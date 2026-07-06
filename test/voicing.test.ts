@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { chordPitchClasses, makeChord } from '../src/chord/index.js';
 import { createsParallelOctave, createsParallelPerfect } from '../src/counterpoint/index.js';
 import {
+  nextVoicing,
   SATB_RANGES,
   voiceChord,
+  voiceChordStyled,
   voiceLeadingCost,
   voiceProgression,
 } from '../src/voicing/index.js';
@@ -160,6 +162,113 @@ describe('voiceProgression', () => {
     // A one-semitone range on C#, which is not a tone of a C major triad.
     expect(() =>
       voiceChord(makeChord(0, 'maj'), { voices: 1, ranges: [{ min: 1, max: 1 }] }),
+    ).toThrow(/no voicing/);
+  });
+});
+
+describe('voiceChordStyled', () => {
+  it('drops the second voice from the top an octave below the close voicing', () => {
+    const chord = makeChord(0, 'maj7');
+    const close = voiceChordStyled(chord, { style: 'close' });
+    const drop2 = voiceChordStyled(chord, { style: 'drop2' });
+    const secondFromTop = close[close.length - 2] ?? Number.NaN;
+    expect(drop2).toContain(secondFromTop - 12);
+    // The two voicings sound the same pitch classes.
+    expect(new Set(drop2.map(pc))).toEqual(new Set(close.map(pc)));
+  });
+
+  it('drops the third voice from the top for drop3', () => {
+    const chord = makeChord(0, 'maj7');
+    const close = voiceChordStyled(chord, { style: 'close' });
+    const drop3 = voiceChordStyled(chord, { style: 'drop3' });
+    const thirdFromTop = close[close.length - 3] ?? Number.NaN;
+    expect(drop3).toContain(thirdFromTop - 12);
+  });
+
+  it('keeps root, third and seventh but omits the fifth in a maj7 shell', () => {
+    const chord = makeChord(0, 'maj7');
+    const shell = new Set(voiceChordStyled(chord, { style: 'shell' }).map(pc));
+    expect(shell.has(0)).toBe(true); // root
+    expect(shell.has(4)).toBe(true); // major third
+    expect(shell.has(11)).toBe(true); // major seventh
+    expect(shell.has(7)).toBe(false); // fifth omitted
+  });
+
+  it('keeps root, third and seventh but omits the fifth in a dom7 shell', () => {
+    const chord = makeChord(7, 'dom7'); // G7
+    const shell = new Set(voiceChordStyled(chord, { style: 'shell' }).map(pc));
+    expect(shell.has(7)).toBe(true); // root
+    expect(shell.has(11)).toBe(true); // major third
+    expect(shell.has(5)).toBe(true); // minor seventh
+    expect(shell.has(2)).toBe(false); // fifth omitted
+  });
+
+  it('omits the root in a rootless voicing', () => {
+    const rootless = new Set(voiceChordStyled(makeChord(0, 'dom7'), { style: 'rootless' }).map(pc));
+    expect(rootless.has(0)).toBe(false);
+    expect(rootless.has(4)).toBe(true);
+    expect(rootless.has(10)).toBe(true);
+  });
+
+  it('places the requested pitch class on top', () => {
+    const voicing = voiceChordStyled(makeChord(0, 'maj7'), { topNote: 4 });
+    expect(pc(voicing[voicing.length - 1] ?? Number.NaN)).toBe(4);
+  });
+
+  it('is ascending and contains every chord tone for a close voicing', () => {
+    const chord = makeChord(2, 'dom7');
+    const voicing = voiceChordStyled(chord);
+    for (let i = 1; i < voicing.length; i += 1) {
+      expect(voicing[i] ?? 0).toBeGreaterThanOrEqual(voicing[i - 1] ?? 0);
+    }
+    const sounding = new Set(voicing.map(pc));
+    for (const tone of chordPitchClasses(chord)) {
+      expect(sounding.has(tone)).toBe(true);
+    }
+  });
+
+  it('is deterministic', () => {
+    const chord = makeChord(5, 'maj7');
+    expect(voiceChordStyled(chord, { style: 'drop2' })).toEqual(
+      voiceChordStyled(chord, { style: 'drop2' }),
+    );
+  });
+});
+
+describe('nextVoicing', () => {
+  const current = voiceChord(makeChord(0, 'maj')); // C major, SATB
+
+  it('returns a same-length ascending voicing with low voice-leading cost', () => {
+    const next = nextVoicing(current, makeChord(7, 'maj')); // to G major
+    expect(next).toHaveLength(current.length);
+    for (let i = 1; i < next.length; i += 1) {
+      expect(next[i] ?? 0).toBeGreaterThanOrEqual(next[i - 1] ?? 0);
+    }
+    expect(voiceLeadingCost(current, next)).toBeLessThanOrEqual(12);
+  });
+
+  it('avoids parallel perfects and octaves against the current voicing', () => {
+    const next = nextVoicing(current, makeChord(7, 'maj'));
+    for (let lower = 0; lower < next.length; lower += 1) {
+      for (let upper = lower + 1; upper < next.length; upper += 1) {
+        const prevLower = current[lower] ?? 0;
+        const prevUpper = current[upper] ?? 0;
+        const curLower = next[lower] ?? 0;
+        const curUpper = next[upper] ?? 0;
+        expect(createsParallelPerfect(prevUpper, curUpper, prevLower, curLower)).toBe(false);
+        expect(createsParallelOctave(prevUpper, curUpper, prevLower, curLower)).toBe(false);
+      }
+    }
+  });
+
+  it('is deterministic', () => {
+    const chord = makeChord(5, 'maj');
+    expect(nextVoicing(current, chord)).toEqual(nextVoicing(current, chord));
+  });
+
+  it('throws when no voicing fits the given ranges', () => {
+    expect(() =>
+      nextVoicing(current, makeChord(0, 'maj'), { voices: 1, ranges: [{ min: 1, max: 1 }] }),
     ).toThrow(/no voicing/);
   });
 });

@@ -11,8 +11,8 @@
  * library-wide convention.
  */
 
-import { createRng } from '../drums/rng.js';
 import { beatsPerBar, metricWeight, type TimeSignature } from '../meter/index.js';
+import { createRng } from '../random/index.js';
 
 /** A single rhythmic note: an onset position and how long it sounds. */
 export type RhythmEvent = {

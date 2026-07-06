@@ -6,7 +6,9 @@ import {
   chordScaleReport,
   chordScales,
   scaleMatchesChord,
+  scalesForChanges,
 } from '../src/chordscale/index.js';
+import { NAMED_SCALES } from '../src/scale/index.js';
 
 describe('scaleMatchesChord', () => {
   it('accepts a scale that contains every chord tone', () => {
@@ -129,5 +131,58 @@ describe('chordScaleReport', () => {
   it('returns no avoid notes or tensions for an unknown scale name', () => {
     expect(avoidNotes(makeChord(0, 'maj7'), 'not-a-scale')).toEqual([]);
     expect(availableTensions(makeChord(0, 'maj7'), 'not-a-scale')).toEqual([]);
+  });
+});
+
+describe('scalesForChanges', () => {
+  /** Pitch-class set of a named scale rooted on `rootPc`. */
+  function scalePitchClasses(name: string, rootPc: number): Set<number> {
+    const mask = NAMED_SCALES[name];
+    const pcs = new Set<number>();
+    if (mask === undefined) {
+      return pcs;
+    }
+    for (let n = 0; n < 12; n += 1) {
+      if (((mask >> n) & 1) === 1) {
+        pcs.add((rootPc + n) % 12);
+      }
+    }
+    return pcs;
+  }
+
+  it('picks scales from the same collection for a ii-V-I in C', () => {
+    const chords = [makeChord(2, 'min7'), makeChord(7, 'dom7'), makeChord(0, 'maj7')];
+    const choices = scalesForChanges(chords);
+    expect(choices).toHaveLength(3);
+    expect(choices[0]?.scale.name).toBe('dorian');
+    expect(choices[1]?.scale.name).toBe('mixolydian');
+    expect(choices[2]?.scale.name).toBe('ionian');
+
+    const first = choices[0]?.scale ?? { name: '', rootPc: 0 };
+    const collection = scalePitchClasses(first.name, first.rootPc);
+    for (const choice of choices) {
+      const pcs = scalePitchClasses(choice.scale.name, choice.scale.rootPc);
+      expect(pcs).toEqual(collection);
+    }
+  });
+
+  it('returns the best-fit scale for a single chord', () => {
+    const chord = makeChord(0, 'maj7');
+    const choices = scalesForChanges([chord]);
+    expect(choices).toEqual([{ chord, scale: chordScales(chord)[0] }]);
+  });
+
+  it('returns [] for an empty input', () => {
+    expect(scalesForChanges([])).toEqual([]);
+  });
+
+  it('returns one choice per chord, rooted on each chord root', () => {
+    const chords = [makeChord(2, 'min7'), makeChord(7, 'dom7'), makeChord(0, 'maj7')];
+    const choices = scalesForChanges(chords);
+    expect(choices).toHaveLength(chords.length);
+    choices.forEach((choice, i) => {
+      expect(choice.chord).toBe(chords[i]);
+      expect(choice.scale.rootPc).toBe(chords[i]?.rootPc);
+    });
   });
 });

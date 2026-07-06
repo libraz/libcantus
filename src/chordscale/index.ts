@@ -195,3 +195,122 @@ export function chordScaleReport(chord: Chord, limit?: number): ChordScaleReport
     tensions: availableTensions(chord, match.name),
   }));
 }
+
+/** A chord paired with the scale chosen for it by {@link scalesForChanges}. */
+export type ScaleChoice = {
+  chord: Chord;
+  scale: ChordScaleMatch;
+};
+
+/**
+ * Small per-candidate penalty added in {@link scalesForChanges} so that, among
+ * choices of otherwise-equal transition cost, the tighter best-fit scale wins.
+ */
+const RANK_PENALTY = 0.01;
+
+/** Build the pitch-class set of a named scale rooted on `rootPc`. */
+function scalePitchClassSet(name: string, rootPc: number): Set<number> {
+  const mask = NAMED_SCALES[name];
+  const pcs = new Set<number>();
+  if (mask === undefined) {
+    return pcs;
+  }
+  for (let n = 0; n < 12; n += 1) {
+    if (((mask >> n) & 1) === 1) {
+      pcs.add(pitchClass(rootPc + n));
+    }
+  }
+  return pcs;
+}
+
+/** Count pitch classes that belong to exactly one of two sets. */
+function symmetricDifferenceSize(a: Set<number>, b: Set<number>): number {
+  let count = 0;
+  for (const pc of a) {
+    if (!b.has(pc)) {
+      count += 1;
+    }
+  }
+  for (const pc of b) {
+    if (!a.has(pc)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+/**
+ * Choose one scale per chord across a progression, favoring continuity.
+ *
+ * Each chord's {@link chordScales} candidates form a stage in a Viterbi-style
+ * dynamic program. The transition cost between adjacent choices is the number
+ * of pitch classes that differ between their pitch-class sets (the symmetric
+ * difference), plus a small penalty for straying from a chord's best-fit scale
+ * so that ties break toward the tighter fit. The minimum-total-cost path is
+ * returned, one {@link ScaleChoice} per input chord in the original order.
+ *
+ * @param chords The chord sequence to choose scales for.
+ * @returns One scale choice per chord, in input order.
+ */
+export function scalesForChanges(chords: Chord[]): ScaleChoice[] {
+  if (chords.length === 0) {
+    return [];
+  }
+  const candidateLists = chords.map((chord) => chordScales(chord));
+  const pcSets = candidateLists.map((candidates) =>
+    candidates.map((match) => scalePitchClassSet(match.name, match.rootPc)),
+  );
+
+  const first = candidateLists[0] ?? [];
+  const dp: number[][] = [first.map((_, j) => j * RANK_PENALTY)];
+  const back: number[][] = [first.map(() => -1)];
+
+  for (let i = 1; i < candidateLists.length; i += 1) {
+    const candidates = candidateLists[i] ?? [];
+    const prevCosts = dp[i - 1] ?? [];
+    const prevSets = pcSets[i - 1] ?? [];
+    const curSets = pcSets[i] ?? [];
+    const stageCosts: number[] = [];
+    const stageBack: number[] = [];
+    for (let j = 0; j < candidates.length; j += 1) {
+      let bestCost = Number.POSITIVE_INFINITY;
+      let bestPrev = -1;
+      for (let k = 0; k < prevCosts.length; k += 1) {
+        const transition = symmetricDifferenceSize(
+          prevSets[k] ?? new Set(),
+          curSets[j] ?? new Set(),
+        );
+        const cost = (prevCosts[k] ?? 0) + transition;
+        if (cost < bestCost) {
+          bestCost = cost;
+          bestPrev = k;
+        }
+      }
+      stageCosts.push(bestCost + j * RANK_PENALTY);
+      stageBack.push(bestPrev);
+    }
+    dp.push(stageCosts);
+    back.push(stageBack);
+  }
+
+  const lastCosts = dp[dp.length - 1] ?? [];
+  let bestFinal = 0;
+  for (let j = 1; j < lastCosts.length; j += 1) {
+    if ((lastCosts[j] ?? Number.POSITIVE_INFINITY) < (lastCosts[bestFinal] ?? 0)) {
+      bestFinal = j;
+    }
+  }
+
+  const chosenIndices: number[] = new Array(candidateLists.length);
+  let current = bestFinal;
+  for (let i = candidateLists.length - 1; i >= 0; i -= 1) {
+    chosenIndices[i] = current;
+    current = back[i]?.[current] ?? -1;
+  }
+
+  return chords.map((chord, i) => {
+    const candidates = candidateLists[i] ?? [];
+    const scale = candidates[chosenIndices[i] ?? 0] ?? { name: 'chromatic', rootPc: chord.rootPc };
+    return { chord, scale };
+  });
+}

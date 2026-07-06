@@ -6,14 +6,10 @@ import type { TimeSignature } from '../meter/index.js';
 import { isStrongBeat } from '../meter/index.js';
 import type { GeneratedChord } from '../progression/index.js';
 import { isScaleTone, majorKey, scaleTonesInDegreeOrder } from '../scale/index.js';
-import type { KeyScale } from '../types.js';
+import type { KeyScale, NoteEvent } from '../types.js';
 
-/** A melody note supplied to the harmonizer. */
-export type MelodyNote = {
-  pitch: number;
-  startBeat: number;
-  durationBeat: number;
-};
+/** A melody note supplied to the harmonizer: a {@link NoteEvent}. */
+export type MelodyNote = NoteEvent;
 
 /** Options controlling {@link harmonizeMelody}. */
 export type HarmonizeOptions = {

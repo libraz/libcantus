@@ -2,7 +2,7 @@ import type { Chord } from '../chord/index.js';
 import { chordPitchClasses, chordToneRole } from '../chord/index.js';
 import { createsVerticalDissonance, isLeadingToneResolution } from '../counterpoint/index.js';
 import type { VoiceSnapshot } from '../safety/index.js';
-import type { KeyScale } from '../types.js';
+import type { KeyScale, NoteEvent } from '../types.js';
 
 /** A theory annotation attached to a note. */
 export type TheoryLabel =
@@ -24,13 +24,8 @@ export type AnalyzedNote = {
   rationale?: string;
 };
 
-/** A single note in a monophonic voice. */
-export type VoiceNote = {
-  id: number;
-  pitch: number;
-  startBeat: number;
-  durationBeat: number;
-};
+/** A single note in a monophonic voice: a {@link NoteEvent} with a stable id. */
+export type VoiceNote = NoteEvent & { id: number };
 
 function pitchClass(pitch: number): number {
   return ((Math.trunc(pitch) % 12) + 12) % 12;

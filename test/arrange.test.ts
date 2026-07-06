@@ -1,0 +1,149 @@
+import { describe, expect, it } from 'vitest';
+import { type ArrangementTrack, analyzeArrangement, tensionCurve } from '../src/arrange/index.js';
+import { NoteSafety } from '../src/safety/index.js';
+import { majorKey } from '../src/scale/index.js';
+import type { NoteEvent } from '../src/types.js';
+
+/** Build a block chord: every pitch sounding for the same span. */
+function blockChord(pitches: number[], startBeat: number, durationBeat = 4): NoteEvent[] {
+  return pitches.map((pitch) => ({ pitch, startBeat, durationBeat }));
+}
+
+/** Harmony track spelling C, F, G7, C as block chords, one per bar (4/4). */
+function harmonyTrack(): NoteEvent[] {
+  return [
+    ...blockChord([48, 52, 55], 0), // C E G
+    ...blockChord([53, 57, 60], 4), // F A C
+    ...blockChord([55, 59, 62, 65], 8), // G B D F (dominant seventh)
+    ...blockChord([48, 52, 55], 12), // C E G
+  ];
+}
+
+/** Mostly-consonant quarter-note melody over the C-F-G7-C harmony. */
+function melodyTrack(): NoteEvent[] {
+  return [
+    { pitch: 72, startBeat: 0, durationBeat: 1 }, // C over C
+    { pitch: 76, startBeat: 1, durationBeat: 1 }, // E over C
+    { pitch: 79, startBeat: 2, durationBeat: 1 }, // G over C
+    { pitch: 76, startBeat: 3, durationBeat: 1 }, // E over C
+    { pitch: 77, startBeat: 4, durationBeat: 1 }, // F over F
+    { pitch: 81, startBeat: 5, durationBeat: 1 }, // A over F
+    { pitch: 84, startBeat: 6, durationBeat: 1 }, // C over F
+    { pitch: 81, startBeat: 7, durationBeat: 1 }, // A over F
+    { pitch: 74, startBeat: 8, durationBeat: 1 }, // D over G7
+    { pitch: 79, startBeat: 9, durationBeat: 1 }, // G over G7
+    { pitch: 77, startBeat: 10, durationBeat: 1 }, // F over G7
+    { pitch: 74, startBeat: 11, durationBeat: 1 }, // D over G7
+    { pitch: 72, startBeat: 12, durationBeat: 4 }, // C over C
+  ];
+}
+
+/** Root-note bass under the C-F-G7-C harmony. */
+function bassTrack(): NoteEvent[] {
+  return [
+    { pitch: 36, startBeat: 0, durationBeat: 4 }, // C
+    { pitch: 41, startBeat: 4, durationBeat: 4 }, // F
+    { pitch: 43, startBeat: 8, durationBeat: 4 }, // G
+    { pitch: 36, startBeat: 12, durationBeat: 4 }, // C
+  ];
+}
+
+function baseArrangement(): ArrangementTrack[] {
+  return [
+    { name: 'melody', role: 'melody', notes: melodyTrack() },
+    { name: 'harmony', role: 'harmony', notes: harmonyTrack() },
+    { name: 'bass', role: 'bass', notes: bassTrack() },
+  ];
+}
+
+describe('analyzeArrangement', () => {
+  it('infers C major and the right chord per bar', () => {
+    const analysis = analyzeArrangement(baseArrangement(), { key: majorKey(0) });
+    expect(analysis.key.rootPc).toBe(0);
+    const roots = analysis.timeline.segments.map((seg) => seg.chord.rootPc);
+    expect(roots).toEqual([0, 5, 7, 0]);
+    expect(analysis.timeline.at(0)?.rootPc).toBe(0);
+    expect(analysis.timeline.at(4)?.rootPc).toBe(5);
+    expect(analysis.timeline.at(8)?.rootPc).toBe(7);
+    expect(analysis.timeline.at(12)?.rootPc).toBe(0);
+  });
+
+  it('labels the melody chord tones as chordTone', () => {
+    const analysis = analyzeArrangement(baseArrangement(), { key: majorKey(0) });
+    const melody = analysis.tracks.find((t) => t.name === 'melody');
+    expect(melody).toBeDefined();
+    const first = melody?.notes[0];
+    expect(first?.labels.some((l) => l.kind === 'chordTone')).toBe(true);
+    // Every diatonic chord tone of the consonant melody is a chord tone.
+    const chordToneCount = (melody?.notes ?? []).filter((n) =>
+      n.labels.some((l) => l.kind === 'chordTone'),
+    ).length;
+    expect(chordToneCount).toBeGreaterThanOrEqual(8);
+  });
+
+  it('reports the closing authentic cadence', () => {
+    const analysis = analyzeArrangement(baseArrangement(), { key: majorKey(0) });
+    const authentic = analysis.cadences.find((c) => c.type === 'authentic');
+    expect(authentic).toBeDefined();
+    expect(authentic?.atBeat).toBe(12);
+  });
+
+  it('flags a sustained dissonant melody note as a conflict', () => {
+    const tracks = baseArrangement();
+    // A held C# over the tonic C major chord on the downbeat: outside the key.
+    const clashing: NoteEvent[] = [
+      { pitch: 73, startBeat: 0, durationBeat: 4 },
+      ...melodyTrack().filter((n) => n.startBeat >= 4),
+    ];
+    tracks[0] = { name: 'melody', role: 'melody', notes: clashing };
+    const analysis = analyzeArrangement(tracks, { key: majorKey(0) });
+    const conflict = analysis.conflicts.find(
+      (c) => c.trackName === 'melody' && c.beat === 0 && c.pitch === 73,
+    );
+    expect(conflict).toBeDefined();
+    expect(conflict?.safety).toBeGreaterThanOrEqual(NoteSafety.Warning);
+    // Conflicts are ordered worst severity first.
+    for (let i = 1; i < analysis.conflicts.length; i += 1) {
+      const prev = analysis.conflicts[i - 1];
+      const cur = analysis.conflicts[i];
+      if (prev && cur) {
+        expect(
+          prev.safety > cur.safety || (prev.safety === cur.safety && prev.beat <= cur.beat),
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('defaults missing name and role', () => {
+    const analysis = analyzeArrangement([{ notes: harmonyTrack() }], { key: majorKey(0) });
+    expect(analysis.tracks[0]?.name).toBe('track 1');
+    expect(analysis.tracks[0]?.role).toBe('other');
+  });
+});
+
+describe('tensionCurve', () => {
+  it('returns one point per sampled beat with values in [0, 1]', () => {
+    const points = tensionCurve(baseArrangement(), { key: majorKey(0) });
+    expect(points).toHaveLength(16);
+    for (let i = 0; i < points.length; i += 1) {
+      const point = points[i];
+      expect(point?.beat).toBe(i);
+      expect(point?.tension).toBeGreaterThanOrEqual(0);
+      expect(point?.tension).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('reads higher on the dominant bar than on the tonic bar', () => {
+    const points = tensionCurve(baseArrangement(), { key: majorKey(0) });
+    const tonic = points.find((p) => p.beat === 0);
+    const dominant = points.find((p) => p.beat === 8);
+    expect(tonic).toBeDefined();
+    expect(dominant).toBeDefined();
+    expect(dominant?.tension ?? 0).toBeGreaterThan(tonic?.tension ?? 0);
+  });
+
+  it('honours a custom sampling step', () => {
+    const points = tensionCurve(baseArrangement(), { key: majorKey(0), step: 4 });
+    expect(points.map((p) => p.beat)).toEqual([0, 4, 8, 12]);
+  });
+});

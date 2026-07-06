@@ -1,5 +1,17 @@
 export type { AnalyzedNote, TheoryLabel, VoiceNote } from './analysis/index.js';
 export { analyzeVoice } from './analysis/index.js';
+export type {
+  ArrangementAnalysis,
+  ArrangementOptions,
+  ArrangementTrack,
+  Conflict,
+  TensionPoint,
+  TrackAnalysis,
+  TrackRole,
+} from './arrange/index.js';
+export { analyzeArrangement, tensionCurve } from './arrange/index.js';
+export type { BassLineOptions, BassSegment, BassStyle } from './bass/index.js';
+export { generateBassLine } from './bass/index.js';
 export type { Chord as ChordData, ChordQuality } from './chord/index.js';
 export {
   chordFromDegree,
@@ -10,14 +22,17 @@ export {
   diatonicTriad,
   makeChord,
 } from './chord/index.js';
-export type { ChordScaleMatch, ChordScaleReportEntry } from './chordscale/index.js';
+export type { ChordScaleMatch, ChordScaleReportEntry, ScaleChoice } from './chordscale/index.js';
 export {
   availableTensions,
   avoidNotes,
   chordScaleReport,
   chordScales,
   scaleMatchesChord,
+  scalesForChanges,
 } from './chordscale/index.js';
+export type { CounterMelodyOptions } from './countermelody/index.js';
+export { generateCounterMelody } from './countermelody/index.js';
 export {
   createsHiddenParallelPerfect,
   createsParallelOctave,
@@ -60,6 +75,8 @@ export {
   romanToChord,
   secondaryDominant,
 } from './functional/index.js';
+export type { GrooveSlot, GrooveTemplate, HumanizeOptions } from './groove/index.js';
+export { applyGrooveTemplate, extractGrooveTemplate, humanize } from './groove/index.js';
 export type {
   HarmonizeOptions,
   HarmonizeResult,
@@ -117,6 +134,19 @@ export {
   progressions,
   progressionsByStyle,
 } from './progression/index.js';
+export type { Rng } from './random/index.js';
+export { createRng } from './random/index.js';
+export type {
+  BorrowedChord,
+  SubstituteOptions,
+  Substitution,
+  SubstitutionType,
+} from './reharmony/index.js';
+export {
+  modalInterchangePalette,
+  negativeHarmonyMirror,
+  substituteChord,
+} from './reharmony/index.js';
 export type { RhythmEvent, RhythmOptions } from './rhythm/index.js';
 export { generateRhythm, onsetWeightCurve, rhythmDensity } from './rhythm/index.js';
 export type {
@@ -161,8 +191,19 @@ export {
   spellPitchClasses,
   spellScale,
 } from './spelling/index.js';
-export type { ChordSegment, ChordTimeline } from './timeline/index.js';
-export { chordTimelineFromChords } from './timeline/index.js';
+export { formatChordSymbol, parseChordSymbol, transposeChordSymbol } from './symbol/index.js';
+export type {
+  CadenceHit,
+  ChordSegment,
+  ChordTimeline,
+  ChordTimelineOptions,
+  ChordTimelineResult,
+} from './timeline/index.js';
+export {
+  chordTimelineFromChords,
+  chordTimelineFromNotes,
+  detectCadences,
+} from './timeline/index.js';
 export type { Tuning } from './tuning/index.js';
 export {
   centsBetweenFreq,
@@ -175,6 +216,18 @@ export {
   ratioToCents,
   TWELVE_TET,
 } from './tuning/index.js';
-export type { KeyScale } from './types.js';
-export type { VoiceRange, VoicingOptions } from './voicing/index.js';
-export { SATB_RANGES, voiceChord, voiceLeadingCost, voiceProgression } from './voicing/index.js';
+export type { KeyScale, NoteEvent } from './types.js';
+export type {
+  StyledVoicingOptions,
+  VoiceRange,
+  VoicingOptions,
+  VoicingStyle,
+} from './voicing/index.js';
+export {
+  nextVoicing,
+  SATB_RANGES,
+  voiceChord,
+  voiceChordStyled,
+  voiceLeadingCost,
+  voiceProgression,
+} from './voicing/index.js';

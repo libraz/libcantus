@@ -9,3 +9,21 @@ export type KeyScale = {
   rootPc: number;
   modeMask12: number;
 };
+
+/**
+ * A single sounding note on a beat-indexed timeline: an absolute MIDI pitch, an
+ * onset and duration measured in quarter-note beats, and an optional MIDI
+ * velocity. This is the library-wide interchange shape for note events read
+ * from or written to a DAW/MIDI track; the harmonizer's `MelodyNote` and the
+ * analysis `VoiceNote` are specializations of it.
+ */
+export type NoteEvent = {
+  /** MIDI pitch (middle C = 60). */
+  pitch: number;
+  /** Onset in quarter-note beats, absolute from the start of the timeline. */
+  startBeat: number;
+  /** Duration in quarter-note beats. */
+  durationBeat: number;
+  /** MIDI velocity in [0, 127], when known. */
+  velocity?: number;
+};

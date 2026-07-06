@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "description": "Pure-TypeScript music-theory and composition primitives (intervals, scales, chords).",
   "type": "module",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": "libraz",
   "engines": {
     "node": ">=22 <23"

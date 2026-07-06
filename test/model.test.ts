@@ -337,3 +337,36 @@ describe('Chord letter-name spelling and plain-data construction', () => {
     expect(() => empty.invert(0)).toThrow(/invert/);
   });
 });
+
+describe('Chord symbols, styled voicings, and negative harmony', () => {
+  it('round-trips a chord symbol through Chord.parse and symbol()', () => {
+    const chord = Chord.parse('F#m7b5');
+    expect(chord.rootPc).toBe(6);
+    expect(chord.quality).toBe('m7b5');
+    expect(chord.symbol()).toBe('F#m7b5');
+  });
+
+  it('parses a slash chord and formats it back', () => {
+    const chord = Chord.parse('C/G');
+    expect(chord.bassPc).toBe(7);
+    expect(chord.symbol()).toBe('C/G');
+  });
+
+  it('renders a styled voicing as ascending MIDI pitches', () => {
+    const voicing = Chord.of('C', 'maj7').styledVoicing({ style: 'shell' });
+    for (let i = 1; i < voicing.length; i += 1) {
+      expect(voicing[i] ?? 0).toBeGreaterThan(voicing[i - 1] ?? 0);
+    }
+  });
+
+  it('mirrors a dominant into its negative-harmony counterpart', () => {
+    // In C major the axis reflects each pitch class p -> (7 - p) mod 12, turning
+    // G7 into the {C, D, F, Ab} subdominant-function collection, and the result
+    // carries no spurious slash bass.
+    const g7 = Key.major('C').chord(4, 'dom7');
+    const mirrored = g7.negativeHarmony();
+    const expected = new Set(g7.pitchClasses().map((pc) => (((7 - pc) % 12) + 12) % 12));
+    expect(new Set(mirrored.pitchClasses())).toEqual(expected);
+    expect(mirrored.bassPc).toBeUndefined();
+  });
+});

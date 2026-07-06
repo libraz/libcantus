@@ -48,6 +48,7 @@ import {
   type SpelledInterval,
   spelledInterval,
 } from '../pitch/index.js';
+import { negativeHarmonyMirror } from '../reharmony/index.js';
 import {
   isScaleTone,
   majorKey,
@@ -56,8 +57,15 @@ import {
   scaleTonesInDegreeOrder,
 } from '../scale/index.js';
 import { spellChord, spellScale } from '../spelling/index.js';
+import { formatChordSymbol, parseChordSymbol } from '../symbol/index.js';
 import type { KeyScale } from '../types.js';
-import { type VoicingOptions, voiceChord, voiceProgression } from '../voicing/index.js';
+import {
+  type StyledVoicingOptions,
+  type VoicingOptions,
+  voiceChord,
+  voiceChordStyled,
+  voiceProgression,
+} from '../voicing/index.js';
 
 /** Reduce any integer to a pitch class in [0, 11]. */
 function mod12(n: number): number {
@@ -525,6 +533,17 @@ export class Chord {
   }
 
   /**
+   * Parse a lead-sheet chord symbol (e.g. `'Cmaj7'`, `'F#m7b5'`, `'C/G'`).
+   *
+   * @param symbol The chord symbol.
+   * @returns The chord (without key context).
+   * @throws If the root or quality is not recognized.
+   */
+  static parse(symbol: string): Chord {
+    return new Chord(parseChordSymbol(symbol));
+  }
+
+  /**
    * Identify the chords matching a set of pitches, best interpretation first.
    *
    * @param pitches MIDI pitches or bare pitch classes.
@@ -652,6 +671,16 @@ export class Chord {
   }
 
   /**
+   * The chord rendered as a lead-sheet symbol (e.g. `'Cmaj7'`, `'F#m7'`, `'C/G'`).
+   *
+   * @param opts Set `flats: true` to spell the root/bass with flats.
+   * @returns The chord symbol.
+   */
+  symbol(opts?: { flats?: boolean }): string {
+    return formatChordSymbol(this.#data, opts);
+  }
+
+  /**
    * Realize the chord as one MIDI pitch per voice, ascending.
    *
    * @param opts Voicing options; defaults to four SATB voices.
@@ -660,6 +689,30 @@ export class Chord {
    */
   voice(opts?: VoicingOptions): number[] {
     return voiceChord(this.#data, opts);
+  }
+
+  /**
+   * Realize the chord as a single styled voicing (`close`, `drop2`, `drop3`,
+   * `shell`, or `rootless`), optionally constraining the top voice.
+   *
+   * @param opts Styled-voicing options; defaults to a close-position voicing.
+   * @returns MIDI pitches, ascending.
+   */
+  styledVoicing(opts?: StyledVoicingOptions): number[] {
+    return voiceChordStyled(this.#data, opts);
+  }
+
+  /**
+   * The negative-harmony mirror of the chord about the key's tonic–dominant
+   * axis (major becomes minor and vice versa).
+   *
+   * @param key Key providing the reflection axis; falls back to the carried
+   *   context.
+   * @returns The mirrored chord, keeping any key context.
+   * @throws If no key is given and none is carried.
+   */
+  negativeHarmony(key?: Key): Chord {
+    return new Chord(negativeHarmonyMirror(this.#data, this.#resolveKey(key).scale), this.#key);
   }
 
   /**
