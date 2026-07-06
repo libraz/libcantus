@@ -36,6 +36,19 @@ describe('chordToRoman in a minor key', () => {
   it('spells a flat-two chromatic root as bII', () => {
     expect(chordToRoman(makeChord(10, 'maj'), aMinor)).toBe('bII');
   });
+
+  it('round-trips every triad root through chordToRoman and romanToChord', () => {
+    for (let pc = 0; pc < 12; pc += 1) {
+      const roman = chordToRoman(makeChord(pc, 'maj'), aMinor);
+      expect(romanToChord(roman, aMinor).rootPc).toBe(pc);
+    }
+  });
+
+  it('spells the tritone above the tonic with a sharp, not a flat fifth', () => {
+    // pc 3 is the tritone above the A-minor tonic; it spells as #IV, not bV.
+    expect(chordToRoman(makeChord(3, 'maj'), aMinor)).toBe('#IV');
+    expect(romanToChord('#IV', aMinor).rootPc).toBe(3);
+  });
 });
 
 describe('half-diminished supertonic in a minor key', () => {

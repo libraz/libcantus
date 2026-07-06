@@ -18,9 +18,22 @@ describe('parallel perfect fixes', () => {
     expect(createsParallelPerfect(67, 72, 60, 60)).toBe(false);
   });
 
-  it('requires similar motion', () => {
-    // contrary motion into a fifth is not a parallel perfect.
+  it('does not flag a change of perfect class by contrary motion', () => {
+    // A fifth (7) contracting to a unison (0) changes perfect kind, so it is not
+    // a parallel perfect even though both voices move.
     expect(createsParallelPerfect(67, 65, 60, 65)).toBe(false);
+  });
+
+  it('flags anti-parallel octaves reached by contrary motion', () => {
+    // Both voices move in opposite directions from an octave to an octave
+    // (74->62 down, 50->62 up): forbidden in strict two-voice counterpoint.
+    expect(createsParallelPerfect(74, 62, 50, 62)).toBe(true);
+  });
+
+  it('does not flag an oblique approach to the same perfect class', () => {
+    // Upper voice stationary at 74 while the lower rises 50->62 into an octave:
+    // oblique motion is allowed.
+    expect(createsParallelPerfect(74, 74, 50, 62)).toBe(false);
   });
 });
 

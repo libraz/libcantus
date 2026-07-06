@@ -5,6 +5,7 @@ import {
   createsParallelOctave,
   createsParallelPerfect,
   createsVerticalDissonance,
+  isForbiddenMelodicLeap,
 } from '../counterpoint/index.js';
 import { isScaleTone } from '../scale/index.js';
 import type { KeyScale } from '../types.js';
@@ -194,17 +195,21 @@ function evaluateInternal(q: SafetyQuery, collectSuggestions: boolean): SafetyRe
   }
 
   if (q.prevPitch !== undefined) {
-    const d = Math.abs(pitch - q.prevPitch);
-    if (d % 12 === 6) {
+    // Quality flags reduce the melodic interval to its pitch-class interval so
+    // compound intervals are treated uniformly with their simple form. The
+    // forbidden-leap flag defers to the counterpoint rule, which preserves the
+    // octave boundary (an octave leap is allowed, wider leaps are not).
+    const pc = Math.abs(pitch - q.prevPitch) % 12;
+    if (pc === 6) {
       reasons |= ReasonFlag.Tritone;
     }
-    if (d >= 6) {
+    if (isForbiddenMelodicLeap(q.prevPitch, pitch)) {
       reasons |= ReasonFlag.LargeLeap;
     }
-    if (d === 1) {
+    if (pc === 1) {
       reasons |= ReasonFlag.MinorSecond;
     }
-    if (d === 11) {
+    if (pc === 11) {
       reasons |= ReasonFlag.MajorSeventh;
     }
   }

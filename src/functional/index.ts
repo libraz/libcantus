@@ -282,12 +282,18 @@ function romanSpelling(
     return { degreeNumber: diatonic + 1, accidental: '' };
   }
   // Chromatic root: prefer a flat of the diatonic degree a semitone above it,
-  // then a sharp of the degree a semitone below. Degree 1 (the tonic) is skipped
-  // in the flat pass so a raised leading tone is spelled as `#vii` rather than a
-  // flat tonic `bI`.
-  for (let i = 1; i < tones.length; i += 1) {
+  // then a sharp of the degree a semitone below. Degree 1 (the tonic) and
+  // degree 5 (the dominant) are skipped in the flat pass, so a raised leading
+  // tone spells as `#vii` rather than a flat tonic `bI`, and the tritone above
+  // the tonic spells as `#iv` rather than a flat fifth `bV` (matching the
+  // conventional `OFFSET_SPELLING` for offset 6).
+  for (let i = 0; i < tones.length; i += 1) {
+    const degreeNumber = i + 1;
+    if (degreeNumber === 1 || degreeNumber === 5) {
+      continue;
+    }
     if (mod12((tones[i] ?? 0) - 1) === mod12(rootPc)) {
-      return { degreeNumber: i + 1, accidental: 'b' };
+      return { degreeNumber, accidental: 'b' };
     }
   }
   for (let i = 0; i < tones.length; i += 1) {
@@ -376,8 +382,11 @@ export function functionOf(chord: Chord, key: KeyScale): HarmonicFunction {
  *
  * - authentic: V (dominant a fifth above the tonic) to I
  * - plagal: IV (a fourth above the tonic) to I
- * - deceptive: V to the submediant (vi in major, VI at a flat-six in minor)
- * - half: any chord to V
+ * - deceptive: V to the submediant (diatonic vi or borrowed bVI in major, VI in
+ *   minor)
+ * - half: any chord other than the dominant itself to V
+ *
+ * A static V-to-V repeat with no root motion is not a cadence and yields null.
  *
  * @param from The penultimate chord.
  * @param to The final chord.
@@ -388,17 +397,22 @@ export function detectCadence(from: Chord, to: Chord, key: KeyScale): Cadence {
   const tonic = mod12(key.rootPc);
   const fromOffset = mod12(from.rootPc - tonic);
   const toOffset = mod12(to.rootPc - tonic);
-  const submediant = isMinorKey(key) ? 8 : 9;
+  // Deceptive targets: the diatonic submediant (vi at offset 9 in major, VI at
+  // offset 8 in minor) plus, in a major key, the borrowed flat-submediant bVI
+  // at offset 8.
+  const deceptiveTargets = isMinorKey(key) ? [8] : [8, 9];
   if (fromOffset === 7 && toOffset === 0) {
     return 'authentic';
   }
   if (fromOffset === 5 && toOffset === 0) {
     return 'plagal';
   }
-  if (fromOffset === 7 && toOffset === submediant) {
+  if (fromOffset === 7 && deceptiveTargets.includes(toOffset)) {
     return 'deceptive';
   }
-  if (toOffset === 7) {
+  // A move to the dominant is a half cadence, but a no-root-motion V-to-V repeat
+  // is not a cadence at all.
+  if (toOffset === 7 && fromOffset !== 7) {
     return 'half';
   }
   return null;

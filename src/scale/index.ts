@@ -1,8 +1,13 @@
 import type { KeyScale } from '../types.js';
 
-/** Build a 12-bit mode mask from a list of semitone offsets above the root. */
+/**
+ * Build a 12-bit mode mask from a list of semitone offsets above the root.
+ *
+ * Bit 0 (the root) is always set, enforcing the `KeyScale` invariant that the
+ * root is a scale tone even when the offset list omits 0.
+ */
 export function maskFromOffsets(offsets: readonly number[]): number {
-  let mask = 0;
+  let mask = 1;
   for (const offset of offsets) {
     mask |= 1 << (((offset % 12) + 12) % 12);
   }

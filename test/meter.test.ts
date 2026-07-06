@@ -26,6 +26,25 @@ describe('time signatures', () => {
     expect(isCompound(parseTimeSignature('3/8'))).toBe(false); // simple triple
   });
 
+  it('classifies compound meters independent of the denominator', () => {
+    // Compound is defined by a numerator that is a multiple of three above
+    // three, so 6/4 (compound duple) and 9/8 are compound while the simple
+    // 3/4 and 4/4 are not.
+    expect(isCompound(parseTimeSignature('6/4'))).toBe(true);
+    expect(isCompound(parseTimeSignature('9/8'))).toBe(true);
+    expect(isCompound(parseTimeSignature('3/4'))).toBe(false);
+    expect(isCompound(parseTimeSignature('4/4'))).toBe(false);
+  });
+
+  it('groups 6/4 as two dotted-half pulses', () => {
+    const ts = parseTimeSignature('6/4');
+    expect(beatsPerBar(ts)).toBe(6);
+    expect(pulsesPerBar(ts)).toBe(2);
+    expect(metricWeight(0, ts)).toBe(3); // downbeat
+    expect(metricWeight(3, ts)).toBe(2); // second compound pulse (dotted half in)
+    expect(metricWeight(1, ts)).toBe(0); // off-pulse subdivision
+  });
+
   it('computes bar length and pulse count', () => {
     expect(beatsPerBar(parseTimeSignature('4/4'))).toBe(4);
     expect(beatsPerBar(parseTimeSignature('6/8'))).toBe(3);

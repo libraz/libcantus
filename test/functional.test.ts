@@ -53,6 +53,45 @@ describe('chordToRoman', () => {
   });
 });
 
+describe('chromatic-root spelling round-trip', () => {
+  // The canonical major-key spelling of each semitone offset above the tonic,
+  // mirroring the module's OFFSET_SPELLING table. The tritone (offset 6) spells
+  // as a raised subdominant #IV; every other chromatic keeps its flat spelling.
+  const majorSpelling = [
+    'I',
+    'bII',
+    'II',
+    'bIII',
+    'III',
+    'IV',
+    '#IV',
+    'V',
+    'bVI',
+    'VI',
+    'bVII',
+    'VII',
+  ];
+
+  it('names each pitch class in C major consistent with OFFSET_SPELLING', () => {
+    for (let pc = 0; pc < 12; pc += 1) {
+      expect(chordToRoman(makeChord(pc, 'maj'), cMajor)).toBe(majorSpelling[pc]);
+    }
+  });
+
+  it('round-trips every triad root through chordToRoman and romanToChord', () => {
+    for (let pc = 0; pc < 12; pc += 1) {
+      const roman = chordToRoman(makeChord(pc, 'maj'), cMajor);
+      expect(romanToChord(roman, cMajor).rootPc).toBe(pc);
+    }
+  });
+
+  it('spells the tritone as #IV and round-trips it', () => {
+    expect(chordToRoman(makeChord(6, 'maj'), cMajor)).toBe('#IV');
+    expect(romanToChord('#iv', cMajor)).toMatchObject({ rootPc: 6 });
+    expect(romanToChord('#IV', cMajor).rootPc).toBe(6);
+  });
+});
+
 describe('half-diminished implies a seventh', () => {
   it('reads a bare ø as a half-diminished seventh', () => {
     expect(romanToChord('iiø', cMajor)).toMatchObject({ rootPc: 2, quality: 'm7b5' });
@@ -141,6 +180,17 @@ describe('detectCadence', () => {
     expect(detectCadence(makeChord(7, 'maj'), makeChord(9, 'min'), cMajor)).toBe('deceptive');
     expect(detectCadence(makeChord(2, 'min'), makeChord(7, 'maj'), cMajor)).toBe('half');
     expect(detectCadence(makeChord(0, 'maj'), makeChord(2, 'min'), cMajor)).toBeNull();
+  });
+
+  it('does not treat a static V-to-V repeat as a cadence', () => {
+    expect(detectCadence(makeChord(7, 'dom7'), makeChord(7, 'dom7'), cMajor)).toBeNull();
+    expect(detectCadence(makeChord(7, 'maj'), makeChord(7, 'maj'), cMajor)).toBeNull();
+  });
+
+  it('treats V to the borrowed flat-submediant bVI as deceptive in major', () => {
+    expect(detectCadence(makeChord(7, 'maj'), makeChord(8, 'maj'), cMajor)).toBe('deceptive');
+    // The diatonic submediant vi (offset 9) remains deceptive too.
+    expect(detectCadence(makeChord(7, 'maj'), makeChord(9, 'min'), cMajor)).toBe('deceptive');
   });
 });
 

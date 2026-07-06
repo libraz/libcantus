@@ -130,11 +130,25 @@ it('warns on a scale tone without a chord', () => {
   expect(chromatic.safety).toBe(NoteSafety.Dissonant);
 });
 
-it('flags a melodic large leap and minor second against the previous pitch', () => {
-  const leap = evaluateSafety(query({ candidatePitch: 72, prevPitch: 60 }));
+it('flags a forbidden melodic leap and minor second against the previous pitch', () => {
+  // A major ninth (14 semitones) is a forbidden leap; an octave is not, so the
+  // LargeLeap flag now defers to the counterpoint forbidden-leap rule.
+  const leap = evaluateSafety(query({ candidatePitch: 74, prevPitch: 60 }));
   expect(leap.reasons & ReasonFlag.LargeLeap).toBeTruthy();
+  expect(
+    evaluateSafety(query({ candidatePitch: 72, prevPitch: 60 })).reasons & ReasonFlag.LargeLeap,
+  ).toBeFalsy();
   const semitone = evaluateSafety(query({ candidatePitch: 65, prevPitch: 64 }));
   expect(semitone.reasons & ReasonFlag.MinorSecond).toBeTruthy();
+});
+
+it('flags anti-parallel perfect intervals reached by contrary motion', () => {
+  // Candidate descends 74->62 while the other voice rises 50->62: an octave to a
+  // unison (same perfect class) by contrary motion — a parallel perfect.
+  const r = evaluateSafety(
+    query({ candidatePitch: 62, prevPitch: 74, otherVoices: [{ pitch: 62, prevPitch: 50 }] }),
+  );
+  expect(r.reasons & ReasonFlag.ParallelPerfect).toBeTruthy();
 });
 
 describe('enumerateSafePitches', () => {

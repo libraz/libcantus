@@ -12,6 +12,13 @@ describe('maskFromOffsets', () => {
   it('builds the harmonic-minor mask', () => {
     expect(maskFromOffsets([0, 2, 3, 5, 7, 8, 11])).toBe(HARMONIC_MINOR_MASK);
   });
+
+  it('always sets bit 0 even when the offsets omit the root', () => {
+    // The KeyScale invariant requires the root to be a scale tone, so the
+    // root bit is forced on regardless of the supplied offsets.
+    expect(maskFromOffsets([2, 4, 7]) & 1).toBe(1);
+    expect(maskFromOffsets([]) & 1).toBe(1);
+  });
 });
 
 describe('named scales', () => {

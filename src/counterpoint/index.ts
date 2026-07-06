@@ -60,11 +60,24 @@ function similarMotion(aMove: number, bMove: number): boolean {
   return aMove !== 0 && bMove !== 0 && aMove > 0 === bMove > 0;
 }
 
+/** Whether both voices actually move (neither is stationary — excludes oblique motion). */
+function bothVoicesMove(aMove: number, bMove: number): boolean {
+  return aMove !== 0 && bMove !== 0;
+}
+
 /**
- * Whether two voices move into consecutive parallel perfect intervals of the
- * same kind (fifth-to-fifth, octave-to-octave, unison-to-unison) by similar
- * motion. A fifth expanding to a twelfth counts (same perfect class); a fifth
- * moving to an octave does not (different perfect kinds).
+ * Whether two voices move into consecutive perfect intervals of the same kind
+ * (fifth-to-fifth, octave-to-octave, unison-to-unison).
+ *
+ * Both true parallels (similar motion) and anti-parallels — the same perfect
+ * class reached by contrary motion, e.g. octave to octave with the voices moving
+ * in opposite directions — are flagged, as both are forbidden in strict two-voice
+ * counterpoint. The rule requires that both voices actually move: oblique motion
+ * (either voice stationary) and the no-change case (identical pitches) are excluded.
+ *
+ * A fifth expanding to a twelfth counts (same perfect class); a fifth moving to
+ * an octave does not (different perfect kinds — the direct/hidden case owned by
+ * {@link createsHiddenParallelPerfect}).
  */
 export function createsParallelPerfect(
   aPrev: number,
@@ -72,7 +85,7 @@ export function createsParallelPerfect(
   bPrev: number,
   bCur: number,
 ): boolean {
-  if (!similarMotion(aCur - aPrev, bCur - bPrev)) {
+  if (!bothVoicesMove(aCur - aPrev, bCur - bPrev)) {
     return false;
   }
   const nowClass = simpleClass(aCur - bCur);

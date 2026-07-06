@@ -93,6 +93,15 @@ describe('transformMotif shifts', () => {
     expect(seq.notes).toHaveLength(cell.notes.length * 2);
     expect(seq.notes[3]?.startBeat).toBe(3); // copy begins after the original span
   });
+
+  it('sequences by semitones when no key is given', () => {
+    // Documented fallback: without a key, sequence shifts the copy chromatically
+    // by `amount` semitones (not diatonic degrees).
+    const seq = transformMotif(cell, 'sequence', 2);
+    expect(seq.notes).toHaveLength(cell.notes.length * 2);
+    const copy = seq.notes.slice(cell.notes.length);
+    expect(copy.map((n) => n.pitch)).toEqual([62, 66, 69]); // 60/64/67 + 2 semitones
+  });
 });
 
 describe('generateMotif', () => {

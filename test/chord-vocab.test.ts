@@ -34,6 +34,23 @@ describe('chordToneRole with sixths and diminished sevenths', () => {
   it('names the diminished seventh, not a sixth', () => {
     expect(chordToneRole(9, makeChord(0, 'dim7'))).toBe('seventh');
   });
+
+  it('treats the #11 of a 7#11 chord as a tension, not the fifth', () => {
+    const chord = makeChord(0, '7#11');
+    expect(chordToneRole(6, chord)).toBeNull();
+    expect(chordToneRole(7, chord)).toBe('fifth');
+  });
+
+  it('treats the b13 of a 7b13 chord as a tension, not the fifth', () => {
+    const chord = makeChord(0, '7b13');
+    expect(chordToneRole(8, chord)).toBeNull();
+    expect(chordToneRole(7, chord)).toBe('fifth');
+  });
+
+  it('does not report a seventh for a plain triad without one', () => {
+    expect(chordToneRole(10, makeChord(0, 'maj'))).toBeNull();
+    expect(chordToneRole(11, makeChord(0, 'maj'))).toBeNull();
+  });
 });
 
 describe('diatonic stacking', () => {

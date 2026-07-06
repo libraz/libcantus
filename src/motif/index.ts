@@ -186,12 +186,16 @@ export function generateMotif(opts: GenerateMotifOptions): MotifCell {
  * `retrograde` mirrors onsets about the cell span, preserving rests (self-inverse);
  * `augment`/`diminish` scale time by `amount ?? 2` and its reciprocal;
  * `transposeChromatic` adds `amount` semitones; `transposeDiatonic` shifts by
- * `amount` scale degrees; `sequence` appends a diatonically shifted copy.
+ * `amount` scale degrees when a `key` is given, or — with no `key` — falls back
+ * to a chromatic shift of `amount` semitones; `sequence` appends a shifted copy
+ * (by `amount` diatonic degrees with a `key`, or by `amount` semitones without
+ * one, since it delegates to `transposeDiatonic`).
  *
  * @param cell The cell to transform.
  * @param t The transformation.
  * @param amount Optional parameter (semitones, degrees, or time factor).
- * @param key Key context required by the diatonic transforms.
+ * @param key Key context for the diatonic transforms; without it,
+ *   `transposeDiatonic` and `sequence` shift chromatically by semitones.
  * @returns The transformed cell.
  */
 export function transformMotif(
@@ -211,6 +215,8 @@ export function transformMotif(
       return {
         notes: notes.map((n) => ({
           ...n,
+          // With a key, shift by scale degrees; without one, fall back to a
+          // chromatic shift of `degrees` semitones.
           pitch: key ? stepDiatonic(n.pitch, degrees, key) : n.pitch + degrees,
         })),
       };
@@ -240,6 +246,8 @@ export function transformMotif(
     case 'sequence': {
       const degrees = amount ?? 2;
       const span = cellSpan(cell);
+      // Delegates to transposeDiatonic: a diatonic shift when `key` is given,
+      // otherwise a chromatic shift of `degrees` semitones.
       const copy = transformMotif(cell, 'transposeDiatonic', degrees, key);
       const shifted = copy.notes.map((n) => ({ ...n, startBeat: n.startBeat + span }));
       return { notes: [...clone(cell).notes, ...shifted] };

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { makeChord } from '../src/chord/index.js';
 import { parseNote } from '../src/pitch/index.js';
 import { majorKey, minorKey, scaleByName } from '../src/scale/index.js';
-import { noteNames, spellChord, spellScale } from '../src/spelling/index.js';
+import { noteNames, spellChord, spellPitchClass, spellScale } from '../src/spelling/index.js';
 
 describe('spellScale', () => {
   it('spells C major with natural letters', () => {
@@ -51,6 +51,18 @@ describe('spellScale', () => {
       'C',
       'D',
     ]);
+  });
+});
+
+describe('spellPitchClass', () => {
+  it('spells a sharp minor key raised leading tone with a sharp letter (E# in F# minor)', () => {
+    // F# natural minor omits pc 5; its raised leading tone must spell E#, not F.
+    expect(spellPitchClass(5, parseNote('F#'), minorKey(6))).toEqual({ letter: 2, alter: 1 });
+  });
+
+  it('spells a sharp minor key raised sixth with a sharp letter (E# in G# minor)', () => {
+    // G# natural minor's sixth degree is E; its raised sixth must spell E#, not F.
+    expect(spellPitchClass(5, parseNote('G#'), minorKey(8))).toEqual({ letter: 2, alter: 1 });
   });
 });
 

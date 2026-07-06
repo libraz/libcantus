@@ -16,13 +16,28 @@ import type { KeyScale } from '../types.js';
 /** Semitone offset of each natural letter above C: C D E F G A B. */
 const LETTER_SEMITONES = [0, 2, 4, 5, 7, 9, 11] as const;
 
-/** Conventional accidental spelling for each chromatic offset above the tonic. */
+/**
+ * Conventional degree assignment for each chromatic offset above the tonic.
+ *
+ * The letter is derived from the tonic's letter plus `degreeOffset` (so the
+ * spelling follows the key's diatonic letters), and the accidental is recomputed
+ * for that letter. This covers the flat-side alterations (b2, b3, b6, b7), the
+ * raised fourth (#4), and the raised degrees of a minor key: the raised sixth
+ * (#6) and the raised leading tone (#7). The latter two keep sharp-side minor
+ * keys spelling their raised degrees with the key-correct letter (e.g. F# minor
+ * spells its leading tone E#, not F).
+ *
+ * The `alter` field is illustrative only; `spellPitchClass` recomputes the
+ * accidental from the chosen letter.
+ */
 const CHROMATIC_SPELLING: Record<number, { degreeOffset: number; alter: number }> = {
   1: { degreeOffset: 1, alter: -1 }, // b2
   3: { degreeOffset: 2, alter: -1 }, // b3
   6: { degreeOffset: 3, alter: 1 }, // #4
   8: { degreeOffset: 5, alter: -1 }, // b6
+  9: { degreeOffset: 5, alter: 1 }, // #6 (raised sixth of a minor key)
   10: { degreeOffset: 6, alter: -1 }, // b7
+  11: { degreeOffset: 6, alter: 1 }, // #7 (raised leading tone of a minor key)
 };
 
 function mod12(n: number): number {
@@ -56,8 +71,9 @@ function isHeptatonic(key: KeyScale): boolean {
  * Spell a single pitch class relative to a spelled tonic and key.
  *
  * Diatonic pitch classes take the scale's letter for their degree; the common
- * chromatic tones (b2, b3, #4, b6, b7) take their conventional accidental
- * spelling; anything else falls back to a sharp spelling of the nearest natural.
+ * chromatic tones (b2, b3, #4, b6, b7) and a minor key's raised degrees (#6, #7)
+ * take their conventional, key-correct accidental spelling; anything else falls
+ * back to a sharp spelling of the nearest natural.
  *
  * @param pc The pitch class to spell.
  * @param tonic The spelled tonic (its letter anchors the spelling).

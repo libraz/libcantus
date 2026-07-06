@@ -162,17 +162,27 @@ export function chordToneRole(
   chord: Chord,
 ): 'root' | 'third' | 'fifth' | 'sixth' | 'seventh' | null {
   const interval = (pitchClass(pitch) - pitchClass(chord.rootPc) + 12) % 12;
+  const tones = chordToneOffsets(chord);
   if (interval === 0) {
     return 'root';
   }
   if (interval === 3 || interval === 4) {
-    return 'third';
+    return tones.has(interval) ? 'third' : null;
   }
-  if (interval === 6 || interval === 7 || interval === 8) {
-    return 'fifth';
+  if (interval === 7) {
+    return tones.has(7) ? 'fifth' : null;
+  }
+  if (interval === 6) {
+    // A diminished fifth is the chord's fifth only when no perfect fifth is
+    // present; alongside a perfect fifth it is a #11 tension, not a fifth.
+    return tones.has(6) && !tones.has(7) ? 'fifth' : null;
+  }
+  if (interval === 8) {
+    // An augmented fifth is the chord's fifth only without a perfect fifth;
+    // alongside a perfect fifth it is a b13 tension, not a fifth.
+    return tones.has(8) && !tones.has(7) ? 'fifth' : null;
   }
   if (interval === 9) {
-    const tones = chordToneOffsets(chord);
     const hasHigherSeventh = tones.has(10) || tones.has(11);
     const isDiminishedSeventh = tones.has(3) && tones.has(6) && !hasHigherSeventh;
     if (isDiminishedSeventh) {
@@ -184,7 +194,7 @@ export function chordToneRole(
     return null;
   }
   if (interval === 10 || interval === 11) {
-    return 'seventh';
+    return tones.has(interval) ? 'seventh' : null;
   }
   return null;
 }

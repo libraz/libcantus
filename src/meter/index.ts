@@ -56,16 +56,16 @@ export function formatTimeSignature(ts: TimeSignature): string {
 }
 
 /**
- * Whether a meter is compound: its beats divide into three, as in 6/8, 9/8, or
- * 12/8. Meters like 3/8 (a simple triple) and 3/4 are not compound.
+ * Whether a meter is compound: its main pulses each divide into three, as in
+ * 6/8, 9/8, 12/8, or 6/4. Compound meters are those whose numerator is a
+ * multiple of three greater than three, independent of the denominator. Meters
+ * like 3/8 and 3/4 (simple triples, numerator 3) are not compound.
  *
  * @param ts The time signature.
  * @returns True for compound meters.
  */
 export function isCompound(ts: TimeSignature): boolean {
-  return (
-    ts.numerator % 3 === 0 && ts.numerator > 3 && (ts.denominator === 8 || ts.denominator === 16)
-  );
+  return ts.numerator % 3 === 0 && ts.numerator > 3;
 }
 
 /** Length of one denominator unit in quarter-note beats. */
