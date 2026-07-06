@@ -6,7 +6,7 @@ import type { KeyScale } from '../types.js';
 
 /** A theory annotation attached to a note. */
 export type TheoryLabel =
-  | { kind: 'chordTone'; role: 'root' | 'third' | 'fifth' | 'seventh' }
+  | { kind: 'chordTone'; role: 'root' | 'third' | 'fifth' | 'sixth' | 'seventh' }
   | { kind: 'tension'; degree: 9 | 11 | 13 }
   | { kind: 'avoid' }
   | { kind: 'passing' }

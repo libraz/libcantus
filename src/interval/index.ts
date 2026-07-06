@@ -14,18 +14,24 @@ function simpleInterval(semitones: number): number {
  * Classify an interval for counterpoint evaluation.
  *
  * The interval is reduced modulo 12, so compound intervals classify as their
- * simple equivalents. The perfect fourth (5) classifies as a dissonance.
+ * simple equivalents. The perfect fourth (5) is context-dependent: with
+ * `twoVoice` (the default) it classifies as a dissonance, matching
+ * {@link isConsonantInterval}; otherwise it is an imperfect consonance.
  *
  * @param semitones Interval size in semitones (may be negative or compound).
+ * @param twoVoice When true, the perfect fourth is treated as dissonant.
  * @returns The counterpoint quality of the interval.
  */
-export function classifyInterval(semitones: number): IntervalQuality {
+export function classifyInterval(semitones: number, twoVoice = true): IntervalQuality {
   const pc = simpleInterval(semitones);
   if (pc === 0 || pc === 7) {
     return IntervalQuality.PerfectConsonance;
   }
   if (pc === 3 || pc === 4 || pc === 8 || pc === 9) {
     return IntervalQuality.ImperfectConsonance;
+  }
+  if (pc === 5) {
+    return twoVoice ? IntervalQuality.Dissonance : IntervalQuality.ImperfectConsonance;
   }
   return IntervalQuality.Dissonance;
 }

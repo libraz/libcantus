@@ -1,14 +1,108 @@
 import type { KeyScale } from '../types.js';
 
+/** Build a 12-bit mode mask from a list of semitone offsets above the root. */
+export function maskFromOffsets(offsets: readonly number[]): number {
+  let mask = 0;
+  for (const offset of offsets) {
+    mask |= 1 << (((offset % 12) + 12) % 12);
+  }
+  return mask;
+}
+
 /** Mode mask for the major (Ionian) scale: offsets {0, 2, 4, 5, 7, 9, 11}. */
 export const MAJOR_MASK = 0b101010110101;
 
 /** Mode mask for the natural minor (Aeolian) scale: offsets {0, 2, 3, 5, 7, 8, 10}. */
 export const NATURAL_MINOR_MASK = 0b010110101101;
 
+/** Harmonic minor: natural minor with a raised seventh — offsets {0,2,3,5,7,8,11}. */
+export const HARMONIC_MINOR_MASK = maskFromOffsets([0, 2, 3, 5, 7, 8, 11]);
+
+/** Ascending melodic minor: offsets {0,2,3,5,7,9,11}. */
+export const MELODIC_MINOR_MASK = maskFromOffsets([0, 2, 3, 5, 7, 9, 11]);
+
+/** Dorian mode: offsets {0,2,3,5,7,9,10}. */
+export const DORIAN_MASK = maskFromOffsets([0, 2, 3, 5, 7, 9, 10]);
+
+/** Phrygian mode: offsets {0,1,3,5,7,8,10}. */
+export const PHRYGIAN_MASK = maskFromOffsets([0, 1, 3, 5, 7, 8, 10]);
+
+/** Lydian mode: offsets {0,2,4,6,7,9,11}. */
+export const LYDIAN_MASK = maskFromOffsets([0, 2, 4, 6, 7, 9, 11]);
+
+/** Mixolydian mode: offsets {0,2,4,5,7,9,10}. */
+export const MIXOLYDIAN_MASK = maskFromOffsets([0, 2, 4, 5, 7, 9, 10]);
+
+/** Locrian mode: offsets {0,1,3,5,6,8,10}. */
+export const LOCRIAN_MASK = maskFromOffsets([0, 1, 3, 5, 6, 8, 10]);
+
+/** Major pentatonic: offsets {0,2,4,7,9}. */
+export const MAJOR_PENTATONIC_MASK = maskFromOffsets([0, 2, 4, 7, 9]);
+
+/** Minor pentatonic: offsets {0,3,5,7,10}. */
+export const MINOR_PENTATONIC_MASK = maskFromOffsets([0, 3, 5, 7, 10]);
+
+/** Hexatonic blues scale: minor pentatonic plus the flat-fifth — {0,3,5,6,7,10}. */
+export const BLUES_MASK = maskFromOffsets([0, 3, 5, 6, 7, 10]);
+
+/** Whole-tone scale: offsets {0,2,4,6,8,10}. */
+export const WHOLE_TONE_MASK = maskFromOffsets([0, 2, 4, 6, 8, 10]);
+
+/** Octatonic (half-step first): offsets {0,1,3,4,6,7,9,10}. */
+export const OCTATONIC_HALF_WHOLE_MASK = maskFromOffsets([0, 1, 3, 4, 6, 7, 9, 10]);
+
+/** Octatonic (whole-step first): offsets {0,2,3,5,6,8,9,11}. */
+export const OCTATONIC_WHOLE_HALF_MASK = maskFromOffsets([0, 2, 3, 5, 6, 8, 9, 11]);
+
+/** Chromatic scale: all twelve pitch classes. */
+export const CHROMATIC_MASK = 0b111111111111;
+
+/** Named scale masks addressable by {@link scaleByName}. */
+export const NAMED_SCALES: Record<string, number> = {
+  major: MAJOR_MASK,
+  ionian: MAJOR_MASK,
+  naturalMinor: NATURAL_MINOR_MASK,
+  aeolian: NATURAL_MINOR_MASK,
+  harmonicMinor: HARMONIC_MINOR_MASK,
+  melodicMinor: MELODIC_MINOR_MASK,
+  dorian: DORIAN_MASK,
+  phrygian: PHRYGIAN_MASK,
+  lydian: LYDIAN_MASK,
+  mixolydian: MIXOLYDIAN_MASK,
+  locrian: LOCRIAN_MASK,
+  majorPentatonic: MAJOR_PENTATONIC_MASK,
+  minorPentatonic: MINOR_PENTATONIC_MASK,
+  blues: BLUES_MASK,
+  wholeTone: WHOLE_TONE_MASK,
+  octatonicHalfWhole: OCTATONIC_HALF_WHOLE_MASK,
+  octatonicWholeHalf: OCTATONIC_WHOLE_HALF_MASK,
+  chromatic: CHROMATIC_MASK,
+};
+
 /** Build a `KeyScale` for a major key on the given root pitch class. */
 export function majorKey(rootPc: number): KeyScale {
   return { rootPc: ((rootPc % 12) + 12) % 12, modeMask12: MAJOR_MASK };
+}
+
+/** Build a `KeyScale` for a natural-minor key on the given root pitch class. */
+export function minorKey(rootPc: number): KeyScale {
+  return { rootPc: ((rootPc % 12) + 12) % 12, modeMask12: NATURAL_MINOR_MASK };
+}
+
+/**
+ * Build a `KeyScale` from a named scale (see {@link NAMED_SCALES}).
+ *
+ * @param name The scale name, e.g. `'dorian'` or `'harmonicMinor'`.
+ * @param rootPc The root pitch class.
+ * @returns The key/scale.
+ * @throws If the name is not a known scale.
+ */
+export function scaleByName(name: string, rootPc: number): KeyScale {
+  const mask = NAMED_SCALES[name];
+  if (mask === undefined) {
+    throw new Error(`Unknown scale: ${name}`);
+  }
+  return { rootPc: ((rootPc % 12) + 12) % 12, modeMask12: mask };
 }
 
 /** Reduce a pitch (or pitch class) to a pitch class in [0, 11]. */

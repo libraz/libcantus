@@ -1,0 +1,88 @@
+import { describe, expect, it } from 'vitest';
+import {
+  formatNote,
+  midiToNote,
+  noteToMidi,
+  noteToPitchClass,
+  parseNote,
+  spelledInterval,
+} from '../src/pitch/index.js';
+
+describe('parseNote / formatNote', () => {
+  it('round-trips common spellings', () => {
+    for (const text of ['C', 'C#4', 'Bb', 'F##3', 'Ebb2', 'G-1']) {
+      expect(formatNote(parseNote(text))).toBe(text);
+    }
+  });
+
+  it('parses double sharps written with x', () => {
+    expect(parseNote('Fx3')).toEqual({ letter: 3, alter: 2, octave: 3 });
+  });
+
+  it('rejects invalid text', () => {
+    expect(() => parseNote('H')).toThrow();
+    expect(() => parseNote('')).toThrow();
+  });
+});
+
+describe('pitch-class and MIDI conversion', () => {
+  it('distinguishes enharmonics in spelling but shares a pitch class', () => {
+    expect(noteToPitchClass(parseNote('G#'))).toBe(8);
+    expect(noteToPitchClass(parseNote('Ab'))).toBe(8);
+  });
+
+  it('places middle C at MIDI 60', () => {
+    expect(noteToMidi(parseNote('C4'))).toBe(60);
+    expect(noteToMidi(parseNote('A4'))).toBe(69);
+  });
+
+  it('names MIDI numbers with the requested spelling', () => {
+    expect(formatNote(midiToNote(61, 'sharp'))).toBe('C#4');
+    expect(formatNote(midiToNote(61, 'flat'))).toBe('Db4');
+    expect(formatNote(midiToNote(60))).toBe('C4');
+  });
+
+  it('requires an octave for MIDI conversion', () => {
+    expect(() => noteToMidi(parseNote('C'))).toThrow();
+  });
+});
+
+describe('spelledInterval', () => {
+  it('distinguishes augmented fourth from diminished fifth', () => {
+    const aug4 = spelledInterval(parseNote('C4'), parseNote('F#4'));
+    expect(aug4).toMatchObject({ number: 4, quality: 'A', semitones: 6 });
+    const dim5 = spelledInterval(parseNote('C4'), parseNote('Gb4'));
+    expect(dim5).toMatchObject({ number: 5, quality: 'd', semitones: 6 });
+  });
+
+  it('names common intervals', () => {
+    expect(spelledInterval(parseNote('C4'), parseNote('E4'))).toMatchObject({
+      number: 3,
+      quality: 'M',
+    });
+    expect(spelledInterval(parseNote('C4'), parseNote('Eb4'))).toMatchObject({
+      number: 3,
+      quality: 'm',
+    });
+    expect(spelledInterval(parseNote('C4'), parseNote('G4'))).toMatchObject({
+      number: 5,
+      quality: 'P',
+    });
+    expect(spelledInterval(parseNote('C4'), parseNote('C5'))).toMatchObject({
+      number: 8,
+      quality: 'P',
+      semitones: 12,
+    });
+  });
+
+  it('detects the augmented second in harmonic minor', () => {
+    const aug2 = spelledInterval(parseNote('Ab4'), parseNote('B4'));
+    expect(aug2).toMatchObject({ number: 2, quality: 'A', semitones: 3 });
+  });
+
+  it('carries a sign for descending intervals', () => {
+    const down = spelledInterval(parseNote('G4'), parseNote('C4'));
+    expect(down.semitones).toBe(-7);
+    expect(down.number).toBe(5);
+  });
+});

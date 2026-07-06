@@ -258,8 +258,9 @@ function autoQuality(degree: number): ChordQuality {
  * fill `bars`; each bar is four beats, so `startBeat` is `barIndex * 4`. Chord
  * roots come from the key's diatonic scale-degree mapping. When `ext` is
  * omitted or `'auto'`, each chord takes its diatonic triad quality; otherwise
- * `ext` is forced on every chord. `reharmonize` is reserved and currently has
- * no effect.
+ * `ext` is forced on every chord. When `reharmonize` is set, some chords are
+ * deterministically replaced with the secondary dominant (V7) of the following
+ * chord, flagged with `secondaryDominant`.
  *
  * @param opts Generation options.
  * @returns One chord per bar in timeline order.
@@ -282,7 +283,40 @@ export function generateProgression(opts: GenerateProgressionOptions): Generated
   for (let bar = 0; bar < opts.bars; bar += 1) {
     const degree = degrees[bar % degrees.length] ?? 0;
     const quality = opts.ext !== undefined && opts.ext !== 'auto' ? opts.ext : autoQuality(degree);
-    chords.push({ rootPc: degreeToRootPc(degree, opts.key), quality, startBeat: bar * 4 });
+    const chord: GeneratedChord = {
+      rootPc: degreeToRootPc(degree, opts.key),
+      quality,
+      startBeat: bar * 4,
+      degree: degree >= 0 && degree <= 6 ? degree : undefined,
+    };
+    chords.push(chord);
   }
+
+  if (opts.reharmonize) {
+    const tonicPc = (((opts.key.rootPc % 12) + 12) % 12) as number;
+    const rrng = mulberry32((seed ^ 0x9e3779b9) >>> 0);
+    for (let i = 0; i < chords.length - 1; i += 1) {
+      const cur = chords[i];
+      const next = chords[i + 1];
+      if (!cur || !next) {
+        continue;
+      }
+      const domRoot = (next.rootPc + 7) % 12;
+      const targetsTonic = (next.rootPc - tonicPc + 12) % 12 === 0;
+      const alreadySecondary = cur.rootPc === domRoot && cur.quality === 'dom7';
+      if (targetsTonic || alreadySecondary) {
+        continue;
+      }
+      if (rrng() < 0.5) {
+        chords[i] = {
+          rootPc: domRoot,
+          quality: 'dom7',
+          startBeat: cur.startBeat,
+          secondaryDominant: true,
+        };
+      }
+    }
+  }
+
   return chords;
 }

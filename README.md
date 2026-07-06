@@ -1,6 +1,7 @@
 # @libraz/cantus
 
-Pure-TypeScript music-theory and composition primitives: intervals, scales, and chords.
+Pure-TypeScript music-theory and composition primitives: pitch spelling,
+intervals, scales, chords, functional harmony, and voice-leading.
 
 [![CI](https://github.com/libraz/libcantus/actions/workflows/ci.yml/badge.svg)](https://github.com/libraz/libcantus/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -9,11 +10,18 @@ Pure-TypeScript music-theory and composition primitives: intervals, scales, and 
 
 ## Features
 
-| Module     | Exports                                                                                                          |
-| ---------- | --------------------------------------------------------------------------------------------------------------- |
-| `interval` | `IntervalQuality`, `classifyInterval`, `isPerfectInterval`, `isConsonantInterval`                               |
-| `scale`    | `KeyScale`, `majorKey`, `isScaleTone`, `nearestScaleTone`, `pitchToScaleDegree`, `diatonicPitchClasses`         |
-| `chord`    | `Chord`, `ChordQuality`, `chordFromDegree`, `chordPitchClasses`, `chordToneRole`                                |
+| Module        | Exports                                                                                                                     |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `pitch`       | `Note`, `parseNote`, `formatNote`, `noteToMidi`, `midiToNote`, `spelledInterval` (letter-name spelling, enharmonics)         |
+| `interval`    | `IntervalQuality`, `classifyInterval`, `isPerfectInterval`, `isConsonantInterval`                                            |
+| `scale`       | `KeyScale`, `majorKey`, `minorKey`, `scaleByName`, `NAMED_SCALES` (modes, pentatonic, blues, whole-tone, octatonic, …)       |
+| `chord`       | `Chord`, `ChordQuality`, `chordFromDegree`, `diatonicTriad`, `diatonicSeventh`, `chordPitchClasses`, `chordToneRole`         |
+| `functional`  | `romanToChord`, `chordToRoman`, `functionOf`, `detectCadence`, `secondaryDominant`                                           |
+| `detect`      | `detectChord`, `detectChordBest`, `detectKey` (recognition: notes → chord/key)                                               |
+| `counterpoint`| parallel/hidden-perfect, unison, overlap, spacing, voice-crossing, leading-tone, and dissonance predicates                   |
+
+Chord vocabulary spans triads through thirteenths, including `dim7`, `m7b5`,
+`minMaj7`, `aug7`, sixths, and altered dominants.
 
 All functions are pure: plain inputs in, plain TypeScript objects out. No runtime dependencies.
 
@@ -42,6 +50,34 @@ a major key; `MAJOR_MASK` and `NATURAL_MINOR_MASK` are provided for custom keys.
 
 `nearestScaleTone` snaps a pitch to the closest in-scale MIDI pitch and prefers
 the lower pitch on a tie.
+
+### Roman numerals, recognition, and spelling
+
+```ts
+import {
+  chordToRoman,
+  detectChord,
+  detectKey,
+  majorKey,
+  makeChord,
+  parseNote,
+  romanToChord,
+  spelledInterval,
+} from '@libraz/cantus';
+
+const c = majorKey(0);
+
+romanToChord('V7/V', c); // { rootPc: 2, quality: 'dom7' }  (D7)
+chordToRoman(makeChord(7, 'dom7'), c); // 'V7'
+
+// Recognition (notes -> chord/key), the inverse of the builders:
+detectChord([60, 64, 67])[0]; // { rootPc: 0, quality: 'maj', exact: true }
+detectKey([0, 0, 0, 4, 7])[0]; // C major, best fit
+
+// Spelling distinguishes enharmonics the pitch-class layer cannot:
+spelledInterval(parseNote('C4'), parseNote('F#4')); // { number: 4, quality: 'A', semitones: 6 }
+spelledInterval(parseNote('C4'), parseNote('Gb4')); // { number: 5, quality: 'd', semitones: 6 }
+```
 
 ## License
 

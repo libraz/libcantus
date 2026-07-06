@@ -1,4 +1,4 @@
-import { isConsonantInterval, isPerfectInterval } from '../interval/index.js';
+import { isConsonantInterval } from '../interval/index.js';
 import type { KeyScale } from '../types.js';
 
 /** Reduce a MIDI pitch (or pitch class) to a pitch class in [0, 11]. */
@@ -42,9 +42,26 @@ export function isForbiddenMelodicLeap(prev: number, cur: number): boolean {
   return semis === 6 || semis === 11;
 }
 
+/** Reduce an interval to its simple class in [0, 11]. */
+function simpleClass(semitones: number): number {
+  return Math.abs(semitones) % 12;
+}
+
+/** Whether a simple interval class is a perfect kind (unison/octave or fifth). */
+function isPerfectClass(cls: number): boolean {
+  return cls === 0 || cls === 7;
+}
+
+/** Whether two voices move in the same direction (similar or parallel motion). */
+function similarMotion(aMove: number, bMove: number): boolean {
+  return aMove !== 0 && bMove !== 0 && aMove > 0 === bMove > 0;
+}
+
 /**
- * Whether two voices move into consecutive parallel perfect intervals
- * (unison, fifth, or octave held identical across the move).
+ * Whether two voices move into consecutive parallel perfect intervals of the
+ * same kind (fifth-to-fifth, octave-to-octave, unison-to-unison) by similar
+ * motion. A fifth expanding to a twelfth counts (same perfect class); a fifth
+ * moving to an octave does not (different perfect kinds).
  */
 export function createsParallelPerfect(
   aPrev: number,
@@ -52,17 +69,17 @@ export function createsParallelPerfect(
   bPrev: number,
   bCur: number,
 ): boolean {
-  if (aCur === aPrev || bCur === bPrev) {
+  if (!similarMotion(aCur - aPrev, bCur - bPrev)) {
     return false;
   }
-  const now = aCur - bCur;
-  const prev = aPrev - bPrev;
-  return isPerfectInterval(now) && isPerfectInterval(prev) && now === prev && now !== 0;
+  const nowClass = simpleClass(aCur - bCur);
+  const prevClass = simpleClass(aPrev - bPrev);
+  return isPerfectClass(nowClass) && nowClass === prevClass;
 }
 
 /**
- * Whether two voices move in parallel octaves (both intervals reduce to an
- * octave/unison class).
+ * Whether two voices move in consecutive parallel octaves (or unisons) by
+ * similar motion.
  */
 export function createsParallelOctave(
   aPrev: number,
@@ -70,19 +87,35 @@ export function createsParallelOctave(
   bPrev: number,
   bCur: number,
 ): boolean {
+  if (!similarMotion(aCur - aPrev, bCur - bPrev)) {
+    return false;
+  }
+  return simpleClass(aCur - bCur) === 0 && simpleClass(aPrev - bPrev) === 0;
+}
+
+/**
+ * Whether two voices move in consecutive parallel unisons — both landing on the
+ * same pitch, having shared a pitch on the previous move.
+ */
+export function createsParallelUnison(
+  aPrev: number,
+  aCur: number,
+  bPrev: number,
+  bCur: number,
+): boolean {
   if (aCur === aPrev || bCur === bPrev) {
     return false;
   }
-  const now = aCur - bCur;
-  const prev = aPrev - bPrev;
-  const octNow = Math.abs(now) % 12 === 0 && now !== 0;
-  const octPrev = Math.abs(prev) % 12 === 0 && prev !== 0;
-  return octNow && octPrev;
+  return aCur === bCur && aPrev === bPrev;
 }
 
 /**
  * Whether two voices reach a perfect interval by similar motion from an
- * imperfect one (hidden/direct parallels).
+ * imperfect one (a hidden/direct fifth or octave).
+ *
+ * The traditional step exception is applied: the approach is allowed when the
+ * upper of the two voices moves by step, so only leaps into the perfect
+ * interval are flagged.
  */
 export function createsHiddenParallelPerfect(
   aPrev: number,
@@ -90,17 +123,53 @@ export function createsHiddenParallelPerfect(
   bPrev: number,
   bCur: number,
 ): boolean {
-  const thisMotion = aCur - aPrev;
-  const otherMotion = bCur - bPrev;
-  if (thisMotion === 0 || otherMotion === 0) {
+  const aMove = aCur - aPrev;
+  const bMove = bCur - bPrev;
+  if (!similarMotion(aMove, bMove)) {
     return false;
   }
-  if (thisMotion > 0 !== otherMotion > 0) {
+  const nowClass = simpleClass(aCur - bCur);
+  const prevClass = simpleClass(aPrev - bPrev);
+  if (!isPerfectClass(nowClass) || isPerfectClass(prevClass)) {
     return false;
   }
-  const now = aCur - bCur;
-  const prev = aPrev - bPrev;
-  return isPerfectInterval(now) && !isPerfectInterval(prev);
+  const upperMove = aCur >= bCur ? aMove : bMove;
+  if (Math.abs(upperMove) <= 2) {
+    return false; // upper voice moves by step — direct interval is acceptable
+  }
+  return true;
+}
+
+/**
+ * Whether two voices overlap: the upper voice descends below where the lower
+ * voice just was, or the lower voice rises above where the upper voice just was.
+ * Distinct from a simultaneous voice crossing.
+ *
+ * @param upperPrev Previous pitch of the upper voice.
+ * @param upperCur Current pitch of the upper voice.
+ * @param lowerPrev Previous pitch of the lower voice.
+ * @param lowerCur Current pitch of the lower voice.
+ */
+export function createsVoiceOverlap(
+  upperPrev: number,
+  upperCur: number,
+  lowerPrev: number,
+  lowerCur: number,
+): boolean {
+  return upperCur < lowerPrev || lowerCur > upperPrev;
+}
+
+/**
+ * Whether two adjacent upper voices are spaced more than a maximum apart
+ * (commonly an octave). Bass-to-tenor spacing is conventionally exempt, so this
+ * is meant for the upper voice pairs.
+ *
+ * @param upperPitch Pitch of the higher voice.
+ * @param lowerPitch Pitch of the lower voice.
+ * @param maxSemitones Maximum allowed spacing in semitones (default an octave).
+ */
+export function exceedsSpacing(upperPitch: number, lowerPitch: number, maxSemitones = 12): boolean {
+  return Math.abs(upperPitch - lowerPitch) > maxSemitones;
 }
 
 /**
