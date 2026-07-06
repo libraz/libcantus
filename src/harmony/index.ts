@@ -1,0 +1,58 @@
+import type { Chord } from '../chord/index.js';
+
+/** Harmonic role a pitch plays within a chord. */
+export type HarmonyRole = 'root' | 'third' | 'fifth' | 'seventh' | 'tension' | 'doubling';
+
+/**
+ * How firmly a pitch is locked to the chord's identity.
+ *
+ * - `identity`: moving it produces a different chord (the root).
+ * - `quality`: moving it flips the chord quality (the third).
+ * - `voicing`: it can move freely without changing chord identity or quality.
+ */
+export type LockLevel = 'identity' | 'quality' | 'voicing';
+
+/** A pitch's role, lock level, and owning chord. */
+export type VoicedRole = {
+  role: HarmonyRole;
+  lock: LockLevel;
+  belongsToChordId: number;
+};
+
+/**
+ * Classify a pitch's harmonic role and lock level within a chord.
+ *
+ * The role comes from the pitch's interval class above the chord root: root (0),
+ * third (3/4), fifth (6/7/8), seventh (10/11), and 9/11/13 tensions (2/5/9, and
+ * the flat ninth 1). The root locks the chord identity, the third locks its
+ * quality, and everything else is free voicing. Detecting an octave doubling
+ * requires the surrounding voicing, which this single-pitch query does not carry,
+ * so `doubling` is part of the type but not returned here.
+ *
+ * @param pitch MIDI pitch or bare pitch class.
+ * @param chord The chord providing the root reference.
+ * @param chordId Identifier stored on the result (defaults to 0).
+ * @returns The pitch's role, lock level, and owning chord id.
+ */
+export function roleOf(pitch: number, chord: Chord, chordId = 0): VoicedRole {
+  const interval = (((Math.trunc(pitch) - chord.rootPc) % 12) + 12) % 12;
+  let role: HarmonyRole;
+  let lock: LockLevel;
+  if (interval === 0) {
+    role = 'root';
+    lock = 'identity';
+  } else if (interval === 3 || interval === 4) {
+    role = 'third';
+    lock = 'quality';
+  } else if (interval === 6 || interval === 7 || interval === 8) {
+    role = 'fifth';
+    lock = 'voicing';
+  } else if (interval === 10 || interval === 11) {
+    role = 'seventh';
+    lock = 'voicing';
+  } else {
+    role = 'tension';
+    lock = 'voicing';
+  }
+  return { role, lock, belongsToChordId: chordId };
+}

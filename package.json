@@ -1,0 +1,54 @@
+{
+  "name": "@libraz/cantus",
+  "version": "0.0.0",
+  "description": "Pure-TypeScript music-theory and composition primitives (intervals, scales, chords).",
+  "type": "module",
+  "license": "MIT",
+  "author": "libraz",
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "packageManager": "yarn@4.17.0",
+  "volta": {
+    "node": "22.22.3",
+    "yarn": "4.17.0"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "tsconfig.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "prepare": "[ -d node_modules/typescript ] && tsup || true",
+    "prepublishOnly": "yarn build"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.2",
+    "@vitest/coverage-v8": "4.1.9",
+    "tsup": "8.5.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.9"
+  }
+}
