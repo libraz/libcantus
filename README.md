@@ -1,4 +1,4 @@
-# @libraz/cantus
+# @libraz/libcantus
 
 Pure-TypeScript toolkit for working with music: name notes and chords, analyze
 harmony, recognize what you're hearing, voice and reharmonize progressions, and
@@ -32,14 +32,17 @@ dependencies.
   missing parts against it.
 - **Work with pitch as sound** — frequencies, cents, EDO, and just intonation.
 
-Everything is available in two interchangeable styles: a **fluent, immutable
-class API** that reads like music theory, and the underlying **tree-shakeable
-pure functions**. Pick whichever fits.
+The musical **values** — notes, chords, keys, progressions — come in two
+interchangeable styles: a **fluent, immutable class API** (`Note`, `Chord`,
+`Key`, `Progression`) that reads like music theory, and the underlying
+**tree-shakeable pure functions**. Operations over **collections and timelines**
+(part generation and whole-arrangement analysis) work on arrays of note events,
+so — like `rhythm`, `drums`, and `detectKey` — they are exposed as functions.
 
 ## Install
 
 ```sh
-yarn add @libraz/cantus
+yarn add @libraz/libcantus
 ```
 
 ## Quick start
@@ -48,7 +51,7 @@ The class API chains immutably and carries key context, so analysis needs no
 repetition:
 
 ```ts
-import { Chord, Key, Note } from '@libraz/cantus';
+import { Chord, Key, Note } from '@libraz/libcantus';
 
 const c = Key.major('C');
 
@@ -68,7 +71,7 @@ pure functions, so the two styles interoperate freely. The same task with the
 functional API:
 
 ```ts
-import { chordFromDegree, chordPitchClasses, classifyInterval, majorKey } from '@libraz/cantus';
+import { chordFromDegree, chordPitchClasses, classifyInterval, majorKey } from '@libraz/libcantus';
 
 const cMajor = majorKey(0);
 
@@ -82,10 +85,12 @@ Parse and format notes, convert to MIDI, and spell intervals so enharmonics the
 pitch-class layer can't tell apart come out right:
 
 ```ts
-import { parseNote, spelledInterval } from '@libraz/cantus';
+import { Interval, Note } from '@libraz/libcantus';
 
-spelledInterval(parseNote('C4'), parseNote('F#4')); // { number: 4, quality: 'A', semitones: 6 }
-spelledInterval(parseNote('C4'), parseNote('Gb4')); // { number: 5, quality: 'd', semitones: 6 }
+Note.of('C4').transpose(7).name; // 'G4'
+Note.of('C4').midi; // 60
+Interval.between(Note.of('C4'), Note.of('F#4')).name; // 'A4'  (augmented fourth)
+Interval.between(Note.of('C4'), Note.of('Gb4')).name; // 'd5'  (diminished fifth)
 ```
 
 ## Keys and scales
@@ -103,24 +108,23 @@ the lower on a tie) — handy when constraining generated notes to a key.
 From scale degrees, Roman numerals, or lead-sheet symbols — and back again:
 
 ```ts
-import {
-  chordToRoman, majorKey, makeChord, parseChordSymbol, romanToChord,
-} from '@libraz/cantus';
+import { Chord, Key } from '@libraz/libcantus';
 
-const c = majorKey(0);
+const c = Key.major('C');
 
-romanToChord('V7/V', c); // { rootPc: 2, quality: 'dom7' }  (D7)
-chordToRoman(makeChord(7, 'dom7'), c); // 'V7'
-parseChordSymbol('F#m7b5'); // { rootPc: 6, quality: 'm7b5', ... }
+c.roman('V7/V').symbol(); // 'D7'  (a secondary dominant)
+c.chord(4, 'dom7').roman(); // 'V7'
+Chord.parse('F#m7b5').pitchClasses(); // [0, 4, 6, 9]
 ```
 
 Chord vocabulary spans triads through thirteenths — `dim7`, `m7b5`, `minMaj7`,
 `aug7`, sixths, and altered dominants included.
 
-Or generate a progression from a style preset:
+Or generate a progression from a style preset (a collection-level operation, so
+it stays functional):
 
 ```ts
-import { generateProgression } from '@libraz/cantus';
+import { generateProgression, majorKey } from '@libraz/libcantus';
 
 // One chord per bar, secondary dominants inserted where they fit:
 generateProgression({ key: majorKey(0), style: 'idol', bars: 8, reharmonize: true, seed: 1 });
@@ -132,10 +136,10 @@ Turn chords into Roman-numeral analysis with function, cadences, and modal
 interchange — in major and minor, respecting inversions:
 
 ```ts
-import { analyzeChord, makeChord, majorKey } from '@libraz/cantus';
+import { Chord, Key } from '@libraz/libcantus';
 
 // A minor iv in a major key reads as a borrowed subdominant:
-analyzeChord(makeChord(5, 'min'), majorKey(0));
+Chord.of('F', 'min').analyze(Key.major('C'));
 // { function: 'subdominant', borrowed: true, source: 'parallel-minor', roman: 'iv' }
 ```
 
@@ -144,59 +148,73 @@ analyzeChord(makeChord(5, 'min'), majorKey(0));
 Notes in, chord or key out — the inverse of the builders:
 
 ```ts
-import { detectChord, detectKey } from '@libraz/cantus';
+import { Chord, detectKey } from '@libraz/libcantus';
 
-detectChord([60, 64, 67])[0]; // { rootPc: 0, quality: 'maj', exact: true }
-detectKey([0, 0, 0, 4, 7])[0]; // C major, best fit
+Chord.detect([60, 64, 67])[0].symbol(); // 'C'
+Chord.detectBest([60, 63, 67, 70])?.symbol(); // 'Cm7'
+detectKey([0, 0, 0, 4, 7])[0]; // C major, best fit  (key ranking stays functional)
 ```
 
 ## Spell chords and scales
 
-Give a spelled tonic and the pitch-class core produces letter names, correct in
-major and minor:
+A `Key` carries a spelled tonic, so the pitch-class core produces letter names,
+correct in major and minor:
 
 ```ts
-import { minorKey, noteNames, parseNote, scaleByName, spellScale } from '@libraz/cantus';
+import { Chord, Key } from '@libraz/libcantus';
 
-noteNames(spellScale(parseNote('A'), scaleByName('harmonicMinor', 9)));
-// ['A', 'B', 'C', 'D', 'E', 'F', 'G#']
-noteNames(spellScale(parseNote('E'), minorKey(4)));
-// ['E', 'F#', 'G', 'A', 'B', 'C', 'D']
+Key.named('harmonicMinor', 'A').noteNames(); // ['A', 'B', 'C', 'D', 'E', 'F', 'G#']
+Key.minor('E').noteNames(); // ['E', 'F#', 'G', 'A', 'B', 'C', 'D']
+
+// Chords spell in a key's context too:
+Key.major('C').chord(4, 'dom7').spell().map((n) => n.name); // ['G', 'B', 'D', 'F']
 ```
 
 ## Reharmonize
 
-Get substitution candidates for a chord — tritone, relative, borrowed, and
-chromatic-mediant subs, plus modal-interchange palettes and negative harmony:
+Reflect a chord through negative harmony on the class, or list substitution
+candidates — tritone, relative, borrowed, and chromatic-mediant subs, plus
+modal-interchange palettes — with the functions:
 
 ```ts
-import { parseChordSymbol, substituteChord } from '@libraz/cantus';
+import { Chord, Key, majorKey, parseChordSymbol, substituteChord } from '@libraz/libcantus';
 
+Key.major('C').chord(4, 'dom7').negativeHarmony().symbol(); // 'Dm7b5'
+
+// Substitution/palette search returns lists, so it stays functional:
 substituteChord(parseChordSymbol('G7'), majorKey(0));
 // [{ chord: Db7, type: 'tritone', ... }, ...]
 ```
 
 ## Choose scales and tensions
 
-Find scales compatible with a chord, its available tensions and avoid notes, and
-a continuity-optimized scale choice across a whole set of changes:
+Find scales compatible with a chord and its available tensions and avoid notes
+on the class; get a continuity-optimized scale choice across a whole set of
+changes with `scalesForChanges`:
 
 ```ts
-import { chordScales, makeChord } from '@libraz/cantus';
+import { Chord } from '@libraz/libcantus';
 
-chordScales(makeChord(0, 'dom7'))[0]; // { name: 'mixolydian', rootPc: 0 }
+Chord.of('C', 'dom7').scales()[0]; // { name: 'mixolydian', rootPc: 0 }
+Chord.of('C', 'maj7').tensions('ionian'); // [2, 9]  (9 and 13; the 11 is an avoid note)
 ```
 
 ## Voice chords
 
 Realize a progression into smooth 4-voice (SATB) MIDI voicings with minimal
-motion, or apply a comping style (drop-2/3, shell, rootless):
+motion, or voice a single chord in a comping style (drop-2/3, shell, rootless):
 
 ```ts
-import { makeChord, voiceProgression } from '@libraz/cantus';
+import { Chord, Key } from '@libraz/libcantus';
 
-voiceProgression([makeChord(0, 'maj'), makeChord(5, 'maj'), makeChord(7, 'dom7'), makeChord(0, 'maj')]);
-// [[...], [...], [...], [...]]  (one ascending pitch per voice, minimal motion)
+const c = Key.major('C');
+
+// A whole progression, voiced with minimal motion:
+c.chord(0, 'maj').progressionTo(c.chord(5, 'maj'), c.chord(4, 'dom7'), c.chord(0, 'maj')).voice();
+// [[...], [...], [...], [...]]  (one ascending pitch per voice)
+
+// A single chord in a shell comping voicing:
+Chord.of('C', 'maj7').styledVoicing({ style: 'shell' }); // root, third, seventh
 ```
 
 `voiceLeadingCost` and `nextVoicing` let you steer the leading, and the
@@ -211,7 +229,7 @@ Seeded, deterministic generators for melody and accompaniment:
 import {
   generateBassLine, generateCounterMelody, generateDrums, generateRhythm,
   generateMotif, parseTimeSignature,
-} from '@libraz/cantus';
+} from '@libraz/libcantus';
 
 generateRhythm(parseTimeSignature('4/4'), { seed: 1, density: 0.5 }); // strong-beat-weighted onsets
 generateMotif({ key: majorKey(0), length: 4, contour: 'arch', seed: 1 }); // a short melodic cell
@@ -228,7 +246,7 @@ then analyses and generates against it:
 ```ts
 import {
   analyzeArrangement, chordTimelineFromNotes, generateBassLine, generateCounterMelody,
-} from '@libraz/cantus';
+} from '@libraz/libcantus';
 
 // Infer a chord progression (and the key) from played notes:
 const { timeline, key } = chordTimelineFromNotes(melodyAndChordNotes);
@@ -261,7 +279,7 @@ Frequencies, cents, EDO, and just intonation — for tuning, microtonality, and
 analysis:
 
 ```ts
-import { frequencyOf, edo, justDeviationCents } from '@libraz/cantus';
+import { frequencyOf, edo, justDeviationCents } from '@libraz/libcantus';
 ```
 
 Meter helpers (`TimeSignature`, `parseTimeSignature`, `beatsPerBar`,

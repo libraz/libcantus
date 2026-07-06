@@ -1,10 +1,27 @@
 {
-  "name": "@libraz/cantus",
-  "version": "0.0.0",
+  "name": "@libraz/libcantus",
+  "version": "0.9.0",
   "description": "Pure-TypeScript music-theory and composition primitives (intervals, scales, chords).",
   "type": "module",
   "license": "Apache-2.0",
   "author": "libraz",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/libraz/libcantus.git"
+  },
+  "homepage": "https://github.com/libraz/libcantus#readme",
+  "bugs": {
+    "url": "https://github.com/libraz/libcantus/issues"
+  },
+  "keywords": [
+    "music-theory",
+    "music",
+    "chords",
+    "scales",
+    "intervals",
+    "harmony",
+    "composition"
+  ],
   "engines": {
     "node": ">=22 <23"
   },
@@ -48,7 +65,7 @@
     "@biomejs/biome": "2.5.2",
     "@vitest/coverage-v8": "4.1.9",
     "tsup": "8.5.1",
-    "typescript": "5.9.3",
+    "typescript": "6.0.3",
     "vitest": "4.1.9"
   }
 }

@@ -5,7 +5,7 @@ import {
   diatonicPitchClasses,
   IntervalQuality,
   majorKey,
-} from '@libraz/cantus';
+} from '@libraz/libcantus';
 import { describe, expect, it } from 'vitest';
 
 describe('public entry point', () => {
