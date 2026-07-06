@@ -75,5 +75,14 @@ jobs:
 
       # No NODE_AUTH_TOKEN: authentication is via OIDC trusted publishing,
       # configured on the npm package settings for this repo + workflow.
+      # Idempotent: skip when this version is already on the registry so
+      # re-running a tag (or tagging a manually-bootstrapped version) is green.
       - name: Publish to npm
-        run: npm publish --access public --provenance
+        run: |
+          name="$(node -p "require('./package.json').name")"
+          version="$(node -p "require('./package.json').version")"
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "$name@$version is already published; skipping publish."
+            exit 0
+          fi
+          npm publish --access public --provenance
