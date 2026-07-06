@@ -68,6 +68,13 @@ function mod12(n: number): number {
   return ((n % 12) + 12) % 12;
 }
 
+/** Whether a key's scale has a minor third and no major third (a minor key). */
+export function isMinorKey(key: KeyScale): boolean {
+  const hasMinorThird = (key.modeMask12 >> 3) & 1;
+  const hasMajorThird = (key.modeMask12 >> 4) & 1;
+  return Boolean(hasMinorThird) && !hasMajorThird;
+}
+
 /** Diatonic pitch class of a 1-based scale degree in a key. */
 function degreeRootPc(degreeNumber: number, key: KeyScale): number {
   const tones = scaleTonesInDegreeOrder(key);
@@ -91,8 +98,34 @@ function seventhQuality(base: 'maj' | 'min' | 'dim' | 'aug', halfDim: boolean): 
   return base === 'maj' ? 'dom7' : 'min7';
 }
 
-/** Parse a Roman numeral (no secondary '/') into a root pitch class and quality. */
-function parseSimpleRoman(text: string, key: KeyScale): { rootPc: number; quality: ChordQuality } {
+/** Read figured-bass digits into a chord inversion and whether a seventh is implied. */
+function parseInversion(figures: string): { inversion: number; seventh: boolean } {
+  if (figures === '65') {
+    return { inversion: 1, seventh: true };
+  }
+  if (figures === '43') {
+    return { inversion: 2, seventh: true };
+  }
+  if (figures === '42' || figures === '2') {
+    return { inversion: 3, seventh: true };
+  }
+  if (figures === '7') {
+    return { inversion: 0, seventh: true };
+  }
+  if (figures === '64') {
+    return { inversion: 2, seventh: false };
+  }
+  if (figures === '6') {
+    return { inversion: 1, seventh: false };
+  }
+  return { inversion: 0, seventh: false };
+}
+
+/** Parse a Roman numeral (no secondary '/') into a root, quality, and inversion. */
+function parseSimpleRoman(
+  text: string,
+  key: KeyScale,
+): { rootPc: number; quality: ChordQuality; inversion: number } {
   const match = /^([b#]?)([iIvV]+)(.*)$/.exec(text.trim());
   if (!match) {
     throw new Error(`Invalid Roman numeral: ${text}`);
@@ -110,8 +143,10 @@ function parseSimpleRoman(text: string, key: KeyScale): { rootPc: number; qualit
   const isDim = /o|°|dim/.test(suffix);
   const isAug = /\+|aug/.test(suffix);
   const isHalfDim = /ø/.test(suffix);
-  const hasSeventh = /7/.test(suffix);
   const explicitMaj7 = /maj7|M7/.test(suffix);
+  const figures = suffix.replace(/maj7|M7/g, '').replace(/[^0-9]/g, '');
+  const { inversion, seventh } = parseInversion(figures);
+  const hasSeventh = explicitMaj7 || seventh;
 
   let base: 'maj' | 'min' | 'dim' | 'aug';
   if (isDim || isHalfDim) {
@@ -134,16 +169,31 @@ function parseSimpleRoman(text: string, key: KeyScale): { rootPc: number; qualit
   } else {
     quality = base;
   }
-  return { rootPc, quality };
+  return { rootPc, quality, inversion };
+}
+
+/** Build a chord from a parsed Roman numeral, attaching a bass for inversions. */
+function chordFromParsed(parsed: {
+  rootPc: number;
+  quality: ChordQuality;
+  inversion: number;
+}): Chord {
+  const chord = makeChord(parsed.rootPc, parsed.quality);
+  if (parsed.inversion > 0 && parsed.inversion < chord.intervals.length) {
+    chord.bassPc = mod12(parsed.rootPc + (chord.intervals[parsed.inversion] ?? 0));
+  }
+  return chord;
 }
 
 /**
  * Build the chord denoted by a Roman numeral in a key.
  *
  * Supports accidentals (`bVII`, `#iv`), case-based triad quality, the `o`/`ø`/`+`
- * suffixes, sevenths (`V7`, `viio7`, `iiø7`, `Imaj7`), and applied/secondary
- * chords via a slash (`V7/V`, `viio/ii`). The target after the slash is read as
- * a scale degree whose root becomes a local major tonic for the applied chord.
+ * suffixes, sevenths (`V7`, `viio7`, `iiø7`, `Imaj7`), figured-bass inversions
+ * (`V6`, `V64`, `V65`, `V43`, `V42`), and applied/secondary chords via a slash
+ * (`V7/V`, `viio/ii`). The target after the slash is read as a scale degree
+ * whose root becomes a local major tonic for the applied chord. Inverted chords
+ * carry a `bassPc`.
  *
  * @param text The Roman numeral.
  * @param key The prevailing key.
@@ -157,11 +207,9 @@ export function romanToChord(text: string, key: KeyScale): Chord {
     const target = trimmed.slice(slash + 1);
     const targetRoot = parseSimpleRoman(target, key).rootPc;
     const localKey = majorKey(targetRoot);
-    const { rootPc, quality } = parseSimpleRoman(applied, localKey);
-    return makeChord(rootPc, quality);
+    return chordFromParsed(parseSimpleRoman(applied, localKey));
   }
-  const { rootPc, quality } = parseSimpleRoman(trimmed, key);
-  return makeChord(rootPc, quality);
+  return chordFromParsed(parseSimpleRoman(trimmed, key));
 }
 
 /** Case and suffix for rendering a chord quality as a Roman numeral. */
@@ -192,23 +240,81 @@ function romanStyle(quality: ChordQuality): { lower: boolean; suffix: string } {
   }
 }
 
+/** Choose the degree number and accidental to spell a root as a Roman numeral. */
+function romanSpelling(
+  rootPc: number,
+  key: KeyScale,
+): { degreeNumber: number; accidental: string } {
+  const tones = scaleTonesInDegreeOrder(key);
+  const diatonic = tones.indexOf(mod12(rootPc));
+  if (diatonic >= 0) {
+    return { degreeNumber: diatonic + 1, accidental: '' };
+  }
+  // Chromatic root: prefer a flat of the diatonic degree a semitone above it,
+  // then a sharp of the degree a semitone below.
+  for (let i = 0; i < tones.length; i += 1) {
+    if (mod12((tones[i] ?? 0) - 1) === mod12(rootPc)) {
+      return { degreeNumber: i + 1, accidental: 'b' };
+    }
+  }
+  for (let i = 0; i < tones.length; i += 1) {
+    if (mod12((tones[i] ?? 0) + 1) === mod12(rootPc)) {
+      return { degreeNumber: i + 1, accidental: '#' };
+    }
+  }
+  const [degreeNumber, accidental] = OFFSET_SPELLING[mod12(rootPc - key.rootPc)] ?? [1, ''];
+  return { degreeNumber, accidental };
+}
+
+/** Quality marker (without the seventh digit) used when a figure carries the 7. */
+function baseMarker(quality: ChordQuality): string {
+  if (quality === 'dim' || quality === 'dim7') {
+    return 'o';
+  }
+  if (quality === 'm7b5') {
+    return 'ø';
+  }
+  if (quality === 'aug' || quality === 'aug7') {
+    return '+';
+  }
+  return '';
+}
+
+const TRIAD_FIGURES: Record<number, string> = { 1: '6', 2: '64' };
+const SEVENTH_FIGURES: Record<number, string> = { 1: '65', 2: '43', 3: '42' };
+
 /**
  * Render a chord as a Roman numeral relative to a key.
  *
- * The root's offset from the tonic selects the numeral and any accidental; the
- * quality selects the case and suffix. Chromatic roots receive a flat/sharp
- * spelling from the standard major-key convention.
+ * Diatonic roots take their scale-degree numeral directly, so numerals are
+ * correct in both major and minor keys (and any custom scale). The quality
+ * selects the case and suffix; chromatic roots receive a flat/sharp spelling by
+ * convention. When the chord carries a `bassPc` on a chord tone, a figured-bass
+ * inversion (`6`, `64`, `65`, `43`, `42`) is emitted.
  *
  * @param chord The chord to name.
  * @param key The prevailing key.
  * @returns The Roman numeral string.
  */
 export function chordToRoman(chord: Chord, key: KeyScale): string {
-  const offset = mod12(chord.rootPc - key.rootPc);
-  const [degreeNumber, accidental] = OFFSET_SPELLING[offset] ?? [1, ''];
+  const { degreeNumber, accidental } = romanSpelling(chord.rootPc, key);
   const { lower, suffix } = romanStyle(chord.quality);
   const numeral: string = ROMAN[degreeNumber - 1] ?? 'I';
-  return `${accidental}${lower ? numeral.toLowerCase() : numeral}${suffix}`;
+  const cased = lower ? numeral.toLowerCase() : numeral;
+
+  let inversion = 0;
+  if (chord.bassPc !== undefined) {
+    const idx = chord.intervals.findIndex((iv) => mod12(chord.rootPc + iv) === chord.bassPc);
+    if (idx > 0) {
+      inversion = idx;
+    }
+  }
+  if (inversion > 0) {
+    const isSeventh = chord.intervals.length >= 4;
+    const figure = (isSeventh ? SEVENTH_FIGURES : TRIAD_FIGURES)[inversion] ?? '';
+    return `${accidental}${cased}${baseMarker(chord.quality)}${figure}`;
+  }
+  return `${accidental}${cased}${suffix}`;
 }
 
 /**
@@ -229,7 +335,7 @@ export function functionOf(chord: Chord, key: KeyScale): HarmonicFunction {
  *
  * - authentic: V (dominant a fifth above the tonic) to I
  * - plagal: IV (a fourth above the tonic) to I
- * - deceptive: V to vi
+ * - deceptive: V to the submediant (vi in major, VI at a flat-six in minor)
  * - half: any chord to V
  *
  * @param from The penultimate chord.
@@ -241,13 +347,14 @@ export function detectCadence(from: Chord, to: Chord, key: KeyScale): Cadence {
   const tonic = mod12(key.rootPc);
   const fromOffset = mod12(from.rootPc - tonic);
   const toOffset = mod12(to.rootPc - tonic);
+  const submediant = isMinorKey(key) ? 8 : 9;
   if (fromOffset === 7 && toOffset === 0) {
     return 'authentic';
   }
   if (fromOffset === 5 && toOffset === 0) {
     return 'plagal';
   }
-  if (fromOffset === 7 && toOffset === 9) {
+  if (fromOffset === 7 && toOffset === submediant) {
     return 'deceptive';
   }
   if (toOffset === 7) {

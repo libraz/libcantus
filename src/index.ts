@@ -38,6 +38,7 @@ export {
   chordToRoman,
   detectCadence,
   functionOf,
+  isMinorKey,
   romanToChord,
   secondaryDominant,
 } from './functional/index.js';
@@ -55,6 +56,19 @@ export {
   isConsonantInterval,
   isPerfectInterval,
 } from './interval/index.js';
+export type { BarPosition, TimeSignature } from './meter/index.js';
+export {
+  barPositionToBeat,
+  beatsPerBar,
+  beatToBarPosition,
+  formatTimeSignature,
+  isCompound,
+  isStrongBeat,
+  metricWeight,
+  parseTimeSignature,
+  pulsesPerBar,
+  tuplet,
+} from './meter/index.js';
 export type {
   GenerateMotifOptions,
   MotifCell,
@@ -119,6 +133,25 @@ export {
   scaleTonesInDegreeOrder,
   WHOLE_TONE_MASK,
 } from './scale/index.js';
+export {
+  noteNames,
+  spellChord,
+  spellPitchClass,
+  spellPitchClasses,
+  spellScale,
+} from './spelling/index.js';
 export type { ChordSegment, ChordTimeline } from './timeline/index.js';
 export { chordTimelineFromChords } from './timeline/index.js';
+export type { Tuning } from './tuning/index.js';
+export {
+  centsBetweenFreq,
+  centsOfSteps,
+  edo,
+  frequencyOf,
+  JUST_RATIOS,
+  justDeviationCents,
+  nearestStep,
+  ratioToCents,
+  TWELVE_TET,
+} from './tuning/index.js';
 export type { KeyScale } from './types.js';

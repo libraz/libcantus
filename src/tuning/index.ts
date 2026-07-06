@@ -1,0 +1,129 @@
+/**
+ * Tuning and microtonality: frequency conversion, cents, arbitrary equal
+ * temperaments (EDO), and just-intonation ratios.
+ *
+ * The rest of the library reasons in twelve-tone pitch classes, which is a
+ * deliberate scope choice for tonal theory. This module is the escape hatch for
+ * anyone who needs actual frequencies, cents, non-12 equal temperaments, or the
+ * acoustic (just) tuning behind the tempered intervals.
+ */
+
+/**
+ * An equal-tempered tuning: a reference pitch and a number of equal divisions of
+ * the octave. With `divisions === 12` a step index is an ordinary MIDI number.
+ */
+export type Tuning = {
+  /** Step index (MIDI number when `divisions` is 12) whose frequency is `refFreq`. */
+  refStep: number;
+  /** Frequency in Hz of `refStep`. */
+  refFreq: number;
+  /** Equal divisions of the octave (12 standard; e.g. 19 or 31 for microtonal). */
+  divisions: number;
+};
+
+/** Standard twelve-tone equal temperament, A4 (MIDI 69) = 440 Hz. */
+export const TWELVE_TET: Tuning = { refStep: 69, refFreq: 440, divisions: 12 };
+
+/**
+ * Build an equal temperament with `n` divisions of the octave.
+ *
+ * @param n Divisions of the octave (e.g. 19, 24, 31).
+ * @param refFreq Reference frequency in Hz (default 440).
+ * @param refStep Step index of the reference (default 69).
+ * @returns The tuning.
+ */
+export function edo(n: number, refFreq = 440, refStep = 69): Tuning {
+  return { refStep, refFreq, divisions: n };
+}
+
+/**
+ * Frequency in Hz of a step index under a tuning.
+ *
+ * @param step Step index (a MIDI number under 12-EDO).
+ * @param tuning The tuning (default 12-TET).
+ * @returns The frequency in Hz.
+ */
+export function frequencyOf(step: number, tuning: Tuning = TWELVE_TET): number {
+  return tuning.refFreq * 2 ** ((step - tuning.refStep) / tuning.divisions);
+}
+
+/**
+ * Nearest step index to a frequency under a tuning (the inverse of
+ * {@link frequencyOf}, rounded).
+ *
+ * @param freq Frequency in Hz.
+ * @param tuning The tuning (default 12-TET).
+ * @returns The nearest step index.
+ */
+export function nearestStep(freq: number, tuning: Tuning = TWELVE_TET): number {
+  return Math.round(tuning.refStep + tuning.divisions * Math.log2(freq / tuning.refFreq));
+}
+
+/**
+ * Interval in cents between two frequencies.
+ *
+ * @param a Lower/first frequency in Hz.
+ * @param b Upper/second frequency in Hz.
+ * @returns Cents from `a` to `b` (negative if `b` is lower).
+ */
+export function centsBetweenFreq(a: number, b: number): number {
+  return 1200 * Math.log2(b / a);
+}
+
+/**
+ * Cents spanned by a number of equal-temperament steps.
+ *
+ * @param steps Number of steps.
+ * @param tuning The tuning (default 12-TET).
+ * @returns The cents.
+ */
+export function centsOfSteps(steps: number, tuning: Tuning = TWELVE_TET): number {
+  return (steps * 1200) / tuning.divisions;
+}
+
+/**
+ * Cents of a frequency ratio, e.g. `ratioToCents(3, 2)` ≈ 701.955 for the just
+ * perfect fifth.
+ *
+ * @param numerator Ratio numerator.
+ * @param denominator Ratio denominator.
+ * @returns The interval in cents.
+ */
+export function ratioToCents(numerator: number, denominator: number): number {
+  return 1200 * Math.log2(numerator / denominator);
+}
+
+/**
+ * Five-limit just-intonation ratios for the twelve interval classes above a
+ * unison, indexed by semitone class (0..12).
+ */
+export const JUST_RATIOS: Record<number, [number, number]> = {
+  0: [1, 1],
+  1: [16, 15],
+  2: [9, 8],
+  3: [6, 5],
+  4: [5, 4],
+  5: [4, 3],
+  6: [45, 32],
+  7: [3, 2],
+  8: [8, 5],
+  9: [5, 3],
+  10: [9, 5],
+  11: [15, 8],
+  12: [2, 1],
+};
+
+/**
+ * Cents by which a five-limit just interval departs from its 12-TET tempering
+ * (positive means the just interval is wider).
+ *
+ * @param semitoneClass Semitone class in [0, 12].
+ * @returns The deviation in cents, or NaN if the class has no listed ratio.
+ */
+export function justDeviationCents(semitoneClass: number): number {
+  const ratio = JUST_RATIOS[semitoneClass];
+  if (!ratio) {
+    return Number.NaN;
+  }
+  return ratioToCents(ratio[0], ratio[1]) - semitoneClass * 100;
+}

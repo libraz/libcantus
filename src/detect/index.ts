@@ -19,6 +19,10 @@ export type ChordMatch = {
   extraPcs: number[];
   /** True when the input pitch-class set equals the chord exactly. */
   exact: boolean;
+  /** Inversion implied by the lowest note: 0 root position, 1 first, ... */
+  inversion: number;
+  /** Bass pitch class when inverted (the lowest note is not the root). */
+  bassPc?: number;
 };
 
 /** A candidate key interpretation of a pitch-class set. */
@@ -56,30 +60,43 @@ export function detectChord(pitches: number[]): ChordMatch[] {
   if (input.length === 0) {
     return [];
   }
+  const bassPc = pitchClass(Math.min(...pitches));
   const inputSet = new Set(input);
   const matches: ChordMatch[] = [];
   const qualities = chordQualities();
   for (const rootPc of input) {
     for (const quality of qualities) {
-      const tones = chordPitchClasses(makeChord(rootPc, quality));
+      const chord = makeChord(rootPc, quality);
+      const tones = chordPitchClasses(chord);
       const toneSet = new Set(tones);
       const missingPcs = tones.filter((pc) => !inputSet.has(pc));
       if (missingPcs.length > 0) {
         continue;
       }
       const extraPcs = input.filter((pc) => !toneSet.has(pc));
-      matches.push({
+      const bassIndex = chord.intervals.findIndex((iv) => pitchClass(rootPc + iv) === bassPc);
+      const inversion = bassIndex > 0 ? bassIndex : 0;
+      const match: ChordMatch = {
         rootPc,
         quality,
         missingPcs,
         extraPcs,
         exact: extraPcs.length === 0,
-      });
+        inversion,
+      };
+      if (inversion > 0) {
+        match.bassPc = bassPc;
+      }
+      matches.push(match);
     }
   }
   matches.sort((a, b) => {
     if (a.extraPcs.length !== b.extraPcs.length) {
       return a.extraPcs.length - b.extraPcs.length;
+    }
+    // Prefer root position (the bass is the chord root) on a tie.
+    if ((a.inversion === 0) !== (b.inversion === 0)) {
+      return a.inversion === 0 ? -1 : 1;
     }
     const aSize = chordPitchClasses(makeChord(a.rootPc, a.quality)).length;
     const bSize = chordPitchClasses(makeChord(b.rootPc, b.quality)).length;
@@ -99,7 +116,7 @@ export function detectChordBest(pitches: number[]): Chord | null {
   if (!best) {
     return null;
   }
-  return makeChord(best.rootPc, best.quality);
+  return makeChord(best.rootPc, best.quality, best.bassPc);
 }
 
 /**
