@@ -145,4 +145,13 @@ describe('developMotif', () => {
       expect(chordPitchClasses(chord)).toContain(pitchClass(note.pitch));
     }
   });
+
+  it('terminates quickly for a degenerate tiny-span cell', () => {
+    const timeline = chordTimelineFromChords([{ rootPc: 0, quality: 'maj', startBeat: 0 }], 4);
+    const tiny: MotifCell = { notes: [{ pitch: 60, startBeat: 0, durationBeat: 1e-9 }] };
+    const startedAt = Date.now();
+    const developed = developMotif(tiny, timeline, cMajor, 1);
+    expect(Date.now() - startedAt).toBeLessThan(1000);
+    expect(developed.notes.length).toBeGreaterThan(0);
+  });
 });

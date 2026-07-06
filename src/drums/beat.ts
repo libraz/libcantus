@@ -10,6 +10,7 @@ import {
   hiHatNote,
   hiHatTypeVelocityMultiplier,
   hiHatVelocityMultiplier,
+  OHH_VEL_BOOST,
   roleHiHatInstrument,
   sectionHiHatType,
   shouldAddOpenHHAccent,
@@ -133,7 +134,7 @@ export function generateGhostNotesForBeat(ctx: BeatCtx, sec: SectionCtx): void {
       continue;
     }
     const variation = ctx.rng.float(0.85, 1.15);
-    const ghostBase = getGhostVelocity(ctx.section, ctx.beat % 2, false);
+    const ghostBase = getGhostVelocity(ctx.section, ctx.beat / 2, false);
     let ghostVel = ctx.velocity * ghostBase * variation;
     if (pos === 'a') {
       ghostVel *= 0.9;
@@ -188,7 +189,12 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
     const introRest = ctx.section === 'intro' && ctx.beat !== 0;
     if (!introRest) {
       if (isDynamicOpen) {
-        ctx.track.add(GM.OHH, ctx.beatTick, EIGHTH, ctx.velocity * dm * 0.75 * typeMult + 7);
+        ctx.track.add(
+          GM.OHH,
+          ctx.beatTick,
+          EIGHTH,
+          ctx.velocity * dm * 0.75 * typeMult + OHH_VEL_BOOST,
+        );
       } else {
         ctx.track.add(
           hhInstrument,
@@ -217,7 +223,7 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
       }
       const hhVel = Math.max(20, ctx.velocity * dm * typeMult * (eighth === 0 ? 0.9 : 0.65));
       if (isDynamicOpen && eighth === 0) {
-        ctx.track.add(GM.OHH, hhTick, EIGHTH, hhVel + 7);
+        ctx.track.add(GM.OHH, hhTick, EIGHTH, hhVel + OHH_VEL_BOOST);
         continue;
       }
       let useOpen = false;
@@ -245,7 +251,7 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
     const metricVel = hiHatVelocityMultiplier(sixteenth, ctx.rng);
     const hhVel = Math.max(20, ctx.velocity * dm * typeMult * metricVel);
     if (isDynamicOpen && sixteenth === 0) {
-      ctx.track.add(GM.OHH, hhTick, SIXTEENTH, hhVel + 7);
+      ctx.track.add(GM.OHH, hhTick, SIXTEENTH, hhVel + OHH_VEL_BOOST);
       continue;
     }
     if (ctx.beat === 3 && sixteenth === 3) {

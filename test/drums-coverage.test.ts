@@ -58,6 +58,27 @@ describe('generateDrums coverage matrix', () => {
     }
   });
 
+  it('suppresses kick and snare voices under fxOnly', () => {
+    const KICK = 36;
+    const SNARE = 38;
+    for (const style of STYLES) {
+      for (const section of SECTIONS) {
+        const hits = generateDrums({
+          bars: 4,
+          bpm: 120,
+          style,
+          section,
+          density: 0.8,
+          role: 'fxOnly',
+          seed: 7,
+          fills: true,
+        });
+        expect(hits.some((h) => h.pitch === KICK)).toBe(false);
+        expect(hits.some((h) => h.pitch === SNARE)).toBe(false);
+      }
+    }
+  });
+
   it('covers every feel, role, and tempo band', () => {
     for (const feel of FEELS) {
       for (const role of ROLES) {

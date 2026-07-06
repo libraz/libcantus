@@ -38,6 +38,12 @@ describe('chordToRoman in a minor key', () => {
   });
 });
 
+describe('half-diminished supertonic in a minor key', () => {
+  it('reads a bare iiø as a half-diminished seventh', () => {
+    expect(romanToChord('iiø', aMinor)).toMatchObject({ rootPc: 11, quality: 'm7b5' });
+  });
+});
+
 describe('detectCadence in a minor key', () => {
   it('recognizes the raised-dominant authentic cadence', () => {
     expect(detectCadence(makeChord(4, 'maj'), makeChord(9, 'min'), aMinor)).toBe('authentic');

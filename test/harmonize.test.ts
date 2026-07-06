@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { chordPitchClasses, makeChord } from '../src/chord/index.js';
 import { type HarmonizeOptions, harmonizeMelody } from '../src/harmonize/index.js';
 import { majorKey, scaleTonesInDegreeOrder } from '../src/scale/index.js';
 
@@ -80,6 +81,31 @@ describe('harmonizeMelody', () => {
       placement: { transposeSearch: false, octaveSearch: false },
     });
     expect(result.key.rootPc).toBe(7); // G major
+  });
+
+  it('avoids clashing with a note sustained across a segment boundary', () => {
+    // A whole-note B4 sounds through both segments; the short notes in the
+    // second segment outline a C-major triad. Without accounting for the held
+    // note, the second segment would pick C major, which clashes with the B.
+    const melody = [
+      { pitch: 71, startBeat: 0, durationBeat: 4 }, // held B4 across both segments
+      { pitch: 72, startBeat: 2, durationBeat: 0.5 }, // C5
+      { pitch: 76, startBeat: 2.5, durationBeat: 0.5 }, // E5
+      { pitch: 79, startBeat: 3, durationBeat: 1 }, // G5
+    ];
+    const result = harmonizeMelody({
+      melody,
+      key: cMajor,
+      harmonicRhythm: 2,
+      reharmonize: 'diatonic',
+      placement: { transposeSearch: false, octaveSearch: false },
+    });
+    const second = result.chords[1];
+    expect(second).toBeDefined();
+    if (second) {
+      const pcs = chordPitchClasses(makeChord(second.rootPc, second.quality));
+      expect(pcs).toContain(71 % 12); // the held B is a chord tone, not a clash
+    }
   });
 
   it('is deterministic for identical options and seed', () => {

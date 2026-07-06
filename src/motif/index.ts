@@ -42,6 +42,12 @@ function pitchClass(pitch: number): number {
   return ((Math.trunc(pitch) % 12) + 12) % 12;
 }
 
+/**
+ * Smallest span, in beats, treated as a distinct tile step. A positive but
+ * near-zero cell span is clamped to this so tiling cannot stall.
+ */
+const MIN_TILE_SPAN = 1 / 256;
+
 /** Nearest in-scale pitch strictly above `pitch`. */
 function upScaleTone(pitch: number, key: KeyScale): number {
   for (let d = 1; d <= 12; d += 1) {
@@ -281,7 +287,12 @@ export function developMotif(
     return clone(cell);
   }
 
-  for (let offset = 0; offset < totalBeats; offset += span) {
+  // Clamp a degenerate near-zero span so the tile count stays finite, and step
+  // the offset multiplicatively so rounding error cannot accumulate over tiles.
+  const tileSpan = Math.max(span, MIN_TILE_SPAN);
+  const tileCount = Math.ceil(totalBeats / tileSpan);
+  for (let k = 0; k < tileCount; k += 1) {
+    const offset = k * tileSpan;
     for (const n of cell.notes) {
       const startBeat = offset + (n.startBeat - origin);
       if (startBeat >= totalBeats) {

@@ -2,6 +2,8 @@ import type { Chord, ChordQuality } from '../chord/index.js';
 import { chordPitchClasses, diatonicTriad, makeChord } from '../chord/index.js';
 import type { HarmonyRole } from '../harmony/index.js';
 import { roleOf } from '../harmony/index.js';
+import type { TimeSignature } from '../meter/index.js';
+import { isStrongBeat } from '../meter/index.js';
 import type { GeneratedChord } from '../progression/index.js';
 import { isScaleTone, majorKey, scaleTonesInDegreeOrder } from '../scale/index.js';
 import type { KeyScale } from '../types.js';
@@ -40,9 +42,17 @@ type Candidate = {
   base: number;
 };
 
-type Segment = { startBeat: number; noteIndices: number[] };
+type Segment = { startBeat: number; endBeat: number; noteIndices: number[] };
 
 const FALLBACK: Candidate = { rootPc: 0, quality: 'maj', secondaryDominant: false, base: 0 };
+
+/** Default meter used to weight metric accents when none is supplied. */
+const DEFAULT_METER: TimeSignature = { numerator: 4, denominator: 4 };
+
+/** Comfortable melodic range (MIDI) and the per-semitone cost of leaving it. */
+const COMFORT_LOW = 55;
+const COMFORT_HIGH = 79;
+const TESSITURA_WEIGHT = 0.001;
 
 function pitchClass(pitch: number): number {
   return ((Math.trunc(pitch) % 12) + 12) % 12;
@@ -132,7 +142,13 @@ function buildCandidates(key: KeyScale, reharmonize: HarmonizeOptions['reharmoni
   return candidates;
 }
 
-/** Melody-fit cost of a candidate over a segment's notes. */
+/**
+ * Melody-fit cost of a candidate over a segment's notes.
+ *
+ * Each note is weighted by the portion of its duration that overlaps the
+ * segment, so a note sustained across a boundary contributes to every segment
+ * it sounds in rather than only the one it starts in.
+ */
 function emissionCost(seg: Segment, cand: Candidate, melody: MelodyNote[], key: KeyScale): number {
   const pcs = chordPitchClasses(makeChord(cand.rootPc, cand.quality));
   let cost = cand.base;
@@ -141,14 +157,36 @@ function emissionCost(seg: Segment, cand: Candidate, melody: MelodyNote[], key: 
     if (!note) {
       continue;
     }
-    const w = Math.max(0.25, note.durationBeat);
+    const overlapStart = Math.max(note.startBeat, seg.startBeat);
+    const overlap = Math.min(note.startBeat + note.durationBeat, seg.endBeat) - overlapStart;
+    if (overlap <= 0) {
+      continue;
+    }
+    const w = Math.max(0.25, overlap);
     if (pcs.includes(pitchClass(note.pitch))) {
       continue;
     }
-    const strong = (note.startBeat - seg.startBeat) % 2 === 0;
+    const strong = isStrongBeat(overlapStart, DEFAULT_METER);
     cost += (strong ? 10 : 2) * w;
     if (!isScaleTone(note.pitch, key)) {
       cost += w;
+    }
+  }
+  return cost;
+}
+
+/**
+ * Register cost of a placed melody: a small penalty for notes pushed outside a
+ * comfortable range. Kept far below emission/transition costs so it only breaks
+ * ties between otherwise-equal octave placements.
+ */
+function tessituraCost(melody: MelodyNote[]): number {
+  let cost = 0;
+  for (const n of melody) {
+    if (n.pitch < COMFORT_LOW) {
+      cost += (COMFORT_LOW - n.pitch) * TESSITURA_WEIGHT;
+    } else if (n.pitch > COMFORT_HIGH) {
+      cost += (n.pitch - COMFORT_HIGH) * TESSITURA_WEIGHT;
     }
   }
   return cost;
@@ -246,7 +284,8 @@ function harmonizeOnce(
  * chords by melody fit, and a Viterbi search picks the lowest-cost path using a
  * functional-flow transition cost. When `placement.transposeSearch`/`octaveSearch`
  * is set, the whole melody is transposed across a range and the best
- * `(transpose, progression)` pair is returned.
+ * `(transpose, progression)` pair is returned; a small tessitura cost breaks
+ * ties toward placements that keep the melody in a comfortable register.
  *
  * @param opts Melody, key (or `'infer'`), harmonic rhythm, reharmonization
  *   strength, height-search flags, and seed.
@@ -265,11 +304,12 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   const segments: Segment[] = [];
   for (let s = 0; s < segCount; s += 1) {
     const startBeat = s * hr;
+    const endBeat = startBeat + hr;
     const noteIndices = opts.melody
       .map((n, i) => ({ n, i }))
-      .filter(({ n }) => n.startBeat >= startBeat && n.startBeat < startBeat + hr)
+      .filter(({ n }) => n.startBeat < endBeat && n.startBeat + n.durationBeat > startBeat)
       .map(({ i }) => i);
-    segments.push({ startBeat, noteIndices });
+    segments.push({ startBeat, endBeat, noteIndices });
   }
 
   const transposes: number[] = [0];
@@ -295,8 +335,9 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   for (const ts of transposes) {
     const shifted = opts.melody.map((n) => ({ ...n, pitch: n.pitch + ts }));
     const { cost, path } = harmonizeOnce(shifted, key, candidates, segments, jitter);
-    if (cost < bestCost) {
-      bestCost = cost;
+    const total = cost + tessituraCost(shifted);
+    if (total < bestCost) {
+      bestCost = total;
       bestTs = ts;
       bestPath = path;
       bestMelody = shifted;

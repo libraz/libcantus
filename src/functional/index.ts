@@ -98,6 +98,16 @@ function seventhQuality(base: 'maj' | 'min' | 'dim' | 'aug', halfDim: boolean): 
   return base === 'maj' ? 'dom7' : 'min7';
 }
 
+/** Figure strings that denote a recognized figured-bass inversion. */
+const INVERSION_FIGURES = new Set(['6', '64', '65', '43', '42', '2', '7']);
+
+/** Figure strings that denote a fixed root-position extension quality. */
+const EXTENSION_FIGURES: Record<string, ChordQuality> = {
+  '9': 'dom9',
+  '11': '11',
+  '13': '13',
+};
+
 /** Read figured-bass digits into a chord inversion and whether a seventh is implied. */
 function parseInversion(figures: string): { inversion: number; seventh: boolean } {
   if (figures === '65') {
@@ -145,8 +155,23 @@ function parseSimpleRoman(
   const isHalfDim = /ø/.test(suffix);
   const explicitMaj7 = /maj7|M7/.test(suffix);
   const figures = suffix.replace(/maj7|M7/g, '').replace(/[^0-9]/g, '');
+
+  // Extension figures (9/11/13) denote a fixed root-position tension quality,
+  // not a figured-bass inversion, so they short-circuit the case/quality logic.
+  const extension = EXTENSION_FIGURES[figures];
+  if (extension !== undefined) {
+    return { rootPc, quality: extension, inversion: 0 };
+  }
+  // Reject figure strings that are neither a known figured-bass inversion nor a
+  // supported extension rather than silently degrading to a root triad.
+  if (figures !== '' && !INVERSION_FIGURES.has(figures)) {
+    throw new Error(`Unsupported figured-bass or extension "${figures}" in Roman numeral: ${text}`);
+  }
+
   const { inversion, seventh } = parseInversion(figures);
-  const hasSeventh = explicitMaj7 || seventh;
+  // The ø glyph is the half-diminished seventh by definition (there is no
+  // half-diminished triad), so it always implies a seventh.
+  const hasSeventh = explicitMaj7 || seventh || isHalfDim;
 
   let base: 'maj' | 'min' | 'dim' | 'aug';
   if (isDim || isHalfDim) {
@@ -189,11 +214,17 @@ function chordFromParsed(parsed: {
  * Build the chord denoted by a Roman numeral in a key.
  *
  * Supports accidentals (`bVII`, `#iv`), case-based triad quality, the `o`/`ø`/`+`
- * suffixes, sevenths (`V7`, `viio7`, `iiø7`, `Imaj7`), figured-bass inversions
+ * suffixes, sevenths (`V7`, `viio7`, `Imaj7`), figured-bass inversions
  * (`V6`, `V64`, `V65`, `V43`, `V42`), and applied/secondary chords via a slash
  * (`V7/V`, `viio/ii`). The target after the slash is read as a scale degree
  * whose root becomes a local major tonic for the applied chord. Inverted chords
  * carry a `bassPc`.
+ *
+ * The `ø` glyph always denotes the half-diminished seventh (`iiø` == `iiø7` ==
+ * `m7b5`), since no half-diminished triad exists. Root-position extension
+ * figures map to fixed qualities (`V9` -> `dom9`, `V11` -> `11`, `V13` -> `13`).
+ * A figure string that is neither a recognized inversion nor a supported
+ * extension throws rather than silently degrading to a triad.
  *
  * @param text The Roman numeral.
  * @param key The prevailing key.
@@ -279,6 +310,9 @@ function baseMarker(quality: ChordQuality): string {
   if (quality === 'aug' || quality === 'aug7') {
     return '+';
   }
+  if (quality === 'maj7' || quality === 'minMaj7') {
+    return 'maj7';
+  }
   return '';
 }
 
@@ -313,8 +347,13 @@ export function chordToRoman(chord: Chord, key: KeyScale): string {
   }
   if (inversion > 0) {
     const isSeventh = chord.intervals.length >= 4;
-    const figure = (isSeventh ? SEVENTH_FIGURES : TRIAD_FIGURES)[inversion] ?? '';
-    return `${accidental}${cased}${baseMarker(chord.quality)}${figure}`;
+    const figure = (isSeventh ? SEVENTH_FIGURES : TRIAD_FIGURES)[inversion];
+    if (figure !== undefined) {
+      return `${accidental}${cased}${baseMarker(chord.quality)}${figure}`;
+    }
+    // The bass falls on a tension beyond the seventh (e.g. a ninth in the bass);
+    // no figured-bass symbol exists for it, so fall back to root-position
+    // rendering with the quality suffix rather than emitting a bare numeral.
   }
   return `${accidental}${cased}${suffix}`;
 }

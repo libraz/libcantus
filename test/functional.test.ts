@@ -53,6 +53,76 @@ describe('chordToRoman', () => {
   });
 });
 
+describe('half-diminished implies a seventh', () => {
+  it('reads a bare ø as a half-diminished seventh', () => {
+    expect(romanToChord('iiø', cMajor)).toMatchObject({ rootPc: 2, quality: 'm7b5' });
+    expect(romanToChord('viiø', cMajor)).toMatchObject({ rootPc: 11, quality: 'm7b5' });
+  });
+
+  it('still reads an explicit ø7 as a half-diminished seventh', () => {
+    expect(romanToChord('iiø7', cMajor)).toMatchObject({ rootPc: 2, quality: 'm7b5' });
+  });
+});
+
+describe('extension figures', () => {
+  it('maps a ninth figure to a root-position dominant ninth', () => {
+    expect(romanToChord('V9', cMajor)).toMatchObject({ rootPc: 7, quality: 'dom9' });
+  });
+
+  it('maps eleventh and thirteenth figures to their qualities', () => {
+    expect(romanToChord('V11', cMajor)).toMatchObject({ rootPc: 7, quality: '11' });
+    expect(romanToChord('V13', cMajor)).toMatchObject({ rootPc: 7, quality: '13' });
+  });
+
+  it('throws on an unsupported figure rather than silently downgrading', () => {
+    expect(() => romanToChord('V8', cMajor)).toThrow();
+    expect(() => romanToChord('V99', cMajor)).toThrow();
+  });
+});
+
+describe('maj7 / minMaj7 inversion round-trips', () => {
+  it('round-trips maj7 in every inversion', () => {
+    expect(chordToRoman(makeChord(0, 'maj7'), cMajor)).toBe('Imaj7');
+    for (const [bass, roman] of [
+      [4, 'Imaj765'],
+      [7, 'Imaj743'],
+      [11, 'Imaj742'],
+    ] as const) {
+      const chord = makeChord(0, 'maj7', bass);
+      expect(chordToRoman(chord, cMajor)).toBe(roman);
+      expect(romanToChord(roman, cMajor)).toMatchObject({
+        rootPc: 0,
+        quality: 'maj7',
+        bassPc: bass,
+      });
+    }
+  });
+
+  it('round-trips minMaj7 in every inversion', () => {
+    expect(chordToRoman(makeChord(0, 'minMaj7'), cMajor)).toBe('imaj7');
+    for (const [bass, roman] of [
+      [3, 'imaj765'],
+      [7, 'imaj743'],
+      [11, 'imaj742'],
+    ] as const) {
+      const chord = makeChord(0, 'minMaj7', bass);
+      expect(chordToRoman(chord, cMajor)).toBe(roman);
+      expect(romanToChord(roman, cMajor)).toMatchObject({
+        rootPc: 0,
+        quality: 'minMaj7',
+        bassPc: bass,
+      });
+    }
+  });
+});
+
+describe('chordToRoman with a tension in the bass', () => {
+  it('falls back to root-position rendering instead of a bare numeral', () => {
+    expect(chordToRoman(makeChord(7, 'dom9', 9), cMajor)).not.toBe('V');
+    expect(chordToRoman(makeChord(7, 'dom9', 9), cMajor)).toContain('V');
+  });
+});
+
 describe('functionOf', () => {
   it('maps degrees to tonal functions', () => {
     expect(functionOf(makeChord(0, 'maj'), cMajor)).toBe('tonic');

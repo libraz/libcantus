@@ -16,7 +16,6 @@ const cMaj: Chord = { rootPc: 0, quality: 'maj', intervals: [0, 4, 7] };
 const query = (over: Partial<SafetyQuery>): SafetyQuery => ({
   profile: 'pop',
   candidatePitch: 60,
-  beat: 0,
   chord: cMaj,
   key: cMajor,
   otherVoices: [],
@@ -70,6 +69,49 @@ describe('evaluateSafety', () => {
     expect(cp('pop').reasons & ReasonFlag.ParallelPerfect).toBeTruthy();
     expect(cp('pop').safety).toBe(NoteSafety.Warning);
     expect(cp('strict').safety).toBe(NoteSafety.Dissonant);
+  });
+
+  it('flags a prepared suspension but not a dissonance moved into', () => {
+    // Candidate voice holds D across the barline; the other voice steps from G
+    // (a perfect fifth below, consonant) to C (a major second, dissonant).
+    const held = evaluateSafety(
+      query({
+        candidatePitch: 62, // D, held over
+        prevPitch: 62,
+        strongBeat: true,
+        otherVoices: [{ pitch: 60, prevPitch: 55 }],
+      }),
+    );
+    expect(held.reasons & ReasonFlag.Suspension).toBeTruthy();
+    expect(held.reasons & ReasonFlag.VerticalDissonance).toBeTruthy();
+
+    // The same clash reached by leaping into it is not a suspension.
+    const moved = evaluateSafety(
+      query({
+        candidatePitch: 62,
+        prevPitch: 64, // stepped down into the dissonance, not held
+        strongBeat: true,
+        otherVoices: [{ pitch: 60, prevPitch: 55 }],
+      }),
+    );
+    expect(moved.reasons & ReasonFlag.Suspension).toBeFalsy();
+  });
+
+  it('suggests nearby safe pitches for a rejected candidate only', () => {
+    const bad = evaluateSafety(query({ candidatePitch: 66 })); // F#, chromatic
+    expect(bad.safety).toBe(NoteSafety.Dissonant);
+    expect(bad.suggestions).toBeDefined();
+    expect(bad.suggestions?.[0]).toBe(67); // nearest safe pitch (G, chord tone)
+    // Every suggestion evaluates to Safe under the same context, ordered by nearness.
+    const sugg = bad.suggestions ?? [];
+    for (const p of sugg) {
+      expect(evaluateSafety(query({ candidatePitch: p })).safety).toBe(NoteSafety.Safe);
+    }
+    for (let i = 1; i < sugg.length; i += 1) {
+      expect(Math.abs(sugg[i] - 66)).toBeGreaterThanOrEqual(Math.abs(sugg[i - 1] - 66));
+    }
+    // A safe candidate carries no suggestions.
+    expect(evaluateSafety(query({ candidatePitch: 64 })).suggestions).toBeUndefined();
   });
 });
 

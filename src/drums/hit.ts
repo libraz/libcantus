@@ -1,4 +1,4 @@
-import { clampVel } from './internal.js';
+import { clampVel, GM } from './internal.js';
 
 /** A single percussion onset. */
 export type DrumHit = {
@@ -25,7 +25,7 @@ export class HitList {
   /** True when a crash already sits within a 16th of `startBeat`. */
   hasCrashNear(startBeat: number): boolean {
     return this.hits.some(
-      (h) => h.pitch === 49 && h.startBeat >= startBeat && h.startBeat < startBeat + 0.25,
+      (h) => h.pitch === GM.CRASH && h.startBeat >= startBeat && h.startBeat < startBeat + 0.25,
     );
   }
 }

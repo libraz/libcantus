@@ -49,7 +49,6 @@ export type VoiceSnapshot = {
 export type SafetyQuery = {
   profile: SafetyProfile;
   candidatePitch: number;
-  beat: number;
   prevPitch?: number;
   chord: Chord | null;
   key: KeyScale;
@@ -67,6 +66,11 @@ export type SafetyResult = {
   suggestions?: number[];
   rationale?: string;
 };
+
+/** Semitone radius searched around a rejected candidate for safe alternatives. */
+const SUGGESTION_WINDOW = 12;
+/** Maximum number of alternative pitches returned in `SafetyResult.suggestions`. */
+const MAX_SUGGESTIONS = 3;
 
 function pitchClass(pitch: number): number {
   return ((Math.trunc(pitch) % 12) + 12) % 12;
@@ -112,6 +116,18 @@ function stepResolution(pitch: number, chord: Chord): number | undefined {
  * @returns The verdict, reason bitmask, and optional resolution guidance.
  */
 export function evaluateSafety(q: SafetyQuery): SafetyResult {
+  return evaluateInternal(q, true);
+}
+
+/**
+ * Core safety evaluation.
+ *
+ * @param q The candidate and its harmonic/voice-leading context.
+ * @param collectSuggestions Whether to search for safe alternatives on a
+ *   non-Safe verdict. Set false during that search itself to bound recursion.
+ * @returns The verdict, reason bitmask, and optional guidance.
+ */
+function evaluateInternal(q: SafetyQuery, collectSuggestions: boolean): SafetyResult {
   let reasons = 0;
   let level = NoteSafety.Safe;
   let resolveTo: number | undefined;
@@ -195,11 +211,22 @@ export function evaluateSafety(q: SafetyQuery): SafetyResult {
 
   if (q.strongBeat) {
     const twoVoice = q.otherVoices.length === 1;
+    const prev = q.prevPitch;
     for (const ov of q.otherVoices) {
-      if (createsVerticalDissonance(pitch, ov.pitch, twoVoice)) {
-        reasons |= ReasonFlag.VerticalDissonance;
-        raise(NoteSafety.Dissonant);
-        break;
+      if (!createsVerticalDissonance(pitch, ov.pitch, twoVoice)) {
+        continue;
+      }
+      reasons |= ReasonFlag.VerticalDissonance;
+      raise(NoteSafety.Dissonant);
+      // A held pitch that was consonant on the previous step and is now
+      // dissonant against the same voice is a prepared suspension.
+      if (
+        prev !== undefined &&
+        pitch === prev &&
+        ov.prevPitch !== undefined &&
+        !createsVerticalDissonance(prev, ov.prevPitch, twoVoice)
+      ) {
+        reasons |= ReasonFlag.Suspension;
       }
     }
   }
@@ -234,13 +261,48 @@ export function evaluateSafety(q: SafetyQuery): SafetyResult {
   if (resolveTo !== undefined) {
     result.resolveTo = resolveTo;
   }
+  if (collectSuggestions && level !== NoteSafety.Safe) {
+    const suggestions = findSafeNearby(q, pitch);
+    if (suggestions.length > 0) {
+      result.suggestions = suggestions;
+    }
+  }
   return result;
+}
+
+/**
+ * Find safe alternative pitches near a rejected candidate.
+ *
+ * Searches outward from the candidate within `SUGGESTION_WINDOW` semitones,
+ * probing the pitch below before the one above at each distance so the result
+ * is deterministic and ordered by nearness.
+ *
+ * @param q The safety context of the rejected candidate.
+ * @param candidate The candidate pitch that was not Safe.
+ * @returns Up to `MAX_SUGGESTIONS` safe pitches, nearest first.
+ */
+function findSafeNearby(q: SafetyQuery, candidate: number): number[] {
+  const out: number[] = [];
+  for (let d = 1; d <= SUGGESTION_WINDOW; d += 1) {
+    for (const p of [candidate - d, candidate + d]) {
+      if (evaluateInternal({ ...q, candidatePitch: p }, false).safety === NoteSafety.Safe) {
+        out.push(p);
+        if (out.length >= MAX_SUGGESTIONS) {
+          return out;
+        }
+      }
+    }
+  }
+  return out;
 }
 
 /** Build a short human explanation from the reason flags. */
 function describe(reasons: number, q: SafetyQuery): string {
   if (reasons & ReasonFlag.OutOfRange) {
     return 'Outside the target vocal range';
+  }
+  if (reasons & ReasonFlag.Suspension) {
+    return 'Prepared suspension — a held consonance now dissonant, awaiting resolution';
   }
   if (reasons & ReasonFlag.VerticalDissonance) {
     return 'Dissonant against a sounding voice on a strong beat';
@@ -291,7 +353,7 @@ export function enumerateSafePitches(
     return [];
   }
   for (let pitch = pitchHigh; pitch >= pitchLow; pitch -= 1) {
-    const result = evaluateSafety({ ...q, candidatePitch: pitch });
+    const result = evaluateInternal({ ...q, candidatePitch: pitch }, false);
     if (result.safety === NoteSafety.Dissonant) {
       continue;
     }

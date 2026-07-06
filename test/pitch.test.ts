@@ -23,6 +23,14 @@ describe('parseNote / formatNote', () => {
     expect(() => parseNote('H')).toThrow();
     expect(() => parseNote('')).toThrow();
   });
+
+  it('rejects contradictory mixed accidentals but allows same-direction stacks', () => {
+    expect(() => parseNote('C#b4')).toThrow();
+    expect(() => parseNote('Bb#')).toThrow();
+    expect(() => parseNote('Cxb')).toThrow();
+    expect(parseNote('C##4')).toEqual({ letter: 0, alter: 2, octave: 4 });
+    expect(parseNote('Ebb2')).toEqual({ letter: 2, alter: -2, octave: 2 });
+  });
 });
 
 describe('pitch-class and MIDI conversion', () => {

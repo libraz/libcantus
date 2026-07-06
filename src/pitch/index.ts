@@ -54,16 +54,17 @@ function mod7(n: number): number {
 /**
  * Parse scientific pitch notation into a {@link Note}.
  *
- * Accepts a letter (case-insensitive) followed by any number of accidentals and
- * an optional octave, e.g. `"C"`, `"C#4"`, `"Bb"`, `"F##3"`, `"Ebb2"`. Both `#`
- * and `x` (double-sharp) are accepted for sharps; `b` for flats.
+ * Accepts a letter (case-insensitive) followed by any number of same-direction
+ * accidentals and an optional octave, e.g. `"C"`, `"C#4"`, `"Bb"`, `"F##3"`,
+ * `"Ebb2"`. Both `#` and `x` (double-sharp) are accepted for sharps; `b` for
+ * flats. Mixing sharps and flats (e.g. `"C#b"`) is rejected.
  *
  * @param text The note text.
  * @returns The parsed note.
  * @throws If the text is not a valid note.
  */
 export function parseNote(text: string): Note {
-  const match = /^([A-Ga-g])([#xb]*)(-?\d+)?$/.exec(text.trim());
+  const match = /^([A-Ga-g])([#x]*|b*)(-?\d+)?$/.exec(text.trim());
   if (!match) {
     throw new Error(`Invalid note: ${text}`);
   }

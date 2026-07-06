@@ -1,3 +1,4 @@
+import { HH_16TH_BPM_THRESHOLD } from './hihat.js';
 import type { HitList } from './hit.js';
 import type { DrumRole, SectionType } from './internal.js';
 import { EIGHTH, GM, PercMoodCategory, SIXTEENTH, sectionIndex } from './internal.js';
@@ -81,7 +82,7 @@ export function generateAuxPercussionForBar(
   }
 
   if (config.shaker) {
-    const use16th = config.shaker16th && bpm < 150;
+    const use16th = config.shaker16th && bpm < HH_16TH_BPM_THRESHOLD;
     if (use16th) {
       const velCurve = [0.75, 0.45, 0.6, 0.45];
       for (let beat = 0; beat < 4; beat += 1) {

@@ -14,6 +14,8 @@ export type ChordQuality =
   | 'm7b5'
   | 'minMaj7'
   | 'aug7'
+  | 'augMaj7'
+  | 'majb5'
   | '6'
   | 'min6'
   | '6/9'
@@ -46,6 +48,7 @@ const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
   min: [0, 3, 7],
   dim: [0, 3, 6],
   aug: [0, 4, 8],
+  majb5: [0, 4, 6],
   maj7: [0, 4, 7, 11],
   min7: [0, 3, 7, 10],
   dom7: [0, 4, 7, 10],
@@ -53,6 +56,7 @@ const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
   m7b5: [0, 3, 6, 10],
   minMaj7: [0, 3, 7, 11],
   aug7: [0, 4, 8, 10],
+  augMaj7: [0, 4, 8, 11],
   '6': [0, 4, 7, 9],
   min6: [0, 3, 7, 9],
   '6/9': [0, 4, 7, 9, 14],
@@ -190,6 +194,9 @@ function classifyTriad(thirdIc: number, fifthIc: number): ChordQuality {
   if (thirdIc === 4 && fifthIc === 8) {
     return 'aug';
   }
+  if (thirdIc === 4 && fifthIc === 6) {
+    return 'majb5';
+  }
   if (thirdIc === 3 && fifthIc === 6) {
     return 'dim';
   }
@@ -215,6 +222,9 @@ function classifySeventh(thirdIc: number, fifthIc: number, seventhIc: number): C
   }
   if (fifthIc === 8 && seventhIc === 10) {
     return 'aug7';
+  }
+  if (fifthIc === 8 && seventhIc === 11) {
+    return 'augMaj7';
   }
   if (seventhIc === 11) {
     return 'maj7';

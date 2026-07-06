@@ -56,4 +56,13 @@ describe('diatonic stacking', () => {
     expect(diatonicSeventh(0, aHarmonic).quality).toBe('minMaj7');
     expect(diatonicSeventh(6, aHarmonic).quality).toBe('dim7');
   });
+
+  it('labels the harmonic-minor mediant seventh as augMaj7 with matching intervals', () => {
+    const aHarmonic = scaleByName('harmonicMinor', 9);
+    const chord = diatonicSeventh(2, aHarmonic);
+    expect(chord.intervals).toEqual([0, 4, 8, 11]);
+    expect(chord.quality).toBe('augMaj7');
+    // The reported quality must rebuild the same intervals.
+    expect(makeChord(chord.rootPc, chord.quality).intervals).toEqual(chord.intervals);
+  });
 });

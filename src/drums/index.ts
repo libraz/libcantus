@@ -9,6 +9,7 @@ import {
 } from './beat.js';
 import { type FillType, generateFill, getFillStartBeat, selectFillType } from './fills.js';
 import {
+  footHiHatVelocity,
   getHiHatLevel,
   openHiHatBarInterval,
   openHiHatBeat,
@@ -78,6 +79,9 @@ export function generateDrums(opts: DrumGenOptions): DrumHit[] {
   const style = mapping.style;
   const feel: Feel = opts.feel ?? mapping.feel;
   const role: DrumRole = opts.role ?? 'full';
+  // fxOnly leaves only fx/aux voices: the main kick, snare, ghost, and fill
+  // voices are suppressed just as timekeeping hi-hats already are.
+  const playMainVoices = role !== 'fxOnly';
   const section = mapSection(opts.section);
   const backingDensity = mapDensity(opts.density);
   const swingAmount = feelSwingAmount(feel);
@@ -147,7 +151,9 @@ export function generateDrums(opts: DrumGenOptions): DrumHit[] {
         if (beat === fillStartBeat) {
           currentFill = selectFillType(section, section, style, energy, rng);
         }
-        generateFill(track, beatTick, beat, currentFill, velocity);
+        if (playMainVoices) {
+          generateFill(track, beatTick, beat, currentFill, velocity);
+        }
         continue;
       }
 
@@ -167,13 +173,15 @@ export function generateDrums(opts: DrumGenOptions): DrumHit[] {
         rng,
       };
 
-      if (inLift) {
-        generatePreChorusBuildup(ctx, sec, isLastBar);
-      }
-      generateKickForBeat(ctx, sec, kick);
-      generateSnareForBeat(ctx, sec, section === 'intro' && bar === 0);
-      if (sec.useGhostNotes && !inLift) {
-        generateGhostNotesForBeat(ctx, sec);
+      if (playMainVoices) {
+        if (inLift) {
+          generatePreChorusBuildup(ctx, sec, isLastBar);
+        }
+        generateKickForBeat(ctx, sec, kick);
+        generateSnareForBeat(ctx, sec, section === 'intro' && bar === 0);
+        if (sec.useGhostNotes && !inLift) {
+          generateGhostNotesForBeat(ctx, sec);
+        }
       }
       generateHiHatForBeat(ctx, sec);
     }
@@ -183,7 +191,7 @@ export function generateDrums(opts: DrumGenOptions): DrumHit[] {
         const fhhTick = barStart + fhhBeat;
         const occupied = track.hits.some((h) => h.pitch === GM.FHH && h.startBeat === fhhTick);
         if (!occupied) {
-          track.add(GM.FHH, fhhTick, 0.5, rng.range(45, 60));
+          track.add(GM.FHH, fhhTick, 0.5, footHiHatVelocity(rng));
         }
       }
     }
