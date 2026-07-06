@@ -125,4 +125,9 @@ describe('chordScaleReport', () => {
     expect(report).toHaveLength(1);
     expect(report[0]?.name).toBe('chromatic');
   });
+
+  it('returns no avoid notes or tensions for an unknown scale name', () => {
+    expect(avoidNotes(makeChord(0, 'maj7'), 'not-a-scale')).toEqual([]);
+    expect(availableTensions(makeChord(0, 'maj7'), 'not-a-scale')).toEqual([]);
+  });
 });

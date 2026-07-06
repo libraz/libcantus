@@ -1,6 +1,6 @@
 export type { AnalyzedNote, TheoryLabel, VoiceNote } from './analysis/index.js';
 export { analyzeVoice } from './analysis/index.js';
-export type { Chord, ChordQuality } from './chord/index.js';
+export type { Chord as ChordData, ChordQuality } from './chord/index.js';
 export {
   chordFromDegree,
   chordPitchClasses,
@@ -87,6 +87,7 @@ export {
   pulsesPerBar,
   tuplet,
 } from './meter/index.js';
+export { Chord, Interval, Key, Note, Progression } from './model/index.js';
 export type {
   GenerateMotifOptions,
   MotifCell,
@@ -95,7 +96,7 @@ export type {
   MotifTransform,
 } from './motif/index.js';
 export { developMotif, generateMotif, transformMotif } from './motif/index.js';
-export type { Note, SpelledInterval } from './pitch/index.js';
+export type { Note as NoteData, SpelledInterval } from './pitch/index.js';
 export {
   formatNote,
   midiToNote,

@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { makeChord } from '../src/chord/index.js';
 import { parseNote } from '../src/pitch/index.js';
 import { majorKey, minorKey, scaleByName } from '../src/scale/index.js';
-import { noteNames, spellChord, spellPitchClass, spellScale } from '../src/spelling/index.js';
+import {
+  noteNames,
+  spellChord,
+  spellPitchClass,
+  spellPitchClasses,
+  spellScale,
+} from '../src/spelling/index.js';
 
 describe('spellScale', () => {
   it('spells C major with natural letters', () => {
@@ -93,5 +99,22 @@ describe('spellChord', () => {
       'D',
       'F',
     ]);
+  });
+});
+
+describe('spellPitchClasses', () => {
+  it('spells an arbitrary pitch-class list in input order', () => {
+    expect(noteNames(spellPitchClasses([0, 4, 7], parseNote('C'), majorKey(0)))).toEqual([
+      'C',
+      'E',
+      'G',
+    ]);
+  });
+
+  it('falls back to a sharp spelling of the nearest natural for a non-heptatonic scale', () => {
+    // A whole-tone scale is not heptatonic, so degrees are named tone-by-tone.
+    expect(
+      noteNames(spellPitchClasses([0, 2, 6, 10], parseNote('C'), scaleByName('wholeTone', 0))),
+    ).toEqual(['C', 'D', 'F#', 'A#']);
   });
 });

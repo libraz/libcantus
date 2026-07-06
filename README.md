@@ -12,10 +12,11 @@ intervals, scales, chords, functional harmony, and voice-leading.
 
 | Module        | Exports                                                                                                                     |
 | ------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `pitch`       | `Note`, `parseNote`, `formatNote`, `noteToMidi`, `midiToNote`, `spelledInterval` (letter-name spelling, enharmonics)         |
+| `model`       | `Note`, `Interval`, `Key`, `Chord`, `Progression` (fluent, immutable class API over the functions below)                     |
+| `pitch`       | `NoteData`, `parseNote`, `formatNote`, `noteToMidi`, `midiToNote`, `spelledInterval` (letter-name spelling, enharmonics)     |
 | `interval`    | `IntervalQuality`, `classifyInterval`, `isPerfectInterval`, `isConsonantInterval`                                            |
 | `scale`       | `KeyScale`, `majorKey`, `minorKey`, `scaleByName`, `NAMED_SCALES` (modes, pentatonic, blues, whole-tone, octatonic, …)       |
-| `chord`       | `Chord`, `ChordQuality`, `chordFromDegree`, `diatonicTriad`, `diatonicSeventh`, `chordPitchClasses`, `chordToneRole`         |
+| `chord`       | `ChordData`, `ChordQuality`, `chordFromDegree`, `diatonicTriad`, `diatonicSeventh`, `chordPitchClasses`, `chordToneRole`     |
 | `functional`  | `romanToChord`, `chordToRoman`, `functionOf`, `analyzeChord`, `isBorrowedChord`, `borrowedSource`, `detectCadence`, `secondaryDominant` (major & minor, inversions, modal interchange) |
 | `chordscale`  | `chordScales`, `availableTensions`, `avoidNotes`, `chordScaleReport` (compatible scales and tensions for a chord)            |
 | `spelling`    | `spellScale`, `spellChord`, `spellPitchClasses`, `noteNames` (letter-name output from a spelled tonic)                       |
@@ -29,7 +30,10 @@ intervals, scales, chords, functional harmony, and voice-leading.
 Chord vocabulary spans triads through thirteenths, including `dim7`, `m7b5`,
 `minMaj7`, `aug7`, sixths, and altered dominants.
 
-All functions are pure: plain inputs in, plain TypeScript objects out. No runtime dependencies.
+Two interchangeable API styles over the same engine: a fluent, immutable class
+API (`Note`, `Interval`, `Key`, `Chord`, `Progression`) for expressive chaining,
+and the underlying pure functions (plain inputs in, plain objects out) for
+maximum tree-shaking. No runtime dependencies.
 
 ## Install
 
@@ -38,6 +42,33 @@ yarn add @libraz/cantus
 ```
 
 ## Usage
+
+The fluent class API reads as music theory and chains immutably:
+
+```ts
+import { Chord, Key, Note } from '@libraz/cantus';
+
+const c = Key.major('C');
+
+c.chord(4, 'dom7').pitchClasses(); // [2, 5, 7, 11]  (G7)
+c.roman('V7/V').voice(); // [ ...SATB MIDI ]  (secondary dominant, voiced)
+Note.of('C4').transpose(7).name; // 'G4'
+
+// Chords built from a key carry that context, so analysis needs no repetition:
+c.chord(1, 'min').progressionTo(c.chord(4, 'dom7'), c.chord(0, 'maj')).analyze();
+// { chords: [...functional analysis...], cadence: 'authentic' }  (ii–V–I)
+
+Chord.detect([60, 64, 67])[0].quality; // 'maj'
+```
+
+Every class wraps a plain object (`Chord.data`, `Note.data`) and delegates to the
+pure functions below, so the two styles interoperate freely.
+
+### Functional API
+
+The same capabilities are exposed as tree-shakeable pure functions. The plain
+object types are `NoteData` and `ChordData` (the `Note` and `Chord` names belong
+to the classes):
 
 ```ts
 import { chordFromDegree, chordPitchClasses, classifyInterval, majorKey } from '@libraz/cantus';

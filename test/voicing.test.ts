@@ -155,4 +155,11 @@ describe('voiceProgression', () => {
     const voicings = voiceProgression(slash);
     expect(pc(voicings[1]?.[0] ?? Number.NaN)).toBe(9);
   });
+
+  it('throws when no pitch of the required class fits the given range', () => {
+    // A one-semitone range on C#, which is not a tone of a C major triad.
+    expect(() =>
+      voiceChord(makeChord(0, 'maj'), { voices: 1, ranges: [{ min: 1, max: 1 }] }),
+    ).toThrow(/no voicing/);
+  });
 });
