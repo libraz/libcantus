@@ -233,16 +233,23 @@ export function spelledInterval(a: Note, b: Note): SpelledInterval {
   let semitones: number;
   if (octaved) {
     letterSteps = diatonicIndex(b) - diatonicIndex(a);
+    // Signed pitch distance from a to b, so a note below a yields a negative span.
     semitones = noteToMidi(b) - noteToMidi(a);
   } else {
     letterSteps = mod7(b.letter - a.letter);
-    const rawSemis = mod12(noteToPitchClass(b) - noteToPitchClass(a));
-    // Keep the chromatic span consistent with the ascending diatonic span.
+    let rawSemis = mod12(noteToPitchClass(b) - noteToPitchClass(a));
+    // Lift the chromatic span into the octave nearest the diatonic reference so
+    // wraparound intervals (e.g. Ab -> G# = augmented seventh) stay consistent
+    // with the ascending diatonic number instead of collapsing modulo 12.
+    const reference = SIMPLE_REFERENCE[letterSteps + 1] ?? 0;
+    if (reference - rawSemis > 6) {
+      rawSemis += 12;
+    }
     semitones = rawSemis;
   }
-  const sign = letterSteps < 0 ? -1 : 1;
   const absSteps = Math.abs(letterSteps);
   const number = absSteps + 1;
+  // Quality comes from the absolute chromatic span; semitones keeps its sign.
   const quality = qualityFromSpan(number, Math.abs(semitones));
-  return { number, quality, semitones: sign * Math.abs(semitones) };
+  return { number, quality, semitones };
 }

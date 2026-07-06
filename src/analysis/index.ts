@@ -40,6 +40,21 @@ function intervalAboveRoot(pitch: number, chord: Chord): number {
   return (((pitchClass(pitch) - pitchClass(chord.rootPc)) % 12) + 12) % 12;
 }
 
+/**
+ * Map an interval class above the root to its extended-tension scale degree:
+ * a flat/natural ninth (1 or 2) to 9, an eleventh (5 or 6) to 11, and a
+ * thirteenth (8 or 9) to 13.
+ */
+function tensionDegree(ic: number): 9 | 11 | 13 {
+  if (ic === 1 || ic === 2) {
+    return 9;
+  }
+  if (ic === 5 || ic === 6) {
+    return 11;
+  }
+  return 13;
+}
+
 function isChordMember(pitch: number, chord: Chord | null): boolean {
   return chord ? chordPitchClasses(chord).includes(pitchClass(pitch)) : false;
 }
@@ -108,19 +123,13 @@ export function analyzeVoice(
     const member = isChordMember(note.pitch, chord);
     let handled = false;
 
-    const verticallyDissonant =
-      !member ||
-      otherVoicesAtBeat(note.startBeat).some((ov) =>
-        createsVerticalDissonance(note.pitch, ov.pitch, true),
-      );
-
     if (chord && member) {
       const role = chordToneRole(note.pitch, chord);
       if (role) {
         labels.push({ kind: 'chordTone', role });
       } else {
         const ic = intervalAboveRoot(note.pitch, chord);
-        labels.push({ kind: 'tension', degree: ic === 2 ? 9 : ic === 5 ? 11 : 13 });
+        labels.push({ kind: 'tension', degree: tensionDegree(ic) });
       }
       handled = true;
     }
@@ -129,6 +138,9 @@ export function analyzeVoice(
       const prevChord = chordAtBeat(prev.startBeat);
       const prepared = prev.pitch === note.pitch && isChordMember(prev.pitch, prevChord);
       const resolves = isStep(next.pitch, note.pitch);
+      const verticallyDissonant = otherVoicesAtBeat(note.startBeat).some((ov) =>
+        createsVerticalDissonance(note.pitch, ov.pitch, true),
+      );
       if (prepared && verticallyDissonant && resolves) {
         const ic = intervalAboveRoot(note.pitch, chord);
         const sus = suspensionType(ic, next.pitch - note.pitch);
@@ -159,10 +171,12 @@ export function analyzeVoice(
 
     if (
       !handled &&
+      chord &&
       prev &&
       next &&
       !member &&
       prev.pitch === next.pitch &&
+      isChordMember(prev.pitch, chordAtBeat(prev.startBeat)) &&
       isStep(note.pitch, prev.pitch)
     ) {
       labels.push({ kind: 'neighbor' });
@@ -202,7 +216,7 @@ export function analyzeVoice(
           labels.push({ kind: 'needsResolution', resolveTo });
         }
       } else if (isTension) {
-        labels.push({ kind: 'tension', degree: ic === 2 ? 9 : ic === 5 ? 11 : 13 });
+        labels.push({ kind: 'tension', degree: tensionDegree(ic) });
       } else {
         const resolveTo = stepResolution(note.pitch, chord);
         if (resolveTo !== undefined) {

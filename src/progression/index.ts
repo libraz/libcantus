@@ -1,4 +1,5 @@
 import type { ChordQuality } from '../chord/index.js';
+import { diatonicTriad } from '../chord/index.js';
 import { scaleTonesInDegreeOrder } from '../scale/index.js';
 import type { KeyScale } from '../types.js';
 
@@ -239,12 +240,21 @@ function degreeToRootPc(degree: number, key: KeyScale): number {
   return ((((key.rootPc % 12) + offset) % 12) + 12) % 12;
 }
 
-/** Diatonic (or borrowed) triad quality of a degree in a major-key context. */
-function autoQuality(degree: number): ChordQuality {
-  if (degree === 6 || degree === 14) {
+/**
+ * Diatonic (or borrowed) triad quality of a degree in the given key.
+ *
+ * Diatonic degrees (0-6) take their scale-correct triad quality, so non-major
+ * keys yield diatonic chords. Borrowed degrees keep their fixed chromatic
+ * qualities (`#IV` diminished, `iv` minor, the rest major).
+ */
+function autoQuality(degree: number, key: KeyScale): ChordQuality {
+  if (degree >= 0 && degree <= 6) {
+    return diatonicTriad(degree, key).quality;
+  }
+  if (degree === 14) {
     return 'dim';
   }
-  if (degree === 1 || degree === 2 || degree === 5 || degree === 12) {
+  if (degree === 12) {
     return 'min';
   }
   return 'maj';
@@ -282,7 +292,8 @@ export function generateProgression(opts: GenerateProgressionOptions): Generated
   const chords: GeneratedChord[] = [];
   for (let bar = 0; bar < opts.bars; bar += 1) {
     const degree = degrees[bar % degrees.length] ?? 0;
-    const quality = opts.ext !== undefined && opts.ext !== 'auto' ? opts.ext : autoQuality(degree);
+    const quality =
+      opts.ext !== undefined && opts.ext !== 'auto' ? opts.ext : autoQuality(degree, opts.key);
     const chord: GeneratedChord = {
       rootPc: degreeToRootPc(degree, opts.key),
       quality,
@@ -304,7 +315,10 @@ export function generateProgression(opts: GenerateProgressionOptions): Generated
       const domRoot = (next.rootPc + 7) % 12;
       const targetsTonic = (next.rootPc - tonicPc + 12) % 12 === 0;
       const alreadySecondary = cur.rootPc === domRoot && cur.quality === 'dom7';
-      if (targetsTonic || alreadySecondary) {
+      // A secondary dominant inserted at i-1 resolves onto this chord; replacing
+      // it here would orphan that dominant.
+      const isResolutionTarget = chords[i - 1]?.secondaryDominant === true;
+      if (targetsTonic || alreadySecondary || isResolutionTarget) {
         continue;
       }
       if (rrng() < 0.5) {

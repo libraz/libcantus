@@ -25,6 +25,37 @@ describe('transformMotif involutions', () => {
     expect(transformMotif(transformMotif(cell, 'retrograde'), 'retrograde')).toEqual(cell);
   });
 
+  it('preserves rests and is self-inverse when retrograding a gapped cell', () => {
+    const withRest: MotifCell = {
+      notes: [
+        { pitch: 60, startBeat: 0, durationBeat: 1 },
+        { pitch: 64, startBeat: 2, durationBeat: 1 }, // rest across beat 1
+      ],
+    };
+    const once = transformMotif(withRest, 'retrograde');
+    // Span preserved: last offset still lands on beat 3.
+    expect(Math.max(...once.notes.map((n) => n.startBeat + n.durationBeat))).toBe(3);
+    // Rest preserved: the pitches are mirrored, not packed together.
+    expect(once.notes.map((n) => ({ ...n }))).toEqual([
+      { pitch: 60, startBeat: 2, durationBeat: 1 },
+      { pitch: 64, startBeat: 0, durationBeat: 1 },
+    ]);
+    expect(transformMotif(once, 'retrograde')).toEqual(withRest);
+  });
+
+  it('augments about the earliest onset for an unsorted cell', () => {
+    const unsorted: MotifCell = {
+      notes: [
+        { pitch: 64, startBeat: 2, durationBeat: 1 },
+        { pitch: 60, startBeat: 0, durationBeat: 1 },
+      ],
+    };
+    const augmented = transformMotif(unsorted, 'augment', 2);
+    // Origin is the minimum onset (beat 0), so nothing is pushed to negative time.
+    expect(Math.min(...augmented.notes.map((n) => n.startBeat))).toBe(0);
+    expect(augmented.notes.map((n) => n.startBeat)).toEqual([4, 0]);
+  });
+
   it('augments then diminishes back to the original durations', () => {
     const augmented = transformMotif(cell, 'augment', 2);
     expect(augmented.notes.map((n) => n.durationBeat)).toEqual([2, 2, 2]);

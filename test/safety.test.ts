@@ -104,4 +104,9 @@ describe('enumerateSafePitches', () => {
     // chord tones (67,64,60) come before scale tones.
     expect(pitches.indexOf(64)).toBeLessThan(pitches.indexOf(62));
   });
+
+  it('returns [] for a non-finite bound instead of hanging', () => {
+    expect(enumerateSafePitches(query({}), 60, Number.POSITIVE_INFINITY)).toEqual([]);
+    expect(enumerateSafePitches(query({}), Number.NaN, 67)).toEqual([]);
+  });
 });

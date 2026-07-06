@@ -287,6 +287,9 @@ export function enumerateSafePitches(
 ): number[] {
   const chordTones: number[] = [];
   const others: number[] = [];
+  if (!Number.isFinite(pitchLow) || !Number.isFinite(pitchHigh)) {
+    return [];
+  }
   for (let pitch = pitchHigh; pitch >= pitchLow; pitch -= 1) {
     const result = evaluateSafety({ ...q, candidatePitch: pitch });
     if (result.safety === NoteSafety.Dissonant) {

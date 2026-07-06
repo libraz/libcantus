@@ -86,12 +86,17 @@ function nearestChordTone(pitch: number, chord: Chord): number {
   return pitch;
 }
 
+/** Earliest onset in a cell; the time origin for timing transforms. */
+function cellOrigin(notes: MotifNote[]): number {
+  return notes.length === 0 ? 0 : Math.min(...notes.map((n) => n.startBeat));
+}
+
 /** Total beat span covered by a cell (from first onset to last offset). */
 function cellSpan(cell: MotifCell): number {
   if (cell.notes.length === 0) {
     return 0;
   }
-  const start = Math.min(...cell.notes.map((n) => n.startBeat));
+  const start = cellOrigin(cell.notes);
   const end = Math.max(...cell.notes.map((n) => n.startBeat + n.durationBeat));
   return end - start;
 }
@@ -172,7 +177,7 @@ export function generateMotif(opts: GenerateMotifOptions): MotifCell {
  * Apply a transformation to a motif cell.
  *
  * `invert` reflects pitches about the first note (chromatic, self-inverse);
- * `retrograde` reverses the note order, re-laid contiguously (self-inverse);
+ * `retrograde` mirrors onsets about the cell span, preserving rests (self-inverse);
  * `augment`/`diminish` scale time by `amount ?? 2` and its reciprocal;
  * `transposeChromatic` adds `amount` semitones; `transposeDiatonic` shifts by
  * `amount` scale degrees; `sequence` appends a diatonically shifted copy.
@@ -212,14 +217,15 @@ export function transformMotif(
       if (notes.length === 0) {
         return { notes: [] };
       }
-      const origin = notes[0]?.startBeat ?? 0;
-      let time = origin;
-      const out: MotifNote[] = [];
-      for (const n of [...notes].reverse()) {
-        out.push({ pitch: n.pitch, startBeat: time, durationBeat: n.durationBeat });
-        time += n.durationBeat;
-      }
-      return { notes: out };
+      const start = cellOrigin(notes);
+      const end = Math.max(...notes.map((n) => n.startBeat + n.durationBeat));
+      return {
+        notes: notes.map((n) => ({
+          pitch: n.pitch,
+          startBeat: start + (end - (n.startBeat + n.durationBeat)),
+          durationBeat: n.durationBeat,
+        })),
+      };
     }
     case 'augment':
       return scaleTime(cell, amount ?? 2);
@@ -237,7 +243,7 @@ export function transformMotif(
 
 /** Scale a cell's timing about its origin by `factor`. */
 function scaleTime(cell: MotifCell, factor: number): MotifCell {
-  const origin = cell.notes[0]?.startBeat ?? 0;
+  const origin = cellOrigin(cell.notes);
   return {
     notes: cell.notes.map((n) => ({
       pitch: n.pitch,
@@ -268,7 +274,7 @@ export function developMotif(
 ): MotifCell {
   const span = cellSpan(cell);
   const totalBeats = Math.max(1, Math.trunc(bars)) * 4;
-  const origin = cell.notes[0]?.startBeat ?? 0;
+  const origin = cellOrigin(cell.notes);
   const out: MotifNote[] = [];
 
   if (span <= 0) {

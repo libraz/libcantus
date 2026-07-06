@@ -85,4 +85,49 @@ describe('spelledInterval', () => {
     expect(down.semitones).toBe(-7);
     expect(down.number).toBe(5);
   });
+
+  it('signs semitones by pitch direction, not letter direction', () => {
+    const down = spelledInterval(parseNote('C4'), parseNote('Cb4'));
+    expect(down).toMatchObject({ number: 1, quality: 'A', semitones: -1 });
+    const up = spelledInterval(parseNote('C4'), parseNote('C#4'));
+    expect(up).toMatchObject({ number: 1, quality: 'A', semitones: 1 });
+  });
+
+  describe('pitch-class branch (octaveless notes)', () => {
+    it('keeps wraparound intervals consistent with the ascending number', () => {
+      expect(spelledInterval(parseNote('Ab'), parseNote('G#'))).toMatchObject({
+        number: 7,
+        quality: 'A',
+        semitones: 12,
+      });
+      expect(spelledInterval(parseNote('C'), parseNote('B#'))).toMatchObject({
+        number: 7,
+        quality: 'A',
+        semitones: 12,
+      });
+      expect(spelledInterval(parseNote('Dbb'), parseNote('C#'))).toMatchObject({
+        number: 7,
+        quality: 'AA',
+        semitones: 13,
+      });
+    });
+
+    it('measures simple intervals within a single ascending octave', () => {
+      expect(spelledInterval(parseNote('B'), parseNote('C'))).toMatchObject({
+        number: 2,
+        quality: 'm',
+        semitones: 1,
+      });
+      expect(spelledInterval(parseNote('C'), parseNote('C'))).toMatchObject({
+        number: 1,
+        quality: 'P',
+        semitones: 0,
+      });
+      expect(spelledInterval(parseNote('C'), parseNote('G'))).toMatchObject({
+        number: 5,
+        quality: 'P',
+        semitones: 7,
+      });
+    });
+  });
 });

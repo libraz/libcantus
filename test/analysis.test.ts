@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeVoice, type VoiceNote } from '../src/analysis/index.js';
 import type { Chord } from '../src/chord/index.js';
+import { makeChord } from '../src/chord/index.js';
 import { MAJOR_MASK } from '../src/scale/index.js';
 import type { KeyScale } from '../src/types.js';
 
@@ -18,9 +19,31 @@ describe('analyzeVoice', () => {
       { id: 3, pitch: 64, startBeat: 2, durationBeat: 1 }, // E (resolution)
     ];
     const chordAt = (beat: number): Chord => (beat < 1 ? fMaj : cMaj);
-    const analyzed = analyzeVoice(voice, chordAt, cMajor, noOtherVoices);
+    // A C in the bass makes the suspended F a dissonant fourth, which is what
+    // qualifies it as a genuine suspension.
+    const cBass = () => [{ pitch: 60 }];
+    const analyzed = analyzeVoice(voice, chordAt, cMajor, cBass);
     const suspension = analyzed[1]?.labels.find((l) => l.kind === 'suspension');
     expect(suspension).toEqual({ kind: 'suspension', type: 'sus4-3', resolveTo: 64 });
+  });
+
+  it('does not label a suspension when no other voice is dissonant against it', () => {
+    const voice: VoiceNote[] = [
+      { id: 1, pitch: 65, startBeat: 0, durationBeat: 1 }, // F over F major (preparation)
+      { id: 2, pitch: 65, startBeat: 1, durationBeat: 1 }, // F over C major
+      { id: 3, pitch: 64, startBeat: 2, durationBeat: 1 }, // E (resolution)
+    ];
+    const chordAt = (beat: number): Chord => (beat < 1 ? fMaj : cMaj);
+    const analyzed = analyzeVoice(voice, chordAt, cMajor, noOtherVoices);
+    const suspension = analyzed[1]?.labels.find((l) => l.kind === 'suspension');
+    expect(suspension).toBeUndefined();
+  });
+
+  it('labels the flat ninth of a 7b9 chord as a ninth tension', () => {
+    const c7b9 = makeChord(0, '7b9');
+    const voice: VoiceNote[] = [{ id: 1, pitch: 61, startBeat: 0, durationBeat: 1 }]; // Db over C
+    const analyzed = analyzeVoice(voice, () => c7b9, cMajor, noOtherVoices);
+    expect(analyzed[0]?.labels).toContainEqual({ kind: 'tension', degree: 9 });
   });
 
   it('labels a stepwise connector between chord tones as passing', () => {

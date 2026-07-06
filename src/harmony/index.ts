@@ -25,7 +25,10 @@ export type VoicedRole = {
  * The role comes from the pitch's interval class above the chord root: root (0),
  * third (3/4), fifth (6/7/8), seventh (10/11), and 9/11/13 tensions (2/5/9, and
  * the flat ninth 1). The root locks the chord identity, the third locks its
- * quality, and everything else is free voicing. Detecting an octave doubling
+ * quality, and everything else is free voicing. In a suspended chord (a chord
+ * whose intervals include a 4th (5) or 2nd (2) but no third), the suspended tone
+ * takes the third's place as the quality-defining tone and is locked to
+ * `quality`, since moving it changes the chord. Detecting an octave doubling
  * requires the surrounding voicing, which this single-pitch query does not carry,
  * so `doubling` is part of the type but not returned here.
  *
@@ -38,11 +41,17 @@ export function roleOf(pitch: number, chord: Chord, chordId = 0): VoicedRole {
   const interval = (((Math.trunc(pitch) - chord.rootPc) % 12) + 12) % 12;
   const tones = new Set(chord.intervals.map((i) => ((i % 12) + 12) % 12));
   const hasHigherSeventh = tones.has(10) || tones.has(11);
+  const hasThird = tones.has(3) || tones.has(4);
+  const isSuspendedTone =
+    !hasThird && ((interval === 5 && tones.has(5)) || (interval === 2 && tones.has(2)));
   let role: HarmonyRole;
   let lock: LockLevel;
   if (interval === 0) {
     role = 'root';
     lock = 'identity';
+  } else if (isSuspendedTone) {
+    role = 'third'; // suspended tone occupies the third's quality-defining slot
+    lock = 'quality';
   } else if (interval === 3 || interval === 4) {
     role = 'third';
     lock = 'quality';

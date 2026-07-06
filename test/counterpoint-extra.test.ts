@@ -5,6 +5,7 @@ import {
   createsParallelUnison,
   createsVoiceOverlap,
   exceedsSpacing,
+  isForbiddenMelodicLeap,
 } from '../src/counterpoint/index.js';
 
 describe('parallel perfect fixes', () => {
@@ -40,6 +41,23 @@ describe('hidden parallel step exception', () => {
 
   it('still flags a direct fifth when the upper voice leaps', () => {
     expect(createsHiddenParallelPerfect(64, 67, 55, 60)).toBe(true);
+  });
+
+  it('flags similar motion from one perfect interval into a different one', () => {
+    // Octave C4/C5 to fifth C5/G5, both voices ascending: a direct fifth that a
+    // guard exempting any prior perfect interval would wrongly allow.
+    expect(createsHiddenParallelPerfect(72, 79, 60, 72)).toBe(true);
+  });
+});
+
+describe('forbidden melodic leaps', () => {
+  it('forbids both sevenths and any leap wider than an octave', () => {
+    expect(isForbiddenMelodicLeap(60, 70)).toBe(true); // minor seventh
+    expect(isForbiddenMelodicLeap(60, 71)).toBe(true); // major seventh
+    expect(isForbiddenMelodicLeap(60, 66)).toBe(true); // tritone
+    expect(isForbiddenMelodicLeap(60, 74)).toBe(true); // compound (major ninth)
+    expect(isForbiddenMelodicLeap(60, 72)).toBe(false); // octave is allowed
+    expect(isForbiddenMelodicLeap(60, 67)).toBe(false); // fifth
   });
 });
 

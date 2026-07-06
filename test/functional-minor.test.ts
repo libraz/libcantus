@@ -27,6 +27,15 @@ describe('chordToRoman in a minor key', () => {
       expect(chordToRoman(romanToChord(roman, aMinor), aMinor)).toBe(roman);
     }
   });
+
+  it('spells the raised leading-tone chord as sharp-vii, not a flat tonic', () => {
+    expect(chordToRoman(makeChord(8, 'dim'), aMinor)).toBe('#viio');
+    expect(chordToRoman(makeChord(8, 'dim7'), aMinor)).toBe('#viio7');
+  });
+
+  it('spells a flat-two chromatic root as bII', () => {
+    expect(chordToRoman(makeChord(10, 'maj'), aMinor)).toBe('bII');
+  });
 });
 
 describe('detectCadence in a minor key', () => {

@@ -54,6 +54,13 @@ describe('metric weight', () => {
     expect(isStrongBeat(1, ts)).toBe(false);
   });
 
+  it('treats a downbeat reached just below the bar boundary as strong', () => {
+    const ts = parseTimeSignature('4/4');
+    // Accumulated tuplet durations can land an epsilon below the next downbeat.
+    expect(metricWeight(4 - 5e-10, ts)).toBe(3);
+    expect(isStrongBeat(4 - 5e-10, ts)).toBe(true);
+  });
+
   it('places the two dotted beats of 6/8', () => {
     const ts = parseTimeSignature('6/8');
     expect(metricWeight(0, ts)).toBe(3);

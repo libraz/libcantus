@@ -30,16 +30,19 @@ export function createsVerticalDissonance(a: number, b: number, twoVoice: boolea
 }
 
 /**
- * Whether a melodic move is a forbidden leap (tritone or diminished/augmented
- * seventh-class interval).
+ * Whether a melodic move is a forbidden leap: a tritone, either seventh (minor
+ * or major), or any leap wider than an octave.
+ *
+ * Operates on the raw absolute distance, so compound leaps are not reduced to
+ * their simple class before the octave check.
  *
  * @param prev Starting pitch.
  * @param cur Ending pitch.
  * @returns True when the leap is forbidden in strict counterpoint.
  */
 export function isForbiddenMelodicLeap(prev: number, cur: number): boolean {
-  const semis = Math.abs(cur - prev) % 12;
-  return semis === 6 || semis === 11;
+  const semis = Math.abs(cur - prev);
+  return semis === 6 || semis === 10 || semis === 11 || semis > 12;
 }
 
 /** Reduce an interval to its simple class in [0, 11]. */
@@ -130,7 +133,10 @@ export function createsHiddenParallelPerfect(
   }
   const nowClass = simpleClass(aCur - bCur);
   const prevClass = simpleClass(aPrev - bPrev);
-  if (!isPerfectClass(nowClass) || isPerfectClass(prevClass)) {
+  // Approaching the same perfect class (e.g. fifth to fifth) is a true parallel
+  // owned by createsParallelPerfect; approaching a different perfect interval
+  // (fifth to octave, or vice versa) is the hidden/direct case flagged here.
+  if (!isPerfectClass(nowClass) || prevClass === nowClass) {
     return false;
   }
   const upperMove = aCur >= bCur ? aMove : bMove;

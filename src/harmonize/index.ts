@@ -1,5 +1,5 @@
 import type { Chord, ChordQuality } from '../chord/index.js';
-import { chordPitchClasses, makeChord } from '../chord/index.js';
+import { chordPitchClasses, diatonicTriad, makeChord } from '../chord/index.js';
 import type { HarmonyRole } from '../harmony/index.js';
 import { roleOf } from '../harmony/index.js';
 import type { GeneratedChord } from '../progression/index.js';
@@ -86,11 +86,9 @@ function inferKey(melody: MelodyNote[]): KeyScale {
 /** Enumerate candidate chords for the key, gated by reharmonization strength. */
 function buildCandidates(key: KeyScale, reharmonize: HarmonizeOptions['reharmonize']): Candidate[] {
   const tones = scaleTonesInDegreeOrder(key);
-  const diatonicQuality = (d: number): ChordQuality =>
-    d === 0 || d === 3 || d === 4 ? 'maj' : d === 6 ? 'dim' : 'min';
   const candidates: Candidate[] = tones.map((rootPc, degree) => ({
     rootPc,
-    quality: diatonicQuality(degree),
+    quality: diatonicTriad(degree, key).quality,
     degree,
     secondaryDominant: false,
     base: 0,

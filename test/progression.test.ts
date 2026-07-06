@@ -4,7 +4,7 @@ import {
   progressions,
   progressionsByStyle,
 } from '../src/progression/index.js';
-import { MAJOR_MASK } from '../src/scale/index.js';
+import { MAJOR_MASK, minorKey } from '../src/scale/index.js';
 import type { KeyScale } from '../src/types.js';
 
 const cMajor: KeyScale = { rootPc: 0, modeMask12: MAJOR_MASK };
@@ -77,6 +77,20 @@ describe('generateProgression', () => {
       ext: 'maj7',
     });
     expect(chords.every((c) => c.quality === 'maj7')).toBe(true);
+  });
+
+  it('derives diatonic qualities from a minor key', () => {
+    // A natural minor: i=Am, v=Em, VI=Fmaj, iv=Dm. The VI degree must be major,
+    // not minor as a hardcoded major-key table would produce.
+    const chords = generateProgression({
+      presetId: 'fourChordPop',
+      key: minorKey(9),
+      style: 'idol',
+      bars: 4,
+      ext: 'auto',
+    });
+    expect(chords.map((c) => c.rootPc)).toEqual([9, 4, 5, 2]);
+    expect(chords.map((c) => c.quality)).toEqual(['min', 'min', 'maj', 'min']);
   });
 
   it('is deterministic for a given seed when no preset is fixed', () => {

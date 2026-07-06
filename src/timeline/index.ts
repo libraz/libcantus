@@ -20,8 +20,9 @@ export type ChordTimeline = {
  * Build a chord timeline from placed chords.
  *
  * Each chord spans from its `startBeat` to the next chord's `startBeat`; the last
- * chord runs to `totalBeats`. `at(beat)` returns the covering segment's chord, or
- * null when the beat lies outside every segment.
+ * chord runs to `totalBeats`. Segments with no positive length (from duplicate
+ * onsets or a last chord at or past `totalBeats`) are dropped. `at(beat)` returns
+ * the covering segment's chord, or null when the beat lies outside every segment.
  *
  * @param chords Placed chords in time order.
  * @param totalBeats End of the timeline in beats.
@@ -32,11 +33,17 @@ export function chordTimelineFromChords(
   totalBeats: number,
 ): ChordTimeline {
   const sorted = [...chords].sort((a, b) => a.startBeat - b.startBeat);
-  const segments: ChordSegment[] = sorted.map((gc, i) => {
-    const next = sorted[i + 1];
-    const endBeat = next ? next.startBeat : totalBeats;
-    return { startBeat: gc.startBeat, endBeat, chord: makeChord(gc.rootPc, gc.quality, gc.bassPc) };
-  });
+  const segments: ChordSegment[] = sorted
+    .map((gc, i) => {
+      const next = sorted[i + 1];
+      const endBeat = Math.max(gc.startBeat, next ? next.startBeat : totalBeats);
+      return {
+        startBeat: gc.startBeat,
+        endBeat,
+        chord: makeChord(gc.rootPc, gc.quality, gc.bassPc),
+      };
+    })
+    .filter((seg) => seg.endBeat > seg.startBeat);
 
   const at = (beat: number): Chord | null => {
     for (const seg of segments) {

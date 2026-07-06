@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { type DrumGenOptions, generateDrums } from '../src/drums/index.js';
+import { quantizeSwing } from '../src/drums/swing.js';
 
 const KICK = 36;
 const SNARE = 38;
@@ -177,5 +178,15 @@ describe('generateDrums richness', () => {
       fills: true,
     };
     expect(generateDrums(opts)).toEqual(generateDrums(opts));
+  });
+});
+
+describe('quantizeSwing sixteenth grid', () => {
+  it('delays the "e" off-beat 16th under full swing', () => {
+    expect(quantizeSwing(0.25, 1, 'sixteenth')).toBeGreaterThan(0.25);
+  });
+
+  it('delays the "a" off-beat 16th under full swing', () => {
+    expect(quantizeSwing(0.75, 1, 'sixteenth')).toBeGreaterThan(0.75);
   });
 });

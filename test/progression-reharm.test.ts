@@ -38,6 +38,27 @@ describe('generateProgression reharmonize', () => {
     expect(sawSecondary).toBe(true);
   });
 
+  it('never orphans a secondary dominant by replacing its resolution target', () => {
+    // A dominant inserted at index i-1 targets chords[i]; that target must not
+    // itself be replaced by another dominant, which would leave two consecutive
+    // secondary dominants with the first resolving to nothing.
+    for (let seed = 0; seed < 24; seed += 1) {
+      const chords = generateProgression({
+        presetId: 'fourChordPop',
+        key: cMajor,
+        style: 'idol',
+        bars: 8,
+        reharmonize: true,
+        seed,
+      });
+      for (let i = 0; i < chords.length - 1; i += 1) {
+        if (chords[i]?.secondaryDominant) {
+          expect(chords[i + 1]?.secondaryDominant).not.toBe(true);
+        }
+      }
+    }
+  });
+
   it('leaves the progression unchanged without reharmonize', () => {
     const plain = generateProgression({
       presetId: 'fourChordPop',

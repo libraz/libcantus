@@ -27,6 +27,14 @@ describe('detectChord', () => {
     expect(match).toMatchObject({ exact: true, missingPcs: [], extraPcs: [] });
   });
 
+  it('recognizes a fifth-omitted dominant seventh shell voicing', () => {
+    const matches = detectChord([0, 4, 10]);
+    const c7 = matches.find((m) => m.rootPc === 0 && m.quality === 'dom7');
+    expect(c7).toBeDefined();
+    expect(c7?.missingPcs).toContain(7);
+    expect(c7?.extraPcs).toEqual([]);
+  });
+
   it('returns nothing for an empty input', () => {
     expect(detectChord([])).toEqual([]);
     expect(detectChordBest([])).toBeNull();

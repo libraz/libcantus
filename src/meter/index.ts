@@ -139,11 +139,11 @@ export function metricWeight(beatInQuarters: number, ts: TimeSignature): number 
   if (!isMultiple(beat, pulse)) {
     return 0;
   }
-  const pulseIndex = Math.round(beat / pulse);
+  const pulses = pulsesPerBar(ts);
+  const pulseIndex = Math.round(beat / pulse) % pulses;
   if (pulseIndex === 0) {
     return 3;
   }
-  const pulses = pulsesPerBar(ts);
   if (pulses % 2 === 0 && pulseIndex === pulses / 2) {
     return 2;
   }

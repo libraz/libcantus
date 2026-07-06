@@ -251,8 +251,10 @@ function romanSpelling(
     return { degreeNumber: diatonic + 1, accidental: '' };
   }
   // Chromatic root: prefer a flat of the diatonic degree a semitone above it,
-  // then a sharp of the degree a semitone below.
-  for (let i = 0; i < tones.length; i += 1) {
+  // then a sharp of the degree a semitone below. Degree 1 (the tonic) is skipped
+  // in the flat pass so a raised leading tone is spelled as `#vii` rather than a
+  // flat tonic `bI`.
+  for (let i = 1; i < tones.length; i += 1) {
     if (mod12((tones[i] ?? 0) - 1) === mod12(rootPc)) {
       return { degreeNumber: i + 1, accidental: 'b' };
     }

@@ -47,10 +47,11 @@ function uniquePitchClasses(pitches: number[]): number[] {
  * Identify chords matching a set of pitches.
  *
  * Every input pitch class is tried as a root against every known chord quality.
- * A match is reported when all of the chord's tones are present in the input;
- * matches are ranked best-first by fewest extra notes, then fewest missing
- * notes, then most specific (largest) chord. An exact match (no extras, no
- * missing) is flagged and ranked first.
+ * A match is reported when all of the chord's tones are present in the input, or
+ * when the only absent tone is the perfect fifth (a common omission in shell
+ * voicings); matches are ranked best-first by fewest extra notes, then fewest
+ * missing notes, then most specific (largest) chord. An exact match (no extras,
+ * no missing) is flagged and ranked first.
  *
  * @param pitches MIDI pitches or bare pitch classes (octave-agnostic).
  * @returns Ranked chord interpretations (may be empty).
@@ -70,7 +71,10 @@ export function detectChord(pitches: number[]): ChordMatch[] {
       const tones = chordPitchClasses(chord);
       const toneSet = new Set(tones);
       const missingPcs = tones.filter((pc) => !inputSet.has(pc));
-      if (missingPcs.length > 0) {
+      // Accept an exact-tone match, or one whose only absent tone is the perfect
+      // fifth; any other missing tone (third, sus tone, seventh, ...) rejects.
+      const fifthPc = pitchClass(rootPc + 7);
+      if (missingPcs.length > 1 || (missingPcs.length === 1 && missingPcs[0] !== fifthPc)) {
         continue;
       }
       const extraPcs = input.filter((pc) => !toneSet.has(pc));
@@ -93,6 +97,9 @@ export function detectChord(pitches: number[]): ChordMatch[] {
   matches.sort((a, b) => {
     if (a.extraPcs.length !== b.extraPcs.length) {
       return a.extraPcs.length - b.extraPcs.length;
+    }
+    if (a.missingPcs.length !== b.missingPcs.length) {
+      return a.missingPcs.length - b.missingPcs.length;
     }
     // Prefer root position (the bass is the chord root) on a tie.
     if ((a.inversion === 0) !== (b.inversion === 0)) {

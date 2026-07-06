@@ -58,7 +58,7 @@ export function isPerfectInterval(semitones: number): boolean {
  * @param twoVoice When true, the perfect fourth is treated as dissonant.
  * @returns True if the interval is consonant in the given context.
  */
-export function isConsonantInterval(semitones: number, twoVoice: boolean): boolean {
+export function isConsonantInterval(semitones: number, twoVoice = true): boolean {
   const pc = simpleInterval(semitones);
   if (pc === 5) {
     return !twoVoice;

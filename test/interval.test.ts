@@ -64,4 +64,10 @@ describe('isConsonantInterval', () => {
       expect(isConsonantInterval(s, false)).toBe(false);
     }
   });
+
+  it('defaults to two-voice context, matching classifyInterval', () => {
+    expect(isConsonantInterval(5)).toBe(false);
+    expect(isConsonantInterval(5)).toBe(isConsonantInterval(5, true));
+    expect(isConsonantInterval(7)).toBe(true);
+  });
 });
