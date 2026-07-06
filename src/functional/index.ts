@@ -8,8 +8,15 @@
  */
 
 import type { Chord, ChordQuality } from '../chord/index.js';
-import { makeChord } from '../chord/index.js';
-import { majorKey, scaleTonesInDegreeOrder } from '../scale/index.js';
+import { chordPitchClasses, makeChord } from '../chord/index.js';
+import {
+  HARMONIC_MINOR_MASK,
+  isScaleTone,
+  MAJOR_MASK,
+  majorKey,
+  NATURAL_MINOR_MASK,
+  scaleTonesInDegreeOrder,
+} from '../scale/index.js';
 import type { KeyScale } from '../types.js';
 
 /** The three broad harmonic functions of tonal music. */
@@ -375,6 +382,170 @@ export function chordToRoman(chord: Chord, key: KeyScale): string {
  */
 export function functionOf(chord: Chord, key: KeyScale): HarmonicFunction {
   return FUNCTION_BY_OFFSET[mod12(chord.rootPc - key.rootPc)] ?? 'tonic';
+}
+
+/** The origin of a recognized non-diatonic chord, or null when none applies. */
+export type BorrowedSource = 'parallel-minor' | 'parallel-major' | 'neapolitan' | null;
+
+/** The result of {@link analyzeChord}: function, borrowing, and Roman numeral. */
+export type ChordAnalysis = {
+  function: HarmonicFunction;
+  borrowed: boolean;
+  source: BorrowedSource;
+  roman: string;
+};
+
+/**
+ * Whether every pitch class of a chord belongs to the key's scale.
+ *
+ * The test is strict against the key's own mode mask: in a natural-minor key
+ * the harmonic-minor dominant (major V) is *not* diatonic, since the raised
+ * leading tone lies outside the mask. Borrowing predicates treat that case as
+ * an in-key alteration separately (see {@link isBorrowedChord}).
+ *
+ * @param chord The chord to test.
+ * @param key The prevailing key.
+ * @returns True if all chord pitch classes are scale tones.
+ */
+export function isDiatonic(chord: Chord, key: KeyScale): boolean {
+  return chordPitchClasses(chord).every((pc) => isScaleTone(pc, key));
+}
+
+/**
+ * The parallel key: same tonic, opposite mode.
+ *
+ * A key with a minor third (natural/harmonic/melodic minor, dorian, phrygian)
+ * maps to the parallel major; any other key maps to the parallel natural minor.
+ *
+ * @param key The key to mirror.
+ * @returns The parallel major or natural-minor key on the same tonic.
+ */
+export function parallelKey(key: KeyScale): KeyScale {
+  return {
+    rootPc: mod12(key.rootPc),
+    modeMask12: isMinorKey(key) ? MAJOR_MASK : NATURAL_MINOR_MASK,
+  };
+}
+
+/**
+ * In a minor key, whether a non-diatonic chord is explained by the harmonic
+ * minor scale on the same tonic (major V, V7, the raised-leading-tone viio).
+ * Such chords are in-key chromatic alterations, not modal interchange.
+ */
+function isHarmonicMinorAlteration(chord: Chord, key: KeyScale): boolean {
+  return (
+    isMinorKey(key) &&
+    isDiatonic(chord, { rootPc: mod12(key.rootPc), modeMask12: HARMONIC_MINOR_MASK })
+  );
+}
+
+/** Whether a chord is the Neapolitan: a major triad on the flat second degree. */
+function isNeapolitan(chord: Chord, key: KeyScale): boolean {
+  return mod12(chord.rootPc - key.rootPc) === 1 && chord.quality === 'maj';
+}
+
+/**
+ * Whether a chord is borrowed from the parallel mode (modal interchange).
+ *
+ * True when the chord is not diatonic to `key` but is diatonic to its
+ * {@link parallelKey} — e.g. iv, bVI, or bVII in a major key, or the Picardy
+ * tonic and major IV in a minor key. Two non-diatonic families are excluded:
+ * chords diatonic to neither mode (they are chromatic, not borrowed), and, in
+ * a minor key, chords explained by the harmonic minor scale (the major
+ * dominant and raised-leading-tone chords), which are in-key alterations
+ * rather than interchange even though they happen to fit the parallel major.
+ *
+ * @param chord The chord to test.
+ * @param key The prevailing key.
+ * @returns True if the chord is borrowed from the parallel mode.
+ */
+export function isBorrowedChord(chord: Chord, key: KeyScale): boolean {
+  if (isDiatonic(chord, key)) {
+    return false;
+  }
+  if (isHarmonicMinorAlteration(chord, key)) {
+    return false;
+  }
+  return isDiatonic(chord, parallelKey(key));
+}
+
+/**
+ * Identify where a non-diatonic chord comes from.
+ *
+ * The Neapolitan (major triad on b2) is recognized first, since it sits
+ * outside both parallel modes; parallel-mode borrowing follows the
+ * {@link isBorrowedChord} rules. Diatonic chords, harmonic-minor alterations,
+ * and unrecognized chromatic chords all yield null.
+ *
+ * @param chord The chord to classify.
+ * @param key The prevailing key.
+ * @returns The borrowing source, or null.
+ */
+export function borrowedSource(chord: Chord, key: KeyScale): BorrowedSource {
+  if (isDiatonic(chord, key)) {
+    return null;
+  }
+  if (isNeapolitan(chord, key)) {
+    return 'neapolitan';
+  }
+  if (isBorrowedChord(chord, key)) {
+    return isMinorKey(key) ? 'parallel-major' : 'parallel-minor';
+  }
+  return null;
+}
+
+/** Diminished-family qualities: diminished triad, dim7, half-diminished. */
+function isDiminishedQuality(quality: ChordQuality): boolean {
+  return quality === 'dim' || quality === 'dim7' || quality === 'm7b5';
+}
+
+/** Whether the chord's interval template carries a major third above the root. */
+function hasMajorThird(chord: Chord): boolean {
+  return chord.intervals.some((interval) => mod12(interval) === 4);
+}
+
+/**
+ * Quality-aware harmonic function, refining the offset table where chord
+ * quality disambiguates: diminished chords on the leading tone or the raised
+ * subdominant resolve by semitone and act as dominants; the Neapolitan and the
+ * major-third chords on bVI/bVII borrowed from the parallel minor act as
+ * subdominant (predominant) harmony. All other chords keep {@link functionOf}.
+ */
+function qualityAwareFunction(chord: Chord, key: KeyScale): HarmonicFunction {
+  const offset = mod12(chord.rootPc - key.rootPc);
+  if (isDiminishedQuality(chord.quality) && (offset === 11 || offset === 6)) {
+    return 'dominant';
+  }
+  if (isNeapolitan(chord, key)) {
+    return 'subdominant';
+  }
+  if (!isMinorKey(key) && hasMajorThird(chord) && (offset === 8 || offset === 10)) {
+    return 'subdominant';
+  }
+  return functionOf(chord, key);
+}
+
+/**
+ * Analyze a chord in a key: harmonic function, borrowing, and Roman numeral.
+ *
+ * The function is quality-aware (see the predicates behind it), the source
+ * follows {@link borrowedSource}, and the numeral comes from
+ * {@link chordToRoman}. `borrowed` is true whenever a source is identified —
+ * including the Neapolitan, which the stricter parallel-mode predicate
+ * {@link isBorrowedChord} does not count.
+ *
+ * @param chord The chord to analyze.
+ * @param key The prevailing key.
+ * @returns The chord analysis.
+ */
+export function analyzeChord(chord: Chord, key: KeyScale): ChordAnalysis {
+  const source = borrowedSource(chord, key);
+  return {
+    function: qualityAwareFunction(chord, key),
+    borrowed: source !== null,
+    source,
+    roman: chordToRoman(chord, key),
+  };
 }
 
 /**

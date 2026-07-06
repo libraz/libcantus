@@ -10,6 +10,14 @@ export {
   diatonicTriad,
   makeChord,
 } from './chord/index.js';
+export type { ChordScaleMatch, ChordScaleReportEntry } from './chordscale/index.js';
+export {
+  availableTensions,
+  avoidNotes,
+  chordScaleReport,
+  chordScales,
+  scaleMatchesChord,
+} from './chordscale/index.js';
 export {
   createsHiddenParallelPerfect,
   createsParallelOctave,
@@ -33,12 +41,22 @@ export type {
   Section,
 } from './drums/index.js';
 export { generateDrums } from './drums/index.js';
-export type { Cadence, HarmonicFunction } from './functional/index.js';
+export type {
+  BorrowedSource,
+  Cadence,
+  ChordAnalysis,
+  HarmonicFunction,
+} from './functional/index.js';
 export {
+  analyzeChord,
+  borrowedSource,
   chordToRoman,
   detectCadence,
   functionOf,
+  isBorrowedChord,
+  isDiatonic,
   isMinorKey,
+  parallelKey,
   romanToChord,
   secondaryDominant,
 } from './functional/index.js';
@@ -98,6 +116,8 @@ export {
   progressions,
   progressionsByStyle,
 } from './progression/index.js';
+export type { RhythmEvent, RhythmOptions } from './rhythm/index.js';
+export { generateRhythm, onsetWeightCurve, rhythmDensity } from './rhythm/index.js';
 export type {
   SafetyProfile,
   SafetyQuery,
@@ -155,3 +175,5 @@ export {
   TWELVE_TET,
 } from './tuning/index.js';
 export type { KeyScale } from './types.js';
+export type { VoiceRange, VoicingOptions } from './voicing/index.js';
+export { SATB_RANGES, voiceChord, voiceLeadingCost, voiceProgression } from './voicing/index.js';

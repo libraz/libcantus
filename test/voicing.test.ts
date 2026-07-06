@@ -1,0 +1,158 @@
+import { describe, expect, it } from 'vitest';
+import { chordPitchClasses, makeChord } from '../src/chord/index.js';
+import { createsParallelOctave, createsParallelPerfect } from '../src/counterpoint/index.js';
+import {
+  SATB_RANGES,
+  voiceChord,
+  voiceLeadingCost,
+  voiceProgression,
+} from '../src/voicing/index.js';
+
+/** Reduce a MIDI pitch to a pitch class. */
+function pc(pitch: number): number {
+  return ((pitch % 12) + 12) % 12;
+}
+
+describe('voiceChord', () => {
+  it('voices a triad within the SATB ranges with all chord tones present', () => {
+    const chord = makeChord(0, 'maj');
+    const voicing = voiceChord(chord);
+    expect(voicing).toHaveLength(4);
+    for (let i = 0; i < voicing.length; i += 1) {
+      const pitch = voicing[i] ?? Number.NaN;
+      const range = SATB_RANGES[i] ?? { min: 0, max: 0 };
+      expect(pitch).toBeGreaterThanOrEqual(range.min);
+      expect(pitch).toBeLessThanOrEqual(range.max);
+    }
+    const sounding = new Set(voicing.map(pc));
+    for (const tone of chordPitchClasses(chord)) {
+      expect(sounding.has(tone)).toBe(true);
+    }
+  });
+
+  it('returns pitches in ascending order (index 0 = lowest)', () => {
+    const voicing = voiceChord(makeChord(7, 'dom7'));
+    for (let i = 1; i < voicing.length; i += 1) {
+      expect(voicing[i] ?? 0).toBeGreaterThanOrEqual(voicing[i - 1] ?? 0);
+    }
+  });
+
+  it('puts the root in the bass by default', () => {
+    const voicing = voiceChord(makeChord(2, 'min'));
+    expect(pc(voicing[0] ?? Number.NaN)).toBe(2);
+  });
+
+  it('puts bassPc in the bass for slash chords', () => {
+    const voicing = voiceChord(makeChord(0, 'maj', 4)); // C/E
+    expect(pc(voicing[0] ?? Number.NaN)).toBe(4);
+  });
+
+  it('supports other voice counts', () => {
+    const voicing = voiceChord(makeChord(0, 'maj'), { voices: 3 });
+    expect(voicing).toHaveLength(3);
+    expect(pc(voicing[0] ?? Number.NaN)).toBe(0);
+  });
+
+  it('respects explicit ranges', () => {
+    const ranges = [
+      { min: 48, max: 59 },
+      { min: 60, max: 71 },
+      { min: 66, max: 77 },
+    ];
+    const voicing = voiceChord(makeChord(5, 'maj'), { ranges });
+    expect(voicing).toHaveLength(3);
+    for (let i = 0; i < voicing.length; i += 1) {
+      const pitch = voicing[i] ?? Number.NaN;
+      const range = ranges[i] ?? { min: 0, max: 0 };
+      expect(pitch).toBeGreaterThanOrEqual(range.min);
+      expect(pitch).toBeLessThanOrEqual(range.max);
+    }
+  });
+});
+
+describe('voiceLeadingCost', () => {
+  it('sums absolute semitone motion across voices', () => {
+    expect(voiceLeadingCost([60, 64, 67], [62, 65, 67])).toBe(3);
+    expect(voiceLeadingCost([60], [60])).toBe(0);
+  });
+
+  it('returns Infinity for voicings of different lengths', () => {
+    expect(voiceLeadingCost([60, 64], [60, 64, 67])).toBe(Number.POSITIVE_INFINITY);
+  });
+});
+
+describe('voiceProgression', () => {
+  const progression = [
+    makeChord(0, 'maj'), // C
+    makeChord(5, 'maj'), // F
+    makeChord(7, 'maj'), // G
+    makeChord(0, 'maj'), // C
+  ];
+
+  it('voices each chord with smooth voice leading', () => {
+    const voicings = voiceProgression(progression);
+    expect(voicings).toHaveLength(4);
+    let total = 0;
+    for (let i = 1; i < voicings.length; i += 1) {
+      const cost = voiceLeadingCost(voicings[i - 1] ?? [], voicings[i] ?? []);
+      expect(cost).toBeLessThanOrEqual(12);
+      total += cost;
+    }
+    expect(total).toBeLessThanOrEqual(30);
+  });
+
+  it('keeps every voicing inside its voice range and ascending', () => {
+    const voicings = voiceProgression(progression);
+    for (const voicing of voicings) {
+      for (let i = 0; i < voicing.length; i += 1) {
+        const pitch = voicing[i] ?? Number.NaN;
+        const range = SATB_RANGES[i] ?? { min: 0, max: 0 };
+        expect(pitch).toBeGreaterThanOrEqual(range.min);
+        expect(pitch).toBeLessThanOrEqual(range.max);
+        if (i > 0) {
+          expect(pitch).toBeGreaterThanOrEqual(voicing[i - 1] ?? 0);
+        }
+      }
+    }
+  });
+
+  it('avoids parallel perfects and octaves between consecutive voicings', () => {
+    const voicings = voiceProgression(progression);
+    for (let step = 1; step < voicings.length; step += 1) {
+      const prev = voicings[step - 1] ?? [];
+      const cur = voicings[step] ?? [];
+      for (let lower = 0; lower < cur.length; lower += 1) {
+        for (let upper = lower + 1; upper < cur.length; upper += 1) {
+          const prevLower = prev[lower] ?? 0;
+          const prevUpper = prev[upper] ?? 0;
+          const curLower = cur[lower] ?? 0;
+          const curUpper = cur[upper] ?? 0;
+          expect(createsParallelPerfect(prevUpper, curUpper, prevLower, curLower)).toBe(false);
+          expect(createsParallelOctave(prevUpper, curUpper, prevLower, curLower)).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('places each chord tone in every voicing', () => {
+    const voicings = voiceProgression(progression);
+    for (let i = 0; i < progression.length; i += 1) {
+      const chord = progression[i];
+      const voicing = voicings[i] ?? [];
+      const sounding = new Set(voicing.map(pc));
+      for (const tone of chordPitchClasses(chord ?? makeChord(0, 'maj'))) {
+        expect(sounding.has(tone)).toBe(true);
+      }
+    }
+  });
+
+  it('is deterministic', () => {
+    expect(voiceProgression(progression)).toEqual(voiceProgression(progression));
+  });
+
+  it('follows bassPc across a progression', () => {
+    const slash = [makeChord(0, 'maj'), makeChord(5, 'maj', 9)]; // C, F/A
+    const voicings = voiceProgression(slash);
+    expect(pc(voicings[1]?.[0] ?? Number.NaN)).toBe(9);
+  });
+});

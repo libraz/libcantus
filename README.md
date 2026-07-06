@@ -16,10 +16,13 @@ intervals, scales, chords, functional harmony, and voice-leading.
 | `interval`    | `IntervalQuality`, `classifyInterval`, `isPerfectInterval`, `isConsonantInterval`                                            |
 | `scale`       | `KeyScale`, `majorKey`, `minorKey`, `scaleByName`, `NAMED_SCALES` (modes, pentatonic, blues, whole-tone, octatonic, …)       |
 | `chord`       | `Chord`, `ChordQuality`, `chordFromDegree`, `diatonicTriad`, `diatonicSeventh`, `chordPitchClasses`, `chordToneRole`         |
-| `functional`  | `romanToChord`, `chordToRoman`, `functionOf`, `detectCadence`, `isMinorKey`, `secondaryDominant` (major & minor, inversions) |
+| `functional`  | `romanToChord`, `chordToRoman`, `functionOf`, `analyzeChord`, `isBorrowedChord`, `borrowedSource`, `detectCadence`, `secondaryDominant` (major & minor, inversions, modal interchange) |
+| `chordscale`  | `chordScales`, `availableTensions`, `avoidNotes`, `chordScaleReport` (compatible scales and tensions for a chord)            |
 | `spelling`    | `spellScale`, `spellChord`, `spellPitchClasses`, `noteNames` (letter-name output from a spelled tonic)                       |
 | `detect`      | `detectChord`, `detectChordBest`, `detectKey` (recognition: notes → chord/key, with inversions)                              |
 | `counterpoint`| parallel/hidden-perfect, unison, overlap, spacing, voice-crossing, leading-tone, and dissonance predicates                   |
+| `voicing`     | `voiceChord`, `voiceProgression`, `voiceLeadingCost`, `SATB_RANGES` (realize chords into smooth N-voice MIDI voicings)       |
+| `rhythm`      | `generateRhythm`, `onsetWeightCurve`, `rhythmDensity` (seeded rhythm generation weighted by metric accent)                   |
 | `meter`       | `TimeSignature`, `parseTimeSignature`, `beatsPerBar`, `metricWeight`, `isStrongBeat`, `tuplet` (simple & compound meters)     |
 | `tuning`      | `frequencyOf`, `edo`, `centsBetweenFreq`, `ratioToCents`, `JUST_RATIOS`, `justDeviationCents` (Hz, cents, EDO, just intonation) |
 
@@ -92,6 +95,37 @@ noteNames(spellScale(parseNote('A'), scaleByName('harmonicMinor', 9)));
 // ['A', 'B', 'C', 'D', 'E', 'F', 'G#']
 noteNames(spellScale(parseNote('E'), minorKey(4)));
 // ['E', 'F#', 'G', 'A', 'B', 'C', 'D']
+```
+
+### Voicing, chord scales, and rhythm
+
+```ts
+import {
+  analyzeChord,
+  chordScales,
+  generateRhythm,
+  majorKey,
+  makeChord,
+  parseTimeSignature,
+  voiceProgression,
+} from '@libraz/cantus';
+
+const c = majorKey(0);
+
+// Realize a progression into smooth 4-voice (SATB) MIDI voicings:
+voiceProgression([makeChord(0, 'maj'), makeChord(5, 'maj'), makeChord(7, 'dom7'), makeChord(0, 'maj')]);
+// [[...], [...], [...], [...]]  (one ascending pitch per voice, minimal motion)
+
+// Modal interchange: a minor iv in a major key reads as a borrowed subdominant:
+analyzeChord(makeChord(5, 'min'), c);
+// { function: 'subdominant', borrowed: true, source: 'parallel-minor', roman: 'iv' }
+
+// Which scales fit over a chord, and its available tensions:
+chordScales(makeChord(0, 'dom7'))[0]; // { name: 'mixolydian', rootPc: 0 }
+
+// Seeded rhythm weighted toward strong beats:
+generateRhythm(parseTimeSignature('4/4'), { seed: 1, density: 0.5 });
+// [{ position: 0, duration: ... }, ...]
 ```
 
 ## License
