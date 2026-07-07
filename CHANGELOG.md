@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.2] - 2026-07-07
 
 ### Added
 
@@ -97,6 +97,6 @@ Initial public release.
 - Fluent immutable class API (`Note`, `Chord`, `Key`, ...) layered over the tree-shakeable functional core.
 - Dual ESM/CJS builds with bundled type declarations.
 
-[Unreleased]: https://github.com/libraz/libcantus/compare/v0.9.1...HEAD
+[0.9.2]: https://github.com/libraz/libcantus/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/libraz/libcantus/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/libraz/libcantus/releases/tag/v0.9.0

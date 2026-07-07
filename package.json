@@ -1,6 +1,6 @@
 {
   "name": "@libraz/libcantus",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "Pure-TypeScript music-theory and composition primitives (intervals, scales, chords).",
   "type": "module",
   "license": "Apache-2.0",
