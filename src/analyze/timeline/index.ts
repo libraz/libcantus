@@ -1,7 +1,7 @@
 import type { TimeSignature } from '../../core/meter/index.js';
 import { beatsPerBar, metricWeight, parseTimeSignature } from '../../core/meter/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
-import type { Chord, GeneratedChord } from '../../theory/chord/index.js';
+import type { Chord, ChordSpan } from '../../theory/chord/index.js';
 import { chordPitchClasses, makeChord } from '../../theory/chord/index.js';
 import { isScaleTone, majorKey } from '../../theory/scale/index.js';
 import type { ChordMatch } from '../detect/index.js';
@@ -44,10 +44,7 @@ export type ChordTimeline = {
  * @returns A queryable chord timeline.
  * @category Arrangement & Analysis
  */
-export function chordTimelineFromChords(
-  chords: GeneratedChord[],
-  totalBeats: number,
-): ChordTimeline {
+export function chordTimelineFromChords(chords: ChordSpan[], totalBeats: number): ChordTimeline {
   const sorted = [...chords].sort((a, b) => a.startBeat - b.startBeat);
   const segments: ChordSegment[] = sorted
     .map((gc, i) => {

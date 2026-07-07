@@ -1,9 +1,9 @@
 import type { KeyScale } from '../../core/types.js';
-import type { ChordQuality, GeneratedChord } from '../../theory/chord/index.js';
+import type { ChordQuality, ChordSpan } from '../../theory/chord/index.js';
 import { diatonicTriad } from '../../theory/chord/index.js';
 import { scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
 
-export type { GeneratedChord } from '../../theory/chord/index.js';
+export type { ChordSpan } from '../../theory/chord/index.js';
 
 /**
  * Broad production style a progression preset suits.
@@ -37,7 +37,7 @@ export type ProgressionPreset = {
  *
  * @category Composition
  */
-export type GenerateProgressionOptions = {
+export type ProgressionOptions = {
   key: KeyScale;
   style: ProgStyle;
   bars: number;
@@ -301,12 +301,12 @@ function autoQuality(degree: number, key: KeyScale): ChordQuality {
  * ```ts
  * import { generateProgression, majorKey } from '@libraz/libcantus';
  * const chords = generateProgression({ key: majorKey(0), style: 'dance', bars: 4 });
- * // Deterministic for a given seed (defaults to 0); one GeneratedChord per bar.
+ * // Deterministic for a given seed (defaults to 0); one ChordSpan per bar.
  * ```
  *
  * @category Composition
  */
-export function generateProgression(opts: GenerateProgressionOptions): GeneratedChord[] {
+export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
   const seed = opts.seed ?? 0;
   let preset: ProgressionPreset | undefined;
   if (opts.presetId !== undefined) {
@@ -323,12 +323,12 @@ export function generateProgression(opts: GenerateProgressionOptions): Generated
     preset = candidates[index] ?? PRESETS[0];
   }
   const degrees = preset?.degrees ?? [0];
-  const chords: GeneratedChord[] = [];
+  const chords: ChordSpan[] = [];
   for (let bar = 0; bar < opts.bars; bar += 1) {
     const degree = degrees[bar % degrees.length] ?? 0;
     const quality =
       opts.ext !== undefined && opts.ext !== 'auto' ? opts.ext : autoQuality(degree, opts.key);
-    const chord: GeneratedChord = {
+    const chord: ChordSpan = {
       rootPc: degreeToRootPc(degree, opts.key),
       quality,
       startBeat: bar * 4,

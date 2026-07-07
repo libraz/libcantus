@@ -5,7 +5,7 @@
  */
 
 import type { NoteEvent } from '../../core/types.js';
-import type { VoiceNote } from '../analysis/index.js';
+import type { VoiceNote } from '../voice/index.js';
 import type { ArrangementTrack, TrackRole } from './tracks.js';
 
 /** Float tolerance for beat boundary comparisons. */

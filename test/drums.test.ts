@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  type DrumGenOptions,
+  type DrumsOptions,
   type GrooveStyle,
   generateDrums,
   type Section,
@@ -20,7 +20,7 @@ const isOffGrid16 = (beat: number) => {
   return Math.abs(frac - 0.25) < 1e-6 || Math.abs(frac - 0.75) < 1e-6;
 };
 
-const base: DrumGenOptions = {
+const base: DrumsOptions = {
   bars: 1,
   bpm: 120,
   style: 'standard',
@@ -48,7 +48,7 @@ describe('generateDrums basic groove', () => {
   });
 
   it('suppresses 16th-note hats at high BPM', () => {
-    const countHats = (opts: DrumGenOptions) =>
+    const countHats = (opts: DrumsOptions) =>
       generateDrums(opts).filter((h) => h.pitch === CLOSED_HAT).length;
     const slow = countHats({ ...base, density: 0.8, bpm: 110 });
     const fast = countHats({ ...base, density: 0.8, bpm: 180 });
@@ -56,7 +56,7 @@ describe('generateDrums basic groove', () => {
   });
 
   it('replaces only the last bar when fills are enabled', () => {
-    const opts: DrumGenOptions = { ...base, bars: 4, seed: 0 };
+    const opts: DrumsOptions = { ...base, bars: 4, seed: 0 };
     const noFill = generateDrums(opts);
     const withFill = generateDrums({ ...opts, fills: true });
 
@@ -89,7 +89,7 @@ describe('generateDrums richness', () => {
   });
 
   it('allows 16th-grid hats at moderate BPM but not at high BPM', () => {
-    const opts: DrumGenOptions = {
+    const opts: DrumsOptions = {
       bars: 1,
       bpm: 120,
       style: 'standard',
@@ -107,7 +107,7 @@ describe('generateDrums richness', () => {
   });
 
   it('delays off-beat hi-hats under a swing feel', () => {
-    const common: DrumGenOptions = {
+    const common: DrumsOptions = {
       bars: 1,
       bpm: 120,
       style: 'standard',
@@ -146,7 +146,7 @@ describe('generateDrums richness', () => {
   });
 
   it('produces a recognizable fill in the last bar', () => {
-    const opts = (seed: number, fills: boolean): DrumGenOptions => ({
+    const opts = (seed: number, fills: boolean): DrumsOptions => ({
       bars: 4,
       bpm: 120,
       style: 'standard',
@@ -173,7 +173,7 @@ describe('generateDrums richness', () => {
   });
 
   it('is deterministic for identical options and seed', () => {
-    const opts: DrumGenOptions = {
+    const opts: DrumsOptions = {
       bars: 4,
       bpm: 124,
       style: 'funk',
@@ -200,7 +200,7 @@ describe('generateDrums richness', () => {
     const sections: Section[] = ['intro', 'verse', 'prechorus', 'chorus', 'bridge', 'outro'];
     for (const style of styles) {
       for (const section of sections) {
-        const opts: DrumGenOptions = {
+        const opts: DrumsOptions = {
           bars: 3,
           bpm: 132,
           style,

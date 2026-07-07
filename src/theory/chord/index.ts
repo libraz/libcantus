@@ -77,7 +77,7 @@ export type Chord = {
  *
  * @category Composition
  */
-export type GeneratedChord = {
+export type ChordSpan = {
   rootPc: number;
   quality: ChordQuality;
   startBeat: number;

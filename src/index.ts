@@ -1,5 +1,3 @@
-export type { AnalyzedNote, TheoryLabel, VoiceNote } from './analyze/analysis/index.js';
-export { analyzeVoice } from './analyze/analysis/index.js';
 export type {
   ArrangementAnalysis,
   ArrangementOptions,
@@ -43,6 +41,8 @@ export {
   chordTimelineFromNotes,
   detectCadences,
 } from './analyze/timeline/index.js';
+export type { AnalyzedNote, TheoryLabel, VoiceNote } from './analyze/voice/index.js';
+export { analyzeVoice } from './analyze/voice/index.js';
 export {
   classifyInterval,
   IntervalQuality,
@@ -91,9 +91,9 @@ export { generateBassLine } from './generate/bass/index.js';
 export type { CounterMelodyOptions } from './generate/countermelody/index.js';
 export { generateCounterMelody } from './generate/countermelody/index.js';
 export type {
-  DrumGenOptions,
   DrumHit,
   DrumRole,
+  DrumsOptions,
   EuclideanKick,
   GrooveFeel,
   GrooveStyle,
@@ -109,17 +109,17 @@ export type {
 } from './generate/harmonize/index.js';
 export { harmonizeMelody } from './generate/harmonize/index.js';
 export type {
-  GenerateMotifOptions,
   MotifCell,
   MotifContour,
   MotifNote,
+  MotifOptions,
   MotifTransform,
 } from './generate/motif/index.js';
 export { developMotif, generateMotif, transformMotif } from './generate/motif/index.js';
 export type {
-  GeneratedChord,
-  GenerateProgressionOptions,
+  ChordSpan,
   ProgFunction,
+  ProgressionOptions,
   ProgressionPreset,
   ProgStyle,
 } from './generate/progression/index.js';

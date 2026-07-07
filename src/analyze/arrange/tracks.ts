@@ -13,13 +13,13 @@ import {
   type SafetyProfile,
   type VoiceSnapshot,
 } from '../../theory/safety/index.js';
-import { type AnalyzedNote, analyzeVoice, type VoiceNote } from '../analysis/index.js';
 import {
   type CadenceHit,
   type ChordTimeline,
   chordTimelineFromNotes,
   detectCadences,
 } from '../timeline/index.js';
+import { type AnalyzedNote, analyzeVoice, type VoiceNote } from '../voice/index.js';
 import { covers, EPS, type PreparedTrack, poolNotes, prepareTracks } from './internal.js';
 
 /**

@@ -99,7 +99,7 @@ export type EuclideanKick = {
  *
  * @category Composition
  */
-export type DrumGenOptions = {
+export type DrumsOptions = {
   bars: number;
   bpm: number;
   style: GrooveStyle;
@@ -163,7 +163,7 @@ export type DrumGenOptions = {
  *
  * @category Composition
  */
-export function generateDrums(opts: DrumGenOptions): DrumHit[] {
+export function generateDrums(opts: DrumsOptions): DrumHit[] {
   const track = new HitList();
   const rng = createRng(opts.seed ?? 0);
   const mapping = mapStyle(opts.style);

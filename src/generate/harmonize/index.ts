@@ -12,7 +12,7 @@ import {
   NATURAL_MINOR_MASK,
   scaleTonesInDegreeOrder,
 } from '../../theory/scale/index.js';
-import type { GeneratedChord } from '../progression/index.js';
+import type { ChordSpan } from '../progression/index.js';
 
 /**
  * A melody note supplied to the harmonizer: a {@link NoteEvent}.
@@ -48,7 +48,7 @@ export type HarmonizeOptions = {
 export type HarmonizeResult = {
   transposeSemitones: number;
   key: KeyScale;
-  chords: GeneratedChord[];
+  chords: ChordSpan[];
   melodyRoles: { noteIndex: number; role: HarmonyRole }[];
 };
 
@@ -356,7 +356,7 @@ function harmonizeOnce(
  *   reharmonize: 'diatonic',
  *   placement: { transposeSearch: false, octaveSearch: false },
  * });
- * result.chords; // one GeneratedChord per harmonic-rhythm segment
+ * result.chords; // one ChordSpan per harmonic-rhythm segment
  * ```
  * @category Reharmonization
  */
@@ -413,9 +413,9 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
     }
   }
 
-  const chords: GeneratedChord[] = bestPath.map((ci, s) => {
+  const chords: ChordSpan[] = bestPath.map((ci, s) => {
     const cand = candAt(ci);
-    const chord: GeneratedChord = {
+    const chord: ChordSpan = {
       rootPc: cand.rootPc,
       quality: cand.quality,
       startBeat: segments[s]?.startBeat ?? s * hr,

@@ -8,8 +8,8 @@ import {
 } from '../src/generate/drums/fills.js';
 import { HitList } from '../src/generate/drums/hit.js';
 import type {
-  DrumGenOptions,
   DrumRole,
+  DrumsOptions,
   GrooveFeel,
   GrooveStyle,
   Section,
@@ -41,7 +41,7 @@ describe('generateDrums coverage matrix', () => {
     for (const style of STYLES) {
       for (const section of SECTIONS) {
         for (const density of [0.2, 0.55, 0.9]) {
-          const opts: DrumGenOptions = {
+          const opts: DrumsOptions = {
             bars: 4,
             bpm: 128,
             style,
@@ -88,7 +88,7 @@ describe('generateDrums coverage matrix', () => {
     for (const feel of FEELS) {
       for (const role of ROLES) {
         for (const bpm of [88, 120, 165]) {
-          const opts: DrumGenOptions = {
+          const opts: DrumsOptions = {
             bars: 2,
             bpm,
             style: 'funk',
@@ -128,7 +128,7 @@ describe('euclid', () => {
   });
 
   it('drives the kick from a euclidean option in generateDrums', () => {
-    const opts: DrumGenOptions = {
+    const opts: DrumsOptions = {
       bars: 2,
       bpm: 120,
       style: 'standard',

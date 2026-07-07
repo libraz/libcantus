@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeVoice, type VoiceNote } from '../src/analyze/analysis/index.js';
+import { analyzeVoice, type VoiceNote } from '../src/analyze/voice/index.js';
 import type { KeyScale } from '../src/core/types.js';
 import type { Chord } from '../src/theory/chord/index.js';
 import { makeChord } from '../src/theory/chord/index.js';

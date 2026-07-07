@@ -50,7 +50,7 @@ export type MotifContour = 'arch' | 'ascending' | 'descending' | 'wave';
  *
  * @category Composition
  */
-export type GenerateMotifOptions = {
+export type MotifOptions = {
   key: KeyScale;
   chord?: Chord | null;
   bars: number;
@@ -207,7 +207,7 @@ function contourOffsets(contour: MotifContour, count: number): number[] {
  *
  * @category Composition
  */
-export function generateMotif(opts: GenerateMotifOptions): MotifCell {
+export function generateMotif(opts: MotifOptions): MotifCell {
   const contour = opts.contour ?? 'arch';
   const bars = Math.max(1, Math.trunc(opts.bars));
   const totalBeats = bars * 4;
