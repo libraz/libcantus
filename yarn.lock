@@ -409,10 +409,10 @@ __metadata:
   resolution: "@libraz/libcantus@workspace:."
   dependencies:
     "@biomejs/biome": "npm:2.5.2"
+    "@libraz/typedoc-theme": "npm:^0.1.1"
     "@vitest/coverage-v8": "npm:4.1.9"
     tsup: "npm:8.5.1"
     typedoc: "npm:0.28.20"
-    typedoc-material-theme: "npm:1.4.1"
     typedoc-plugin-extras: "npm:4.0.1"
     typedoc-plugin-mdn-links: "npm:5.1.1"
     typescript: "npm:6.0.3"
@@ -420,10 +420,12 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@material/material-color-utilities@npm:^0.3.0":
-  version: 0.3.0
-  resolution: "@material/material-color-utilities@npm:0.3.0"
-  checksum: 10c0/3bef025428b893f2acc9e9e2bd186363a60b7c0836fe43c78222e29fe67dc579618e844f0661a20657ed9f7fd8b94fd43a2961892894d0b6a2ba5264ce2673f8
+"@libraz/typedoc-theme@npm:^0.1.1":
+  version: 0.1.1
+  resolution: "@libraz/typedoc-theme@npm:0.1.1"
+  peerDependencies:
+    typedoc: ">=0.28.0 <0.29.0"
+  checksum: 10c0/5dfd68308fc2ee142489675a0a974b3812b9cf36ae61d336528aa5b480436f1e3c621874603e009c9e2ff0cc1bfe0a4221078055f6b4719256c56594516a3101
   languageName: node
   linkType: hard
 
@@ -2110,17 +2112,6 @@ __metadata:
     tsup: dist/cli-default.js
     tsup-node: dist/cli-node.js
   checksum: 10c0/86b0a5ee5533cf5363431ffaf6a244d06fbc80e3a739f216a121a336b28e663d521bae1d3b2d9ba7d479cb4b5f7dcb5e0722e169d3daf664c78f0d68676fa06a
-  languageName: node
-  linkType: hard
-
-"typedoc-material-theme@npm:1.4.1":
-  version: 1.4.1
-  resolution: "typedoc-material-theme@npm:1.4.1"
-  dependencies:
-    "@material/material-color-utilities": "npm:^0.3.0"
-  peerDependencies:
-    typedoc: ^0.25.13 || ^0.26.x || ^0.27.x || ^0.28.x
-  checksum: 10c0/5c5244c1699b0930d66fc0d813e845fa8a597749cd7ca46928147c809a8879d246b81229094cf7ee3c4f1157c9a781bf4b71b01594e5d60beee7989895618600
   languageName: node
   linkType: hard
 

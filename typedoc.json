@@ -24,8 +24,8 @@
     "Utilities",
     "*"
   ],
-  "plugin": ["typedoc-material-theme", "typedoc-plugin-mdn-links", "typedoc-plugin-extras"],
-  "themeColor": "#b5892e",
+  "plugin": ["@libraz/typedoc-theme", "typedoc-plugin-mdn-links", "typedoc-plugin-extras"],
+  "theme": "libraz",
   "footerDate": true,
   "footerTypedocVersion": false,
   "validation": {
