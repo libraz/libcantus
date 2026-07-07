@@ -412,9 +412,9 @@ __metadata:
     "@vitest/coverage-v8": "npm:4.1.9"
     tsup: "npm:8.5.1"
     typedoc: "npm:0.28.20"
-    typedoc-material-theme: "npm:^1.4.1"
-    typedoc-plugin-extras: "npm:^4.0.1"
-    typedoc-plugin-mdn-links: "npm:^5.1.1"
+    typedoc-material-theme: "npm:1.4.1"
+    typedoc-plugin-extras: "npm:4.0.1"
+    typedoc-plugin-mdn-links: "npm:5.1.1"
     typescript: "npm:6.0.3"
     vitest: "npm:4.1.9"
   languageName: unknown
@@ -2113,7 +2113,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typedoc-material-theme@npm:^1.4.1":
+"typedoc-material-theme@npm:1.4.1":
   version: 1.4.1
   resolution: "typedoc-material-theme@npm:1.4.1"
   dependencies:
@@ -2124,7 +2124,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typedoc-plugin-extras@npm:^4.0.1":
+"typedoc-plugin-extras@npm:4.0.1":
   version: 4.0.1
   resolution: "typedoc-plugin-extras@npm:4.0.1"
   peerDependencies:
@@ -2133,7 +2133,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typedoc-plugin-mdn-links@npm:^5.1.1":
+"typedoc-plugin-mdn-links@npm:5.1.1":
   version: 5.1.1
   resolution: "typedoc-plugin-mdn-links@npm:5.1.1"
   peerDependencies:
