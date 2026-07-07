@@ -47,6 +47,21 @@ so — like `rhythm`, `drums`, and `detectKey` — they are exposed as functions
 yarn add @libraz/libcantus
 ```
 
+## Subpath imports
+
+The package root exports everything. To pull in a single layer, import its
+subpath instead:
+
+```ts
+import { Chord, Key, Note } from '@libraz/libcantus/model'; // class API
+import { majorKey, makeChord } from '@libraz/libcantus/theory'; // scales, chords
+import { generateDrums, generateProgression } from '@libraz/libcantus/generate';
+import { analyzeArrangement, detectKey } from '@libraz/libcantus/analyze';
+import { parseNote, edo } from '@libraz/libcantus/core'; // pitch, meter, tuning
+```
+
+The layers are `core`, `theory`, `analyze`, `generate`, and `model`.
+
 ## Quick start
 
 The class API chains immutably and carries key context, so analysis needs no

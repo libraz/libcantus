@@ -38,6 +38,31 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js",
+      "require": "./dist/core/index.cjs"
+    },
+    "./theory": {
+      "types": "./dist/theory/index.d.ts",
+      "import": "./dist/theory/index.js",
+      "require": "./dist/theory/index.cjs"
+    },
+    "./analyze": {
+      "types": "./dist/analyze/index.d.ts",
+      "import": "./dist/analyze/index.js",
+      "require": "./dist/analyze/index.cjs"
+    },
+    "./generate": {
+      "types": "./dist/generate/index.d.ts",
+      "import": "./dist/generate/index.js",
+      "require": "./dist/generate/index.cjs"
+    },
+    "./model": {
+      "types": "./dist/model/index.d.ts",
+      "import": "./dist/model/index.js",
+      "require": "./dist/model/index.cjs"
     }
   },
   "files": [
