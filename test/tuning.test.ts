@@ -21,6 +21,22 @@ describe('12-TET frequency conversion', () => {
     expect(nearestStep(frequencyOf(60))).toBe(60);
   });
 
+  it('converts the MIDI range boundaries and beyond without clamping', () => {
+    // Step 0 and 127 are the MIDI extremes; conversion is not clamped, so any
+    // integer step maps to a positive frequency and round-trips exactly.
+    expect(frequencyOf(0)).toBeGreaterThan(0);
+    expect(frequencyOf(127)).toBeGreaterThan(frequencyOf(0));
+    for (const step of [-24, 0, 60, 127, 200]) {
+      expect(nearestStep(frequencyOf(step))).toBe(step);
+    }
+  });
+
+  it('yields a positive frequency for negative and out-of-range steps', () => {
+    expect(frequencyOf(-12)).toBeGreaterThan(0);
+    expect(frequencyOf(-12)).toBeCloseTo(frequencyOf(0) / 2, 6);
+    expect(frequencyOf(200)).toBeGreaterThan(frequencyOf(127));
+  });
+
   it('measures an octave as 1200 cents', () => {
     expect(centsBetweenFreq(220, 440)).toBeCloseTo(1200, 6);
     expect(centsOfSteps(12, TWELVE_TET)).toBe(1200);

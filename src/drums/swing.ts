@@ -53,8 +53,13 @@ export function quantizeSwing(
       return base + EIGHTH + DELTA_8 * clamped;
     }
     if (offset >= EIGHTH + HALF_16TH && offset < 3 * SIXTEENTH + HALF_16TH) {
-      const result = base + EIGHTH + DELTA_8 * clamped + SIXTEENTH + DELTA_16 * clamped;
-      return Math.min(result, base + 1 - 1 / 480);
+      // The "a" 16th is the midpoint of the compressed second half of the beat
+      // (between the swung "and" and the next downbeat), mirroring the "e" 16th
+      // in the first half. Because DELTA_8 = 2 * DELTA_16, that midpoint reduces
+      // to a single DELTA_16 delay off the straight position, so the "a" never
+      // overshoots the downbeat and needs no clamp. At the default shuffle feel
+      // (swing 0.75) this lands near 0.8125 rather than the doubly-swung 0.9375.
+      return base + 3 * SIXTEENTH + DELTA_16 * clamped;
     }
     return startBeat;
   }

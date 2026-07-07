@@ -2,7 +2,6 @@ import type { Chord } from '../chord/index.js';
 import { chordPitchClasses } from '../chord/index.js';
 import {
   createsHiddenParallelPerfect,
-  createsParallelOctave,
   createsParallelPerfect,
   createsVerticalDissonance,
   isForbiddenMelodicLeap,
@@ -242,10 +241,9 @@ function evaluateInternal(q: SafetyQuery, collectSuggestions: boolean): SafetyRe
       if (ov.prevPitch === undefined) {
         continue;
       }
-      if (
-        createsParallelPerfect(prev, pitch, ov.prevPitch, ov.pitch) ||
-        createsParallelOctave(prev, pitch, ov.prevPitch, ov.pitch)
-      ) {
+      // createsParallelPerfect covers every perfect class (unison/octave and
+      // fifth), so no separate octave check is needed.
+      if (createsParallelPerfect(prev, pitch, ov.prevPitch, ov.pitch)) {
         reasons |= ReasonFlag.ParallelPerfect;
         raise(parallelSeverity);
       }

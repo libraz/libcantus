@@ -35,6 +35,13 @@ export type GenerateMotifOptions = {
   chord?: Chord | null;
   bars: number;
   contour?: MotifContour;
+  /**
+   * Probability in [0, 1] that a note is nudged by a single diatonic step. The
+   * nudge direction is balanced (up or down with equal odds), so it adds
+   * variety without biasing the line off its contour. Default 0, which
+   * reproduces the requested contour exactly (no drift, tails return to tonic).
+   */
+  jitter?: number;
   seed?: number;
 };
 
@@ -126,7 +133,6 @@ function mulberry32(seed: number): () => number {
 /** Diatonic scale-degree offsets shaping a contour of `count` notes. */
 function contourOffsets(contour: MotifContour, count: number): number[] {
   const offsets: number[] = [];
-  const half = Math.floor(count / 2);
   for (let i = 0; i < count; i += 1) {
     switch (contour) {
       case 'ascending':
@@ -136,7 +142,9 @@ function contourOffsets(contour: MotifContour, count: number): number[] {
         offsets.push(-i);
         break;
       case 'arch':
-        offsets.push(i <= half ? i : count - 1 - i);
+        // Symmetric rise-and-fall: a palindrome that starts and ends on the
+        // tonic (offset 0) for both odd and even lengths.
+        offsets.push(Math.min(i, count - 1 - i));
         break;
       case 'wave':
         offsets.push([0, 1, 0, -1][i % 4] ?? 0);
@@ -151,9 +159,11 @@ function contourOffsets(contour: MotifContour, count: number): number[] {
  *
  * The melody follows the requested contour in diatonic steps from the tonic,
  * snapped to the key. When a chord is supplied, notes landing on bar downbeats
- * are pulled to the nearest chord tone. Output is deterministic for a given seed.
+ * are pulled to the nearest chord tone. An optional `jitter` adds balanced
+ * per-note variation without biasing the contour; it is off by default, so the
+ * contour is reproduced exactly. Output is deterministic for a given seed.
  *
- * @param opts Key, optional chord, length, contour, and seed.
+ * @param opts Key, optional chord, length, contour, jitter, and seed.
  * @returns The generated motif cell.
  */
 export function generateMotif(opts: GenerateMotifOptions): MotifCell {
@@ -163,12 +173,19 @@ export function generateMotif(opts: GenerateMotifOptions): MotifCell {
   const noteCount = Math.max(3, bars * 2);
   const beatsPerNote = totalBeats / noteCount;
   const rng = mulberry32(opts.seed ?? 0);
+  const jitterProb = Math.min(1, Math.max(0, opts.jitter ?? 0));
   const tonic = pitchClass(opts.key.rootPc) + 60;
   const offsets = contourOffsets(contour, noteCount);
 
   const notes: MotifNote[] = [];
   for (let i = 0; i < noteCount; i += 1) {
-    const jitter = rng() < 0.25 ? 1 : 0;
+    // Opt-in, direction-balanced jitter: disabled by default so the contour is
+    // preserved exactly. When enabled it nudges up or down with equal odds,
+    // avoiding the upward bias that used to drift arch/wave tails off the tonic.
+    let jitter = 0;
+    if (jitterProb > 0 && rng() < jitterProb) {
+      jitter = rng() < 0.5 ? 1 : -1;
+    }
     let pitch = stepDiatonic(tonic, (offsets[i] ?? 0) + jitter, opts.key);
     const startBeat = i * beatsPerNote;
     if (opts.chord && startBeat % 4 === 0) {

@@ -67,7 +67,9 @@ export type GrooveStyle =
   | 'bossa'
   | 'trap'
   | 'halftime'
-  | 'breakbeat';
+  | 'breakbeat'
+  | 'house'
+  | 'synthpop';
 
 /** Public role identifiers gating which voices are present. */
 export type DrumRole = 'full' | 'ambient' | 'minimal' | 'fxOnly';
@@ -92,6 +94,10 @@ const STYLE_MAP: Record<GrooveStyle, StyleMapping> = {
   trap: { style: 'trap', feel: 'straight', ghostBoost: false, snareBeat3: true },
   halftime: { style: 'sparse', feel: 'straight', ghostBoost: false, snareBeat3: true },
   breakbeat: { style: 'rock', feel: 'straight', ghostBoost: false, snareBeat3: false },
+  // Four-on-the-floor dance kick with idol-style auxiliary percussion.
+  house: { style: 'fourOnFloor', feel: 'straight', ghostBoost: false, snareBeat3: false },
+  // Synth-pop pulse with denser 16th hi-hats and busy kick syncopation.
+  synthpop: { style: 'synth', feel: 'straight', ghostBoost: true, snareBeat3: false },
 };
 
 /** Resolve the internal style/feel parameters for a public groove style. */

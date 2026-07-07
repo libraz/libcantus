@@ -53,6 +53,28 @@ describe('pitch-class and MIDI conversion', () => {
   it('requires an octave for MIDI conversion', () => {
     expect(() => noteToMidi(parseNote('C'))).toThrow();
   });
+
+  it('names the MIDI range boundaries', () => {
+    expect(formatNote(midiToNote(0))).toBe('C-1');
+    expect(formatNote(midiToNote(127))).toBe('G9');
+    expect(noteToMidi(midiToNote(0))).toBe(0);
+    expect(noteToMidi(midiToNote(127))).toBe(127);
+  });
+
+  it('extrapolates out-of-range MIDI numbers without clamping, staying invertible', () => {
+    // Negative and >127 inputs are not clamped; they extend the octave grid and
+    // remain an exact inverse of noteToMidi.
+    expect(formatNote(midiToNote(-1))).toBe('B-2');
+    expect(formatNote(midiToNote(128))).toBe('G#9');
+    for (const midi of [-12, -1, 128, 200]) {
+      expect(noteToMidi(midiToNote(midi))).toBe(midi);
+    }
+  });
+
+  it('rounds fractional MIDI numbers to the nearest integer', () => {
+    expect(noteToMidi(midiToNote(60.4))).toBe(60);
+    expect(noteToMidi(midiToNote(60.6))).toBe(61);
+  });
 });
 
 describe('spelledInterval', () => {
@@ -99,6 +121,38 @@ describe('spelledInterval', () => {
     expect(down).toMatchObject({ number: 1, quality: 'A', semitones: -1 });
     const up = spelledInterval(parseNote('C4'), parseNote('C#4'));
     expect(up).toMatchObject({ number: 1, quality: 'A', semitones: 1 });
+  });
+
+  describe('same-letter descending semitones (octaveless)', () => {
+    it('returns a descending augmented unison, not a garbage augmentation stack', () => {
+      // Regression: octave lift used to be upward-only, so a same-letter
+      // downward step wrapped to +11 semitones and stacked eleven "A"s.
+      for (const [from, to] of [
+        ['E', 'Eb'],
+        ['F#', 'F'],
+        ['C', 'Cb'],
+      ] as const) {
+        expect(spelledInterval(parseNote(from), parseNote(to))).toMatchObject({
+          number: 1,
+          quality: 'A',
+          semitones: -1,
+        });
+      }
+    });
+
+    it('leaves ascending same-letter steps unchanged', () => {
+      for (const [from, to] of [
+        ['Eb', 'E'],
+        ['F', 'F#'],
+        ['Cb', 'C'],
+      ] as const) {
+        expect(spelledInterval(parseNote(from), parseNote(to))).toMatchObject({
+          number: 1,
+          quality: 'A',
+          semitones: 1,
+        });
+      }
+    });
   });
 
   describe('pitch-class branch (octaveless notes)', () => {

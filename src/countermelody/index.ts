@@ -1,10 +1,6 @@
 import type { Chord } from '../chord/index.js';
 import { chordToneRole } from '../chord/index.js';
-import {
-  createsParallelOctave,
-  createsParallelPerfect,
-  isForbiddenMelodicLeap,
-} from '../counterpoint/index.js';
+import { createsParallelPerfect, isForbiddenMelodicLeap } from '../counterpoint/index.js';
 import type { TimeSignature } from '../meter/index.js';
 import { isStrongBeat } from '../meter/index.js';
 import type { Rng } from '../random/index.js';
@@ -309,8 +305,9 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
         if (
           prevPitch !== undefined &&
           melPrev !== undefined &&
-          (createsParallelPerfect(prevPitch, candidate, melPrev, melPitch) ||
-            createsParallelOctave(prevPitch, candidate, melPrev, melPitch))
+          // Parallel octaves are the perfect-class-zero case of this predicate,
+          // so a single check covers both parallel fifths and octaves.
+          createsParallelPerfect(prevPitch, candidate, melPrev, melPitch)
         ) {
           continue;
         }

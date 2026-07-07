@@ -1,7 +1,7 @@
 import type { Chord } from '../chord/index.js';
 import { chordPitchClasses, chordToneRole } from '../chord/index.js';
 import {
-  createsParallelOctave,
+  createsHiddenParallelPerfect,
   createsParallelPerfect,
   createsVoiceCrossing,
   createsVoiceOverlap,
@@ -51,6 +51,13 @@ const VIOLATION_PENALTY = 1000;
 const MISSING_TONE_PENALTY = 500;
 /** Score penalty per doubled tone that is neither the root nor the fifth. */
 const POOR_DOUBLING_PENALTY = 4;
+/**
+ * Moderate penalty for a hidden/direct perfect fifth or octave reached on the
+ * outer-voice (bass–soprano) pair. Unlike a true parallel perfect it is
+ * discouraged rather than forbidden, so the weight sits alongside voice-leading
+ * motion rather than the hard {@link VIOLATION_PENALTY}.
+ */
+const HIDDEN_PERFECT_PENALTY = 6;
 /** Hard cap on candidate voicings evaluated per chord, keeping the search bounded. */
 const MAX_CANDIDATES = 4000;
 
@@ -91,7 +98,13 @@ function resolveRanges(opts?: VoicingOptions): VoiceRange[] {
   return ranges;
 }
 
-/** All MIDI pitches of a pitch class inside an inclusive range, ascending. */
+/**
+ * All MIDI pitches of a pitch class inside an inclusive range, ordered from the
+ * centre of the range outward (ties break toward the lower pitch). Enumerating
+ * centre-outward keeps the candidate set balanced around the register when it
+ * is truncated at {@link MAX_CANDIDATES}, instead of skewing to the low octaves
+ * that a plain ascending scan would visit first.
+ */
 function pitchesForPc(pc: number, range: VoiceRange): number[] {
   const result: number[] = [];
   for (let midi = Math.ceil(range.min); midi <= range.max; midi += 1) {
@@ -99,7 +112,12 @@ function pitchesForPc(pc: number, range: VoiceRange): number[] {
       result.push(midi);
     }
   }
-  return result;
+  const center = (range.min + range.max) / 2;
+  return result.sort((a, b) => {
+    const da = Math.abs(a - center);
+    const db = Math.abs(b - center);
+    return da === db ? a - b : da - db;
+  });
 }
 
 /**
@@ -178,9 +196,10 @@ function structuralPenalty(pitches: number[], chord: Chord): number {
 
 /**
  * Count counterpoint violations between two consecutive voicings of equal
- * length: parallel perfects and parallel octaves on every voice pair, voice
- * crossings in the new voicing, and — on adjacent pairs — voice overlaps and
- * over-wide spacing between upper voices.
+ * length: parallel perfects (fifths and octaves alike, since octaves are the
+ * perfect-class-zero case of {@link createsParallelPerfect}) on every voice
+ * pair, voice crossings in the new voicing, and — on adjacent pairs — voice
+ * overlaps and over-wide spacing between upper voices.
  */
 function violationCount(prev: number[], cur: number[], maxSpacing: number): number {
   let count = 0;
@@ -201,9 +220,6 @@ function violationCount(prev: number[], cur: number[], maxSpacing: number): numb
       if (createsParallelPerfect(prevUpper, curUpper, prevLower, curLower)) {
         count += 1;
       }
-      if (createsParallelOctave(prevUpper, curUpper, prevLower, curLower)) {
-        count += 1;
-      }
       if (createsVoiceCrossing(curUpper, curLower)) {
         count += 1;
       }
@@ -222,12 +238,15 @@ function violationCount(prev: number[], cur: number[], maxSpacing: number): numb
 
 /**
  * Total voice-leading cost between two voicings: the sum of absolute semitone
- * motion across voices. The arrays must be the same length; when they differ
- * the voicings are not comparable and the cost is `Infinity`.
+ * motion across voices, plus a moderate {@link HIDDEN_PERFECT_PENALTY} when the
+ * outer-voice (bass–soprano) pair reaches a hidden/direct perfect fifth or
+ * octave by similar motion. The arrays must be the same length; when they
+ * differ the voicings are not comparable and the cost is `Infinity`.
  *
  * @param from The previous voicing, one MIDI pitch per voice.
  * @param to The next voicing, one MIDI pitch per voice.
- * @returns The summed absolute motion, or `Infinity` when lengths differ.
+ * @returns The summed absolute motion (plus any hidden-perfect penalty), or
+ *   `Infinity` when lengths differ.
  */
 export function voiceLeadingCost(from: number[], to: number[]): number {
   if (from.length !== to.length) {
@@ -241,6 +260,23 @@ export function voiceLeadingCost(from: number[], to: number[]): number {
       continue;
     }
     total += Math.abs(b - a);
+  }
+  // Discourage hidden/direct perfects between the outermost voices, where they
+  // are most audible. True parallels are handled (and forbidden) elsewhere.
+  if (from.length >= 2) {
+    const bassPrev = from[0];
+    const bassCur = to[0];
+    const sopPrev = from[from.length - 1];
+    const sopCur = to[to.length - 1];
+    if (
+      bassPrev !== undefined &&
+      bassCur !== undefined &&
+      sopPrev !== undefined &&
+      sopCur !== undefined &&
+      createsHiddenParallelPerfect(bassPrev, bassCur, sopPrev, sopCur)
+    ) {
+      total += HIDDEN_PERFECT_PENALTY;
+    }
   }
   return total;
 }
@@ -501,7 +537,12 @@ export function nextVoicing(current: number[], chord: Chord, opts?: VoicingOptio
   const ranges =
     opts?.ranges !== undefined || opts?.voices !== undefined
       ? resolveRanges(opts)
-      : current.map((pitch) => ({ min: pitch - 12, max: pitch + 12 }));
+      : current.map((pitch) => {
+          // Window one octave around each current pitch, clamped so extreme-low
+          // or extreme-high input can never yield MIDI outside [0, 127].
+          const centre = Math.min(127, Math.max(0, pitch));
+          return { min: Math.max(0, centre - 12), max: Math.min(127, centre + 12) };
+        });
   const maxSpacing = opts?.maxSpacing ?? DEFAULT_MAX_SPACING;
   const candidates = enumerateVoicings(chord, ranges, maxSpacing);
   let best: number[] | undefined;

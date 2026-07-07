@@ -10,6 +10,16 @@
 export type TimeSignature = {
   numerator: number;
   denominator: number;
+  /**
+   * Optional additive grouping of the bar's main pulses, as the felt-beat
+   * lengths in pulses — e.g. `[2, 2, 3]` for a 2+2+3 reading of 7/8, or
+   * `[3, 2]` for 5/8. The entries must be positive integers summing to
+   * {@link pulsesPerBar}. When present, the head pulse of each group (other
+   * than the downbeat) is treated as a secondary strong pulse by
+   * {@link metricWeight}/{@link isStrongBeat}; when absent, all main pulses
+   * are weighted equally as flat, evenly divided pulses.
+   */
+  grouping?: number[];
 };
 
 /** A position expressed as a bar index and a quarter-note offset within the bar. */
@@ -92,11 +102,47 @@ function pulseBeats(ts: TimeSignature): number {
  * Number of main pulses (felt beats) per bar: the numerator for simple meters,
  * a third of it for compound meters.
  *
+ * For additive/irregular meters such as 7/8 or 5/8 this counts the raw pulses
+ * (7 and 5 respectively), which are otherwise felt as flat, evenly divided and
+ * equally accented pulses. To recover a 2+2+3 or 3+2 felt-beat grouping, set
+ * {@link TimeSignature.grouping}; {@link metricWeight} then accents each
+ * group's head pulse.
+ *
  * @param ts The time signature.
  * @returns The pulse count per bar.
  */
 export function pulsesPerBar(ts: TimeSignature): number {
   return beatsPerBar(ts) / pulseBeats(ts);
+}
+
+/**
+ * Whether `grouping` is a valid additive grouping for a bar of `pulses` main
+ * pulses: a non-empty list of positive integers summing to `pulses`.
+ */
+function isValidGrouping(grouping: number[], pulses: number): boolean {
+  if (grouping.length === 0) {
+    return false;
+  }
+  let sum = 0;
+  for (const g of grouping) {
+    if (!Number.isInteger(g) || g <= 0) {
+      return false;
+    }
+    sum += g;
+  }
+  return sum === pulses;
+}
+
+/** Whether `pulseIndex` is the head pulse of one of the additive groups. */
+function isGroupHead(grouping: number[], pulseIndex: number): boolean {
+  let acc = 0;
+  for (const g of grouping) {
+    if (acc === pulseIndex) {
+      return true;
+    }
+    acc += g;
+  }
+  return false;
 }
 
 /**
@@ -126,12 +172,21 @@ export function barPositionToBeat(pos: BarPosition, ts: TimeSignature): number {
 
 /**
  * Metric weight of a position within its bar, on a 0–3 scale:
- * 3 the downbeat, 2 a secondary strong pulse (the bar's midpoint in even
- * meters), 1 any other main pulse, and 0 an off-pulse subdivision.
+ * 3 the downbeat, 2 a secondary strong pulse, 1 any other main pulse, and 0 an
+ * off-pulse subdivision.
+ *
+ * The secondary strong pulse is the bar's midpoint in even simple/compound
+ * meters. For an additive/irregular meter with {@link TimeSignature.grouping}
+ * set (e.g. `[2, 2, 3]` for 7/8), each group's head pulse other than the
+ * downbeat is the secondary strong pulse instead; without a grouping every
+ * non-downbeat main pulse of such a meter weighs 1 (flat, evenly divided
+ * pulses).
  *
  * @param beatInQuarters Absolute or in-bar quarter-note position.
  * @param ts The time signature.
  * @returns The metric weight (0–3).
+ * @throws If `ts.grouping` is present but is not a positive-integer list
+ *   summing to {@link pulsesPerBar}.
  */
 export function metricWeight(beatInQuarters: number, ts: TimeSignature): number {
   const { beat } = beatToBarPosition(beatInQuarters, ts);
@@ -143,6 +198,16 @@ export function metricWeight(beatInQuarters: number, ts: TimeSignature): number 
   const pulseIndex = Math.round(beat / pulse) % pulses;
   if (pulseIndex === 0) {
     return 3;
+  }
+  const grouping = ts.grouping;
+  if (grouping !== undefined) {
+    if (!isValidGrouping(grouping, pulses)) {
+      throw new Error(
+        `Invalid grouping [${grouping.join(', ')}] for ${formatTimeSignature(ts)}: ` +
+          `entries must be positive integers summing to ${pulses}`,
+      );
+    }
+    return isGroupHead(grouping, pulseIndex) ? 2 : 1;
   }
   if (pulses % 2 === 0 && pulseIndex === pulses / 2) {
     return 2;

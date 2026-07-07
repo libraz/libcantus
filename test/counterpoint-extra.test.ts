@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createsHiddenParallelPerfect,
+  createsParallelOctave,
   createsParallelPerfect,
   createsParallelUnison,
   createsVoiceOverlap,
@@ -34,6 +35,25 @@ describe('parallel perfect fixes', () => {
     // Upper voice stationary at 74 while the lower rises 50->62 into an octave:
     // oblique motion is allowed.
     expect(createsParallelPerfect(74, 74, 50, 62)).toBe(false);
+  });
+});
+
+describe('parallel octave subsumption', () => {
+  // A similar-motion parallel octave must be counted exactly once. It is the
+  // perfect-class-zero case of createsParallelPerfect, so callers rely on that
+  // single predicate rather than OR-ing in createsParallelOctave (double count).
+  it('flags a similar-motion parallel octave through both predicates', () => {
+    // C5/C4 to D5/D4: octave to octave, both voices ascending a step.
+    expect(createsParallelOctave(72, 74, 60, 62)).toBe(true);
+    expect(createsParallelPerfect(72, 74, 60, 62)).toBe(true);
+  });
+
+  it('has createsParallelPerfect cover every case createsParallelOctave flags', () => {
+    // Anti-parallel octaves by contrary motion: createsParallelPerfect still
+    // flags them while the similar-motion-only octave predicate does not, so the
+    // former is the strict superset to tally on.
+    expect(createsParallelOctave(74, 62, 50, 62)).toBe(false);
+    expect(createsParallelPerfect(74, 62, 50, 62)).toBe(true);
   });
 });
 

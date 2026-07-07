@@ -58,6 +58,26 @@ describe('spellScale', () => {
       'D',
     ]);
   });
+
+  it('derives a double-sharp leading tone in G# harmonic minor (Fx)', () => {
+    // G# harmonic minor raises the seventh degree F# to F double-sharp (Fx),
+    // which must keep the F letter rather than collapsing to a natural G.
+    const scale = spellScale(parseNote('G#'), scaleByName('harmonicMinor', 8));
+    expect(noteNames(scale)).toEqual(['G#', 'A#', 'B', 'C#', 'D#', 'E', 'F##']);
+    expect(scale[6]).toEqual({ letter: 3, alter: 2 });
+  });
+
+  it('derives a double-sharp seventh in D# harmonic minor (Cx)', () => {
+    expect(noteNames(spellScale(parseNote('D#'), scaleByName('harmonicMinor', 3)))).toEqual([
+      'D#',
+      'E#',
+      'F#',
+      'G#',
+      'A#',
+      'B',
+      'C##',
+    ]);
+  });
 });
 
 describe('spellPitchClass', () => {
@@ -99,6 +119,13 @@ describe('spellChord', () => {
       'D',
       'F',
     ]);
+  });
+
+  it('spells a leading-tone diminished seventh with a double-sharp root (Fx in G# minor)', () => {
+    // The vii°7 of G# harmonic minor is rooted on the double-sharp leading tone.
+    expect(
+      noteNames(spellChord(makeChord(7, 'dim7'), parseNote('G#'), scaleByName('harmonicMinor', 8))),
+    ).toEqual(['F##', 'A#', 'C#', 'E']);
   });
 });
 

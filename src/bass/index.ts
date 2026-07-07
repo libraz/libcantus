@@ -98,10 +98,18 @@ function chordTonePcs(chord: Chord): number[] {
   return pcs;
 }
 
-/** The chord's perfect-fifth pitch class, falling back to the root when absent. */
+/**
+ * The chord's fifth pitch class.
+ *
+ * Uses the perfect fifth when present, otherwise the chord's actual altered
+ * fifth (diminished = 6, augmented = 8 semitones above the root), so dim/aug/
+ * m7b5 chords sound their real fifth rather than a repeated root. Falls back to
+ * the root only when the chord has no fifth degree at all.
+ */
 function fifthPcOf(chord: Chord): number {
-  const hasFifth = chord.intervals.some((i) => pitchClass(i) === 7);
-  return hasFifth ? pitchClass(chord.rootPc + 7) : pitchClass(chord.rootPc);
+  const fifths = new Set(chord.intervals.map((i) => pitchClass(i)));
+  const chosen = fifths.has(7) ? 7 : fifths.has(6) ? 6 : fifths.has(8) ? 8 : undefined;
+  return chosen === undefined ? pitchClass(chord.rootPc) : pitchClass(chord.rootPc + chosen);
 }
 
 /** The sounding bass pitch class of a chord: its slash bass, else its root. */
@@ -166,9 +174,10 @@ function buildPop(ctx: BuildContext, seg: BassSegment): void {
       emitted = true;
     } else if (ctx.rng.prob(PICKUP_PROB)) {
       if (ctx.rng.prob(0.5)) {
-        // Octave pickup: the root an octave below the band anchor.
+        // Octave pickup: the root dropped toward the bottom of the register,
+        // clamped so it never falls below the declared band.
         const base = placePc(rootPc, ctx.prevMidi, ctx.low);
-        emit(ctx, pos, rootPc, base - 12);
+        emit(ctx, pos, rootPc, Math.max(ctx.low, base - 12));
       } else {
         ctx.prevMidi = emit(ctx, pos, fifthPcOf(seg.chord));
       }

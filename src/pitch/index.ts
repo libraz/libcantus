@@ -170,6 +170,10 @@ const FLAT_SPELLING: readonly [number, number][] = [
 /**
  * Name a MIDI number as a {@link Note}, choosing sharp or flat spelling.
  *
+ * The input is rounded to the nearest integer but is not clamped to the MIDI
+ * range 0..127: out-of-range values extrapolate linearly (e.g. `-1` -> `B-2`,
+ * `128` -> `G#9`) and remain an exact inverse of {@link noteToMidi}.
+ *
  * @param midi The MIDI number.
  * @param spelling Whether to prefer sharps or flats for black keys.
  * @returns The spelled note, with octave.
@@ -240,11 +244,17 @@ export function spelledInterval(a: Note, b: Note): SpelledInterval {
     letterSteps = mod7(b.letter - a.letter);
     let rawSemis = mod12(noteToPitchClass(b) - noteToPitchClass(a));
     // Lift the chromatic span into the octave nearest the diatonic reference so
-    // wraparound intervals (e.g. Ab -> G# = augmented seventh) stay consistent
-    // with the ascending diatonic number instead of collapsing modulo 12.
+    // wraparound intervals stay consistent with the diatonic number instead of
+    // collapsing modulo 12. The correction is bidirectional: an upward wrap
+    // (e.g. Ab -> G# = augmented seventh) adds an octave, while a same-letter or
+    // downward chromatic step (e.g. E -> Eb, F# -> F, C -> Cb = descending
+    // diminished/augmented unison) subtracts one so the sign follows pitch
+    // direction instead of returning a garbage stack of augmentations.
     const reference = SIMPLE_REFERENCE[letterSteps + 1] ?? 0;
     if (reference - rawSemis > 6) {
       rawSemis += 12;
+    } else if (rawSemis - reference > 6) {
+      rawSemis -= 12;
     }
     semitones = rawSemis;
   }

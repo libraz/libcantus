@@ -27,12 +27,35 @@ export type AnalyzedNote = {
 /** A single note in a monophonic voice: a {@link NoteEvent} with a stable id. */
 export type VoiceNote = NoteEvent & { id: number };
 
+/** Float tolerance for beat comparisons. */
+const EPS = 1e-9;
+
 function pitchClass(pitch: number): number {
   return ((Math.trunc(pitch) % 12) + 12) % 12;
 }
 
 function intervalAboveRoot(pitch: number, chord: Chord): number {
   return (((pitchClass(pitch) - pitchClass(chord.rootPc)) % 12) + 12) % 12;
+}
+
+/**
+ * Interval class of a pitch above the actual sounding bass.
+ *
+ * Suspension figures (4-3, 7-6, 9-8) are named for the interval above the bass,
+ * not the chord root, so this prefers the lowest pitch among the other sounding
+ * voices when one lies below the note. Without a lower sounding voice it falls
+ * back to the chord's bass pitch class (or root in root position).
+ */
+function intervalAboveBass(pitch: number, others: VoiceSnapshot[], chord: Chord): number {
+  let bass = Number.POSITIVE_INFINITY;
+  for (const ov of others) {
+    bass = Math.min(bass, ov.pitch);
+  }
+  if (Number.isFinite(bass) && bass < pitch) {
+    return (((pitch - bass) % 12) + 12) % 12;
+  }
+  const ref = chord.bassPc ?? chord.rootPc;
+  return (((pitchClass(pitch) - pitchClass(ref)) % 12) + 12) % 12;
 }
 
 /**
@@ -59,6 +82,10 @@ function isStep(a: number, b: number): boolean {
   return d === 1 || d === 2;
 }
 
+/**
+ * Classify a suspension figure from the interval class above the sounding bass
+ * (`ic`) and the resolution direction (`delta`, positive when resolving upward).
+ */
 function suspensionType(ic: number, delta: number): TheoryLabel & { kind: 'suspension' } {
   let type: 'sus4-3' | 'sus7-6' | 'sus9-8' | 'sus2-3';
   if (delta > 0) {
@@ -92,6 +119,12 @@ function stepResolution(pitch: number, chord: Chord): number | undefined {
  * avoid, or an unresolved-dissonance label. Leading-tone resolutions are noted
  * additionally.
  *
+ * The voice is expected to be monophonic (one note at a time). Notes sharing an
+ * onset are treated as simultaneous cluster members, not melodic neighbors, so
+ * they receive no melodic labels (suspension, passing, neighbor, anticipation,
+ * escape) — only harmonic ones. Callers with truly polyphonic material should
+ * split it into monophonic sub-voices first, as `analyzeArrangement` does.
+ *
  * @param voice The monophonic voice, in time order.
  * @param chordAtBeat Chord sounding at a given beat, or null.
  * @param key Key context for leading-tone detection.
@@ -111,8 +144,15 @@ export function analyzeVoice(
     if (!note) {
       continue;
     }
-    const prev = i > 0 ? voice[i - 1] : undefined;
-    const next = i + 1 < voice.length ? voice[i + 1] : undefined;
+    const prevNote = i > 0 ? voice[i - 1] : undefined;
+    const nextNote = i + 1 < voice.length ? voice[i + 1] : undefined;
+    // A neighboring note sharing this note's onset is a simultaneous cluster
+    // member, not a melodic predecessor/successor; treating it as one would
+    // fabricate passing/suspension figures, so it is dropped here.
+    const prev =
+      prevNote !== undefined && prevNote.startBeat < note.startBeat - EPS ? prevNote : undefined;
+    const next =
+      nextNote !== undefined && nextNote.startBeat > note.startBeat + EPS ? nextNote : undefined;
     const chord = chordAtBeat(note.startBeat);
     const labels: TheoryLabel[] = [];
     const member = isChordMember(note.pitch, chord);
@@ -133,11 +173,12 @@ export function analyzeVoice(
       const prevChord = chordAtBeat(prev.startBeat);
       const prepared = prev.pitch === note.pitch && isChordMember(prev.pitch, prevChord);
       const resolves = isStep(next.pitch, note.pitch);
-      const verticallyDissonant = otherVoicesAtBeat(note.startBeat).some((ov) =>
+      const others = otherVoicesAtBeat(note.startBeat);
+      const verticallyDissonant = others.some((ov) =>
         createsVerticalDissonance(note.pitch, ov.pitch, true),
       );
       if (prepared && verticallyDissonant && resolves) {
-        const ic = intervalAboveRoot(note.pitch, chord);
+        const ic = intervalAboveBass(note.pitch, others, chord);
         const sus = suspensionType(ic, next.pitch - note.pitch);
         sus.resolveTo = next.pitch;
         labels.push(sus);

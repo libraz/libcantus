@@ -5,14 +5,17 @@
  * (`Cmaj7`, `F#m7b5`, `Bb7`, `C/G`) and the library's structured {@link Chord}
  * type, so callers can accept/emit plain text at the edges of the API.
  */
-import { type Chord, type ChordQuality, makeChord } from '../chord/index.js';
-import { formatNote, midiToNote, noteToPitchClass, parseNote } from '../pitch/index.js';
+import { type Chord, type ChordQuality, makeChord, type PitchSpelling } from '../chord/index.js';
+import { formatNote, midiToNote, type Note, noteToPitchClass, parseNote } from '../pitch/index.js';
 
-/** Matches a chord root: a letter A-G with an optional single-direction accidental. */
-const ROOT_RE = /^[A-G](?:#{1,2}|b{1,2})?/;
+/**
+ * Matches a chord root: a letter A-G (case-insensitive, like {@link parseNote})
+ * with an optional single-direction accidental.
+ */
+const ROOT_RE = /^[A-Ga-g](?:#{1,2}|b{1,2})?/;
 
 /** Matches a bare note usable as a slash-chord bass (no octave). */
-const BASS_RE = /^[A-G](?:#{1,2}|b{1,2})?$/;
+const BASS_RE = /^[A-Ga-g](?:#{1,2}|b{1,2})?$/;
 
 /** Recognized quality suffixes, keyed by their exact lead-sheet spelling. */
 const QUALITY_MAP: Record<string, ChordQuality> = {
@@ -114,18 +117,33 @@ function pitchClass(value: number): number {
   return ((Math.trunc(value) % 12) + 12) % 12;
 }
 
-/** Pitch class of a bare note token (letter plus optional accidental). */
-function bassPitchClass(token: string): number {
-  return noteToPitchClass(parseNote(token));
+/** Build a chord and record the parsed spellings as enharmonic hints. */
+function makeSpelledChord(root: Note, quality: ChordQuality, bass?: Note): Chord {
+  const chord = makeChord(
+    noteToPitchClass(root),
+    quality,
+    bass === undefined ? undefined : noteToPitchClass(bass),
+  );
+  chord.rootSpelling = { letter: root.letter, alter: root.alter };
+  if (bass !== undefined) {
+    chord.bassSpelling = { letter: bass.letter, alter: bass.alter };
+  }
+  return chord;
 }
 
 /**
  * Parse a lead-sheet chord symbol into a {@link Chord}.
  *
  * Accepts `<root><quality>[/<bass>]`, e.g. `Cmaj7`, `F#m7b5`, `Bb7`, `C/G`,
- * `C6/9`. The `/` after a quality is ambiguous between a slash bass and the
- * `6/9` quality; it resolves to a bass only when the token following it is
- * itself a valid note.
+ * `C6/9`, `C6/9/E`. Root and bass letters are case-insensitive, matching
+ * {@link parseNote}. A `/` is ambiguous between a slash bass and the `6/9`
+ * quality; the text splits at the last `/` whose right-hand side is a valid
+ * bare note preceded by a recognized quality, so `6/9` (with or without a
+ * further slash bass) parses as a quality.
+ *
+ * The parsed chord carries the root/bass spellings as enharmonic hints
+ * (`rootSpelling`/`bassSpelling`) so {@link formatChordSymbol} can reproduce
+ * flat spellings such as `Bbmaj7` instead of respelling them with sharps.
  *
  * @param text The chord symbol text.
  * @returns The parsed chord.
@@ -138,31 +156,41 @@ export function parseChordSymbol(text: string): Chord {
     throw new Error(`Invalid chord symbol: ${text}`);
   }
   const rootToken = rootMatch[0];
-  const rootPc = noteToPitchClass(parseNote(rootToken));
+  const rootNote = parseNote(rootToken);
   const rest = trimmed.slice(rootToken.length);
 
-  const slashIndex = rest.indexOf('/');
-  if (slashIndex === -1) {
-    const quality = QUALITY_MAP[rest];
-    if (quality === undefined) {
-      throw new Error(`Unrecognized chord quality: ${text}`);
+  // Split at the last '/' so the '6/9' quality's own slash never masks a
+  // trailing slash bass (e.g. 'C6/9/E').
+  const slashIndex = rest.lastIndexOf('/');
+  if (slashIndex !== -1) {
+    const before = rest.slice(0, slashIndex);
+    const after = rest.slice(slashIndex + 1);
+    const beforeQuality = QUALITY_MAP[before];
+    if (beforeQuality !== undefined && BASS_RE.test(after)) {
+      return makeSpelledChord(rootNote, beforeQuality, parseNote(after));
     }
-    return makeChord(rootPc, quality);
   }
 
-  const before = rest.slice(0, slashIndex);
-  const after = rest.slice(slashIndex + 1);
-  const beforeQuality = QUALITY_MAP[before];
-  if (beforeQuality !== undefined && BASS_RE.test(after)) {
-    return makeChord(rootPc, beforeQuality, bassPitchClass(after));
+  const quality = QUALITY_MAP[rest];
+  if (quality === undefined) {
+    throw new Error(`Unrecognized chord quality: ${text}`);
   }
+  return makeSpelledChord(rootNote, quality);
+}
 
-  const combinedQuality = QUALITY_MAP[rest];
-  if (combinedQuality !== undefined) {
-    return makeChord(rootPc, combinedQuality);
+/**
+ * Name a pitch class, preferring a spelling hint when it is still valid.
+ *
+ * A hint is used only when no explicit sharp/flat preference was given and the
+ * hint still resolves to `pc` (a stale hint left over after transposition is
+ * ignored). Otherwise the pitch class is respelled from the requested table.
+ */
+function pitchClassName(pc: number, hint: PitchSpelling | undefined, flats?: boolean): string {
+  if (flats === undefined && hint !== undefined && noteToPitchClass(hint) === pc) {
+    return formatNote(hint);
   }
-
-  throw new Error(`Unrecognized chord quality: ${text}`);
+  const note = midiToNote(60 + pc, flats ? 'flat' : 'sharp');
+  return formatNote({ letter: note.letter, alter: note.alter });
 }
 
 /**
@@ -170,22 +198,23 @@ export function parseChordSymbol(text: string): Chord {
  *
  * The inverse of {@link parseChordSymbol}: each quality maps to one canonical
  * suffix spelling, and a slash bass is appended only when it differs from the
- * root.
+ * root. When the chord carries `rootSpelling`/`bassSpelling` hints (as chords
+ * from {@link parseChordSymbol} do) and no explicit `flats` preference is
+ * given, the hints are reused so flat symbols round-trip unchanged.
  *
  * @param chord The chord to format.
  * @param opts Formatting options.
- * @param opts.flats Prefer flat spellings over sharps for altered roots/basses.
+ * @param opts.flats Prefer flat spellings over sharps for altered roots/basses;
+ *   passing either `true` or `false` overrides any spelling hints.
  * @returns The chord symbol text.
  */
 export function formatChordSymbol(chord: Chord, opts?: { flats?: boolean }): string {
-  const spelling = opts?.flats ? 'flat' : 'sharp';
-  const rootNote = midiToNote(60 + pitchClass(chord.rootPc), spelling);
-  const rootName = formatNote({ letter: rootNote.letter, alter: rootNote.alter });
+  const rootPc = pitchClass(chord.rootPc);
+  const rootName = pitchClassName(rootPc, chord.rootSpelling, opts?.flats);
   const suffix = CANONICAL_SUFFIX[chord.quality];
   let symbol = `${rootName}${suffix}`;
-  if (chord.bassPc !== undefined && pitchClass(chord.bassPc) !== pitchClass(chord.rootPc)) {
-    const bassNote = midiToNote(60 + pitchClass(chord.bassPc), spelling);
-    symbol += `/${formatNote({ letter: bassNote.letter, alter: bassNote.alter })}`;
+  if (chord.bassPc !== undefined && pitchClass(chord.bassPc) !== rootPc) {
+    symbol += `/${pitchClassName(pitchClass(chord.bassPc), chord.bassSpelling, opts?.flats)}`;
   }
   return symbol;
 }

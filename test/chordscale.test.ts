@@ -58,6 +58,32 @@ describe('chordScales', () => {
     const matches = chordScales(makeChord(0, '7b13'));
     expect(matches).toEqual([{ name: 'chromatic', rootPc: 0 }]);
   });
+
+  it('reports each pitch-class set once, under its modal name', () => {
+    for (const quality of ['maj', 'min', 'maj7', 'min7'] as const) {
+      const names = chordScales(makeChord(0, quality)).map((m) => m.name);
+      expect(new Set(names).size).toBe(names.length);
+      // major/ionian and naturalMinor/aeolian share a mask; only the modal
+      // alias may appear.
+      expect(names).not.toContain('major');
+      expect(names).not.toContain('naturalMinor');
+      const masks = names.map((name) => NAMED_SCALES[name]);
+      expect(new Set(masks).size).toBe(masks.length);
+    }
+  });
+
+  it('keeps the modal aliases available for minor chords', () => {
+    expect(chordScales(makeChord(9, 'min')).map((m) => m.name)).toContain('aeolian');
+  });
+
+  it('ranks heptatonic modes above pentatonics for a bare triad', () => {
+    const names = chordScales(makeChord(0, 'maj')).map((m) => m.name);
+    const ionianIndex = names.indexOf('ionian');
+    const pentaIndex = names.indexOf('majorPentatonic');
+    expect(ionianIndex).toBeGreaterThanOrEqual(0);
+    expect(pentaIndex).toBeGreaterThanOrEqual(0);
+    expect(ionianIndex).toBeLessThan(pentaIndex);
+  });
 });
 
 describe('avoidNotes', () => {

@@ -126,6 +126,67 @@ describe('generateMotif', () => {
     const first = motif.notes[0];
     expect(first && chordPitchClasses(chord).includes(pitchClass(first.pitch))).toBe(true);
   });
+
+  it('builds a symmetric arch that returns to the tonic for even lengths', () => {
+    // bars=2 => 4 notes (an even length); the arch must be a palindrome that
+    // starts and ends on the tonic (C4 = 60).
+    const motif = generateMotif({ key: cMajor, bars: 2, contour: 'arch' });
+    const pitches = motif.notes.map((n) => n.pitch);
+    expect(pitches).toEqual([60, 62, 62, 60]);
+    expect(pitches[0]).toBe(60);
+    expect(pitches[pitches.length - 1]).toBe(60);
+    expect(pitches).toEqual([...pitches].reverse());
+  });
+
+  it('keeps an odd-length arch symmetric and tonic-anchored', () => {
+    const pitches = generateMotif({ key: cMajor, bars: 3, contour: 'arch' }).notes.map(
+      (n) => n.pitch,
+    );
+    expect(pitches).toEqual([60, 62, 64, 64, 62, 60]);
+    expect(pitches).toEqual([...pitches].reverse());
+  });
+
+  it('honors the requested contour with no upward drift by default', () => {
+    // Without jitter the ascending contour is exactly the diatonic climb from
+    // the tonic, with no random upward nudge.
+    const pitches = generateMotif({
+      key: cMajor,
+      bars: 1,
+      contour: 'ascending',
+      seed: 5,
+    }).notes.map((n) => n.pitch);
+    expect(pitches).toEqual([60, 62, 64]);
+    for (let i = 1; i < pitches.length; i += 1) {
+      expect(pitches[i]).toBeGreaterThan(pitches[i - 1] ?? Number.NEGATIVE_INFINITY);
+    }
+  });
+
+  it('ignores the seed while jitter is off (contour is seed-independent)', () => {
+    const a = generateMotif({ key: cMajor, bars: 2, contour: 'wave', seed: 1 });
+    const b = generateMotif({ key: cMajor, bars: 2, contour: 'wave', seed: 999 });
+    expect(a).toEqual(b);
+  });
+
+  it('applies opt-in jitter deterministically per seed', () => {
+    const withJitter = generateMotif({
+      key: cMajor,
+      bars: 2,
+      contour: 'ascending',
+      jitter: 1,
+      seed: 4,
+    });
+    const again = generateMotif({
+      key: cMajor,
+      bars: 2,
+      contour: 'ascending',
+      jitter: 1,
+      seed: 4,
+    });
+    expect(withJitter).toEqual(again);
+    // Enabling jitter perturbs the plain contour.
+    const plain = generateMotif({ key: cMajor, bars: 2, contour: 'ascending', seed: 4 });
+    expect(withJitter).not.toEqual(plain);
+  });
 });
 
 describe('developMotif', () => {

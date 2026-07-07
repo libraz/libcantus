@@ -61,6 +61,24 @@ describe('Note', () => {
     expect(transposed).not.toBe(original);
     expect(original.name).toBe('C4');
   });
+
+  it('transposes by zero as the identity, preserving the exact spelling', () => {
+    // A naive MIDI round-trip would respell Eb4 as D#4; zero must keep Eb4.
+    expect(Note.of('Eb4').transpose(0).name).toBe('Eb4');
+    expect(Note.of('D#4').transpose(0).name).toBe('D#4');
+    expect(Note.of('Cb').transpose(0).name).toBe('Cb');
+    const eb = Note.of('Eb4');
+    const same = eb.transpose(0);
+    expect(same).not.toBe(eb);
+    expect(same.equals(eb)).toBe(true);
+  });
+
+  it('serializes to plain note data instead of {}', () => {
+    expect(Note.of('Bb3').toJSON()).toEqual({ letter: 6, alter: -1, octave: 3 });
+    // Round-trips through JSON back into an equal note.
+    const restored = Note.fromData(JSON.parse(JSON.stringify(Note.of('F#4'))));
+    expect(restored.equals(Note.of('F#4'))).toBe(true);
+  });
 });
 
 describe('Interval', () => {
@@ -76,6 +94,15 @@ describe('Interval', () => {
     const fifth = Interval.of(5, 'P', 7);
     expect(fifth.name).toBe('P5');
     expect(fifth.semitones).toBe(7);
+  });
+
+  it('serializes to plain interval data instead of {}', () => {
+    expect(Interval.of(5, 'P', 7).toJSON()).toEqual({ number: 5, quality: 'P', semitones: 7 });
+    expect(Interval.between(Note.of('C4'), Note.of('E4')).toJSON()).toEqual({
+      number: 3,
+      quality: 'M',
+      semitones: 4,
+    });
   });
 });
 
@@ -94,6 +121,31 @@ describe('Key', () => {
   it('synthesizes a spelled tonic from a numeric root', () => {
     expect(Key.major(0).tonic.name).toBe('C');
     expect(Key.minor(10).tonic.name).toBe('Bb');
+  });
+
+  it('spells a numeric root with the fewest accidentals (no double flats/sharps)', () => {
+    // Pitch class 6 minor is F# minor (3 sharps), not Gb minor (which needs
+    // Bbb and Ebb double flats).
+    const sixMinor = Key.minor(6);
+    expect(sixMinor.tonic.name).toBe('F#');
+    expect(sixMinor.noteNames()).toEqual(['F#', 'G#', 'A', 'B', 'C#', 'D', 'E']);
+    for (const note of sixMinor.notes()) {
+      expect(Math.abs(note.alter)).toBeLessThanOrEqual(1);
+    }
+    // Pitch class 6 major is Gb major (Gb Ab Bb Cb Db Eb F), the flat side here.
+    expect(Key.major(6).noteNames()).toEqual(['Gb', 'Ab', 'Bb', 'Cb', 'Db', 'Eb', 'F']);
+    // Flat keys with a natural minimal spelling stay flat.
+    expect(Key.minor(10).noteNames()).toEqual(['Bb', 'C', 'Db', 'Eb', 'F', 'Gb', 'Ab']);
+  });
+
+  it('serializes to plain key data instead of {}', () => {
+    const key = Key.major('Eb');
+    const json = key.toJSON();
+    expect(json.tonic).toEqual({ letter: 2, alter: -1 });
+    expect(json.scale).toEqual(key.scale);
+    // Round-trips through Key.of back into the same spelled scale.
+    const restored = Key.of(json.scale, Note.fromData(json.tonic));
+    expect(restored.noteNames()).toEqual(key.noteNames());
   });
 
   it('supports named scales', () => {
@@ -182,8 +234,22 @@ describe('Chord', () => {
     const tonic = cMajor.chord(0, 'maj');
     expect(tonic.invert(1).bassPc).toBe(4);
     expect(tonic.invert(2).bassPc).toBe(7);
-    expect(tonic.invert(3).bassPc).toBe(0);
+    // invert(3) wraps to index 0 = root position, so it carries no slash bass.
+    expect(tonic.invert(3).bassPc).toBeUndefined();
     expect(tonic.invert(1).roman()).toBe('I6');
+  });
+
+  it('treats invert(0) as root position: no bass, equal to the original', () => {
+    const c = Chord.of('C', 'maj');
+    const rooted = c.invert(0);
+    expect(rooted.bassPc).toBeUndefined();
+    expect(rooted.equals(c)).toBe(true);
+    // A root-position chord serializes without a spurious bassPc.
+    expect(rooted.toJSON()).toEqual({ rootPc: 0, quality: 'maj', intervals: [0, 4, 7] });
+    expect('bassPc' in rooted.toJSON()).toBe(false);
+    // Inverting a slash chord back to index 0 also clears the bass.
+    const slash = Chord.of('C', 'maj', 4);
+    expect(slash.invert(0).bassPc).toBeUndefined();
   });
 
   it('lists chord scales, tensions, and avoid notes', () => {
@@ -304,6 +370,20 @@ describe('Progression', () => {
     expect(longer.length).toBe(2);
     expect(longer.chords[1]?.quality).toBe('dom7');
   });
+
+  it('serializes to plain progression data instead of {}', () => {
+    const cMajor = Key.major('C');
+    const prog = cMajor.chord(0, 'maj').progressionTo(cMajor.chord(4, 'dom7'));
+    const json = prog.toJSON();
+    expect(json.chords).toEqual([
+      { rootPc: 0, quality: 'maj', intervals: [0, 4, 7] },
+      { rootPc: 7, quality: 'dom7', intervals: [0, 4, 7, 10] },
+    ]);
+    expect(json.key?.tonic).toEqual({ letter: 0, alter: 0 });
+    // A keyless progression serializes its chords with an undefined key.
+    const keyless = new Progression([Chord.of(0, 'maj')]);
+    expect(keyless.toJSON().key).toBeUndefined();
+  });
 });
 
 describe('Chord letter-name spelling and plain-data construction', () => {
@@ -368,5 +448,26 @@ describe('Chord symbols, styled voicings, and negative harmony', () => {
     const expected = new Set(g7.pitchClasses().map((pc) => (((7 - pc) % 12) + 12) % 12));
     expect(new Set(mirrored.pitchClasses())).toEqual(expected);
     expect(mirrored.bassPc).toBeUndefined();
+  });
+
+  it('retains an explicit negative-harmony key so a later no-arg analysis works', () => {
+    const cMajor = Key.major('C');
+    // The source chord carries no key context of its own.
+    const g7 = Chord.of(7, 'dom7');
+    const mirrored = g7.negativeHarmony(cMajor);
+    expect(mirrored.key).toBeDefined();
+    expect(() => mirrored.analyze()).not.toThrow();
+    const analysis = mirrored.analyze();
+    expect(analysis.function).toBe('subdominant');
+  });
+
+  it('round-trips a flat-spelled chord symbol through the class API', () => {
+    // The parse-time spelling hint survives the immutable copy, so the flat
+    // name is reproduced instead of being respelled with sharps.
+    expect(Chord.parse('Bbmaj7').symbol()).toBe('Bbmaj7');
+    expect(Chord.parse('Ebm7').symbol()).toBe('Ebm7');
+    expect(Chord.parse('Ab/C').symbol()).toBe('Ab/C');
+    // An explicit preference still overrides the hint.
+    expect(Chord.parse('Bbmaj7').symbol({ flats: false })).toBe('A#maj7');
   });
 });

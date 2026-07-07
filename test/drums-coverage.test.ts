@@ -26,7 +26,12 @@ const STYLES: GrooveStyle[] = [
   'trap',
   'halftime',
   'breakbeat',
+  'house',
+  'synthpop',
 ];
+
+/** General MIDI percussion notes the drum engine is allowed to emit. */
+const GM_PITCHES = new Set([36, 38, 37, 39, 42, 44, 46, 49, 51, 54, 50, 47, 45, 82]);
 const SECTIONS: Section[] = ['intro', 'verse', 'prechorus', 'chorus', 'bridge', 'outro'];
 const FEELS: GrooveFeel[] = ['straight', 'swing', 'shuffle'];
 const ROLES: DrumRole[] = ['full', 'ambient', 'minimal', 'fxOnly'];
@@ -121,6 +126,32 @@ describe('euclid', () => {
     expect(kick.beat1).toBe(true);
     expect(hasHit(mask, 0)).toBe(true);
   });
+
+  it('drives the kick from a euclidean option in generateDrums', () => {
+    const opts: DrumGenOptions = {
+      bars: 2,
+      bpm: 120,
+      style: 'standard',
+      section: 'verse',
+      density: 0.5,
+      seed: 3,
+    };
+    // A default standard verse kicks only on beats 1 and 3.
+    const defaultKicks = generateDrums(opts)
+      .filter((h) => h.pitch === 36)
+      .map((h) => h.startBeat % 4);
+    expect(new Set(defaultKicks)).toEqual(new Set([0, 2]));
+
+    // pulses=4 over 16 steps spreads onsets to all four downbeats.
+    const euclid = generateDrums({ ...opts, euclideanKick: { pulses: 4, steps: 16 } });
+    const euclidKicks = euclid.filter((h) => h.pitch === 36).map((h) => h.startBeat % 4);
+    expect(new Set(euclidKicks)).toEqual(new Set([0, 1, 2, 3]));
+
+    // Determinism holds with the euclidean option applied.
+    expect(
+      generateDrums({ ...opts, euclideanKick: { pulses: 5, steps: 16, rotation: 1 } }),
+    ).toEqual(generateDrums({ ...opts, euclideanKick: { pulses: 5, steps: 16, rotation: 1 } }));
+  });
 });
 
 describe('fills', () => {
@@ -140,18 +171,43 @@ describe('fills', () => {
     'halfTimeFill',
   ];
 
-  it('renders every fill archetype at every beat', () => {
+  it('renders every fill archetype into valid, non-empty hits', () => {
+    const barStart = 12;
     for (const fill of ALL_FILLS) {
       const track = new HitList();
       for (let beat = 0; beat < 4; beat += 1) {
-        generateFill(track, 12 + beat, beat, fill, 100);
+        generateFill(track, barStart + beat, beat, fill, 100);
+      }
+      // Every archetype must produce sound across the four beats of the bar.
+      expect(track.hits.length).toBeGreaterThan(0);
+      for (const h of track.hits) {
+        // GM percussion pitch in range.
+        expect(GM_PITCHES.has(h.pitch)).toBe(true);
+        expect(h.pitch).toBeGreaterThanOrEqual(35);
+        expect(h.pitch).toBeLessThanOrEqual(82);
+        // Velocity within the valid MIDI range.
+        expect(h.velocity).toBeGreaterThanOrEqual(1);
+        expect(h.velocity).toBeLessThanOrEqual(127);
+        // Hits stay inside the fill bar (a flam grace note may sit a fraction
+        // before the beat but never before the bar, and never past its end).
+        expect(h.startBeat).toBeGreaterThanOrEqual(barStart);
+        expect(h.startBeat).toBeLessThan(barStart + 4);
       }
     }
-    // A tom-based fill emits tom voices in its later beats.
-    const track = new HitList();
-    generateFill(track, 14, 2, 'tomDescend', 100);
-    generateFill(track, 15, 3, 'tomDescend', 100);
-    expect(track.hits.some((h) => h.pitch === 45 || h.pitch === 47 || h.pitch === 50)).toBe(true);
+  });
+
+  it('emits a phrase-end fill at beat 3 for every low-energy archetype', () => {
+    // At low energy the fill spans only beat 3; none of the archetypes reachable
+    // there may leave that beat silent (#21).
+    const lowEnergyFills: FillType[] = ['simpleCrash', 'breakdownFill', 'halfTimeFill'];
+    for (const fill of lowEnergyFills) {
+      const track = new HitList();
+      generateFill(track, 15, 3, fill, 100);
+      expect(track.hits.length).toBeGreaterThan(0);
+      for (const h of track.hits) {
+        expect(h.startBeat).toBeGreaterThanOrEqual(15);
+      }
+    }
   });
 
   it('sizes fills by energy', () => {
@@ -161,25 +217,127 @@ describe('fills', () => {
     expect(getFillStartBeat('peak')).toBe(0);
   });
 
-  it('selects fill types across transition contexts', () => {
-    const rng = createRng(9);
-    const contexts: [
+  it('selects fills from the expected set for each transition context', () => {
+    type Ctx = [
       Parameters<typeof selectFillType>[0],
       Parameters<typeof selectFillType>[1],
       Parameters<typeof selectFillType>[2],
       Parameters<typeof selectFillType>[3],
-    ][] = [
-      ['a', 'chorus', 'sparse', 'medium'],
-      ['a', 'chorus', 'fourOnFloor', 'low'],
-      ['b', 'chorus', 'standard', 'peak'],
-      ['a', 'chorus', 'fourOnFloor', 'high'],
-      ['a', 'chorus', 'standard', 'high'],
-      ['intro', 'a', 'standard', 'medium'],
-      ['a', 'a', 'rock', 'medium'],
-      ['a', 'a', 'standard', 'medium'],
+      FillType[],
     ];
-    for (const [from, to, style, energy] of contexts) {
-      expect(typeof selectFillType(from, to, style, energy, rng)).toBe('string');
+    const contexts: Ctx[] = [
+      // sparse style: only the two sparse archetypes, whatever the transition.
+      ['a', 'chorus', 'sparse', 'medium', ['simpleCrash', 'breakdownFill']],
+      // low target energy is handled before the transition-specific blocks.
+      ['a', 'chorus', 'fourOnFloor', 'low', ['simpleCrash', 'breakdownFill', 'halfTimeFill']],
+      // into-chorus, non-high style.
+      [
+        'b',
+        'chorus',
+        'standard',
+        'peak',
+        ['snareTomCombo', 'tomDescend', 'ghostToAccent', 'hiHatChoke', 'linearFill', 'snareRoll'],
+      ],
+      // into-chorus, high-energy style.
+      [
+        'a',
+        'chorus',
+        'fourOnFloor',
+        'high',
+        [
+          'tomDescend',
+          'snareRoll',
+          'linearFill',
+          'bdSnareAlternate',
+          'flamsAndDrags',
+          'tomShuffle',
+          'ghostToAccent',
+        ],
+      ],
+      [
+        'a',
+        'chorus',
+        'standard',
+        'high',
+        ['snareTomCombo', 'tomDescend', 'ghostToAccent', 'hiHatChoke', 'linearFill', 'snareRoll'],
+      ],
+      // out-of-intro, non-chorus target.
+      [
+        'intro',
+        'a',
+        'standard',
+        'medium',
+        ['snareRoll', 'simpleCrash', 'ghostToAccent', 'breakdownFill', 'halfTimeFill'],
+      ],
+      // generic high-energy style.
+      [
+        'a',
+        'a',
+        'rock',
+        'medium',
+        [
+          'tomDescend',
+          'snareRoll',
+          'tomAscend',
+          'snareTomCombo',
+          'linearFill',
+          'bdSnareAlternate',
+          'flamsAndDrags',
+          'tomShuffle',
+        ],
+      ],
+      // generic default style.
+      [
+        'a',
+        'a',
+        'standard',
+        'medium',
+        [
+          'snareRoll',
+          'snareTomCombo',
+          'ghostToAccent',
+          'hiHatChoke',
+          'halfTimeFill',
+          'breakdownFill',
+        ],
+      ],
+    ];
+    for (const [from, to, style, energy, expected] of contexts) {
+      const allowed = new Set(expected);
+      // Draw many times so the assertion covers the whole branch, not one path.
+      for (let seed = 0; seed < 64; seed += 1) {
+        const rng = createRng(seed);
+        const picked = selectFillType(from, to, style, energy, rng);
+        expect(allowed.has(picked)).toBe(true);
+      }
+    }
+  });
+
+  it('reaches every fill archetype across transition contexts', () => {
+    const seen = new Set<FillType>();
+    const froms: Parameters<typeof selectFillType>[0][] = ['intro', 'a', 'b'];
+    const tos: Parameters<typeof selectFillType>[1][] = ['chorus', 'a', 'outro'];
+    const styles: Parameters<typeof selectFillType>[2][] = [
+      'sparse',
+      'standard',
+      'rock',
+      'fourOnFloor',
+    ];
+    const energies: Parameters<typeof selectFillType>[3][] = ['low', 'medium', 'high', 'peak'];
+    for (const from of froms) {
+      for (const to of tos) {
+        for (const style of styles) {
+          for (const energy of energies) {
+            for (let seed = 0; seed < 32; seed += 1) {
+              const rng = createRng(seed * 7 + 1);
+              seen.add(selectFillType(from, to, style, energy, rng));
+            }
+          }
+        }
+      }
+    }
+    for (const fill of ALL_FILLS) {
+      expect(seen.has(fill)).toBe(true);
     }
   });
 });

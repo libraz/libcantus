@@ -34,12 +34,32 @@ export type ChordQuality =
   | '13'
   | '5';
 
-/** A chord expressed as a root pitch class plus semitone offsets. */
+/**
+ * A bare spelled pitch used as an enharmonic hint: a diatonic letter
+ * (0..6 = C..B) plus a chromatic alteration (-2 double-flat .. +2 double-sharp).
+ * Mirrors the letter/alter half of the pitch module's `Note` without an octave.
+ */
+export type PitchSpelling = {
+  letter: number;
+  alter: number;
+};
+
+/**
+ * A chord expressed as a root pitch class plus semitone offsets.
+ *
+ * `rootSpelling`/`bassSpelling` are optional enharmonic hints recorded by
+ * parsers (e.g. `parseChordSymbol('Bb7')`) so formatters can reproduce the
+ * original spelling instead of defaulting to sharps. Consumers may ignore
+ * them; a hint is only trusted when its pitch class still matches the
+ * corresponding `rootPc`/`bassPc`.
+ */
 export type Chord = {
   rootPc: number;
   quality: ChordQuality;
   intervals: number[];
   bassPc?: number;
+  rootSpelling?: PitchSpelling;
+  bassSpelling?: PitchSpelling;
 };
 
 /** Semitone offsets from the root for each supported chord quality. */

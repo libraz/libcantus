@@ -50,14 +50,29 @@ export type ChordScaleMatch = {
 };
 
 /**
+ * Scale names whose mask duplicates another {@link NAMED_SCALES} entry
+ * (major/ionian, naturalMinor/aeolian). Chord-scale analysis conventionally
+ * speaks in mode names, so these aliases are skipped and only the modal name
+ * is reported.
+ */
+const ALIASED_SCALE_NAMES = new Set(['major', 'naturalMinor']);
+
+/** Number of tones in a heptatonic (seven-note) scale. */
+const HEPTATONIC_SIZE = 7;
+
+/**
  * List the scales that fit over a chord, best fit first.
  *
  * Only the chord root is considered as the scale root, matching the
  * conventional chord-scale relationship. Every entry of {@link NAMED_SCALES}
- * whose pitch-class set is a superset of the chord's is returned, ranked by
- * fewest extra scale tones beyond the chord, then by scale size (heptatonic
- * before larger scales), then by scale name. The chromatic scale is only
- * returned as a fallback when no other scale contains the chord.
+ * whose pitch-class set is a superset of the chord's is returned once per
+ * distinct pitch-class set (aliased masks such as major/ionian report only the
+ * modal name), ranked by fewest extra scale tones beyond the chord, then by
+ * scale size (heptatonic before larger scales), then by scale name. For bare
+ * triads and smaller chords, heptatonic scales rank before pentatonics and
+ * other sizes: a pentatonic adds no modal color over a triad, so the seven-note
+ * modes are the more useful answer. The chromatic scale is only returned as a
+ * fallback when no other scale contains the chord.
  *
  * @param chord The chord to fit scales over.
  * @returns The matching scales rooted on the chord root, best fit first.
@@ -66,14 +81,16 @@ export function chordScales(chord: Chord): ChordScaleMatch[] {
   const chordPcs = chordPitchClasses(chord);
   const rootPc = pitchClass(chord.rootPc);
   const ranked: { name: string; extra: number; size: number }[] = [];
+  const seenMasks = new Set<number>();
   for (const name of Object.keys(NAMED_SCALES)) {
-    if (name === 'chromatic') {
+    if (name === 'chromatic' || ALIASED_SCALE_NAMES.has(name)) {
       continue;
     }
     const mask = NAMED_SCALES[name];
-    if (mask === undefined) {
+    if (mask === undefined || seenMasks.has(mask)) {
       continue;
     }
+    seenMasks.add(mask);
     if (scaleMatchesChord(chordPcs, mask, rootPc)) {
       const size = popcount12(mask);
       ranked.push({ name, extra: size - chordPcs.length, size });
@@ -87,7 +104,11 @@ export function chordScales(chord: Chord): ChordScaleMatch[] {
     }
     return [];
   }
+  const preferHeptatonic = chordPcs.length <= 3;
   ranked.sort((a, b) => {
+    if (preferHeptatonic && (a.size === HEPTATONIC_SIZE) !== (b.size === HEPTATONIC_SIZE)) {
+      return a.size === HEPTATONIC_SIZE ? -1 : 1;
+    }
     if (a.extra !== b.extra) {
       return a.extra - b.extra;
     }

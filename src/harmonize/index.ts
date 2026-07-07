@@ -5,7 +5,13 @@ import { roleOf } from '../harmony/index.js';
 import type { TimeSignature } from '../meter/index.js';
 import { isStrongBeat } from '../meter/index.js';
 import type { GeneratedChord } from '../progression/index.js';
-import { isScaleTone, majorKey, scaleTonesInDegreeOrder } from '../scale/index.js';
+import {
+  isScaleTone,
+  majorKey,
+  minorKey,
+  NATURAL_MINOR_MASK,
+  scaleTonesInDegreeOrder,
+} from '../scale/index.js';
 import type { KeyScale, NoteEvent } from '../types.js';
 
 /** A melody note supplied to the harmonizer: a {@link NoteEvent}. */
@@ -50,6 +56,15 @@ const COMFORT_LOW = 55;
 const COMFORT_HIGH = 79;
 const TESSITURA_WEIGHT = 0.001;
 
+/**
+ * Magnitude of the seed-driven per-candidate perturbation. Kept far below the
+ * smallest real cost difference (transition/emission terms are on the order of
+ * 0.3 and up), so it can only decide between candidates or paths whose costs are
+ * otherwise exactly equal. The seed therefore breaks ties deterministically and
+ * never overrides melody fit or functional flow.
+ */
+const TIE_BREAK_JITTER = 1e-6;
+
 function pitchClass(pitch: number): number {
   return ((Math.trunc(pitch) % 12) + 12) % 12;
 }
@@ -65,28 +80,47 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-/** Estimate the best-fit major key from a melody's pitch-class weighting. */
+/**
+ * Estimate the best-fit key from a melody's pitch-class weighting.
+ *
+ * Both major and natural-minor tonics are scored, so a minor melody is
+ * recognized as its own minor key rather than being folded into the relative
+ * major (which shares identical pitch-class content). Each in-scale note adds
+ * its duration weight; notes matching the candidate tonic add a further
+ * half-weight, and that tonic emphasis is what separates a minor key from its
+ * relative major. For minor candidates the raised leading tone (the
+ * harmonic-minor seventh) also counts as in-scale, so cadential leading tones do
+ * not penalize the true minor key. Ties are broken toward the earlier candidate,
+ * and major is scored before minor at each tonic.
+ */
 function inferKey(melody: MelodyNote[]): KeyScale {
-  let best = 0;
+  let best: KeyScale = majorKey(0);
   let bestScore = Number.NEGATIVE_INFINITY;
+  const candidates: KeyScale[] = [];
   for (let tonic = 0; tonic < 12; tonic += 1) {
-    const key = majorKey(tonic);
+    candidates.push(majorKey(tonic), minorKey(tonic));
+  }
+  for (const key of candidates) {
+    const tonic = pitchClass(key.rootPc);
+    const isMinor = key.modeMask12 === NATURAL_MINOR_MASK;
+    const leadingTone = (tonic + 11) % 12;
     let score = 0;
     for (const n of melody) {
       const w = Math.max(0.25, n.durationBeat);
-      if (isScaleTone(n.pitch, key)) {
+      const pc = pitchClass(n.pitch);
+      if (isScaleTone(n.pitch, key) || (isMinor && pc === leadingTone)) {
         score += w;
       }
-      if (pitchClass(n.pitch) === tonic) {
+      if (pc === tonic) {
         score += 0.5 * w;
       }
     }
     if (score > bestScore) {
       bestScore = score;
-      best = tonic;
+      best = key;
     }
   }
-  return majorKey(best);
+  return best;
 }
 
 /** Enumerate candidate chords for the key, gated by reharmonization strength. */
@@ -283,6 +317,12 @@ function harmonizeOnce(
  * `(transpose, progression)` pair is returned; a small tessitura cost breaks
  * ties toward placements that keep the melody in a comfortable register.
  *
+ * The `seed` drives a deterministic tie-break only: it perturbs candidates by a
+ * magnitude far below any real cost difference (see {@link TIE_BREAK_JITTER}),
+ * so it can decide between chords or paths of otherwise-equal cost but never
+ * overrides melody fit or functional flow. For a well-determined melody the
+ * result is identical across seeds; the same seed always yields the same result.
+ *
  * @param opts Melody, key (or `'infer'`), harmonic rhythm, reharmonization
  *   strength, height-search flags, and seed.
  * @returns The chosen transpose, key, chord path, and per-note roles.
@@ -292,7 +332,7 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   const candidates = buildCandidates(key, opts.reharmonize);
   const candAt = (i: number): Candidate => candidates[i] ?? FALLBACK;
   const rng = mulberry32(opts.seed ?? 0);
-  const jitter = candidates.map(() => rng() * 1e-6);
+  const jitter = candidates.map(() => rng() * TIE_BREAK_JITTER);
 
   const melodyEnd = opts.melody.reduce((m, n) => Math.max(m, n.startBeat + n.durationBeat), 0);
   const hr = Math.max(0.25, opts.harmonicRhythm);

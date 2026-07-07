@@ -32,7 +32,19 @@ export function getFillStartBeat(energy: SectionEnergy): number {
   }
 }
 
-/** Pick a fill archetype from the transition context. */
+/**
+ * Pick a fill archetype for a section transition.
+ *
+ * The transition-specific archetypes (into a chorus, out of an intro) are
+ * checked before the generic energy fills so every variation stays reachable;
+ * with `from === to` the caller effectively asks for a within-section fill.
+ *
+ * @param from Section the fill leaves.
+ * @param to Section the fill leads into.
+ * @param style Internal drum style.
+ * @param nextEnergy Energy of the section the fill leads into.
+ * @param rng Deterministic PRNG.
+ */
 export function selectFillType(
   from: SectionType,
   to: SectionType,
@@ -44,6 +56,11 @@ export function selectFillType(
     return rng.range(0, 1) === 0 ? 'simpleCrash' : 'breakdownFill';
   }
 
+  const toChorus = to === 'chorus';
+  const fromIntro = from === 'intro';
+  const highEnergy = style === 'rock' || style === 'fourOnFloor';
+
+  // Dropping into a low-energy section: keep the phrase end gentle.
   if (nextEnergy === 'low') {
     switch (rng.range(0, 2)) {
       case 0:
@@ -55,25 +72,9 @@ export function selectFillType(
     }
   }
 
-  if (nextEnergy === 'peak') {
-    switch (rng.range(0, 3)) {
-      case 0:
-        return 'tomDescend';
-      case 1:
-        return 'snareRoll';
-      case 2:
-        return 'linearFill';
-      default:
-        return 'flamsAndDrags';
-    }
-  }
-
-  const toChorus = to === 'chorus';
-  const fromIntro = from === 'intro';
-  const highEnergy = style === 'rock' || style === 'fourOnFloor';
-  const choice = rng.range(0, 7);
-
+  // Big lead-ins to a chorus take precedence over the generic energy fills.
   if (toChorus) {
+    const choice = rng.range(0, 7);
     if (highEnergy) {
       switch (choice) {
         case 0:
@@ -110,8 +111,9 @@ export function selectFillType(
     }
   }
 
+  // Leaving the intro: lighter, building character.
   if (fromIntro) {
-    switch (choice) {
+    switch (rng.range(0, 5)) {
       case 0:
       case 1:
         return 'snareRoll';
@@ -126,6 +128,8 @@ export function selectFillType(
     }
   }
 
+  // Generic medium/high/peak fills, split by style energy.
+  const choice = rng.range(0, 7);
   if (highEnergy) {
     switch (choice) {
       case 0:
@@ -339,6 +343,13 @@ export function generateFill(
       if (beat === 2) {
         track.add(GM.SD, beatTick, 1, accentVel);
         track.add(GM.BD, beatTick, 1, fillVel);
+      } else if (beat === 3) {
+        // At low energy the fill spans only beat 3, so this branch keeps the
+        // phrase end from going silent: a broad half-time backbeat snare with a
+        // light pickup into the next section.
+        track.add(GM.SD, beatTick, EIGHTH, accentVel);
+        track.add(GM.SD, beatTick + E, S, fillVel * 0.6);
+        track.add(GM.SD, beatTick + E + S, S, accentVel);
       }
       break;
   }

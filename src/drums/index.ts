@@ -7,6 +7,7 @@ import {
   generateSnareForBeat,
   type SectionCtx,
 } from './beat.js';
+import { euclideanRhythm, patternToMask } from './euclid.js';
 import { type FillType, generateFill, getFillStartBeat, selectFillType } from './fills.js';
 import {
   footHiHatVelocity,
@@ -34,7 +35,12 @@ import {
   sectionDensityMultiplier,
   sectionEnergy,
 } from './internal.js';
-import { getKickPattern, isInPreChorusLift, type KickPattern } from './kick.js';
+import {
+  euclideanToKickPattern,
+  getKickPattern,
+  isInPreChorusLift,
+  type KickPattern,
+} from './kick.js';
 import { generateAuxPercussionForBar, getPercussionConfig } from './percussion.js';
 import { createRng } from './rng.js';
 
@@ -44,6 +50,16 @@ export type { DrumRole, GrooveStyle } from './internal.js';
 
 /** Public section identifiers for {@link generateDrums}. */
 export type Section = PublicSection;
+
+/** A Euclidean (Bjorklund) kick pattern for {@link generateDrums}. */
+export type EuclideanKick = {
+  /** Number of kick onsets, clamped to `[0, steps]`. */
+  pulses: number;
+  /** Total steps in the bar (1..16, default 16). */
+  steps?: number;
+  /** Steps to rotate the onsets toward later positions (default 0). */
+  rotation?: number;
+};
 
 /** Options controlling {@link generateDrums}. */
 export type DrumGenOptions = {
@@ -56,6 +72,17 @@ export type DrumGenOptions = {
   feel?: GrooveFeel;
   role?: DrumRole;
   seed?: number;
+  /**
+   * Section the final-bar fill leads into. Shapes which fill archetype is
+   * chosen (into-chorus and out-of-intro fills differ from generic ones).
+   * Defaults to `section`, i.e. a within-section fill.
+   */
+  nextSection?: Section;
+  /**
+   * When set, the kick follows this Euclidean rhythm instead of the
+   * style/section pattern, giving direct access to evenly spread onsets.
+   */
+  euclideanKick?: EuclideanKick;
 };
 
 /**
@@ -66,7 +93,10 @@ export type DrumGenOptions = {
  * by its General MIDI pitch. Groove style selects an internal style and feel;
  * `density` sets the backing-density level; `section` shapes kick, hi-hat, ghost,
  * and percussion density. 16th-note hi-hats drop to 8ths at or above 150 BPM.
- * When `fills` is true the final bar is replaced with a fill. Output is fully
+ * When `fills` is true the final bar is replaced with a fill whose archetype is
+ * shaped by `nextSection`; a fill that would emit nothing on its beat falls back
+ * to the normal groove so the phrase end is never silent. `euclideanKick`
+ * overrides the kick with an evenly-spread Euclidean pattern. Output is fully
  * determined by the options plus `seed`.
  *
  * @param opts Generation options.
@@ -114,6 +144,23 @@ export function generateDrums(opts: DrumGenOptions): DrumHit[] {
   const fillStartBeat = getFillStartBeat(energy);
   const percMood = percMoodCategory(style);
 
+  // The final-bar fill is shaped by the section it leads into. When no next
+  // section is given the fill is treated as within-section (from === to).
+  const nextSection = opts.nextSection ? mapSection(opts.nextSection) : section;
+  const nextEnergy = sectionEnergy(nextSection);
+
+  const euclidKick: KickPattern | undefined = opts.euclideanKick
+    ? euclideanToKickPattern(
+        patternToMask(
+          euclideanRhythm(
+            opts.euclideanKick.pulses,
+            opts.euclideanKick.steps ?? 16,
+            opts.euclideanKick.rotation ?? 0,
+          ),
+        ),
+      )
+    : undefined;
+
   const reuseSectionKick = (section === 'b' || section === 'chorus') && style !== 'sparse';
   let sectionKick: KickPattern | undefined;
 
@@ -133,7 +180,9 @@ export function generateDrums(opts: DrumGenOptions): DrumHit[] {
     }
 
     let kick: KickPattern;
-    if (reuseSectionKick) {
+    if (euclidKick) {
+      kick = euclidKick;
+    } else if (reuseSectionKick) {
       sectionKick ??= getKickPattern(section, style, 0, rng);
       kick = sectionKick;
     } else {
@@ -149,12 +198,20 @@ export function generateDrums(opts: DrumGenOptions): DrumHit[] {
 
       if (opts.fills && isLastBar && !inLift && beat >= fillStartBeat) {
         if (beat === fillStartBeat) {
-          currentFill = selectFillType(section, section, style, energy, rng);
+          currentFill = selectFillType(section, nextSection, style, nextEnergy, rng);
         }
         if (playMainVoices) {
+          const before = track.hits.length;
           generateFill(track, beatTick, beat, currentFill, velocity);
+          if (track.hits.length > before) {
+            continue;
+          }
+          // Safety net: an archetype that contributes nothing on this beat would
+          // leave a silent phrase end, so fall through to the normal groove.
+        } else {
+          // fxOnly deliberately emits no main voices on the fill beats.
+          continue;
         }
-        continue;
       }
 
       const ctx: BeatCtx = {

@@ -125,11 +125,22 @@ describe('extractGrooveTemplate', () => {
     }
   });
 
-  it('defaults unvisited slots to zero', () => {
+  it('defaults unvisited slots to a null-velocity sentinel', () => {
     const template = extractGrooveTemplate(makeEvents([0]), FOUR_FOUR, 4);
     for (let i = 1; i < template.slotsPerBar; i += 1) {
-      expect(template.slots[i]).toEqual({ timingOffset: 0, velocity: 0 });
+      expect(template.slots[i]).toEqual({ timingOffset: 0, velocity: null });
     }
+  });
+
+  it('stores its time signature', () => {
+    const template = extractGrooveTemplate(makeEvents([0]), FOUR_FOUR, 4);
+    expect(template.ts).toEqual(FOUR_FOUR);
+  });
+
+  it('records a real velocity of 0 rather than treating it as unrecorded', () => {
+    const events: NoteEvent[] = [{ pitch: 60, startBeat: 0, durationBeat: 1, velocity: 0 }];
+    const template = extractGrooveTemplate(events, FOUR_FOUR, 4);
+    expect(template.slots[0]?.velocity).toBe(0);
   });
 
   it('averages velocity per slot', () => {
@@ -169,11 +180,33 @@ describe('applyGrooveTemplate', () => {
     const template: GrooveTemplate = {
       subdivision: 4,
       slotsPerBar: 16,
-      slots: new Array(16).fill(null).map(() => ({ timingOffset: 0, velocity: 0 })),
+      slots: new Array(16).fill(null).map(() => ({ timingOffset: 0, velocity: null })),
     };
     const quantized: NoteEvent[] = [{ pitch: 60, startBeat: 0, durationBeat: 1, velocity: 55 }];
     const result = applyGrooveTemplate(quantized, template, FOUR_FOUR);
     expect(result[0]?.velocity).toBe(55);
+  });
+
+  it('applies a genuine velocity-0 slot instead of leaving the event untouched', () => {
+    // A slot that recorded a real velocity of 0 must survive extract + apply.
+    const groovy: NoteEvent[] = [{ pitch: 60, startBeat: 0, durationBeat: 1, velocity: 0 }];
+    const template = extractGrooveTemplate(groovy, FOUR_FOUR, 4);
+    expect(template.slots[0]?.velocity).toBe(0);
+
+    const quantized: NoteEvent[] = [{ pitch: 72, startBeat: 0, durationBeat: 1, velocity: 100 }];
+    const result = applyGrooveTemplate(quantized, template, FOUR_FOUR);
+    expect(result[0]?.velocity).toBe(0);
+  });
+
+  it('rejects applying a template under a different meter than it was extracted', () => {
+    const template = extractGrooveTemplate(makeEvents([0, 1, 2, 3]), FOUR_FOUR, 4);
+    const threeFour = parseTimeSignature('3/4');
+    expect(() => applyGrooveTemplate(makeEvents([0, 1, 2]), template, threeFour)).toThrow();
+  });
+
+  it('accepts applying a template under the matching meter', () => {
+    const template = extractGrooveTemplate(makeEvents([0, 1, 2, 3]), FOUR_FOUR, 4);
+    expect(() => applyGrooveTemplate(makeEvents([0, 1, 2, 3]), template, FOUR_FOUR)).not.toThrow();
   });
 
   it('round-trips a groovy feel through extract + apply on a stiff line', () => {

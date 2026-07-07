@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { chordPitchClasses, makeChord } from '../src/chord/index.js';
 import { type HarmonizeOptions, harmonizeMelody } from '../src/harmonize/index.js';
-import { majorKey, scaleTonesInDegreeOrder } from '../src/scale/index.js';
+import { majorKey, NATURAL_MINOR_MASK, scaleTonesInDegreeOrder } from '../src/scale/index.js';
 
 const cMajor = majorKey(0);
 
@@ -81,6 +81,49 @@ describe('harmonizeMelody', () => {
       placement: { transposeSearch: false, octaveSearch: false },
     });
     expect(result.key.rootPc).toBe(7); // G major
+  });
+
+  it('infers a minor key for a clearly minor melody instead of the relative major', () => {
+    // A C E C A G A: centered and cadencing on A, using natural-minor tones
+    // (including G natural). The relative major (C) shares the same pitch
+    // classes, so only the tonic emphasis on A distinguishes A minor.
+    const melody = [69, 72, 76, 72, 69, 67, 69].map((pitch, i) => ({
+      pitch,
+      startBeat: i,
+      durationBeat: 1,
+    }));
+    const result = harmonizeMelody({
+      melody,
+      key: 'infer',
+      harmonicRhythm: 4,
+      reharmonize: 'diatonic',
+      placement: { transposeSearch: false, octaveSearch: false },
+    });
+    expect(result.key.rootPc).toBe(9); // A minor, not C major
+    expect(result.key.modeMask12).toBe(NATURAL_MINOR_MASK);
+  });
+
+  it('treats the seed as a tie-break only: seed does not change a well-determined result', () => {
+    // A strongly diatonic C-major melody has a single lowest-cost harmonization,
+    // so the seed (which only perturbs otherwise-equal candidates) cannot alter
+    // it. Different seeds must yield the same chords.
+    const melody = [60, 64, 67, 72, 67, 64, 60, 72].map((pitch, i) => ({
+      pitch,
+      startBeat: i,
+      durationBeat: 1,
+    }));
+    const base: Omit<HarmonizeOptions, 'seed'> = {
+      melody,
+      key: cMajor,
+      harmonicRhythm: 4,
+      reharmonize: 'diatonic',
+      placement: { transposeSearch: false, octaveSearch: false },
+    };
+    const a = harmonizeMelody({ ...base, seed: 1 });
+    const b = harmonizeMelody({ ...base, seed: 9999 });
+    expect(a.chords).toEqual(b.chords);
+    // And the same seed is always reproducible.
+    expect(harmonizeMelody({ ...base, seed: 1 })).toEqual(harmonizeMelody({ ...base, seed: 1 }));
   });
 
   it('avoids clashing with a note sustained across a segment boundary', () => {

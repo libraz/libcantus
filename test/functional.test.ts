@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { makeChord } from '../src/chord/index.js';
+import { chordPitchClasses, chordQualities, makeChord } from '../src/chord/index.js';
 import {
   chordToRoman,
   detectCadence,
@@ -7,9 +7,11 @@ import {
   romanToChord,
   secondaryDominant,
 } from '../src/functional/index.js';
-import { majorKey } from '../src/scale/index.js';
+import { majorKey, minorKey } from '../src/scale/index.js';
+import type { KeyScale } from '../src/types.js';
 
 const cMajor = majorKey(0);
+const aMinor = minorKey(9);
 
 describe('romanToChord', () => {
   it('parses diatonic numerals with case-based quality', () => {
@@ -197,5 +199,131 @@ describe('detectCadence', () => {
 describe('secondaryDominant', () => {
   it('builds V7 of a target degree', () => {
     expect(secondaryDominant(4, cMajor)).toMatchObject({ rootPc: 2, quality: 'dom7' });
+  });
+});
+
+describe('roman round-trip across every chord quality', () => {
+  // Tonic, supertonic, subdominant, and dominant degrees of each key.
+  const keyCases: [string, KeyScale, number[]][] = [
+    ['C major', cMajor, [0, 2, 5, 7]],
+    ['A minor', aMinor, [9, 11, 2, 4]],
+  ];
+
+  for (const [name, key, roots] of keyCases) {
+    it(`chord -> roman -> chord preserves quality and pitch classes in ${name}`, () => {
+      for (const quality of chordQualities()) {
+        for (const rootPc of roots) {
+          const chord = makeChord(rootPc, quality);
+          const roman = chordToRoman(chord, key);
+          const back = romanToChord(roman, key);
+          expect(back.rootPc, `${quality} on pc ${rootPc} via "${roman}"`).toBe(rootPc);
+          expect(back.quality, `${quality} on pc ${rootPc} via "${roman}"`).toBe(quality);
+          expect(chordPitchClasses(back), `${quality} on pc ${rootPc} via "${roman}"`).toEqual(
+            chordPitchClasses(chord),
+          );
+        }
+      }
+    });
+
+    it(`roman -> chord -> roman is stable in ${name}`, () => {
+      for (const quality of chordQualities()) {
+        for (const rootPc of roots) {
+          const roman = chordToRoman(makeChord(rootPc, quality), key);
+          expect(chordToRoman(romanToChord(roman, key), key), `${quality} as "${roman}"`).toBe(
+            roman,
+          );
+        }
+      }
+    });
+  }
+});
+
+describe('extension figures honor numeral case and quality suffix', () => {
+  it('keeps ii9-V9-Imaj9 diatonic in C major', () => {
+    const ii9 = romanToChord('ii9', cMajor);
+    expect(ii9).toMatchObject({ rootPc: 2, quality: 'min9' });
+    // D F A C E
+    expect(chordPitchClasses(ii9)).toEqual([0, 2, 4, 5, 9]);
+
+    const v9 = romanToChord('V9', cMajor);
+    expect(v9).toMatchObject({ rootPc: 7, quality: 'dom9' });
+    // G B D F A
+    expect(chordPitchClasses(v9)).toEqual([2, 5, 7, 9, 11]);
+
+    const imaj9 = romanToChord('Imaj9', cMajor);
+    expect(imaj9).toMatchObject({ rootPc: 0, quality: 'maj9' });
+    // C E G B D
+    expect(chordPitchClasses(imaj9)).toEqual([0, 2, 4, 7, 11]);
+  });
+
+  it('reads a lowercase ninth as a minor ninth', () => {
+    expect(romanToChord('vi9', cMajor)).toMatchObject({ rootPc: 9, quality: 'min9' });
+  });
+
+  it('round-trips ninths in a minor key', () => {
+    expect(romanToChord('i9', aMinor)).toMatchObject({ rootPc: 9, quality: 'min9' });
+    expect(chordToRoman(makeChord(9, 'min9'), aMinor)).toBe('i9');
+    expect(chordToRoman(makeChord(4, 'dom9'), aMinor)).toBe('V9');
+    expect(romanToChord('V9', aMinor)).toMatchObject({ rootPc: 4, quality: 'dom9' });
+  });
+
+  it('rejects extensions that have no quality for the numeral case', () => {
+    // No minor-11 or minor-13 quality exists, so a lowercase numeral with
+    // those figures throws instead of silently becoming a dominant.
+    expect(() => romanToChord('ii11', cMajor)).toThrow();
+    expect(() => romanToChord('ii13', cMajor)).toThrow();
+  });
+});
+
+describe('added-tone and suspended qualities round-trip', () => {
+  it('renders min6 in lower case and round-trips it', () => {
+    const roman = chordToRoman(makeChord(2, 'min6'), cMajor);
+    expect(roman).toBe('iiadd6');
+    expect(romanToChord(roman, cMajor)).toMatchObject({ rootPc: 2, quality: 'min6' });
+  });
+
+  it('round-trips sus2 without re-parsing as an inverted seventh', () => {
+    const roman = chordToRoman(makeChord(0, 'sus2'), cMajor);
+    expect(roman).toBe('Isus2');
+    const back = romanToChord(roman, cMajor);
+    expect(back).toMatchObject({ rootPc: 0, quality: 'sus2' });
+    expect(back.bassPc).toBeUndefined();
+  });
+
+  it('round-trips sus4, the power chord, and majb5 without throwing', () => {
+    for (const quality of ['sus4', '5', 'majb5'] as const) {
+      const roman = chordToRoman(makeChord(7, quality), cMajor);
+      expect(romanToChord(roman, cMajor)).toMatchObject({ rootPc: 7, quality });
+    }
+  });
+
+  it('round-trips augmented sevenths including inversions', () => {
+    expect(chordToRoman(makeChord(0, 'augMaj7'), cMajor)).toBe('I+maj7');
+    expect(romanToChord('I+maj7', cMajor)).toMatchObject({ rootPc: 0, quality: 'augMaj7' });
+    expect(chordToRoman(makeChord(0, 'aug7', 4), cMajor)).toBe('I+65');
+    expect(romanToChord('I+65', cMajor)).toMatchObject({ rootPc: 0, quality: 'aug7', bassPc: 4 });
+    expect(chordToRoman(makeChord(0, 'augMaj7', 4), cMajor)).toBe('I+maj765');
+    expect(romanToChord('I+maj765', cMajor)).toMatchObject({
+      rootPc: 0,
+      quality: 'augMaj7',
+      bassPc: 4,
+    });
+  });
+});
+
+describe('inverted added-tone chords do not become false seventh figures', () => {
+  it('renders an inverted sixth chord in root position, not I65', () => {
+    expect(chordToRoman(makeChord(0, '6', 4), cMajor)).toBe('Iadd6');
+    expect(chordToRoman(makeChord(0, 'min6', 3), cMajor)).toBe('iadd6');
+  });
+
+  it('renders inverted add9 and 6/9 in root position', () => {
+    expect(chordToRoman(makeChord(0, 'add9', 4), cMajor)).toBe('Iadd9');
+    expect(chordToRoman(makeChord(0, '6/9', 7), cMajor)).toBe('I69');
+  });
+
+  it('still emits seventh figures for true seventh chords', () => {
+    expect(chordToRoman(makeChord(7, 'dom7', 11), cMajor)).toBe('V65');
+    expect(chordToRoman(makeChord(11, 'dim7', 2), cMajor)).toBe('viio65');
   });
 });

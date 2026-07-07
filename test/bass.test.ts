@@ -151,6 +151,55 @@ describe('generateBassLine', () => {
     expect(a).not.toEqual(b);
   });
 
+  it('sounds the real altered fifth for dim/aug/m7b5 chords in rootFifth style', () => {
+    // rootFifth emits the root on the downbeat and the fifth on the midpoint;
+    // dim => 6, aug => 8, m7b5 => 6 semitones above the root.
+    const cases: [Parameters<typeof makeChord>[1], number][] = [
+      ['dim', 6],
+      ['aug', 8],
+      ['m7b5', 6],
+    ];
+    for (const [quality, expectedFifth] of cases) {
+      const segments: BassSegment[] = [{ startBeat: 0, endBeat: 4, chord: makeChord(0, quality) }];
+      const notes = generateBassLine({ segments, key: cMajor, style: 'rootFifth' });
+      expect(notes).toHaveLength(2);
+      const rootPc = (((notes[0]?.pitch ?? Number.NaN) % 12) + 12) % 12;
+      const fifthPc = (((notes[1]?.pitch ?? Number.NaN) % 12) + 12) % 12;
+      expect(rootPc).toBe(0);
+      // The fifth is the actual altered fifth, never a repeated root.
+      expect(fifthPc).toBe(expectedFifth);
+      expect(fifthPc).not.toBe(rootPc);
+    }
+  });
+
+  it('keeps pop pickups within the declared register band', () => {
+    // Default octave 2 => band [36, 48]. Sweep many seeds so weak-beat pickups
+    // (including the octave-drop pickup) actually fire; none may leave the band.
+    const octave = 2;
+    const low = octave * 12 + 12;
+    const high = low + 12;
+    for (let seed = 0; seed < 40; seed += 1) {
+      const notes = generateBassLine({
+        segments: progression(),
+        key: cMajor,
+        style: 'pop',
+        octave,
+        seed,
+      });
+      for (const note of notes) {
+        expect(note.pitch).toBeGreaterThanOrEqual(low);
+        expect(note.pitch).toBeLessThanOrEqual(high);
+      }
+    }
+  });
+
+  it('is deep-equal deterministic across every style for a fixed seed', () => {
+    for (const style of ALL_STYLES) {
+      const opts: BassLineOptions = { segments: progression(), key: cMajor, style, seed: 99 };
+      expect(generateBassLine(opts)).toEqual(generateBassLine(opts));
+    }
+  });
+
   it('returns an empty line for no segments', () => {
     expect(generateBassLine({ segments: [], key: cMajor })).toEqual([]);
   });

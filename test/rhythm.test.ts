@@ -35,6 +35,18 @@ describe('generateRhythm determinism', () => {
     expect(a).toEqual(b);
   });
 
+  it('is deeply equal on repeat across a range of option combinations', () => {
+    const optionSets = [
+      { seed: 0, bars: 1, subdivision: 2, density: 0.3 },
+      { seed: 3, bars: 3, subdivision: 4, density: 0.7 },
+      { seed: 99, bars: 2, subdivision: 3, density: 1 },
+    ];
+    for (const opts of optionSets) {
+      expect(generateRhythm(SIX_EIGHT, opts)).toEqual(generateRhythm(SIX_EIGHT, opts));
+      expect(generateRhythm(FOUR_FOUR, opts)).toEqual(generateRhythm(FOUR_FOUR, opts));
+    }
+  });
+
   it('generally differs across seeds', () => {
     const base = generateRhythm(FOUR_FOUR, { seed: 1, subdivision: 4 });
     let differing = 0;
@@ -45,6 +57,55 @@ describe('generateRhythm determinism', () => {
       }
     }
     expect(differing).toBeGreaterThan(15);
+  });
+});
+
+describe('generateRhythm downbeats', () => {
+  it('forces every bar downbeat regardless of seed', () => {
+    const bars = 3;
+    const barBeats = beatsPerBar(FOUR_FOUR);
+    const downbeats = Array.from({ length: bars }, (_, b) => b * barBeats);
+    for (let seed = 0; seed < 20; seed += 1) {
+      const events = generateRhythm(FOUR_FOUR, { seed, bars, subdivision: 4 });
+      const positions = new Set(events.map((e) => e.position));
+      for (const downbeat of downbeats) {
+        expect(positions.has(downbeat)).toBe(true);
+      }
+    }
+  });
+
+  it('keeps every bar downbeat even at density 0', () => {
+    const bars = 4;
+    const barBeats = beatsPerBar(FOUR_FOUR);
+    for (let seed = 0; seed < 10; seed += 1) {
+      const events = generateRhythm(FOUR_FOUR, { seed, bars, subdivision: 4, density: 0 });
+      // With no probabilistic onsets, exactly the bar downbeats remain.
+      expect(events.map((e) => e.position)).toEqual([0, barBeats, 2 * barBeats, 3 * barBeats]);
+    }
+  });
+});
+
+describe('generateRhythm density clamping', () => {
+  it('treats density 0 as no probabilistic onsets (downbeats only)', () => {
+    const events = generateRhythm(FOUR_FOUR, { seed: 5, bars: 2, subdivision: 4, density: 0 });
+    expect(events.map((e) => e.position)).toEqual([0, 4]);
+  });
+
+  it('clamps density above 1 to exactly 1', () => {
+    const atOne = generateRhythm(FOUR_FOUR, { seed: 9, bars: 2, subdivision: 4, density: 1 });
+    const overOne = generateRhythm(FOUR_FOUR, { seed: 9, bars: 2, subdivision: 4, density: 1.5 });
+    expect(overOne).toEqual(atOne);
+  });
+
+  it('clamps negative density to 0', () => {
+    const atZero = generateRhythm(FOUR_FOUR, { seed: 9, bars: 2, subdivision: 4, density: 0 });
+    const belowZero = generateRhythm(FOUR_FOUR, {
+      seed: 9,
+      bars: 2,
+      subdivision: 4,
+      density: -0.5,
+    });
+    expect(belowZero).toEqual(atZero);
   });
 });
 

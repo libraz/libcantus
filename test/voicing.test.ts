@@ -81,6 +81,46 @@ describe('voiceLeadingCost', () => {
   it('returns Infinity for voicings of different lengths', () => {
     expect(voiceLeadingCost([60, 64], [60, 64, 67])).toBe(Number.POSITIVE_INFINITY);
   });
+
+  it('charges more for a hidden perfect on the outer voices than a clean move of equal motion', () => {
+    // Both candidates move the two voices a combined 8 semitones.
+    // Clean: bass +4, soprano +4 landing on a major third (imperfect) — no penalty.
+    const clean = voiceLeadingCost([60, 63], [64, 67]);
+    // Hidden: bass +2, soprano +6 reaching a perfect fifth by similar motion
+    // with the soprano leaping — a direct fifth, discouraged.
+    const hidden = voiceLeadingCost([60, 63], [62, 69]);
+    expect(clean).toBe(8);
+    expect(hidden).toBeGreaterThan(clean);
+    expect(hidden).toBe(14); // 8 motion + 6 hidden-perfect penalty
+  });
+
+  it('does not penalize a direct fifth reached with the top voice moving by step', () => {
+    // Bass Bb3 and soprano F4 reach a perfect fifth, but the soprano moves only
+    // a semitone (F#4->F4): the traditional step exception keeps it a plain cost.
+    expect(voiceLeadingCost([60, 66], [58, 65])).toBe(3);
+  });
+
+  it('leaves inner-voice hidden perfects to the pure motion cost', () => {
+    // A hidden fifth between two inner voices (not the bass/soprano pair) is not
+    // charged the outer-voice penalty; only the summed motion is counted.
+    expect(voiceLeadingCost([60, 60, 63, 84], [60, 62, 69, 84])).toBe(8);
+  });
+});
+
+describe('voiceChord register balance', () => {
+  it('does not bias candidates to the low register for a wide 5-voice range', () => {
+    // Five voices each spanning six octaves with generous spacing: the search
+    // hits MAX_CANDIDATES, and a naive low-to-high enumeration would exhaust the
+    // budget on low-bass candidates, pinning the bass near its floor. Centre-out
+    // enumeration keeps the bass near the register centre instead.
+    const wide = Array.from({ length: 5 }, () => ({ min: 24, max: 96 }));
+    const voicing = voiceChord(makeChord(0, 'maj7'), { ranges: wide, maxSpacing: 48 });
+    expect(voicing).toHaveLength(5);
+    const center = (24 + 96) / 2; // 60
+    const bass = voicing[0] ?? 0;
+    // The bass sits near the register centre, not pinned toward the 24 floor.
+    expect(Math.abs(bass - center)).toBeLessThanOrEqual(12);
+  });
 });
 
 describe('voiceProgression', () => {
@@ -270,5 +310,23 @@ describe('nextVoicing', () => {
     expect(() =>
       nextVoicing(current, makeChord(0, 'maj'), { voices: 1, ranges: [{ min: 1, max: 1 }] }),
     ).toThrow(/no voicing/);
+  });
+
+  it('never returns MIDI outside [0, 127] for extreme-low input', () => {
+    const voicing = nextVoicing([1, 3, 5], makeChord(0, 'maj'));
+    expect(voicing).toHaveLength(3);
+    for (const pitch of voicing) {
+      expect(pitch).toBeGreaterThanOrEqual(0);
+      expect(pitch).toBeLessThanOrEqual(127);
+    }
+  });
+
+  it('never returns MIDI outside [0, 127] for extreme-high input', () => {
+    const voicing = nextVoicing([124, 126, 127], makeChord(0, 'maj'));
+    expect(voicing).toHaveLength(3);
+    for (const pitch of voicing) {
+      expect(pitch).toBeGreaterThanOrEqual(0);
+      expect(pitch).toBeLessThanOrEqual(127);
+    }
   });
 });

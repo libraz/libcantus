@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   diatonicPitchClasses,
+  HARMONIC_MINOR_MASK,
   isScaleTone,
   MAJOR_MASK,
+  MELODIC_MINOR_MASK,
   majorKey,
+  NATURAL_MINOR_MASK,
   nearestScaleTone,
   pitchToScaleDegree,
 } from '../src/scale/index.js';
@@ -19,6 +22,23 @@ describe('diatonicPitchClasses', () => {
   it('is sorted ascending for a non-zero root', () => {
     const gMajor = majorKey(7);
     expect(diatonicPitchClasses(gMajor)).toEqual([0, 2, 4, 6, 7, 9, 11]);
+  });
+});
+
+describe('minor scale masks', () => {
+  it('raises the seventh in the harmonic minor variant', () => {
+    const aHarmonicMinor: KeyScale = { rootPc: 9, modeMask12: HARMONIC_MINOR_MASK };
+    const aNaturalMinor: KeyScale = { rootPc: 9, modeMask12: NATURAL_MINOR_MASK };
+    expect(isScaleTone(68, aHarmonicMinor)).toBe(true); // G#, the leading tone
+    expect(isScaleTone(68, aNaturalMinor)).toBe(false);
+    expect(isScaleTone(67, aHarmonicMinor)).toBe(false); // natural G is replaced
+  });
+
+  it('raises the sixth and seventh in the melodic minor variant', () => {
+    const aMelodicMinor: KeyScale = { rootPc: 9, modeMask12: MELODIC_MINOR_MASK };
+    expect(isScaleTone(66, aMelodicMinor)).toBe(true); // F#
+    expect(isScaleTone(68, aMelodicMinor)).toBe(true); // G#
+    expect(isScaleTone(65, aMelodicMinor)).toBe(false); // natural F is replaced
   });
 });
 

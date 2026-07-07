@@ -96,6 +96,13 @@ export function createsParallelPerfect(
 /**
  * Whether two voices move in consecutive parallel octaves (or unisons) by
  * similar motion.
+ *
+ * This is a strict subset of {@link createsParallelPerfect}: a similar-motion
+ * octave-to-octave is the perfect-class-zero case that predicate already flags
+ * (and it additionally catches the contrary-motion anti-parallel). Callers that
+ * tally parallel violations should therefore use {@link createsParallelPerfect}
+ * alone to avoid double counting; this predicate remains for callers wanting a
+ * dedicated similar-motion octave test.
  */
 export function createsParallelOctave(
   aPrev: number,

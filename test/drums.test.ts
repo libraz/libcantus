@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { type DrumGenOptions, generateDrums } from '../src/drums/index.js';
+import {
+  type DrumGenOptions,
+  type GrooveStyle,
+  generateDrums,
+  type Section,
+} from '../src/drums/index.js';
 import { quantizeSwing } from '../src/drums/swing.js';
 
 const KICK = 36;
@@ -179,6 +184,66 @@ describe('generateDrums richness', () => {
     };
     expect(generateDrums(opts)).toEqual(generateDrums(opts));
   });
+
+  it('is deterministic across the full style/section/feel/role matrix', () => {
+    const styles: GrooveStyle[] = [
+      'standard',
+      'funk',
+      'shuffle',
+      'bossa',
+      'trap',
+      'halftime',
+      'breakbeat',
+      'house',
+      'synthpop',
+    ];
+    const sections: Section[] = ['intro', 'verse', 'prechorus', 'chorus', 'bridge', 'outro'];
+    for (const style of styles) {
+      for (const section of sections) {
+        const opts: DrumGenOptions = {
+          bars: 3,
+          bpm: 132,
+          style,
+          section,
+          density: 0.7,
+          seed: 123,
+          fills: true,
+          nextSection: 'chorus',
+        };
+        // Two independent runs of the same options must be byte-for-byte equal.
+        expect(generateDrums(opts)).toEqual(generateDrums(opts));
+      }
+    }
+  });
+});
+
+describe('generateDrums phrase-end fills', () => {
+  it('never emits a silent last-bar fill at low energy', () => {
+    // At intro/outro energy the fill spans only beat 3; no seed may leave the
+    // phrase end silent (#21). intro/outro carry no auxiliary percussion, so a
+    // hit in the beat-3 window can only come from the fill itself.
+    const sections: Section[] = ['intro', 'outro'];
+    const styles: GrooveStyle[] = ['standard', 'halftime', 'breakbeat', 'house', 'synthpop'];
+    const bars = 2;
+    const lastBarStart = (bars - 1) * 4;
+    for (const section of sections) {
+      for (const style of styles) {
+        for (let seed = 0; seed < 40; seed += 1) {
+          const hits = generateDrums({
+            bars,
+            bpm: 120,
+            style,
+            section,
+            density: 0.5,
+            seed,
+            fills: true,
+          });
+          const fillWindow = hits.filter((h) => h.startBeat >= lastBarStart + 3);
+          expect(fillWindow.length).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
 });
 
 describe('quantizeSwing sixteenth grid', () => {
@@ -188,5 +253,16 @@ describe('quantizeSwing sixteenth grid', () => {
 
   it('delays the "a" off-beat 16th under full swing', () => {
     expect(quantizeSwing(0.75, 1, 'sixteenth')).toBeGreaterThan(0.75);
+  });
+
+  it('places the shuffle "a" 16th near 0.8125 without over-swinging', () => {
+    // The default shuffle feel clamps effective swing to 0.75. The "a" 16th
+    // (0.75 beat) must land near 0.8125, not the previously doubly-swung
+    // 0.9375 that crowded the next downbeat (#23).
+    const swing = 0.75;
+    expect(quantizeSwing(0.75, swing, 'sixteenth')).toBeCloseTo(0.8125, 10);
+    // It is symmetric with the "e" 16th and never crosses the next downbeat.
+    expect(quantizeSwing(0.25, swing, 'sixteenth')).toBeCloseTo(0.3125, 10);
+    expect(quantizeSwing(0.75, 1, 'sixteenth')).toBeLessThan(1);
   });
 });

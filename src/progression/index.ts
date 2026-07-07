@@ -264,7 +264,9 @@ function autoQuality(degree: number, key: KeyScale): ChordQuality {
  * Generate a chord progression laid out one chord per bar.
  *
  * A preset is chosen by `presetId` when given, otherwise deterministically from
- * the presets matching `style`, seeded by `seed`. The preset's degrees cycle to
+ * the presets matching `style`, seeded by `seed`. An unknown `presetId` is a
+ * caller error and throws rather than silently falling back to a random preset.
+ * The preset's degrees cycle to
  * fill `bars`; each bar is four beats, so `startBeat` is `barIndex * 4`. Chord
  * roots come from the key's diatonic scale-degree mapping. When `ext` is
  * omitted or `'auto'`, each chord takes its diatonic triad quality; otherwise
@@ -274,12 +276,16 @@ function autoQuality(degree: number, key: KeyScale): ChordQuality {
  *
  * @param opts Generation options.
  * @returns One chord per bar in timeline order.
+ * @throws If `presetId` is given but does not match any built-in preset.
  */
 export function generateProgression(opts: GenerateProgressionOptions): GeneratedChord[] {
   const seed = opts.seed ?? 0;
   let preset: ProgressionPreset | undefined;
   if (opts.presetId !== undefined) {
     preset = PRESETS.find((p) => p.id === opts.presetId);
+    if (preset === undefined) {
+      throw new Error(`Unknown progression preset: ${opts.presetId}`);
+    }
   }
   if (preset === undefined) {
     const pool = PRESETS.filter((p) => p.styles.includes(opts.style));

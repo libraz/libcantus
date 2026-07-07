@@ -81,7 +81,14 @@ function copyNote(data: NoteData): NoteData {
   return copy;
 }
 
-/** Defensive copy of a plain chord. */
+/**
+ * Defensive copy of a plain chord.
+ *
+ * Any enharmonic spelling hints (`rootSpelling`/`bassSpelling`, populated by
+ * `parseChordSymbol`) are carried through so a flat-named chord round-trips
+ * through the class API; a hint that no longer matches its pitch class is
+ * simply ignored by the formatter.
+ */
 function copyChord(data: ChordData): ChordData {
   const copy: ChordData = {
     rootPc: data.rootPc,
@@ -90,6 +97,12 @@ function copyChord(data: ChordData): ChordData {
   };
   if (data.bassPc !== undefined) {
     copy.bassPc = data.bassPc;
+  }
+  if (data.rootSpelling !== undefined) {
+    copy.rootSpelling = { letter: data.rootSpelling.letter, alter: data.rootSpelling.alter };
+  }
+  if (data.bassSpelling !== undefined) {
+    copy.bassSpelling = { letter: data.bassSpelling.letter, alter: data.bassSpelling.alter };
   }
   return copy;
 }
@@ -196,12 +209,16 @@ export class Note {
    *
    * When the note carries an octave the transposition happens in MIDI space and
    * the result is spelled with a sharp preference. An octave-less note stays
-   * octave-less: only its pitch class is moved.
+   * octave-less: only its pitch class is moved. Transposing by zero is the
+   * identity: the original spelling is preserved (no enharmonic respelling).
    *
    * @param semitones The signed semitone offset.
    * @returns The transposed note.
    */
   transpose(semitones: number): Note {
+    if (semitones === 0) {
+      return new Note(this.#data);
+    }
     if (this.#data.octave !== undefined) {
       return Note.fromMidi(this.midi + semitones);
     }
@@ -230,6 +247,18 @@ export class Note {
       this.#data.alter === other.#data.alter &&
       this.#data.octave === other.#data.octave
     );
+  }
+
+  /**
+   * The plain note data, for JSON serialization.
+   *
+   * Private class fields do not serialize, so an explicit `toJSON` keeps
+   * `JSON.stringify(note)` from collapsing to `{}`.
+   *
+   * @returns A copy of the underlying plain note object.
+   */
+  toJSON(): NoteData {
+    return this.data;
   }
 }
 
@@ -292,11 +321,44 @@ export class Interval {
   get name(): string {
     return `${this.#quality}${this.#number}`;
   }
+
+  /**
+   * The plain interval data, for JSON serialization.
+   *
+   * Private class fields do not serialize, so an explicit `toJSON` keeps
+   * `JSON.stringify(interval)` from collapsing to `{}`.
+   *
+   * @returns The diatonic number, quality, and semitone span.
+   */
+  toJSON(): SpelledInterval {
+    return { number: this.#number, quality: this.#quality, semitones: this.#semitones };
+  }
 }
 
 /** Resolve a string or numeric key root into a spelled tonic note. */
 function resolveTonic(root: string | number, spelling: 'sharp' | 'flat'): Note {
   return typeof root === 'string' ? Note.of(root) : new Note(spellPitchClassBare(root, spelling));
+}
+
+/** Total accidentals a spelled tonic produces across a key's whole scale. */
+function accidentalLoad(tonic: NoteData, scale: KeyScale): number {
+  return spellScale(tonic, scale).reduce((sum, note) => sum + Math.abs(note.alter), 0);
+}
+
+/**
+ * Choose the tonic spelling (sharp- or flat-side) that spells `scale` with the
+ * fewest accidentals, so a numeric root never yields a double-flat/double-sharp
+ * scale (e.g. pitch class 6 minor spells as F# minor, not Gb minor with Bbb).
+ */
+function bestTonicForScale(rootPc: number, scale: KeyScale): Note {
+  const sharp = spellPitchClassBare(rootPc, 'sharp');
+  const flat = spellPitchClassBare(rootPc, 'flat');
+  if (sharp.letter === flat.letter && sharp.alter === flat.alter) {
+    return new Note(sharp);
+  }
+  return accidentalLoad(flat, scale) <= accidentalLoad(sharp, scale)
+    ? new Note(flat)
+    : new Note(sharp);
 }
 
 /**
@@ -322,25 +384,35 @@ export class Key {
   /**
    * A major key.
    *
-   * @param root Tonic as a note name (e.g. `'Eb'`) or a pitch class; numeric
-   *   roots are spelled with a sharp preference.
+   * @param root Tonic as a note name (e.g. `'Eb'`) or a pitch class; a numeric
+   *   root is spelled with whichever accidental side yields the fewest
+   *   accidentals across the scale.
    * @returns The major key.
    */
   static major(root: string | number): Key {
-    const tonic = resolveTonic(root, 'sharp');
-    return new Key(majorKey(tonic.pitchClass), tonic);
+    if (typeof root === 'string') {
+      const tonic = Note.of(root);
+      return new Key(majorKey(tonic.pitchClass), tonic);
+    }
+    const scale = majorKey(root);
+    return new Key(scale, bestTonicForScale(root, scale));
   }
 
   /**
    * A natural-minor key.
    *
-   * @param root Tonic as a note name or a pitch class; numeric roots are
-   *   spelled with a flat preference.
+   * @param root Tonic as a note name or a pitch class; a numeric root is
+   *   spelled with whichever accidental side yields the fewest accidentals
+   *   across the scale.
    * @returns The minor key.
    */
   static minor(root: string | number): Key {
-    const tonic = resolveTonic(root, 'flat');
-    return new Key(minorKey(tonic.pitchClass), tonic);
+    if (typeof root === 'string') {
+      const tonic = Note.of(root);
+      return new Key(minorKey(tonic.pitchClass), tonic);
+    }
+    const scale = minorKey(root);
+    return new Key(scale, bestTonicForScale(root, scale));
   }
 
   /**
@@ -485,6 +557,20 @@ export class Key {
    */
   contains(x: number | Note): boolean {
     return isScaleTone(typeof x === 'number' ? x : x.pitchClass, this.#scale);
+  }
+
+  /**
+   * The plain key data, for JSON serialization.
+   *
+   * Private class fields do not serialize, so an explicit `toJSON` keeps
+   * `JSON.stringify(key)` from collapsing to `{}`. The result pairs the
+   * `KeyScale` with the spelled tonic, enough to reconstruct the key via
+   * {@link Key.of}.
+   *
+   * @returns The key/scale and its spelled tonic.
+   */
+  toJSON(): { scale: KeyScale; tonic: NoteData } {
+    return { scale: this.scale, tonic: this.#tonic.data };
   }
 }
 
@@ -712,13 +798,19 @@ export class Chord {
    * @throws If no key is given and none is carried.
    */
   negativeHarmony(key?: Key): Chord {
-    return new Chord(negativeHarmonyMirror(this.#data, this.#resolveKey(key).scale), this.#key);
+    const resolved = this.#resolveKey(key);
+    // Retain the key that anchored the reflection (explicit first, then carried)
+    // so a later no-arg analysis method still has a key context.
+    return new Chord(negativeHarmonyMirror(this.#data, resolved.scale), key ?? this.#key);
   }
 
   /**
    * The n-th inversion: a copy whose bass is the chord tone `n` steps above the
    * root in the interval template (`invert(1)` puts the third in the bass).
    * `n` wraps around the template length; negative values count backwards.
+   *
+   * `invert(0)` (and any `n` that wraps to it) is root position, so it carries
+   * no slash bass and equals the original chord.
    *
    * @param n The inversion number.
    * @returns The inverted chord, keeping any key context.
@@ -732,7 +824,11 @@ export class Chord {
     }
     const index = ((n % length) + length) % length;
     const data = copyChord(this.#data);
-    data.bassPc = mod12(this.#data.rootPc + (intervals[index] ?? 0));
+    if (index === 0) {
+      delete data.bassPc;
+    } else {
+      data.bassPc = mod12(this.#data.rootPc + (intervals[index] ?? 0));
+    }
     return new Chord(data, this.#key);
   }
 
@@ -944,6 +1040,22 @@ export class Progression {
         ? detectCadence(from.data, to.data, resolved.scale)
         : null;
     return { chords, cadence };
+  }
+
+  /**
+   * The plain progression data, for JSON serialization.
+   *
+   * Private class fields do not serialize, so an explicit `toJSON` keeps
+   * `JSON.stringify(progression)` from collapsing to `{}`. The chords are
+   * emitted as plain data and the carried key, when present, as its own data.
+   *
+   * @returns The chord data sequence and the carried key, if any.
+   */
+  toJSON(): { chords: ChordData[]; key: { scale: KeyScale; tonic: NoteData } | undefined } {
+    return {
+      chords: this.#chords.map((chord) => chord.data),
+      key: this.#key?.toJSON(),
+    };
   }
 
   /** Resolve the key for an analysis method: explicit first, then carried. */

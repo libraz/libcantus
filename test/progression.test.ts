@@ -17,8 +17,32 @@ describe('progressions', () => {
     expect(byId.get('fourChordPop')?.degrees).toEqual([0, 4, 5, 3]);
   });
 
-  it('exposes all 22 presets', () => {
-    expect(progressions()).toHaveLength(22);
+  it('exposes presets with unique ids and well-formed fields', () => {
+    const presets = progressions();
+    expect(presets.length).toBeGreaterThan(0);
+
+    const ids = presets.map((p) => p.id);
+    expect(new Set(ids).size).toBe(ids.length); // ids are unique
+
+    // Degrees the generator can actually place: diatonic 0..6 plus the mapped
+    // borrowed degrees. Any other value would silently collapse to the tonic.
+    const validDegrees = new Set([0, 1, 2, 3, 4, 5, 6, 8, 10, 11, 12, 13, 14]);
+    const validStyles = new Set(['minimal', 'dance', 'idol', 'rock']);
+    const validFunctions = new Set(['loop', 'tensionBuild', 'cadenceStrong', 'stable']);
+
+    for (const p of presets) {
+      expect(p.id.length).toBeGreaterThan(0);
+      expect(p.name.length).toBeGreaterThan(0);
+      expect(p.degrees.length).toBeGreaterThan(0);
+      expect(p.styles.length).toBeGreaterThan(0);
+      expect(validFunctions.has(p.functional)).toBe(true);
+      for (const degree of p.degrees) {
+        expect(validDegrees.has(degree)).toBe(true);
+      }
+      for (const style of p.styles) {
+        expect(validStyles.has(style)).toBe(true);
+      }
+    }
   });
 });
 
@@ -96,5 +120,16 @@ describe('generateProgression', () => {
   it('is deterministic for a given seed when no preset is fixed', () => {
     const opts = { key: cMajor, style: 'rock' as const, bars: 4, seed: 42 };
     expect(generateProgression(opts)).toEqual(generateProgression(opts));
+  });
+
+  it('throws on an unknown presetId instead of falling back silently', () => {
+    expect(() =>
+      generateProgression({
+        presetId: 'noSuchPreset',
+        key: cMajor,
+        style: 'idol',
+        bars: 4,
+      }),
+    ).toThrow(/noSuchPreset/);
   });
 });

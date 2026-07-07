@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { type ArrangementTrack, analyzeArrangement, tensionCurve } from '../src/arrange/index.js';
-import { NoteSafety } from '../src/safety/index.js';
+import { NoteSafety, ReasonFlag } from '../src/safety/index.js';
 import { majorKey } from '../src/scale/index.js';
 import type { NoteEvent } from '../src/types.js';
 
@@ -112,6 +112,101 @@ describe('analyzeArrangement', () => {
         ).toBe(true);
       }
     }
+  });
+
+  it('re-checks a sustained note against each chord change it spans', () => {
+    // A whole-note pedal C held from the I bar into the V bar: consonant over
+    // C major at its onset, clashing with G major from beat 4. The low velocity
+    // keeps the pedal out of the inferred chords.
+    const tracks: ArrangementTrack[] = [
+      {
+        name: 'pedal',
+        role: 'melody',
+        notes: [{ pitch: 60, startBeat: 0, durationBeat: 8, velocity: 20 }],
+      },
+      {
+        name: 'harmony',
+        role: 'harmony',
+        notes: [...blockChord([48, 52, 55], 0), ...blockChord([43, 47, 50, 55], 4)],
+      },
+    ];
+    const analysis = analyzeArrangement(tracks, { key: majorKey(0) });
+    expect(analysis.timeline.segments.map((seg) => seg.chord.rootPc)).toEqual([0, 7]);
+    // No clash at the onset over the tonic chord...
+    expect(analysis.conflicts.find((c) => c.trackName === 'pedal' && c.beat === 0)).toBeUndefined();
+    // ...but the held C is re-evaluated at the chord change and flagged there.
+    const held = analysis.conflicts.find((c) => c.trackName === 'pedal' && c.beat === 4);
+    expect(held).toBeDefined();
+    expect(held?.pitch).toBe(60);
+    expect(held?.safety).toBe(NoteSafety.Dissonant);
+  });
+
+  it('does not give a struck cluster note a passing label', () => {
+    // A pad striking C-D-E together over the tonic chord: the D sounds with its
+    // cluster, it does not travel between C and E, so it is a ninth tension.
+    const tracks: ArrangementTrack[] = [
+      { name: 'harmony', role: 'harmony', notes: blockChord([48, 52, 55], 0) },
+      {
+        name: 'pad',
+        role: 'harmony',
+        notes: [
+          { pitch: 72, startBeat: 0, durationBeat: 4, velocity: 20 },
+          { pitch: 74, startBeat: 0, durationBeat: 4, velocity: 20 },
+          { pitch: 76, startBeat: 0, durationBeat: 4, velocity: 20 },
+        ],
+      },
+    ];
+    const analysis = analyzeArrangement(tracks, { key: majorKey(0) });
+    expect(analysis.timeline.segments[0]?.chord.rootPc).toBe(0);
+    const pad = analysis.tracks.find((t) => t.name === 'pad');
+    expect(pad?.notes).toHaveLength(3);
+    // Notes are reported in onset-then-pitch order, so index 1 is the D.
+    const dLabels = pad?.notes[1]?.labels ?? [];
+    expect(dLabels.some((l) => l.kind === 'passing')).toBe(false);
+    expect(dLabels.some((l) => l.kind === 'suspension')).toBe(false);
+    expect(dLabels).toContainEqual({ kind: 'tension', degree: 9 });
+  });
+
+  it('detects a dissonant cluster inside a single track', () => {
+    // The pad is alone in bar two, so only its own simultaneous notes can make
+    // the D dissonant: intra-track clusters must be heard.
+    const tracks: ArrangementTrack[] = [
+      { name: 'harmony', role: 'harmony', notes: blockChord([48, 52, 55], 0) },
+      {
+        name: 'pad',
+        role: 'harmony',
+        notes: [
+          { pitch: 72, startBeat: 4, durationBeat: 4, velocity: 20 },
+          { pitch: 74, startBeat: 4, durationBeat: 4, velocity: 20 },
+          { pitch: 76, startBeat: 4, durationBeat: 4, velocity: 20 },
+        ],
+      },
+    ];
+    const analysis = analyzeArrangement(tracks, { key: majorKey(0) });
+    const clash = analysis.conflicts.find(
+      (c) => c.trackName === 'pad' && c.beat === 4 && c.pitch === 74,
+    );
+    expect(clash).toBeDefined();
+    expect((clash?.reasons ?? 0) & ReasonFlag.VerticalDissonance).toBeTruthy();
+    expect(clash?.safety).toBe(NoteSafety.Dissonant);
+  });
+
+  it('ignores zero- and negative-length notes in labels and conflicts', () => {
+    const tracks = baseArrangement();
+    const melody = melodyTrack();
+    tracks[0] = {
+      name: 'melody',
+      role: 'melody',
+      notes: [
+        ...melody,
+        { pitch: 73, startBeat: 0, durationBeat: 0 },
+        { pitch: 73, startBeat: 8, durationBeat: -1 },
+      ],
+    };
+    const analysis = analyzeArrangement(tracks, { key: majorKey(0) });
+    const track = analysis.tracks.find((t) => t.name === 'melody');
+    expect(track?.notes).toHaveLength(melody.length);
+    expect(analysis.conflicts.find((c) => c.pitch === 73)).toBeUndefined();
   });
 
   it('defaults missing name and role', () => {

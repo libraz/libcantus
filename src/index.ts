@@ -51,6 +51,7 @@ export type {
   DrumGenOptions,
   DrumHit,
   DrumRole,
+  EuclideanKick,
   GrooveFeel,
   GrooveStyle,
   Section,

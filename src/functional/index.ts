@@ -108,12 +108,55 @@ function seventhQuality(base: 'maj' | 'min' | 'dim' | 'aug', halfDim: boolean): 
 /** Figure strings that denote a recognized figured-bass inversion. */
 const INVERSION_FIGURES = new Set(['6', '64', '65', '43', '42', '2', '7']);
 
-/** Figure strings that denote a fixed root-position extension quality. */
-const EXTENSION_FIGURES: Record<string, ChordQuality> = {
-  '9': 'dom9',
-  '11': '11',
-  '13': '13',
+/**
+ * Canonical Roman-numeral rendering (numeral case and quality suffix) for every
+ * supported chord quality. The table is the single source of truth for both
+ * directions: {@link chordToRoman} renders from it and {@link romanToChord}
+ * recognizes its exact case-sensitive suffixes, so the two stay mutual
+ * inverses by construction. Suffixes are chosen to never collide with
+ * figured-bass inversion digits (`6`, `64`, `65`, `43`, `42`, `2`) — the added
+ * sixth is `add6`, the six-nine chord is `69` — and each (case, suffix) pair is
+ * unique.
+ */
+const ROMAN_STYLE: Record<ChordQuality, { lower: boolean; suffix: string }> = {
+  maj: { lower: false, suffix: '' },
+  min: { lower: true, suffix: '' },
+  dim: { lower: true, suffix: 'o' },
+  aug: { lower: false, suffix: '+' },
+  maj7: { lower: false, suffix: 'maj7' },
+  min7: { lower: true, suffix: '7' },
+  dom7: { lower: false, suffix: '7' },
+  dim7: { lower: true, suffix: 'o7' },
+  m7b5: { lower: true, suffix: 'ø7' },
+  minMaj7: { lower: true, suffix: 'maj7' },
+  aug7: { lower: false, suffix: '+7' },
+  augMaj7: { lower: false, suffix: '+maj7' },
+  majb5: { lower: false, suffix: 'b5' },
+  '6': { lower: false, suffix: 'add6' },
+  min6: { lower: true, suffix: 'add6' },
+  '6/9': { lower: false, suffix: '69' },
+  sus2: { lower: false, suffix: 'sus2' },
+  sus4: { lower: false, suffix: 'sus4' },
+  add9: { lower: false, suffix: 'add9' },
+  add11: { lower: false, suffix: 'add11' },
+  maj9: { lower: false, suffix: 'maj9' },
+  min9: { lower: true, suffix: '9' },
+  dom9: { lower: false, suffix: '9' },
+  '7b9': { lower: false, suffix: '7b9' },
+  '7#9': { lower: false, suffix: '7#9' },
+  '7#11': { lower: false, suffix: '7#11' },
+  '7b13': { lower: false, suffix: '7b13' },
+  '11': { lower: false, suffix: '11' },
+  '13': { lower: false, suffix: '13' },
+  '5': { lower: false, suffix: '5' },
 };
+
+/** Reverse lookup of {@link ROMAN_STYLE}: `(case, exact suffix) -> quality`. */
+const SUFFIX_QUALITY: ReadonlyMap<string, ChordQuality> = new Map(
+  (Object.entries(ROMAN_STYLE) as [ChordQuality, { lower: boolean; suffix: string }][]).map(
+    ([quality, style]) => [`${style.lower ? 'l' : 'u'}:${style.suffix}`, quality],
+  ),
+);
 
 /** Read figured-bass digits into a chord inversion and whether a seventh is implied. */
 function parseInversion(figures: string): { inversion: number; seventh: boolean } {
@@ -157,20 +200,24 @@ function parseSimpleRoman(
   const suffix = match[3] ?? '';
   const rootPc = mod12(degreeRootPc(degreeNumber, key) + accidental);
 
+  // Canonical quality suffixes (exact match, case-sensitive on the numeral)
+  // come first so every chordToRoman rendering re-parses to the same quality:
+  // `V9` -> dom9 but `ii9` -> min9 and `Imaj9` -> maj9, and added-tone suffixes
+  // whose digits would otherwise be misread as figured bass (`Iadd6`, `I69`,
+  // `Isus2`, `Iadd11`) resolve to their qualities in root position.
+  const canonical = SUFFIX_QUALITY.get(`${isUpper ? 'u' : 'l'}:${suffix}`);
+  if (canonical !== undefined) {
+    return { rootPc, quality: canonical, inversion: 0 };
+  }
+
   const isDim = /o|°|dim/.test(suffix);
   const isAug = /\+|aug/.test(suffix);
   const isHalfDim = /ø/.test(suffix);
   const explicitMaj7 = /maj7|M7/.test(suffix);
   const figures = suffix.replace(/maj7|M7/g, '').replace(/[^0-9]/g, '');
 
-  // Extension figures (9/11/13) denote a fixed root-position tension quality,
-  // not a figured-bass inversion, so they short-circuit the case/quality logic.
-  const extension = EXTENSION_FIGURES[figures];
-  if (extension !== undefined) {
-    return { rootPc, quality: extension, inversion: 0 };
-  }
   // Reject figure strings that are neither a known figured-bass inversion nor a
-  // supported extension rather than silently degrading to a root triad.
+  // canonical quality suffix rather than silently degrading to a root triad.
   if (figures !== '' && !INVERSION_FIGURES.has(figures)) {
     throw new Error(`Unsupported figured-bass or extension "${figures}" in Roman numeral: ${text}`);
   }
@@ -191,7 +238,7 @@ function parseSimpleRoman(
 
   let quality: ChordQuality;
   if (explicitMaj7) {
-    quality = base === 'min' ? 'minMaj7' : 'maj7';
+    quality = base === 'min' ? 'minMaj7' : base === 'aug' ? 'augMaj7' : 'maj7';
   } else if (hasSeventh) {
     quality = seventhQuality(base, isHalfDim);
   } else if (base === 'dim') {
@@ -228,10 +275,14 @@ function chordFromParsed(parsed: {
  * carry a `bassPc`.
  *
  * The `ø` glyph always denotes the half-diminished seventh (`iiø` == `iiø7` ==
- * `m7b5`), since no half-diminished triad exists. Root-position extension
- * figures map to fixed qualities (`V9` -> `dom9`, `V11` -> `11`, `V13` -> `13`).
+ * `m7b5`), since no half-diminished triad exists. Extension and added-tone
+ * suffixes are the canonical case-sensitive forms emitted by
+ * {@link chordToRoman} and honor the numeral case: `V9` -> `dom9`, `ii9` ->
+ * `min9`, `Imaj9` -> `maj9`, `V11` -> `11`, `V13` -> `13`, `Iadd6`/`iadd6` ->
+ * `6`/`min6`, `I69` -> `6/9`, `Isus2`/`Isus4`, `Iadd9`/`Iadd11`, `Ib5` ->
+ * `majb5`, `I5` -> `5`, and the altered dominants `V7b9`/`V7#9`/`V7#11`/`V7b13`.
  * A figure string that is neither a recognized inversion nor a supported
- * extension throws rather than silently degrading to a triad.
+ * quality suffix throws rather than silently degrading to a triad.
  *
  * @param text The Roman numeral.
  * @param key The prevailing key.
@@ -252,30 +303,7 @@ export function romanToChord(text: string, key: KeyScale): Chord {
 
 /** Case and suffix for rendering a chord quality as a Roman numeral. */
 function romanStyle(quality: ChordQuality): { lower: boolean; suffix: string } {
-  switch (quality) {
-    case 'min':
-      return { lower: true, suffix: '' };
-    case 'dim':
-      return { lower: true, suffix: 'o' };
-    case 'aug':
-      return { lower: false, suffix: '+' };
-    case 'maj7':
-      return { lower: false, suffix: 'maj7' };
-    case 'dom7':
-      return { lower: false, suffix: '7' };
-    case 'min7':
-      return { lower: true, suffix: '7' };
-    case 'm7b5':
-      return { lower: true, suffix: 'ø7' };
-    case 'dim7':
-      return { lower: true, suffix: 'o7' };
-    case 'minMaj7':
-      return { lower: true, suffix: 'maj7' };
-    case 'maj':
-      return { lower: false, suffix: '' };
-    default:
-      return { lower: false, suffix: quality };
-  }
+  return ROMAN_STYLE[quality];
 }
 
 /** Choose the degree number and accidental to spell a root as a Roman numeral. */
@@ -323,6 +351,9 @@ function baseMarker(quality: ChordQuality): string {
   if (quality === 'aug' || quality === 'aug7') {
     return '+';
   }
+  if (quality === 'augMaj7') {
+    return '+maj7';
+  }
   if (quality === 'maj7' || quality === 'minMaj7') {
     return 'maj7';
   }
@@ -332,6 +363,26 @@ function baseMarker(quality: ChordQuality): string {
 const TRIAD_FIGURES: Record<number, string> = { 1: '6', 2: '64' };
 const SEVENTH_FIGURES: Record<number, string> = { 1: '65', 2: '43', 3: '42' };
 
+/** Qualities whose inversions render as lossless triad figures (6, 64). */
+const TRIAD_FIGURE_QUALITIES: ReadonlySet<ChordQuality> = new Set(['maj', 'min', 'dim', 'aug']);
+
+/**
+ * Qualities carrying a chordal seventh, whose inversions render as seventh
+ * figures (65, 43, 42). Membership is decided by the quality itself — a 7th
+ * above the root (10 or 11 semitones, or the diminished 7th of `dim7`) — never
+ * by interval count, which would turn added-tone chords into false sevenths.
+ */
+const SEVENTH_FIGURE_QUALITIES: ReadonlySet<ChordQuality> = new Set([
+  'maj7',
+  'min7',
+  'dom7',
+  'dim7',
+  'm7b5',
+  'minMaj7',
+  'aug7',
+  'augMaj7',
+]);
+
 /**
  * Render a chord as a Roman numeral relative to a key.
  *
@@ -339,7 +390,10 @@ const SEVENTH_FIGURES: Record<number, string> = { 1: '65', 2: '43', 3: '42' };
  * correct in both major and minor keys (and any custom scale). The quality
  * selects the case and suffix; chromatic roots receive a flat/sharp spelling by
  * convention. When the chord carries a `bassPc` on a chord tone, a figured-bass
- * inversion (`6`, `64`, `65`, `43`, `42`) is emitted.
+ * inversion (`6`, `64`, `65`, `43`, `42`) is emitted for plain triads and true
+ * seventh chords; added-tone and extended qualities have no lossless figure and
+ * render in root position instead (the bass is dropped, pitch classes are
+ * preserved).
  *
  * @param chord The chord to name.
  * @param key The prevailing key.
@@ -359,14 +413,18 @@ export function chordToRoman(chord: Chord, key: KeyScale): string {
     }
   }
   if (inversion > 0) {
-    const isSeventh = chord.intervals.length >= 4;
-    const figure = (isSeventh ? SEVENTH_FIGURES : TRIAD_FIGURES)[inversion];
+    const figure = SEVENTH_FIGURE_QUALITIES.has(chord.quality)
+      ? SEVENTH_FIGURES[inversion]
+      : TRIAD_FIGURE_QUALITIES.has(chord.quality)
+        ? TRIAD_FIGURES[inversion]
+        : undefined;
     if (figure !== undefined) {
       return `${accidental}${cased}${baseMarker(chord.quality)}${figure}`;
     }
-    // The bass falls on a tension beyond the seventh (e.g. a ninth in the bass);
-    // no figured-bass symbol exists for it, so fall back to root-position
-    // rendering with the quality suffix rather than emitting a bare numeral.
+    // No lossless figured-bass symbol exists — the quality is an added-tone or
+    // extended chord, or the bass falls on a tension beyond the seventh — so
+    // fall back to root-position rendering with the quality suffix rather than
+    // emitting a figure that would re-parse as a different chord.
   }
   return `${accidental}${cased}${suffix}`;
 }

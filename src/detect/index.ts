@@ -6,7 +6,14 @@
 
 import type { Chord, ChordQuality } from '../chord/index.js';
 import { chordPitchClasses, chordQualities, makeChord } from '../chord/index.js';
-import { majorKey, minorKey } from '../scale/index.js';
+import {
+  HARMONIC_MINOR_MASK,
+  MAJOR_MASK,
+  MELODIC_MINOR_MASK,
+  majorKey,
+  minorKey,
+  NATURAL_MINOR_MASK,
+} from '../scale/index.js';
 import type { KeyScale } from '../types.js';
 
 /** A candidate chord interpretation of a pitch set. */
@@ -85,7 +92,7 @@ export function detectChord(pitches: number[]): ChordMatch[] {
         quality,
         missingPcs,
         extraPcs,
-        exact: extraPcs.length === 0,
+        exact: extraPcs.length === 0 && missingPcs.length === 0,
         inversion,
       };
       if (inversion > 0) {
@@ -127,46 +134,70 @@ export function detectChordBest(pitches: number[]): Chord | null {
 }
 
 /**
+ * Minor-scale variants scored for each minor-key candidate. Scoring against all
+ * three lets the raised sixth and seventh (e.g. the leading tone G# in A minor)
+ * count toward their own tonic instead of only penalizing it.
+ */
+const MINOR_MASK_VARIANTS = [NATURAL_MINOR_MASK, HARMONIC_MINOR_MASK, MELODIC_MINOR_MASK];
+
+/**
  * Rank major and minor keys by how well they contain a set of pitch classes.
  *
  * The tonic is weighted so that, among equally-fitting keys, the one whose root
- * appears in the input is preferred. Returns all 24 keys ranked best-first.
+ * appears in the input is preferred. Minor candidates are scored against the
+ * natural, harmonic, and melodic minor variants and keep the best of the three,
+ * so a minor cadence containing the leading tone still resolves to its own
+ * tonic; the returned key is always the natural-minor scale. Returns all 24
+ * keys ranked best-first, or an empty array for an empty input (mirroring
+ * {@link detectChord}).
  *
  * @param pitches MIDI pitches or bare pitch classes.
- * @returns Ranked key interpretations.
+ * @returns Ranked key interpretations (empty for an empty input).
  */
 export function detectKey(pitches: number[]): KeyMatch[] {
   const input = uniquePitchClasses(pitches);
+  if (input.length === 0) {
+    return [];
+  }
   const counts = new Map<number, number>();
   for (const pc of pitches.map(pitchClass)) {
     counts.set(pc, (counts.get(pc) ?? 0) + 1);
   }
-  const total = pitches.length || 1;
+  const total = pitches.length;
   const results: (KeyMatch & { score: number })[] = [];
   for (let tonic = 0; tonic < 12; tonic += 1) {
     for (const mode of ['major', 'minor'] as const) {
       const key = mode === 'major' ? majorKey(tonic) : minorKey(tonic);
+      const masks = mode === 'major' ? [MAJOR_MASK] : MINOR_MASK_VARIANTS;
+      // Score each scale variant and keep the best; ties keep the earlier
+      // (more diatonic) variant.
       let inScale = 0;
-      let weighted = 0;
-      for (const pc of input) {
-        const offset = (pc - tonic + 12) % 12;
-        if ((key.modeMask12 >> offset) & 1) {
-          inScale += 1;
+      let weighted = Number.NEGATIVE_INFINITY;
+      for (const mask of masks) {
+        let variantInScale = 0;
+        let variantWeighted = 0;
+        for (const pc of input) {
+          const offset = (pc - tonic + 12) % 12;
+          if ((mask >> offset) & 1) {
+            variantInScale += 1;
+          }
+        }
+        for (const [pc, count] of counts) {
+          const offset = (pc - tonic + 12) % 12;
+          if ((mask >> offset) & 1) {
+            variantWeighted += count;
+          }
+        }
+        if (variantWeighted > weighted) {
+          weighted = variantWeighted;
+          inScale = variantInScale;
         }
       }
-      for (const [pc, count] of counts) {
-        const offset = (pc - tonic + 12) % 12;
-        if ((key.modeMask12 >> offset) & 1) {
-          weighted += count;
-        }
-        if (pc === tonic) {
-          weighted += count * 0.5;
-        }
-      }
+      weighted += (counts.get(tonic) ?? 0) * 0.5;
       results.push({
         key,
         mode,
-        fit: input.length === 0 ? 0 : inScale / input.length,
+        fit: inScale / input.length,
         score: weighted / total,
       });
     }

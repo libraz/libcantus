@@ -36,7 +36,8 @@ export type RhythmOptions = {
   subdivision?: number;
   /**
    * Overall onset density in [0, 1]. Scales the per-slot onset probability, so
-   * higher values fill more grid slots. Default 0.5.
+   * higher values fill more grid slots. Values outside [0, 1] are clamped into
+   * range. Default 0.5.
    */
   density?: number;
 };
@@ -71,9 +72,10 @@ export function onsetWeightCurve(weight: number): number {
  * Generate a deterministic rhythmic pattern over `bars` bars of a time
  * signature. A grid is built at the chosen subdivision; each slot becomes an
  * onset with a probability derived from its metric weight scaled by `density`
- * and sampled from the seeded PRNG. The first slot (the downbeat) is always an
- * onset. Each event's duration extends to the next onset, and the last event
- * extends to the end of the span.
+ * and sampled from the seeded PRNG. Every bar's downbeat is always an onset, so
+ * a pattern of any length has a reliable pulse independent of the seed. Each
+ * event's duration extends to the next onset, and the last event extends to the
+ * end of the span. `density` is clamped to [0, 1].
  *
  * @param ts The time signature.
  * @param opts Generation options.
@@ -83,17 +85,20 @@ export function generateRhythm(ts: TimeSignature, opts: RhythmOptions = {}): Rhy
   const seed = opts.seed ?? 0;
   const bars = opts.bars ?? DEFAULT_BARS;
   const subdivision = opts.subdivision ?? DEFAULT_SUBDIVISION;
-  const density = opts.density ?? DEFAULT_DENSITY;
+  const density = Math.min(1, Math.max(0, opts.density ?? DEFAULT_DENSITY));
 
-  const spanBeats = beatsPerBar(ts) * bars;
+  const barBeats = beatsPerBar(ts);
+  const spanBeats = barBeats * bars;
   const step = 1 / subdivision;
   const slotCount = Math.round(spanBeats * subdivision);
+  const slotsPerBar = Math.round(barBeats * subdivision);
   const rng = createRng(seed);
 
   const positions: number[] = [];
   for (let i = 0; i < slotCount; i += 1) {
     const position = i * step;
-    if (i === 0) {
+    // Force every bar's downbeat so the pulse is reliable regardless of seed.
+    if (i % slotsPerBar === 0) {
       positions.push(position);
       continue;
     }

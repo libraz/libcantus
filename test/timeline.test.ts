@@ -114,6 +114,25 @@ describe('chordTimelineFromNotes', () => {
   it('throws on a non-positive harmonic rhythm', () => {
     expect(() => chordTimelineFromNotes(cfgcNotes(), { harmonicRhythm: 0 })).toThrow();
   });
+
+  it('ignores zero- and negative-length notes at ingest', () => {
+    // Silent events must affect neither the inferred key, the segments, nor
+    // the confidences — including the span (the beat-20 ghost adds no windows).
+    const ghosts: NoteEvent[] = [
+      { pitch: 66, startBeat: 0, durationBeat: 0 },
+      { pitch: 66, startBeat: 1, durationBeat: 0 },
+      { pitch: 66, startBeat: 2, durationBeat: 0 },
+      { pitch: 61, startBeat: 3, durationBeat: -1 },
+      { pitch: 60, startBeat: 20, durationBeat: 0 },
+    ];
+    const clean = chordTimelineFromNotes(blockChord([60, 64, 67], 0));
+    const noisy = chordTimelineFromNotes([...blockChord([60, 64, 67], 0), ...ghosts]);
+    expect(noisy.key).toEqual(clean.key);
+    expect(noisy.key.rootPc).toBe(0);
+    expect(noisy.key.modeMask12).toBe(MAJOR_MASK);
+    expect(noisy.timeline.segments).toEqual(clean.timeline.segments);
+    expect(noisy.segmentConfidence).toEqual(clean.segmentConfidence);
+  });
 });
 
 describe('detectCadences', () => {
@@ -131,6 +150,17 @@ describe('detectCadences', () => {
 
   it('returns no hits for a single-segment timeline', () => {
     const { timeline } = chordTimelineFromNotes(blockChord([60, 64, 67], 0));
+    expect(detectCadences(timeline, majorKey(0))).toEqual([]);
+  });
+
+  it('does not pair segments separated by a rest', () => {
+    // G major, a bar of silence, then C major: V-(rest)-I is not a cadence.
+    const notes = [...blockChord([55, 59, 62], 0), ...blockChord([48, 52, 55], 8)];
+    const { timeline } = chordTimelineFromNotes(notes, { key: majorKey(0), totalBeats: 12 });
+    expect(timeline.segments.map((seg) => [seg.startBeat, seg.endBeat])).toEqual([
+      [0, 4],
+      [8, 12],
+    ]);
     expect(detectCadences(timeline, majorKey(0))).toEqual([]);
   });
 });

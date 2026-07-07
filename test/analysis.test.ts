@@ -27,6 +27,39 @@ describe('analyzeVoice', () => {
     expect(suspension).toEqual({ kind: 'suspension', type: 'sus4-3', resolveTo: 64 });
   });
 
+  it('classifies the suspension subtype from the sounding bass, not the root', () => {
+    // A 7-6 suspension: E is held over D minor in first inversion (F in the
+    // bass) and resolves down to D. Above the bass F the held E is a seventh
+    // (sus7-6); measured from the root D it would misread as a ninth (sus9-8).
+    const dmOverF = makeChord(2, 'min', 5);
+    const voice: VoiceNote[] = [
+      { id: 1, pitch: 64, startBeat: 0, durationBeat: 1 }, // E over C major (preparation)
+      { id: 2, pitch: 64, startBeat: 1, durationBeat: 1 }, // E over Dm/F (suspension)
+      { id: 3, pitch: 62, startBeat: 2, durationBeat: 1 }, // D (resolution)
+    ];
+    const chordAt = (beat: number): Chord => (beat < 1 ? cMaj : dmOverF);
+    const bass = (beat: number) => (beat < 1 ? [{ pitch: 48 }] : [{ pitch: 53 }]);
+    const analyzed = analyzeVoice(voice, chordAt, cMajor, bass);
+    const suspension = analyzed[1]?.labels.find((l) => l.kind === 'suspension');
+    expect(suspension).toEqual({ kind: 'suspension', type: 'sus7-6', resolveTo: 62 });
+  });
+
+  it('gives simultaneous cluster notes no melodic labels', () => {
+    // A C-D-E cluster struck together: under naive onset-sorted adjacency the
+    // D would read as a passing tone between C and E, but nothing moves — it
+    // is a sounding ninth against the chord.
+    const voice: VoiceNote[] = [
+      { id: 1, pitch: 60, startBeat: 0, durationBeat: 4 },
+      { id: 2, pitch: 62, startBeat: 0, durationBeat: 4 },
+      { id: 3, pitch: 64, startBeat: 0, durationBeat: 4 },
+    ];
+    const analyzed = analyzeVoice(voice, () => cMaj, cMajor, noOtherVoices);
+    const dLabels = analyzed[1]?.labels ?? [];
+    expect(dLabels.some((l) => l.kind === 'passing')).toBe(false);
+    expect(dLabels.some((l) => l.kind === 'suspension')).toBe(false);
+    expect(dLabels).toContainEqual({ kind: 'tension', degree: 9 });
+  });
+
   it('does not label a suspension when no other voice is dissonant against it', () => {
     const voice: VoiceNote[] = [
       { id: 1, pitch: 65, startBeat: 0, durationBeat: 1 }, // F over F major (preparation)

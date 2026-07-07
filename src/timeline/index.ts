@@ -266,6 +266,10 @@ function sameChord(a: Chord, b: Chord): boolean {
  * the fraction of the window weight explained by chord tones, reduced when the
  * match is inexact, and duration-weighted across merged windows.
  *
+ * Notes with a zero or negative duration never sound, so they are dropped at
+ * ingest: they contribute to neither the key inference, the span, nor any
+ * window's histogram.
+ *
  * @param notes The notes to analyze (any number of tracks, flattened).
  * @param opts Analysis options; see {@link ChordTimelineOptions}.
  * @returns The inferred timeline, the key used, and per-segment confidences.
@@ -280,9 +284,11 @@ export function chordTimelineFromNotes(
   if (!(harmonicRhythm > 0)) {
     throw new Error(`Invalid harmonic rhythm: ${harmonicRhythm}`);
   }
-  const lastNoteEnd = notes.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
+  // Zero/negative-length notes never sound; drop them before any inference.
+  const sounding = notes.filter((note) => note.durationBeat > 0);
+  const lastNoteEnd = sounding.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
   const totalBeats = opts.totalBeats ?? lastNoteEnd;
-  const key = opts.key ?? detectKey(notes.map((n) => n.pitch))[0]?.key ?? majorKey(0);
+  const key = opts.key ?? detectKey(sounding.map((n) => n.pitch))[0]?.key ?? majorKey(0);
 
   const segments: ChordSegment[] = [];
   const segmentConfidence: number[] = [];
@@ -290,7 +296,7 @@ export function chordTimelineFromNotes(
   for (let i = 0; i < windowCount; i += 1) {
     const start = i * harmonicRhythm;
     const end = Math.min(start + harmonicRhythm, totalBeats);
-    const inferred = analyzeWindow(notes, start, end, ts, key);
+    const inferred = analyzeWindow(sounding, start, end, ts, key);
     if (!inferred) {
       continue;
     }
@@ -328,8 +334,10 @@ export type CadenceHit = {
 /**
  * Find cadences between consecutive segments of a chord timeline.
  *
- * Each adjacent segment pair is classified with {@link detectCadence}; pairs
- * forming no cadence are skipped.
+ * Each temporally adjacent segment pair is classified with
+ * {@link detectCadence}; pairs forming no cadence are skipped. Segments
+ * separated by a gap (a rest in the timeline) are not a chord-to-chord
+ * progression, so they are never paired.
  *
  * @param timeline The chord timeline to scan.
  * @param key The prevailing key.
@@ -342,6 +350,9 @@ export function detectCadences(timeline: ChordTimeline, key: KeyScale): CadenceH
     const cur = timeline.segments[i];
     if (!prev || !cur) {
       continue;
+    }
+    if (Math.abs(cur.startBeat - prev.endBeat) > EPS) {
+      continue; // A rest separates the chords; no cadential motion across it.
     }
     const type = detectCadence(prev.chord, cur.chord, key);
     if (type !== null) {

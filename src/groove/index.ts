@@ -8,7 +8,12 @@
  * seeded PRNG from the `random` module so results are fully reproducible.
  */
 
-import { beatsPerBar, metricWeight, type TimeSignature } from '../meter/index.js';
+import {
+  beatsPerBar,
+  formatTimeSignature,
+  metricWeight,
+  type TimeSignature,
+} from '../meter/index.js';
 import { createRng } from '../random/index.js';
 import type { NoteEvent } from '../types.js';
 
@@ -88,8 +93,12 @@ export function humanize(events: NoteEvent[], opts: HumanizeOptions = {}): NoteE
 export type GrooveSlot = {
   /** Average `actualStartBeat - quantizedBeat` (in quarter-note beats) for events landing on this slot. */
   timingOffset: number;
-  /** Average velocity of events landing on this slot; 0 if none did. */
-  velocity: number;
+  /**
+   * Average velocity of events landing on this slot, or `null` if no event
+   * with a velocity did. `null` (not 0) is the "unrecorded" sentinel so that a
+   * genuine velocity of 0 is preserved and applied like any other value.
+   */
+  velocity: number | null;
 };
 
 /** A per-bar grid of timing and velocity deviations captured from a performance. */
@@ -100,6 +109,13 @@ export type GrooveTemplate = {
   slotsPerBar: number;
   /** One entry per grid slot, in slot-index order (slot 0 is the downbeat). */
   slots: GrooveSlot[];
+  /**
+   * The time signature the template was extracted under. {@link applyGrooveTemplate}
+   * requires the apply-time meter to match this so the per-bar grid lines up
+   * instead of silently drifting. Optional for backward compatibility with
+   * templates constructed without it (in which case no check is performed).
+   */
+  ts?: TimeSignature;
 };
 
 /**
@@ -137,8 +153,10 @@ function quantizeToGrid(
 /**
  * Extract a groove template from a set of note events: for each grid slot,
  * the average timing deviation from the quantized grid and the average
- * velocity of events landing on it. Slots with no events default to
- * `{ timingOffset: 0, velocity: 0 }`.
+ * velocity of events landing on it. Slots with no velocity-carrying event
+ * record `velocity: null` (the "unrecorded" sentinel); empty slots default to
+ * `{ timingOffset: 0, velocity: null }`. The time signature is stored on the
+ * template so {@link applyGrooveTemplate} can verify the meter matches.
  *
  * @param events The (typically "groovy", human-played) events to analyze.
  * @param ts The time signature, used to compute the bar length.
@@ -178,36 +196,52 @@ export function extractGrooveTemplate(
   for (let i = 0; i < slotsPerBar; i += 1) {
     const count = counts[i] ?? 0;
     if (count === 0) {
-      slots.push({ timingOffset: 0, velocity: 0 });
+      slots.push({ timingOffset: 0, velocity: null });
       continue;
     }
     const velocityCount = velocityCounts[i] ?? 0;
     slots.push({
       timingOffset: (offsetSums[i] ?? 0) / count,
-      velocity: velocityCount > 0 ? (velocitySums[i] ?? 0) / velocityCount : 0,
+      velocity: velocityCount > 0 ? (velocitySums[i] ?? 0) / velocityCount : null,
     });
   }
 
-  return { subdivision, slotsPerBar, slots };
+  return { subdivision, slotsPerBar, slots, ts };
 }
 
 /**
  * Apply a groove template to a set of (typically quantized) note events: each
  * event is snapped to its grid slot and then offset by that slot's recorded
  * timing deviation, pushing stiff timing toward the template's feel.
- * Velocity is set to the slot's recorded average when it recorded any
- * (`velocity > 0`); otherwise the event's own velocity is left untouched.
+ * Velocity is set to the slot's recorded average when it recorded one (a
+ * non-`null` velocity, including a genuine 0); otherwise the event's own
+ * velocity is left untouched.
+ *
+ * If the template carries a time signature (see {@link GrooveTemplate.ts}) it
+ * must match `ts`, since a differing bar length would misalign the per-bar
+ * grid and drift the feel; a mismatch throws rather than corrupting timing
+ * silently.
  *
  * @param events The events to reshape.
  * @param template The groove template, from {@link extractGrooveTemplate}.
  * @param ts The time signature, used to compute the bar length.
  * @returns Reshaped copies of `events`, in input order.
+ * @throws If `template.ts` is set and does not match `ts`.
  */
 export function applyGrooveTemplate(
   events: NoteEvent[],
   template: GrooveTemplate,
   ts: TimeSignature,
 ): NoteEvent[] {
+  if (
+    template.ts &&
+    (template.ts.numerator !== ts.numerator || template.ts.denominator !== ts.denominator)
+  ) {
+    throw new Error(
+      `Groove template meter ${formatTimeSignature(template.ts)} does not match ` +
+        `apply-time meter ${formatTimeSignature(ts)}`,
+    );
+  }
   const barBeats = beatsPerBar(ts);
   return events.map((event) => {
     const { quantizedBeat, slotIndex } = quantizeToGrid(
@@ -218,7 +252,10 @@ export function applyGrooveTemplate(
     );
     const slot = template.slots[slotIndex];
     const startBeat = quantizedBeat + (slot?.timingOffset ?? 0);
-    const velocity = slot && slot.velocity > 0 ? Math.round(slot.velocity) : event.velocity;
+    const velocity =
+      slot && slot.velocity !== null && slot.velocity !== undefined
+        ? Math.round(slot.velocity)
+        : event.velocity;
 
     return {
       pitch: event.pitch,

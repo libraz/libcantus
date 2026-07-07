@@ -142,6 +142,15 @@ it('flags a forbidden melodic leap and minor second against the previous pitch',
   expect(semitone.reasons & ReasonFlag.MinorSecond).toBeTruthy();
 });
 
+it('flags parallel octaves moving by similar motion', () => {
+  // Both voices rise a step, keeping an exact octave: 62/50 -> 64/52.
+  const r = evaluateSafety(
+    query({ candidatePitch: 64, prevPitch: 62, otherVoices: [{ pitch: 52, prevPitch: 50 }] }),
+  );
+  expect(r.reasons & ReasonFlag.ParallelPerfect).toBeTruthy();
+  expect(r.safety).toBe(NoteSafety.Warning);
+});
+
 it('flags anti-parallel perfect intervals reached by contrary motion', () => {
   // Candidate descends 74->62 while the other voice rises 50->62: an octave to a
   // unison (same perfect class) by contrary motion — a parallel perfect.

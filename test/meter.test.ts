@@ -9,6 +9,7 @@ import {
   metricWeight,
   parseTimeSignature,
   pulsesPerBar,
+  type TimeSignature,
   tuplet,
 } from '../src/meter/index.js';
 
@@ -92,6 +93,51 @@ describe('metric weight', () => {
     expect(metricWeight(0, ts)).toBe(3);
     expect(metricWeight(1, ts)).toBe(1);
     expect(metricWeight(2, ts)).toBe(1);
+  });
+});
+
+describe('additive meter grouping', () => {
+  it('treats 7/8 as flat equal pulses without a grouping', () => {
+    const ts = parseTimeSignature('7/8');
+    expect(pulsesPerBar(ts)).toBe(7);
+    // Every eighth-note pulse (0.5 quarter apart) is a plain main pulse.
+    expect(metricWeight(0, ts)).toBe(3);
+    for (let pulse = 1; pulse < 7; pulse += 1) {
+      expect(metricWeight(pulse * 0.5, ts)).toBe(1);
+    }
+    // Off-pulse subdivisions still weigh 0.
+    expect(metricWeight(0.25, ts)).toBe(0);
+  });
+
+  it('accents the 2+2+3 group heads of 7/8 when grouped', () => {
+    const ts: TimeSignature = { numerator: 7, denominator: 8, grouping: [2, 2, 3] };
+    // Group heads at pulse 0 (beat 0), pulse 2 (beat 1.0), pulse 4 (beat 2.0).
+    expect(metricWeight(0, ts)).toBe(3); // downbeat
+    expect(metricWeight(1.0, ts)).toBe(2); // head of second group
+    expect(metricWeight(2.0, ts)).toBe(2); // head of third group
+    // Non-head pulses weigh 1.
+    expect(metricWeight(0.5, ts)).toBe(1);
+    expect(metricWeight(1.5, ts)).toBe(1);
+    expect(metricWeight(2.5, ts)).toBe(1);
+    expect(metricWeight(3.0, ts)).toBe(1);
+    expect(isStrongBeat(1.0, ts)).toBe(true);
+    expect(isStrongBeat(0.5, ts)).toBe(false);
+  });
+
+  it('accents the 3+2 group head of 5/8 when grouped', () => {
+    const ts: TimeSignature = { numerator: 5, denominator: 8, grouping: [3, 2] };
+    // Group heads at pulse 0 (beat 0) and pulse 3 (beat 1.5).
+    expect(metricWeight(0, ts)).toBe(3);
+    expect(metricWeight(1.5, ts)).toBe(2);
+    expect(metricWeight(0.5, ts)).toBe(1);
+    expect(metricWeight(1.0, ts)).toBe(1);
+    expect(metricWeight(2.0, ts)).toBe(1);
+  });
+
+  it('throws on a grouping that does not sum to the pulse count', () => {
+    const ts: TimeSignature = { numerator: 7, denominator: 8, grouping: [2, 2, 2] };
+    // pulse index 0 short-circuits, but any later pulse validates the grouping.
+    expect(() => metricWeight(0.5, ts)).toThrow();
   });
 });
 
