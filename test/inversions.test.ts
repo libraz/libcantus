@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { chordQualities, makeChord } from '../src/chord/index.js';
-import { detectChord, detectChordBest } from '../src/detect/index.js';
-import { chordToRoman, romanToChord } from '../src/functional/index.js';
-import { majorKey } from '../src/scale/index.js';
+import { detectChord, detectChordBest } from '../src/analyze/detect/index.js';
+import { chordToRoman, romanToChord } from '../src/analyze/functional/index.js';
+import { chordQualities, makeChord } from '../src/theory/chord/index.js';
+import { majorKey } from '../src/theory/scale/index.js';
 
 const cMajor = majorKey(0);
 

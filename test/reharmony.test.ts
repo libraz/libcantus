@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { chordPitchClasses, makeChord } from '../src/chord/index.js';
 import {
   modalInterchangePalette,
   negativeHarmonyMirror,
   substituteChord,
-} from '../src/reharmony/index.js';
-import { majorKey } from '../src/scale/index.js';
+} from '../src/generate/reharmony/index.js';
+import { chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
+import { majorKey } from '../src/theory/scale/index.js';
 
 describe('substituteChord', () => {
   it('tritone-substitutes G7 in C major with Db7', () => {

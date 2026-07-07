@@ -8,22 +8,7 @@
  * mutable data.
  */
 
-import {
-  type Chord as ChordData,
-  type ChordQuality,
-  chordFromDegree,
-  chordPitchClasses,
-  diatonicSeventh,
-  diatonicTriad,
-  makeChord,
-} from '../chord/index.js';
-import {
-  availableTensions,
-  avoidNotes,
-  type ChordScaleMatch,
-  chordScales,
-} from '../chordscale/index.js';
-import { detectChord, detectChordBest } from '../detect/index.js';
+import { detectChord, detectChordBest } from '../analyze/detect/index.js';
 import {
   analyzeChord,
   type BorrowedSource,
@@ -37,7 +22,7 @@ import {
   isBorrowedChord,
   isMinorKey,
   romanToChord,
-} from '../functional/index.js';
+} from '../analyze/functional/index.js';
 import {
   formatNote,
   midiToNote,
@@ -47,25 +32,40 @@ import {
   parseNote,
   type SpelledInterval,
   spelledInterval,
-} from '../pitch/index.js';
-import { negativeHarmonyMirror } from '../reharmony/index.js';
+} from '../core/pitch/index.js';
+import type { KeyScale } from '../core/types.js';
+import { negativeHarmonyMirror } from '../generate/reharmony/index.js';
+import {
+  type Chord as ChordData,
+  type ChordQuality,
+  chordFromDegree,
+  chordPitchClasses,
+  diatonicSeventh,
+  diatonicTriad,
+  makeChord,
+} from '../theory/chord/index.js';
+import {
+  availableTensions,
+  avoidNotes,
+  type ChordScaleMatch,
+  chordScales,
+} from '../theory/chordscale/index.js';
 import {
   isScaleTone,
   majorKey,
   minorKey,
   scaleByName,
   scaleTonesInDegreeOrder,
-} from '../scale/index.js';
-import { spellChord, spellScale } from '../spelling/index.js';
-import { formatChordSymbol, parseChordSymbol } from '../symbol/index.js';
-import type { KeyScale } from '../types.js';
+} from '../theory/scale/index.js';
+import { spellChord, spellScale } from '../theory/spelling/index.js';
+import { formatChordSymbol, parseChordSymbol } from '../theory/symbol/index.js';
 import {
   type StyledVoicingOptions,
   type VoicingOptions,
   voiceChord,
   voiceChordStyled,
   voiceProgression,
-} from '../voicing/index.js';
+} from '../theory/voicing/index.js';
 
 /** Reduce any integer to a pitch class in [0, 11]. */
 function mod12(n: number): number {

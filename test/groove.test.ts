@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { parseTimeSignature } from '../src/core/meter/index.js';
+import type { NoteEvent } from '../src/core/types.js';
 import {
   applyGrooveTemplate,
   extractGrooveTemplate,
   type GrooveTemplate,
   humanize,
-} from '../src/groove/index.js';
-import { parseTimeSignature } from '../src/meter/index.js';
-import type { NoteEvent } from '../src/types.js';
+} from '../src/generate/groove/index.js';
 
 const FOUR_FOUR = parseTimeSignature('4/4');
 

@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { chordPitchClasses } from '../src/chord/index.js';
-import { developMotif, generateMotif, type MotifCell, transformMotif } from '../src/motif/index.js';
-import { MAJOR_MASK } from '../src/scale/index.js';
-import { chordTimelineFromChords } from '../src/timeline/index.js';
-import type { KeyScale } from '../src/types.js';
+import { chordTimelineFromChords } from '../src/analyze/timeline/index.js';
+import type { KeyScale } from '../src/core/types.js';
+import {
+  developMotif,
+  generateMotif,
+  type MotifCell,
+  transformMotif,
+} from '../src/generate/motif/index.js';
+import { chordPitchClasses } from '../src/theory/chord/index.js';
+import { MAJOR_MASK } from '../src/theory/scale/index.js';
 
 const cMajor: KeyScale = { rootPc: 0, modeMask12: MAJOR_MASK };
 const cell: MotifCell = {

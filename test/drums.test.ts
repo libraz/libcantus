@@ -4,8 +4,8 @@ import {
   type GrooveStyle,
   generateDrums,
   type Section,
-} from '../src/drums/index.js';
-import { quantizeSwing } from '../src/drums/swing.js';
+} from '../src/generate/drums/index.js';
+import { quantizeSwing } from '../src/generate/drums/swing.js';
 
 const KICK = 36;
 const SNARE = 38;

@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import type { Chord } from '../src/chord/index.js';
-import { makeChord } from '../src/chord/index.js';
-import type { CounterMelodyOptions } from '../src/countermelody/index.js';
-import { generateCounterMelody } from '../src/countermelody/index.js';
-import { createsParallelOctave, createsParallelPerfect } from '../src/counterpoint/index.js';
-import { isStrongBeat } from '../src/meter/index.js';
-import { evaluateSafety, NoteSafety } from '../src/safety/index.js';
-import { MAJOR_MASK } from '../src/scale/index.js';
-import type { KeyScale, NoteEvent } from '../src/types.js';
+import { isStrongBeat } from '../src/core/meter/index.js';
+import type { KeyScale, NoteEvent } from '../src/core/types.js';
+import type { CounterMelodyOptions } from '../src/generate/countermelody/index.js';
+import { generateCounterMelody } from '../src/generate/countermelody/index.js';
+import type { Chord } from '../src/theory/chord/index.js';
+import { makeChord } from '../src/theory/chord/index.js';
+import { createsParallelOctave, createsParallelPerfect } from '../src/theory/counterpoint/index.js';
+import { evaluateSafety, NoteSafety } from '../src/theory/safety/index.js';
+import { MAJOR_MASK } from '../src/theory/scale/index.js';
 
 const cMajor: KeyScale = { rootPc: 0, modeMask12: MAJOR_MASK };
 

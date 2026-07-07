@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import type { NoteEvent } from '../src/core/types.js';
 import {
   type BassLineOptions,
   type BassSegment,
   type BassStyle,
   generateBassLine,
-} from '../src/bass/index.js';
-import { chordPitchClasses, makeChord } from '../src/chord/index.js';
-import { majorKey } from '../src/scale/index.js';
-import type { NoteEvent } from '../src/types.js';
+} from '../src/generate/bass/index.js';
+import { chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
+import { majorKey } from '../src/theory/scale/index.js';
 
 const cMajor = majorKey(0);
 

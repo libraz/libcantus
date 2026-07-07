@@ -6,7 +6,7 @@ import {
   minorKey,
   NAMED_SCALES,
   scaleByName,
-} from '../src/scale/index.js';
+} from '../src/theory/scale/index.js';
 
 describe('maskFromOffsets', () => {
   it('builds the harmonic-minor mask', () => {

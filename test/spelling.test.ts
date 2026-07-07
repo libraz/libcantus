@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { makeChord } from '../src/chord/index.js';
-import { parseNote } from '../src/pitch/index.js';
-import { majorKey, minorKey, scaleByName } from '../src/scale/index.js';
+import { parseNote } from '../src/core/pitch/index.js';
+import { makeChord } from '../src/theory/chord/index.js';
+import { majorKey, minorKey, scaleByName } from '../src/theory/scale/index.js';
 import {
   noteNames,
   spellChord,
   spellPitchClass,
   spellPitchClasses,
   spellScale,
-} from '../src/spelling/index.js';
+} from '../src/theory/spelling/index.js';
 
 describe('spellScale', () => {
   it('spells C major with natural letters', () => {

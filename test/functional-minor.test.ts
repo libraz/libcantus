@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { makeChord } from '../src/chord/index.js';
-import { chordToRoman, detectCadence, isMinorKey, romanToChord } from '../src/functional/index.js';
-import { majorKey, minorKey, scaleByName } from '../src/scale/index.js';
+import {
+  chordToRoman,
+  detectCadence,
+  isMinorKey,
+  romanToChord,
+} from '../src/analyze/functional/index.js';
+import { makeChord } from '../src/theory/chord/index.js';
+import { majorKey, minorKey, scaleByName } from '../src/theory/scale/index.js';
 
 const aMinor = minorKey(9);
 

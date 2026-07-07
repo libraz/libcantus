@@ -1,0 +1,330 @@
+import type { KeyScale, NoteEvent } from '../../core/types.js';
+import type { Chord } from '../../theory/chord/index.js';
+import { chordPitchClasses, chordToneRole } from '../../theory/chord/index.js';
+import {
+  createsVerticalDissonance,
+  isLeadingToneResolution,
+} from '../../theory/counterpoint/index.js';
+import type { VoiceSnapshot } from '../../theory/safety/index.js';
+
+/**
+ * A theory annotation attached to a note.
+ *
+ * @category Arrangement & Analysis
+ */
+export type TheoryLabel =
+  | { kind: 'chordTone'; role: 'root' | 'third' | 'fifth' | 'sixth' | 'seventh' }
+  | { kind: 'tension'; degree: 9 | 11 | 13 }
+  | { kind: 'avoid' }
+  | { kind: 'passing' }
+  | { kind: 'neighbor' }
+  | { kind: 'suspension'; type: 'sus4-3' | 'sus7-6' | 'sus9-8' | 'sus2-3'; resolveTo: number }
+  | { kind: 'anticipation' }
+  | { kind: 'escape' }
+  | { kind: 'needsResolution'; resolveTo: number }
+  | { kind: 'leadingTone'; resolveTo: number };
+
+/**
+ * A note with its theory labels and a short rationale.
+ *
+ * @category Arrangement & Analysis
+ */
+export type AnalyzedNote = {
+  noteId: number;
+  labels: TheoryLabel[];
+  rationale?: string;
+};
+
+/**
+ * A single note in a monophonic voice: a {@link NoteEvent} with a stable id.
+ *
+ * @category Arrangement & Analysis
+ */
+export type VoiceNote = NoteEvent & { id: number };
+
+/** Float tolerance for beat comparisons. */
+const EPS = 1e-9;
+
+function pitchClass(pitch: number): number {
+  return ((Math.trunc(pitch) % 12) + 12) % 12;
+}
+
+function intervalAboveRoot(pitch: number, chord: Chord): number {
+  return (((pitchClass(pitch) - pitchClass(chord.rootPc)) % 12) + 12) % 12;
+}
+
+/**
+ * Interval class of a pitch above the actual sounding bass.
+ *
+ * Suspension figures (4-3, 7-6, 9-8) are named for the interval above the bass,
+ * not the chord root, so this prefers the lowest pitch among the other sounding
+ * voices when one lies below the note. Without a lower sounding voice it falls
+ * back to the chord's bass pitch class (or root in root position).
+ */
+function intervalAboveBass(pitch: number, others: VoiceSnapshot[], chord: Chord): number {
+  let bass = Number.POSITIVE_INFINITY;
+  for (const ov of others) {
+    bass = Math.min(bass, ov.pitch);
+  }
+  if (Number.isFinite(bass) && bass < pitch) {
+    return (((pitch - bass) % 12) + 12) % 12;
+  }
+  const ref = chord.bassPc ?? chord.rootPc;
+  return (((pitchClass(pitch) - pitchClass(ref)) % 12) + 12) % 12;
+}
+
+/**
+ * Map an interval class above the root to its extended-tension scale degree:
+ * a flat/natural ninth (1 or 2) to 9, an eleventh (5 or 6) to 11, and a
+ * thirteenth (8 or 9) to 13.
+ */
+function tensionDegree(ic: number): 9 | 11 | 13 {
+  if (ic === 1 || ic === 2) {
+    return 9;
+  }
+  if (ic === 5 || ic === 6) {
+    return 11;
+  }
+  return 13;
+}
+
+function isChordMember(pitch: number, chord: Chord | null): boolean {
+  return chord ? chordPitchClasses(chord).includes(pitchClass(pitch)) : false;
+}
+
+function isStep(a: number, b: number): boolean {
+  const d = Math.abs(a - b);
+  return d === 1 || d === 2;
+}
+
+/**
+ * Classify a suspension figure from the interval class above the sounding bass
+ * (`ic`) and the resolution direction (`delta`, positive when resolving upward).
+ */
+function suspensionType(ic: number, delta: number): TheoryLabel & { kind: 'suspension' } {
+  let type: 'sus4-3' | 'sus7-6' | 'sus9-8' | 'sus2-3';
+  if (delta > 0) {
+    type = 'sus2-3';
+  } else if (ic === 2) {
+    type = 'sus9-8';
+  } else if (ic === 10 || ic === 11) {
+    type = 'sus7-6';
+  } else {
+    type = 'sus4-3';
+  }
+  return { kind: 'suspension', type, resolveTo: 0 };
+}
+
+function stepResolution(pitch: number, chord: Chord): number | undefined {
+  for (let delta = 1; delta <= 2; delta += 1) {
+    if (isChordMember(pitch - delta, chord)) {
+      return pitch - delta;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Label every note of a voice with its theory roles.
+ *
+ * Each note is classified against the chord sounding at its beat. Chord tones
+ * get a role label; non-chord tones are matched, in order, as suspensions
+ * (prepared by an identical consonant pitch and resolving by step), passing
+ * tones, neighbors, anticipations, and escape tones, then fall back to tension,
+ * avoid, or an unresolved-dissonance label. Leading-tone resolutions are noted
+ * additionally.
+ *
+ * The voice is expected to be monophonic (one note at a time). Notes sharing an
+ * onset are treated as simultaneous cluster members, not melodic neighbors, so
+ * they receive no melodic labels (suspension, passing, neighbor, anticipation,
+ * escape) — only harmonic ones. Callers with truly polyphonic material should
+ * split it into monophonic sub-voices first, as `analyzeArrangement` does.
+ *
+ * @param voice The monophonic voice, in time order.
+ * @param chordAtBeat Chord sounding at a given beat, or null.
+ * @param key Key context for leading-tone detection.
+ * @param otherVoicesAtBeat Other sounding voices at a given beat.
+ * @returns One annotation per input note.
+ * @example
+ * ```ts
+ * import { analyzeVoice, makeChord, majorKey } from '@libraz/libcantus';
+ * const voice = [
+ *   { id: 0, pitch: 60, startBeat: 0, durationBeat: 1 },
+ *   { id: 1, pitch: 62, startBeat: 1, durationBeat: 1 },
+ *   { id: 2, pitch: 64, startBeat: 2, durationBeat: 1 },
+ * ];
+ * const cMajor = makeChord(0, 'maj');
+ * const labels = analyzeVoice(voice, () => cMajor, majorKey(0), () => []);
+ * labels; // one AnalyzedNote per input note, in the same order
+ * ```
+ * @category Arrangement & Analysis
+ */
+export function analyzeVoice(
+  voice: VoiceNote[],
+  chordAtBeat: (beat: number) => Chord | null,
+  key: KeyScale,
+  otherVoicesAtBeat: (beat: number) => VoiceSnapshot[],
+): AnalyzedNote[] {
+  const result: AnalyzedNote[] = [];
+
+  for (let i = 0; i < voice.length; i += 1) {
+    const note = voice[i];
+    if (!note) {
+      continue;
+    }
+    const prevNote = i > 0 ? voice[i - 1] : undefined;
+    const nextNote = i + 1 < voice.length ? voice[i + 1] : undefined;
+    // A neighboring note sharing this note's onset is a simultaneous cluster
+    // member, not a melodic predecessor/successor; treating it as one would
+    // fabricate passing/suspension figures, so it is dropped here.
+    const prev =
+      prevNote !== undefined && prevNote.startBeat < note.startBeat - EPS ? prevNote : undefined;
+    const next =
+      nextNote !== undefined && nextNote.startBeat > note.startBeat + EPS ? nextNote : undefined;
+    const chord = chordAtBeat(note.startBeat);
+    const labels: TheoryLabel[] = [];
+    const member = isChordMember(note.pitch, chord);
+    let handled = false;
+
+    if (chord && member) {
+      const role = chordToneRole(note.pitch, chord);
+      if (role) {
+        labels.push({ kind: 'chordTone', role });
+      } else {
+        const ic = intervalAboveRoot(note.pitch, chord);
+        labels.push({ kind: 'tension', degree: tensionDegree(ic) });
+      }
+      handled = true;
+    }
+
+    if (!handled && chord && prev && next) {
+      const prevChord = chordAtBeat(prev.startBeat);
+      const prepared = prev.pitch === note.pitch && isChordMember(prev.pitch, prevChord);
+      const resolves = isStep(next.pitch, note.pitch);
+      const others = otherVoicesAtBeat(note.startBeat);
+      const verticallyDissonant = others.some((ov) =>
+        createsVerticalDissonance(note.pitch, ov.pitch, true),
+      );
+      if (prepared && verticallyDissonant && resolves) {
+        const ic = intervalAboveBass(note.pitch, others, chord);
+        const sus = suspensionType(ic, next.pitch - note.pitch);
+        sus.resolveTo = next.pitch;
+        labels.push(sus);
+        handled = true;
+      }
+    }
+
+    if (!handled && chord && prev && next) {
+      const prevMember = isChordMember(prev.pitch, chordAtBeat(prev.startBeat));
+      const nextMember = isChordMember(next.pitch, chordAtBeat(next.startBeat));
+      const up = note.pitch - prev.pitch > 0;
+      const contInto = next.pitch - note.pitch > 0;
+      const sameDir = note.pitch !== prev.pitch && next.pitch !== note.pitch && up === contInto;
+      if (
+        prevMember &&
+        nextMember &&
+        !member &&
+        isStep(note.pitch, prev.pitch) &&
+        isStep(next.pitch, note.pitch) &&
+        sameDir
+      ) {
+        labels.push({ kind: 'passing' });
+        handled = true;
+      }
+    }
+
+    if (
+      !handled &&
+      chord &&
+      prev &&
+      next &&
+      !member &&
+      prev.pitch === next.pitch &&
+      isChordMember(prev.pitch, chordAtBeat(prev.startBeat)) &&
+      isStep(note.pitch, prev.pitch)
+    ) {
+      labels.push({ kind: 'neighbor' });
+      handled = true;
+    }
+
+    if (!handled && chord && next && !member && note.pitch === next.pitch) {
+      const nextChord = chordAtBeat(next.startBeat);
+      if (isChordMember(next.pitch, nextChord)) {
+        labels.push({ kind: 'anticipation' });
+        handled = true;
+      }
+    }
+
+    if (!handled && chord && prev && next && !member) {
+      const prevMember = isChordMember(prev.pitch, chordAtBeat(prev.startBeat));
+      const nextMember = isChordMember(next.pitch, chordAtBeat(next.startBeat));
+      const stepFromPrev = isStep(note.pitch, prev.pitch);
+      const leapToNext = Math.abs(next.pitch - note.pitch) >= 3;
+      const opposite = note.pitch - prev.pitch > 0 !== next.pitch - note.pitch > 0;
+      if (prevMember && nextMember && stepFromPrev && leapToNext && opposite) {
+        labels.push({ kind: 'escape' });
+        handled = true;
+      }
+    }
+
+    if (!handled && chord && !member) {
+      const ic = intervalAboveRoot(note.pitch, chord);
+      const isTension = ic === 2 || ic === 5 || ic === 9;
+      const avoid =
+        (ic === 5 && chord.intervals.includes(4) && !chord.intervals.includes(5)) ||
+        (ic === 11 && chord.intervals.includes(4) && chord.intervals.includes(10));
+      if (avoid) {
+        labels.push({ kind: 'avoid' });
+        const resolveTo = stepResolution(note.pitch, chord);
+        if (resolveTo !== undefined) {
+          labels.push({ kind: 'needsResolution', resolveTo });
+        }
+      } else if (isTension) {
+        labels.push({ kind: 'tension', degree: tensionDegree(ic) });
+      } else {
+        const resolveTo = stepResolution(note.pitch, chord);
+        if (resolveTo !== undefined) {
+          labels.push({ kind: 'needsResolution', resolveTo });
+        }
+      }
+    }
+
+    if (next && isLeadingToneResolution(note.pitch, next.pitch, key)) {
+      labels.push({ kind: 'leadingTone', resolveTo: next.pitch });
+    }
+
+    result.push({ noteId: note.id, labels, rationale: describe(labels) });
+  }
+
+  return result;
+}
+
+/** Build a short rationale from a note's primary label. */
+function describe(labels: TheoryLabel[]): string {
+  const primary = labels[0];
+  if (!primary) {
+    return 'Unclassified note';
+  }
+  switch (primary.kind) {
+    case 'chordTone':
+      return `Chord ${primary.role}`;
+    case 'tension':
+      return `${primary.degree}th tension`;
+    case 'avoid':
+      return 'Avoid note';
+    case 'passing':
+      return 'Passing tone between chord tones';
+    case 'neighbor':
+      return 'Neighbor tone';
+    case 'suspension':
+      return `Suspension (${primary.type})`;
+    case 'anticipation':
+      return 'Anticipation of the next chord';
+    case 'escape':
+      return 'Escape tone';
+    case 'needsResolution':
+      return 'Unresolved dissonance';
+    case 'leadingTone':
+      return 'Leading tone resolving to the tonic';
+  }
+}

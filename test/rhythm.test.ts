@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { beatsPerBar, metricWeight, type TimeSignature } from '../src/meter/index.js';
+import { beatsPerBar, metricWeight, type TimeSignature } from '../src/core/meter/index.js';
 import {
   generateRhythm,
   onsetWeightCurve,
   type RhythmEvent,
   rhythmDensity,
-} from '../src/rhythm/index.js';
+} from '../src/generate/rhythm/index.js';
 
 const FOUR_FOUR: TimeSignature = { numerator: 4, denominator: 4 };
 const SIX_EIGHT: TimeSignature = { numerator: 6, denominator: 8 };

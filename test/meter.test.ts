@@ -11,7 +11,7 @@ import {
   pulsesPerBar,
   type TimeSignature,
   tuplet,
-} from '../src/meter/index.js';
+} from '../src/core/meter/index.js';
 
 describe('time signatures', () => {
   it('parses and formats', () => {

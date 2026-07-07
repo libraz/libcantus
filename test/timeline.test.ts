@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { MAJOR_MASK, majorKey, minorKey } from '../src/scale/index.js';
 import {
   chordTimelineFromChords,
   chordTimelineFromNotes,
   detectCadences,
-} from '../src/timeline/index.js';
-import type { NoteEvent } from '../src/types.js';
+} from '../src/analyze/timeline/index.js';
+import type { NoteEvent } from '../src/core/types.js';
+import { MAJOR_MASK, majorKey, minorKey } from '../src/theory/scale/index.js';
 
 /** Build a block chord: every pitch sounding for the same span. */
 function blockChord(pitches: number[], startBeat: number, durationBeat = 4): NoteEvent[] {

@@ -8,7 +8,7 @@ import {
   nearestStep,
   ratioToCents,
   TWELVE_TET,
-} from '../src/tuning/index.js';
+} from '../src/core/tuning/index.js';
 
 describe('12-TET frequency conversion', () => {
   it('places A4 at 440 Hz and middle C near 261.63', () => {

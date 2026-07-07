@@ -1,22 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { euclideanRhythm, hasHit, patternToMask } from '../src/drums/euclid.js';
+import { euclideanRhythm, hasHit, patternToMask } from '../src/generate/drums/euclid.js';
 import {
   type FillType,
   generateFill,
   getFillStartBeat,
   selectFillType,
-} from '../src/drums/fills.js';
-import { HitList } from '../src/drums/hit.js';
+} from '../src/generate/drums/fills.js';
+import { HitList } from '../src/generate/drums/hit.js';
 import type {
   DrumGenOptions,
   DrumRole,
   GrooveFeel,
   GrooveStyle,
   Section,
-} from '../src/drums/index.js';
-import { generateDrums } from '../src/drums/index.js';
-import { euclideanToKickPattern } from '../src/drums/kick.js';
-import { createRng } from '../src/drums/rng.js';
+} from '../src/generate/drums/index.js';
+import { generateDrums } from '../src/generate/drums/index.js';
+import { euclideanToKickPattern } from '../src/generate/drums/kick.js';
+import { createRng } from '../src/generate/drums/rng.js';
 
 const STYLES: GrooveStyle[] = [
   'standard',

@@ -1,5 +1,5 @@
-export type { AnalyzedNote, TheoryLabel, VoiceNote } from './analysis/index.js';
-export { analyzeVoice } from './analysis/index.js';
+export type { AnalyzedNote, TheoryLabel, VoiceNote } from './analyze/analysis/index.js';
+export { analyzeVoice } from './analyze/analysis/index.js';
 export type {
   ArrangementAnalysis,
   ArrangementOptions,
@@ -8,61 +8,16 @@ export type {
   TensionPoint,
   TrackAnalysis,
   TrackRole,
-} from './arrange/index.js';
-export { analyzeArrangement, tensionCurve } from './arrange/index.js';
-export type { BassLineOptions, BassSegment, BassStyle } from './bass/index.js';
-export { generateBassLine } from './bass/index.js';
-export type { Chord as ChordData, ChordQuality } from './chord/index.js';
-export {
-  chordFromDegree,
-  chordPitchClasses,
-  chordQualities,
-  chordToneRole,
-  diatonicSeventh,
-  diatonicTriad,
-  makeChord,
-} from './chord/index.js';
-export type { ChordScaleMatch, ChordScaleReportEntry, ScaleChoice } from './chordscale/index.js';
-export {
-  availableTensions,
-  avoidNotes,
-  chordScaleReport,
-  chordScales,
-  scaleMatchesChord,
-  scalesForChanges,
-} from './chordscale/index.js';
-export type { CounterMelodyOptions } from './countermelody/index.js';
-export { generateCounterMelody } from './countermelody/index.js';
-export {
-  createsHiddenParallelPerfect,
-  createsParallelOctave,
-  createsParallelPerfect,
-  createsParallelUnison,
-  createsVerticalDissonance,
-  createsVoiceCrossing,
-  createsVoiceOverlap,
-  exceedsSpacing,
-  isForbiddenMelodicLeap,
-  isLeadingToneResolution,
-} from './counterpoint/index.js';
-export type { ChordMatch, KeyMatch } from './detect/index.js';
-export { detectChord, detectChordBest, detectKey } from './detect/index.js';
-export type {
-  DrumGenOptions,
-  DrumHit,
-  DrumRole,
-  EuclideanKick,
-  GrooveFeel,
-  GrooveStyle,
-  Section,
-} from './drums/index.js';
-export { generateDrums } from './drums/index.js';
+} from './analyze/arrange/index.js';
+export { analyzeArrangement, tensionCurve } from './analyze/arrange/index.js';
+export type { ChordMatch, KeyMatch } from './analyze/detect/index.js';
+export { detectChord, detectChordBest, detectKey } from './analyze/detect/index.js';
 export type {
   BorrowedSource,
   Cadence,
   ChordAnalysis,
   HarmonicFunction,
-} from './functional/index.js';
+} from './analyze/functional/index.js';
 export {
   analyzeChord,
   borrowedSource,
@@ -75,24 +30,26 @@ export {
   parallelKey,
   romanToChord,
   secondaryDominant,
-} from './functional/index.js';
-export type { GrooveSlot, GrooveTemplate, HumanizeOptions } from './groove/index.js';
-export { applyGrooveTemplate, extractGrooveTemplate, humanize } from './groove/index.js';
+} from './analyze/functional/index.js';
 export type {
-  HarmonizeOptions,
-  HarmonizeResult,
-  MelodyNote,
-} from './harmonize/index.js';
-export { harmonizeMelody } from './harmonize/index.js';
-export type { HarmonyRole, LockLevel, VoicedRole } from './harmony/index.js';
-export { roleOf } from './harmony/index.js';
+  CadenceHit,
+  ChordSegment,
+  ChordTimeline,
+  ChordTimelineOptions,
+  ChordTimelineResult,
+} from './analyze/timeline/index.js';
+export {
+  chordTimelineFromChords,
+  chordTimelineFromNotes,
+  detectCadences,
+} from './analyze/timeline/index.js';
 export {
   classifyInterval,
   IntervalQuality,
   isConsonantInterval,
   isPerfectInterval,
-} from './interval/index.js';
-export type { BarPosition, TimeSignature } from './meter/index.js';
+} from './core/interval/index.js';
+export type { BarPosition, TimeSignature } from './core/meter/index.js';
 export {
   barPositionToBeat,
   beatsPerBar,
@@ -104,17 +61,8 @@ export {
   parseTimeSignature,
   pulsesPerBar,
   tuplet,
-} from './meter/index.js';
-export { Chord, Interval, Key, Note, Progression } from './model/index.js';
-export type {
-  GenerateMotifOptions,
-  MotifCell,
-  MotifContour,
-  MotifNote,
-  MotifTransform,
-} from './motif/index.js';
-export { developMotif, generateMotif, transformMotif } from './motif/index.js';
-export type { Note as NoteData, SpelledInterval } from './pitch/index.js';
+} from './core/meter/index.js';
+export type { Note as NoteData, SpelledInterval } from './core/pitch/index.js';
 export {
   formatNote,
   midiToNote,
@@ -122,41 +70,127 @@ export {
   noteToPitchClass,
   parseNote,
   spelledInterval,
-} from './pitch/index.js';
+} from './core/pitch/index.js';
+export type { Rng } from './core/random/index.js';
+export { createRng } from './core/random/index.js';
+export type { Tuning } from './core/tuning/index.js';
+export {
+  centsBetweenFreq,
+  centsOfSteps,
+  edo,
+  frequencyOf,
+  JUST_RATIOS,
+  justDeviationCents,
+  nearestStep,
+  ratioToCents,
+  TWELVE_TET,
+} from './core/tuning/index.js';
+export type { KeyScale, NoteEvent } from './core/types.js';
+export type { BassLineOptions, BassSegment, BassStyle } from './generate/bass/index.js';
+export { generateBassLine } from './generate/bass/index.js';
+export type { CounterMelodyOptions } from './generate/countermelody/index.js';
+export { generateCounterMelody } from './generate/countermelody/index.js';
+export type {
+  DrumGenOptions,
+  DrumHit,
+  DrumRole,
+  EuclideanKick,
+  GrooveFeel,
+  GrooveStyle,
+  Section,
+} from './generate/drums/index.js';
+export { generateDrums } from './generate/drums/index.js';
+export type { GrooveSlot, GrooveTemplate, HumanizeOptions } from './generate/groove/index.js';
+export { applyGrooveTemplate, extractGrooveTemplate, humanize } from './generate/groove/index.js';
+export type {
+  HarmonizeOptions,
+  HarmonizeResult,
+  MelodyNote,
+} from './generate/harmonize/index.js';
+export { harmonizeMelody } from './generate/harmonize/index.js';
+export type {
+  GenerateMotifOptions,
+  MotifCell,
+  MotifContour,
+  MotifNote,
+  MotifTransform,
+} from './generate/motif/index.js';
+export { developMotif, generateMotif, transformMotif } from './generate/motif/index.js';
 export type {
   GeneratedChord,
   GenerateProgressionOptions,
   ProgFunction,
   ProgressionPreset,
   ProgStyle,
-} from './progression/index.js';
+} from './generate/progression/index.js';
 export {
   generateProgression,
   progressions,
   progressionsByStyle,
-} from './progression/index.js';
-export type { Rng } from './random/index.js';
-export { createRng } from './random/index.js';
+} from './generate/progression/index.js';
 export type {
   BorrowedChord,
   SubstituteOptions,
   Substitution,
   SubstitutionType,
-} from './reharmony/index.js';
+} from './generate/reharmony/index.js';
 export {
   modalInterchangePalette,
   negativeHarmonyMirror,
   substituteChord,
-} from './reharmony/index.js';
-export type { RhythmEvent, RhythmOptions } from './rhythm/index.js';
-export { generateRhythm, onsetWeightCurve, rhythmDensity } from './rhythm/index.js';
+} from './generate/reharmony/index.js';
+export type { RhythmEvent, RhythmOptions } from './generate/rhythm/index.js';
+export { generateRhythm, onsetWeightCurve, rhythmDensity } from './generate/rhythm/index.js';
+export { Chord, Interval, Key, Note, Progression } from './model/index.js';
+export type { Chord as ChordData, ChordQuality } from './theory/chord/index.js';
+export {
+  chordFromDegree,
+  chordPitchClasses,
+  chordQualities,
+  chordToneRole,
+  diatonicSeventh,
+  diatonicTriad,
+  makeChord,
+} from './theory/chord/index.js';
+export type {
+  ChordScaleMatch,
+  ChordScaleReportEntry,
+  ScaleChoice,
+} from './theory/chordscale/index.js';
+export {
+  availableTensions,
+  avoidNotes,
+  chordScaleReport,
+  chordScales,
+  scaleMatchesChord,
+  scalesForChanges,
+} from './theory/chordscale/index.js';
+export {
+  createsHiddenParallelPerfect,
+  createsParallelOctave,
+  createsParallelPerfect,
+  createsParallelUnison,
+  createsVerticalDissonance,
+  createsVoiceCrossing,
+  createsVoiceOverlap,
+  exceedsSpacing,
+  isForbiddenMelodicLeap,
+  isLeadingToneResolution,
+} from './theory/counterpoint/index.js';
+export type { HarmonyRole, LockLevel, VoicedRole } from './theory/harmony/index.js';
+export { roleOf } from './theory/harmony/index.js';
 export type {
   SafetyProfile,
   SafetyQuery,
   SafetyResult,
   VoiceSnapshot,
-} from './safety/index.js';
-export { enumerateSafePitches, evaluateSafety, NoteSafety, ReasonFlag } from './safety/index.js';
+} from './theory/safety/index.js';
+export {
+  enumerateSafePitches,
+  evaluateSafety,
+  NoteSafety,
+  ReasonFlag,
+} from './theory/safety/index.js';
 export {
   BLUES_MASK,
   CHROMATIC_MASK,
@@ -184,46 +218,25 @@ export {
   scaleByName,
   scaleTonesInDegreeOrder,
   WHOLE_TONE_MASK,
-} from './scale/index.js';
+} from './theory/scale/index.js';
 export {
   noteNames,
   spellChord,
   spellPitchClass,
   spellPitchClasses,
   spellScale,
-} from './spelling/index.js';
-export { formatChordSymbol, parseChordSymbol, transposeChordSymbol } from './symbol/index.js';
-export type {
-  CadenceHit,
-  ChordSegment,
-  ChordTimeline,
-  ChordTimelineOptions,
-  ChordTimelineResult,
-} from './timeline/index.js';
+} from './theory/spelling/index.js';
 export {
-  chordTimelineFromChords,
-  chordTimelineFromNotes,
-  detectCadences,
-} from './timeline/index.js';
-export type { Tuning } from './tuning/index.js';
-export {
-  centsBetweenFreq,
-  centsOfSteps,
-  edo,
-  frequencyOf,
-  JUST_RATIOS,
-  justDeviationCents,
-  nearestStep,
-  ratioToCents,
-  TWELVE_TET,
-} from './tuning/index.js';
-export type { KeyScale, NoteEvent } from './types.js';
+  formatChordSymbol,
+  parseChordSymbol,
+  transposeChordSymbol,
+} from './theory/symbol/index.js';
 export type {
   StyledVoicingOptions,
   VoiceRange,
   VoicingOptions,
   VoicingStyle,
-} from './voicing/index.js';
+} from './theory/voicing/index.js';
 export {
   nextVoicing,
   SATB_RANGES,
@@ -231,4 +244,4 @@ export {
   voiceChordStyled,
   voiceLeadingCost,
   voiceProgression,
-} from './voicing/index.js';
+} from './theory/voicing/index.js';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { makeChord } from '../src/chord/index.js';
+import { makeChord } from '../src/theory/chord/index.js';
 import {
   availableTensions,
   avoidNotes,
@@ -7,8 +7,8 @@ import {
   chordScales,
   scaleMatchesChord,
   scalesForChanges,
-} from '../src/chordscale/index.js';
-import { NAMED_SCALES } from '../src/scale/index.js';
+} from '../src/theory/chordscale/index.js';
+import { NAMED_SCALES } from '../src/theory/scale/index.js';
 
 describe('scaleMatchesChord', () => {
   it('accepts a scale that contains every chord tone', () => {

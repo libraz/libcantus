@@ -5,8 +5,8 @@ import {
   diatonicSeventh,
   diatonicTriad,
   makeChord,
-} from '../src/chord/index.js';
-import { majorKey, scaleByName } from '../src/scale/index.js';
+} from '../src/theory/chord/index.js';
+import { majorKey, scaleByName } from '../src/theory/scale/index.js';
 
 describe('extended chord vocabulary', () => {
   it('builds a half-diminished seventh', () => {

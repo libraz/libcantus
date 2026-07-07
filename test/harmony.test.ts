@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Chord } from '../src/chord/index.js';
-import { roleOf } from '../src/harmony/index.js';
+import type { Chord } from '../src/theory/chord/index.js';
+import { roleOf } from '../src/theory/harmony/index.js';
 
 const cMaj: Chord = { rootPc: 0, quality: 'maj', intervals: [0, 4, 7] };
 const cSus4: Chord = { rootPc: 0, quality: 'sus4', intervals: [0, 5, 7] };

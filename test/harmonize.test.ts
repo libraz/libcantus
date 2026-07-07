@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { chordPitchClasses, makeChord } from '../src/chord/index.js';
-import { type HarmonizeOptions, harmonizeMelody } from '../src/harmonize/index.js';
-import { majorKey, NATURAL_MINOR_MASK, scaleTonesInDegreeOrder } from '../src/scale/index.js';
+import { type HarmonizeOptions, harmonizeMelody } from '../src/generate/harmonize/index.js';
+import { chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
+import {
+  majorKey,
+  NATURAL_MINOR_MASK,
+  scaleTonesInDegreeOrder,
+} from '../src/theory/scale/index.js';
 
 const cMajor = majorKey(0);
 

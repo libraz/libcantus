@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { chordFromDegree, chordPitchClasses, chordToneRole } from '../src/chord/index.js';
-import { MAJOR_MASK } from '../src/scale/index.js';
-import type { KeyScale } from '../src/types.js';
+import type { KeyScale } from '../src/core/types.js';
+import { chordFromDegree, chordPitchClasses, chordToneRole } from '../src/theory/chord/index.js';
+import { MAJOR_MASK } from '../src/theory/scale/index.js';
 
 const cMajor: KeyScale = { rootPc: 0, modeMask12: MAJOR_MASK };
 

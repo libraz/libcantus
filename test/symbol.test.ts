@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { chordQualities, makeChord } from '../src/chord/index.js';
-import { formatChordSymbol, parseChordSymbol, transposeChordSymbol } from '../src/symbol/index.js';
+import { chordQualities, makeChord } from '../src/theory/chord/index.js';
+import {
+  formatChordSymbol,
+  parseChordSymbol,
+  transposeChordSymbol,
+} from '../src/theory/symbol/index.js';
 
 describe('parseChordSymbol', () => {
   it('parses a maj7 chord', () => {

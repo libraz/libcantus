@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { makeChord } from '../src/chord/index.js';
 import {
   analyzeChord,
   borrowedSource,
   isBorrowedChord,
   isDiatonic,
   parallelKey,
-} from '../src/functional/index.js';
-import { MAJOR_MASK, majorKey, minorKey, NATURAL_MINOR_MASK } from '../src/scale/index.js';
+} from '../src/analyze/functional/index.js';
+import { makeChord } from '../src/theory/chord/index.js';
+import { MAJOR_MASK, majorKey, minorKey, NATURAL_MINOR_MASK } from '../src/theory/scale/index.js';
 
 const cMajor = majorKey(0);
 const aMinor = minorKey(9);

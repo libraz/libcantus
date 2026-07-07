@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { chordQualities, makeChord } from '../src/chord/index.js';
-import { detectChord, detectChordBest, detectKey } from '../src/detect/index.js';
+import { detectChord, detectChordBest, detectKey } from '../src/analyze/detect/index.js';
+import { chordQualities, makeChord } from '../src/theory/chord/index.js';
 
 describe('detectChord', () => {
   it('recognizes a C major triad exactly', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { generateProgression } from '../src/progression/index.js';
-import { majorKey } from '../src/scale/index.js';
+import { generateProgression } from '../src/generate/progression/index.js';
+import { majorKey } from '../src/theory/scale/index.js';
 
 const cMajor = majorKey(0);
 

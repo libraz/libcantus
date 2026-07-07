@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeVoice, type VoiceNote } from '../src/analysis/index.js';
-import type { Chord } from '../src/chord/index.js';
-import { makeChord } from '../src/chord/index.js';
-import { MAJOR_MASK } from '../src/scale/index.js';
-import type { KeyScale } from '../src/types.js';
+import { analyzeVoice, type VoiceNote } from '../src/analyze/analysis/index.js';
+import type { KeyScale } from '../src/core/types.js';
+import type { Chord } from '../src/theory/chord/index.js';
+import { makeChord } from '../src/theory/chord/index.js';
+import { MAJOR_MASK } from '../src/theory/scale/index.js';
 
 const cMajor: KeyScale = { rootPc: 0, modeMask12: MAJOR_MASK };
 const cMaj: Chord = { rootPc: 0, quality: 'maj', intervals: [0, 4, 7] };

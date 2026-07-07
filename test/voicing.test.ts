@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { chordPitchClasses, makeChord } from '../src/chord/index.js';
-import { createsParallelOctave, createsParallelPerfect } from '../src/counterpoint/index.js';
+import { chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
+import { createsParallelOctave, createsParallelPerfect } from '../src/theory/counterpoint/index.js';
 import {
   nextVoicing,
   SATB_RANGES,
@@ -8,7 +8,7 @@ import {
   voiceChordStyled,
   voiceLeadingCost,
   voiceProgression,
-} from '../src/voicing/index.js';
+} from '../src/theory/voicing/index.js';
 
 /** Reduce a MIDI pitch to a pitch class. */
 function pc(pitch: number): number {

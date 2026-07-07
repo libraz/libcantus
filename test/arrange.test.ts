@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { type ArrangementTrack, analyzeArrangement, tensionCurve } from '../src/arrange/index.js';
-import { NoteSafety, ReasonFlag } from '../src/safety/index.js';
-import { majorKey } from '../src/scale/index.js';
-import type { NoteEvent } from '../src/types.js';
+import {
+  type ArrangementTrack,
+  analyzeArrangement,
+  tensionCurve,
+} from '../src/analyze/arrange/index.js';
+import type { NoteEvent } from '../src/core/types.js';
+import { NoteSafety, ReasonFlag } from '../src/theory/safety/index.js';
+import { majorKey } from '../src/theory/scale/index.js';
 
 /** Build a block chord: every pitch sounding for the same span. */
 function blockChord(pitches: number[], startBeat: number, durationBeat = 4): NoteEvent[] {

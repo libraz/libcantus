@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import type { KeyScale } from '../src/core/types.js';
 import {
   generateProgression,
   progressions,
   progressionsByStyle,
-} from '../src/progression/index.js';
-import { MAJOR_MASK, minorKey } from '../src/scale/index.js';
-import type { KeyScale } from '../src/types.js';
+} from '../src/generate/progression/index.js';
+import { MAJOR_MASK, minorKey } from '../src/theory/scale/index.js';
 
 const cMajor: KeyScale = { rootPc: 0, modeMask12: MAJOR_MASK };
 

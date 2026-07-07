@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { KeyScale } from '../src/core/types.js';
 import {
   createsHiddenParallelPerfect,
   createsParallelOctave,
@@ -7,9 +8,8 @@ import {
   createsVoiceCrossing,
   isForbiddenMelodicLeap,
   isLeadingToneResolution,
-} from '../src/counterpoint/index.js';
-import { MAJOR_MASK } from '../src/scale/index.js';
-import type { KeyScale } from '../src/types.js';
+} from '../src/theory/counterpoint/index.js';
+import { MAJOR_MASK } from '../src/theory/scale/index.js';
 
 const cMajor: KeyScale = { rootPc: 0, modeMask12: MAJOR_MASK };
 

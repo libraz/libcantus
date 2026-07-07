@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { chordPitchClasses, chordQualities, makeChord } from '../src/chord/index.js';
 import {
   chordToRoman,
   detectCadence,
   functionOf,
   romanToChord,
   secondaryDominant,
-} from '../src/functional/index.js';
-import { majorKey, minorKey } from '../src/scale/index.js';
-import type { KeyScale } from '../src/types.js';
+} from '../src/analyze/functional/index.js';
+import type { KeyScale } from '../src/core/types.js';
+import { chordPitchClasses, chordQualities, makeChord } from '../src/theory/chord/index.js';
+import { majorKey, minorKey } from '../src/theory/scale/index.js';
 
 const cMajor = majorKey(0);
 const aMinor = minorKey(9);

@@ -7,7 +7,7 @@ import {
   createsVoiceOverlap,
   exceedsSpacing,
   isForbiddenMelodicLeap,
-} from '../src/counterpoint/index.js';
+} from '../src/theory/counterpoint/index.js';
 
 describe('parallel perfect fixes', () => {
   it('flags a fifth expanding to a twelfth (same perfect class)', () => {

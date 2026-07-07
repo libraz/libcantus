@@ -6,7 +6,7 @@ import {
   noteToPitchClass,
   parseNote,
   spelledInterval,
-} from '../src/pitch/index.js';
+} from '../src/core/pitch/index.js';
 
 describe('parseNote / formatNote', () => {
   it('round-trips common spellings', () => {

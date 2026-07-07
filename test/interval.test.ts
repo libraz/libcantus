@@ -4,7 +4,7 @@ import {
   IntervalQuality,
   isConsonantInterval,
   isPerfectInterval,
-} from '../src/interval/index.js';
+} from '../src/core/interval/index.js';
 
 describe('classifyInterval', () => {
   it('classifies perfect consonances', () => {
