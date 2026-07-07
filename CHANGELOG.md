@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Per-layer subpath entry points, so a consumer can import a single layer
+  instead of the whole package: `@libraz/libcantus/core`, `/theory`,
+  `/analyze`, `/generate`, and `/model`. The package root still exports
+  everything.
+
+### Changed
+
+- Renamed public option and record types for cross-surface naming consistency
+  (the values they configure are unchanged):
+  - `DrumGenOptions` → `DrumsOptions`
+  - `GenerateMotifOptions` → `MotifOptions`
+  - `GenerateProgressionOptions` → `ProgressionOptions`
+  - `GeneratedChord` → `ChordSpan`
+
 ## [0.9.1] - 2026-07-07
 
 A correctness pass across every public surface. Most entries are bug fixes, but
