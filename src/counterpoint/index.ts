@@ -12,6 +12,7 @@ function pitchClass(pitch: number): number {
  * @param upperPitch Pitch of the nominally higher voice.
  * @param lowerPitch Pitch of the nominally lower voice.
  * @returns True when the upper voice sits below the lower voice.
+ * @category Voicing & Counterpoint
  */
 export function createsVoiceCrossing(upperPitch: number, lowerPitch: number): boolean {
   return upperPitch < lowerPitch;
@@ -24,6 +25,7 @@ export function createsVoiceCrossing(upperPitch: number, lowerPitch: number): bo
  * @param b Second pitch.
  * @param twoVoice When true, the perfect fourth counts as dissonant.
  * @returns True when the vertical interval is dissonant.
+ * @category Voicing & Counterpoint
  */
 export function createsVerticalDissonance(a: number, b: number, twoVoice: boolean): boolean {
   return !isConsonantInterval(a - b, twoVoice);
@@ -39,6 +41,7 @@ export function createsVerticalDissonance(a: number, b: number, twoVoice: boolea
  * @param prev Starting pitch.
  * @param cur Ending pitch.
  * @returns True when the leap is forbidden in strict counterpoint.
+ * @category Voicing & Counterpoint
  */
 export function isForbiddenMelodicLeap(prev: number, cur: number): boolean {
   const semis = Math.abs(cur - prev);
@@ -78,6 +81,8 @@ function bothVoicesMove(aMove: number, bMove: number): boolean {
  * A fifth expanding to a twelfth counts (same perfect class); a fifth moving to
  * an octave does not (different perfect kinds — the direct/hidden case owned by
  * {@link createsHiddenParallelPerfect}).
+ *
+ * @category Voicing & Counterpoint
  */
 export function createsParallelPerfect(
   aPrev: number,
@@ -103,6 +108,8 @@ export function createsParallelPerfect(
  * tally parallel violations should therefore use {@link createsParallelPerfect}
  * alone to avoid double counting; this predicate remains for callers wanting a
  * dedicated similar-motion octave test.
+ *
+ * @category Voicing & Counterpoint
  */
 export function createsParallelOctave(
   aPrev: number,
@@ -119,6 +126,8 @@ export function createsParallelOctave(
 /**
  * Whether two voices move in consecutive parallel unisons — both landing on the
  * same pitch, having shared a pitch on the previous move.
+ *
+ * @category Voicing & Counterpoint
  */
 export function createsParallelUnison(
   aPrev: number,
@@ -139,6 +148,8 @@ export function createsParallelUnison(
  * The traditional step exception is applied: the approach is allowed when the
  * upper of the two voices moves by step, so only leaps into the perfect
  * interval are flagged.
+ *
+ * @category Voicing & Counterpoint
  */
 export function createsHiddenParallelPerfect(
   aPrev: number,
@@ -175,6 +186,7 @@ export function createsHiddenParallelPerfect(
  * @param upperCur Current pitch of the upper voice.
  * @param lowerPrev Previous pitch of the lower voice.
  * @param lowerCur Current pitch of the lower voice.
+ * @category Voicing & Counterpoint
  */
 export function createsVoiceOverlap(
   upperPrev: number,
@@ -193,6 +205,7 @@ export function createsVoiceOverlap(
  * @param upperPitch Pitch of the higher voice.
  * @param lowerPitch Pitch of the lower voice.
  * @param maxSemitones Maximum allowed spacing in semitones (default an octave).
+ * @category Voicing & Counterpoint
  */
 export function exceedsSpacing(upperPitch: number, lowerPitch: number, maxSemitones = 12): boolean {
   return Math.abs(upperPitch - lowerPitch) > maxSemitones;
@@ -205,6 +218,7 @@ export function exceedsSpacing(upperPitch: number, lowerPitch: number, maxSemito
  * @param cur The following pitch.
  * @param key Key context supplying the tonic.
  * @returns True when `prev` is the leading tone and `cur` is the tonic a step above.
+ * @category Voicing & Counterpoint
  */
 export function isLeadingToneResolution(prev: number, cur: number, key: KeyScale): boolean {
   const tonic = pitchClass(key.rootPc);

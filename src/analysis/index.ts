@@ -4,7 +4,11 @@ import { createsVerticalDissonance, isLeadingToneResolution } from '../counterpo
 import type { VoiceSnapshot } from '../safety/index.js';
 import type { KeyScale, NoteEvent } from '../types.js';
 
-/** A theory annotation attached to a note. */
+/**
+ * A theory annotation attached to a note.
+ *
+ * @category Arrangement & Analysis
+ */
 export type TheoryLabel =
   | { kind: 'chordTone'; role: 'root' | 'third' | 'fifth' | 'sixth' | 'seventh' }
   | { kind: 'tension'; degree: 9 | 11 | 13 }
@@ -17,14 +21,22 @@ export type TheoryLabel =
   | { kind: 'needsResolution'; resolveTo: number }
   | { kind: 'leadingTone'; resolveTo: number };
 
-/** A note with its theory labels and a short rationale. */
+/**
+ * A note with its theory labels and a short rationale.
+ *
+ * @category Arrangement & Analysis
+ */
 export type AnalyzedNote = {
   noteId: number;
   labels: TheoryLabel[];
   rationale?: string;
 };
 
-/** A single note in a monophonic voice: a {@link NoteEvent} with a stable id. */
+/**
+ * A single note in a monophonic voice: a {@link NoteEvent} with a stable id.
+ *
+ * @category Arrangement & Analysis
+ */
 export type VoiceNote = NoteEvent & { id: number };
 
 /** Float tolerance for beat comparisons. */
@@ -130,6 +142,19 @@ function stepResolution(pitch: number, chord: Chord): number | undefined {
  * @param key Key context for leading-tone detection.
  * @param otherVoicesAtBeat Other sounding voices at a given beat.
  * @returns One annotation per input note.
+ * @example
+ * ```ts
+ * import { analyzeVoice, makeChord, majorKey } from '@libraz/libcantus';
+ * const voice = [
+ *   { id: 0, pitch: 60, startBeat: 0, durationBeat: 1 },
+ *   { id: 1, pitch: 62, startBeat: 1, durationBeat: 1 },
+ *   { id: 2, pitch: 64, startBeat: 2, durationBeat: 1 },
+ * ];
+ * const cMajor = makeChord(0, 'maj');
+ * const labels = analyzeVoice(voice, () => cMajor, majorKey(0), () => []);
+ * labels; // one AnalyzedNote per input note, in the same order
+ * ```
+ * @category Arrangement & Analysis
  */
 export function analyzeVoice(
   voice: VoiceNote[],

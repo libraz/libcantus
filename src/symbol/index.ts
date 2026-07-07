@@ -148,6 +148,13 @@ function makeSpelledChord(root: Note, quality: ChordQuality, bass?: Note): Chord
  * @param text The chord symbol text.
  * @returns The parsed chord.
  * @throws If the root or quality is not recognized.
+ * @example
+ * ```ts
+ * import { parseChordSymbol, formatChordSymbol } from '@libraz/libcantus';
+ * const c = parseChordSymbol('Bbmaj7');
+ * formatChordSymbol(c); // 'Bbmaj7' — flat spelling is preserved on round-trip
+ * ```
+ * @category Chords
  */
 export function parseChordSymbol(text: string): Chord {
   const trimmed = text.trim();
@@ -207,6 +214,12 @@ function pitchClassName(pc: number, hint: PitchSpelling | undefined, flats?: boo
  * @param opts.flats Prefer flat spellings over sharps for altered roots/basses;
  *   passing either `true` or `false` overrides any spelling hints.
  * @returns The chord symbol text.
+ * @example
+ * ```ts
+ * import { makeChord, formatChordSymbol } from '@libraz/libcantus';
+ * formatChordSymbol(makeChord(0, 'min7')); // 'Cm7'
+ * ```
+ * @category Chords
  */
 export function formatChordSymbol(chord: Chord, opts?: { flats?: boolean }): string {
   const rootPc = pitchClass(chord.rootPc);
@@ -227,6 +240,12 @@ export function formatChordSymbol(chord: Chord, opts?: { flats?: boolean }): str
  * @param opts Formatting options for the result; see {@link formatChordSymbol}.
  * @returns The transposed chord symbol text.
  * @throws If `text` does not parse as a chord symbol.
+ * @example
+ * ```ts
+ * import { transposeChordSymbol } from '@libraz/libcantus';
+ * transposeChordSymbol('C/G', 2); // 'D/A'
+ * ```
+ * @category Chords
  */
 export function transposeChordSymbol(
   text: string,

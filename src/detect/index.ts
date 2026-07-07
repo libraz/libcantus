@@ -16,7 +16,11 @@ import {
 } from '../scale/index.js';
 import type { KeyScale } from '../types.js';
 
-/** A candidate chord interpretation of a pitch set. */
+/**
+ * A candidate chord interpretation of a pitch set.
+ *
+ * @category Recognition
+ */
 export type ChordMatch = {
   rootPc: number;
   quality: ChordQuality;
@@ -32,7 +36,11 @@ export type ChordMatch = {
   bassPc?: number;
 };
 
-/** A candidate key interpretation of a pitch-class set. */
+/**
+ * A candidate key interpretation of a pitch-class set.
+ *
+ * @category Recognition
+ */
 export type KeyMatch = {
   key: KeyScale;
   mode: 'major' | 'minor';
@@ -62,6 +70,13 @@ function uniquePitchClasses(pitches: number[]): number[] {
  *
  * @param pitches MIDI pitches or bare pitch classes (octave-agnostic).
  * @returns Ranked chord interpretations (may be empty).
+ * @example
+ * ```ts
+ * import { detectChord } from '@libraz/libcantus';
+ * const matches = detectChord([60, 64, 67]); // C E G
+ * matches[0]; // { rootPc: 0, quality: 'maj', exact: true, ... }
+ * ```
+ * @category Recognition
  */
 export function detectChord(pitches: number[]): ChordMatch[] {
   const input = uniquePitchClasses(pitches);
@@ -124,6 +139,12 @@ export function detectChord(pitches: number[]): ChordMatch[] {
  *
  * @param pitches MIDI pitches or bare pitch classes.
  * @returns The top-ranked chord, or null when nothing matches.
+ * @example
+ * ```ts
+ * import { detectChordBest } from '@libraz/libcantus';
+ * detectChordBest([60, 64, 67]); // C major triad: { rootPc: 0, quality: 'maj', ... }
+ * ```
+ * @category Recognition
  */
 export function detectChordBest(pitches: number[]): Chord | null {
   const best = detectChord(pitches)[0];
@@ -153,6 +174,13 @@ const MINOR_MASK_VARIANTS = [NATURAL_MINOR_MASK, HARMONIC_MINOR_MASK, MELODIC_MI
  *
  * @param pitches MIDI pitches or bare pitch classes.
  * @returns Ranked key interpretations (empty for an empty input).
+ * @example
+ * ```ts
+ * import { detectKey } from '@libraz/libcantus';
+ * const keys = detectKey([60, 62, 64, 65, 67, 69, 71]); // C major scale
+ * keys[0].mode; // 'major', with keys[0].key.rootPc === 0
+ * ```
+ * @category Recognition
  */
 export function detectKey(pitches: number[]): KeyMatch[] {
   const input = uniquePitchClasses(pitches);

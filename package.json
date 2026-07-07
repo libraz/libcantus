@@ -1,6 +1,6 @@
 {
   "name": "@libraz/libcantus",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Pure-TypeScript music-theory and composition primitives (intervals, scales, chords).",
   "type": "module",
   "license": "Apache-2.0",
@@ -58,6 +58,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "docs": "typedoc",
     "prepare": "[ -d node_modules/typescript ] && tsup || true",
     "prepublishOnly": "yarn build"
   },
@@ -65,6 +66,10 @@
     "@biomejs/biome": "2.5.2",
     "@vitest/coverage-v8": "4.1.9",
     "tsup": "8.5.1",
+    "typedoc": "0.28.20",
+    "typedoc-material-theme": "1.4.1",
+    "typedoc-plugin-extras": "4.0.1",
+    "typedoc-plugin-mdn-links": "5.1.1",
     "typescript": "6.0.3",
     "vitest": "4.1.9"
   }

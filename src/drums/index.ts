@@ -44,33 +44,85 @@ import {
 import { generateAuxPercussionForBar, getPercussionConfig } from './percussion.js';
 import { createRng } from './rng.js';
 
+/**
+ * A single drum onset emitted by {@link generateDrums}.
+ *
+ * @category Composition
+ */
 export type { DrumHit } from './hit.js';
+
+/**
+ * Groove feel (the swing/straight rhythmic character) for {@link generateDrums}.
+ *
+ * @category Composition
+ */
 export type GrooveFeel = Feel;
+
+/**
+ * Drum voicing role and groove style identifiers for {@link generateDrums}.
+ *
+ * @category Composition
+ */
 export type { DrumRole, GrooveStyle } from './internal.js';
 
-/** Public section identifiers for {@link generateDrums}. */
+/**
+ * Public section identifiers for {@link generateDrums}.
+ *
+ * @category Composition
+ */
 export type Section = PublicSection;
 
-/** A Euclidean (Bjorklund) kick pattern for {@link generateDrums}. */
+/**
+ * A Euclidean (Bjorklund) kick pattern for {@link generateDrums}.
+ *
+ * @category Composition
+ */
 export type EuclideanKick = {
   /** Number of kick onsets, clamped to `[0, steps]`. */
   pulses: number;
-  /** Total steps in the bar (1..16, default 16). */
+  /**
+   * Total steps in the bar (1..16).
+   *
+   * @defaultValue 16
+   */
   steps?: number;
-  /** Steps to rotate the onsets toward later positions (default 0). */
+  /**
+   * Steps to rotate the onsets toward later positions.
+   *
+   * @defaultValue 0
+   */
   rotation?: number;
 };
 
-/** Options controlling {@link generateDrums}. */
+/**
+ * Options controlling {@link generateDrums}.
+ *
+ * @category Composition
+ */
 export type DrumGenOptions = {
   bars: number;
   bpm: number;
   style: GrooveStyle;
   section: Section;
   density: number;
+  /**
+   * Replace the final bar with a fill.
+   *
+   * @defaultValue false
+   */
   fills?: boolean;
   feel?: GrooveFeel;
+  /**
+   * Voicing role; `'fxOnly'` suppresses the main kick/snare/ghost/fill voices.
+   *
+   * @defaultValue `'full'`
+   */
   role?: DrumRole;
+  /**
+   * Seed for the deterministic PRNG.
+   *
+   * @defaultValue 0
+   */
   seed?: number;
   /**
    * Section the final-bar fill leads into. Shapes which fill archetype is
@@ -101,6 +153,15 @@ export type DrumGenOptions = {
  *
  * @param opts Generation options.
  * @returns Percussion onsets in bar order.
+ *
+ * @example
+ * ```ts
+ * import { generateDrums } from '@libraz/libcantus';
+ * const hits = generateDrums({ bars: 4, bpm: 120, style: 'standard', section: 'chorus', density: 0.6, fills: true });
+ * // Fully determined by the options plus seed (defaults to 0).
+ * ```
+ *
+ * @category Composition
  */
 export function generateDrums(opts: DrumGenOptions): DrumHit[] {
   const track = new HitList();

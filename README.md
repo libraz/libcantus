@@ -5,11 +5,13 @@ harmony, recognize what you're hearing, voice and reharmonize progressions, and
 generate parts (bass, countermelody, drums, rhythm) — all with no runtime
 dependencies.
 
-[![CI](https://github.com/libraz/libcantus/actions/workflows/ci.yml/badge.svg)](https://github.com/libraz/libcantus/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/libraz/libcantus/ci.yml?branch=main&label=CI)](https://github.com/libraz/libcantus/actions)
+[![npm](https://img.shields.io/npm/v/@libraz/libcantus)](https://www.npmjs.com/package/@libraz/libcantus)
 [![codecov](https://codecov.io/gh/libraz/libcantus/branch/main/graph/badge.svg)](https://codecov.io/gh/libraz/libcantus)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libcantus/blob/main/LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A522-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![docs](https://img.shields.io/badge/docs-API%20reference-b5892e)](https://libraz.github.io/libcantus/)
 
 ## What can you do with it?
 
@@ -285,6 +287,12 @@ import { frequencyOf, edo, justDeviationCents } from '@libraz/libcantus';
 Meter helpers (`TimeSignature`, `parseTimeSignature`, `beatsPerBar`,
 `metricWeight`, `isStrongBeat`, `tuplet`) cover simple and compound meters and
 back the accent-aware generators.
+
+## Documentation
+
+Full API reference — every export with signatures, categorized by domain and
+with runnable examples — is generated from the source and published at
+**[libraz.github.io/libcantus](https://libraz.github.io/libcantus/)**.
 
 ## License
 

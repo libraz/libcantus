@@ -10,7 +10,11 @@ import { enumerateSafePitches } from '../safety/index.js';
 import { nearestScaleTone } from '../scale/index.js';
 import type { KeyScale, NoteEvent } from '../types.js';
 
-/** Options controlling {@link generateCounterMelody}. */
+/**
+ * Options controlling {@link generateCounterMelody}.
+ *
+ * @category Voicing & Counterpoint
+ */
 export type CounterMelodyOptions = {
   /** The lead line to write against, in ascending onset order. */
   melody: NoteEvent[];
@@ -18,22 +22,40 @@ export type CounterMelodyOptions = {
   chordAt: (beat: number) => Chord | null;
   /** Key/scale context for scale-tone decisions. */
   key: KeyScale;
-  /** Meter used for strong-beat decisions (default 4/4). */
+  /**
+   * Meter used for strong-beat decisions.
+   *
+   * @defaultValue 4/4
+   */
   ts?: TimeSignature;
-  /** Which side of the melody the counter line occupies (default `'below'`). */
+  /**
+   * Which side of the melody the counter line occupies.
+   *
+   * @defaultValue 'below'
+   */
   register?: 'above' | 'below';
   /**
-   * Onset strategy: `'complement'` (default) moves where the melody holds or
-   * rests and reinforces some strong beats; `'follow'` mirrors melody onsets.
+   * Onset strategy: `'complement'` moves where the melody holds or rests and
+   * reinforces some strong beats; `'follow'` mirrors melody onsets.
+   *
+   * @defaultValue 'complement'
    */
   rhythm?: 'complement' | 'follow';
-  /** Safety profile applied to candidate pitches (default `'pop'`). */
+  /**
+   * Safety profile applied to candidate pitches.
+   *
+   * @defaultValue 'pop'
+   */
   profile?: 'strict' | 'pop';
   /** Lowest MIDI pitch the counter line may use (default derived from `register`). */
   pitchLow?: number;
   /** Highest MIDI pitch the counter line may use (default derived from `register`). */
   pitchHigh?: number;
-  /** PRNG seed; the same seed always yields the same line (default 0). */
+  /**
+   * PRNG seed; the same seed always yields the same line.
+   *
+   * @defaultValue 0
+   */
   seed?: number;
 };
 
@@ -240,6 +262,17 @@ function fallbackPitch(
  *
  * @param opts The lead line, chord context callback, key, and generation knobs.
  * @returns The counter line as note events sorted by onset; `[]` for an empty melody.
+ * @example
+ * ```ts
+ * import { generateCounterMelody, majorKey, parseChordSymbol } from '@libraz/libcantus';
+ * const melody = [{ pitch: 72, startBeat: 0, durationBeat: 2 }];
+ * const counter = generateCounterMelody({
+ *   melody,
+ *   chordAt: () => parseChordSymbol('C'),
+ *   key: majorKey(0),
+ * }); // note events below the melody, in onset order
+ * ```
+ * @category Voicing & Counterpoint
  */
 export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
   const melody = [...opts.melody].sort((a, b) => a.startBeat - b.startBeat);

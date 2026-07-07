@@ -117,6 +117,13 @@ function spellPitchClassBare(pc: number, spelling: 'sharp' | 'flat'): NoteData {
  * An immutable spelled note: a diatonic letter plus a chromatic alteration and
  * an optional octave. Wraps the plain note object and delegates to the pitch
  * module; every transformation returns a new instance.
+ *
+ * @category Class API
+ * @example
+ * ```ts
+ * import { Note } from '@libraz/libcantus';
+ * Note.of('C4').transpose(7).name; // 'G4'
+ * ```
  */
 export class Note {
   readonly #data: NoteData;
@@ -266,6 +273,13 @@ export class Note {
  * An immutable spelled interval value: a diatonic number, a quality label, and
  * a signed semitone span. A thin convenience wrapper over the pitch module's
  * plain interval result.
+ *
+ * @category Class API
+ * @example
+ * ```ts
+ * import { Interval, Note } from '@libraz/libcantus';
+ * Interval.between(Note.of('C4'), Note.of('G4')).name; // 'P5'
+ * ```
  */
 export class Interval {
   readonly #number: number;
@@ -365,6 +379,13 @@ function bestTonicForScale(rootPc: number, scale: KeyScale): Note {
  * An immutable key/scale: a `KeyScale` (root pitch class plus mode mask) paired
  * with a spelled tonic that anchors letter-name spelling. Acts as the factory
  * for key-aware chords.
+ *
+ * @category Class API
+ * @example
+ * ```ts
+ * import { Key } from '@libraz/libcantus';
+ * Key.major('C').chord(4).symbol(); // 'G' (the diatonic triad on scale degree 4)
+ * ```
  */
 export class Key {
   readonly #scale: KeyScale;
@@ -579,6 +600,13 @@ export class Key {
  * optional slash bass, optionally carrying a {@link Key} context. Analysis
  * methods (`roman`, `function`, `analyze`, ...) use an explicitly passed key
  * first and fall back to the carried context.
+ *
+ * @category Class API
+ * @example
+ * ```ts
+ * import { Chord } from '@libraz/libcantus';
+ * Chord.parse('Cmaj7').invert(1).symbol(); // 'Cmaj7/E' (third in the bass)
+ * ```
  */
 export class Chord {
   readonly #data: ChordData;
@@ -931,6 +959,15 @@ export class Chord {
 /**
  * An immutable ordered sequence of chords, optionally carrying a {@link Key}
  * context shared by its analysis methods.
+ *
+ * @category Class API
+ * @example
+ * ```ts
+ * import { Key } from '@libraz/libcantus';
+ * const key = Key.major('C');
+ * key.chord(1).progressionTo(key.chord(4), key.chord(0)).roman();
+ * // ['ii', 'V', 'I']
+ * ```
  */
 export class Progression {
   readonly #chords: readonly Chord[];

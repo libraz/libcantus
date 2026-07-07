@@ -29,17 +29,29 @@ import type { KeyScale, NoteEvent } from '../types.js';
 /** Float tolerance for beat boundary comparisons. */
 const EPS = 1e-9;
 
-/** The musical role a track plays in the arrangement. */
+/**
+ * The musical role a track plays in the arrangement.
+ *
+ * @category Arrangement & Analysis
+ */
 export type TrackRole = 'melody' | 'harmony' | 'bass' | 'other';
 
-/** One input track: its notes plus optional name and role. */
+/**
+ * One input track: its notes plus optional name and role.
+ *
+ * @category Arrangement & Analysis
+ */
 export type ArrangementTrack = {
   name?: string;
   role?: TrackRole;
   notes: NoteEvent[];
 };
 
-/** A track after analysis: its resolved name, role, and per-note annotations. */
+/**
+ * A track after analysis: its resolved name, role, and per-note annotations.
+ *
+ * @category Arrangement & Analysis
+ */
 export type TrackAnalysis = {
   name: string;
   role: TrackRole;
@@ -47,7 +59,11 @@ export type TrackAnalysis = {
   notes: AnalyzedNote[];
 };
 
-/** A note that clashes with the harmony sounding beneath it. */
+/**
+ * A note that clashes with the harmony sounding beneath it.
+ *
+ * @category Arrangement & Analysis
+ */
 export type Conflict = {
   beat: number;
   trackName: string;
@@ -59,7 +75,11 @@ export type Conflict = {
   rationale?: string;
 };
 
-/** The full result of {@link analyzeArrangement}. */
+/**
+ * The full result of {@link analyzeArrangement}.
+ *
+ * @category Arrangement & Analysis
+ */
 export type ArrangementAnalysis = {
   key: KeyScale;
   timeline: ChordTimeline;
@@ -70,15 +90,31 @@ export type ArrangementAnalysis = {
   conflicts: Conflict[];
 };
 
-/** Options controlling {@link analyzeArrangement} and {@link tensionCurve}. */
+/**
+ * Options controlling {@link analyzeArrangement} and {@link tensionCurve}.
+ *
+ * @category Arrangement & Analysis
+ */
 export type ArrangementOptions = {
   /** Key context; inferred from the pooled notes when omitted. */
   key?: KeyScale;
-  /** Time signature; defaults to 4/4. */
+  /**
+   * Time signature; defaults to 4/4.
+   *
+   * @defaultValue `4/4`
+   */
   ts?: TimeSignature;
-  /** Chord-slot length in beats; defaults to one bar of `ts`. */
+  /**
+   * Chord-slot length in beats; defaults to one bar of `ts`.
+   *
+   * @defaultValue one bar of `ts`
+   */
   harmonicRhythm?: number;
-  /** Safety profile used for conflict detection; defaults to `pop`. */
+  /**
+   * Safety profile used for conflict detection; defaults to `pop`.
+   *
+   * @defaultValue `'pop'`
+   */
   profile?: SafetyProfile;
 };
 
@@ -283,6 +319,17 @@ function evaluationBeats(note: VoiceNote, timeline: ChordTimeline): number[] {
  * @param tracks The tracks to analyse.
  * @param opts Analysis options; see {@link ArrangementOptions}.
  * @returns The inferred harmony, per-track annotations, cadences, and conflicts.
+ * @example
+ * ```ts
+ * import { analyzeArrangement } from '@libraz/libcantus';
+ * const melody = [
+ *   { pitch: 60, startBeat: 0, durationBeat: 2 },
+ *   { pitch: 67, startBeat: 2, durationBeat: 2 },
+ * ];
+ * const { key, conflicts } = analyzeArrangement([{ role: 'melody', notes: melody }]);
+ * conflicts; // notes clashing with the inferred harmony, worst severity first
+ * ```
+ * @category Arrangement & Analysis
  */
 export function analyzeArrangement(
   tracks: ArrangementTrack[],
@@ -356,7 +403,11 @@ export function analyzeArrangement(
   return { key, timeline, segmentConfidence, cadences, tracks: trackAnalyses, conflicts };
 }
 
-/** A tension reading sampled at a beat. */
+/**
+ * A tension reading sampled at a beat.
+ *
+ * @category Arrangement & Analysis
+ */
 export type TensionPoint = {
   beat: number;
   /** Combined tension in [0, 1]. */
@@ -403,6 +454,14 @@ function clamp01(value: number): number {
  * @param opts Analysis options plus an optional `step` (default one beat).
  * @returns One {@link TensionPoint} per sampled beat, in beat order.
  * @throws If `step` is not positive.
+ * @example
+ * ```ts
+ * import { tensionCurve } from '@libraz/libcantus';
+ * const notes = [{ pitch: 60, startBeat: 0, durationBeat: 4 }];
+ * const curve = tensionCurve([{ notes }], { step: 1 });
+ * curve; // one { beat, tension } sample per beat, in beat order
+ * ```
+ * @category Arrangement & Analysis
  */
 export function tensionCurve(
   tracks: ArrangementTrack[],

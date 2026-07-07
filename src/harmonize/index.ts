@@ -14,20 +14,37 @@ import {
 } from '../scale/index.js';
 import type { KeyScale, NoteEvent } from '../types.js';
 
-/** A melody note supplied to the harmonizer: a {@link NoteEvent}. */
+/**
+ * A melody note supplied to the harmonizer: a {@link NoteEvent}.
+ *
+ * @category Reharmonization
+ */
 export type MelodyNote = NoteEvent;
 
-/** Options controlling {@link harmonizeMelody}. */
+/**
+ * Options controlling {@link harmonizeMelody}.
+ *
+ * @category Reharmonization
+ */
 export type HarmonizeOptions = {
   melody: MelodyNote[];
   key: KeyScale | 'infer';
   harmonicRhythm: number;
   reharmonize: 'diatonic' | 'secondaryDominant' | 'borrowed';
   placement: { transposeSearch: boolean; octaveSearch: boolean };
+  /**
+   * Seed for the deterministic tie-break perturbation.
+   *
+   * @defaultValue 0
+   */
   seed?: number;
 };
 
-/** The chosen transpose, key, chord path, and per-note roles. */
+/**
+ * The chosen transpose, key, chord path, and per-note roles.
+ *
+ * @category Reharmonization
+ */
 export type HarmonizeResult = {
   transposeSemitones: number;
   key: KeyScale;
@@ -326,6 +343,22 @@ function harmonizeOnce(
  * @param opts Melody, key (or `'infer'`), harmonic rhythm, reharmonization
  *   strength, height-search flags, and seed.
  * @returns The chosen transpose, key, chord path, and per-note roles.
+ * @example
+ * ```ts
+ * import { harmonizeMelody, majorKey } from '@libraz/libcantus';
+ * const result = harmonizeMelody({
+ *   melody: [
+ *     { pitch: 60, startBeat: 0, durationBeat: 1 },
+ *     { pitch: 64, startBeat: 1, durationBeat: 1 },
+ *   ],
+ *   key: majorKey(0),
+ *   harmonicRhythm: 1,
+ *   reharmonize: 'diatonic',
+ *   placement: { transposeSearch: false, octaveSearch: false },
+ * });
+ * result.chords; // one GeneratedChord per harmonic-rhythm segment
+ * ```
+ * @category Reharmonization
  */
 export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   const key = opts.key === 'infer' ? inferKey(opts.melody) : opts.key;

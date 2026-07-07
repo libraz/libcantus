@@ -3,13 +3,25 @@ import { diatonicTriad } from '../chord/index.js';
 import { scaleTonesInDegreeOrder } from '../scale/index.js';
 import type { KeyScale } from '../types.js';
 
-/** Broad production style a progression preset suits. */
+/**
+ * Broad production style a progression preset suits.
+ *
+ * @category Composition
+ */
 export type ProgStyle = 'minimal' | 'dance' | 'idol' | 'rock';
 
-/** Harmonic-function role of a progression as a whole. */
+/**
+ * Harmonic-function role of a progression as a whole.
+ *
+ * @category Composition
+ */
 export type ProgFunction = 'loop' | 'tensionBuild' | 'cadenceStrong' | 'stable';
 
-/** A named chord-progression preset expressed in scale degrees. */
+/**
+ * A named chord-progression preset expressed in scale degrees.
+ *
+ * @category Composition
+ */
 export type ProgressionPreset = {
   id: string;
   name: string;
@@ -18,7 +30,11 @@ export type ProgressionPreset = {
   styles: ProgStyle[];
 };
 
-/** A chord placed on the timeline by {@link generateProgression}. */
+/**
+ * A chord placed on the timeline by {@link generateProgression}.
+ *
+ * @category Composition
+ */
 export type GeneratedChord = {
   rootPc: number;
   quality: ChordQuality;
@@ -30,7 +46,11 @@ export type GeneratedChord = {
   secondaryDominant?: boolean;
 };
 
-/** Options controlling {@link generateProgression}. */
+/**
+ * Options controlling {@link generateProgression}.
+ *
+ * @category Composition
+ */
 export type GenerateProgressionOptions = {
   key: KeyScale;
   style: ProgStyle;
@@ -38,6 +58,11 @@ export type GenerateProgressionOptions = {
   presetId?: string;
   ext?: ChordQuality | 'auto';
   reharmonize?: boolean;
+  /**
+   * Seed for the deterministic preset choice and reharmonization.
+   *
+   * @defaultValue 0
+   */
   seed?: number;
 };
 
@@ -208,12 +233,20 @@ const BORROWED_OFFSET: Record<number, number> = {
   14: 6, // #IV
 };
 
-/** All built-in progression presets. */
+/**
+ * All built-in progression presets.
+ *
+ * @category Composition
+ */
 export function progressions(): ProgressionPreset[] {
   return PRESETS.map((p) => ({ ...p, degrees: [...p.degrees], styles: [...p.styles] }));
 }
 
-/** Presets whose style list includes the given style. */
+/**
+ * Presets whose style list includes the given style.
+ *
+ * @category Composition
+ */
 export function progressionsByStyle(style: ProgStyle): ProgressionPreset[] {
   return progressions().filter((p) => p.styles.includes(style));
 }
@@ -277,6 +310,15 @@ function autoQuality(degree: number, key: KeyScale): ChordQuality {
  * @param opts Generation options.
  * @returns One chord per bar in timeline order.
  * @throws If `presetId` is given but does not match any built-in preset.
+ *
+ * @example
+ * ```ts
+ * import { generateProgression, majorKey } from '@libraz/libcantus';
+ * const chords = generateProgression({ key: majorKey(0), style: 'dance', bars: 4 });
+ * // Deterministic for a given seed (defaults to 0); one GeneratedChord per bar.
+ * ```
+ *
+ * @category Composition
  */
 export function generateProgression(opts: GenerateProgressionOptions): GeneratedChord[] {
   const seed = opts.seed ?? 0;

@@ -11,6 +11,8 @@
 /**
  * An equal-tempered tuning: a reference pitch and a number of equal divisions of
  * the octave. With `divisions === 12` a step index is an ordinary MIDI number.
+ *
+ * @category Pitch & Intervals
  */
 export type Tuning = {
   /** Step index (MIDI number when `divisions` is 12) whose frequency is `refFreq`. */
@@ -21,7 +23,11 @@ export type Tuning = {
   divisions: number;
 };
 
-/** Standard twelve-tone equal temperament, A4 (MIDI 69) = 440 Hz. */
+/**
+ * Standard twelve-tone equal temperament, A4 (MIDI 69) = 440 Hz.
+ *
+ * @category Pitch & Intervals
+ */
 export const TWELVE_TET: Tuning = { refStep: 69, refFreq: 440, divisions: 12 };
 
 /**
@@ -31,6 +37,13 @@ export const TWELVE_TET: Tuning = { refStep: 69, refFreq: 440, divisions: 12 };
  * @param refFreq Reference frequency in Hz (default 440).
  * @param refStep Step index of the reference (default 69).
  * @returns The tuning.
+ * @example
+ * ```ts
+ * import { edo, frequencyOf } from '@libraz/libcantus';
+ * const et19 = edo(19); // { refStep: 69, refFreq: 440, divisions: 19 }
+ * frequencyOf(70, et19); // one 19-EDO step above A4
+ * ```
+ * @category Pitch & Intervals
  */
 export function edo(n: number, refFreq = 440, refStep = 69): Tuning {
   return { refStep, refFreq, divisions: n };
@@ -42,6 +55,13 @@ export function edo(n: number, refFreq = 440, refStep = 69): Tuning {
  * @param step Step index (a MIDI number under 12-EDO).
  * @param tuning The tuning (default 12-TET).
  * @returns The frequency in Hz.
+ * @example
+ * ```ts
+ * import { frequencyOf } from '@libraz/libcantus';
+ * frequencyOf(69); // 440 (A4 in 12-TET)
+ * frequencyOf(60); // middle C in Hz
+ * ```
+ * @category Pitch & Intervals
  */
 export function frequencyOf(step: number, tuning: Tuning = TWELVE_TET): number {
   return tuning.refFreq * 2 ** ((step - tuning.refStep) / tuning.divisions);
@@ -54,6 +74,7 @@ export function frequencyOf(step: number, tuning: Tuning = TWELVE_TET): number {
  * @param freq Frequency in Hz.
  * @param tuning The tuning (default 12-TET).
  * @returns The nearest step index.
+ * @category Pitch & Intervals
  */
 export function nearestStep(freq: number, tuning: Tuning = TWELVE_TET): number {
   return Math.round(tuning.refStep + tuning.divisions * Math.log2(freq / tuning.refFreq));
@@ -65,6 +86,7 @@ export function nearestStep(freq: number, tuning: Tuning = TWELVE_TET): number {
  * @param a Lower/first frequency in Hz.
  * @param b Upper/second frequency in Hz.
  * @returns Cents from `a` to `b` (negative if `b` is lower).
+ * @category Pitch & Intervals
  */
 export function centsBetweenFreq(a: number, b: number): number {
   return 1200 * Math.log2(b / a);
@@ -76,6 +98,7 @@ export function centsBetweenFreq(a: number, b: number): number {
  * @param steps Number of steps.
  * @param tuning The tuning (default 12-TET).
  * @returns The cents.
+ * @category Pitch & Intervals
  */
 export function centsOfSteps(steps: number, tuning: Tuning = TWELVE_TET): number {
   return (steps * 1200) / tuning.divisions;
@@ -88,6 +111,7 @@ export function centsOfSteps(steps: number, tuning: Tuning = TWELVE_TET): number
  * @param numerator Ratio numerator.
  * @param denominator Ratio denominator.
  * @returns The interval in cents.
+ * @category Pitch & Intervals
  */
 export function ratioToCents(numerator: number, denominator: number): number {
   return 1200 * Math.log2(numerator / denominator);
@@ -96,6 +120,8 @@ export function ratioToCents(numerator: number, denominator: number): number {
 /**
  * Five-limit just-intonation ratios for the twelve interval classes above a
  * unison, indexed by semitone class (0..12).
+ *
+ * @category Pitch & Intervals
  */
 export const JUST_RATIOS: Record<number, [number, number]> = {
   0: [1, 1],
@@ -119,6 +145,7 @@ export const JUST_RATIOS: Record<number, [number, number]> = {
  *
  * @param semitoneClass Semitone class in [0, 12].
  * @returns The deviation in cents, or NaN if the class has no listed ratio.
+ * @category Pitch & Intervals
  */
 export function justDeviationCents(semitoneClass: number): number {
   const ratio = JUST_RATIOS[semitoneClass];

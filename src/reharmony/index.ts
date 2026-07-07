@@ -32,7 +32,11 @@ function mod12(n: number): number {
   return ((n % 12) + 12) % 12;
 }
 
-/** The kind of substitution relationship a candidate realizes. */
+/**
+ * The kind of substitution relationship a candidate realizes.
+ *
+ * @category Reharmonization
+ */
 export type SubstitutionType =
   | 'tritone'
   | 'relative'
@@ -40,7 +44,11 @@ export type SubstitutionType =
   | 'chromatic-mediant'
   | 'secondary-dominant';
 
-/** A proposed chord substitution with its relationship, numeral, and function. */
+/**
+ * A proposed chord substitution with its relationship, numeral, and function.
+ *
+ * @category Reharmonization
+ */
 export type Substitution = {
   chord: Chord;
   type: SubstitutionType;
@@ -48,7 +56,11 @@ export type Substitution = {
   function: HarmonicFunction;
 };
 
-/** Options controlling which substitutions {@link substituteChord} returns. */
+/**
+ * Options controlling which substitutions {@link substituteChord} returns.
+ *
+ * @category Reharmonization
+ */
 export type SubstituteOptions = {
   /**
    * Melody pitch classes that must remain chord tones. When given, only
@@ -132,6 +144,13 @@ const THIRD_OFFSETS = [3, 4, 8, 9] as const;
  * @param key The prevailing key.
  * @param opts Optional melody-preservation constraint.
  * @returns The deduplicated substitution candidates.
+ * @example
+ * ```ts
+ * import { substituteChord, makeChord, majorKey } from '@libraz/libcantus';
+ * const subs = substituteChord(makeChord(7, 'dom7'), majorKey(0));
+ * // includes the tritone sub Db7 (rootPc 1, quality 'dom7')
+ * ```
+ * @category Reharmonization
  */
 export function substituteChord(
   chord: Chord,
@@ -214,7 +233,11 @@ export function substituteChord(
   return results;
 }
 
-/** A borrowed chord in the modal-interchange palette of a key. */
+/**
+ * A borrowed chord in the modal-interchange palette of a key.
+ *
+ * @category Reharmonization
+ */
 export type BorrowedChord = {
   chord: Chord;
   roman: string;
@@ -231,6 +254,7 @@ export type BorrowedChord = {
  *
  * @param key The prevailing key.
  * @returns The borrowed-chord palette.
+ * @category Reharmonization
  */
 export function modalInterchangePalette(key: KeyScale): BorrowedChord[] {
   const palette: BorrowedChord[] = [];
@@ -275,6 +299,13 @@ export function modalInterchangePalette(key: KeyScale): BorrowedChord[] {
  * @param chord The chord to reflect.
  * @param key The prevailing key.
  * @returns The negative-harmony counterpart of the chord.
+ * @example
+ * ```ts
+ * import { negativeHarmonyMirror, makeChord, majorKey } from '@libraz/libcantus';
+ * negativeHarmonyMirror(makeChord(7, 'maj'), majorKey(0));
+ * // G major reflected across C's axis => F minor (rootPc 5, quality 'min')
+ * ```
+ * @category Reharmonization
  */
 export function negativeHarmonyMirror(chord: Chord, key: KeyScale): Chord {
   const tonic = mod12(key.rootPc);

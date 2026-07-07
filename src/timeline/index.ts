@@ -10,14 +10,22 @@ import type { GeneratedChord } from '../progression/index.js';
 import { isScaleTone, majorKey } from '../scale/index.js';
 import type { KeyScale, NoteEvent } from '../types.js';
 
-/** A chord occupying a half-open beat span. */
+/**
+ * A chord occupying a half-open beat span.
+ *
+ * @category Arrangement & Analysis
+ */
 export type ChordSegment = {
   startBeat: number;
   endBeat: number;
   chord: Chord;
 };
 
-/** A beat-indexed sequence of chord segments. */
+/**
+ * A beat-indexed sequence of chord segments.
+ *
+ * @category Arrangement & Analysis
+ */
 export type ChordTimeline = {
   /** The chord sounding at a beat, or null when no segment covers it. */
   at: (beat: number) => Chord | null;
@@ -35,6 +43,7 @@ export type ChordTimeline = {
  * @param chords Placed chords in time order.
  * @param totalBeats End of the timeline in beats.
  * @returns A queryable chord timeline.
+ * @category Arrangement & Analysis
  */
 export function chordTimelineFromChords(
   chords: GeneratedChord[],
@@ -96,19 +105,39 @@ function pitchClass(value: number): number {
   return ((Math.trunc(value) % 12) + 12) % 12;
 }
 
-/** Options controlling {@link chordTimelineFromNotes}. */
+/**
+ * Options controlling {@link chordTimelineFromNotes}.
+ *
+ * @category Arrangement & Analysis
+ */
 export type ChordTimelineOptions = {
   /** Key context; inferred from the notes with {@link detectKey} when omitted. */
   key?: KeyScale;
-  /** Time signature used for metric accents; defaults to 4/4. */
+  /**
+   * Time signature used for metric accents; defaults to 4/4.
+   *
+   * @defaultValue `4/4`
+   */
   ts?: TimeSignature;
-  /** Window length in beats per chord slot; defaults to one bar of `ts`. */
+  /**
+   * Window length in beats per chord slot; defaults to one bar of `ts`.
+   *
+   * @defaultValue one bar of `ts`
+   */
   harmonicRhythm?: number;
-  /** End of the analyzed span in beats; defaults to the end of the last note. */
+  /**
+   * End of the analyzed span in beats; defaults to the end of the last note.
+   *
+   * @defaultValue the end of the last note
+   */
   totalBeats?: number;
 };
 
-/** The result of {@link chordTimelineFromNotes}. */
+/**
+ * The result of {@link chordTimelineFromNotes}.
+ *
+ * @category Arrangement & Analysis
+ */
 export type ChordTimelineResult = {
   /** The inferred timeline, with adjacent identical chords merged. */
   timeline: ChordTimeline;
@@ -274,6 +303,18 @@ function sameChord(a: Chord, b: Chord): boolean {
  * @param opts Analysis options; see {@link ChordTimelineOptions}.
  * @returns The inferred timeline, the key used, and per-segment confidences.
  * @throws If `harmonicRhythm` is not positive.
+ * @example
+ * ```ts
+ * import { chordTimelineFromNotes } from '@libraz/libcantus';
+ * const notes = [
+ *   { pitch: 60, startBeat: 0, durationBeat: 2 }, // C
+ *   { pitch: 64, startBeat: 0, durationBeat: 2 }, // E
+ *   { pitch: 67, startBeat: 0, durationBeat: 2 }, // G
+ * ];
+ * const { timeline, key } = chordTimelineFromNotes(notes);
+ * timeline.at(0); // the chord inferred over beat 0, or null
+ * ```
+ * @category Arrangement & Analysis
  */
 export function chordTimelineFromNotes(
   notes: NoteEvent[],
@@ -322,7 +363,11 @@ export function chordTimelineFromNotes(
   };
 }
 
-/** A cadence found between two consecutive timeline segments. */
+/**
+ * A cadence found between two consecutive timeline segments.
+ *
+ * @category Arrangement & Analysis
+ */
 export type CadenceHit = {
   /** The beat where the cadence arrives (the second chord's onset). */
   atBeat: number;
@@ -342,6 +387,17 @@ export type CadenceHit = {
  * @param timeline The chord timeline to scan.
  * @param key The prevailing key.
  * @returns The cadences found, in time order.
+ * @example
+ * ```ts
+ * import { chordTimelineFromNotes, detectCadences } from '@libraz/libcantus';
+ * const notes = [
+ *   { pitch: 67, startBeat: 0, durationBeat: 4 }, // G, a dominant
+ *   { pitch: 60, startBeat: 4, durationBeat: 4 }, // C, the tonic
+ * ];
+ * const { timeline, key } = chordTimelineFromNotes(notes);
+ * const cadences = detectCadences(timeline, key);
+ * ```
+ * @category Arrangement & Analysis
  */
 export function detectCadences(timeline: ChordTimeline, key: KeyScale): CadenceHit[] {
   const hits: CadenceHit[] = [];

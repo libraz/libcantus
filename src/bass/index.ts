@@ -18,29 +18,57 @@ import { createRng } from '../random/index.js';
 import { nearestScaleTone } from '../scale/index.js';
 import type { KeyScale, NoteEvent } from '../types.js';
 
-/** A chord sounding over a half-open beat span `[startBeat, endBeat)`. */
+/**
+ * A chord sounding over a half-open beat span `[startBeat, endBeat)`.
+ *
+ * @category Composition
+ */
 export type BassSegment = {
   startBeat: number;
   endBeat: number;
   chord: Chord;
 };
 
-/** The bass-line idiom to generate. */
+/**
+ * The bass-line idiom to generate.
+ *
+ * @category Composition
+ */
 export type BassStyle = 'root' | 'rootFifth' | 'pop' | 'walking' | 'arpeggio';
 
-/** Options controlling {@link generateBassLine}. */
+/**
+ * Options controlling {@link generateBassLine}.
+ *
+ * @category Composition
+ */
 export type BassLineOptions = {
   /** Chord placement to follow; need not be pre-sorted. */
   segments: BassSegment[];
   /** Key/scale context, used for diatonic approach tones in `walking`. */
   key: KeyScale;
-  /** Time signature; used for metric accents. Default 4/4. */
+  /**
+   * Time signature; used for metric accents.
+   *
+   * @defaultValue `{ numerator: 4, denominator: 4 }`
+   */
   ts?: TimeSignature;
-  /** Bass-line idiom. Default `'root'`. */
+  /**
+   * Bass-line idiom.
+   *
+   * @defaultValue `'root'`
+   */
   style?: BassStyle;
-  /** Target register as a base MIDI octave; roots land around `octave*12+12`. Default 2. */
+  /**
+   * Target register as a base MIDI octave; roots land around `octave*12+12`.
+   *
+   * @defaultValue 2
+   */
   octave?: number;
-  /** Seed for the deterministic PRNG. Default 0. */
+  /**
+   * Seed for the deterministic PRNG.
+   *
+   * @defaultValue 0
+   */
   seed?: number;
 };
 
@@ -240,6 +268,18 @@ function buildWalking(ctx: BuildContext, seg: BassSegment, next: BassSegment | u
  *
  * @param opts Segments, key, and generation options.
  * @returns Bass notes sorted by onset, non-overlapping.
+ *
+ * @example
+ * ```ts
+ * import { generateBassLine, makeChord, majorKey } from '@libraz/libcantus';
+ * const segments = [
+ *   { startBeat: 0, endBeat: 4, chord: makeChord(0, 'maj') },
+ *   { startBeat: 4, endBeat: 8, chord: makeChord(7, 'maj') },
+ * ];
+ * const notes = generateBassLine({ segments, key: majorKey(0), style: 'walking' });
+ * ```
+ *
+ * @category Composition
  */
 export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
   const segments = [...opts.segments].sort((a, b) => a.startBeat - b.startBeat);

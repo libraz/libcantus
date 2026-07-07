@@ -19,10 +19,18 @@ import {
 } from '../scale/index.js';
 import type { KeyScale } from '../types.js';
 
-/** The three broad harmonic functions of tonal music. */
+/**
+ * The three broad harmonic functions of tonal music.
+ *
+ * @category Functional Harmony
+ */
 export type HarmonicFunction = 'tonic' | 'subdominant' | 'dominant';
 
-/** A recognized cadence type, or null when a chord pair forms none. */
+/**
+ * A recognized cadence type, or null when a chord pair forms none.
+ *
+ * @category Functional Harmony
+ */
 export type Cadence = 'authentic' | 'plagal' | 'half' | 'deceptive' | null;
 
 /** Roman numeral glyphs indexed by degree number - 1. */
@@ -75,7 +83,11 @@ function mod12(n: number): number {
   return ((n % 12) + 12) % 12;
 }
 
-/** Whether a key's scale has a minor third and no major third (a minor key). */
+/**
+ * Whether a key's scale has a minor third and no major third (a minor key).
+ *
+ * @category Functional Harmony
+ */
 export function isMinorKey(key: KeyScale): boolean {
   const hasMinorThird = (key.modeMask12 >> 3) & 1;
   const hasMajorThird = (key.modeMask12 >> 4) & 1;
@@ -287,6 +299,12 @@ function chordFromParsed(parsed: {
  * @param text The Roman numeral.
  * @param key The prevailing key.
  * @returns The chord.
+ * @example
+ * ```ts
+ * import { romanToChord, majorKey } from '@libraz/libcantus';
+ * romanToChord('V7', majorKey(0)); // G7 in C major: { rootPc: 7, quality: 'dom7', ... }
+ * ```
+ * @category Functional Harmony
  */
 export function romanToChord(text: string, key: KeyScale): Chord {
   const trimmed = text.trim();
@@ -398,6 +416,12 @@ const SEVENTH_FIGURE_QUALITIES: ReadonlySet<ChordQuality> = new Set([
  * @param chord The chord to name.
  * @param key The prevailing key.
  * @returns The Roman numeral string.
+ * @example
+ * ```ts
+ * import { chordToRoman, makeChord, majorKey } from '@libraz/libcantus';
+ * chordToRoman(makeChord(7, 'dom7'), majorKey(0)); // => 'V7' (G7 in C major)
+ * ```
+ * @category Functional Harmony
  */
 export function chordToRoman(chord: Chord, key: KeyScale): string {
   const { degreeNumber, accidental } = romanSpelling(chord.rootPc, key);
@@ -437,15 +461,24 @@ export function chordToRoman(chord: Chord, key: KeyScale): string {
  * @param chord The chord.
  * @param key The prevailing key.
  * @returns The harmonic function.
+ * @category Functional Harmony
  */
 export function functionOf(chord: Chord, key: KeyScale): HarmonicFunction {
   return FUNCTION_BY_OFFSET[mod12(chord.rootPc - key.rootPc)] ?? 'tonic';
 }
 
-/** The origin of a recognized non-diatonic chord, or null when none applies. */
+/**
+ * The origin of a recognized non-diatonic chord, or null when none applies.
+ *
+ * @category Functional Harmony
+ */
 export type BorrowedSource = 'parallel-minor' | 'parallel-major' | 'neapolitan' | null;
 
-/** The result of {@link analyzeChord}: function, borrowing, and Roman numeral. */
+/**
+ * The result of {@link analyzeChord}: function, borrowing, and Roman numeral.
+ *
+ * @category Functional Harmony
+ */
 export type ChordAnalysis = {
   function: HarmonicFunction;
   borrowed: boolean;
@@ -464,6 +497,7 @@ export type ChordAnalysis = {
  * @param chord The chord to test.
  * @param key The prevailing key.
  * @returns True if all chord pitch classes are scale tones.
+ * @category Functional Harmony
  */
 export function isDiatonic(chord: Chord, key: KeyScale): boolean {
   return chordPitchClasses(chord).every((pc) => isScaleTone(pc, key));
@@ -477,6 +511,7 @@ export function isDiatonic(chord: Chord, key: KeyScale): boolean {
  *
  * @param key The key to mirror.
  * @returns The parallel major or natural-minor key on the same tonic.
+ * @category Functional Harmony
  */
 export function parallelKey(key: KeyScale): KeyScale {
   return {
@@ -516,6 +551,7 @@ function isNeapolitan(chord: Chord, key: KeyScale): boolean {
  * @param chord The chord to test.
  * @param key The prevailing key.
  * @returns True if the chord is borrowed from the parallel mode.
+ * @category Functional Harmony
  */
 export function isBorrowedChord(chord: Chord, key: KeyScale): boolean {
   if (isDiatonic(chord, key)) {
@@ -538,6 +574,7 @@ export function isBorrowedChord(chord: Chord, key: KeyScale): boolean {
  * @param chord The chord to classify.
  * @param key The prevailing key.
  * @returns The borrowing source, or null.
+ * @category Functional Harmony
  */
 export function borrowedSource(chord: Chord, key: KeyScale): BorrowedSource {
   if (isDiatonic(chord, key)) {
@@ -595,6 +632,13 @@ function qualityAwareFunction(chord: Chord, key: KeyScale): HarmonicFunction {
  * @param chord The chord to analyze.
  * @param key The prevailing key.
  * @returns The chord analysis.
+ * @example
+ * ```ts
+ * import { analyzeChord, makeChord, majorKey } from '@libraz/libcantus';
+ * analyzeChord(makeChord(7, 'dom7'), majorKey(0));
+ * // { function: 'dominant', borrowed: false, source: null, roman: 'V7' }
+ * ```
+ * @category Functional Harmony
  */
 export function analyzeChord(chord: Chord, key: KeyScale): ChordAnalysis {
   const source = borrowedSource(chord, key);
@@ -621,6 +665,12 @@ export function analyzeChord(chord: Chord, key: KeyScale): ChordAnalysis {
  * @param to The final chord.
  * @param key The prevailing key.
  * @returns The cadence type, or null.
+ * @example
+ * ```ts
+ * import { detectCadence, makeChord, majorKey } from '@libraz/libcantus';
+ * detectCadence(makeChord(7, 'maj'), makeChord(0, 'maj'), majorKey(0)); // => 'authentic'
+ * ```
+ * @category Functional Harmony
  */
 export function detectCadence(from: Chord, to: Chord, key: KeyScale): Cadence {
   const tonic = mod12(key.rootPc);
@@ -653,6 +703,7 @@ export function detectCadence(from: Chord, to: Chord, key: KeyScale): Cadence {
  * @param targetDegree 0-based scale degree to tonicize.
  * @param key The prevailing key.
  * @returns A dominant-seventh chord a fifth above the target's root.
+ * @category Functional Harmony
  */
 export function secondaryDominant(targetDegree: number, key: KeyScale): Chord {
   const targetRoot = degreeRootPc(targetDegree + 1, key);

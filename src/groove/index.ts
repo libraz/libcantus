@@ -17,19 +17,47 @@ import {
 import { createRng } from '../random/index.js';
 import type { NoteEvent } from '../types.js';
 
-/** Options controlling {@link humanize}. */
+/**
+ * Options controlling {@link humanize}.
+ *
+ * @category Rhythm & Meter
+ */
 export type HumanizeOptions = {
-  /** Time signature used to derive metric accents. Default 4/4. */
+  /**
+   * Time signature used to derive metric accents.
+   *
+   * @defaultValue 4/4
+   */
   ts?: TimeSignature;
-  /** Maximum timing jitter in quarter-note beats, applied as ±this value. Default 0.02. */
+  /**
+   * Maximum timing jitter in quarter-note beats, applied as ±this value.
+   *
+   * @defaultValue 0.02
+   */
   timing?: number;
-  /** Maximum velocity jitter (MIDI units), applied as ±this value. Default 8. */
+  /**
+   * Maximum velocity jitter (MIDI units), applied as ±this value.
+   *
+   * @defaultValue 8
+   */
   velocity?: number;
-  /** How much louder strong beats get relative to weak ones, in MIDI velocity units. Default 12. */
+  /**
+   * How much louder strong beats get relative to weak ones, in MIDI velocity units.
+   *
+   * @defaultValue 12
+   */
   accent?: number;
-  /** Velocity assumed for events with no `velocity` of their own. Default 80. */
+  /**
+   * Velocity assumed for events with no `velocity` of their own.
+   *
+   * @defaultValue 80
+   */
   baseVelocity?: number;
-  /** Seed for the deterministic PRNG. Default 0. */
+  /**
+   * Seed for the deterministic PRNG.
+   *
+   * @defaultValue 0
+   */
   seed?: number;
 };
 
@@ -61,6 +89,13 @@ const MAX_VELOCITY = 127;
  * @param events The events to humanize.
  * @param opts Humanization options.
  * @returns Humanized copies of `events`, in input order.
+ * @example
+ * ```ts
+ * import { humanize } from '@libraz/libcantus';
+ * const events = [{ pitch: 60, startBeat: 0, durationBeat: 1, velocity: 80 }];
+ * humanize(events, { seed: 1, timing: 0.03 }); // copies with jittered timing and accented velocity
+ * ```
+ * @category Rhythm & Meter
  */
 export function humanize(events: NoteEvent[], opts: HumanizeOptions = {}): NoteEvent[] {
   const ts = opts.ts ?? DEFAULT_TS;
@@ -89,7 +124,11 @@ export function humanize(events: NoteEvent[], opts: HumanizeOptions = {}): NoteE
   });
 }
 
-/** The recorded feel at a single grid slot: an average timing deviation and velocity. */
+/**
+ * The recorded feel at a single grid slot: an average timing deviation and velocity.
+ *
+ * @category Rhythm & Meter
+ */
 export type GrooveSlot = {
   /** Average `actualStartBeat - quantizedBeat` (in quarter-note beats) for events landing on this slot. */
   timingOffset: number;
@@ -101,7 +140,11 @@ export type GrooveSlot = {
   velocity: number | null;
 };
 
-/** A per-bar grid of timing and velocity deviations captured from a performance. */
+/**
+ * A per-bar grid of timing and velocity deviations captured from a performance.
+ *
+ * @category Rhythm & Meter
+ */
 export type GrooveTemplate = {
   /** Grid resolution: equal grid steps per quarter-note beat. */
   subdivision: number;
@@ -162,6 +205,7 @@ function quantizeToGrid(
  * @param ts The time signature, used to compute the bar length.
  * @param subdivision Grid resolution: equal grid steps per quarter-note beat.
  * @returns The extracted groove template.
+ * @category Rhythm & Meter
  */
 export function extractGrooveTemplate(
   events: NoteEvent[],
@@ -227,6 +271,21 @@ export function extractGrooveTemplate(
  * @param ts The time signature, used to compute the bar length.
  * @returns Reshaped copies of `events`, in input order.
  * @throws If `template.ts` is set and does not match `ts`.
+ * @example
+ * ```ts
+ * import { extractGrooveTemplate, applyGrooveTemplate, parseTimeSignature } from '@libraz/libcantus';
+ * const ts = parseTimeSignature('4/4');
+ * // Learn the feel from a loosely played performance...
+ * const groovy = [
+ *   { pitch: 36, startBeat: 0.02, durationBeat: 1, velocity: 100 },
+ *   { pitch: 38, startBeat: 1.06, durationBeat: 1, velocity: 70 },
+ * ];
+ * const template = extractGrooveTemplate(groovy, ts, 4);
+ * // ...then impose it on stiff, quantized events.
+ * const quantized = [{ pitch: 36, startBeat: 0, durationBeat: 1, velocity: 80 }];
+ * applyGrooveTemplate(quantized, template, ts); // events nudged toward the captured feel
+ * ```
+ * @category Rhythm & Meter
  */
 export function applyGrooveTemplate(
   events: NoteEvent[],

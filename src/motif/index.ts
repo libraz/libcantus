@@ -4,7 +4,11 @@ import { isScaleTone, nearestScaleTone } from '../scale/index.js';
 import type { ChordTimeline } from '../timeline/index.js';
 import type { KeyScale } from '../types.js';
 
-/** A transformation applicable to a motif cell. */
+/**
+ * A transformation applicable to a motif cell.
+ *
+ * @category Composition
+ */
 export type MotifTransform =
   | 'transposeDiatonic'
   | 'transposeChromatic'
@@ -14,34 +18,62 @@ export type MotifTransform =
   | 'diminish'
   | 'sequence';
 
-/** A single note within a motif cell. */
+/**
+ * A single note within a motif cell.
+ *
+ * @category Composition
+ */
 export type MotifNote = {
   pitch: number;
   startBeat: number;
   durationBeat: number;
 };
 
-/** A short melodic cell. */
+/**
+ * A short melodic cell.
+ *
+ * @category Composition
+ */
 export type MotifCell = {
   notes: MotifNote[];
 };
 
-/** Melodic contour shape for {@link generateMotif}. */
+/**
+ * Melodic contour shape for {@link generateMotif}.
+ *
+ * @category Composition
+ */
 export type MotifContour = 'arch' | 'ascending' | 'descending' | 'wave';
 
-/** Options controlling {@link generateMotif}. */
+/**
+ * Options controlling {@link generateMotif}.
+ *
+ * @category Composition
+ */
 export type GenerateMotifOptions = {
   key: KeyScale;
   chord?: Chord | null;
   bars: number;
+  /**
+   * Melodic contour shape the line follows.
+   *
+   * @defaultValue `'arch'`
+   */
   contour?: MotifContour;
   /**
    * Probability in [0, 1] that a note is nudged by a single diatonic step. The
    * nudge direction is balanced (up or down with equal odds), so it adds
    * variety without biasing the line off its contour. Default 0, which
    * reproduces the requested contour exactly (no drift, tails return to tonic).
+   *
+   * @defaultValue 0
    */
   jitter?: number;
+  /**
+   * Seed for the deterministic PRNG.
+   *
+   * @defaultValue 0
+   */
   seed?: number;
 };
 
@@ -165,6 +197,15 @@ function contourOffsets(contour: MotifContour, count: number): number[] {
  *
  * @param opts Key, optional chord, length, contour, jitter, and seed.
  * @returns The generated motif cell.
+ *
+ * @example
+ * ```ts
+ * import { generateMotif, majorKey } from '@libraz/libcantus';
+ * const cell = generateMotif({ key: majorKey(0), bars: 2, contour: 'arch' });
+ * // cell.notes is a deterministic MotifCell (seed defaults to 0)
+ * ```
+ *
+ * @category Composition
  */
 export function generateMotif(opts: GenerateMotifOptions): MotifCell {
   const contour = opts.contour ?? 'arch';
@@ -214,6 +255,15 @@ export function generateMotif(opts: GenerateMotifOptions): MotifCell {
  * @param key Key context for the diatonic transforms; without it,
  *   `transposeDiatonic` and `sequence` shift chromatically by semitones.
  * @returns The transformed cell.
+ *
+ * @example
+ * ```ts
+ * import { generateMotif, transformMotif, majorKey } from '@libraz/libcantus';
+ * const cell = generateMotif({ key: majorKey(0), bars: 1 });
+ * const inverted = transformMotif(cell, 'invert');
+ * ```
+ *
+ * @category Composition
  */
 export function transformMotif(
   cell: MotifCell,
@@ -296,6 +346,16 @@ function scaleTime(cell: MotifCell, factor: number): MotifCell {
  * @param key Key context (used to keep snapped pitches sensible).
  * @param bars Number of four-beat bars to fill.
  * @returns The developed, harmony-aware cell.
+ *
+ * @example
+ * ```ts
+ * import { chordTimelineFromChords, developMotif, generateMotif, majorKey } from '@libraz/libcantus';
+ * const key = majorKey(0);
+ * const timeline = chordTimelineFromChords([{ rootPc: 0, quality: 'maj', startBeat: 0 }], 8);
+ * const developed = developMotif(generateMotif({ key, bars: 1 }), timeline, key, 2);
+ * ```
+ *
+ * @category Composition
  */
 export function developMotif(
   cell: MotifCell,

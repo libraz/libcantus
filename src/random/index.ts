@@ -5,7 +5,11 @@
  * seed the stream is fully reproducible.
  */
 
-/** A deterministic PRNG with the sampling helpers the generators need. */
+/**
+ * A deterministic PRNG with the sampling helpers the generators need.
+ *
+ * @category Utilities
+ */
 export type Rng = {
   /** Next float in [0, 1). */
   next: () => number;
@@ -22,6 +26,14 @@ export type Rng = {
  *
  * @param seed The 32-bit seed; the same seed always yields the same stream.
  * @returns The seeded generator.
+ * @example
+ * ```ts
+ * import { createRng } from '@libraz/libcantus';
+ * const rng = createRng(42);
+ * rng.next(); // deterministic float in [0, 1)
+ * rng.range(1, 6); // deterministic integer in [1, 6]
+ * ```
+ * @category Utilities
  */
 export function createRng(seed: number): Rng {
   let state = seed >>> 0;

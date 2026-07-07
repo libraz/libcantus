@@ -79,6 +79,7 @@ function isHeptatonic(key: KeyScale): boolean {
  * @param tonic The spelled tonic (its letter anchors the spelling).
  * @param key The key/scale.
  * @returns The spelled note (without octave).
+ * @category Pitch & Intervals
  */
 export function spellPitchClass(pc: number, tonic: Note, key: KeyScale): Note {
   const tonicPc = mod12(naturalPc(tonic.letter) + tonic.alter);
@@ -117,6 +118,13 @@ export function spellPitchClass(pc: number, tonic: Note, key: KeyScale): Note {
  * @param tonic The spelled tonic.
  * @param key The key/scale.
  * @returns Spelled notes, one per scale degree.
+ * @example
+ * ```ts
+ * import { spellScale, noteNames, parseNote, majorKey } from '@libraz/libcantus';
+ * noteNames(spellScale(parseNote('C'), majorKey(0)));
+ * // ['C', 'D', 'E', 'F', 'G', 'A', 'B']
+ * ```
+ * @category Pitch & Intervals
  */
 export function spellScale(tonic: Note, key: KeyScale): Note[] {
   return scaleTonesInDegreeOrder(key).map((pc) => spellPitchClass(pc, tonic, key));
@@ -129,6 +137,7 @@ export function spellScale(tonic: Note, key: KeyScale): Note[] {
  * @param tonic The spelled tonic.
  * @param key The key/scale.
  * @returns Spelled notes, in input order.
+ * @category Pitch & Intervals
  */
 export function spellPitchClasses(pcs: number[], tonic: Note, key: KeyScale): Note[] {
   return pcs.map((pc) => spellPitchClass(pc, tonic, key));
@@ -146,6 +155,14 @@ export function spellPitchClasses(pcs: number[], tonic: Note, key: KeyScale): No
  * @param tonic The spelled tonic of the key.
  * @param key The key/scale.
  * @returns Spelled chord tones, root first.
+ * @example
+ * ```ts
+ * import { spellChord, noteNames, parseNote, majorKey, makeChord } from '@libraz/libcantus';
+ * // G7 in C major
+ * noteNames(spellChord(makeChord(7, 'dom7'), parseNote('C'), majorKey(0)));
+ * // ['G', 'B', 'D', 'F']
+ * ```
+ * @category Pitch & Intervals
  */
 export function spellChord(chord: Chord, tonic: Note, key: KeyScale): Note[] {
   return chord.intervals.map((interval) =>
@@ -158,6 +175,7 @@ export function spellChord(chord: Chord, tonic: Note, key: KeyScale): Note[] {
  *
  * @param notes The notes.
  * @returns Their formatted names.
+ * @category Pitch & Intervals
  */
 export function noteNames(notes: Note[]): string[] {
   return notes.map(formatNote);

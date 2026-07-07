@@ -1,6 +1,10 @@
 import type { Chord } from '../chord/index.js';
 
-/** Harmonic role a pitch plays within a chord. */
+/**
+ * Harmonic role a pitch plays within a chord.
+ *
+ * @category Functional Harmony
+ */
 export type HarmonyRole = 'root' | 'third' | 'fifth' | 'sixth' | 'seventh' | 'tension' | 'doubling';
 
 /**
@@ -9,10 +13,16 @@ export type HarmonyRole = 'root' | 'third' | 'fifth' | 'sixth' | 'seventh' | 'te
  * - `identity`: moving it produces a different chord (the root).
  * - `quality`: moving it flips the chord quality (the third).
  * - `voicing`: it can move freely without changing chord identity or quality.
+ *
+ * @category Functional Harmony
  */
 export type LockLevel = 'identity' | 'quality' | 'voicing';
 
-/** A pitch's role, lock level, and owning chord. */
+/**
+ * A pitch's role, lock level, and owning chord.
+ *
+ * @category Functional Harmony
+ */
 export type VoicedRole = {
   role: HarmonyRole;
   lock: LockLevel;
@@ -36,6 +46,13 @@ export type VoicedRole = {
  * @param chord The chord providing the root reference.
  * @param chordId Identifier stored on the result (defaults to 0).
  * @returns The pitch's role, lock level, and owning chord id.
+ * @example
+ * ```ts
+ * import { roleOf, makeChord } from '@libraz/libcantus';
+ * roleOf(64, makeChord(0, 'maj')); // E over C major
+ * // { role: 'third', lock: 'quality', belongsToChordId: 0 }
+ * ```
+ * @category Functional Harmony
  */
 export function roleOf(pitch: number, chord: Chord, chordId = 0): VoicedRole {
   const interval = (((Math.trunc(pitch) - chord.rootPc) % 12) + 12) % 12;

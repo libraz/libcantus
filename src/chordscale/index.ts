@@ -29,6 +29,8 @@ function maskHasPitchClass(mask: number, scaleRootPc: number, pc: number): boole
  * @param scaleMask The scale's 12-bit mode mask.
  * @param scaleRootPc The pitch class the mask is rooted on.
  * @returns True if the scale is a superset of the chord.
+ *
+ * @category Scales
  */
 export function scaleMatchesChord(
   chordPcs: number[],
@@ -43,7 +45,11 @@ export function scaleMatchesChord(
   return true;
 }
 
-/** A named scale rooted on a pitch class that fits over a chord. */
+/**
+ * A named scale rooted on a pitch class that fits over a chord.
+ *
+ * @category Scales
+ */
 export type ChordScaleMatch = {
   name: string;
   rootPc: number;
@@ -76,6 +82,15 @@ const HEPTATONIC_SIZE = 7;
  *
  * @param chord The chord to fit scales over.
  * @returns The matching scales rooted on the chord root, best fit first.
+ *
+ * @example
+ * ```ts
+ * import { makeChord, chordScales } from '@libraz/libcantus';
+ * const scales = chordScales(makeChord(0, 'maj7'));
+ * // scales for Cmaj7, best fit first; each is { name, rootPc: 0 }
+ * ```
+ *
+ * @category Scales
  */
 export function chordScales(chord: Chord): ChordScaleMatch[] {
   const chordPcs = chordPitchClasses(chord);
@@ -130,6 +145,8 @@ export function chordScales(chord: Chord): ChordScaleMatch[] {
  * @param chord The chord providing the chord tones.
  * @param scaleName A key of {@link NAMED_SCALES}.
  * @returns The avoid-note pitch classes, sorted ascending in [0, 11].
+ *
+ * @category Scales
  */
 export function avoidNotes(chord: Chord, scaleName: string): number[] {
   const mask = NAMED_SCALES[scaleName];
@@ -165,6 +182,14 @@ export function avoidNotes(chord: Chord, scaleName: string): number[] {
  * @param chord The chord providing the chord tones.
  * @param scaleName A key of {@link NAMED_SCALES}.
  * @returns The available-tension pitch classes, sorted ascending in [0, 11].
+ *
+ * @example
+ * ```ts
+ * import { makeChord, availableTensions } from '@libraz/libcantus';
+ * availableTensions(makeChord(0, 'maj7'), 'ionian'); // [2, 9] — color tones over Cmaj7
+ * ```
+ *
+ * @category Scales
  */
 export function availableTensions(chord: Chord, scaleName: string): number[] {
   const mask = NAMED_SCALES[scaleName];
@@ -188,7 +213,11 @@ export function availableTensions(chord: Chord, scaleName: string): number[] {
   return tensions.sort((a, b) => a - b);
 }
 
-/** A scale fit over a chord together with its avoid notes and tensions. */
+/**
+ * A scale fit over a chord together with its avoid notes and tensions.
+ *
+ * @category Scales
+ */
 export type ChordScaleReportEntry = {
   name: string;
   rootPc: number;
@@ -205,6 +234,8 @@ export type ChordScaleReportEntry = {
  * @param chord The chord to analyze.
  * @param limit Optional maximum number of scales to report; all by default.
  * @returns One entry per reported scale, best fit first.
+ *
+ * @category Scales
  */
 export function chordScaleReport(chord: Chord, limit?: number): ChordScaleReportEntry[] {
   const matches = chordScales(chord);
@@ -217,7 +248,11 @@ export function chordScaleReport(chord: Chord, limit?: number): ChordScaleReport
   }));
 }
 
-/** A chord paired with the scale chosen for it by {@link scalesForChanges}. */
+/**
+ * A chord paired with the scale chosen for it by {@link scalesForChanges}.
+ *
+ * @category Scales
+ */
 export type ScaleChoice = {
   chord: Chord;
   scale: ChordScaleMatch;
@@ -272,6 +307,8 @@ function symmetricDifferenceSize(a: Set<number>, b: Set<number>): number {
  *
  * @param chords The chord sequence to choose scales for.
  * @returns One scale choice per chord, in input order.
+ *
+ * @category Scales
  */
 export function scalesForChanges(chords: Chord[]): ScaleChoice[] {
   if (chords.length === 0) {

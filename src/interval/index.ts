@@ -1,4 +1,8 @@
-/** Counterpoint classification of a harmonic interval. */
+/**
+ * Counterpoint classification of a harmonic interval.
+ *
+ * @category Pitch & Intervals
+ */
 export enum IntervalQuality {
   PerfectConsonance = 0,
   ImperfectConsonance = 1,
@@ -21,6 +25,14 @@ function simpleInterval(semitones: number): number {
  * @param semitones Interval size in semitones (may be negative or compound).
  * @param twoVoice When true, the perfect fourth is treated as dissonant.
  * @returns The counterpoint quality of the interval.
+ * @example
+ * ```ts
+ * import { classifyInterval, IntervalQuality } from '@libraz/libcantus';
+ * classifyInterval(7); // IntervalQuality.PerfectConsonance
+ * classifyInterval(5); // IntervalQuality.Dissonance (two-voice)
+ * classifyInterval(5, false); // IntervalQuality.ImperfectConsonance
+ * ```
+ * @category Pitch & Intervals
  */
 export function classifyInterval(semitones: number, twoVoice = true): IntervalQuality {
   const pc = simpleInterval(semitones);
@@ -41,6 +53,7 @@ export function classifyInterval(semitones: number, twoVoice = true): IntervalQu
  *
  * @param semitones Interval size in semitones (may be negative or compound).
  * @returns True for the unison/octave (0) and the perfect fifth (7) mod 12.
+ * @category Pitch & Intervals
  */
 export function isPerfectInterval(semitones: number): boolean {
   const pc = simpleInterval(semitones);
@@ -57,6 +70,7 @@ export function isPerfectInterval(semitones: number): boolean {
  * @param semitones Interval size in semitones (may be negative or compound).
  * @param twoVoice When true, the perfect fourth is treated as dissonant.
  * @returns True if the interval is consonant in the given context.
+ * @category Pitch & Intervals
  */
 export function isConsonantInterval(semitones: number, twoVoice = true): boolean {
   const pc = simpleInterval(semitones);

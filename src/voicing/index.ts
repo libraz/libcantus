@@ -8,7 +8,11 @@ import {
   exceedsSpacing,
 } from '../counterpoint/index.js';
 
-/** An inclusive MIDI pitch range for a single voice. */
+/**
+ * An inclusive MIDI pitch range for a single voice.
+ *
+ * @category Voicing & Counterpoint
+ */
 export type VoiceRange = {
   min: number;
   max: number;
@@ -18,6 +22,8 @@ export type VoiceRange = {
  * Default four-voice SATB ranges, ascending (index 0 = lowest):
  * bass E2–C4 (40–60), tenor C3–G4 (48–67), alto G3–D5 (55–74),
  * soprano C4–G5 (60–79).
+ *
+ * @category Voicing & Counterpoint
  */
 export const SATB_RANGES: readonly VoiceRange[] = [
   { min: 40, max: 60 },
@@ -26,13 +32,25 @@ export const SATB_RANGES: readonly VoiceRange[] = [
   { min: 60, max: 79 },
 ];
 
-/** Options controlling {@link voiceChord} and {@link voiceProgression}. */
+/**
+ * Options controlling {@link voiceChord} and {@link voiceProgression}.
+ *
+ * @category Voicing & Counterpoint
+ */
 export type VoicingOptions = {
-  /** Number of voices to realize (default 4). Ignored when `ranges` is given. */
+  /**
+   * Number of voices to realize. Ignored when `ranges` is given.
+   *
+   * @defaultValue 4
+   */
   voices?: number;
   /** Explicit per-voice ranges, ascending (index 0 = lowest). Takes precedence over `voices`. */
   ranges?: VoiceRange[];
-  /** Maximum spacing in semitones between adjacent upper voices (default 12). */
+  /**
+   * Maximum spacing in semitones between adjacent upper voices.
+   *
+   * @defaultValue 12
+   */
   maxSpacing?: number;
 };
 
@@ -247,6 +265,7 @@ function violationCount(prev: number[], cur: number[], maxSpacing: number): numb
  * @param to The next voicing, one MIDI pitch per voice.
  * @returns The summed absolute motion (plus any hidden-perfect penalty), or
  *   `Infinity` when lengths differ.
+ * @category Voicing & Counterpoint
  */
 export function voiceLeadingCost(from: number[], to: number[]): number {
   if (from.length !== to.length) {
@@ -293,6 +312,13 @@ export function voiceLeadingCost(from: number[], to: number[]): number {
  * @param opts Voicing options; defaults to four voices in {@link SATB_RANGES}.
  * @returns MIDI pitches, ascending, one per voice.
  * @throws If no voicing fits the given ranges.
+ * @example
+ * ```ts
+ * import { parseChordSymbol, voiceChord } from '@libraz/libcantus';
+ * const chord = parseChordSymbol('Cmaj7');
+ * voiceChord(chord); // four ascending MIDI pitches within the SATB ranges
+ * ```
+ * @category Voicing & Counterpoint
  */
 export function voiceChord(chord: Chord, opts?: VoicingOptions): number[] {
   const ranges = resolveRanges(opts);
@@ -335,6 +361,13 @@ export function voiceChord(chord: Chord, opts?: VoicingOptions): number[] {
  * @param opts Voicing options; defaults to four voices in {@link SATB_RANGES}.
  * @returns One voicing per chord, each ascending with one MIDI pitch per voice.
  * @throws If any chord admits no voicing within the given ranges.
+ * @example
+ * ```ts
+ * import { parseChordSymbol, voiceProgression } from '@libraz/libcantus';
+ * const chords = ['C', 'Am', 'F', 'G'].map((s) => parseChordSymbol(s));
+ * voiceProgression(chords); // one four-voice voicing per chord, smoothly led
+ * ```
+ * @category Voicing & Counterpoint
  */
 export function voiceProgression(chords: Chord[], opts?: VoicingOptions): number[][] {
   const ranges = resolveRanges(opts);
@@ -379,18 +412,36 @@ export function voiceProgression(chords: Chord[], opts?: VoicingOptions): number
  *   root/third/fifth for triads; the fifth and tensions are omitted.
  * - `rootless`: the root omitted, keeping third/fifth/seventh and tensions
  *   (a typical left-hand jazz voicing).
+ *
+ * @category Voicing & Counterpoint
  */
 export type VoicingStyle = 'close' | 'drop2' | 'drop3' | 'shell' | 'rootless';
 
-/** Options controlling {@link voiceChordStyled}. */
+/**
+ * Options controlling {@link voiceChordStyled}.
+ *
+ * @category Voicing & Counterpoint
+ */
 export type StyledVoicingOptions = {
-  /** Voicing style to build (default `close`). */
+  /**
+   * Voicing style to build.
+   *
+   * @defaultValue 'close'
+   */
   style?: VoicingStyle;
   /** Constrain the highest voice to this pitch class (0..11) when given. */
   topNote?: number;
-  /** Base octave for the close stack; the stack begins near `12 * octave` (default 4). */
+  /**
+   * Base octave for the close stack; the stack begins near `12 * octave`.
+   *
+   * @defaultValue 4
+   */
   octave?: number;
-  /** Omit the root regardless of style (relevant for jazz voicings). */
+  /**
+   * Omit the root regardless of style (relevant for jazz voicings).
+   *
+   * @defaultValue false
+   */
   rootless?: boolean;
 };
 
@@ -444,6 +495,13 @@ function nearestPc(target: number, pcs: number[]): number {
  * @param chord The chord to voice.
  * @param opts Styled voicing options; defaults to a close voicing at octave 4.
  * @returns MIDI pitches, ascending, one per retained voice.
+ * @example
+ * ```ts
+ * import { parseChordSymbol, voiceChordStyled } from '@libraz/libcantus';
+ * const chord = parseChordSymbol('Dm7');
+ * voiceChordStyled(chord, { style: 'drop2' }); // ascending MIDI pitches, drop-2 voicing
+ * ```
+ * @category Voicing & Counterpoint
  */
 export function voiceChordStyled(chord: Chord, opts?: StyledVoicingOptions): number[] {
   const style = opts?.style ?? 'close';
@@ -532,6 +590,7 @@ export function voiceChordStyled(chord: Chord, opts?: StyledVoicingOptions): num
  * @param opts Voicing options; when omitted, ranges follow `current`'s span.
  * @returns The chosen voicing, ascending with one MIDI pitch per voice.
  * @throws If no voicing fits the derived ranges.
+ * @category Voicing & Counterpoint
  */
 export function nextVoicing(current: number[], chord: Chord, opts?: VoicingOptions): number[] {
   const ranges =

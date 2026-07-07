@@ -9,17 +9,29 @@ import {
 import { isScaleTone } from '../scale/index.js';
 import type { KeyScale } from '../types.js';
 
-/** Severity policy: `strict` counterpoint vs. lenient `pop` voice-leading. */
+/**
+ * Severity policy: `strict` counterpoint vs. lenient `pop` voice-leading.
+ *
+ * @category Arrangement & Analysis
+ */
 export type SafetyProfile = 'strict' | 'pop';
 
-/** Overall placeability verdict for a candidate pitch. */
+/**
+ * Overall placeability verdict for a candidate pitch.
+ *
+ * @category Arrangement & Analysis
+ */
 export enum NoteSafety {
   Safe = 0,
   Warning = 1,
   Dissonant = 2,
 }
 
-/** Bit flags describing why a pitch received its verdict. */
+/**
+ * Bit flags describing why a pitch received its verdict.
+ *
+ * @category Arrangement & Analysis
+ */
 export enum ReasonFlag {
   ChordTone = 1 << 0,
   Tension = 1 << 1,
@@ -39,13 +51,21 @@ export enum ReasonFlag {
   NeedsResolution = 1 << 15,
 }
 
-/** A neighbouring voice's current and previous pitch. */
+/**
+ * A neighbouring voice's current and previous pitch.
+ *
+ * @category Arrangement & Analysis
+ */
 export type VoiceSnapshot = {
   pitch: number;
   prevPitch?: number;
 };
 
-/** Everything needed to evaluate one candidate pitch. */
+/**
+ * Everything needed to evaluate one candidate pitch.
+ *
+ * @category Arrangement & Analysis
+ */
 export type SafetyQuery = {
   profile: SafetyProfile;
   candidatePitch: number;
@@ -58,7 +78,11 @@ export type SafetyQuery = {
   vocalHigh?: number;
 };
 
-/** The verdict, reason flags, and optional resolution guidance. */
+/**
+ * The verdict, reason flags, and optional resolution guidance.
+ *
+ * @category Arrangement & Analysis
+ */
 export type SafetyResult = {
   safety: NoteSafety;
   reasons: number;
@@ -114,6 +138,20 @@ function stepResolution(pitch: number, chord: Chord): number | undefined {
  *
  * @param q The candidate and its harmonic/voice-leading context.
  * @returns The verdict, reason bitmask, and optional resolution guidance.
+ * @example
+ * ```ts
+ * import { evaluateSafety, makeChord, majorKey, NoteSafety } from '@libraz/libcantus';
+ * const result = evaluateSafety({
+ *   profile: 'pop',
+ *   candidatePitch: 60, // C over a C major chord
+ *   chord: makeChord(0, 'maj'),
+ *   key: majorKey(0),
+ *   otherVoices: [],
+ *   strongBeat: true,
+ * });
+ * result.safety === NoteSafety.Safe; // true — C is a chord tone
+ * ```
+ * @category Arrangement & Analysis
  */
 export function evaluateSafety(q: SafetyQuery): SafetyResult {
   return evaluateInternal(q, true);
@@ -344,6 +382,17 @@ function describe(reasons: number, q: SafetyQuery): string {
  * @param pitchLow Lowest MIDI pitch to consider (inclusive).
  * @param pitchHigh Highest MIDI pitch to consider (inclusive).
  * @returns Placeable pitches (non-dissonant), chord tones before others, each group descending.
+ * @example
+ * ```ts
+ * import { enumerateSafePitches, makeChord, majorKey } from '@libraz/libcantus';
+ * const pitches = enumerateSafePitches(
+ *   { profile: 'pop', chord: makeChord(0, 'maj'), key: majorKey(0), otherVoices: [], strongBeat: true },
+ *   60,
+ *   72,
+ * );
+ * pitches; // placeable pitches in [60, 72], chord tones first, each group descending
+ * ```
+ * @category Arrangement & Analysis
  */
 export function enumerateSafePitches(
   q: Omit<SafetyQuery, 'candidatePitch'>,

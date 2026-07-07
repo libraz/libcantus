@@ -1,7 +1,11 @@
 import { scaleTonesInDegreeOrder } from '../scale/index.js';
 import type { KeyScale } from '../types.js';
 
-/** Chord quality identifiers understood by the chord builder. */
+/**
+ * Chord quality identifiers understood by the chord builder.
+ *
+ * @category Chords
+ */
 export type ChordQuality =
   | 'maj'
   | 'min'
@@ -38,6 +42,8 @@ export type ChordQuality =
  * A bare spelled pitch used as an enharmonic hint: a diatonic letter
  * (0..6 = C..B) plus a chromatic alteration (-2 double-flat .. +2 double-sharp).
  * Mirrors the letter/alter half of the pitch module's `Note` without an octave.
+ *
+ * @category Chords
  */
 export type PitchSpelling = {
   letter: number;
@@ -52,6 +58,8 @@ export type PitchSpelling = {
  * original spelling instead of defaulting to sharps. Consumers may ignore
  * them; a hint is only trusted when its pitch class still matches the
  * corresponding `rootPc`/`bassPc`.
+ *
+ * @category Chords
  */
 export type Chord = {
   rootPc: number;
@@ -101,7 +109,11 @@ function pitchClass(value: number): number {
   return ((Math.trunc(value) % 12) + 12) % 12;
 }
 
-/** All chord qualities the builder understands, longest templates last. */
+/**
+ * All chord qualities the builder understands, longest templates last.
+ *
+ * @category Chords
+ */
 export function chordQualities(): ChordQuality[] {
   return Object.keys(QUALITY_INTERVALS) as ChordQuality[];
 }
@@ -117,6 +129,8 @@ export function chordQualities(): ChordQuality[] {
  * @param ext Chord quality to apply.
  * @param key Key context supplying the diatonic root.
  * @returns The constructed chord.
+ *
+ * @category Chords
  */
 export function chordFromDegree(degree: number, ext: ChordQuality, key: KeyScale): Chord {
   const tones = scaleTonesInDegreeOrder(key);
@@ -133,6 +147,15 @@ export function chordFromDegree(degree: number, ext: ChordQuality, key: KeyScale
  * @param quality Chord quality supplying the interval template.
  * @param bassPc Optional slash-chord bass pitch class.
  * @returns The constructed chord.
+ *
+ * @example
+ * ```ts
+ * import { makeChord } from '@libraz/libcantus';
+ * const cmaj7 = makeChord(0, 'maj7');
+ * // { rootPc: 0, quality: 'maj7', intervals: [0, 4, 7, 11] }
+ * ```
+ *
+ * @category Chords
  */
 export function makeChord(rootPc: number, quality: ChordQuality, bassPc?: number): Chord {
   const chord: Chord = {
@@ -151,6 +174,14 @@ export function makeChord(rootPc: number, quality: ChordQuality, bassPc?: number
  *
  * @param chord The chord to enumerate.
  * @returns The chord's pitch classes, sorted ascending in [0, 11].
+ *
+ * @example
+ * ```ts
+ * import { makeChord, chordPitchClasses } from '@libraz/libcantus';
+ * chordPitchClasses(makeChord(0, 'maj7')); // [0, 4, 7, 11]
+ * ```
+ *
+ * @category Chords
  */
 export function chordPitchClasses(chord: Chord): number[] {
   const set = new Set<number>();
@@ -176,6 +207,8 @@ function chordToneOffsets(chord: Chord): Set<number> {
  * @param pitch MIDI pitch or bare pitch class.
  * @param chord The chord providing the root reference.
  * @returns The chord-tone role, or null if the pitch has no basic role.
+ *
+ * @category Chords
  */
 export function chordToneRole(
   pitch: number,
@@ -295,6 +328,14 @@ function stackThirds(degree: number, key: KeyScale, size: 3 | 4): Chord {
  * @param degree 0-based scale degree of the chord root.
  * @param key Key/scale context.
  * @returns The diatonic triad.
+ *
+ * @example
+ * ```ts
+ * import { majorKey, diatonicTriad } from '@libraz/libcantus';
+ * const tonic = diatonicTriad(0, majorKey(0)); // C major triad (degree 0 of C major)
+ * ```
+ *
+ * @category Chords
  */
 export function diatonicTriad(degree: number, key: KeyScale): Chord {
   return stackThirds(degree, key, 3);
@@ -306,6 +347,8 @@ export function diatonicTriad(degree: number, key: KeyScale): Chord {
  * @param degree 0-based scale degree of the chord root.
  * @param key Key/scale context.
  * @returns The diatonic seventh chord.
+ *
+ * @category Chords
  */
 export function diatonicSeventh(degree: number, key: KeyScale): Chord {
   return stackThirds(degree, key, 4);

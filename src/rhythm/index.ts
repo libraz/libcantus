@@ -14,7 +14,11 @@
 import { beatsPerBar, metricWeight, type TimeSignature } from '../meter/index.js';
 import { createRng } from '../random/index.js';
 
-/** A single rhythmic note: an onset position and how long it sounds. */
+/**
+ * A single rhythmic note: an onset position and how long it sounds.
+ *
+ * @category Rhythm & Meter
+ */
 export type RhythmEvent = {
   /** Onset position in quarter-note beats, absolute from the start of the span. */
   position: number;
@@ -22,22 +26,38 @@ export type RhythmEvent = {
   duration: number;
 };
 
-/** Options controlling {@link generateRhythm}. */
+/**
+ * Options controlling {@link generateRhythm}.
+ *
+ * @category Rhythm & Meter
+ */
 export type RhythmOptions = {
-  /** Seed for the deterministic PRNG. Default 0. */
+  /**
+   * Seed for the deterministic PRNG.
+   *
+   * @defaultValue 0
+   */
   seed?: number;
-  /** Number of bars to generate. Default 1. */
+  /**
+   * Number of bars to generate.
+   *
+   * @defaultValue 1
+   */
   bars?: number;
   /**
    * Grid resolution as the number of equal grid steps per quarter-note beat.
    * The default of 2 yields an eighth-note grid; 4 yields a sixteenth-note
    * grid, 3 an eighth-note triplet grid, and so on.
+   *
+   * @defaultValue 2
    */
   subdivision?: number;
   /**
    * Overall onset density in [0, 1]. Scales the per-slot onset probability, so
    * higher values fill more grid slots. Values outside [0, 1] are clamped into
-   * range. Default 0.5.
+   * range.
+   *
+   * @defaultValue 0.5
    */
   density?: number;
 };
@@ -54,6 +74,7 @@ const DEFAULT_BARS = 1;
  *
  * @param weight The metric weight, 0 (off-pulse) to 3 (downbeat).
  * @returns A base onset probability in [0, 1].
+ * @category Rhythm & Meter
  */
 export function onsetWeightCurve(weight: number): number {
   switch (weight) {
@@ -80,6 +101,13 @@ export function onsetWeightCurve(weight: number): number {
  * @param ts The time signature.
  * @param opts Generation options.
  * @returns Onset events sorted by position, non-overlapping, covering the span.
+ * @example
+ * ```ts
+ * import { parseTimeSignature, generateRhythm } from '@libraz/libcantus';
+ * const ts = parseTimeSignature('4/4');
+ * generateRhythm(ts, { seed: 42, density: 0.6 }); // onset events over one bar
+ * ```
+ * @category Rhythm & Meter
  */
 export function generateRhythm(ts: TimeSignature, opts: RhythmOptions = {}): RhythmEvent[] {
   const seed = opts.seed ?? 0;
@@ -124,6 +152,7 @@ export function generateRhythm(ts: TimeSignature, opts: RhythmOptions = {}): Rhy
  * @param events Events from {@link generateRhythm}.
  * @param ts The time signature.
  * @returns The onset count divided by the number of bars the events span.
+ * @category Rhythm & Meter
  */
 export function rhythmDensity(events: RhythmEvent[], ts: TimeSignature): number {
   if (events.length === 0) {

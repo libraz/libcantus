@@ -6,7 +6,11 @@
  * of the library's beat convention (four quarter-note beats per bar in 4/4).
  */
 
-/** A time signature as a numerator over a note-value denominator. */
+/**
+ * A time signature as a numerator over a note-value denominator.
+ *
+ * @category Rhythm & Meter
+ */
 export type TimeSignature = {
   numerator: number;
   denominator: number;
@@ -22,7 +26,11 @@ export type TimeSignature = {
   grouping?: number[];
 };
 
-/** A position expressed as a bar index and a quarter-note offset within the bar. */
+/**
+ * A position expressed as a bar index and a quarter-note offset within the bar.
+ *
+ * @category Rhythm & Meter
+ */
 export type BarPosition = {
   bar: number;
   /** Quarter-note offset from the start of the bar. */
@@ -46,6 +54,12 @@ function isMultiple(value: number, unit: number): boolean {
  * @param text The signature text.
  * @returns The parsed time signature.
  * @throws If the text is not `n/d` with positive integers.
+ * @example
+ * ```ts
+ * import { parseTimeSignature } from '@libraz/libcantus';
+ * parseTimeSignature('6/8'); // { numerator: 6, denominator: 8 }
+ * ```
+ * @category Rhythm & Meter
  */
 export function parseTimeSignature(text: string): TimeSignature {
   const match = /^\s*(\d+)\s*\/\s*(\d+)\s*$/.exec(text);
@@ -60,7 +74,11 @@ export function parseTimeSignature(text: string): TimeSignature {
   return { numerator, denominator };
 }
 
-/** Render a time signature as `"n/d"`. */
+/**
+ * Render a time signature as `"n/d"`.
+ *
+ * @category Rhythm & Meter
+ */
 export function formatTimeSignature(ts: TimeSignature): string {
   return `${ts.numerator}/${ts.denominator}`;
 }
@@ -73,6 +91,7 @@ export function formatTimeSignature(ts: TimeSignature): string {
  *
  * @param ts The time signature.
  * @returns True for compound meters.
+ * @category Rhythm & Meter
  */
 export function isCompound(ts: TimeSignature): boolean {
   return ts.numerator % 3 === 0 && ts.numerator > 3;
@@ -88,6 +107,7 @@ function unitBeats(ts: TimeSignature): number {
  *
  * @param ts The time signature.
  * @returns The bar length in quarter notes.
+ * @category Rhythm & Meter
  */
 export function beatsPerBar(ts: TimeSignature): number {
   return ts.numerator * unitBeats(ts);
@@ -110,6 +130,7 @@ function pulseBeats(ts: TimeSignature): number {
  *
  * @param ts The time signature.
  * @returns The pulse count per bar.
+ * @category Rhythm & Meter
  */
 export function pulsesPerBar(ts: TimeSignature): number {
   return beatsPerBar(ts) / pulseBeats(ts);
@@ -151,6 +172,13 @@ function isGroupHead(grouping: number[], pulseIndex: number): boolean {
  * @param beatInQuarters Absolute position in quarter-note beats.
  * @param ts The time signature.
  * @returns The bar and in-bar quarter-note offset.
+ * @example
+ * ```ts
+ * import { parseTimeSignature, beatToBarPosition } from '@libraz/libcantus';
+ * const ts = parseTimeSignature('4/4');
+ * beatToBarPosition(5, ts); // { bar: 1, beat: 1 }
+ * ```
+ * @category Rhythm & Meter
  */
 export function beatToBarPosition(beatInQuarters: number, ts: TimeSignature): BarPosition {
   const barLen = beatsPerBar(ts);
@@ -165,6 +193,7 @@ export function beatToBarPosition(beatInQuarters: number, ts: TimeSignature): Ba
  * @param pos The bar position.
  * @param ts The time signature.
  * @returns The absolute position in quarter-note beats.
+ * @category Rhythm & Meter
  */
 export function barPositionToBeat(pos: BarPosition, ts: TimeSignature): number {
   return pos.bar * beatsPerBar(ts) + pos.beat;
@@ -187,6 +216,13 @@ export function barPositionToBeat(pos: BarPosition, ts: TimeSignature): number {
  * @returns The metric weight (0–3).
  * @throws If `ts.grouping` is present but is not a positive-integer list
  *   summing to {@link pulsesPerBar}.
+ * @example
+ * ```ts
+ * import { parseTimeSignature, metricWeight } from '@libraz/libcantus';
+ * const ts = parseTimeSignature('4/4');
+ * metricWeight(0, ts); // 3 (the downbeat)
+ * ```
+ * @category Rhythm & Meter
  */
 export function metricWeight(beatInQuarters: number, ts: TimeSignature): number {
   const { beat } = beatToBarPosition(beatInQuarters, ts);
@@ -222,6 +258,7 @@ export function metricWeight(beatInQuarters: number, ts: TimeSignature): number 
  * @param beatInQuarters Absolute or in-bar quarter-note position.
  * @param ts The time signature.
  * @returns True on strong beats.
+ * @category Rhythm & Meter
  */
 export function isStrongBeat(beatInQuarters: number, ts: TimeSignature): boolean {
   return metricWeight(beatInQuarters, ts) >= 2;
@@ -235,6 +272,7 @@ export function isStrongBeat(beatInQuarters: number, ts: TimeSignature): boolean
  * @param count Number of equal parts.
  * @returns `count` equal durations summing to `totalBeats`.
  * @throws If `count` is not a positive integer.
+ * @category Rhythm & Meter
  */
 export function tuplet(totalBeats: number, count: number): number[] {
   if (!Number.isInteger(count) || count <= 0) {

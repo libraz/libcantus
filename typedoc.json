@@ -1,0 +1,40 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts"],
+  "out": "docs/api",
+  "readme": "README.md",
+  "name": "@libraz/libcantus",
+  "includeVersion": true,
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "sort": ["source-order"],
+  "categorizeByGroup": false,
+  "categoryOrder": [
+    "Pitch & Intervals",
+    "Scales",
+    "Chords",
+    "Recognition",
+    "Functional Harmony",
+    "Reharmonization",
+    "Voicing & Counterpoint",
+    "Rhythm & Meter",
+    "Composition",
+    "Arrangement & Analysis",
+    "Class API",
+    "Utilities",
+    "*"
+  ],
+  "plugin": ["typedoc-material-theme", "typedoc-plugin-mdn-links", "typedoc-plugin-extras"],
+  "themeColor": "#b5892e",
+  "footerDate": true,
+  "footerTypedocVersion": false,
+  "validation": {
+    "notExported": false,
+    "invalidLink": false,
+    "notDocumented": false
+  },
+  "navigationLinks": {
+    "GitHub": "https://github.com/libraz/libcantus",
+    "npm": "https://www.npmjs.com/package/@libraz/libcantus"
+  }
+}
