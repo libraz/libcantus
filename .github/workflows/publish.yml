@@ -5,31 +5,23 @@ on:
     tags:
       - 'v*.*.*'
 
-permissions:
-  contents: write
-  id-token: write
-
 concurrency:
   group: publish-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  publish-npm:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
 
       - name: Setup Node.js (Volta-pinned 22)
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 22
-          registry-url: 'https://registry.npmjs.org'
-
-      # Trusted publishing (OIDC) requires npm >= 11.5.1; the version bundled
-      # with Node 22 is older, so upgrade before publishing.
-      - name: Upgrade npm for OIDC trusted publishing
-        run: npm install -g npm@latest
 
       - name: Enable Corepack and pin Yarn
         run: |
@@ -64,7 +56,63 @@ jobs:
             exit 1
           fi
 
-      - name: Create GitHub Release
+      - name: Build the exact package artifact
+        run: npm pack --ignore-scripts
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: npm-package
+          path: '*.tgz'
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-npm:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Download verified package artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: npm-package
+
+      - name: Setup Node.js for npm
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing (OIDC) requires npm >= 11.5.1; the version bundled
+      # with Node 22 can be older, so pin a known compatible major here.
+      - name: Install npm with trusted-publishing support
+        run: npm install --global npm@11
+
+      # No NODE_AUTH_TOKEN: authentication is via OIDC trusted publishing.
+      # Re-runs are idempotent: an already published version skips npm publish
+      # and continues to the release reconciliation step.
+      - name: Publish verified artifact to npm
+        run: |
+          tarball="$(find . -maxdepth 1 -name '*.tgz' -print -quit)"
+          if [ -z "$tarball" ]; then
+            echo "Verified npm tarball is missing" >&2
+            exit 1
+          fi
+          metadata="$(tar -xOf "$tarball" package/package.json)"
+          name="$(node -e 'console.log(JSON.parse(process.argv[1]).name)' "$metadata")"
+          version="$(node -e 'console.log(JSON.parse(process.argv[1]).version)' "$metadata")"
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "$name@$version is already published; skipping publish."
+          else
+            npm publish "$tarball" --access public --provenance
+          fi
+
+      # The GitHub Release is created only after npm is confirmed published.
+      # If release creation fails, rerunning safely skips npm and retries here.
+      - name: Create or reconcile GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           name: ${{ github.ref_name }}
@@ -72,17 +120,3 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # No NODE_AUTH_TOKEN: authentication is via OIDC trusted publishing,
-      # configured on the npm package settings for this repo + workflow.
-      # Idempotent: skip when this version is already on the registry so
-      # re-running a tag (or tagging a manually-bootstrapped version) is green.
-      - name: Publish to npm
-        run: |
-          name="$(node -p "require('./package.json').name")"
-          version="$(node -p "require('./package.json').version")"
-          if npm view "$name@$version" version >/dev/null 2>&1; then
-            echo "$name@$version is already published; skipping publish."
-            exit 0
-          fi
-          npm publish --access public --provenance
