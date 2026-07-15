@@ -317,8 +317,10 @@ function classifySeventh(thirdIc: number, fifthIc: number, seventhIc: number): C
 function stackThirds(degree: number, key: KeyScale, size: 3 | 4): Chord {
   const tones = scaleTonesInDegreeOrder(key);
   const length = tones.length;
-  if (length === 0) {
-    return { rootPc: pitchClass(key.rootPc), quality: 'maj', intervals: [0, 4, 7] };
+  if (length !== 7) {
+    throw new Error(
+      `diatonic chord stacking requires a heptatonic scale (received ${length} tones)`,
+    );
   }
   const idx = (step: number) => (((degree + step) % length) + length) % length;
   const rootPc = tones[idx(0)] ?? pitchClass(key.rootPc);

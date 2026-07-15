@@ -188,6 +188,7 @@ describe('generateMotif', () => {
       seed: 4,
     });
     expect(withJitter).toEqual(again);
+    expect(withJitter.notes.map((note) => note.pitch)).toEqual([62, 64, 62, 64]);
     // Enabling jitter perturbs the plain contour.
     const plain = generateMotif({ key: cMajor, bars: 2, contour: 'ascending', seed: 4 });
     expect(withJitter).not.toEqual(plain);

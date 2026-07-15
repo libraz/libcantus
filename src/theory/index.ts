@@ -2,7 +2,12 @@
  * Public API of the theory layer. Re-exports every theory-layer module;
  * also available from the package root.
  */
-export type { Chord as ChordData, ChordQuality } from './chord/index.js';
+export type {
+  Chord as ChordData,
+  ChordQuality,
+  ChordSpan,
+  PitchSpelling,
+} from './chord/index.js';
 export {
   chordFromDegree,
   chordPitchClasses,

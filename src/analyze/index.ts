@@ -12,7 +12,7 @@ export type {
   TrackRole,
 } from './arrange/index.js';
 export { analyzeArrangement, tensionCurve } from './arrange/index.js';
-export type { ChordMatch, KeyMatch } from './detect/index.js';
+export type { ChordMatch, DetectChordOptions, KeyMatch } from './detect/index.js';
 export { detectChord, detectChordBest, detectKey } from './detect/index.js';
 export type {
   BorrowedSource,

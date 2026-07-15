@@ -13,6 +13,11 @@
 
 import { beatsPerBar, metricWeight, type TimeSignature } from '../../core/meter/index.js';
 import { createRng } from '../../core/random/index.js';
+import {
+  assertFiniteNumber,
+  assertGenerationBudget,
+  assertPositiveInt,
+} from '../../core/validation/index.js';
 
 /**
  * A single rhythmic note: an onset position and how long it sounds.
@@ -113,12 +118,17 @@ export function generateRhythm(ts: TimeSignature, opts: RhythmOptions = {}): Rhy
   const seed = opts.seed ?? 0;
   const bars = opts.bars ?? DEFAULT_BARS;
   const subdivision = opts.subdivision ?? DEFAULT_SUBDIVISION;
-  const density = Math.min(1, Math.max(0, opts.density ?? DEFAULT_DENSITY));
+  const requestedDensity = assertFiniteNumber(opts.density ?? DEFAULT_DENSITY, 'rhythm density');
+  const density = Math.min(1, Math.max(0, requestedDensity));
+
+  assertPositiveInt(bars, 'rhythm bars');
+  assertPositiveInt(subdivision, 'rhythm subdivision');
 
   const barBeats = beatsPerBar(ts);
   const spanBeats = barBeats * bars;
   const step = 1 / subdivision;
   const slotCount = Math.round(spanBeats * subdivision);
+  assertGenerationBudget(slotCount, 'rhythm grid slots');
   const slotsPerBar = Math.round(barBeats * subdivision);
   const rng = createRng(seed);
 

@@ -1,3 +1,8 @@
+import {
+  assertFiniteNumber,
+  assertGenerationBudget,
+  assertPositiveInt,
+} from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
 import {
   DEFAULT_MAX_SPACING,
@@ -70,12 +75,23 @@ export function resolveRanges(opts?: VoicingOptions): VoiceRange[] {
     if (opts.ranges.length === 0) {
       throw new Error('ranges must contain at least one voice range');
     }
-    return opts.ranges.map((range) => ({ ...range }));
+    assertGenerationBudget(opts.ranges.length, 'voice ranges', 128);
+    return opts.ranges.map((range, index) => {
+      assertFiniteNumber(range.min, `ranges[${index}].min`);
+      assertFiniteNumber(range.max, `ranges[${index}].max`);
+      if (range.min > range.max) {
+        throw new RangeError(`ranges[${index}].min must not exceed max`);
+      }
+      assertGenerationBudget(
+        Math.floor(range.max) - Math.ceil(range.min) + 1,
+        `ranges[${index}] span`,
+        4096,
+      );
+      return { ...range };
+    });
   }
   const voices = opts?.voices ?? 4;
-  if (voices < 1) {
-    throw new Error('voices must be at least 1');
-  }
+  assertPositiveInt(voices, 'voices', 128);
   if (voices === 4) {
     return SATB_RANGES.map((range) => ({ ...range }));
   }
@@ -115,6 +131,8 @@ export function resolveRanges(opts?: VoicingOptions): VoiceRange[] {
 export function voiceChord(chord: Chord, opts?: VoicingOptions): number[] {
   const ranges = resolveRanges(opts);
   const maxSpacing = opts?.maxSpacing ?? DEFAULT_MAX_SPACING;
+  assertFiniteNumber(maxSpacing, 'maxSpacing');
+  if (maxSpacing < 0) throw new RangeError('maxSpacing must be non-negative');
   const candidates = enumerateVoicings(chord, ranges, maxSpacing);
   let best: number[] | undefined;
   let bestScore = Number.POSITIVE_INFINITY;
@@ -162,8 +180,11 @@ export function voiceChord(chord: Chord, opts?: VoicingOptions): number[] {
  * @category Voicing & Counterpoint
  */
 export function voiceProgression(chords: Chord[], opts?: VoicingOptions): number[][] {
+  assertGenerationBudget(chords.length * 4000, 'voiced progression search');
   const ranges = resolveRanges(opts);
   const maxSpacing = opts?.maxSpacing ?? DEFAULT_MAX_SPACING;
+  assertFiniteNumber(maxSpacing, 'maxSpacing');
+  if (maxSpacing < 0) throw new RangeError('maxSpacing must be non-negative');
   const result: number[][] = [];
   let prev: number[] | undefined;
   for (const chord of chords) {

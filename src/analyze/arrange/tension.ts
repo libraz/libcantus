@@ -7,6 +7,12 @@
 
 import { isStrongBeat, parseTimeSignature, type TimeSignature } from '../../core/meter/index.js';
 import type { KeyScale } from '../../core/types.js';
+import {
+  assertGenerationBudget,
+  assertNoteEvents,
+  assertRange,
+  assertTimeSignature,
+} from '../../core/validation/index.js';
 import { chordPitchClasses } from '../../theory/chord/index.js';
 import { evaluateSafety, NoteSafety, type SafetyProfile } from '../../theory/safety/index.js';
 import { functionOf } from '../functional/index.js';
@@ -84,11 +90,16 @@ export function tensionCurve(
   opts: ArrangementOptions & { step?: number } = {},
 ): TensionPoint[] {
   const ts = opts.ts ?? parseTimeSignature('4/4');
+  assertTimeSignature(ts);
+  assertGenerationBudget(tracks.length, 'arrangement tracks');
+  for (let index = 0; index < tracks.length; index += 1) {
+    assertNoteEvents(tracks[index]?.notes ?? [], `tracks[${index}].notes`, {
+      allowNonPositiveDuration: true,
+    });
+  }
   const profile: SafetyProfile = opts.profile ?? 'pop';
   const step = opts.step ?? 1;
-  if (!(step > 0)) {
-    throw new Error(`Invalid tension sampling step: ${step}`);
-  }
+  assertRange(step, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'tension sampling step');
 
   const pooled = poolNotes(tracks);
   const totalBeats = pooled.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
@@ -101,6 +112,7 @@ export function tensionCurve(
   const prepared = prepareTracks(tracks);
   const points: TensionPoint[] = [];
   const sampleCount = Math.max(0, Math.ceil(totalBeats / step - EPS));
+  assertGenerationBudget(sampleCount, 'tension samples');
   for (let i = 0; i < sampleCount; i += 1) {
     const beat = i * step;
     points.push({ beat, tension: sampleTension(prepared, timeline, key, ts, profile, beat) });

@@ -5,6 +5,7 @@
  */
 
 import type { KeyScale } from '../../core/types.js';
+import { assertFiniteNumber, assertGenerationBudget } from '../../core/validation/index.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { chordPitchClasses, chordQualities, makeChord } from '../../theory/chord/index.js';
 import {
@@ -30,9 +31,21 @@ export type ChordMatch = {
   extraPcs: number[];
   /** True when the input pitch-class set equals the chord exactly. */
   exact: boolean;
-  /** Inversion implied by the lowest note: 0 root position, 1 first, ... */
-  inversion: number;
+  /** Inversion implied by a known bass, or null for an unordered pitch-class set. */
+  inversion: number | null;
   /** Bass pitch class when inverted (the lowest note is not the root). */
+  bassPc?: number;
+};
+
+/** Input interpretation for {@link detectChord} and {@link detectChordBest}. */
+export type DetectChordOptions = {
+  /**
+   * `midi` uses the numerically lowest pitch as bass; `pitchClass` treats the
+   * input as unordered. `auto` (default) selects pitch-class mode only when all
+   * values lie in 0..11.
+   */
+  input?: 'auto' | 'midi' | 'pitchClass';
+  /** Explicit bass pitch class, including for an unordered pitch-class set. */
   bassPc?: number;
 };
 
@@ -58,6 +71,13 @@ function uniquePitchClasses(pitches: number[]): number[] {
   return [...new Set(pitches.map(pitchClass))].sort((a, b) => a - b);
 }
 
+function assertPitches(pitches: number[]): void {
+  assertGenerationBudget(pitches.length, 'detection pitches');
+  for (let index = 0; index < pitches.length; index += 1) {
+    assertFiniteNumber(pitches[index] ?? Number.NaN, `pitches[${index}]`);
+  }
+}
+
 /**
  * Identify chords matching a set of pitches.
  *
@@ -78,12 +98,25 @@ function uniquePitchClasses(pitches: number[]): number[] {
  * ```
  * @category Recognition
  */
-export function detectChord(pitches: number[]): ChordMatch[] {
+export function detectChord(pitches: number[], opts: DetectChordOptions = {}): ChordMatch[] {
+  assertPitches(pitches);
+  if (opts.bassPc !== undefined) assertFiniteNumber(opts.bassPc, 'bassPc');
   const input = uniquePitchClasses(pitches);
   if (input.length === 0) {
     return [];
   }
-  const bassPc = pitchClass(Math.min(...pitches));
+  const inputKind =
+    opts.input === undefined || opts.input === 'auto'
+      ? pitches.every((pitch) => Number.isInteger(pitch) && pitch >= 0 && pitch <= 11)
+        ? 'pitchClass'
+        : 'midi'
+      : opts.input;
+  const bassPc =
+    opts.bassPc !== undefined
+      ? pitchClass(opts.bassPc)
+      : inputKind === 'midi'
+        ? pitchClass(pitches.reduce((lowest, pitch) => Math.min(lowest, pitch), Infinity))
+        : undefined;
   const inputSet = new Set(input);
   const matches: ChordMatch[] = [];
   const qualities = chordQualities();
@@ -100,8 +133,11 @@ export function detectChord(pitches: number[]): ChordMatch[] {
         continue;
       }
       const extraPcs = input.filter((pc) => !toneSet.has(pc));
-      const bassIndex = chord.intervals.findIndex((iv) => pitchClass(rootPc + iv) === bassPc);
-      const inversion = bassIndex > 0 ? bassIndex : 0;
+      const bassIndex =
+        bassPc === undefined
+          ? -1
+          : chord.intervals.findIndex((iv) => pitchClass(rootPc + iv) === bassPc);
+      const inversion = bassPc === undefined ? null : bassIndex > 0 ? bassIndex : 0;
       const match: ChordMatch = {
         rootPc,
         quality,
@@ -110,7 +146,7 @@ export function detectChord(pitches: number[]): ChordMatch[] {
         exact: extraPcs.length === 0 && missingPcs.length === 0,
         inversion,
       };
-      if (inversion > 0) {
+      if (bassPc !== undefined && bassPc !== rootPc) {
         match.bassPc = bassPc;
       }
       matches.push(match);
@@ -146,8 +182,8 @@ export function detectChord(pitches: number[]): ChordMatch[] {
  * ```
  * @category Recognition
  */
-export function detectChordBest(pitches: number[]): Chord | null {
-  const best = detectChord(pitches)[0];
+export function detectChordBest(pitches: number[], opts: DetectChordOptions = {}): Chord | null {
+  const best = detectChord(pitches, opts)[0];
   if (!best) {
     return null;
   }
@@ -183,6 +219,7 @@ const MINOR_MASK_VARIANTS = [NATURAL_MINOR_MASK, HARMONIC_MINOR_MASK, MELODIC_MI
  * @category Recognition
  */
 export function detectKey(pitches: number[]): KeyMatch[] {
+  assertPitches(pitches);
   const input = uniquePitchClasses(pitches);
   if (input.length === 0) {
     return [];

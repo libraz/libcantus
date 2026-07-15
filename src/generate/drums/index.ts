@@ -1,4 +1,10 @@
 import {
+  assertGenerationBudget,
+  assertInteger,
+  assertPositiveInt,
+  assertRange,
+} from '../../core/validation/index.js';
+import {
   type BeatCtx,
   generateGhostNotesForBeat,
   generateHiHatForBeat,
@@ -7,7 +13,7 @@ import {
   generateSnareForBeat,
   type SectionCtx,
 } from './beat.js';
-import { euclideanRhythm, patternToMask } from './euclid.js';
+import { euclideanRhythm } from './euclid.js';
 import { type FillType, generateFill, getFillStartBeat, selectFillType } from './fills.js';
 import {
   footHiHatVelocity,
@@ -35,12 +41,7 @@ import {
   sectionDensityMultiplier,
   sectionEnergy,
 } from './internal.js';
-import {
-  euclideanToKickPattern,
-  getKickPattern,
-  isInPreChorusLift,
-  type KickPattern,
-} from './kick.js';
+import { getKickPattern, isInPreChorusLift, type KickPattern } from './kick.js';
 import { generateAuxPercussionForBar, getPercussionConfig } from './percussion.js';
 import { createRng } from './rng.js';
 
@@ -164,6 +165,16 @@ export type DrumsOptions = {
  * @category Composition
  */
 export function generateDrums(opts: DrumsOptions): DrumHit[] {
+  assertPositiveInt(opts.bars, 'drum bars');
+  assertRange(opts.bpm, Number.MIN_VALUE, 1000, 'drum bpm');
+  assertRange(opts.density, 0, 1, 'drum density');
+  assertGenerationBudget(opts.bars * 128, 'drum hits');
+  if (opts.euclideanKick) {
+    const steps = opts.euclideanKick.steps ?? 16;
+    assertInteger(steps, 'euclidean steps', 1, 16);
+    assertInteger(opts.euclideanKick.pulses, 'euclidean pulses');
+    assertInteger(opts.euclideanKick.rotation ?? 0, 'euclidean rotation');
+  }
   const track = new HitList();
   const rng = createRng(opts.seed ?? 0);
   const mapping = mapStyle(opts.style);
@@ -210,16 +221,9 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
   const nextSection = opts.nextSection ? mapSection(opts.nextSection) : section;
   const nextEnergy = sectionEnergy(nextSection);
 
-  const euclidKick: KickPattern | undefined = opts.euclideanKick
-    ? euclideanToKickPattern(
-        patternToMask(
-          euclideanRhythm(
-            opts.euclideanKick.pulses,
-            opts.euclideanKick.steps ?? 16,
-            opts.euclideanKick.rotation ?? 0,
-          ),
-        ),
-      )
+  const euclidSteps = opts.euclideanKick?.steps ?? 16;
+  const euclidKick = opts.euclideanKick
+    ? euclideanRhythm(opts.euclideanKick.pulses, euclidSteps, opts.euclideanKick.rotation ?? 0)
     : undefined;
 
   const reuseSectionKick = (section === 'b' || section === 'chorus') && style !== 'sparse';
@@ -240,13 +244,11 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
       barHasOpenHh = !track.hasCrashNear(barStart + openHhBeatIndex);
     }
 
-    let kick: KickPattern;
-    if (euclidKick) {
-      kick = euclidKick;
-    } else if (reuseSectionKick) {
+    let kick: KickPattern | undefined;
+    if (!euclidKick && reuseSectionKick) {
       sectionKick ??= getKickPattern(section, style, 0, rng);
       kick = sectionKick;
-    } else {
+    } else if (!euclidKick) {
       kick = getKickPattern(section, style, bar, rng);
     }
 
@@ -295,7 +297,23 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
         if (inLift) {
           generatePreChorusBuildup(ctx, sec, isLastBar);
         }
-        generateKickForBeat(ctx, sec, kick);
+        if (euclidKick && !inLift) {
+          const stepLength = 4 / euclidSteps;
+          for (let step = 0; step < euclidKick.length; step += 1) {
+            const onset = step * stepLength;
+            if (euclidKick[step] && Math.floor(onset) === beat) {
+              const wholeBeat = Math.abs(onset - Math.round(onset)) < 1e-9;
+              track.add(
+                GM.BD,
+                barStart + onset,
+                Math.min(0.5, stepLength),
+                velocity * (wholeBeat ? 1 : 0.85),
+              );
+            }
+          }
+        } else if (kick) {
+          generateKickForBeat(ctx, sec, kick);
+        }
         generateSnareForBeat(ctx, sec, section === 'intro' && bar === 0);
         if (sec.useGhostNotes && !inLift) {
           generateGhostNotesForBeat(ctx, sec);
@@ -314,10 +332,24 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
       }
     }
 
+    let percussionConfig = getPercussionConfig(percMood, section);
+    if (
+      role === 'fxOnly' &&
+      !percussionConfig.tambourine &&
+      !percussionConfig.shaker &&
+      !percussionConfig.handclap
+    ) {
+      percussionConfig = {
+        tambourine: false,
+        shaker: true,
+        handclap: false,
+        shaker16th: false,
+      };
+    }
     generateAuxPercussionForBar(
       track,
       barStart,
-      getPercussionConfig(percMood, section),
+      percussionConfig,
       role,
       densityMult,
       rng,

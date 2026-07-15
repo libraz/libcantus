@@ -113,6 +113,21 @@ describe('spellChord', () => {
     ]);
   });
 
+  it('spells secondary dominants from the chord root letter, not nearest key tones', () => {
+    expect(noteNames(spellChord(makeChord(4, 'dom7'), parseNote('C'), cMajor))).toEqual([
+      'E',
+      'G#',
+      'B',
+      'D',
+    ]);
+    expect(noteNames(spellChord(makeChord(11, 'dom7'), parseNote('C'), cMajor))).toEqual([
+      'B',
+      'D#',
+      'F#',
+      'A',
+    ]);
+  });
+
   it('spells a borrowed flat-seven chord with flats', () => {
     expect(noteNames(spellChord(makeChord(10, 'maj'), parseNote('C'), cMajor))).toEqual([
       'Bb',

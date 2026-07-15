@@ -108,9 +108,11 @@ export function prepareTracks(tracks: ArrangementTrack[]): PreparedTrack[] {
       voice,
       sounding: voice.map((note, i) => {
         const prev = i > 0 ? voice[i - 1] : undefined;
+        const prevEnd = prev === undefined ? undefined : prev.startBeat + prev.durationBeat;
+        const contiguous = prevEnd !== undefined && Math.abs(prevEnd - note.startBeat) <= EPS;
         return {
           pitch: note.pitch,
-          prevPitch: prev?.pitch,
+          prevPitch: contiguous ? prev?.pitch : undefined,
           startBeat: note.startBeat,
           endBeat: note.startBeat + note.durationBeat,
         };

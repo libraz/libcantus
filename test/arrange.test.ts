@@ -5,7 +5,7 @@ import {
   tensionCurve,
 } from '../src/analyze/arrange/index.js';
 import type { NoteEvent } from '../src/core/types.js';
-import { NoteSafety, ReasonFlag } from '../src/theory/safety/index.js';
+import { evaluateSafety, NoteSafety, ReasonFlag } from '../src/theory/safety/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
 
 /** Build a block chord: every pitch sounding for the same span. */
@@ -106,6 +106,7 @@ describe('analyzeArrangement', () => {
     );
     expect(conflict).toBeDefined();
     expect(conflict?.safety).toBeGreaterThanOrEqual(NoteSafety.Warning);
+    expect(conflict?.suggestions?.length).toBeGreaterThan(0);
     // Conflicts are ordered worst severity first.
     for (let i = 1; i < analysis.conflicts.length; i += 1) {
       const prev = analysis.conflicts[i - 1];
@@ -193,6 +194,89 @@ describe('analyzeArrangement', () => {
     expect(clash).toBeDefined();
     expect((clash?.reasons ?? 0) & ReasonFlag.VerticalDissonance).toBeTruthy();
     expect(clash?.safety).toBe(NoteSafety.Dissonant);
+  });
+
+  it.each([
+    {
+      name: 'parallel fifth',
+      upper: [67, 69],
+      lower: [60, 62],
+      reason: ReasonFlag.ParallelPerfect,
+    },
+    {
+      name: 'hidden perfect',
+      upper: [67, 72],
+      lower: [64, 65],
+      reason: ReasonFlag.HiddenParallel,
+    },
+    {
+      name: 'voice crossing',
+      upper: [64, 59],
+      lower: [60, 62],
+      reason: ReasonFlag.VoiceCrossing,
+    },
+  ])('reports $name motion through the public arrangement analyzer', ({ upper, lower, reason }) => {
+    const unit = evaluateSafety({
+      profile: 'strict',
+      candidatePitch: upper[1] ?? 0,
+      prevPitch: upper[0],
+      chord: null,
+      key: majorKey(0),
+      otherVoices: [{ pitch: lower[1] ?? 0, prevPitch: lower[0] }],
+      strongBeat: false,
+    });
+    expect(unit.reasons & reason).toBeTruthy();
+
+    const tracks: ArrangementTrack[] = [
+      {
+        name: 'upper',
+        role: 'melody',
+        notes: upper.map((pitch, startBeat) => ({ pitch, startBeat, durationBeat: 1 })),
+      },
+      {
+        name: 'lower',
+        role: 'bass',
+        notes: lower.map((pitch, startBeat) => ({ pitch, startBeat, durationBeat: 1 })),
+      },
+    ];
+    const analysis = analyzeArrangement(tracks, {
+      key: majorKey(0),
+      harmonicRhythm: 1,
+      profile: 'strict',
+    });
+    const conflict = analysis.conflicts.find(
+      (candidate) => candidate.trackName === 'upper' && candidate.beat === 1,
+    );
+    expect(conflict).toBeDefined();
+    expect((conflict?.reasons ?? 0) & reason).toBeTruthy();
+  });
+
+  it('does not fabricate motion when a held note is rechecked at a chord boundary', () => {
+    const tracks: ArrangementTrack[] = [
+      {
+        name: 'held',
+        role: 'melody',
+        notes: [{ pitch: 67, startBeat: 0, durationBeat: 2 }],
+      },
+      {
+        name: 'moving',
+        role: 'bass',
+        notes: [
+          { pitch: 60, startBeat: 0, durationBeat: 1 },
+          { pitch: 62, startBeat: 1, durationBeat: 1 },
+        ],
+      },
+    ];
+    const analysis = analyzeArrangement(tracks, {
+      key: majorKey(0),
+      harmonicRhythm: 1,
+      profile: 'strict',
+    });
+    const heldAtBoundary = analysis.conflicts.find(
+      (candidate) => candidate.trackName === 'held' && candidate.beat === 1,
+    );
+    expect((heldAtBoundary?.reasons ?? 0) & ReasonFlag.ParallelPerfect).toBeFalsy();
+    expect((heldAtBoundary?.reasons ?? 0) & ReasonFlag.HiddenParallel).toBeFalsy();
   });
 
   it('ignores zero- and negative-length notes in labels and conflicts', () => {

@@ -5,6 +5,32 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.3] - 2026-07-15
+
+### Added
+
+- Core-layer note-event index: `createNoteEventIndex` with the `NoteEventIndex`
+  and `IndexedNoteEvent` types, giving fast sounding-at-beat and time-window
+  lookups over a note list. The chord-timeline analyzer now builds on it.
+- Core-layer runtime validation helpers — `assertNoteEvent`, `assertNoteEvents`,
+  `assertRange`, `assertTimeSignature`, `assertInteger`, `assertPositiveInt`,
+  `assertFiniteNumber`, `assertGenerationBudget`, and `DEFAULT_GENERATION_BUDGET`.
+- Optional `DetectChordOptions` argument on `detectChord` and `detectChordBest`
+  (defaults preserve the previous behavior).
+- `bench:timeline` script for benchmarking the note-event index.
+
+### Changed
+
+- Public generation and analysis entry points now validate their inputs and
+  throw a descriptive error on malformed note events, out-of-range values, or an
+  invalid time signature instead of producing undefined results.
+
+### Fixed
+
+- Type resolution for CommonJS consumers: the `exports` map points each `require`
+  condition at a dedicated `.d.cts` declaration, so `require()`-based TypeScript
+  projects resolve the correct types.
+
 ## [0.9.2] - 2026-07-07
 
 ### Added
@@ -97,6 +123,7 @@ Initial public release.
 - Fluent immutable class API (`Note`, `Chord`, `Key`, ...) layered over the tree-shakeable functional core.
 - Dual ESM/CJS builds with bundled type declarations.
 
+[0.9.3]: https://github.com/libraz/libcantus/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/libraz/libcantus/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/libraz/libcantus/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/libraz/libcantus/releases/tag/v0.9.0

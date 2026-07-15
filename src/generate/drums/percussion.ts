@@ -70,7 +70,7 @@ export function generateAuxPercussionForBar(
   rng: DrumRng,
   bpm: number,
 ): void {
-  if (role === 'minimal' || role === 'fxOnly') {
+  if (role === 'minimal') {
     return;
   }
 

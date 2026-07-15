@@ -51,29 +51,125 @@ describe('generateCounterMelody', () => {
     expect(generateCounterMelody({ melody: [], chordAt, key: cMajor })).toEqual([]);
   });
 
+  it('returns an explicit rest instead of an unchecked fallback when no pitch is safe', () => {
+    const impossible: NoteEvent[] = [{ pitch: 60, startBeat: 0, durationBeat: 2 }];
+    expect(
+      generateCounterMelody({
+        melody: impossible,
+        chordAt: () => makeChord(0, 'maj'),
+        key: cMajor,
+        rhythm: 'follow',
+        register: 'below',
+        pitchLow: 59,
+        pitchHigh: 59,
+      }),
+    ).toEqual([]);
+  });
+
   it('produces no dissonant notes when re-evaluated in context', () => {
     for (const rhythm of ['complement', 'follow'] as const) {
       const counter = generate({ rhythm });
       expect(counter.length).toBeGreaterThan(0);
-      let prevPitch: number | undefined;
-      let prevOnset: number | undefined;
-      for (const note of counter) {
-        const mel = soundingAt(melody, note.startBeat);
-        const melPrev = prevOnset !== undefined ? soundingAt(melody, prevOnset)?.pitch : undefined;
-        const result = evaluateSafety({
-          profile: 'pop',
-          candidatePitch: note.pitch,
-          prevPitch,
-          chord: chordAt(note.startBeat),
-          key: cMajor,
-          otherVoices: mel ? [{ pitch: mel.pitch, prevPitch: melPrev }] : [],
-          strongBeat: isStrongBeat(note.startBeat, { numerator: 4, denominator: 4 }),
-        });
-        expect(result.safety).not.toBe(NoteSafety.Dissonant);
-        prevPitch = note.pitch;
-        prevOnset = note.startBeat;
+      for (let i = 0; i < counter.length; i += 1) {
+        const note = counter[i];
+        if (!note) continue;
+        const end = note.startBeat + note.durationBeat;
+        const boundaries = new Set<number>([note.startBeat]);
+        for (const melodyNote of melody) {
+          if (melodyNote.startBeat > note.startBeat && melodyNote.startBeat < end) {
+            boundaries.add(melodyNote.startBeat);
+          }
+        }
+        for (let beat = Math.ceil(note.startBeat / 4) * 4; beat < end; beat += 4) {
+          if (beat > note.startBeat) boundaries.add(beat);
+        }
+        for (const beat of [...boundaries].sort((a, b) => a - b)) {
+          const mel = soundingAt(melody, beat);
+          const melodyAttacked = mel !== undefined && Math.abs(mel.startBeat - beat) < 1e-9;
+          const melPrev = melodyAttacked ? soundingAt(melody, beat - 2e-9)?.pitch : mel?.pitch;
+          const previousCounter = i > 0 ? counter[i - 1] : undefined;
+          const contiguous =
+            previousCounter !== undefined &&
+            Math.abs(previousCounter.startBeat + previousCounter.durationBeat - note.startBeat) <
+              1e-9;
+          const result = evaluateSafety({
+            profile: 'pop',
+            candidatePitch: note.pitch,
+            prevPitch:
+              beat === note.startBeat
+                ? contiguous
+                  ? previousCounter?.pitch
+                  : undefined
+                : note.pitch,
+            chord: chordAt(beat),
+            key: cMajor,
+            otherVoices: mel ? [{ pitch: mel.pitch, prevPitch: melPrev }] : [],
+            strongBeat: isStrongBeat(beat, { numerator: 4, denominator: 4 }),
+          });
+          expect(result.safety).not.toBe(NoteSafety.Dissonant);
+        }
       }
     }
+  });
+
+  it('keeps a held counter note safe when the melody attacks inside it', () => {
+    const changingMelody: NoteEvent[] = [
+      { pitch: 72, startBeat: 0, durationBeat: 4 },
+      { pitch: 63, startBeat: 2, durationBeat: 1 },
+    ];
+    const counter = generateCounterMelody({
+      melody: changingMelody,
+      chordAt: () => makeChord(0, 'maj'),
+      key: cMajor,
+      rhythm: 'complement',
+      pitchLow: 55,
+      pitchHigh: 67,
+      seed: 7,
+    });
+    const held = counter.find(
+      (note) => note.startBeat <= 2 && 2 < note.startBeat + note.durationBeat,
+    );
+    expect(held).toBeDefined();
+    const result = evaluateSafety({
+      profile: 'pop',
+      candidatePitch: held?.pitch ?? 0,
+      prevPitch: held?.pitch,
+      chord: makeChord(0, 'maj'),
+      key: cMajor,
+      otherVoices: [{ pitch: 63, prevPitch: 72 }],
+      strongBeat: true,
+    });
+    expect(result.safety).toBe(NoteSafety.Safe);
+  });
+
+  it('keeps a held counter note safe across an explicit chord boundary', () => {
+    const sustained: NoteEvent[] = [{ pitch: 72, startBeat: 0, durationBeat: 4 }];
+    const changingChord = (beat: number): Chord =>
+      beat < 1.75 ? makeChord(0, 'maj') : makeChord(5, 'maj');
+    const counter = generateCounterMelody({
+      melody: sustained,
+      chordAt: changingChord,
+      chordChangeBeats: [1.75],
+      key: cMajor,
+      rhythm: 'complement',
+      pitchLow: 55,
+      pitchHigh: 67,
+      seed: 7,
+    });
+    const held = counter.find(
+      (note) => note.startBeat <= 1.75 && 1.75 < note.startBeat + note.durationBeat,
+    );
+    expect(held).toBeDefined();
+    const result = evaluateSafety({
+      profile: 'pop',
+      candidatePitch: held?.pitch ?? 0,
+      prevPitch: held?.pitch,
+      chord: changingChord(1.75),
+      key: cMajor,
+      otherVoices: [{ pitch: 72, prevPitch: 72 }],
+      strongBeat: false,
+    });
+    expect(result.safety).toBe(NoteSafety.Safe);
   });
 
   it('avoids parallel perfect intervals with the melody', () => {
@@ -85,7 +181,7 @@ describe('generateCounterMelody', () => {
         if (!prev || !cur) {
           continue;
         }
-        const melPrev = soundingAt(melody, prev.startBeat);
+        const melPrev = soundingAt(melody, cur.startBeat - 2e-9);
         const melCur = soundingAt(melody, cur.startBeat);
         if (!melPrev || !melCur) {
           continue;

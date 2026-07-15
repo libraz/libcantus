@@ -89,6 +89,23 @@ describe('analyzeVoice', () => {
     expect(analyzed[1]?.labels).toContainEqual({ kind: 'passing' });
   });
 
+  it('does not invent melodic labels or resolutions across a rest', () => {
+    const voice: VoiceNote[] = [
+      { id: 1, pitch: 60, startBeat: 0, durationBeat: 1 },
+      { id: 2, pitch: 62, startBeat: 4, durationBeat: 1 },
+      { id: 3, pitch: 64, startBeat: 8, durationBeat: 1 },
+    ];
+    const analyzed = analyzeVoice(voice, () => cMaj, cMajor, noOtherVoices);
+    expect(analyzed[1]?.labels.some((label) => label.kind === 'passing')).toBe(false);
+
+    const leadingAcrossRest: VoiceNote[] = [
+      { id: 4, pitch: 71, startBeat: 0, durationBeat: 1 },
+      { id: 5, pitch: 72, startBeat: 4, durationBeat: 1 },
+    ];
+    const leading = analyzeVoice(leadingAcrossRest, () => cMaj, cMajor, noOtherVoices);
+    expect(leading[0]?.labels.some((label) => label.kind === 'leadingTone')).toBe(false);
+  });
+
   it('labels chord tones with their role', () => {
     const voice: VoiceNote[] = [
       { id: 1, pitch: 60, startBeat: 0, durationBeat: 1 },

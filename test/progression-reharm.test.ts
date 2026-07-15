@@ -17,6 +17,23 @@ describe('generateProgression reharmonize', () => {
     expect(generateProgression(opts)).toEqual(generateProgression(opts));
   });
 
+  it('preserves the seeded public-output golden after RNG consolidation', () => {
+    expect(
+      generateProgression({
+        key: cMajor,
+        style: 'rock',
+        bars: 4,
+        seed: 42,
+        reharmonize: true,
+      }),
+    ).toEqual([
+      { rootPc: 5, quality: 'dom7', startBeat: 0, secondaryDominant: true },
+      { rootPc: 10, quality: 'maj', startBeat: 4 },
+      { rootPc: 5, quality: 'maj', startBeat: 8, degree: 3 },
+      { rootPc: 0, quality: 'maj', startBeat: 12, degree: 0 },
+    ]);
+  });
+
   it('introduces at least one secondary dominant across seeds', () => {
     let sawSecondary = false;
     for (let seed = 0; seed < 12; seed += 1) {

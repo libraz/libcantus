@@ -62,7 +62,7 @@ describe('just intonation', () => {
     expect(justDeviationCents(4)).toBeCloseTo(-13.686, 3); // just major third is narrower
   });
 
-  it('returns NaN for an unlisted class', () => {
-    expect(justDeviationCents(13)).toBeNaN();
+  it('rejects an unlisted class', () => {
+    expect(() => justDeviationCents(13)).toThrow(RangeError);
   });
 });

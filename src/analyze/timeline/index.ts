@@ -1,6 +1,14 @@
+import { createNoteEventIndex } from '../../core/event-index/index.js';
 import type { TimeSignature } from '../../core/meter/index.js';
 import { beatsPerBar, metricWeight, parseTimeSignature } from '../../core/meter/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
+import {
+  assertFiniteNumber,
+  assertGenerationBudget,
+  assertNoteEvents,
+  assertRange,
+  assertTimeSignature,
+} from '../../core/validation/index.js';
 import type { Chord, ChordSpan } from '../../theory/chord/index.js';
 import { chordPitchClasses, makeChord } from '../../theory/chord/index.js';
 import { isScaleTone, majorKey } from '../../theory/scale/index.js';
@@ -45,11 +53,24 @@ export type ChordTimeline = {
  * @category Arrangement & Analysis
  */
 export function chordTimelineFromChords(chords: ChordSpan[], totalBeats: number): ChordTimeline {
-  const sorted = [...chords].sort((a, b) => a.startBeat - b.startBeat);
+  assertRange(totalBeats, 0, Number.MAX_SAFE_INTEGER, 'timeline totalBeats');
+  assertGenerationBudget(chords.length, 'timeline chords');
+  for (let index = 0; index < chords.length; index += 1) {
+    assertRange(
+      chords[index]?.startBeat ?? Number.NaN,
+      0,
+      Number.MAX_SAFE_INTEGER,
+      `chords[${index}].startBeat`,
+    );
+  }
+  const sorted = [...chords]
+    .filter((chord) => chord.startBeat < totalBeats)
+    .sort((a, b) => a.startBeat - b.startBeat);
   const segments: ChordSegment[] = sorted
     .map((gc, i) => {
       const next = sorted[i + 1];
-      const endBeat = Math.max(gc.startBeat, next ? next.startBeat : totalBeats);
+      const nextBeat = next ? next.startBeat : totalBeats;
+      const endBeat = Math.min(totalBeats, Math.max(gc.startBeat, nextBeat));
       return {
         startBeat: gc.startBeat,
         endBeat,
@@ -64,6 +85,7 @@ export function chordTimelineFromChords(chords: ChordSpan[], totalBeats: number)
 /** Build the `at(beat)` lookup over a segment list. */
 function segmentLookup(segments: ChordSegment[]): (beat: number) => Chord | null {
   return (beat) => {
+    assertFiniteNumber(beat, 'timeline query beat');
     for (const seg of segments) {
       if (beat >= seg.startBeat && beat < seg.endBeat) {
         return seg.chord;
@@ -317,23 +339,37 @@ export function chordTimelineFromNotes(
   opts: ChordTimelineOptions = {},
 ): ChordTimelineResult {
   const ts = opts.ts ?? parseTimeSignature('4/4');
+  assertTimeSignature(ts);
   const harmonicRhythm = opts.harmonicRhythm ?? beatsPerBar(ts);
-  if (!(harmonicRhythm > 0)) {
-    throw new Error(`Invalid harmonic rhythm: ${harmonicRhythm}`);
-  }
+  assertRange(harmonicRhythm, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'harmonic rhythm');
+  assertNoteEvents(notes, 'timeline notes', { allowNonPositiveDuration: true });
   // Zero/negative-length notes never sound; drop them before any inference.
-  const sounding = notes.filter((note) => note.durationBeat > 0);
+  const soundingIndex = createNoteEventIndex(notes.filter((note) => note.durationBeat > 0));
+  const sounding = soundingIndex.notes.map(({ note }) => note);
   const lastNoteEnd = sounding.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
   const totalBeats = opts.totalBeats ?? lastNoteEnd;
+  assertRange(totalBeats, 0, Number.MAX_SAFE_INTEGER, 'timeline totalBeats');
   const key = opts.key ?? detectKey(sounding.map((n) => n.pitch))[0]?.key ?? majorKey(0);
 
   const segments: ChordSegment[] = [];
   const segmentConfidence: number[] = [];
   const windowCount = Math.max(0, Math.ceil(totalBeats / harmonicRhythm - EPS));
+  assertGenerationBudget(windowCount, 'timeline windows');
+  const windowNotes: NoteEvent[][] = Array.from({ length: windowCount }, () => []);
+  let memberships = 0;
+  for (const indexed of soundingIndex.notes) {
+    const first = Math.max(0, Math.floor(indexed.note.startBeat / harmonicRhythm));
+    const lastExclusive = Math.min(windowCount, Math.ceil(indexed.endBeat / harmonicRhythm));
+    memberships += Math.max(0, lastExclusive - first);
+    assertGenerationBudget(memberships, 'timeline note-to-window memberships');
+    for (let window = first; window < lastExclusive; window += 1) {
+      windowNotes[window]?.push(indexed.note);
+    }
+  }
   for (let i = 0; i < windowCount; i += 1) {
     const start = i * harmonicRhythm;
     const end = Math.min(start + harmonicRhythm, totalBeats);
-    const inferred = analyzeWindow(sounding, start, end, ts, key);
+    const inferred = analyzeWindow(windowNotes[i] ?? [], start, end, ts, key);
     if (!inferred) {
       continue;
     }

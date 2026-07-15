@@ -82,4 +82,12 @@ describe('diatonic stacking', () => {
     // The reported quality must rebuild the same intervals.
     expect(makeChord(chord.rootPc, chord.quality).intervals).toEqual(chord.intervals);
   });
+
+  it('rejects non-heptatonic scales instead of returning a mismatched quality template', () => {
+    for (const name of ['majorPentatonic', 'wholeTone', 'octatonicHalfWhole', 'chromatic']) {
+      const scale = scaleByName(name, 0);
+      expect(() => diatonicTriad(0, scale), name).toThrow(/heptatonic/);
+      expect(() => diatonicSeventh(0, scale), name).toThrow(/heptatonic/);
+    }
+  });
 });

@@ -5,6 +5,8 @@
  * seed the stream is fully reproducible.
  */
 
+import { assertFiniteNumber, assertInteger, assertRange } from '../validation/index.js';
+
 /**
  * A deterministic PRNG with the sampling helpers the generators need.
  *
@@ -36,6 +38,7 @@ export type Rng = {
  * @category Utilities
  */
 export function createRng(seed: number): Rng {
+  assertFiniteNumber(seed, 'seed');
   let state = seed >>> 0;
   const next = () => {
     state = (state + 0x6d2b79f5) >>> 0;
@@ -46,8 +49,28 @@ export function createRng(seed: number): Rng {
   };
   return {
     next,
-    prob: (p) => next() < p,
-    range: (lo, hi) => lo + Math.floor(next() * (hi - lo + 1)),
-    float: (lo, hi) => lo + next() * (hi - lo),
+    prob: (p) => next() < assertRange(p, 0, 1, 'probability'),
+    range: (lo, hi) => {
+      assertInteger(lo, 'range lower bound');
+      assertInteger(hi, 'range upper bound');
+      if (lo > hi) {
+        throw new RangeError(
+          `range lower bound must not exceed upper bound; received ${lo} > ${hi}`,
+        );
+      }
+      assertInteger(hi - lo, 'range span', 0);
+      return lo + Math.floor(next() * (hi - lo + 1));
+    },
+    float: (lo, hi) => {
+      assertFiniteNumber(lo, 'float lower bound');
+      assertFiniteNumber(hi, 'float upper bound');
+      if (lo > hi) {
+        throw new RangeError(
+          `float lower bound must not exceed upper bound; received ${lo} > ${hi}`,
+        );
+      }
+      assertFiniteNumber(hi - lo, 'float span');
+      return lo + next() * (hi - lo);
+    },
   };
 }

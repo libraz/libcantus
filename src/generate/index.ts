@@ -33,7 +33,6 @@ export type {
 } from './motif/index.js';
 export { developMotif, generateMotif, transformMotif } from './motif/index.js';
 export type {
-  ChordSpan,
   ProgFunction,
   ProgressionOptions,
   ProgressionPreset,

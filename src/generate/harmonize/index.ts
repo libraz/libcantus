@@ -1,6 +1,10 @@
+import { isDiatonic, parallelKey } from '../../analyze/functional/index.js';
+import { createNoteEventIndex } from '../../core/event-index/index.js';
 import type { TimeSignature } from '../../core/meter/index.js';
 import { isStrongBeat } from '../../core/meter/index.js';
+import { createRng } from '../../core/random/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
+import { assertGenerationBudget, assertRange } from '../../core/validation/index.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { chordPitchClasses, diatonicTriad, makeChord } from '../../theory/chord/index.js';
 import type { HarmonyRole } from '../../theory/harmony/index.js';
@@ -86,17 +90,6 @@ function pitchClass(pitch: number): number {
   return ((Math.trunc(pitch) % 12) + 12) % 12;
 }
 
-function mulberry32(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 /**
  * Estimate the best-fit key from a melody's pitch-class weighting.
  *
@@ -151,7 +144,6 @@ function buildCandidates(key: KeyScale, reharmonize: HarmonizeOptions['reharmoni
     base: 0,
   }));
 
-  const tonic = tones[0] ?? 0;
   if (reharmonize !== 'diatonic') {
     for (const target of [1, 3, 4, 5]) {
       const targetRoot = tones[target] ?? 0;
@@ -166,27 +158,30 @@ function buildCandidates(key: KeyScale, reharmonize: HarmonizeOptions['reharmoni
   }
 
   if (reharmonize === 'borrowed') {
-    candidates.push({
-      rootPc: (tonic + 10) % 12,
-      quality: 'maj',
-      secondaryDominant: false,
-      base: 2,
-    }); // bVII
-    candidates.push({
-      rootPc: (tonic + 8) % 12,
-      quality: 'maj',
-      secondaryDominant: false,
-      base: 2,
-    }); // bVI
-    candidates.push({
-      rootPc: (tonic + 5) % 12,
-      quality: 'min',
-      secondaryDominant: false,
-      base: 2,
-    }); // iv
+    const parallel = parallelKey(key);
+    const parallelTones = scaleTonesInDegreeOrder(parallel);
+    for (let degree = 0; degree < parallelTones.length; degree += 1) {
+      const chord = diatonicTriad(degree, parallel);
+      if (!isDiatonic(chord, key)) {
+        candidates.push({
+          rootPc: chord.rootPc,
+          quality: chord.quality,
+          secondaryDominant: false,
+          base: 1.25,
+        });
+      }
+    }
   }
 
-  return candidates;
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    const id = `${candidate.rootPc}:${candidate.quality}`;
+    if (seen.has(id)) {
+      return false;
+    }
+    seen.add(id);
+    return true;
+  });
 }
 
 /**
@@ -361,24 +356,40 @@ function harmonizeOnce(
  * @category Reharmonization
  */
 export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
+  const noteIndex = createNoteEventIndex(opts.melody);
   const key = opts.key === 'infer' ? inferKey(opts.melody) : opts.key;
   const candidates = buildCandidates(key, opts.reharmonize);
   const candAt = (i: number): Candidate => candidates[i] ?? FALLBACK;
-  const rng = mulberry32(opts.seed ?? 0);
-  const jitter = candidates.map(() => rng() * TIE_BREAK_JITTER);
+  const rng = createRng(opts.seed ?? 0);
+  const jitter = candidates.map(() => rng.next() * TIE_BREAK_JITTER);
 
-  const melodyEnd = opts.melody.reduce((m, n) => Math.max(m, n.startBeat + n.durationBeat), 0);
-  const hr = Math.max(0.25, opts.harmonicRhythm);
+  const melodyEnd = noteIndex.notes.reduce((m, n) => Math.max(m, n.endBeat), 0);
+  const requestedHr = assertRange(
+    opts.harmonicRhythm,
+    Number.MIN_VALUE,
+    Number.MAX_SAFE_INTEGER,
+    'harmonic rhythm',
+  );
+  const hr = Math.max(0.25, requestedHr);
   const segCount = Math.max(1, Math.ceil(melodyEnd / hr));
-  const segments: Segment[] = [];
-  for (let s = 0; s < segCount; s += 1) {
-    const startBeat = s * hr;
-    const endBeat = startBeat + hr;
-    const noteIndices = opts.melody
-      .map((n, i) => ({ n, i }))
-      .filter(({ n }) => n.startBeat < endBeat && n.startBeat + n.durationBeat > startBeat)
-      .map(({ i }) => i);
-    segments.push({ startBeat, endBeat, noteIndices });
+  assertGenerationBudget(segCount, 'harmonic segments');
+  assertGenerationBudget(segCount * candidates.length * candidates.length, 'harmonization search');
+  const segments: Segment[] = Array.from({ length: segCount }, (_, s) => ({
+    startBeat: s * hr,
+    endBeat: (s + 1) * hr,
+    noteIndices: [],
+  }));
+  // Associate each note only with the windows it actually spans. This replaces
+  // the former per-window full melody scan and creates no temporary note objects.
+  let memberships = 0;
+  for (const indexed of noteIndex.notes) {
+    const first = Math.max(0, Math.floor(indexed.note.startBeat / hr));
+    const lastExclusive = Math.min(segCount, Math.ceil(indexed.endBeat / hr - Number.EPSILON));
+    memberships += Math.max(0, lastExclusive - first);
+    assertGenerationBudget(memberships, 'note-to-segment memberships');
+    for (let segment = first; segment < lastExclusive; segment += 1) {
+      segments[segment]?.noteIndices.push(indexed.originalIndex);
+    }
   }
 
   const transposes: number[] = [0];

@@ -53,6 +53,23 @@ describe('detectChord', () => {
       expect(match.exact).toBe(false);
     }
   });
+
+  it('does not invent a bass or inversion for an unordered pitch-class set', () => {
+    for (const pitches of [
+      [7, 11, 2],
+      [2, 7, 11],
+      [11, 2, 7],
+    ]) {
+      const best = detectChord(pitches)[0];
+      expect(best).toMatchObject({ rootPc: 7, quality: 'maj', inversion: null });
+      expect(best?.bassPc).toBeUndefined();
+    }
+  });
+
+  it('accepts an explicit bass for a pitch-class set', () => {
+    const best = detectChord([0, 4, 7], { input: 'pitchClass', bassPc: 4 })[0];
+    expect(best).toMatchObject({ rootPc: 0, quality: 'maj', inversion: 1, bassPc: 4 });
+  });
 });
 
 describe('makeChord -> detectChord round trip', () => {

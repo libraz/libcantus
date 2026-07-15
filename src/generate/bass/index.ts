@@ -15,6 +15,12 @@
 import { isStrongBeat, type TimeSignature } from '../../core/meter/index.js';
 import { createRng } from '../../core/random/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
+import {
+  assertGenerationBudget,
+  assertInteger,
+  assertRange,
+  assertTimeSignature,
+} from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
 import { nearestScaleTone } from '../../theory/scale/index.js';
 
@@ -282,14 +288,31 @@ function buildWalking(ctx: BuildContext, seg: BassSegment, next: BassSegment | u
  * @category Composition
  */
 export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
+  assertGenerationBudget(opts.segments.length, 'bass segments');
+  for (let index = 0; index < opts.segments.length; index += 1) {
+    const segment = opts.segments[index];
+    if (!segment) continue;
+    assertRange(segment.startBeat, 0, Number.MAX_SAFE_INTEGER, `segments[${index}].startBeat`);
+    assertRange(segment.endBeat, 0, Number.MAX_SAFE_INTEGER, `segments[${index}].endBeat`);
+    if (segment.endBeat <= segment.startBeat) {
+      throw new RangeError(`segments[${index}] must have a positive duration`);
+    }
+  }
   const segments = [...opts.segments].sort((a, b) => a.startBeat - b.startBeat);
   if (segments.length === 0) {
     return [];
   }
 
   const ts = opts.ts ?? DEFAULT_TS;
+  assertTimeSignature(ts);
   const style = opts.style ?? DEFAULT_STYLE;
   const octave = opts.octave ?? DEFAULT_OCTAVE;
+  assertInteger(octave, 'bass octave', -1, 9);
+  const estimatedNotes = segments.reduce(
+    (count, segment) => count + Math.max(1, Math.ceil(segment.endBeat - segment.startBeat)),
+    0,
+  );
+  assertGenerationBudget(estimatedNotes, 'bass notes');
   const low = octave * 12 + 12;
 
   const ctx: BuildContext = {

@@ -1,4 +1,9 @@
 import type { KeyScale } from '../../core/types.js';
+import {
+  assertFiniteNumber,
+  assertGenerationBudget,
+  assertInteger,
+} from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
 import { chordPitchClasses } from '../chord/index.js';
 import {
@@ -96,6 +101,36 @@ const SUGGESTION_WINDOW = 12;
 /** Maximum number of alternative pitches returned in `SafetyResult.suggestions`. */
 const MAX_SUGGESTIONS = 3;
 
+/** Canonical minimum verdict contributed by each non-informational reason. */
+const REASON_SEVERITY: ReadonlyArray<
+  readonly [flag: ReasonFlag, pop: NoteSafety, strict: NoteSafety]
+> = [
+  [ReasonFlag.Tension, NoteSafety.Warning, NoteSafety.Warning],
+  [ReasonFlag.AvoidNote, NoteSafety.Warning, NoteSafety.Dissonant],
+  [ReasonFlag.ScaleTone, NoteSafety.Warning, NoteSafety.Warning],
+  [ReasonFlag.NonScale, NoteSafety.Dissonant, NoteSafety.Dissonant],
+  [ReasonFlag.OutOfRange, NoteSafety.Warning, NoteSafety.Warning],
+  [ReasonFlag.Tritone, NoteSafety.Dissonant, NoteSafety.Dissonant],
+  [ReasonFlag.LargeLeap, NoteSafety.Warning, NoteSafety.Dissonant],
+  [ReasonFlag.VerticalDissonance, NoteSafety.Dissonant, NoteSafety.Dissonant],
+  [ReasonFlag.ParallelPerfect, NoteSafety.Warning, NoteSafety.Dissonant],
+  [ReasonFlag.HiddenParallel, NoteSafety.Warning, NoteSafety.Dissonant],
+  [ReasonFlag.VoiceCrossing, NoteSafety.Warning, NoteSafety.Dissonant],
+  [ReasonFlag.Suspension, NoteSafety.Dissonant, NoteSafety.Dissonant],
+  [ReasonFlag.NeedsResolution, NoteSafety.Warning, NoteSafety.Dissonant],
+];
+
+function minimumSafetyForReasons(reasons: number, profile: SafetyProfile): NoteSafety {
+  let minimum = NoteSafety.Safe;
+  const severityIndex = profile === 'strict' ? 2 : 1;
+  for (const entry of REASON_SEVERITY) {
+    if (reasons & entry[0]) {
+      minimum = Math.max(minimum, entry[severityIndex]) as NoteSafety;
+    }
+  }
+  return minimum;
+}
+
 function pitchClass(pitch: number): number {
   return ((Math.trunc(pitch) % 12) + 12) % 12;
 }
@@ -154,7 +189,28 @@ function stepResolution(pitch: number, chord: Chord): number | undefined {
  * @category Arrangement & Analysis
  */
 export function evaluateSafety(q: SafetyQuery): SafetyResult {
+  assertSafetyContext(q);
+  assertFiniteNumber(q.candidatePitch, 'candidatePitch');
   return evaluateInternal(q, true);
+}
+
+/** Validate all numeric context fields once at a public safety entry point. */
+function assertSafetyContext(q: Omit<SafetyQuery, 'candidatePitch'>): void {
+  if (q.prevPitch !== undefined) assertFiniteNumber(q.prevPitch, 'prevPitch');
+  if (q.vocalLow !== undefined) assertFiniteNumber(q.vocalLow, 'vocalLow');
+  if (q.vocalHigh !== undefined) assertFiniteNumber(q.vocalHigh, 'vocalHigh');
+  if (q.vocalLow !== undefined && q.vocalHigh !== undefined && q.vocalLow > q.vocalHigh) {
+    throw new RangeError('vocalLow must not exceed vocalHigh');
+  }
+  assertGenerationBudget(q.otherVoices.length, 'other voices');
+  for (let index = 0; index < q.otherVoices.length; index += 1) {
+    const voice = q.otherVoices[index];
+    if (!voice) continue;
+    assertFiniteNumber(voice.pitch, `otherVoices[${index}].pitch`);
+    if (voice.prevPitch !== undefined) {
+      assertFiniteNumber(voice.prevPitch, `otherVoices[${index}].prevPitch`);
+    }
+  }
 }
 
 /**
@@ -239,9 +295,11 @@ function evaluateInternal(q: SafetyQuery, collectSuggestions: boolean): SafetyRe
     const pc = Math.abs(pitch - q.prevPitch) % 12;
     if (pc === 6) {
       reasons |= ReasonFlag.Tritone;
+      raise(NoteSafety.Dissonant);
     }
     if (isForbiddenMelodicLeap(q.prevPitch, pitch)) {
       reasons |= ReasonFlag.LargeLeap;
+      raise(parallelSeverity);
     }
     if (pc === 1) {
       reasons |= ReasonFlag.MinorSecond;
@@ -297,6 +355,12 @@ function evaluateInternal(q: SafetyQuery, collectSuggestions: boolean): SafetyRe
       }
     }
   }
+
+  // Keep reason production and verdict policy as one invariant even when a new
+  // call path skips an earlier local `raise`: informational flags (ChordTone,
+  // MinorSecond, MajorSeventh) may coexist with Safe; every policy flag above
+  // contributes at least its table severity.
+  raise(minimumSafetyForReasons(reasons, q.profile));
 
   const result: SafetyResult = { safety: level, reasons, rationale: describe(reasons, q) };
   if (resolveTo !== undefined) {
@@ -382,6 +446,7 @@ function describe(reasons: number, q: SafetyQuery): string {
  * @param pitchLow Lowest MIDI pitch to consider (inclusive).
  * @param pitchHigh Highest MIDI pitch to consider (inclusive).
  * @returns Placeable pitches (non-dissonant), chord tones before others, each group descending.
+ * @throws If either bound is non-finite/non-integral, reversed, or exceeds the generation budget.
  * @example
  * ```ts
  * import { enumerateSafePitches, makeChord, majorKey } from '@libraz/libcantus';
@@ -399,11 +464,15 @@ export function enumerateSafePitches(
   pitchLow: number,
   pitchHigh: number,
 ): number[] {
+  assertSafetyContext(q);
   const chordTones: number[] = [];
   const others: number[] = [];
-  if (!Number.isFinite(pitchLow) || !Number.isFinite(pitchHigh)) {
-    return [];
+  assertInteger(pitchLow, 'pitchLow');
+  assertInteger(pitchHigh, 'pitchHigh');
+  if (pitchLow > pitchHigh) {
+    throw new RangeError(`pitchLow must not exceed pitchHigh; received ${pitchLow} > ${pitchHigh}`);
   }
+  assertGenerationBudget(pitchHigh - pitchLow + 1, 'safe pitch candidates');
   for (let pitch = pitchHigh; pitch >= pitchLow; pitch -= 1) {
     const result = evaluateInternal({ ...q, candidatePitch: pitch }, false);
     if (result.safety === NoteSafety.Dissonant) {

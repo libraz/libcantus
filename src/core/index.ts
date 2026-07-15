@@ -2,6 +2,9 @@
  * Public API of the core layer. Re-exports every core-layer module;
  * also available from the package root.
  */
+
+export type { IndexedNoteEvent, NoteEventIndex } from './event-index/index.js';
+export { createNoteEventIndex } from './event-index/index.js';
 export {
   classifyInterval,
   IntervalQuality,
@@ -45,3 +48,14 @@ export {
   TWELVE_TET,
 } from './tuning/index.js';
 export type { KeyScale, NoteEvent } from './types.js';
+export {
+  assertFiniteNumber,
+  assertGenerationBudget,
+  assertInteger,
+  assertNoteEvent,
+  assertNoteEvents,
+  assertPositiveInt,
+  assertRange,
+  assertTimeSignature,
+  DEFAULT_GENERATION_BUDGET,
+} from './validation/index.js';

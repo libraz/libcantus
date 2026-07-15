@@ -3,6 +3,7 @@ import { type HarmonizeOptions, harmonizeMelody } from '../src/generate/harmoniz
 import { chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
 import {
   majorKey,
+  minorKey,
   NATURAL_MINOR_MASK,
   scaleTonesInDegreeOrder,
 } from '../src/theory/scale/index.js';
@@ -165,5 +166,23 @@ describe('harmonizeMelody', () => {
       seed: 99,
     };
     expect(harmonizeMelody(opts)).toEqual(harmonizeMelody(opts));
+  });
+
+  it('adds parallel-major borrowed chords when harmonizing in minor', () => {
+    const melody = [69, 73, 76].map((pitch, i) => ({
+      pitch,
+      startBeat: i,
+      durationBeat: 1,
+    }));
+    const common = {
+      melody,
+      key: minorKey(9),
+      harmonicRhythm: 4,
+      placement: { transposeSearch: false, octaveSearch: false },
+    } as const;
+    const diatonic = harmonizeMelody({ ...common, reharmonize: 'diatonic' });
+    const borrowed = harmonizeMelody({ ...common, reharmonize: 'borrowed' });
+    expect(diatonic.chords[0]).not.toMatchObject({ rootPc: 9, quality: 'maj' });
+    expect(borrowed.chords[0]).toMatchObject({ rootPc: 9, quality: 'maj' });
   });
 });

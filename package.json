@@ -1,6 +1,6 @@
 {
   "name": "@libraz/libcantus",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "Pure-TypeScript music-theory and composition primitives (intervals, scales, chords).",
   "type": "module",
   "license": "Apache-2.0",
@@ -35,34 +35,64 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./core": {
-      "types": "./dist/core/index.d.ts",
-      "import": "./dist/core/index.js",
-      "require": "./dist/core/index.cjs"
+      "import": {
+        "types": "./dist/core/index.d.ts",
+        "default": "./dist/core/index.js"
+      },
+      "require": {
+        "types": "./dist/core/index.d.cts",
+        "default": "./dist/core/index.cjs"
+      }
     },
     "./theory": {
-      "types": "./dist/theory/index.d.ts",
-      "import": "./dist/theory/index.js",
-      "require": "./dist/theory/index.cjs"
+      "import": {
+        "types": "./dist/theory/index.d.ts",
+        "default": "./dist/theory/index.js"
+      },
+      "require": {
+        "types": "./dist/theory/index.d.cts",
+        "default": "./dist/theory/index.cjs"
+      }
     },
     "./analyze": {
-      "types": "./dist/analyze/index.d.ts",
-      "import": "./dist/analyze/index.js",
-      "require": "./dist/analyze/index.cjs"
+      "import": {
+        "types": "./dist/analyze/index.d.ts",
+        "default": "./dist/analyze/index.js"
+      },
+      "require": {
+        "types": "./dist/analyze/index.d.cts",
+        "default": "./dist/analyze/index.cjs"
+      }
     },
     "./generate": {
-      "types": "./dist/generate/index.d.ts",
-      "import": "./dist/generate/index.js",
-      "require": "./dist/generate/index.cjs"
+      "import": {
+        "types": "./dist/generate/index.d.ts",
+        "default": "./dist/generate/index.js"
+      },
+      "require": {
+        "types": "./dist/generate/index.d.cts",
+        "default": "./dist/generate/index.cjs"
+      }
     },
     "./model": {
-      "types": "./dist/model/index.d.ts",
-      "import": "./dist/model/index.js",
-      "require": "./dist/model/index.cjs"
+      "import": {
+        "types": "./dist/model/index.d.ts",
+        "default": "./dist/model/index.js"
+      },
+      "require": {
+        "types": "./dist/model/index.d.cts",
+        "default": "./dist/model/index.cjs"
+      }
     }
   },
   "files": [
@@ -83,6 +113,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "bench:timeline": "yarn build && node --expose-gc benchmark/timeline-index.mjs",
     "docs": "typedoc",
     "prepare": "[ -d node_modules/typescript ] && tsup || true",
     "prepublishOnly": "yarn build"

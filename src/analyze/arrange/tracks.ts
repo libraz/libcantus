@@ -8,6 +8,11 @@
 import { isStrongBeat, parseTimeSignature, type TimeSignature } from '../../core/meter/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
+  assertGenerationBudget,
+  assertNoteEvents,
+  assertTimeSignature,
+} from '../../core/validation/index.js';
+import {
   evaluateSafety,
   NoteSafety,
   type SafetyProfile,
@@ -65,6 +70,10 @@ export type Conflict = {
   safety: NoteSafety;
   /** {@link import('../safety/index.js').SafetyResult.reasons} bitmask. */
   reasons: number;
+  /** Preferred stepwise resolution, when the safety evaluator provides one. */
+  resolveTo?: number;
+  /** Nearby fully safe replacement pitches, nearest first. */
+  suggestions?: number[];
   rationale?: string;
 };
 
@@ -143,8 +152,12 @@ function otherVoicesSounding(
           continue;
         }
         const snap: VoiceSnapshot = { pitch: note.pitch };
-        if (note.prevPitch !== undefined) {
-          snap.prevPitch = note.prevPitch;
+        // Motion reasons compare one real transition shared by both voices.
+        // A voice attacking exactly here contributes its adjacent predecessor;
+        // a sustained voice contributes the same pitch (oblique motion).
+        const previous = Math.abs(note.startBeat - beat) <= EPS ? note.prevPitch : note.pitch;
+        if (previous !== undefined) {
+          snap.prevPitch = previous;
         }
         out.push(snap);
       }
@@ -211,6 +224,13 @@ export function analyzeArrangement(
   opts: ArrangementOptions = {},
 ): ArrangementAnalysis {
   const ts = opts.ts ?? parseTimeSignature('4/4');
+  assertTimeSignature(ts);
+  assertGenerationBudget(tracks.length, 'arrangement tracks');
+  for (let index = 0; index < tracks.length; index += 1) {
+    assertNoteEvents(tracks[index]?.notes ?? [], `tracks[${index}].notes`, {
+      allowNonPositiveDuration: true,
+    });
+  }
   const profile: SafetyProfile = opts.profile ?? 'pop';
   const pooled = poolNotes(tracks);
 
@@ -242,11 +262,18 @@ export function analyzeArrangement(
         ),
       );
 
-      for (const note of subVoice.voice) {
+      for (let noteIndex = 0; noteIndex < subVoice.voice.length; noteIndex += 1) {
+        const note = subVoice.voice[noteIndex];
+        const preparedNote = subVoice.sounding[noteIndex];
+        if (note === undefined || preparedNote === undefined) {
+          continue;
+        }
         for (const beat of evaluationBeats(note, timeline)) {
+          const atOnset = Math.abs(beat - note.startBeat) <= EPS;
           const result = evaluateSafety({
             profile,
             candidatePitch: note.pitch,
+            prevPitch: atOnset ? preparedNote.prevPitch : note.pitch,
             chord: timeline.at(beat),
             key,
             otherVoices: otherVoicesSounding(prepared, t, v, beat),
@@ -262,6 +289,12 @@ export function analyzeArrangement(
             };
             if (result.rationale !== undefined) {
               conflict.rationale = result.rationale;
+            }
+            if (result.resolveTo !== undefined) {
+              conflict.resolveTo = result.resolveTo;
+            }
+            if (result.suggestions !== undefined) {
+              conflict.suggestions = [...result.suggestions];
             }
             conflicts.push(conflict);
           }

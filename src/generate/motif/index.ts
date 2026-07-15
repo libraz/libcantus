@@ -1,5 +1,13 @@
 import type { ChordTimeline } from '../../analyze/timeline/index.js';
+import { createRng } from '../../core/random/index.js';
 import type { KeyScale } from '../../core/types.js';
+import {
+  assertFiniteNumber,
+  assertGenerationBudget,
+  assertInteger,
+  assertNoteEvents,
+  assertPositiveInt,
+} from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
 import { chordPitchClasses } from '../../theory/chord/index.js';
 import { isScaleTone, nearestScaleTone } from '../../theory/scale/index.js';
@@ -133,7 +141,20 @@ function nearestChordTone(pitch: number, chord: Chord): number {
 
 /** Earliest onset in a cell; the time origin for timing transforms. */
 function cellOrigin(notes: MotifNote[]): number {
-  return notes.length === 0 ? 0 : Math.min(...notes.map((n) => n.startBeat));
+  let origin = Number.POSITIVE_INFINITY;
+  for (const note of notes) {
+    origin = Math.min(origin, note.startBeat);
+  }
+  return Number.isFinite(origin) ? origin : 0;
+}
+
+/** Latest offset in a cell, without spreading an unbounded caller array. */
+function cellEnd(notes: MotifNote[]): number {
+  let end = Number.NEGATIVE_INFINITY;
+  for (const note of notes) {
+    end = Math.max(end, note.startBeat + note.durationBeat);
+  }
+  return Number.isFinite(end) ? end : 0;
 }
 
 /** Total beat span covered by a cell (from first onset to last offset). */
@@ -142,24 +163,12 @@ function cellSpan(cell: MotifCell): number {
     return 0;
   }
   const start = cellOrigin(cell.notes);
-  const end = Math.max(...cell.notes.map((n) => n.startBeat + n.durationBeat));
+  const end = cellEnd(cell.notes);
   return end - start;
 }
 
 function clone(cell: MotifCell): MotifCell {
   return { notes: cell.notes.map((n) => ({ ...n })) };
-}
-
-/** Deterministic 32-bit PRNG in [0, 1). */
-function mulberry32(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 /** Diatonic scale-degree offsets shaping a contour of `count` notes. */
@@ -209,12 +218,14 @@ function contourOffsets(contour: MotifContour, count: number): number[] {
  */
 export function generateMotif(opts: MotifOptions): MotifCell {
   const contour = opts.contour ?? 'arch';
-  const bars = Math.max(1, Math.trunc(opts.bars));
+  const bars = assertPositiveInt(opts.bars, 'motif bars');
   const totalBeats = bars * 4;
   const noteCount = Math.max(3, bars * 2);
+  assertGenerationBudget(noteCount, 'motif notes');
   const beatsPerNote = totalBeats / noteCount;
-  const rng = mulberry32(opts.seed ?? 0);
-  const jitterProb = Math.min(1, Math.max(0, opts.jitter ?? 0));
+  const rng = createRng(opts.seed ?? 0);
+  const requestedJitter = assertFiniteNumber(opts.jitter ?? 0, 'motif jitter');
+  const jitterProb = Math.min(1, Math.max(0, requestedJitter));
   const tonic = pitchClass(opts.key.rootPc) + 60;
   const offsets = contourOffsets(contour, noteCount);
 
@@ -224,8 +235,8 @@ export function generateMotif(opts: MotifOptions): MotifCell {
     // preserved exactly. When enabled it nudges up or down with equal odds,
     // avoiding the upward bias that used to drift arch/wave tails off the tonic.
     let jitter = 0;
-    if (jitterProb > 0 && rng() < jitterProb) {
-      jitter = rng() < 0.5 ? 1 : -1;
+    if (jitterProb > 0 && rng.next() < jitterProb) {
+      jitter = rng.next() < 0.5 ? 1 : -1;
     }
     let pitch = stepDiatonic(tonic, (offsets[i] ?? 0) + jitter, opts.key);
     const startBeat = i * beatsPerNote;
@@ -271,6 +282,16 @@ export function transformMotif(
   amount?: number,
   key?: KeyScale,
 ): MotifCell {
+  assertNoteEvents(cell.notes, 'motif notes');
+  if (amount !== undefined) {
+    assertFiniteNumber(amount, 'motif transform amount');
+  }
+  if ((t === 'transposeDiatonic' || t === 'sequence') && amount !== undefined) {
+    assertInteger(amount, 'diatonic transform amount');
+  }
+  if ((t === 'augment' || t === 'diminish') && amount !== undefined && amount <= 0) {
+    throw new RangeError('time transform amount must be positive');
+  }
   const notes = cell.notes;
   switch (t) {
     case 'transposeChromatic': {
@@ -297,7 +318,7 @@ export function transformMotif(
         return { notes: [] };
       }
       const start = cellOrigin(notes);
-      const end = Math.max(...notes.map((n) => n.startBeat + n.durationBeat));
+      const end = cellEnd(notes);
       return {
         notes: notes.map((n) => ({
           pitch: n.pitch,
@@ -363,8 +384,10 @@ export function developMotif(
   key: KeyScale,
   bars: number,
 ): MotifCell {
+  assertPositiveInt(bars, 'development bars');
+  assertNoteEvents(cell.notes, 'motif notes');
   const span = cellSpan(cell);
-  const totalBeats = Math.max(1, Math.trunc(bars)) * 4;
+  const totalBeats = bars * 4;
   const origin = cellOrigin(cell.notes);
   const out: MotifNote[] = [];
 
@@ -376,6 +399,7 @@ export function developMotif(
   // the offset multiplicatively so rounding error cannot accumulate over tiles.
   const tileSpan = Math.max(span, MIN_TILE_SPAN);
   const tileCount = Math.ceil(totalBeats / tileSpan);
+  assertGenerationBudget(tileCount * cell.notes.length, 'developed motif notes');
   for (let k = 0; k < tileCount; k += 1) {
     const offset = k * tileSpan;
     for (const n of cell.notes) {

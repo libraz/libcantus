@@ -142,6 +142,25 @@ it('flags a forbidden melodic leap and minor second against the previous pitch',
   expect(semitone.reasons & ReasonFlag.MinorSecond).toBeTruthy();
 });
 
+it('never reports a hard-rule tritone or forbidden leap as Safe', () => {
+  const leapPop = evaluateSafety(query({ candidatePitch: 76, prevPitch: 60, profile: 'pop' }));
+  const leapStrict = evaluateSafety(
+    query({ candidatePitch: 76, prevPitch: 60, profile: 'strict' }),
+  );
+  expect(leapPop.reasons & ReasonFlag.LargeLeap).toBeTruthy();
+  expect(leapPop.safety).toBe(NoteSafety.Warning);
+  expect(leapStrict.safety).toBe(NoteSafety.Dissonant);
+
+  const tritoneChord: Chord = { rootPc: 0, quality: 'majb5', intervals: [0, 4, 6] };
+  for (const profile of ['pop', 'strict'] as const) {
+    const result = evaluateSafety(
+      query({ candidatePitch: 66, prevPitch: 60, chord: tritoneChord, profile }),
+    );
+    expect(result.reasons & ReasonFlag.Tritone).toBeTruthy();
+    expect(result.safety).toBe(NoteSafety.Dissonant);
+  }
+});
+
 it('flags parallel octaves moving by similar motion', () => {
   // Both voices rise a step, keeping an exact octave: 62/50 -> 64/52.
   const r = evaluateSafety(
@@ -170,8 +189,8 @@ describe('enumerateSafePitches', () => {
     expect(pitches.indexOf(64)).toBeLessThan(pitches.indexOf(62));
   });
 
-  it('returns [] for a non-finite bound instead of hanging', () => {
-    expect(enumerateSafePitches(query({}), 60, Number.POSITIVE_INFINITY)).toEqual([]);
-    expect(enumerateSafePitches(query({}), Number.NaN, 67)).toEqual([]);
+  it('rejects a non-finite bound instead of hanging', () => {
+    expect(() => enumerateSafePitches(query({}), 60, Number.POSITIVE_INFINITY)).toThrow(RangeError);
+    expect(() => enumerateSafePitches(query({}), Number.NaN, 67)).toThrow(RangeError);
   });
 });

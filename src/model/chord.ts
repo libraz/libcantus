@@ -1,4 +1,4 @@
-import { detectChord, detectChordBest } from '../analyze/detect/index.js';
+import { type DetectChordOptions, detectChord, detectChordBest } from '../analyze/detect/index.js';
 import {
   analyzeChord,
   type BorrowedSource,
@@ -22,7 +22,7 @@ import {
   type ChordScaleMatch,
   chordScales,
 } from '../theory/chordscale/index.js';
-import { spellChord } from '../theory/spelling/index.js';
+import { spellChord, spellChordFromRoot, spellPitchClass } from '../theory/spelling/index.js';
 import { formatChordSymbol, parseChordSymbol } from '../theory/symbol/index.js';
 import {
   type StyledVoicingOptions,
@@ -33,7 +33,7 @@ import {
 import type { Key } from './key.js';
 import { Note } from './note.js';
 import { Progression } from './progression.js';
-import { mod12 } from './shared.js';
+import { mod12, spellPitchClassBare } from './shared.js';
 
 /**
  * Defensive copy of a plain chord.
@@ -85,7 +85,11 @@ export class Chord {
    * @param key Optional key context for analysis methods.
    */
   constructor(data: ChordData, key?: Key) {
-    this.#data = copyChord(data);
+    const copy = copyChord(data);
+    if (copy.rootSpelling === undefined && key !== undefined) {
+      copy.rootSpelling = spellPitchClass(copy.rootPc, key.tonic.data, key.scale);
+    }
+    this.#data = copy;
     this.#key = key;
   }
 
@@ -98,8 +102,13 @@ export class Chord {
    * @returns The chord (without key context).
    */
   static of(root: string | number, quality: ChordQuality, bass?: number): Chord {
-    const rootPc = typeof root === 'string' ? Note.of(root).pitchClass : root;
-    return new Chord(makeChord(rootPc, quality, bass));
+    if (typeof root === 'string') {
+      const rootNote = Note.of(root);
+      const data = makeChord(rootNote.pitchClass, quality, bass);
+      data.rootSpelling = { letter: rootNote.letter, alter: rootNote.alter };
+      return new Chord(data);
+    }
+    return new Chord(makeChord(root, quality, bass));
   }
 
   /**
@@ -129,8 +138,8 @@ export class Chord {
    * @param pitches MIDI pitches or bare pitch classes.
    * @returns Ranked chord interpretations (may be empty).
    */
-  static detect(pitches: number[]): Chord[] {
-    return detectChord(pitches).map(
+  static detect(pitches: number[], opts?: DetectChordOptions): Chord[] {
+    return detectChord(pitches, opts).map(
       (match) => new Chord(makeChord(match.rootPc, match.quality, match.bassPc)),
     );
   }
@@ -141,8 +150,8 @@ export class Chord {
    * @param pitches MIDI pitches or bare pitch classes.
    * @returns The top-ranked chord, or null when nothing matches.
    */
-  static detectBest(pitches: number[]): Chord | null {
-    const best = detectChordBest(pitches);
+  static detectBest(pitches: number[], opts?: DetectChordOptions): Chord | null {
+    const best = detectChordBest(pitches, opts);
     return best === null ? null : new Chord(best);
   }
 
@@ -320,8 +329,18 @@ export class Chord {
     const data = copyChord(this.#data);
     if (index === 0) {
       delete data.bassPc;
+      delete data.bassSpelling;
     } else {
       data.bassPc = mod12(this.#data.rootPc + (intervals[index] ?? 0));
+      const rootSpelling =
+        data.rootSpelling ??
+        (this.#key
+          ? spellPitchClass(data.rootPc, this.#key.tonic.data, this.#key.scale)
+          : spellPitchClassBare(data.rootPc, 'sharp'));
+      const bassSpelling = spellChordFromRoot(data, rootSpelling)[index];
+      if (bassSpelling !== undefined) {
+        data.bassSpelling = bassSpelling;
+      }
     }
     return new Chord(data, this.#key);
   }

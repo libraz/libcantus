@@ -1,3 +1,4 @@
+import { assertFiniteNumber, assertInteger } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
 import { chordToneRole } from '../chord/index.js';
 import { pitchClass } from './internal.js';
@@ -105,7 +106,12 @@ function nearestPc(target: number, pcs: number[]): number {
  */
 export function voiceChordStyled(chord: Chord, opts?: StyledVoicingOptions): number[] {
   const style = opts?.style ?? 'close';
-  const base = 12 * ((opts?.octave ?? DEFAULT_STYLE_OCTAVE) + 1);
+  const octave = opts?.octave ?? DEFAULT_STYLE_OCTAVE;
+  assertInteger(octave, 'styled voicing octave', -10, 10);
+  if (opts?.topNote !== undefined) {
+    assertFiniteNumber(opts.topNote, 'styled voicing topNote');
+  }
+  const base = 12 * (octave + 1);
   const rootPc = pitchClass(chord.rootPc);
   const bassPc = pitchClass(chord.bassPc ?? chord.rootPc);
   const omitRoot = style === 'rootless' || opts?.rootless === true;
@@ -130,12 +136,12 @@ export function voiceChordStyled(chord: Chord, opts?: StyledVoicingOptions): num
         : 'fifth';
     order = order.filter((_pc, i) => {
       const role = roles[i];
-      return role === 'root' || role === 'third' || role === guide;
+      return _pc === bassPc || role === 'root' || role === 'third' || role === guide;
     });
   }
 
   if (omitRoot) {
-    order = order.filter((pc) => pc !== rootPc);
+    order = order.filter((pc) => pc !== rootPc || (chord.bassPc !== undefined && pc === bassPc));
   }
 
   if (order.length === 0) {
@@ -170,6 +176,23 @@ export function voiceChordStyled(chord: Chord, opts?: StyledVoicingOptions): num
     stack[stack.length - 2] = (stack[stack.length - 2] ?? 0) - 12;
   } else if (style === 'drop3' && stack.length >= 3) {
     stack[stack.length - 3] = (stack[stack.length - 3] ?? 0) - 12;
+  }
+
+  // An explicit slash bass is a structural requirement, including when it is
+  // not a chord member. Drop voicings and top-note rotation may have moved a
+  // different tone below it, so lower the retained bass by octaves before the
+  // final sort. This gives the bass priority over a conflicting top-note hint.
+  if (chord.bassPc !== undefined) {
+    const bassIndexInStack = stack.findIndex((pitch) => pitchClass(pitch) === bassPc);
+    if (bassIndexInStack >= 0) {
+      const otherLowest = Math.min(
+        ...stack.filter((_pitch, index) => index !== bassIndexInStack),
+        Number.POSITIVE_INFINITY,
+      );
+      while ((stack[bassIndexInStack] ?? 0) >= otherLowest) {
+        stack[bassIndexInStack] = (stack[bassIndexInStack] ?? 0) - 12;
+      }
+    }
   }
 
   return stack.sort((a, b) => a - b);

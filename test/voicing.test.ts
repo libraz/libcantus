@@ -243,6 +243,17 @@ describe('voiceChordStyled', () => {
     expect(shell.has(2)).toBe(false); // fifth omitted
   });
 
+  it('pins chord-tone and non-chord slash basses below every styled voicing', () => {
+    for (const bassPc of [4, 2]) {
+      const chord = makeChord(0, 'maj7', bassPc);
+      for (const style of ['close', 'drop2', 'drop3', 'shell', 'rootless'] as const) {
+        const voicing = voiceChordStyled(chord, { style });
+        expect(voicing.length, `${style} Cmaj7/${bassPc}`).toBeGreaterThan(0);
+        expect(pc(voicing[0] ?? Number.NaN), `${style} Cmaj7/${bassPc}`).toBe(bassPc);
+      }
+    }
+  });
+
   it('omits the root in a rootless voicing', () => {
     const rootless = new Set(voiceChordStyled(makeChord(0, 'dom7'), { style: 'rootless' }).map(pc));
     expect(rootless.has(0)).toBe(false);

@@ -1,4 +1,6 @@
+import { createRng } from '../../core/random/index.js';
 import type { KeyScale } from '../../core/types.js';
+import { assertGenerationBudget, assertPositiveInt } from '../../core/validation/index.js';
 import type { ChordQuality, ChordSpan } from '../../theory/chord/index.js';
 import { diatonicTriad } from '../../theory/chord/index.js';
 import { scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
@@ -237,18 +239,6 @@ export function progressionsByStyle(style: ProgStyle): ProgressionPreset[] {
   return progressions().filter((p) => p.styles.includes(style));
 }
 
-/** Deterministic 32-bit PRNG producing a float in [0, 1). */
-function mulberry32(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 /** Root pitch class of a scale degree in the given key, including borrowed degrees. */
 function degreeToRootPc(degree: number, key: KeyScale): number {
   if (degree >= 0 && degree <= 6) {
@@ -307,6 +297,8 @@ function autoQuality(degree: number, key: KeyScale): ChordQuality {
  * @category Composition
  */
 export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
+  assertPositiveInt(opts.bars, 'progression bars');
+  assertGenerationBudget(opts.bars, 'progression chords');
   const seed = opts.seed ?? 0;
   let preset: ProgressionPreset | undefined;
   if (opts.presetId !== undefined) {
@@ -318,8 +310,8 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
   if (preset === undefined) {
     const pool = PRESETS.filter((p) => p.styles.includes(opts.style));
     const candidates = pool.length > 0 ? pool : PRESETS;
-    const rng = mulberry32(seed);
-    const index = Math.floor(rng() * candidates.length) % candidates.length;
+    const rng = createRng(seed);
+    const index = Math.floor(rng.next() * candidates.length) % candidates.length;
     preset = candidates[index] ?? PRESETS[0];
   }
   const degrees = preset?.degrees ?? [0];
@@ -339,7 +331,7 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
 
   if (opts.reharmonize) {
     const tonicPc = (((opts.key.rootPc % 12) + 12) % 12) as number;
-    const rrng = mulberry32((seed ^ 0x9e3779b9) >>> 0);
+    const rrng = createRng((seed ^ 0x9e3779b9) >>> 0);
     for (let i = 0; i < chords.length - 1; i += 1) {
       const cur = chords[i];
       const next = chords[i + 1];
@@ -355,7 +347,7 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
       if (targetsTonic || alreadySecondary || isResolutionTarget) {
         continue;
       }
-      if (rrng() < 0.5) {
+      if (rrng.next() < 0.5) {
         chords[i] = {
           rootPc: domRoot,
           quality: 'dom7',

@@ -1,14 +1,21 @@
+import type { NoteEventIndex } from '../../core/event-index/index.js';
+import { createNoteEventIndex } from '../../core/event-index/index.js';
 import type { TimeSignature } from '../../core/meter/index.js';
 import { isStrongBeat } from '../../core/meter/index.js';
 import type { Rng } from '../../core/random/index.js';
 import { createRng } from '../../core/random/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
+import {
+  assertGenerationBudget,
+  assertInteger,
+  assertRange,
+  assertTimeSignature,
+} from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
 import { chordToneRole } from '../../theory/chord/index.js';
 import { createsParallelPerfect, isForbiddenMelodicLeap } from '../../theory/counterpoint/index.js';
 import type { VoiceSnapshot } from '../../theory/safety/index.js';
-import { enumerateSafePitches } from '../../theory/safety/index.js';
-import { nearestScaleTone } from '../../theory/scale/index.js';
+import { enumerateSafePitches, evaluateSafety, NoteSafety } from '../../theory/safety/index.js';
 
 /**
  * Options controlling {@link generateCounterMelody}.
@@ -20,6 +27,12 @@ export type CounterMelodyOptions = {
   melody: NoteEvent[];
   /** Chord sounding at an absolute beat position, or null when none applies. */
   chordAt: (beat: number) => Chord | null;
+  /**
+   * Exact chord-change beats exposed by the caller's timeline. The generator
+   * also probes its half-beat grid, but callback discontinuities between grid
+   * points are not introspectable and should be listed here.
+   */
+  chordChangeBeats?: number[];
   /** Key/scale context for scale-tone decisions. */
   key: KeyScale;
   /**
@@ -98,26 +111,33 @@ function isWholeBeat(beat: number): boolean {
 }
 
 /** The melody note sounding at a beat (latest onset wins on overlaps). */
-function melodyNoteAt(melody: NoteEvent[], beat: number): NoteEvent | undefined {
-  let found: NoteEvent | undefined;
-  for (const note of melody) {
-    if (note.startBeat - EPS <= beat && beat < note.startBeat + note.durationBeat - EPS) {
-      if (!found || note.startBeat > found.startBeat) {
-        found = note;
-      }
-    }
-  }
-  return found;
+function melodyNoteAt(melody: NoteEventIndex, beat: number): NoteEvent | undefined {
+  return melody.at(beat)?.note;
 }
 
 /** Whether any melody note attacks exactly at a beat. */
-function melodyAttacksAt(melody: NoteEvent[], beat: number): boolean {
-  return melody.some((note) => Math.abs(note.startBeat - beat) < EPS);
+function melodyAttacksAt(melody: NoteEventIndex, beat: number): boolean {
+  return melody.attacksAt(beat);
+}
+
+/** Melody voice at a transition, including the pitch immediately before it. */
+function melodySnapshotAt(melody: NoteEventIndex, beat: number): VoiceSnapshot | undefined {
+  const current = melodyNoteAt(melody, beat);
+  if (current === undefined) {
+    return undefined;
+  }
+  const attacked = Math.abs(current.startBeat - beat) < EPS;
+  const previous = attacked ? melodyNoteAt(melody, beat - EPS * 2) : current;
+  const snapshot: VoiceSnapshot = { pitch: current.pitch };
+  if (previous !== undefined) {
+    snapshot.prevPitch = previous.pitch;
+  }
+  return snapshot;
 }
 
 /** Counter onsets mirroring the melody's own onsets, deduplicated and sorted. */
-function followOnsets(melody: NoteEvent[]): number[] {
-  return [...new Set(melody.map((note) => note.startBeat))].sort((a, b) => a - b);
+function followOnsets(melody: NoteEventIndex): number[] {
+  return [...new Set(melody.notes.map(({ note }) => note.startBeat))];
 }
 
 /**
@@ -127,7 +147,7 @@ function followOnsets(melody: NoteEvent[]): number[] {
  * gap between accepted onsets keeps the line sparse.
  */
 function complementOnsets(
-  melody: NoteEvent[],
+  melody: NoteEventIndex,
   ts: TimeSignature,
   spanStart: number,
   spanEnd: number,
@@ -208,42 +228,79 @@ function scoreCandidate(
   return score;
 }
 
+/** Event boundaries at which a held counter pitch can acquire a new context. */
+function heldNoteBoundaries(
+  melody: NoteEventIndex,
+  startBeat: number,
+  endBeat: number,
+  chordChangeBeats: number[],
+): number[] {
+  const boundaries = new Set<number>([startBeat]);
+  for (const onset of melody.onsetsBetween(startBeat, endBeat)) {
+    boundaries.add(onset);
+  }
+  for (const beat of chordChangeBeats) {
+    if (beat > startBeat + EPS && beat < endBeat - EPS) {
+      boundaries.add(beat);
+    }
+  }
+  // `chordAt` is an opaque callback. Probe the same half-beat grid used by the
+  // complement rhythm so ordinary beat/bar chord changes are still found even
+  // when the caller does not provide `chordChangeBeats`.
+  const firstGrid = Math.floor(startBeat / GRID_STEP + 1) * GRID_STEP;
+  for (let beat = firstGrid; beat < endBeat - EPS; beat += GRID_STEP) {
+    boundaries.add(beat);
+  }
+  return [...boundaries].sort((a, b) => a - b);
+}
+
 /**
- * Last-resort pitch when no safe candidate survives filtering: the scale tone
- * nearest the previous pitch (or the register centre), pushed onto the correct
- * side of the sounding melody note.
+ * Worst safety reached while `pitch` is held through its complete interval.
+ * A wrong-side crossing is treated as unavailable. Safe candidates are later
+ * preferred over Warning candidates; Dissonant candidates are never emitted.
  */
-function fallbackPitch(
-  melPitch: number | undefined,
+function heldPitchSafety(
+  pitch: number,
+  startBeat: number,
+  endBeat: number,
   prevPitch: number | undefined,
-  center: number,
+  melody: NoteEventIndex,
+  opts: CounterMelodyOptions,
+  profile: 'strict' | 'pop',
   register: 'above' | 'below',
   low: number,
   high: number,
-  key: KeyScale,
-): number {
-  let target = prevPitch ?? Math.round(center);
-  if (melPitch !== undefined) {
-    if (register === 'below' && target >= melPitch) {
-      target = melPitch - 5;
-    } else if (register === 'above' && target <= melPitch) {
-      target = melPitch + 5;
+  ts: TimeSignature,
+): NoteSafety | null {
+  let worst = NoteSafety.Safe;
+  const boundaries = heldNoteBoundaries(melody, startBeat, endBeat, opts.chordChangeBeats ?? []);
+  for (const boundary of boundaries) {
+    const melodyVoice = melodySnapshotAt(melody, boundary);
+    if (
+      melodyVoice !== undefined &&
+      ((register === 'below' && pitch >= melodyVoice.pitch) ||
+        (register === 'above' && pitch <= melodyVoice.pitch))
+    ) {
+      return null;
+    }
+    const atCounterOnset = Math.abs(boundary - startBeat) < EPS;
+    const result = evaluateSafety({
+      profile,
+      candidatePitch: pitch,
+      prevPitch: atCounterOnset ? prevPitch : pitch,
+      chord: opts.chordAt(boundary),
+      key: opts.key,
+      otherVoices: melodyVoice ? [melodyVoice] : [],
+      strongBeat: isStrongBeat(boundary, ts),
+      vocalLow: low,
+      vocalHigh: high,
+    });
+    worst = Math.max(worst, result.safety) as NoteSafety;
+    if (worst === NoteSafety.Dissonant) {
+      return worst;
     }
   }
-  target = Math.min(Math.max(target, low), high);
-  let pitch = nearestScaleTone(target, key);
-  // Push onto the requested side of the melody, but only by whole octaves that
-  // keep the pitch inside [low, high]; the declared range is a hard bound while
-  // the register side is a soft preference. A final clamp guarantees the range.
-  if (melPitch !== undefined) {
-    while (register === 'below' && pitch >= melPitch && pitch - 12 >= low) {
-      pitch -= 12;
-    }
-    while (register === 'above' && pitch <= melPitch && pitch + 12 <= high) {
-      pitch += 12;
-    }
-  }
-  return Math.min(Math.max(pitch, low), high);
+  return worst;
 }
 
 /**
@@ -275,40 +332,65 @@ function fallbackPitch(
  * @category Voicing & Counterpoint
  */
 export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
-  const melody = [...opts.melody].sort((a, b) => a.startBeat - b.startBeat);
-  if (melody.length === 0) {
+  const melody = createNoteEventIndex(opts.melody);
+  if (melody.notes.length === 0) {
     return [];
   }
   const ts = opts.ts ?? DEFAULT_TS;
+  assertTimeSignature(ts);
   const register = opts.register ?? 'below';
   const rhythm = opts.rhythm ?? 'complement';
   const profile = opts.profile ?? 'pop';
   const rng = createRng(opts.seed ?? 0);
 
-  const spanStart = melody[0]?.startBeat ?? 0;
-  const spanEnd = melody.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), spanStart);
-  const meanPitch = melody.reduce((sum, n) => sum + n.pitch, 0) / melody.length;
+  const spanStart = melody.notes[0]?.note.startBeat ?? 0;
+  const spanEnd = melody.notes.reduce((end, n) => Math.max(end, n.endBeat), spanStart);
+  assertGenerationBudget(Math.ceil((spanEnd - spanStart) / GRID_STEP), 'countermelody grid');
+  const meanPitch = melody.notes.reduce((sum, n) => sum + n.note.pitch, 0) / melody.notes.length;
   const defaultCenter =
     register === 'below' ? meanPitch - REGISTER_OFFSET : meanPitch + REGISTER_OFFSET;
   const low = opts.pitchLow ?? Math.round(defaultCenter) - DEFAULT_HALF_RANGE;
   const high = opts.pitchHigh ?? Math.round(defaultCenter) + DEFAULT_HALF_RANGE;
+  assertInteger(low, 'countermelody pitchLow');
+  assertInteger(high, 'countermelody pitchHigh');
+  if (low > high) {
+    throw new RangeError(
+      `countermelody pitchLow must not exceed pitchHigh; received ${low} > ${high}`,
+    );
+  }
+  assertGenerationBudget(high - low + 1, 'countermelody pitch candidates');
+  assertGenerationBudget(opts.chordChangeBeats?.length ?? 0, 'chord change beats');
+  for (let index = 0; index < (opts.chordChangeBeats?.length ?? 0); index += 1) {
+    assertRange(
+      opts.chordChangeBeats?.[index] ?? Number.NaN,
+      0,
+      Number.MAX_SAFE_INTEGER,
+      `chordChangeBeats[${index}]`,
+    );
+  }
   const center = (low + high) / 2;
 
   const onsets =
     rhythm === 'follow'
       ? followOnsets(melody)
       : complementOnsets(melody, ts, spanStart, spanEnd, rng);
+  assertGenerationBudget(onsets.length * (high - low + 1), 'countermelody search');
 
   const out: NoteEvent[] = [];
   let prevPitch: number | undefined;
-  let prevOnset: number | undefined;
-  for (const beat of onsets) {
+  for (let onsetIndex = 0; onsetIndex < onsets.length; onsetIndex += 1) {
+    const beat = onsets[onsetIndex];
+    if (beat === undefined) {
+      continue;
+    }
+    const nextOnset = onsets[onsetIndex + 1];
+    const endBeat = nextOnset ?? Math.max(spanEnd, beat + GRID_STEP);
     const melNote = melodyNoteAt(melody, beat);
     const melPitch = melNote?.pitch;
-    const melPrev = prevOnset !== undefined ? melodyNoteAt(melody, prevOnset)?.pitch : undefined;
+    const melodyVoice = melodySnapshotAt(melody, beat);
+    const melPrev = melodyVoice?.prevPitch;
     const chord = opts.chordAt(beat);
-    const otherVoices: VoiceSnapshot[] =
-      melPitch !== undefined ? [{ pitch: melPitch, prevPitch: melPrev }] : [];
+    const otherVoices: VoiceSnapshot[] = melodyVoice !== undefined ? [melodyVoice] : [];
 
     const candidates = enumerateSafePitches(
       {
@@ -326,15 +408,26 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
     );
 
     let bestPitch: number | undefined;
+    let bestWorstSafety = NoteSafety.Dissonant;
     let bestScore = Number.NEGATIVE_INFINITY;
     for (const candidate of candidates) {
+      const worstSafety = heldPitchSafety(
+        candidate,
+        beat,
+        endBeat,
+        prevPitch,
+        melody,
+        opts,
+        profile,
+        register,
+        low,
+        high,
+        ts,
+      );
+      if (worstSafety === null || worstSafety === NoteSafety.Dissonant) {
+        continue;
+      }
       if (melPitch !== undefined) {
-        if (register === 'below' && candidate >= melPitch) {
-          continue;
-        }
-        if (register === 'above' && candidate <= melPitch) {
-          continue;
-        }
         if (
           prevPitch !== undefined &&
           melPrev !== undefined &&
@@ -348,32 +441,30 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
       const score = scoreCandidate(candidate, melPitch, melPrev, prevPitch, chord, center);
       const tie =
         Math.abs(score - bestScore) <= EPS && candidate < (bestPitch ?? Number.POSITIVE_INFINITY);
-      if (score > bestScore + EPS || tie) {
+      if (
+        worstSafety < bestWorstSafety ||
+        (worstSafety === bestWorstSafety && (score > bestScore + EPS || tie))
+      ) {
+        bestWorstSafety = worstSafety;
         bestScore = score;
         bestPitch = candidate;
       }
     }
 
-    const pitch =
-      bestPitch ?? fallbackPitch(melPitch, prevPitch, center, register, low, high, opts.key);
+    if (bestPitch === undefined) {
+      // Do not emit an unchecked fallback. Ending the previous note at this
+      // planned onset leaves an explicit rest when the constraints are
+      // unsatisfiable instead of returning a plausibly named unsafe line.
+      prevPitch = undefined;
+      continue;
+    }
+    const pitch = bestPitch;
     const velocity = Math.max(
       1,
       Math.min(127, Math.round((melNote?.velocity ?? DEFAULT_MELODY_VELOCITY) - VELOCITY_DROP)),
     );
-    out.push({ pitch, startBeat: beat, durationBeat: GRID_STEP, velocity });
+    out.push({ pitch, startBeat: beat, durationBeat: endBeat - beat, velocity });
     prevPitch = pitch;
-    prevOnset = beat;
-  }
-
-  // Extend each note to the next counter onset; the last to the melody's end.
-  for (let i = 0; i < out.length; i += 1) {
-    const note = out[i];
-    if (!note) {
-      continue;
-    }
-    const next = out[i + 1];
-    const end = next ? next.startBeat : Math.max(spanEnd, note.startBeat + GRID_STEP);
-    note.durationBeat = end - note.startBeat;
   }
   return out;
 }

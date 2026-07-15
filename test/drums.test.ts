@@ -145,6 +145,18 @@ describe('generateDrums richness', () => {
     expect(auxCount(intro)).toBe(0);
   });
 
+  it('keeps only FX/auxiliary voices in fxOnly and never returns an accidental empty bar', () => {
+    const main = new Set([KICK, SNARE, CLOSED_HAT, OPEN_HAT]);
+    for (const section of ['intro', 'verse', 'chorus', 'outro'] as const) {
+      const hits = generateDrums({ ...base, section, role: 'fxOnly', density: 0.8 });
+      expect(hits.length, section).toBeGreaterThan(0);
+      expect(
+        hits.some((hit) => main.has(hit.pitch)),
+        section,
+      ).toBe(false);
+    }
+  });
+
   it('produces a recognizable fill in the last bar', () => {
     const opts = (seed: number, fills: boolean): DrumsOptions => ({
       bars: 4,

@@ -1,4 +1,4 @@
-import type { Chord } from '../chord/index.js';
+import { type Chord, chordToneRole } from '../chord/index.js';
 
 /**
  * Harmonic role a pitch plays within a chord.
@@ -57,33 +57,18 @@ export type VoicedRole = {
 export function roleOf(pitch: number, chord: Chord, chordId = 0): VoicedRole {
   const interval = (((Math.trunc(pitch) - chord.rootPc) % 12) + 12) % 12;
   const tones = new Set(chord.intervals.map((i) => ((i % 12) + 12) % 12));
-  const hasHigherSeventh = tones.has(10) || tones.has(11);
   const hasThird = tones.has(3) || tones.has(4);
   const isSuspendedTone =
     !hasThird && ((interval === 5 && tones.has(5)) || (interval === 2 && tones.has(2)));
+  const chordRole = chordToneRole(pitch, chord);
   let role: HarmonyRole;
   let lock: LockLevel;
-  if (interval === 0) {
-    role = 'root';
-    lock = 'identity';
-  } else if (isSuspendedTone) {
+  if (isSuspendedTone) {
     role = 'third'; // suspended tone occupies the third's quality-defining slot
     lock = 'quality';
-  } else if (interval === 3 || interval === 4) {
-    role = 'third';
-    lock = 'quality';
-  } else if (interval === 6 || interval === 7 || interval === 8) {
-    role = 'fifth';
-    lock = 'voicing';
-  } else if (interval === 9 && tones.has(3) && tones.has(6) && !hasHigherSeventh) {
-    role = 'seventh'; // diminished seventh
-    lock = 'voicing';
-  } else if (interval === 9 && tones.has(9) && !hasHigherSeventh) {
-    role = 'sixth';
-    lock = 'voicing';
-  } else if (interval === 10 || interval === 11) {
-    role = 'seventh';
-    lock = 'voicing';
+  } else if (chordRole !== null) {
+    role = chordRole;
+    lock = chordRole === 'root' ? 'identity' : chordRole === 'third' ? 'quality' : 'voicing';
   } else {
     role = 'tension';
     lock = 'voicing';

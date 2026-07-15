@@ -180,4 +180,18 @@ describe('chordTimelineFromChords', () => {
     expect(timeline.at(5)?.quality).toBe('dom7');
     expect(timeline.at(8)).toBeNull();
   });
+
+  it('caps segments at totalBeats and excludes later chord onsets', () => {
+    const timeline = chordTimelineFromChords(
+      [
+        { rootPc: 0, quality: 'maj', startBeat: 0 },
+        { rootPc: 7, quality: 'maj', startBeat: 8 },
+      ],
+      4,
+    );
+    expect(timeline.segments.map((segment) => [segment.startBeat, segment.endBeat])).toEqual([
+      [0, 4],
+    ]);
+    expect(timeline.at(6)).toBeNull();
+  });
 });

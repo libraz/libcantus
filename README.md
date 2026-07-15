@@ -10,7 +10,7 @@ dependencies.
 [![codecov](https://codecov.io/gh/libraz/libcantus/branch/main/graph/badge.svg)](https://codecov.io/gh/libraz/libcantus)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libcantus/blob/main/LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A522-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-22.x-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![docs](https://img.shields.io/badge/docs-API%20reference-b5892e)](https://libraz.github.io/libcantus/)
 
 ## What can you do with it?
@@ -245,11 +245,12 @@ Seeded, deterministic generators for melody and accompaniment:
 ```ts
 import {
   generateBassLine, generateCounterMelody, generateDrums, generateRhythm,
-  generateMotif, parseTimeSignature,
+  generateMotif, majorKey, parseTimeSignature,
 } from '@libraz/libcantus';
 
 generateRhythm(parseTimeSignature('4/4'), { seed: 1, density: 0.5 }); // strong-beat-weighted onsets
-generateMotif({ key: majorKey(0), length: 4, contour: 'arch', seed: 1 }); // a short melodic cell
+const motif = generateMotif({ key: majorKey(0), bars: 2, contour: 'arch', seed: 1 });
+motif.notes.length > 0; // true — a deterministic short melodic cell
 ```
 
 `humanize`, `extractGrooveTemplate`, and `applyGrooveTemplate` add a meter-aware

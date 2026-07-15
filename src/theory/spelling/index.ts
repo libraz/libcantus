@@ -144,6 +144,74 @@ export function spellPitchClasses(pcs: number[], tonic: Note, key: KeyScale): No
 }
 
 /**
+ * Diatonic letter distance implied by a chord interval.
+ *
+ * Chord intervals are not merely pitch-class distances: 6 is a diminished
+ * fifth in the basic chord templates while 18 is an augmented eleventh, and 9
+ * is a diminished seventh in `dim7` but a sixth elsewhere. Keeping that
+ * distinction is what prevents functional chord tones from being respelled by
+ * their nearest key pitch (for example G# becoming Ab in E7).
+ */
+function chordLetterOffset(interval: number, chord: Chord): number {
+  switch (interval) {
+    case 0:
+    case 12:
+      return 0;
+    case 1:
+    case 2:
+    case 13:
+    case 14:
+      return 1;
+    case 3:
+    case 4:
+    case 15:
+    case 16:
+      return 2;
+    case 5:
+    case 17:
+    case 18:
+      return 3;
+    case 6:
+    case 7:
+    case 8:
+    case 19:
+      return 4;
+    case 9:
+      return chord.quality === 'dim7' ? 6 : 5;
+    case 20:
+    case 21:
+      return 5;
+    case 10:
+    case 11:
+    case 22:
+    case 23:
+      return 6;
+    default: {
+      // Unknown/custom interval data gets the nearest conventional diatonic
+      // distance. Public builders use the explicit cases above.
+      const octaves = Math.floor(Math.max(0, interval) / 12);
+      const simple = mod12(interval);
+      const simpleOffset = [0, 1, 1, 2, 2, 3, 4, 4, 4, 5, 6, 6][simple] ?? 0;
+      return octaves * 7 + simpleOffset;
+    }
+  }
+}
+
+/**
+ * Spell chord tones from an already chosen root spelling.
+ *
+ * This is exported for the model layer's inversion support; the package
+ * barrels intentionally expose the key-aware {@link spellChord} entry point.
+ */
+export function spellChordFromRoot(chord: Chord, root: Note): Note[] {
+  return chord.intervals.map((interval) => {
+    const letter = mod7(root.letter + chordLetterOffset(interval, chord));
+    const pc = mod12(chord.rootPc + interval);
+    return { letter, alter: alterFor(letter, pc) };
+  });
+}
+
+/**
  * Spell a chord's tones, in the chord's own (tertian) order, relative to a key.
  *
  * Diatonic chords spell exactly (e.g. G7 in C major -> G B D F). Chromatic chord
@@ -165,9 +233,8 @@ export function spellPitchClasses(pcs: number[], tonic: Note, key: KeyScale): No
  * @category Pitch & Intervals
  */
 export function spellChord(chord: Chord, tonic: Note, key: KeyScale): Note[] {
-  return chord.intervals.map((interval) =>
-    spellPitchClass(mod12(chord.rootPc + interval), tonic, key),
-  );
+  const root = spellPitchClass(chord.rootPc, tonic, key);
+  return spellChordFromRoot(chord, root);
 }
 
 /**

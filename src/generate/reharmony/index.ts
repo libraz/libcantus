@@ -91,13 +91,6 @@ function isStableTarget(chord: Chord): boolean {
   return hasFifth && hasThird && !isDominantType(chord);
 }
 
-/** The triad pitch classes (root, third, fifth) implied by a chord's template. */
-function triadPitchClasses(chord: Chord): number[] {
-  const third = hasInterval(chord, 4) ? 4 : hasInterval(chord, 3) ? 3 : 4;
-  const fifth = hasInterval(chord, 8) ? 8 : hasInterval(chord, 6) ? 6 : 7;
-  return [mod12(chord.rootPc), mod12(chord.rootPc + third), mod12(chord.rootPc + fifth)];
-}
-
 /** Count the pitch classes shared between two pitch-class sets. */
 function commonToneCount(a: number[], b: number[]): number {
   const set = new Set(b);
@@ -157,7 +150,7 @@ export function substituteChord(
   key: KeyScale,
   opts?: SubstituteOptions,
 ): Substitution[] {
-  const original = triadPitchClasses(chord);
+  const original = chordPitchClasses(chord);
   const candidates: { chord: Chord; type: SubstitutionType }[] = [];
 
   // Tritone substitution: only for dominant-type chords.

@@ -175,6 +175,12 @@ describe('Key', () => {
     expect(cMajor.diatonicSeventh(1).quality).toBe('min7');
   });
 
+  it('keeps the key spelling on degree and Roman-numeral chords', () => {
+    expect(Key.major('Eb').chord(0).symbol()).toBe('Eb');
+    expect(Key.major('Bb').diatonicTriad(3).symbol()).toBe('Eb');
+    expect(Key.major('C').roman('V7/vi').symbol()).toBe('E7');
+  });
+
   it('builds Roman-numeral chords carrying the key context', () => {
     const five = Key.major('C').roman('V7');
     expect(five.rootPc).toBe(7);
@@ -188,6 +194,11 @@ describe('Chord', () => {
     expect(Chord.of('C', 'maj').pitchClasses()).toEqual([0, 4, 7]);
     expect(Chord.of(9, 'min7').pitchClasses()).toEqual([0, 4, 7, 9]);
     expect(Chord.of('G', 'dom7', 11).bassPc).toBe(11);
+  });
+
+  it('preserves a string root spelling', () => {
+    expect(Chord.of('Eb', 'maj').symbol()).toBe('Eb');
+    expect(Chord.of('C#', 'min').symbol()).toBe('C#m');
   });
 
   it('supports the fluent degree-chord chain', () => {
@@ -239,13 +250,38 @@ describe('Chord', () => {
     expect(tonic.invert(1).roman()).toBe('I6');
   });
 
+  it('derives each inversion bass from the chord letter sequence', () => {
+    const bbMinor = Chord.parse('Bbm');
+    expect(bbMinor.invert(1).symbol()).toBe('Bbm/Db');
+    expect(bbMinor.invert(2).symbol()).toBe('Bbm/F');
+    expect(bbMinor.invert(3).symbol()).toBe('Bbm');
+
+    // The augmented fifth of G# is D##, not its enharmonic E.
+    expect(Chord.parse('G#aug').invert(2).symbol()).toBe('G#aug/D##');
+  });
+
+  it('round-trips every inversion without changing pitch classes or spellings', () => {
+    const source = Chord.parse('Bbm7');
+    for (let inversion = 0; inversion < source.intervals.length; inversion += 1) {
+      const transformed = source.invert(inversion);
+      const reparsed = Chord.parse(transformed.symbol());
+      expect(reparsed.pitchClasses()).toEqual(source.pitchClasses());
+      expect(reparsed.symbol()).toBe(transformed.symbol());
+    }
+  });
+
   it('treats invert(0) as root position: no bass, equal to the original', () => {
     const c = Chord.of('C', 'maj');
     const rooted = c.invert(0);
     expect(rooted.bassPc).toBeUndefined();
     expect(rooted.equals(c)).toBe(true);
     // A root-position chord serializes without a spurious bassPc.
-    expect(rooted.toJSON()).toEqual({ rootPc: 0, quality: 'maj', intervals: [0, 4, 7] });
+    expect(rooted.toJSON()).toEqual({
+      rootPc: 0,
+      quality: 'maj',
+      intervals: [0, 4, 7],
+      rootSpelling: { letter: 0, alter: 0 },
+    });
     expect('bassPc' in rooted.toJSON()).toBe(false);
     // Inverting a slash chord back to index 0 also clears the bass.
     const slash = Chord.of('C', 'maj', 4);
@@ -376,8 +412,18 @@ describe('Progression', () => {
     const prog = cMajor.chord(0, 'maj').progressionTo(cMajor.chord(4, 'dom7'));
     const json = prog.toJSON();
     expect(json.chords).toEqual([
-      { rootPc: 0, quality: 'maj', intervals: [0, 4, 7] },
-      { rootPc: 7, quality: 'dom7', intervals: [0, 4, 7, 10] },
+      {
+        rootPc: 0,
+        quality: 'maj',
+        intervals: [0, 4, 7],
+        rootSpelling: { letter: 0, alter: 0 },
+      },
+      {
+        rootPc: 7,
+        quality: 'dom7',
+        intervals: [0, 4, 7, 10],
+        rootSpelling: { letter: 4, alter: 0 },
+      },
     ]);
     expect(json.key?.tonic).toEqual({ letter: 0, alter: 0 });
     // A keyless progression serializes its chords with an undefined key.

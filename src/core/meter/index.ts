@@ -6,6 +6,14 @@
  * of the library's beat convention (four quarter-note beats per bar in 4/4).
  */
 
+import {
+  assertFiniteNumber,
+  assertInteger,
+  assertPositiveInt,
+  assertRange,
+  assertTimeSignature,
+} from '../validation/index.js';
+
 /**
  * A time signature as a numerator over a note-value denominator.
  *
@@ -68,7 +76,12 @@ export function parseTimeSignature(text: string): TimeSignature {
   }
   const numerator = Number.parseInt(match[1] ?? '', 10);
   const denominator = Number.parseInt(match[2] ?? '', 10);
-  if (numerator <= 0 || denominator <= 0) {
+  if (
+    !Number.isSafeInteger(numerator) ||
+    !Number.isSafeInteger(denominator) ||
+    numerator <= 0 ||
+    denominator <= 0
+  ) {
     throw new Error(`Invalid time signature: ${text}`);
   }
   return { numerator, denominator };
@@ -80,6 +93,7 @@ export function parseTimeSignature(text: string): TimeSignature {
  * @category Rhythm & Meter
  */
 export function formatTimeSignature(ts: TimeSignature): string {
+  assertTimeSignature(ts);
   return `${ts.numerator}/${ts.denominator}`;
 }
 
@@ -94,6 +108,7 @@ export function formatTimeSignature(ts: TimeSignature): string {
  * @category Rhythm & Meter
  */
 export function isCompound(ts: TimeSignature): boolean {
+  assertTimeSignature(ts);
   return ts.numerator % 3 === 0 && ts.numerator > 3;
 }
 
@@ -110,6 +125,7 @@ function unitBeats(ts: TimeSignature): number {
  * @category Rhythm & Meter
  */
 export function beatsPerBar(ts: TimeSignature): number {
+  assertTimeSignature(ts);
   return ts.numerator * unitBeats(ts);
 }
 
@@ -181,6 +197,7 @@ function isGroupHead(grouping: number[], pulseIndex: number): boolean {
  * @category Rhythm & Meter
  */
 export function beatToBarPosition(beatInQuarters: number, ts: TimeSignature): BarPosition {
+  assertFiniteNumber(beatInQuarters, 'beat');
   const barLen = beatsPerBar(ts);
   const bar = Math.floor(beatInQuarters / barLen);
   return { bar, beat: beatInQuarters - bar * barLen };
@@ -196,6 +213,8 @@ export function beatToBarPosition(beatInQuarters: number, ts: TimeSignature): Ba
  * @category Rhythm & Meter
  */
 export function barPositionToBeat(pos: BarPosition, ts: TimeSignature): number {
+  assertInteger(pos.bar, 'bar position bar');
+  assertFiniteNumber(pos.beat, 'bar position beat');
   return pos.bar * beatsPerBar(ts) + pos.beat;
 }
 
@@ -225,6 +244,8 @@ export function barPositionToBeat(pos: BarPosition, ts: TimeSignature): number {
  * @category Rhythm & Meter
  */
 export function metricWeight(beatInQuarters: number, ts: TimeSignature): number {
+  assertFiniteNumber(beatInQuarters, 'beat');
+  assertTimeSignature(ts);
   const { beat } = beatToBarPosition(beatInQuarters, ts);
   const pulse = pulseBeats(ts);
   if (!isMultiple(beat, pulse)) {
@@ -275,8 +296,7 @@ export function isStrongBeat(beatInQuarters: number, ts: TimeSignature): boolean
  * @category Rhythm & Meter
  */
 export function tuplet(totalBeats: number, count: number): number[] {
-  if (!Number.isInteger(count) || count <= 0) {
-    throw new Error(`Invalid tuplet count: ${count}`);
-  }
+  assertRange(totalBeats, 0, Number.MAX_SAFE_INTEGER, 'tuplet total beats');
+  assertPositiveInt(count, 'tuplet count');
   return new Array<number>(count).fill(totalBeats / count);
 }

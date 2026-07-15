@@ -7,10 +7,17 @@
  * @param rotation Steps to rotate onsets toward later positions.
  * @returns One boolean per step; true marks an onset.
  */
+import {
+  assertGenerationBudget,
+  assertInteger,
+  assertPositiveInt,
+} from '../../core/validation/index.js';
+
 export function euclideanRhythm(pulses: number, steps: number, rotation = 0): boolean[] {
-  if (steps < 1) {
-    return [];
-  }
+  assertPositiveInt(steps, 'euclidean steps');
+  assertInteger(pulses, 'euclidean pulses');
+  assertInteger(rotation, 'euclidean rotation');
+  assertGenerationBudget(steps, 'euclidean pattern steps');
   const p = Math.max(0, Math.min(pulses, steps));
   const base = bjorklund(p, steps);
   const shift = ((rotation % steps) + steps) % steps;

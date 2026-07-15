@@ -16,6 +16,13 @@ import {
 } from '../../core/meter/index.js';
 import { createRng } from '../../core/random/index.js';
 import type { NoteEvent } from '../../core/types.js';
+import {
+  assertGenerationBudget,
+  assertNoteEvents,
+  assertPositiveInt,
+  assertRange,
+  assertTimeSignature,
+} from '../../core/validation/index.js';
 
 /**
  * Options controlling {@link humanize}.
@@ -99,10 +106,16 @@ const MAX_VELOCITY = 127;
  */
 export function humanize(events: NoteEvent[], opts: HumanizeOptions = {}): NoteEvent[] {
   const ts = opts.ts ?? DEFAULT_TS;
+  assertTimeSignature(ts);
+  assertNoteEvents(events, 'humanize events');
   const timing = opts.timing ?? DEFAULT_TIMING;
   const velocityJitter = opts.velocity ?? DEFAULT_VELOCITY_JITTER;
   const accent = opts.accent ?? DEFAULT_ACCENT;
   const baseVelocity = opts.baseVelocity ?? DEFAULT_BASE_VELOCITY;
+  assertRange(timing, 0, Number.MAX_SAFE_INTEGER, 'humanize timing');
+  assertRange(velocityJitter, 0, 127, 'humanize velocity jitter');
+  assertRange(accent, 0, 127, 'humanize accent');
+  assertRange(baseVelocity, 0, 127, 'humanize base velocity');
   const rng = createRng(opts.seed ?? 0);
 
   return events.map((event) => {
@@ -212,8 +225,12 @@ export function extractGrooveTemplate(
   ts: TimeSignature,
   subdivision: number,
 ): GrooveTemplate {
+  assertTimeSignature(ts);
+  assertNoteEvents(events, 'groove source events');
+  assertPositiveInt(subdivision, 'groove subdivision');
   const barBeats = beatsPerBar(ts);
   const slotsPerBar = Math.round(barBeats * subdivision);
+  assertGenerationBudget(slotsPerBar, 'groove template slots');
   const offsetSums = new Array<number>(slotsPerBar).fill(0);
   const velocitySums = new Array<number>(slotsPerBar).fill(0);
   const counts = new Array<number>(slotsPerBar).fill(0);
@@ -292,6 +309,14 @@ export function applyGrooveTemplate(
   template: GrooveTemplate,
   ts: TimeSignature,
 ): NoteEvent[] {
+  assertTimeSignature(ts);
+  assertNoteEvents(events, 'groove target events');
+  assertPositiveInt(template.subdivision, 'template subdivision');
+  assertPositiveInt(template.slotsPerBar, 'template slotsPerBar');
+  assertGenerationBudget(template.slots.length, 'template slots');
+  if (template.slots.length !== template.slotsPerBar) {
+    throw new RangeError('template slots length must equal slotsPerBar');
+  }
   if (
     template.ts &&
     (template.ts.numerator !== ts.numerator || template.ts.denominator !== ts.denominator)

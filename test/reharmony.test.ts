@@ -25,6 +25,22 @@ describe('substituteChord', () => {
     const db7 = subs.find((s) => s.chord.rootPc === 1 && s.chord.quality === 'dom7');
     expect(db7).toBeUndefined();
   });
+
+  it('counts only tones that actually exist in power and suspended chords', () => {
+    const powerSubs = substituteChord(makeChord(0, '5'), majorKey(0));
+    expect(
+      powerSubs.find(
+        (sub) => sub.type === 'relative' && sub.chord.rootPc === 9 && sub.chord.quality === 'min',
+      ),
+    ).toBeUndefined();
+
+    const susSubs = substituteChord(makeChord(0, 'sus4'), majorKey(0));
+    expect(
+      susSubs.find(
+        (sub) => sub.type === 'relative' && sub.chord.rootPc === 9 && sub.chord.quality === 'min',
+      ),
+    ).toBeUndefined();
+  });
 });
 
 describe('modalInterchangePalette', () => {

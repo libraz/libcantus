@@ -161,11 +161,20 @@ function parseSimpleRoman(
     return { rootPc, quality: canonical, inversion: 0 };
   }
 
-  const isDim = /o|°|dim/.test(suffix);
-  const isAug = /\+|aug/.test(suffix);
-  const isHalfDim = /ø/.test(suffix);
-  const explicitMaj7 = /maj7|M7/.test(suffix);
-  const figures = suffix.replace(/maj7|M7/g, '').replace(/[^0-9]/g, '');
+  // Non-canonical spellings are limited to a complete quality marker followed
+  // by an optional major-seventh marker and a recognized figured bass. Never
+  // search substrings: `Vfoo` must not become diminished merely because it
+  // contains an "o", and unknown trailing text must be rejected in full.
+  const parsedSuffix = /^(o|°|dim|ø|\+|aug)?(maj7|M7)?(65|64|43|42|7|6|2)?$/.exec(suffix);
+  if (!parsedSuffix) {
+    throw new Error(`Unsupported suffix "${suffix}" in Roman numeral: ${text}`);
+  }
+  const qualityMarker = parsedSuffix[1] ?? '';
+  const isDim = qualityMarker === 'o' || qualityMarker === '°' || qualityMarker === 'dim';
+  const isAug = qualityMarker === '+' || qualityMarker === 'aug';
+  const isHalfDim = qualityMarker === 'ø';
+  const explicitMaj7 = parsedSuffix[2] !== undefined;
+  const figures = parsedSuffix[3] ?? '';
 
   // Reject figure strings that are neither a known figured-bass inversion nor a
   // canonical quality suffix rather than silently degrading to a root triad.

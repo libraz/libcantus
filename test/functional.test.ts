@@ -33,6 +33,8 @@ describe('romanToChord', () => {
 
   it('rejects nonsense', () => {
     expect(() => romanToChord('Q', cMajor)).toThrow();
+    expect(() => romanToChord('Igarbage', cMajor)).toThrow();
+    expect(() => romanToChord('Vfoo', cMajor)).toThrow();
   });
 });
 

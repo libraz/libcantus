@@ -20,8 +20,24 @@ describe('roleOf', () => {
   });
 
   it('classifies sevenths and tensions as voicing', () => {
-    expect(roleOf(10, cMaj).role).toBe('seventh');
+    expect(roleOf(10, cMaj).role).toBe('tension');
     expect(roleOf(2, cMaj)).toEqual({ role: 'tension', lock: 'voicing', belongsToChordId: 0 });
+  });
+
+  it('classifies altered extensions by membership instead of pitch-class shape', () => {
+    const sharpEleven: Chord = {
+      rootPc: 0,
+      quality: '7#11',
+      intervals: [0, 4, 7, 10, 18],
+    };
+    const flatThirteen: Chord = {
+      rootPc: 0,
+      quality: '7b13',
+      intervals: [0, 4, 7, 10, 20],
+    };
+    expect(roleOf(6, sharpEleven).role).toBe('tension');
+    expect(roleOf(8, flatThirteen).role).toBe('tension');
+    expect(roleOf(7, sharpEleven).role).toBe('fifth');
   });
 
   it('locks the suspended tone of a sus4 chord to quality', () => {

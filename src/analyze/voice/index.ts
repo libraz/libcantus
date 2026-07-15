@@ -1,4 +1,5 @@
 import type { KeyScale, NoteEvent } from '../../core/types.js';
+import { assertNoteEvents } from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
 import { chordPitchClasses, chordToneRole } from '../../theory/chord/index.js';
 import {
@@ -165,6 +166,7 @@ export function analyzeVoice(
   key: KeyScale,
   otherVoicesAtBeat: (beat: number) => VoiceSnapshot[],
 ): AnalyzedNote[] {
+  assertNoteEvents(voice, 'voice notes', { allowNonPositiveDuration: true });
   const result: AnalyzedNote[] = [];
 
   for (let i = 0; i < voice.length; i += 1) {
@@ -177,10 +179,17 @@ export function analyzeVoice(
     // A neighboring note sharing this note's onset is a simultaneous cluster
     // member, not a melodic predecessor/successor; treating it as one would
     // fabricate passing/suspension figures, so it is dropped here.
+    const prevEnd =
+      prevNote === undefined
+        ? Number.NEGATIVE_INFINITY
+        : prevNote.startBeat + prevNote.durationBeat;
+    const noteEnd = note.startBeat + note.durationBeat;
     const prev =
-      prevNote !== undefined && prevNote.startBeat < note.startBeat - EPS ? prevNote : undefined;
+      prevNote !== undefined && Math.abs(prevEnd - note.startBeat) <= EPS ? prevNote : undefined;
     const next =
-      nextNote !== undefined && nextNote.startBeat > note.startBeat + EPS ? nextNote : undefined;
+      nextNote !== undefined && Math.abs(noteEnd - nextNote.startBeat) <= EPS
+        ? nextNote
+        : undefined;
     const chord = chordAtBeat(note.startBeat);
     const labels: TheoryLabel[] = [];
     const member = isChordMember(note.pitch, chord);

@@ -8,6 +8,13 @@
  * acoustic (just) tuning behind the tempered intervals.
  */
 
+import {
+  assertFiniteNumber,
+  assertInteger,
+  assertPositiveInt,
+  assertRange,
+} from '../validation/index.js';
+
 /**
  * An equal-tempered tuning: a reference pitch and a number of equal divisions of
  * the octave. With `divisions === 12` a step index is an ordinary MIDI number.
@@ -30,6 +37,13 @@ export type Tuning = {
  */
 export const TWELVE_TET: Tuning = { refStep: 69, refFreq: 440, divisions: 12 };
 
+function assertTuning(tuning: Tuning): Tuning {
+  assertFiniteNumber(tuning.refStep, 'tuning.refStep');
+  assertRange(tuning.refFreq, Number.MIN_VALUE, Number.MAX_VALUE, 'tuning.refFreq');
+  assertPositiveInt(tuning.divisions, 'tuning.divisions');
+  return tuning;
+}
+
 /**
  * Build an equal temperament with `n` divisions of the octave.
  *
@@ -46,6 +60,9 @@ export const TWELVE_TET: Tuning = { refStep: 69, refFreq: 440, divisions: 12 };
  * @category Pitch & Intervals
  */
 export function edo(n: number, refFreq = 440, refStep = 69): Tuning {
+  assertPositiveInt(n, 'EDO divisions');
+  assertRange(refFreq, Number.MIN_VALUE, Number.MAX_VALUE, 'reference frequency');
+  assertFiniteNumber(refStep, 'reference step');
   return { refStep, refFreq, divisions: n };
 }
 
@@ -64,7 +81,10 @@ export function edo(n: number, refFreq = 440, refStep = 69): Tuning {
  * @category Pitch & Intervals
  */
 export function frequencyOf(step: number, tuning: Tuning = TWELVE_TET): number {
-  return tuning.refFreq * 2 ** ((step - tuning.refStep) / tuning.divisions);
+  assertFiniteNumber(step, 'step');
+  assertTuning(tuning);
+  const result = tuning.refFreq * 2 ** ((step - tuning.refStep) / tuning.divisions);
+  return assertRange(result, Number.MIN_VALUE, Number.MAX_VALUE, 'frequency result');
 }
 
 /**
@@ -77,6 +97,8 @@ export function frequencyOf(step: number, tuning: Tuning = TWELVE_TET): number {
  * @category Pitch & Intervals
  */
 export function nearestStep(freq: number, tuning: Tuning = TWELVE_TET): number {
+  assertRange(freq, Number.MIN_VALUE, Number.MAX_VALUE, 'frequency');
+  assertTuning(tuning);
   return Math.round(tuning.refStep + tuning.divisions * Math.log2(freq / tuning.refFreq));
 }
 
@@ -89,7 +111,9 @@ export function nearestStep(freq: number, tuning: Tuning = TWELVE_TET): number {
  * @category Pitch & Intervals
  */
 export function centsBetweenFreq(a: number, b: number): number {
-  return 1200 * Math.log2(b / a);
+  assertRange(a, Number.MIN_VALUE, Number.MAX_VALUE, 'first frequency');
+  assertRange(b, Number.MIN_VALUE, Number.MAX_VALUE, 'second frequency');
+  return 1200 * (Math.log2(b) - Math.log2(a));
 }
 
 /**
@@ -101,7 +125,9 @@ export function centsBetweenFreq(a: number, b: number): number {
  * @category Pitch & Intervals
  */
 export function centsOfSteps(steps: number, tuning: Tuning = TWELVE_TET): number {
-  return (steps * 1200) / tuning.divisions;
+  assertFiniteNumber(steps, 'steps');
+  assertTuning(tuning);
+  return assertFiniteNumber((steps * 1200) / tuning.divisions, 'cents result');
 }
 
 /**
@@ -114,7 +140,9 @@ export function centsOfSteps(steps: number, tuning: Tuning = TWELVE_TET): number
  * @category Pitch & Intervals
  */
 export function ratioToCents(numerator: number, denominator: number): number {
-  return 1200 * Math.log2(numerator / denominator);
+  assertRange(numerator, Number.MIN_VALUE, Number.MAX_VALUE, 'ratio numerator');
+  assertRange(denominator, Number.MIN_VALUE, Number.MAX_VALUE, 'ratio denominator');
+  return 1200 * (Math.log2(numerator) - Math.log2(denominator));
 }
 
 /**
@@ -144,13 +172,15 @@ export const JUST_RATIOS: Record<number, [number, number]> = {
  * (positive means the just interval is wider).
  *
  * @param semitoneClass Semitone class in [0, 12].
- * @returns The deviation in cents, or NaN if the class has no listed ratio.
+ * @returns The deviation in cents.
+ * @throws If `semitoneClass` is not an integer in [0, 12].
  * @category Pitch & Intervals
  */
 export function justDeviationCents(semitoneClass: number): number {
+  assertInteger(semitoneClass, 'semitone class', 0, 12);
   const ratio = JUST_RATIOS[semitoneClass];
   if (!ratio) {
-    return Number.NaN;
+    throw new RangeError(`semitone class has no just ratio: ${semitoneClass}`);
   }
   return ratioToCents(ratio[0], ratio[1]) - semitoneClass * 100;
 }

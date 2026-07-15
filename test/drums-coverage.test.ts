@@ -152,6 +152,38 @@ describe('euclid', () => {
       generateDrums({ ...opts, euclideanKick: { pulses: 5, steps: 16, rotation: 1 } }),
     ).toEqual(generateDrums({ ...opts, euclideanKick: { pulses: 5, steps: 16, rotation: 1 } }));
   });
+
+  it('scales Euclidean steps across the whole bar', () => {
+    const hits = generateDrums({
+      bars: 1,
+      bpm: 120,
+      style: 'standard',
+      section: 'verse',
+      density: 0.5,
+      euclideanKick: { pulses: 4, steps: 8 },
+    });
+    expect(hits.filter((hit) => hit.pitch === 36).map((hit) => hit.startBeat)).toEqual([
+      0, 1, 2, 3,
+    ]);
+  });
+
+  it('preserves pulse count, bar span, and determinism for every supported step count', () => {
+    for (let steps = 1; steps <= 16; steps += 1) {
+      const options: DrumsOptions = {
+        bars: 1,
+        bpm: 120,
+        style: 'standard',
+        section: 'verse',
+        density: 0.5,
+        euclideanKick: { pulses: steps, steps },
+      };
+      const kicks = generateDrums(options).filter((hit) => hit.pitch === 36);
+      expect(kicks).toHaveLength(steps);
+      expect(kicks[0]?.startBeat).toBe(0);
+      expect(kicks.at(-1)?.startBeat).toBeCloseTo((4 * (steps - 1)) / steps);
+      expect(generateDrums(options)).toEqual(generateDrums(options));
+    }
+  });
 });
 
 describe('fills', () => {
