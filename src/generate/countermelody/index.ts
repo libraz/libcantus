@@ -332,8 +332,11 @@ function heldPitchSafety(
  * @category Voicing & Counterpoint
  */
 export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
-  const melody = createNoteEventIndex(opts.melody);
-  if (melody.notes.length === 0) {
+  // Zero-length artefacts are accepted and ignored, matching the analysis
+  // layer, so an array that passed through `analyzeArrangement` can be fed
+  // straight in here.
+  const melody = createNoteEventIndex(opts.melody, { allowNonPositiveDuration: true });
+  if (melody.notes.every((indexed) => indexed.note.durationBeat <= 0)) {
     return [];
   }
   const ts = opts.ts ?? DEFAULT_TS;

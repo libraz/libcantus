@@ -22,6 +22,7 @@ import {
   assertPositiveInt,
   assertRange,
   assertTimeSignature,
+  dropSilentNotes,
 } from '../../core/validation/index.js';
 
 /**
@@ -102,12 +103,19 @@ const MAX_VELOCITY = 127;
  * const events = [{ pitch: 60, startBeat: 0, durationBeat: 1, velocity: 80 }];
  * humanize(events, { seed: 1, timing: 0.03 }); // copies with jittered timing and accented velocity
  * ```
+ * Notes with a zero or negative duration never sound and are dropped, so the
+ * result can be shorter than the input.
+ *
  * @category Rhythm & Meter
  */
 export function humanize(events: NoteEvent[], opts: HumanizeOptions = {}): NoteEvent[] {
   const ts = opts.ts ?? DEFAULT_TS;
   assertTimeSignature(ts);
-  assertNoteEvents(events, 'humanize events');
+  // Zero-length artefacts are routine in MIDI imports and never sound, so they
+  // are accepted and dropped here, exactly as the analysis layer does — the two
+  // sides of a pipeline must not disagree about the same array.
+  assertNoteEvents(events, 'humanize events', { allowNonPositiveDuration: true });
+  const sounding = dropSilentNotes(events);
   const timing = opts.timing ?? DEFAULT_TIMING;
   const velocityJitter = opts.velocity ?? DEFAULT_VELOCITY_JITTER;
   const accent = opts.accent ?? DEFAULT_ACCENT;
@@ -118,7 +126,7 @@ export function humanize(events: NoteEvent[], opts: HumanizeOptions = {}): NoteE
   assertRange(baseVelocity, 0, 127, 'humanize base velocity');
   const rng = createRng(opts.seed ?? 0);
 
-  return events.map((event) => {
+  return sounding.map((event) => {
     const timingOffset = rng.float(-timing, timing);
     const startBeat = Math.max(0, event.startBeat + timingOffset);
 
@@ -226,7 +234,7 @@ export function extractGrooveTemplate(
   subdivision: number,
 ): GrooveTemplate {
   assertTimeSignature(ts);
-  assertNoteEvents(events, 'groove source events');
+  assertNoteEvents(events, 'groove source events', { allowNonPositiveDuration: true });
   assertPositiveInt(subdivision, 'groove subdivision');
   const barBeats = beatsPerBar(ts);
   const slotsPerBar = Math.round(barBeats * subdivision);
@@ -236,7 +244,7 @@ export function extractGrooveTemplate(
   const counts = new Array<number>(slotsPerBar).fill(0);
   const velocityCounts = new Array<number>(slotsPerBar).fill(0);
 
-  for (const event of events) {
+  for (const event of dropSilentNotes(events)) {
     const { quantizedBeat, slotIndex } = quantizeToGrid(
       event.startBeat,
       barBeats,
@@ -310,7 +318,7 @@ export function applyGrooveTemplate(
   ts: TimeSignature,
 ): NoteEvent[] {
   assertTimeSignature(ts);
-  assertNoteEvents(events, 'groove target events');
+  assertNoteEvents(events, 'groove target events', { allowNonPositiveDuration: true });
   assertPositiveInt(template.subdivision, 'template subdivision');
   assertPositiveInt(template.slotsPerBar, 'template slotsPerBar');
   assertGenerationBudget(template.slots.length, 'template slots');
@@ -327,7 +335,7 @@ export function applyGrooveTemplate(
     );
   }
   const barBeats = beatsPerBar(ts);
-  return events.map((event) => {
+  return dropSilentNotes(events).map((event) => {
     const { quantizedBeat, slotIndex } = quantizeToGrid(
       event.startBeat,
       barBeats,

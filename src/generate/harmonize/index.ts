@@ -377,14 +377,14 @@ function harmonizeOnce(
  * @category Reharmonization
  */
 export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
-  const noteIndex = createNoteEventIndex(opts.melody);
+  const noteIndex = createNoteEventIndex(opts.melody, { allowNonPositiveDuration: true });
   const ts = opts.ts ?? DEFAULT_METER;
   assertTimeSignature(ts);
   const key = opts.key === 'infer' ? inferKey(opts.melody) : opts.key;
   // Nothing to harmonize: inventing a tonic bar here would silently insert a
   // ghost chord into a chart built by harmonizing sections and concatenating
   // them. The sibling generators return an empty result for empty input too.
-  if (noteIndex.notes.length === 0) {
+  if (noteIndex.notes.every((indexed) => indexed.note.durationBeat <= 0)) {
     return { transposeSemitones: 0, key, chords: [], melodyRoles: [] };
   }
   const candidates = buildCandidates(key, opts.reharmonize);
@@ -415,6 +415,9 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   // the former per-window full melody scan and creates no temporary note objects.
   let memberships = 0;
   for (const indexed of noteIndex.notes) {
+    if (indexed.note.durationBeat <= 0) {
+      continue; // never sounds, so it belongs to no segment
+    }
     const first = Math.max(0, Math.floor(indexed.note.startBeat / hr));
     const lastExclusive = Math.min(segCount, Math.ceil(indexed.endBeat / hr - Number.EPSILON));
     memberships += Math.max(0, lastExclusive - first);

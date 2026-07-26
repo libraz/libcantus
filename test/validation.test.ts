@@ -9,6 +9,7 @@ import {
 import {
   isCompound,
   metricWeight,
+  parseTimeSignature,
   pulsesPerBar,
   type TimeSignature,
   tuplet,
@@ -39,8 +40,15 @@ import {
   assertPositiveInt,
   assertRange,
   assertTimeSignature,
+  dropSilentNotes,
 } from '../src/core/validation/index.js';
+import { generateCounterMelody } from '../src/generate/countermelody/index.js';
 import { generateDrums } from '../src/generate/drums/index.js';
+import {
+  applyGrooveTemplate,
+  extractGrooveTemplate,
+  humanize,
+} from '../src/generate/groove/index.js';
 import { harmonizeMelody } from '../src/generate/harmonize/index.js';
 import { generateMotif } from '../src/generate/motif/index.js';
 import { generateProgression } from '../src/generate/progression/index.js';
@@ -221,5 +229,51 @@ describe('generation budget is caller-adjustable', () => {
     expect(() =>
       analyzeArrangement([{ name: 'a', role: 'harmony', notes }], { budget: 8 }),
     ).toThrow(RangeError);
+  });
+});
+
+describe('silent notes across the pipeline', () => {
+  /** A track carrying the zero-length artefacts a MIDI import routinely leaves. */
+  function withArtefacts(): NoteEvent[] {
+    return [
+      { pitch: 60, startBeat: 0, durationBeat: 1 },
+      { pitch: 62, startBeat: 1, durationBeat: 0 },
+      { pitch: 64, startBeat: 1, durationBeat: 1 },
+      { pitch: 67, startBeat: 2, durationBeat: -1 },
+      { pitch: 65, startBeat: 2, durationBeat: 2 },
+    ];
+  }
+
+  it('drops them everywhere rather than throwing in half the library', () => {
+    const notes = withArtefacts();
+    // The analysis side accepts them...
+    const analysis = analyzeArrangement([{ notes }]);
+    expect(analysis.tracks[0]?.notes).toHaveLength(3);
+    // ...and so does every generation entry point that takes note events.
+    expect(() => humanize(notes)).not.toThrow();
+    expect(humanize(notes)).toHaveLength(3);
+    const ts = parseTimeSignature('4/4');
+    expect(() => extractGrooveTemplate(notes, ts, 4)).not.toThrow();
+    expect(() => applyGrooveTemplate(notes, extractGrooveTemplate(notes, ts, 4), ts)).not.toThrow();
+    expect(
+      generateCounterMelody({
+        melody: notes,
+        key: majorKey(0),
+        chordAt: () => makeChord(0, 'maj'),
+      }),
+    ).not.toHaveLength(0);
+    const harmonized = harmonizeMelody({
+      melody: notes,
+      key: majorKey(0),
+      harmonicRhythm: 4,
+      reharmonize: 'diatonic',
+      placement: { transposeSearch: false, octaveSearch: false },
+    });
+    expect(harmonized.chords.length).toBeGreaterThan(0);
+  });
+
+  it('exposes the same filter the library applies', () => {
+    expect(dropSilentNotes(withArtefacts())).toHaveLength(3);
+    expect(dropSilentNotes([])).toEqual([]);
   });
 });

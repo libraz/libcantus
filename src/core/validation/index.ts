@@ -28,6 +28,27 @@ export function assertInteger(
 }
 
 /**
+ * Drop the notes that never sound.
+ *
+ * A MIDI or DAW import routinely carries zero-length artefacts. Every entry
+ * point in this library ignores them, but a caller holding such an array still
+ * has to decide what to do with it before comparing note counts or indices;
+ * this is the one filter to apply.
+ *
+ * @param events The note events to filter.
+ * @returns A new array containing only the notes with a positive duration.
+ * @example
+ * ```ts
+ * import { dropSilentNotes } from '@libraz/libcantus';
+ * dropSilentNotes([{ pitch: 60, startBeat: 0, durationBeat: 0 }]); // []
+ * ```
+ * @category Core
+ */
+export function dropSilentNotes(events: NoteEvent[]): NoteEvent[] {
+  return events.filter((event) => event !== undefined && event.durationBeat > 0);
+}
+
+/**
  * Require a value to be one of a fixed set of names.
  *
  * TypeScript checks string-union options at compile time only, so a value that

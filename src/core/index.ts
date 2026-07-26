@@ -58,8 +58,10 @@ export {
   assertInteger,
   assertNoteEvent,
   assertNoteEvents,
+  assertOneOf,
   assertPositiveInt,
   assertRange,
   assertTimeSignature,
   DEFAULT_GENERATION_BUDGET,
+  dropSilentNotes,
 } from './validation/index.js';
