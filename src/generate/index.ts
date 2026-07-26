@@ -3,11 +3,23 @@
  * also available from the package root.
  */
 
+// Types from the layers below that this layer's own signatures name, so a
+// consumer importing only `@libraz/libcantus/generate` can still spell them.
+export type { BorrowedSource, HarmonicFunction } from '../analyze/functional/index.js';
+export type { ChordSegment, ChordTimeline } from '../analyze/timeline/index.js';
+export type { TimeSignature } from '../core/meter/index.js';
+export type { KeyScale, NoteEvent } from '../core/types.js';
 // ChordSpan is defined in the theory layer but appears in this layer's public
 // signatures (generateProgression's return, HarmonizeResult.chords), so it is
 // re-exported here: a consumer of the /generate subpath must be able to name
 // every type those signatures mention.
-export type { ChordSpan } from '../theory/chord/index.js';
+export type {
+  Chord as ChordData,
+  ChordQuality,
+  ChordSpan,
+  PitchSpelling,
+} from '../theory/chord/index.js';
+export type { HarmonyRole } from '../theory/harmony/index.js';
 export type { BassLineOptions, BassSegment, BassStyle } from './bass/index.js';
 export { generateBassLine } from './bass/index.js';
 export type { CounterMelodyOptions } from './countermelody/index.js';

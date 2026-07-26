@@ -2,6 +2,19 @@
  * Public API of the analyze layer. Re-exports every analyze-layer module;
  * also available from the package root.
  */
+
+// Types from the layers below that this layer's own signatures name, so a
+// consumer importing only `@libraz/libcantus/analyze` can still spell them.
+export type { TimeSignature } from '../core/meter/index.js';
+export type { KeyScale, NoteEvent } from '../core/types.js';
+export type {
+  Chord as ChordData,
+  ChordQuality,
+  ChordSpan,
+  PitchSpelling,
+} from '../theory/chord/index.js';
+export type { SafetyProfile, VoiceSnapshot } from '../theory/safety/index.js';
+export { NoteSafety } from '../theory/safety/index.js';
 export type {
   ArrangementAnalysis,
   ArrangementOptions,

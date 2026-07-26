@@ -2,6 +2,11 @@
  * Public API of the theory layer. Re-exports every theory-layer module;
  * also available from the package root.
  */
+
+// Types from the layers below that this layer's own signatures name, so a
+// consumer importing only `@libraz/libcantus/theory` can still spell them.
+export type { Note as NoteData } from '../core/pitch/index.js';
+export type { KeyScale } from '../core/types.js';
 export type {
   Chord as ChordData,
   ChordQuality,

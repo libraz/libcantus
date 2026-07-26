@@ -93,12 +93,30 @@
         "types": "./dist/model/index.d.cts",
         "default": "./dist/model/index.cjs"
       }
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "core": [
+        "./dist/core/index.d.ts"
+      ],
+      "theory": [
+        "./dist/theory/index.d.ts"
+      ],
+      "analyze": [
+        "./dist/analyze/index.d.ts"
+      ],
+      "generate": [
+        "./dist/generate/index.d.ts"
+      ],
+      "model": [
+        "./dist/model/index.d.ts"
+      ]
     }
   },
   "files": [
     "dist",
-    "src",
-    "tsconfig.json",
     "README.md",
     "LICENSE"
   ],

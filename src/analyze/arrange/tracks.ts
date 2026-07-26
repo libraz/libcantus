@@ -91,7 +91,7 @@ export type Conflict = {
   labels: TheoryLabel[];
   /** The clash severity: {@link NoteSafety.Warning} or {@link NoteSafety.Dissonant}. */
   safety: NoteSafety;
-  /** {@link import('../safety/index.js').SafetyResult.reasons} bitmask. */
+  /** {@link SafetyResult.reasons} bitmask. */
   reasons: number;
   /** Preferred stepwise resolution, when the safety evaluator provides one. */
   resolveTo?: number;

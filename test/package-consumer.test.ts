@@ -33,6 +33,7 @@ const importLines = [
   "import * as model from '@libraz/libcantus/model';",
   "import type { ChordSpan as RootChordSpan, PitchSpelling as RootPitchSpelling } from '@libraz/libcantus';",
   "import type { ChordSpan as TheoryChordSpan, PitchSpelling as TheoryPitchSpelling } from '@libraz/libcantus/theory';",
+  "import type { ChordQuality as ModelChordQuality, KeyScale as ModelKeyScale } from '@libraz/libcantus/model';",
 ];
 
 const requireLines = [
@@ -44,6 +45,7 @@ const requireLines = [
   "import model = require('@libraz/libcantus/model');",
   "import type { ChordSpan as RootChordSpan, PitchSpelling as RootPitchSpelling } from '@libraz/libcantus';",
   "import type { ChordSpan as TheoryChordSpan, PitchSpelling as TheoryPitchSpelling } from '@libraz/libcantus/theory';",
+  "import type { ChordQuality as ModelChordQuality, KeyScale as ModelKeyScale } from '@libraz/libcantus/model';",
 ];
 
 const runtimeCheck = `
@@ -81,6 +83,12 @@ const rootSpan: RootChordSpan = { rootPc: 0, quality: 'maj', startBeat: 0 };
 const theorySpan: TheoryChordSpan = rootSpan;
 void theorySpelling;
 void theorySpan;
+// The class API's own signatures name these plain types, so the /model subpath
+// has to publish them or a consumer cannot declare a variable of one.
+const modelQuality: ModelChordQuality = 'maj7';
+const modelKey: ModelKeyScale = { rootPc: 0, modeMask12: 0b101010110101 };
+void modelQuality;
+void modelKey;
 `;
 
 describe('packed package consumer matrix', () => {
@@ -108,12 +116,12 @@ describe('packed package consumer matrix', () => {
         expect(packedPaths.has(`${entry}${extension}`), `${entry}${extension}`).toBe(true);
       }
     }
+    // The sourcemaps already embed the TypeScript sources, so shipping `src`
+    // beside them would put the same text in the tarball twice.
     expect(
       [...packedPaths].filter(
         (file) =>
-          !file.startsWith('dist/') &&
-          !file.startsWith('src/') &&
-          !['package.json', 'README.md', 'LICENSE', 'tsconfig.json'].includes(file),
+          !file.startsWith('dist/') && !['package.json', 'README.md', 'LICENSE'].includes(file),
       ),
     ).toEqual([]);
 
@@ -158,9 +166,30 @@ describe('packed package consumer matrix', () => {
       JSON.stringify({ compilerOptions, files: ['consumer.cts'] }),
     );
 
+    // A consumer on the pre-`exports` resolver reads `typesVersions`, not the
+    // `exports` map, so every subpath needs a declaration mapping there too.
+    const classic = path.join(consumer, 'classic');
+    write(path.join(classic, 'package.json'), JSON.stringify({ type: 'commonjs' }));
+    write(path.join(classic, 'consumer.ts'), `${importLines.join('\n')}\n${typeParityCheck}`);
+    write(
+      path.join(classic, 'tsconfig.json'),
+      JSON.stringify({
+        compilerOptions: {
+          ...compilerOptions,
+          module: 'CommonJS',
+          moduleResolution: 'node10',
+          // node10 resolution is deprecated in the compiler but still what a
+          // `module: commonjs` project defaults to, so consumers keep hitting it.
+          ignoreDeprecations: '6.0',
+        },
+        files: ['consumer.ts'],
+      }),
+    );
+
     const tsc = path.join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
     run(process.execPath, [tsc, '-p', path.join(esm, 'tsconfig.json')], consumer);
     run(process.execPath, [tsc, '-p', path.join(cjs, 'tsconfig.json')], consumer);
+    run(process.execPath, [tsc, '-p', path.join(classic, 'tsconfig.json')], consumer);
 
     write(
       path.join(esm, 'runtime.mjs'),
@@ -224,5 +253,17 @@ const chordNotes = melodyAndChordNotes;
       ),
     ) as { exports: Record<string, { require: { types: string } }> };
     expect(installedPackage.exports['.']?.require.types).toBe('./dist/index.d.cts');
+
+    // Version detection, bundler plugins, and monorepo tooling all resolve the
+    // manifest itself; an `exports` map that omits it breaks them.
+    write(
+      path.join(consumer, 'manifest.cjs'),
+      `const manifest = require('@libraz/libcantus/package.json');
+if (typeof manifest.version !== 'string') {
+  throw new Error('package.json was not resolvable through the exports map');
+}
+`,
+    );
+    run(process.execPath, [path.join(consumer, 'manifest.cjs')], consumer);
   }, 120_000);
 });
