@@ -32,6 +32,7 @@ export {
   noteToPitchClass,
   parseNote,
   spelledInterval,
+  transposeNote,
 } from './pitch/index.js';
 export type { Rng } from './random/index.js';
 export { createRng } from './random/index.js';

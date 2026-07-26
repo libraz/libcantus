@@ -21,23 +21,51 @@ const LETTER_SEMITONES = [0, 2, 4, 5, 7, 9, 11] as const;
  *
  * The letter is derived from the tonic's letter plus `degreeOffset` (so the
  * spelling follows the key's diatonic letters), and the accidental is recomputed
- * for that letter. This covers the flat-side alterations (b2, b3, b6, b7), the
- * raised fourth (#4), and the raised degrees of a minor key: the raised sixth
- * (#6) and the raised leading tone (#7). The latter two keep sharp-side minor
- * keys spelling their raised degrees with the key-correct letter (e.g. F# minor
- * spells its leading tone E#, not F).
+ * for that letter. The table covers the whole octave, so a pitch class that is
+ * not a degree of the scale — a chromatic tone in a heptatonic key, or any tone
+ * outside a pentatonic or blues scale — still spells from the tonic's letter
+ * rather than falling back to a fixed sharp table.
  *
- * The `alter` field is illustrative only; `spellPitchClass` recomputes the
- * accidental from the chosen letter.
+ * Offsets follow the conventional ascending chromatic spelling: b2, M2, b3, M3,
+ * P4, #4, P5, b6, #6, b7, #7. The raised sixth and leading tone keep sharp-side
+ * minor keys spelling their raised degrees with the key-correct letter (e.g. F#
+ * minor spells its leading tone E#, not F).
  */
-const CHROMATIC_SPELLING: Record<number, { degreeOffset: number; alter: number }> = {
-  1: { degreeOffset: 1, alter: -1 }, // b2
-  3: { degreeOffset: 2, alter: -1 }, // b3
-  6: { degreeOffset: 3, alter: 1 }, // #4
-  8: { degreeOffset: 5, alter: -1 }, // b6
-  9: { degreeOffset: 5, alter: 1 }, // #6 (raised sixth of a minor key)
-  10: { degreeOffset: 6, alter: -1 }, // b7
-  11: { degreeOffset: 6, alter: 1 }, // #7 (raised leading tone of a minor key)
+const CHROMATIC_SPELLING: Record<number, number> = {
+  1: 1, // b2
+  2: 1, // M2
+  3: 2, // b3
+  4: 2, // M3
+  5: 3, // P4
+  6: 3, // #4
+  7: 4, // P5
+  8: 5, // b6
+  9: 5, // #6 (raised sixth of a minor key)
+  10: 6, // b7
+  11: 6, // #7 (raised leading tone of a minor key)
+};
+
+/**
+ * Sharp-side counterpart of {@link CHROMATIC_SPELLING}, used for scales that are
+ * not heptatonic and whose tonic is not itself flat-side.
+ *
+ * A scale with fewer (or more) than seven tones has no letter-per-degree
+ * spelling to follow, so its non-diatonic tones take the accidental side of the
+ * tonic: C whole-tone spells C D E F# G# A#, while Eb major pentatonic spells
+ * Eb F G Bb C.
+ */
+const CHROMATIC_SPELLING_SHARP: Record<number, number> = {
+  1: 0, // #1
+  2: 1, // M2
+  3: 1, // #2
+  4: 2, // M3
+  5: 3, // P4
+  6: 3, // #4
+  7: 4, // P5
+  8: 4, // #5
+  9: 5, // M6
+  10: 5, // #6
+  11: 6, // M7
 };
 
 function mod12(n: number): number {
@@ -62,6 +90,30 @@ function alterFor(letter: number, pc: number): number {
   return d;
 }
 
+/** Spell `pc` on the letter `degreeOffset` steps above the tonic's letter. */
+function letterFor(tonic: Note, degreeOffset: number | undefined, pc: number): Note | undefined {
+  if (degreeOffset === undefined) {
+    return undefined;
+  }
+  const letter = mod7(tonic.letter + degreeOffset);
+  return { letter, alter: alterFor(letter, pc) };
+}
+
+/** The lighter-accidental of two candidate spellings; ties go to `preferFlat`. */
+function pickSpelling(
+  flat: Note | undefined,
+  sharp: Note | undefined,
+  preferFlat: boolean,
+): Note | undefined {
+  if (flat === undefined || sharp === undefined) {
+    return flat ?? sharp;
+  }
+  if (Math.abs(flat.alter) !== Math.abs(sharp.alter)) {
+    return Math.abs(flat.alter) < Math.abs(sharp.alter) ? flat : sharp;
+  }
+  return preferFlat ? flat : sharp;
+}
+
 /** Whether the key's scale is a seven-note (heptatonic) scale. */
 function isHeptatonic(key: KeyScale): boolean {
   return scaleTonesInDegreeOrder(key).length === 7;
@@ -70,10 +122,12 @@ function isHeptatonic(key: KeyScale): boolean {
 /**
  * Spell a single pitch class relative to a spelled tonic and key.
  *
- * Diatonic pitch classes take the scale's letter for their degree; the common
- * chromatic tones (b2, b3, #4, b6, b7) and a minor key's raised degrees (#6, #7)
- * take their conventional, key-correct accidental spelling; anything else falls
- * back to a sharp spelling of the nearest natural.
+ * The tonic always spells as itself. In a heptatonic key each scale degree takes
+ * the next letter above the tonic, so the scale spells with one letter per
+ * degree. Every other pitch class — a chromatic tone in a heptatonic key, or any
+ * tone of a scale that is not heptatonic (pentatonic, blues, octatonic) — takes
+ * the conventional interval spelling above the tonic's letter, so a flat-side
+ * key keeps flat-side names.
  *
  * @param pc The pitch class to spell.
  * @param tonic The spelled tonic (its letter anchors the spelling).
@@ -84,27 +138,42 @@ function isHeptatonic(key: KeyScale): boolean {
 export function spellPitchClass(pc: number, tonic: Note, key: KeyScale): Note {
   const tonicPc = mod12(naturalPc(tonic.letter) + tonic.alter);
   const offset = mod12(pc - tonicPc);
-  const tones = scaleTonesInDegreeOrder(key);
 
-  if (isHeptatonic(key)) {
-    const degree = tones.indexOf(mod12(pc));
+  // The tonic spells as itself, whatever the scale: a caller that asked for Eb
+  // major pentatonic must not be handed back a D#.
+  if (offset === 0) {
+    return { letter: mod7(tonic.letter), alter: tonic.alter };
+  }
+
+  const heptatonic = isHeptatonic(key);
+  if (heptatonic) {
+    const degree = scaleTonesInDegreeOrder(key).indexOf(mod12(pc));
     if (degree >= 0) {
       const letter = mod7(tonic.letter + degree);
       return { letter, alter: alterFor(letter, pc) };
     }
-    const chromatic = CHROMATIC_SPELLING[offset];
-    if (chromatic) {
-      const letter = mod7(tonic.letter + chromatic.degreeOffset);
+  }
+
+  if (heptatonic) {
+    const degreeOffset = CHROMATIC_SPELLING[offset];
+    if (degreeOffset !== undefined) {
+      const letter = mod7(tonic.letter + degreeOffset);
       return { letter, alter: alterFor(letter, pc) };
+    }
+  } else {
+    // A scale that is not heptatonic has no letter-per-degree spelling to
+    // follow, so take whichever conventional letter needs the smaller
+    // accidental, breaking ties on the tonic's own side.
+    const flat = letterFor(tonic, CHROMATIC_SPELLING[offset], pc);
+    const sharp = letterFor(tonic, CHROMATIC_SPELLING_SHARP[offset], pc);
+    const best = pickSpelling(flat, sharp, tonic.alter < 0);
+    if (best !== undefined) {
+      return best;
     }
   }
 
-  // Fallback: name the pitch class from the nearest natural, preferring a sharp.
-  for (let letter = 0; letter < 7; letter += 1) {
-    if (naturalPc(letter) === mod12(pc)) {
-      return { letter, alter: 0 };
-    }
-  }
+  // Unreachable for a pitch class, since both tables cover offsets 1..11 and
+  // offset 0 returns above; kept so a non-integral input still names something.
   const belowLetter = mod7([0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6][mod12(pc)] ?? 0);
   return { letter: belowLetter, alter: alterFor(belowLetter, pc) };
 }
@@ -164,9 +233,12 @@ function chordLetterOffset(interval: number, chord: Chord): number {
       return 1;
     case 3:
     case 4:
-    case 15:
     case 16:
       return 2;
+    case 15:
+      // A raised ninth over a chord that already has a third is a ninth, not a
+      // second third: C7#9 spells D#, not a duplicate E.
+      return chord.intervals.some((i) => i === 3 || i === 4) ? 1 : 2;
     case 5:
     case 17:
     case 18:
@@ -233,8 +305,49 @@ export function spellChordFromRoot(chord: Chord, root: Note): Note[] {
  * @category Pitch & Intervals
  */
 export function spellChord(chord: Chord, tonic: Note, key: KeyScale): Note[] {
-  const root = spellPitchClass(chord.rootPc, tonic, key);
-  return spellChordFromRoot(chord, root);
+  return spellChordFromRoot(chord, chordRootSpelling(chord, tonic, key));
+}
+
+/**
+ * The root spelling to use for a chord: the chord's own hint when it still
+ * matches the root pitch class, otherwise the key's spelling of that pitch
+ * class.
+ *
+ * Honouring the hint is what keeps a chord's spelled tones agreeing with the
+ * symbol it renders as — `parseChordSymbol('C#7')` must spell C# E# G# B even
+ * when analysed in a flat-side key.
+ */
+function chordRootSpelling(chord: Chord, tonic: Note, key: KeyScale): Note {
+  const hint = chord.rootSpelling;
+  if (hint !== undefined && mod12(naturalPc(hint.letter) + hint.alter) === mod12(chord.rootPc)) {
+    return { letter: mod7(hint.letter), alter: hint.alter };
+  }
+  return spellPitchClass(chord.rootPc, tonic, key);
+}
+
+/**
+ * Spell a MIDI pitch relative to a key, keeping its octave.
+ *
+ * The octave-less sibling of this function, {@link spellPitchClass}, is enough
+ * for chord and scale spelling; this one is for naming actual sounding pitches
+ * (a generated line, an imported track) without losing the register.
+ *
+ * @param pitch The MIDI pitch; rounded to the nearest integer.
+ * @param tonic The spelled tonic of the key.
+ * @param key The key/scale.
+ * @returns The spelled note, carrying the octave that reproduces `pitch`.
+ * @example
+ * ```ts
+ * import { spellPitch, formatNote, parseNote, majorKey } from '@libraz/libcantus';
+ * formatNote(spellPitch(70, parseNote('Eb'), majorKey(3))); // 'Bb4'
+ * ```
+ * @category Pitch & Intervals
+ */
+export function spellPitch(pitch: number, tonic: Note, key: KeyScale): Note {
+  const rounded = Math.round(pitch);
+  const spelled = spellPitchClass(mod12(rounded), tonic, key);
+  const octave = (rounded - naturalPc(spelled.letter) - spelled.alter) / 12 - 1;
+  return { letter: spelled.letter, alter: spelled.alter, octave };
 }
 
 /**

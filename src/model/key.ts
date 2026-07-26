@@ -19,11 +19,6 @@ import { Chord } from './chord.js';
 import { Note } from './note.js';
 import { mod12, spellPitchClassBare } from './shared.js';
 
-/** Resolve a string or numeric key root into a spelled tonic note. */
-function resolveTonic(root: string | number, spelling: 'sharp' | 'flat'): Note {
-  return typeof root === 'string' ? Note.of(root) : new Note(spellPitchClassBare(root, spelling));
-}
-
 /** Total accidentals a spelled tonic produces across a key's whole scale. */
 function accidentalLoad(tonic: NoteData, scale: KeyScale): number {
   return spellScale(tonic, scale).reduce((sum, note) => sum + Math.abs(note.alter), 0);
@@ -68,7 +63,14 @@ export class Key {
    * @param tonic The spelled tonic anchoring letter-name spelling.
    */
   constructor(scale: KeyScale, tonic: Note) {
-    this.#scale = { rootPc: mod12(scale.rootPc), modeMask12: scale.modeMask12 };
+    const rootPc = mod12(scale.rootPc);
+    if (tonic.pitchClass !== rootPc) {
+      throw new RangeError(
+        `tonic ${tonic.name} does not match the scale root pitch class ${rootPc}; ` +
+          'pass a tonic that spells the scale root, or omit it to have one chosen',
+      );
+    }
+    this.#scale = { rootPc, modeMask12: scale.modeMask12 };
     this.#tonic = tonic;
   }
 
@@ -110,27 +112,37 @@ export class Key {
    * A key on a named scale (e.g. `'dorian'`, `'harmonicMinor'`).
    *
    * @param name The scale name, a key of the scale module's named-scale table.
-   * @param root Tonic as a note name or a pitch class.
+   * @param root Tonic as a note name or a pitch class; a numeric root is
+   *   spelled with whichever accidental side yields the fewest accidentals
+   *   across the scale, exactly as {@link Key.major} does.
    * @returns The key.
    * @throws If the name is not a known scale.
    */
   static named(name: string, root: string | number): Key {
-    const tonic = resolveTonic(root, 'sharp');
-    return new Key(scaleByName(name, tonic.pitchClass), tonic);
+    if (typeof root === 'string') {
+      const tonic = Note.of(root);
+      return new Key(scaleByName(name, tonic.pitchClass), tonic);
+    }
+    const scale = scaleByName(name, mod12(root));
+    return new Key(scale, bestTonicForScale(mod12(root), scale));
   }
 
   /**
    * Wrap an existing `KeyScale`, synthesizing a spelled tonic when none is
-   * given (flat-preferred for minor-third scales, sharp-preferred otherwise).
+   * given.
+   *
+   * The synthesized tonic is chosen the same way as for a numeric root
+   * elsewhere: whichever accidental side spells the scale with the fewest
+   * accidentals. This is what keeps `Key.of(detectKey(...).scale)` from handing
+   * every downstream chord a double-sharp spelling.
    *
    * @param scale The key/scale to wrap.
-   * @param tonic Optional spelled tonic.
+   * @param tonic Optional spelled tonic; must spell the scale's root pitch class.
    * @returns The key.
+   * @throws If the given tonic is not the scale's root pitch class.
    */
   static of(scale: KeyScale, tonic?: Note): Key {
-    const spelled =
-      tonic ?? new Note(spellPitchClassBare(scale.rootPc, isMinorKey(scale) ? 'flat' : 'sharp'));
-    return new Key(scale, spelled);
+    return new Key(scale, tonic ?? bestTonicForScale(mod12(scale.rootPc), scale));
   }
 
   /** A copy of the underlying plain `KeyScale`. */

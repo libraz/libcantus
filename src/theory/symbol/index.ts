@@ -197,13 +197,20 @@ export function parseChordSymbol(text: string): Chord {
  *
  * A hint is used only when no explicit sharp/flat preference was given and the
  * hint still resolves to `pc` (a stale hint left over after transposition is
- * ignored). Otherwise the pitch class is respelled from the requested table.
+ * ignored). Otherwise the pitch class is respelled from the requested table,
+ * falling back to `inheritFlats` so an unhinted slash bass follows the side its
+ * root was spelled on rather than flipping to sharps inside one symbol.
  */
-function pitchClassName(pc: number, hint: PitchSpelling | undefined, flats?: boolean): string {
+function pitchClassName(
+  pc: number,
+  hint: PitchSpelling | undefined,
+  flats?: boolean,
+  inheritFlats?: boolean,
+): string {
   if (flats === undefined && hint !== undefined && noteToPitchClass(hint) === pc) {
     return formatNote(hint);
   }
-  const note = midiToNote(60 + pc, flats ? 'flat' : 'sharp');
+  const note = midiToNote(60 + pc, (flats ?? inheritFlats) ? 'flat' : 'sharp');
   return formatNote({ letter: note.letter, alter: note.alter });
 }
 
@@ -230,11 +237,16 @@ function pitchClassName(pc: number, hint: PitchSpelling | undefined, flats?: boo
  */
 export function formatChordSymbol(chord: Chord, opts?: { flats?: boolean }): string {
   const rootPc = pitchClass(chord.rootPc);
-  const rootName = pitchClassName(rootPc, chord.rootSpelling, opts?.flats);
+  const rootHint = chord.rootSpelling;
+  const rootName = pitchClassName(rootPc, rootHint, opts?.flats);
   const suffix = CANONICAL_SUFFIX[chord.quality];
   let symbol = `${rootName}${suffix}`;
   if (chord.bassPc !== undefined && pitchClass(chord.bassPc) !== rootPc) {
-    symbol += `/${pitchClassName(pitchClass(chord.bassPc), chord.bassSpelling, opts?.flats)}`;
+    const inheritFlats =
+      rootHint !== undefined && noteToPitchClass(rootHint) === rootPc
+        ? rootHint.alter < 0
+        : undefined;
+    symbol += `/${pitchClassName(pitchClass(chord.bassPc), chord.bassSpelling, opts?.flats, inheritFlats)}`;
   }
   return symbol;
 }

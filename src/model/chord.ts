@@ -15,6 +15,7 @@ import {
   type ChordQuality,
   chordPitchClasses,
   makeChord,
+  type PitchSpelling,
 } from '../theory/chord/index.js';
 import {
   availableTensions,
@@ -33,7 +34,7 @@ import {
 import type { Key } from './key.js';
 import { Note } from './note.js';
 import { Progression } from './progression.js';
-import { mod12, spellPitchClassBare } from './shared.js';
+import { mod12 } from './shared.js';
 
 /**
  * Defensive copy of a plain chord.
@@ -62,6 +63,33 @@ function copyChord(data: ChordData): ChordData {
 }
 
 /**
+ * Spell the slash bass of a chord whose root spelling is already settled.
+ *
+ * A bass that is one of the chord's own tones takes that tone's spelling, so
+ * `Eb/Bb` never renders as `Eb/A#`; a bass outside the chord is spelled by the
+ * key when one is available.
+ */
+function deriveBassSpelling(chord: ChordData, key: Key | undefined): PitchSpelling | undefined {
+  const bassPc = chord.bassPc;
+  if (bassPc === undefined) {
+    return undefined;
+  }
+  const root = chord.rootSpelling;
+  if (root !== undefined) {
+    const index = chord.intervals.findIndex((i) => mod12(chord.rootPc + i) === bassPc);
+    const tone = index >= 0 ? spellChordFromRoot(chord, root)[index] : undefined;
+    if (tone !== undefined) {
+      return { letter: tone.letter, alter: tone.alter };
+    }
+  }
+  if (key === undefined) {
+    return undefined;
+  }
+  const spelled = spellPitchClass(bassPc, key.tonic.data, key.scale);
+  return { letter: spelled.letter, alter: spelled.alter };
+}
+
+/**
  * An immutable chord: a root pitch class, quality, interval template, and
  * optional slash bass, optionally carrying a {@link Key} context. Analysis
  * methods (`roman`, `function`, `analyze`, ...) use an explicitly passed key
@@ -75,7 +103,8 @@ function copyChord(data: ChordData): ChordData {
  * ```
  */
 export class Chord {
-  readonly #data: ChordData;
+  /** Exactly what the caller supplied: any spelling here is the caller's own. */
+  readonly #given: ChordData;
   readonly #key: Key | undefined;
 
   /**
@@ -85,12 +114,30 @@ export class Chord {
    * @param key Optional key context for analysis methods.
    */
   constructor(data: ChordData, key?: Key) {
-    const copy = copyChord(data);
-    if (copy.rootSpelling === undefined && key !== undefined) {
-      copy.rootSpelling = spellPitchClass(copy.rootPc, key.tonic.data, key.scale);
-    }
-    this.#data = copy;
+    this.#given = copyChord(data);
     this.#key = key;
+  }
+
+  /**
+   * The chord data with any missing spelling hint filled in from the key.
+   *
+   * Derived spellings are computed on read rather than baked in at construction,
+   * so re-attaching a different key re-spells the chord instead of carrying the
+   * first key's letters forever. A spelling the caller supplied always wins.
+   */
+  get #data(): ChordData {
+    const out = copyChord(this.#given);
+    const key = this.#key;
+    if (out.rootSpelling === undefined && key !== undefined) {
+      out.rootSpelling = spellPitchClass(out.rootPc, key.tonic.data, key.scale);
+    }
+    if (out.bassSpelling === undefined) {
+      const bass = deriveBassSpelling(out, key);
+      if (bass !== undefined) {
+        out.bassSpelling = bass;
+      }
+    }
+    return out;
   }
 
   /**
@@ -98,17 +145,26 @@ export class Chord {
    *
    * @param root Root as a note name (e.g. `'Eb'`) or a pitch class.
    * @param quality The chord quality.
-   * @param bass Optional slash-chord bass pitch class.
+   * @param bass Optional slash-chord bass, as a note name (e.g. `'Bb'`) or a
+   *   pitch class. A named bass keeps its own spelling.
    * @returns The chord (without key context).
    */
-  static of(root: string | number, quality: ChordQuality, bass?: number): Chord {
-    if (typeof root === 'string') {
-      const rootNote = Note.of(root);
-      const data = makeChord(rootNote.pitchClass, quality, bass);
+  static of(root: string | number, quality: ChordQuality, bass?: string | number): Chord {
+    const bassNote = typeof bass === 'string' ? Note.of(bass) : undefined;
+    const bassPc = bassNote !== undefined ? bassNote.pitchClass : (bass as number | undefined);
+    const rootNote = typeof root === 'string' ? Note.of(root) : undefined;
+    const data = makeChord(
+      rootNote !== undefined ? rootNote.pitchClass : (root as number),
+      quality,
+      bassPc,
+    );
+    if (rootNote !== undefined) {
       data.rootSpelling = { letter: rootNote.letter, alter: rootNote.alter };
-      return new Chord(data);
     }
-    return new Chord(makeChord(root, quality, bass));
+    if (bassNote !== undefined) {
+      data.bassSpelling = { letter: bassNote.letter, alter: bassNote.alter };
+    }
+    return new Chord(data);
   }
 
   /**
@@ -175,9 +231,12 @@ export class Chord {
     return this.#data.bassPc;
   }
 
-  /** A copy of the underlying plain chord object. */
+  /**
+   * A copy of the underlying plain chord object, including the spellings
+   * derived from any attached key.
+   */
   get data(): ChordData {
-    return copyChord(this.#data);
+    return this.#data;
   }
 
   /** The carried key context, if any. */
@@ -188,11 +247,17 @@ export class Chord {
   /**
    * A copy of this chord carrying the given key context.
    *
+   * Only a spelling the caller supplied (via `Chord.parse`, `Chord.of` with a
+   * named root, or plain data carrying a hint) survives; a spelling that came
+   * from a previously attached key is re-derived, so re-keying a progression
+   * during a modulation does not keep the old key's letters and the order of
+   * `withKey` calls does not affect the result.
+   *
    * @param key The key context to attach.
    * @returns The new chord.
    */
   withKey(key: Key): Chord {
-    return new Chord(this.#data, key);
+    return new Chord(this.#given, key);
   }
 
   /**
@@ -320,27 +385,20 @@ export class Chord {
    * @throws If the chord has no intervals.
    */
   invert(n: number): Chord {
-    const intervals = this.#data.intervals;
+    const data = copyChord(this.#given);
+    const intervals = data.intervals;
     const length = intervals.length;
     if (length === 0) {
       throw new Error('cannot invert a chord with no intervals');
     }
     const index = ((n % length) + length) % length;
-    const data = copyChord(this.#data);
+    // The bass spelling follows from the root spelling in force at read time, so
+    // it is derived rather than frozen in here.
+    delete data.bassSpelling;
     if (index === 0) {
       delete data.bassPc;
-      delete data.bassSpelling;
     } else {
-      data.bassPc = mod12(this.#data.rootPc + (intervals[index] ?? 0));
-      const rootSpelling =
-        data.rootSpelling ??
-        (this.#key
-          ? spellPitchClass(data.rootPc, this.#key.tonic.data, this.#key.scale)
-          : spellPitchClassBare(data.rootPc, 'sharp'));
-      const bassSpelling = spellChordFromRoot(data, rootSpelling)[index];
-      if (bassSpelling !== undefined) {
-        data.bassSpelling = bassSpelling;
-      }
+      data.bassPc = mod12(data.rootPc + (intervals[index] ?? 0));
     }
     return new Chord(data, this.#key);
   }

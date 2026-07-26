@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { parseNote } from '../src/core/pitch/index.js';
-import { makeChord } from '../src/theory/chord/index.js';
+import { formatNote, parseNote } from '../src/core/pitch/index.js';
+import { Chord, Key, Note } from '../src/model/index.js';
+import { chordQualities, makeChord } from '../src/theory/chord/index.js';
 import { majorKey, minorKey, scaleByName } from '../src/theory/scale/index.js';
 import {
   noteNames,
   spellChord,
+  spellPitch,
   spellPitchClass,
   spellPitchClasses,
   spellScale,
@@ -158,5 +160,168 @@ describe('spellPitchClasses', () => {
     expect(
       noteNames(spellPitchClasses([0, 2, 6, 10], parseNote('C'), scaleByName('wholeTone', 0))),
     ).toEqual(['C', 'D', 'F#', 'A#']);
+  });
+});
+
+describe('spelling stays on the key side across every path', () => {
+  it('spells a non-heptatonic scale from the caller tonic, not a sharp table', () => {
+    expect(noteNames(spellScale(parseNote('Eb'), scaleByName('majorPentatonic', 3)))).toEqual([
+      'Eb',
+      'F',
+      'G',
+      'Bb',
+      'C',
+    ]);
+    expect(noteNames(spellScale(parseNote('Bb'), scaleByName('blues', 10)))).not.toContain('A#');
+  });
+
+  it('spells a chord over a flat-side mode without double accidentals', () => {
+    expect(
+      noteNames(spellChord(makeChord(3, 'maj'), parseNote('Bb'), scaleByName('lydian', 10))),
+    ).toEqual(['Eb', 'G', 'Bb']);
+  });
+
+  it('never produces a double accidental for any named scale on any root', () => {
+    const names = [
+      'major',
+      'naturalMinor',
+      'dorian',
+      'phrygian',
+      'lydian',
+      'mixolydian',
+      'locrian',
+      'harmonicMinor',
+      'melodicMinor',
+      'majorPentatonic',
+      'minorPentatonic',
+      'blues',
+      'wholeTone',
+      'octatonicHalfWhole',
+      'octatonicWholeHalf',
+      'chromatic',
+    ];
+    for (const name of names) {
+      for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+        const key = Key.named(name, rootPc);
+        for (const spelled of key.noteNames()) {
+          expect(spelled, `${name}/${rootPc} -> ${key.noteNames().join(' ')}`).toMatch(
+            /^[A-G](#|b)?$/,
+          );
+        }
+      }
+    }
+  });
+
+  it('spells a raised ninth as a ninth, never a duplicated third', () => {
+    expect(noteNames(spellChord(makeChord(0, '7#9'), parseNote('C'), majorKey(0)))).toEqual([
+      'C',
+      'E',
+      'G',
+      'Bb',
+      'D#',
+    ]);
+    expect(
+      Chord.parse('Bb7#9')
+        .withKey(Key.major('Eb'))
+        .spell()
+        .map((n) => n.name),
+    ).toEqual(['Bb', 'D', 'F', 'Ab', 'C#']);
+  });
+
+  it('never spells one chord with the same letter twice', () => {
+    for (const quality of chordQualities()) {
+      for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+        const letters = spellChord(makeChord(rootPc, quality), parseNote('C'), majorKey(0)).map(
+          (n) => n.letter,
+        );
+        expect(new Set(letters).size, `${quality}/${rootPc}`).toBe(letters.length);
+      }
+    }
+  });
+
+  it('keeps the octave when spelling a sounding pitch', () => {
+    expect(formatNote(spellPitch(70, parseNote('Eb'), majorKey(3)))).toBe('Bb4');
+    expect(formatNote(spellPitch(59, parseNote('C'), majorKey(0)))).toBe('B3');
+  });
+});
+
+describe('Chord spelling agrees with the symbol it renders as', () => {
+  it('spells the root the symbol shows, not a respelling of its pitch class', () => {
+    const chord = Chord.parse('C#7').withKey(Key.major('C'));
+    expect(chord.symbol()).toBe('C#7');
+    expect(chord.spell().map((n) => n.name)).toEqual(['C#', 'E#', 'G#', 'B']);
+    const dSharpMinor = Chord.parse('D#m').withKey(Key.major('C'));
+    expect(dSharpMinor.symbol()).toBe('D#m');
+    expect(dSharpMinor.spell().map((n) => n.name)).toEqual(['D#', 'F#', 'A#']);
+  });
+
+  it('spells a slash bass from the chord, not from a sharp table', () => {
+    expect(Chord.of('Eb', 'maj', 10).symbol()).toBe('Eb/Bb');
+    expect(Chord.of('Ab', 'maj', 3).symbol()).toBe('Ab/Eb');
+    expect(Chord.of('Eb', 'maj').invert(2).symbol()).toBe('Eb/Bb');
+    expect(Chord.parse('Bb').withKey(Key.major('Eb')).invert(1).symbol()).toBe('Bb/D');
+  });
+
+  it('re-spells when a different key is attached, whatever the order', () => {
+    const chord = Key.major('C').chord(1); // Dm, spelled from C major
+    const viaTwo = chord.withKey(Key.major('Db')).withKey(Key.major('D'));
+    const direct = chord.withKey(Key.major('D'));
+    expect(viaTwo.symbol()).toBe(direct.symbol());
+    // The same chord, first spelled by a flat key, then re-keyed to a sharp one.
+    const gSharpMinor = Key.major('Cb').chord(5); // Ab minor in Cb major
+    expect(gSharpMinor.symbol()).toBe('Abm');
+    expect(gSharpMinor.withKey(Key.major('B')).symbol()).toBe('G#m');
+  });
+
+  it('keeps a spelling the caller supplied through a key change', () => {
+    const parsed = Chord.parse('Gb');
+    expect(parsed.withKey(Key.major('D')).symbol()).toBe('Gb');
+  });
+});
+
+describe('Key factories agree on numeric roots', () => {
+  it('spells a numeric root the same way whichever factory is used', () => {
+    for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+      expect(Key.major(rootPc).noteNames()).toEqual(Key.of(majorKey(rootPc)).noteNames());
+      expect(Key.major(rootPc).noteNames()).toEqual(Key.named('major', rootPc).noteNames());
+      expect(Key.minor(rootPc).noteNames()).toEqual(Key.of(minorKey(rootPc)).noteNames());
+    }
+  });
+
+  it('rejects a tonic that does not spell the scale root', () => {
+    expect(() => Key.of(majorKey(0), Note.of('F#'))).toThrow(RangeError);
+  });
+});
+
+describe('Note.transpose keeps the spelling', () => {
+  it('moves the letter by the interval, not by a sharp table', () => {
+    expect(Note.of('Ab4').transpose(2).name).toBe('Bb4');
+    expect(Note.of('Eb4').transpose(5).name).toBe('Ab4');
+    expect(Note.of('F#3').transpose(2).name).toBe('G#3');
+    expect(Note.of('Bb').transpose(7).name).toBe('F');
+  });
+
+  it('is an exact inverse of itself for every note and offset', () => {
+    for (const name of ['C4', 'Ab4', 'F#3', 'Bb2', 'D#5', 'Cb4', 'B#3']) {
+      for (let semitones = -14; semitones <= 14; semitones += 1) {
+        // A tritone is the one ambiguous distance: ascending it is an augmented
+        // fourth and descending it a diminished fifth, so it is not self-inverse.
+        if (Math.abs(semitones) % 12 === 6) continue;
+        const note = Note.of(name);
+        const round = note.transpose(semitones).transpose(-semitones);
+        expect(round.name, `${name} +-${semitones}`).toBe(note.name);
+      }
+    }
+  });
+
+  it('spells a tritone by direction: up an augmented fourth, down a diminished fifth', () => {
+    expect(Note.of('C4').transpose(6).name).toBe('F#4');
+    expect(Note.of('C4').transpose(-6).name).toBe('F#3');
+    expect(Note.of('Ab4').transpose(-6).name).toBe('D4');
+  });
+
+  it('honours an explicit spelling preference', () => {
+    expect(Note.of('Ab4').transpose(2, { spelling: 'sharp' }).name).toBe('A#4');
+    expect(Note.of('C4').transpose(1, { spelling: 'flat' }).name).toBe('Db4');
   });
 });

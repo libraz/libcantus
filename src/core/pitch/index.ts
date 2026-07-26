@@ -225,6 +225,75 @@ export function midiToNote(midi: number, spelling: 'sharp' | 'flat' = 'sharp'): 
   return { letter: entry[0], alter: entry[1], octave };
 }
 
+/**
+ * Diatonic letter distance of the conventional ascending interval for each
+ * semitone step within an octave: P1, m2, M2, m3, M3, P4, A4, P5, m6, M6, m7, M7.
+ */
+const LETTER_STEPS_BY_SEMITONE = [0, 1, 1, 2, 2, 3, 3, 4, 5, 5, 6, 6] as const;
+
+/**
+ * Transpose a note by a signed number of semitones, keeping its spelling.
+ *
+ * The letter moves by the diatonic distance of the conventional interval for
+ * that many semitones and the accidental is recomputed for the new letter, so
+ * enharmonic identity survives: `Ab4` up a major second is `Bb4`, not `A#4`, and
+ * the operation is an exact inverse of itself. An octave-less note stays
+ * octave-less.
+ *
+ * A bare semitone count cannot distinguish an augmented fourth from a diminished
+ * fifth; pass `spelling` to override the letter distance when the enharmonic
+ * choice matters.
+ *
+ * @param note The note to transpose.
+ * @param semitones The signed semitone offset.
+ * @param opts `spelling` forces the result onto the sharp or flat side instead
+ *   of following the source note's letter.
+ * @returns The transposed note.
+ * @example
+ * ```ts
+ * import { transposeNote, formatNote, parseNote } from '@libraz/libcantus';
+ * formatNote(transposeNote(parseNote('Ab4'), 2)); // 'Bb4'
+ * formatNote(transposeNote(parseNote('Ab4'), 2, { spelling: 'sharp' })); // 'A#4'
+ * ```
+ * @category Pitch & Intervals
+ */
+export function transposeNote(
+  note: Note,
+  semitones: number,
+  opts?: { spelling?: 'sharp' | 'flat' },
+): Note {
+  if (!Number.isFinite(semitones)) {
+    throw new RangeError(`semitones must be a finite number; received ${semitones}`);
+  }
+  const steps = Math.round(semitones);
+  if (opts?.spelling !== undefined) {
+    return note.octave === undefined
+      ? bareOf(midiToNote(60 + mod12(noteToPitchClass(note) + steps), opts.spelling))
+      : midiToNote(noteToMidi(note) + steps, opts.spelling);
+  }
+  const octaves = Math.floor(steps / 12);
+  const letterSteps = (LETTER_STEPS_BY_SEMITONE[steps - 12 * octaves] ?? 0) + 7 * octaves;
+  const absoluteLetter = mod7(note.letter) + letterSteps;
+  const letter = mod7(absoluteLetter);
+  const natural = LETTER_SEMITONES[letter] ?? 0;
+  if (note.octave === undefined) {
+    return { letter, alter: alterFor(natural, mod12(noteToPitchClass(note) + steps)) };
+  }
+  const octave = note.octave + Math.floor(absoluteLetter / 7);
+  return { letter, alter: noteToMidi(note) + steps - ((octave + 1) * 12 + natural), octave };
+}
+
+/** Drop the octave from a spelled note. */
+function bareOf(note: Note): Note {
+  return { letter: note.letter, alter: note.alter };
+}
+
+/** Shortest signed alteration taking a letter's natural pitch class to `pc`. */
+function alterFor(natural: number, pc: number): number {
+  const d = mod12(pc - natural);
+  return d > 6 ? d - 12 : d;
+}
+
 /** Reference semitone span of a perfect/major simple interval by diatonic number. */
 const SIMPLE_REFERENCE = [0, 0, 2, 4, 5, 7, 9, 11] as const;
 

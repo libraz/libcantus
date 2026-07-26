@@ -87,6 +87,8 @@ export {
 export {
   noteNames,
   spellChord,
+  spellChordFromRoot,
+  spellPitch,
   spellPitchClass,
   spellPitchClasses,
   spellScale,

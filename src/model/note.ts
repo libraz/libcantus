@@ -7,8 +7,8 @@ import {
   parseNote,
   type SpelledInterval,
   spelledInterval,
+  transposeNote,
 } from '../core/pitch/index.js';
-import { spellPitchClassBare } from './shared.js';
 
 /** Defensive copy of a plain note. */
 function copyNote(data: NoteData): NoteData {
@@ -118,24 +118,30 @@ export class Note {
   }
 
   /**
-   * Transpose by a signed number of semitones.
+   * Transpose by a signed number of semitones, keeping the spelling.
    *
-   * When the note carries an octave the transposition happens in MIDI space and
-   * the result is spelled with a sharp preference. An octave-less note stays
+   * The letter moves by the diatonic distance of the conventional interval for
+   * that many semitones, so `Ab4` up a major second is `Bb4` rather than `A#4`
+   * and a flat key stays on the flat side. An octave-less note stays
    * octave-less: only its pitch class is moved. Transposing by zero is the
    * identity: the original spelling is preserved (no enharmonic respelling).
    *
    * @param semitones The signed semitone offset.
+   * @param opts `spelling` forces the result onto the sharp or flat side
+   *   instead of following this note's letter.
    * @returns The transposed note.
+   * @example
+   * ```ts
+   * import { Note } from '@libraz/libcantus';
+   * Note.of('Ab4').transpose(2).name; // 'Bb4'
+   * Note.of('Ab4').transpose(2, { spelling: 'sharp' }).name; // 'A#4'
+   * ```
    */
-  transpose(semitones: number): Note {
-    if (semitones === 0) {
+  transpose(semitones: number, opts?: { spelling?: 'sharp' | 'flat' }): Note {
+    if (semitones === 0 && opts?.spelling === undefined) {
       return new Note(this.#data);
     }
-    if (this.#data.octave !== undefined) {
-      return Note.fromMidi(this.midi + semitones);
-    }
-    return new Note(spellPitchClassBare(this.pitchClass + semitones, 'sharp'));
+    return new Note(transposeNote(this.#data, semitones, opts));
   }
 
   /**
