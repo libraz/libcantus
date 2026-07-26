@@ -63,6 +63,31 @@ const ALIASED_SCALE_NAMES = new Set(['major', 'naturalMinor']);
 const HEPTATONIC_SIZE = 7;
 
 /**
+ * Conventional preference among equally-fitting scales, brightest first.
+ *
+ * Several modes fit a chord that states no third or sixth — a power chord, a
+ * suspension — equally well. Alphabetical order made `aeolian` the answer for
+ * those, naming a minor mode as the best fit for a mode-neutral chord.
+ */
+const SCALE_PREFERENCE = [
+  'ionian',
+  'major',
+  'mixolydian',
+  'dorian',
+  'lydian',
+  'aeolian',
+  'naturalMinor',
+  'phrygian',
+  'locrian',
+] as const;
+
+/** Position of a scale in {@link SCALE_PREFERENCE}, or last when unlisted. */
+function conventionalRank(name: string): number {
+  const index = (SCALE_PREFERENCE as readonly string[]).indexOf(name);
+  return index < 0 ? SCALE_PREFERENCE.length : index;
+}
+
+/**
  * List the scales that fit over a chord, best fit first.
  *
  * Only the chord root is considered as the scale root, matching the
@@ -70,11 +95,17 @@ const HEPTATONIC_SIZE = 7;
  * whose pitch-class set is a superset of the chord's is returned once per
  * distinct pitch-class set (aliased masks such as major/ionian report only the
  * modal name), ranked by fewest extra scale tones beyond the chord, then by
- * scale size (heptatonic before larger scales), then by scale name. For bare
- * triads and smaller chords, heptatonic scales rank before pentatonics and
- * other sizes: a pentatonic adds no modal color over a triad, so the seven-note
- * modes are the more useful answer. The chromatic scale is only returned as a
- * fallback when no other scale contains the chord.
+ * scale size (heptatonic before larger scales), then by conventional
+ * preference. For bare triads and smaller chords, heptatonic scales rank before
+ * pentatonics and other sizes: a pentatonic adds no modal color over a triad,
+ * so the seven-note modes are the more useful answer. The chromatic scale is
+ * only returned as a fallback when no other scale contains the chord.
+ *
+ * The ranking is by fit, so the first entry is the tightest-fitting scale
+ * rather than the idiomatic choice: a four-note chord that a pentatonic covers
+ * exactly puts that pentatonic ahead of the mode a player would name. Read the
+ * whole list, or pick by name, when the idiomatic scale is what is wanted;
+ * {@link scalesForChanges} makes that choice for a progression.
  *
  * @param chord The chord to fit scales over.
  * @returns The matching scales rooted on the chord root, best fit first.
@@ -125,6 +156,11 @@ export function chordScales(chord: Chord): ChordScaleMatch[] {
     }
     if (a.size !== b.size) {
       return a.size - b.size;
+    }
+    const rankA = conventionalRank(a.name);
+    const rankB = conventionalRank(b.name);
+    if (rankA !== rankB) {
+      return rankA - rankB;
     }
     return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
   });

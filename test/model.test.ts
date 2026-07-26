@@ -21,6 +21,15 @@ describe('Note', () => {
     expect(Note.fromData({ letter: 6, alter: -1, octave: 3 }).name).toBe('Bb3');
   });
 
+  it('rejects a letter outside 0..6 instead of accepting a name-equal mismatch', () => {
+    // 7 and 0 both print as C and both report pitch class 0, but `equals`
+    // compares letters directly, so an unreduced letter would be a note that
+    // looks identical to C yet never equals it.
+    expect(() => Note.fromData({ letter: 7, alter: 0, octave: 4 })).toThrow(RangeError);
+    expect(() => new Note({ letter: -1, alter: 0 })).toThrow(/letter/);
+    expect(() => new Note({ letter: 1.5, alter: 0 })).toThrow(/letter/);
+  });
+
   it('transposes up and down via MIDI when an octave is present', () => {
     expect(Note.of('C4').transpose(7).name).toBe('G4');
     expect(Note.of('G4').transpose(-7).name).toBe('C4');

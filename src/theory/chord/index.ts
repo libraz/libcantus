@@ -341,12 +341,15 @@ function stackThirds(degree: number, key: KeyScale, size: 3 | 4): Chord {
  *
  * Unlike {@link chordFromDegree}, the chord quality is derived from the scale
  * rather than supplied, so degrees yield their scale-correct triads (e.g. a
- * diminished triad on the leading tone of a major key). Intended for heptatonic
- * scales; other scales stack by scale step regardless.
+ * diminished triad on the leading tone of a major key).
  *
  * @param degree 0-based scale degree of the chord root.
  * @param key Key/scale context.
  * @returns The diatonic triad.
+ * @throws If the scale is not heptatonic. Stacking thirds means skipping every
+ *   other degree, which only lands on a triad when there are seven of them, so
+ *   the pentatonic, blues, whole-tone, octatonic and chromatic scales have no
+ *   diatonic triad; use {@link chordFromDegree} with an explicit quality there.
  *
  * @example
  * ```ts
@@ -366,6 +369,8 @@ export function diatonicTriad(degree: number, key: KeyScale): Chord {
  * @param degree 0-based scale degree of the chord root.
  * @param key Key/scale context.
  * @returns The diatonic seventh chord.
+ * @throws If the scale is not heptatonic, for the reason given on
+ *   {@link diatonicTriad}.
  *
  * @category Chords
  */

@@ -53,6 +53,17 @@ describe('chordScales', () => {
     expect(pentaIndex).toBeLessThan(ionianIndex);
   });
 
+  it('names a bright mode, not the alphabetically first one, for a mode-neutral chord', () => {
+    // C5 states no third, so every mode containing C and G fits equally well.
+    // Alphabetical order answered aeolian, calling a minor mode the best fit
+    // for a chord that is not minor.
+    const names = chordScales(makeChord(0, '5')).map((m) => m.name);
+    expect(names[0]).toBe('ionian');
+    expect(names.indexOf('ionian')).toBeLessThan(names.indexOf('aeolian'));
+    const sus = chordScales(makeChord(0, 'sus4')).map((m) => m.name);
+    expect(sus.indexOf('mixolydian')).toBeLessThan(sus.indexOf('aeolian'));
+  });
+
   it('falls back to the chromatic scale when nothing else contains the chord', () => {
     // 7b13 = {0,4,7,8,10}; no named heptatonic/symmetric scale is a superset.
     const matches = chordScales(makeChord(0, '7b13'));

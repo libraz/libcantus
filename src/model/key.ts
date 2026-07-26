@@ -211,6 +211,10 @@ export class Key {
    * @param degree 0-based scale degree of the chord root.
    * @param quality Optional chord quality.
    * @returns The chord, with this key attached.
+   * @throws Without a `quality`, if this key's scale is not heptatonic —
+   *   stacking thirds needs seven degrees, so the pentatonic, blues,
+   *   whole-tone, octatonic and chromatic scales have no diatonic triad. Pass
+   *   an explicit `quality` for those.
    */
   chord(degree: number, quality?: ChordQuality): Chord {
     const data =
@@ -225,6 +229,8 @@ export class Key {
    *
    * @param degree 0-based scale degree of the chord root.
    * @returns The triad, with this key attached.
+   * @throws If this key's scale is not heptatonic; stacking thirds needs seven
+   *   degrees. Use {@link Key.chord} with an explicit quality instead.
    */
   diatonicTriad(degree: number): Chord {
     return new Chord(diatonicTriad(degree, this.#scale), this);
@@ -235,6 +241,8 @@ export class Key {
    *
    * @param degree 0-based scale degree of the chord root.
    * @returns The seventh chord, with this key attached.
+   * @throws If this key's scale is not heptatonic; stacking thirds needs seven
+   *   degrees. Use {@link Key.chord} with an explicit quality instead.
    */
   diatonicSeventh(degree: number): Chord {
     return new Chord(diatonicSeventh(degree, this.#scale), this);

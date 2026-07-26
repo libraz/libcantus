@@ -10,8 +10,17 @@ import {
   transposeNote,
 } from '../core/pitch/index.js';
 
-/** Defensive copy of a plain note. */
+/**
+ * Defensive copy of a plain note, with the letter checked.
+ *
+ * Formatting and pitch-class arithmetic reduce the letter modulo 7, but
+ * `equals` compares it directly: an unreduced letter produces two notes that
+ * print the same name and report the same pitch class yet compare unequal.
+ */
 function copyNote(data: NoteData): NoteData {
+  if (!Number.isInteger(data.letter) || data.letter < 0 || data.letter > 6) {
+    throw new RangeError(`note letter must be an integer in [0, 6]; received ${data.letter}`);
+  }
   const copy: NoteData = { letter: data.letter, alter: data.alter };
   if (data.octave !== undefined) {
     copy.octave = data.octave;
@@ -38,6 +47,7 @@ export class Note {
    * Wrap a plain note object.
    *
    * @param data The spelled note; it is copied, never retained or mutated.
+   * @throws If `letter` is not an integer in 0..6.
    */
   constructor(data: NoteData) {
     this.#data = copyNote(data);
@@ -70,6 +80,7 @@ export class Note {
    *
    * @param data The plain note.
    * @returns The wrapped note.
+   * @throws If `letter` is not an integer in 0..6.
    */
   static fromData(data: NoteData): Note {
     return new Note(data);
