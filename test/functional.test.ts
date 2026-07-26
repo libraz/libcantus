@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  analyzeChord,
   chordToRoman,
   detectCadence,
   functionOf,
@@ -8,7 +9,7 @@ import {
 } from '../src/analyze/functional/index.js';
 import type { KeyScale } from '../src/core/types.js';
 import { chordPitchClasses, chordQualities, makeChord } from '../src/theory/chord/index.js';
-import { majorKey, minorKey } from '../src/theory/scale/index.js';
+import { majorKey, minorKey, scaleByName } from '../src/theory/scale/index.js';
 
 const cMajor = majorKey(0);
 const aMinor = minorKey(9);
@@ -327,5 +328,72 @@ describe('inverted added-tone chords do not become false seventh figures', () =>
   it('still emits seventh figures for true seventh chords', () => {
     expect(chordToRoman(makeChord(7, 'dom7', 11), cMajor)).toBe('V65');
     expect(chordToRoman(makeChord(11, 'dim7', 2), cMajor)).toBe('viio65');
+  });
+});
+
+describe('applied dominants keep dominant function', () => {
+  it('reads a secondary dominant as dominant, not as the degree it sits on', () => {
+    expect(functionOf(makeChord(9, 'dom7'), cMajor)).toBe('dominant'); // A7 -> ii
+    expect(functionOf(makeChord(2, 'dom7'), cMajor)).toBe('dominant'); // D7 -> V
+    expect(functionOf(makeChord(4, 'dom7'), cMajor)).toBe('dominant'); // E7 -> vi
+    expect(functionOf(makeChord(0, 'dom7'), cMajor)).toBe('dominant'); // C7 -> IV
+  });
+
+  it('keeps a tritone substitute dominant', () => {
+    expect(functionOf(makeChord(1, 'dom7'), cMajor)).toBe('dominant'); // Db7 for G7
+  });
+
+  it('reads an applied leading-tone chord as dominant', () => {
+    expect(functionOf(makeChord(1, 'dim7'), cMajor)).toBe('dominant'); // C#dim7 -> ii
+    expect(functionOf(makeChord(11, 'dim7'), cMajor)).toBe('dominant'); // Bdim7 -> I
+  });
+
+  it('leaves the borrowed pop triads and predominants alone', () => {
+    expect(functionOf(makeChord(10, 'maj'), cMajor)).toBe('subdominant'); // bVII
+    expect(functionOf(makeChord(8, 'maj'), cMajor)).toBe('subdominant'); // bVI
+    expect(functionOf(makeChord(1, 'maj'), cMajor)).toBe('subdominant'); // Neapolitan
+    expect(functionOf(makeChord(2, 'm7b5'), cMajor)).toBe('subdominant'); // borrowed iiø7
+    expect(functionOf(makeChord(2, 'min7'), cMajor)).toBe('subdominant'); // ii7
+    expect(functionOf(makeChord(5, 'maj7'), cMajor)).toBe('subdominant'); // IVmaj7
+    expect(functionOf(makeChord(9, 'min7'), cMajor)).toBe('tonic'); // vi7
+  });
+
+  it('agrees with analyzeChord, which no longer has a separate rule set', () => {
+    for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+      for (const quality of ['maj', 'min', 'dom7', 'dim7', 'm7b5', 'maj7'] as const) {
+        const chord = makeChord(rootPc, quality);
+        expect(analyzeChord(chord, cMajor).function).toBe(functionOf(chord, cMajor));
+      }
+    }
+  });
+});
+
+describe('Roman numerals in minor and modal keys', () => {
+  it('spells a raised mode degree as a sharp, not a flat of the degree above', () => {
+    expect(chordToRoman(makeChord(1, 'maj'), aMinor)).toBe('#III'); // C# not bIV
+    expect(chordToRoman(makeChord(6, 'maj'), aMinor)).toBe('#VI'); // F# not bvii
+  });
+
+  it('treats a flat on an already-lowered degree as that degree', () => {
+    expect(romanToChord('bVII', aMinor).rootPc).toBe(7); // G, not F#
+    expect(romanToChord('bVI', aMinor).rootPc).toBe(5); // F, not E
+    expect(romanToChord('bIII', aMinor).rootPc).toBe(0); // C, not B
+  });
+
+  it('still raises a lowered degree when asked', () => {
+    expect(romanToChord('#VII', aMinor).rootPc).toBe(8); // G#, the leading tone
+    expect(romanToChord('#III', aMinor).rootPc).toBe(1);
+  });
+
+  it('round-trips every chromatic root through both directions in minor and dorian', () => {
+    for (const key of [minorKey(9), scaleByName('dorian', 2), scaleByName('phrygian', 4)]) {
+      for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+        for (const quality of ['maj', 'min', 'dom7', 'min7'] as const) {
+          const chord = makeChord(rootPc, quality);
+          const roman = chordToRoman(chord, key);
+          expect(romanToChord(roman, key).rootPc, `${roman} in ${key.rootPc}`).toBe(rootPc);
+        }
+      }
+    }
   });
 });

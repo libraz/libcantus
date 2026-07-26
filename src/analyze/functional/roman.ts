@@ -10,7 +10,7 @@ import type { KeyScale } from '../../core/types.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { makeChord } from '../../theory/chord/index.js';
 import { majorKey, scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
-import { degreeRootPc, mod12 } from './internal.js';
+import { degreeRootPc, loweredDegrees, mod12 } from './internal.js';
 
 /** Roman numeral glyphs indexed by degree number - 1. */
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'] as const;
@@ -149,7 +149,10 @@ function parseSimpleRoman(
   }
   const isUpper = (match[2] ?? '')[0] === (match[2] ?? '')[0]?.toUpperCase();
   const suffix = match[3] ?? '';
-  const rootPc = mod12(degreeRootPc(degreeNumber, key) + accidental);
+  // A flat on a degree the mode already lowers is that degree, not a further
+  // lowering: `bVII` in A minor is G, the pop reading, rather than F#.
+  const redundantFlat = accidental === -1 && loweredDegrees(key).has(degreeNumber);
+  const rootPc = mod12(degreeRootPc(degreeNumber, key) + (redundantFlat ? 0 : accidental));
 
   // Canonical quality suffixes (exact match, case-sensitive on the numeral)
   // come first so every chordToRoman rendering re-parses to the same quality:
@@ -282,7 +285,15 @@ function romanSpelling(
   if (diatonic >= 0) {
     return { degreeNumber: diatonic + 1, accidental: '' };
   }
-  // Chromatic root: prefer a flat of the diatonic degree a semitone above it,
+  // A chromatic root a semitone above a degree the mode already lowers is that
+  // degree raised: C# in A minor is `#III`, not `bIV`.
+  const lowered = loweredDegrees(key);
+  for (let i = 0; i < tones.length; i += 1) {
+    if (lowered.has(i + 1) && mod12((tones[i] ?? 0) + 1) === mod12(rootPc)) {
+      return { degreeNumber: i + 1, accidental: '#' };
+    }
+  }
+  // Otherwise prefer a flat of the diatonic degree a semitone above it,
   // then a sharp of the degree a semitone below. Degree 1 (the tonic) and
   // degree 5 (the dominant) are skipped in the flat pass, so a raised leading
   // tone spells as `#vii` rather than a flat tonic `bI`, and the tritone above

@@ -50,17 +50,73 @@ export function isMinorKey(key: KeyScale): boolean {
 }
 
 /**
- * The harmonic function of a chord in a key, from its root's offset above the
- * tonic. The mapping follows common-practice major-key function and is a useful
- * approximation in minor and for borrowed chords.
+ * The harmonic function of a chord in a key.
+ *
+ * The root's offset above the tonic gives the baseline mapping, which follows
+ * common-practice major-key function and is a useful approximation in minor and
+ * for borrowed chords. Chord quality then refines it where the sonority settles
+ * an ambiguity the root offset cannot:
+ *
+ * - A chord that *sounds* like a dominant — a major third with a minor seventh,
+ *   or a diminished-family chord — and is not diatonic to the key has dominant
+ *   function when its root resolves down a fifth or by a semitone onto a
+ *   diatonic degree. This is what makes an applied dominant (`A7` in C, which
+ *   tonicizes ii) and its tritone substitute (`Db7`) read as dominant rather
+ *   than inheriting the function of the degree they happen to sit on.
+ * - The Neapolitan is subdominant.
+ * - A major triad on bVI or bVII of a major key is subdominant — the borrowed
+ *   pop cadence chord, distinct from the bVII7 above, which has a seventh and
+ *   is a dominant sonority.
  *
  * @param chord The chord.
  * @param key The prevailing key.
  * @returns The harmonic function.
+ * @example
+ * ```ts
+ * import { functionOf, makeChord, majorKey } from '@libraz/libcantus';
+ * functionOf(makeChord(9, 'dom7'), majorKey(0)); // 'dominant' — A7 tonicizes ii
+ * functionOf(makeChord(10, 'maj'), majorKey(0)); // 'subdominant' — borrowed bVII
+ * ```
  * @category Functional Harmony
  */
 export function functionOf(chord: Chord, key: KeyScale): HarmonicFunction {
-  return FUNCTION_BY_OFFSET[mod12(chord.rootPc - key.rootPc)] ?? 'tonic';
+  const offset = mod12(chord.rootPc - key.rootPc);
+  if (isNeapolitan(chord, key)) {
+    return 'subdominant';
+  }
+  if (isAppliedDominant(chord, key)) {
+    return 'dominant';
+  }
+  if (!isMinorKey(key) && hasMajorThird(chord) && (offset === 8 || offset === 10)) {
+    return 'subdominant';
+  }
+  return FUNCTION_BY_OFFSET[offset] ?? 'tonic';
+}
+
+/**
+ * Whether the chord is a dominant sonority pointing at a diatonic degree.
+ *
+ * A chord already diatonic to the key keeps the offset table's reading; what is
+ * classified here is the chromatic chord whose sonority and resolution give it
+ * dominant function regardless of the degree it sits on.
+ *
+ * The resolution required depends on the sonority. A dominant seventh (major
+ * third plus minor seventh) must fall a perfect fifth — the applied dominants —
+ * or a semitone, which is the same motion its tritone substitute makes. A
+ * diminished-family chord must rise a semitone, the leading-tone resolution;
+ * requiring that is what keeps a borrowed `iiø7`, which falls a fifth like any
+ * other supertonic chord, reading as a predominant rather than a dominant.
+ */
+function isAppliedDominant(chord: Chord, key: KeyScale): boolean {
+  if (isDiatonic(chord, key)) {
+    return false;
+  }
+  const root = mod12(chord.rootPc);
+  const resolvesTo = (step: number) => isScaleTone(mod12(root + step), key);
+  if (hasMajorThird(chord) && chord.intervals.some((i) => mod12(i) === 10)) {
+    return resolvesTo(5) || resolvesTo(11);
+  }
+  return isDiminishedQuality(chord.quality) && resolvesTo(1);
 }
 
 /**
@@ -120,27 +176,6 @@ function hasMajorThird(chord: Chord): boolean {
 }
 
 /**
- * Quality-aware harmonic function, refining the offset table where chord
- * quality disambiguates: diminished chords on the leading tone or the raised
- * subdominant resolve by semitone and act as dominants; the Neapolitan and the
- * major-third chords on bVI/bVII borrowed from the parallel minor act as
- * subdominant (predominant) harmony. All other chords keep {@link functionOf}.
- */
-function qualityAwareFunction(chord: Chord, key: KeyScale): HarmonicFunction {
-  const offset = mod12(chord.rootPc - key.rootPc);
-  if (isDiminishedQuality(chord.quality) && (offset === 11 || offset === 6)) {
-    return 'dominant';
-  }
-  if (isNeapolitan(chord, key)) {
-    return 'subdominant';
-  }
-  if (!isMinorKey(key) && hasMajorThird(chord) && (offset === 8 || offset === 10)) {
-    return 'subdominant';
-  }
-  return functionOf(chord, key);
-}
-
-/**
  * Analyze a chord in a key: harmonic function, borrowing, and Roman numeral.
  *
  * The function is quality-aware (see the predicates behind it), the source
@@ -163,7 +198,7 @@ function qualityAwareFunction(chord: Chord, key: KeyScale): HarmonicFunction {
 export function analyzeChord(chord: Chord, key: KeyScale): ChordAnalysis {
   const source = borrowedSource(chord, key);
   return {
-    function: qualityAwareFunction(chord, key),
+    function: functionOf(chord, key),
     borrowed: source !== null,
     source,
     roman: chordToRoman(chord, key),
