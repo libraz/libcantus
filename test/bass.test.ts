@@ -172,9 +172,11 @@ describe('generateBassLine', () => {
     }
   });
 
-  it('keeps pop pickups within the declared register band', () => {
+  it('keeps pop notes in the register band, allowing the octave pickup below it', () => {
     // Default octave 2 => band [36, 48]. Sweep many seeds so weak-beat pickups
-    // (including the octave-drop pickup) actually fire; none may leave the band.
+    // actually fire. The octave pickup is by definition an octave below where
+    // the root would otherwise sit, so it is allowed that far down and no
+    // further.
     const octave = 2;
     const low = octave * 12 + 12;
     const high = low + 12;
@@ -187,8 +189,40 @@ describe('generateBassLine', () => {
         seed,
       });
       for (const note of notes) {
-        expect(note.pitch).toBeGreaterThanOrEqual(low);
+        expect(note.pitch).toBeGreaterThanOrEqual(low - 12);
         expect(note.pitch).toBeLessThanOrEqual(high);
+      }
+    }
+  });
+
+  it('sounds only chord tones, whatever the root and seed', () => {
+    // The octave pickup used to clamp back to the bottom of the band, which is
+    // always pitch class 0 — a C sounding under every chord in the progression.
+    for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+      const segments: BassSegment[] = [
+        { startBeat: 0, endBeat: 4, chord: makeChord(rootPc, 'maj') },
+        { startBeat: 4, endBeat: 8, chord: makeChord((rootPc + 7) % 12, 'dom7') },
+      ];
+      for (let seed = 0; seed < 20; seed += 1) {
+        for (const style of ['root', 'rootFifth', 'arpeggio', 'walking', 'pop'] as const) {
+          const notes = generateBassLine({ segments, key: cMajor, style, octave: 2, seed });
+          for (const note of notes) {
+            const segment = segments.find(
+              (candidate) =>
+                note.startBeat >= candidate.startBeat && note.startBeat < candidate.endBeat,
+            );
+            if (segment === undefined) {
+              continue;
+            }
+            const tones = chordPitchClasses(segment.chord);
+            const pc = ((note.pitch % 12) + 12) % 12;
+            // Walking lines pass through approach notes by design; every other
+            // style sounds chord tones only.
+            if (style !== 'walking') {
+              expect(tones, `${style} on ${rootPc} seed ${seed}`).toContain(pc);
+            }
+          }
+        }
       }
     }
   });

@@ -13,6 +13,7 @@ const CLOSED_HAT = 42;
 const OPEN_HAT = 46;
 const TAMBOURINE = 54;
 const HANDCLAP = 39;
+const SIDESTICK = 37;
 
 const isTom = (pitch: number) => pitch === 45 || pitch === 47 || pitch === 50;
 const isOffGrid16 = (beat: number) => {
@@ -276,5 +277,126 @@ describe('quantizeSwing sixteenth grid', () => {
     // It is symmetric with the "e" 16th and never crosses the next downbeat.
     expect(quantizeSwing(0.25, swing, 'sixteenth')).toBeCloseTo(0.3125, 10);
     expect(quantizeSwing(0.75, 1, 'sixteenth')).toBeLessThan(1);
+  });
+});
+
+describe('generateDrums option validation', () => {
+  it('rejects a name that is not one of the documented values', () => {
+    // A name from a config file or a JavaScript caller used to be read against
+    // a table with no entry for it, producing NaN velocities or a TypeError.
+    expect(() => generateDrums({ ...base, section: 'verse2' as Section })).toThrow(/drum section/);
+    expect(() => generateDrums({ ...base, style: 'bogus' as GrooveStyle })).toThrow(/drum style/);
+    expect(() => generateDrums({ ...base, feel: 'swung' as DrumsOptions['feel'] })).toThrow(
+      /drum feel/,
+    );
+    expect(() => generateDrums({ ...base, role: 'quiet' as DrumsOptions['role'] })).toThrow(
+      /drum role/,
+    );
+    expect(() => generateDrums({ ...base, nextSection: 'coda' as Section })).toThrow(
+      /drum nextSection/,
+    );
+  });
+
+  it('emits an integer velocity in [1, 127] for every hit', () => {
+    const sections: Section[] = ['intro', 'verse', 'prechorus', 'chorus', 'bridge', 'outro'];
+    const styles: GrooveStyle[] = ['standard', 'funk', 'shuffle', 'bossa', 'trap', 'halftime'];
+    for (const section of sections) {
+      for (const style of styles) {
+        for (const role of ['full', 'ambient', 'minimal', 'fxOnly'] as const) {
+          for (const hit of generateDrums({
+            ...base,
+            bars: 2,
+            section,
+            style,
+            role,
+            fills: true,
+          })) {
+            expect(Number.isInteger(hit.velocity), `${style}/${section}/${role}`).toBe(true);
+            expect(hit.velocity).toBeGreaterThanOrEqual(1);
+            expect(hit.velocity).toBeLessThanOrEqual(127);
+          }
+        }
+      }
+    }
+  });
+});
+
+describe('generateDrums shuffle alignment', () => {
+  it('puts the kick and the hi-hat "and" on the same tick', () => {
+    // The kick's "and" was fully swung while the hi-hat's was left straight, so
+    // the two voices separated by tens of milliseconds at the same notated
+    // position — audible as a flam rather than as groove.
+    const HATS = new Set([CLOSED_HAT, OPEN_HAT, 44, 51]); // closed, open, pedal, ride
+    const isAnd = (beat: number) => {
+      const frac = beat - Math.floor(beat);
+      return frac >= 0.4 && frac <= 0.7;
+    };
+    for (const density of [0.3, 0.6, 0.9]) {
+      for (const style of ['shuffle', 'standard', 'funk'] as const) {
+        const hits = generateDrums({ ...base, bars: 2, style, section: 'chorus', density });
+        for (let beat = 0; beat < 8; beat += 1) {
+          const inBeat = hits.filter((h) => h.startBeat >= beat && h.startBeat < beat + 1);
+          const kickAnd = inBeat.find((h) => h.pitch === KICK && isAnd(h.startBeat));
+          const hatAnd = inBeat.find((h) => HATS.has(h.pitch) && isAnd(h.startBeat));
+          if (kickAnd === undefined || hatAnd === undefined) {
+            continue;
+          }
+          expect(hatAnd.startBeat, `${style} density ${density} beat ${beat}`).toBeCloseTo(
+            kickAnd.startBeat,
+            9,
+          );
+        }
+      }
+    }
+  });
+});
+
+describe('generateDrums role ordering', () => {
+  it('never lets a sparser role play louder than a busier one', () => {
+    const sections: Section[] = ['intro', 'verse', 'prechorus', 'chorus', 'bridge', 'outro'];
+    const styles: GrooveStyle[] = ['standard', 'halftime', 'trap', 'house'];
+    for (const section of sections) {
+      for (const style of styles) {
+        const peak = (role: DrumsOptions['role']) => {
+          const hits = generateDrums({ ...base, bars: 2, section, style, role });
+          return hits.reduce((loudest, hit) => Math.max(loudest, hit.velocity), 0);
+        };
+        const full = peak('full');
+        const ambient = peak('ambient');
+        const minimal = peak('minimal');
+        expect(ambient, `${style}/${section}`).toBeLessThanOrEqual(full);
+        expect(minimal, `${style}/${section}`).toBeLessThanOrEqual(ambient);
+      }
+    }
+  });
+
+  it('gives minimal a backbeat in every style', () => {
+    const styles: GrooveStyle[] = ['standard', 'halftime', 'trap', 'house', 'bossa'];
+    for (const style of styles) {
+      const hits = generateDrums({ ...base, bars: 2, style, section: 'chorus', role: 'minimal' });
+      const backbeat = hits.filter((h) => h.pitch === SNARE || h.pitch === SIDESTICK);
+      expect(backbeat.length, style).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('generateDrums prechorus fills', () => {
+  it('honours nextSection rather than assuming a chorus follows', () => {
+    const opts: DrumsOptions = {
+      ...base,
+      bars: 4,
+      section: 'prechorus',
+      fills: true,
+    };
+    const intoVerse = generateDrums({ ...opts, nextSection: 'verse' });
+    const intoChorus = generateDrums({ ...opts, nextSection: 'chorus' });
+    const withoutFills = generateDrums({ ...opts, nextSection: 'verse', fills: false });
+    // Leading into a verse the fill is what marks the phrase end, so the last
+    // bar has to differ from the plain groove.
+    const lastBar = (hits: ReturnType<typeof generateDrums>) =>
+      JSON.stringify(hits.filter((h) => h.startBeat >= 12));
+    expect(lastBar(intoVerse)).not.toBe(lastBar(withoutFills));
+    // Leading into a chorus the two-bar lift takes over instead.
+    expect(lastBar(intoChorus)).not.toBe(lastBar(intoVerse));
   });
 });

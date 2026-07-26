@@ -27,6 +27,33 @@ export function assertInteger(
   return value;
 }
 
+/**
+ * Require a value to be one of a fixed set of names.
+ *
+ * TypeScript checks string-union options at compile time only, so a value that
+ * arrives from JSON, a config file, or a JavaScript caller reaches the engine
+ * unchecked and is then read against a table that has no entry for it —
+ * producing a silent `undefined`, a NaN velocity, or a crash far from the call.
+ *
+ * @param value The value to check.
+ * @param allowed Every accepted name.
+ * @param name What the value is, for the error message.
+ * @returns The value, narrowed to the allowed union.
+ * @throws If the value is not one of `allowed`.
+ */
+export function assertOneOf<const T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+  name: string,
+): T {
+  if (typeof value !== 'string' || !(allowed as readonly string[]).includes(value)) {
+    throw new RangeError(
+      `${name} must be one of ${allowed.join(', ')}; received ${JSON.stringify(value)}`,
+    );
+  }
+  return value as T;
+}
+
 /** Require a positive safe integer, optionally capped by `max`. */
 export function assertPositiveInt(
   value: number,

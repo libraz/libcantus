@@ -67,6 +67,8 @@ export type BassLineOptions = {
   style?: BassStyle;
   /**
    * Target register as a base MIDI octave; roots land around `octave*12+12`.
+   * An octave pickup in the `pop` style may drop a note into the octave below
+   * that band, which is where such a pickup belongs.
    *
    * @defaultValue 2
    */
@@ -204,10 +206,14 @@ function buildPop(ctx: BuildContext, seg: BassSegment): void {
       emitted = true;
     } else if (ctx.rng.prob(PICKUP_PROB)) {
       if (ctx.rng.prob(0.5)) {
-        // Octave pickup: the root dropped toward the bottom of the register,
-        // clamped so it never falls below the declared band.
+        // Octave pickup: the root an octave below where it would normally sit.
+        // `placePc` already lands inside `[low, low + 12]`, so clamping the drop
+        // back into that band would return the band's floor — pitch class 0 —
+        // whatever the chord root is. The pickup is allowed the octave below the
+        // band instead, and falls back to the plain root when that leaves MIDI.
         const base = placePc(rootPc, ctx.prevMidi, ctx.low);
-        emit(ctx, pos, rootPc, Math.max(ctx.low, base - 12));
+        const dropped = base - 12;
+        emit(ctx, pos, rootPc, dropped >= 0 ? dropped : base);
       } else {
         ctx.prevMidi = emit(ctx, pos, fifthPcOf(seg.chord));
       }

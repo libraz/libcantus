@@ -269,6 +269,64 @@ function autoQuality(degree: number, key: KeyScale): ChordQuality {
   return 'maj';
 }
 
+/** One resolved step of a preset cycle, with the preset degree it came from. */
+type CycleStep = { source: number; degree?: number; rootPc: number; quality: ChordQuality };
+
+/**
+ * Resolve a preset's degrees against a key, dropping any step that lands on the
+ * chord already sounding.
+ *
+ * Presets are written in scale degrees plus a handful of chromatic borrowings
+ * measured from the tonic, and the two can name the same chord: `bVI` is the
+ * sixth degree of a minor key, so `vi bVI bVII I` — a major-key device — turns
+ * into `bVI bVI bVII i` there, sounding one chord twice. Collapsing the repeat
+ * keeps the progression moving. Only a repeat produced by *different* degrees is
+ * collapsed: a preset that names the same degree twice — `I IV V I` closing on
+ * its tonic — means it. The wrap from the last step back to the first is treated
+ * the same way, since the cycle repeats to fill the bars.
+ */
+function resolveCycle(
+  degrees: readonly number[],
+  key: KeyScale,
+  ext: ProgressionOptions['ext'],
+): CycleStep[] {
+  const steps: CycleStep[] = [];
+  for (const degree of degrees) {
+    const step: CycleStep = {
+      source: degree,
+      rootPc: degreeToRootPc(degree, key),
+      quality: ext !== undefined && ext !== 'auto' ? ext : autoQuality(degree, key),
+    };
+    if (degree >= 0 && degree <= 6) {
+      step.degree = degree;
+    }
+    const previous = steps[steps.length - 1];
+    if (previous !== undefined && previous.source !== step.source && sameStep(previous, step)) {
+      continue;
+    }
+    steps.push(step);
+  }
+  const first = steps[0];
+  const last = steps[steps.length - 1];
+  if (
+    steps.length > 1 &&
+    first !== undefined &&
+    last !== undefined &&
+    first.source !== last.source &&
+    sameStep(first, last)
+  ) {
+    steps.pop();
+  }
+  return steps.length > 0
+    ? steps
+    : [{ source: 0, degree: 0, rootPc: degreeToRootPc(0, key), quality: 'maj' }];
+}
+
+/** Whether two resolved steps name the same chord. */
+function sameStep(a: CycleStep, b: CycleStep): boolean {
+  return a.rootPc === b.rootPc && a.quality === b.quality;
+}
+
 /**
  * Generate a chord progression laid out one chord per bar.
  *
@@ -314,18 +372,18 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
     const index = Math.floor(rng.next() * candidates.length) % candidates.length;
     preset = candidates[index] ?? PRESETS[0];
   }
-  const degrees = preset?.degrees ?? [0];
+  const cycle = resolveCycle(preset?.degrees ?? [0], opts.key, opts.ext);
   const chords: ChordSpan[] = [];
   for (let bar = 0; bar < opts.bars; bar += 1) {
-    const degree = degrees[bar % degrees.length] ?? 0;
-    const quality =
-      opts.ext !== undefined && opts.ext !== 'auto' ? opts.ext : autoQuality(degree, opts.key);
+    const step = cycle[bar % cycle.length];
     const chord: ChordSpan = {
-      rootPc: degreeToRootPc(degree, opts.key),
-      quality,
+      rootPc: step?.rootPc ?? 0,
+      quality: step?.quality ?? 'maj',
       startBeat: bar * 4,
-      degree: degree >= 0 && degree <= 6 ? degree : undefined,
     };
+    if (step?.degree !== undefined) {
+      chord.degree = step.degree;
+    }
     chords.push(chord);
   }
 

@@ -57,11 +57,11 @@ export type BeatCtx = {
   rng: DrumRng;
 };
 
-function swing16(tick: number, feel: Feel, swingAmount: number): number {
-  return quantizeSwing(tick, effectiveSwing(feel, swingAmount), 'sixteenth');
-}
-
-function hatSwingFactor(style: DrumStyle): number {
+/**
+ * How much of the feel's swing a style actually takes. Trap sits on a straight
+ * (or triplet-hat) grid, latin only leans; everything else swings by half.
+ */
+function styleSwingFactor(style: DrumStyle): number {
   if (style === 'trap') {
     return 0;
   }
@@ -69,6 +69,23 @@ function hatSwingFactor(style: DrumStyle): number {
     return 0.35;
   }
   return 0.5;
+}
+
+/**
+ * The one swing amount every voice of a section shares.
+ *
+ * Kick, hi-hat, and ghost notes must land on the same grid: when the kick's
+ * "and" is fully swung and the hi-hat's is not, the two voices separate by tens
+ * of milliseconds at the same notated position, which is audible as flamming
+ * rather than as groove.
+ */
+function sectionSwing(sec: SectionCtx, swingAmount: number): number {
+  return effectiveSwing(sec.feel, swingAmount) * styleSwingFactor(sec.style);
+}
+
+/** Place a tick on the section's shared swung 16th grid. */
+function swing16(tick: number, sec: SectionCtx, swingAmount: number): number {
+  return quantizeSwing(tick, sectionSwing(sec, swingAmount), 'sixteenth');
 }
 
 /** Emit the kick for one beat. */
@@ -83,7 +100,7 @@ export function generateKickForBeat(ctx: BeatCtx, sec: SectionCtx, kick: KickPat
     ctx.track.add(GM.BD, ctx.beatTick, EIGHTH, ctx.velocity);
   }
   if (and) {
-    const andTick = swing16(ctx.beatTick + EIGHTH, sec.feel, ctx.swingAmount);
+    const andTick = swing16(ctx.beatTick + EIGHTH, sec, ctx.swingAmount);
     ctx.track.add(GM.BD, andTick, EIGHTH, ctx.velocity * 0.85);
   }
 }
@@ -105,12 +122,21 @@ export function generateSnareForBeat(ctx: BeatCtx, sec: SectionCtx, isIntroFirst
   const promoteSparseChorus =
     sec.style === 'sparse' && ctx.section === 'chorus' && sec.role === 'full';
 
+  if (sec.role === 'fxOnly') {
+    return;
+  }
+  // `minimal` is one step quieter than `ambient` in every style: a side-stick
+  // at a reduced velocity, never the full backbeat and never nothing at all.
+  // Deciding it per style produced the loudest snare of any role in one branch
+  // and no snare whatsoever in another.
+  if (sec.role === 'minimal') {
+    ctx.track.add(GM.SIDESTICK, ctx.beatTick, EIGHTH, ctx.velocity * 0.65);
+    return;
+  }
   if (promoteSparseChorus) {
     ctx.track.add(GM.SD, ctx.beatTick, EIGHTH, backbeatVel);
   } else if (sec.style === 'sparse' || sec.role === 'ambient') {
-    if (sec.role !== 'fxOnly' && sec.role !== 'minimal') {
-      ctx.track.add(GM.SIDESTICK, ctx.beatTick, EIGHTH, ctx.velocity * 0.8);
-    }
+    ctx.track.add(GM.SIDESTICK, ctx.beatTick, EIGHTH, ctx.velocity * 0.8);
   } else {
     ctx.track.add(GM.SD, ctx.beatTick, EIGHTH, backbeatVel);
   }
@@ -140,7 +166,7 @@ export function generateGhostNotesForBeat(ctx: BeatCtx, sec: SectionCtx): void {
       ghostVel *= 0.9;
     }
     const offset = pos === 'e' ? SIXTEENTH : 3 * SIXTEENTH;
-    const tick = swing16(ctx.beatTick + offset, sec.feel, ctx.swingAmount);
+    const tick = swing16(ctx.beatTick + offset, sec, ctx.swingAmount);
     ctx.track.add(GM.SD, tick, SIXTEENTH, ghostVel);
   }
 }
@@ -213,7 +239,7 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
     for (let eighth = 0; eighth < 2; eighth += 1) {
       let hhTick = ctx.beatTick + eighth * EIGHTH;
       if (eighth === 1) {
-        hhTick = swing16(hhTick, sec.feel, ctx.swingAmount);
+        hhTick = swing16(hhTick, sec, ctx.swingAmount);
       }
       if (ctx.section === 'intro' && eighth === 1) {
         if (sec.useFootHh && ctx.beat % 2 === 0) {
@@ -244,9 +270,11 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
 
   for (let sixteenth = 0; sixteenth < 4; sixteenth += 1) {
     let hhTick = ctx.beatTick + sixteenth * SIXTEENTH;
-    if (sixteenth === 1 || sixteenth === 3) {
-      const swung = effectiveSwing(sec.feel, ctx.swingAmount) * hatSwingFactor(sec.style);
-      hhTick = quantizeSwing(hhTick, swung, 'sixteenth');
+    // Every off-beat 16th goes through the shared grid, the "and" included:
+    // leaving position 2 straight put the hat and the kick's "and" on different
+    // ticks in the same bar.
+    if (sixteenth !== 0) {
+      hhTick = swing16(hhTick, sec, ctx.swingAmount);
     }
     const metricVel = hiHatVelocityMultiplier(sixteenth, ctx.rng);
     const hhVel = Math.max(20, ctx.velocity * dm * typeMult * metricVel);

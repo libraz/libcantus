@@ -5,7 +5,7 @@ import {
   progressions,
   progressionsByStyle,
 } from '../src/generate/progression/index.js';
-import { MAJOR_MASK, minorKey } from '../src/theory/scale/index.js';
+import { MAJOR_MASK, majorKey, minorKey } from '../src/theory/scale/index.js';
 
 const cMajor: KeyScale = { rootPc: 0, modeMask12: MAJOR_MASK };
 
@@ -131,5 +131,46 @@ describe('generateProgression', () => {
         bars: 4,
       }),
     ).toThrow(/noSuchPreset/);
+  });
+});
+
+describe('preset degeneracy across keys', () => {
+  it('never repeats the same chord twice in a row in any key', () => {
+    // A preset's diatonic degrees and its chromatic borrowings can name the same
+    // chord: `vi bVI bVII I` is a major-key device, and in a minor key its first
+    // two degrees both land on bVI. Presets that name a degree twice on purpose
+    // (`I IV V I`) are covered by the test below instead.
+    const distinctDegrees = (preset: { degrees: number[] }) =>
+      new Set(preset.degrees).size === preset.degrees.length;
+    for (const preset of progressions().filter(distinctDegrees)) {
+      for (let tonic = 0; tonic < 12; tonic += 1) {
+        for (const key of [majorKey(tonic), minorKey(tonic)]) {
+          const chords = generateProgression({
+            key,
+            style: 'dance',
+            bars: 8,
+            presetId: preset.id,
+          });
+          for (let i = 1; i < chords.length; i += 1) {
+            const previous = chords[i - 1];
+            const current = chords[i];
+            const same =
+              previous?.rootPc === current?.rootPc && previous?.quality === current?.quality;
+            expect(same, `${preset.id} on ${tonic} (${key.modeMask12})`).toBe(false);
+          }
+        }
+      }
+    }
+  });
+
+  it('keeps a preset that closes on its own tonic intact', () => {
+    // `I IV V I` names degree 0 twice on purpose; that repeat is not degeneracy.
+    const chords = generateProgression({
+      key: majorKey(0),
+      style: 'rock',
+      bars: 4,
+      presetId: 'classic',
+    });
+    expect(chords.map((chord) => chord.rootPc)).toEqual([0, 5, 7, 0]);
   });
 });

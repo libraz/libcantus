@@ -1,6 +1,7 @@
 import {
   assertGenerationBudget,
   assertInteger,
+  assertOneOf,
   assertPositiveInt,
   assertRange,
 } from '../../core/validation/index.js';
@@ -27,15 +28,19 @@ import {
 import { type DrumHit, HitList } from './hit.js';
 import {
   calculateVelocity,
+  DRUM_FEELS,
+  DRUM_ROLES,
   type DrumRole,
   type Feel,
   feelSwingAmount,
   GM,
+  GROOVE_STYLES,
   type GrooveStyle,
   ghostMoodCategory,
   mapDensity,
   mapSection,
   mapStyle,
+  PUBLIC_SECTIONS,
   type PublicSection,
   percMoodCategory,
   sectionDensityMultiplier,
@@ -109,12 +114,26 @@ export type DrumsOptions = {
   /**
    * Replace the final bar with a fill.
    *
+   * A pre-chorus leading into a chorus builds instead: the two-bar lift takes
+   * precedence over the fill, since the buildup already marks the phrase end.
+   * Set `nextSection` to anything but `'chorus'` to get the fill.
+   *
    * @defaultValue false
    */
   fills?: boolean;
   feel?: GrooveFeel;
   /**
-   * Voicing role; `'fxOnly'` suppresses the main kick/snare/ghost/fill voices.
+   * Voicing role, from busiest to sparsest:
+   *
+   * - `'full'`: every voice, backbeat snare at full weight.
+   * - `'ambient'`: side-stick backbeat, ride instead of hi-hat.
+   * - `'minimal'`: side-stick backbeat quieter still, pedal hi-hat, no
+   *   auxiliary percussion.
+   * - `'fxOnly'`: no kick, snare, ghost notes, timekeeping hi-hat, or fills —
+   *   only the fx and auxiliary voices.
+   *
+   * The ordering holds in every style and section: a busier role never emits
+   * fewer or quieter voices than a sparser one.
    *
    * @defaultValue `'full'`
    */
@@ -137,6 +156,9 @@ export type DrumsOptions = {
    */
   euclideanKick?: EuclideanKick;
 };
+
+/** Generous upper bound on onsets emitted for a single bar, used for budgeting. */
+const MAX_HITS_PER_BAR = 128;
 
 /**
  * Generate a drum performance as a flat list of onsets.
@@ -168,23 +190,35 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
   assertPositiveInt(opts.bars, 'drum bars');
   assertRange(opts.bpm, Number.MIN_VALUE, 1000, 'drum bpm');
   assertRange(opts.density, 0, 1, 'drum density');
-  assertGenerationBudget(opts.bars * 128, 'drum hits');
+  // Generation is linear in bar count — every lookup inside the bar loop is
+  // indexed — so the estimate is the hit count itself.
+  assertGenerationBudget(opts.bars * MAX_HITS_PER_BAR, 'drum hits');
   if (opts.euclideanKick) {
     const steps = opts.euclideanKick.steps ?? 16;
     assertInteger(steps, 'euclidean steps', 1, 16);
     assertInteger(opts.euclideanKick.pulses, 'euclidean pulses');
     assertInteger(opts.euclideanKick.rotation ?? 0, 'euclidean rotation');
   }
+  // The string options are checked at runtime as well as at compile time: a
+  // name from a config file or a JavaScript caller would otherwise be read
+  // against a table with no entry for it and yield NaN velocities.
+  const publicStyle = assertOneOf(opts.style, GROOVE_STYLES, 'drum style');
+  const publicSection = assertOneOf(opts.section, PUBLIC_SECTIONS, 'drum section');
+  if (opts.nextSection !== undefined) {
+    assertOneOf(opts.nextSection, PUBLIC_SECTIONS, 'drum nextSection');
+  }
   const track = new HitList();
   const rng = createRng(opts.seed ?? 0);
-  const mapping = mapStyle(opts.style);
+  const mapping = mapStyle(publicStyle);
   const style = mapping.style;
-  const feel: Feel = opts.feel ?? mapping.feel;
-  const role: DrumRole = opts.role ?? 'full';
+  const feel: Feel =
+    opts.feel === undefined ? mapping.feel : assertOneOf(opts.feel, DRUM_FEELS, 'drum feel');
+  const role: DrumRole =
+    opts.role === undefined ? 'full' : assertOneOf(opts.role, DRUM_ROLES, 'drum role');
   // fxOnly leaves only fx/aux voices: the main kick, snare, ghost, and fill
   // voices are suppressed just as timekeeping hi-hats already are.
   const playMainVoices = role !== 'fxOnly';
-  const section = mapSection(opts.section);
+  const section = mapSection(publicSection);
   const backingDensity = mapDensity(opts.density);
   const swingAmount = feelSwingAmount(feel);
 
@@ -252,7 +286,11 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
       kick = getKickPattern(section, style, bar, rng);
     }
 
-    const inLift = isInPreChorusLift(section, bar, opts.bars, section === 'b');
+    // The lift is a build into a chorus, so what follows decides it. Passing
+    // `section === 'b'` made the predicate test the section against itself,
+    // which is always true inside a pre-chorus: the lift then fired whatever
+    // `nextSection` said, and suppressed the fill the caller asked for.
+    const inLift = isInPreChorusLift(section, bar, opts.bars, nextSection === 'chorus');
     let currentFill: FillType = 'snareRoll';
 
     for (let beat = 0; beat < 4; beat += 1) {
@@ -325,8 +363,7 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
     if (sec.useFootHh && shouldPlayHiHat(role)) {
       for (let fhhBeat = 0; fhhBeat < 4; fhhBeat += 2) {
         const fhhTick = barStart + fhhBeat;
-        const occupied = track.hits.some((h) => h.pitch === GM.FHH && h.startBeat === fhhTick);
-        if (!occupied) {
+        if (!track.hasOnset(GM.FHH, fhhTick)) {
           track.add(GM.FHH, fhhTick, 0.5, footHiHatVelocity(rng));
         }
       }

@@ -185,4 +185,63 @@ describe('harmonizeMelody', () => {
     expect(diatonic.chords[0]).not.toMatchObject({ rootPc: 9, quality: 'maj' });
     expect(borrowed.chords[0]).toMatchObject({ rootPc: 9, quality: 'maj' });
   });
+
+  it('returns nothing for an empty melody instead of inventing a tonic bar', () => {
+    const result = harmonizeMelody({
+      melody: [],
+      key: cMajor,
+      harmonicRhythm: 4,
+      reharmonize: 'diatonic',
+      placement: { transposeSearch: false, octaveSearch: false },
+    });
+    expect(result.chords).toEqual([]);
+    expect(result.melodyRoles).toEqual([]);
+    expect(result.transposeSemitones).toBe(0);
+    expect(result.key).toEqual(cMajor);
+  });
+
+  it('honours a harmonic rhythm finer than a quarter note', () => {
+    const melody = [60, 64, 67, 72].map((pitch, i) => ({
+      pitch,
+      startBeat: i * 0.125,
+      durationBeat: 0.125,
+    }));
+    const result = harmonizeMelody({
+      melody,
+      key: cMajor,
+      harmonicRhythm: 0.125,
+      reharmonize: 'diatonic',
+      placement: { transposeSearch: false, octaveSearch: false },
+    });
+    // Four eighth-of-a-beat slots, not one quarter-note slot rounded up.
+    expect(result.chords).toHaveLength(4);
+    expect(result.chords.map((chord) => chord.startBeat)).toEqual([0, 0.125, 0.25, 0.375]);
+  });
+
+  it('weights metric accents by the given time signature', () => {
+    // A waltz whose bar-initial notes outline I and whose beat-3 notes outline
+    // V. Read against a 4/4 grid the strong beats fall in the wrong places, so
+    // the two readings must not agree.
+    const melody = [
+      { pitch: 60, startBeat: 0, durationBeat: 1 },
+      { pitch: 64, startBeat: 1, durationBeat: 1 },
+      { pitch: 71, startBeat: 2, durationBeat: 1 },
+      { pitch: 62, startBeat: 3, durationBeat: 1 },
+      { pitch: 67, startBeat: 4, durationBeat: 1 },
+      { pitch: 65, startBeat: 5, durationBeat: 1 },
+    ];
+    const common: Omit<HarmonizeOptions, 'ts'> = {
+      melody,
+      key: cMajor,
+      harmonicRhythm: 3,
+      reharmonize: 'diatonic',
+      placement: { transposeSearch: false, octaveSearch: false },
+    };
+    const waltz = harmonizeMelody({ ...common, ts: { numerator: 3, denominator: 4 } });
+    const fourFour = harmonizeMelody({ ...common, ts: { numerator: 4, denominator: 4 } });
+    expect(waltz.chords).toHaveLength(2);
+    // The option has to reach the accent grid; if it were ignored the two
+    // harmonizations would be identical by construction.
+    expect(waltz.chords.map((c) => c.rootPc)).not.toEqual(fourFour.chords.map((c) => c.rootPc));
+  });
 });

@@ -31,8 +31,11 @@ export type DrumStyle =
   | 'trap'
   | 'latin';
 
+/** Every groove feel, in declaration order. */
+export const DRUM_FEELS = ['straight', 'swing', 'shuffle'] as const;
+
 /** Groove feel controlling off-beat swing. */
-export type Feel = 'straight' | 'swing' | 'shuffle';
+export type Feel = (typeof DRUM_FEELS)[number];
 
 /** Reduced section set the engine reasons about. */
 export type SectionType = 'intro' | 'a' | 'b' | 'chorus' | 'bridge' | 'outro';
@@ -59,23 +62,43 @@ export enum PercMoodCategory {
   RockDark = 4,
 }
 
+/**
+ * Every public groove style, in declaration order. The type is derived from
+ * this list so the runtime guard and the type can never disagree.
+ */
+export const GROOVE_STYLES = [
+  'standard',
+  'funk',
+  'shuffle',
+  'bossa',
+  'trap',
+  'halftime',
+  'breakbeat',
+  'house',
+  'synthpop',
+] as const;
+
 /** Public groove style identifiers. */
-export type GrooveStyle =
-  | 'standard'
-  | 'funk'
-  | 'shuffle'
-  | 'bossa'
-  | 'trap'
-  | 'halftime'
-  | 'breakbeat'
-  | 'house'
-  | 'synthpop';
+export type GrooveStyle = (typeof GROOVE_STYLES)[number];
+
+/** Every public role, in declaration order. */
+export const DRUM_ROLES = ['full', 'ambient', 'minimal', 'fxOnly'] as const;
 
 /** Public role identifiers gating which voices are present. */
-export type DrumRole = 'full' | 'ambient' | 'minimal' | 'fxOnly';
+export type DrumRole = (typeof DRUM_ROLES)[number];
+
+/** Every public section, in declaration order. */
+export const PUBLIC_SECTIONS = [
+  'intro',
+  'verse',
+  'prechorus',
+  'chorus',
+  'bridge',
+  'outro',
+] as const;
 
 /** Public section identifiers. */
-export type PublicSection = 'intro' | 'verse' | 'prechorus' | 'chorus' | 'bridge' | 'outro';
+export type PublicSection = (typeof PUBLIC_SECTIONS)[number];
 
 /** Resolved internal parameters for a public groove style. */
 export type StyleMapping = {

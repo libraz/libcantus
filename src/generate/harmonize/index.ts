@@ -5,7 +5,11 @@ import { isStrongBeat } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import { createRng } from '../../core/random/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
-import { assertGenerationBudget, assertRange } from '../../core/validation/index.js';
+import {
+  assertGenerationBudget,
+  assertRange,
+  assertTimeSignature,
+} from '../../core/validation/index.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { chordPitchClasses, diatonicTriad, makeChord } from '../../theory/chord/index.js';
 import type { HarmonyRole } from '../../theory/harmony/index.js';
@@ -34,7 +38,20 @@ export type MelodyNote = NoteEvent;
 export type HarmonizeOptions = {
   melody: MelodyNote[];
   key: KeyScale | 'infer';
+  /**
+   * Length of each chord slot in beats. Any positive value is honoured, as in
+   * {@link chordTimelineFromNotes}; a value fine enough to make the search
+   * explode is rejected by the generation budget rather than rounded up.
+   */
   harmonicRhythm: number;
+  /**
+   * Time signature used to weight metric accents; defaults to 4/4. A waltz or
+   * a jig harmonized against a 4/4 accent grid gets its chords placed on the
+   * wrong beats, and the error accumulates bar by bar.
+   *
+   * @defaultValue `4/4`
+   */
+  ts?: TimeSignature;
   reharmonize: 'diatonic' | 'secondaryDominant' | 'borrowed';
   placement: { transposeSearch: boolean; octaveSearch: boolean };
   /**
@@ -188,7 +205,13 @@ function buildCandidates(key: KeyScale, reharmonize: HarmonizeOptions['reharmoni
  * segment, so a note sustained across a boundary contributes to every segment
  * it sounds in rather than only the one it starts in.
  */
-function emissionCost(seg: Segment, cand: Candidate, melody: MelodyNote[], key: KeyScale): number {
+function emissionCost(
+  seg: Segment,
+  cand: Candidate,
+  melody: MelodyNote[],
+  key: KeyScale,
+  ts: TimeSignature,
+): number {
   const pcs = chordPitchClasses(makeChord(cand.rootPc, cand.quality));
   let cost = cand.base;
   for (const idx of seg.noteIndices) {
@@ -205,7 +228,7 @@ function emissionCost(seg: Segment, cand: Candidate, melody: MelodyNote[], key: 
     if (pcs.includes(pitchClass(note.pitch))) {
       continue;
     }
-    const strong = isStrongBeat(overlapStart, DEFAULT_METER);
+    const strong = isStrongBeat(overlapStart, ts);
     cost += (strong ? 10 : 2) * w;
     if (!isScaleTone(note.pitch, key)) {
       cost += w;
@@ -259,6 +282,7 @@ function harmonizeOnce(
   candidates: Candidate[],
   segments: Segment[],
   jitter: number[],
+  ts: TimeSignature,
 ): { cost: number; path: number[] } {
   const tonicPc = pitchClass(key.rootPc);
   const n = candidates.length;
@@ -266,7 +290,7 @@ function harmonizeOnce(
   const seg0 = segments[0];
 
   let dp = candidates.map(
-    (c, ci) => (seg0 ? emissionCost(seg0, c, melody, key) : 0) + (jitter[ci] ?? 0),
+    (c, ci) => (seg0 ? emissionCost(seg0, c, melody, key, ts) : 0) + (jitter[ci] ?? 0),
   );
   const back: number[][] = [];
 
@@ -288,7 +312,7 @@ function harmonizeOnce(
           bestPrev = p;
         }
       }
-      next[c] = best + emissionCost(seg, candAt(c), melody, key) + (jitter[c] ?? 0);
+      next[c] = best + emissionCost(seg, candAt(c), melody, key, ts) + (jitter[c] ?? 0);
       ptr[c] = bestPrev;
     }
     dp = next;
@@ -354,20 +378,31 @@ function harmonizeOnce(
  */
 export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   const noteIndex = createNoteEventIndex(opts.melody);
+  const ts = opts.ts ?? DEFAULT_METER;
+  assertTimeSignature(ts);
   const key = opts.key === 'infer' ? inferKey(opts.melody) : opts.key;
+  // Nothing to harmonize: inventing a tonic bar here would silently insert a
+  // ghost chord into a chart built by harmonizing sections and concatenating
+  // them. The sibling generators return an empty result for empty input too.
+  if (noteIndex.notes.length === 0) {
+    return { transposeSemitones: 0, key, chords: [], melodyRoles: [] };
+  }
   const candidates = buildCandidates(key, opts.reharmonize);
   const candAt = (i: number): Candidate => candidates[i] ?? FALLBACK;
   const rng = createRng(opts.seed ?? 0);
   const jitter = candidates.map(() => rng.next() * TIE_BREAK_JITTER);
 
   const melodyEnd = noteIndex.notes.reduce((m, n) => Math.max(m, n.endBeat), 0);
-  const requestedHr = assertRange(
+  // Any positive value is honoured, matching chordTimelineFromNotes: a silent
+  // clamp here would make the same option name mean different things on the
+  // analysis and generation sides. A value small enough to make the search
+  // explode is caught by the budget assertions below, not rounded away.
+  const hr = assertRange(
     opts.harmonicRhythm,
     Number.MIN_VALUE,
     Number.MAX_SAFE_INTEGER,
     'harmonic rhythm',
   );
-  const hr = Math.max(0.25, requestedHr);
   const segCount = Math.max(1, Math.ceil(melodyEnd / hr));
   assertGenerationBudget(segCount, 'harmonic segments');
   assertGenerationBudget(segCount * candidates.length * candidates.length, 'harmonization search');
@@ -409,13 +444,13 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   let bestTs = 0;
   let bestPath: number[] = [];
   let bestMelody = opts.melody;
-  for (const ts of transposes) {
-    const shifted = opts.melody.map((n) => ({ ...n, pitch: n.pitch + ts }));
-    const { cost, path } = harmonizeOnce(shifted, key, candidates, segments, jitter);
+  for (const shift of transposes) {
+    const shifted = opts.melody.map((n) => ({ ...n, pitch: n.pitch + shift }));
+    const { cost, path } = harmonizeOnce(shifted, key, candidates, segments, jitter, ts);
     const total = cost + tessituraCost(shifted);
     if (total < bestCost) {
       bestCost = total;
-      bestTs = ts;
+      bestTs = shift;
       bestPath = path;
       bestMelody = shifted;
     }
