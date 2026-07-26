@@ -6,6 +6,7 @@
  */
 
 import { isStrongBeat, parseTimeSignature, type TimeSignature } from '../../core/meter/index.js';
+import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import {
   assertGenerationBudget,
@@ -46,11 +47,6 @@ const DISSONANCE_WEIGHT = 0.35;
 const SPAN_WEIGHT = 0.15;
 /** Pitch span, in semitones, that saturates the span term. */
 const SPAN_SATURATION = 24;
-
-/** Reduce a pitch to a pitch class in [0, 11]. */
-function pitchClass(pitch: number): number {
-  return ((Math.trunc(pitch) % 12) + 12) % 12;
-}
 
 /** Clamp a value into [0, 1]. */
 function clamp01(value: number): number {

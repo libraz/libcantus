@@ -9,8 +9,28 @@
  * preserved.
  */
 
+import { assertFiniteNumber, assertInteger } from '../validation/index.js';
+
 /** Semitone offset of each natural letter above C: C D E F G A B. */
 const LETTER_SEMITONES = [0, 2, 4, 5, 7, 9, 11] as const;
+
+/**
+ * Widest alteration a note may carry.
+ *
+ * Six accidentals already exceeds anything common practice writes, and the
+ * bound is what keeps an unvalidated number from reaching `String.repeat`.
+ */
+const MAX_ALTER = 6;
+
+/** Validate the fields of a spelled note once, at a public entry point. */
+function assertNote(note: Note, name: string): Note {
+  assertInteger(note.letter, `${name}.letter`, -1000, 1000);
+  assertInteger(note.alter, `${name}.alter`, -MAX_ALTER, MAX_ALTER);
+  if (note.octave !== undefined) {
+    assertInteger(note.octave, `${name}.octave`, -100, 100);
+  }
+  return note;
+}
 
 /** Letter glyphs indexed by letter number (0 = C .. 6 = B). */
 const LETTER_NAMES = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
@@ -47,15 +67,59 @@ export type SpelledInterval = {
   semitones: number;
 };
 
+/**
+ * Reduce a MIDI pitch, a bare pitch class, or any signed offset to a pitch
+ * class in [0, 11].
+ *
+ * This is the library's single definition of pitch-class arithmetic: every
+ * layer routes through it so a fractional pitch reduces the same way
+ * everywhere. A non-integral input is rounded to the nearest semitone first, so
+ * a microtonal 60.6 reads as C# rather than C.
+ *
+ * @param value A MIDI pitch, pitch class, or signed semitone offset.
+ * @returns The pitch class in [0, 11].
+ * @example
+ * ```ts
+ * import { pitchClassOf } from '@libraz/libcantus';
+ * pitchClassOf(61); // 1
+ * pitchClassOf(-1); // 11
+ * pitchClassOf(60.6); // 1
+ * ```
+ * @category Pitch & Intervals
+ */
+export function pitchClassOf(value: number): number {
+  assertFiniteNumber(value, 'pitch');
+  return ((Math.round(value) % 12) + 12) % 12;
+}
+
 /** Reduce any integer to a pitch class in [0, 11]. */
-function mod12(n: number): number {
-  return ((n % 12) + 12) % 12;
+const mod12 = pitchClassOf;
+
+/**
+ * Reduce a letter number or letter offset to a diatonic letter in [0, 6]
+ * (0 = C .. 6 = B).
+ *
+ * @param value A letter number or signed letter offset.
+ * @returns The diatonic letter in [0, 6].
+ * @category Pitch & Intervals
+ */
+export function diatonicLetterOf(value: number): number {
+  return ((Math.round(value) % 7) + 7) % 7;
+}
+
+/**
+ * The pitch class of a diatonic letter with no accidental (C = 0, D = 2, ...).
+ *
+ * @param letter A letter number or signed letter offset; reduced to [0, 6].
+ * @returns The natural pitch class of that letter.
+ * @category Pitch & Intervals
+ */
+export function naturalPitchClassOf(letter: number): number {
+  return LETTER_SEMITONES[diatonicLetterOf(letter)] ?? 0;
 }
 
 /** Reduce any integer to [0, 7). */
-function mod7(n: number): number {
-  return ((n % 7) + 7) % 7;
-}
+const mod7 = diatonicLetterOf;
 
 /**
  * Parse scientific pitch notation into a {@link Note}.
@@ -97,7 +161,7 @@ export function parseNote(text: string): Note {
   if (match[3] !== undefined) {
     note.octave = Number.parseInt(match[3], 10);
   }
-  return note;
+  return assertNote(note, `note ${text}`);
 }
 
 /** Render an alteration as accidental glyphs (`##`, `b`, empty for natural). */
@@ -124,6 +188,7 @@ function formatAlter(alter: number): string {
  * @category Pitch & Intervals
  */
 export function formatNote(note: Note): string {
+  assertNote(note, 'note');
   const glyph = LETTER_NAMES[mod7(note.letter)] ?? 'C';
   const octave = note.octave === undefined ? '' : String(note.octave);
   return `${glyph}${formatAlter(note.alter)}${octave}`;
@@ -142,6 +207,7 @@ export function formatNote(note: Note): string {
  * @category Pitch & Intervals
  */
 export function noteToPitchClass(note: Note): number {
+  assertNote(note, 'note');
   const natural = LETTER_SEMITONES[mod7(note.letter)] ?? 0;
   return mod12(natural + note.alter);
 }
@@ -160,6 +226,7 @@ export function noteToPitchClass(note: Note): number {
  * @category Pitch & Intervals
  */
 export function noteToMidi(note: Note): number {
+  assertNote(note, 'note');
   if (note.octave === undefined) {
     throw new Error('noteToMidi requires an octave');
   }
@@ -217,6 +284,7 @@ const FLAT_SPELLING: readonly [number, number][] = [
  * @category Pitch & Intervals
  */
 export function midiToNote(midi: number, spelling: 'sharp' | 'flat' = 'sharp'): Note {
+  assertFiniteNumber(midi, 'midi');
   const rounded = Math.round(midi);
   const pc = mod12(rounded);
   const octave = Math.floor(rounded / 12) - 1;
@@ -308,11 +376,12 @@ function qualityFromSpan(numberValue: number, semitones: number): string {
   const simple = numberValue - 7 * octaves;
   const reference = (SIMPLE_REFERENCE[simple] ?? 0) + 12 * octaves;
   const delta = semitones - reference;
+  const repeat = (glyph: string, count: number) => glyph.repeat(Math.min(count, MAX_ALTER * 2));
   if (isPerfectNumber(simple)) {
     if (delta === 0) {
       return 'P';
     }
-    return delta > 0 ? 'A'.repeat(delta) : 'd'.repeat(-delta);
+    return delta > 0 ? repeat('A', delta) : repeat('d', -delta);
   }
   if (delta === 0) {
     return 'M';
@@ -320,7 +389,7 @@ function qualityFromSpan(numberValue: number, semitones: number): string {
   if (delta === -1) {
     return 'm';
   }
-  return delta > 0 ? 'A'.repeat(delta) : 'd'.repeat(-delta - 1);
+  return delta > 0 ? repeat('A', delta) : repeat('d', -delta - 1);
 }
 
 /** Diatonic ladder index of a note (letter + 7 * octave when octave-bearing). */
@@ -347,6 +416,8 @@ function diatonicIndex(note: Note): number {
  * @category Pitch & Intervals
  */
 export function spelledInterval(a: Note, b: Note): SpelledInterval {
+  assertNote(a, 'a');
+  assertNote(b, 'b');
   const octaved = a.octave !== undefined && b.octave !== undefined;
   let letterSteps: number;
   let semitones: number;

@@ -1,10 +1,6 @@
 import { isConsonantInterval } from '../../core/interval/index.js';
+import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-
-/** Reduce a MIDI pitch (or pitch class) to a pitch class in [0, 11]. */
-function pitchClass(pitch: number): number {
-  return ((Math.trunc(pitch) % 12) + 12) % 12;
-}
 
 /**
  * Whether an upper voice has crossed below a lower voice.

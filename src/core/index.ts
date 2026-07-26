@@ -26,11 +26,14 @@ export {
 } from './meter/index.js';
 export type { Note as NoteData, SpelledInterval } from './pitch/index.js';
 export {
+  diatonicLetterOf,
   formatNote,
   midiToNote,
+  naturalPitchClassOf,
   noteToMidi,
   noteToPitchClass,
   parseNote,
+  pitchClassOf,
   spelledInterval,
   transposeNote,
 } from './pitch/index.js';

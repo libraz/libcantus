@@ -91,21 +91,18 @@ describe('generateRhythm density clamping', () => {
     expect(events.map((e) => e.position)).toEqual([0, 4]);
   });
 
-  it('clamps density above 1 to exactly 1', () => {
-    const atOne = generateRhythm(FOUR_FOUR, { seed: 9, bars: 2, subdivision: 4, density: 1 });
-    const overOne = generateRhythm(FOUR_FOUR, { seed: 9, bars: 2, subdivision: 4, density: 1.5 });
-    expect(overOne).toEqual(atOne);
-  });
-
-  it('clamps negative density to 0', () => {
-    const atZero = generateRhythm(FOUR_FOUR, { seed: 9, bars: 2, subdivision: 4, density: 0 });
-    const belowZero = generateRhythm(FOUR_FOUR, {
-      seed: 9,
-      bars: 2,
-      subdivision: 4,
-      density: -0.5,
-    });
-    expect(belowZero).toEqual(atZero);
+  it('rejects a density outside [0, 1] instead of silently clamping it', () => {
+    // The same contract as generateDrums: a slider wired to both generators
+    // must not clamp on one side and throw on the other.
+    expect(() =>
+      generateRhythm(FOUR_FOUR, { seed: 9, bars: 2, subdivision: 4, density: 1.5 }),
+    ).toThrow(RangeError);
+    expect(() =>
+      generateRhythm(FOUR_FOUR, { seed: 9, bars: 2, subdivision: 4, density: -0.5 }),
+    ).toThrow(RangeError);
+    expect(() =>
+      generateRhythm(FOUR_FOUR, { seed: 9, bars: 2, subdivision: 4, density: Number.NaN }),
+    ).toThrow(RangeError);
   });
 });
 

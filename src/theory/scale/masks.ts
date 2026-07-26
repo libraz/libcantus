@@ -131,7 +131,7 @@ export const CHROMATIC_MASK = 0b111111111111;
  *
  * @category Scales
  */
-export const NAMED_SCALES: Record<string, number> = {
+export const NAMED_SCALES: Readonly<Record<string, number>> = Object.freeze({
   major: MAJOR_MASK,
   ionian: MAJOR_MASK,
   naturalMinor: NATURAL_MINOR_MASK,
@@ -150,4 +150,19 @@ export const NAMED_SCALES: Record<string, number> = {
   octatonicHalfWhole: OCTATONIC_HALF_WHOLE_MASK,
   octatonicWholeHalf: OCTATONIC_WHOLE_HALF_MASK,
   chromatic: CHROMATIC_MASK,
-};
+});
+
+/**
+ * The mask of a named scale, or undefined when the name is not one.
+ *
+ * Looking the name up through this helper is what keeps `'constructor'` or
+ * `'toString'` from resolving to something inherited from `Object.prototype`
+ * and producing a scale whose mask is a function.
+ *
+ * @param name The scale name.
+ * @returns The 12-bit mask, or undefined for an unknown name.
+ * @category Scales
+ */
+export function namedScaleMask(name: string): number | undefined {
+  return Object.hasOwn(NAMED_SCALES, name) ? NAMED_SCALES[name] : undefined;
+}

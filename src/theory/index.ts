@@ -75,6 +75,7 @@ export {
   minorKey,
   NAMED_SCALES,
   NATURAL_MINOR_MASK,
+  namedScaleMask,
   nearestScaleTone,
   OCTATONIC_HALF_WHOLE_MASK,
   OCTATONIC_WHOLE_HALF_MASK,

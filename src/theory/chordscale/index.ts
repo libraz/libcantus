@@ -1,11 +1,7 @@
+import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { Chord } from '../chord/index.js';
 import { chordPitchClasses } from '../chord/index.js';
-import { NAMED_SCALES } from '../scale/index.js';
-
-/** Reduce a value to a pitch class in [0, 11]. */
-function pitchClass(value: number): number {
-  return ((Math.trunc(value) % 12) + 12) % 12;
-}
+import { NAMED_SCALES, namedScaleMask } from '../scale/index.js';
 
 /** Count the set bits (scale tones) in a 12-bit mode mask. */
 function popcount12(mask: number): number {
@@ -101,7 +97,7 @@ export function chordScales(chord: Chord): ChordScaleMatch[] {
     if (name === 'chromatic' || ALIASED_SCALE_NAMES.has(name)) {
       continue;
     }
-    const mask = NAMED_SCALES[name];
+    const mask = namedScaleMask(name);
     if (mask === undefined || seenMasks.has(mask)) {
       continue;
     }
@@ -149,7 +145,7 @@ export function chordScales(chord: Chord): ChordScaleMatch[] {
  * @category Scales
  */
 export function avoidNotes(chord: Chord, scaleName: string): number[] {
-  const mask = NAMED_SCALES[scaleName];
+  const mask = namedScaleMask(scaleName);
   if (mask === undefined) {
     return [];
   }
@@ -192,7 +188,7 @@ export function avoidNotes(chord: Chord, scaleName: string): number[] {
  * @category Scales
  */
 export function availableTensions(chord: Chord, scaleName: string): number[] {
-  const mask = NAMED_SCALES[scaleName];
+  const mask = namedScaleMask(scaleName);
   if (mask === undefined) {
     return [];
   }
@@ -266,7 +262,7 @@ const RANK_PENALTY = 0.01;
 
 /** Build the pitch-class set of a named scale rooted on `rootPc`. */
 function scalePitchClassSet(name: string, rootPc: number): Set<number> {
-  const mask = NAMED_SCALES[name];
+  const mask = namedScaleMask(name);
   const pcs = new Set<number>();
   if (mask === undefined) {
     return pcs;

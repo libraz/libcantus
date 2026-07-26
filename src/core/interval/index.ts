@@ -1,3 +1,5 @@
+import { assertFiniteNumber } from '../validation/index.js';
+
 /**
  * Counterpoint classification of a harmonic interval.
  *
@@ -9,9 +11,15 @@ export enum IntervalQuality {
   Dissonance = 2,
 }
 
-/** Reduce an interval to a simple interval class in the range [0, 11]. */
+/**
+ * Reduce an interval to a simple interval class in the range [0, 11].
+ *
+ * Every public predicate in this module funnels through here, so a non-finite
+ * interval is rejected once rather than silently classifying as a dissonance.
+ */
 function simpleInterval(semitones: number): number {
-  return Math.abs(semitones) % 12;
+  assertFiniteNumber(semitones, 'semitones');
+  return Math.abs(Math.round(semitones)) % 12;
 }
 
 /**

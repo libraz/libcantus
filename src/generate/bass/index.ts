@@ -13,6 +13,7 @@
  */
 
 import { isStrongBeat, type TimeSignature } from '../../core/meter/index.js';
+import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import { createRng } from '../../core/random/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
@@ -90,11 +91,6 @@ const WEAK_VELOCITY = 80;
 const PICKUP_PROB = 0.35;
 
 const EPS = 1e-9;
-
-/** Reduce a value to a pitch class in [0, 11]. */
-function pitchClass(value: number): number {
-  return ((Math.trunc(value) % 12) + 12) % 12;
-}
 
 /**
  * Place a pitch class as a MIDI note near an anchor, clamped to the bass band.

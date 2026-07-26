@@ -23,11 +23,11 @@ import {
  */
 export type Tuning = {
   /** Step index (MIDI number when `divisions` is 12) whose frequency is `refFreq`. */
-  refStep: number;
+  readonly refStep: number;
   /** Frequency in Hz of `refStep`. */
-  refFreq: number;
+  readonly refFreq: number;
   /** Equal divisions of the octave (12 standard; e.g. 19 or 31 for microtonal). */
-  divisions: number;
+  readonly divisions: number;
 };
 
 /**
@@ -35,7 +35,7 @@ export type Tuning = {
  *
  * @category Pitch & Intervals
  */
-export const TWELVE_TET: Tuning = { refStep: 69, refFreq: 440, divisions: 12 };
+export const TWELVE_TET: Tuning = Object.freeze({ refStep: 69, refFreq: 440, divisions: 12 });
 
 function assertTuning(tuning: Tuning): Tuning {
   assertFiniteNumber(tuning.refStep, 'tuning.refStep');
@@ -151,7 +151,7 @@ export function ratioToCents(numerator: number, denominator: number): number {
  *
  * @category Pitch & Intervals
  */
-export const JUST_RATIOS: Record<number, [number, number]> = {
+export const JUST_RATIOS: Readonly<Record<number, readonly [number, number]>> = Object.freeze({
   0: [1, 1],
   1: [16, 15],
   2: [9, 8],
@@ -165,7 +165,7 @@ export const JUST_RATIOS: Record<number, [number, number]> = {
   10: [9, 5],
   11: [15, 8],
   12: [2, 1],
-};
+});
 
 /**
  * Cents by which a five-limit just interval departs from its 12-TET tempering

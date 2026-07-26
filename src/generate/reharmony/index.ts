@@ -17,6 +17,7 @@ import {
   isDiatonic,
   parallelKey,
 } from '../../analyze/functional/index.js';
+import { pitchClassOf as mod12 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import {
   type Chord,
@@ -26,11 +27,6 @@ import {
   makeChord,
 } from '../../theory/chord/index.js';
 import { scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
-
-/** Reduce a value to a pitch class in [0, 11]. */
-function mod12(n: number): number {
-  return ((n % 12) + 12) % 12;
-}
 
 /**
  * The kind of substitution relationship a candidate realizes.

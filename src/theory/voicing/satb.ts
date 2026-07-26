@@ -19,8 +19,8 @@ import { voiceLeadingCost } from './leading.js';
  * @category Voicing & Counterpoint
  */
 export type VoiceRange = {
-  min: number;
-  max: number;
+  readonly min: number;
+  readonly max: number;
 };
 
 /**
@@ -30,12 +30,12 @@ export type VoiceRange = {
  *
  * @category Voicing & Counterpoint
  */
-export const SATB_RANGES: readonly VoiceRange[] = [
-  { min: 40, max: 60 },
-  { min: 48, max: 67 },
-  { min: 55, max: 74 },
-  { min: 60, max: 79 },
-];
+export const SATB_RANGES: readonly Readonly<VoiceRange>[] = Object.freeze([
+  Object.freeze({ min: 40, max: 60 }),
+  Object.freeze({ min: 48, max: 67 }),
+  Object.freeze({ min: 55, max: 74 }),
+  Object.freeze({ min: 60, max: 79 }),
+]);
 
 /**
  * Options controlling {@link voiceChord} and {@link voiceProgression}.

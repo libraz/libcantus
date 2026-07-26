@@ -13,9 +13,9 @@ export type NoteEventIndex = {
   notes: IndexedNoteEvent[];
   /** Latest-onset note sounding at `beat`, with later input order winning ties. */
   at: (beat: number) => IndexedNoteEvent | undefined;
-  /** Whether one or more notes attack at `beat`. */
+  /** Whether one or more sounding notes attack at `beat`. */
   attacksAt: (beat: number) => boolean;
-  /** Unique attack beats strictly inside `(startBeat, endBeat)`. */
+  /** Unique sounding-note attack beats strictly inside `(startBeat, endBeat)`. */
   onsetsBetween: (startBeat: number, endBeat: number) => number[];
 };
 
@@ -81,22 +81,38 @@ export function createNoteEventIndex(
       return undefined;
     },
     attacksAt(beat) {
-      const firstAfter = upperBound(notes, beat + EPS);
-      const candidate = notes[firstAfter - 1];
-      return candidate !== undefined && Math.abs(candidate.note.startBeat - beat) < EPS;
+      // Only a sounding note attacks: a zero-length artefact must not make
+      // `attacksAt(b)` true on a beat where `at(b)` finds nothing.
+      let index = upperBound(notes, beat + EPS) - 1;
+      while (index >= 0) {
+        const candidate = notes[index];
+        if (candidate === undefined || Math.abs(candidate.note.startBeat - beat) >= EPS) {
+          return false;
+        }
+        if (candidate.note.durationBeat > 0) {
+          return true;
+        }
+        index -= 1;
+      }
+      return false;
     },
     onsetsBetween(startBeat, endBeat) {
       const result: number[] = [];
       let index = upperBound(notes, startBeat + EPS);
       while (index < notes.length) {
-        const onset = notes[index]?.note.startBeat;
-        if (onset === undefined || onset >= endBeat - EPS) {
+        const indexed = notes[index];
+        const onset = indexed?.note.startBeat;
+        if (indexed === undefined || onset === undefined || onset >= endBeat - EPS) {
           break;
         }
-        if (result[result.length - 1] !== onset) {
+        index += 1;
+        if (indexed.note.durationBeat <= 0) {
+          continue;
+        }
+        const previous = result[result.length - 1];
+        if (previous === undefined || Math.abs(previous - onset) >= EPS) {
           result.push(onset);
         }
-        index += 1;
       }
       return result;
     },

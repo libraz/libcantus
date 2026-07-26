@@ -1,4 +1,5 @@
 import type { ChordTimeline } from '../../analyze/timeline/index.js';
+import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import { createRng } from '../../core/random/index.js';
 import type { KeyScale } from '../../core/types.js';
 import {
@@ -84,10 +85,6 @@ export type MotifOptions = {
    */
   seed?: number;
 };
-
-function pitchClass(pitch: number): number {
-  return ((Math.trunc(pitch) % 12) + 12) % 12;
-}
 
 /**
  * Smallest span, in beats, treated as a distinct tile step. A positive but

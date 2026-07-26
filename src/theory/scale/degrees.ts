@@ -1,9 +1,5 @@
+import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-
-/** Reduce a pitch (or pitch class) to a pitch class in [0, 11]. */
-function pitchClass(pitch: number): number {
-  return ((Math.trunc(pitch) % 12) + 12) % 12;
-}
 
 /** Scale offset of a pitch relative to the key root, in [0, 11]. */
 function scaleOffset(pitch: number, key: KeyScale): number {

@@ -12,6 +12,7 @@ import {
   type Note,
   noteToPitchClass,
   parseNote,
+  pitchClassOf as pitchClass,
 } from '../../core/pitch/index.js';
 import { type Chord, type ChordQuality, makeChord, type PitchSpelling } from '../chord/index.js';
 
@@ -119,9 +120,15 @@ const CANONICAL_SUFFIX: Record<ChordQuality, string> = {
   '5': '5',
 };
 
-/** Reduce a value to a pitch class in [0, 11]. */
-function pitchClass(value: number): number {
-  return ((Math.trunc(value) % 12) + 12) % 12;
+/**
+ * The quality a suffix names, or undefined when it names none.
+ *
+ * The own-property check is what stops `'constructor'` and `'toString'` from
+ * resolving through `Object.prototype` and reaching the chord builder with a
+ * quality it has no interval template for.
+ */
+function knownQuality(suffix: string): ChordQuality | undefined {
+  return Object.hasOwn(QUALITY_MAP, suffix) ? QUALITY_MAP[suffix] : undefined;
 }
 
 /** Build a chord and record the parsed spellings as enharmonic hints. */
@@ -179,13 +186,13 @@ export function parseChordSymbol(text: string): Chord {
   if (slashIndex !== -1) {
     const before = rest.slice(0, slashIndex);
     const after = rest.slice(slashIndex + 1);
-    const beforeQuality = QUALITY_MAP[before];
+    const beforeQuality = knownQuality(before);
     if (beforeQuality !== undefined && BASS_RE.test(after)) {
       return makeSpelledChord(rootNote, beforeQuality, parseNote(after));
     }
   }
 
-  const quality = QUALITY_MAP[rest];
+  const quality = knownQuality(rest);
   if (quality === undefined) {
     throw new Error(`Unrecognized chord quality: ${text}`);
   }

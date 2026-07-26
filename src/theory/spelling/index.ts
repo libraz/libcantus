@@ -8,13 +8,15 @@
  */
 
 import type { Note } from '../../core/pitch/index.js';
-import { formatNote } from '../../core/pitch/index.js';
+import {
+  formatNote,
+  diatonicLetterOf as mod7,
+  pitchClassOf as mod12,
+  naturalPitchClassOf as naturalPc,
+} from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { Chord } from '../chord/index.js';
 import { scaleTonesInDegreeOrder } from '../scale/index.js';
-
-/** Semitone offset of each natural letter above C: C D E F G A B. */
-const LETTER_SEMITONES = [0, 2, 4, 5, 7, 9, 11] as const;
 
 /**
  * Conventional degree assignment for each chromatic offset above the tonic.
@@ -74,19 +76,6 @@ const CHROMATIC_SPELLING_SHARP: Record<number, number> = {
   10: 5, // #6
   11: 6, // M7
 };
-
-function mod12(n: number): number {
-  return ((n % 12) + 12) % 12;
-}
-
-function mod7(n: number): number {
-  return ((n % 7) + 7) % 7;
-}
-
-/** Natural pitch class of a letter (0 = C .. 6 = B). */
-function naturalPc(letter: number): number {
-  return LETTER_SEMITONES[mod7(letter)] ?? 0;
-}
 
 /** Shortest signed alteration (in [-6, 6]) taking a letter's natural pc to `pc`. */
 function alterFor(letter: number, pc: number): number {
@@ -166,9 +155,6 @@ export function spellPitchClass(pc: number, tonic: Note, key: KeyScale): Note {
       const letter = mod7(tonic.letter + degree);
       return { letter, alter: alterFor(letter, pc) };
     }
-  }
-
-  if (heptatonic) {
     const degreeOffset = CHROMATIC_SPELLING[offset];
     if (degreeOffset !== undefined) {
       const letter = mod7(tonic.letter + degreeOffset);
@@ -196,8 +182,9 @@ export function spellPitchClass(pc: number, tonic: Note, key: KeyScale): Note {
 /**
  * Spell every pitch class of a scale, in ascending scale-degree order.
  *
- * Correct for heptatonic scales (each degree gets the next letter). Non-standard
- * scales are spelled tone-by-tone with a sharp preference.
+ * Correct for heptatonic scales (each degree gets the next letter). A scale that
+ * is not heptatonic is spelled tone by tone, on the accidental side the scale
+ * leans towards.
  *
  * @param tonic The spelled tonic.
  * @param key The key/scale.

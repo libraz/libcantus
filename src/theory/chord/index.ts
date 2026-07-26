@@ -1,3 +1,4 @@
+import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import { scaleTonesInDegreeOrder } from '../scale/index.js';
 
@@ -122,11 +123,6 @@ const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
   '5': [0, 7],
 };
 
-/** Reduce a value to a pitch class in [0, 11]. */
-function pitchClass(value: number): number {
-  return ((Math.trunc(value) % 12) + 12) % 12;
-}
-
 /**
  * All chord qualities the builder understands, longest templates last.
  *
@@ -176,10 +172,13 @@ export function chordFromDegree(degree: number, ext: ChordQuality, key: KeyScale
  * @category Chords
  */
 export function makeChord(rootPc: number, quality: ChordQuality, bassPc?: number): Chord {
+  if (!Object.hasOwn(QUALITY_INTERVALS, quality)) {
+    throw new Error(`Unknown chord quality: ${String(quality)}`);
+  }
   const chord: Chord = {
     rootPc: pitchClass(rootPc),
     quality,
-    intervals: [...QUALITY_INTERVALS[quality]],
+    intervals: [...(QUALITY_INTERVALS[quality] ?? [])],
   };
   if (bassPc !== undefined) {
     chord.bassPc = pitchClass(bassPc);

@@ -2,6 +2,7 @@ import { isDiatonic, parallelKey } from '../../analyze/functional/index.js';
 import { createNoteEventIndex } from '../../core/event-index/index.js';
 import type { TimeSignature } from '../../core/meter/index.js';
 import { isStrongBeat } from '../../core/meter/index.js';
+import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import { createRng } from '../../core/random/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import { assertGenerationBudget, assertRange } from '../../core/validation/index.js';
@@ -85,10 +86,6 @@ const TESSITURA_WEIGHT = 0.001;
  * never overrides melody fit or functional flow.
  */
 const TIE_BREAK_JITTER = 1e-6;
-
-function pitchClass(pitch: number): number {
-  return ((Math.trunc(pitch) % 12) + 12) % 12;
-}
 
 /**
  * Estimate the best-fit key from a melody's pitch-class weighting.

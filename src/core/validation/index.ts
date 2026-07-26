@@ -1,4 +1,5 @@
 import type { TimeSignature } from '../meter/index.js';
+import { isCompoundNumerator } from '../meter/internal.js';
 import type { NoteEvent } from '../types.js';
 
 /** Default upper bound for synchronous event/window/candidate generation. */
@@ -70,10 +71,14 @@ export function assertTimeSignature(ts: TimeSignature, name = 'time signature'):
     for (let index = 0; index < ts.grouping.length; index += 1) {
       sum += assertPositiveInt(ts.grouping[index] ?? Number.NaN, `${name}.grouping[${index}]`);
     }
-    const compound = ts.numerator % 3 === 0 && ts.numerator > 3;
-    const pulses = compound ? ts.numerator / 3 : ts.numerator;
-    if (sum !== pulses) {
-      throw new RangeError(`${name}.grouping must sum to ${pulses}; received ${sum}`);
+    // A compound numerator accepts either reading: grouping its dotted pulses
+    // (9/8 as [1, 1, 1]) or grouping its denominator units additively (9/8 as
+    // [2, 2, 2, 3]), which is how aksak and other additive metres are written.
+    const pulses = isCompoundNumerator(ts.numerator) ? ts.numerator / 3 : ts.numerator;
+    if (sum !== pulses && sum !== ts.numerator) {
+      const accepted =
+        pulses === ts.numerator ? `${pulses}` : `${pulses} (pulses) or ${ts.numerator} (units)`;
+      throw new RangeError(`${name}.grouping must sum to ${accepted}; received ${sum}`);
     }
   }
   return ts;
@@ -87,15 +92,18 @@ export function assertNoteEvent(
 ): NoteEvent {
   assertFiniteNumber(event.pitch, `${name}.pitch`);
   assertRange(event.startBeat, 0, Number.MAX_SAFE_INTEGER, `${name}.startBeat`);
-  assertRange(
-    event.durationBeat,
-    options.allowNonPositiveDuration ? -Number.MAX_SAFE_INTEGER : Number.MIN_VALUE,
-    Number.MAX_SAFE_INTEGER,
-    `${name}.durationBeat`,
-  );
+  // The positivity check comes first so the common failure — a zero-length note
+  // from a MIDI import — reads as such instead of naming a denormal lower bound.
+  assertFiniteNumber(event.durationBeat, `${name}.durationBeat`);
   if (!options.allowNonPositiveDuration && event.durationBeat <= 0) {
     throw new RangeError(`${name}.durationBeat must be positive; received ${event.durationBeat}`);
   }
+  assertRange(
+    event.durationBeat,
+    -Number.MAX_SAFE_INTEGER,
+    Number.MAX_SAFE_INTEGER,
+    `${name}.durationBeat`,
+  );
   if (event.velocity !== undefined) {
     assertRange(event.velocity, 0, 127, `${name}.velocity`);
   }
@@ -108,12 +116,19 @@ export function assertNoteEvents(
   name = 'note events',
   options: { allowNonPositiveDuration?: boolean; budget?: number } = {},
 ): NoteEvent[] {
+  if (!Array.isArray(events)) {
+    throw new TypeError(`${name} must be an array; received ${typeof events}`);
+  }
   assertGenerationBudget(events.length, `${name} count`, options.budget);
   for (let index = 0; index < events.length; index += 1) {
     const event = events[index];
-    if (event !== undefined) {
-      assertNoteEvent(event, `${name}[${index}]`, options);
+    // A hole in a sparse array and an explicit undefined are both rejected
+    // here: letting either through only moves the failure to a later
+    // TypeError, or drops the note silently.
+    if (event === undefined) {
+      throw new RangeError(`${name}[${index}] must be a note event; received undefined`);
     }
+    assertNoteEvent(event, `${name}[${index}]`, options);
   }
   return events;
 }

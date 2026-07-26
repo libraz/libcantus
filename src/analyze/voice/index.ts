@@ -1,3 +1,4 @@
+import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import { assertNoteEvents } from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
@@ -45,10 +46,6 @@ export type VoiceNote = NoteEvent & { id: number };
 
 /** Float tolerance for beat comparisons. */
 const EPS = 1e-9;
-
-function pitchClass(pitch: number): number {
-  return ((Math.trunc(pitch) % 12) + 12) % 12;
-}
 
 function intervalAboveRoot(pitch: number, chord: Chord): number {
   return (((pitchClass(pitch) - pitchClass(chord.rootPc)) % 12) + 12) % 12;

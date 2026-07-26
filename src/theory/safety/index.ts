@@ -1,3 +1,4 @@
+import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import {
   assertFiniteNumber,
@@ -129,10 +130,6 @@ function minimumSafetyForReasons(reasons: number, profile: SafetyProfile): NoteS
     }
   }
   return minimum;
-}
-
-function pitchClass(pitch: number): number {
-  return ((Math.trunc(pitch) % 12) + 12) % 12;
 }
 
 function intervalAboveRoot(pitch: number, chord: Chord): number {

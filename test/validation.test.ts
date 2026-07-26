@@ -1,19 +1,53 @@
 import { describe, expect, it } from 'vitest';
-import { metricWeight, tuplet } from '../src/core/meter/index.js';
+import {
+  classifyInterval,
+  isConsonantInterval,
+  isPerfectInterval,
+} from '../src/core/interval/index.js';
+import {
+  isCompound,
+  metricWeight,
+  pulsesPerBar,
+  type TimeSignature,
+  tuplet,
+} from '../src/core/meter/index.js';
+import {
+  formatNote,
+  midiToNote,
+  noteToMidi,
+  noteToPitchClass,
+  parseNote,
+  pitchClassOf,
+} from '../src/core/pitch/index.js';
 import { createRng } from '../src/core/random/index.js';
-import { edo, frequencyOf, nearestStep, ratioToCents } from '../src/core/tuning/index.js';
+import {
+  edo,
+  frequencyOf,
+  JUST_RATIOS,
+  nearestStep,
+  ratioToCents,
+  TWELVE_TET,
+} from '../src/core/tuning/index.js';
+import type { NoteEvent } from '../src/core/types.js';
 import {
   assertFiniteNumber,
   assertGenerationBudget,
+  assertNoteEvent,
+  assertNoteEvents,
   assertPositiveInt,
   assertRange,
+  assertTimeSignature,
 } from '../src/core/validation/index.js';
 import { generateDrums } from '../src/generate/drums/index.js';
 import { harmonizeMelody } from '../src/generate/harmonize/index.js';
 import { generateMotif } from '../src/generate/motif/index.js';
 import { generateProgression } from '../src/generate/progression/index.js';
 import { generateRhythm } from '../src/generate/rhythm/index.js';
-import { majorKey } from '../src/theory/scale/index.js';
+import { Note } from '../src/model/index.js';
+import { makeChord } from '../src/theory/chord/index.js';
+import { majorKey, NAMED_SCALES, scaleByName } from '../src/theory/scale/index.js';
+import { parseChordSymbol } from '../src/theory/symbol/index.js';
+import { SATB_RANGES } from '../src/theory/voicing/index.js';
 
 describe('shared numeric input contracts', () => {
   it.each([
@@ -75,5 +109,99 @@ describe('shared numeric input contracts', () => {
       }),
   ])('rejects unsafe generator input before looping or allocating', (generate) => {
     expect(generate).toThrow(RangeError);
+  });
+});
+
+describe('core guards reject what would otherwise flow on as garbage', () => {
+  it('rejects a non-finite MIDI number instead of naming it CNaN', () => {
+    expect(() => midiToNote(Number.NaN)).toThrow(RangeError);
+    expect(() => midiToNote(Number.POSITIVE_INFINITY)).toThrow(RangeError);
+    expect(() => Note.fromMidi(Number.NaN)).toThrow(RangeError);
+    expect(() => pitchClassOf(Number.NaN)).toThrow(RangeError);
+  });
+
+  it('rejects a note whose fields are not finite integers', () => {
+    expect(() => formatNote({ letter: 0, alter: Number.NaN })).toThrow(RangeError);
+    expect(() => noteToMidi({ letter: 0, alter: 0, octave: Number.NaN })).toThrow(RangeError);
+    expect(() => noteToPitchClass({ letter: Number.NaN, alter: 0 })).toThrow(RangeError);
+  });
+
+  it('rejects an alteration wide enough to blow up glyph rendering', () => {
+    expect(() => formatNote({ letter: 0, alter: 1e6 })).toThrow(RangeError);
+    expect(() => parseNote(`C${'#'.repeat(40)}`)).toThrow(RangeError);
+  });
+
+  it('rejects a non-finite interval instead of silently calling it a dissonance', () => {
+    expect(() => classifyInterval(Number.NaN)).toThrow(RangeError);
+    expect(() => isConsonantInterval(Number.POSITIVE_INFINITY)).toThrow(RangeError);
+    expect(() => isPerfectInterval(Number.NaN)).toThrow(RangeError);
+  });
+
+  it('rejects a hole or an undefined element in a note-event array', () => {
+    const sparse: NoteEvent[] = [{ pitch: 60, startBeat: 0, durationBeat: 1 }];
+    sparse[2] = { pitch: 62, startBeat: 2, durationBeat: 1 };
+    expect(() => assertNoteEvents(sparse)).toThrow(RangeError);
+    expect(() => assertNoteEvents([undefined as unknown as NoteEvent])).toThrow(RangeError);
+  });
+
+  it('names a zero-length note as such instead of quoting a denormal bound', () => {
+    expect(() => assertNoteEvent({ pitch: 60, startBeat: 0, durationBeat: 0 })).toThrow(
+      /durationBeat must be positive/,
+    );
+  });
+});
+
+describe('lookup tables cannot be reached through the prototype chain', () => {
+  it('rejects an inherited property name as a scale', () => {
+    for (const name of [
+      'bogus',
+      'toString',
+      'constructor',
+      '__proto__',
+      'valueOf',
+      'hasOwnProperty',
+    ]) {
+      expect(() => scaleByName(name, 0), name).toThrow();
+    }
+  });
+
+  it('rejects an inherited property name as a chord quality', () => {
+    for (const suffix of ['bogus', 'toString', 'constructor', 'valueOf', 'hasOwnProperty']) {
+      expect(() => parseChordSymbol(`C${suffix}`), suffix).toThrow();
+    }
+    expect(() => makeChord(0, 'toString' as never)).toThrow();
+  });
+
+  it('leaves the public constant tables frozen', () => {
+    expect(Object.isFrozen(TWELVE_TET)).toBe(true);
+    expect(Object.isFrozen(NAMED_SCALES)).toBe(true);
+    expect(Object.isFrozen(JUST_RATIOS)).toBe(true);
+    expect(Object.isFrozen(SATB_RANGES)).toBe(true);
+    expect(SATB_RANGES.every((range) => Object.isFrozen(range))).toBe(true);
+  });
+});
+
+describe('additive metres stay expressible', () => {
+  it('accepts a grouping in denominator units for a compound numerator', () => {
+    const aksak: TimeSignature = { numerator: 9, denominator: 8, grouping: [2, 2, 2, 3] };
+    expect(() => assertTimeSignature(aksak)).not.toThrow();
+    expect(pulsesPerBar(aksak)).toBe(9);
+    expect(isCompound(aksak)).toBe(false);
+    // Group heads land on the 1st, 3rd, 5th and 7th quavers.
+    expect(metricWeight(0, aksak)).toBe(3);
+    expect(metricWeight(1, aksak)).toBe(2);
+    expect(metricWeight(0.5, aksak)).toBe(1);
+  });
+
+  it('still accepts a grouping of the compound pulses', () => {
+    const nine: TimeSignature = { numerator: 9, denominator: 8, grouping: [1, 1, 1] };
+    expect(pulsesPerBar(nine)).toBe(3);
+    expect(isCompound(nine)).toBe(true);
+  });
+
+  it('keeps pulse counts exact for a denominator that does not divide evenly', () => {
+    const odd: TimeSignature = { numerator: 7, denominator: 12 };
+    expect(pulsesPerBar(odd)).toBe(7);
+    expect(() => metricWeight(0, odd)).not.toThrow();
   });
 });

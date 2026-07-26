@@ -4,6 +4,7 @@
  * which only go name -> notes.
  */
 
+import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import { assertFiniteNumber, assertGenerationBudget } from '../../core/validation/index.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
@@ -60,11 +61,6 @@ export type KeyMatch = {
   /** Fraction of input pitch classes that are in the scale, in [0, 1]. */
   fit: number;
 };
-
-/** Reduce any integer to a pitch class in [0, 11]. */
-function pitchClass(value: number): number {
-  return ((Math.trunc(value) % 12) + 12) % 12;
-}
 
 /** Unique pitch classes of the input, sorted ascending. */
 function uniquePitchClasses(pitches: number[]): number[] {

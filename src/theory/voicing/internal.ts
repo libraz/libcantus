@@ -1,3 +1,7 @@
+import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
+
+export { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
+
 import type { Chord } from '../chord/index.js';
 import { chordPitchClasses } from '../chord/index.js';
 import {
@@ -19,11 +23,6 @@ const MISSING_TONE_PENALTY = 500;
 const POOR_DOUBLING_PENALTY = 4;
 /** Hard cap on candidate voicings evaluated per chord, keeping the search bounded. */
 const MAX_CANDIDATES = 4000;
-
-/** Reduce a value to a pitch class in [0, 11]. */
-export function pitchClass(value: number): number {
-  return ((Math.trunc(value) % 12) + 12) % 12;
-}
 
 /**
  * All MIDI pitches of a pitch class inside an inclusive range, ordered from the

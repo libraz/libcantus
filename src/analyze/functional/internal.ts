@@ -6,13 +6,13 @@
  * spelled key signature.
  */
 
+import { pitchClassOf as mod12 } from '../../core/pitch/index.js';
+
+export { pitchClassOf as mod12 } from '../../core/pitch/index.js';
+
 import type { KeyScale } from '../../core/types.js';
 import type { Chord } from '../../theory/chord/index.js';
 import { scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
-
-export function mod12(n: number): number {
-  return ((n % 12) + 12) % 12;
-}
 
 /** Diatonic pitch class of a 1-based scale degree in a key. */
 export function degreeRootPc(degreeNumber: number, key: KeyScale): number {

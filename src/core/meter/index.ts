@@ -13,6 +13,13 @@ import {
   assertRange,
   assertTimeSignature,
 } from '../validation/index.js';
+import {
+  barBeatsOf,
+  isAdditiveReading,
+  isCompoundNumerator,
+  pulseBeatsOf,
+  pulseCountOf,
+} from './internal.js';
 
 /**
  * A time signature as a numerator over a note-value denominator.
@@ -25,9 +32,17 @@ export type TimeSignature = {
   /**
    * Optional additive grouping of the bar's main pulses, as the felt-beat
    * lengths in pulses — e.g. `[2, 2, 3]` for a 2+2+3 reading of 7/8, or
-   * `[3, 2]` for 5/8. The entries must be positive integers summing to
-   * {@link pulsesPerBar}. When present, the head pulse of each group (other
-   * than the downbeat) is treated as a secondary strong pulse by
+   * `[3, 2]` for 5/8. The entries must be positive integers summing to the
+   * numerator.
+   *
+   * A compound numerator accepts both readings. 9/8 groups its three dotted
+   * pulses as `[1, 1, 1]`, or reads additively as `[2, 2, 2, 3]` quavers; a
+   * grouping that sums to the numerator selects the additive reading, so
+   * aksak and other additive metres are expressible. {@link pulsesPerBar}
+   * and {@link isCompound} follow whichever reading the grouping selects.
+   *
+   * When present, the head pulse of each group (other than the downbeat) is
+   * treated as a secondary strong pulse by
    * {@link metricWeight}/{@link isStrongBeat}; when absent, all main pulses
    * are weighted equally as flat, evenly divided pulses.
    */
@@ -101,7 +116,9 @@ export function formatTimeSignature(ts: TimeSignature): string {
  * Whether a meter is compound: its main pulses each divide into three, as in
  * 6/8, 9/8, 12/8, or 6/4. Compound meters are those whose numerator is a
  * multiple of three greater than three, independent of the denominator. Meters
- * like 3/8 and 3/4 (simple triples, numerator 3) are not compound.
+ * like 3/8 and 3/4 (simple triples, numerator 3) are not compound, and neither
+ * is a signature whose {@link TimeSignature.grouping} selects the additive
+ * reading (9/8 as 2+2+2+3).
  *
  * @param ts The time signature.
  * @returns True for compound meters.
@@ -109,12 +126,7 @@ export function formatTimeSignature(ts: TimeSignature): string {
  */
 export function isCompound(ts: TimeSignature): boolean {
   assertTimeSignature(ts);
-  return ts.numerator % 3 === 0 && ts.numerator > 3;
-}
-
-/** Length of one denominator unit in quarter-note beats. */
-function unitBeats(ts: TimeSignature): number {
-  return 4 / ts.denominator;
+  return isCompoundNumerator(ts.numerator) && !isAdditiveReading(ts);
 }
 
 /**
@@ -126,12 +138,7 @@ function unitBeats(ts: TimeSignature): number {
  */
 export function beatsPerBar(ts: TimeSignature): number {
   assertTimeSignature(ts);
-  return ts.numerator * unitBeats(ts);
-}
-
-/** Length of one main pulse (a dotted value in compound meters) in quarter notes. */
-function pulseBeats(ts: TimeSignature): number {
-  return isCompound(ts) ? 3 * unitBeats(ts) : unitBeats(ts);
+  return barBeatsOf(ts);
 }
 
 /**
@@ -149,25 +156,8 @@ function pulseBeats(ts: TimeSignature): number {
  * @category Rhythm & Meter
  */
 export function pulsesPerBar(ts: TimeSignature): number {
-  return beatsPerBar(ts) / pulseBeats(ts);
-}
-
-/**
- * Whether `grouping` is a valid additive grouping for a bar of `pulses` main
- * pulses: a non-empty list of positive integers summing to `pulses`.
- */
-function isValidGrouping(grouping: number[], pulses: number): boolean {
-  if (grouping.length === 0) {
-    return false;
-  }
-  let sum = 0;
-  for (const g of grouping) {
-    if (!Number.isInteger(g) || g <= 0) {
-      return false;
-    }
-    sum += g;
-  }
-  return sum === pulses;
+  assertTimeSignature(ts);
+  return pulseCountOf(ts);
 }
 
 /** Whether `pulseIndex` is the head pulse of one of the additive groups. */
@@ -198,7 +188,8 @@ function isGroupHead(grouping: number[], pulseIndex: number): boolean {
  */
 export function beatToBarPosition(beatInQuarters: number, ts: TimeSignature): BarPosition {
   assertFiniteNumber(beatInQuarters, 'beat');
-  const barLen = beatsPerBar(ts);
+  assertTimeSignature(ts);
+  const barLen = barBeatsOf(ts);
   const bar = Math.floor(beatInQuarters / barLen);
   return { bar, beat: beatInQuarters - bar * barLen };
 }
@@ -215,7 +206,8 @@ export function beatToBarPosition(beatInQuarters: number, ts: TimeSignature): Ba
 export function barPositionToBeat(pos: BarPosition, ts: TimeSignature): number {
   assertInteger(pos.bar, 'bar position bar');
   assertFiniteNumber(pos.beat, 'bar position beat');
-  return pos.bar * beatsPerBar(ts) + pos.beat;
+  assertTimeSignature(ts);
+  return pos.bar * barBeatsOf(ts) + pos.beat;
 }
 
 /**
@@ -233,8 +225,8 @@ export function barPositionToBeat(pos: BarPosition, ts: TimeSignature): number {
  * @param beatInQuarters Absolute or in-bar quarter-note position.
  * @param ts The time signature.
  * @returns The metric weight (0–3).
- * @throws If `ts.grouping` is present but is not a positive-integer list
- *   summing to {@link pulsesPerBar}.
+ * @throws If the time signature is malformed, including a grouping that is not
+ *   a positive-integer list summing to the pulse count or the numerator.
  * @example
  * ```ts
  * import { parseTimeSignature, metricWeight } from '@libraz/libcantus';
@@ -246,24 +238,19 @@ export function barPositionToBeat(pos: BarPosition, ts: TimeSignature): number {
 export function metricWeight(beatInQuarters: number, ts: TimeSignature): number {
   assertFiniteNumber(beatInQuarters, 'beat');
   assertTimeSignature(ts);
-  const { beat } = beatToBarPosition(beatInQuarters, ts);
-  const pulse = pulseBeats(ts);
+  const barLen = barBeatsOf(ts);
+  const beat = beatInQuarters - Math.floor(beatInQuarters / barLen) * barLen;
+  const pulse = pulseBeatsOf(ts);
   if (!isMultiple(beat, pulse)) {
     return 0;
   }
-  const pulses = pulsesPerBar(ts);
+  const pulses = pulseCountOf(ts);
   const pulseIndex = Math.round(beat / pulse) % pulses;
   if (pulseIndex === 0) {
     return 3;
   }
   const grouping = ts.grouping;
   if (grouping !== undefined) {
-    if (!isValidGrouping(grouping, pulses)) {
-      throw new Error(
-        `Invalid grouping [${grouping.join(', ')}] for ${formatTimeSignature(ts)}: ` +
-          `entries must be positive integers summing to ${pulses}`,
-      );
-    }
     return isGroupHead(grouping, pulseIndex) ? 2 : 1;
   }
   if (pulses % 2 === 0 && pulseIndex === pulses / 2) {

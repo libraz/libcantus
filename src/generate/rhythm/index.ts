@@ -14,9 +14,9 @@
 import { beatsPerBar, metricWeight, type TimeSignature } from '../../core/meter/index.js';
 import { createRng } from '../../core/random/index.js';
 import {
-  assertFiniteNumber,
   assertGenerationBudget,
   assertPositiveInt,
+  assertRange,
 } from '../../core/validation/index.js';
 
 /**
@@ -118,8 +118,7 @@ export function generateRhythm(ts: TimeSignature, opts: RhythmOptions = {}): Rhy
   const seed = opts.seed ?? 0;
   const bars = opts.bars ?? DEFAULT_BARS;
   const subdivision = opts.subdivision ?? DEFAULT_SUBDIVISION;
-  const requestedDensity = assertFiniteNumber(opts.density ?? DEFAULT_DENSITY, 'rhythm density');
-  const density = Math.min(1, Math.max(0, requestedDensity));
+  const density = assertRange(opts.density ?? DEFAULT_DENSITY, 0, 1, 'rhythm density');
 
   assertPositiveInt(bars, 'rhythm bars');
   assertPositiveInt(subdivision, 'rhythm subdivision');

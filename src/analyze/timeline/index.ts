@@ -1,6 +1,7 @@
 import { createNoteEventIndex } from '../../core/event-index/index.js';
 import type { TimeSignature } from '../../core/meter/index.js';
 import { beatsPerBar, metricWeight, parseTimeSignature } from '../../core/meter/index.js';
+import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
   assertFiniteNumber,
@@ -117,11 +118,6 @@ const EXACT_BONUS = 0.5;
 
 /** Score penalty per extra or missing tone in a match. */
 const MISMATCH_PENALTY = 0.3;
-
-/** Reduce a value to a pitch class in [0, 11]. */
-function pitchClass(value: number): number {
-  return ((Math.trunc(value) % 12) + 12) % 12;
-}
 
 /**
  * Options controlling {@link chordTimelineFromNotes}.
