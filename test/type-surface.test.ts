@@ -77,21 +77,6 @@ function referencedTypeNames(entry: string): Set<string> {
   return names;
 }
 
-/** Whether a referenced name is declared anywhere under this package's src. */
-function isOwnType(name: string, entry: string): boolean {
-  const source = program.getSourceFile(entry);
-  const symbol = source && checker.getSymbolAtLocation(source);
-  for (const exported of symbol ? checker.getExportsOfModule(symbol) : []) {
-    for (const declaration of exported.getDeclarations() ?? []) {
-      const file = declaration.getSourceFile().fileName;
-      if (file.startsWith(resolve(ROOT, 'src')) && exported.getName() === name) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 describe('every layer names its own public types', () => {
   it.each(LAYERS)('%s exports every type its signatures mention', (layer) => {
     const entry = resolve(ROOT, 'src', layer, 'index.ts');

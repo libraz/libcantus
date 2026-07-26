@@ -421,40 +421,65 @@ function findSafeNearby(q: SafetyQuery, candidate: number): number[] {
   return out;
 }
 
-/** Build a short human explanation from the reason flags. */
+/**
+ * Wording for every reason flag, most to least specific.
+ *
+ * The list is exhaustive by construction: {@link describe} picks from it by
+ * severity, so a flag with no wording here would let a rejected pitch be
+ * explained by a milder reason — the seventh of a dominant reading as a plain
+ * "Chord tone" while its verdict says dissonant.
+ */
+const REASON_TEXT: ReadonlyArray<readonly [ReasonFlag, string]> = [
+  [ReasonFlag.OutOfRange, 'Outside the target vocal range'],
+  [
+    ReasonFlag.Suspension,
+    'Prepared suspension — a held consonance now dissonant, awaiting resolution',
+  ],
+  [ReasonFlag.VerticalDissonance, 'Dissonant against a sounding voice on a strong beat'],
+  [ReasonFlag.Tritone, 'Tritone against the sounding harmony'],
+  [ReasonFlag.AvoidNote, 'Avoid note — clashes with a chord tone a semitone away'],
+  [ReasonFlag.NonScale, 'Outside the key'],
+  [ReasonFlag.ParallelPerfect, 'Parallel perfect interval with another voice'],
+  [ReasonFlag.HiddenParallel, 'Hidden perfect interval by similar motion'],
+  [ReasonFlag.VoiceCrossing, 'Crosses another voice'],
+  [ReasonFlag.LargeLeap, 'Leap wider than the profile allows'],
+  [ReasonFlag.NeedsResolution, 'Dissonance awaiting a stepwise resolution'],
+  [ReasonFlag.Tension, 'Chord tension'],
+  [ReasonFlag.ScaleTone, 'Scale tone, not in the chord'],
+  [ReasonFlag.MinorSecond, 'A semitone from a sounding voice'],
+  [ReasonFlag.MajorSeventh, 'A major seventh from a sounding voice'],
+  [ReasonFlag.ChordTone, 'Chord tone'],
+];
+
+/** The severity a single flag carries under a profile; Safe when purely informational. */
+function severityOfReason(flag: ReasonFlag, profile: SafetyProfile): NoteSafety {
+  const entry = REASON_SEVERITY.find(([candidate]) => candidate === flag);
+  return entry === undefined ? NoteSafety.Safe : entry[profile === 'strict' ? 2 : 1];
+}
+
+/**
+ * Build a short human explanation from the reason flags.
+ *
+ * The flag driving the verdict wins: the one whose severity under this profile
+ * is highest, ties going to the more specific wording. Explaining a rejected
+ * pitch by an informational flag it also carries would tell the caller nothing
+ * about what to fix.
+ */
 function describe(reasons: number, q: SafetyQuery): string {
-  if (reasons & ReasonFlag.OutOfRange) {
-    return 'Outside the target vocal range';
+  let best: string | undefined;
+  let bestSeverity = -1;
+  for (const [flag, text] of REASON_TEXT) {
+    if (!(reasons & flag)) {
+      continue;
+    }
+    const severity = severityOfReason(flag, q.profile);
+    if (severity > bestSeverity) {
+      bestSeverity = severity;
+      best = text;
+    }
   }
-  if (reasons & ReasonFlag.Suspension) {
-    return 'Prepared suspension — a held consonance now dissonant, awaiting resolution';
-  }
-  if (reasons & ReasonFlag.VerticalDissonance) {
-    return 'Dissonant against a sounding voice on a strong beat';
-  }
-  if (reasons & ReasonFlag.AvoidNote) {
-    return 'Avoid note — clashes with a chord tone a semitone away';
-  }
-  if (reasons & ReasonFlag.ParallelPerfect) {
-    return 'Parallel perfect interval with another voice';
-  }
-  if (reasons & ReasonFlag.HiddenParallel) {
-    return 'Hidden perfect interval by similar motion';
-  }
-  if (reasons & ReasonFlag.VoiceCrossing) {
-    return 'Crosses another voice';
-  }
-  if (reasons & ReasonFlag.ChordTone) {
-    return 'Chord tone';
-  }
-  if (reasons & ReasonFlag.Tension) {
-    return 'Chord tension';
-  }
-  if (reasons & ReasonFlag.NonScale) {
-    return 'Outside the key';
-  }
-  if (reasons & ReasonFlag.ScaleTone) {
-    return 'Scale tone, not in the chord';
+  if (best !== undefined) {
+    return best;
   }
   return q.chord ? 'Placeable' : 'No chord context';
 }

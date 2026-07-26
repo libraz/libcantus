@@ -337,12 +337,16 @@ export class Chord {
   /**
    * Realize the chord as one MIDI pitch per voice, ascending.
    *
+   * A chord that carries a key passes it to the voicer, so the leading tone is
+   * not doubled; an explicit `opts.key` overrides it.
+   *
    * @param opts Voicing options; defaults to four SATB voices.
    * @returns MIDI pitches, ascending, one per voice.
    * @throws If no voicing fits the given ranges.
    */
   voice(opts?: VoicingOptions): number[] {
-    return voiceChord(this.#data, opts);
+    const key = opts?.key ?? this.#key?.scale;
+    return voiceChord(this.#data, key === undefined ? opts : { ...opts, key });
   }
 
   /**

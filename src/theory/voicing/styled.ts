@@ -93,9 +93,14 @@ function nearestPc(target: number, pcs: number[]): number {
  * {@link VoicingStyle} then transforms the stack, and the result is returned as
  * ascending MIDI pitches (index 0 = lowest).
  *
+ * Every returned pitch is a valid MIDI number: an octave whose stack would run
+ * off either end of the 0..127 range is rejected rather than voiced out of
+ * range, matching {@link nextVoicing}, which clamps its derived ranges.
+ *
  * @param chord The chord to voice.
  * @param opts Styled voicing options; defaults to a close voicing at octave 4.
  * @returns MIDI pitches, ascending, one per retained voice.
+ * @throws If the voicing would not fit inside MIDI 0..127 at the given octave.
  * @example
  * ```ts
  * import { parseChordSymbol, voiceChordStyled } from '@libraz/libcantus';
@@ -195,5 +200,13 @@ export function voiceChordStyled(chord: Chord, opts?: StyledVoicingOptions): num
     }
   }
 
-  return stack.sort((a, b) => a - b);
+  const voicing = stack.sort((a, b) => a - b);
+  const lowest = voicing[0] ?? 0;
+  const highest = voicing[voicing.length - 1] ?? 0;
+  if (lowest < 0 || highest > 127) {
+    throw new RangeError(
+      `styled voicing at octave ${octave} spans MIDI ${lowest}..${highest}, outside 0..127`,
+    );
+  }
+  return voicing;
 }

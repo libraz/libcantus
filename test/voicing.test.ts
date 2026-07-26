@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import type { Chord } from '../src/theory/chord/index.js';
 import { chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
 import { createsParallelOctave, createsParallelPerfect } from '../src/theory/counterpoint/index.js';
+import { majorKey } from '../src/theory/scale/index.js';
 import {
   nextVoicing,
   SATB_RANGES,
@@ -339,5 +341,108 @@ describe('nextVoicing', () => {
       expect(pitch).toBeGreaterThanOrEqual(0);
       expect(pitch).toBeLessThanOrEqual(127);
     }
+  });
+
+  it('fails fast when a voice admits no chord tone at all', () => {
+    // Wide ranges below a top voice pinned to a non-chord tone: without an
+    // up-front feasibility check the search expands the whole cartesian product
+    // of the lower voices before discovering there is no leaf.
+    const ranges = [
+      ...Array.from({ length: 11 }, () => ({ min: 0, max: 127 })),
+      { min: 1, max: 1 }, // C#, no tone of a C major triad
+    ];
+    expect(() => voiceChord(makeChord(0, 'maj'), { ranges })).toThrow(/no voicing/);
+  });
+
+  it('validates its inputs the way its sibling entry points do', () => {
+    const chord = makeChord(0, 'maj');
+    expect(() => nextVoicing([], chord)).toThrow(/at least one pitch/);
+    expect(() => nextVoicing([60, Number.NaN], chord)).toThrow(/current\[1\]/);
+    expect(() => nextVoicing(current, chord, { maxSpacing: Number.NaN })).toThrow(/maxSpacing/);
+    expect(() => nextVoicing(current, chord, { maxSpacing: -1 })).toThrow(/non-negative/);
+  });
+});
+
+describe('tendency-tone resolution', () => {
+  /** Every voice's motion between two voicings, by voice index. */
+  function motions(prev: number[], cur: number[]): number[] {
+    return cur.map((pitch, index) => pitch - (prev[index] ?? 0));
+  }
+
+  it('resolves the chordal seventh downward by step', () => {
+    for (let tonic = 0; tonic < 12; tonic += 1) {
+      const key = majorKey(tonic);
+      const dominant = makeChord((tonic + 7) % 12, 'dom7');
+      const tonicChord = makeChord(tonic, 'maj');
+      const [prev, cur] = voiceProgression([dominant, tonicChord], { key });
+      const seventhPc = ((tonic + 5) % 12) + 0; // the fourth degree, G7's F in C
+      const voice = (prev ?? []).findIndex((pitch) => pc(pitch) === seventhPc);
+      expect(voice, `no seventh voiced on ${tonic}`).toBeGreaterThanOrEqual(0);
+      const motion = motions(prev ?? [], cur ?? [])[voice] ?? 0;
+      expect(motion, `seventh motion in key ${tonic}`).toBeGreaterThanOrEqual(-2);
+      expect(motion, `seventh motion in key ${tonic}`).toBeLessThanOrEqual(-1);
+    }
+  });
+
+  it('resolves the seventh of ii-V-I and of an applied dominant', () => {
+    const key = majorKey(0);
+    const progressions: Chord[][] = [
+      [makeChord(2, 'min7'), makeChord(7, 'dom7'), makeChord(0, 'maj7')],
+      [makeChord(2, 'dom7'), makeChord(7, 'maj')], // V7/V - V
+      [makeChord(7, 'dom7'), makeChord(9, 'min')], // deceptive
+    ];
+    for (const chords of progressions) {
+      const voicings = voiceProgression(chords, { key });
+      for (let step = 1; step < chords.length; step += 1) {
+        const chord = chords[step - 1];
+        const prev = voicings[step - 1] ?? [];
+        const cur = voicings[step] ?? [];
+        const seventh = (chord?.intervals ?? []).find((interval) => interval % 12 === 10);
+        if (seventh === undefined) {
+          continue;
+        }
+        const seventhPc = pc((chord?.rootPc ?? 0) + seventh);
+        const nextPcs = new Set(chordPitchClasses(chords[step] ?? makeChord(0, 'maj')));
+        if (nextPcs.has(seventhPc)) {
+          continue; // held as a common tone
+        }
+        for (let voice = 0; voice < prev.length; voice += 1) {
+          if (pc(prev[voice] ?? 0) !== seventhPc) {
+            continue;
+          }
+          const motion = (cur[voice] ?? 0) - (prev[voice] ?? 0);
+          expect(motion, `seventh at voice ${voice}`).toBeGreaterThanOrEqual(-2);
+          expect(motion, `seventh at voice ${voice}`).toBeLessThanOrEqual(-1);
+        }
+      }
+    }
+  });
+
+  it('does not double the leading tone when the key is known', () => {
+    for (let tonic = 0; tonic < 12; tonic += 1) {
+      const key = majorKey(tonic);
+      const leadingTone = (tonic + 11) % 12;
+      for (const chord of [makeChord(leadingTone, 'dim'), makeChord((tonic + 7) % 12, 'dom7')]) {
+        const voicing = voiceChord(chord, { key });
+        const doubled = voicing.filter((pitch) => pc(pitch) === leadingTone).length;
+        expect(doubled, `${chord.quality} in key ${tonic}`).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('raises the leading tone to the tonic', () => {
+    const key = majorKey(0);
+    const [prev, cur] = voiceProgression([makeChord(7, 'dom7'), makeChord(0, 'maj')], { key });
+    const voice = (prev ?? []).findIndex((pitch) => pc(pitch) === 11);
+    expect(voice).toBeGreaterThanOrEqual(0);
+    expect(motions(prev ?? [], cur ?? [])[voice]).toBe(1);
+  });
+
+  it('leaves the fifth of an altered chord freely doubled', () => {
+    // A diminished triad has no perfect fifth: exempting only root + 7 would
+    // leave the root as the sole freely doubled tone.
+    const voicing = voiceChord(makeChord(11, 'dim'), { key: majorKey(0) });
+    expect(new Set(voicing.map(pc)).size).toBeLessThanOrEqual(3);
+    expect(voicing.filter((pitch) => pc(pitch) === 11)).toHaveLength(1);
   });
 });

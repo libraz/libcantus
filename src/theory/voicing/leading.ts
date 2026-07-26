@@ -1,14 +1,14 @@
+import { assertFiniteNumber } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
 import { createsHiddenParallelPerfect } from '../counterpoint/index.js';
 import {
-  DEFAULT_MAX_SPACING,
   enumerateVoicings,
   structuralPenalty,
   VIOLATION_PENALTY,
   violationCount,
 } from './internal.js';
 import type { VoicingOptions } from './satb.js';
-import { resolveRanges } from './satb.js';
+import { resolveMaxSpacing, resolveRanges } from './satb.js';
 
 /**
  * Moderate penalty for a hidden/direct perfect fifth or octave reached on the
@@ -78,26 +78,38 @@ export function voiceLeadingCost(from: number[], to: number[]): number {
  * @param chord The next chord to voice.
  * @param opts Voicing options; when omitted, ranges follow `current`'s span.
  * @returns The chosen voicing, ascending with one MIDI pitch per voice.
- * @throws If no voicing fits the derived ranges.
+ * @throws If `current` is empty or holds a non-finite pitch while the ranges
+ *   are derived from it, or if no voicing fits the ranges.
  * @category Voicing & Counterpoint
  */
 export function nextVoicing(current: number[], chord: Chord, opts?: VoicingOptions): number[] {
-  const ranges =
-    opts?.ranges !== undefined || opts?.voices !== undefined
-      ? resolveRanges(opts)
-      : current.map((pitch) => {
-          // Window one octave around each current pitch, clamped so extreme-low
-          // or extreme-high input can never yield MIDI outside [0, 127].
-          const centre = Math.min(127, Math.max(0, pitch));
-          return { min: Math.max(0, centre - 12), max: Math.min(127, centre + 12) };
-        });
-  const maxSpacing = opts?.maxSpacing ?? DEFAULT_MAX_SPACING;
+  const derived = opts?.ranges === undefined && opts?.voices === undefined;
+  if (derived) {
+    // The ranges are read off `current`, so an empty voicing would describe a
+    // zero-voice chord and return an empty result — the same input that throws
+    // when written as an explicit `{ ranges: [] }`.
+    if (current.length === 0) {
+      throw new Error('current must contain at least one pitch');
+    }
+    for (let index = 0; index < current.length; index += 1) {
+      assertFiniteNumber(current[index] ?? Number.NaN, `current[${index}]`);
+    }
+  }
+  const ranges = derived
+    ? current.map((pitch) => {
+        // Window one octave around each current pitch, clamped so extreme-low
+        // or extreme-high input can never yield MIDI outside [0, 127].
+        const centre = Math.min(127, Math.max(0, pitch));
+        return { min: Math.max(0, centre - 12), max: Math.min(127, centre + 12) };
+      })
+    : resolveRanges(opts);
+  const maxSpacing = resolveMaxSpacing(opts);
   const candidates = enumerateVoicings(chord, ranges, maxSpacing);
   let best: number[] | undefined;
   let bestScore = Number.POSITIVE_INFINITY;
   for (const candidate of candidates) {
     const score =
-      structuralPenalty(candidate, chord) +
+      structuralPenalty(candidate, chord, opts?.key) +
       voiceLeadingCost(current, candidate) +
       VIOLATION_PENALTY * violationCount(current, candidate, maxSpacing);
     if (score < bestScore) {

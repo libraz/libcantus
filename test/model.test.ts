@@ -386,7 +386,9 @@ describe('Progression', () => {
       for (let v = 0; v < cur.length; v += 1) {
         motion += Math.abs((cur[v] ?? 0) - (prev[v] ?? 0));
       }
-      expect(motion).toBeLessThanOrEqual(12);
+      // Smooth, but not at any price: resolving the seventh downward can cost a
+      // few semitones more than the nearest-neighbour voicing would.
+      expect(motion).toBeLessThanOrEqual(16);
     }
   });
 

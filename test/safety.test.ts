@@ -279,6 +279,51 @@ describe('chord tones are never rejected for the chord they belong to', () => {
   });
 });
 
+describe('rationale', () => {
+  it('explains the reason that drove the verdict, not a milder one', () => {
+    // A chord tone reached by a forbidden leap is still a chord tone, but that
+    // is not what the caller has to fix.
+    const leap = evaluateSafety(
+      query({ candidatePitch: 79, prevPitch: 60, profile: 'strict' }), // G4 -> G5, an octave up
+    );
+    expect(leap.reasons & ReasonFlag.ChordTone).toBeTruthy();
+    if (leap.safety !== NoteSafety.Safe) {
+      expect(leap.rationale).not.toBe('Chord tone');
+    }
+  });
+
+  it('never reassures about a pitch it rejected', () => {
+    // Every wording that says "nothing to fix here". A rejected pitch carrying
+    // one of these is a rationale that contradicts its own verdict.
+    const reassuring = new Set(['Chord tone', 'Placeable', 'No chord context']);
+    let rejected = 0;
+    for (const quality of chordQualities()) {
+      for (let pitch = 55; pitch <= 79; pitch += 1) {
+        for (const profile of ['pop', 'strict'] as const) {
+          const r = evaluateSafety(
+            query({
+              candidatePitch: pitch,
+              prevPitch: 60,
+              profile,
+              chord: makeChord(7, quality),
+              otherVoices: [{ pitch: 65, prevPitch: 64 }],
+              strongBeat: true,
+            }),
+          );
+          if (r.safety === NoteSafety.Safe) {
+            continue;
+          }
+          rejected += 1;
+          expect(reassuring.has(r.rationale ?? ''), `${quality} at ${pitch} (${profile})`).toBe(
+            false,
+          );
+        }
+      }
+    }
+    expect(rejected).toBeGreaterThan(0);
+  });
+});
+
 describe('enumerateSafePitches', () => {
   it('lists chord tones first, descending, and excludes dissonances', () => {
     const pitches = enumerateSafePitches(query({}), 60, 67);

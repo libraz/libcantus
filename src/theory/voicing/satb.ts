@@ -1,3 +1,4 @@
+import type { KeyScale } from '../../core/types.js';
 import {
   assertFiniteNumber,
   assertGenerationBudget,
@@ -7,6 +8,8 @@ import type { Chord } from '../chord/index.js';
 import {
   DEFAULT_MAX_SPACING,
   enumerateVoicings,
+  RESOLUTION_PENALTY,
+  resolutionViolations,
   structuralPenalty,
   VIOLATION_PENALTY,
   violationCount,
@@ -57,6 +60,22 @@ export type VoicingOptions = {
    * @defaultValue 12
    */
   maxSpacing?: number;
+  /**
+   * Maximum number of chords {@link voiceProgression} will voice. The search
+   * per chord is bounded internally, so the cost of a progression is linear in
+   * its length; this is the guard against an unbounded caller, not a limit on
+   * the search.
+   *
+   * @defaultValue 1000000
+   */
+  budget?: number;
+  /**
+   * The prevailing key. Supplying it enables the rules that only make sense
+   * relative to a tonic: the leading tone is neither doubled nor left
+   * unresolved. Without it, voicings are chosen from chord structure and
+   * voice-leading distance alone.
+   */
+  key?: KeyScale;
 };
 
 /** Overall pitch floor/ceiling used when deriving ranges for arbitrary voice counts. */
@@ -109,6 +128,20 @@ export function resolveRanges(opts?: VoicingOptions): VoiceRange[] {
 }
 
 /**
+ * Resolve and validate the adjacent-voice spacing limit. Shared by every entry
+ * point so `nextVoicing` cannot accept a NaN that silently disables the spacing
+ * constraint, nor a negative value that reports itself as an impossible range.
+ */
+export function resolveMaxSpacing(opts?: VoicingOptions): number {
+  const maxSpacing = opts?.maxSpacing ?? DEFAULT_MAX_SPACING;
+  assertFiniteNumber(maxSpacing, 'maxSpacing');
+  if (maxSpacing < 0) {
+    throw new RangeError('maxSpacing must be non-negative');
+  }
+  return maxSpacing;
+}
+
+/**
  * Realize a single chord as one MIDI pitch per voice, ascending (index 0 =
  * lowest). The bass voice takes the chord's `bassPc` when set, otherwise the
  * root; upper voices take chord pitch classes, doubling the root or fifth as
@@ -130,14 +163,12 @@ export function resolveRanges(opts?: VoicingOptions): VoiceRange[] {
  */
 export function voiceChord(chord: Chord, opts?: VoicingOptions): number[] {
   const ranges = resolveRanges(opts);
-  const maxSpacing = opts?.maxSpacing ?? DEFAULT_MAX_SPACING;
-  assertFiniteNumber(maxSpacing, 'maxSpacing');
-  if (maxSpacing < 0) throw new RangeError('maxSpacing must be non-negative');
+  const maxSpacing = resolveMaxSpacing(opts);
   const candidates = enumerateVoicings(chord, ranges, maxSpacing);
   let best: number[] | undefined;
   let bestScore = Number.POSITIVE_INFINITY;
   for (const candidate of candidates) {
-    let score = structuralPenalty(candidate, chord);
+    let score = structuralPenalty(candidate, chord, opts?.key);
     for (let i = 0; i < candidate.length; i += 1) {
       const pitch = candidate[i];
       const range = ranges[i];
@@ -167,10 +198,17 @@ export function voiceChord(chord: Chord, opts?: VoicingOptions): number[] {
  * (parallel perfects/octaves, voice crossing, voice overlap, and over-wide
  * upper-voice spacing).
  *
+ * Tendency tones are resolved rather than merely moved economically: the voice
+ * holding a chordal seventh falls by step unless the next chord keeps that tone,
+ * and — when `opts.key` is given — the leading tone rises to the tonic and is
+ * never doubled. Without a key the leading-tone rules cannot apply, since
+ * nothing identifies which pitch class is the leading tone.
+ *
  * @param chords The chords to voice in order.
  * @param opts Voicing options; defaults to four voices in {@link SATB_RANGES}.
  * @returns One voicing per chord, each ascending with one MIDI pitch per voice.
- * @throws If any chord admits no voicing within the given ranges.
+ * @throws If any chord admits no voicing within the given ranges, or if the
+ *   progression is longer than `opts.budget` chords.
  * @example
  * ```ts
  * import { parseChordSymbol, voiceProgression } from '@libraz/libcantus';
@@ -180,16 +218,16 @@ export function voiceChord(chord: Chord, opts?: VoicingOptions): number[] {
  * @category Voicing & Counterpoint
  */
 export function voiceProgression(chords: Chord[], opts?: VoicingOptions): number[][] {
-  assertGenerationBudget(chords.length * 4000, 'voiced progression search');
+  assertGenerationBudget(chords.length, 'voiced progression chords', opts?.budget);
   const ranges = resolveRanges(opts);
-  const maxSpacing = opts?.maxSpacing ?? DEFAULT_MAX_SPACING;
-  assertFiniteNumber(maxSpacing, 'maxSpacing');
-  if (maxSpacing < 0) throw new RangeError('maxSpacing must be non-negative');
+  const maxSpacing = resolveMaxSpacing(opts);
   const result: number[][] = [];
   let prev: number[] | undefined;
+  let prevChord: Chord | undefined;
   for (const chord of chords) {
     if (prev === undefined) {
       prev = voiceChord(chord, opts);
+      prevChord = chord;
       result.push(prev);
       continue;
     }
@@ -197,10 +235,15 @@ export function voiceProgression(chords: Chord[], opts?: VoicingOptions): number
     let best: number[] | undefined;
     let bestScore = Number.POSITIVE_INFINITY;
     for (const candidate of candidates) {
+      const unresolved =
+        prevChord === undefined
+          ? 0
+          : resolutionViolations(prev, candidate, prevChord, chord, opts?.key);
       const score =
-        structuralPenalty(candidate, chord) +
+        structuralPenalty(candidate, chord, opts?.key) +
         voiceLeadingCost(prev, candidate) +
-        VIOLATION_PENALTY * violationCount(prev, candidate, maxSpacing);
+        VIOLATION_PENALTY * violationCount(prev, candidate, maxSpacing) +
+        RESOLUTION_PENALTY * unresolved;
       if (score < bestScore) {
         bestScore = score;
         best = candidate;
@@ -211,6 +254,7 @@ export function voiceProgression(chords: Chord[], opts?: VoicingOptions): number
     }
     result.push(best);
     prev = best;
+    prevChord = chord;
   }
   return result;
 }
