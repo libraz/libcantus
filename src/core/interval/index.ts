@@ -1,11 +1,17 @@
 import { assertFiniteNumber } from '../validation/index.js';
 
 /**
- * Counterpoint classification of a harmonic interval.
+ * Counterpoint classification of a harmonic interval by consonance.
  *
+ * Distinct from a spelled interval's quality label — see
+ * {@link IntervalQualityLabel}, which names the `'P'` / `'M'` / `'m'` / `'A'` /
+ * `'d'` spelling of an interval rather than how it sounds against another
+ * voice.
+ *
+ * @see {@link IntervalQualityLabel}
  * @category Pitch & Intervals
  */
-export enum IntervalQuality {
+export enum ConsonanceClass {
   PerfectConsonance = 0,
   ImperfectConsonance = 1,
   Dissonance = 2,
@@ -35,25 +41,25 @@ function simpleInterval(semitones: number): number {
  * @returns The counterpoint quality of the interval.
  * @example
  * ```ts
- * import { classifyInterval, IntervalQuality } from '@libraz/libcantus';
- * classifyInterval(7); // IntervalQuality.PerfectConsonance
- * classifyInterval(5); // IntervalQuality.Dissonance (two-voice)
- * classifyInterval(5, false); // IntervalQuality.ImperfectConsonance
+ * import { classifyInterval, ConsonanceClass } from '@libraz/libcantus';
+ * classifyInterval(7); // ConsonanceClass.PerfectConsonance
+ * classifyInterval(5); // ConsonanceClass.Dissonance (two-voice)
+ * classifyInterval(5, false); // ConsonanceClass.ImperfectConsonance
  * ```
  * @category Pitch & Intervals
  */
-export function classifyInterval(semitones: number, twoVoice = true): IntervalQuality {
+export function classifyInterval(semitones: number, twoVoice = true): ConsonanceClass {
   const pc = simpleInterval(semitones);
   if (pc === 0 || pc === 7) {
-    return IntervalQuality.PerfectConsonance;
+    return ConsonanceClass.PerfectConsonance;
   }
   if (pc === 3 || pc === 4 || pc === 8 || pc === 9) {
-    return IntervalQuality.ImperfectConsonance;
+    return ConsonanceClass.ImperfectConsonance;
   }
   if (pc === 5) {
-    return twoVoice ? IntervalQuality.Dissonance : IntervalQuality.ImperfectConsonance;
+    return twoVoice ? ConsonanceClass.Dissonance : ConsonanceClass.ImperfectConsonance;
   }
-  return IntervalQuality.Dissonance;
+  return ConsonanceClass.Dissonance;
 }
 
 /**

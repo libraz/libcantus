@@ -1,6 +1,7 @@
 import { isMinorKey, romanToChord } from '../analyze/functional/index.js';
 import type { Note as NoteData } from '../core/pitch/index.js';
 import type { KeyScale } from '../core/types.js';
+import { assertFiniteNumber } from '../core/validation/index.js';
 import {
   type ChordQuality,
   chordFromDegree,
@@ -175,6 +176,27 @@ export class Key {
   }
 
   /**
+   * Transpose the key by a number of semitones.
+   *
+   * The mode mask is unchanged, so the scale keeps its shape; only the tonic
+   * moves. The new tonic is spelled the way that key is conventionally written
+   * — D major, not C## major.
+   *
+   * @param semitones The signed semitone offset.
+   * @returns The transposed key.
+   * @example
+   * ```ts
+   * import { Key } from '@libraz/libcantus';
+   * Key.major('C').transpose(2).toString(); // 'D major'
+   * ```
+   */
+  transpose(semitones: number): Key {
+    assertFiniteNumber(semitones, 'semitones');
+    const rootPc = mod12(this.#scale.rootPc + Math.round(semitones));
+    return Key.of({ rootPc, modeMask12: this.#scale.modeMask12 });
+  }
+
+  /**
    * The spelled scale, one note per degree (e.g. C D E F G A B for C major).
    *
    * @returns Spelled octave-less notes in scale-degree order.
@@ -282,5 +304,16 @@ export class Key {
    */
   toJSON(): { scale: KeyScale; tonic: NoteData } {
     return { scale: this.scale, tonic: this.#tonic.data };
+  }
+
+  /**
+   * The key's tonic and mode, so a template literal or a log line reads as the
+   * key. Only the major/minor distinction is named, since a mask does not carry
+   * a scale name.
+   *
+   * @returns The name, e.g. `'C major'` or `'A minor'`.
+   */
+  toString(): string {
+    return `${this.#tonic.name} ${this.isMinor ? 'minor' : 'major'}`;
   }
 }

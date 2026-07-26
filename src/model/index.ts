@@ -18,7 +18,11 @@ export type {
   ChordAnalysis,
   HarmonicFunction,
 } from '../analyze/functional/index.js';
-export type { Note as NoteData, SpelledInterval } from '../core/pitch/index.js';
+export type {
+  IntervalQualityLabel,
+  Note as NoteData,
+  SpelledInterval,
+} from '../core/pitch/index.js';
 export type { KeyScale } from '../core/types.js';
 export type {
   Chord as ChordData,

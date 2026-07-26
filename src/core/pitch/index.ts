@@ -54,6 +54,19 @@ export type Note = {
 };
 
 /**
+ * The quality label of a spelled interval: perfect, major, minor, or one or
+ * more augmentations or diminutions.
+ *
+ * This names how an interval is *spelled*. It is a different notion from
+ * {@link ConsonanceClass}, which classifies how an interval *sounds* against
+ * another voice.
+ *
+ * @see {@link ConsonanceClass}
+ * @category Pitch & Intervals
+ */
+export type IntervalQualityLabel = 'P' | 'M' | 'm' | `A${string}` | `d${string}`;
+
+/**
  * A spelled interval: a diatonic number, a quality label, and its semitone span.
  *
  * @category Pitch & Intervals
@@ -62,7 +75,7 @@ export type SpelledInterval = {
   /** Diatonic size: 1 = unison, 2 = second, ... 8 = octave, and beyond. */
   number: number;
   /** Quality label: 'P', 'M', 'm', or repeated 'A'/'d' for (multiply) aug/dim. */
-  quality: string;
+  quality: IntervalQualityLabel;
   /** Signed semitone distance from the first note to the second. */
   semitones: number;
 };
@@ -371,12 +384,13 @@ function isPerfectNumber(simpleNumber: number): boolean {
 }
 
 /** Quality label from a diatonic number and its actual semitone span. */
-function qualityFromSpan(numberValue: number, semitones: number): string {
+function qualityFromSpan(numberValue: number, semitones: number): IntervalQualityLabel {
   const octaves = Math.floor((numberValue - 1) / 7);
   const simple = numberValue - 7 * octaves;
   const reference = (SIMPLE_REFERENCE[simple] ?? 0) + 12 * octaves;
   const delta = semitones - reference;
-  const repeat = (glyph: string, count: number) => glyph.repeat(Math.min(count, MAX_ALTER * 2));
+  const repeat = (glyph: 'A' | 'd', count: number): IntervalQualityLabel =>
+    `${glyph}${glyph.repeat(Math.min(count, MAX_ALTER * 2) - 1)}`;
   if (isPerfectNumber(simple)) {
     if (delta === 0) {
       return 'P';
@@ -390,6 +404,114 @@ function qualityFromSpan(numberValue: number, semitones: number): string {
     return 'm';
   }
   return delta > 0 ? repeat('A', delta) : repeat('d', -delta - 1);
+}
+
+/**
+ * The semitone span of the interval named by a diatonic number and a quality.
+ *
+ * The inverse of the quality derivation in {@link spelledInterval}: it turns a
+ * name back into a distance, which is what transposing by a named interval or
+ * parsing one from text needs.
+ *
+ * @param numberValue Diatonic size: 1 = unison, 2 = second, ... 8 = octave.
+ * @param quality Quality label: `'P'`, `'M'`, `'m'`, or repeated `'A'`/`'d'`.
+ * @returns The unsigned semitone span.
+ * @throws If the quality cannot apply to the number, such as a major fifth.
+ * @example
+ * ```ts
+ * import { intervalSemitones } from '@libraz/libcantus';
+ * intervalSemitones(5, 'P'); // 7
+ * ```
+ * @category Pitch & Intervals
+ */
+export function intervalSemitones(numberValue: number, quality: IntervalQualityLabel): number {
+  assertInteger(numberValue, 'interval number', 1, 64);
+  const octaves = Math.floor((numberValue - 1) / 7);
+  const simple = numberValue - 7 * octaves;
+  const reference = (SIMPLE_REFERENCE[simple] ?? 0) + 12 * octaves;
+  const perfect = isPerfectNumber(simple);
+  if (quality === 'P' || quality === 'M') {
+    if (perfect !== (quality === 'P')) {
+      throw new RangeError(
+        `a ${numberValue === 1 ? 'unison' : `${numberValue}th`} cannot be ${quality === 'P' ? 'perfect' : 'major'}`,
+      );
+    }
+    return reference;
+  }
+  if (quality === 'm') {
+    if (perfect) {
+      throw new RangeError(`a perfect-class interval cannot be minor; received ${numberValue}`);
+    }
+    return reference - 1;
+  }
+  if (/^A+$/.test(quality)) {
+    return reference + quality.length;
+  }
+  if (/^d+$/.test(quality)) {
+    return reference - quality.length - (perfect ? 0 : 1);
+  }
+  throw new RangeError(`unknown interval quality ${JSON.stringify(quality)}`);
+}
+
+/**
+ * Parse an interval name such as `'P5'`, `'m3'`, or `'AA4'`.
+ *
+ * @param name The interval name: a quality label followed by a diatonic number.
+ * @returns The spelled interval, with an ascending (positive) span.
+ * @throws If the name is not a quality label followed by a number, or the two
+ *   cannot describe the same interval.
+ * @example
+ * ```ts
+ * import { parseInterval } from '@libraz/libcantus';
+ * parseInterval('m3'); // { number: 3, quality: 'm', semitones: 3 }
+ * ```
+ * @category Pitch & Intervals
+ */
+export function parseInterval(name: string): SpelledInterval {
+  const match = /^(P|M|m|A+|d+)(\d+)$/.exec(name);
+  const quality = match?.[1] as IntervalQualityLabel | undefined;
+  const numberValue = Number(match?.[2]);
+  if (quality === undefined || !Number.isFinite(numberValue)) {
+    throw new RangeError(
+      `interval must be a quality followed by a number, such as 'P5'; received ${JSON.stringify(name)}`,
+    );
+  }
+  return { number: numberValue, quality, semitones: intervalSemitones(numberValue, quality) };
+}
+
+/**
+ * Transpose a note by a spelled interval, keeping the spelling the interval
+ * names.
+ *
+ * Unlike {@link transposeNote}, which picks a letter from the semitone count,
+ * the diatonic number decides the letter here: transposing C by an augmented
+ * second gives D#, not Eb.
+ *
+ * @param note The note to transpose.
+ * @param interval The interval to apply; a negative span transposes downward.
+ * @returns The transposed note, octave-less if the source was.
+ * @example
+ * ```ts
+ * import { formatNote, parseInterval, parseNote, transposeByInterval } from '@libraz/libcantus';
+ * formatNote(transposeByInterval(parseNote('C4'), parseInterval('A2'))); // 'D#4'
+ * ```
+ * @category Pitch & Intervals
+ */
+export function transposeByInterval(note: Note, interval: SpelledInterval): Note {
+  assertNote(note, 'note');
+  assertInteger(interval.number, 'interval.number', 1, 64);
+  assertFiniteNumber(interval.semitones, 'interval.semitones');
+  const descending = interval.semitones < 0;
+  const letterSteps = (interval.number - 1) * (descending ? -1 : 1);
+  const absoluteLetter = mod7(note.letter) + letterSteps;
+  const letter = mod7(absoluteLetter);
+  const natural = LETTER_SEMITONES[letter] ?? 0;
+  const steps = Math.round(interval.semitones);
+  if (note.octave === undefined) {
+    return { letter, alter: alterFor(natural, mod12(noteToPitchClass(note) + steps)) };
+  }
+  const octave = note.octave + Math.floor(absoluteLetter / 7);
+  return { letter, alter: noteToMidi(note) + steps - ((octave + 1) * 12 + natural), octave };
 }
 
 /** Diatonic ladder index of a note (letter + 7 * octave when octave-bearing). */

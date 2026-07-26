@@ -1,5 +1,6 @@
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
+import { assertFiniteNumber } from '../../core/validation/index.js';
 import { scaleTonesInDegreeOrder } from '../scale/index.js';
 
 /**
@@ -184,6 +185,42 @@ export function makeChord(rootPc: number, quality: ChordQuality, bassPc?: number
     chord.bassPc = pitchClass(bassPc);
   }
   return chord;
+}
+
+/**
+ * Transpose a chord by a number of semitones.
+ *
+ * The interval template is carried over untouched, so a chord whose intervals
+ * were customised keeps them, and a slash bass moves with the root. Enharmonic
+ * spelling hints are dropped rather than shifted: the letter a transposed root
+ * should take depends on the destination key, which a semitone count does not
+ * carry. Pass the result through {@link spellChord} to respell it.
+ *
+ * @param chord The chord to transpose.
+ * @param semitones The signed semitone offset.
+ * @returns The transposed chord.
+ * @throws If `semitones` is not finite.
+ *
+ * @example
+ * ```ts
+ * import { formatChordSymbol, parseChordSymbol, transposeChord } from '@libraz/libcantus';
+ * formatChordSymbol(transposeChord(parseChordSymbol('C/G'), 2)); // 'D/A'
+ * ```
+ *
+ * @category Chords
+ */
+export function transposeChord(chord: Chord, semitones: number): Chord {
+  assertFiniteNumber(semitones, 'semitones');
+  const steps = Math.round(semitones);
+  const moved: Chord = {
+    rootPc: pitchClass(chord.rootPc + steps),
+    quality: chord.quality,
+    intervals: [...chord.intervals],
+  };
+  if (chord.bassPc !== undefined) {
+    moved.bassPc = pitchClass(chord.bassPc + steps);
+  }
+  return moved;
 }
 
 /**

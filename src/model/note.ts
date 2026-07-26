@@ -5,10 +5,11 @@ import {
   noteToMidi,
   noteToPitchClass,
   parseNote,
-  type SpelledInterval,
   spelledInterval,
+  transposeByInterval,
   transposeNote,
 } from '../core/pitch/index.js';
+import { Interval } from './interval.js';
 
 /**
  * Defensive copy of a plain note, with the letter checked.
@@ -159,14 +160,33 @@ export class Note {
    * The spelled interval from this note to another.
    *
    * @param other The second note.
-   * @returns The diatonic number, quality, and semitone span.
+   * @returns The interval, which {@link Interval.toJSON} unwraps to plain data.
    */
-  intervalTo(other: Note): SpelledInterval {
+  intervalTo(other: Note): Interval {
     // Read the other note through its public accessor rather than its private
     // field: a bundler that emits two copies of this class — as a CommonJS
     // build without shared chunks does for the root and /model entries — would
     // otherwise throw on the brand check.
-    return spelledInterval(this.#data, other.data);
+    return Interval.fromData(spelledInterval(this.#data, other.data));
+  }
+
+  /**
+   * Transpose by a spelled interval, keeping the spelling the interval names.
+   *
+   * Unlike {@link Note.transpose}, which picks a letter from the semitone
+   * count, the interval's diatonic number decides the letter: C up an
+   * augmented second is D#, not Eb.
+   *
+   * @param interval The interval to apply; a descending interval moves down.
+   * @returns The transposed note.
+   * @example
+   * ```ts
+   * import { Interval, Note } from '@libraz/libcantus';
+   * Note.of('C4').transposeBy(Interval.parse('A2')).name; // 'D#4'
+   * ```
+   */
+  transposeBy(interval: Interval): Note {
+    return new Note(transposeByInterval(this.#data, interval.toJSON()));
   }
 
   /**
@@ -194,5 +214,14 @@ export class Note {
    */
   toJSON(): NoteData {
     return this.data;
+  }
+
+  /**
+   * The note's name, so a template literal or a log line reads as the note.
+   *
+   * @returns The spelled name, e.g. `'Bb3'`.
+   */
+  toString(): string {
+    return this.name;
   }
 }

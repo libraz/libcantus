@@ -1,28 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ConsonanceClass,
   classifyInterval,
-  IntervalQuality,
   isConsonantInterval,
   isPerfectInterval,
 } from '../src/core/interval/index.js';
 
 describe('classifyInterval', () => {
   it('classifies perfect consonances', () => {
-    expect(classifyInterval(0)).toBe(IntervalQuality.PerfectConsonance);
-    expect(classifyInterval(7)).toBe(IntervalQuality.PerfectConsonance);
+    expect(classifyInterval(0)).toBe(ConsonanceClass.PerfectConsonance);
+    expect(classifyInterval(7)).toBe(ConsonanceClass.PerfectConsonance);
   });
 
   it('classifies imperfect consonances', () => {
     for (const s of [3, 4, 8, 9]) {
-      expect(classifyInterval(s)).toBe(IntervalQuality.ImperfectConsonance);
+      expect(classifyInterval(s)).toBe(ConsonanceClass.ImperfectConsonance);
     }
   });
 
   it('classifies dissonances including the perfect fourth', () => {
     for (const s of [1, 2, 6, 10, 11]) {
-      expect(classifyInterval(s)).toBe(IntervalQuality.Dissonance);
+      expect(classifyInterval(s)).toBe(ConsonanceClass.Dissonance);
     }
-    expect(classifyInterval(5)).toBe(IntervalQuality.Dissonance);
+    expect(classifyInterval(5)).toBe(ConsonanceClass.Dissonance);
   });
 
   it('is octave-equivalent', () => {

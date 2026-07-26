@@ -47,16 +47,12 @@ describe('Note', () => {
   });
 
   it('measures spelled intervals', () => {
-    expect(Note.of('C4').intervalTo(Note.of('G4'))).toEqual({
+    expect(Note.of('C4').intervalTo(Note.of('G4')).toJSON()).toEqual({
       number: 5,
       quality: 'P',
       semitones: 7,
     });
-    expect(Note.of('C4').intervalTo(Note.of('E4'))).toEqual({
-      number: 3,
-      quality: 'M',
-      semitones: 4,
-    });
+    expect(Note.of('C4').intervalTo(Note.of('E4')).name).toBe('M3');
   });
 
   it('compares by spelling', () => {
@@ -87,6 +83,107 @@ describe('Note', () => {
     // Round-trips through JSON back into an equal note.
     const restored = Note.fromData(JSON.parse(JSON.stringify(Note.of('F#4'))));
     expect(restored.equals(Note.of('F#4'))).toBe(true);
+  });
+});
+
+describe('class API string conversion', () => {
+  it('reads as itself in a template literal instead of [object Object]', () => {
+    expect(`${Note.of('Bb3')}`).toBe('Bb3');
+    expect(`${Note.of('C4').intervalTo(Note.of('E4'))}`).toBe('M3');
+    expect(`${Key.major('C')}`).toBe('C major');
+    expect(`${Key.minor('A')}`).toBe('A minor');
+    expect(`${Chord.parse('Cmaj7')}`).toBe('Cmaj7');
+    const progression = new Progression([Chord.parse('C'), Chord.parse('Am'), Chord.parse('F')]);
+    expect(`${progression}`).toBe('C Am F');
+  });
+});
+
+describe('transposing without a string round trip', () => {
+  it('keeps a slash bass and a custom interval set', () => {
+    expect(Chord.parse('C/G').transpose(2).symbol()).toBe('D/A');
+    // A symbol round trip has no way to express this chord, so a transpose that
+    // went through text would either throw or lose the added tone.
+    const custom = Chord.from({ rootPc: 0, quality: 'maj', intervals: [0, 4, 7, 14] });
+    expect(custom.transpose(3).pitchClasses()).toEqual([3, 5, 7, 10]);
+  });
+
+  it('carries the key, so the degree survives the transposition', () => {
+    const chord = Key.major('C').chord(4); // G major, the dominant
+    expect(chord.roman()).toBe('V');
+    const moved = chord.transpose(2);
+    expect(moved.symbol()).toBe('A');
+    expect(moved.roman()).toBe('V');
+  });
+
+  it('moves the tonic of a key and keeps its mode', () => {
+    expect(Key.major('C').transpose(2).toString()).toBe('D major');
+    expect(Key.minor('A').transpose(3).toString()).toBe('C minor');
+    expect(Key.major('C').transpose(2).scale.modeMask12).toBe(Key.major('C').scale.modeMask12);
+  });
+
+  it('moves every chord of a progression at once', () => {
+    const progression = new Progression(
+      [Chord.parse('C'), Chord.parse('Am'), Chord.parse('F'), Chord.parse('G')],
+      Key.major('C'),
+    );
+    const moved = progression.transpose(5);
+    expect(`${moved}`).toBe('F Dm Bb C');
+    expect(moved.key?.toString()).toBe('F major');
+  });
+});
+
+describe('Interval as a usable value', () => {
+  it('parses a name and rejects one that is not an interval', () => {
+    expect(Interval.parse('P5').semitones).toBe(7);
+    expect(Interval.parse('m3').semitones).toBe(3);
+    expect(Interval.parse('AA4').semitones).toBe(7);
+    expect(Interval.parse('d7').semitones).toBe(9);
+    expect(() => Interval.parse('X3')).toThrow(RangeError);
+    expect(() => Interval.parse('P3')).toThrow(RangeError);
+  });
+
+  it('rejects components that do not describe one interval', () => {
+    // A perfect fifth is seven semitones; any other span is a value no
+    // measurement could produce, and reading it back gives a different name.
+    expect(() => Interval.of(5, 'P', 8)).toThrow(RangeError);
+    expect(Interval.of(5, 'P', -7).semitones).toBe(-7);
+  });
+
+  it('inverts to the complement that completes the octave', () => {
+    expect(Interval.parse('M3').invert().name).toBe('m6');
+    expect(Interval.parse('m6').invert().name).toBe('M3');
+    expect(Interval.parse('P5').invert().name).toBe('P4');
+    expect(Interval.parse('A4').invert().name).toBe('d5');
+    expect(Interval.parse('P1').invert().name).toBe('P8');
+    // A compound interval reduces before inverting.
+    expect(Interval.parse('M10').invert().name).toBe('m6');
+  });
+
+  it('classifies consonance and compares by spelling', () => {
+    expect(Interval.parse('M3').isConsonant()).toBe(true);
+    expect(Interval.parse('P4').isConsonant()).toBe(false);
+    expect(Interval.parse('P4').isConsonant(false)).toBe(true);
+    expect(Interval.parse('M2').isConsonant()).toBe(false);
+    expect(Interval.parse('M3').equals(Interval.parse('M3'))).toBe(true);
+    // Same distance, different interval: an augmented second is not a minor third.
+    expect(Interval.parse('A2').semitones).toBe(Interval.parse('m3').semitones);
+    expect(Interval.parse('A2').equals(Interval.parse('m3'))).toBe(false);
+  });
+
+  it('applies to a note by diatonic number, not by semitone count', () => {
+    expect(Note.of('C4').transposeBy(Interval.parse('A2')).name).toBe('D#4');
+    expect(Note.of('C4').transposeBy(Interval.parse('m3')).name).toBe('Eb4');
+    expect(Note.of('C4').transposeBy(Interval.parse('P5')).name).toBe('G4');
+    expect(Note.of('C4').transposeBy(Interval.of(3, 'M', -4)).name).toBe('Ab3');
+    // An octave-less note stays octave-less.
+    const bare = Note.of('C').transposeBy(Interval.parse('P5'));
+    expect(bare.name).toBe('G');
+    expect(bare.octave).toBeUndefined();
+  });
+
+  it('round-trips through JSON', () => {
+    const interval = Interval.parse('m7');
+    expect(Interval.fromJSON(JSON.parse(JSON.stringify(interval))).equals(interval)).toBe(true);
   });
 });
 

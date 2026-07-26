@@ -16,6 +16,7 @@ import {
   chordPitchClasses,
   makeChord,
   type PitchSpelling,
+  transposeChord,
 } from '../theory/chord/index.js';
 import {
   availableTensions,
@@ -408,6 +409,27 @@ export class Chord {
   }
 
   /**
+   * Transpose the chord by a number of semitones.
+   *
+   * The quality and interval template are carried over, so a chord that a
+   * symbol round-trip could not express — a custom interval set, an inversion —
+   * survives. A carried key moves with the chord, so the transposed chord keeps
+   * the same degree and function inside the transposed key.
+   *
+   * @param semitones The signed semitone offset.
+   * @returns The transposed chord, in the transposed key when one is carried.
+   * @example
+   * ```ts
+   * import { Chord } from '@libraz/libcantus';
+   * Chord.parse('C/G').transpose(2).symbol(); // 'D/A'
+   * ```
+   */
+  transpose(semitones: number): Chord {
+    const moved = transposeChord(this.#given, semitones);
+    return new Chord(moved, this.#key?.transpose(semitones));
+  }
+
+  /**
    * The named scales that fit over this chord, best fit first, rooted on the
    * chord root.
    *
@@ -505,6 +527,15 @@ export class Chord {
    */
   toJSON(): ChordData {
     return this.data;
+  }
+
+  /**
+   * The chord symbol, so a template literal or a log line reads as the chord.
+   *
+   * @returns The symbol, e.g. `'Cmaj7'`.
+   */
+  toString(): string {
+    return this.symbol();
   }
 
   /** Resolve the key for an analysis method: explicit first, then carried. */

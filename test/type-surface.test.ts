@@ -15,23 +15,6 @@ import { describe, expect, it } from 'vitest';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const LAYERS = ['core', 'theory', 'analyze', 'generate', 'model'] as const;
 
-/** Type names that come from the TypeScript or DOM lib rather than this package. */
-const AMBIENT = new Set([
-  'Array',
-  'Set',
-  'Map',
-  'Record',
-  'Readonly',
-  'ReadonlyArray',
-  'Partial',
-  'Pick',
-  'Omit',
-  'Exclude',
-  'Promise',
-  'Iterable',
-  'IterableIterator',
-]);
-
 const program = ts.createProgram(
   LAYERS.map((layer) => resolve(ROOT, 'src', layer, 'index.ts')).concat(
     resolve(ROOT, 'src/index.ts'),
@@ -119,7 +102,7 @@ function referencedTypes(entry: string): Map<string, string> {
             ? undefined
             : `${site.getSourceFile().fileName}:${site.pos}`;
         // Only types this package declares matter; lib types resolve anyway.
-        if (origin !== undefined && origin.startsWith(resolve(ROOT, 'src'))) {
+        if (origin?.startsWith(resolve(ROOT, 'src'))) {
           found.set(origin, node.typeName.text);
         }
       }

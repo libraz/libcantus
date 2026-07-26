@@ -143,6 +143,42 @@ export class Progression {
    *
    * @returns The chord data sequence and the carried key, if any.
    */
+  /**
+   * Transpose every chord by a number of semitones.
+   *
+   * A carried key moves with the chords, so the progression keeps its degrees
+   * and functions in the new key.
+   *
+   * @param semitones The signed semitone offset.
+   * @returns The transposed progression.
+   * @example
+   * ```ts
+   * import { Chord, Progression } from '@libraz/libcantus';
+   * new Progression([Chord.parse('C'), Chord.parse('G')]).transpose(2).toString(); // 'D A'
+   * ```
+   */
+  transpose(semitones: number): Progression {
+    const key = this.#key?.transpose(semitones);
+    const chords = this.#chords.map((chord) => {
+      const moved = chord.transpose(semitones);
+      // A chord that carried no key of its own is spelled by this progression's
+      // key, so it has to receive the transposed one or it would fall back to
+      // sharps in a flat key.
+      return key !== undefined && moved.key === undefined ? moved.withKey(key) : moved;
+    });
+    return key === undefined ? new Progression(chords) : new Progression(chords, key);
+  }
+
+  /**
+   * The chord symbols separated by spaces, so a template literal or a log line
+   * reads as the progression.
+   *
+   * @returns The symbols in order, e.g. `'C Am F G'`.
+   */
+  toString(): string {
+    return this.#chords.map((chord) => chord.symbol()).join(' ');
+  }
+
   toJSON(): { chords: ChordData[]; key: { scale: KeyScale; tonic: NoteData } | undefined } {
     return {
       chords: this.#chords.map((chord) => chord.data),

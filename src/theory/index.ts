@@ -21,6 +21,7 @@ export {
   diatonicSeventh,
   diatonicTriad,
   makeChord,
+  transposeChord,
 } from './chord/index.js';
 export type {
   ChordScaleMatch,
