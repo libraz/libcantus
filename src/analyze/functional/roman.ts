@@ -8,9 +8,9 @@
 
 import type { KeyScale } from '../../core/types.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
-import { makeChord } from '../../theory/chord/index.js';
-import { majorKey, scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
-import { degreeRootPc, loweredDegrees, mod12 } from './internal.js';
+import { chordPitchClasses, makeChord } from '../../theory/chord/index.js';
+import { isScaleTone, majorKey, scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
+import { degreeRootPc, loweredDegrees, mod12, romanReference } from './internal.js';
 
 /** Roman numeral glyphs indexed by degree number - 1. */
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'] as const;
@@ -149,10 +149,13 @@ function parseSimpleRoman(
   }
   const isUpper = (match[2] ?? '')[0] === (match[2] ?? '')[0]?.toUpperCase();
   const suffix = match[3] ?? '';
+  // Degrees are read in the key's heptatonic frame, so a numeral means the same
+  // root in both directions even when the key itself is not heptatonic.
+  const frame = romanReference(key);
   // A flat on a degree the mode already lowers is that degree, not a further
   // lowering: `bVII` in A minor is G, the pop reading, rather than F#.
-  const redundantFlat = accidental === -1 && loweredDegrees(key).has(degreeNumber);
-  const rootPc = mod12(degreeRootPc(degreeNumber, key) + (redundantFlat ? 0 : accidental));
+  const redundantFlat = accidental === -1 && loweredDegrees(frame).has(degreeNumber);
+  const rootPc = mod12(degreeRootPc(degreeNumber, frame) + (redundantFlat ? 0 : accidental));
 
   // Canonical quality suffixes (exact match, case-sensitive on the numeral)
   // come first so every chordToRoman rendering re-parses to the same quality:
@@ -280,14 +283,14 @@ function romanSpelling(
   rootPc: number,
   key: KeyScale,
 ): { degreeNumber: number; accidental: string } {
-  const tones = scaleTonesInDegreeOrder(key);
+  const tones = scaleTonesInDegreeOrder(romanReference(key));
   const diatonic = tones.indexOf(mod12(rootPc));
   if (diatonic >= 0) {
     return { degreeNumber: diatonic + 1, accidental: '' };
   }
   // A chromatic root a semitone above a degree the mode already lowers is that
   // degree raised: C# in A minor is `#III`, not `bIV`.
-  const lowered = loweredDegrees(key);
+  const lowered = loweredDegrees(romanReference(key));
   for (let i = 0; i < tones.length; i += 1) {
     if (lowered.has(i + 1) && mod12((tones[i] ?? 0) + 1) === mod12(rootPc)) {
       return { degreeNumber: i + 1, accidental: '#' };
@@ -361,32 +364,141 @@ const SEVENTH_FIGURE_QUALITIES: ReadonlySet<ChordQuality> = new Set([
 ]);
 
 /**
+ * The numeral glyph for a degree number, cased for the chord quality.
+ *
+ * Only the seven glyphs exist, so a degree outside 1..7 is a contract violation
+ * rather than something to paper over with a default numeral.
+ */
+function numeralFor(degreeNumber: number, lower: boolean): string {
+  const glyph = ROMAN[degreeNumber - 1];
+  if (glyph === undefined) {
+    throw new RangeError(`no Roman numeral for scale degree ${degreeNumber}`);
+  }
+  return lower ? glyph.toLowerCase() : glyph;
+}
+
+/** Whether every pitch class of a chord belongs to the key's scale. */
+function isDiatonicChord(chord: Chord, key: KeyScale): boolean {
+  return chordPitchClasses(chord).every((pc) => isScaleTone(pc, key));
+}
+
+/**
+ * Whether the chord sounds like an applied dominant: a major triad, or any
+ * chord stacking a major third and a minor seventh above its root. The
+ * diminished family is handled separately, as the leading-tone chord.
+ */
+function isAppliedDominantSonority(chord: Chord): boolean {
+  const has = (semitones: number): boolean => chord.intervals.some((i) => mod12(i) === semitones);
+  return chord.quality === 'maj' || (has(4) && has(10));
+}
+
+/** Diminished-family qualities, which tonicize from a semitone below. */
+const LEADING_TONE_QUALITIES: ReadonlySet<ChordQuality> = new Set(['dim', 'dim7', 'm7b5']);
+
+/** The third and fifth above a scale degree, measured within its own scale. */
+function degreeTriad(tones: readonly number[], index: number): { third: number; fifth: number } {
+  const root = tones[index] ?? 0;
+  return {
+    third: mod12((tones[(index + 2) % tones.length] ?? 0) - root),
+    fifth: mod12((tones[(index + 4) % tones.length] ?? 0) - root),
+  };
+}
+
+/**
+ * The scale degree a chromatic chord tonicizes, or null when it tonicizes
+ * nothing. A dominant sonority points a fifth below itself, a diminished one a
+ * semitone above itself; the tonic is never a target (that chord is the key's own
+ * dominant) and neither is a degree carrying a diminished triad, which has no
+ * fifth to be tonicized.
+ */
+function appliedTarget(
+  chord: Chord,
+  key: KeyScale,
+): { degreeNumber: number; rootPc: number; lower: boolean } | null {
+  const dominant = isAppliedDominantSonority(chord);
+  const leadingTone = LEADING_TONE_QUALITIES.has(chord.quality);
+  if (!dominant && !leadingTone) {
+    return null;
+  }
+  const tones = scaleTonesInDegreeOrder(romanReference(key));
+  for (let index = 1; index < tones.length; index += 1) {
+    const targetRoot = tones[index];
+    if (targetRoot === undefined) {
+      continue;
+    }
+    const triad = degreeTriad(tones, index);
+    if (triad.fifth === 6) {
+      continue;
+    }
+    const expectedRoot = mod12(targetRoot + (dominant ? 7 : -1));
+    if (expectedRoot === mod12(chord.rootPc)) {
+      return { degreeNumber: index + 1, rootPc: targetRoot, lower: triad.third === 3 };
+    }
+  }
+  return null;
+}
+
+/**
+ * Options for {@link chordToRoman}.
+ *
+ * @category Functional Harmony
+ */
+export type ChordToRomanOptions = {
+  /**
+   * Render a tonicizing chord as an applied numeral (`V7/V`, `viio7/ii`)
+   * instead of naming its root against the home key (`II7`, `#ivo7`).
+   *
+   * Off by default: naming the root is always a correct spelling, whereas
+   * whether a chromatic dominant is genuinely applied is a reading only the
+   * caller can make. Turning it on makes {@link chordToRoman} the exact inverse
+   * of {@link romanToChord} for the chords {@link secondaryDominant} builds.
+   */
+  applied?: boolean;
+};
+
+/**
  * Render a chord as a Roman numeral relative to a key.
  *
  * Diatonic roots take their scale-degree numeral directly, so numerals are
  * correct in both major and minor keys (and any custom scale). The quality
  * selects the case and suffix; chromatic roots receive a flat/sharp spelling by
- * convention. When the chord carries a `bassPc` on a chord tone, a figured-bass
- * inversion (`6`, `64`, `65`, `43`, `42`) is emitted for plain triads and true
- * seventh chords; added-tone and extended qualities have no lossless figure and
- * render in root position instead (the bass is dropped, pitch classes are
- * preserved).
+ * convention. A key that is not heptatonic has no numeral of its own for every
+ * degree, so its roots are named against its parallel major.
+ *
+ * When the chord carries a `bassPc` on a chord tone, a figured-bass inversion
+ * (`6`, `64`, `65`, `43`, `42`) is emitted for plain triads and true seventh
+ * chords; added-tone and extended qualities have no lossless figure and render
+ * in root position instead (the bass is dropped, pitch classes are preserved).
+ *
+ * A `bassPc` that is *not* a chord tone — a pedal or passing bass such as
+ * `C/D` — is likewise dropped, and the numeral names the upper chord alone.
+ * Roman-numeral notation spends its slash on applied chords (`V7/V`), so there
+ * is no unambiguous way to write such a bass; a caller that must keep it should
+ * read `chord.bassPc` alongside the numeral.
  *
  * @param chord The chord to name.
  * @param key The prevailing key.
+ * @param opts `applied` renders tonicizing chords as `V7/V`-style numerals.
  * @returns The Roman numeral string.
  * @example
  * ```ts
  * import { chordToRoman, makeChord, majorKey } from '@libraz/libcantus';
  * chordToRoman(makeChord(7, 'dom7'), majorKey(0)); // => 'V7' (G7 in C major)
+ * chordToRoman(makeChord(2, 'dom7'), majorKey(0), { applied: true }); // => 'V7/V'
  * ```
  * @category Functional Harmony
  */
-export function chordToRoman(chord: Chord, key: KeyScale): string {
+export function chordToRoman(chord: Chord, key: KeyScale, opts: ChordToRomanOptions = {}): string {
+  if (opts.applied === true && !isDiatonicChord(chord, key)) {
+    const target = appliedTarget(chord, key);
+    if (target !== null) {
+      const local = chordToRoman(chord, majorKey(target.rootPc));
+      return `${local}/${numeralFor(target.degreeNumber, target.lower)}`;
+    }
+  }
   const { degreeNumber, accidental } = romanSpelling(chord.rootPc, key);
   const { lower, suffix } = romanStyle(chord.quality);
-  const numeral: string = ROMAN[degreeNumber - 1] ?? 'I';
-  const cased = lower ? numeral.toLowerCase() : numeral;
+  const cased = numeralFor(degreeNumber, lower);
 
   let inversion = 0;
   if (chord.bassPc !== undefined) {

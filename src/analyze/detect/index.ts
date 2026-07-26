@@ -13,8 +13,6 @@ import {
   HARMONIC_MINOR_MASK,
   MAJOR_MASK,
   MELODIC_MINOR_MASK,
-  majorKey,
-  minorKey,
   NATURAL_MINOR_MASK,
 } from '../../theory/scale/index.js';
 
@@ -32,9 +30,14 @@ export type ChordMatch = {
   extraPcs: number[];
   /** True when the input pitch-class set equals the chord exactly. */
   exact: boolean;
-  /** Inversion implied by a known bass, or null for an unordered pitch-class set. */
+  /**
+   * Inversion implied by a known bass: 0 for root position, 1..n for an
+   * inversion. Null when no inversion can be named — either the input is an
+   * unordered pitch-class set with no bass, or the bass is not a chord tone (a
+   * pedal or passing bass), in which case `bassPc` still reports it.
+   */
   inversion: number | null;
-  /** Bass pitch class when inverted (the lowest note is not the root). */
+  /** Bass pitch class when the lowest note is not the root. */
   bassPc?: number;
 };
 
@@ -56,11 +59,33 @@ export type DetectChordOptions = {
  * @category Recognition
  */
 export type KeyMatch = {
+  /** The scale that scored best for this tonic and mode, `variant` included. */
   key: KeyScale;
   mode: 'major' | 'minor';
-  /** Fraction of input pitch classes that are in the scale, in [0, 1]. */
+  /** Which scale form `key` uses; minor keys pick the best-scoring of the three. */
+  variant: KeyVariant;
+  /**
+   * Fraction of the distinct input pitch classes that belong to `key`, in
+   * [0, 1]. Measured against the returned scale, so it always agrees with
+   * `isScaleTone(pc, match.key)`. This is a coverage figure, not the ranking:
+   * see `score`.
+   */
   fit: number;
+  /**
+   * The value the results are ranked by, in [0, 1.5]. Unlike `fit` it counts
+   * every occurrence rather than every distinct pitch class, so a repeated tone
+   * weighs more, and it adds half a count per sounding of the tonic itself to
+   * break ties between keys that contain the same notes.
+   */
+  score: number;
 };
+
+/**
+ * Which form of a scale a {@link KeyMatch} settled on.
+ *
+ * @category Recognition
+ */
+export type KeyVariant = 'major' | 'natural' | 'harmonic' | 'melodic';
 
 /** Unique pitch classes of the input, sorted ascending. */
 function uniquePitchClasses(pitches: number[]): number[] {
@@ -133,7 +158,10 @@ export function detectChord(pitches: number[], opts: DetectChordOptions = {}): C
         bassPc === undefined
           ? -1
           : chord.intervals.findIndex((iv) => pitchClass(rootPc + iv) === bassPc);
-      const inversion = bassPc === undefined ? null : bassIndex > 0 ? bassIndex : 0;
+      // A bass that is not a chord tone names no inversion; reporting it as 0
+      // would be indistinguishable from root position for a caller that reads
+      // `inversion === 0` as "no slash needed".
+      const inversion = bassPc === undefined || bassIndex < 0 ? null : bassIndex;
       const match: ChordMatch = {
         rootPc,
         quality,
@@ -189,20 +217,32 @@ export function detectChordBest(pitches: number[], opts: DetectChordOptions = {}
 /**
  * Minor-scale variants scored for each minor-key candidate. Scoring against all
  * three lets the raised sixth and seventh (e.g. the leading tone G# in A minor)
- * count toward their own tonic instead of only penalizing it.
+ * count toward their own tonic instead of only penalizing it. Natural minor
+ * comes first so it wins a tie as the most diatonic reading.
  */
-const MINOR_MASK_VARIANTS = [NATURAL_MINOR_MASK, HARMONIC_MINOR_MASK, MELODIC_MINOR_MASK];
+const MINOR_VARIANTS = [
+  { variant: 'natural', mask: NATURAL_MINOR_MASK },
+  { variant: 'harmonic', mask: HARMONIC_MINOR_MASK },
+  { variant: 'melodic', mask: MELODIC_MINOR_MASK },
+] as const satisfies readonly { variant: KeyVariant; mask: number }[];
+
+/** The single major form, kept in the same shape as the minor variants. */
+const MAJOR_VARIANTS = [{ variant: 'major', mask: MAJOR_MASK }] as const satisfies readonly {
+  variant: KeyVariant;
+  mask: number;
+}[];
 
 /**
  * Rank major and minor keys by how well they contain a set of pitch classes.
  *
- * The tonic is weighted so that, among equally-fitting keys, the one whose root
- * appears in the input is preferred. Minor candidates are scored against the
- * natural, harmonic, and melodic minor variants and keep the best of the three,
- * so a minor cadence containing the leading tone still resolves to its own
- * tonic; the returned key is always the natural-minor scale. Returns all 24
- * keys ranked best-first, or an empty array for an empty input (mirroring
- * {@link detectChord}).
+ * Ranking is by `score`, which counts repetitions and adds a tonic weight so
+ * that, among equally-fitting keys, the one whose root is actually sounded is
+ * preferred. Minor candidates are scored against the natural, harmonic, and
+ * melodic minor variants and keep the best of the three, so a minor cadence
+ * containing the leading tone still resolves to its own tonic; the winning
+ * variant is what `key` and `variant` report, so `fit` describes the scale the
+ * caller receives. Returns all 24 keys ranked best-first, or an empty array for
+ * an empty input (mirroring {@link detectChord}).
  *
  * @param pitches MIDI pitches or bare pitch classes.
  * @returns Ranked key interpretations (empty for an empty input).
@@ -225,44 +265,47 @@ export function detectKey(pitches: number[]): KeyMatch[] {
     counts.set(pc, (counts.get(pc) ?? 0) + 1);
   }
   const total = pitches.length;
-  const results: (KeyMatch & { score: number })[] = [];
+  const results: KeyMatch[] = [];
   for (let tonic = 0; tonic < 12; tonic += 1) {
     for (const mode of ['major', 'minor'] as const) {
-      const key = mode === 'major' ? majorKey(tonic) : minorKey(tonic);
-      const masks = mode === 'major' ? [MAJOR_MASK] : MINOR_MASK_VARIANTS;
+      const variants = mode === 'major' ? MAJOR_VARIANTS : MINOR_VARIANTS;
       // Score each scale variant and keep the best; ties keep the earlier
-      // (more diatonic) variant.
+      // (more diatonic) variant. The winner is what the match reports, so its
+      // fit is measured against the very scale the caller receives.
       let inScale = 0;
       let weighted = Number.NEGATIVE_INFINITY;
-      for (const mask of masks) {
+      let best: { variant: KeyVariant; mask: number } = variants[0];
+      for (const candidate of variants) {
         let variantInScale = 0;
         let variantWeighted = 0;
         for (const pc of input) {
           const offset = (pc - tonic + 12) % 12;
-          if ((mask >> offset) & 1) {
+          if ((candidate.mask >> offset) & 1) {
             variantInScale += 1;
           }
         }
         for (const [pc, count] of counts) {
           const offset = (pc - tonic + 12) % 12;
-          if ((mask >> offset) & 1) {
+          if ((candidate.mask >> offset) & 1) {
             variantWeighted += count;
           }
         }
         if (variantWeighted > weighted) {
           weighted = variantWeighted;
           inScale = variantInScale;
+          best = candidate;
         }
       }
       weighted += (counts.get(tonic) ?? 0) * 0.5;
       results.push({
-        key,
+        key: { rootPc: tonic, modeMask12: best.mask },
         mode,
+        variant: best.variant,
         fit: inScale / input.length,
         score: weighted / total,
       });
     }
   }
   results.sort((a, b) => b.score - a.score);
-  return results.map(({ key, mode, fit }) => ({ key, mode, fit }));
+  return results;
 }

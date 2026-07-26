@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { detectChord, detectChordBest, detectKey } from '../src/analyze/detect/index.js';
 import { chordQualities, makeChord } from '../src/theory/chord/index.js';
+import { isScaleTone, majorKey } from '../src/theory/scale/index.js';
 
 describe('detectChord', () => {
   it('recognizes a C major triad exactly', () => {
@@ -70,6 +71,17 @@ describe('detectChord', () => {
     const best = detectChord([0, 4, 7], { input: 'pitchClass', bassPc: 4 })[0];
     expect(best).toMatchObject({ rootPc: 0, quality: 'maj', inversion: 1, bassPc: 4 });
   });
+
+  it('reports no inversion for a bass that is not a chord tone', () => {
+    // C/D pedal bass: D belongs to no reading of the triad above it, so calling
+    // it root position would tell the caller no slash is needed.
+    const pedal = detectChord([0, 4, 7], { input: 'pitchClass', bassPc: 2 })[0];
+    expect(pedal).toMatchObject({ rootPc: 0, quality: 'maj', inversion: null, bassPc: 2 });
+    // A bass on the root is still root position, not "unknown".
+    const rooted = detectChord([0, 4, 7], { input: 'pitchClass', bassPc: 0 })[0];
+    expect(rooted?.inversion).toBe(0);
+    expect(rooted?.bassPc).toBeUndefined();
+  });
 });
 
 describe('makeChord -> detectChord round trip', () => {
@@ -132,6 +144,34 @@ describe('detectKey', () => {
 
   it('still ranks all 24 keys for a non-empty input', () => {
     expect(detectKey([0])).toHaveLength(24);
+  });
+
+  it('ranks by the score it reports', () => {
+    const matches = detectKey([0, 0, 0, 0, 1]);
+    for (let index = 1; index < matches.length; index += 1) {
+      const previous = matches[index - 1]?.score ?? 0;
+      expect(matches[index]?.score, `rank ${index}`).toBeLessThanOrEqual(previous);
+    }
+    // fit alone would put Db major (every note in the scale) above C major.
+    expect(matches[0]?.key.rootPc).toBe(0);
+  });
+
+  it('measures fit against the scale it returns', () => {
+    for (const match of detectKey([9, 0, 4, 4, 8, 11, 2, 9, 0, 4])) {
+      const input = [...new Set([9, 0, 4, 8, 11, 2])];
+      const inScale = input.filter((pc) => isScaleTone(pc, match.key)).length;
+      expect(inScale / input.length, `${match.mode} on ${match.key.rootPc}`).toBeCloseTo(match.fit);
+    }
+  });
+
+  it('names the minor variant that won', () => {
+    // The leading tone G# is what carries A minor, so the harmonic variant wins
+    // and is what the match reports.
+    const best = detectKey([9, 0, 4, 4, 8, 11, 2, 9, 0, 4])[0];
+    expect(best).toMatchObject({ mode: 'minor', variant: 'harmonic' });
+    expect(isScaleTone(8, best?.key ?? majorKey(0))).toBe(true);
+    // A plain major fragment reports the only major form.
+    expect(detectKey([0, 4, 7])[0]?.variant).toBe('major');
   });
 
   it('returns nothing for an empty input', () => {

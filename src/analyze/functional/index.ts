@@ -20,4 +20,5 @@ export {
   parallelKey,
   secondaryDominant,
 } from './function.js';
+export type { ChordToRomanOptions } from './roman.js';
 export { chordToRoman, romanToChord } from './roman.js';

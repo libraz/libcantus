@@ -215,7 +215,12 @@ export function substituteChord(
     results.push({
       chord: candidate.chord,
       type: candidate.type,
-      roman: chordToRoman(candidate.chord, key),
+      // A secondary dominant is named as the applied chord it is, so the
+      // numeral re-parses to the chord that was proposed rather than to a
+      // chromatic chord on the same root.
+      roman: chordToRoman(candidate.chord, key, {
+        applied: candidate.type === 'secondary-dominant',
+      }),
       function: functionOf(candidate.chord, key),
     });
   }

@@ -397,3 +397,77 @@ describe('Roman numerals in minor and modal keys', () => {
     }
   });
 });
+
+describe('Roman numerals in keys that are not heptatonic', () => {
+  const nonHeptatonic = [
+    scaleByName('majorPentatonic', 0),
+    scaleByName('minorPentatonic', 9),
+    scaleByName('wholeTone', 0),
+    scaleByName('octatonicWholeHalf', 0),
+    scaleByName('chromatic', 0),
+  ];
+
+  it('never collapses distinct roots onto the same numeral', () => {
+    for (const key of nonHeptatonic) {
+      const seen = new Map<string, number>();
+      for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+        const roman = chordToRoman(makeChord(rootPc, 'maj'), key);
+        expect(seen.has(roman), `${roman} names both ${seen.get(roman)} and ${rootPc}`).toBe(false);
+        seen.set(roman, rootPc);
+      }
+    }
+  });
+
+  it('round-trips every chromatic root through both directions', () => {
+    for (const key of nonHeptatonic) {
+      for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+        for (const quality of ['maj', 'min', 'dom7'] as const) {
+          const roman = chordToRoman(makeChord(rootPc, quality), key);
+          expect(romanToChord(roman, key).rootPc, `${roman} in ${key.modeMask12}`).toBe(rootPc);
+        }
+      }
+    }
+  });
+
+  it('reads degrees against the parallel major of the key', () => {
+    const cPentatonic = scaleByName('majorPentatonic', 0);
+    // The fourth and seventh degrees are absent from the scale, but the numeral
+    // still names them, so `IV` cannot silently become the sixth degree.
+    expect(chordToRoman(makeChord(5, 'maj'), cPentatonic)).toBe('IV');
+    expect(chordToRoman(makeChord(11, 'dim'), cPentatonic)).toBe('viio');
+    expect(romanToChord('IV', cPentatonic).rootPc).toBe(5);
+    expect(romanToChord('VI', cPentatonic).rootPc).toBe(9);
+  });
+});
+
+describe('applied Roman numerals', () => {
+  it('names a secondary dominant as the applied chord it is', () => {
+    expect(chordToRoman(makeChord(2, 'dom7'), cMajor, { applied: true })).toBe('V7/V');
+    expect(chordToRoman(makeChord(9, 'dom7'), cMajor, { applied: true })).toBe('V7/ii');
+    expect(chordToRoman(makeChord(4, 'maj'), cMajor, { applied: true })).toBe('V/vi');
+    expect(chordToRoman(makeChord(0, 'dom7'), cMajor, { applied: true })).toBe('V7/IV');
+    expect(chordToRoman(makeChord(6, 'dim7'), cMajor, { applied: true })).toBe('viio7/V');
+  });
+
+  it('round-trips every secondary dominant the library builds', () => {
+    for (const key of [cMajor, aMinor, scaleByName('dorian', 2)]) {
+      for (let degree = 0; degree < 7; degree += 1) {
+        const chord = secondaryDominant(degree, key);
+        const roman = chordToRoman(chord, key, { applied: true });
+        expect(romanToChord(roman, key).rootPc, `${roman} in ${key.rootPc}`).toBe(chord.rootPc);
+      }
+    }
+  });
+
+  it('leaves diatonic and non-tonicizing chords on their own numeral', () => {
+    // The key's own dominant is not applied to anything.
+    expect(chordToRoman(makeChord(7, 'dom7'), cMajor, { applied: true })).toBe('V7');
+    expect(chordToRoman(makeChord(2, 'min7'), cMajor, { applied: true })).toBe('ii7');
+    // Eb major points at Ab, which is no degree of C major.
+    expect(chordToRoman(makeChord(3, 'maj'), cMajor, { applied: true })).toBe('bIII');
+  });
+
+  it('is off by default', () => {
+    expect(chordToRoman(makeChord(2, 'dom7'), cMajor)).toBe('II7');
+  });
+});
