@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { KeyScale } from '../src/core/types.js';
 import type { Chord } from '../src/theory/chord/index.js';
+import { chordPitchClasses, chordQualities, makeChord } from '../src/theory/chord/index.js';
 import {
   enumerateSafePitches,
   evaluateSafety,
@@ -177,6 +178,105 @@ it('flags anti-parallel perfect intervals reached by contrary motion', () => {
     query({ candidatePitch: 62, prevPitch: 74, otherVoices: [{ pitch: 62, prevPitch: 50 }] }),
   );
   expect(r.reasons & ReasonFlag.ParallelPerfect).toBeTruthy();
+});
+
+describe('chord tones are never rejected for the chord they belong to', () => {
+  it('does not flag a chord tone for a tritone its own chord spells', () => {
+    // Diminished, half-diminished, diminished-seventh and minor-sixth chords all
+    // contain a tritone between two of their own chord tones. Those tones are the
+    // chord, not a clash with it.
+    const cases: [Chord, string][] = [
+      [makeChord(11, 'dim'), 'B dim'],
+      [makeChord(11, 'dim7'), 'B dim7'],
+      [makeChord(11, 'm7b5'), 'B m7b5'],
+      [makeChord(0, 'min6'), 'C min6'],
+      [makeChord(7, 'dom7'), 'G7'],
+    ];
+    for (const [chord, label] of cases) {
+      for (const pc of chordPitchClasses(chord)) {
+        const r = evaluateSafety(query({ candidatePitch: 60 + pc, chord, strongBeat: true }));
+        expect(r.reasons & ReasonFlag.ChordTone, `${label} pc ${pc}`).toBeTruthy();
+        expect(r.reasons & ReasonFlag.Tritone, `${label} pc ${pc}`).toBeFalsy();
+        expect(r.safety, `${label} pc ${pc}`).toBe(NoteSafety.Safe);
+      }
+    }
+  });
+
+  it('keeps every chord tone of every quality placeable in the pop profile', () => {
+    for (const quality of chordQualities()) {
+      for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+        const chord = makeChord(rootPc, quality);
+        for (const pc of chordPitchClasses(chord)) {
+          const r = evaluateSafety(query({ candidatePitch: 60 + pc, chord, strongBeat: true }));
+          expect(r.safety, `${quality}/${rootPc} pc ${pc}`).toBeLessThanOrEqual(NoteSafety.Warning);
+        }
+      }
+    }
+  });
+
+  it('enumerates every chord tone of a diminished-family chord', () => {
+    for (const quality of ['dim', 'dim7', 'm7b5', 'min6'] as const) {
+      const chord = makeChord(11, quality);
+      const pitches = enumerateSafePitches(query({ chord }), 60, 71);
+      for (const pc of chordPitchClasses(chord)) {
+        expect(pitches, `${quality} pc ${pc}`).toContain(60 + pc);
+      }
+    }
+  });
+
+  it('still flags a non-chord tone that forms a tritone with a chord tone', () => {
+    // Db over C major is not a chord tone and sits a tritone above the fifth.
+    const r = evaluateSafety(query({ candidatePitch: 61, chord: makeChord(0, 'maj') }));
+    expect(r.reasons & ReasonFlag.Tritone).toBeTruthy();
+  });
+
+  it('reports no conflict for a correctly voiced dominant seventh on a strong beat', () => {
+    // G7 in close SATB position: G3 B3 D4 F4. The seventh against the root and
+    // the tritone between third and seventh are the chord's own colour.
+    const g7 = makeChord(7, 'dom7');
+    const voices = [55, 59, 62, 65];
+    for (const pitch of voices) {
+      const r = evaluateSafety(
+        query({
+          candidatePitch: pitch,
+          chord: g7,
+          strongBeat: true,
+          otherVoices: voices.filter((p) => p !== pitch).map((p) => ({ pitch: p })),
+        }),
+      );
+      expect(r.reasons & ReasonFlag.VerticalDissonance, `pitch ${pitch}`).toBeFalsy();
+      expect(r.safety, `pitch ${pitch}`).toBe(NoteSafety.Safe);
+    }
+  });
+
+  it('still flags a second between two chord tones as a spacing clash', () => {
+    // The ninth of Cadd9 is a chord tone, but voiced a major second above the
+    // root it is a voicing problem rather than a property of the harmony.
+    const r = evaluateSafety(
+      query({
+        candidatePitch: 74,
+        chord: makeChord(0, 'add9'),
+        strongBeat: true,
+        otherVoices: [{ pitch: 72 }],
+      }),
+    );
+    expect(r.reasons & ReasonFlag.ChordTone).toBeTruthy();
+    expect(r.reasons & ReasonFlag.VerticalDissonance).toBeTruthy();
+  });
+
+  it('still flags a non-chord tone clashing with a sounding chord tone', () => {
+    // F# over a sounding G7 chord tone is not part of the chord.
+    const r = evaluateSafety(
+      query({
+        candidatePitch: 66,
+        chord: makeChord(7, 'dom7'),
+        strongBeat: true,
+        otherVoices: [{ pitch: 65 }],
+      }),
+    );
+    expect(r.reasons & ReasonFlag.VerticalDissonance).toBeTruthy();
+    expect(r.safety).toBe(NoteSafety.Dissonant);
+  });
 });
 
 describe('enumerateSafePitches', () => {

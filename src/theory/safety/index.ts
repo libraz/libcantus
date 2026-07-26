@@ -153,6 +153,23 @@ function avoidsMajorSeventh(chord: Chord): boolean {
   return chord.intervals.includes(4) && chord.intervals.includes(10);
 }
 
+/**
+ * Whether a dissonance between two chord tones is one the chord is built from.
+ *
+ * A seventh chord states a seventh against its root and a dominant states the
+ * tritone between its third and seventh; those intervals are the chord's
+ * identity, not a clash to be prepared and resolved. A second between two chord
+ * tones (a ninth voiced against the root, say) is a spacing problem rather than
+ * a property of the harmony, so it stays reportable.
+ */
+function isStructuralChordDissonance(a: number, b: number, chord: Chord): boolean {
+  const cls = Math.abs(Math.trunc(a) - Math.trunc(b)) % 12;
+  if (cls !== 6 && cls !== 10 && cls !== 11) {
+    return false;
+  }
+  return isChordMember(a, chord) && isChordMember(b, chord);
+}
+
 /** Nearest chord tone at or below the candidate, within two semitones. */
 function stepResolution(pitch: number, chord: Chord): number | undefined {
   for (let delta = 1; delta <= 2; delta += 1) {
@@ -277,9 +294,12 @@ function evaluateInternal(q: SafetyQuery, collectSuggestions: boolean): SafetyRe
     raise(NoteSafety.Dissonant);
   }
 
-  // Harmonic tritone against a chord tone (except in dominant chords, where the
-  // tritone is a defining, stable colour).
-  if (chord && !(chord.intervals.includes(4) && chord.intervals.includes(10))) {
+  // Harmonic tritone against a chord tone. A chord tone is never flagged for a
+  // tritone its own chord spells: the interval is the chord's identity, not a
+  // clash with it. This covers dominant sevenths (third against seventh) and
+  // equally the diminished, half-diminished, diminished-seventh and minor-sixth
+  // families, where the tritone falls between two chord tones as well.
+  if (chord && !isChordMember(pitch, chord)) {
     const ic = intervalAboveRoot(pitch, chord);
     const toneOffsets = chord.intervals.map((i) => ((i % 12) + 12) % 12);
     if (toneOffsets.some((t) => Math.abs(ic - t) === 6)) {
@@ -314,6 +334,9 @@ function evaluateInternal(q: SafetyQuery, collectSuggestions: boolean): SafetyRe
     const prev = q.prevPitch;
     for (const ov of q.otherVoices) {
       if (!createsVerticalDissonance(pitch, ov.pitch, twoVoice)) {
+        continue;
+      }
+      if (chord && isStructuralChordDissonance(pitch, ov.pitch, chord)) {
         continue;
       }
       reasons |= ReasonFlag.VerticalDissonance;
