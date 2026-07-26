@@ -49,12 +49,13 @@ export function assertRange(value: number, min: number, max: number, name: strin
 export function assertGenerationBudget(
   estimated: number,
   name: string,
-  limit = DEFAULT_GENERATION_BUDGET,
+  limit: number | undefined = DEFAULT_GENERATION_BUDGET,
 ): number {
+  const cap = limit ?? DEFAULT_GENERATION_BUDGET;
   assertFiniteNumber(estimated, name);
-  assertPositiveInt(limit, `${name} limit`, Number.MAX_SAFE_INTEGER);
-  if (estimated < 0 || estimated > limit) {
-    throw new RangeError(`${name} exceeds the generation budget ${limit}; received ${estimated}`);
+  assertPositiveInt(cap, `${name} limit`, Number.MAX_SAFE_INTEGER);
+  if (estimated < 0 || estimated > cap) {
+    throw new RangeError(`${name} exceeds the generation budget ${cap}; received ${estimated}`);
   }
   return estimated;
 }

@@ -118,6 +118,17 @@ export type ArrangementOptions = {
    * @defaultValue `'pop'`
    */
   profile?: SafetyProfile;
+  /**
+   * Upper bound on the work this call may do — note counts, windows, and
+   * candidate counts are each checked against it before anything is allocated.
+   *
+   * Raise it to analyse a piece larger than the default allows; the default is
+   * {@link DEFAULT_GENERATION_BUDGET}, chosen so a runaway input fails fast
+   * rather than blocking the thread.
+   *
+   * @defaultValue {@link DEFAULT_GENERATION_BUDGET}
+   */
+  budget?: number;
 };
 
 /**
@@ -225,10 +236,12 @@ export function analyzeArrangement(
 ): ArrangementAnalysis {
   const ts = opts.ts ?? parseTimeSignature('4/4');
   assertTimeSignature(ts);
-  assertGenerationBudget(tracks.length, 'arrangement tracks');
+  const budget = opts.budget;
+  assertGenerationBudget(tracks.length, 'arrangement tracks', budget);
   for (let index = 0; index < tracks.length; index += 1) {
     assertNoteEvents(tracks[index]?.notes ?? [], `tracks[${index}].notes`, {
       allowNonPositiveDuration: true,
+      budget,
     });
   }
   const profile: SafetyProfile = opts.profile ?? 'pop';

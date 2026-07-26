@@ -145,6 +145,17 @@ export type ChordTimelineOptions = {
    * @defaultValue the end of the last note
    */
   totalBeats?: number;
+  /**
+   * Upper bound on the work this call may do — note counts, windows, and
+   * candidate counts are each checked against it before anything is allocated.
+   *
+   * Raise it to analyse a piece larger than the default allows; the default is
+   * {@link DEFAULT_GENERATION_BUDGET}, chosen so a runaway input fails fast
+   * rather than blocking the thread.
+   *
+   * @defaultValue {@link DEFAULT_GENERATION_BUDGET}
+   */
+  budget?: number;
 };
 
 /**
@@ -338,7 +349,8 @@ export function chordTimelineFromNotes(
   assertTimeSignature(ts);
   const harmonicRhythm = opts.harmonicRhythm ?? beatsPerBar(ts);
   assertRange(harmonicRhythm, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'harmonic rhythm');
-  assertNoteEvents(notes, 'timeline notes', { allowNonPositiveDuration: true });
+  const budget = opts.budget;
+  assertNoteEvents(notes, 'timeline notes', { allowNonPositiveDuration: true, budget });
   // Zero/negative-length notes never sound; drop them before any inference.
   const soundingIndex = createNoteEventIndex(notes.filter((note) => note.durationBeat > 0));
   const sounding = soundingIndex.notes.map(({ note }) => note);
@@ -350,14 +362,14 @@ export function chordTimelineFromNotes(
   const segments: ChordSegment[] = [];
   const segmentConfidence: number[] = [];
   const windowCount = Math.max(0, Math.ceil(totalBeats / harmonicRhythm - EPS));
-  assertGenerationBudget(windowCount, 'timeline windows');
+  assertGenerationBudget(windowCount, 'timeline windows', budget);
   const windowNotes: NoteEvent[][] = Array.from({ length: windowCount }, () => []);
   let memberships = 0;
   for (const indexed of soundingIndex.notes) {
     const first = Math.max(0, Math.floor(indexed.note.startBeat / harmonicRhythm));
     const lastExclusive = Math.min(windowCount, Math.ceil(indexed.endBeat / harmonicRhythm));
     memberships += Math.max(0, lastExclusive - first);
-    assertGenerationBudget(memberships, 'timeline note-to-window memberships');
+    assertGenerationBudget(memberships, 'timeline note-to-window memberships', budget);
     for (let window = first; window < lastExclusive; window += 1) {
       windowNotes[window]?.push(indexed.note);
     }

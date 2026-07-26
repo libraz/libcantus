@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { analyzeArrangement } from '../src/analyze/arrange/index.js';
+import { chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
 import {
   classifyInterval,
   isConsonantInterval,
@@ -203,5 +205,21 @@ describe('additive metres stay expressible', () => {
     const odd: TimeSignature = { numerator: 7, denominator: 12 };
     expect(pulsesPerBar(odd)).toBe(7);
     expect(() => metricWeight(0, odd)).not.toThrow();
+  });
+});
+
+describe('generation budget is caller-adjustable', () => {
+  const notes = Array.from({ length: 40 }, (_, i) => ({
+    pitch: 60,
+    startBeat: i,
+    durationBeat: 1,
+  }));
+
+  it('rejects work beyond an explicit budget and accepts it beyond the default', () => {
+    expect(() => chordTimelineFromNotes(notes, { budget: 8 })).toThrow(RangeError);
+    expect(() => chordTimelineFromNotes(notes, { budget: 1000 })).not.toThrow();
+    expect(() =>
+      analyzeArrangement([{ name: 'a', role: 'harmony', notes }], { budget: 8 }),
+    ).toThrow(RangeError);
   });
 });
