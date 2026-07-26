@@ -81,11 +81,23 @@ type Candidate = {
   secondaryDominant: boolean;
   targetDegree?: number;
   base: number;
+  /**
+   * The candidate's pitch classes, resolved once. The emission cost is
+   * evaluated for every transpose, segment, and candidate, and the chord's
+   * pitch classes depend on none of those.
+   */
+  pcs: number[];
 };
 
 type Segment = { startBeat: number; endBeat: number; noteIndices: number[] };
 
-const FALLBACK: Candidate = { rootPc: 0, quality: 'maj', secondaryDominant: false, base: 0 };
+const FALLBACK: Candidate = {
+  rootPc: 0,
+  quality: 'maj',
+  secondaryDominant: false,
+  base: 0,
+  pcs: chordPitchClasses(makeChord(0, 'maj')),
+};
 
 /** Default meter used to weight metric accents when none is supplied. */
 const DEFAULT_METER: TimeSignature = { numerator: 4, denominator: 4 };
@@ -150,23 +162,29 @@ function inferKey(melody: MelodyNote[]): KeyScale {
 /** Enumerate candidate chords for the key, gated by reharmonization strength. */
 function buildCandidates(key: KeyScale, reharmonize: HarmonizeOptions['reharmonize']): Candidate[] {
   const tones = scaleTonesInDegreeOrder(key);
-  const candidates: Candidate[] = tones.map((rootPc, degree) => ({
-    rootPc,
-    quality: diatonicTriad(degree, key).quality,
-    degree,
-    secondaryDominant: false,
-    base: 0,
-  }));
+  const candidates: Candidate[] = tones.map((rootPc, degree) => {
+    const quality = diatonicTriad(degree, key).quality;
+    return {
+      rootPc,
+      quality,
+      degree,
+      secondaryDominant: false,
+      base: 0,
+      pcs: chordPitchClasses(makeChord(rootPc, quality)),
+    };
+  });
 
   if (reharmonize !== 'diatonic') {
     for (const target of [1, 3, 4, 5]) {
       const targetRoot = tones[target] ?? 0;
+      const rootPc = (targetRoot + 7) % 12;
       candidates.push({
-        rootPc: (targetRoot + 7) % 12,
+        rootPc,
         quality: 'dom7',
         secondaryDominant: true,
         targetDegree: target,
         base: 1.5,
+        pcs: chordPitchClasses(makeChord(rootPc, 'dom7')),
       });
     }
   }
@@ -182,6 +200,7 @@ function buildCandidates(key: KeyScale, reharmonize: HarmonizeOptions['reharmoni
           quality: chord.quality,
           secondaryDominant: false,
           base: 1.25,
+          pcs: chordPitchClasses(chord),
         });
       }
     }
@@ -212,7 +231,7 @@ function emissionCost(
   key: KeyScale,
   ts: TimeSignature,
 ): number {
-  const pcs = chordPitchClasses(makeChord(cand.rootPc, cand.quality));
+  const pcs = cand.pcs;
   let cost = cand.base;
   for (const idx of seg.noteIndices) {
     const note = melody[idx];

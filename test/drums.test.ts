@@ -280,6 +280,37 @@ describe('quantizeSwing sixteenth grid', () => {
   });
 });
 
+describe('generateDrums onset ordering', () => {
+  it('returns every hit in non-decreasing onset order', () => {
+    // Foot hi-hats and percussion are appended after the beat loop, so an
+    // unsorted list steps backwards mid-bar and a MIDI writer emits a negative
+    // delta time.
+    for (const style of ['standard', 'funk', 'shuffle', 'trap', 'house'] as const) {
+      const hits = generateDrums({
+        bars: 4,
+        bpm: 120,
+        style,
+        section: 'chorus',
+        density: 0.8,
+        fills: true,
+        seed: 5,
+      });
+      expect(hits.length).toBeGreaterThan(0);
+      for (let i = 1; i < hits.length; i += 1) {
+        const previous = hits[i - 1];
+        const current = hits[i];
+        if (!previous || !current) {
+          throw new Error('expected two adjacent hits');
+        }
+        expect(current.startBeat).toBeGreaterThanOrEqual(previous.startBeat);
+        if (current.startBeat === previous.startBeat) {
+          expect(current.pitch).toBeGreaterThanOrEqual(previous.pitch);
+        }
+      }
+    }
+  });
+});
+
 describe('generateDrums option validation', () => {
   it('rejects a name that is not one of the documented values', () => {
     // A name from a config file or a JavaScript caller used to be read against

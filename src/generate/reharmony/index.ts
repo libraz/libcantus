@@ -93,6 +93,22 @@ function commonToneCount(a: number[], b: number[]): number {
   return a.filter((pc) => set.has(pc)).length;
 }
 
+/** The plain triad quality underlying a chord's own quality. */
+function triadQualityOf(chord: Chord): ChordQuality {
+  const semis = new Set(chord.intervals.map((interval) => mod12(interval)));
+  const hasThird = semis.has(4) ? 'maj' : semis.has(3) ? 'min' : undefined;
+  if (hasThird === undefined) {
+    return chord.quality; // sus, power, and other non-tertian chords stand alone
+  }
+  if (semis.has(6) && !semis.has(7)) {
+    return hasThird === 'min' ? 'dim' : 'majb5';
+  }
+  if (semis.has(8) && !semis.has(7)) {
+    return 'aug';
+  }
+  return hasThird;
+}
+
 /** The diatonic triads of a key, one per scale degree. */
 function diatonicTriadsOf(key: KeyScale): Chord[] {
   const degrees = scaleTonesInDegreeOrder(key).length;
@@ -146,7 +162,11 @@ export function substituteChord(
   key: KeyScale,
   opts?: SubstituteOptions,
 ): Substitution[] {
-  const original = chordPitchClasses(chord);
+  // The relative test counts common tones against the chord's triad, not its
+  // full pitch-class set: an exact count of two would otherwise be decided by
+  // how many tensions the input carries, so C proposes both Em and Am while
+  // Cmaj7 proposes only Am — penalising the candidate that overlaps *more*.
+  const originalTriad = chordPitchClasses(makeChord(chord.rootPc, triadQualityOf(chord)));
   const candidates: { chord: Chord; type: SubstitutionType }[] = [];
 
   // Tritone substitution: only for dominant-type chords.
@@ -167,7 +187,7 @@ export function substituteChord(
     const offset = mod12(triad.rootPc - chord.rootPc);
     if (
       (THIRD_OFFSETS as readonly number[]).includes(offset) &&
-      commonToneCount(original, chordPitchClasses(triad)) === 2
+      commonToneCount(originalTriad, chordPitchClasses(triad)) === 2
     ) {
       candidates.push({ chord: triad, type: 'relative' });
     }
@@ -186,7 +206,7 @@ export function substituteChord(
     for (const quality of ['maj', 'min'] as const) {
       const mediant = makeChord(mod12(chord.rootPc + offset), quality);
       if (
-        commonToneCount(original, chordPitchClasses(mediant)) === 1 &&
+        commonToneCount(originalTriad, chordPitchClasses(mediant)) === 1 &&
         !isDiatonic(mediant, key)
       ) {
         candidates.push({ chord: mediant, type: 'chromatic-mediant' });

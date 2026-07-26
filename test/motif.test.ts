@@ -81,6 +81,20 @@ describe('transformMotif involutions', () => {
   });
 });
 
+describe('transformMotif range', () => {
+  it('rejects a transform that leaves the MIDI range instead of emitting it', () => {
+    const high: MotifCell = { notes: [{ pitch: 120, startBeat: 0, durationBeat: 1 }] };
+    expect(() => transformMotif(high, 'transposeChromatic', 12)).toThrow(RangeError);
+    const low: MotifCell = { notes: [{ pitch: 5, startBeat: 0, durationBeat: 1 }] };
+    expect(() => transformMotif(low, 'transposeChromatic', -12)).toThrow(/0/);
+  });
+
+  it('accepts a transform that lands on the range boundary', () => {
+    const cellAt: MotifCell = { notes: [{ pitch: 115, startBeat: 0, durationBeat: 1 }] };
+    expect(transformMotif(cellAt, 'transposeChromatic', 12).notes[0]?.pitch).toBe(127);
+  });
+});
+
 describe('transformMotif shifts', () => {
   it('transposes diatonically by one scale degree', () => {
     const shifted = transformMotif(cell, 'transposeDiatonic', 1, cMajor);
@@ -192,6 +206,47 @@ describe('generateMotif', () => {
     // Enabling jitter perturbs the plain contour.
     const plain = generateMotif({ key: cMajor, bars: 2, contour: 'ascending', seed: 4 });
     expect(withJitter).not.toEqual(plain);
+  });
+});
+
+describe('motif meter', () => {
+  it('counts bars in the requested meter instead of assuming four beats', () => {
+    const waltz = generateMotif({
+      key: cMajor,
+      bars: 2,
+      contour: 'ascending',
+      ts: { numerator: 3, denominator: 4 },
+    });
+    const span = waltz.notes.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
+    expect(span).toBe(6);
+    const common = generateMotif({ key: cMajor, bars: 2, contour: 'ascending' });
+    expect(common.notes.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0)).toBe(8);
+  });
+
+  it('snaps the bar lines of the requested meter to chord tones', () => {
+    // In 3/4 the second bar starts at beat 3, which a four-beat bar never treats
+    // as a downbeat; F#, a non-chord tone, must still be pulled onto the chord.
+    const chord = { rootPc: 0, quality: 'maj', intervals: [0, 4, 7] } as const;
+    const waltz = generateMotif({
+      key: cMajor,
+      chord,
+      bars: 2,
+      contour: 'ascending',
+      ts: { numerator: 3, denominator: 4 },
+    });
+    const downbeats = waltz.notes.filter((n) => n.startBeat % 3 === 0);
+    expect(downbeats.length).toBeGreaterThanOrEqual(2);
+    for (const note of downbeats) {
+      expect(chordPitchClasses(chord)).toContain(pitchClass(note.pitch));
+    }
+  });
+
+  it('fills the requested meter when developing across bars', () => {
+    const timeline = chordTimelineFromChords([{ rootPc: 0, quality: 'maj', startBeat: 0 }], 12);
+    const cell: MotifCell = { notes: [{ pitch: 60, startBeat: 0, durationBeat: 1 }] };
+    const waltz = developMotif(cell, timeline, cMajor, 2, { numerator: 3, denominator: 4 });
+    expect(waltz.notes).toHaveLength(6);
+    expect(developMotif(cell, timeline, cMajor, 2).notes).toHaveLength(8);
   });
 });
 

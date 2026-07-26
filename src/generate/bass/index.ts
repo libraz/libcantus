@@ -234,15 +234,35 @@ function buildArpeggio(ctx: BuildContext, seg: BassSegment): void {
   });
 }
 
-/** A diatonic or chromatic neighbor of `target`, a step toward `from`. */
+/**
+ * A diatonic or chromatic neighbor of `target`, a step toward `from`.
+ *
+ * The result is folded back into the register band: an approach note is emitted
+ * with an explicit MIDI value, bypassing the placement clamp, and a target on
+ * the band edge would otherwise put it a semitone outside — below MIDI 0 at the
+ * lowest accepted octave.
+ */
 function approachNote(ctx: BuildContext, target: number, from: number): number {
   const dir = from <= target ? -1 : 1;
+  const chromatic = target + dir;
   if (ctx.rng.prob(0.5)) {
-    return target + dir; // chromatic semitone
+    return foldIntoBand(chromatic, ctx.low);
   }
   const cand = nearestScaleTone(target + dir * 2, ctx.key);
   const step = Math.abs(cand - target);
-  return step >= 1 && step <= 2 ? cand : target + dir;
+  return foldIntoBand(step >= 1 && step <= 2 ? cand : chromatic, ctx.low);
+}
+
+/** Shift a pitch by whole octaves until it lies in the band `[low, low + 12]`. */
+function foldIntoBand(midi: number, low: number): number {
+  let result = midi;
+  while (result < low) {
+    result += 12;
+  }
+  while (result > low + 12) {
+    result -= 12;
+  }
+  return result;
 }
 
 /** A quarter-note line of chord tones that leads by step into each chord change. */

@@ -106,6 +106,12 @@ export type EuclideanKick = {
  * @category Composition
  */
 export type DrumsOptions = {
+  /**
+   * Number of bars to generate. Bars are four quarter-note beats long: the
+   * patterns are written for 4/4 and there is no meter option, so a `bars`
+   * count shared with a meter-aware generator such as
+   * {@link generateRhythm} only lines up when that generator is also in 4/4.
+   */
   bars: number;
   bpm: number;
   style: GrooveStyle;
@@ -174,8 +180,12 @@ const MAX_HITS_PER_BAR = 128;
  * overrides the kick with an evenly-spread Euclidean pattern. Output is fully
  * determined by the options plus `seed`.
  *
+ * The patterns are 4/4 only — backbeats, hi-hat subdivisions, and fills are all
+ * written against a four-beat bar — so beat positions are quarter notes and bar
+ * `n` starts at beat `4n`.
+ *
  * @param opts Generation options.
- * @returns Percussion onsets in bar order.
+ * @returns Percussion onsets in onset order, ties broken by pitch.
  *
  * @example
  * ```ts
@@ -394,5 +404,8 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
     );
   }
 
-  return track.hits;
+  // Foot hi-hats and auxiliary percussion are appended after the beat loop, so
+  // the accumulated list is not monotonic within a bar. A consumer writing MIDI
+  // reads these in order and would emit a negative delta time.
+  return [...track.hits].sort((a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch);
 }

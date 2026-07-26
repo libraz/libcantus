@@ -331,19 +331,21 @@ function sameStep(a: CycleStep, b: CycleStep): boolean {
  * Generate a chord progression laid out one chord per bar.
  *
  * A preset is chosen by `presetId` when given, otherwise deterministically from
- * the presets matching `style`, seeded by `seed`. An unknown `presetId` is a
- * caller error and throws rather than silently falling back to a random preset.
- * The preset's degrees cycle to
+ * the presets matching `style`, seeded by `seed`. An unknown `presetId`, or a
+ * `style` no preset claims, is a caller error and throws rather than silently
+ * falling back to a random preset. The preset's degrees cycle to
  * fill `bars`; each bar is four beats, so `startBeat` is `barIndex * 4`. Chord
  * roots come from the key's diatonic scale-degree mapping. When `ext` is
  * omitted or `'auto'`, each chord takes its diatonic triad quality; otherwise
- * `ext` is forced on every chord. When `reharmonize` is set, some chords are
+ * `ext` is forced on every chord — except a chord replaced by `reharmonize`,
+ * which is a secondary dominant and is therefore always a `dom7`; those carry
+ * `secondaryDominant: true`. When `reharmonize` is set, some chords are
  * deterministically replaced with the secondary dominant (V7) of the following
  * chord, flagged with `secondaryDominant`.
  *
  * @param opts Generation options.
  * @returns One chord per bar in timeline order.
- * @throws If `presetId` is given but does not match any built-in preset.
+ * @throws If `presetId` matches no built-in preset, or `style` matches none.
  *
  * @example
  * ```ts
@@ -366,8 +368,14 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
     }
   }
   if (preset === undefined) {
+    // A style no preset claims is a caller error, exactly as an unknown
+    // presetId is: falling back to the whole pool would answer a typo with a
+    // plausible but stylistically unrelated progression.
     const pool = PRESETS.filter((p) => p.styles.includes(opts.style));
-    const candidates = pool.length > 0 ? pool : PRESETS;
+    if (pool.length === 0) {
+      throw new Error(`Unknown progression style: ${opts.style}`);
+    }
+    const candidates = pool;
     const rng = createRng(seed);
     const index = Math.floor(rng.next() * candidates.length) % candidates.length;
     preset = candidates[index] ?? PRESETS[0];

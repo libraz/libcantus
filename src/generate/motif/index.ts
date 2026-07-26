@@ -1,4 +1,6 @@
 import type { ChordTimeline } from '../../analyze/timeline/index.js';
+import type { TimeSignature } from '../../core/meter/index.js';
+import { beatsPerBar } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import { createRng } from '../../core/random/index.js';
 import type { KeyScale } from '../../core/types.js';
@@ -62,7 +64,15 @@ export type MotifContour = 'arch' | 'ascending' | 'descending' | 'wave';
 export type MotifOptions = {
   key: KeyScale;
   chord?: Chord | null;
+  /** Length of the motif in bars of `ts`. */
   bars: number;
+  /**
+   * Meter the bars are counted in. It sets the bar length, so a motif shares a
+   * bar grid with the other generators instead of assuming four beats.
+   *
+   * @defaultValue 4/4
+   */
+  ts?: TimeSignature;
   /**
    * Melodic contour shape the line follows.
    *
@@ -91,6 +101,18 @@ export type MotifOptions = {
  * near-zero cell span is clamped to this so tiling cannot stall.
  */
 const MIN_TILE_SPAN = 1 / 256;
+
+/** Meter assumed when none is supplied. */
+const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
+
+/** Tolerance for beat-position comparisons. */
+const EPS = 1e-9;
+
+/** Whether a beat position falls on a bar line of a `barBeats`-long bar. */
+function isDownbeat(startBeat: number, barBeats: number): boolean {
+  const bar = startBeat / barBeats;
+  return Math.abs(bar - Math.round(bar)) < EPS;
+}
 
 /** Nearest in-scale pitch strictly above `pitch`. */
 function upScaleTone(pitch: number, key: KeyScale): number {
@@ -216,7 +238,8 @@ function contourOffsets(contour: MotifContour, count: number): number[] {
 export function generateMotif(opts: MotifOptions): MotifCell {
   const contour = opts.contour ?? 'arch';
   const bars = assertPositiveInt(opts.bars, 'motif bars');
-  const totalBeats = bars * 4;
+  const barBeats = beatsPerBar(opts.ts ?? DEFAULT_TS);
+  const totalBeats = bars * barBeats;
   const noteCount = Math.max(3, bars * 2);
   assertGenerationBudget(noteCount, 'motif notes');
   const beatsPerNote = totalBeats / noteCount;
@@ -237,7 +260,7 @@ export function generateMotif(opts: MotifOptions): MotifCell {
     }
     let pitch = stepDiatonic(tonic, (offsets[i] ?? 0) + jitter, opts.key);
     const startBeat = i * beatsPerNote;
-    if (opts.chord && startBeat % 4 === 0) {
+    if (opts.chord && isDownbeat(startBeat, barBeats)) {
       pitch = nearestChordTone(pitch, opts.chord);
     }
     notes.push({ pitch, startBeat, durationBeat: beatsPerNote });
@@ -263,6 +286,7 @@ export function generateMotif(opts: MotifOptions): MotifCell {
  * @param key Key context for the diatonic transforms; without it,
  *   `transposeDiatonic` and `sequence` shift chromatically by semitones.
  * @returns The transformed cell.
+ * @throws If a transformed pitch would fall outside the MIDI range 0..127.
  *
  * @example
  * ```ts
@@ -274,6 +298,36 @@ export function generateMotif(opts: MotifOptions): MotifCell {
  * @category Composition
  */
 export function transformMotif(
+  cell: MotifCell,
+  t: MotifTransform,
+  amount?: number,
+  key?: KeyScale,
+): MotifCell {
+  return assertInRange(transformUnchecked(cell, t, amount, key));
+}
+
+/**
+ * Reject a cell whose pitches have left the MIDI range.
+ *
+ * Transposing far enough, or inverting about a low pivot, walks a motif off
+ * either end of the range. Returning such a note would carry an unplayable
+ * pitch through `developMotif` and into whatever consumes the result, so it is
+ * a caller error rather than something to clamp — clamping would distort the
+ * very intervals the transform exists to preserve.
+ */
+function assertInRange(cell: MotifCell): MotifCell {
+  for (const note of cell.notes) {
+    if (note.pitch < 0 || note.pitch > 127) {
+      throw new RangeError(
+        `transformed motif pitch ${note.pitch} is outside the MIDI range 0..127`,
+      );
+    }
+  }
+  return cell;
+}
+
+/** The transform itself, before the range check. */
+function transformUnchecked(
   cell: MotifCell,
   t: MotifTransform,
   amount?: number,
@@ -362,7 +416,8 @@ function scaleTime(cell: MotifCell, factor: number): MotifCell {
  * @param cell The source motif.
  * @param timeline Chord segments to snap against.
  * @param key Key context (used to keep snapped pitches sensible).
- * @param bars Number of four-beat bars to fill.
+ * @param bars Number of bars to fill.
+ * @param ts Meter the bars are counted in; defaults to 4/4.
  * @returns The developed, harmony-aware cell.
  *
  * @example
@@ -380,11 +435,12 @@ export function developMotif(
   timeline: ChordTimeline,
   key: KeyScale,
   bars: number,
+  ts: TimeSignature = DEFAULT_TS,
 ): MotifCell {
   assertPositiveInt(bars, 'development bars');
   assertNoteEvents(cell.notes, 'motif notes');
   const span = cellSpan(cell);
-  const totalBeats = bars * 4;
+  const totalBeats = bars * beatsPerBar(ts);
   const origin = cellOrigin(cell.notes);
   const out: MotifNote[] = [];
 

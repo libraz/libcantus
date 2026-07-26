@@ -43,6 +43,28 @@ describe('substituteChord', () => {
   });
 });
 
+describe('substituteChord relative motion', () => {
+  it('measures common tones against the source triad, not the seventh chord', () => {
+    // Counting against the full pitch-class set makes the answer depend on how
+    // many tensions the input carries: Cmaj7 overlaps Em in three tones and so
+    // loses the substitution that plain C is offered.
+    const relativesOf = (quality: 'maj' | 'maj7') =>
+      substituteChord(makeChord(0, quality), majorKey(0))
+        .filter((sub) => sub.type === 'relative')
+        .map((sub) => sub.chord.rootPc)
+        .sort((a, b) => a - b);
+    expect(relativesOf('maj7')).toEqual(relativesOf('maj'));
+    expect(relativesOf('maj7')).toEqual([4, 9]); // Em and Am
+  });
+
+  it('finds the relative substitution for a minor seventh source chord', () => {
+    const relatives = substituteChord(makeChord(9, 'min7'), majorKey(0))
+      .filter((sub) => sub.type === 'relative')
+      .map((sub) => sub.chord.rootPc);
+    expect(relatives).toContain(0); // Am -> C
+  });
+});
+
 describe('modalInterchangePalette', () => {
   it('lists the borrowed chords of C major with their sources', () => {
     const palette = modalInterchangePalette(majorKey(0));
