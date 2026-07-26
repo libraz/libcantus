@@ -46,13 +46,20 @@ const CHROMATIC_SPELLING: Record<number, number> = {
 };
 
 /**
- * Sharp-side counterpart of {@link CHROMATIC_SPELLING}, used for scales that are
- * not heptatonic and whose tonic is not itself flat-side.
+ * Flat-side table for scales that are not heptatonic.
  *
- * A scale with fewer (or more) than seven tones has no letter-per-degree
- * spelling to follow, so its non-diatonic tones take the accidental side of the
- * tonic: C whole-tone spells C D E F# G# A#, while Eb major pentatonic spells
- * Eb F G Bb C.
+ * Identical to {@link CHROMATIC_SPELLING} except at the tritone, which a
+ * flat-side scale spells as a diminished fifth rather than the augmented fourth
+ * a lydian mode wants: C blues spells C Eb F Gb G Bb.
+ */
+const CHROMATIC_SPELLING_FLAT: Record<number, number> = {
+  ...CHROMATIC_SPELLING,
+  6: 4, // b5
+};
+
+/**
+ * Sharp-side counterpart, used for scales that are not heptatonic and lean
+ * sharp: C whole-tone spells C D E F# G# A#.
  */
 const CHROMATIC_SPELLING_SHARP: Record<number, number> = {
   1: 0, // #1
@@ -119,6 +126,13 @@ function isHeptatonic(key: KeyScale): boolean {
   return scaleTonesInDegreeOrder(key).length === 7;
 }
 
+/** Whether the scale has a minor third and no major third — it leans flat. */
+function hasMinorThird(key: KeyScale): boolean {
+  const tones = scaleTonesInDegreeOrder(key);
+  const root = mod12(key.rootPc);
+  return tones.includes(mod12(root + 3)) && !tones.includes(mod12(root + 4));
+}
+
 /**
  * Spell a single pitch class relative to a spelled tonic and key.
  *
@@ -163,10 +177,11 @@ export function spellPitchClass(pc: number, tonic: Note, key: KeyScale): Note {
   } else {
     // A scale that is not heptatonic has no letter-per-degree spelling to
     // follow, so take whichever conventional letter needs the smaller
-    // accidental, breaking ties on the tonic's own side.
-    const flat = letterFor(tonic, CHROMATIC_SPELLING[offset], pc);
+    // accidental. Ties go to the side the scale itself leans: a flat tonic or a
+    // minor third both mean flats (C blues spells Gb and Bb, not F# and A#).
+    const flat = letterFor(tonic, CHROMATIC_SPELLING_FLAT[offset], pc);
     const sharp = letterFor(tonic, CHROMATIC_SPELLING_SHARP[offset], pc);
-    const best = pickSpelling(flat, sharp, tonic.alter < 0);
+    const best = pickSpelling(flat, sharp, tonic.alter < 0 || hasMinorThird(key));
     if (best !== undefined) {
       return best;
     }

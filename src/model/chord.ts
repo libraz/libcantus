@@ -438,16 +438,30 @@ export class Chord {
   /**
    * Spell the chord tones with letter names, root first, in the key's spelling.
    *
+   * A chord that already knows how its root is spelled — one from
+   * `Chord.parse`, or `Chord.of` with a named root — can spell itself with no
+   * key at all; a key is only needed to choose a spelling for a bare pitch
+   * class.
+   *
    * @param key Key providing the spelled tonic; falls back to the carried
-   *   context.
+   *   context, then to the chord's own root spelling.
    * @returns Spelled octave-less notes in the chord's own (tertian) order.
-   * @throws If no key is given and none is carried.
+   * @throws If no key is given, none is carried, and the chord has no root
+   *   spelling of its own.
    */
   spell(key?: Key): Note[] {
-    const resolved = this.#resolveKey(key);
-    return spellChord(this.#data, resolved.tonic.data, resolved.scale).map(
-      (note) => new Note(note),
-    );
+    const data = this.#data;
+    const resolved = key ?? this.#key;
+    if (resolved === undefined) {
+      const root = data.rootSpelling;
+      if (root === undefined) {
+        throw new Error(
+          'chord has no key context and no root spelling; pass a Key, attach one with withKey(), or build the chord from a symbol',
+        );
+      }
+      return spellChordFromRoot(data, root).map((note) => new Note(note));
+    }
+    return spellChord(data, resolved.tonic.data, resolved.scale).map((note) => new Note(note));
   }
 
   /**

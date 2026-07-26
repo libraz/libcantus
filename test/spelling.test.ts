@@ -155,8 +155,9 @@ describe('spellPitchClasses', () => {
     ]);
   });
 
-  it('falls back to a sharp spelling of the nearest natural for a non-heptatonic scale', () => {
-    // A whole-tone scale is not heptatonic, so degrees are named tone-by-tone.
+  it('names a non-heptatonic scale tone by tone, on the side the scale leans', () => {
+    // A whole-tone scale has no letter-per-degree spelling and no minor third,
+    // so from a natural tonic its altered tones take sharps.
     expect(
       noteNames(spellPitchClasses([0, 2, 6, 10], parseNote('C'), scaleByName('wholeTone', 0))),
     ).toEqual(['C', 'D', 'F#', 'A#']);
@@ -323,5 +324,30 @@ describe('Note.transpose keeps the spelling', () => {
   it('honours an explicit spelling preference', () => {
     expect(Note.of('Ab4').transpose(2, { spelling: 'sharp' }).name).toBe('A#4');
     expect(Note.of('C4').transpose(1, { spelling: 'flat' }).name).toBe('Db4');
+  });
+});
+
+describe('non-heptatonic scales lean the way the scale does', () => {
+  it('spells the blues scale with flats', () => {
+    expect(Key.named('blues', 'C').noteNames()).toEqual(['C', 'Eb', 'F', 'Gb', 'G', 'Bb']);
+    expect(Key.named('minorPentatonic', 'C').noteNames()).toEqual(['C', 'Eb', 'F', 'G', 'Bb']);
+  });
+
+  it('keeps the whole-tone scale on sharps', () => {
+    expect(Key.named('wholeTone', 'C').noteNames()).toEqual(['C', 'D', 'E', 'F#', 'G#', 'A#']);
+  });
+
+  it('spells a chord from its own root when no key is attached', () => {
+    expect(
+      Chord.parse('Bb7')
+        .spell()
+        .map((n) => n.name),
+    ).toEqual(['Bb', 'D', 'F', 'Ab']);
+    expect(
+      Chord.of('F#', 'min')
+        .spell()
+        .map((n) => n.name),
+    ).toEqual(['F#', 'A', 'C#']);
+    expect(() => Chord.from(makeChord(0, 'maj')).spell()).toThrow();
   });
 });
