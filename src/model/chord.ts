@@ -484,7 +484,7 @@ export class Chord {
    */
   equals(other: Chord): boolean {
     const a = this.#data;
-    const b = other.#data;
+    const b = other.data;
     return (
       a.rootPc === b.rootPc &&
       a.quality === b.quality &&

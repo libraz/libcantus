@@ -10,6 +10,10 @@ export default defineConfig({
     'src/model/index.ts',
   ],
   format: ['esm', 'cjs'],
+  // Share chunks in the CommonJS build too. Without it every entry inlines its
+  // own copy of the model classes, so a consumer importing from both the root
+  // and the /model subpath ends up with two unrelated constructors.
+  splitting: true,
   dts: true,
   clean: true,
   sourcemap: true,

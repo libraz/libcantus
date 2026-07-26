@@ -151,7 +151,11 @@ export class Note {
    * @returns The diatonic number, quality, and semitone span.
    */
   intervalTo(other: Note): SpelledInterval {
-    return spelledInterval(this.#data, other.#data);
+    // Read the other note through its public accessor rather than its private
+    // field: a bundler that emits two copies of this class — as a CommonJS
+    // build without shared chunks does for the root and /model entries — would
+    // otherwise throw on the brand check.
+    return spelledInterval(this.#data, other.data);
   }
 
   /**
@@ -161,10 +165,11 @@ export class Note {
    * @returns True if the spellings are identical.
    */
   equals(other: Note): boolean {
+    const b = other.data;
     return (
-      this.#data.letter === other.#data.letter &&
-      this.#data.alter === other.#data.alter &&
-      this.#data.octave === other.#data.octave
+      this.#data.letter === b.letter &&
+      this.#data.alter === b.alter &&
+      this.#data.octave === b.octave
     );
   }
 

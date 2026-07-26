@@ -54,6 +54,24 @@ if (modules.some((value) => Object.keys(value).length === 0)) {
 if (root.majorKey(0).rootPc !== 0 || model.Key.major('Eb').chord(0).symbol() !== 'Eb') {
   throw new Error('package runtime returned an unexpected result');
 }
+// A class reached through the root entry and the same class reached through the
+// /model subpath must be the same class: without shared chunks the CommonJS
+// build emits two copies, and every cross-entry comparison throws on the brand
+// check instead of answering.
+const fromRoot = root.Note.of('C4');
+const fromModel = model.Note.of('D4');
+if (fromRoot.equals(fromModel) !== false) {
+  throw new Error('cross-entry Note.equals disagreed');
+}
+if (fromRoot.intervalTo(fromModel).semitones !== 2) {
+  throw new Error('cross-entry Note.intervalTo disagreed');
+}
+if (!root.Chord.parse('Cmaj7').equals(model.Chord.parse('Cmaj7'))) {
+  throw new Error('cross-entry Chord.equals disagreed');
+}
+if (!(fromModel instanceof root.Note) || !(fromRoot instanceof model.Note)) {
+  throw new Error('cross-entry instanceof disagreed');
+}
 `;
 
 const typeParityCheck = `
@@ -206,5 +224,5 @@ const chordNotes = melodyAndChordNotes;
       ),
     ) as { exports: Record<string, { require: { types: string } }> };
     expect(installedPackage.exports['.']?.require.types).toBe('./dist/index.d.cts');
-  }, 30_000);
+  }, 120_000);
 });

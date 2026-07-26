@@ -2,6 +2,12 @@
  * Public API of the generate layer. Re-exports every generate-layer module;
  * also available from the package root.
  */
+
+// ChordSpan is defined in the theory layer but appears in this layer's public
+// signatures (generateProgression's return, HarmonizeResult.chords), so it is
+// re-exported here: a consumer of the /generate subpath must be able to name
+// every type those signatures mention.
+export type { ChordSpan } from '../theory/chord/index.js';
 export type { BassLineOptions, BassSegment, BassStyle } from './bass/index.js';
 export { generateBassLine } from './bass/index.js';
 export type { CounterMelodyOptions } from './countermelody/index.js';
