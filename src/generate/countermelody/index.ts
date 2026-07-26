@@ -65,7 +65,11 @@ export type CounterMelodyOptions = {
   /** Highest MIDI pitch the counter line may use (default derived from `register`). */
   pitchHigh?: number;
   /**
-   * PRNG seed; the same seed always yields the same line.
+   * PRNG seed. It places the `'complement'` onsets and breaks ties between
+   * equally good candidate pitches; the same seed always yields the same line.
+   * Where the constraints leave only one good answer — which is common with
+   * `rhythm: 'follow'`, whose onsets are fixed by the melody — changing the seed
+   * changes nothing.
    *
    * @defaultValue 0
    */
@@ -104,6 +108,14 @@ const DEFAULT_MELODY_VELOCITY = 96;
 
 /** How far below the concurrent melody velocity the counter line sits. */
 const VELOCITY_DROP = 16;
+
+/**
+ * Magnitude of the seed-driven per-candidate perturbation. Kept far below the
+ * smallest real score difference (the register-centre term alone moves in steps
+ * of 0.02), so the seed can only decide between candidates whose scores are
+ * otherwise exactly equal, and never overrides consonance or motion.
+ */
+const TIE_BREAK_JITTER = 1e-6;
 
 /** Whether a beat position falls on a whole quarter-note beat. */
 function isWholeBeat(beat: number): boolean {
@@ -255,27 +267,66 @@ function heldNoteBoundaries(
 }
 
 /**
+ * Everything about one boundary inside a held counter note that does not depend
+ * on which pitch is being tried there.
+ */
+type BoundaryContext = {
+  /** Melody voice sounding at the boundary, if any. */
+  melodyVoice: VoiceSnapshot | undefined;
+  /** `melodyVoice` in the array shape the safety query takes. */
+  otherVoices: VoiceSnapshot[];
+  /** Chord reported by the caller's callback at the boundary. */
+  chord: Chord | null;
+  /** Whether the boundary is a strong beat of the meter. */
+  strongBeat: boolean;
+  /** Whether the boundary is the counter note's own onset. */
+  atCounterOnset: boolean;
+};
+
+/**
+ * Resolve the candidate-independent context at every boundary a counter note
+ * spans. This is computed once per onset rather than once per candidate pitch,
+ * which is what keeps the caller's `chordAt` callback from being invoked once
+ * per pitch in the register.
+ */
+function boundaryContexts(
+  melody: NoteEventIndex,
+  opts: CounterMelodyOptions,
+  startBeat: number,
+  endBeat: number,
+  ts: TimeSignature,
+): BoundaryContext[] {
+  const boundaries = heldNoteBoundaries(melody, startBeat, endBeat, opts.chordChangeBeats ?? []);
+  return boundaries.map((boundary) => {
+    const melodyVoice = melodySnapshotAt(melody, boundary);
+    return {
+      melodyVoice,
+      otherVoices: melodyVoice === undefined ? [] : [melodyVoice],
+      chord: opts.chordAt(boundary),
+      strongBeat: isStrongBeat(boundary, ts),
+      atCounterOnset: Math.abs(boundary - startBeat) < EPS,
+    };
+  });
+}
+
+/**
  * Worst safety reached while `pitch` is held through its complete interval.
  * A wrong-side crossing is treated as unavailable. Safe candidates are later
  * preferred over Warning candidates; Dissonant candidates are never emitted.
  */
 function heldPitchSafety(
   pitch: number,
-  startBeat: number,
-  endBeat: number,
+  contexts: BoundaryContext[],
   prevPitch: number | undefined,
-  melody: NoteEventIndex,
-  opts: CounterMelodyOptions,
+  key: KeyScale,
   profile: 'strict' | 'pop',
   register: 'above' | 'below',
   low: number,
   high: number,
-  ts: TimeSignature,
 ): NoteSafety | null {
   let worst = NoteSafety.Safe;
-  const boundaries = heldNoteBoundaries(melody, startBeat, endBeat, opts.chordChangeBeats ?? []);
-  for (const boundary of boundaries) {
-    const melodyVoice = melodySnapshotAt(melody, boundary);
+  for (const context of contexts) {
+    const melodyVoice = context.melodyVoice;
     if (
       melodyVoice !== undefined &&
       ((register === 'below' && pitch >= melodyVoice.pitch) ||
@@ -283,18 +334,22 @@ function heldPitchSafety(
     ) {
       return null;
     }
-    const atCounterOnset = Math.abs(boundary - startBeat) < EPS;
-    const result = evaluateSafety({
-      profile,
-      candidatePitch: pitch,
-      prevPitch: atCounterOnset ? prevPitch : pitch,
-      chord: opts.chordAt(boundary),
-      key: opts.key,
-      otherVoices: melodyVoice ? [melodyVoice] : [],
-      strongBeat: isStrongBeat(boundary, ts),
-      vocalLow: low,
-      vocalHigh: high,
-    });
+    // Only `safety` is read, so the suggestion search is turned off rather than
+    // run once per candidate and discarded.
+    const result = evaluateSafety(
+      {
+        profile,
+        candidatePitch: pitch,
+        prevPitch: context.atCounterOnset ? prevPitch : pitch,
+        chord: context.chord,
+        key,
+        otherVoices: context.otherVoices,
+        strongBeat: context.strongBeat,
+        vocalLow: low,
+        vocalHigh: high,
+      },
+      { suggestions: false },
+    );
     worst = Math.max(worst, result.safety) as NoteSafety;
     if (worst === NoteSafety.Dissonant) {
       return worst;
@@ -313,8 +368,10 @@ function heldPitchSafety(
  * consonant tensions against the sounding melody note), rejecting candidates
  * that would form a parallel perfect interval with the melody or sit on the
  * wrong side of it, then scored to favour contrary or oblique motion, imperfect
- * consonance, and stepwise movement. Ties break toward the lower pitch, so a
- * given seed always yields the same line. Notes extend to the next counter
+ * consonance, and stepwise movement. Ties are broken by a seeded perturbation far
+ * below any real score difference (see {@link TIE_BREAK_JITTER}), so the same
+ * seed always yields the same line while a different seed can only reshuffle
+ * candidates that were already equally good. Notes extend to the next counter
  * onset (the last to the melody's end) at a velocity slightly under the melody.
  *
  * @param opts The lead line, chord context callback, key, and generation knobs.
@@ -377,7 +434,16 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
     rhythm === 'follow'
       ? followOnsets(melody)
       : complementOnsets(melody, ts, spanStart, spanEnd, rng);
-  assertGenerationBudget(onsets.length * (high - low + 1), 'countermelody search');
+  // Each candidate pitch is evaluated at every boundary its note spans, and the
+  // boundaries partition the melody's span, so the whole search is bounded by
+  // the total boundary count times the register width.
+  const boundaryEstimate =
+    onsets.length +
+    Math.ceil((spanEnd - spanStart) / GRID_STEP) +
+    melody.notes.length +
+    (opts.chordChangeBeats?.length ?? 0);
+  assertGenerationBudget(boundaryEstimate * (high - low + 1), 'countermelody search');
+  const jitter = Array.from({ length: high - low + 1 }, () => rng.next() * TIE_BREAK_JITTER);
 
   const out: NoteEvent[] = [];
   let prevPitch: number | undefined;
@@ -392,7 +458,8 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
     const melPitch = melNote?.pitch;
     const melodyVoice = melodySnapshotAt(melody, beat);
     const melPrev = melodyVoice?.prevPitch;
-    const chord = opts.chordAt(beat);
+    const contexts = boundaryContexts(melody, opts, beat, endBeat, ts);
+    const chord = contexts[0]?.chord ?? opts.chordAt(beat);
     const otherVoices: VoiceSnapshot[] = melodyVoice !== undefined ? [melodyVoice] : [];
 
     const candidates = enumerateSafePitches(
@@ -416,16 +483,13 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
     for (const candidate of candidates) {
       const worstSafety = heldPitchSafety(
         candidate,
-        beat,
-        endBeat,
+        contexts,
         prevPitch,
-        melody,
-        opts,
+        opts.key,
         profile,
         register,
         low,
         high,
-        ts,
       );
       if (worstSafety === null || worstSafety === NoteSafety.Dissonant) {
         continue;
@@ -441,7 +505,9 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
           continue;
         }
       }
-      const score = scoreCandidate(candidate, melPitch, melPrev, prevPitch, chord, center);
+      const score =
+        scoreCandidate(candidate, melPitch, melPrev, prevPitch, chord, center) +
+        (jitter[candidate - low] ?? 0);
       const tie =
         Math.abs(score - bestScore) <= EPS && candidate < (bestPitch ?? Number.POSITIVE_INFINITY);
       if (

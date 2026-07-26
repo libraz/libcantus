@@ -46,6 +46,56 @@ function generate(over: Partial<CounterMelodyOptions> = {}): NoteEvent[] {
   return generateCounterMelody({ melody, chordAt, key: cMajor, ...over });
 }
 
+describe('countermelody search cost', () => {
+  it('resolves each boundary once per onset, not once per candidate pitch', () => {
+    // The chord callback, the melody snapshot and the strong-beat test are all
+    // independent of which pitch is being tried, so widening the register must
+    // not multiply the number of callback invocations.
+    function callsFor(pitchLow: number, pitchHigh: number): number {
+      let calls = 0;
+      generateCounterMelody({
+        melody,
+        key: cMajor,
+        pitchLow,
+        pitchHigh,
+        chordAt: (beat) => {
+          calls += 1;
+          return chordAt(beat);
+        },
+      });
+      return calls;
+    }
+    const narrow = callsFor(52, 55);
+    const wide = callsFor(40, 67);
+    expect(narrow).toBeGreaterThan(0);
+    expect(wide).toBe(narrow);
+  });
+});
+
+describe('countermelody seeding', () => {
+  it('is reproducible per seed and stays consonant across seeds', () => {
+    for (const rhythm of ['complement', 'follow'] as const) {
+      for (const seed of [0, 1, 2, 17, 512]) {
+        const line = generate({ rhythm, seed });
+        expect(generate({ rhythm, seed })).toEqual(line);
+        for (const note of line) {
+          const mel = soundingAt(melody, note.startBeat);
+          if (mel) {
+            // The seed only decides between candidates of equal score, so it can
+            // never push the counter line onto the wrong side of the melody.
+            expect(note.pitch).toBeLessThan(mel.pitch);
+          }
+        }
+      }
+    }
+  });
+
+  it('fixes follow onsets to the melody regardless of seed', () => {
+    const onsets = (seed: number) => generate({ rhythm: 'follow', seed }).map((n) => n.startBeat);
+    expect(onsets(3)).toEqual(onsets(0));
+  });
+});
+
 describe('generateCounterMelody', () => {
   it('returns [] for an empty melody', () => {
     expect(generateCounterMelody({ melody: [], chordAt, key: cMajor })).toEqual([]);
