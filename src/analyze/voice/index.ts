@@ -29,20 +29,38 @@ export type TheoryLabel =
 /**
  * A note with its theory labels and a short rationale.
  *
+ * The labels describe the note against the chord sounding at its **onset**;
+ * they are not re-derived for the later chords a long note sustains across.
+ * `analyzeArrangement` does re-check every crossed chord change, and reports
+ * what it finds as conflicts, so a note labelled a chord tone here can still
+ * appear in `conflicts` at a later beat.
+ *
+ * The identity fields make an annotation mappable back to the caller's input:
+ * `originalIndex` is the note's position in the array that was passed in, and
+ * `trackIndex` is set by {@link analyzeArrangement}.
+ *
  * @category Arrangement & Analysis
  */
 export type AnalyzedNote = {
   noteId: number;
+  /** The note's index in the caller's own array, when the caller supplied one. */
+  originalIndex?: number;
+  /** The note's track, set by `analyzeArrangement`. */
+  trackIndex?: number;
+  pitch: number;
+  startBeat: number;
+  durationBeat: number;
   labels: TheoryLabel[];
   rationale?: string;
 };
 
 /**
- * A single note in a monophonic voice: a {@link NoteEvent} with a stable id.
+ * A single note in a monophonic voice: a {@link NoteEvent} with a stable id and,
+ * optionally, its index in the caller's original array.
  *
  * @category Arrangement & Analysis
  */
-export type VoiceNote = NoteEvent & { id: number };
+export type VoiceNote = NoteEvent & { id: number; originalIndex?: number };
 
 /** Float tolerance for beat comparisons. */
 const EPS = 1e-9;
@@ -299,7 +317,18 @@ export function analyzeVoice(
       labels.push({ kind: 'leadingTone', resolveTo: next.pitch });
     }
 
-    result.push({ noteId: note.id, labels, rationale: describe(labels) });
+    const analyzed: AnalyzedNote = {
+      noteId: note.id,
+      pitch: note.pitch,
+      startBeat: note.startBeat,
+      durationBeat: note.durationBeat,
+      labels,
+      rationale: describe(labels),
+    };
+    if (note.originalIndex !== undefined) {
+      analyzed.originalIndex = note.originalIndex;
+    }
+    result.push(analyzed);
   }
 
   return result;

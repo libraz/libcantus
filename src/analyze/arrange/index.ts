@@ -9,7 +9,7 @@
  */
 
 export type { TensionPoint } from './tension.js';
-export { tensionCurve } from './tension.js';
+export { tensionCurve, tensionCurveFrom } from './tension.js';
 export type {
   ArrangementAnalysis,
   ArrangementOptions,

@@ -14,7 +14,7 @@ import type { Chord, ChordSpan } from '../../theory/chord/index.js';
 import { chordPitchClasses, makeChord } from '../../theory/chord/index.js';
 import { isScaleTone, majorKey } from '../../theory/scale/index.js';
 import type { ChordMatch } from '../detect/index.js';
-import { detectChord, detectChordBest, detectKey } from '../detect/index.js';
+import { detectChord, detectChordBest, detectKeyFromNotes } from '../detect/index.js';
 import type { Cadence } from '../functional/index.js';
 import { detectCadence } from '../functional/index.js';
 
@@ -83,16 +83,30 @@ export function chordTimelineFromChords(chords: ChordSpan[], totalBeats: number)
   return { at: segmentLookup(segments), segments };
 }
 
-/** Build the `at(beat)` lookup over a segment list. */
+/**
+ * Build the `at(beat)` lookup over a segment list.
+ *
+ * Segments are disjoint and in beat order, so the covering one is found by
+ * binary search. A linear scan here is the inner loop of arrangement analysis,
+ * which queries it once per note per chord change.
+ */
 function segmentLookup(segments: ChordSegment[]): (beat: number) => Chord | null {
   return (beat) => {
     assertFiniteNumber(beat, 'timeline query beat');
-    for (const seg of segments) {
-      if (beat >= seg.startBeat && beat < seg.endBeat) {
-        return seg.chord;
+    let low = 0;
+    let high = segments.length;
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      if ((segments[middle]?.startBeat ?? Number.POSITIVE_INFINITY) <= beat) {
+        low = middle + 1;
+      } else {
+        high = middle;
       }
     }
-    return null;
+    const candidate = segments[low - 1];
+    return candidate !== undefined && beat >= candidate.startBeat && beat < candidate.endBeat
+      ? candidate.chord
+      : null;
   };
 }
 
@@ -125,7 +139,7 @@ const MISMATCH_PENALTY = 0.3;
  * @category Arrangement & Analysis
  */
 export type ChordTimelineOptions = {
-  /** Key context; inferred from the notes with {@link detectKey} when omitted. */
+  /** Key context; inferred from the notes with {@link detectKeyFromNotes} when omitted. */
   key?: KeyScale;
   /**
    * Time signature used for metric accents; defaults to 4/4.
@@ -357,7 +371,10 @@ export function chordTimelineFromNotes(
   const lastNoteEnd = sounding.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
   const totalBeats = opts.totalBeats ?? lastNoteEnd;
   assertRange(totalBeats, 0, Number.MAX_SAFE_INTEGER, 'timeline totalBeats');
-  const key = opts.key ?? detectKey(sounding.map((n) => n.pitch))[0]?.key ?? majorKey(0);
+  // Weighted by duration and velocity, exactly as the per-window chord
+  // histogram below is: a busy ornamental figure must not outvote the sustained
+  // harmony that establishes the key.
+  const key = opts.key ?? detectKeyFromNotes(sounding)[0]?.key ?? majorKey(0);
 
   const segments: ChordSegment[] = [];
   const segmentConfidence: number[] = [];

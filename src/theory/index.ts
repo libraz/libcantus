@@ -45,6 +45,7 @@ export {
 export type { HarmonyRole, LockLevel, VoicedRole } from './harmony/index.js';
 export { roleOf } from './harmony/index.js';
 export type {
+  EvaluateSafetyOptions,
   SafetyProfile,
   SafetyQuery,
   SafetyResult,

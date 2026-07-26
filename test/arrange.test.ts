@@ -3,6 +3,7 @@ import {
   type ArrangementTrack,
   analyzeArrangement,
   tensionCurve,
+  tensionCurveFrom,
 } from '../src/analyze/arrange/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import { evaluateSafety, NoteSafety, ReasonFlag } from '../src/theory/safety/index.js';
@@ -328,5 +329,129 @@ describe('tensionCurve', () => {
   it('honours a custom sampling step', () => {
     const points = tensionCurve(baseArrangement(), { key: majorKey(0), step: 4 });
     expect(points.map((p) => p.beat)).toEqual([0, 4, 8, 12]);
+  });
+
+  it('reuses an analysis instead of inferring the harmony twice', () => {
+    const tracks = baseArrangement();
+    const analysis = analyzeArrangement(tracks);
+    expect(tensionCurveFrom(tracks, analysis)).toEqual(tensionCurve(tracks));
+  });
+});
+
+describe('percussion tracks', () => {
+  /** A four-on-the-floor kick plus a chromatic spread of drum-map pitches. */
+  function drumTrack(): NoteEvent[] {
+    const hits: NoteEvent[] = [];
+    for (let beat = 0; beat < 16; beat += 1) {
+      hits.push({ pitch: 36, startBeat: beat, durationBeat: 0.25 }); // kick
+      hits.push({ pitch: 42, startBeat: beat + 0.5, durationBeat: 0.25 }); // closed hat
+      hits.push({ pitch: 49, startBeat: beat, durationBeat: 0.25 }); // crash
+    }
+    return hits;
+  }
+
+  it('leaves key and timeline identical to the arrangement without them', () => {
+    const withoutDrums = analyzeArrangement(baseArrangement());
+    const withDrums = analyzeArrangement([
+      ...baseArrangement(),
+      { name: 'drums', role: 'drums', notes: drumTrack() },
+    ]);
+    expect(withDrums.key).toEqual(withoutDrums.key);
+    expect(withDrums.timeline.segments).toEqual(withoutDrums.timeline.segments);
+    expect(withDrums.segmentConfidence).toEqual(withoutDrums.segmentConfidence);
+  });
+
+  it('reports the track but annotates nothing in it, and raises no conflicts', () => {
+    const analysis = analyzeArrangement([
+      ...baseArrangement(),
+      { name: 'drums', role: 'drums', notes: drumTrack() },
+    ]);
+    const drums = analysis.tracks.find((track) => track.role === 'drums');
+    expect(drums).toBeDefined();
+    expect(drums?.notes).toEqual([]);
+    expect(analysis.conflicts.some((c) => c.trackName === 'drums')).toBe(false);
+  });
+
+  it('does not let percussion count as a sounding voice', () => {
+    const drums = analyzeArrangement([
+      ...baseArrangement(),
+      { name: 'drums', role: 'drums', notes: drumTrack() },
+    ]);
+    const plain = analyzeArrangement(baseArrangement());
+    expect(drums.conflicts).toEqual(plain.conflicts);
+  });
+});
+
+describe('analysis cost', () => {
+  it('analyses a large arrangement without a quadratic blow-up', () => {
+    // Not a timing assertion: the guard is that the whole analysis finishes
+    // inside the test timeout. A per-beat scan of every note in the piece —
+    // which is what this replaced — takes minutes at this size.
+    const notes: NoteEvent[] = [];
+    for (let i = 0; i < 32_000; i += 1) {
+      notes.push({ pitch: 48 + (i % 24), startBeat: i * 0.25, durationBeat: 0.5 });
+    }
+    const analysis = analyzeArrangement([{ notes }]);
+    expect(analysis.tracks[0]?.notes).toHaveLength(32_000);
+  }, 20_000);
+});
+
+describe('conflict traceability', () => {
+  it('maps every conflict back to the note the caller passed in', () => {
+    const tracks = baseArrangement();
+    const analysis = analyzeArrangement(tracks);
+    expect(analysis.conflicts.length).toBeGreaterThan(0);
+    for (const conflict of analysis.conflicts) {
+      const source = tracks[conflict.trackIndex]?.notes[conflict.originalIndex ?? -1];
+      expect(source, `${conflict.trackName}@${conflict.beat}`).toBeDefined();
+      expect(source?.pitch).toBe(conflict.pitch);
+      const analyzed = analysis.tracks[conflict.trackIndex]?.notes.find(
+        (note) => note.noteId === conflict.noteId,
+      );
+      expect(analyzed?.pitch).toBe(conflict.pitch);
+      expect(conflict.labels).toEqual(analyzed?.labels);
+    }
+  });
+
+  it('carries pitch and onset on every annotation', () => {
+    const tracks = baseArrangement();
+    const analysis = analyzeArrangement(tracks);
+    for (let index = 0; index < tracks.length; index += 1) {
+      for (const note of analysis.tracks[index]?.notes ?? []) {
+        const source = tracks[index]?.notes[note.originalIndex ?? -1];
+        expect(source?.pitch).toBe(note.pitch);
+        expect(source?.startBeat).toBe(note.startBeat);
+        expect(note.trackIndex).toBe(index);
+      }
+    }
+  });
+
+  it('narrows the report with minSeverity', () => {
+    const tracks = baseArrangement();
+    const all = analyzeArrangement(tracks).conflicts;
+    const severe = analyzeArrangement(tracks, { minSeverity: NoteSafety.Dissonant }).conflicts;
+    expect(severe.length).toBeLessThanOrEqual(all.length);
+    for (const conflict of severe) {
+      expect(conflict.safety).toBe(NoteSafety.Dissonant);
+    }
+  });
+});
+
+describe('sub-voice assignment', () => {
+  it('follows pitch rather than lane order after a chord thins out', () => {
+    // A two-note chord followed by a single melodic line sitting on the upper
+    // note. Packing by lane availability alone hands the line to the lane the
+    // low note was on, inventing a seventh leap that is not in the music.
+    const notes: NoteEvent[] = [
+      { pitch: 60, startBeat: 0, durationBeat: 1 },
+      { pitch: 72, startBeat: 0, durationBeat: 1 },
+      { pitch: 71, startBeat: 1, durationBeat: 1 },
+      { pitch: 69, startBeat: 2, durationBeat: 1 },
+      { pitch: 67, startBeat: 3, durationBeat: 1 },
+    ];
+    const analysis = analyzeArrangement([{ name: 'piano', notes }], { key: majorKey(0) });
+    for (const conflict of analysis.conflicts) {
+      expect(conflict.reasons & ReasonFlag.LargeLeap, `beat ${conflict.beat}`).toBeFalsy();
+    }
   });
 });

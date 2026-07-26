@@ -18,21 +18,32 @@ import {
   type SafetyProfile,
   type VoiceSnapshot,
 } from '../../theory/safety/index.js';
+import { majorKey } from '../../theory/scale/index.js';
+import { detectKeyFromNotes } from '../detect/index.js';
 import {
   type CadenceHit,
   type ChordTimeline,
   chordTimelineFromNotes,
   detectCadences,
 } from '../timeline/index.js';
-import { type AnalyzedNote, analyzeVoice, type VoiceNote } from '../voice/index.js';
-import { covers, EPS, type PreparedTrack, poolNotes, prepareTracks } from './internal.js';
+import {
+  type AnalyzedNote,
+  analyzeVoice,
+  type TheoryLabel,
+  type VoiceNote,
+} from '../voice/index.js';
+import { EPS, isPercussion, type PreparedTrack, poolNotes, prepareTracks } from './internal.js';
 
 /**
  * The musical role a track plays in the arrangement.
  *
+ * `drums` marks a percussion track. Its pitches select instruments rather than
+ * naming harmony, so such a track is excluded from chord and key inference and
+ * from every voice-leading comparison; it is reported back with no annotations.
+ *
  * @category Arrangement & Analysis
  */
-export type TrackRole = 'melody' | 'harmony' | 'bass' | 'other';
+export type TrackRole = 'melody' | 'harmony' | 'bass' | 'drums' | 'other';
 
 /**
  * One input track: its notes plus optional name and role.
@@ -65,7 +76,19 @@ export type TrackAnalysis = {
 export type Conflict = {
   beat: number;
   trackName: string;
+  /** The clashing track's index in the caller's input array. */
+  trackIndex: number;
+  /** The note's index in that track's own note array. */
+  originalIndex?: number;
+  /** The id the note carries in {@link TrackAnalysis.notes}. */
+  noteId: number;
   pitch: number;
+  /**
+   * The note's theory labels at its onset, so a caller can tell a genuine clash
+   * from a passing tone, a neighbour, or a prepared suspension — all of which
+   * are ordinary non-chord tones that still evaluate as unsafe.
+   */
+  labels: TheoryLabel[];
   /** The clash severity: {@link NoteSafety.Warning} or {@link NoteSafety.Dissonant}. */
   safety: NoteSafety;
   /** {@link import('../safety/index.js').SafetyResult.reasons} bitmask. */
@@ -100,6 +123,23 @@ export type ArrangementAnalysis = {
 export type ArrangementOptions = {
   /** Key context; inferred from the pooled notes when omitted. */
   key?: KeyScale;
+  /**
+   * A chord timeline to analyse against, instead of inferring one from the
+   * notes. Supply it to analyse a hand-written progression, or to reuse the
+   * timeline of an earlier call rather than re-running chord inference.
+   */
+  timeline?: ChordTimeline;
+  /**
+   * Indices of the tracks the harmony is inferred from. Defaults to every
+   * pitched track. Percussion tracks are excluded either way.
+   */
+  harmonyTracks?: number[];
+  /**
+   * Lowest severity reported in `conflicts`.
+   *
+   * @defaultValue {@link NoteSafety.Warning}
+   */
+  minSeverity?: NoteSafety;
   /**
    * Time signature; defaults to 4/4.
    *
@@ -147,34 +187,46 @@ function otherVoicesSounding(
   const out: VoiceSnapshot[] = [];
   for (let t = 0; t < prepared.length; t += 1) {
     const track = prepared[t];
-    if (!track) {
+    if (!track || isPercussion(track.role)) {
       continue;
     }
     for (let v = 0; v < track.voices.length; v += 1) {
       if (t === excludeTrack && v === excludeVoice) {
         continue;
       }
-      const subVoice = track.voices[v];
-      if (!subVoice) {
+      // Each sub-voice is monophonic, so this is one binary search per voice
+      // rather than a scan of every note in the arrangement.
+      const note = track.voices[v]?.at(beat);
+      if (note === undefined) {
         continue;
       }
-      for (const note of subVoice.sounding) {
-        if (!covers(note, beat)) {
-          continue;
-        }
-        const snap: VoiceSnapshot = { pitch: note.pitch };
-        // Motion reasons compare one real transition shared by both voices.
-        // A voice attacking exactly here contributes its adjacent predecessor;
-        // a sustained voice contributes the same pitch (oblique motion).
-        const previous = Math.abs(note.startBeat - beat) <= EPS ? note.prevPitch : note.pitch;
-        if (previous !== undefined) {
-          snap.prevPitch = previous;
-        }
-        out.push(snap);
+      const snap: VoiceSnapshot = { pitch: note.pitch };
+      // Motion reasons compare one real transition shared by both voices.
+      // A voice attacking exactly here contributes its adjacent predecessor;
+      // a sustained voice contributes the same pitch (oblique motion).
+      const previous = Math.abs(note.startBeat - beat) <= EPS ? note.prevPitch : note.pitch;
+      if (previous !== undefined) {
+        snap.prevPitch = previous;
       }
+      out.push(snap);
     }
   }
   return out;
+}
+
+/** Index of the first segment starting strictly after a beat. */
+function firstSegmentAfter(timeline: ChordTimeline, beat: number): number {
+  let low = 0;
+  let high = timeline.segments.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if ((timeline.segments[middle]?.startBeat ?? Number.POSITIVE_INFINITY) <= beat + EPS) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+  return low;
 }
 
 /**
@@ -182,14 +234,19 @@ function otherVoicesSounding(
  * plus the onset of every later chord segment the note sustains across. Each
  * crossed segment is visited exactly once (at its own start), so a boundary
  * beat is never evaluated twice for the same note.
+ *
+ * Segments are in beat order, so the crossed ones are a contiguous run found by
+ * binary search rather than by scanning the whole timeline for every note.
  */
 function evaluationBeats(note: VoiceNote, timeline: ChordTimeline): number[] {
   const noteEnd = note.startBeat + note.durationBeat;
   const beats = [note.startBeat];
-  for (const segment of timeline.segments) {
-    if (segment.startBeat > note.startBeat + EPS && segment.startBeat < noteEnd - EPS) {
-      beats.push(segment.startBeat);
+  for (let i = firstSegmentAfter(timeline, note.startBeat); i < timeline.segments.length; i += 1) {
+    const start = timeline.segments[i]?.startBeat;
+    if (start === undefined || start >= noteEnd - EPS) {
+      break;
     }
+    beats.push(start);
   }
   return beats;
 }
@@ -197,12 +254,16 @@ function evaluationBeats(note: VoiceNote, timeline: ChordTimeline): number[] {
 /**
  * Analyse a whole arrangement against a single inferred harmony.
  *
- * The chord timeline and key are inferred from the pooled notes of every track
- * (see {@link chordTimelineFromNotes}); pooling all voices is robust even when
- * roles are absent or a track doubles the harmony, so it is preferred over
- * deriving the harmony from a subset. Zero- and negative-length notes never
- * sound, so they are dropped at ingest and appear in neither the annotations
- * nor the conflicts.
+ * The chord timeline and key are inferred from the pooled notes of every
+ * pitched track (see {@link chordTimelineFromNotes}); pooling all voices is
+ * robust even when roles are absent or a track doubles the harmony, so it is
+ * preferred over deriving the harmony from a subset. A track marked
+ * `role: 'drums'` is excluded — its pitches name instruments, not harmony, and
+ * pooling them would corrupt the key, the timeline and every reading built on
+ * them. Pass `harmonyTracks` to restrict inference further, or `timeline` to
+ * analyse against a progression you already have. Zero- and negative-length
+ * notes never sound, so they are dropped at ingest and appear in neither the
+ * annotations nor the conflicts.
  *
  * Voice analysis assumes one monophonic voice at a time, so each track is
  * first partitioned into monophonic sub-voices (a polyphonic block-chord track
@@ -214,6 +275,13 @@ function evaluationBeats(note: VoiceNote, timeline: ChordTimeline): number[] {
  * sustains across, so a held note that clashes with a later chord is caught:
  * evaluations that are not {@link NoteSafety.Safe} become conflicts, one per
  * clashing beat, sorted worst severity first and then by beat.
+ *
+ * Every ordinary non-chord tone — a passing note, a neighbour, a prepared
+ * suspension — is by definition unsafe against the chord under it, so the
+ * conflict list is a report, not a fault list. Each conflict carries the note's
+ * `labels` and its `trackIndex`/`originalIndex`, so a caller can tell those
+ * apart and map a conflict back to the note it passed in; `minSeverity` narrows
+ * the list to outright dissonance.
  *
  * @param tracks The tracks to analyse.
  * @param opts Analysis options; see {@link ArrangementOptions}.
@@ -245,13 +313,24 @@ export function analyzeArrangement(
     });
   }
   const profile: SafetyProfile = opts.profile ?? 'pop';
-  const pooled = poolNotes(tracks);
+  const minSeverity = opts.minSeverity ?? NoteSafety.Warning;
+  const harmonyTracks =
+    opts.harmonyTracks === undefined ? undefined : new Set(opts.harmonyTracks.map(Math.trunc));
+  const pooled = poolNotes(tracks, harmonyTracks);
 
-  const { timeline, key, segmentConfidence } = chordTimelineFromNotes(pooled, {
-    key: opts.key,
-    ts,
-    harmonicRhythm: opts.harmonicRhythm,
-  });
+  const inferred =
+    opts.timeline === undefined
+      ? chordTimelineFromNotes(pooled, {
+          key: opts.key,
+          ts,
+          harmonicRhythm: opts.harmonicRhythm,
+        })
+      : {
+          timeline: opts.timeline,
+          key: opts.key ?? detectKeyFromNotes(pooled)[0]?.key ?? majorKey(0),
+          segmentConfidence: opts.timeline.segments.map(() => 1),
+        };
+  const { timeline, key, segmentConfidence } = inferred;
   const cadences = detectCadences(timeline, key);
   const prepared = prepareTracks(tracks);
 
@@ -263,17 +342,23 @@ export function analyzeArrangement(
     if (!track) {
       continue;
     }
+    if (isPercussion(track.role)) {
+      // A drum hit has no harmonic reading, so labelling it against the chord
+      // would produce noise rather than analysis.
+      trackAnalyses.push({ name: track.name, role: track.role, notes: [] });
+      continue;
+    }
     const notes: AnalyzedNote[] = [];
     for (let v = 0; v < track.voices.length; v += 1) {
       const subVoice = track.voices[v];
       if (!subVoice) {
         continue;
       }
-      notes.push(
-        ...analyzeVoice(subVoice.voice, timeline.at, key, (beat) =>
-          otherVoicesSounding(prepared, t, v, beat),
-        ),
+      const analyzed = analyzeVoice(subVoice.voice, timeline.at, key, (beat) =>
+        otherVoicesSounding(prepared, t, v, beat),
       );
+      notes.push(...analyzed.map((note) => ({ ...note, trackIndex: track.trackIndex })));
+      const labelsById = new Map(analyzed.map((note) => [note.noteId, note.labels]));
 
       for (let noteIndex = 0; noteIndex < subVoice.voice.length; noteIndex += 1) {
         const note = subVoice.voice[noteIndex];
@@ -292,14 +377,20 @@ export function analyzeArrangement(
             otherVoices: otherVoicesSounding(prepared, t, v, beat),
             strongBeat: isStrongBeat(beat, ts),
           });
-          if (result.safety !== NoteSafety.Safe) {
+          if (result.safety !== NoteSafety.Safe && result.safety >= minSeverity) {
             const conflict: Conflict = {
               beat,
               trackName: track.name,
+              trackIndex: track.trackIndex,
+              noteId: note.id,
               pitch: note.pitch,
+              labels: labelsById.get(note.id) ?? [],
               safety: result.safety,
               reasons: result.reasons,
             };
+            if (note.originalIndex !== undefined) {
+              conflict.originalIndex = note.originalIndex;
+            }
             if (result.rationale !== undefined) {
               conflict.rationale = result.rationale;
             }

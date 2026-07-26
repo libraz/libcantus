@@ -16,10 +16,12 @@ import {
 } from '../../core/validation/index.js';
 import { chordPitchClasses } from '../../theory/chord/index.js';
 import { evaluateSafety, NoteSafety, type SafetyProfile } from '../../theory/safety/index.js';
+import { majorKey } from '../../theory/scale/index.js';
+import { detectKeyFromNotes } from '../detect/index.js';
 import { functionOf } from '../functional/index.js';
 import { type ChordTimeline, chordTimelineFromNotes } from '../timeline/index.js';
-import { covers, EPS, type PreparedTrack, poolNotes, prepareTracks } from './internal.js';
-import type { ArrangementOptions, ArrangementTrack } from './tracks.js';
+import { EPS, isPercussion, type PreparedTrack, poolNotes, prepareTracks } from './internal.js';
+import type { ArrangementAnalysis, ArrangementOptions, ArrangementTrack } from './tracks.js';
 
 /**
  * A tension reading sampled at a beat.
@@ -87,28 +89,46 @@ export function tensionCurve(
 ): TensionPoint[] {
   const ts = opts.ts ?? parseTimeSignature('4/4');
   assertTimeSignature(ts);
-  assertGenerationBudget(tracks.length, 'arrangement tracks');
+  const budget = opts.budget;
+  assertGenerationBudget(tracks.length, 'arrangement tracks', budget);
   for (let index = 0; index < tracks.length; index += 1) {
     assertNoteEvents(tracks[index]?.notes ?? [], `tracks[${index}].notes`, {
       allowNonPositiveDuration: true,
+      budget,
     });
   }
   const profile: SafetyProfile = opts.profile ?? 'pop';
   const step = opts.step ?? 1;
   assertRange(step, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'tension sampling step');
 
-  const pooled = poolNotes(tracks);
-  const totalBeats = pooled.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
-  const { timeline, key } = chordTimelineFromNotes(pooled, {
-    key: opts.key,
-    ts,
-    harmonicRhythm: opts.harmonicRhythm,
-  });
+  const harmonyTracks =
+    opts.harmonyTracks === undefined ? undefined : new Set(opts.harmonyTracks.map(Math.trunc));
+  const pooled = poolNotes(tracks, harmonyTracks);
+  const totalBeats = poolNotes(tracks).reduce(
+    (end, n) => Math.max(end, n.startBeat + n.durationBeat),
+    0,
+  );
+  const { timeline, key } =
+    opts.timeline === undefined
+      ? chordTimelineFromNotes(pooled, {
+          key: opts.key,
+          ts,
+          harmonicRhythm: opts.harmonicRhythm,
+          budget,
+        })
+      : {
+          timeline: opts.timeline,
+          key: opts.key ?? detectKeyFromNotes(pooled)[0]?.key ?? majorKey(0),
+        };
 
   const prepared = prepareTracks(tracks);
   const points: TensionPoint[] = [];
   const sampleCount = Math.max(0, Math.ceil(totalBeats / step - EPS));
-  assertGenerationBudget(sampleCount, 'tension samples');
+  assertGenerationBudget(sampleCount, 'tension samples', budget);
+  // The per-sample cost is one lookup per sub-voice, so it is their product —
+  // not either dimension alone — that has to stay inside the budget.
+  const voiceCount = prepared.reduce((sum, track) => sum + track.voices.length, 0);
+  assertGenerationBudget(sampleCount * voiceCount, 'tension sample-voice lookups', budget);
   for (let i = 0; i < sampleCount; i += 1) {
     const beat = i * step;
     points.push({ beat, tension: sampleTension(prepared, timeline, key, ts, profile, beat) });
@@ -116,19 +136,51 @@ export function tensionCurve(
   return points;
 }
 
-/** All sounding notes across every track at a beat, tagged with their track. */
+/**
+ * Sample the tension of an arrangement already analysed by
+ * {@link analyzeArrangement}, reusing its harmony instead of inferring it again.
+ *
+ * `analyzeArrangement` followed by `tensionCurve` runs chord and key inference
+ * twice over the same notes. This takes the analysis it already produced, so
+ * the curve and the annotations describe the same harmony by construction.
+ *
+ * @param tracks The same tracks that were analysed.
+ * @param analysis The result of {@link analyzeArrangement} for those tracks.
+ * @param opts Analysis options plus an optional `step` (default one beat).
+ * @returns One {@link TensionPoint} per sampled beat, in beat order.
+ * @example
+ * ```ts
+ * import { analyzeArrangement, tensionCurveFrom } from '@libraz/libcantus';
+ * const tracks = [{ notes: [{ pitch: 60, startBeat: 0, durationBeat: 4 }] }];
+ * const analysis = analyzeArrangement(tracks);
+ * tensionCurveFrom(tracks, analysis, { step: 1 });
+ * ```
+ * @category Arrangement & Analysis
+ */
+export function tensionCurveFrom(
+  tracks: ArrangementTrack[],
+  analysis: ArrangementAnalysis,
+  opts: ArrangementOptions & { step?: number } = {},
+): TensionPoint[] {
+  return tensionCurve(tracks, { ...opts, timeline: analysis.timeline, key: analysis.key });
+}
+
+/**
+ * All sounding pitched notes across every track at a beat, tagged with their
+ * track. Percussion carries no harmony, so it is skipped; each sub-voice is
+ * monophonic, so its contribution is one binary search rather than a scan.
+ */
 function allSounding(prepared: PreparedTrack[], beat: number): { pitch: number; track: number }[] {
   const out: { pitch: number; track: number }[] = [];
   for (let t = 0; t < prepared.length; t += 1) {
     const track = prepared[t];
-    if (!track) {
+    if (!track || isPercussion(track.role)) {
       continue;
     }
     for (const subVoice of track.voices) {
-      for (const note of subVoice.sounding) {
-        if (covers(note, beat)) {
-          out.push({ pitch: note.pitch, track: t });
-        }
+      const note = subVoice.at(beat);
+      if (note !== undefined) {
+        out.push({ pitch: note.pitch, track: t });
       }
     }
   }
@@ -167,14 +219,18 @@ function sampleTension(
       nonChord += 1;
     }
     const others = sounding.filter((_, j) => j !== i).map((s) => ({ pitch: s.pitch }));
-    const result = evaluateSafety({
-      profile,
-      candidatePitch: voice.pitch,
-      chord,
-      key,
-      otherVoices: others,
-      strongBeat,
-    });
+    // Only the verdict is read, so the replacement-pitch search is skipped.
+    const result = evaluateSafety(
+      {
+        profile,
+        candidatePitch: voice.pitch,
+        chord,
+        key,
+        otherVoices: others,
+        strongBeat,
+      },
+      { suggestions: false },
+    );
     if (result.safety === NoteSafety.Dissonant) {
       dissonant += 1;
     }

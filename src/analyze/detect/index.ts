@@ -5,7 +5,7 @@
  */
 
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
-import type { KeyScale } from '../../core/types.js';
+import type { KeyScale, NoteEvent } from '../../core/types.js';
 import { assertFiniteNumber, assertGenerationBudget } from '../../core/validation/index.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { chordPitchClasses, chordQualities, makeChord } from '../../theory/chord/index.js';
@@ -86,6 +86,22 @@ export type KeyMatch = {
  * @category Recognition
  */
 export type KeyVariant = 'major' | 'natural' | 'harmonic' | 'melodic';
+
+/**
+ * Input weighting for {@link detectKey}.
+ *
+ * @category Recognition
+ */
+export type DetectKeyOptions = {
+  /**
+   * How much each pitch counts toward the histogram, one entry per pitch.
+   * Defaults to one per pitch, which weighs a thirty-second-note ornament as
+   * heavily as the whole note under it. {@link detectKeyFromNotes} supplies
+   * duration times velocity, matching how chord inference weighs its own
+   * histogram.
+   */
+  weights?: number[];
+};
 
 /** Unique pitch classes of the input, sorted ascending. */
 function uniquePitchClasses(pitches: number[]): number[] {
@@ -254,17 +270,31 @@ const MAJOR_VARIANTS = [{ variant: 'major', mask: MAJOR_MASK }] as const satisfi
  * ```
  * @category Recognition
  */
-export function detectKey(pitches: number[]): KeyMatch[] {
+export function detectKey(pitches: number[], opts: DetectKeyOptions = {}): KeyMatch[] {
   assertPitches(pitches);
   const input = uniquePitchClasses(pitches);
   if (input.length === 0) {
     return [];
   }
-  const counts = new Map<number, number>();
-  for (const pc of pitches.map(pitchClass)) {
-    counts.set(pc, (counts.get(pc) ?? 0) + 1);
+  const weights = opts.weights;
+  if (weights !== undefined && weights.length !== pitches.length) {
+    throw new RangeError('weights must have one entry per pitch');
   }
-  const total = pitches.length;
+  const counts = new Map<number, number>();
+  let total = 0;
+  for (let index = 0; index < pitches.length; index += 1) {
+    const weight = weights === undefined ? 1 : (weights[index] ?? 0);
+    assertFiniteNumber(weight, `weights[${index}]`);
+    if (weight <= 0) {
+      continue;
+    }
+    const pc = pitchClass(pitches[index] ?? 0);
+    counts.set(pc, (counts.get(pc) ?? 0) + weight);
+    total += weight;
+  }
+  if (total === 0) {
+    return [];
+  }
   const results: KeyMatch[] = [];
   for (let tonic = 0; tonic < 12; tonic += 1) {
     for (const mode of ['major', 'minor'] as const) {
@@ -308,4 +338,34 @@ export function detectKey(pitches: number[]): KeyMatch[] {
   }
   results.sort((a, b) => b.score - a.score);
   return results;
+}
+
+/** Default MIDI velocity assumed when a note event does not carry one. */
+const DEFAULT_VELOCITY = 100;
+
+/**
+ * Rank keys by how well they contain a set of note events, weighting each note
+ * by how much of the music it actually occupies.
+ *
+ * {@link detectKey} counts every pitch once, which lets a run of fast ornamental
+ * notes outvote the sustained harmony that establishes the key. This weighs
+ * each note by duration times velocity, the same measure chord inference uses,
+ * so the two agree on what the music emphasises. Notes that never sound (zero
+ * or negative duration) are ignored.
+ *
+ * @param notes The note events to weigh.
+ * @returns Ranked key interpretations (empty when nothing sounds).
+ * @example
+ * ```ts
+ * import { detectKeyFromNotes } from '@libraz/libcantus';
+ * detectKeyFromNotes([{ pitch: 60, startBeat: 0, durationBeat: 4 }])[0]?.key.rootPc; // 0
+ * ```
+ * @category Recognition
+ */
+export function detectKeyFromNotes(notes: NoteEvent[]): KeyMatch[] {
+  const sounding = notes.filter((note) => note.durationBeat > 0);
+  return detectKey(
+    sounding.map((note) => note.pitch),
+    { weights: sounding.map((note) => note.durationBeat * (note.velocity ?? DEFAULT_VELOCITY)) },
+  );
 }

@@ -11,9 +11,15 @@ export type {
   TrackAnalysis,
   TrackRole,
 } from './arrange/index.js';
-export { analyzeArrangement, tensionCurve } from './arrange/index.js';
-export type { ChordMatch, DetectChordOptions, KeyMatch, KeyVariant } from './detect/index.js';
-export { detectChord, detectChordBest, detectKey } from './detect/index.js';
+export { analyzeArrangement, tensionCurve, tensionCurveFrom } from './arrange/index.js';
+export type {
+  ChordMatch,
+  DetectChordOptions,
+  DetectKeyOptions,
+  KeyMatch,
+  KeyVariant,
+} from './detect/index.js';
+export { detectChord, detectChordBest, detectKey, detectKeyFromNotes } from './detect/index.js';
 export type {
   BorrowedSource,
   Cadence,

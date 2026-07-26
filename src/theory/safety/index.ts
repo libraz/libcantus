@@ -202,11 +202,27 @@ function stepResolution(pitch: number, chord: Chord): number | undefined {
  * ```
  * @category Arrangement & Analysis
  */
-export function evaluateSafety(q: SafetyQuery): SafetyResult {
+export function evaluateSafety(q: SafetyQuery, opts: EvaluateSafetyOptions = {}): SafetyResult {
   assertSafetyContext(q);
   assertFiniteNumber(q.candidatePitch, 'candidatePitch');
-  return evaluateInternal(q, true);
+  return evaluateInternal(q, opts.suggestions ?? true);
 }
+
+/**
+ * Options for {@link evaluateSafety}.
+ *
+ * @category Arrangement & Analysis
+ */
+export type EvaluateSafetyOptions = {
+  /**
+   * Whether to search for safe replacement pitches when the verdict is not
+   * safe. Turning it off skips up to two dozen extra evaluations per rejected
+   * pitch, which is worth doing when only the verdict is wanted.
+   *
+   * @defaultValue true
+   */
+  suggestions?: boolean;
+};
 
 /** Validate all numeric context fields once at a public safety entry point. */
 function assertSafetyContext(q: Omit<SafetyQuery, 'candidatePitch'>): void {
