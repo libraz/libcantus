@@ -21,7 +21,7 @@ export type {
 } from '../theory/chord/index.js';
 export type { HarmonyRole } from '../theory/harmony/index.js';
 export type { BassLineOptions, BassSegment, BassStyle } from './bass/index.js';
-export { generateBassLine } from './bass/index.js';
+export { BASS_STYLES, generateBassLine } from './bass/index.js';
 export type { CounterMelodyOptions } from './countermelody/index.js';
 export { generateCounterMelody } from './countermelody/index.js';
 export type {

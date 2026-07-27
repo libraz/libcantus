@@ -20,6 +20,7 @@ import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
   assertGenerationBudget,
   assertInteger,
+  assertOneOf,
   assertRange,
   assertTimeSignature,
 } from '../../core/validation/index.js';
@@ -37,11 +38,18 @@ import { nearestScaleTone } from '../../theory/scale/index.js';
 export type BassSegment = ChordSegment;
 
 /**
+ * Every bass-line idiom, in declaration order.
+ *
+ * @category Composition
+ */
+export const BASS_STYLES = ['root', 'rootFifth', 'pop', 'walking', 'arpeggio'] as const;
+
+/**
  * The bass-line idiom to generate.
  *
  * @category Composition
  */
-export type BassStyle = 'root' | 'rootFifth' | 'pop' | 'walking' | 'arpeggio';
+export type BassStyle = (typeof BASS_STYLES)[number];
 
 /**
  * Options controlling {@link generateBassLine}.
@@ -327,7 +335,7 @@ export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
 
   const ts = opts.ts ?? DEFAULT_TS;
   assertTimeSignature(ts);
-  const style = opts.style ?? DEFAULT_STYLE;
+  const style = assertOneOf(opts.style ?? DEFAULT_STYLE, BASS_STYLES, 'bass style');
   const octave = opts.octave ?? DEFAULT_OCTAVE;
   assertInteger(octave, 'bass octave', -1, 9);
   const estimatedNotes = segments.reduce(

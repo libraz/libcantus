@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeArrangement } from '../src/analyze/arrange/index.js';
 import { chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
+import { createNoteEventIndex } from '../src/core/event-index/index.js';
 import {
   classifyInterval,
   isConsonantInterval,
@@ -42,6 +43,7 @@ import {
   assertTimeSignature,
   dropSilentNotes,
 } from '../src/core/validation/index.js';
+import { generateBassLine } from '../src/generate/bass/index.js';
 import { generateCounterMelody } from '../src/generate/countermelody/index.js';
 import { generateDrums } from '../src/generate/drums/index.js';
 import {
@@ -50,7 +52,7 @@ import {
   humanize,
 } from '../src/generate/groove/index.js';
 import { harmonizeMelody } from '../src/generate/harmonize/index.js';
-import { generateMotif } from '../src/generate/motif/index.js';
+import { generateMotif, transformMotif } from '../src/generate/motif/index.js';
 import { generateProgression } from '../src/generate/progression/index.js';
 import { generateRhythm } from '../src/generate/rhythm/index.js';
 import { Note } from '../src/model/index.js';
@@ -157,6 +159,106 @@ describe('core guards reject what would otherwise flow on as garbage', () => {
   it('names a zero-length note as such instead of quoting a denormal bound', () => {
     expect(() => assertNoteEvent({ pitch: 60, startBeat: 0, durationBeat: 0 })).toThrow(
       /durationBeat must be positive/,
+    );
+  });
+});
+
+describe('every note-event guard has a rejection path', () => {
+  it.each([
+    ['non-finite pitch', { pitch: Number.NaN, startBeat: 0, durationBeat: 1 }],
+    ['infinite pitch', { pitch: Number.POSITIVE_INFINITY, startBeat: 0, durationBeat: 1 }],
+    ['negative onset', { pitch: 60, startBeat: -1, durationBeat: 1 }],
+    ['non-finite onset', { pitch: 60, startBeat: Number.NaN, durationBeat: 1 }],
+    ['zero duration', { pitch: 60, startBeat: 0, durationBeat: 0 }],
+    ['negative duration', { pitch: 60, startBeat: 0, durationBeat: -1 }],
+    ['velocity above 127', { pitch: 60, startBeat: 0, durationBeat: 1, velocity: 128 }],
+    ['negative velocity', { pitch: 60, startBeat: 0, durationBeat: 1, velocity: -1 }],
+  ])('rejects a note with a %s', (_label, event) => {
+    expect(() => assertNoteEvent(event)).toThrow(RangeError);
+    expect(() => assertNoteEvents([event])).toThrow(RangeError);
+  });
+
+  it('accepts a silent note only when the caller opts in', () => {
+    const silent = { pitch: 60, startBeat: 0, durationBeat: 0 };
+    expect(() => assertNoteEvent(silent, 'note', { allowNonPositiveDuration: true })).not.toThrow();
+    // A non-finite field is still rejected under the same option.
+    expect(() =>
+      assertNoteEvent({ pitch: Number.NaN, startBeat: 0, durationBeat: 0 }, 'note', {
+        allowNonPositiveDuration: true,
+      }),
+    ).toThrow(RangeError);
+  });
+
+  it('applies the caller budget to the event count', () => {
+    const many = Array.from({ length: 5 }, (_, i) => ({
+      pitch: 60,
+      startBeat: i,
+      durationBeat: 1,
+    }));
+    expect(() => assertNoteEvents(many, 'events', { budget: 4 })).toThrow(RangeError);
+    expect(() => assertNoteEvents(many, 'events', { budget: 5 })).not.toThrow();
+  });
+
+  it.each([
+    [
+      'bass style',
+      () =>
+        generateBassLine({
+          segments: [{ startBeat: 0, endBeat: 4, chord: makeChord(0, 'maj') }],
+          key: majorKey(0),
+          style: 'nonsense' as never,
+        }),
+    ],
+    [
+      'bass segment span',
+      () =>
+        generateBassLine({
+          segments: [{ startBeat: 4, endBeat: 4, chord: makeChord(0, 'maj') }],
+          key: majorKey(0),
+        }),
+    ],
+    [
+      'countermelody melody',
+      () =>
+        generateCounterMelody({
+          melody: [{ pitch: 60, startBeat: 0, durationBeat: Number.NaN }],
+          key: majorKey(0),
+          chordAt: () => makeChord(0, 'maj'),
+        }),
+    ],
+    [
+      'motif notes',
+      () =>
+        transformMotif(
+          { notes: [{ pitch: Number.NaN, startBeat: 0, durationBeat: 1 }] },
+          'retrograde',
+        ),
+    ],
+    [
+      'arrangement tracks',
+      () => analyzeArrangement([{ notes: [{ pitch: 60, startBeat: -1, durationBeat: 1 }] }]),
+    ],
+    [
+      'event index',
+      () => createNoteEventIndex([{ pitch: 60, startBeat: 0, durationBeat: 1, velocity: 999 }]),
+    ],
+  ])('rejects malformed input at the %s entry point', (_label, call) => {
+    expect(call).toThrow(RangeError);
+  });
+
+  it('validates the compound branch of a grouping', () => {
+    // 9/8 accepts both readings; a sum that is neither is rejected.
+    expect(() =>
+      assertTimeSignature({ numerator: 9, denominator: 8, grouping: [1, 1, 1] }),
+    ).not.toThrow();
+    expect(() =>
+      assertTimeSignature({ numerator: 9, denominator: 8, grouping: [2, 2, 2, 3] }),
+    ).not.toThrow();
+    expect(() =>
+      assertTimeSignature({ numerator: 9, denominator: 8, grouping: [2, 2, 2] }),
+    ).toThrow(/pulses|units/);
+    expect(() => assertTimeSignature({ numerator: 6, denominator: 8, grouping: [] })).toThrow(
+      /must not be empty/,
     );
   });
 });

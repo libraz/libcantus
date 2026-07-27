@@ -113,11 +113,24 @@ describe('euclid', () => {
     expect(euclideanRhythm(4, 4)).toEqual([true, true, true, true]);
   });
 
-  it('rotates onsets', () => {
+  it('names the pattern of the standard euclidean rhythms', () => {
+    // E(5,8), the Cuban cinquillo, and E(5,16), a common trap kick.
+    expect(euclideanRhythm(5, 8)).toEqual([true, false, true, true, false, true, true, false]);
+    expect(euclideanRhythm(2, 5)).toEqual([true, false, true, false, false]);
+    expect(euclideanRhythm(7, 16).filter(Boolean)).toHaveLength(7);
+  });
+
+  it('rotates onsets forward by the given number of steps', () => {
+    // A rotation moves each onset later by `rotation` steps, wrapping around;
+    // asserting only that the array changed would pass for either direction.
     const base = euclideanRhythm(3, 8);
     const rotated = euclideanRhythm(3, 8, 2);
-    expect(rotated).not.toEqual(base);
     expect(rotated.filter(Boolean)).toHaveLength(3);
+    for (let step = 0; step < base.length; step += 1) {
+      expect(rotated[(step + 2) % base.length], `step ${step}`).toBe(base[step]);
+    }
+    expect(euclideanRhythm(3, 8, 8)).toEqual(base);
+    expect(euclideanRhythm(3, 8, -2)).toEqual(euclideanRhythm(3, 8, 6));
   });
 
   it('maps a euclidean pattern to a kick pattern', () => {

@@ -5,7 +5,7 @@ import {
   substituteChord,
 } from '../src/generate/reharmony/index.js';
 import { chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
-import { majorKey } from '../src/theory/scale/index.js';
+import { majorKey, minorKey, scaleByName } from '../src/theory/scale/index.js';
 
 describe('substituteChord', () => {
   it('tritone-substitutes G7 in C major with Db7', () => {
@@ -65,6 +65,48 @@ describe('substituteChord relative motion', () => {
   });
 });
 
+describe('every substitution kind is offered', () => {
+  it('names a borrowed, a chromatic-mediant, and a secondary dominant', () => {
+    const byType = (chord: Parameters<typeof substituteChord>[0], type: string) =>
+      substituteChord(chord, majorKey(0)).filter((sub) => sub.type === type);
+
+    // Borrowed: the parallel minor's chords with the same function as C major.
+    const borrowed = byType(makeChord(0, 'maj'), 'borrowed');
+    expect(borrowed.length).toBeGreaterThan(0);
+    for (const sub of borrowed) {
+      expect(sub.function).toBe('tonic');
+    }
+
+    // Chromatic mediant: a third away, one common tone, not in the key.
+    const mediants = byType(makeChord(0, 'maj'), 'chromaticMediant');
+    expect(mediants.length).toBeGreaterThan(0);
+    for (const sub of mediants) {
+      const shared = chordPitchClasses(sub.chord).filter((pc) =>
+        chordPitchClasses(makeChord(0, 'maj')).includes(pc),
+      );
+      expect(shared).toHaveLength(1);
+      expect([3, 4, 8, 9]).toContain((sub.chord.rootPc - 0 + 12) % 12);
+    }
+
+    // Secondary dominant: the V7 that tonicizes a stable target.
+    const secondary = byType(makeChord(2, 'min'), 'secondaryDominant');
+    expect(secondary.map((sub) => sub.chord.rootPc)).toContain(9);
+    expect(secondary.every((sub) => sub.chord.quality === 'dom7')).toBe(true);
+  });
+
+  it('offers substitutions in a minor key too', () => {
+    const subs = substituteChord(makeChord(9, 'min'), minorKey(9));
+    expect(subs.length).toBeGreaterThan(0);
+    for (const sub of subs) {
+      expect(sub.roman.length).toBeGreaterThan(0);
+    }
+    // The relative major is a third away sharing two tones of the Am triad.
+    expect(subs.filter((sub) => sub.type === 'relative').map((sub) => sub.chord.rootPc)).toContain(
+      0,
+    );
+  });
+});
+
 describe('modalInterchangePalette', () => {
   it('lists the borrowed chords of C major with their sources', () => {
     const palette = modalInterchangePalette(majorKey(0));
@@ -76,6 +118,61 @@ describe('modalInterchangePalette', () => {
     expect(byRoman.get('bVII')?.source).toBe('parallelMinor');
     expect(byRoman.get('bII')?.chord.rootPc).toBe(1); // Db major (Neapolitan)
     expect(byRoman.get('bII')?.source).toBe('neapolitan');
+  });
+
+  it('borrows from the parallel major when the key is minor', () => {
+    // The parallel mode flips, so a minor key borrows the major chords — the
+    // direction a C-major-only test can never exercise.
+    const palette = modalInterchangePalette(minorKey(9));
+    const sources = palette.map((borrowed) => borrowed.source);
+    expect(sources).toContain('parallelMajor');
+    // The direction has to flip: nothing here is borrowed from a parallel minor.
+    expect(sources).not.toContain('parallelMinor');
+    // A major IV over an A minor tonic is the characteristic borrowing.
+    expect(palette.map((borrowed) => borrowed.chord.rootPc)).toContain(2);
+  });
+
+  it('does not call the b2 chord a borrowing in a key that already has it', () => {
+    // In Phrygian the flat second is native, so the Neapolitan is not added.
+    const phrygian = scaleByName('phrygian', 0);
+    const palette = modalInterchangePalette(phrygian);
+    expect(palette.filter((borrowed) => borrowed.source === 'neapolitan')).toEqual([]);
+  });
+});
+
+describe('negative harmony away from C', () => {
+  it('mirrors about the axis of the actual tonic', () => {
+    // The axis runs through the tonic and its dominant, so the reflection is
+    // 2*tonic + 7 - p. In C the doubled-tonic term vanishes, which is why a
+    // C-only test cannot tell the correct formula from `7 - p`.
+    const cases: { tonic: number; chord: [number, 'maj' | 'dom7' | 'min']; expected: number[] }[] =
+      [
+        // In G major the axis maps p to (9 - p) mod 12, so D7 {2,6,9,0} becomes
+        // {7,3,0,9}.
+        { tonic: 7, chord: [2, 'dom7'], expected: [0, 3, 7, 9] },
+        // In Eb major the axis maps p to (13 - p) mod 12, so Bb {10,2,5}
+        // becomes {3,11,8}.
+        { tonic: 3, chord: [10, 'maj'], expected: [3, 8, 11] },
+      ];
+    for (const { tonic, chord, expected } of cases) {
+      const mirrored = negativeHarmonyMirror(makeChord(chord[0], chord[1]), majorKey(tonic));
+      expect(
+        chordPitchClasses(mirrored).sort((a, b) => a - b),
+        `tonic ${tonic}`,
+      ).toEqual(expected);
+    }
+  });
+
+  it('is its own inverse, which the reflection formula guarantees', () => {
+    for (const tonic of [0, 3, 5, 7, 10]) {
+      const source = makeChord(7, 'dom7');
+      const once = negativeHarmonyMirror(source, majorKey(tonic));
+      const twice = negativeHarmonyMirror(once, majorKey(tonic));
+      expect(
+        chordPitchClasses(twice).sort((a, b) => a - b),
+        `tonic ${tonic}`,
+      ).toEqual(chordPitchClasses(source).sort((a, b) => a - b));
+    }
   });
 });
 

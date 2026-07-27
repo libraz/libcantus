@@ -9,6 +9,7 @@ import * as api from '../src/index.js';
 const EXPECTED_EXPORTS = [
   'ALTERED_MASK',
   'BudgetExceededError',
+  'BASS_STYLES',
   'BLUES_MASK',
   'BORROWED_DEGREES',
   'CHROMATIC_MASK',
