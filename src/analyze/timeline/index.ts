@@ -46,7 +46,10 @@ export type ChordTimeline = {
  * @returns A queryable chord timeline.
  * @category Arrangement & Analysis
  */
-export function chordTimelineFromChords(chords: ChordSpan[], totalBeats: number): ChordTimeline {
+export function chordTimelineFromChords(
+  chords: readonly ChordSpan[],
+  totalBeats: number,
+): ChordTimeline {
   assertRange(totalBeats, 0, Number.MAX_SAFE_INTEGER, 'timeline totalBeats');
   assertGenerationBudget(chords.length, 'timeline chords');
   for (let index = 0; index < chords.length; index += 1) {
@@ -237,7 +240,7 @@ function chordConfidence(
  * root weight, key membership, and exactness.
  */
 function analyzeWindow(
-  notes: NoteEvent[],
+  notes: readonly NoteEvent[],
   windowStart: number,
   windowEnd: number,
   ts: TimeSignature,

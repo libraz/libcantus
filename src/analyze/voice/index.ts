@@ -80,7 +80,7 @@ export type IdentifiedVoiceNote = VoiceNote & { id: number };
  * @returns The same notes as voice notes, each carrying its index as its id.
  * @category Arrangement & Analysis
  */
-export function toVoiceNotes(events: NoteEvent[]): IdentifiedVoiceNote[] {
+export function toVoiceNotes(events: readonly NoteEvent[]): IdentifiedVoiceNote[] {
   return events.map((event, index) => ({ ...event, id: index, originalIndex: index }));
 }
 
@@ -200,7 +200,7 @@ function stepResolution(pitch: number, chord: Chord): number | undefined {
  * @category Arrangement & Analysis
  */
 export function analyzeVoice(
-  voice: VoiceNote[],
+  voice: readonly VoiceNote[],
   chordAtBeat: (beat: number) => Chord | null,
   key: KeyScale,
   otherVoicesAtBeat: (beat: number) => VoiceSnapshot[] = () => [],

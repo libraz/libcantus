@@ -25,6 +25,7 @@ import {
   type ChordScaleMatch,
   chordScales,
 } from '../theory/chordscale/index.js';
+import type { ScaleNameInput } from '../theory/scale/index.js';
 import { spellChord, spellChordFromRoot, spellPitchClass } from '../theory/spelling/index.js';
 import { formatChordSymbol, parseChordSymbol } from '../theory/symbol/index.js';
 import {
@@ -221,7 +222,7 @@ export class Chord {
    * @param opts How to interpret the input; see {@link DetectChordOptions}.
    * @returns Ranked chord interpretations (may be empty).
    */
-  static detect(pitches: number[], opts?: DetectChordOptions): Chord[] {
+  static detect(pitches: readonly number[], opts?: DetectChordOptions): Chord[] {
     return detectChord(pitches, opts).map(
       (match) => new Chord(makeChord(match.rootPc, match.quality, match.bassPc)),
     );
@@ -246,7 +247,7 @@ export class Chord {
    * ```
    */
   static detectMatches(
-    pitches: number[],
+    pitches: readonly number[],
     opts?: DetectChordOptions,
   ): { chord: Chord; match: ChordMatch }[] {
     return detectChord(pitches, opts).map((match) => ({
@@ -262,7 +263,7 @@ export class Chord {
    * @param opts How to interpret the input; see {@link DetectChordOptions}.
    * @returns The top-ranked chord, or null when nothing matches.
    */
-  static detectBest(pitches: number[], opts?: DetectChordOptions): Chord | null {
+  static detectBest(pitches: readonly number[], opts?: DetectChordOptions): Chord | null {
     const best = detectChordBest(pitches, opts);
     return best === null ? null : new Chord(best);
   }
@@ -500,8 +501,9 @@ export class Chord {
    *
    * @param scaleName A named scale, rooted on the chord root.
    * @returns Tension pitch classes, ascending in [0, 11].
+   * @throws If `scaleName` is not a built-in scale.
    */
-  tensions(scaleName: string): number[] {
+  tensions(scaleName: ScaleNameInput): number[] {
     return availableTensions(this.#data, scaleName);
   }
 
@@ -511,8 +513,9 @@ export class Chord {
    *
    * @param scaleName A named scale, rooted on the chord root.
    * @returns Avoid-note pitch classes, ascending in [0, 11].
+   * @throws If `scaleName` is not a built-in scale.
    */
-  avoidNotes(scaleName: string): number[] {
+  avoidNotes(scaleName: ScaleNameInput): number[] {
     return avoidNotes(this.#data, scaleName);
   }
 

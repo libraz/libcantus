@@ -103,6 +103,85 @@ export function nearestStep(freq: number, tuning: Tuning = TWELVE_TET): number {
 }
 
 /**
+ * Step index of a frequency under a tuning, unrounded.
+ *
+ * The exact inverse of {@link frequencyOf}. {@link nearestStep} rounds it,
+ * which discards how far off the pitch actually is — the figure a tuner
+ * display, a pitch-bend amount, or an intonation check is built on.
+ *
+ * @param freq Frequency in Hz.
+ * @param tuning The tuning (default 12-TET).
+ * @returns The fractional step index.
+ * @example
+ * ```ts
+ * import { stepOf } from '@libraz/libcantus';
+ * stepOf(442); // slightly above 69, the step for A440
+ * ```
+ * @category Pitch & Intervals
+ */
+export function stepOf(freq: number, tuning: Tuning = TWELVE_TET): number {
+  assertRange(freq, Number.MIN_VALUE, Number.MAX_VALUE, 'frequency');
+  assertTuning(tuning);
+  return tuning.refStep + tuning.divisions * Math.log2(freq / tuning.refFreq);
+}
+
+/**
+ * How far a frequency sits from its nearest step, in cents.
+ *
+ * Positive means sharp of the step, negative flat.
+ *
+ * @param freq Frequency in Hz.
+ * @param tuning The tuning (default 12-TET).
+ * @returns The signed deviation in cents.
+ * @example
+ * ```ts
+ * import { centsFromNearestStep } from '@libraz/libcantus';
+ * Math.round(centsFromNearestStep(442)); // 8
+ * ```
+ * @category Pitch & Intervals
+ */
+export function centsFromNearestStep(freq: number, tuning: Tuning = TWELVE_TET): number {
+  const exact = stepOf(freq, tuning);
+  return centsOfSteps(exact - Math.round(exact), tuning);
+}
+
+/**
+ * Steps spanned by an interval in cents, unrounded — the inverse of
+ * {@link centsOfSteps}.
+ *
+ * @param cents The interval in cents.
+ * @param tuning The tuning (default 12-TET).
+ * @returns The fractional step count.
+ * @category Pitch & Intervals
+ */
+export function stepsOfCents(cents: number, tuning: Tuning = TWELVE_TET): number {
+  assertFiniteNumber(cents, 'cents');
+  assertTuning(tuning);
+  return assertFiniteNumber((cents * tuning.divisions) / 1200, 'steps result');
+}
+
+/**
+ * The frequency ratio an interval in cents spans — the inverse of
+ * {@link ratioToCents}.
+ *
+ * Multiply a frequency by this to move it by that many cents, which is how a
+ * cents offset (a pitch-bend spec, a tuning table entry) is applied.
+ *
+ * @param cents The interval in cents.
+ * @returns The frequency ratio.
+ * @example
+ * ```ts
+ * import { centsToRatio } from '@libraz/libcantus';
+ * 440 * centsToRatio(14); // A440 raised by 14 cents
+ * ```
+ * @category Pitch & Intervals
+ */
+export function centsToRatio(cents: number): number {
+  assertFiniteNumber(cents, 'cents');
+  return 2 ** (cents / 1200);
+}
+
+/**
  * Interval in cents between two frequencies.
  *
  * @param a Lower/first frequency in Hz.

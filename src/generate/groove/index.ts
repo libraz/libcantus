@@ -113,7 +113,7 @@ const MAX_VELOCITY = 127;
  *
  * @category Rhythm & Meter
  */
-export function humanize(events: NoteEvent[], opts: HumanizeOptions = {}): NoteEvent[] {
+export function humanize(events: readonly NoteEvent[], opts: HumanizeOptions = {}): NoteEvent[] {
   const ts = opts.ts ?? DEFAULT_TS;
   assertTimeSignature(ts);
   // Zero-length artefacts are routine in MIDI imports and never sound, so they
@@ -236,7 +236,7 @@ function quantizeToGrid(
  * @category Rhythm & Meter
  */
 export function extractGrooveTemplate(
-  events: NoteEvent[],
+  events: readonly NoteEvent[],
   ts: TimeSignature,
   subdivision = DEFAULT_GROOVE_SUBDIVISION,
 ): GrooveTemplate {
@@ -320,7 +320,7 @@ export function extractGrooveTemplate(
  * @category Rhythm & Meter
  */
 export function applyGrooveTemplate(
-  events: NoteEvent[],
+  events: readonly NoteEvent[],
   template: GrooveTemplate,
   ts: TimeSignature,
 ): NoteEvent[] {

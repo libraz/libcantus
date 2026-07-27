@@ -62,7 +62,7 @@ export type HarmonizePlacement = {
  */
 export type HarmonizeOptions = {
   /** The melody to harmonize, in ascending onset order. */
-  melody: MelodyNote[];
+  melody: readonly MelodyNote[];
   /**
    * The key to harmonize in, or `'infer'` to estimate it from the melody's
    * pitch-class weighting — which is what a caller who has only a melody
@@ -183,7 +183,7 @@ const TIE_BREAK_JITTER = 1e-6;
  * not penalize the true minor key. Ties are broken toward the earlier candidate,
  * and major is scored before minor at each tonic.
  */
-function inferKey(melody: MelodyNote[]): KeyScale {
+function inferKey(melody: readonly MelodyNote[]): KeyScale {
   let best: KeyScale = majorKey(0);
   let bestScore = Number.NEGATIVE_INFINITY;
   const candidates: KeyScale[] = [];
@@ -424,7 +424,7 @@ function harmonizeOnce(
  * ties toward placements that keep the melody in a comfortable register.
  *
  * The `seed` drives a deterministic tie-break only: it perturbs candidates by a
- * magnitude far below any real cost difference (see {@link TIE_BREAK_JITTER}),
+ * magnitude far below any real cost difference (see `TIE_BREAK_JITTER`),
  * so it can decide between chords or paths of otherwise-equal cost but never
  * overrides melody fit or functional flow. For a well-determined melody the
  * result is identical across seeds; the same seed always yields the same result.

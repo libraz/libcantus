@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { chordTimelineFromChords } from '../src/analyze/timeline/index.js';
+import { analyzeArrangement } from '../src/analyze/arrange/index.js';
+import { detectChord, detectChordBest, detectKeyFromNotes } from '../src/analyze/detect/index.js';
+import { chordTimelineFromChords, chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
 import { analyzeVoice, toVoiceNotes } from '../src/analyze/voice/index.js';
 import { parseTimeSignature } from '../src/core/meter/index.js';
 import type { NoteEvent } from '../src/core/types.js';
@@ -18,6 +20,24 @@ import { makeChord } from '../src/theory/chord/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
 
 const cMajor = majorKey(0);
+
+describe('readonly inputs are accepted', () => {
+  it('takes a frozen note array without a defensive copy at the call site', () => {
+    const notes: readonly NoteEvent[] = Object.freeze([
+      Object.freeze({ pitch: 60, startBeat: 0, durationBeat: 1 }),
+      Object.freeze({ pitch: 64, startBeat: 1, durationBeat: 1 }),
+      Object.freeze({ pitch: 67, startBeat: 2, durationBeat: 1 }),
+    ]);
+    const pitches: readonly number[] = Object.freeze([60, 64, 67]);
+    expect(() => humanize(notes)).not.toThrow();
+    expect(() => detectChord(pitches)).not.toThrow();
+    expect(() => detectKeyFromNotes(notes)).not.toThrow();
+    expect(() => chordTimelineFromNotes(notes)).not.toThrow();
+    expect(() => analyzeArrangement([{ notes }])).not.toThrow();
+    expect(() => harmonizeMelody({ melody: notes })).not.toThrow();
+    expect(detectChordBest(pitches)?.rootPc).toBe(0);
+  });
+});
 
 describe('drum voices are nameable', () => {
   it('names the note numbers the generator emits', () => {

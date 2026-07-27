@@ -20,7 +20,7 @@ const HIDDEN_PERFECT_PENALTY = 6;
 
 /**
  * Total voice-leading cost between two voicings: the sum of absolute semitone
- * motion across voices, plus a moderate {@link HIDDEN_PERFECT_PENALTY} when the
+ * motion across voices, plus a moderate `HIDDEN_PERFECT_PENALTY` when the
  * outer-voice (bass–soprano) pair reaches a hidden/direct perfect fifth or
  * octave by similar motion. The arrays must be the same length; when they
  * differ the voicings are not comparable and the cost is `Infinity`.

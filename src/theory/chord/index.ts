@@ -38,7 +38,17 @@ export type ChordQuality =
   | '7b13'
   | '11'
   | '13'
-  | '5';
+  | '5'
+  | '7sus4'
+  | '7b5'
+  | '7alt'
+  | '13b9'
+  | 'maj13'
+  | 'maj7#11'
+  | 'min11'
+  | 'min13'
+  | 'minAdd9'
+  | 'min6/9';
 
 /**
  * A bare spelled pitch used as an enharmonic hint: a diatonic letter
@@ -137,6 +147,19 @@ const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
   '11': [0, 7, 10, 14, 17],
   '13': [0, 4, 7, 10, 14, 21],
   '5': [0, 7],
+  '7sus4': [0, 5, 7, 10],
+  '7b5': [0, 4, 6, 10],
+  // The altered dominant as it is voiced from a lead sheet: a dominant seventh
+  // with a raised fifth and a raised ninth. The full seven-note altered stack
+  // has no seven-letter spelling, so it is not what this symbol denotes.
+  '7alt': [0, 4, 8, 10, 15],
+  '13b9': [0, 4, 7, 10, 13, 21],
+  maj13: [0, 4, 7, 11, 14, 21],
+  'maj7#11': [0, 4, 7, 11, 18],
+  min11: [0, 3, 7, 10, 14, 17],
+  min13: [0, 3, 7, 10, 14, 21],
+  minAdd9: [0, 3, 7, 14],
+  'min6/9': [0, 3, 7, 9, 14],
 };
 
 /**

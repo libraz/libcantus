@@ -49,7 +49,7 @@ export type BassStyle = 'root' | 'rootFifth' | 'pop' | 'walking' | 'arpeggio';
  */
 export type BassLineOptions = {
   /** Chord placement to follow; need not be pre-sorted. */
-  segments: BassSegment[];
+  segments: readonly BassSegment[];
   /** Key/scale context, used for diatonic approach tones in `walking`. */
   key: KeyScale;
   /**

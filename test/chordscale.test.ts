@@ -8,7 +8,7 @@ import {
   scaleMatchesChord,
   scalesForChanges,
 } from '../src/theory/chordscale/index.js';
-import { NAMED_SCALES } from '../src/theory/scale/index.js';
+import { NAMED_SCALES, scaleByName } from '../src/theory/scale/index.js';
 
 describe('scaleMatchesChord', () => {
   it('accepts a scale that contains every chord tone', () => {
@@ -116,8 +116,10 @@ describe('avoidNotes', () => {
     expect(avoidNotes(makeChord(0, 'maj7'), 'mixolydian')).toEqual([]);
   });
 
-  it('returns [] for an unknown scale name', () => {
-    expect(avoidNotes(makeChord(0, 'maj7'), 'notAScale')).toEqual([]);
+  it('rejects an unknown scale name rather than answering []', () => {
+    // An empty result already means "no avoid notes here"; returning it for a
+    // typo would make a misspelled scale look like a clean one.
+    expect(() => avoidNotes(makeChord(0, 'maj7'), 'notAScale')).toThrow(RangeError);
   });
 });
 
@@ -165,9 +167,10 @@ describe('chordScaleReport', () => {
     expect(report[0]?.name).toBe('chromatic');
   });
 
-  it('returns no avoid notes or tensions for an unknown scale name', () => {
-    expect(avoidNotes(makeChord(0, 'maj7'), 'not-a-scale')).toEqual([]);
-    expect(availableTensions(makeChord(0, 'maj7'), 'not-a-scale')).toEqual([]);
+  it('reports an unknown scale name the same way scaleByName does', () => {
+    expect(() => avoidNotes(makeChord(0, 'maj7'), 'not-a-scale')).toThrow(RangeError);
+    expect(() => availableTensions(makeChord(0, 'maj7'), 'not-a-scale')).toThrow(RangeError);
+    expect(() => scaleByName('not-a-scale', 0)).toThrow(RangeError);
   });
 });
 

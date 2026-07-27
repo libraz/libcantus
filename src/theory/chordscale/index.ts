@@ -1,7 +1,8 @@
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { Chord } from '../chord/index.js';
 import { chordPitchClasses } from '../chord/index.js';
-import { NAMED_SCALES, namedScaleMask } from '../scale/index.js';
+import type { ScaleNameInput } from '../scale/index.js';
+import { NAMED_SCALES, namedScaleMask, requireScaleMask } from '../scale/index.js';
 
 /** Count the set bits (scale tones) in a 12-bit mode mask. */
 function popcount12(mask: number): number {
@@ -177,14 +178,14 @@ export function chordScales(chord: Chord): ChordScaleMatch[] {
  * @param chord The chord providing the chord tones.
  * @param scaleName A key of {@link NAMED_SCALES}.
  * @returns The avoid-note pitch classes, sorted ascending in [0, 11].
+ * @throws If `scaleName` is not a built-in scale. An empty result already
+ *   means "this scale has no avoid notes over this chord"; answering a typo
+ *   the same way would make the two indistinguishable.
  *
  * @category Scales
  */
-export function avoidNotes(chord: Chord, scaleName: string): number[] {
-  const mask = namedScaleMask(scaleName);
-  if (mask === undefined) {
-    return [];
-  }
+export function avoidNotes(chord: Chord, scaleName: ScaleNameInput): number[] {
+  const mask = requireScaleMask(scaleName);
   const rootPc = pitchClass(chord.rootPc);
   const chordPcs = chordPitchClasses(chord);
   if (!scaleMatchesChord(chordPcs, mask, rootPc)) {
@@ -214,6 +215,7 @@ export function avoidNotes(chord: Chord, scaleName: string): number[] {
  * @param chord The chord providing the chord tones.
  * @param scaleName A key of {@link NAMED_SCALES}.
  * @returns The available-tension pitch classes, sorted ascending in [0, 11].
+ * @throws If `scaleName` is not a built-in scale, as {@link avoidNotes} does.
  *
  * @example
  * ```ts
@@ -223,11 +225,8 @@ export function avoidNotes(chord: Chord, scaleName: string): number[] {
  *
  * @category Scales
  */
-export function availableTensions(chord: Chord, scaleName: string): number[] {
-  const mask = namedScaleMask(scaleName);
-  if (mask === undefined) {
-    return [];
-  }
+export function availableTensions(chord: Chord, scaleName: ScaleNameInput): number[] {
+  const mask = requireScaleMask(scaleName);
   const rootPc = pitchClass(chord.rootPc);
   const chordPcs = chordPitchClasses(chord);
   if (!scaleMatchesChord(chordPcs, mask, rootPc)) {

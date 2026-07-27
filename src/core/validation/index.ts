@@ -2,10 +2,18 @@ import type { TimeSignature } from '../meter/index.js';
 import { isCompoundNumerator } from '../meter/internal.js';
 import type { NoteEvent } from '../types.js';
 
-/** Default upper bound for synchronous event/window/candidate generation. */
+/**
+ * Default upper bound for synchronous event/window/candidate generation.
+ *
+ * @category Core
+ */
 export const DEFAULT_GENERATION_BUDGET = 1_000_000;
 
-/** Require a finite JavaScript number and return it unchanged. */
+/**
+ * Require a finite JavaScript number and return it unchanged.
+ *
+ * @category Core
+ */
 export function assertFiniteNumber(value: number, name: string): number {
   if (!Number.isFinite(value)) {
     throw new RangeError(`${name} must be finite; received ${value}`);
@@ -13,7 +21,11 @@ export function assertFiniteNumber(value: number, name: string): number {
   return value;
 }
 
-/** Require an integer in the inclusive range `[min, max]`. */
+/**
+ * Require an integer in the inclusive range `[min, max]`.
+ *
+ * @category Core
+ */
 export function assertInteger(
   value: number,
   name: string,
@@ -44,7 +56,7 @@ export function assertInteger(
  * ```
  * @category Core
  */
-export function dropSilentNotes(events: NoteEvent[]): NoteEvent[] {
+export function dropSilentNotes(events: readonly NoteEvent[]): NoteEvent[] {
   return events.filter((event) => event !== undefined && event.durationBeat > 0);
 }
 
@@ -61,6 +73,8 @@ export function dropSilentNotes(events: NoteEvent[]): NoteEvent[] {
  * @param name What the value is, for the error message.
  * @returns The value, narrowed to the allowed union.
  * @throws If the value is not one of `allowed`.
+ *
+ * @category Core
  */
 export function assertOneOf<const T extends string>(
   value: unknown,
@@ -75,7 +89,11 @@ export function assertOneOf<const T extends string>(
   return value as T;
 }
 
-/** Require a positive safe integer, optionally capped by `max`. */
+/**
+ * Require a positive safe integer, optionally capped by `max`.
+ *
+ * @category Core
+ */
 export function assertPositiveInt(
   value: number,
   name: string,
@@ -84,7 +102,11 @@ export function assertPositiveInt(
   return assertInteger(value, name, 1, max);
 }
 
-/** Require a finite number in the inclusive range `[min, max]`. */
+/**
+ * Require a finite number in the inclusive range `[min, max]`.
+ *
+ * @category Core
+ */
 export function assertRange(value: number, min: number, max: number, name: string): number {
   assertFiniteNumber(value, name);
   if (value < min || value > max) {
@@ -93,7 +115,11 @@ export function assertRange(value: number, min: number, max: number, name: strin
   return value;
 }
 
-/** Reject work estimates that would exceed a synchronous generation budget. */
+/**
+ * Reject work estimates that would exceed a synchronous generation budget.
+ *
+ * @category Core
+ */
 export function assertGenerationBudget(
   estimated: number,
   name: string,
@@ -108,7 +134,11 @@ export function assertGenerationBudget(
   return estimated;
 }
 
-/** Validate a time signature, including additive grouping, before any early return. */
+/**
+ * Validate a time signature, including additive grouping, before any early return.
+ *
+ * @category Core
+ */
 export function assertTimeSignature(ts: TimeSignature, name = 'time signature'): TimeSignature {
   assertPositiveInt(ts.numerator, `${name}.numerator`);
   assertPositiveInt(ts.denominator, `${name}.denominator`);
@@ -133,11 +163,31 @@ export function assertTimeSignature(ts: TimeSignature, name = 'time signature'):
   return ts;
 }
 
-/** Validate the finite fields of one timeline note event. */
+/**
+ * How strictly {@link assertNoteEvent} and {@link assertNoteEvents} read an
+ * event array.
+ *
+ * @category Core
+ */
+export type NoteEventAssertOptions = {
+  /**
+   * Accept notes that never sound. The analysis side does, so an array from a
+   * MIDI import can be validated before the zero-length artefacts are dropped.
+   */
+  allowNonPositiveDuration?: boolean;
+  /** Upper bound on the event count; defaults to the generation budget. */
+  budget?: number;
+};
+
+/**
+ * Validate the finite fields of one timeline note event.
+ *
+ * @category Core
+ */
 export function assertNoteEvent(
   event: NoteEvent,
   name = 'note event',
-  options: { allowNonPositiveDuration?: boolean } = {},
+  options: NoteEventAssertOptions = {},
 ): NoteEvent {
   assertFiniteNumber(event.pitch, `${name}.pitch`);
   assertRange(event.startBeat, 0, Number.MAX_SAFE_INTEGER, `${name}.startBeat`);
@@ -159,11 +209,15 @@ export function assertNoteEvent(
   return event;
 }
 
-/** Validate an event array and its allocation budget without copying it. */
+/**
+ * Validate an event array and its allocation budget without copying it.
+ *
+ * @category Core
+ */
 export function assertNoteEvents(
-  events: NoteEvent[],
+  events: readonly NoteEvent[],
   name = 'note events',
-  options: { allowNonPositiveDuration?: boolean; budget?: number } = {},
+  options: NoteEventAssertOptions = {},
 ): NoteEvent[] {
   if (!Array.isArray(events)) {
     throw new TypeError(`${name} must be an array; received ${typeof events}`);

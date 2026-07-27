@@ -14,13 +14,16 @@ export {
 export type { BarPosition, TimeSignature } from './meter/index.js';
 export {
   barPositionToBeat,
+  barPositionToPulse,
   beatsPerBar,
   beatToBarPosition,
+  formatBarPosition,
   formatTimeSignature,
   isCompound,
   isStrongBeat,
   metricWeight,
   parseTimeSignature,
+  pulseBeats,
   pulsesPerBar,
   tuplet,
 } from './meter/index.js';
@@ -45,16 +48,21 @@ export { createRng } from './random/index.js';
 export type { Tuning } from './tuning/index.js';
 export {
   centsBetweenFreq,
+  centsFromNearestStep,
   centsOfSteps,
+  centsToRatio,
   edo,
   frequencyOf,
   JUST_RATIOS,
   justDeviationCents,
   nearestStep,
   ratioToCents,
+  stepOf,
+  stepsOfCents,
   TWELVE_TET,
 } from './tuning/index.js';
 export type { KeyScale, NoteEvent } from './types.js';
+export type { NoteEventAssertOptions } from './validation/index.js';
 export {
   assertFiniteNumber,
   assertGenerationBudget,

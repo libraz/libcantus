@@ -31,6 +31,7 @@ export type {
   PitchSpelling,
 } from '../theory/chord/index.js';
 export type { ChordScaleMatch } from '../theory/chordscale/index.js';
+export type { ScaleName, ScaleNameInput } from '../theory/scale/index.js';
 export type {
   StyledVoicingOptions,
   VoiceRange,

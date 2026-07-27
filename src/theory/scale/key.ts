@@ -1,5 +1,6 @@
 import type { KeyScale } from '../../core/types.js';
-import { MAJOR_MASK, NATURAL_MINOR_MASK, namedScaleMask } from './masks.js';
+import type { ScaleNameInput } from './masks.js';
+import { MAJOR_MASK, NATURAL_MINOR_MASK, requireScaleMask } from './masks.js';
 
 /**
  * Build a `KeyScale` for a major key on the given root pitch class.
@@ -47,10 +48,6 @@ export function minorKey(rootPc: number): KeyScale {
  *
  * @category Scales
  */
-export function scaleByName(name: string, rootPc: number): KeyScale {
-  const mask = namedScaleMask(name);
-  if (mask === undefined) {
-    throw new Error(`Unknown scale: ${name}`);
-  }
-  return { rootPc: ((rootPc % 12) + 12) % 12, modeMask12: mask };
+export function scaleByName(name: ScaleNameInput, rootPc: number): KeyScale {
+  return { rootPc: ((rootPc % 12) + 12) % 12, modeMask12: requireScaleMask(name) };
 }

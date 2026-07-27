@@ -4,6 +4,8 @@
  * `modeMask12` is a 12-bit mask where bit `n` set means the pitch class
  * `(rootPc + n) % 12` belongs to the scale. Bit 0 (the root) is always set;
  * {@link maskFromOffsets} enforces this so the root is always a scale tone.
+ *
+ * @category Core
  */
 export type KeyScale = {
   rootPc: number;
@@ -16,6 +18,8 @@ export type KeyScale = {
  * velocity. This is the library-wide interchange shape for note events read
  * from or written to a DAW/MIDI track; the harmonizer's `MelodyNote` and the
  * analysis `VoiceNote` are specializations of it.
+ *
+ * @category Core
  */
 export type NoteEvent = {
   /** MIDI pitch (middle C = 60). */

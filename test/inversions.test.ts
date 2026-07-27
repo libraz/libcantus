@@ -58,7 +58,8 @@ describe('inverted voicings round-trip through detectChord', () => {
    * - relative pairs: 6/min7 share one set, min6/m7b5 share another;
    * - symmetric chords: every inversion of dim7 and aug is another root's
    *   voicing of the same quality;
-   * - rotations: sus2/sus4 are rotations of one set, 6/9 and 11 of another.
+   * - rotations: sus2/sus4 are rotations of one set, 6/9 and 11 of another,
+   *   maj13 and min11 of a third.
    */
   const ambiguous = new Set<string>([
     // 6 <-> min7 (e.g. C6 = Am7)
@@ -95,6 +96,22 @@ describe('inverted voicings round-trip through detectChord', () => {
     '11:2',
     '11:3',
     '11:4',
+    // 7b5 is symmetric under tritone transposition (the French sixth), so
+    // every inversion is another root's root-position voicing.
+    '7b5:1',
+    '7b5:2',
+    '7b5:3',
+    // maj13 <-> min11 (e.g. Cmaj13 = Am11)
+    'maj13:1',
+    'maj13:2',
+    'maj13:3',
+    'maj13:4',
+    'maj13:5',
+    'min11:1',
+    'min11:2',
+    'min11:3',
+    'min11:4',
+    'min11:5',
   ]);
 
   it('recovers root, quality, and inversion from every unambiguous inversion', () => {

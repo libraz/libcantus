@@ -270,11 +270,13 @@ describe('extension figures honor numeral case and quality suffix', () => {
     expect(romanToChord('V9', aMinor)).toMatchObject({ rootPc: 4, quality: 'dom9' });
   });
 
-  it('rejects extensions that have no quality for the numeral case', () => {
-    // No minor-11 or minor-13 quality exists, so a lowercase numeral with
-    // those figures throws instead of silently becoming a dominant.
-    expect(() => romanToChord('ii11', cMajor)).toThrow();
-    expect(() => romanToChord('ii13', cMajor)).toThrow();
+  it('reads a lowercase extension figure as the minor quality of that size', () => {
+    // A lowercase numeral names a minor chord, so its 11th and 13th figures
+    // resolve to the minor qualities rather than silently becoming dominants.
+    expect(romanToChord('ii11', cMajor)).toMatchObject({ rootPc: 2, quality: 'min11' });
+    expect(romanToChord('ii13', cMajor)).toMatchObject({ rootPc: 2, quality: 'min13' });
+    expect(chordToRoman(makeChord(2, 'min11'), cMajor)).toBe('ii11');
+    expect(chordToRoman(makeChord(2, 'min13'), cMajor)).toBe('ii13');
   });
 });
 

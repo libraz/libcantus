@@ -25,7 +25,7 @@ import { enumerateSafePitches, evaluateSafety, NoteSafety } from '../../theory/s
  */
 export type CounterMelodyOptions = {
   /** The lead line to write against, in ascending onset order. */
-  melody: NoteEvent[];
+  melody: readonly NoteEvent[];
   /**
    * The harmony to write against. A timeline carries its own segment
    * boundaries, so a chord change anywhere — including off the generator's
@@ -385,7 +385,7 @@ function heldPitchSafety(
  * that would form a parallel perfect interval with the melody or sit on the
  * wrong side of it, then scored to favour contrary or oblique motion, imperfect
  * consonance, and stepwise movement. Ties are broken by a seeded perturbation far
- * below any real score difference (see {@link TIE_BREAK_JITTER}), so the same
+ * below any real score difference (see `TIE_BREAK_JITTER`), so the same
  * seed always yields the same line while a different seed can only reshuffle
  * candidates that were already equally good. Notes extend to the next counter
  * onset (the last to the melody's end) at a velocity slightly under the melody.

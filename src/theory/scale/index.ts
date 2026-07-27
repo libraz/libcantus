@@ -6,6 +6,7 @@ export {
   scaleTonesInDegreeOrder,
 } from './degrees.js';
 export { majorKey, minorKey, scaleByName } from './key.js';
+export type { ScaleName, ScaleNameInput } from './masks.js';
 export {
   BLUES_MASK,
   CHROMATIC_MASK,
@@ -25,5 +26,6 @@ export {
   OCTATONIC_HALF_WHOLE_MASK,
   OCTATONIC_WHOLE_HALF_MASK,
   PHRYGIAN_MASK,
+  requireScaleMask,
   WHOLE_TONE_MASK,
 } from './masks.js';

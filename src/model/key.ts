@@ -167,7 +167,7 @@ export class Key {
    * @param opts How to weigh the input; see {@link DetectKeyOptions}.
    * @returns Ranked keys (may be empty).
    */
-  static detect(pitches: number[], opts?: DetectKeyOptions): Key[] {
+  static detect(pitches: readonly number[], opts?: DetectKeyOptions): Key[] {
     return detectKey(pitches, opts).map((match) => Key.of(match.key));
   }
 
@@ -183,7 +183,7 @@ export class Key {
    * Key.detectBest([0, 2, 4, 5, 7, 9, 11])?.toString(); // 'C major'
    * ```
    */
-  static detectBest(pitches: number[], opts?: DetectKeyOptions): Key | null {
+  static detectBest(pitches: readonly number[], opts?: DetectKeyOptions): Key | null {
     const best = detectKeyBest(pitches, opts);
     return best === null ? null : Key.of(best.key);
   }

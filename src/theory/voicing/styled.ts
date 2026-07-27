@@ -33,7 +33,8 @@ export type StyledVoicingOptions = {
   /** Constrain the highest voice to this pitch class (0..11) when given. */
   topNote?: number;
   /**
-   * Base octave for the close stack; the stack begins near `12 * octave`.
+   * Base octave in scientific pitch notation: octave 4 starts the stack near
+   * middle C (MIDI 60), i.e. near `12 * (octave + 1)`.
    *
    * @defaultValue 4
    */

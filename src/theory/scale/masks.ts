@@ -131,7 +131,7 @@ export const CHROMATIC_MASK = 0b111111111111;
  *
  * @category Scales
  */
-export const NAMED_SCALES: Readonly<Record<string, number>> = Object.freeze({
+export const NAMED_SCALES = Object.freeze({
   major: MAJOR_MASK,
   ionian: MAJOR_MASK,
   naturalMinor: NATURAL_MINOR_MASK,
@@ -153,6 +153,22 @@ export const NAMED_SCALES: Readonly<Record<string, number>> = Object.freeze({
 });
 
 /**
+ * The name of a built-in scale, as accepted by {@link scaleByName},
+ * {@link avoidNotes}, and {@link availableTensions}.
+ *
+ * @category Scales
+ */
+export type ScaleName = keyof typeof NAMED_SCALES;
+
+/**
+ * A scale name that completes to the built-in names but still accepts any
+ * string, so a caller with a name from configuration is not forced to cast.
+ *
+ * @category Scales
+ */
+export type ScaleNameInput = ScaleName | (string & {});
+
+/**
  * The mask of a named scale, or undefined when the name is not one.
  *
  * Looking the name up through this helper is what keeps `'constructor'` or
@@ -163,6 +179,27 @@ export const NAMED_SCALES: Readonly<Record<string, number>> = Object.freeze({
  * @returns The 12-bit mask, or undefined for an unknown name.
  * @category Scales
  */
-export function namedScaleMask(name: string): number | undefined {
-  return Object.hasOwn(NAMED_SCALES, name) ? NAMED_SCALES[name] : undefined;
+export function namedScaleMask(name: ScaleNameInput): number | undefined {
+  return Object.hasOwn(NAMED_SCALES, name) ? NAMED_SCALES[name as ScaleName] : undefined;
+}
+
+/**
+ * The mask of a named scale, rejecting an unknown name.
+ *
+ * Every public entry point that takes a scale name funnels through here, so a
+ * typo is reported the same way everywhere instead of being answered with an
+ * empty result that also means "this scale has none".
+ *
+ * @param name The scale name.
+ * @param label What the name is, for the error message.
+ * @returns The 12-bit mask.
+ * @throws If the name is not a built-in scale.
+ * @category Scales
+ */
+export function requireScaleMask(name: ScaleNameInput, label = 'scale'): number {
+  const mask = namedScaleMask(name);
+  if (mask === undefined) {
+    throw new RangeError(`Unknown ${label}: ${String(name)}`);
+  }
+  return mask;
 }

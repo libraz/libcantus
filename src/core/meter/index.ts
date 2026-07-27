@@ -55,8 +55,13 @@ export type TimeSignature = {
  * @category Rhythm & Meter
  */
 export type BarPosition = {
+  /** 0-based bar index. {@link formatBarPosition} renders it 1-based. */
   bar: number;
-  /** Quarter-note offset from the start of the bar. */
+  /**
+   * Quarter-note offset from the start of the bar — not the felt beat. In 6/8
+   * the second felt beat is at `beat: 1.5`; {@link barPositionToPulse} converts
+   * to felt-beat numbering.
+   */
   beat: number;
 };
 
@@ -192,6 +197,72 @@ export function beatToBarPosition(beatInQuarters: number, ts: TimeSignature): Ba
   const barLen = barBeatsOf(ts);
   const bar = Math.floor(beatInQuarters / barLen);
   return { bar, beat: beatInQuarters - bar * barLen };
+}
+
+/**
+ * Length of one felt beat (main pulse) in quarter-note beats.
+ *
+ * A quarter note in simple meters, a dotted quarter in compound ones, and one
+ * denominator unit in an additive metre. Position displays, click tracks, and
+ * score export are all written against this length.
+ *
+ * @param ts The time signature.
+ * @returns The pulse length in quarter-note beats.
+ * @example
+ * ```ts
+ * import { parseTimeSignature, pulseBeats } from '@libraz/libcantus';
+ * pulseBeats(parseTimeSignature('6/8')); // 1.5
+ * ```
+ * @category Rhythm & Meter
+ */
+export function pulseBeats(ts: TimeSignature): number {
+  assertTimeSignature(ts);
+  return pulseBeatsOf(ts);
+}
+
+/**
+ * The felt-beat number of a bar position, 1-based.
+ *
+ * {@link BarPosition.beat} is a quarter-note offset, so in 6/8 the second felt
+ * beat reads as 1.5. This is the number a musician says and a position display
+ * shows.
+ *
+ * @param pos The bar position.
+ * @param ts The time signature.
+ * @returns The 1-based felt-beat number, fractional between pulses.
+ * @example
+ * ```ts
+ * import { barPositionToPulse, parseTimeSignature } from '@libraz/libcantus';
+ * barPositionToPulse({ bar: 0, beat: 1.5 }, parseTimeSignature('6/8')); // 2
+ * ```
+ * @category Rhythm & Meter
+ */
+export function barPositionToPulse(pos: BarPosition, ts: TimeSignature): number {
+  assertFiniteNumber(pos.beat, 'position.beat');
+  assertTimeSignature(ts);
+  return pos.beat / pulseBeatsOf(ts) + 1;
+}
+
+/**
+ * Render an absolute position as the `bar.beat` a DAW or a score shows:
+ * 1-based bar, 1-based felt beat.
+ *
+ * @param beatInQuarters Absolute position in quarter-note beats.
+ * @param ts The time signature.
+ * @param decimals Digits of the fractional beat to keep.
+ * @returns The formatted position, e.g. `'3.2'` for bar 3, felt beat 2.
+ * @example
+ * ```ts
+ * import { formatBarPosition, parseTimeSignature } from '@libraz/libcantus';
+ * formatBarPosition(7.5, parseTimeSignature('6/8')); // '3.2'
+ * ```
+ * @category Rhythm & Meter
+ */
+export function formatBarPosition(beatInQuarters: number, ts: TimeSignature, decimals = 2): string {
+  const position = beatToBarPosition(beatInQuarters, ts);
+  const pulse = barPositionToPulse(position, ts);
+  const rounded = Number(pulse.toFixed(decimals));
+  return `${position.bar + 1}.${rounded}`;
 }
 
 /**

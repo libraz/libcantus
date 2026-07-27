@@ -1,14 +1,22 @@
 import type { NoteEvent } from '../types.js';
 import { assertNoteEvents } from '../validation/index.js';
 
-/** A validated note retaining its position in the caller's original array. */
+/**
+ * A validated note retaining its position in the caller's original array.
+ *
+ * @category Core
+ */
 export type IndexedNoteEvent = {
   note: NoteEvent;
   originalIndex: number;
   endBeat: number;
 };
 
-/** Binary-searchable, stable-sorted index over note onsets and active spans. */
+/**
+ * Binary-searchable, stable-sorted index over note onsets and active spans.
+ *
+ * @category Core
+ */
 export type NoteEventIndex = {
   notes: IndexedNoteEvent[];
   /** Latest-onset note sounding at `beat`, with later input order winning ties. */
@@ -39,9 +47,11 @@ function upperBound(values: IndexedNoteEvent[], beat: number): number {
  * Validate and stable-sort note events once, then expose logarithmic onset and
  * active-note lookups. Non-positive-duration notes may be retained for callers
  * that intentionally filter them later, but never count as sounding.
+ *
+ * @category Core
  */
 export function createNoteEventIndex(
-  events: NoteEvent[],
+  events: readonly NoteEvent[],
   options: { allowNonPositiveDuration?: boolean } = {},
 ): NoteEventIndex {
   assertNoteEvents(events, 'note events', options);

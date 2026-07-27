@@ -41,7 +41,11 @@ export type ChordMatch = {
   bassPc?: number;
 };
 
-/** Input interpretation for {@link detectChord} and {@link detectChordBest}. */
+/**
+ * Input interpretation for {@link detectChord} and {@link detectChordBest}.
+ *
+ * @category Recognition
+ */
 export type DetectChordOptions = {
   /**
    * `midi` uses the numerically lowest pitch as bass; `pitchClass` treats the
@@ -100,15 +104,15 @@ export type DetectKeyOptions = {
    * duration times velocity, matching how chord inference weighs its own
    * histogram.
    */
-  weights?: number[];
+  weights?: readonly number[];
 };
 
 /** Unique pitch classes of the input, sorted ascending. */
-function uniquePitchClasses(pitches: number[]): number[] {
+function uniquePitchClasses(pitches: readonly number[]): number[] {
   return [...new Set(pitches.map(pitchClass))].sort((a, b) => a - b);
 }
 
-function assertPitches(pitches: number[]): void {
+function assertPitches(pitches: readonly number[]): void {
   assertGenerationBudget(pitches.length, 'detection pitches');
   for (let index = 0; index < pitches.length; index += 1) {
     assertFiniteNumber(pitches[index] ?? Number.NaN, `pitches[${index}]`);
@@ -135,7 +139,10 @@ function assertPitches(pitches: number[]): void {
  * ```
  * @category Recognition
  */
-export function detectChord(pitches: number[], opts: DetectChordOptions = {}): ChordMatch[] {
+export function detectChord(
+  pitches: readonly number[],
+  opts: DetectChordOptions = {},
+): ChordMatch[] {
   assertPitches(pitches);
   if (opts.bassPc !== undefined) assertFiniteNumber(opts.bassPc, 'bassPc');
   const input = uniquePitchClasses(pitches);
@@ -222,7 +229,10 @@ export function detectChord(pitches: number[], opts: DetectChordOptions = {}): C
  * ```
  * @category Recognition
  */
-export function detectChordBest(pitches: number[], opts: DetectChordOptions = {}): Chord | null {
+export function detectChordBest(
+  pitches: readonly number[],
+  opts: DetectChordOptions = {},
+): Chord | null {
   const best = detectChord(pitches, opts)[0];
   if (!best) {
     return null;
@@ -270,7 +280,7 @@ const MAJOR_VARIANTS = [{ variant: 'major', mask: MAJOR_MASK }] as const satisfi
  * ```
  * @category Recognition
  */
-export function detectKey(pitches: number[], opts: DetectKeyOptions = {}): KeyMatch[] {
+export function detectKey(pitches: readonly number[], opts: DetectKeyOptions = {}): KeyMatch[] {
   assertPitches(pitches);
   const input = uniquePitchClasses(pitches);
   if (input.length === 0) {
@@ -362,7 +372,7 @@ const DEFAULT_VELOCITY = 100;
  * ```
  * @category Recognition
  */
-export function detectKeyFromNotes(notes: NoteEvent[]): KeyMatch[] {
+export function detectKeyFromNotes(notes: readonly NoteEvent[]): KeyMatch[] {
   const sounding = notes.filter((note) => note.durationBeat > 0);
   return detectKey(
     sounding.map((note) => note.pitch),
@@ -387,6 +397,9 @@ export function detectKeyFromNotes(notes: NoteEvent[]): KeyMatch[] {
  * ```
  * @category Recognition
  */
-export function detectKeyBest(pitches: number[], opts: DetectKeyOptions = {}): KeyMatch | null {
+export function detectKeyBest(
+  pitches: readonly number[],
+  opts: DetectKeyOptions = {},
+): KeyMatch | null {
   return detectKey(pitches, opts)[0] ?? null;
 }

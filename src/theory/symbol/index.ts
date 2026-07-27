@@ -84,6 +84,35 @@ const QUALITY_MAP: Record<string, ChordQuality> = {
   '11': '11',
   '13': '13',
   '5': '5',
+  '7sus4': '7sus4',
+  '7sus': '7sus4',
+  '9sus4': '11',
+  '9sus': '11',
+  '7b5': '7b5',
+  '7alt': '7alt',
+  alt: '7alt',
+  '13b9': '13b9',
+  maj13: 'maj13',
+  M13: 'maj13',
+  'maj7#11': 'maj7#11',
+  'M7#11': 'maj7#11',
+  m11: 'min11',
+  min11: 'min11',
+  m13: 'min13',
+  min13: 'min13',
+  madd9: 'minAdd9',
+  'min(add9)': 'minAdd9',
+  'm(add9)': 'minAdd9',
+  '6add9': '6/9',
+  'm6/9': 'min6/9',
+  m69: 'min6/9',
+  'min6/9': 'min6/9',
+  // ASCII stand-ins for the degree and half-diminished glyphs, which most
+  // lead sheets and chord-chart text files use instead of the typographic ones.
+  o: 'dim',
+  o7: 'dim7',
+  h: 'm7b5',
+  h7: 'm7b5',
 };
 
 /** Canonical lead-sheet suffix emitted for each chord quality when formatting. */
@@ -118,6 +147,16 @@ const CANONICAL_SUFFIX: Record<ChordQuality, string> = {
   '11': '11',
   '13': '13',
   '5': '5',
+  '7sus4': '7sus4',
+  '7b5': '7b5',
+  '7alt': '7alt',
+  '13b9': '13b9',
+  maj13: 'maj13',
+  'maj7#11': 'maj7#11',
+  min11: 'm11',
+  min13: 'm13',
+  minAdd9: 'madd9',
+  'min6/9': 'm6/9',
 };
 
 /**

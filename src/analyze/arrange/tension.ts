@@ -60,12 +60,12 @@ function clamp01(value: number): number {
  *
  * At each sample beat the tension combines three normalized terms:
  *  - the sounding chord's harmonic function (dominant `1`, subdominant `0.5`,
- *    tonic or no chord `0`), weighted {@link FUNCTION_WEIGHT};
+ *    tonic or no chord `0`), weighted `FUNCTION_WEIGHT`;
  *  - the dissonance of the sounding notes — the larger of the share of sounding
  *    pitches that are not chord tones and the share that {@link evaluateSafety}
- *    rates {@link NoteSafety.Dissonant} — weighted {@link DISSONANCE_WEIGHT};
+ *    rates {@link NoteSafety.Dissonant} — weighted `DISSONANCE_WEIGHT`;
  *  - the registral span of the sounding notes, saturating at
- *    {@link SPAN_SATURATION} semitones, weighted {@link SPAN_WEIGHT}.
+ *    `SPAN_SATURATION` semitones, weighted `SPAN_WEIGHT`.
  *
  * The weighted sum is clamped to [0, 1]. The harmony is inferred from all tracks
  * pooled together, so the result is deterministic and self-contained.

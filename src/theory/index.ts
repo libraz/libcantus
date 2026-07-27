@@ -64,6 +64,7 @@ export {
   NoteSafety,
   ReasonFlag,
 } from './safety/index.js';
+export type { ScaleName, ScaleNameInput } from './scale/index.js';
 export {
   BLUES_MASK,
   CHROMATIC_MASK,
@@ -89,6 +90,7 @@ export {
   OCTATONIC_WHOLE_HALF_MASK,
   PHRYGIAN_MASK,
   pitchToScaleDegree,
+  requireScaleMask,
   scaleByName,
   scaleTonesInDegreeOrder,
   WHOLE_TONE_MASK,

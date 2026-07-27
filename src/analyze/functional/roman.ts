@@ -100,6 +100,16 @@ const ROMAN_STYLE: Record<ChordQuality, { lower: boolean; suffix: string }> = {
   '11': { lower: false, suffix: '11' },
   '13': { lower: false, suffix: '13' },
   '5': { lower: false, suffix: '5' },
+  '7sus4': { lower: false, suffix: '7sus4' },
+  '7b5': { lower: false, suffix: '7b5' },
+  '7alt': { lower: false, suffix: '7alt' },
+  '13b9': { lower: false, suffix: '13b9' },
+  maj13: { lower: false, suffix: 'maj13' },
+  'maj7#11': { lower: false, suffix: 'maj7#11' },
+  min11: { lower: true, suffix: '11' },
+  min13: { lower: true, suffix: '13' },
+  minAdd9: { lower: true, suffix: 'add9' },
+  'min6/9': { lower: true, suffix: '69' },
 };
 
 /** Reverse lookup of {@link ROMAN_STYLE}: `(case, exact suffix) -> quality`. */

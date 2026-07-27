@@ -53,7 +53,7 @@ export type TrackRole = 'melody' | 'harmony' | 'bass' | 'drums' | 'other';
 export type ArrangementTrack = {
   name?: string;
   role?: TrackRole;
-  notes: NoteEvent[];
+  notes: readonly NoteEvent[];
 };
 
 /**

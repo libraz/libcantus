@@ -78,13 +78,21 @@ export const GROOVE_STYLES = [
   'synthpop',
 ] as const;
 
-/** Public groove style identifiers. */
+/**
+ * Public groove style identifiers.
+ *
+ * @category Composition
+ */
 export type GrooveStyle = (typeof GROOVE_STYLES)[number];
 
 /** Every public role, in declaration order. */
 export const DRUM_ROLES = ['full', 'ambient', 'minimal', 'fxOnly'] as const;
 
-/** Public role identifiers gating which voices are present. */
+/**
+ * Public role identifiers gating which voices are present.
+ *
+ * @category Composition
+ */
 export type DrumRole = (typeof DRUM_ROLES)[number];
 
 /** Every public section, in declaration order. */

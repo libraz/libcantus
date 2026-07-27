@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chordQualities, makeChord } from '../src/theory/chord/index.js';
+import { chordPitchClasses, chordQualities, makeChord } from '../src/theory/chord/index.js';
 import {
   formatChordSymbol,
   parseChordSymbol,
@@ -84,6 +84,44 @@ describe('parseChordSymbol', () => {
 
   it('throws on an unrecognized quality', () => {
     expect(() => parseChordSymbol('Cfoo')).toThrow();
+  });
+});
+
+describe('lead-sheet vocabulary', () => {
+  it('parses the suspended and altered dominants a chart actually uses', () => {
+    expect(parseChordSymbol('G7sus4')).toMatchObject({ rootPc: 7, quality: '7sus4' });
+    expect(parseChordSymbol('G7sus')).toMatchObject({ rootPc: 7, quality: '7sus4' });
+    // A 9sus4 is the same pitch-class set as the 11 chord and reads as one.
+    expect(parseChordSymbol('G9sus4').quality).toBe('11');
+    expect(parseChordSymbol('C7b5')).toMatchObject({ rootPc: 0, quality: '7b5' });
+    expect(parseChordSymbol('G7alt')).toMatchObject({ rootPc: 7, quality: '7alt' });
+    expect(parseChordSymbol('Galt')).toMatchObject({ rootPc: 7, quality: '7alt' });
+    expect(parseChordSymbol('G13b9')).toMatchObject({ rootPc: 7, quality: '13b9' });
+  });
+
+  it('parses the minor and major extensions beyond the ninth', () => {
+    expect(parseChordSymbol('Am11')).toMatchObject({ rootPc: 9, quality: 'min11' });
+    expect(parseChordSymbol('Am13')).toMatchObject({ rootPc: 9, quality: 'min13' });
+    expect(parseChordSymbol('Cmaj13')).toMatchObject({ rootPc: 0, quality: 'maj13' });
+    expect(parseChordSymbol('Cmaj7#11')).toMatchObject({ rootPc: 0, quality: 'maj7#11' });
+    expect(parseChordSymbol('Cmadd9')).toMatchObject({ rootPc: 0, quality: 'minAdd9' });
+    expect(parseChordSymbol('Cm6/9')).toMatchObject({ rootPc: 0, quality: 'min6/9' });
+    expect(parseChordSymbol('C6add9').quality).toBe('6/9');
+  });
+
+  it('accepts the ASCII stand-ins for the degree and half-diminished glyphs', () => {
+    expect(parseChordSymbol('Ao')).toMatchObject({ rootPc: 9, quality: 'dim' });
+    expect(parseChordSymbol('Ao7')).toMatchObject({ rootPc: 9, quality: 'dim7' });
+    expect(parseChordSymbol('Ah7')).toMatchObject({ rootPc: 9, quality: 'm7b5' });
+    expect(parseChordSymbol('Ao7')).toEqual(parseChordSymbol('A°7'));
+    expect(parseChordSymbol('Ah7')).toEqual(parseChordSymbol('Aø7'));
+  });
+
+  it('spells every quality with distinct letters', () => {
+    for (const quality of ['7sus4', '7b5', '7alt', '13b9', 'maj13', 'min11'] as const) {
+      const chord = makeChord(0, quality);
+      expect(chordPitchClasses(chord).length, quality).toBe(chord.intervals.length);
+    }
   });
 });
 
