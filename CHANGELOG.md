@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.3] - 2026-07-27
+## [0.9.4] - 2026-07-27
 
 A correctness and API pass across every layer. Most entries are bug fixes, but
 several change observable output, tighten input validation, or rename a public
@@ -13,14 +13,10 @@ symbol — see **Changed** and **Removed** before upgrading.
 
 ### Added
 
-- Core-layer note-event index: `createNoteEventIndex` with the `NoteEventIndex`,
-  `IndexedNoteEvent`, and `OnsetTieBreak` types, giving fast sounding-at-beat and
-  time-window lookups over a note list. The chord-timeline analyzer, the
-  arrangement analysis, and the countermelody generator all build on it.
-- Core-layer runtime validation helpers — `assertNoteEvent`, `assertNoteEvents`,
-  `assertRange`, `assertTimeSignature`, `assertInteger`, `assertPositiveInt`,
-  `assertFiniteNumber`, `assertGenerationBudget`, `assertOneOf`,
-  `dropSilentNotes`, `DEFAULT_GENERATION_BUDGET`, and the
+- The note-event index gains an `OnsetTieBreak` option and a caller-supplied
+  budget, and now backs the arrangement analysis and the countermelody generator
+  as well as the chord timeline.
+- Core-layer validation helpers `assertOneOf` and `dropSilentNotes`, and the
   `NoteEventAssertOptions` type.
 - Coded errors: `InvalidInputError`, `NoSolutionError`, and
   `BudgetExceededError`, each carrying a `LibcantusErrorCode`, plus the
@@ -63,7 +59,6 @@ symbol — see **Changed** and **Removed** before upgrading.
   and `intervalAboveRoot` / `isChordMember` as the shared chord predicates.
 - Per-subpath `typesVersions` for consumers on the pre-`exports` resolver, and
   `./package.json` in the `exports` map.
-- `bench:timeline` script for benchmarking the note-event index.
 
 ### Changed
 
@@ -87,10 +82,9 @@ symbol — see **Changed** and **Removed** before upgrading.
   pitch, rather than in the order the voices were accumulated.
 - **Breaking.** The published package no longer ships `src` or `tsconfig.json`;
   the sourcemaps already carry the same sources.
-- Public generation and analysis entry points validate their inputs and throw a
-  descriptive error on malformed note events, out-of-range values, an unknown
-  style or preset name, or an invalid time signature, instead of producing
-  undefined results. A note pitch must be a MIDI number in [0, 127].
+- Input validation reaches the entry points it had missed and covers more of
+  what an argument can get wrong: an unknown style, preset, or scale name is
+  rejected, and a note pitch must be a MIDI number in [0, 127].
 - Zero-length notes are accepted and ignored everywhere rather than throwing in
   some places and being dropped in others.
 - `createRng` rejects a seed the 32-bit state cannot hold, and `Rng.prob`
@@ -112,7 +106,7 @@ symbol — see **Changed** and **Removed** before upgrading.
 - Each layer barrel re-exports the types its own public signatures name, so a
   single-subpath consumer can spell every type it needs.
 - `CounterMelodyOptions.chordChangeBeats` was added alongside a rewrite of
-  candidate selection; a given seed can produce a different line than in 0.9.2.
+  candidate selection; a given seed can produce a different line than in 0.9.3.
   The seed now also breaks ties between equally good candidate pitches.
 - The chord-progression cycle collapses a repeated degree only when the two
   degrees come from different steps of the preset.
@@ -142,9 +136,9 @@ symbol — see **Changed** and **Removed** before upgrading.
   leave the MIDI range are rejected.
 - Relative substitutions are measured against the source chord's triad, so a
   seventh chord is offered the same relatives as its triad.
-- Type resolution for CommonJS consumers: the `exports` map points each `require`
-  condition at a dedicated `.d.cts` declaration, so `require()`-based TypeScript
-  projects resolve the correct types.
+- The CommonJS build shares its chunks, so a class reached through the package
+  root and through the `/model` subpath is one class; cross-entry `equals` and
+  `instanceof` answered with a brand-check crash before.
 
 ### Performance
 
@@ -153,6 +147,32 @@ symbol — see **Changed** and **Removed** before upgrading.
 - `generateCounterMelody` resolves each boundary once per onset rather than once
   per candidate pitch, so the caller's chord callback is no longer invoked once
   per pitch in the register.
+
+## [0.9.3] - 2026-07-15
+
+### Added
+
+- Core-layer note-event index: `createNoteEventIndex` with the `NoteEventIndex`
+  and `IndexedNoteEvent` types, giving fast sounding-at-beat and time-window
+  lookups over a note list. The chord-timeline analyzer now builds on it.
+- Core-layer runtime validation helpers — `assertNoteEvent`, `assertNoteEvents`,
+  `assertRange`, `assertTimeSignature`, `assertInteger`, `assertPositiveInt`,
+  `assertFiniteNumber`, `assertGenerationBudget`, and `DEFAULT_GENERATION_BUDGET`.
+- Optional `DetectChordOptions` argument on `detectChord` and `detectChordBest`
+  (defaults preserve the previous behavior).
+- `bench:timeline` script for benchmarking the note-event index.
+
+### Changed
+
+- Public generation and analysis entry points now validate their inputs and
+  throw a descriptive error on malformed note events, out-of-range values, or an
+  invalid time signature instead of producing undefined results.
+
+### Fixed
+
+- Type resolution for CommonJS consumers: the `exports` map points each `require`
+  condition at a dedicated `.d.cts` declaration, so `require()`-based TypeScript
+  projects resolve the correct types.
 
 ## [0.9.2] - 2026-07-07
 
@@ -246,6 +266,7 @@ Initial public release.
 - Fluent immutable class API (`Note`, `Chord`, `Key`, ...) layered over the tree-shakeable functional core.
 - Dual ESM/CJS builds with bundled type declarations.
 
+[0.9.4]: https://github.com/libraz/libcantus/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/libraz/libcantus/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/libraz/libcantus/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/libraz/libcantus/compare/v0.9.0...v0.9.1
