@@ -243,5 +243,16 @@ describe('harmonizeMelody', () => {
     // The option has to reach the accent grid; if it were ignored the two
     // harmonizations would be identical by construction.
     expect(waltz.chords.map((c) => c.rootPc)).not.toEqual(fourFour.chords.map((c) => c.rootPc));
+
+    // A compound metre and an additive one have to reach the accent grid too,
+    // not just the simple triple case.
+    const jig = harmonizeMelody({ ...common, ts: { numerator: 6, denominator: 8 } });
+    const aksak = harmonizeMelody({
+      ...common,
+      ts: { numerator: 7, denominator: 8, grouping: [2, 2, 3] },
+    });
+    for (const result of [jig, aksak]) {
+      expect(result.chords.map((c) => c.rootPc)).not.toEqual(fourFour.chords.map((c) => c.rootPc));
+    }
   });
 });

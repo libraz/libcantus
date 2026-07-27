@@ -5,9 +5,14 @@ import { chordTimelineFromChords, chordTimelineFromNotes } from '../src/analyze/
 import { analyzeVoice, toVoiceNotes } from '../src/analyze/voice/index.js';
 import { parseTimeSignature } from '../src/core/meter/index.js';
 import type { NoteEvent } from '../src/core/types.js';
+import { generateBassLine } from '../src/generate/bass/index.js';
 import { generateCounterMelody } from '../src/generate/countermelody/index.js';
 import { DRUM_NOTES, drumVoiceOf, generateDrums } from '../src/generate/drums/index.js';
-import { extractGrooveTemplate, humanize } from '../src/generate/groove/index.js';
+import {
+  applyGrooveTemplate,
+  extractGrooveTemplate,
+  humanize,
+} from '../src/generate/groove/index.js';
 import { harmonizeMelody } from '../src/generate/harmonize/index.js';
 import { generateMotif, motifToNoteEvents } from '../src/generate/motif/index.js';
 import {
@@ -197,5 +202,34 @@ describe('analyzeVoice takes a plain melody', () => {
     );
     expect(explicit.map((note) => note.labels)).toEqual(labels.map((note) => note.labels));
     expect(explicit.map((note) => note.originalIndex)).toEqual([0, 1, 2]);
+  });
+});
+
+describe('an empty sequence in gives an empty sequence out', () => {
+  // A caller who splits a piece into sections and generates each one hits empty
+  // sections routinely. Every generator that takes a sequence has to agree on
+  // what that means, or concatenating the sections silently inserts material
+  // nobody wrote.
+  const ts = parseTimeSignature('4/4');
+
+  it('holds for every generate entry that takes a sequence', () => {
+    expect(generateBassLine({ segments: [], key: cMajor })).toEqual([]);
+    expect(
+      generateCounterMelody({ melody: [], chordAt: () => makeChord(0, 'maj'), key: cMajor }),
+    ).toEqual([]);
+    expect(humanize([])).toEqual([]);
+    expect(applyGrooveTemplate([], extractGrooveTemplate([], ts), ts)).toEqual([]);
+
+    const harmonized = harmonizeMelody({ melody: [], key: cMajor });
+    expect(harmonized.chords).toEqual([]);
+    expect(harmonized.melodyRoles).toEqual([]);
+    expect(harmonized.transposeSemitones).toBe(0);
+  });
+
+  it('extracts a neutral groove template from no events rather than failing', () => {
+    const template = extractGrooveTemplate([], ts);
+    expect(template.slots).toHaveLength(template.slotsPerBar);
+    expect(template.slots.every((slot) => slot.timingOffset === 0)).toBe(true);
+    expect(template.slots.every((slot) => slot.velocity === null)).toBe(true);
   });
 });

@@ -74,6 +74,29 @@ if (!root.Chord.parse('Cmaj7').equals(model.Chord.parse('Cmaj7'))) {
 if (!(fromModel instanceof root.Note) || !(fromRoot instanceof model.Note)) {
   throw new Error('cross-entry instanceof disagreed');
 }
+if (!root.Interval.parse('P5').equals(model.Interval.parse('P5'))) {
+  throw new Error('cross-entry Interval.equals disagreed');
+}
+if (!root.Key.major('C').equals(model.Key.major('C'))) {
+  throw new Error('cross-entry Key.equals disagreed');
+}
+const rootProgression = root.Progression.fromSpans([{ rootPc: 0, quality: 'maj', startBeat: 0 }]);
+const modelProgression = model.Progression.fromSpans([{ rootPc: 0, quality: 'maj', startBeat: 0 }]);
+if (!rootProgression.equals(modelProgression)) {
+  throw new Error('cross-entry Progression.equals disagreed');
+}
+const sameClass =
+  root.Chord.parse('Cmaj7') instanceof model.Chord &&
+  model.Chord.parse('Cmaj7') instanceof root.Chord &&
+  root.Interval.parse('P5') instanceof model.Interval &&
+  model.Interval.parse('P5') instanceof root.Interval &&
+  root.Key.major('C') instanceof model.Key &&
+  model.Key.major('C') instanceof root.Key &&
+  rootProgression instanceof model.Progression &&
+  modelProgression instanceof root.Progression;
+if (!sameClass) {
+  throw new Error('cross-entry instanceof disagreed across the class API');
+}
 `;
 
 const typeParityCheck = `

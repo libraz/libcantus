@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import * as analyze from '../src/analyze/index.js';
+import * as core from '../src/core/index.js';
+import * as generate from '../src/generate/index.js';
 import * as api from '../src/index.js';
+import * as model from '../src/model/index.js';
+import * as theory from '../src/theory/index.js';
 
 /**
  * Guards the public runtime surface against accidental loss during refactors.
@@ -204,9 +209,21 @@ const EXPECTED_EXPORTS = [
   'voiceProgression',
 ];
 
+/** Every layer barrel, in the order the root re-exports them. */
+const LAYERS = { core, theory, analyze, generate, model } as const;
+
 describe('public API surface', () => {
   it('exports exactly the expected runtime members', () => {
     const actual = Object.keys(api).sort();
     expect(actual).toEqual([...EXPECTED_EXPORTS].sort());
+  });
+
+  it('reaches every root member through the layer subpath that owns it', () => {
+    // Derived rather than listed: the root barrel is five `export *` lines, so
+    // a name the root still has but a layer barrel lost is a subpath consumer's
+    // break that the root-only list above cannot see.
+    const fromLayers = new Set(Object.values(LAYERS).flatMap((layer) => Object.keys(layer)));
+    expect([...Object.keys(api)].filter((name) => !fromLayers.has(name))).toEqual([]);
+    expect([...fromLayers].filter((name) => !(name in api)).sort()).toEqual([]);
   });
 });
