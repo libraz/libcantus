@@ -37,8 +37,8 @@ export type SubstitutionType =
   | 'tritone'
   | 'relative'
   | 'borrowed'
-  | 'chromatic-mediant'
-  | 'secondary-dominant';
+  | 'chromaticMediant'
+  | 'secondaryDominant';
 
 /**
  * A proposed chord substitution with its relationship, numeral, and function.
@@ -134,11 +134,11 @@ const THIRD_OFFSETS = [3, 4, 8, 9] as const;
  * original chord and each other:
  *
  * - `tritone`: for a dominant-type chord, the dominant seventh a tritone away.
- * - `secondary-dominant`: for a stable target, the dominant seventh a fifth
+ * - `secondaryDominant`: for a stable target, the dominant seventh a fifth
  *   above its root (tonicizing it).
  * - `relative`: a diatonic triad a third away that shares two common tones.
  * - `borrowed`: a triad from the parallel mode with the same harmonic function.
- * - `chromatic-mediant`: a major/minor triad a third away sharing one common
+ * - `chromaticMediant`: a major/minor triad a third away sharing one common
  *   tone.
  *
  * Each result carries its Roman numeral and harmonic function in `key`. When
@@ -178,7 +178,7 @@ export function substituteChord(
   if (isStableTarget(chord)) {
     candidates.push({
       chord: makeChord(mod12(chord.rootPc + 7), 'dom7'),
-      type: 'secondary-dominant',
+      type: 'secondaryDominant',
     });
   }
 
@@ -209,7 +209,7 @@ export function substituteChord(
         commonToneCount(originalTriad, chordPitchClasses(mediant)) === 1 &&
         !isDiatonic(mediant, key)
       ) {
-        candidates.push({ chord: mediant, type: 'chromatic-mediant' });
+        candidates.push({ chord: mediant, type: 'chromaticMediant' });
       }
     }
   }
@@ -239,7 +239,7 @@ export function substituteChord(
       // numeral re-parses to the chord that was proposed rather than to a
       // chromatic chord on the same root.
       roman: chordToRoman(candidate.chord, key, {
-        applied: candidate.type === 'secondary-dominant',
+        applied: candidate.type === 'secondaryDominant',
       }),
       function: functionOf(candidate.chord, key),
     });

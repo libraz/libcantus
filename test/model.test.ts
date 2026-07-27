@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { detectKeyBest } from '../src/analyze/detect/index.js';
+import { generateProgression } from '../src/generate/progression/index.js';
 import { Chord, Interval, Key, Note, Progression } from '../src/model/index.js';
 
 describe('Note', () => {
@@ -95,6 +97,72 @@ describe('class API string conversion', () => {
     expect(`${Chord.parse('Cmaj7')}`).toBe('Cmaj7');
     const progression = new Progression([Chord.parse('C'), Chord.parse('Am'), Chord.parse('F')]);
     expect(`${progression}`).toBe('C Am F');
+  });
+});
+
+describe('plain data round trips and collection access', () => {
+  it('rebuilds every class from its own JSON', () => {
+    const note = Note.of('F#4');
+    expect(Note.fromJSON(JSON.parse(JSON.stringify(note))).equals(note)).toBe(true);
+    const chord = Chord.parse('Cmaj7');
+    expect(Chord.fromJSON(JSON.parse(JSON.stringify(chord))).equals(chord)).toBe(true);
+    expect(Chord.fromData(chord.toJSON()).equals(chord)).toBe(true);
+    const key = Key.minor('A');
+    expect(Key.fromJSON(JSON.parse(JSON.stringify(key))).equals(key)).toBe(true);
+    const progression = new Progression([Chord.parse('C'), Chord.parse('G')], Key.major('C'));
+    const restored = Progression.fromJSON(JSON.parse(JSON.stringify(progression)));
+    expect(restored.equals(progression)).toBe(true);
+    expect(restored.key?.equals(Key.major('C'))).toBe(true);
+  });
+
+  it('compares keys by tonic and mode, not by spelling', () => {
+    expect(Key.major('C#').equals(Key.major('Db'))).toBe(true);
+    expect(Key.major('C').equals(Key.minor('C'))).toBe(false);
+    expect(Key.major('C').equals(Key.major('D'))).toBe(false);
+  });
+
+  it('indexes and iterates a progression without copying it each time', () => {
+    const chords = [Chord.parse('C'), Chord.parse('Am'), Chord.parse('F')];
+    const progression = new Progression(chords);
+    expect(progression.at(0)?.symbol()).toBe('C');
+    expect(progression.at(-1)?.symbol()).toBe('F');
+    expect(progression.at(3)).toBeUndefined();
+    expect([...progression].map((chord) => chord.symbol())).toEqual(['C', 'Am', 'F']);
+    // The same array is handed out each time rather than a fresh copy.
+    expect(progression.chords).toBe(progression.chords);
+  });
+
+  it('lifts generated chord spans into a progression', () => {
+    const key = Key.major('C');
+    const spans = generateProgression({ key: key.scale, style: 'dance', bars: 4 });
+    const progression = Progression.fromSpans(spans, key);
+    expect(progression.length).toBe(spans.length);
+    expect(progression.at(0)?.rootPc).toBe(spans[0]?.rootPc);
+    // The chords carry the key, so they answer analysis questions directly.
+    expect(progression.roman().length).toBe(spans.length);
+  });
+});
+
+describe('recognition through the class API', () => {
+  it('keeps the match metadata a recognition UI needs', () => {
+    const [best] = Chord.detectMatches([60, 64, 67]);
+    expect(best?.chord.symbol()).toBe('C');
+    expect(best?.match.exact).toBe(true);
+    expect(best?.match.missingPcs).toEqual([]);
+    expect(best?.match.extraPcs).toEqual([]);
+    // A fifth-less voicing is still recognised, and says which tone is absent.
+    const partial = Chord.detectMatches([60, 64, 71]).find((m) => m.chord.symbol() === 'Cmaj7');
+    expect(partial?.match.exact).toBe(false);
+    expect(partial?.match.missingPcs).toContain(7);
+  });
+
+  it('detects a key the way it detects a chord', () => {
+    const cMajorScale = [0, 2, 4, 5, 7, 9, 11];
+    expect(Key.detectBest(cMajorScale)?.toString()).toBe('C major');
+    expect(Key.detect(cMajorScale).length).toBeGreaterThan(1);
+    expect(Key.detectBest([])).toBe(null);
+    expect(detectKeyBest(cMajorScale)?.mode).toBe('major');
+    expect(detectKeyBest([])).toBe(null);
   });
 });
 
@@ -340,7 +408,7 @@ describe('Chord', () => {
     const cMajor = Key.major('C');
     expect(Chord.of(7, 'dom7').function(cMajor)).toBe('dominant');
     expect(Chord.of(5, 'min').isBorrowed(cMajor)).toBe(true);
-    expect(Chord.of(5, 'min').borrowedSource(cMajor)).toBe('parallel-minor');
+    expect(Chord.of(5, 'min').borrowedSource(cMajor)).toBe('parallelMinor');
     const analysis = Chord.of(5, 'min').analyze(cMajor);
     expect(analysis.borrowed).toBe(true);
     expect(analysis.roman).toBe('iv');

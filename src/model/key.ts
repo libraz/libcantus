@@ -1,3 +1,5 @@
+import type { DetectKeyOptions } from '../analyze/detect/index.js';
+import { detectKey, detectKeyBest } from '../analyze/detect/index.js';
 import { isMinorKey, romanToChord } from '../analyze/functional/index.js';
 import type { Note as NoteData } from '../core/pitch/index.js';
 import type { KeyScale } from '../core/types.js';
@@ -144,6 +146,60 @@ export class Key {
    */
   static of(scale: KeyScale, tonic?: Note): Key {
     return new Key(scale, tonic ?? bestTonicForScale(mod12(scale.rootPc), scale));
+  }
+
+  /**
+   * Rebuild a key from its {@link Key.toJSON} output.
+   *
+   * @param data The serialized key and tonic.
+   * @returns The key.
+   */
+  static fromJSON(data: { scale: KeyScale; tonic: NoteData }): Key {
+    return new Key(data.scale, new Note(data.tonic));
+  }
+
+  /**
+   * Identify the keys a set of pitches fits, best interpretation first.
+   *
+   * The counterpart of {@link Chord.detect}.
+   *
+   * @param pitches MIDI pitches or bare pitch classes.
+   * @param opts How to weigh the input; see {@link DetectKeyOptions}.
+   * @returns Ranked keys (may be empty).
+   */
+  static detect(pitches: number[], opts?: DetectKeyOptions): Key[] {
+    return detectKey(pitches, opts).map((match) => Key.of(match.key));
+  }
+
+  /**
+   * The single best key interpretation of a pitch set.
+   *
+   * @param pitches MIDI pitches or bare pitch classes.
+   * @param opts How to weigh the input; see {@link DetectKeyOptions}.
+   * @returns The top-ranked key, or null when nothing matches.
+   * @example
+   * ```ts
+   * import { Key } from '@libraz/libcantus';
+   * Key.detectBest([0, 2, 4, 5, 7, 9, 11])?.toString(); // 'C major'
+   * ```
+   */
+  static detectBest(pitches: number[], opts?: DetectKeyOptions): Key | null {
+    const best = detectKeyBest(pitches, opts);
+    return best === null ? null : Key.of(best.key);
+  }
+
+  /**
+   * Whether another key has the same tonic pitch class and mode.
+   *
+   * The spelled tonic is not compared: C# major and Db major are the same key
+   * written two ways.
+   *
+   * @param other The key to compare.
+   * @returns True when tonic and mode mask both match.
+   */
+  equals(other: Key): boolean {
+    const scale = other.scale;
+    return this.#scale.rootPc === scale.rootPc && this.#scale.modeMask12 === scale.modeMask12;
   }
 
   /** A copy of the underlying plain `KeyScale`. */

@@ -82,6 +82,7 @@ const EXPECTED_EXPORTS = [
   'detectChordBest',
   'diatonicLetterOf',
   'detectKey',
+  'detectKeyBest',
   'detectKeyFromNotes',
   'dropSilentNotes',
   'developMotif',

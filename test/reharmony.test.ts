@@ -71,9 +71,9 @@ describe('modalInterchangePalette', () => {
     const byRoman = new Map(palette.map((b) => [b.roman, b]));
 
     expect(byRoman.get('iv')?.chord.rootPc).toBe(5); // F minor
-    expect(byRoman.get('iv')?.source).toBe('parallel-minor');
-    expect(byRoman.get('bVI')?.source).toBe('parallel-minor');
-    expect(byRoman.get('bVII')?.source).toBe('parallel-minor');
+    expect(byRoman.get('iv')?.source).toBe('parallelMinor');
+    expect(byRoman.get('bVI')?.source).toBe('parallelMinor');
+    expect(byRoman.get('bVII')?.source).toBe('parallelMinor');
     expect(byRoman.get('bII')?.chord.rootPc).toBe(1); // Db major (Neapolitan)
     expect(byRoman.get('bII')?.source).toBe('neapolitan');
   });

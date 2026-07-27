@@ -32,7 +32,13 @@ export type {
   KeyMatch,
   KeyVariant,
 } from './detect/index.js';
-export { detectChord, detectChordBest, detectKey, detectKeyFromNotes } from './detect/index.js';
+export {
+  detectChord,
+  detectChordBest,
+  detectKey,
+  detectKeyBest,
+  detectKeyFromNotes,
+} from './detect/index.js';
 export type {
   BorrowedSource,
   Cadence,

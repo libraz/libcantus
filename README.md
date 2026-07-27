@@ -157,7 +157,7 @@ import { Chord, Key } from '@libraz/libcantus';
 
 // A minor iv in a major key reads as a borrowed subdominant:
 Chord.of('F', 'min').analyze(Key.major('C'));
-// { function: 'subdominant', borrowed: true, source: 'parallel-minor', roman: 'iv' }
+// { function: 'subdominant', borrowed: true, source: 'parallelMinor', roman: 'iv' }
 ```
 
 ## Recognize what you hear

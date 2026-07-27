@@ -32,11 +32,11 @@ describe('modal interchange in C major', () => {
   it('detects the minor subdominant iv as borrowed from the parallel minor', () => {
     const iv = makeChord(5, 'min');
     expect(isBorrowedChord(iv, cMajor)).toBe(true);
-    expect(borrowedSource(iv, cMajor)).toBe('parallel-minor');
+    expect(borrowedSource(iv, cMajor)).toBe('parallelMinor');
     expect(analyzeChord(iv, cMajor)).toEqual({
       function: 'subdominant',
       borrowed: true,
-      source: 'parallel-minor',
+      source: 'parallelMinor',
       roman: 'iv',
     });
   });
@@ -47,7 +47,7 @@ describe('modal interchange in C major', () => {
     expect(analyzeChord(flatSix, cMajor)).toEqual({
       function: 'subdominant',
       borrowed: true,
-      source: 'parallel-minor',
+      source: 'parallelMinor',
       roman: 'bVI',
     });
   });
@@ -58,7 +58,7 @@ describe('modal interchange in C major', () => {
     expect(analyzeChord(flatSeven, cMajor)).toEqual({
       function: 'subdominant',
       borrowed: true,
-      source: 'parallel-minor',
+      source: 'parallelMinor',
       roman: 'bVII',
     });
   });
@@ -104,16 +104,16 @@ describe('modal interchange in A minor', () => {
     const majorFour = makeChord(2, 'maj');
     expect(isDiatonic(majorFour, aMinor)).toBe(false);
     expect(isBorrowedChord(majorFour, aMinor)).toBe(true);
-    expect(borrowedSource(majorFour, aMinor)).toBe('parallel-major');
+    expect(borrowedSource(majorFour, aMinor)).toBe('parallelMajor');
     expect(analyzeChord(majorFour, aMinor)).toMatchObject({
       borrowed: true,
-      source: 'parallel-major',
+      source: 'parallelMajor',
       roman: 'IV',
     });
   });
 
   it('detects the Picardy tonic as borrowed from the parallel major', () => {
-    expect(borrowedSource(makeChord(9, 'maj'), aMinor)).toBe('parallel-major');
+    expect(borrowedSource(makeChord(9, 'maj'), aMinor)).toBe('parallelMajor');
   });
 
   it('treats the raised dominant as a harmonic-minor alteration, not interchange', () => {

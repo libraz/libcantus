@@ -17,7 +17,7 @@ import { isNeapolitan, mod12 } from './internal.js';
  *
  * @category Functional Harmony
  */
-export type BorrowedSource = 'parallel-minor' | 'parallel-major' | 'neapolitan' | null;
+export type BorrowedSource = 'parallelMinor' | 'parallelMajor' | 'neapolitan' | null;
 
 /**
  * In a minor key, whether a non-diatonic chord is explained by the harmonic
@@ -78,7 +78,7 @@ export function borrowedSource(chord: Chord, key: KeyScale): BorrowedSource {
     return 'neapolitan';
   }
   if (isBorrowedChord(chord, key)) {
-    return isMinorKey(key) ? 'parallel-major' : 'parallel-minor';
+    return isMinorKey(key) ? 'parallelMajor' : 'parallelMinor';
   }
   return null;
 }

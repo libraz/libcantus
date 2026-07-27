@@ -190,6 +190,17 @@ export class Note {
   }
 
   /**
+   * Rebuild a note from its {@link Note.toJSON} output.
+   *
+   * @param data The serialized note.
+   * @returns The wrapped note.
+   * @throws If `letter` is not an integer in 0..6.
+   */
+  static fromJSON(data: NoteData): Note {
+    return new Note(data);
+  }
+
+  /**
    * Whether another note has the same letter, alteration, and octave.
    *
    * @param other The note to compare.

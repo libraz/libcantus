@@ -8,7 +8,7 @@
  * mutable data.
  */
 
-export type { DetectChordOptions } from '../analyze/detect/index.js';
+export type { ChordMatch, DetectChordOptions, DetectKeyOptions } from '../analyze/detect/index.js';
 // The classes' own signatures name these plain types; without them a consumer
 // importing only `@libraz/libcantus/model` cannot declare a variable, write a
 // wrapper, or emit declarations under `isolatedDeclarations`.
@@ -27,6 +27,7 @@ export type { KeyScale } from '../core/types.js';
 export type {
   Chord as ChordData,
   ChordQuality,
+  ChordSpan,
   PitchSpelling,
 } from '../theory/chord/index.js';
 export type { ChordScaleMatch } from '../theory/chordscale/index.js';

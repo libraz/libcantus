@@ -369,3 +369,24 @@ export function detectKeyFromNotes(notes: NoteEvent[]): KeyMatch[] {
     { weights: sounding.map((note) => note.durationBeat * (note.velocity ?? DEFAULT_VELOCITY)) },
   );
 }
+
+/**
+ * The single best key interpretation of a pitch set.
+ *
+ * The counterpart of {@link detectChordBest}: the ranked list is the general
+ * answer, but a caller that just wants "what key is this" should not have to
+ * index into it and assert the result is there.
+ *
+ * @param pitches MIDI pitches or bare pitch classes.
+ * @param opts How to weigh the input; see {@link DetectKeyOptions}.
+ * @returns The top-ranked key, or null when nothing sounds.
+ * @example
+ * ```ts
+ * import { detectKeyBest } from '@libraz/libcantus';
+ * detectKeyBest([0, 2, 4, 5, 7, 9, 11])?.mode; // 'major'
+ * ```
+ * @category Recognition
+ */
+export function detectKeyBest(pitches: number[], opts: DetectKeyOptions = {}): KeyMatch | null {
+  return detectKey(pitches, opts)[0] ?? null;
+}

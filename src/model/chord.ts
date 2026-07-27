@@ -1,4 +1,5 @@
-import { type DetectChordOptions, detectChord, detectChordBest } from '../analyze/detect/index.js';
+import type { ChordMatch, DetectChordOptions } from '../analyze/detect/index.js';
+import { detectChord, detectChordBest } from '../analyze/detect/index.js';
 import {
   analyzeChord,
   type BorrowedSource,
@@ -179,6 +180,30 @@ export class Chord {
   }
 
   /**
+   * Alias of {@link Chord.from}, matching the `fromData` factory on the other
+   * classes.
+   *
+   * @param data The plain chord.
+   * @returns The wrapped chord (without key context).
+   */
+  static fromData(data: ChordData): Chord {
+    return new Chord(data);
+  }
+
+  /**
+   * Rebuild a chord from its {@link Chord.toJSON} output.
+   *
+   * The key context is not serialized, so the result carries none; re-attach
+   * one with {@link Chord.withKey}.
+   *
+   * @param data The serialized chord.
+   * @returns The wrapped chord.
+   */
+  static fromJSON(data: ChordData): Chord {
+    return new Chord(data);
+  }
+
+  /**
    * Parse a lead-sheet chord symbol (e.g. `'Cmaj7'`, `'F#m7b5'`, `'C/G'`).
    *
    * @param symbol The chord symbol.
@@ -193,6 +218,7 @@ export class Chord {
    * Identify the chords matching a set of pitches, best interpretation first.
    *
    * @param pitches MIDI pitches or bare pitch classes.
+   * @param opts How to interpret the input; see {@link DetectChordOptions}.
    * @returns Ranked chord interpretations (may be empty).
    */
   static detect(pitches: number[], opts?: DetectChordOptions): Chord[] {
@@ -202,9 +228,38 @@ export class Chord {
   }
 
   /**
+   * Identify the chords matching a set of pitches, keeping each match's
+   * recognition metadata beside the chord.
+   *
+   * {@link Chord.detect} discards the confidence signals a recognition UI needs
+   * — whether the set matched exactly, which chord tones were missing, which
+   * input notes were foreign, and which inversion the bass implies.
+   *
+   * @param pitches MIDI pitches or bare pitch classes.
+   * @param opts How to interpret the input; see {@link DetectChordOptions}.
+   * @returns Ranked interpretations, each with its chord and its match record.
+   * @example
+   * ```ts
+   * import { Chord } from '@libraz/libcantus';
+   * const [best] = Chord.detectMatches([60, 64, 67]);
+   * best?.match.exact; // true
+   * ```
+   */
+  static detectMatches(
+    pitches: number[],
+    opts?: DetectChordOptions,
+  ): { chord: Chord; match: ChordMatch }[] {
+    return detectChord(pitches, opts).map((match) => ({
+      chord: new Chord(makeChord(match.rootPc, match.quality, match.bassPc)),
+      match,
+    }));
+  }
+
+  /**
    * The single best chord interpretation of a pitch set.
    *
    * @param pitches MIDI pitches or bare pitch classes.
+   * @param opts How to interpret the input; see {@link DetectChordOptions}.
    * @returns The top-ranked chord, or null when nothing matches.
    */
   static detectBest(pitches: number[], opts?: DetectChordOptions): Chord | null {
