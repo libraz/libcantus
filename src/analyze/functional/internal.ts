@@ -20,7 +20,10 @@ export function degreeRootPc(degreeNumber: number, key: KeyScale): number {
   if (tones.length === 0) {
     return mod12(key.rootPc);
   }
-  return tones[(degreeNumber - 1) % tones.length] ?? mod12(key.rootPc);
+  // A plain `%` yields a negative index for a degree below the first, which
+  // reads as undefined and collapses to the tonic; wrap into range instead.
+  const index = (((degreeNumber - 1) % tones.length) + tones.length) % tones.length;
+  return tones[index] ?? mod12(key.rootPc);
 }
 
 /**

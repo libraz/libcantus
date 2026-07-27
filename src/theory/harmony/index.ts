@@ -1,11 +1,11 @@
-import { type Chord, chordToneRole } from '../chord/index.js';
+import { type Chord, type ChordToneRole, chordToneRole } from '../chord/index.js';
 
 /**
  * Harmonic role a pitch plays within a chord.
  *
  * @category Functional Harmony
  */
-export type HarmonyRole = 'root' | 'third' | 'fifth' | 'sixth' | 'seventh' | 'tension' | 'doubling';
+export type HarmonyRole = ChordToneRole | 'tension' | 'doubling';
 
 /**
  * How firmly a pitch is locked to the chord's identity.
@@ -32,15 +32,18 @@ export type VoicedRole = {
 /**
  * Classify a pitch's harmonic role and lock level within a chord.
  *
- * The role comes from the pitch's interval class above the chord root: root (0),
- * third (3/4), fifth (6/7/8), seventh (10/11), and 9/11/13 tensions (2/5/9, and
- * the flat ninth 1). The root locks the chord identity, the third locks its
- * quality, and everything else is free voicing. In a suspended chord (a chord
- * whose intervals include a 4th (5) or 2nd (2) but no third), the suspended tone
- * takes the third's place as the quality-defining tone and is locked to
- * `quality`, since moving it changes the chord. Detecting an octave doubling
- * requires the surrounding voicing, which this single-pitch query does not carry,
- * so `doubling` is part of the type but not returned here.
+ * The role comes from the pitch's interval class above the chord root, read
+ * against the chord's own template: root (0), third (3/4), fifth (6/7/8),
+ * sixth or seventh (9/10/11). Every pitch the template does not claim is
+ * `'tension'` — including one that is simply foreign to the chord, which this
+ * single-pitch query cannot tell from a colour tone. The root locks the chord
+ * identity, the third locks its quality, and everything else is free voicing.
+ * In a suspended chord (a chord whose intervals include a 4th (5) or 2nd (2)
+ * but no third), the suspended tone takes the third's place as the
+ * quality-defining tone and is locked to `quality`, since moving it changes the
+ * chord. Detecting an octave doubling requires the surrounding voicing, which
+ * this query does not carry, so `'doubling'` is part of the type — the shared
+ * vocabulary of harmonic roles — but is never returned here.
  *
  * @param pitch MIDI pitch or bare pitch class.
  * @param chord The chord providing the root reference.

@@ -66,11 +66,7 @@ export function getGhostDensity(
 }
 
 /** Ghost-note velocity multiplier for a section and metric position. */
-export function getGhostVelocity(
-  section: SectionType,
-  beatPosition: number,
-  isAfterSnare: boolean,
-): number {
+export function getGhostVelocity(section: SectionType, beatPosition: number): number {
   let base = 0.4;
   const even = beatPosition % 2 === 0 ? 0.05 : 0;
   switch (section) {
@@ -91,20 +87,20 @@ export function getGhostVelocity(
       base = 0.38;
       break;
   }
-  if (isAfterSnare) {
-    base += 0.1;
-  }
   return Math.max(0.25, Math.min(0.65, base));
 }
 
-/** Probability of a ghost at a specific 16th position (higher near the snare). */
+/**
+ * Probability of a ghost at a specific 16th position, higher when the ghost
+ * leads straight into the backbeat.
+ *
+ * Ghosts are only placed on beats 1 and 3 (indices 0 and 2), so those are the
+ * positions this answers for; the "a" of each is the one that anticipates the
+ * snare.
+ */
 export function getGhostProbabilityAtPosition(beat: number, sixteenthInBeat: number): number {
-  const nearSnare =
-    (beat === 0 && sixteenthInBeat === 3) ||
-    (beat === 1 && sixteenthInBeat === 1) ||
-    (beat === 2 && sixteenthInBeat === 3) ||
-    (beat === 3 && sixteenthInBeat === 1);
-  return nearSnare ? 0.6 : 0.25;
+  const leadsIntoBackbeat = (beat === 0 || beat === 2) && sixteenthInBeat === 3;
+  return leadsIntoBackbeat ? 0.6 : 0.25;
 }
 
 /** Choose which ghost positions a groove favours. */

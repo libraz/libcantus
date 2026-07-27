@@ -22,9 +22,14 @@ export type KeyScale = {
  * @category Core
  */
 export type NoteEvent = {
-  /** MIDI pitch (middle C = 60). */
+  /** MIDI pitch in [0, 127] (middle C = 60). */
   pitch: number;
-  /** Onset in quarter-note beats, absolute from the start of the timeline. */
+  /**
+   * Onset in quarter-note beats, absolute from the start of the timeline, and
+   * never negative: beat 0 is the start of the music, so a pickup bar is
+   * written as the first bar rather than as negative time. Shift the whole
+   * timeline if the downbeat needs to land later.
+   */
   startBeat: number;
   /** Duration in quarter-note beats. */
   durationBeat: number;

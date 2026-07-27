@@ -112,7 +112,7 @@ export function nextVoicing(current: number[], chord: Chord, opts?: VoicingOptio
     const score =
       structuralPenalty(candidate, chord, opts?.key) +
       voiceLeadingCost(current, candidate) +
-      VIOLATION_PENALTY * violationCount(current, candidate, maxSpacing);
+      VIOLATION_PENALTY * violationCount(current, candidate);
     if (score < bestScore) {
       bestScore = score;
       best = candidate;

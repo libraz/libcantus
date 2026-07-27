@@ -63,7 +63,13 @@ export function classifyInterval(semitones: number, twoVoice = true): Consonance
 }
 
 /**
- * Test whether an interval is a perfect interval (unison/octave or fifth).
+ * Test whether an interval is a perfect consonance: the unison/octave or the
+ * fifth.
+ *
+ * The perfect fourth is deliberately excluded. This is the predicate the
+ * parallel-motion rules are written against, where the fourth behaves as a
+ * dissonance between two voices; {@link classifyInterval} is the general
+ * classifier, and it treats the fourth as context-dependent.
  *
  * @param semitones Interval size in semitones (may be negative or compound).
  * @returns True for the unison/octave (0) and the perfect fifth (7) mod 12.

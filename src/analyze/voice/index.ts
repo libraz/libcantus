@@ -1,7 +1,7 @@
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import { assertNoteEvents } from '../../core/validation/index.js';
-import type { Chord } from '../../theory/chord/index.js';
+import type { Chord, ChordToneRole } from '../../theory/chord/index.js';
 import { chordPitchClasses, chordToneRole } from '../../theory/chord/index.js';
 import {
   createsVerticalDissonance,
@@ -10,17 +10,25 @@ import {
 import type { VoiceSnapshot } from '../../theory/safety/index.js';
 
 /**
+ * A suspension figure, named by the interval above the bass and the interval it
+ * resolves to.
+ *
+ * @category Arrangement & Analysis
+ */
+export type SuspensionFigure = 'sus4-3' | 'sus6-5' | 'sus7-6' | 'sus9-8' | 'sus2-3';
+
+/**
  * A theory annotation attached to a note.
  *
  * @category Arrangement & Analysis
  */
 export type TheoryLabel =
-  | { kind: 'chordTone'; role: 'root' | 'third' | 'fifth' | 'sixth' | 'seventh' }
+  | { kind: 'chordTone'; role: ChordToneRole }
   | { kind: 'tension'; degree: 9 | 11 | 13 }
   | { kind: 'avoid' }
   | { kind: 'passing' }
   | { kind: 'neighbor' }
-  | { kind: 'suspension'; type: 'sus4-3' | 'sus7-6' | 'sus9-8' | 'sus2-3'; resolveTo: number }
+  | { kind: 'suspension'; type: SuspensionFigure; resolveTo: number }
   | { kind: 'anticipation' }
   | { kind: 'escape' }
   | { kind: 'needsResolution'; resolveTo: number }
@@ -139,18 +147,26 @@ function isStep(a: number, b: number): boolean {
  * Classify a suspension figure from the interval class above the sounding bass
  * (`ic`) and the resolution direction (`delta`, positive when resolving upward).
  */
-function suspensionType(ic: number, delta: number): TheoryLabel & { kind: 'suspension' } {
-  let type: 'sus4-3' | 'sus7-6' | 'sus9-8' | 'sus2-3';
+function suspensionType(ic: number, delta: number): SuspensionFigure | null {
   if (delta > 0) {
-    type = 'sus2-3';
-  } else if (ic === 2) {
-    type = 'sus9-8';
-  } else if (ic === 10 || ic === 11) {
-    type = 'sus7-6';
-  } else {
-    type = 'sus4-3';
+    return 'sus2-3';
   }
-  return { kind: 'suspension', type, resolveTo: 0 };
+  if (ic === 2) {
+    return 'sus9-8';
+  }
+  if (ic === 10 || ic === 11) {
+    return 'sus7-6';
+  }
+  if (ic === 5 || ic === 6) {
+    return 'sus4-3';
+  }
+  if (ic === 8 || ic === 9) {
+    return 'sus6-5';
+  }
+  // Any other interval above the bass is a downward-resolving dissonance with
+  // no standard figure; a catch-all `sus4-3` would name it after an interval it
+  // does not form.
+  return null;
 }
 
 function stepResolution(pitch: number, chord: Chord): number | undefined {
@@ -255,10 +271,11 @@ export function analyzeVoice(
       );
       if (prepared && verticallyDissonant && resolves) {
         const ic = intervalAboveBass(note.pitch, others, chord);
-        const sus = suspensionType(ic, next.pitch - note.pitch);
-        sus.resolveTo = next.pitch;
-        labels.push(sus);
-        handled = true;
+        const type = suspensionType(ic, next.pitch - note.pitch);
+        if (type !== null) {
+          labels.push({ kind: 'suspension', type, resolveTo: next.pitch });
+          handled = true;
+        }
       }
     }
 

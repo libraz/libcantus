@@ -543,6 +543,15 @@ function diatonicIndex(note: Note): number {
 export function spelledInterval(a: Note, b: Note): SpelledInterval {
   assertNote(a, 'a');
   assertNote(b, 'b');
+  // Two octave-bearing notes measure their full signed distance; two
+  // octave-less ones measure a single ascending octave. One of each has no
+  // defined answer, and silently picking either reading gives a number the
+  // caller cannot interpret.
+  if ((a.octave === undefined) !== (b.octave === undefined)) {
+    throw new InvalidInputError(
+      'spelledInterval needs both notes to carry an octave or neither to; received one of each',
+    );
+  }
   const octaved = a.octave !== undefined && b.octave !== undefined;
   let letterSteps: number;
   let semitones: number;
@@ -570,7 +579,15 @@ export function spelledInterval(a: Note, b: Note): SpelledInterval {
   }
   const absSteps = Math.abs(letterSteps);
   const number = absSteps + 1;
-  // Quality comes from the absolute chromatic span; semitones keeps its sign.
-  const quality = qualityFromSpan(number, Math.abs(semitones));
+  // The span is measured in the direction the letters move, not as a magnitude:
+  // C# up to Dbb steps up one letter but down one semitone, which is a doubly
+  // diminished second, not a minor one. `semitones` keeps its own sign.
+  //
+  // A unison is the exception: the letters do not move, so there is no
+  // direction to measure against and the quality names the chromatic
+  // alteration alone — C down to Cb is a descending augmented unison.
+  const directedSpan =
+    letterSteps === 0 ? Math.abs(semitones) : letterSteps > 0 ? semitones : -semitones;
+  const quality = qualityFromSpan(number, directedSpan);
   return { number, quality, semitones };
 }

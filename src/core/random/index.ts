@@ -39,7 +39,9 @@ export type Rng = {
  * @category Utilities
  */
 export function createRng(seed: number): Rng {
-  assertFiniteNumber(seed, 'seed');
+  // The state is 32 bits, so a wider or fractional seed would be truncated —
+  // silently mapping distinct seeds onto one sequence.
+  assertInteger(seed, 'seed', 0, 0xffffffff);
   let state = seed >>> 0;
   const next = () => {
     state = (state + 0x6d2b79f5) >>> 0;
@@ -50,7 +52,13 @@ export function createRng(seed: number): Rng {
   };
   return {
     next,
-    prob: (p) => next() < assertRange(p, 0, 1, 'probability'),
+    prob: (p) => {
+      // Validate first: a draw consumed by a rejected call shifts the stream,
+      // so a caller who catches the error gets a different sequence than one
+      // who never made the call.
+      assertRange(p, 0, 1, 'probability');
+      return next() < p;
+    },
     range: (lo, hi) => {
       assertInteger(lo, 'range lower bound');
       assertInteger(hi, 'range upper bound');

@@ -17,6 +17,7 @@ export type {
   Chord as ChordData,
   ChordQuality,
   ChordSpan,
+  ChordToneRole,
   PitchSpelling,
 } from '../theory/chord/index.js';
 export type { HarmonyRole } from '../theory/harmony/index.js';

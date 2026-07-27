@@ -105,16 +105,35 @@ export function parseTimeSignature(text: string): TimeSignature {
   ) {
     throw new InvalidInputError(`Invalid time signature: ${text}`);
   }
-  return { numerator, denominator };
+  // The same signature every consumer validates, validated here too: parsing
+  // a signature the rest of the library rejects only moves the failure.
+  return assertTimeSignature({ numerator, denominator }, `time signature ${text}`);
 }
 
 /**
- * Render a time signature as `"n/d"`.
+ * Render a time signature as `"n/d"`, or as `"a+b+c/d"` when it carries an
+ * additive grouping and `grouping` is requested.
  *
+ * The plain form drops the grouping, so a round trip through it reads 7/8 as
+ * flat rather than as 2+2+3; ask for the additive form to keep it.
+ *
+ * @param ts The time signature.
+ * @param opts Set `grouping: true` to render an additive grouping.
+ * @returns The formatted signature.
+ * @example
+ * ```ts
+ * import { formatTimeSignature } from '@libraz/libcantus';
+ * const aksak = { numerator: 7, denominator: 8, grouping: [2, 2, 3] };
+ * formatTimeSignature(aksak); // '7/8'
+ * formatTimeSignature(aksak, { grouping: true }); // '2+2+3/8'
+ * ```
  * @category Rhythm & Meter
  */
-export function formatTimeSignature(ts: TimeSignature): string {
+export function formatTimeSignature(ts: TimeSignature, opts: { grouping?: boolean } = {}): string {
   assertTimeSignature(ts);
+  if (opts.grouping === true && ts.grouping !== undefined) {
+    return `${ts.grouping.join('+')}/${ts.denominator}`;
+  }
   return `${ts.numerator}/${ts.denominator}`;
 }
 

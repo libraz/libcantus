@@ -274,7 +274,7 @@ export function voiceProgression(chords: readonly Chord[], opts?: VoicingOptions
       const score =
         structuralPenalty(candidate, chord, opts?.key) +
         voiceLeadingCost(prev, candidate) +
-        VIOLATION_PENALTY * violationCount(prev, candidate, maxSpacing) +
+        VIOLATION_PENALTY * violationCount(prev, candidate) +
         RESOLUTION_PENALTY * unresolved;
       if (score < bestScore) {
         bestScore = score;

@@ -116,6 +116,28 @@ describe('spelledInterval', () => {
     expect(down.number).toBe(5);
   });
 
+  it('names a compound alteration by the direction the letters move', () => {
+    // C# up to Dbb steps up one letter but down one semitone. Reading the span
+    // as a magnitude calls that a minor second, which is the interval between
+    // two entirely different notes.
+    expect(spelledInterval(parseNote('C#4'), parseNote('Dbb4'))).toMatchObject({
+      number: 2,
+      quality: 'dd',
+      semitones: -1,
+    });
+    // The ordinary ascending and descending cases are unchanged.
+    expect(spelledInterval(parseNote('C4'), parseNote('Db4'))).toMatchObject({
+      number: 2,
+      quality: 'm',
+      semitones: 1,
+    });
+    expect(spelledInterval(parseNote('G4'), parseNote('C4'))).toMatchObject({
+      number: 5,
+      quality: 'P',
+      semitones: -7,
+    });
+  });
+
   it('signs semitones by pitch direction, not letter direction', () => {
     const down = spelledInterval(parseNote('C4'), parseNote('Cb4'));
     expect(down).toMatchObject({ number: 1, quality: 'A', semitones: -1 });

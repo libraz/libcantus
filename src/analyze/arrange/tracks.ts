@@ -5,6 +5,7 @@
  * conflicts.
  */
 
+import { InvalidInputError } from '../../core/errors/index.js';
 import { isStrongBeat, parseTimeSignature, type TimeSignature } from '../../core/meter/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
@@ -37,9 +38,14 @@ import { EPS, isPercussion, type PreparedTrack, poolNotes, prepareTracks } from 
 /**
  * The musical role a track plays in the arrangement.
  *
- * `drums` marks a percussion track. Its pitches select instruments rather than
+ * Only `drums` changes the analysis: its pitches select instruments rather than
  * naming harmony, so such a track is excluded from chord and key inference and
- * from every voice-leading comparison; it is reported back with no annotations.
+ * from every voice-leading comparison, and is reported back with no
+ * annotations. `harmony` is meaningful through
+ * {@link ArrangementOptions.harmonyTracks}, which names the tracks the chords
+ * are inferred from. The rest are labels carried through to
+ * {@link TrackAnalysis.role} for the caller's own use; nothing is inferred, so
+ * a track left unlabelled reports `'other'` rather than a guess.
  *
  * @category Arrangement & Analysis
  */
@@ -306,12 +312,25 @@ export function analyzeArrangement(
   assertTimeSignature(ts);
   const budget = opts.budget;
   assertGenerationBudget(tracks.length, 'arrangement tracks', budget);
+  let noteCount = 0;
   for (let index = 0; index < tracks.length; index += 1) {
-    assertNoteEvents(tracks[index]?.notes ?? [], `tracks[${index}].notes`, {
+    const notes = tracks[index]?.notes;
+    // A missing array is rejected by name here rather than becoming a raw
+    // TypeError further down, where the message no longer says which track.
+    if (!Array.isArray(notes)) {
+      throw new InvalidInputError(
+        `tracks[${index}].notes must be an array; received ${typeof notes}`,
+      );
+    }
+    assertNoteEvents(notes, `tracks[${index}].notes`, {
       allowNonPositiveDuration: true,
       budget,
     });
+    noteCount += notes.length;
   }
+  // The pooled total is what the downstream timeline analysis actually sizes
+  // its work by, so it is checked here, under this layer's own name.
+  assertGenerationBudget(noteCount, 'arrangement notes', budget);
   const profile: SafetyProfile = opts.profile ?? 'pop';
   const minSeverity = opts.minSeverity ?? NoteSafety.Warning;
   const harmonyTracks =

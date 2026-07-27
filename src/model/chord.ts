@@ -42,13 +42,19 @@ import { Note } from './note.js';
 import { Progression } from './progression.js';
 import { mod12 } from './shared.js';
 
+/** Whether a spelling hint still names the pitch class it is attached to. */
+function hintMatches(hint: PitchSpelling | undefined, pc: number | undefined): boolean {
+  return hint !== undefined && pc !== undefined && mod12(noteToPitchClass(hint)) === mod12(pc);
+}
+
 /**
  * Defensive copy of a plain chord.
  *
- * Any enharmonic spelling hints (`rootSpelling`/`bassSpelling`, populated by
+ * Enharmonic spelling hints (`rootSpelling`/`bassSpelling`, populated by
  * `parseChordSymbol`) are carried through so a flat-named chord round-trips
- * through the class API; a hint that no longer matches its pitch class is
- * simply ignored by the formatter.
+ * through the class API — but only while they still name their own pitch
+ * class. A stale hint is dropped here rather than passed on, so that everything
+ * downstream, including the derived bass spelling, reads a hint it can trust.
  */
 function copyChord(data: ChordData): ChordData {
   const copy: ChordData = {
@@ -59,10 +65,10 @@ function copyChord(data: ChordData): ChordData {
   if (data.bassPc !== undefined) {
     copy.bassPc = data.bassPc;
   }
-  if (data.rootSpelling !== undefined) {
+  if (hintMatches(data.rootSpelling, data.rootPc) && data.rootSpelling !== undefined) {
     copy.rootSpelling = { letter: data.rootSpelling.letter, alter: data.rootSpelling.alter };
   }
-  if (data.bassSpelling !== undefined) {
+  if (hintMatches(data.bassSpelling, data.bassPc) && data.bassSpelling !== undefined) {
     copy.bassSpelling = { letter: data.bassSpelling.letter, alter: data.bassSpelling.alter };
   }
   return copy;

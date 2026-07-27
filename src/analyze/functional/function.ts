@@ -8,6 +8,7 @@
  */
 
 import type { KeyScale } from '../../core/types.js';
+import { assertInteger } from '../../core/validation/index.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { chordPitchClasses, makeChord } from '../../theory/chord/index.js';
 import { isScaleTone, MAJOR_MASK, NATURAL_MINOR_MASK } from '../../theory/scale/index.js';
@@ -208,12 +209,16 @@ export function analyzeChord(chord: Chord, key: KeyScale): ChordAnalysis {
 /**
  * The secondary dominant (V7) that tonicizes a scale degree.
  *
- * @param targetDegree 0-based scale degree to tonicize.
+ * @param targetDegree 0-based scale degree to tonicize, in 0..6.
  * @param key The prevailing key.
  * @returns A dominant-seventh chord a fifth above the target's root.
+ * @throws If `targetDegree` is not an integer in 0..6.
  * @category Functional Harmony
  */
 export function secondaryDominant(targetDegree: number, key: KeyScale): Chord {
+  // A degree outside the scale is a caller error, not a wrap-around: silently
+  // tonicizing some other degree produces a chord that reads as intentional.
+  assertInteger(targetDegree, 'targetDegree', 0, 6);
   const targetRoot = degreeRootPc(targetDegree + 1, key);
   return makeChord(mod12(targetRoot + 7), 'dom7');
 }

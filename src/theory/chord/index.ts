@@ -52,6 +52,16 @@ export type ChordQuality =
   | 'min6/9';
 
 /**
+ * The basic role a chord tone plays: the degrees a chord's own template names.
+ *
+ * The shared vocabulary behind {@link chordToneRole}, the harmony layer's
+ * `HarmonyRole`, and the voice analyser's labels, so the three cannot drift.
+ *
+ * @category Chords
+ */
+export type ChordToneRole = 'root' | 'third' | 'fifth' | 'sixth' | 'seventh';
+
+/**
  * A bare spelled pitch used as an enharmonic hint: a diatonic letter
  * (0..6 = C..B) plus a chromatic alteration (-2 double-flat .. +2 double-sharp).
  * Mirrors the letter/alter half of the pitch module's `Note` without an octave.
@@ -164,7 +174,12 @@ const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
 };
 
 /**
- * All chord qualities the builder understands, longest templates last.
+ * All chord qualities the builder understands, in declaration order.
+ *
+ * The order is stable but carries no meaning: it is neither alphabetical nor
+ * sorted by template size. {@link detectChord} uses it as its final tie-break,
+ * so it is part of the observable behaviour and does not get reshuffled
+ * casually — but do not read it as a ranking.
  *
  * @category Chords
  */
@@ -323,10 +338,7 @@ function chordToneOffsets(chord: Chord): Set<number> {
  *
  * @category Chords
  */
-export function chordToneRole(
-  pitch: number,
-  chord: Chord,
-): 'root' | 'third' | 'fifth' | 'sixth' | 'seventh' | null {
+export function chordToneRole(pitch: number, chord: Chord): ChordToneRole | null {
   const interval = (pitchClass(pitch) - pitchClass(chord.rootPc) + 12) % 12;
   const tones = chordToneOffsets(chord);
   if (interval === 0) {

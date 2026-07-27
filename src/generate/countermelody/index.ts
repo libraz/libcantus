@@ -10,6 +10,7 @@ import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
   assertGenerationBudget,
   assertInteger,
+  assertOneOf,
   assertRange,
   assertTimeSignature,
 } from '../../core/validation/index.js';
@@ -426,14 +427,22 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
     allowNonPositiveDuration: true,
     tieBreak: register === 'below' ? 'highest' : 'lowest',
   });
+  const ts = opts.ts ?? DEFAULT_TS;
+  assertTimeSignature(ts);
+  const rhythm = assertOneOf(opts.rhythm ?? 'complement', ['complement', 'follow'], 'rhythm');
+  const profile = assertOneOf(opts.profile ?? 'pop', ['strict', 'pop'], 'safety profile');
+  const rng = createRng(opts.seed ?? 0);
+  if (opts.pitchLow !== undefined) {
+    assertInteger(opts.pitchLow, 'countermelody pitchLow');
+  }
+  if (opts.pitchHigh !== undefined) {
+    assertInteger(opts.pitchHigh, 'countermelody pitchHigh');
+  }
+  // The options are checked before the empty-melody exit, so a call with a
+  // malformed option is rejected whether or not the melody happens to sound.
   if (melody.notes.every((indexed) => indexed.note.durationBeat <= 0)) {
     return [];
   }
-  const ts = opts.ts ?? DEFAULT_TS;
-  assertTimeSignature(ts);
-  const rhythm = opts.rhythm ?? 'complement';
-  const profile = opts.profile ?? 'pop';
-  const rng = createRng(opts.seed ?? 0);
 
   const spanStart = melody.notes[0]?.note.startBeat ?? 0;
   const spanEnd = melody.notes.reduce((end, n) => Math.max(end, n.endBeat), spanStart);

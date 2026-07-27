@@ -131,7 +131,10 @@ export function assertGenerationBudget(
   const cap = limit ?? DEFAULT_GENERATION_BUDGET;
   assertFiniteNumber(estimated, name);
   assertPositiveInt(cap, `${name} limit`, Number.MAX_SAFE_INTEGER);
-  if (estimated < 0 || estimated > cap) {
+  if (estimated < 0) {
+    throw new InvalidInputError(`${name} must not be negative; received ${estimated}`);
+  }
+  if (estimated > cap) {
     throw new BudgetExceededError(
       `${name} exceeds the generation budget ${cap}; received ${estimated}`,
     );
@@ -194,7 +197,7 @@ export function assertNoteEvent(
   name = 'note event',
   options: NoteEventAssertOptions = {},
 ): NoteEvent {
-  assertFiniteNumber(event.pitch, `${name}.pitch`);
+  assertInteger(event.pitch, `${name}.pitch`, 0, 127);
   assertRange(event.startBeat, 0, Number.MAX_SAFE_INTEGER, `${name}.startBeat`);
   // The positivity check comes first so the common failure — a zero-length note
   // from a MIDI import — reads as such instead of naming a denormal lower bound.

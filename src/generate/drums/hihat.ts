@@ -188,7 +188,14 @@ export function shouldUseFootHiHat(section: SectionType, role: DrumRole): boolea
   }
 }
 
-/** Primary hi-hat articulation for a section. */
+/**
+ * The hi-hat articulation a section leans on.
+ *
+ * This shapes dynamics only: the note a timekeeping hat actually sounds comes
+ * from {@link roleHiHatInstrument}, which follows the voicing role, and from
+ * the per-onset open-hat decisions. Feeding this into {@link hiHatNote} instead
+ * would let the section override the role's own kit choice.
+ */
 export function sectionHiHatType(section: SectionType, role: DrumRole): HiHatType {
   if (role === 'ambient') {
     return 'ride';
@@ -225,7 +232,10 @@ export function hiHatNote(type: HiHatType): number {
   }
 }
 
-/** Velocity multiplier for a hi-hat articulation. */
+/**
+ * Velocity multiplier for a hi-hat articulation — the only effect
+ * {@link sectionHiHatType} has on the output.
+ */
 export function hiHatTypeVelocityMultiplier(type: HiHatType): number {
   switch (type) {
     case 'halfOpen':

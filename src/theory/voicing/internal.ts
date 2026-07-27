@@ -6,12 +6,7 @@ import { NoSolutionError } from '../../core/errors/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { Chord } from '../chord/index.js';
 import { chordPitchClasses, chordToneRole } from '../chord/index.js';
-import {
-  createsParallelPerfect,
-  createsVoiceCrossing,
-  createsVoiceOverlap,
-  exceedsSpacing,
-} from '../counterpoint/index.js';
+import { createsParallelPerfect, createsVoiceOverlap } from '../counterpoint/index.js';
 import type { VoiceRange } from './satb.js';
 
 /** Default maximum spacing between adjacent upper voices (one octave). */
@@ -241,10 +236,14 @@ export function resolutionViolations(
  * Count counterpoint violations between two consecutive voicings of equal
  * length: parallel perfects (fifths and octaves alike, since octaves are the
  * perfect-class-zero case of {@link createsParallelPerfect}) on every voice
- * pair, voice crossings in the new voicing, and — on adjacent pairs — voice
- * overlaps and over-wide spacing between upper voices.
+ * pair, and voice overlaps on adjacent pairs.
+ *
+ * Voice crossing and over-wide spacing are not counted: {@link
+ * enumerateVoicings} rejects both while building a candidate, so a candidate
+ * that reaches here cannot exhibit either. Overlap involves the previous
+ * voicing and so is still live.
  */
-export function violationCount(prev: number[], cur: number[], maxSpacing: number): number {
+export function violationCount(prev: number[], cur: number[]): number {
   let count = 0;
   for (let lower = 0; lower < cur.length; lower += 1) {
     for (let upper = lower + 1; upper < cur.length; upper += 1) {
@@ -263,14 +262,8 @@ export function violationCount(prev: number[], cur: number[], maxSpacing: number
       if (createsParallelPerfect(prevUpper, curUpper, prevLower, curLower)) {
         count += 1;
       }
-      if (createsVoiceCrossing(curUpper, curLower)) {
-        count += 1;
-      }
       if (upper === lower + 1) {
         if (createsVoiceOverlap(prevUpper, curUpper, prevLower, curLower)) {
-          count += 1;
-        }
-        if (lower > 0 && exceedsSpacing(curUpper, curLower, maxSpacing)) {
           count += 1;
         }
       }

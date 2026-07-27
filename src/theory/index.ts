@@ -12,6 +12,7 @@ export type {
   ChordQuality,
   ChordSegment,
   ChordSpan,
+  ChordToneRole,
   PitchSpelling,
 } from './chord/index.js';
 export {

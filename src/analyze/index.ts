@@ -11,6 +11,7 @@ export type {
   Chord as ChordData,
   ChordQuality,
   ChordSpan,
+  ChordToneRole,
   PitchSpelling,
 } from '../theory/chord/index.js';
 export type { SafetyProfile, VoiceSnapshot } from '../theory/safety/index.js';
@@ -74,6 +75,7 @@ export {
 export type {
   AnalyzedNote,
   IdentifiedVoiceNote,
+  SuspensionFigure,
   TheoryLabel,
   VoiceNote,
 } from './voice/index.js';

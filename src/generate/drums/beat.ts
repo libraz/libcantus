@@ -160,7 +160,7 @@ export function generateGhostNotesForBeat(ctx: BeatCtx, sec: SectionCtx): void {
       continue;
     }
     const variation = ctx.rng.float(0.85, 1.15);
-    const ghostBase = getGhostVelocity(ctx.section, ctx.beat / 2, false);
+    const ghostBase = getGhostVelocity(ctx.section, ctx.beat / 2);
     let ghostVel = ctx.velocity * ghostBase * variation;
     if (pos === 'a') {
       ghostVel *= 0.9;
