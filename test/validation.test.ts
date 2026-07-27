@@ -62,13 +62,12 @@ import { parseChordSymbol } from '../src/theory/symbol/index.js';
 import { SATB_RANGES } from '../src/theory/voicing/index.js';
 
 describe('shared numeric input contracts', () => {
-  it.each([
-    Number.NaN,
-    Number.POSITIVE_INFINITY,
-    Number.NEGATIVE_INFINITY,
-  ])('rejects non-finite value %s', (value) => {
-    expect(() => assertFiniteNumber(value, 'value')).toThrow(RangeError);
-  });
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    'rejects non-finite value %s',
+    (value) => {
+      expect(() => assertFiniteNumber(value, 'value')).toThrow(RangeError);
+    },
+  );
 
   it('checks integer, range, and generation budget boundaries', () => {
     expect(assertPositiveInt(1, 'count')).toBe(1);

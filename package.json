@@ -137,14 +137,14 @@
     "prepublishOnly": "yarn build"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.2",
+    "@biomejs/biome": "2.5.5",
     "@libraz/typedoc-theme": "^0.1.1",
-    "@vitest/coverage-v8": "4.1.9",
+    "@vitest/coverage-v8": "4.1.10",
     "tsup": "8.5.1",
     "typedoc": "0.28.20",
     "typedoc-plugin-extras": "4.0.1",
     "typedoc-plugin-mdn-links": "5.1.1",
     "typescript": "6.0.3",
-    "vitest": "4.1.9"
+    "vitest": "4.1.10"
   }
 }
