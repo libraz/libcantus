@@ -1,3 +1,4 @@
+import { BudgetExceededError, InvalidInputError } from '../errors/index.js';
 import type { TimeSignature } from '../meter/index.js';
 import { isCompoundNumerator } from '../meter/internal.js';
 import type { NoteEvent } from '../types.js';
@@ -16,7 +17,7 @@ export const DEFAULT_GENERATION_BUDGET = 1_000_000;
  */
 export function assertFiniteNumber(value: number, name: string): number {
   if (!Number.isFinite(value)) {
-    throw new RangeError(`${name} must be finite; received ${value}`);
+    throw new InvalidInputError(`${name} must be finite; received ${value}`);
   }
   return value;
 }
@@ -34,7 +35,9 @@ export function assertInteger(
 ): number {
   assertFiniteNumber(value, name);
   if (!Number.isSafeInteger(value) || value < min || value > max) {
-    throw new RangeError(`${name} must be an integer in [${min}, ${max}]; received ${value}`);
+    throw new InvalidInputError(
+      `${name} must be an integer in [${min}, ${max}]; received ${value}`,
+    );
   }
   return value;
 }
@@ -82,7 +85,7 @@ export function assertOneOf<const T extends string>(
   name: string,
 ): T {
   if (typeof value !== 'string' || !(allowed as readonly string[]).includes(value)) {
-    throw new RangeError(
+    throw new InvalidInputError(
       `${name} must be one of ${allowed.join(', ')}; received ${JSON.stringify(value)}`,
     );
   }
@@ -110,7 +113,7 @@ export function assertPositiveInt(
 export function assertRange(value: number, min: number, max: number, name: string): number {
   assertFiniteNumber(value, name);
   if (value < min || value > max) {
-    throw new RangeError(`${name} must be in [${min}, ${max}]; received ${value}`);
+    throw new InvalidInputError(`${name} must be in [${min}, ${max}]; received ${value}`);
   }
   return value;
 }
@@ -129,7 +132,9 @@ export function assertGenerationBudget(
   assertFiniteNumber(estimated, name);
   assertPositiveInt(cap, `${name} limit`, Number.MAX_SAFE_INTEGER);
   if (estimated < 0 || estimated > cap) {
-    throw new RangeError(`${name} exceeds the generation budget ${cap}; received ${estimated}`);
+    throw new BudgetExceededError(
+      `${name} exceeds the generation budget ${cap}; received ${estimated}`,
+    );
   }
   return estimated;
 }
@@ -144,7 +149,7 @@ export function assertTimeSignature(ts: TimeSignature, name = 'time signature'):
   assertPositiveInt(ts.denominator, `${name}.denominator`);
   if (ts.grouping !== undefined) {
     if (ts.grouping.length === 0) {
-      throw new RangeError(`${name}.grouping must not be empty`);
+      throw new InvalidInputError(`${name}.grouping must not be empty`);
     }
     let sum = 0;
     for (let index = 0; index < ts.grouping.length; index += 1) {
@@ -157,7 +162,7 @@ export function assertTimeSignature(ts: TimeSignature, name = 'time signature'):
     if (sum !== pulses && sum !== ts.numerator) {
       const accepted =
         pulses === ts.numerator ? `${pulses}` : `${pulses} (pulses) or ${ts.numerator} (units)`;
-      throw new RangeError(`${name}.grouping must sum to ${accepted}; received ${sum}`);
+      throw new InvalidInputError(`${name}.grouping must sum to ${accepted}; received ${sum}`);
     }
   }
   return ts;
@@ -195,7 +200,9 @@ export function assertNoteEvent(
   // from a MIDI import — reads as such instead of naming a denormal lower bound.
   assertFiniteNumber(event.durationBeat, `${name}.durationBeat`);
   if (!options.allowNonPositiveDuration && event.durationBeat <= 0) {
-    throw new RangeError(`${name}.durationBeat must be positive; received ${event.durationBeat}`);
+    throw new InvalidInputError(
+      `${name}.durationBeat must be positive; received ${event.durationBeat}`,
+    );
   }
   assertRange(
     event.durationBeat,
@@ -229,7 +236,7 @@ export function assertNoteEvents(
     // here: letting either through only moves the failure to a later
     // TypeError, or drops the note silently.
     if (event === undefined) {
-      throw new RangeError(`${name}[${index}] must be a note event; received undefined`);
+      throw new InvalidInputError(`${name}[${index}] must be a note event; received undefined`);
     }
     assertNoteEvent(event, `${name}[${index}]`, options);
   }

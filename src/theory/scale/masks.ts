@@ -6,6 +6,7 @@
  *
  * @category Scales
  */
+import { InvalidInputError } from '../../core/errors/index.js';
 export function maskFromOffsets(offsets: readonly number[]): number {
   let mask = 1;
   for (const offset of offsets) {
@@ -127,6 +128,54 @@ export const OCTATONIC_WHOLE_HALF_MASK = maskFromOffsets([0, 2, 3, 5, 6, 8, 9, 1
 export const CHROMATIC_MASK = 0b111111111111;
 
 /**
+ * Lydian dominant (melodic minor's fourth mode): offsets {0,2,4,6,7,9,10}.
+ *
+ * The scale over an unaltered dominant with a raised eleventh.
+ *
+ * @category Scales
+ */
+export const LYDIAN_DOMINANT_MASK = maskFromOffsets([0, 2, 4, 6, 7, 9, 10]);
+
+/**
+ * Mixolydian b13, the aeolian dominant (melodic minor's fifth mode): offsets
+ * {0,2,4,5,7,8,10}.
+ *
+ * The scale over a dominant with a flat thirteenth.
+ *
+ * @category Scales
+ */
+export const MIXOLYDIAN_B13_MASK = maskFromOffsets([0, 2, 4, 5, 7, 8, 10]);
+
+/**
+ * Locrian natural 2 (melodic minor's sixth mode): offsets {0,2,3,5,6,8,10}.
+ *
+ * The scale over a half-diminished chord used as a minor ii.
+ *
+ * @category Scales
+ */
+export const LOCRIAN_NATURAL2_MASK = maskFromOffsets([0, 2, 3, 5, 6, 8, 10]);
+
+/**
+ * The altered scale, or superlocrian (melodic minor's seventh mode): offsets
+ * {0,1,3,4,6,8,10}.
+ *
+ * The scale over an altered dominant: every tension raised or lowered.
+ *
+ * @category Scales
+ */
+export const ALTERED_MASK = maskFromOffsets([0, 1, 3, 4, 6, 8, 10]);
+
+/**
+ * Phrygian dominant (harmonic minor's fifth mode): offsets {0,1,4,5,7,8,10}.
+ *
+ * The scale over the dominant of a minor key, and the characteristic sound of
+ * the flamenco and maqam repertoires.
+ *
+ * @category Scales
+ */
+export const PHRYGIAN_DOMINANT_MASK = maskFromOffsets([0, 1, 4, 5, 7, 8, 10]);
+
+/**
  * Named scale masks addressable by {@link scaleByName}.
  *
  * @category Scales
@@ -143,6 +192,11 @@ export const NAMED_SCALES = Object.freeze({
   lydian: LYDIAN_MASK,
   mixolydian: MIXOLYDIAN_MASK,
   locrian: LOCRIAN_MASK,
+  lydianDominant: LYDIAN_DOMINANT_MASK,
+  mixolydianB13: MIXOLYDIAN_B13_MASK,
+  locrianNatural2: LOCRIAN_NATURAL2_MASK,
+  altered: ALTERED_MASK,
+  phrygianDominant: PHRYGIAN_DOMINANT_MASK,
   majorPentatonic: MAJOR_PENTATONIC_MASK,
   minorPentatonic: MINOR_PENTATONIC_MASK,
   blues: BLUES_MASK,
@@ -199,7 +253,7 @@ export function namedScaleMask(name: ScaleNameInput): number | undefined {
 export function requireScaleMask(name: ScaleNameInput, label = 'scale'): number {
   const mask = namedScaleMask(name);
   if (mask === undefined) {
-    throw new RangeError(`Unknown ${label}: ${String(name)}`);
+    throw new InvalidInputError(`Unknown ${label}: ${String(name)}`);
   }
   return mask;
 }

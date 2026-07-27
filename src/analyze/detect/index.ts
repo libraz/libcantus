@@ -4,6 +4,7 @@
  * which only go name -> notes.
  */
 
+import { InvalidInputError } from '../../core/errors/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import { assertFiniteNumber, assertGenerationBudget } from '../../core/validation/index.js';
@@ -288,7 +289,7 @@ export function detectKey(pitches: readonly number[], opts: DetectKeyOptions = {
   }
   const weights = opts.weights;
   if (weights !== undefined && weights.length !== pitches.length) {
-    throw new RangeError('weights must have one entry per pitch');
+    throw new InvalidInputError('weights must have one entry per pitch');
   }
   const counts = new Map<number, number>();
   let total = 0;

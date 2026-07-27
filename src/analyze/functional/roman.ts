@@ -6,6 +6,7 @@
  * inverses by construction.
  */
 
+import { InvalidInputError } from '../../core/errors/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { chordPitchClasses, makeChord } from '../../theory/chord/index.js';
@@ -149,13 +150,13 @@ function parseSimpleRoman(
 ): { rootPc: number; quality: ChordQuality; inversion: number } {
   const match = /^([b#]?)([iIvV]+)(.*)$/.exec(text.trim());
   if (!match) {
-    throw new Error(`Invalid Roman numeral: ${text}`);
+    throw new InvalidInputError(`Invalid Roman numeral: ${text}`);
   }
   const accidental = match[1] === 'b' ? -1 : match[1] === '#' ? 1 : 0;
   const glyph = (match[2] ?? '').toUpperCase();
   const degreeNumber = ROMAN_TO_DEGREE[glyph];
   if (degreeNumber === undefined) {
-    throw new Error(`Invalid Roman numeral: ${text}`);
+    throw new InvalidInputError(`Invalid Roman numeral: ${text}`);
   }
   const isUpper = (match[2] ?? '')[0] === (match[2] ?? '')[0]?.toUpperCase();
   const suffix = match[3] ?? '';
@@ -183,7 +184,7 @@ function parseSimpleRoman(
   // contains an "o", and unknown trailing text must be rejected in full.
   const parsedSuffix = /^(o|°|dim|ø|\+|aug)?(maj7|M7)?(65|64|43|42|7|6|2)?$/.exec(suffix);
   if (!parsedSuffix) {
-    throw new Error(`Unsupported suffix "${suffix}" in Roman numeral: ${text}`);
+    throw new InvalidInputError(`Unsupported suffix "${suffix}" in Roman numeral: ${text}`);
   }
   const qualityMarker = parsedSuffix[1] ?? '';
   const isDim = qualityMarker === 'o' || qualityMarker === '°' || qualityMarker === 'dim';
@@ -195,7 +196,9 @@ function parseSimpleRoman(
   // Reject figure strings that are neither a known figured-bass inversion nor a
   // canonical quality suffix rather than silently degrading to a root triad.
   if (figures !== '' && !INVERSION_FIGURES.has(figures)) {
-    throw new Error(`Unsupported figured-bass or extension "${figures}" in Roman numeral: ${text}`);
+    throw new InvalidInputError(
+      `Unsupported figured-bass or extension "${figures}" in Roman numeral: ${text}`,
+    );
   }
 
   const { inversion, seventh } = parseInversion(figures);
@@ -382,7 +385,7 @@ const SEVENTH_FIGURE_QUALITIES: ReadonlySet<ChordQuality> = new Set([
 function numeralFor(degreeNumber: number, lower: boolean): string {
   const glyph = ROMAN[degreeNumber - 1];
   if (glyph === undefined) {
-    throw new RangeError(`no Roman numeral for scale degree ${degreeNumber}`);
+    throw new InvalidInputError(`no Roman numeral for scale degree ${degreeNumber}`);
   }
   return lower ? glyph.toLowerCase() : glyph;
 }

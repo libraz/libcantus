@@ -6,6 +6,7 @@
  * type, so callers can accept/emit plain text at the edges of the API.
  */
 
+import { InvalidInputError } from '../../core/errors/index.js';
 import {
   formatNote,
   midiToNote,
@@ -14,6 +15,7 @@ import {
   parseNote,
   pitchClassOf as pitchClass,
 } from '../../core/pitch/index.js';
+import { assertFiniteNumber } from '../../core/validation/index.js';
 import { type Chord, type ChordQuality, makeChord, type PitchSpelling } from '../chord/index.js';
 
 /**
@@ -213,7 +215,7 @@ export function parseChordSymbol(text: string): Chord {
   const trimmed = text.trim();
   const rootMatch = ROOT_RE.exec(trimmed);
   if (!rootMatch) {
-    throw new Error(`Invalid chord symbol: ${text}`);
+    throw new InvalidInputError(`Invalid chord symbol: ${text}`);
   }
   const rootToken = rootMatch[0];
   const rootNote = parseNote(rootToken);
@@ -233,7 +235,7 @@ export function parseChordSymbol(text: string): Chord {
 
   const quality = knownQuality(rest);
   if (quality === undefined) {
-    throw new Error(`Unrecognized chord quality: ${text}`);
+    throw new InvalidInputError(`Unrecognized chord quality: ${text}`);
   }
   return makeSpelledChord(rootNote, quality);
 }
@@ -282,6 +284,16 @@ function pitchClassName(
  * @category Chords
  */
 export function formatChordSymbol(chord: Chord, opts?: { flats?: boolean }): string {
+  // A chord rebuilt from JSON or arrived at through arithmetic can carry a
+  // non-finite root or a quality this module has no suffix for; formatting
+  // those produces 'C' and 'Cundefined', which read as real symbols.
+  assertFiniteNumber(chord.rootPc, 'chord rootPc');
+  if (chord.bassPc !== undefined) {
+    assertFiniteNumber(chord.bassPc, 'chord bassPc');
+  }
+  if (!Object.hasOwn(CANONICAL_SUFFIX, chord.quality)) {
+    throw new InvalidInputError(`Unknown chord quality: ${String(chord.quality)}`);
+  }
   const rootPc = pitchClass(chord.rootPc);
   const rootHint = chord.rootSpelling;
   const rootName = pitchClassName(rootPc, rootHint, opts?.flats);

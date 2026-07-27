@@ -1,3 +1,4 @@
+import { InvalidInputError } from '../../core/errors/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import {
@@ -230,7 +231,7 @@ function assertSafetyContext(q: Omit<SafetyQuery, 'candidatePitch'>): void {
   if (q.vocalLow !== undefined) assertFiniteNumber(q.vocalLow, 'vocalLow');
   if (q.vocalHigh !== undefined) assertFiniteNumber(q.vocalHigh, 'vocalHigh');
   if (q.vocalLow !== undefined && q.vocalHigh !== undefined && q.vocalLow > q.vocalHigh) {
-    throw new RangeError('vocalLow must not exceed vocalHigh');
+    throw new InvalidInputError('vocalLow must not exceed vocalHigh');
   }
   assertGenerationBudget(q.otherVoices.length, 'other voices');
   for (let index = 0; index < q.otherVoices.length; index += 1) {
@@ -531,7 +532,9 @@ export function enumerateSafePitches(
   assertInteger(pitchLow, 'pitchLow');
   assertInteger(pitchHigh, 'pitchHigh');
   if (pitchLow > pitchHigh) {
-    throw new RangeError(`pitchLow must not exceed pitchHigh; received ${pitchLow} > ${pitchHigh}`);
+    throw new InvalidInputError(
+      `pitchLow must not exceed pitchHigh; received ${pitchLow} > ${pitchHigh}`,
+    );
   }
   assertGenerationBudget(pitchHigh - pitchLow + 1, 'safe pitch candidates');
   for (let pitch = pitchHigh; pitch >= pitchLow; pitch -= 1) {

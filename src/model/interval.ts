@@ -1,3 +1,4 @@
+import { InvalidInputError } from '../core/errors/index.js';
 import { isConsonantInterval } from '../core/interval/index.js';
 import type { IntervalQualityLabel, SpelledInterval } from '../core/pitch/index.js';
 import { intervalSemitones, parseInterval } from '../core/pitch/index.js';
@@ -70,7 +71,7 @@ export class Interval {
   static of(numberValue: number, quality: IntervalQualityLabel, semitones: number): Interval {
     const expected = intervalSemitones(numberValue, quality);
     if (Math.abs(semitones) !== expected) {
-      throw new RangeError(
+      throw new InvalidInputError(
         `${quality}${numberValue} spans ${expected} semitones; received ${semitones}`,
       );
     }

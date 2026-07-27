@@ -1,6 +1,7 @@
 import type { DetectKeyOptions } from '../analyze/detect/index.js';
 import { detectKey, detectKeyBest } from '../analyze/detect/index.js';
 import { isMinorKey, romanToChord } from '../analyze/functional/index.js';
+import { InvalidInputError } from '../core/errors/index.js';
 import type { Note as NoteData } from '../core/pitch/index.js';
 import type { KeyScale } from '../core/types.js';
 import { assertFiniteNumber } from '../core/validation/index.js';
@@ -68,7 +69,7 @@ export class Key {
   constructor(scale: KeyScale, tonic: Note) {
     const rootPc = mod12(scale.rootPc);
     if (tonic.pitchClass !== rootPc) {
-      throw new RangeError(
+      throw new InvalidInputError(
         `tonic ${tonic.name} does not match the scale root pitch class ${rootPc}; ` +
           'pass a tonic that spells the scale root, or omit it to have one chosen',
       );

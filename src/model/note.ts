@@ -1,3 +1,4 @@
+import { InvalidInputError } from '../core/errors/index.js';
 import {
   formatNote,
   midiToNote,
@@ -20,7 +21,9 @@ import { Interval } from './interval.js';
  */
 function copyNote(data: NoteData): NoteData {
   if (!Number.isInteger(data.letter) || data.letter < 0 || data.letter > 6) {
-    throw new RangeError(`note letter must be an integer in [0, 6]; received ${data.letter}`);
+    throw new InvalidInputError(
+      `note letter must be an integer in [0, 6]; received ${data.letter}`,
+    );
   }
   const copy: NoteData = { letter: data.letter, alter: data.alter };
   if (data.octave !== undefined) {
@@ -104,7 +107,7 @@ export class Note {
    */
   get midi(): number {
     if (this.#data.octave === undefined) {
-      throw new Error(`note ${this.name} has no octave, so it has no MIDI number`);
+      throw new InvalidInputError(`note ${this.name} has no octave, so it has no MIDI number`);
     }
     return noteToMidi(this.#data);
   }

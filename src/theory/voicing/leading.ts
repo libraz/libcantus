@@ -1,3 +1,4 @@
+import { InvalidInputError, NoSolutionError } from '../../core/errors/index.js';
 import { assertFiniteNumber } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
 import { createsHiddenParallelPerfect } from '../counterpoint/index.js';
@@ -89,7 +90,7 @@ export function nextVoicing(current: number[], chord: Chord, opts?: VoicingOptio
     // zero-voice chord and return an empty result — the same input that throws
     // when written as an explicit `{ ranges: [] }`.
     if (current.length === 0) {
-      throw new Error('current must contain at least one pitch');
+      throw new InvalidInputError('current must contain at least one pitch');
     }
     for (let index = 0; index < current.length; index += 1) {
       assertFiniteNumber(current[index] ?? Number.NaN, `current[${index}]`);
@@ -118,7 +119,7 @@ export function nextVoicing(current: number[], chord: Chord, opts?: VoicingOptio
     }
   }
   if (best === undefined) {
-    throw new Error('no voicing satisfies the given ranges');
+    throw new NoSolutionError('no voicing satisfies the given ranges');
   }
   return best;
 }

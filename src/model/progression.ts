@@ -4,6 +4,7 @@ import {
   detectCadence,
   type HarmonicFunction,
 } from '../analyze/functional/index.js';
+import { InvalidInputError } from '../core/errors/index.js';
 import type { Note as NoteData } from '../core/pitch/index.js';
 import type { KeyScale } from '../core/types.js';
 import type { Chord as ChordData, ChordSpan } from '../theory/chord/index.js';
@@ -274,7 +275,9 @@ export class Progression {
   #resolveKey(key?: Key): Key {
     const resolved = key ?? this.#key;
     if (resolved === undefined) {
-      throw new Error('progression has no key context; pass a Key or attach one with withKey()');
+      throw new InvalidInputError(
+        'progression has no key context; pass a Key or attach one with withKey()',
+      );
     }
     return resolved;
   }

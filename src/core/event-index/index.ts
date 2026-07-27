@@ -13,13 +13,27 @@ export type IndexedNoteEvent = {
 };
 
 /**
+ * Which note wins when several sound from the same onset.
+ *
+ * `'highest'` and `'lowest'` name a voice, so the answer does not depend on the
+ * order the caller happened to store the chord in; `'last'` takes the one
+ * latest in the input array.
+ *
+ * @category Core
+ */
+export type OnsetTieBreak = 'highest' | 'lowest' | 'last';
+
+/**
  * Binary-searchable, stable-sorted index over note onsets and active spans.
  *
  * @category Core
  */
 export type NoteEventIndex = {
   notes: IndexedNoteEvent[];
-  /** Latest-onset note sounding at `beat`, with later input order winning ties. */
+  /**
+   * Latest-onset note sounding at `beat`. Simultaneous onsets are resolved by
+   * the index's {@link OnsetTieBreak}.
+   */
   at: (beat: number) => IndexedNoteEvent | undefined;
   /** Whether one or more sounding notes attack at `beat`. */
   attacksAt: (beat: number) => boolean;
@@ -52,9 +66,10 @@ function upperBound(values: IndexedNoteEvent[], beat: number): number {
  */
 export function createNoteEventIndex(
   events: readonly NoteEvent[],
-  options: { allowNonPositiveDuration?: boolean } = {},
+  options: { allowNonPositiveDuration?: boolean; tieBreak?: OnsetTieBreak } = {},
 ): NoteEventIndex {
   assertNoteEvents(events, 'note events', options);
+  const tieBreak = options.tieBreak ?? 'highest';
   const notes = events
     .map((note, originalIndex) => ({
       note,
@@ -73,22 +88,38 @@ export function createNoteEventIndex(
     notes,
     at(beat) {
       let index = upperBound(notes, beat + EPS) - 1;
+      let best: IndexedNoteEvent | undefined;
       while (index >= 0) {
         if ((prefixMaxEnd[index] ?? Number.NEGATIVE_INFINITY) <= beat + EPS) {
-          return undefined;
+          break;
         }
         const indexed = notes[index];
-        if (
-          indexed &&
-          indexed.note.durationBeat > 0 &&
-          indexed.note.startBeat - EPS <= beat &&
-          beat < indexed.endBeat - EPS
-        ) {
-          return indexed;
-        }
         index -= 1;
+        if (
+          indexed === undefined ||
+          indexed.note.durationBeat <= 0 ||
+          indexed.note.startBeat - EPS > beat ||
+          beat >= indexed.endBeat - EPS
+        ) {
+          continue;
+        }
+        if (best === undefined) {
+          best = indexed;
+          if (tieBreak === 'last') {
+            break;
+          }
+          continue;
+        }
+        // Only notes from the same onset compete: a later onset always wins.
+        if (Math.abs(indexed.note.startBeat - best.note.startBeat) >= EPS) {
+          break;
+        }
+        const higher = indexed.note.pitch > best.note.pitch;
+        if (tieBreak === 'highest' ? higher : !higher) {
+          best = indexed;
+        }
       }
-      return undefined;
+      return best;
     },
     attacksAt(beat) {
       // Only a sounding note attacks: a zero-length artefact must not make

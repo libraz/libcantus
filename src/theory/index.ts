@@ -66,6 +66,7 @@ export {
 } from './safety/index.js';
 export type { ScaleName, ScaleNameInput } from './scale/index.js';
 export {
+  ALTERED_MASK,
   BLUES_MASK,
   CHROMATIC_MASK,
   DORIAN_MASK,
@@ -73,11 +74,14 @@ export {
   HARMONIC_MINOR_MASK,
   isScaleTone,
   LOCRIAN_MASK,
+  LOCRIAN_NATURAL2_MASK,
+  LYDIAN_DOMINANT_MASK,
   LYDIAN_MASK,
   MAJOR_MASK,
   MAJOR_PENTATONIC_MASK,
   MELODIC_MINOR_MASK,
   MINOR_PENTATONIC_MASK,
+  MIXOLYDIAN_B13_MASK,
   MIXOLYDIAN_MASK,
   majorKey,
   maskFromOffsets,
@@ -88,6 +92,7 @@ export {
   nearestScaleTone,
   OCTATONIC_HALF_WHOLE_MASK,
   OCTATONIC_WHOLE_HALF_MASK,
+  PHRYGIAN_DOMINANT_MASK,
   PHRYGIAN_MASK,
   pitchToScaleDegree,
   requireScaleMask,

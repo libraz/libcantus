@@ -8,16 +8,20 @@ export {
 export { majorKey, minorKey, scaleByName } from './key.js';
 export type { ScaleName, ScaleNameInput } from './masks.js';
 export {
+  ALTERED_MASK,
   BLUES_MASK,
   CHROMATIC_MASK,
   DORIAN_MASK,
   HARMONIC_MINOR_MASK,
   LOCRIAN_MASK,
+  LOCRIAN_NATURAL2_MASK,
+  LYDIAN_DOMINANT_MASK,
   LYDIAN_MASK,
   MAJOR_MASK,
   MAJOR_PENTATONIC_MASK,
   MELODIC_MINOR_MASK,
   MINOR_PENTATONIC_MASK,
+  MIXOLYDIAN_B13_MASK,
   MIXOLYDIAN_MASK,
   maskFromOffsets,
   NAMED_SCALES,
@@ -25,6 +29,7 @@ export {
   namedScaleMask,
   OCTATONIC_HALF_WHOLE_MASK,
   OCTATONIC_WHOLE_HALF_MASK,
+  PHRYGIAN_DOMINANT_MASK,
   PHRYGIAN_MASK,
   requireScaleMask,
   WHOLE_TONE_MASK,

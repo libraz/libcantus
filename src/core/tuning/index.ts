@@ -8,6 +8,7 @@
  * acoustic (just) tuning behind the tempered intervals.
  */
 
+import { InvalidInputError } from '../errors/index.js';
 import {
   assertFiniteNumber,
   assertInteger,
@@ -259,7 +260,7 @@ export function justDeviationCents(semitoneClass: number): number {
   assertInteger(semitoneClass, 'semitone class', 0, 12);
   const ratio = JUST_RATIOS[semitoneClass];
   if (!ratio) {
-    throw new RangeError(`semitone class has no just ratio: ${semitoneClass}`);
+    throw new InvalidInputError(`semitone class has no just ratio: ${semitoneClass}`);
   }
   return ratioToCents(ratio[0], ratio[1]) - semitoneClass * 100;
 }

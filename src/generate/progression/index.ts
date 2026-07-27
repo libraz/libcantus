@@ -1,3 +1,4 @@
+import { InvalidInputError } from '../../core/errors/index.js';
 import { createRng } from '../../core/random/index.js';
 import type { KeyScale } from '../../core/types.js';
 import { assertGenerationBudget, assertPositiveInt } from '../../core/validation/index.js';
@@ -408,7 +409,7 @@ export function pickProgressionPreset(style: ProgStyle, seed = 0): ProgressionPr
   // plausible but stylistically unrelated progression.
   const pool = PRESETS.filter((preset) => preset.styles.includes(style));
   if (pool.length === 0) {
-    throw new Error(`Unknown progression style: ${style}`);
+    throw new InvalidInputError(`Unknown progression style: ${style}`);
   }
   const rng = createRng(seed);
   const index = Math.floor(rng.next() * pool.length) % pool.length;
@@ -451,7 +452,7 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
   let preset: ProgressionPreset | undefined;
   if (opts.preset !== undefined) {
     if (opts.preset.degrees.length === 0) {
-      throw new RangeError('progression preset must name at least one degree');
+      throw new InvalidInputError('progression preset must name at least one degree');
     }
     preset = {
       id: opts.preset.id ?? 'custom',
@@ -464,7 +465,7 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
   if (preset === undefined && opts.presetId !== undefined) {
     preset = PRESETS.find((p) => p.id === opts.presetId);
     if (preset === undefined) {
-      throw new Error(`Unknown progression preset: ${opts.presetId}`);
+      throw new InvalidInputError(`Unknown progression preset: ${opts.presetId}`);
     }
   }
   preset ??= pickProgressionPreset(opts.style, seed);

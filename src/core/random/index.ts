@@ -5,6 +5,7 @@
  * seed the stream is fully reproducible.
  */
 
+import { InvalidInputError } from '../errors/index.js';
 import { assertFiniteNumber, assertInteger, assertRange } from '../validation/index.js';
 
 /**
@@ -54,7 +55,7 @@ export function createRng(seed: number): Rng {
       assertInteger(lo, 'range lower bound');
       assertInteger(hi, 'range upper bound');
       if (lo > hi) {
-        throw new RangeError(
+        throw new InvalidInputError(
           `range lower bound must not exceed upper bound; received ${lo} > ${hi}`,
         );
       }
@@ -65,7 +66,7 @@ export function createRng(seed: number): Rng {
       assertFiniteNumber(lo, 'float lower bound');
       assertFiniteNumber(hi, 'float upper bound');
       if (lo > hi) {
-        throw new RangeError(
+        throw new InvalidInputError(
           `float lower bound must not exceed upper bound; received ${lo} > ${hi}`,
         );
       }

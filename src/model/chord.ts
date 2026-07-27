@@ -10,6 +10,9 @@ import {
   type HarmonicFunction,
   isBorrowedChord,
 } from '../analyze/functional/index.js';
+import { InvalidInputError } from '../core/errors/index.js';
+import type { Note as NoteData } from '../core/pitch/index.js';
+import { noteToPitchClass } from '../core/pitch/index.js';
 import { negativeHarmonyMirror } from '../generate/reharmony/index.js';
 import {
   type Chord as ChordData,
@@ -450,7 +453,7 @@ export class Chord {
     const intervals = data.intervals;
     const length = intervals.length;
     if (length === 0) {
-      throw new Error('cannot invert a chord with no intervals');
+      throw new InvalidInputError('cannot invert a chord with no intervals');
     }
     const index = ((n % length) + length) % length;
     // The bass spelling follows from the root spelling in force at read time, so
@@ -527,25 +530,42 @@ export class Chord {
    * key at all; a key is only needed to choose a spelling for a bare pitch
    * class.
    *
+   * A slash bass outside the chord tones is appended, so the spelled notes
+   * are the notes the chord sounds — the same set {@link Chord.pitchClasses}
+   * reports.
+   *
    * @param key Key providing the spelled tonic; falls back to the carried
    *   context, then to the chord's own root spelling.
-   * @returns Spelled octave-less notes in the chord's own (tertian) order.
+   * @returns Spelled octave-less notes in the chord's own (tertian) order,
+   *   with any foreign slash bass last.
    * @throws If no key is given, none is carried, and the chord has no root
    *   spelling of its own.
    */
   spell(key?: Key): Note[] {
     const data = this.#data;
     const resolved = key ?? this.#key;
+    let tones: NoteData[];
     if (resolved === undefined) {
       const root = data.rootSpelling;
       if (root === undefined) {
-        throw new Error(
+        throw new InvalidInputError(
           'chord has no key context and no root spelling; pass a Key, attach one with withKey(), or build the chord from a symbol',
         );
       }
-      return spellChordFromRoot(data, root).map((note) => new Note(note));
+      tones = spellChordFromRoot(data, root);
+    } else {
+      tones = spellChord(data, resolved.tonic.data, resolved.scale);
     }
-    return spellChord(data, resolved.tonic.data, resolved.scale).map((note) => new Note(note));
+    const bassPc = data.bassPc;
+    const bass = data.bassSpelling;
+    if (
+      bassPc !== undefined &&
+      bass !== undefined &&
+      !tones.some((tone) => mod12(noteToPitchClass(tone)) === mod12(bassPc))
+    ) {
+      tones = [...tones, { letter: bass.letter, alter: bass.alter }];
+    }
+    return tones.map((note) => new Note(note));
   }
 
   /**
@@ -600,7 +620,9 @@ export class Chord {
   #resolveKey(key?: Key): Key {
     const resolved = key ?? this.#key;
     if (resolved === undefined) {
-      throw new Error('chord has no key context; pass a Key or attach one with withKey()');
+      throw new InvalidInputError(
+        'chord has no key context; pass a Key or attach one with withKey()',
+      );
     }
     return resolved;
   }

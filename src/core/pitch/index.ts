@@ -9,6 +9,7 @@
  * preserved.
  */
 
+import { InvalidInputError } from '../errors/index.js';
 import { assertFiniteNumber, assertInteger } from '../validation/index.js';
 
 /** Semitone offset of each natural letter above C: C D E F G A B. */
@@ -156,7 +157,7 @@ const mod7 = diatonicLetterOf;
 export function parseNote(text: string): Note {
   const match = /^([A-Ga-g])([#x]*|b*)(-?\d+)?$/.exec(text.trim());
   if (!match) {
-    throw new Error(`Invalid note: ${text}`);
+    throw new InvalidInputError(`Invalid note: ${text}`);
   }
   const letterGlyph = (match[1] ?? '').toUpperCase();
   const letter = LETTER_NAMES.indexOf(letterGlyph as (typeof LETTER_NAMES)[number]);
@@ -241,7 +242,7 @@ export function noteToPitchClass(note: Note): number {
 export function noteToMidi(note: Note): number {
   assertNote(note, 'note');
   if (note.octave === undefined) {
-    throw new Error('noteToMidi requires an octave');
+    throw new InvalidInputError('noteToMidi requires an octave');
   }
   const natural = LETTER_SEMITONES[mod7(note.letter)] ?? 0;
   return (note.octave + 1) * 12 + natural + note.alter;
@@ -344,7 +345,7 @@ export function transposeNote(
   opts?: { spelling?: 'sharp' | 'flat' },
 ): Note {
   if (!Number.isFinite(semitones)) {
-    throw new RangeError(`semitones must be a finite number; received ${semitones}`);
+    throw new InvalidInputError(`semitones must be a finite number; received ${semitones}`);
   }
   const steps = Math.round(semitones);
   if (opts?.spelling !== undefined) {
@@ -432,7 +433,7 @@ export function intervalSemitones(numberValue: number, quality: IntervalQualityL
   const perfect = isPerfectNumber(simple);
   if (quality === 'P' || quality === 'M') {
     if (perfect !== (quality === 'P')) {
-      throw new RangeError(
+      throw new InvalidInputError(
         `a ${numberValue === 1 ? 'unison' : `${numberValue}th`} cannot be ${quality === 'P' ? 'perfect' : 'major'}`,
       );
     }
@@ -440,7 +441,9 @@ export function intervalSemitones(numberValue: number, quality: IntervalQualityL
   }
   if (quality === 'm') {
     if (perfect) {
-      throw new RangeError(`a perfect-class interval cannot be minor; received ${numberValue}`);
+      throw new InvalidInputError(
+        `a perfect-class interval cannot be minor; received ${numberValue}`,
+      );
     }
     return reference - 1;
   }
@@ -450,7 +453,7 @@ export function intervalSemitones(numberValue: number, quality: IntervalQualityL
   if (/^d+$/.test(quality)) {
     return reference - quality.length - (perfect ? 0 : 1);
   }
-  throw new RangeError(`unknown interval quality ${JSON.stringify(quality)}`);
+  throw new InvalidInputError(`unknown interval quality ${JSON.stringify(quality)}`);
 }
 
 /**
@@ -472,7 +475,7 @@ export function parseInterval(name: string): SpelledInterval {
   const quality = match?.[1] as IntervalQualityLabel | undefined;
   const numberValue = Number(match?.[2]);
   if (quality === undefined || !Number.isFinite(numberValue)) {
-    throw new RangeError(
+    throw new InvalidInputError(
       `interval must be a quality followed by a number, such as 'P5'; received ${JSON.stringify(name)}`,
     );
   }

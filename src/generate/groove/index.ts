@@ -8,6 +8,7 @@
  * seeded PRNG from the `random` module so results are fully reproducible.
  */
 
+import { InvalidInputError } from '../../core/errors/index.js';
 import {
   beatsPerBar,
   formatTimeSignature,
@@ -330,13 +331,13 @@ export function applyGrooveTemplate(
   assertPositiveInt(template.slotsPerBar, 'template slotsPerBar');
   assertGenerationBudget(template.slots.length, 'template slots');
   if (template.slots.length !== template.slotsPerBar) {
-    throw new RangeError('template slots length must equal slotsPerBar');
+    throw new InvalidInputError('template slots length must equal slotsPerBar');
   }
   if (
     template.ts &&
     (template.ts.numerator !== ts.numerator || template.ts.denominator !== ts.denominator)
   ) {
-    throw new Error(
+    throw new InvalidInputError(
       `Groove template meter ${formatTimeSignature(template.ts)} does not match ` +
         `apply-time meter ${formatTimeSignature(ts)}`,
     );

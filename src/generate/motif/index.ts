@@ -1,4 +1,5 @@
 import type { ChordTimeline } from '../../analyze/timeline/index.js';
+import { InvalidInputError } from '../../core/errors/index.js';
 import type { TimeSignature } from '../../core/meter/index.js';
 import { beatsPerBar } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
@@ -338,7 +339,7 @@ export function transformMotif(
 function assertInRange(cell: MotifCell): MotifCell {
   for (const note of cell.notes) {
     if (note.pitch < 0 || note.pitch > 127) {
-      throw new RangeError(
+      throw new InvalidInputError(
         `transformed motif pitch ${note.pitch} is outside the MIDI range 0..127`,
       );
     }
@@ -361,7 +362,7 @@ function transformUnchecked(
     assertInteger(amount, 'diatonic transform amount');
   }
   if ((t === 'augment' || t === 'diminish') && amount !== undefined && amount <= 0) {
-    throw new RangeError('time transform amount must be positive');
+    throw new InvalidInputError('time transform amount must be positive');
   }
   const notes = cell.notes;
   switch (t) {

@@ -3,7 +3,14 @@
  * also available from the package root.
  */
 
-export type { IndexedNoteEvent, NoteEventIndex } from './event-index/index.js';
+export type { LibcantusErrorCode } from './errors/index.js';
+export {
+  BudgetExceededError,
+  InvalidInputError,
+  isLibcantusError,
+  NoSolutionError,
+} from './errors/index.js';
+export type { IndexedNoteEvent, NoteEventIndex, OnsetTieBreak } from './event-index/index.js';
 export { createNoteEventIndex } from './event-index/index.js';
 export {
   ConsonanceClass,

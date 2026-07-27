@@ -1,3 +1,4 @@
+import { InvalidInputError } from '../../core/errors/index.js';
 import { assertFiniteNumber, assertInteger } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
 import { chordToneRole } from '../chord/index.js';
@@ -205,7 +206,7 @@ export function voiceChordStyled(chord: Chord, opts?: StyledVoicingOptions): num
   const lowest = voicing[0] ?? 0;
   const highest = voicing[voicing.length - 1] ?? 0;
   if (lowest < 0 || highest > 127) {
-    throw new RangeError(
+    throw new InvalidInputError(
       `styled voicing at octave ${octave} spans MIDI ${lowest}..${highest}, outside 0..127`,
     );
   }

@@ -12,6 +12,7 @@
  * library-wide convention.
  */
 
+import { InvalidInputError } from '../../core/errors/index.js';
 import { isStrongBeat, type TimeSignature } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import { createRng } from '../../core/random/index.js';
@@ -316,7 +317,7 @@ export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
     assertRange(segment.startBeat, 0, Number.MAX_SAFE_INTEGER, `segments[${index}].startBeat`);
     assertRange(segment.endBeat, 0, Number.MAX_SAFE_INTEGER, `segments[${index}].endBeat`);
     if (segment.endBeat <= segment.startBeat) {
-      throw new RangeError(`segments[${index}] must have a positive duration`);
+      throw new InvalidInputError(`segments[${index}] must have a positive duration`);
     }
   }
   const segments = [...opts.segments].sort((a, b) => a.startBeat - b.startBeat);

@@ -2,6 +2,7 @@ import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 
 export { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 
+import { NoSolutionError } from '../../core/errors/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { Chord } from '../chord/index.js';
 import { chordPitchClasses, chordToneRole } from '../chord/index.js';
@@ -105,7 +106,7 @@ export function enumerateVoicings(
   );
   for (let voice = 0; voice < byVoice.length; voice += 1) {
     if ((byVoice[voice] ?? []).length === 0) {
-      throw new Error('no voicing satisfies the given ranges');
+      throw new NoSolutionError('no voicing satisfies the given ranges');
     }
   }
   const results: number[][] = [];

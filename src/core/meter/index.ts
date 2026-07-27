@@ -6,6 +6,7 @@
  * of the library's beat convention (four quarter-note beats per bar in 4/4).
  */
 
+import { InvalidInputError } from '../errors/index.js';
 import {
   assertFiniteNumber,
   assertInteger,
@@ -92,7 +93,7 @@ function isMultiple(value: number, unit: number): boolean {
 export function parseTimeSignature(text: string): TimeSignature {
   const match = /^\s*(\d+)\s*\/\s*(\d+)\s*$/.exec(text);
   if (!match) {
-    throw new Error(`Invalid time signature: ${text}`);
+    throw new InvalidInputError(`Invalid time signature: ${text}`);
   }
   const numerator = Number.parseInt(match[1] ?? '', 10);
   const denominator = Number.parseInt(match[2] ?? '', 10);
@@ -102,7 +103,7 @@ export function parseTimeSignature(text: string): TimeSignature {
     numerator <= 0 ||
     denominator <= 0
   ) {
-    throw new Error(`Invalid time signature: ${text}`);
+    throw new InvalidInputError(`Invalid time signature: ${text}`);
   }
   return { numerator, denominator };
 }

@@ -1,4 +1,5 @@
 import type { ChordTimeline } from '../../analyze/timeline/index.js';
+import { InvalidInputError } from '../../core/errors/index.js';
 import type { NoteEventIndex } from '../../core/event-index/index.js';
 import { createNoteEventIndex } from '../../core/event-index/index.js';
 import type { TimeSignature } from '../../core/meter/index.js';
@@ -417,13 +418,19 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
     timeline === undefined
       ? (opts.chordChangeBeats ?? [])
       : timeline.segments.flatMap((segment) => [segment.startBeat, segment.endBeat]);
-  const melody = createNoteEventIndex(opts.melody, { allowNonPositiveDuration: true });
+  const register = opts.register ?? 'below';
+  // The counter line writes against the voice on its own side of the texture,
+  // so a chord in the melody track resolves to that voice rather than to
+  // whichever note the caller happened to store last.
+  const melody = createNoteEventIndex(opts.melody, {
+    allowNonPositiveDuration: true,
+    tieBreak: register === 'below' ? 'highest' : 'lowest',
+  });
   if (melody.notes.every((indexed) => indexed.note.durationBeat <= 0)) {
     return [];
   }
   const ts = opts.ts ?? DEFAULT_TS;
   assertTimeSignature(ts);
-  const register = opts.register ?? 'below';
   const rhythm = opts.rhythm ?? 'complement';
   const profile = opts.profile ?? 'pop';
   const rng = createRng(opts.seed ?? 0);
@@ -439,7 +446,7 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
   assertInteger(low, 'countermelody pitchLow');
   assertInteger(high, 'countermelody pitchHigh');
   if (low > high) {
-    throw new RangeError(
+    throw new InvalidInputError(
       `countermelody pitchLow must not exceed pitchHigh; received ${low} > ${high}`,
     );
   }

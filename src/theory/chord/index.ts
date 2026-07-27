@@ -1,6 +1,7 @@
+import { InvalidInputError } from '../../core/errors/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import { assertFiniteNumber } from '../../core/validation/index.js';
+import { assertFiniteNumber, assertInteger } from '../../core/validation/index.js';
 import { scaleTonesInDegreeOrder } from '../scale/index.js';
 
 /**
@@ -186,6 +187,10 @@ export function chordQualities(): ChordQuality[] {
  * @category Chords
  */
 export function chordFromDegree(degree: number, ext: ChordQuality, key: KeyScale): Chord {
+  assertInteger(degree, 'chord degree', -1000, 1000);
+  if (!Object.hasOwn(QUALITY_INTERVALS, ext)) {
+    throw new InvalidInputError(`Unknown chord quality: ${String(ext)}`);
+  }
   const tones = scaleTonesInDegreeOrder(key);
   const length = tones.length;
   const index = length > 0 ? ((degree % length) + length) % length : 0;
@@ -211,8 +216,15 @@ export function chordFromDegree(degree: number, ext: ChordQuality, key: KeyScale
  * @category Chords
  */
 export function makeChord(rootPc: number, quality: ChordQuality, bassPc?: number): Chord {
+  // A NaN root formats as 'C' and an unknown quality as 'Cundefined', so both
+  // travel on into voicing, detection, and serialization as a chord that looks
+  // real. They are rejected where the chord is built instead.
+  assertFiniteNumber(rootPc, 'chord rootPc');
+  if (bassPc !== undefined) {
+    assertFiniteNumber(bassPc, 'chord bassPc');
+  }
   if (!Object.hasOwn(QUALITY_INTERVALS, quality)) {
-    throw new Error(`Unknown chord quality: ${String(quality)}`);
+    throw new InvalidInputError(`Unknown chord quality: ${String(quality)}`);
   }
   const chord: Chord = {
     rootPc: pitchClass(rootPc),
@@ -264,21 +276,30 @@ export function transposeChord(chord: Chord, semitones: number): Chord {
 /**
  * Get the sorted, deduplicated pitch classes of a chord.
  *
+ * A slash bass is one of them: `F/G` sounds a G, the voicers put it in the
+ * bass, and a set that omitted it would not re-detect as the chord it came
+ * from. Pass `includeBass: false` to enumerate the interval template alone.
+ *
  * @param chord The chord to enumerate.
+ * @param opts Set `includeBass: false` to omit a slash bass.
  * @returns The chord's pitch classes, sorted ascending in [0, 11].
  *
  * @example
  * ```ts
  * import { makeChord, chordPitchClasses } from '@libraz/libcantus';
  * chordPitchClasses(makeChord(0, 'maj7')); // [0, 4, 7, 11]
+ * chordPitchClasses(makeChord(5, 'maj', 7)); // [0, 5, 7, 9] — F/G, G included
  * ```
  *
  * @category Chords
  */
-export function chordPitchClasses(chord: Chord): number[] {
+export function chordPitchClasses(chord: Chord, opts: { includeBass?: boolean } = {}): number[] {
   const set = new Set<number>();
   for (const interval of chord.intervals) {
     set.add(pitchClass(chord.rootPc + interval));
+  }
+  if (opts.includeBass !== false && chord.bassPc !== undefined) {
+    set.add(pitchClass(chord.bassPc));
   }
   return [...set].sort((a, b) => a - b);
 }
@@ -392,7 +413,7 @@ function stackThirds(degree: number, key: KeyScale, size: 3 | 4): Chord {
   const tones = scaleTonesInDegreeOrder(key);
   const length = tones.length;
   if (length !== 7) {
-    throw new Error(
+    throw new InvalidInputError(
       `diatonic chord stacking requires a heptatonic scale (received ${length} tones)`,
     );
   }

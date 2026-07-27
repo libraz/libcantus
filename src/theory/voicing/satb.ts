@@ -1,3 +1,4 @@
+import { InvalidInputError, NoSolutionError } from '../../core/errors/index.js';
 import type { KeyScale } from '../../core/types.js';
 import {
   assertFiniteNumber,
@@ -5,6 +6,7 @@ import {
   assertPositiveInt,
 } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
+import { formatChordSymbol } from '../symbol/index.js';
 import {
   DEFAULT_MAX_SPACING,
   enumerateVoicings,
@@ -92,14 +94,14 @@ const DERIVED_SPAN = 19;
 export function resolveRanges(opts?: VoicingOptions): VoiceRange[] {
   if (opts?.ranges !== undefined) {
     if (opts.ranges.length === 0) {
-      throw new Error('ranges must contain at least one voice range');
+      throw new InvalidInputError('ranges must contain at least one voice range');
     }
     assertGenerationBudget(opts.ranges.length, 'voice ranges', 128);
     return opts.ranges.map((range, index) => {
       assertFiniteNumber(range.min, `ranges[${index}].min`);
       assertFiniteNumber(range.max, `ranges[${index}].max`);
       if (range.min > range.max) {
-        throw new RangeError(`ranges[${index}].min must not exceed max`);
+        throw new InvalidInputError(`ranges[${index}].min must not exceed max`);
       }
       assertGenerationBudget(
         Math.floor(range.max) - Math.ceil(range.min) + 1,
@@ -136,7 +138,7 @@ export function resolveMaxSpacing(opts?: VoicingOptions): number {
   const maxSpacing = opts?.maxSpacing ?? DEFAULT_MAX_SPACING;
   assertFiniteNumber(maxSpacing, 'maxSpacing');
   if (maxSpacing < 0) {
-    throw new RangeError('maxSpacing must be non-negative');
+    throw new InvalidInputError('maxSpacing must be non-negative');
   }
   return maxSpacing;
 }
@@ -185,7 +187,9 @@ export function voiceChord(chord: Chord, opts?: VoicingOptions): number[] {
     }
   }
   if (best === undefined) {
-    throw new Error('no voicing satisfies the given ranges');
+    throw new NoSolutionError(
+      `no voicing satisfies the given ranges for ${formatChordSymbol(chord)}`,
+    );
   }
   return best;
 }
@@ -217,21 +221,49 @@ export function voiceChord(chord: Chord, opts?: VoicingOptions): number[] {
  * ```
  * @category Voicing & Counterpoint
  */
-export function voiceProgression(chords: Chord[], opts?: VoicingOptions): number[][] {
+/** The unsatisfiable-constraints error for one chord of a progression. */
+function noSolutionAt(index: number, chord: Chord): NoSolutionError {
+  return new NoSolutionError(
+    `no voicing satisfies the given ranges for ${formatChordSymbol(chord)} at index ${index}`,
+    { at: index },
+  );
+}
+
+/**
+ * Run one chord's work, re-raising an unsatisfiable-constraints failure with
+ * the chord it happened on. Voicing a whole lead sheet is otherwise told only
+ * that some chord did not fit.
+ */
+function locate<T>(index: number, chord: Chord, work: () => T): T {
+  try {
+    return work();
+  } catch (error) {
+    if (error instanceof NoSolutionError) {
+      throw noSolutionAt(index, chord);
+    }
+    throw error;
+  }
+}
+
+export function voiceProgression(chords: readonly Chord[], opts?: VoicingOptions): number[][] {
   assertGenerationBudget(chords.length, 'voiced progression chords', opts?.budget);
   const ranges = resolveRanges(opts);
   const maxSpacing = resolveMaxSpacing(opts);
   const result: number[][] = [];
   let prev: number[] | undefined;
   let prevChord: Chord | undefined;
-  for (const chord of chords) {
+  for (let index = 0; index < chords.length; index += 1) {
+    const chord = chords[index];
+    if (chord === undefined) {
+      continue;
+    }
     if (prev === undefined) {
-      prev = voiceChord(chord, opts);
+      prev = locate(index, chord, () => voiceChord(chord, opts));
       prevChord = chord;
       result.push(prev);
       continue;
     }
-    const candidates = enumerateVoicings(chord, ranges, maxSpacing);
+    const candidates = locate(index, chord, () => enumerateVoicings(chord, ranges, maxSpacing));
     let best: number[] | undefined;
     let bestScore = Number.POSITIVE_INFINITY;
     for (const candidate of candidates) {
@@ -250,7 +282,7 @@ export function voiceProgression(chords: Chord[], opts?: VoicingOptions): number
       }
     }
     if (best === undefined) {
-      throw new Error('no voicing satisfies the given ranges');
+      throw noSolutionAt(index, chord);
     }
     result.push(best);
     prev = best;

@@ -64,9 +64,18 @@ describe('chordScales', () => {
     expect(sus.indexOf('mixolydian')).toBeLessThan(sus.indexOf('aeolian'));
   });
 
+  it('names the melodic-minor mode of an altered dominant instead of falling back', () => {
+    // 7b13 = {0,4,7,8,10}, which is mixolydian b13 — the scale a player would
+    // name. A chromatic fallback here reads as an answer while being none.
+    expect(chordScales(makeChord(0, '7b13'))[0]?.name).toBe('mixolydianB13');
+    expect(chordScales(makeChord(0, '7#11'))[0]?.name).toBe('lydianDominant');
+    expect(chordScales(makeChord(0, '7alt')).map((m) => m.name)).toContain('altered');
+    expect(chordScales(makeChord(0, 'm7b5')).map((m) => m.name)).toContain('locrianNatural2');
+  });
+
   it('falls back to the chromatic scale when nothing else contains the chord', () => {
-    // 7b13 = {0,4,7,8,10}; no named heptatonic/symmetric scale is a superset.
-    const matches = chordScales(makeChord(0, '7b13'));
+    // augMaj7 = {0,4,8,11}; no named heptatonic/symmetric scale is a superset.
+    const matches = chordScales(makeChord(0, 'augMaj7'));
     expect(matches).toEqual([{ name: 'chromatic', rootPc: 0 }]);
   });
 
@@ -162,7 +171,7 @@ describe('chordScaleReport', () => {
   });
 
   it('reports the chromatic fallback for an unsupported chord', () => {
-    const report = chordScaleReport(makeChord(0, '7b13'));
+    const report = chordScaleReport(makeChord(0, 'augMaj7'));
     expect(report).toHaveLength(1);
     expect(report[0]?.name).toBe('chromatic');
   });
