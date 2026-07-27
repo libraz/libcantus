@@ -362,7 +362,10 @@ export function chordTimelineFromNotes(
   const budget = opts.budget;
   assertNoteEvents(notes, 'timeline notes', { allowNonPositiveDuration: true, budget });
   // Zero/negative-length notes never sound; drop them before any inference.
-  const soundingIndex = createNoteEventIndex(notes.filter((note) => note.durationBeat > 0));
+  const soundingIndex = createNoteEventIndex(
+    notes.filter((note) => note.durationBeat > 0),
+    { name: 'timeline notes', budget },
+  );
   const sounding = soundingIndex.notes.map(({ note }) => note);
   const lastNoteEnd = sounding.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
   const totalBeats = opts.totalBeats ?? lastNoteEnd;

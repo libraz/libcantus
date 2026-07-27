@@ -1,5 +1,4 @@
 import { InvalidInputError } from '../../core/errors/index.js';
-import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import {
   assertFiniteNumber,
@@ -7,7 +6,7 @@ import {
   assertInteger,
 } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
-import { chordPitchClasses } from '../chord/index.js';
+import { intervalAboveRoot, isChordMember } from '../chord/index.js';
 import {
   createsHiddenParallelPerfect,
   createsParallelPerfect,
@@ -131,14 +130,6 @@ function minimumSafetyForReasons(reasons: number, profile: SafetyProfile): NoteS
     }
   }
   return minimum;
-}
-
-function intervalAboveRoot(pitch: number, chord: Chord): number {
-  return (((pitchClass(pitch) - pitchClass(chord.rootPc)) % 12) + 12) % 12;
-}
-
-function isChordMember(pitch: number, chord: Chord): boolean {
-  return chordPitchClasses(chord).includes(pitchClass(pitch));
 }
 
 /** Whether the perfect fourth is an avoid note over this chord. */

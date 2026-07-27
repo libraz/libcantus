@@ -66,9 +66,15 @@ function upperBound(values: IndexedNoteEvent[], beat: number): number {
  */
 export function createNoteEventIndex(
   events: readonly NoteEvent[],
-  options: { allowNonPositiveDuration?: boolean; tieBreak?: OnsetTieBreak } = {},
+  options: {
+    allowNonPositiveDuration?: boolean;
+    tieBreak?: OnsetTieBreak;
+    budget?: number;
+    /** What the events are, for the validation error message. */
+    name?: string;
+  } = {},
 ): NoteEventIndex {
-  assertNoteEvents(events, 'note events', options);
+  assertNoteEvents(events, options.name ?? 'note events', options);
   const tieBreak = options.tieBreak ?? 'highest';
   const notes = events
     .map((note, originalIndex) => ({
@@ -77,12 +83,21 @@ export function createNoteEventIndex(
       endBeat: note.startBeat + note.durationBeat,
     }))
     .sort((a, b) => a.note.startBeat - b.note.startBeat || a.originalIndex - b.originalIndex);
-  const prefixMaxEnd: number[] = [];
-  let maxEnd = Number.NEGATIVE_INFINITY;
-  for (const indexed of notes) {
-    maxEnd = Math.max(maxEnd, indexed.endBeat);
-    prefixMaxEnd.push(maxEnd);
-  }
+  // Built on the first `at` call rather than up front: several callers use this
+  // only to validate and sort, and never ask what sounds at a beat.
+  let prefixMaxEnd: number[] | undefined;
+  const maxEndUpTo = (index: number): number => {
+    if (prefixMaxEnd === undefined) {
+      const prefix: number[] = [];
+      let maxEnd = Number.NEGATIVE_INFINITY;
+      for (const indexed of notes) {
+        maxEnd = Math.max(maxEnd, indexed.endBeat);
+        prefix.push(maxEnd);
+      }
+      prefixMaxEnd = prefix;
+    }
+    return prefixMaxEnd[index] ?? Number.NEGATIVE_INFINITY;
+  };
 
   return {
     notes,
@@ -90,7 +105,7 @@ export function createNoteEventIndex(
       let index = upperBound(notes, beat + EPS) - 1;
       let best: IndexedNoteEvent | undefined;
       while (index >= 0) {
-        if ((prefixMaxEnd[index] ?? Number.NEGATIVE_INFINITY) <= beat + EPS) {
+        if (maxEndUpTo(index) <= beat + EPS) {
           break;
         }
         const indexed = notes[index];

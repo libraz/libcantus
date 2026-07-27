@@ -319,6 +319,33 @@ export function chordPitchClasses(chord: Chord, opts: { includeBass?: boolean } 
   return [...set].sort((a, b) => a - b);
 }
 
+/**
+ * A pitch's interval class above the chord root, in [0, 11].
+ *
+ * The shared reading of "where does this pitch sit in the chord", used by the
+ * safety evaluator and the voice analyser alike so they cannot disagree.
+ *
+ * @param pitch MIDI pitch or bare pitch class.
+ * @param chord The chord providing the root reference.
+ * @returns The interval class above the root.
+ * @category Chords
+ */
+export function intervalAboveRoot(pitch: number, chord: Chord): number {
+  return (((pitchClass(pitch) - pitchClass(chord.rootPc)) % 12) + 12) % 12;
+}
+
+/**
+ * Whether a pitch is one of a chord's tones, ignoring octave.
+ *
+ * @param pitch MIDI pitch or bare pitch class.
+ * @param chord The chord, or null for no sounding harmony.
+ * @returns True when the pitch class belongs to the chord.
+ * @category Chords
+ */
+export function isChordMember(pitch: number, chord: Chord | null): boolean {
+  return chord === null ? false : chordPitchClasses(chord).includes(pitchClass(pitch));
+}
+
 /** The chord-tone offsets present in a chord, reduced to pitch-class space. */
 function chordToneOffsets(chord: Chord): Set<number> {
   return new Set(chord.intervals.map((i) => ((i % 12) + 12) % 12));

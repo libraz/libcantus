@@ -2,7 +2,7 @@ import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import { assertNoteEvents } from '../../core/validation/index.js';
 import type { Chord, ChordToneRole } from '../../theory/chord/index.js';
-import { chordPitchClasses, chordToneRole } from '../../theory/chord/index.js';
+import { chordToneRole, intervalAboveRoot, isChordMember } from '../../theory/chord/index.js';
 import {
   createsVerticalDissonance,
   isLeadingToneResolution,
@@ -95,10 +95,6 @@ export function toVoiceNotes(events: readonly NoteEvent[]): IdentifiedVoiceNote[
 /** Float tolerance for beat comparisons. */
 const EPS = 1e-9;
 
-function intervalAboveRoot(pitch: number, chord: Chord): number {
-  return (((pitchClass(pitch) - pitchClass(chord.rootPc)) % 12) + 12) % 12;
-}
-
 /**
  * Interval class of a pitch above the actual sounding bass.
  *
@@ -132,10 +128,6 @@ function tensionDegree(ic: number): 9 | 11 | 13 {
     return 11;
   }
   return 13;
-}
-
-function isChordMember(pitch: number, chord: Chord | null): boolean {
-  return chord ? chordPitchClasses(chord).includes(pitchClass(pitch)) : false;
 }
 
 function isStep(a: number, b: number): boolean {

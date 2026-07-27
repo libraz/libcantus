@@ -22,6 +22,8 @@ export {
   chordToneRole,
   diatonicSeventh,
   diatonicTriad,
+  intervalAboveRoot,
+  isChordMember,
   makeChord,
   transposeChord,
 } from './chord/index.js';

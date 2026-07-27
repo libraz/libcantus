@@ -124,6 +124,8 @@ const EXPECTED_EXPORTS = [
   'isBorrowedChord',
   'InvalidInputError',
   'NoSolutionError',
+  'intervalAboveRoot',
+  'isChordMember',
   'isCompound',
   'isConsonantInterval',
   'isLibcantusError',
