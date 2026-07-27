@@ -18,16 +18,9 @@ import { detectChord, detectChordBest, detectKeyFromNotes } from '../detect/inde
 import type { Cadence } from '../functional/index.js';
 import { detectCadence } from '../functional/index.js';
 
-/**
- * A chord occupying a half-open beat span.
- *
- * @category Arrangement & Analysis
- */
-export type ChordSegment = {
-  startBeat: number;
-  endBeat: number;
-  chord: Chord;
-};
+export type { ChordSegment } from '../../theory/chord/index.js';
+
+import type { ChordSegment } from '../../theory/chord/index.js';
 
 /**
  * A beat-indexed sequence of chord segments.

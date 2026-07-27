@@ -29,10 +29,57 @@ export type ProgFunction = 'loop' | 'tensionBuild' | 'cadenceStrong' | 'stable';
 export type ProgressionPreset = {
   id: string;
   name: string;
-  degrees: number[];
+  /**
+   * The chord roots, in order, as {@link ProgressionDegree} codes: 0..6 for the
+   * key's own scale degrees and {@link BORROWED_DEGREES} for the borrowed ones.
+   */
+  degrees: ProgressionDegree[];
   functional: ProgFunction;
   styles: ProgStyle[];
 };
+
+/**
+ * The borrowed (non-diatonic) chord roots a preset can name, as their semitone
+ * offset above the tonic.
+ *
+ * Scale degrees 0..6 address the key's own chords; these codes continue the
+ * numbering for the chromatic chords a pop progression borrows, so a preset is
+ * one flat list of degree codes.
+ *
+ * @example
+ * ```ts
+ * import { BORROWED_DEGREES, generateProgression, majorKey } from '@libraz/libcantus';
+ * generateProgression({
+ *   key: majorKey(0),
+ *   style: 'rock',
+ *   bars: 4,
+ *   preset: { degrees: [0, BORROWED_DEGREES.bVII, 3, 0] },
+ * });
+ * ```
+ * @category Composition
+ */
+export const BORROWED_DEGREES = {
+  /** Flat submediant: bVI. */
+  bVI: 8,
+  /** Flat subtonic: bVII. */
+  bVII: 10,
+  /** Flat mediant: bIII. */
+  bIII: 11,
+  /** Minor subdominant borrowed from the parallel minor: iv. */
+  iv: 12,
+  /** Neapolitan: bII. */
+  bII: 13,
+  /** Sharp subdominant, the diminished #IV. */
+  sharpIV: 14,
+} as const;
+
+/**
+ * A chord root in a preset: a scale degree 0..6, or one of
+ * {@link BORROWED_DEGREES}.
+ *
+ * @category Composition
+ */
+export type ProgressionDegree = number;
 
 /**
  * Options controlling {@link generateProgression}.
@@ -41,9 +88,19 @@ export type ProgressionPreset = {
  */
 export type ProgressionOptions = {
   key: KeyScale;
+  /**
+   * Which pool of built-in presets to choose from. Ignored when `preset` names
+   * the progression outright.
+   */
   style: ProgStyle;
   bars: number;
+  /** Pick a specific built-in preset by id instead of choosing one by style. */
   presetId?: string;
+  /**
+   * Use this progression rather than a built-in one. Only `degrees` is
+   * required; see {@link BORROWED_DEGREES} for the non-diatonic codes.
+   */
+  preset?: Partial<ProgressionPreset> & { degrees: ProgressionDegree[] };
   ext?: ChordQuality | 'auto';
   reharmonize?: boolean;
   /**
@@ -213,12 +270,12 @@ const PRESETS: ProgressionPreset[] = [
 
 /** Chromatic semitone offset from the tonic for borrowed (non-diatonic) degrees. */
 const BORROWED_OFFSET: Record<number, number> = {
-  8: 8, // bVI
-  10: 10, // bVII
-  11: 3, // bIII
-  12: 5, // iv
-  13: 1, // bII
-  14: 6, // #IV
+  [BORROWED_DEGREES.bVI]: 8,
+  [BORROWED_DEGREES.bVII]: 10,
+  [BORROWED_DEGREES.bIII]: 3,
+  [BORROWED_DEGREES.iv]: 5,
+  [BORROWED_DEGREES.bII]: 1,
+  [BORROWED_DEGREES.sharpIV]: 6,
 };
 
 /**
@@ -328,6 +385,37 @@ function sameStep(a: CycleStep, b: CycleStep): boolean {
 }
 
 /**
+ * The preset {@link generateProgression} would choose for a style and seed.
+ *
+ * The choice is otherwise invisible: the generator returns chords, not the
+ * preset it drew them from, so a caller who wants to show or reproduce it has
+ * no way to name it.
+ *
+ * @param style The style pool to choose from.
+ * @param seed The same seed the generator would be given.
+ * @returns The preset that seed selects.
+ * @throws If no preset claims the style.
+ * @example
+ * ```ts
+ * import { pickProgressionPreset } from '@libraz/libcantus';
+ * pickProgressionPreset('dance', 3).name;
+ * ```
+ * @category Composition
+ */
+export function pickProgressionPreset(style: ProgStyle, seed = 0): ProgressionPreset {
+  // A style no preset claims is a caller error, exactly as an unknown
+  // presetId is: falling back to the whole pool would answer a typo with a
+  // plausible but stylistically unrelated progression.
+  const pool = PRESETS.filter((preset) => preset.styles.includes(style));
+  if (pool.length === 0) {
+    throw new Error(`Unknown progression style: ${style}`);
+  }
+  const rng = createRng(seed);
+  const index = Math.floor(rng.next() * pool.length) % pool.length;
+  return pool[index] ?? (PRESETS[0] as ProgressionPreset);
+}
+
+/**
  * Generate a chord progression laid out one chord per bar.
  *
  * A preset is chosen by `presetId` when given, otherwise deterministically from
@@ -361,25 +449,25 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
   assertGenerationBudget(opts.bars, 'progression chords');
   const seed = opts.seed ?? 0;
   let preset: ProgressionPreset | undefined;
-  if (opts.presetId !== undefined) {
+  if (opts.preset !== undefined) {
+    if (opts.preset.degrees.length === 0) {
+      throw new RangeError('progression preset must name at least one degree');
+    }
+    preset = {
+      id: opts.preset.id ?? 'custom',
+      name: opts.preset.name ?? 'Custom',
+      degrees: opts.preset.degrees,
+      functional: opts.preset.functional ?? 'loop',
+      styles: opts.preset.styles ?? [opts.style],
+    };
+  }
+  if (preset === undefined && opts.presetId !== undefined) {
     preset = PRESETS.find((p) => p.id === opts.presetId);
     if (preset === undefined) {
       throw new Error(`Unknown progression preset: ${opts.presetId}`);
     }
   }
-  if (preset === undefined) {
-    // A style no preset claims is a caller error, exactly as an unknown
-    // presetId is: falling back to the whole pool would answer a typo with a
-    // plausible but stylistically unrelated progression.
-    const pool = PRESETS.filter((p) => p.styles.includes(opts.style));
-    if (pool.length === 0) {
-      throw new Error(`Unknown progression style: ${opts.style}`);
-    }
-    const candidates = pool;
-    const rng = createRng(seed);
-    const index = Math.floor(rng.next() * candidates.length) % candidates.length;
-    preset = candidates[index] ?? PRESETS[0];
-  }
+  preset ??= pickProgressionPreset(opts.style, seed);
   const cycle = resolveCycle(preset?.degrees ?? [0], opts.key, opts.ext);
   const chords: ChordSpan[] = [];
   for (let bar = 0; bar < opts.bars; bar += 1) {

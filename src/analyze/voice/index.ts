@@ -60,7 +60,29 @@ export type AnalyzedNote = {
  *
  * @category Arrangement & Analysis
  */
-export type VoiceNote = NoteEvent & { id: number; originalIndex?: number };
+export type VoiceNote = NoteEvent & { id?: number; originalIndex?: number };
+
+/**
+ * A voice note whose id has been assigned, as {@link toVoiceNotes} returns and
+ * {@link analyzeArrangement} works in.
+ *
+ * @category Arrangement & Analysis
+ */
+export type IdentifiedVoiceNote = VoiceNote & { id: number };
+
+/**
+ * Give plain note events the ids {@link analyzeVoice} reports back.
+ *
+ * The id is only an identity handle, so the array position serves; this exists
+ * so the mapping is a named call rather than a `map` every caller writes.
+ *
+ * @param events The note events, in time order.
+ * @returns The same notes as voice notes, each carrying its index as its id.
+ * @category Arrangement & Analysis
+ */
+export function toVoiceNotes(events: NoteEvent[]): IdentifiedVoiceNote[] {
+  return events.map((event, index) => ({ ...event, id: index, originalIndex: index }));
+}
 
 /** Float tolerance for beat comparisons. */
 const EPS = 1e-9;
@@ -156,21 +178,23 @@ function stepResolution(pitch: number, chord: Chord): number | undefined {
  * escape) — only harmonic ones. Callers with truly polyphonic material should
  * split it into monophonic sub-voices first, as `analyzeArrangement` does.
  *
- * @param voice The monophonic voice, in time order.
+ * @param voice The monophonic voice, in time order. A note without an `id` is
+ *   identified by its position, so plain note events can be passed straight in.
  * @param chordAtBeat Chord sounding at a given beat, or null.
  * @param key Key context for leading-tone detection.
- * @param otherVoicesAtBeat Other sounding voices at a given beat.
+ * @param otherVoicesAtBeat Other sounding voices at a given beat; defaults to
+ *   none, which is the whole story for a solo line.
  * @returns One annotation per input note.
  * @example
  * ```ts
  * import { analyzeVoice, makeChord, majorKey } from '@libraz/libcantus';
  * const voice = [
- *   { id: 0, pitch: 60, startBeat: 0, durationBeat: 1 },
- *   { id: 1, pitch: 62, startBeat: 1, durationBeat: 1 },
- *   { id: 2, pitch: 64, startBeat: 2, durationBeat: 1 },
+ *   { pitch: 60, startBeat: 0, durationBeat: 1 },
+ *   { pitch: 62, startBeat: 1, durationBeat: 1 },
+ *   { pitch: 64, startBeat: 2, durationBeat: 1 },
  * ];
  * const cMajor = makeChord(0, 'maj');
- * const labels = analyzeVoice(voice, () => cMajor, majorKey(0), () => []);
+ * const labels = analyzeVoice(voice, () => cMajor, majorKey(0));
  * labels; // one AnalyzedNote per input note, in the same order
  * ```
  * @category Arrangement & Analysis
@@ -179,7 +203,7 @@ export function analyzeVoice(
   voice: VoiceNote[],
   chordAtBeat: (beat: number) => Chord | null,
   key: KeyScale,
-  otherVoicesAtBeat: (beat: number) => VoiceSnapshot[],
+  otherVoicesAtBeat: (beat: number) => VoiceSnapshot[] = () => [],
 ): AnalyzedNote[] {
   assertNoteEvents(voice, 'voice notes', { allowNonPositiveDuration: true });
   const result: AnalyzedNote[] = [];
@@ -318,7 +342,7 @@ export function analyzeVoice(
     }
 
     const analyzed: AnalyzedNote = {
-      noteId: note.id,
+      noteId: note.id ?? i,
       pitch: note.pitch,
       startBeat: note.startBeat,
       durationBeat: note.durationBeat,

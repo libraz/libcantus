@@ -1,3 +1,4 @@
+import type { ChordTimeline } from '../../analyze/timeline/index.js';
 import type { NoteEventIndex } from '../../core/event-index/index.js';
 import { createNoteEventIndex } from '../../core/event-index/index.js';
 import type { TimeSignature } from '../../core/meter/index.js';
@@ -25,12 +26,27 @@ import { enumerateSafePitches, evaluateSafety, NoteSafety } from '../../theory/s
 export type CounterMelodyOptions = {
   /** The lead line to write against, in ascending onset order. */
   melody: NoteEvent[];
-  /** Chord sounding at an absolute beat position, or null when none applies. */
-  chordAt: (beat: number) => Chord | null;
   /**
-   * Exact chord-change beats exposed by the caller's timeline. The generator
-   * also probes its half-beat grid, but callback discontinuities between grid
-   * points are not introspectable and should be listed here.
+   * The harmony to write against. A timeline carries its own segment
+   * boundaries, so a chord change anywhere — including off the generator's
+   * half-beat probe grid — is seen; prefer it over `chordAt`.
+   *
+   * Exactly one of `timeline` and `chordAt` is required; `timeline` wins when
+   * both are given.
+   */
+  timeline?: ChordTimeline;
+  /**
+   * Chord sounding at an absolute beat position, or null when none applies.
+   *
+   * A callback is opaque: the generator cannot see where it changes, so it
+   * probes a half-beat grid and otherwise relies on `chordChangeBeats`. A held
+   * counter note that spans an unseen change is not checked against the new
+   * chord.
+   */
+  chordAt?: (beat: number) => Chord | null;
+  /**
+   * Exact chord-change beats the `chordAt` callback does not expose. Ignored
+   * when `timeline` is given, since a timeline lists its own boundaries.
    */
   chordChangeBeats?: number[];
   /** Key/scale context for scale-tone decisions. */
@@ -291,18 +307,18 @@ type BoundaryContext = {
  */
 function boundaryContexts(
   melody: NoteEventIndex,
-  opts: CounterMelodyOptions,
+  harmony: { chordAt: (beat: number) => Chord | null; chordChangeBeats: number[] },
   startBeat: number,
   endBeat: number,
   ts: TimeSignature,
 ): BoundaryContext[] {
-  const boundaries = heldNoteBoundaries(melody, startBeat, endBeat, opts.chordChangeBeats ?? []);
+  const boundaries = heldNoteBoundaries(melody, startBeat, endBeat, harmony.chordChangeBeats);
   return boundaries.map((boundary) => {
     const melodyVoice = melodySnapshotAt(melody, boundary);
     return {
       melodyVoice,
       otherVoices: melodyVoice === undefined ? [] : [melodyVoice],
-      chord: opts.chordAt(boundary),
+      chord: harmony.chordAt(boundary),
       strongBeat: isStrongBeat(boundary, ts),
       atCounterOnset: Math.abs(boundary - startBeat) < EPS,
     };
@@ -392,6 +408,15 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
   // Zero-length artefacts are accepted and ignored, matching the analysis
   // layer, so an array that passed through `analyzeArrangement` can be fed
   // straight in here.
+  const timeline = opts.timeline;
+  const chordAt = timeline === undefined ? opts.chordAt : (beat: number) => timeline.at(beat);
+  if (chordAt === undefined) {
+    throw new TypeError('countermelody needs a timeline or a chordAt callback');
+  }
+  const chordChangeBeats =
+    timeline === undefined
+      ? (opts.chordChangeBeats ?? [])
+      : timeline.segments.flatMap((segment) => [segment.startBeat, segment.endBeat]);
   const melody = createNoteEventIndex(opts.melody, { allowNonPositiveDuration: true });
   if (melody.notes.every((indexed) => indexed.note.durationBeat <= 0)) {
     return [];
@@ -419,10 +444,10 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
     );
   }
   assertGenerationBudget(high - low + 1, 'countermelody pitch candidates');
-  assertGenerationBudget(opts.chordChangeBeats?.length ?? 0, 'chord change beats');
-  for (let index = 0; index < (opts.chordChangeBeats?.length ?? 0); index += 1) {
+  assertGenerationBudget(chordChangeBeats.length, 'chord change beats');
+  for (let index = 0; index < chordChangeBeats.length; index += 1) {
     assertRange(
-      opts.chordChangeBeats?.[index] ?? Number.NaN,
+      chordChangeBeats[index] ?? Number.NaN,
       0,
       Number.MAX_SAFE_INTEGER,
       `chordChangeBeats[${index}]`,
@@ -441,7 +466,7 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
     onsets.length +
     Math.ceil((spanEnd - spanStart) / GRID_STEP) +
     melody.notes.length +
-    (opts.chordChangeBeats?.length ?? 0);
+    chordChangeBeats.length;
   assertGenerationBudget(boundaryEstimate * (high - low + 1), 'countermelody search');
   const jitter = Array.from({ length: high - low + 1 }, () => rng.next() * TIE_BREAK_JITTER);
 
@@ -458,8 +483,8 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
     const melPitch = melNote?.pitch;
     const melodyVoice = melodySnapshotAt(melody, beat);
     const melPrev = melodyVoice?.prevPitch;
-    const contexts = boundaryContexts(melody, opts, beat, endBeat, ts);
-    const chord = contexts[0]?.chord ?? opts.chordAt(beat);
+    const contexts = boundaryContexts(melody, { chordAt, chordChangeBeats }, beat, endBeat, ts);
+    const chord = contexts[0]?.chord ?? chordAt(beat);
     const otherVoices: VoiceSnapshot[] = melodyVoice !== undefined ? [melodyVoice] : [];
 
     const candidates = enumerateSafePitches(

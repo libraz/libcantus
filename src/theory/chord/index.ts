@@ -90,6 +90,21 @@ export type ChordSpan = {
   secondaryDominant?: boolean;
 };
 
+/**
+ * A chord occupying a half-open beat span `[startBeat, endBeat)`.
+ *
+ * The exchange record between anything that lays chords out in time — a
+ * timeline analysis, a bass-line plan, an accompaniment generator — so those
+ * surfaces share one definition instead of agreeing by coincidence.
+ *
+ * @category Composition
+ */
+export type ChordSegment = {
+  startBeat: number;
+  endBeat: number;
+  chord: Chord;
+};
+
 /** Semitone offsets from the root for each supported chord quality. */
 const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
   maj: [0, 4, 7],

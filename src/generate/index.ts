@@ -28,16 +28,18 @@ export type {
   DrumHit,
   DrumRole,
   DrumsOptions,
+  DrumVoice,
   EuclideanKick,
   GrooveFeel,
   GrooveStyle,
   Section,
 } from './drums/index.js';
-export { generateDrums } from './drums/index.js';
+export { DRUM_NOTES, drumVoiceOf, generateDrums } from './drums/index.js';
 export type { GrooveSlot, GrooveTemplate, HumanizeOptions } from './groove/index.js';
 export { applyGrooveTemplate, extractGrooveTemplate, humanize } from './groove/index.js';
 export type {
   HarmonizeOptions,
+  HarmonizePlacement,
   HarmonizeResult,
   MelodyNote,
 } from './harmonize/index.js';
@@ -49,15 +51,23 @@ export type {
   MotifOptions,
   MotifTransform,
 } from './motif/index.js';
-export { developMotif, generateMotif, transformMotif } from './motif/index.js';
+export {
+  developMotif,
+  generateMotif,
+  motifToNoteEvents,
+  transformMotif,
+} from './motif/index.js';
 export type {
   ProgFunction,
+  ProgressionDegree,
   ProgressionOptions,
   ProgressionPreset,
   ProgStyle,
 } from './progression/index.js';
 export {
+  BORROWED_DEGREES,
   generateProgression,
+  pickProgressionPreset,
   progressions,
   progressionsByStyle,
 } from './progression/index.js';
@@ -73,4 +83,9 @@ export {
   substituteChord,
 } from './reharmony/index.js';
 export type { RhythmEvent, RhythmOptions } from './rhythm/index.js';
-export { generateRhythm, onsetWeightCurve, rhythmDensity } from './rhythm/index.js';
+export {
+  generateRhythm,
+  onsetWeightCurve,
+  rhythmDensity,
+  rhythmToNoteEvents,
+} from './rhythm/index.js';

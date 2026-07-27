@@ -71,5 +71,10 @@ export {
   chordTimelineFromNotes,
   detectCadences,
 } from './timeline/index.js';
-export type { AnalyzedNote, TheoryLabel, VoiceNote } from './voice/index.js';
-export { analyzeVoice } from './voice/index.js';
+export type {
+  AnalyzedNote,
+  IdentifiedVoiceNote,
+  TheoryLabel,
+  VoiceNote,
+} from './voice/index.js';
+export { analyzeVoice, toVoiceNotes } from './voice/index.js';

@@ -10,6 +10,7 @@ export type { KeyScale } from '../core/types.js';
 export type {
   Chord as ChordData,
   ChordQuality,
+  ChordSegment,
   ChordSpan,
   PitchSpelling,
 } from './chord/index.js';

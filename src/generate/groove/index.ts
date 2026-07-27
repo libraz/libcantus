@@ -71,6 +71,11 @@ export type HumanizeOptions = {
 
 /** Default time signature for {@link humanize} when none is given. */
 const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
+/**
+ * Grid resolution assumed by {@link extractGrooveTemplate}. A sixteenth-note
+ * grid is where the deviations a template records are audible.
+ */
+const DEFAULT_GROOVE_SUBDIVISION = 4;
 const DEFAULT_TIMING = 0.02;
 const DEFAULT_VELOCITY_JITTER = 8;
 const DEFAULT_ACCENT = 12;
@@ -225,13 +230,15 @@ function quantizeToGrid(
  * @param events The (typically "groovy", human-played) events to analyze.
  * @param ts The time signature, used to compute the bar length.
  * @param subdivision Grid resolution: equal grid steps per quarter-note beat.
+ *   Defaults to a sixteenth-note grid, which is where the timing deviations a
+ *   template records — swing, push, drag — are audible.
  * @returns The extracted groove template.
  * @category Rhythm & Meter
  */
 export function extractGrooveTemplate(
   events: NoteEvent[],
   ts: TimeSignature,
-  subdivision: number,
+  subdivision = DEFAULT_GROOVE_SUBDIVISION,
 ): GrooveTemplate {
   assertTimeSignature(ts);
   assertNoteEvents(events, 'groove source events', { allowNonPositiveDuration: true });

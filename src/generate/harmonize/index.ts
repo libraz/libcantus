@@ -35,15 +35,50 @@ export type MelodyNote = NoteEvent;
  *
  * @category Reharmonization
  */
+export type HarmonizePlacement = {
+  /**
+   * Search a range of transpositions and keep the best-fitting one. The result
+   * reports the shift it chose in `transposeSemitones`.
+   *
+   * @defaultValue false
+   */
+  transposeSearch: boolean;
+  /**
+   * Search octave placements as well, so a melody written too high or too low
+   * is moved into a comfortable register.
+   *
+   * @defaultValue false
+   */
+  octaveSearch: boolean;
+};
+
+/**
+ * Options controlling {@link harmonizeMelody}.
+ *
+ * Only `melody` is required; every other knob has the default a first call
+ * wants.
+ *
+ * @category Reharmonization
+ */
 export type HarmonizeOptions = {
+  /** The melody to harmonize, in ascending onset order. */
   melody: MelodyNote[];
-  key: KeyScale | 'infer';
+  /**
+   * The key to harmonize in, or `'infer'` to estimate it from the melody's
+   * pitch-class weighting — which is what a caller who has only a melody
+   * wants, and so the default.
+   *
+   * @defaultValue `'infer'`
+   */
+  key?: KeyScale | 'infer';
   /**
    * Length of each chord slot in beats. Any positive value is honoured, as in
    * {@link chordTimelineFromNotes}; a value fine enough to make the search
    * explode is rejected by the generation budget rather than rounded up.
+   *
+   * @defaultValue 2
    */
-  harmonicRhythm: number;
+  harmonicRhythm?: number;
   /**
    * Time signature used to weight metric accents; defaults to 4/4. A waltz or
    * a jig harmonized against a 4/4 accent grid gets its chords placed on the
@@ -52,8 +87,21 @@ export type HarmonizeOptions = {
    * @defaultValue `4/4`
    */
   ts?: TimeSignature;
-  reharmonize: 'diatonic' | 'secondaryDominant' | 'borrowed';
-  placement: { transposeSearch: boolean; octaveSearch: boolean };
+  /**
+   * How far beyond the key's own triads the chord vocabulary reaches:
+   * `'diatonic'` uses only them, `'secondaryDominant'` adds the dominants that
+   * tonicize each degree, and `'borrowed'` adds the parallel mode's chords too.
+   *
+   * @defaultValue `'diatonic'`
+   */
+  reharmonize?: 'diatonic' | 'secondaryDominant' | 'borrowed';
+  /**
+   * Whether to search transpositions and octave placements for the melody.
+   * Both are off by default, so the melody is harmonized where it was written.
+   *
+   * @defaultValue both false
+   */
+  placement?: HarmonizePlacement;
   /**
    * Seed for the deterministic tie-break perturbation.
    *
@@ -98,6 +146,12 @@ const FALLBACK: Candidate = {
   base: 0,
   pcs: chordPitchClasses(makeChord(0, 'maj')),
 };
+
+/** Chord slot length assumed when the caller names none: one chord per half bar. */
+const DEFAULT_HARMONIC_RHYTHM = 2;
+
+/** Placement assumed when the caller names none: harmonize the melody as written. */
+const DEFAULT_PLACEMENT: HarmonizePlacement = { transposeSearch: false, octaveSearch: false };
 
 /** Default meter used to weight metric accents when none is supplied. */
 const DEFAULT_METER: TimeSignature = { numerator: 4, denominator: 4 };
@@ -375,21 +429,18 @@ function harmonizeOnce(
  * overrides melody fit or functional flow. For a well-determined melody the
  * result is identical across seeds; the same seed always yields the same result.
  *
- * @param opts Melody, key (or `'infer'`), harmonic rhythm, reharmonization
- *   strength, height-search flags, and seed.
+ * @param opts The melody and, optionally, the key, harmonic rhythm,
+ *   reharmonization strength, placement search, meter, and seed. Only `melody`
+ *   is required.
  * @returns The chosen transpose, key, chord path, and per-note roles.
  * @example
  * ```ts
- * import { harmonizeMelody, majorKey } from '@libraz/libcantus';
+ * import { harmonizeMelody } from '@libraz/libcantus';
  * const result = harmonizeMelody({
  *   melody: [
  *     { pitch: 60, startBeat: 0, durationBeat: 1 },
  *     { pitch: 64, startBeat: 1, durationBeat: 1 },
  *   ],
- *   key: majorKey(0),
- *   harmonicRhythm: 1,
- *   reharmonize: 'diatonic',
- *   placement: { transposeSearch: false, octaveSearch: false },
  * });
  * result.chords; // one ChordSpan per harmonic-rhythm segment
  * ```
@@ -399,14 +450,16 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   const noteIndex = createNoteEventIndex(opts.melody, { allowNonPositiveDuration: true });
   const ts = opts.ts ?? DEFAULT_METER;
   assertTimeSignature(ts);
-  const key = opts.key === 'infer' ? inferKey(opts.melody) : opts.key;
+  const requestedKey = opts.key ?? 'infer';
+  const key = requestedKey === 'infer' ? inferKey(opts.melody) : requestedKey;
+  const placement = opts.placement ?? DEFAULT_PLACEMENT;
   // Nothing to harmonize: inventing a tonic bar here would silently insert a
   // ghost chord into a chart built by harmonizing sections and concatenating
   // them. The sibling generators return an empty result for empty input too.
   if (noteIndex.notes.every((indexed) => indexed.note.durationBeat <= 0)) {
     return { transposeSemitones: 0, key, chords: [], melodyRoles: [] };
   }
-  const candidates = buildCandidates(key, opts.reharmonize);
+  const candidates = buildCandidates(key, opts.reharmonize ?? 'diatonic');
   const candAt = (i: number): Candidate => candidates[i] ?? FALLBACK;
   const rng = createRng(opts.seed ?? 0);
   const jitter = candidates.map(() => rng.next() * TIE_BREAK_JITTER);
@@ -417,7 +470,7 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   // analysis and generation sides. A value small enough to make the search
   // explode is caught by the budget assertions below, not rounded away.
   const hr = assertRange(
-    opts.harmonicRhythm,
+    opts.harmonicRhythm ?? DEFAULT_HARMONIC_RHYTHM,
     Number.MIN_VALUE,
     Number.MAX_SAFE_INTEGER,
     'harmonic rhythm',
@@ -447,14 +500,14 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   }
 
   const transposes: number[] = [0];
-  if (opts.placement.transposeSearch) {
+  if (placement.transposeSearch) {
     for (let s = -6; s <= 6; s += 1) {
       if (s !== 0) {
         transposes.push(s);
       }
     }
   }
-  if (opts.placement.octaveSearch) {
+  if (placement.octaveSearch) {
     for (const o of [-12, 12]) {
       if (!transposes.includes(o)) {
         transposes.push(o);

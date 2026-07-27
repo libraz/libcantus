@@ -22,19 +22,18 @@ import {
   assertRange,
   assertTimeSignature,
 } from '../../core/validation/index.js';
-import type { Chord } from '../../theory/chord/index.js';
+import type { Chord, ChordSegment } from '../../theory/chord/index.js';
 import { nearestScaleTone } from '../../theory/scale/index.js';
 
 /**
  * A chord sounding over a half-open beat span `[startBeat, endBeat)`.
  *
+ * The same record {@link ChordSegment} names, so a timeline segment can be fed
+ * straight to the bass generator.
+ *
  * @category Composition
  */
-export type BassSegment = {
-  startBeat: number;
-  endBeat: number;
-  chord: Chord;
-};
+export type BassSegment = ChordSegment;
 
 /**
  * The bass-line idiom to generate.

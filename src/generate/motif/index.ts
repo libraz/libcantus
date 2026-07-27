@@ -3,7 +3,7 @@ import type { TimeSignature } from '../../core/meter/index.js';
 import { beatsPerBar } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import { createRng } from '../../core/random/index.js';
-import type { KeyScale } from '../../core/types.js';
+import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
   assertFiniteNumber,
   assertGenerationBudget,
@@ -266,6 +266,26 @@ export function generateMotif(opts: MotifOptions): MotifCell {
     notes.push({ pitch, startBeat, durationBeat: beatsPerNote });
   }
   return { notes };
+}
+
+/**
+ * Turn a motif cell into note events.
+ *
+ * A {@link MotifNote} already carries the {@link NoteEvent} fields, but a cell
+ * wraps them in an object; this unwraps it, so a motif can be humanized,
+ * grooved, or written out like any other line.
+ *
+ * @param cell The motif to convert.
+ * @returns The cell's notes, copied, in the order they are stored.
+ * @example
+ * ```ts
+ * import { generateMotif, humanize, majorKey, motifToNoteEvents } from '@libraz/libcantus';
+ * humanize(motifToNoteEvents(generateMotif({ key: majorKey(0), bars: 2 })));
+ * ```
+ * @category Composition
+ */
+export function motifToNoteEvents(cell: MotifCell): NoteEvent[] {
+  return cell.notes.map((note) => ({ ...note }));
 }
 
 /**

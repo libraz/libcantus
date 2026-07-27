@@ -13,7 +13,9 @@
 
 import { beatsPerBar, metricWeight, type TimeSignature } from '../../core/meter/index.js';
 import { createRng } from '../../core/random/index.js';
+import type { NoteEvent } from '../../core/types.js';
 import {
+  assertFiniteNumber,
   assertGenerationBudget,
   assertPositiveInt,
   assertRange,
@@ -30,6 +32,44 @@ export type RhythmEvent = {
   /** Duration in quarter-note beats, extending to the next onset. */
   duration: number;
 };
+
+/** Velocity given to converted rhythm events when the caller names none. */
+const DEFAULT_RHYTHM_VELOCITY = 96;
+
+/**
+ * Turn rhythm events into note events at a fixed pitch.
+ *
+ * {@link RhythmEvent} names its fields `position`/`duration` because a rhythm
+ * has no pitch; every other generator in the library speaks {@link NoteEvent}.
+ * This is the bridge, so a generated rhythm can be humanized, grooved, or
+ * written out like any other line.
+ *
+ * @param events The rhythm events to convert.
+ * @param pitch The MIDI pitch to give every note.
+ * @param velocity Velocity for every note; defaults to a mezzo-forte 96.
+ * @returns The note events, in the order given.
+ * @example
+ * ```ts
+ * import { generateRhythm, humanize, rhythmToNoteEvents } from '@libraz/libcantus';
+ * const rhythm = generateRhythm({ numerator: 4, denominator: 4 }, { bars: 2 });
+ * humanize(rhythmToNoteEvents(rhythm, 38));
+ * ```
+ * @category Rhythm & Meter
+ */
+export function rhythmToNoteEvents(
+  events: RhythmEvent[],
+  pitch: number,
+  velocity: number = DEFAULT_RHYTHM_VELOCITY,
+): NoteEvent[] {
+  assertFiniteNumber(pitch, 'pitch');
+  assertRange(velocity, 0, 127, 'velocity');
+  return events.map((event) => ({
+    pitch,
+    startBeat: event.position,
+    durationBeat: event.duration,
+    velocity,
+  }));
+}
 
 /**
  * Options controlling {@link generateRhythm}.

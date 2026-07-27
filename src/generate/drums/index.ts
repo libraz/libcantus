@@ -55,7 +55,8 @@ import { createRng } from './rng.js';
  *
  * @category Composition
  */
-export type { DrumHit } from './hit.js';
+export type { DrumHit, DrumVoice } from './hit.js';
+export { DRUM_NOTES, drumVoiceOf } from './hit.js';
 
 /**
  * Groove feel (the swing/straight rhythmic character) for {@link generateDrums}.

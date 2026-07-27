@@ -279,7 +279,7 @@ report.conflicts; // [{ beat, trackName, pitch, safety, reasons, rationale }, ..
 
 // Generate the missing parts from the recovered timeline:
 generateBassLine({ segments: timeline.segments, key, style: 'walking', seed: 1 });
-generateCounterMelody({ melody: melodyNotes, chordAt: timeline.at, key, register: 'below' });
+generateCounterMelody({ melody: melodyNotes, timeline, key, register: 'below' });
 ```
 
 `harmonizeMelody` goes the other way — given a bare melody, it searches for the

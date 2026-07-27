@@ -5,7 +5,7 @@
  */
 
 import type { NoteEvent } from '../../core/types.js';
-import type { VoiceNote } from '../voice/index.js';
+import type { IdentifiedVoiceNote } from '../voice/index.js';
 import type { ArrangementTrack, TrackRole } from './tracks.js';
 
 /** Float tolerance for beat boundary comparisons. */
@@ -29,7 +29,7 @@ export type PreparedNote = {
 /** One monophonic sub-voice of a track: ordered notes plus sounding spans. */
 export type PreparedVoice = {
   /** The sub-voice's notes in time order, each with a stable id. */
-  voice: VoiceNote[];
+  voice: IdentifiedVoiceNote[];
   /** The same notes as sounding spans, each carrying its predecessor's pitch. */
   sounding: PreparedNote[];
   /**
@@ -103,8 +103,8 @@ export function poolNotes(tracks: ArrangementTrack[], only?: ReadonlySet<number>
  * The predecessor pitch this produces feeds leap and parallel detection, so a
  * mis-assigned lane invents voice-leading faults that are not in the music.
  */
-function splitIntoSubVoices(ordered: VoiceNote[]): VoiceNote[][] {
-  const lanes: VoiceNote[][] = [];
+function splitIntoSubVoices(ordered: IdentifiedVoiceNote[]): IdentifiedVoiceNote[][] {
+  const lanes: IdentifiedVoiceNote[][] = [];
   for (const note of ordered) {
     let best = -1;
     let bestDistance = Number.POSITIVE_INFINITY;
@@ -166,7 +166,7 @@ function lastStartingAtOrBefore(sounding: PreparedNote[], beat: number): number 
 export function prepareTracks(tracks: ArrangementTrack[]): PreparedTrack[] {
   let nextId = 0;
   return tracks.map((track, index) => {
-    const ordered: VoiceNote[] = track.notes
+    const ordered: IdentifiedVoiceNote[] = track.notes
       .map((note, originalIndex) => ({ note, originalIndex }))
       .filter(({ note }) => note.durationBeat > 0)
       .sort((a, b) => a.note.startBeat - b.note.startBeat || a.note.pitch - b.note.pitch)
