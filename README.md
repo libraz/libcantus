@@ -1,9 +1,16 @@
 # @libraz/libcantus
 
-Pure-TypeScript toolkit for working with music: name notes and chords, analyze
-harmony, recognize what you're hearing, voice and reharmonize progressions, and
-generate parts (bass, countermelody, drums, rhythm) — all with no runtime
-dependencies.
+Pure-TypeScript music theory engine. It takes MIDI note numbers and chord
+symbols and gives back harmonic meaning (Roman numerals, function, cadence,
+key), then generates new parts against that meaning. Built for the tools that
+sit next to a DAW: analyzers, generators, and composition assistants.
+
+It is a theory layer, not an I/O or audio layer. There is no MIDI file reader or
+writer, no audio analysis, and no playback — bring your own parser and hand it
+note events. No runtime dependencies. If you need that other layer as well,
+[libsonare](https://github.com/libraz/libsonare) covers audio analysis,
+mastering, synthesis, and SMF I/O, and its npm binding sits alongside this one;
+the two share no code and neither requires the other.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/libraz/libcantus/ci.yml?branch=main&label=CI)](https://github.com/libraz/libcantus/actions)
 [![npm](https://img.shields.io/npm/v/@libraz/libcantus)](https://www.npmjs.com/package/@libraz/libcantus)
@@ -21,7 +28,7 @@ dependencies.
   (`V7/V`), or lead-sheet symbols (`Cmaj7`, `F#m7b5`, `C/G`).
 - **Analyze harmony** — Roman-numeral analysis, harmonic function, cadence
   detection, and borrowed / modal-interchange chords.
-- **Recognize what you hear** — notes in, chord or key out (the inverse of the
+- **Recognize chords and keys** — notes in, chord or key out (the inverse of the
   builders).
 - **Reharmonize** — tritone subs, chromatic mediants, negative harmony, modal
   interchange palettes.
@@ -29,17 +36,18 @@ dependencies.
   rootless comping styles.
 - **Generate parts** — bass lines, countermelodies, drums, rhythms, motifs, and
   whole progressions; deterministic for a given seed.
-- **Arrange from a DAW / MIDI file** — feed raw multi-track notes, recover the
+- **Analyze a whole arrangement** — feed raw multi-track note events, recover the
   harmony, get a whole-piece analysis (with per-note conflicts), and generate the
   missing parts against it.
 - **Work with pitch as sound** — frequencies, cents, EDO, and just intonation.
 
-The musical **values** — notes, chords, keys, progressions — come in two
-interchangeable styles: a **fluent, immutable class API** (`Note`, `Chord`,
-`Key`, `Progression`) that reads like music theory, and the underlying
-**tree-shakeable pure functions**. Operations over **collections and timelines**
-(part generation and whole-arrangement analysis) work on arrays of note events,
-so — like `rhythm`, `drums`, and `detectKey` — they are exposed as functions.
+The theory itself lives in **tree-shakeable pure functions**. On top of them sits
+a **fluent, immutable class API** (`Note`, `Interval`, `Chord`, `Key`,
+`Progression`) that reads like music theory. Which one you get follows a single
+rule: the musical **values** — notes, chords, keys, progressions — have both
+forms and interoperate freely, while operations over **collections and
+timelines** (part generation, whole-arrangement analysis, key ranking) take
+arrays of note events and are exposed as functions only.
 
 ## Install
 
@@ -88,11 +96,11 @@ pure functions, so the two styles interoperate freely. The same task with the
 functional API:
 
 ```ts
-import { chordFromDegree, chordPitchClasses, classifyInterval, majorKey } from '@libraz/libcantus';
+import { chordFromDegree, chordPitchClasses, classifyInterval, ConsonanceClass, majorKey } from '@libraz/libcantus';
 
 const cMajor = majorKey(0);
 
-classifyInterval(7); // IntervalQuality.PerfectConsonance
+classifyInterval(7); // ConsonanceClass.PerfectConsonance
 chordPitchClasses(chordFromDegree(4, 'dom7', cMajor)); // [2, 5, 7, 11]  (G7)
 ```
 
@@ -160,7 +168,7 @@ Chord.of('F', 'min').analyze(Key.major('C'));
 // { function: 'subdominant', borrowed: true, source: 'parallelMinor', roman: 'iv' }
 ```
 
-## Recognize what you hear
+## Recognize chords and keys
 
 Notes in, chord or key out — the inverse of the builders:
 
@@ -256,10 +264,11 @@ motif.notes.length > 0; // true — a deterministic short melodic cell
 `humanize`, `extractGrooveTemplate`, and `applyGrooveTemplate` add a meter-aware
 feel — or capture the feel of one performance and transplant it onto another.
 
-## Arrange from a DAW or MIDI file
+## Analyze and extend an arrangement
 
-The arrangement layer takes raw multi-track `NoteEvent`s, recovers the harmony,
-then analyses and generates against it:
+The arrangement layer takes raw multi-track `NoteEvent`s — whatever your DAW or
+MIDI-file parser produced — recovers the harmony, then analyses and generates
+against it:
 
 ```ts
 import {

@@ -1,7 +1,7 @@
 {
   "name": "@libraz/libcantus",
   "version": "0.9.4",
-  "description": "Pure-TypeScript music-theory and composition primitives (intervals, scales, chords).",
+  "description": "Pure-TypeScript music theory engine: harmonic analysis, chord and scale vocabulary, voicing, reharmonization, and seeded part generation over MIDI note events.",
   "type": "module",
   "license": "Apache-2.0",
   "author": "libraz",
@@ -20,7 +20,13 @@
     "scales",
     "intervals",
     "harmony",
-    "composition"
+    "composition",
+    "midi",
+    "chord-detection",
+    "voicing",
+    "reharmonization",
+    "arrangement",
+    "generative-music"
   ],
   "engines": {
     "node": ">=22 <23"
@@ -114,6 +120,7 @@
   "files": [
     "dist",
     "README.md",
+    "README_ja.md",
     "LICENSE"
   ],
   "sideEffects": false,
