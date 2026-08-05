@@ -1,0 +1,4 @@
+# typescript: TypeScript 7 (native port) is not supported by typedoc yet
+# (its peer range tops out at 6.0.x).
+reject:
+  - typescript

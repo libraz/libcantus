@@ -1,6 +1,0 @@
-{
-  "reject": ["typescript"],
-  "rejectReason": {
-    "typescript": "TypeScript 7 (native port) is not supported by typedoc yet (peer range tops out at 6.0.x)."
-  }
-}
