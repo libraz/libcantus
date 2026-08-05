@@ -10,6 +10,7 @@
   "sort": ["source-order"],
   "categorizeByGroup": false,
   "categoryOrder": [
+    "Core",
     "Pitch & Intervals",
     "Scales",
     "Chords",
@@ -31,8 +32,19 @@
   "validation": {
     "notExported": false,
     "invalidLink": true,
-    "notDocumented": false
+    "notDocumented": true
   },
+  "requiredToBeDocumented": [
+    "Variable",
+    "Function",
+    "Class",
+    "Interface",
+    "TypeAlias",
+    "Enum",
+    "Method",
+    "Accessor"
+  ],
+  "treatValidationWarningsAsErrors": true,
   "navigationLinks": {
     "GitHub": "https://github.com/libraz/libcantus",
     "npm": "https://www.npmjs.com/package/@libraz/libcantus"
