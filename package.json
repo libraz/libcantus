@@ -1,6 +1,6 @@
 {
   "name": "@libraz/libcantus",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "description": "Pure-TypeScript music theory engine: harmonic analysis, chord and scale vocabulary, voicing, reharmonization, and seeded part generation over MIDI note events.",
   "type": "module",
   "license": "Apache-2.0",

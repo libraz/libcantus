@@ -5,6 +5,70 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.5] - 2026-08-05
+
+Additive across the public API — no export was removed and no signature was
+narrowed. Several entries change observable output, and arguments that used to
+travel into the pitch maths are now rejected where they are given; see
+**Changed** before upgrading.
+
+### Added
+
+- A spelled interval carries an optional `descending` flag, so `transposeNote`,
+  `transposeByInterval`, and the `Interval` class round-trip a descending span
+  back to the letters it came from.
+- Additive time signatures parse into their grouping, and a sub-pulse position
+  formats as `bar.pulse+fraction`.
+- Chord vocabulary: `minMaj9`, `minMaj11`, and `minMaj13`. The Roman-numeral
+  parser accepts figured-bass slashes.
+- Validation helpers `assertMidiPitch`, `clampToMidi`, `assertDegree`,
+  `assertFiniteSemitones`, and `soundingNotesOnly`, plus the `DetectedKeyMatch`
+  type.
+- `analyzeChord` takes `ChordToRomanOptions` and `detectKeyFromNotes` takes the
+  key-detection options, both as a trailing optional argument.
+- `README_ja.md`, a Japanese counterpart to the README, ships in the package.
+
+### Changed
+
+- A caller-supplied chord timeline reports 0 confidence instead of 1. It was
+  never measured against the notes it was handed, so reporting full confidence
+  turned a confidence gate into an unconditional pass.
+- A sub-pulse bar position no longer formats as a decimal, which read back as a
+  different position.
+- A MIDI pitch, a bounded degree, and a finite semitone offset are required at
+  the entry points that reach the pitch maths, so an out-of-range argument
+  throws where it was passed rather than propagating.
+- The note-event index freezes the notes it indexed, so later mutation of the
+  caller's array cannot desynchronise it.
+- The generation budget threads through key detection.
+- The README states the library's actual input and output, names the tools it is
+  built for, and draws the scope boundary: no MIDI file reader or writer, no
+  audio analysis, no playback. Two headings that implied otherwise were renamed.
+- The toolchain is pinned in `mise.toml` (Node 22.23.2, Yarn 4.18.0) rather than
+  a `volta` block, and Biome moves to 2.5.6.
+- The docs build fails on an undocumented export or an invalid link.
+
+### Fixed
+
+- `isLibcantusError` recognises a library error by its code rather than by
+  `instanceof`, so a failure that crossed a realm boundary still matches.
+- An unaltered `viio` in a minor key reads as the harmonic-minor leading tone on
+  both the parse and the render path.
+- Splitting sub-voices pairs simultaneous onsets with the free lanes in register
+  order, so a block chord no longer manufactures a voice crossing.
+- Spelling prefers the plainer enharmonic letter where a chromatic spelling would
+  need a double accidental, and the idiomatic chord scale ranks first.
+- A chord's explicit spelling hints move with its transposition, and `spell` and
+  `toJSON` derive from an explicit key instead of the carried one.
+
+### Performance
+
+- The note-event index answers from a segment tree over note ends, which one long
+  held note no longer defeats.
+- Arrangement analysis reuses one sounding-voice snapshot per beat, collapses a
+  tension sample to its distinct pitches, and runs the first safety pass without
+  the replacement-pitch search, so only a reported conflict pays for it.
+
 ## [0.9.4] - 2026-07-27
 
 A correctness and API pass across every layer. Most entries are bug fixes, but
@@ -266,6 +330,7 @@ Initial public release.
 - Fluent immutable class API (`Note`, `Chord`, `Key`, ...) layered over the tree-shakeable functional core.
 - Dual ESM/CJS builds with bundled type declarations.
 
+[0.9.5]: https://github.com/libraz/libcantus/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/libraz/libcantus/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/libraz/libcantus/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/libraz/libcantus/compare/v0.9.1...v0.9.2
