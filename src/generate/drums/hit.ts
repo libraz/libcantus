@@ -16,7 +16,7 @@ import { clampVel, GM } from './internal.js';
  * ```
  * @category Composition
  */
-export const DRUM_NOTES = {
+export const DRUM_NOTES = Object.freeze({
   kick: GM.BD,
   snare: GM.SD,
   sideStick: GM.SIDESTICK,
@@ -31,7 +31,7 @@ export const DRUM_NOTES = {
   midTom: GM.TOM_M,
   lowTom: GM.TOM_L,
   shaker: GM.SHAKER,
-} as const;
+} as const);
 
 /**
  * A percussion voice name, one key of {@link DRUM_NOTES}.

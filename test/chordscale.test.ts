@@ -73,6 +73,11 @@ describe('chordScales', () => {
     expect(chordScales(makeChord(0, 'm7b5')).map((m) => m.name)).toContain('locrianNatural2');
   });
 
+  it('prefers idiomatic whole-tone and locrian choices over a tighter generic fit', () => {
+    expect(chordScales(makeChord(0, 'aug'))[0]?.name).toBe('wholeTone');
+    expect(chordScales(makeChord(0, 'm7b5'))[0]?.name).toBe('locrian');
+  });
+
   it('falls back to the chromatic scale when nothing else contains the chord', () => {
     // augMaj7 = {0,4,8,11}; no named heptatonic/symmetric scale is a superset.
     const matches = chordScales(makeChord(0, 'augMaj7'));
@@ -121,6 +126,10 @@ describe('avoidNotes', () => {
     expect(avoidNotes(makeChord(0, 'dom7'), 'mixolydian')).toEqual([5]);
   });
 
+  it('flags a major third below the suspended fourth as an avoid note', () => {
+    expect(avoidNotes(makeChord(0, '7sus4'), 'mixolydian')).toContain(4);
+  });
+
   it('returns [] when the scale does not contain the chord', () => {
     expect(avoidNotes(makeChord(0, 'maj7'), 'mixolydian')).toEqual([]);
   });
@@ -150,6 +159,16 @@ describe('availableTensions', () => {
     expect(availableTensions(makeChord(0, 'dom7'), 'mixolydian')).toEqual([2, 9]);
   });
 
+  it('offers altered colors over a conventional dominant seventh', () => {
+    const chord = makeChord(7, 'dom7');
+    expect(chordScales(chord).map((match) => match.name)).toContain('altered');
+    expect(availableTensions(chord, 'altered')).toEqual([1, 3, 8, 10]);
+  });
+
+  it('does not offer a suspended chord its conflicting major third', () => {
+    expect(availableTensions(makeChord(0, '7sus4'), 'mixolydian')).not.toContain(4);
+  });
+
   it('returns [] when the scale does not contain the chord', () => {
     expect(availableTensions(makeChord(0, 'maj7'), 'mixolydian')).toEqual([]);
   });
@@ -168,6 +187,10 @@ describe('chordScaleReport', () => {
   it('honors the limit argument', () => {
     const report = chordScaleReport(makeChord(0, 'maj7'), 1);
     expect(report).toHaveLength(1);
+  });
+
+  it.each([0, -1, 1.5, Number.NaN])('rejects an invalid report limit (%s)', (limit) => {
+    expect(() => chordScaleReport(makeChord(0, 'maj7'), limit)).toThrow(RangeError);
   });
 
   it('reports the chromatic fallback for an unsupported chord', () => {

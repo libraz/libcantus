@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { detectKeyBest } from '../src/analyze/detect/index.js';
 import { generateProgression } from '../src/generate/progression/index.js';
 import { Chord, Interval, Key, Note, Progression } from '../src/model/index.js';
+import { transposeChordSymbol } from '../src/theory/symbol/index.js';
+import { voiceProgression } from '../src/theory/voicing/index.js';
 
 describe('Note', () => {
   it('parses, formats, and converts name -> pitch class -> MIDI', () => {
@@ -30,6 +32,11 @@ describe('Note', () => {
     expect(() => Note.fromData({ letter: 7, alter: 0, octave: 4 })).toThrow(RangeError);
     expect(() => new Note({ letter: -1, alter: 0 })).toThrow(/letter/);
     expect(() => new Note({ letter: 1.5, alter: 0 })).toThrow(/letter/);
+    expect(() => new Note({ letter: 0, alter: Number.NaN })).toThrow(RangeError);
+    expect(() => new Note({ letter: 0, alter: 7 })).toThrow(RangeError);
+    expect(() => new Note({ letter: 0, alter: 0, octave: Number.POSITIVE_INFINITY })).toThrow(
+      RangeError,
+    );
   });
 
   it('transposes up and down via MIDI when an octave is present', () => {
@@ -55,6 +62,18 @@ describe('Note', () => {
       semitones: 7,
     });
     expect(Note.of('C4').intervalTo(Note.of('E4')).name).toBe('M3');
+  });
+
+  it('carries a zero-semitone descending interval through the class API', () => {
+    const from = Note.of('Fb4');
+    const interval = from.intervalTo(Note.of('E4'));
+    expect(interval.toJSON()).toMatchObject({
+      number: 2,
+      quality: 'd',
+      semitones: 0,
+      descending: true,
+    });
+    expect(from.transposeBy(interval).name).toBe('E4');
   });
 
   it('compares by spelling', () => {
@@ -164,6 +183,36 @@ describe('recognition through the class API', () => {
     expect(detectKeyBest(cMajorScale)?.mode).toBe('major');
     expect(detectKeyBest([])).toBe(null);
   });
+
+  it('keeps key-detection scores and scale variants through the class API', () => {
+    const [best] = Key.detectMatches([57, 59, 60, 62, 64, 65, 68]); // A harmonic minor
+    expect(best).toMatchObject({ mode: 'minor', variant: 'harmonic', fit: 1 });
+    expect(best?.key.toString()).toBe('A harmonic minor');
+    expect(best?.key.variant).toBe('harmonic');
+  });
+});
+
+describe('class API parity with functional analysis helpers', () => {
+  it('passes applied-Roman options through chord and progression analysis', () => {
+    const key = Key.major('C');
+    const applied = Chord.parse('D7');
+    const progression = new Progression([applied, Chord.parse('G7'), Chord.parse('C')], key);
+
+    expect(applied.roman(key, { applied: true })).toBe('V7/V');
+    expect(progression.roman(undefined, { applied: true })).toEqual(['V7/V', 'V7', 'I']);
+    expect(progression.analyze(undefined, { applied: true }).chords[0]?.roman).toBe('V7/V');
+  });
+
+  it('chooses chord scales directly from a progression', () => {
+    const progression = new Progression([
+      Chord.parse('Cmaj7'),
+      Chord.parse('Dm7'),
+      Chord.parse('G7'),
+    ]);
+    const choices = progression.scales();
+    expect(choices).toHaveLength(progression.length);
+    expect(choices.map((choice) => choice.chord.rootPc)).toEqual([0, 2, 7]);
+  });
 });
 
 describe('transposing without a string round trip', () => {
@@ -173,6 +222,22 @@ describe('transposing without a string round trip', () => {
     // went through text would either throw or lose the added tone.
     const custom = Chord.from({ rootPc: 0, quality: 'maj', intervals: [0, 4, 7, 14] });
     expect(custom.transpose(3).pitchClasses()).toEqual([3, 5, 7, 10]);
+  });
+
+  it('preserves explicit flat spelling while transposing chord symbols', () => {
+    expect(Chord.parse('Bb7').transpose(0).symbol()).toBe('Bb7');
+    expect(Chord.parse('Bb7').transpose(3).symbol()).toBe('Db7');
+    expect(Chord.parse('Bb7').transpose(-2).symbol()).toBe('Ab7');
+  });
+
+  it('keeps model and function chord transposition on one spelling pipeline', () => {
+    for (const symbol of ['C', 'Bb7', 'F#m7b5', 'Eb/G']) {
+      for (const semitones of [-12, -5, 0, 3, 12]) {
+        expect(Chord.parse(symbol).transpose(semitones).symbol(), `${symbol}/${semitones}`).toBe(
+          transposeChordSymbol(symbol, semitones),
+        );
+      }
+    }
   });
 
   it('carries the key, so the degree survives the transposition', () => {
@@ -187,6 +252,8 @@ describe('transposing without a string round trip', () => {
     expect(Key.major('C').transpose(2).toString()).toBe('D major');
     expect(Key.minor('A').transpose(3).toString()).toBe('C minor');
     expect(Key.major('C').transpose(2).scale.modeMask12).toBe(Key.major('C').scale.modeMask12);
+    expect(Key.major('C#').transpose(0).toString()).toBe('C# major');
+    expect(Key.major('F#').transpose(0).toString()).toBe('F# major');
   });
 
   it('moves every chord of a progression at once', () => {
@@ -197,6 +264,28 @@ describe('transposing without a string round trip', () => {
     const moved = progression.transpose(5);
     expect(`${moved}`).toBe('F Dm Bb C');
     expect(moved.key?.toString()).toBe('F major');
+  });
+
+  it('passes its carried key to voiceProgression', () => {
+    const key = Key.major('C');
+    const progression = new Progression([key.chord(4), key.chord(0)], key);
+    expect(progression.voice()).toEqual(
+      voiceProgression(
+        progression.chords.map((chord) => chord.data),
+        { key: key.scale },
+      ),
+    );
+  });
+
+  it('preserves spelling across class identity transpositions', () => {
+    for (const semitones of [-12, 0, 12]) {
+      expect(Note.of('C#').transpose(semitones).name).toBe('C#');
+      expect(Key.major('C#').transpose(semitones).toString()).toBe('C# major');
+      expect(Chord.parse('Bb7').transpose(semitones).symbol()).toBe('Bb7');
+      expect(`${new Progression([Chord.parse('Bb7')], Key.major('Db')).transpose(semitones)}`).toBe(
+        'Bb7',
+      );
+    }
   });
 });
 
@@ -215,6 +304,25 @@ describe('Interval as a usable value', () => {
     // measurement could produce, and reading it back gives a different name.
     expect(() => Interval.of(5, 'P', 8)).toThrow(RangeError);
     expect(Interval.of(5, 'P', -7).semitones).toBe(-7);
+  });
+
+  it('builds and double-inverts every valid simple diminished or augmented interval', () => {
+    const intervals: Interval[] = [];
+    for (let numberValue = 1; numberValue <= 8; numberValue += 1) {
+      for (const quality of ['P', 'M', 'm', 'A', 'AA', 'd', 'dd'] as const) {
+        try {
+          intervals.push(Interval.parse(`${quality}${numberValue}`));
+        } catch {
+          // A quality can be invalid for a degree (for example M5); those are
+          // rejected by the parser and are not interval values to invert.
+        }
+      }
+    }
+    for (const parsed of intervals) {
+      const built = Interval.of(parsed.number, parsed.quality, parsed.semitones);
+      expect(built.invert().invert().equals(built), parsed.name).toBe(true);
+    }
+    expect(Interval.parse('AA7').invert().name).toBe('dd2');
   });
 
   it('inverts to the complement that completes the octave', () => {
@@ -332,6 +440,11 @@ describe('Key', () => {
     expect(key.tonic.name).toBe('G');
   });
 
+  it('rejects an invalid mode mask instead of constructing a tonic-less key', () => {
+    expect(() => Key.of({ rootPc: 0, modeMask12: 0 })).toThrow(/modeMask12/);
+    expect(() => Key.of({ rootPc: 0, modeMask12: 0b10 })).toThrow(/include the tonic/);
+  });
+
   it('tests scale membership for numbers and notes', () => {
     const cMajor = Key.major('C');
     expect(cMajor.contains(7)).toBe(true);
@@ -348,6 +461,17 @@ describe('Key', () => {
     expect(cMajor.diatonicTriad(5).quality).toBe('min');
     expect(cMajor.diatonicSeventh(1).quality).toBe('min7');
   });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, 1.5])(
+    'validates every degree-chord overload for degree %s',
+    (degree) => {
+      const key = Key.major('C');
+      expect(() => key.chord(degree)).toThrow(RangeError);
+      expect(() => key.chord(degree, 'maj7')).toThrow(RangeError);
+      expect(() => key.diatonicTriad(degree)).toThrow(RangeError);
+      expect(() => key.diatonicSeventh(degree)).toThrow(RangeError);
+    },
+  );
 
   it('keeps the key spelling on degree and Roman-numeral chords', () => {
     expect(Key.major('Eb').chord(0).symbol()).toBe('Eb');
@@ -592,19 +716,48 @@ describe('Progression', () => {
         rootPc: 0,
         quality: 'maj',
         intervals: [0, 4, 7],
-        rootSpelling: { letter: 0, alter: 0 },
       },
       {
         rootPc: 7,
         quality: 'dom7',
         intervals: [0, 4, 7, 10],
-        rootSpelling: { letter: 4, alter: 0 },
       },
     ]);
     expect(json.key?.tonic).toEqual({ letter: 0, alter: 0 });
     // A keyless progression serializes its chords with an undefined key.
     const keyless = new Progression([Chord.of(0, 'maj')]);
     expect(keyless.toJSON().key).toBeUndefined();
+  });
+
+  it('attaches the progression key consistently across every construction path', () => {
+    const key = Key.major('Eb');
+    const bare = Chord.of(8, 'maj');
+    const fromConstructor = new Progression([bare], key);
+    const fromWithKey = new Progression([bare]).withKey(key);
+    const fromSpans = Progression.fromSpans([{ startBeat: 0, rootPc: 8, quality: 'maj' }], key);
+    const fromTranspose = new Progression([Chord.of(6, 'maj')], Key.major('Db')).transpose(2);
+
+    for (const progression of [fromConstructor, fromWithKey, fromSpans, fromTranspose]) {
+      expect(progression.chords[0]?.key?.equals(progression.key as Key)).toBe(true);
+      expect(progression.chords[0]?.symbol()).toBe('Ab');
+      expect(progression.chords[0]?.spell().map((note) => note.name)).toEqual(['Ab', 'C', 'Eb']);
+    }
+  });
+
+  it('uses an explicit spelling key and preserves only caller spelling hints through JSON', () => {
+    const chord = Chord.of(6, 'dim7').withKey(Key.major('Db'));
+    expect(chord.spell(Key.major('D')).map((note) => note.name)).toEqual(['F#', 'A', 'C', 'Eb']);
+
+    const restored = Chord.fromJSON(
+      JSON.parse(JSON.stringify(Chord.of(6, 'maj').withKey(Key.major('G')))),
+    );
+    expect(restored.withKey(Key.major('Db')).symbol()).toBe('Gb');
+    expect(
+      restored
+        .withKey(Key.major('Db'))
+        .spell()
+        .map((note) => note.name),
+    ).toEqual(['Gb', 'Bb', 'Db']);
   });
 });
 

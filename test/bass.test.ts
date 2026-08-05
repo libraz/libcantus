@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { beatsPerBar, pulseBeats, type TimeSignature } from '../src/core/meter/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import {
   type BassLineOptions,
@@ -35,6 +36,18 @@ function segmentAt(segments: BassSegment[], startBeat: number): BassSegment | un
 }
 
 describe('generateBassLine', () => {
+  it('rejects overlapping chord segments instead of silently dropping one', () => {
+    expect(() =>
+      generateBassLine({
+        segments: [
+          { startBeat: 0, endBeat: 4, chord: makeChord(0, 'maj') },
+          { startBeat: 0, endBeat: 4, chord: makeChord(7, 'maj') },
+        ],
+        key: cMajor,
+      }),
+    ).toThrow(/must not overlap/);
+  });
+
   it('places every note in the bass register', () => {
     for (const style of ALL_STYLES) {
       const notes = generateBassLine({ segments: progression(), key: cMajor, style, seed: 3 });
@@ -236,5 +249,26 @@ describe('generateBassLine', () => {
 
   it('returns an empty line for no segments', () => {
     expect(generateBassLine({ segments: [], key: cMajor })).toEqual([]);
+  });
+
+  it.each([
+    { numerator: 6, denominator: 8 },
+    { numerator: 12, denominator: 8 },
+    { numerator: 5, denominator: 4 },
+  ] as const)('aligns every pulse-driven style to the global meter grid (%o)', (ts) => {
+    const meter: TimeSignature = ts;
+    const bar = beatsPerBar(meter);
+    const pulse = pulseBeats(meter);
+    const segments: BassSegment[] = [{ startBeat: 0, endBeat: bar, chord: makeChord(0, 'maj') }];
+    for (const style of ['pop', 'walking', 'arpeggio'] as const) {
+      const notes = generateBassLine({ segments, key: cMajor, style, ts: meter, seed: 1 });
+      for (const note of notes) {
+        const positionInPulse = note.startBeat / pulse;
+        expect(
+          Math.abs(positionInPulse - Math.round(positionInPulse)),
+          `${style}@${note.startBeat}`,
+        ).toBeLessThan(1e-9);
+      }
+    }
   });
 });

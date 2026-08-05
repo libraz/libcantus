@@ -33,9 +33,22 @@ describe('chordToRoman in a minor key', () => {
     }
   });
 
-  it('spells the raised leading-tone chord as sharp-vii, not a flat tonic', () => {
-    expect(chordToRoman(makeChord(8, 'dim'), aMinor)).toBe('#viio');
-    expect(chordToRoman(makeChord(8, 'dim7'), aMinor)).toBe('#viio7');
+  it('reads and writes an unaltered diminished seventh-degree numeral as the raised leading tone', () => {
+    expect(romanToChord('viio', aMinor)).toMatchObject({ rootPc: 8, quality: 'dim' });
+    expect(romanToChord('viio7', aMinor)).toMatchObject({ rootPc: 8, quality: 'dim7' });
+    expect(chordToRoman(makeChord(8, 'dim'), aMinor)).toBe('viio');
+    expect(chordToRoman(makeChord(8, 'dim7'), aMinor)).toBe('viio7');
+  });
+
+  it('round-trips the harmonic-minor leading-tone cadence in every minor key', () => {
+    for (let tonic = 0; tonic < 12; tonic += 1) {
+      const key = minorKey(tonic);
+      for (const roman of ['i', 'iv', 'V', 'viio7', 'i']) {
+        expect(chordToRoman(romanToChord(roman, key), key), `${roman} in minor key ${tonic}`).toBe(
+          roman,
+        );
+      }
+    }
   });
 
   it('spells a flat-two chromatic root as bII', () => {

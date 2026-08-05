@@ -1,10 +1,10 @@
-import type { DetectKeyOptions } from '../analyze/detect/index.js';
+import type { DetectKeyOptions, KeyMatch, KeyVariant } from '../analyze/detect/index.js';
 import { detectKey, detectKeyBest } from '../analyze/detect/index.js';
 import { isMinorKey, romanToChord } from '../analyze/functional/index.js';
 import { InvalidInputError } from '../core/errors/index.js';
 import type { Note as NoteData } from '../core/pitch/index.js';
 import type { KeyScale } from '../core/types.js';
-import { assertFiniteNumber } from '../core/validation/index.js';
+import { assertFiniteNumber, assertInteger } from '../core/validation/index.js';
 import {
   type ChordQuality,
   chordFromDegree,
@@ -15,6 +15,7 @@ import {
   isScaleTone,
   majorKey,
   minorKey,
+  type ScaleNameInput,
   scaleByName,
   scaleTonesInDegreeOrder,
 } from '../theory/scale/index.js';
@@ -22,6 +23,9 @@ import { spellScale } from '../theory/spelling/index.js';
 import { Chord } from './chord.js';
 import { Note } from './note.js';
 import { mod12, spellPitchClassBare } from './shared.js';
+
+/** A detected key paired with the score and scale form that produced it. */
+export type DetectedKeyMatch = Omit<KeyMatch, 'key'> & { key: Key };
 
 /** Total accidentals a spelled tonic produces across a key's whole scale. */
 function accidentalLoad(tonic: NoteData, scale: KeyScale): number {
@@ -59,14 +63,21 @@ function bestTonicForScale(rootPc: number, scale: KeyScale): Note {
 export class Key {
   readonly #scale: KeyScale;
   readonly #tonic: Note;
+  readonly #variant: KeyVariant | undefined;
 
   /**
    * Wrap a key/scale and its spelled tonic.
    *
    * @param scale The key/scale; its root is normalized to a pitch class.
    * @param tonic The spelled tonic anchoring letter-name spelling.
+   * @param variant Optional detected scale form retained for display.
    */
-  constructor(scale: KeyScale, tonic: Note) {
+  constructor(scale: KeyScale, tonic: Note, variant?: KeyVariant) {
+    assertInteger(scale.rootPc, 'scale.rootPc');
+    assertInteger(scale.modeMask12, 'scale.modeMask12', 1, 0b111111111111);
+    if ((scale.modeMask12 & 1) === 0) {
+      throw new InvalidInputError('scale.modeMask12 must include the tonic (bit 0)');
+    }
     const rootPc = mod12(scale.rootPc);
     if (tonic.pitchClass !== rootPc) {
       throw new InvalidInputError(
@@ -76,6 +87,17 @@ export class Key {
     }
     this.#scale = { rootPc, modeMask12: scale.modeMask12 };
     this.#tonic = tonic;
+    this.#variant = variant;
+  }
+
+  /** Preserve detection metadata while replacing its plain key with this API's Key. */
+  static #fromMatch(match: KeyMatch): DetectedKeyMatch {
+    const key = new Key(
+      match.key,
+      bestTonicForScale(mod12(match.key.rootPc), match.key),
+      match.variant,
+    );
+    return { ...match, key };
   }
 
   /**
@@ -122,7 +144,7 @@ export class Key {
    * @returns The key.
    * @throws If the name is not a known scale.
    */
-  static named(name: string, root: string | number): Key {
+  static named(name: ScaleNameInput, root: string | number): Key {
     if (typeof root === 'string') {
       const tonic = Note.of(root);
       return new Key(scaleByName(name, tonic.pitchClass), tonic);
@@ -169,7 +191,18 @@ export class Key {
    * @returns Ranked keys (may be empty).
    */
   static detect(pitches: readonly number[], opts?: DetectKeyOptions): Key[] {
-    return detectKey(pitches, opts).map((match) => Key.of(match.key));
+    return Key.detectMatches(pitches, opts).map((match) => match.key);
+  }
+
+  /**
+   * Identify keys while retaining each candidate's score, fit, and scale form.
+   *
+   * @param pitches MIDI pitches or bare pitch classes.
+   * @param opts How to weigh the input; see {@link DetectKeyOptions}.
+   * @returns Ranked key matches (may be empty).
+   */
+  static detectMatches(pitches: readonly number[], opts?: DetectKeyOptions): DetectedKeyMatch[] {
+    return detectKey(pitches, opts).map((match) => Key.#fromMatch(match));
   }
 
   /**
@@ -186,7 +219,7 @@ export class Key {
    */
   static detectBest(pitches: readonly number[], opts?: DetectKeyOptions): Key | null {
     const best = detectKeyBest(pitches, opts);
-    return best === null ? null : Key.of(best.key);
+    return best === null ? null : Key.#fromMatch(best).key;
   }
 
   /**
@@ -223,6 +256,11 @@ export class Key {
     return isMinorKey(this.#scale);
   }
 
+  /** The detected scale form, when this key came from key detection. */
+  get variant(): KeyVariant | undefined {
+    return this.#variant;
+  }
+
   /**
    * The scale's pitch classes in ascending scale-degree order (degree 0 first).
    *
@@ -250,7 +288,11 @@ export class Key {
   transpose(semitones: number): Key {
     assertFiniteNumber(semitones, 'semitones');
     const rootPc = mod12(this.#scale.rootPc + Math.round(semitones));
-    return Key.of({ rootPc, modeMask12: this.#scale.modeMask12 });
+    return new Key(
+      { rootPc, modeMask12: this.#scale.modeMask12 },
+      this.#tonic.transpose(semitones),
+      this.#variant,
+    );
   }
 
   /**
@@ -365,12 +407,14 @@ export class Key {
 
   /**
    * The key's tonic and mode, so a template literal or a log line reads as the
-   * key. Only the major/minor distinction is named, since a mask does not carry
-   * a scale name.
+   * key. Detected harmonic and melodic minor keys retain their scale form.
    *
    * @returns The name, e.g. `'C major'` or `'A minor'`.
    */
   toString(): string {
+    if (this.#variant === 'harmonic' || this.#variant === 'melodic') {
+      return `${this.#tonic.name} ${this.#variant} minor`;
+    }
     return `${this.#tonic.name} ${this.isMinor ? 'minor' : 'major'}`;
   }
 }

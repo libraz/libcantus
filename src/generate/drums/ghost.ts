@@ -1,6 +1,5 @@
 import type { BackingDensity, SectionType } from './internal.js';
 import { MoodCategory, sectionIndex } from './internal.js';
-import type { DrumRng } from './rng.js';
 
 /** Ghost-note position within a beat: the "e" (1st 16th) or "a" (3rd 16th). */
 export type GhostPosition = 'e' | 'a';
@@ -104,12 +103,9 @@ export function getGhostProbabilityAtPosition(beat: number, sixteenthInBeat: num
 }
 
 /** Choose which ghost positions a groove favours. */
-export function selectGhostPositions(mood: MoodCategory, rng: DrumRng): GhostPosition[] {
+export function selectGhostPositions(mood: MoodCategory): GhostPosition[] {
   if (mood === MoodCategory.Energetic) {
     return ['e', 'a'];
-  }
-  if (mood === MoodCategory.Calm) {
-    return rng.prob(0.5) ? ['e'] : [];
   }
   return ['e'];
 }

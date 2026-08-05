@@ -55,8 +55,11 @@ const EXPECTED_EXPORTS = [
   'analyzeVoice',
   'applyGrooveTemplate',
   'assertFiniteNumber',
+  'assertFiniteSemitones',
+  'assertDegree',
   'assertGenerationBudget',
   'assertInteger',
+  'assertMidiPitch',
   'assertNoteEvent',
   'assertNoteEvents',
   'assertOneOf',
@@ -84,6 +87,7 @@ const EXPECTED_EXPORTS = [
   'chordToRoman',
   'chordToneRole',
   'classifyInterval',
+  'clampToMidi',
   'createNoteEventIndex',
   'createRng',
   'createsHiddenParallelPerfect',
@@ -102,6 +106,7 @@ const EXPECTED_EXPORTS = [
   'detectKeyBest',
   'detectKeyFromNotes',
   'dropSilentNotes',
+  'soundingNotesOnly',
   'developMotif',
   'diatonicPitchClasses',
   'diatonicSeventh',
@@ -225,5 +230,33 @@ describe('public API surface', () => {
     const fromLayers = new Set(Object.values(LAYERS).flatMap((layer) => Object.keys(layer)));
     expect([...Object.keys(api)].filter((name) => !fromLayers.has(name))).toEqual([]);
     expect([...fromLayers].filter((name) => !(name in api)).sort()).toEqual([]);
+  });
+
+  it('keeps the model API aligned with its functional counterparts', () => {
+    const key = model.Key.major('C');
+    const chord = key.roman('V7/V');
+    const progression = new model.Progression([chord, key.roman('V7'), key.roman('I')], key);
+    const romanOpts = { applied: true };
+
+    expect(chord.roman(undefined, romanOpts)).toBe(
+      api.chordToRoman(chord.data, key.scale, romanOpts),
+    );
+    expect(progression.analyze(undefined, romanOpts).chords).toEqual(
+      progression.chords.map((item) => api.analyzeChord(item.data, key.scale, romanOpts)),
+    );
+    expect(progression.scales()).toEqual(
+      api.scalesForChanges(progression.chords.map((item) => item.data)),
+    );
+
+    const pitches = [57, 59, 60, 62, 64, 65, 68];
+    expect(model.Key.detectMatches(pitches)).toEqual(
+      api.detectKey(pitches).map((match) => ({
+        ...match,
+        key: expect.objectContaining({
+          scale: match.key,
+          variant: match.variant,
+        }),
+      })),
+    );
   });
 });

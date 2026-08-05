@@ -14,22 +14,24 @@ import {
   noteToPitchClass,
   parseNote,
   pitchClassOf as pitchClass,
+  transposeNote,
 } from '../../core/pitch/index.js';
-import { assertFiniteNumber } from '../../core/validation/index.js';
+import { assertFiniteNumber, assertFiniteSemitones } from '../../core/validation/index.js';
 import { type Chord, type ChordQuality, makeChord, type PitchSpelling } from '../chord/index.js';
 
 /**
  * Matches a chord root: a letter A-G (case-insensitive, like {@link parseNote})
  * with an optional single-direction accidental.
  */
-const ROOT_RE = /^[A-Ga-g](?:#{1,2}|b{1,2})?/;
+const ROOT_RE = /^[A-Ga-g](?:#{1,2}|b{1,2}|x)?/;
 
 /** Matches a bare note usable as a slash-chord bass (no octave). */
-const BASS_RE = /^[A-Ga-g](?:#{1,2}|b{1,2})?$/;
+const BASS_RE = /^[A-Ga-g](?:#{1,2}|b{1,2}|x)?$/;
 
 /** Recognized quality suffixes, keyed by their exact lead-sheet spelling. */
 const QUALITY_MAP: Record<string, ChordQuality> = {
   '': 'maj',
+  maj: 'maj',
   m: 'min',
   min: 'min',
   '-': 'min',
@@ -54,6 +56,15 @@ const QUALITY_MAP: Record<string, ChordQuality> = {
   mMaj7: 'minMaj7',
   mM7: 'minMaj7',
   minMaj7: 'minMaj7',
+  mMaj9: 'minMaj9',
+  mM9: 'minMaj9',
+  minMaj9: 'minMaj9',
+  mMaj11: 'minMaj11',
+  mM11: 'minMaj11',
+  minMaj11: 'minMaj11',
+  mMaj13: 'minMaj13',
+  mM13: 'minMaj13',
+  minMaj13: 'minMaj13',
   aug7: 'aug7',
   '+7': 'aug7',
   '7#5': 'aug7',
@@ -129,6 +140,9 @@ const CANONICAL_SUFFIX: Record<ChordQuality, string> = {
   dim7: 'dim7',
   m7b5: 'm7b5',
   minMaj7: 'mMaj7',
+  minMaj9: 'mMaj9',
+  minMaj11: 'mMaj11',
+  minMaj13: 'mMaj13',
   aug7: 'aug7',
   augMaj7: 'augMaj7',
   majb5: 'maj(b5)',
@@ -212,7 +226,12 @@ function makeSpelledChord(root: Note, quality: ChordQuality, bass?: Note): Chord
  * @category Chords
  */
 export function parseChordSymbol(text: string): Chord {
-  const trimmed = text.trim();
+  const trimmed = text
+    .trim()
+    .replaceAll('♯', '#')
+    .replaceAll('♭', 'b')
+    .replaceAll('𝄪', 'x')
+    .replaceAll('𝄫', 'bb');
   const rootMatch = ROOT_RE.exec(trimmed);
   if (!rootMatch) {
     throw new InvalidInputError(`Invalid chord symbol: ${text}`);
@@ -329,10 +348,19 @@ export function transposeChordSymbol(
   semitones: number,
   opts?: { flats?: boolean },
 ): string {
+  assertFiniteSemitones(semitones);
   const chord = parseChordSymbol(text);
   const transposed: Chord = { ...chord, rootPc: pitchClass(chord.rootPc + semitones) };
+  if (chord.rootSpelling !== undefined) {
+    const hint = transposeNote(chord.rootSpelling, semitones);
+    transposed.rootSpelling = { letter: hint.letter, alter: hint.alter };
+  }
   if (chord.bassPc !== undefined) {
     transposed.bassPc = pitchClass(chord.bassPc + semitones);
+  }
+  if (chord.bassSpelling !== undefined) {
+    const hint = transposeNote(chord.bassSpelling, semitones);
+    transposed.bassSpelling = { letter: hint.letter, alter: hint.alter };
   }
   return formatChordSymbol(transposed, opts);
 }

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { detectChord, detectChordBest, detectKey } from '../src/analyze/detect/index.js';
+import {
+  detectChord,
+  detectChordBest,
+  detectKey,
+  detectKeyFromNotes,
+} from '../src/analyze/detect/index.js';
 import { chordQualities, makeChord } from '../src/theory/chord/index.js';
 import { isScaleTone, majorKey } from '../src/theory/scale/index.js';
 
@@ -116,6 +121,13 @@ describe('detectKey', () => {
     expect(best?.fit).toBe(1);
   });
 
+  it('excludes zero-weight pitches from fit as well as score', () => {
+    const clean = detectKey([0, 4, 7], { weights: [1, 1, 1] });
+    const withMutedNoise = detectKey([0, 4, 7, 1], { weights: [1, 1, 1, 0] });
+    expect(withMutedNoise[0]?.fit).toBe(clean[0]?.fit);
+    expect(withMutedNoise[0]?.score).toBe(clean[0]?.score);
+  });
+
   it('detects A minor for a minor cadence containing the leading tone', () => {
     // Am - E7 - Am (A C E / E G# B D / A C E): the leading tone G# must count
     // toward A minor via its harmonic-minor variant instead of handing the win
@@ -176,5 +188,31 @@ describe('detectKey', () => {
 
   it('returns nothing for an empty input', () => {
     expect(detectKey([])).toEqual([]);
+  });
+
+  it('rejects pitches outside the MIDI domain instead of folding them modulo 12', () => {
+    expect(() => detectKey([128])).toThrow(RangeError);
+    expect(() => detectKeyFromNotes([{ pitch: 200, startBeat: 0, durationBeat: 4 }])).toThrow(
+      RangeError,
+    );
+  });
+
+  it('validates every NoteEvent field before duration weighting', () => {
+    expect(() => detectKeyFromNotes([{ pitch: 60, startBeat: -1, durationBeat: 4 }])).toThrow(
+      RangeError,
+    );
+    // Import artefacts that never sound stay accepted just like the other
+    // event-consuming analysis entry points.
+    expect(detectKeyFromNotes([{ pitch: 60, startBeat: 0, durationBeat: 0 }])).toEqual([]);
+  });
+
+  it('uses the caller budget at both pitch and NoteEvent key-detection entrances', () => {
+    const notes = [
+      { pitch: 60, startBeat: 0, durationBeat: 1 },
+      { pitch: 64, startBeat: 1, durationBeat: 1 },
+    ];
+    expect(() => detectKey([60, 64], { budget: 1 })).toThrow(/key detection pitches/);
+    expect(() => detectKeyFromNotes(notes, { budget: 1 })).toThrow(/key detection notes count/);
+    expect(detectKeyFromNotes(notes, { budget: 2 })).toHaveLength(24);
   });
 });

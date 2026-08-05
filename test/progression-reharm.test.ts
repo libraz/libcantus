@@ -76,6 +76,20 @@ describe('generateProgression reharmonize', () => {
     }
   });
 
+  it('retains at least one tonic statement when reharmonizing', () => {
+    const chords = generateProgression({
+      presetId: 'fourChordPop',
+      key: cMajor,
+      style: 'idol',
+      bars: 8,
+      reharmonize: true,
+      seed: 4,
+    });
+    expect(chords.some((chord) => chord.rootPc === 0 && chord.secondaryDominant !== true)).toBe(
+      true,
+    );
+  });
+
   it('leaves the progression unchanged without reharmonize', () => {
     const plain = generateProgression({
       presetId: 'fourChordPop',

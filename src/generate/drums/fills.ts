@@ -28,7 +28,7 @@ export function getFillStartBeat(energy: SectionEnergy): number {
       return 2;
     case 'high':
     case 'peak':
-      return 0;
+      return 2;
   }
 }
 

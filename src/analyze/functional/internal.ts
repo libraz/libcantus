@@ -74,3 +74,9 @@ export function romanReference(key: KeyScale): KeyScale {
 export function isNeapolitan(chord: Chord, key: KeyScale): boolean {
   return mod12(chord.rootPc - key.rootPc) === 1 && chord.quality === 'maj';
 }
+
+/** Whether a chord has the sonority that can tonicize another scale degree. */
+export function isAppliedDominantSonority(chord: Chord): boolean {
+  const has = (semitones: number): boolean => chord.intervals.some((i) => mod12(i) === semitones);
+  return chord.quality === 'maj' || (has(4) && has(10));
+}

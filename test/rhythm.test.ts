@@ -83,6 +83,28 @@ describe('generateRhythm downbeats', () => {
       expect(events.map((e) => e.position)).toEqual([0, barBeats, 2 * barBeats, 3 * barBeats]);
     }
   });
+
+  it.each([
+    [{ numerator: 7, denominator: 8 }, 3],
+    [{ numerator: 7, denominator: 8 }, 4],
+    [{ numerator: 5, denominator: 8 }, 3],
+    [{ numerator: 5, denominator: 8 }, 4],
+    [{ numerator: 9, denominator: 8 }, 3],
+    [{ numerator: 9, denominator: 8 }, 4],
+  ] as const)(
+    'keeps the downbeat of every irregular bar (%o, subdivision %i)',
+    (ts, subdivision) => {
+      const bars = 4;
+      const positions = new Set(
+        generateRhythm(ts, { seed: 1, bars, subdivision, density: 1 }).map(
+          (event) => event.position,
+        ),
+      );
+      for (let bar = 0; bar < bars; bar += 1) {
+        expect(positions.has(bar * beatsPerBar(ts))).toBe(true);
+      }
+    },
+  );
 });
 
 describe('generateRhythm density clamping', () => {

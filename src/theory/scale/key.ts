@@ -1,3 +1,4 @@
+import { pitchClassOf } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { ScaleNameInput } from './masks.js';
 import { MAJOR_MASK, NATURAL_MINOR_MASK, requireScaleMask } from './masks.js';
@@ -14,7 +15,7 @@ import { MAJOR_MASK, NATURAL_MINOR_MASK, requireScaleMask } from './masks.js';
  * @category Scales
  */
 export function majorKey(rootPc: number): KeyScale {
-  return { rootPc: ((rootPc % 12) + 12) % 12, modeMask12: MAJOR_MASK };
+  return { rootPc: pitchClassOf(rootPc), modeMask12: MAJOR_MASK };
 }
 
 /**
@@ -29,7 +30,7 @@ export function majorKey(rootPc: number): KeyScale {
  * @category Scales
  */
 export function minorKey(rootPc: number): KeyScale {
-  return { rootPc: ((rootPc % 12) + 12) % 12, modeMask12: NATURAL_MINOR_MASK };
+  return { rootPc: pitchClassOf(rootPc), modeMask12: NATURAL_MINOR_MASK };
 }
 
 /**
@@ -49,5 +50,5 @@ export function minorKey(rootPc: number): KeyScale {
  * @category Scales
  */
 export function scaleByName(name: ScaleNameInput, rootPc: number): KeyScale {
-  return { rootPc: ((rootPc % 12) + 12) % 12, modeMask12: requireScaleMask(name) };
+  return { rootPc: pitchClassOf(rootPc), modeMask12: requireScaleMask(name) };
 }

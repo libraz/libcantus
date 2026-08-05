@@ -18,6 +18,11 @@ function pc(pitch: number): number {
 }
 
 describe('voiceChord', () => {
+  it('lets callers raise the candidate cap for a large voicing search', () => {
+    const compact = voiceChord(makeChord(0, '13'), { voices: 6, maxCandidates: 10_000 });
+    expect(compact).toEqual([48, 52, 57, 62, 67, 70]);
+  });
+
   it('voices a triad within the SATB ranges with all chord tones present', () => {
     const chord = makeChord(0, 'maj');
     const voicing = voiceChord(chord);
@@ -126,6 +131,17 @@ describe('voiceChord register balance', () => {
 });
 
 describe('voiceProgression', () => {
+  it('keeps adjacent voices distinct in every realized chord', () => {
+    const voicings = voiceProgression([makeChord(7, 'dom7'), makeChord(0, 'maj')], {
+      key: majorKey(0),
+    });
+    for (const voicing of voicings) {
+      for (let index = 1; index < voicing.length; index += 1) {
+        expect(voicing[index]).toBeGreaterThan(voicing[index - 1] ?? Number.POSITIVE_INFINITY);
+      }
+    }
+  });
+
   const progression = [
     makeChord(0, 'maj'), // C
     makeChord(5, 'maj'), // F
@@ -289,6 +305,14 @@ describe('voiceChordStyled', () => {
 });
 
 describe('nextVoicing', () => {
+  it('can thin a larger current voicing to the requested voice count', () => {
+    const next = nextVoicing([60, 64, 67, 72], makeChord(7, 'maj'), { voices: 3 });
+    expect(next).toHaveLength(3);
+    expect(next.every((pitch, index) => index === 0 || pitch >= (next[index - 1] ?? pitch))).toBe(
+      true,
+    );
+  });
+
   const current = voiceChord(makeChord(0, 'maj')); // C major, SATB
 
   it('returns a same-length ascending voicing with low voice-leading cost', () => {
@@ -317,6 +341,17 @@ describe('nextVoicing', () => {
   it('is deterministic', () => {
     const chord = makeChord(5, 'maj');
     expect(nextVoicing(current, chord)).toEqual(nextVoicing(current, chord));
+  });
+
+  it('uses the same tendency-tone score as progression voicing', () => {
+    const chords = [makeChord(7, 'dom7'), makeChord(0, 'maj')];
+    const opts = {
+      key: majorKey(0),
+      ranges: SATB_RANGES.map((range) => ({ ...range })),
+      previousChord: chords[0],
+    };
+    const [previous, expected] = voiceProgression(chords, opts);
+    expect(nextVoicing(previous ?? [], chords[1] ?? makeChord(0, 'maj'), opts)).toEqual(expected);
   });
 
   it('throws when no voicing fits the given ranges', () => {

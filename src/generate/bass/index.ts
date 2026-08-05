@@ -13,7 +13,12 @@
  */
 
 import { InvalidInputError } from '../../core/errors/index.js';
-import { isStrongBeat, type TimeSignature } from '../../core/meter/index.js';
+import {
+  beatsPerBar,
+  isStrongBeat,
+  pulseBeats,
+  type TimeSignature,
+} from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import { createRng } from '../../core/random/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
@@ -23,6 +28,7 @@ import {
   assertOneOf,
   assertRange,
   assertTimeSignature,
+  clampToMidi,
 } from '../../core/validation/index.js';
 import type { Chord, ChordSegment } from '../../theory/chord/index.js';
 import { nearestScaleTone } from '../../theory/scale/index.js';
@@ -42,7 +48,13 @@ export type BassSegment = ChordSegment;
  *
  * @category Composition
  */
-export const BASS_STYLES = ['root', 'rootFifth', 'pop', 'walking', 'arpeggio'] as const;
+export const BASS_STYLES = Object.freeze([
+  'root',
+  'rootFifth',
+  'pop',
+  'walking',
+  'arpeggio',
+] as const);
 
 /**
  * The bass-line idiom to generate.
@@ -157,12 +169,28 @@ function bassPcOf(chord: Chord): number {
   return pitchClass(chord.bassPc ?? chord.rootPc);
 }
 
-/** Integer quarter-note beat positions within `[start, end)`, at least one. */
-function beatPositions(start: number, end: number): number[] {
+/** Main-pulse positions within `[start, end)`, aligned to the global bar grid. */
+function beatPositions(start: number, end: number, ts: TimeSignature): number[] {
   const positions: number[] = [];
-  for (let p = start; p < end - EPS; p += 1) {
-    positions.push(p);
+  const barBeats = beatsPerBar(ts);
+  const pulse = pulseBeats(ts);
+  const firstBar = Math.floor(start / barBeats);
+  const lastBar = Math.floor((end - EPS) / barBeats);
+  for (let bar = firstBar; bar <= lastBar; bar += 1) {
+    const barStart = bar * barBeats;
+    const firstPulse = Math.max(0, Math.ceil((start - barStart - EPS) / pulse));
+    for (let index = firstPulse; ; index += 1) {
+      const position = barStart + index * pulse;
+      if (position >= barStart + barBeats - EPS || position >= end - EPS) {
+        break;
+      }
+      if (position >= start - EPS) {
+        positions.push(position);
+      }
+    }
   }
+  // A segment shorter than a pulse still needs a bass note. Its boundary is
+  // necessarily the harmonic placement rather than an invented local grid.
   if (positions.length === 0) {
     positions.push(start);
   }
@@ -183,7 +211,10 @@ type BuildContext = {
 
 /** Append a note for pitch class `pc` at `pos`, placed near the running anchor. */
 function emit(ctx: BuildContext, pos: number, pc: number, midiOverride?: number): number {
-  const midi = midiOverride ?? placePc(pc, ctx.prevMidi, ctx.low);
+  const midi = clampToMidi(
+    midiOverride ?? placePc(pc, ctx.prevMidi, ctx.low),
+    'generated bass pitch',
+  );
   const velocity = isStrongBeat(pos, ctx.ts) ? STRONG_VELOCITY : WEAK_VELOCITY;
   ctx.notes.push({ startBeat: pos, pitch: midi, velocity });
   return midi;
@@ -205,7 +236,7 @@ function buildRootFifth(ctx: BuildContext, seg: BassSegment): void {
 
 /** Root on every strong beat, with occasional octave/fifth pickups on weak beats. */
 function buildPop(ctx: BuildContext, seg: BassSegment): void {
-  const positions = beatPositions(seg.startBeat, seg.endBeat);
+  const positions = beatPositions(seg.startBeat, seg.endBeat, ctx.ts);
   const rootPc = bassPcOf(seg.chord);
   let emitted = false;
   for (const pos of positions) {
@@ -235,7 +266,7 @@ function buildPop(ctx: BuildContext, seg: BassSegment): void {
 /** Cycle root -> third -> fifth (-> seventh) across the segment's beats. */
 function buildArpeggio(ctx: BuildContext, seg: BassSegment): void {
   const tones = chordTonePcs(seg.chord);
-  const positions = beatPositions(seg.startBeat, seg.endBeat);
+  const positions = beatPositions(seg.startBeat, seg.endBeat, ctx.ts);
   positions.forEach((pos, i) => {
     const pc = tones[i % tones.length] ?? bassPcOf(seg.chord);
     ctx.prevMidi = emit(ctx, pos, pc);
@@ -276,7 +307,7 @@ function foldIntoBand(midi: number, low: number): number {
 /** A quarter-note line of chord tones that leads by step into each chord change. */
 function buildWalking(ctx: BuildContext, seg: BassSegment, next: BassSegment | undefined): void {
   const tones = chordTonePcs(seg.chord);
-  const positions = beatPositions(seg.startBeat, seg.endBeat);
+  const positions = beatPositions(seg.startBeat, seg.endBeat, ctx.ts);
   const count = positions.length;
   positions.forEach((pos, i) => {
     if (i === 0) {
@@ -329,6 +360,15 @@ export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
     }
   }
   const segments = [...opts.segments].sort((a, b) => a.startBeat - b.startBeat);
+  for (let index = 1; index < segments.length; index += 1) {
+    const previous = segments[index - 1];
+    const current = segments[index];
+    if (previous !== undefined && current !== undefined && current.startBeat < previous.endBeat) {
+      throw new InvalidInputError(
+        `bass segments must not overlap: segments ${index - 1} and ${index} overlap`,
+      );
+    }
+  }
   if (segments.length === 0) {
     return [];
   }
@@ -337,7 +377,9 @@ export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
   assertTimeSignature(ts);
   const style = assertOneOf(opts.style ?? DEFAULT_STYLE, BASS_STYLES, 'bass style');
   const octave = opts.octave ?? DEFAULT_OCTAVE;
-  assertInteger(octave, 'bass octave', -1, 9);
+  // The generated bass band spans `low..low + 12`, so octave 8 is the highest
+  // base that can keep every emitted pitch in the MIDI domain.
+  assertInteger(octave, 'bass octave', -1, 8);
   const estimatedNotes = segments.reduce(
     (count, segment) => count + Math.max(1, Math.ceil(segment.endBeat - segment.startBeat)),
     0,
@@ -393,7 +435,7 @@ export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
       continue;
     }
     out.push({
-      pitch: note.pitch,
+      pitch: clampToMidi(note.pitch, 'generated bass pitch'),
       startBeat: note.startBeat,
       durationBeat,
       velocity: note.velocity,

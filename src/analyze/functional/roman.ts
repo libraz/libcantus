@@ -11,7 +11,13 @@ import type { KeyScale } from '../../core/types.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { chordPitchClasses, makeChord } from '../../theory/chord/index.js';
 import { isScaleTone, majorKey, scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
-import { degreeRootPc, loweredDegrees, mod12, romanReference } from './internal.js';
+import {
+  degreeRootPc,
+  isAppliedDominantSonority,
+  loweredDegrees,
+  mod12,
+  romanReference,
+} from './internal.js';
 
 /** Roman numeral glyphs indexed by degree number - 1. */
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'] as const;
@@ -81,6 +87,9 @@ const ROMAN_STYLE: Record<ChordQuality, { lower: boolean; suffix: string }> = {
   dim7: { lower: true, suffix: 'o7' },
   m7b5: { lower: true, suffix: 'ø7' },
   minMaj7: { lower: true, suffix: 'maj7' },
+  minMaj9: { lower: true, suffix: 'maj9' },
+  minMaj11: { lower: true, suffix: 'maj11' },
+  minMaj13: { lower: true, suffix: 'maj13' },
   aug7: { lower: false, suffix: '+7' },
   augMaj7: { lower: false, suffix: '+maj7' },
   majb5: { lower: false, suffix: 'b5' },
@@ -152,13 +161,17 @@ function parseSimpleRoman(
   if (!match) {
     throw new InvalidInputError(`Invalid Roman numeral: ${text}`);
   }
+  const glyphText = match[2] ?? '';
+  if (glyphText !== glyphText.toUpperCase() && glyphText !== glyphText.toLowerCase()) {
+    throw new InvalidInputError(`Roman numeral must use one case: ${text}`);
+  }
   const accidental = match[1] === 'b' ? -1 : match[1] === '#' ? 1 : 0;
-  const glyph = (match[2] ?? '').toUpperCase();
+  const glyph = glyphText.toUpperCase();
   const degreeNumber = ROMAN_TO_DEGREE[glyph];
   if (degreeNumber === undefined) {
     throw new InvalidInputError(`Invalid Roman numeral: ${text}`);
   }
-  const isUpper = (match[2] ?? '')[0] === (match[2] ?? '')[0]?.toUpperCase();
+  const isUpper = glyphText[0] === glyphText[0]?.toUpperCase();
   const suffix = match[3] ?? '';
   // Degrees are read in the key's heptatonic frame, so a numeral means the same
   // root in both directions even when the key itself is not heptatonic.
@@ -166,7 +179,21 @@ function parseSimpleRoman(
   // A flat on a degree the mode already lowers is that degree, not a further
   // lowering: `bVII` in A minor is G, the pop reading, rather than F#.
   const redundantFlat = accidental === -1 && loweredDegrees(frame).has(degreeNumber);
-  const rootPc = mod12(degreeRootPc(degreeNumber, frame) + (redundantFlat ? 0 : accidental));
+  const diatonicRootPc = mod12(
+    degreeRootPc(degreeNumber, frame) + (redundantFlat ? 0 : accidental),
+  );
+
+  // In a minor key, an unaltered diminished seventh-degree numeral conventionally
+  // denotes the harmonic-minor leading tone: `viio` in A minor is G#, not G.
+  // An explicit accidental remains literal, so callers can still write `#viio`
+  // (or `bviio`) when that distinction is meaningful to them.
+  const rootForQuality = (quality: ChordQuality): number =>
+    accidental === 0 &&
+    degreeNumber === 7 &&
+    loweredDegrees(frame).has(7) &&
+    (quality === 'dim' || quality === 'dim7')
+      ? mod12(diatonicRootPc + 1)
+      : diatonicRootPc;
 
   // Canonical quality suffixes (exact match, case-sensitive on the numeral)
   // come first so every chordToRoman rendering re-parses to the same quality:
@@ -175,7 +202,7 @@ function parseSimpleRoman(
   // `Isus2`, `Iadd11`) resolve to their qualities in root position.
   const canonical = SUFFIX_QUALITY.get(`${isUpper ? 'u' : 'l'}:${suffix}`);
   if (canonical !== undefined) {
-    return { rootPc, quality: canonical, inversion: 0 };
+    return { rootPc: rootForQuality(canonical), quality: canonical, inversion: 0 };
   }
 
   // Non-canonical spellings are limited to a complete quality marker followed
@@ -227,7 +254,7 @@ function parseSimpleRoman(
   } else {
     quality = base;
   }
-  return { rootPc, quality, inversion };
+  return { rootPc: rootForQuality(quality), quality, inversion };
 }
 
 /** Build a chord from a parsed Roman numeral, attaching a bass for inversions. */
@@ -274,7 +301,9 @@ function chordFromParsed(parsed: {
  * @category Functional Harmony
  */
 export function romanToChord(text: string, key: KeyScale): Chord {
-  const trimmed = text.trim();
+  // Accept the conventional slashes in figured bass (`V6/4`, `V6/5`) while
+  // retaining `/` as the separator for applied dominants (`V7/V`).
+  const trimmed = text.trim().replace(/(\d)\/(?=\d)/g, '$1');
   const slash = trimmed.indexOf('/');
   if (slash >= 0) {
     const applied = trimmed.slice(0, slash);
@@ -395,16 +424,6 @@ function isDiatonicChord(chord: Chord, key: KeyScale): boolean {
   return chordPitchClasses(chord).every((pc) => isScaleTone(pc, key));
 }
 
-/**
- * Whether the chord sounds like an applied dominant: a major triad, or any
- * chord stacking a major third and a minor seventh above its root. The
- * diminished family is handled separately, as the leading-tone chord.
- */
-function isAppliedDominantSonority(chord: Chord): boolean {
-  const has = (semitones: number): boolean => chord.intervals.some((i) => mod12(i) === semitones);
-  return chord.quality === 'maj' || (has(4) && has(10));
-}
-
 /** Diminished-family qualities, which tonicize from a semitone below. */
 const LEADING_TONE_QUALITIES: ReadonlySet<ChordQuality> = new Set(['dim', 'dim7', 'm7b5']);
 
@@ -440,9 +459,6 @@ function appliedTarget(
       continue;
     }
     const triad = degreeTriad(tones, index);
-    if (triad.fifth === 6) {
-      continue;
-    }
     const expectedRoot = mod12(targetRoot + (dominant ? 7 : -1));
     if (expectedRoot === mod12(chord.rootPc)) {
       return { degreeNumber: index + 1, rootPc: targetRoot, lower: triad.third === 3 };
@@ -509,9 +525,19 @@ export function chordToRoman(chord: Chord, key: KeyScale, opts: ChordToRomanOpti
       return `${local}/${numeralFor(target.degreeNumber, target.lower)}`;
     }
   }
-  const { degreeNumber, accidental } = romanSpelling(chord.rootPc, key);
+  const { degreeNumber, accidental: spelledAccidental } = romanSpelling(chord.rootPc, key);
   const { lower, suffix } = romanStyle(chord.quality);
   const cased = numeralFor(degreeNumber, lower);
+  // Render the conventional unaltered `viio`/`viio7` for the raised leading
+  // tone in a minor key. Keeping the parser and formatter aligned makes the
+  // common harmonic-minor progression a true round trip.
+  const accidental =
+    spelledAccidental === '#' &&
+    degreeNumber === 7 &&
+    loweredDegrees(romanReference(key)).has(7) &&
+    (chord.quality === 'dim' || chord.quality === 'dim7')
+      ? ''
+      : spelledAccidental;
 
   let inversion = 0;
   if (chord.bassPc !== undefined) {

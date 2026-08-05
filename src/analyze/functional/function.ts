@@ -11,10 +11,15 @@ import type { KeyScale } from '../../core/types.js';
 import { assertInteger } from '../../core/validation/index.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { chordPitchClasses, makeChord } from '../../theory/chord/index.js';
-import { isScaleTone, MAJOR_MASK, NATURAL_MINOR_MASK } from '../../theory/scale/index.js';
+import {
+  isScaleTone,
+  MAJOR_MASK,
+  NATURAL_MINOR_MASK,
+  scaleTonesInDegreeOrder,
+} from '../../theory/scale/index.js';
 import { type BorrowedSource, borrowedSource } from './borrowed.js';
-import { degreeRootPc, isNeapolitan, mod12 } from './internal.js';
-import { chordToRoman } from './roman.js';
+import { degreeRootPc, isAppliedDominantSonority, isNeapolitan, mod12 } from './internal.js';
+import { type ChordToRomanOptions, chordToRoman } from './roman.js';
 
 /**
  * The three broad harmonic functions of tonal music.
@@ -37,6 +42,22 @@ const FUNCTION_BY_OFFSET: readonly HarmonicFunction[] = [
   'tonic', // 9  vi
   'subdominant', // 10 bVII
   'dominant', // 11 vii
+];
+
+/** Harmonic function of each root offset in a natural-minor context. */
+const MINOR_FUNCTION_BY_OFFSET: readonly HarmonicFunction[] = [
+  'tonic',
+  'subdominant',
+  'subdominant',
+  'tonic',
+  'dominant',
+  'subdominant',
+  'dominant',
+  'dominant',
+  'tonic',
+  'tonic',
+  'subdominant',
+  'dominant',
 ];
 
 /**
@@ -91,7 +112,8 @@ export function functionOf(chord: Chord, key: KeyScale): HarmonicFunction {
   if (!isMinorKey(key) && hasMajorThird(chord) && (offset === 8 || offset === 10)) {
     return 'subdominant';
   }
-  return FUNCTION_BY_OFFSET[offset] ?? 'tonic';
+  const functions = isMinorKey(key) ? MINOR_FUNCTION_BY_OFFSET : FUNCTION_BY_OFFSET;
+  return functions[offset] ?? 'tonic';
 }
 
 /**
@@ -114,8 +136,8 @@ function isAppliedDominant(chord: Chord, key: KeyScale): boolean {
   }
   const root = mod12(chord.rootPc);
   const resolvesTo = (step: number) => isScaleTone(mod12(root + step), key);
-  if (hasMajorThird(chord) && chord.intervals.some((i) => mod12(i) === 10)) {
-    return resolvesTo(5) || resolvesTo(11);
+  if (isAppliedDominantSonority(chord)) {
+    return chord.quality === 'maj' ? resolvesTo(5) : resolvesTo(5) || resolvesTo(11);
   }
   return isDiminishedQuality(chord.quality) && resolvesTo(1);
 }
@@ -187,6 +209,7 @@ function hasMajorThird(chord: Chord): boolean {
  *
  * @param chord The chord to analyze.
  * @param key The prevailing key.
+ * @param opts Options used when rendering the Roman numeral.
  * @returns The chord analysis.
  * @example
  * ```ts
@@ -196,29 +219,34 @@ function hasMajorThird(chord: Chord): boolean {
  * ```
  * @category Functional Harmony
  */
-export function analyzeChord(chord: Chord, key: KeyScale): ChordAnalysis {
+export function analyzeChord(
+  chord: Chord,
+  key: KeyScale,
+  opts: ChordToRomanOptions = {},
+): ChordAnalysis {
   const source = borrowedSource(chord, key);
   return {
     function: functionOf(chord, key),
     borrowed: source !== null,
     source,
-    roman: chordToRoman(chord, key),
+    roman: chordToRoman(chord, key, opts),
   };
 }
 
 /**
  * The secondary dominant (V7) that tonicizes a scale degree.
  *
- * @param targetDegree 0-based scale degree to tonicize, in 0..6.
+ * @param targetDegree 0-based scale degree to tonicize.
  * @param key The prevailing key.
  * @returns A dominant-seventh chord a fifth above the target's root.
- * @throws If `targetDegree` is not an integer in 0..6.
+ * @throws If `targetDegree` is not an integer naming a degree in `key`.
  * @category Functional Harmony
  */
 export function secondaryDominant(targetDegree: number, key: KeyScale): Chord {
   // A degree outside the scale is a caller error, not a wrap-around: silently
   // tonicizing some other degree produces a chord that reads as intentional.
-  assertInteger(targetDegree, 'targetDegree', 0, 6);
+  const degreeCount = scaleTonesInDegreeOrder(key).length;
+  assertInteger(targetDegree, 'targetDegree', 0, degreeCount - 1);
   const targetRoot = degreeRootPc(targetDegree + 1, key);
   return makeChord(mod12(targetRoot + 7), 'dom7');
 }

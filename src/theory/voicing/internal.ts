@@ -27,6 +27,8 @@ const MISSING_TONE_PENALTY = 500;
 const MISSING_FIFTH_PENALTY = 20;
 /** Score penalty per doubled tone that is neither the root nor the fifth. */
 const POOR_DOUBLING_PENALTY = 4;
+/** Penalty for adjacent voices sharing exactly the same MIDI pitch. */
+const UNISON_PENALTY = 100;
 /**
  * Score penalty for doubling the key's leading tone. Doubling it guarantees
  * parallel octaves on its resolution, so it is a rule violation rather than a
@@ -40,15 +42,15 @@ const LEADING_TONE_DOUBLING_PENALTY = 200;
  * can never buy an unresolved seventh, and well below
  * {@link VIOLATION_PENALTY}, so avoiding parallels still comes first.
  */
-export const RESOLUTION_PENALTY = 40;
+export const RESOLUTION_PENALTY = 200;
 /** Hard cap on candidate voicings evaluated per chord, keeping the search bounded. */
-const MAX_CANDIDATES = 4000;
+const DEFAULT_MAX_CANDIDATES = 4000;
 /**
  * Hard cap on search-tree nodes visited per chord. The candidate cap alone only
  * counts completed voicings, so a search whose upper voices admit no chord tone
  * would expand the whole cartesian product without ever reaching a leaf.
  */
-const MAX_SEARCH_NODES = MAX_CANDIDATES * 16;
+const SEARCH_NODES_PER_CANDIDATE = 16;
 
 /**
  * All MIDI pitches of a pitch class inside an inclusive range, ordered from the
@@ -78,8 +80,8 @@ function pitchesForPc(pc: number, range: VoiceRange): number[] {
  * any chord pitch class within its range. Candidates are built in ascending
  * voice order and pruned to exclude voice crossings and over-wide adjacent
  * spacing (the bass–tenor pair is allowed an extra octave, per convention).
- * Enumeration is deterministic and capped at {@link MAX_CANDIDATES} completed
- * voicings and {@link MAX_SEARCH_NODES} visited nodes.
+ * Enumeration is deterministic and capped at `maxCandidates` completed
+ * voicings and a proportional number of visited nodes.
  *
  * Each voice's admissible pitches are resolved once up front rather than
  * recomputed at every node, and a voice that admits no chord tone at all fails
@@ -92,6 +94,7 @@ export function enumerateVoicings(
   chord: Chord,
   ranges: VoiceRange[],
   maxSpacing: number,
+  maxCandidates = DEFAULT_MAX_CANDIDATES,
 ): number[][] {
   const chordPcs = chordPitchClasses(chord);
   const bassPc = pitchClass(chord.bassPc ?? chord.rootPc);
@@ -107,9 +110,10 @@ export function enumerateVoicings(
   const results: number[][] = [];
   const current: number[] = [];
   let nodes = 0;
+  const maxSearchNodes = maxCandidates * SEARCH_NODES_PER_CANDIDATE;
   const build = (voice: number): void => {
     nodes += 1;
-    if (results.length >= MAX_CANDIDATES || nodes > MAX_SEARCH_NODES) {
+    if (results.length >= maxCandidates || nodes > maxSearchNodes) {
       return;
     }
     if (voice === ranges.length) {
@@ -153,6 +157,11 @@ export function structuralPenalty(pitches: number[], chord: Chord, key?: KeyScal
     counts.set(pc, (counts.get(pc) ?? 0) + 1);
   }
   let penalty = 0;
+  for (let index = 1; index < pitches.length; index += 1) {
+    if (pitches[index] === pitches[index - 1]) {
+      penalty += UNISON_PENALTY;
+    }
+  }
   for (const pc of chordPitchClasses(chord)) {
     if (!counts.has(pc)) {
       penalty +=

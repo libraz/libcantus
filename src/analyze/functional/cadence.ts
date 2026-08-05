@@ -11,6 +11,16 @@ import type { Chord } from '../../theory/chord/index.js';
 import { isMinorKey } from './function.js';
 import { mod12 } from './internal.js';
 
+/** Whether a chord can carry dominant function through its major third. */
+function hasDominantThird(chord: Chord): boolean {
+  return chord.intervals.some((interval) => mod12(interval) === 4);
+}
+
+/** Whether a leading-tone chord is a diminished-family resolution chord. */
+function isLeadingToneDiminished(chord: Chord): boolean {
+  return chord.quality === 'dim' || chord.quality === 'dim7' || chord.quality === 'm7b5';
+}
+
 /**
  * A recognized cadence type, or null when a chord pair forms none.
  *
@@ -48,18 +58,20 @@ export function detectCadence(from: Chord, to: Chord, key: KeyScale): Cadence {
   // offset 8 in minor) plus, in a major key, the borrowed flat-submediant bVI
   // at offset 8.
   const deceptiveTargets = isMinorKey(key) ? [8] : [8, 9];
-  if (fromOffset === 7 && toOffset === 0) {
+  const dominant = fromOffset === 7 && hasDominantThird(from);
+  const leadingTone = fromOffset === 11 && isLeadingToneDiminished(from);
+  if ((dominant || leadingTone) && toOffset === 0) {
     return 'authentic';
   }
   if (fromOffset === 5 && toOffset === 0) {
     return 'plagal';
   }
-  if (fromOffset === 7 && deceptiveTargets.includes(toOffset)) {
+  if (dominant && deceptiveTargets.includes(toOffset)) {
     return 'deceptive';
   }
   // A move to the dominant is a half cadence, but a no-root-motion V-to-V repeat
   // is not a cadence at all.
-  if (toOffset === 7 && fromOffset !== 7) {
+  if (toOffset === 7 && hasDominantThird(to) && fromOffset !== 7) {
     return 'half';
   }
   return null;

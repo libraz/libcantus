@@ -11,6 +11,7 @@ import {
   assertInteger,
   assertNoteEvents,
   assertPositiveInt,
+  clampToMidi,
 } from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
 import { chordPitchClasses } from '../../theory/chord/index.js';
@@ -264,7 +265,11 @@ export function generateMotif(opts: MotifOptions): MotifCell {
     if (opts.chord && isDownbeat(startBeat, barBeats)) {
       pitch = nearestChordTone(pitch, opts.chord);
     }
-    notes.push({ pitch, startBeat, durationBeat: beatsPerNote });
+    notes.push({
+      pitch: clampToMidi(pitch, 'generated motif pitch'),
+      startBeat,
+      durationBeat: beatsPerNote,
+    });
   }
   return { notes };
 }
@@ -358,8 +363,14 @@ function transformUnchecked(
   if (amount !== undefined) {
     assertFiniteNumber(amount, 'motif transform amount');
   }
-  if ((t === 'transposeDiatonic' || t === 'sequence') && amount !== undefined) {
-    assertInteger(amount, 'diatonic transform amount');
+  if (
+    (t === 'transposeChromatic' || t === 'transposeDiatonic' || t === 'sequence') &&
+    amount !== undefined
+  ) {
+    assertInteger(
+      amount,
+      `${t === 'transposeChromatic' ? 'chromatic' : 'diatonic'} transform amount`,
+    );
   }
   if ((t === 'augment' || t === 'diminish') && amount !== undefined && amount <= 0) {
     throw new InvalidInputError('time transform amount must be positive');

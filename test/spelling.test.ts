@@ -6,6 +6,7 @@ import { majorKey, minorKey, scaleByName } from '../src/theory/scale/index.js';
 import {
   noteNames,
   spellChord,
+  spellChordFromRoot,
   spellPitch,
   spellPitchClass,
   spellPitchClasses,
@@ -79,6 +80,14 @@ describe('spellScale', () => {
       'B',
       'C##',
     ]);
+  });
+});
+
+describe('spellChordFromRoot', () => {
+  it('requires the supplied spelling to name the chord root', () => {
+    expect(() => spellChordFromRoot(makeChord(0, 'maj'), parseNote('D'))).toThrow(
+      /must match chord.rootPc/,
+    );
   });
 });
 
@@ -165,6 +174,22 @@ describe('spellPitchClasses', () => {
 });
 
 describe('spelling stays on the key side across every path', () => {
+  it('spells common borrowed roots without double accidentals in flat keys', () => {
+    expect(Key.major('Ab').roman('bII7').symbol()).toBe('A7');
+    expect(Key.major('Db').roman('bII').symbol()).toBe('D');
+    expect(Key.major('Gb').roman('bII').symbol()).toBe('G');
+    expect(Key.major('Cb').roman('bII').symbol()).toBe('C');
+  });
+
+  it('keeps borrowed roots readable across every major key', () => {
+    for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+      const key = Key.major(rootPc);
+      for (const roman of ['bII', 'bII7', 'bVI', 'bVII']) {
+        expect(key.roman(roman).symbol(), `${key}/${roman}`).toMatch(/^[A-G](?:#|b)?(?:7)?$/);
+      }
+    }
+  });
+
   it('spells a non-heptatonic scale from the caller tonic, not a sharp table', () => {
     expect(noteNames(spellScale(parseNote('Eb'), scaleByName('majorPentatonic', 3)))).toEqual([
       'Eb',
@@ -317,8 +342,8 @@ describe('Note.transpose keeps the spelling', () => {
 
   it('spells a tritone by direction: up an augmented fourth, down a diminished fifth', () => {
     expect(Note.of('C4').transpose(6).name).toBe('F#4');
-    expect(Note.of('C4').transpose(-6).name).toBe('F#3');
-    expect(Note.of('Ab4').transpose(-6).name).toBe('D4');
+    expect(Note.of('C4').transpose(-6).name).toBe('Gb3');
+    expect(Note.of('Ab4').transpose(-6).name).toBe('Ebb4');
   });
 
   it('honours an explicit spelling preference', () => {
@@ -335,6 +360,20 @@ describe('non-heptatonic scales lean the way the scale does', () => {
 
   it('keeps the whole-tone scale on sharps', () => {
     expect(Key.named('wholeTone', 'C').noteNames()).toEqual(['C', 'D', 'E', 'F#', 'G#', 'A#']);
+  });
+
+  it('keeps altered non-heptatonic scales on their conventional spellings', () => {
+    expect(Key.named('minorPentatonic', 8).noteNames()).toEqual(['Ab', 'B', 'Db', 'Eb', 'Gb']);
+    expect(Key.named('octatonicHalfWhole', 'Bb').noteNames()).toEqual([
+      'Bb',
+      'B',
+      'Db',
+      'D',
+      'E',
+      'F',
+      'G',
+      'Ab',
+    ]);
   });
 
   it('spells a chord from its own root when no key is attached', () => {

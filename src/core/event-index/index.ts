@@ -7,7 +7,7 @@ import { assertNoteEvents } from '../validation/index.js';
  * @category Core
  */
 export type IndexedNoteEvent = {
-  note: NoteEvent;
+  note: Readonly<NoteEvent>;
   originalIndex: number;
   endBeat: number;
 };
@@ -29,7 +29,7 @@ export type OnsetTieBreak = 'highest' | 'lowest' | 'last';
  * @category Core
  */
 export type NoteEventIndex = {
-  notes: IndexedNoteEvent[];
+  notes: readonly IndexedNoteEvent[];
   /**
    * Latest-onset note sounding at `beat`. Simultaneous onsets are resolved by
    * the index's {@link OnsetTieBreak}.
@@ -43,7 +43,7 @@ export type NoteEventIndex = {
 
 const EPS = 1e-9;
 
-function upperBound(values: IndexedNoteEvent[], beat: number): number {
+function upperBound(values: readonly IndexedNoteEvent[], beat: number): number {
   let low = 0;
   let high = values.length;
   while (low < high) {
@@ -76,40 +76,52 @@ export function createNoteEventIndex(
 ): NoteEventIndex {
   assertNoteEvents(events, options.name ?? 'note events', options);
   const tieBreak = options.tieBreak ?? 'highest';
-  const notes = events
-    .map((note, originalIndex) => ({
-      note,
-      originalIndex,
-      endBeat: note.startBeat + note.durationBeat,
-    }))
-    .sort((a, b) => a.note.startBeat - b.note.startBeat || a.originalIndex - b.originalIndex);
-  // Built on the first `at` call rather than up front: several callers use this
-  // only to validate and sort, and never ask what sounds at a beat.
-  let prefixMaxEnd: number[] | undefined;
-  const maxEndUpTo = (index: number): number => {
-    if (prefixMaxEnd === undefined) {
-      const prefix: number[] = [];
-      let maxEnd = Number.NEGATIVE_INFINITY;
-      for (const indexed of notes) {
-        maxEnd = Math.max(maxEnd, indexed.endBeat);
-        prefix.push(maxEnd);
+  const notes = Object.freeze(
+    events
+      .map((note, originalIndex) => ({
+        note: Object.freeze({ ...note }),
+        originalIndex,
+        endBeat: note.startBeat + note.durationBeat,
+      }))
+      .sort((a, b) => a.note.startBeat - b.note.startBeat || a.originalIndex - b.originalIndex),
+  );
+  // Segment-tree maxima find the latest active onset in logarithmic time even
+  // when an early, very long note would defeat a prefix-max backwards scan.
+  let treeSize = 1;
+  while (treeSize < notes.length) treeSize *= 2;
+  const maxEndTree = new Array<number>(treeSize * 2).fill(Number.NEGATIVE_INFINITY);
+  for (let index = 0; index < notes.length; index += 1) {
+    maxEndTree[treeSize + index] = notes[index]?.endBeat ?? Number.NEGATIVE_INFINITY;
+  }
+  for (let index = treeSize - 1; index > 0; index -= 1) {
+    maxEndTree[index] = Math.max(
+      maxEndTree[index * 2] ?? Number.NEGATIVE_INFINITY,
+      maxEndTree[index * 2 + 1] ?? Number.NEGATIVE_INFINITY,
+    );
+  }
+  const latestActiveIndex = (exclusive: number, beat: number): number => {
+    const find = (node: number, start: number, end: number): number => {
+      if (start >= exclusive || (maxEndTree[node] ?? Number.NEGATIVE_INFINITY) <= beat + EPS) {
+        return -1;
       }
-      prefixMaxEnd = prefix;
-    }
-    return prefixMaxEnd[index] ?? Number.NEGATIVE_INFINITY;
+      if (end - start === 1) return start < notes.length ? start : -1;
+      const mid = Math.floor((start + end) / 2);
+      const right = find(node * 2 + 1, mid, end);
+      return right >= 0 ? right : find(node * 2, start, mid);
+    };
+    return find(1, 0, treeSize);
   };
 
   return {
     notes,
     at(beat) {
-      let index = upperBound(notes, beat + EPS) - 1;
+      const index = latestActiveIndex(upperBound(notes, beat + EPS), beat);
+      if (index < 0) return undefined;
+      const onset = notes[index]?.note.startBeat;
       let best: IndexedNoteEvent | undefined;
-      while (index >= 0) {
-        if (maxEndUpTo(index) <= beat + EPS) {
-          break;
-        }
-        const indexed = notes[index];
-        index -= 1;
+      for (let candidateIndex = index; candidateIndex >= 0; candidateIndex -= 1) {
+        const indexed = notes[candidateIndex];
+        if (indexed !== undefined && indexed.note.startBeat !== onset) break;
         if (
           indexed === undefined ||
           indexed.note.durationBeat <= 0 ||
@@ -120,15 +132,9 @@ export function createNoteEventIndex(
         }
         if (best === undefined) {
           best = indexed;
-          if (tieBreak === 'last') {
-            break;
-          }
           continue;
         }
-        // Only notes from the same onset compete: a later onset always wins.
-        if (Math.abs(indexed.note.startBeat - best.note.startBeat) >= EPS) {
-          break;
-        }
+        if (tieBreak === 'last') continue;
         const higher = indexed.note.pitch > best.note.pitch;
         if (tieBreak === 'highest' ? higher : !higher) {
           best = indexed;

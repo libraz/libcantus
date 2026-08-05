@@ -78,6 +78,11 @@ describe('failures are told apart by code, not by message', () => {
     expect(thrown(() => detectChord([Number.NaN]))).toBeInstanceOf(RangeError);
     expect(isLibcantusError(new Error('plain'))).toBe(false);
   });
+
+  it('recognizes the coded error contract across a second module copy', () => {
+    const foreign = { code: 'NO_SOLUTION' as const, name: 'NoSolutionError' };
+    expect(isLibcantusError(foreign) && foreign.code).toBe('NO_SOLUTION');
+  });
 });
 
 describe('chord data cannot be malformed silently', () => {

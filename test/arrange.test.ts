@@ -5,6 +5,7 @@ import {
   tensionCurve,
   tensionCurveFrom,
 } from '../src/analyze/arrange/index.js';
+import { chordTimelineFromChords } from '../src/analyze/timeline/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import { evaluateSafety, NoteSafety, ReasonFlag } from '../src/theory/safety/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
@@ -197,6 +198,24 @@ describe('analyzeArrangement', () => {
     expect(clash?.safety).toBe(NoteSafety.Dissonant);
   });
 
+  it('keeps parallel block chords on ordered sub-voice lanes', () => {
+    const analysis = analyzeArrangement(
+      [
+        {
+          name: 'harmony',
+          role: 'harmony',
+          notes: [...blockChord([60, 70], 0, 1), ...blockChord([67, 69], 1, 1)],
+        },
+      ],
+      {
+        key: majorKey(0),
+        timeline: chordTimelineFromChords([{ rootPc: 0, quality: '13', startBeat: 0 }], 2),
+      },
+    );
+    expect(analysis.conflicts).toEqual([]);
+    expect(analysis.segmentConfidence).toEqual([0]);
+  });
+
   it.each([
     {
       name: 'parallel fifth',
@@ -335,6 +354,20 @@ describe('tensionCurve', () => {
     const tracks = baseArrangement();
     const analysis = analyzeArrangement(tracks);
     expect(tensionCurveFrom(tracks, analysis)).toEqual(tensionCurve(tracks));
+  });
+
+  it('handles 2,000 simultaneous notes without quadratic per-voice safety work', () => {
+    const notes: NoteEvent[] = Array.from({ length: 2000 }, (_, index) => ({
+      pitch: 48 + (index % 80),
+      startBeat: 0,
+      durationBeat: 1,
+    }));
+    const points = tensionCurve([{ role: 'harmony', notes }], {
+      key: majorKey(0),
+      step: 1,
+    });
+    expect(points).toHaveLength(1);
+    expect(points[0]?.tension).toBeGreaterThanOrEqual(0);
   });
 });
 

@@ -38,6 +38,7 @@ describe('counterpoint predicates', () => {
     expect(createsVerticalDissonance(66, 60, true)).toBe(true); // tritone
     expect(createsVerticalDissonance(65, 60, true)).toBe(true); // fourth, two-voice
     expect(createsVerticalDissonance(65, 60, false)).toBe(false); // fourth, allowed
+    expect(() => createsVerticalDissonance(Number.NaN, 60, true)).toThrow(RangeError);
   });
 
   it('flags forbidden melodic leaps', () => {

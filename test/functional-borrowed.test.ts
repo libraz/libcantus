@@ -65,9 +65,9 @@ describe('modal interchange in C major', () => {
 
   it('recognizes the Neapolitan as its own source with subdominant function', () => {
     const neapolitan = makeChord(1, 'maj');
-    // The Neapolitan fits neither parallel mode, so the strict parallel-mode
-    // predicate rejects it while borrowedSource names it.
-    expect(isBorrowedChord(neapolitan, cMajor)).toBe(false);
+    // `isBorrowedChord` and the richer analysis now agree on the recognized
+    // Neapolitan family.
+    expect(isBorrowedChord(neapolitan, cMajor)).toBe(true);
     expect(borrowedSource(neapolitan, cMajor)).toBe('neapolitan');
     expect(analyzeChord(neapolitan, cMajor)).toEqual({
       function: 'subdominant',
@@ -136,6 +136,12 @@ describe('modal interchange in A minor', () => {
     expect(isBorrowedChord(leadingTone, aMinor)).toBe(false);
     expect(borrowedSource(leadingTone, aMinor)).toBeNull();
     expect(analyzeChord(leadingTone, aMinor).function).toBe('dominant');
+  });
+
+  it('does not mistake melodic-minor leading-tone harmony for interchange', () => {
+    const melodicLeadingTone = makeChord(8, 'm7b5'); // G#ø7 in A melodic minor
+    expect(isBorrowedChord(melodicLeadingTone, aMinor)).toBe(false);
+    expect(borrowedSource(melodicLeadingTone, aMinor)).toBeNull();
   });
 
   it('does not flag diatonic minor-key chords as borrowed', () => {

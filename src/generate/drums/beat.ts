@@ -84,7 +84,7 @@ function sectionSwing(sec: SectionCtx, swingAmount: number): number {
 }
 
 /** Place a tick on the section's shared swung 16th grid. */
-function swing16(tick: number, sec: SectionCtx, swingAmount: number): number {
+export function swing16(tick: number, sec: SectionCtx, swingAmount: number): number {
   return quantizeSwing(tick, sectionSwing(sec, swingAmount), 'sixteenth');
 }
 
@@ -147,7 +147,7 @@ export function generateGhostNotesForBeat(ctx: BeatCtx, sec: SectionCtx): void {
   if (ctx.beat !== 0 && ctx.beat !== 2) {
     return;
   }
-  const positions = selectGhostPositions(sec.ghostMood, ctx.rng);
+  const positions = selectGhostPositions(sec.ghostMood);
   let ghostProb = getGhostDensity(sec.ghostMood, ctx.section, sec.backingDensity, ctx.bpm);
   if (sec.ghostBoost) {
     ghostProb = Math.min(1, ghostProb * 1.4);
@@ -189,7 +189,12 @@ export function generatePreChorusBuildup(
   const progress = (barInLift * 4 + ctx.beat) / (barsInLift * 4);
   const buildupVel = ctx.velocity * (0.5 + 0.5 * progress);
   ctx.track.add(GM.SD, ctx.beatTick, EIGHTH, buildupVel);
-  ctx.track.add(GM.SD, ctx.beatTick + EIGHTH, EIGHTH, buildupVel * 0.85);
+  ctx.track.add(
+    GM.SD,
+    swing16(ctx.beatTick + EIGHTH, sec, ctx.swingAmount),
+    EIGHTH,
+    buildupVel * 0.85,
+  );
   if (isSectionLastBar && ctx.beat === 3) {
     ctx.track.add(GM.CRASH, ctx.beatTick + EIGHTH + SIXTEENTH, SIXTEENTH, ctx.velocity * 1.1);
   }
@@ -198,9 +203,6 @@ export function generatePreChorusBuildup(
 /** Emit the timekeeping hi-hat (or ride/foot) for one beat. */
 export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
   if (!shouldPlayHiHat(sec.role)) {
-    if (sec.useFootHh && (ctx.beat === 0 || ctx.beat === 2)) {
-      ctx.track.add(GM.FHH, ctx.beatTick, EIGHTH, footHiHatVelocity(ctx.rng));
-    }
     return;
   }
 
@@ -209,12 +211,13 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
   const hhType = sectionHiHatType(ctx.section, sec.role);
   const typeMult = hiHatTypeVelocityMultiplier(hhType);
   const isDynamicOpen = ctx.barHasOpenHh && ctx.beat === ctx.openHhBeat;
+  const allowsOpenHiHat = sec.role !== 'ambient' && sec.role !== 'minimal';
   const dm = sec.densityMult;
 
   if (sec.hhLevel === 'quarter') {
     const introRest = ctx.section === 'intro' && ctx.beat !== 0;
     if (!introRest) {
-      if (isDynamicOpen) {
+      if (isDynamicOpen && allowsOpenHiHat) {
         ctx.track.add(
           GM.OHH,
           ctx.beatTick,
@@ -248,7 +251,7 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
         continue;
       }
       const hhVel = Math.max(20, ctx.velocity * dm * typeMult * (eighth === 0 ? 0.9 : 0.65));
-      if (isDynamicOpen && eighth === 0) {
+      if (isDynamicOpen && allowsOpenHiHat && eighth === 0) {
         ctx.track.add(GM.OHH, hhTick, EIGHTH, hhVel + OHH_VEL_BOOST);
         continue;
       }
@@ -259,7 +262,7 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
       } else if (eighth === 0) {
         useOpen = shouldAddOpenHHAccent(ctx.section, ctx.beat, ctx.bar, ctx.rng);
       }
-      if (useOpen) {
+      if (useOpen && allowsOpenHiHat) {
         ctx.track.add(hiHatNote('open'), hhTick, EIGHTH, Math.max(20, hhVel * 1.1));
       } else {
         ctx.track.add(hhInstrument, hhTick, EIGHTH / 2, hhVel);
@@ -278,11 +281,11 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
     }
     const metricVel = hiHatVelocityMultiplier(sixteenth, ctx.rng);
     const hhVel = Math.max(20, ctx.velocity * dm * typeMult * metricVel);
-    if (isDynamicOpen && sixteenth === 0) {
+    if (isDynamicOpen && allowsOpenHiHat && sixteenth === 0) {
       ctx.track.add(GM.OHH, hhTick, SIXTEENTH, hhVel + OHH_VEL_BOOST);
       continue;
     }
-    if (ctx.beat === 3 && sixteenth === 3) {
+    if (allowsOpenHiHat && ctx.beat === 3 && sixteenth === 3) {
       const openProb = Math.max(0.1, Math.min(0.4, 30 / ctx.bpm));
       if (ctx.rng.prob(openProb)) {
         ctx.track.add(GM.OHH, hhTick, SIXTEENTH, Math.max(20, hhVel * 1.2));

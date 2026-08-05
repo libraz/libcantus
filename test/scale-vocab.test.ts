@@ -19,6 +19,11 @@ describe('maskFromOffsets', () => {
     expect(maskFromOffsets([2, 4, 7]) & 1).toBe(1);
     expect(maskFromOffsets([]) & 1).toBe(1);
   });
+
+  it('rejects offsets that cannot name a chromatic pitch class', () => {
+    expect(() => maskFromOffsets([Number.NaN])).toThrow(RangeError);
+    expect(() => maskFromOffsets([1.5])).toThrow(RangeError);
+  });
 });
 
 describe('named scales', () => {

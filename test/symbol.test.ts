@@ -7,6 +7,23 @@ import {
 } from '../src/theory/symbol/index.js';
 
 describe('parseChordSymbol', () => {
+  it('accepts the common explicit major suffix', () => {
+    expect(parseChordSymbol('Cmaj')).toMatchObject({ rootPc: 0, quality: 'maj' });
+  });
+
+  it('normalizes Unicode and double-sharp root and bass accidentals', () => {
+    expect(parseChordSymbol('C♯m7')).toEqual(parseChordSymbol('C#m7'));
+    expect(parseChordSymbol('D♭/A♭')).toEqual(parseChordSymbol('Db/Ab'));
+    expect(parseChordSymbol('Cxm7')).toMatchObject({ rootPc: 2, quality: 'min7' });
+    expect(parseChordSymbol('C/F𝄪')).toMatchObject({ bassPc: 7 });
+  });
+
+  it('parses minor-major extensions through thirteen', () => {
+    expect(parseChordSymbol('BbmMaj9')).toMatchObject({ rootPc: 10, quality: 'minMaj9' });
+    expect(parseChordSymbol('BbmMaj11')).toMatchObject({ rootPc: 10, quality: 'minMaj11' });
+    expect(parseChordSymbol('BbmMaj13')).toMatchObject({ rootPc: 10, quality: 'minMaj13' });
+  });
+
   it('parses a maj7 chord', () => {
     const chord = parseChordSymbol('Cmaj7');
     expect(chord.rootPc).toBe(0);
@@ -182,12 +199,16 @@ describe('transposeChordSymbol', () => {
   });
 
   it('wraps the root around the octave', () => {
-    expect(transposeChordSymbol('Bb7', 3)).toBe('C#7');
+    expect(transposeChordSymbol('Bb7', 3)).toBe('Db7');
   });
 
   it('keeps the original spelling on an identity transpose', () => {
     expect(transposeChordSymbol('Bbmaj7', 0)).toBe('Bbmaj7');
     expect(transposeChordSymbol('Eb/Bb', 12)).toBe('Eb/Bb');
+  });
+
+  it('rejects a non-finite transposition before formatting', () => {
+    expect(() => transposeChordSymbol('C7', Number.NaN)).toThrow(RangeError);
   });
 });
 

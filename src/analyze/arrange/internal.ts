@@ -105,11 +105,14 @@ export function poolNotes(tracks: ArrangementTrack[], only?: ReadonlySet<number>
  */
 function splitIntoSubVoices(ordered: IdentifiedVoiceNote[]): IdentifiedVoiceNote[][] {
   const lanes: IdentifiedVoiceNote[][] = [];
-  for (const note of ordered) {
+  const attachNearest = (note: IdentifiedVoiceNote, excluded = new Set<number>()): boolean => {
     let best = -1;
     let bestDistance = Number.POSITIVE_INFINITY;
     let bestEnd = Number.NEGATIVE_INFINITY;
     for (let lane = 0; lane < lanes.length; lane += 1) {
+      if (excluded.has(lane)) {
+        continue;
+      }
       const last = lanes[lane]?.[(lanes[lane]?.length ?? 0) - 1];
       if (last === undefined) {
         continue;
@@ -130,9 +133,53 @@ function splitIntoSubVoices(ordered: IdentifiedVoiceNote[]): IdentifiedVoiceNote
     }
     if (best >= 0) {
       lanes[best]?.push(note);
-    } else {
-      lanes.push([note]);
+      return true;
     }
+    return false;
+  };
+
+  for (let start = 0; start < ordered.length; ) {
+    const onset = ordered[start]?.startBeat ?? 0;
+    let end = start + 1;
+    while (end < ordered.length && Math.abs((ordered[end]?.startBeat ?? 0) - onset) <= EPS) {
+      end += 1;
+    }
+    const block = ordered.slice(start, end);
+    // Notes struck together form a vertical slice, not a sequence of greedy
+    // nearest-neighbour decisions. Pair their low-to-high order with the
+    // already-free lanes' low-to-high order so parallel block chords cannot
+    // swap lanes and manufacture a crossing on the following beat.
+    if (block.length > 1) {
+      const freeLanes = lanes
+        .map((lane, index) => ({ index, last: lane[lane.length - 1] }))
+        .filter(
+          (entry): entry is { index: number; last: IdentifiedVoiceNote } =>
+            entry.last !== undefined &&
+            entry.last.startBeat + entry.last.durationBeat <= onset + EPS,
+        )
+        .sort((a, b) => a.last.pitch - b.last.pitch);
+      const paired = new Set<number>();
+      for (let index = 0; index < block.length; index += 1) {
+        const note = block[index];
+        const lane = freeLanes[index];
+        if (
+          note !== undefined &&
+          lane !== undefined &&
+          Math.abs(lane.last.pitch - note.pitch) <= MAX_LANE_LEAP
+        ) {
+          lanes[lane.index]?.push(note);
+          paired.add(lane.index);
+        } else if (note !== undefined && !attachNearest(note, paired)) {
+          lanes.push([note]);
+        }
+      }
+    } else {
+      const note = block[0];
+      if (note !== undefined && !attachNearest(note)) {
+        lanes.push([note]);
+      }
+    }
+    start = end;
   }
   return lanes;
 }

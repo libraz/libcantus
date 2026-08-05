@@ -5,6 +5,7 @@ import {
   type BorrowedSource,
   borrowedSource,
   type ChordAnalysis,
+  type ChordToRomanOptions,
   chordToRoman,
   functionOf,
   type HarmonicFunction,
@@ -12,7 +13,7 @@ import {
 } from '../analyze/functional/index.js';
 import { InvalidInputError } from '../core/errors/index.js';
 import type { Note as NoteData } from '../core/pitch/index.js';
-import { noteToPitchClass } from '../core/pitch/index.js';
+import { noteToPitchClass, transposeNote } from '../core/pitch/index.js';
 import { negativeHarmonyMirror } from '../generate/reharmony/index.js';
 import {
   type Chord as ChordData,
@@ -45,6 +46,18 @@ import { mod12 } from './shared.js';
 /** Whether a spelling hint still names the pitch class it is attached to. */
 function hintMatches(hint: PitchSpelling | undefined, pc: number | undefined): boolean {
   return hint !== undefined && pc !== undefined && mod12(noteToPitchClass(hint)) === mod12(pc);
+}
+
+/** Move an explicit spelling hint without turning it into a derived key spelling. */
+function transposeHint(
+  hint: PitchSpelling | undefined,
+  semitones: number,
+): PitchSpelling | undefined {
+  if (hint === undefined) {
+    return undefined;
+  }
+  const moved = transposeNote(hint, semitones);
+  return { letter: moved.letter, alter: moved.alter };
 }
 
 /**
@@ -138,8 +151,12 @@ export class Chord {
    * first key's letters forever. A spelling the caller supplied always wins.
    */
   get #data(): ChordData {
+    return this.#dataWithKey(this.#key);
+  }
+
+  /** Build a read view whose missing spellings are derived from `key`. */
+  #dataWithKey(key: Key | undefined): ChordData {
     const out = copyChord(this.#given);
-    const key = this.#key;
     if (out.rootSpelling === undefined && key !== undefined) {
       out.rootSpelling = spellPitchClass(out.rootPc, key.tonic.data, key.scale);
     }
@@ -339,11 +356,12 @@ export class Chord {
    * The chord's Roman numeral in a key.
    *
    * @param key Key to analyze in; falls back to the carried context.
+   * @param opts Applied-numeral rendering options.
    * @returns The Roman numeral string.
    * @throws If no key is given and none is carried.
    */
-  roman(key?: Key): string {
-    return chordToRoman(this.#data, this.#resolveKey(key).scale);
+  roman(key?: Key, opts?: ChordToRomanOptions): string {
+    return chordToRoman(this.#data, this.#resolveKey(key).scale, opts);
   }
 
   /**
@@ -361,11 +379,12 @@ export class Chord {
    * Full functional analysis: function, borrowing, and Roman numeral.
    *
    * @param key Key to analyze in; falls back to the carried context.
+   * @param opts Applied-numeral rendering options.
    * @returns The chord analysis.
    * @throws If no key is given and none is carried.
    */
-  analyze(key?: Key): ChordAnalysis {
-    return analyzeChord(this.#data, this.#resolveKey(key).scale);
+  analyze(key?: Key, opts?: ChordToRomanOptions): ChordAnalysis {
+    return analyzeChord(this.#data, this.#resolveKey(key).scale, opts);
   }
 
   /**
@@ -491,6 +510,14 @@ export class Chord {
    */
   transpose(semitones: number): Chord {
     const moved = transposeChord(this.#given, semitones);
+    const rootSpelling = transposeHint(this.#given.rootSpelling, semitones);
+    const bassSpelling = transposeHint(this.#given.bassSpelling, semitones);
+    if (rootSpelling !== undefined) {
+      moved.rootSpelling = rootSpelling;
+    }
+    if (bassSpelling !== undefined) {
+      moved.bassSpelling = bassSpelling;
+    }
     return new Chord(moved, this.#key?.transpose(semitones));
   }
 
@@ -548,8 +575,10 @@ export class Chord {
    *   spelling of its own.
    */
   spell(key?: Key): Note[] {
-    const data = this.#data;
     const resolved = key ?? this.#key;
+    // An explicit key must select the spelling view before any derived hints
+    // are read; only caller-provided hints in #given are independent of it.
+    const data = this.#dataWithKey(resolved);
     let tones: NoteData[];
     if (resolved === undefined) {
       const root = data.rootSpelling;
@@ -610,7 +639,9 @@ export class Chord {
    * @returns A copy of the underlying plain chord object.
    */
   toJSON(): ChordData {
-    return this.data;
+    // Key context is intentionally not serialized. Persist only spelling hints
+    // the caller provided, so a restored chord can be re-spelled by a new key.
+    return copyChord(this.#given);
   }
 
   /**

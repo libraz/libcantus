@@ -280,6 +280,24 @@ describe('generateCounterMelody', () => {
     }
   });
 
+  it('ignores zero-length imported artefacts before choosing follow onsets', () => {
+    const sounding: NoteEvent[] = [{ pitch: 72, startBeat: 0, durationBeat: 4 }];
+    const withSilentArtefact = [...sounding, { pitch: 20, startBeat: 60, durationBeat: 0 }];
+    const base = generateCounterMelody({
+      melody: sounding,
+      chordAt,
+      key: cMajor,
+      rhythm: 'follow',
+    });
+    const result = generateCounterMelody({
+      melody: withSilentArtefact,
+      chordAt,
+      key: cMajor,
+      rhythm: 'follow',
+    });
+    expect(result).toEqual(base);
+  });
+
   it('fills melody gaps in complement mode', () => {
     // A rest from beat 1 to beat 3 between two melody notes.
     const gapped: NoteEvent[] = [

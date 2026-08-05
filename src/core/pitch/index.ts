@@ -79,6 +79,8 @@ export type SpelledInterval = {
   quality: IntervalQualityLabel;
   /** Signed semitone distance from the first note to the second. */
   semitones: number;
+  /** True when the diatonic letter movement is descending despite a zero span. */
+  descending?: boolean;
 };
 
 /**
@@ -118,6 +120,7 @@ const mod12 = pitchClassOf;
  * @category Pitch & Intervals
  */
 export function diatonicLetterOf(value: number): number {
+  assertFiniteNumber(value, 'diatonic letter');
   return ((Math.round(value) % 7) + 7) % 7;
 }
 
@@ -155,6 +158,9 @@ const mod7 = diatonicLetterOf;
  * @category Pitch & Intervals
  */
 export function parseNote(text: string): Note {
+  if (typeof text !== 'string') {
+    throw new InvalidInputError(`note must be a string; received ${typeof text}`);
+  }
   const match = /^([A-Ga-g])([#x]*|b*)(-?\d+)?$/.exec(text.trim());
   if (!match) {
     throw new InvalidInputError(`Invalid note: ${text}`);
@@ -353,8 +359,14 @@ export function transposeNote(
       ? bareOf(midiToNote(60 + mod12(noteToPitchClass(note) + steps), opts.spelling))
       : midiToNote(noteToMidi(note) + steps, opts.spelling);
   }
-  const octaves = Math.floor(steps / 12);
-  const letterSteps = (LETTER_STEPS_BY_SEMITONE[steps - 12 * octaves] ?? 0) + 7 * octaves;
+  const direction = steps < 0 ? -1 : 1;
+  const magnitude = Math.abs(steps);
+  const octaves = Math.floor(magnitude / 12);
+  const withinOctave = magnitude % 12;
+  // Descending motion reverses the conventional ascending letter distance.
+  // Deriving it from floor(negative / 12) treated -6 as a descending fourth,
+  // so transpose(+n) followed by transpose(-n) changed the letter spelling.
+  const letterSteps = direction * ((LETTER_STEPS_BY_SEMITONE[withinOctave] ?? 0) + 7 * octaves);
   const absoluteLetter = mod7(note.letter) + letterSteps;
   const letter = mod7(absoluteLetter);
   const natural = LETTER_SEMITONES[letter] ?? 0;
@@ -451,7 +463,7 @@ export function intervalSemitones(numberValue: number, quality: IntervalQualityL
     return reference + quality.length;
   }
   if (/^d+$/.test(quality)) {
-    return reference - quality.length - (perfect ? 0 : 1);
+    return Math.abs(reference - quality.length - (perfect ? 0 : 1));
   }
   throw new InvalidInputError(`unknown interval quality ${JSON.stringify(quality)}`);
 }
@@ -460,7 +472,8 @@ export function intervalSemitones(numberValue: number, quality: IntervalQualityL
  * Parse an interval name such as `'P5'`, `'m3'`, or `'AA4'`.
  *
  * @param name The interval name: a quality label followed by a diatonic number.
- * @returns The spelled interval, with an ascending (positive) span.
+ * @returns The spelled interval. Diminished unisons have a descending
+ *   (negative) semitone span; all other supported names are ascending.
  * @throws If the name is not a quality label followed by a number, or the two
  *   cannot describe the same interval.
  * @example
@@ -502,9 +515,12 @@ export function parseInterval(name: string): SpelledInterval {
  */
 export function transposeByInterval(note: Note, interval: SpelledInterval): Note {
   assertNote(note, 'note');
-  assertInteger(interval.number, 'interval.number', 1, 64);
+  // `spelledInterval` accepts the full supported octave range, so accepting
+  // only 64 here made a value produced by that sibling public function
+  // impossible to apply back to its source note.
+  assertInteger(interval.number, 'interval.number', 1);
   assertFiniteNumber(interval.semitones, 'interval.semitones');
-  const descending = interval.semitones < 0;
+  const descending = interval.descending ?? interval.semitones < 0;
   const letterSteps = (interval.number - 1) * (descending ? -1 : 1);
   const absoluteLetter = mod7(note.letter) + letterSteps;
   const letter = mod7(absoluteLetter);
@@ -589,5 +605,6 @@ export function spelledInterval(a: Note, b: Note): SpelledInterval {
   const directedSpan =
     letterSteps === 0 ? Math.abs(semitones) : letterSteps > 0 ? semitones : -semitones;
   const quality = qualityFromSpan(number, directedSpan);
-  return { number, quality, semitones };
+  const descending = letterSteps < 0 || (letterSteps === 0 && semitones < 0);
+  return { number, quality, semitones, descending };
 }

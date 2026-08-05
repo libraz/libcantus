@@ -7,9 +7,11 @@ import {
   MAJOR_MASK,
   MELODIC_MINOR_MASK,
   majorKey,
+  minorKey,
   NATURAL_MINOR_MASK,
   nearestScaleTone,
   pitchToScaleDegree,
+  scaleByName,
 } from '../src/theory/scale/index.js';
 
 const cMajor: KeyScale = { rootPc: 0, modeMask12: MAJOR_MASK };
@@ -57,6 +59,21 @@ describe('nearestScaleTone', () => {
   it('returns an in-scale pitch unchanged', () => {
     expect(nearestScaleTone(64, cMajor)).toBe(64);
   });
+
+  it('never returns a pitch beyond the MIDI range', () => {
+    expect(nearestScaleTone(-12, cMajor)).toBeGreaterThanOrEqual(0);
+    expect(nearestScaleTone(200, cMajor)).toBeLessThanOrEqual(127);
+  });
+});
+
+describe('key construction', () => {
+  it.each([majorKey, minorKey, (root: number) => scaleByName('dorian', root)])(
+    'rejects a non-finite root pitch class',
+    (create) => {
+      expect(() => create(Number.NaN)).toThrow(RangeError);
+      expect(() => create(Number.POSITIVE_INFINITY)).toThrow(RangeError);
+    },
+  );
 });
 
 describe('pitchToScaleDegree', () => {

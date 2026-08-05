@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   barPositionToBeat,
+  barPositionToPulse,
   beatsPerBar,
   beatToBarPosition,
+  formatBarPosition,
   formatTimeSignature,
   isCompound,
   isStrongBeat,
   metricWeight,
   parseTimeSignature,
+  pulseBeats,
   pulsesPerBar,
   type TimeSignature,
   tuplet,
@@ -18,6 +21,11 @@ describe('time signatures', () => {
     expect(parseTimeSignature('6/8')).toEqual({ numerator: 6, denominator: 8 });
     expect(formatTimeSignature({ numerator: 4, denominator: 4 })).toBe('4/4');
     expect(() => parseTimeSignature('4-4')).toThrow();
+  });
+
+  it('round-trips additive groupings', () => {
+    const aksak = { numerator: 7, denominator: 8, grouping: [2, 2, 3] };
+    expect(parseTimeSignature(formatTimeSignature(aksak, { grouping: true }))).toEqual(aksak);
   });
 
   it('classifies compound meters', () => {
@@ -59,6 +67,19 @@ describe('bar positions', () => {
     const ts = parseTimeSignature('4/4');
     expect(beatToBarPosition(6, ts)).toEqual({ bar: 1, beat: 2 });
     expect(barPositionToBeat({ bar: 1, beat: 2 }, ts)).toBe(6);
+  });
+
+  it('never emits a beat beyond the bar or an ambiguous second dot', () => {
+    expect(formatBarPosition(3.999, parseTimeSignature('4/4'))).toBe('2.1');
+    expect(formatBarPosition(8, parseTimeSignature('6/8'))).toBe('3.2+0.33');
+    expect(() => formatBarPosition(0, parseTimeSignature('4/4'), -1)).toThrow(RangeError);
+  });
+
+  it('converts compound-meter offsets to their felt pulse numbers', () => {
+    const ts = parseTimeSignature('6/8');
+    expect(pulseBeats(ts)).toBe(1.5);
+    expect(barPositionToPulse({ bar: 2, beat: 0 }, ts)).toBe(1);
+    expect(barPositionToPulse({ bar: 2, beat: 1.5 }, ts)).toBe(2);
   });
 });
 

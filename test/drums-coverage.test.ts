@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { euclideanRhythm, hasHit, patternToMask } from '../src/generate/drums/euclid.js';
+import { euclideanRhythm } from '../src/generate/drums/euclid.js';
 import {
   type FillType,
   generateFill,
@@ -15,7 +15,6 @@ import type {
   Section,
 } from '../src/generate/drums/index.js';
 import { generateDrums } from '../src/generate/drums/index.js';
-import { euclideanToKickPattern } from '../src/generate/drums/kick.js';
 import { createRng } from '../src/generate/drums/rng.js';
 
 const STYLES: GrooveStyle[] = [
@@ -131,13 +130,6 @@ describe('euclid', () => {
     }
     expect(euclideanRhythm(3, 8, 8)).toEqual(base);
     expect(euclideanRhythm(3, 8, -2)).toEqual(euclideanRhythm(3, 8, 6));
-  });
-
-  it('maps a euclidean pattern to a kick pattern', () => {
-    const mask = patternToMask(euclideanRhythm(4, 16));
-    const kick = euclideanToKickPattern(mask);
-    expect(kick.beat1).toBe(true);
-    expect(hasHit(mask, 0)).toBe(true);
   });
 
   it('drives the kick from a euclidean option in generateDrums', () => {
@@ -258,8 +250,8 @@ describe('fills', () => {
   it('sizes fills by energy', () => {
     expect(getFillStartBeat('low')).toBe(3);
     expect(getFillStartBeat('medium')).toBe(2);
-    expect(getFillStartBeat('high')).toBe(0);
-    expect(getFillStartBeat('peak')).toBe(0);
+    expect(getFillStartBeat('high')).toBe(2);
+    expect(getFillStartBeat('peak')).toBe(2);
   });
 
   it('selects fills from the expected set for each transition context', () => {

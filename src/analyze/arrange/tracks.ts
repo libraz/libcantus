@@ -184,22 +184,21 @@ export type ArrangementOptions = {
  * same track are included, so dissonant clusters inside a single polyphonic
  * track are still detected.
  */
-function otherVoicesSounding(
-  prepared: PreparedTrack[],
-  excludeTrack: number,
-  excludeVoice: number,
-  beat: number,
-): VoiceSnapshot[] {
-  const out: VoiceSnapshot[] = [];
+type SoundingVoice = {
+  track: number;
+  voice: number;
+  snapshot: VoiceSnapshot;
+};
+
+/** Build one complete arrangement snapshot for an evaluation beat. */
+function soundingVoicesAt(prepared: PreparedTrack[], beat: number): SoundingVoice[] {
+  const out: SoundingVoice[] = [];
   for (let t = 0; t < prepared.length; t += 1) {
     const track = prepared[t];
     if (!track || isPercussion(track.role)) {
       continue;
     }
     for (let v = 0; v < track.voices.length; v += 1) {
-      if (t === excludeTrack && v === excludeVoice) {
-        continue;
-      }
       // Each sub-voice is monophonic, so this is one binary search per voice
       // rather than a scan of every note in the arrangement.
       const note = track.voices[v]?.at(beat);
@@ -214,10 +213,25 @@ function otherVoicesSounding(
       if (previous !== undefined) {
         snap.prevPitch = previous;
       }
-      out.push(snap);
+      out.push({ track: t, voice: v, snapshot: snap });
     }
   }
   return out;
+}
+
+/** Get every simultaneous voice except the one being evaluated. */
+function otherVoicesSounding(
+  prepared: PreparedTrack[],
+  excludeTrack: number,
+  excludeVoice: number,
+  beat: number,
+  cache: Map<number, SoundingVoice[]>,
+): VoiceSnapshot[] {
+  const sounding = cache.get(beat) ?? soundingVoicesAt(prepared, beat);
+  cache.set(beat, sounding);
+  return sounding
+    .filter(({ track, voice }) => track !== excludeTrack || voice !== excludeVoice)
+    .map(({ snapshot }) => snapshot);
 }
 
 /** Index of the first segment starting strictly after a beat. */
@@ -343,15 +357,20 @@ export function analyzeArrangement(
           key: opts.key,
           ts,
           harmonicRhythm: opts.harmonicRhythm,
+          budget,
         })
       : {
           timeline: opts.timeline,
-          key: opts.key ?? detectKeyFromNotes(pooled)[0]?.key ?? majorKey(0),
-          segmentConfidence: opts.timeline.segments.map(() => 1),
+          key: opts.key ?? detectKeyFromNotes(pooled, { budget })[0]?.key ?? majorKey(0),
+          // A caller-provided timeline was not inferred from these notes, so
+          // it has no measured confidence. Reporting 1 would turn confidence
+          // gates into unconditional passes.
+          segmentConfidence: opts.timeline.segments.map(() => 0),
         };
   const { timeline, key, segmentConfidence } = inferred;
   const cadences = detectCadences(timeline, key);
   const prepared = prepareTracks(tracks);
+  const soundingCache = new Map<number, SoundingVoice[]>();
 
   const trackAnalyses: TrackAnalysis[] = [];
   const conflicts: Conflict[] = [];
@@ -374,7 +393,7 @@ export function analyzeArrangement(
         continue;
       }
       const analyzed = analyzeVoice(subVoice.voice, timeline.at, key, (beat) =>
-        otherVoicesSounding(prepared, t, v, beat),
+        otherVoicesSounding(prepared, t, v, beat, soundingCache),
       );
       notes.push(...analyzed.map((note) => ({ ...note, trackIndex: track.trackIndex })));
       const labelsById = new Map(analyzed.map((note) => [note.noteId, note.labels]));
@@ -387,16 +406,21 @@ export function analyzeArrangement(
         }
         for (const beat of evaluationBeats(note, timeline)) {
           const atOnset = Math.abs(beat - note.startBeat) <= EPS;
-          const result = evaluateSafety({
+          const safetyQuery = {
             profile,
             candidatePitch: note.pitch,
             prevPitch: atOnset ? preparedNote.prevPitch : note.pitch,
             chord: timeline.at(beat),
             key,
-            otherVoices: otherVoicesSounding(prepared, t, v, beat),
+            otherVoices: otherVoicesSounding(prepared, t, v, beat, soundingCache),
             strongBeat: isStrongBeat(beat, ts),
-          });
+          };
+          // Most evaluations become no reportable conflict. Avoid their
+          // replacement-pitch scan (up to 24 recursive safety checks), then
+          // collect suggestions only for the conflicts we will retain.
+          let result = evaluateSafety(safetyQuery, { suggestions: false });
           if (result.safety !== NoteSafety.Safe && result.safety >= minSeverity) {
+            result = evaluateSafety(safetyQuery);
             const conflict: Conflict = {
               beat,
               trackName: track.name,

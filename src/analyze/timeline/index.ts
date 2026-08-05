@@ -14,7 +14,7 @@ import type { Chord, ChordSpan } from '../../theory/chord/index.js';
 import { chordPitchClasses, makeChord } from '../../theory/chord/index.js';
 import { isScaleTone, majorKey } from '../../theory/scale/index.js';
 import type { ChordMatch } from '../detect/index.js';
-import { detectChord, detectChordBest, detectKeyFromNotes } from '../detect/index.js';
+import { detectChord, detectKeyFromNotes } from '../detect/index.js';
 import type { Cadence } from '../functional/index.js';
 import { detectCadence } from '../functional/index.js';
 
@@ -113,9 +113,6 @@ const NOISE_THRESHOLD_RATIO = 0.2;
 
 /** Maximum number of pitch classes fed to chord detection per window. */
 const MAX_DETECTION_PCS = 6;
-
-/** Number of top-weighted pitch classes tried in the detection fallback. */
-const FALLBACK_PCS = 3;
 
 /** Confidence multiplier applied when the chosen chord match is inexact. */
 const INEXACT_CONFIDENCE_FACTOR = 0.85;
@@ -284,13 +281,16 @@ function analyzeWindow(
     .map(({ pc }) => pc);
 
   // Feed detection with the window's true bass as the lowest pitch so inversion
-  // detection works; when the bass pc was filtered out as noise, anchor on the
-  // heaviest pc instead so no spurious inversion is reported.
+  // detection works. If that pitch class was removed as noise, detection must
+  // become unordered instead: promoting the strongest remaining tone to bass
+  // manufactures a slash chord that the input never established.
   const bassPc = pitchClass(lowestPitch);
-  const anchorPc = selected.includes(bassPc) ? bassPc : (selected[0] ?? bassPc);
-  const detectionPitches = selected.map((pc) => (pc === anchorPc ? pc : pc + 12));
+  const hasBass = selected.includes(bassPc);
+  const detectionPitches = hasBass
+    ? selected.map((pc) => (pc === bassPc ? pc : pc + 12))
+    : selected;
 
-  const matches = detectChord(detectionPitches);
+  const matches = detectChord(detectionPitches, { input: hasBass ? 'midi' : 'pitchClass' });
   let bestMatch: ChordMatch | null = null;
   let bestScore = Number.NEGATIVE_INFINITY;
   for (const match of matches) {
@@ -305,11 +305,6 @@ function analyzeWindow(
     return { chord, confidence: chordConfidence(chord, weights, totalWeight, bestMatch.exact) };
   }
 
-  // Fallback: retry on only the top-weighted pitch classes.
-  const fallback = detectChordBest(selected.slice(0, FALLBACK_PCS));
-  if (fallback) {
-    return { chord: fallback, confidence: chordConfidence(fallback, weights, totalWeight, false) };
-  }
   return null;
 }
 
@@ -373,7 +368,7 @@ export function chordTimelineFromNotes(
   // Weighted by duration and velocity, exactly as the per-window chord
   // histogram below is: a busy ornamental figure must not outvote the sustained
   // harmony that establishes the key.
-  const key = opts.key ?? detectKeyFromNotes(sounding)[0]?.key ?? majorKey(0);
+  const key = opts.key ?? detectKeyFromNotes(sounding, { budget })[0]?.key ?? majorKey(0);
 
   const segments: ChordSegment[] = [];
   const segmentConfidence: number[] = [];

@@ -1,4 +1,5 @@
 import { InvalidInputError } from '../../core/errors/index.js';
+import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import {
   assertFiniteNumber,
@@ -55,6 +56,7 @@ export enum ReasonFlag {
   VoiceCrossing = 1 << 13,
   Suspension = 1 << 14,
   NeedsResolution = 1 << 15,
+  MelodicTritone = 1 << 16,
 }
 
 /**
@@ -112,6 +114,7 @@ const REASON_SEVERITY: ReadonlyArray<
   [ReasonFlag.NonScale, NoteSafety.Dissonant, NoteSafety.Dissonant],
   [ReasonFlag.OutOfRange, NoteSafety.Warning, NoteSafety.Warning],
   [ReasonFlag.Tritone, NoteSafety.Dissonant, NoteSafety.Dissonant],
+  [ReasonFlag.MelodicTritone, NoteSafety.Warning, NoteSafety.Dissonant],
   [ReasonFlag.LargeLeap, NoteSafety.Warning, NoteSafety.Dissonant],
   [ReasonFlag.VerticalDissonance, NoteSafety.Dissonant, NoteSafety.Dissonant],
   [ReasonFlag.ParallelPerfect, NoteSafety.Warning, NoteSafety.Dissonant],
@@ -152,8 +155,13 @@ function avoidsMajorSeventh(chord: Chord): boolean {
  * a property of the harmony, so it stays reportable.
  */
 function isStructuralChordDissonance(a: number, b: number, chord: Chord): boolean {
-  const cls = Math.abs(Math.trunc(a) - Math.trunc(b)) % 12;
-  if (cls !== 6 && cls !== 10 && cls !== 11) {
+  const rawClass = pitchClass(Math.abs(a - b));
+  const aOffset = intervalAboveRoot(a, chord);
+  const bOffset = intervalAboveRoot(b, chord);
+  const rootSeventh =
+    (aOffset === 0 && (bOffset === 10 || bOffset === 11)) ||
+    (bOffset === 0 && (aOffset === 10 || aOffset === 11));
+  if (rawClass !== 6 && !rootSeventh) {
     return false;
   }
   return isChordMember(a, chord) && isChordMember(b, chord);
@@ -267,6 +275,14 @@ function evaluateInternal(q: SafetyQuery, collectSuggestions: boolean): SafetyRe
   const inScale = isScaleTone(pitch, q.key);
   const chord = q.chord;
 
+  // A chromatic avoid note remains chromatic. The avoid-note branch below
+  // refines the resolution guidance, but must not erase the key relationship
+  // or downgrade a non-scale pitch to a merely stylistic warning.
+  if (!inScale && (chord === null || !isChordMember(pitch, chord))) {
+    reasons |= ReasonFlag.NonScale;
+    raise(NoteSafety.Dissonant);
+  }
+
   if (chord && isChordMember(pitch, chord)) {
     reasons |= ReasonFlag.ChordTone;
   } else if (chord) {
@@ -287,16 +303,10 @@ function evaluateInternal(q: SafetyQuery, collectSuggestions: boolean): SafetyRe
     } else if (inScale) {
       reasons |= ReasonFlag.ScaleTone;
       raise(NoteSafety.Warning);
-    } else {
-      reasons |= ReasonFlag.NonScale;
-      raise(NoteSafety.Dissonant);
     }
   } else if (inScale) {
     reasons |= ReasonFlag.ScaleTone;
     raise(NoteSafety.Warning);
-  } else {
-    reasons |= ReasonFlag.NonScale;
-    raise(NoteSafety.Dissonant);
   }
 
   // Harmonic tritone against a chord tone. A chord tone is never flagged for a
@@ -319,8 +329,8 @@ function evaluateInternal(q: SafetyQuery, collectSuggestions: boolean): SafetyRe
     // octave boundary (an octave leap is allowed, wider leaps are not).
     const pc = Math.abs(pitch - q.prevPitch) % 12;
     if (pc === 6) {
-      reasons |= ReasonFlag.Tritone;
-      raise(NoteSafety.Dissonant);
+      reasons |= ReasonFlag.MelodicTritone;
+      raise(q.profile === 'strict' ? NoteSafety.Dissonant : NoteSafety.Warning);
     }
     if (isForbiddenMelodicLeap(q.prevPitch, pitch)) {
       reasons |= ReasonFlag.LargeLeap;
@@ -418,6 +428,9 @@ function findSafeNearby(q: SafetyQuery, candidate: number): number[] {
   const out: number[] = [];
   for (let d = 1; d <= SUGGESTION_WINDOW; d += 1) {
     for (const p of [candidate - d, candidate + d]) {
+      if (p < 0 || p > 127) {
+        continue;
+      }
       if (evaluateInternal({ ...q, candidatePitch: p }, false).safety === NoteSafety.Safe) {
         out.push(p);
         if (out.length >= MAX_SUGGESTIONS) {
@@ -445,6 +458,7 @@ const REASON_TEXT: ReadonlyArray<readonly [ReasonFlag, string]> = [
   ],
   [ReasonFlag.VerticalDissonance, 'Dissonant against a sounding voice on a strong beat'],
   [ReasonFlag.Tritone, 'Tritone against the sounding harmony'],
+  [ReasonFlag.MelodicTritone, 'Melodic tritone leap'],
   [ReasonFlag.AvoidNote, 'Avoid note — clashes with a chord tone a semitone away'],
   [ReasonFlag.NonScale, 'Outside the key'],
   [ReasonFlag.ParallelPerfect, 'Parallel perfect interval with another voice'],
@@ -454,8 +468,8 @@ const REASON_TEXT: ReadonlyArray<readonly [ReasonFlag, string]> = [
   [ReasonFlag.NeedsResolution, 'Dissonance awaiting a stepwise resolution'],
   [ReasonFlag.Tension, 'Chord tension'],
   [ReasonFlag.ScaleTone, 'Scale tone, not in the chord'],
-  [ReasonFlag.MinorSecond, 'A semitone from a sounding voice'],
-  [ReasonFlag.MajorSeventh, 'A major seventh from a sounding voice'],
+  [ReasonFlag.MinorSecond, 'Melodic semitone'],
+  [ReasonFlag.MajorSeventh, 'Melodic major seventh'],
   [ReasonFlag.ChordTone, 'Chord tone'],
 ];
 
@@ -528,7 +542,9 @@ export function enumerateSafePitches(
     );
   }
   assertGenerationBudget(pitchHigh - pitchLow + 1, 'safe pitch candidates');
-  for (let pitch = pitchHigh; pitch >= pitchLow; pitch -= 1) {
+  const low = Math.max(pitchLow, q.vocalLow ?? pitchLow);
+  const high = Math.min(pitchHigh, q.vocalHigh ?? pitchHigh);
+  for (let pitch = high; pitch >= low; pitch -= 1) {
     const result = evaluateInternal({ ...q, candidatePitch: pitch }, false);
     if (result.safety === NoteSafety.Dissonant) {
       continue;

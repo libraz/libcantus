@@ -4,12 +4,14 @@ import type { Chord } from '../chord/index.js';
 import { createsHiddenParallelPerfect } from '../counterpoint/index.js';
 import {
   enumerateVoicings,
+  RESOLUTION_PENALTY,
+  resolutionViolations,
   structuralPenalty,
   VIOLATION_PENALTY,
   violationCount,
 } from './internal.js';
 import type { VoicingOptions } from './satb.js';
-import { resolveMaxSpacing, resolveRanges } from './satb.js';
+import { resolveMaxCandidates, resolveMaxSpacing, resolveRanges } from './satb.js';
 
 /**
  * Moderate penalty for a hidden/direct perfect fifth or octave reached on the
@@ -104,15 +106,40 @@ export function nextVoicing(current: number[], chord: Chord, opts?: VoicingOptio
         return { min: Math.max(0, centre - 12), max: Math.min(127, centre + 12) };
       })
     : resolveRanges(opts);
+  for (let index = 0; index < current.length; index += 1) {
+    assertFiniteNumber(current[index] ?? Number.NaN, `current[${index}]`);
+  }
+  if (current.length < ranges.length) {
+    throw new InvalidInputError(
+      `current has ${current.length} voices but the requested ranges require ${ranges.length}`,
+    );
+  }
+  // Thinning an existing texture is a normal use case (SATB to three voices,
+  // for example). Keep the outer voices and select evenly spaced inner voices
+  // so motion is still measured between like voice roles.
+  const source =
+    current.length === ranges.length
+      ? current
+      : ranges.length === 1
+        ? [current[0] ?? Number.NaN]
+        : ranges.map((_, index) => {
+            const sourceIndex = Math.round((index * (current.length - 1)) / (ranges.length - 1));
+            return current[sourceIndex] ?? Number.NaN;
+          });
   const maxSpacing = resolveMaxSpacing(opts);
-  const candidates = enumerateVoicings(chord, ranges, maxSpacing);
+  const candidates = enumerateVoicings(chord, ranges, maxSpacing, resolveMaxCandidates(opts));
+  const previousChord = opts?.previousChord;
   let best: number[] | undefined;
   let bestScore = Number.POSITIVE_INFINITY;
   for (const candidate of candidates) {
     const score =
       structuralPenalty(candidate, chord, opts?.key) +
-      voiceLeadingCost(current, candidate) +
-      VIOLATION_PENALTY * violationCount(current, candidate);
+      voiceLeadingCost(source, candidate) +
+      VIOLATION_PENALTY * violationCount(source, candidate) +
+      RESOLUTION_PENALTY *
+        (previousChord === undefined
+          ? 0
+          : resolutionViolations(source, candidate, previousChord, chord, opts?.key));
     if (score < bestScore) {
       bestScore = score;
       best = candidate;

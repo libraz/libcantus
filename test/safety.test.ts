@@ -42,6 +42,13 @@ describe('evaluateSafety', () => {
     expect(pop.resolveTo).toBe(64); // resolves down to E
   });
 
+  it('keeps a chromatic avoid note marked as non-scale', () => {
+    const result = evaluateSafety(query({ candidatePitch: 66, chord: makeChord(7, 'dom7') }));
+    expect(result.reasons & ReasonFlag.AvoidNote).toBeTruthy();
+    expect(result.reasons & ReasonFlag.NonScale).toBeTruthy();
+    expect(result.safety).toBe(NoteSafety.Dissonant);
+  });
+
   it('flags a chromatic tritone above the root', () => {
     const r = evaluateSafety(query({ candidatePitch: 66 })); // F#
     expect(r.reasons & ReasonFlag.NonScale).toBeTruthy();
@@ -143,7 +150,7 @@ it('flags a forbidden melodic leap and minor second against the previous pitch',
   expect(semitone.reasons & ReasonFlag.MinorSecond).toBeTruthy();
 });
 
-it('never reports a hard-rule tritone or forbidden leap as Safe', () => {
+it('applies the safety profile to melodic tritones and forbidden leaps', () => {
   const leapPop = evaluateSafety(query({ candidatePitch: 76, prevPitch: 60, profile: 'pop' }));
   const leapStrict = evaluateSafety(
     query({ candidatePitch: 76, prevPitch: 60, profile: 'strict' }),
@@ -153,13 +160,13 @@ it('never reports a hard-rule tritone or forbidden leap as Safe', () => {
   expect(leapStrict.safety).toBe(NoteSafety.Dissonant);
 
   const tritoneChord: Chord = { rootPc: 0, quality: 'majb5', intervals: [0, 4, 6] };
-  for (const profile of ['pop', 'strict'] as const) {
-    const result = evaluateSafety(
-      query({ candidatePitch: 66, prevPitch: 60, chord: tritoneChord, profile }),
-    );
-    expect(result.reasons & ReasonFlag.Tritone).toBeTruthy();
-    expect(result.safety).toBe(NoteSafety.Dissonant);
-  }
+  const pop = evaluateSafety(query({ candidatePitch: 66, prevPitch: 60, chord: tritoneChord }));
+  const strict = evaluateSafety(
+    query({ candidatePitch: 66, prevPitch: 60, chord: tritoneChord, profile: 'strict' }),
+  );
+  expect(pop.reasons & ReasonFlag.MelodicTritone).toBeTruthy();
+  expect(pop.safety).toBe(NoteSafety.Warning);
+  expect(strict.safety).toBe(NoteSafety.Dissonant);
 });
 
 it('flags parallel octaves moving by similar motion', () => {
@@ -198,6 +205,43 @@ describe('chord tones are never rejected for the chord they belong to', () => {
         expect(r.reasons & ReasonFlag.ChordTone, `${label} pc ${pc}`).toBeTruthy();
         expect(r.reasons & ReasonFlag.Tritone, `${label} pc ${pc}`).toBeFalsy();
         expect(r.safety, `${label} pc ${pc}`).toBe(NoteSafety.Safe);
+      }
+    }
+  });
+
+  it('treats structural chord-tone dissonances identically in either inversion', () => {
+    for (const quality of chordQualities()) {
+      const chord = makeChord(0, quality);
+      const tones = chordPitchClasses(chord);
+      for (const a of tones) {
+        for (const b of tones) {
+          const rawInterval = Math.abs(a - b) % 12;
+          const rootSeventh =
+            (a === 0 && (b === 10 || b === 11)) || (b === 0 && (a === 10 || a === 11));
+          if (rawInterval !== 6 && !rootSeventh) {
+            continue;
+          }
+          const above = evaluateSafety(
+            query({
+              candidatePitch: 72 + a,
+              chord,
+              strongBeat: true,
+              otherVoices: [{ pitch: 48 + b }],
+            }),
+          );
+          const below = evaluateSafety(
+            query({
+              candidatePitch: 72 + b,
+              chord,
+              strongBeat: true,
+              otherVoices: [{ pitch: 48 + a }],
+            }),
+          );
+          expect(
+            Boolean(above.reasons & ReasonFlag.VerticalDissonance),
+            `${quality}: ${a} above ${b}`,
+          ).toBe(Boolean(below.reasons & ReasonFlag.VerticalDissonance));
+        }
       }
     }
   });
@@ -325,6 +369,11 @@ describe('rationale', () => {
 });
 
 describe('enumerateSafePitches', () => {
+  it('honors the vocal range supplied in its safety context', () => {
+    const pitches = enumerateSafePitches(query({ vocalLow: 62, vocalHigh: 67 }), 55, 72);
+    expect(pitches).not.toHaveLength(0);
+    expect(pitches.every((pitch) => pitch >= 62 && pitch <= 67)).toBe(true);
+  });
   it('lists chord tones first, descending, and excludes dissonances', () => {
     const pitches = enumerateSafePitches(query({}), 60, 67);
     expect(pitches[0]).toBe(67); // top chord tone (G)

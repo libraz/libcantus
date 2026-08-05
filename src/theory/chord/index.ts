@@ -20,6 +20,9 @@ export type ChordQuality =
   | 'dim7'
   | 'm7b5'
   | 'minMaj7'
+  | 'minMaj9'
+  | 'minMaj11'
+  | 'minMaj13'
   | 'aug7'
   | 'augMaj7'
   | 'majb5'
@@ -139,6 +142,9 @@ const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
   dim7: [0, 3, 6, 9],
   m7b5: [0, 3, 6, 10],
   minMaj7: [0, 3, 7, 11],
+  minMaj9: [0, 3, 7, 11, 14],
+  minMaj11: [0, 3, 7, 11, 14, 17],
+  minMaj13: [0, 3, 7, 11, 14, 21],
   aug7: [0, 4, 8, 10],
   augMaj7: [0, 4, 8, 11],
   '6': [0, 4, 7, 9],
@@ -372,7 +378,7 @@ export function chordToneRole(pitch: number, chord: Chord): ChordToneRole | null
     return 'root';
   }
   if (interval === 3 || interval === 4) {
-    return tones.has(interval) ? 'third' : null;
+    return tones.has(interval) && (interval !== 3 || !tones.has(4)) ? 'third' : null;
   }
   if (interval === 7) {
     return tones.has(7) ? 'fifth' : null;
@@ -390,7 +396,7 @@ export function chordToneRole(pitch: number, chord: Chord): ChordToneRole | null
   if (interval === 9) {
     const hasHigherSeventh = tones.has(10) || tones.has(11);
     const isDiminishedSeventh = tones.has(3) && tones.has(6) && !hasHigherSeventh;
-    if (isDiminishedSeventh) {
+    if (tones.has(9) && isDiminishedSeventh) {
       return 'seventh';
     }
     if (tones.has(9) && !hasHigherSeventh) {
@@ -441,14 +447,27 @@ function classifySeventh(thirdIc: number, fifthIc: number, seventhIc: number): C
   if (fifthIc === 8 && seventhIc === 11) {
     return 'augMaj7';
   }
+  if (fifthIc === 6 && seventhIc === 10) {
+    return '7b5';
+  }
   if (seventhIc === 11) {
     return 'maj7';
   }
   return 'dom7';
 }
 
+/** Whether a classified quality describes precisely the stacked pitch classes. */
+function matchesQualityIntervals(quality: ChordQuality, intervals: readonly number[]): boolean {
+  const template = QUALITY_INTERVALS[quality];
+  return (
+    template.length === intervals.length &&
+    template.every((interval, index) => interval === intervals[index])
+  );
+}
+
 /** Stack scale thirds from a scale degree into a chord of `size` notes. */
 function stackThirds(degree: number, key: KeyScale, size: 3 | 4): Chord {
+  assertInteger(degree, 'chord degree', -1000, 1000);
   const tones = scaleTonesInDegreeOrder(key);
   const length = tones.length;
   if (length !== 7) {
@@ -468,6 +487,11 @@ function stackThirds(degree: number, key: KeyScale, size: 3 | 4): Chord {
     size === 3
       ? classifyTriad(thirdIc, fifthIc)
       : classifySeventh(thirdIc, fifthIc, offsets[3] ?? 11);
+  if (!matchesQualityIntervals(quality, offsets)) {
+    throw new InvalidInputError(
+      `scale thirds at degree ${degree} produce unsupported intervals [${offsets.join(', ')}]`,
+    );
+  }
   return { rootPc, quality, intervals: offsets };
 }
 

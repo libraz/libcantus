@@ -231,20 +231,30 @@ export function ratioToCents(numerator: number, denominator: number): number {
  *
  * @category Pitch & Intervals
  */
+function justRatio(numerator: number, denominator: number): readonly [number, number] {
+  return Object.freeze([numerator, denominator] as [number, number]);
+}
+
+/**
+ * Five-limit just-intonation ratios for the twelve interval classes above a
+ * unison, indexed by semitone class (0..12).
+ *
+ * @category Pitch & Intervals
+ */
 export const JUST_RATIOS: Readonly<Record<number, readonly [number, number]>> = Object.freeze({
-  0: [1, 1],
-  1: [16, 15],
-  2: [9, 8],
-  3: [6, 5],
-  4: [5, 4],
-  5: [4, 3],
-  6: [45, 32],
-  7: [3, 2],
-  8: [8, 5],
-  9: [5, 3],
-  10: [9, 5],
-  11: [15, 8],
-  12: [2, 1],
+  0: justRatio(1, 1),
+  1: justRatio(16, 15),
+  2: justRatio(9, 8),
+  3: justRatio(6, 5),
+  4: justRatio(5, 4),
+  5: justRatio(4, 3),
+  6: justRatio(45, 32),
+  7: justRatio(3, 2),
+  8: justRatio(8, 5),
+  9: justRatio(5, 3),
+  10: justRatio(9, 5),
+  11: justRatio(15, 8),
+  12: justRatio(2, 1),
 });
 
 /**

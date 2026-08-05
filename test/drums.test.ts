@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { parseTimeSignature } from '../src/core/meter/index.js';
 import {
   type DrumsOptions,
   type GrooveStyle,
@@ -14,6 +15,7 @@ const OPEN_HAT = 46;
 const TAMBOURINE = 54;
 const HANDCLAP = 39;
 const SIDESTICK = 37;
+const SHAKER = 82;
 
 const isTom = (pitch: number) => pitch === 45 || pitch === 47 || pitch === 50;
 const isOffGrid16 = (beat: number) => {
@@ -31,6 +33,19 @@ const base: DrumsOptions = {
 };
 
 describe('generateDrums basic groove', () => {
+  it.each(['6/8', '12/8', '5/4', '7/8'])('keeps every hit inside each requested %s bar', (text) => {
+    const ts = parseTimeSignature(text);
+    const barBeats = (ts.numerator * 4) / ts.denominator;
+    const bars = 3;
+    const hits = generateDrums({ ...base, bars, ts, section: 'chorus', style: 'house' });
+    for (const hit of hits) {
+      const bar = Math.floor(hit.startBeat / barBeats);
+      expect(bar).toBeGreaterThanOrEqual(0);
+      expect(bar).toBeLessThan(bars);
+      expect(hit.startBeat).toBeLessThan((bar + 1) * barBeats);
+    }
+  });
+
   it('places a standard 1-and-3 kick and a backbeat snare', () => {
     const hits = generateDrums(base);
     const kicks = hits.filter((h) => h.pitch === KICK);
@@ -121,6 +136,47 @@ describe('generateDrums richness', () => {
         (h) => h.pitch === CLOSED_HAT && h.startBeat > 0.4 && h.startBeat < 0.9,
       )?.startBeat ?? 0;
     expect(offBeat('swing')).toBeGreaterThan(offBeat('straight'));
+  });
+
+  it('puts Euclidean kicks, shakers, and pre-chorus snare lifts on the shared shuffle grid', () => {
+    // Standard/shuffle applies 0.75 effective swing at the style's 0.5
+    // intensity, so every off-beat eighth is delayed by 0.0625 beats.
+    const swungAnd = quantizeSwing(0.5, 0.375, 'sixteenth');
+    const hiHatPitches = new Set([CLOSED_HAT, OPEN_HAT]);
+    const hasHiHatAt = (hits: ReturnType<typeof generateDrums>, tick: number) =>
+      hits.some((hit) => hiHatPitches.has(hit.pitch) && hit.startBeat === tick);
+
+    const euclidean = generateDrums({
+      ...base,
+      section: 'chorus',
+      feel: 'shuffle',
+      euclideanKick: { pulses: 3, steps: 8 },
+    });
+    const offBeatKicks = euclidean.filter((hit) => hit.pitch === KICK && hit.startBeat % 1 !== 0);
+    expect(offBeatKicks.length).toBeGreaterThan(0);
+    for (const kick of offBeatKicks) {
+      expect(kick.startBeat % 1).toBe(swungAnd);
+      expect(hasHiHatAt(euclidean, kick.startBeat)).toBe(true);
+    }
+
+    const preChorus = generateDrums({
+      ...base,
+      bars: 3,
+      bpm: 170,
+      section: 'prechorus',
+      feel: 'shuffle',
+      nextSection: 'chorus',
+    });
+    for (const barStart of [0, 4, 8]) {
+      const tick = barStart + swungAnd;
+      expect(preChorus.some((hit) => hit.pitch === SHAKER && hit.startBeat === tick)).toBe(true);
+      expect(hasHiHatAt(preChorus, tick)).toBe(true);
+    }
+    for (const barStart of [4, 8]) {
+      const tick = barStart + swungAnd;
+      expect(preChorus.some((hit) => hit.pitch === SNARE && hit.startBeat === tick)).toBe(true);
+      expect(hasHiHatAt(preChorus, tick)).toBe(true);
+    }
   });
 
   it('adds auxiliary percussion only in energetic sections', () => {
@@ -383,6 +439,27 @@ describe('generateDrums shuffle alignment', () => {
 });
 
 describe('generateDrums role ordering', () => {
+  it('keeps ambient on ride and minimal on pedal hi-hat articulations', () => {
+    const ambient = generateDrums({
+      ...base,
+      bars: 4,
+      section: 'chorus',
+      role: 'ambient',
+      seed: 1,
+    });
+    const minimal = generateDrums({
+      ...base,
+      bars: 4,
+      section: 'chorus',
+      role: 'minimal',
+      seed: 1,
+    });
+    expect(ambient.some((hit) => hit.pitch === 51)).toBe(true);
+    expect(ambient.some((hit) => hit.pitch === OPEN_HAT)).toBe(false);
+    expect(minimal.some((hit) => hit.pitch === 44)).toBe(true);
+    expect(minimal.some((hit) => hit.pitch === CLOSED_HAT || hit.pitch === OPEN_HAT)).toBe(false);
+  });
+
   it('never lets a sparser role play louder than a busier one', () => {
     const sections: Section[] = ['intro', 'verse', 'prechorus', 'chorus', 'bridge', 'outro'];
     const styles: GrooveStyle[] = ['standard', 'halftime', 'trap', 'house'];
@@ -412,6 +489,27 @@ describe('generateDrums role ordering', () => {
 });
 
 describe('generateDrums prechorus fills', () => {
+  it('leaves the opening two beats to the groove so fill archetypes can differ', () => {
+    const signatures = new Set<string>();
+    for (let seed = 0; seed < 20; seed += 1) {
+      const hits = generateDrums({
+        ...base,
+        bars: 1,
+        section: 'chorus',
+        style: 'house',
+        fills: true,
+        seed,
+      });
+      signatures.add(
+        hits
+          .filter((hit) => hit.startBeat >= 2)
+          .map((hit) => `${hit.startBeat}:${hit.pitch}`)
+          .join(','),
+      );
+    }
+    expect(signatures.size).toBeGreaterThan(1);
+  });
+
   it('honours nextSection rather than assuming a chorus follows', () => {
     const opts: DrumsOptions = {
       ...base,

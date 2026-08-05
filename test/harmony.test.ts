@@ -57,4 +57,10 @@ describe('roleOf', () => {
   it('carries the chord id through', () => {
     expect(roleOf(0, cMaj, 42).belongsToChordId).toBe(42);
   });
+
+  it('uses the shared rounded pitch-class contract', () => {
+    // 65.6 rounds to F#, so it is not the F suspended fourth.
+    expect(roleOf(65.6, cSus4).role).toBe('tension');
+    expect(() => roleOf(Number.NaN, cMaj)).toThrow(RangeError);
+  });
 });

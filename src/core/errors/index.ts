@@ -88,9 +88,9 @@ export class BudgetExceededError extends RangeError {
 export function isLibcantusError(
   value: unknown,
 ): value is InvalidInputError | NoSolutionError | BudgetExceededError {
-  return (
-    value instanceof InvalidInputError ||
-    value instanceof NoSolutionError ||
-    value instanceof BudgetExceededError
-  );
+  if (typeof value !== 'object' || value === null || !('code' in value)) {
+    return false;
+  }
+  const code = value.code;
+  return code === 'INVALID_INPUT' || code === 'NO_SOLUTION' || code === 'BUDGET_EXCEEDED';
 }

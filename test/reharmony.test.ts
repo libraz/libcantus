@@ -65,8 +65,8 @@ describe('substituteChord relative motion', () => {
   });
 });
 
-describe('every substitution kind is offered', () => {
-  it('names a borrowed, a chromatic-mediant, and a secondary dominant', () => {
+describe('substitution kinds', () => {
+  it('names borrowed and chromatic-mediant replacements without a destructive secondary dominant', () => {
     const byType = (chord: Parameters<typeof substituteChord>[0], type: string) =>
       substituteChord(chord, majorKey(0)).filter((sub) => sub.type === type);
 
@@ -88,10 +88,9 @@ describe('every substitution kind is offered', () => {
       expect([3, 4, 8, 9]).toContain((sub.chord.rootPc - 0 + 12) % 12);
     }
 
-    // Secondary dominant: the V7 that tonicizes a stable target.
-    const secondary = byType(makeChord(2, 'min'), 'secondaryDominant');
-    expect(secondary.map((sub) => sub.chord.rootPc)).toContain(9);
-    expect(secondary.every((sub) => sub.chord.quality === 'dom7')).toBe(true);
+    expect(substituteChord(makeChord(0, 'maj'), majorKey(0))).not.toContainEqual(
+      expect.objectContaining({ type: 'secondaryDominant' }),
+    );
   });
 
   it('offers substitutions in a minor key too', () => {
@@ -130,6 +129,8 @@ describe('modalInterchangePalette', () => {
     expect(sources).not.toContain('parallelMinor');
     // A major IV over an A minor tonic is the characteristic borrowing.
     expect(palette.map((borrowed) => borrowed.chord.rootPc)).toContain(2);
+    expect(palette.map((borrowed) => borrowed.roman)).not.toContain('V');
+    expect(palette.map((borrowed) => borrowed.roman)).not.toContain('#viio');
   });
 
   it('does not call the b2 chord a borrowing in a key that already has it', () => {

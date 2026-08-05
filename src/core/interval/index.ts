@@ -1,4 +1,4 @@
-import { assertFiniteNumber } from '../validation/index.js';
+import { pitchClassOf } from '../pitch/index.js';
 
 /**
  * Counterpoint classification of a harmonic interval by consonance.
@@ -24,8 +24,7 @@ export enum ConsonanceClass {
  * interval is rejected once rather than silently classifying as a dissonance.
  */
 function simpleInterval(semitones: number): number {
-  assertFiniteNumber(semitones, 'semitones');
-  return Math.abs(Math.round(semitones)) % 12;
+  return pitchClassOf(Math.abs(semitones));
 }
 
 /**

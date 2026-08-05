@@ -63,6 +63,15 @@ export type VoicingOptions = {
    */
   maxSpacing?: number;
   /**
+   * Maximum candidate voicings evaluated for one chord.
+   *
+   * Raise this for large voicings when exact optimum matters more than bounded
+   * search time.
+   *
+   * @defaultValue 4000
+   */
+  maxCandidates?: number;
+  /**
    * Maximum number of chords {@link voiceProgression} will voice. The search
    * per chord is bounded internally, so the cost of a progression is linear in
    * its length; this is the guard against an unbounded caller, not a limit on
@@ -78,6 +87,12 @@ export type VoicingOptions = {
    * voice-leading distance alone.
    */
   key?: KeyScale;
+  /**
+   * The chord that produced the current voicing passed to {@link nextVoicing}.
+   * When supplied, chordal-seventh resolution is scored exactly as it is by
+   * {@link voiceProgression}.
+   */
+  previousChord?: Chord;
 };
 
 /** Overall pitch floor/ceiling used when deriving ranges for arbitrary voice counts. */
@@ -143,6 +158,13 @@ export function resolveMaxSpacing(opts?: VoicingOptions): number {
   return maxSpacing;
 }
 
+/** Resolve and validate the per-chord candidate-search cap. */
+export function resolveMaxCandidates(opts?: VoicingOptions): number | undefined {
+  if (opts?.maxCandidates === undefined) return undefined;
+  assertPositiveInt(opts.maxCandidates, 'maxCandidates', 1_000_000);
+  return opts.maxCandidates;
+}
+
 /**
  * Realize a single chord as one MIDI pitch per voice, ascending (index 0 =
  * lowest). The bass voice takes the chord's `bassPc` when set, otherwise the
@@ -166,7 +188,7 @@ export function resolveMaxSpacing(opts?: VoicingOptions): number {
 export function voiceChord(chord: Chord, opts?: VoicingOptions): number[] {
   const ranges = resolveRanges(opts);
   const maxSpacing = resolveMaxSpacing(opts);
-  const candidates = enumerateVoicings(chord, ranges, maxSpacing);
+  const candidates = enumerateVoicings(chord, ranges, maxSpacing, resolveMaxCandidates(opts));
   let best: number[] | undefined;
   let bestScore = Number.POSITIVE_INFINITY;
   for (const candidate of candidates) {
@@ -245,10 +267,25 @@ function locate<T>(index: number, chord: Chord, work: () => T): T {
   }
 }
 
+/**
+ * Voice a chord progression with smooth, bounded SATB-style leading.
+ *
+ * Each chord is chosen from a deterministic candidate set, minimizing motion
+ * while penalizing counterpoint violations. A supplied key additionally
+ * resolves leading tones and chordal sevenths.
+ *
+ * @param chords The chords to voice in order.
+ * @param opts Voicing options; defaults to four voices in {@link SATB_RANGES}.
+ * @returns One ascending MIDI voicing per chord.
+ * @throws {@link NoSolutionError} with the failing chord index when a chord
+ *   cannot fit the requested ranges.
+ * @category Voicing & Counterpoint
+ */
 export function voiceProgression(chords: readonly Chord[], opts?: VoicingOptions): number[][] {
   assertGenerationBudget(chords.length, 'voiced progression chords', opts?.budget);
   const ranges = resolveRanges(opts);
   const maxSpacing = resolveMaxSpacing(opts);
+  const maxCandidates = resolveMaxCandidates(opts);
   const result: number[][] = [];
   let prev: number[] | undefined;
   let prevChord: Chord | undefined;
@@ -263,7 +300,9 @@ export function voiceProgression(chords: readonly Chord[], opts?: VoicingOptions
       result.push(prev);
       continue;
     }
-    const candidates = locate(index, chord, () => enumerateVoicings(chord, ranges, maxSpacing));
+    const candidates = locate(index, chord, () =>
+      enumerateVoicings(chord, ranges, maxSpacing, maxCandidates),
+    );
     let best: number[] | undefined;
     let bestScore = Number.POSITIVE_INFINITY;
     for (const candidate of candidates) {

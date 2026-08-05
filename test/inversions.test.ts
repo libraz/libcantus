@@ -7,6 +7,12 @@ import { majorKey } from '../src/theory/scale/index.js';
 const cMajor = majorKey(0);
 
 describe('romanToChord inversions', () => {
+  it('accepts slashed figured-bass notation as well as compact figures', () => {
+    expect(romanToChord('V6/4', cMajor)).toEqual(romanToChord('V64', cMajor));
+    expect(romanToChord('V6/5', cMajor)).toEqual(romanToChord('V65', cMajor));
+    expect(romanToChord('V4/3', cMajor)).toEqual(romanToChord('V43', cMajor));
+  });
+
   it('parses triad inversions into a bass', () => {
     expect(romanToChord('V6', cMajor)).toMatchObject({ rootPc: 7, quality: 'maj', bassPc: 11 });
     expect(romanToChord('IV64', cMajor)).toMatchObject({ rootPc: 5, quality: 'maj', bassPc: 0 });

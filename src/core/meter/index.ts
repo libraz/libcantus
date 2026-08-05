@@ -91,11 +91,12 @@ function isMultiple(value: number, unit: number): boolean {
  * @category Rhythm & Meter
  */
 export function parseTimeSignature(text: string): TimeSignature {
-  const match = /^\s*(\d+)\s*\/\s*(\d+)\s*$/.exec(text);
+  const match = /^\s*((?:\d+\s*\+\s*)*\d+)\s*\/\s*(\d+)\s*$/.exec(text);
   if (!match) {
     throw new InvalidInputError(`Invalid time signature: ${text}`);
   }
-  const numerator = Number.parseInt(match[1] ?? '', 10);
+  const groupTokens = (match[1] ?? '').split('+').map((token) => Number.parseInt(token.trim(), 10));
+  const numerator = groupTokens.reduce((sum, value) => sum + value, 0);
   const denominator = Number.parseInt(match[2] ?? '', 10);
   if (
     !Number.isSafeInteger(numerator) ||
@@ -107,7 +108,8 @@ export function parseTimeSignature(text: string): TimeSignature {
   }
   // The same signature every consumer validates, validated here too: parsing
   // a signature the rest of the library rejects only moves the failure.
-  return assertTimeSignature({ numerator, denominator }, `time signature ${text}`);
+  const grouping = groupTokens.length > 1 ? groupTokens : undefined;
+  return assertTimeSignature({ numerator, denominator, grouping }, `time signature ${text}`);
 }
 
 /**
@@ -279,10 +281,18 @@ export function barPositionToPulse(pos: BarPosition, ts: TimeSignature): number 
  * @category Rhythm & Meter
  */
 export function formatBarPosition(beatInQuarters: number, ts: TimeSignature, decimals = 2): string {
+  assertInteger(decimals, 'decimals', 0, 100);
   const position = beatToBarPosition(beatInQuarters, ts);
   const pulse = barPositionToPulse(position, ts);
   const rounded = Number(pulse.toFixed(decimals));
-  return `${position.bar + 1}.${rounded}`;
+  if (rounded >= pulsesPerBar(ts) + 1) {
+    return `${position.bar + 2}.1`;
+  }
+  const wholePulse = Math.floor(rounded);
+  const fraction = Number((rounded - wholePulse).toFixed(decimals));
+  return fraction === 0
+    ? `${position.bar + 1}.${wholePulse}`
+    : `${position.bar + 1}.${wholePulse}+${fraction}`;
 }
 
 /**

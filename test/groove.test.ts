@@ -151,6 +151,14 @@ describe('extractGrooveTemplate', () => {
     const template = extractGrooveTemplate(events, FOUR_FOUR, 4);
     expect(template.slots[0]?.velocity).toBeCloseTo(80, 6);
   });
+
+  it('keeps a stable per-bar slot table when the grid does not divide the meter', () => {
+    const ts = parseTimeSignature('7/8');
+    const template = extractGrooveTemplate(makeEvents([0, 3.5, 7]), ts, 3);
+    expect(template.slotsPerBar).toBe(11);
+    expect(template.slots).toHaveLength(11);
+    expect(() => applyGrooveTemplate(makeEvents([0, 3.5, 7]), template, ts)).not.toThrow();
+  });
 });
 
 describe('applyGrooveTemplate', () => {
@@ -185,6 +193,24 @@ describe('applyGrooveTemplate', () => {
     const quantized: NoteEvent[] = [{ pitch: 60, startBeat: 0, durationBeat: 1, velocity: 55 }];
     const result = applyGrooveTemplate(quantized, template, FOUR_FOUR);
     expect(result[0]?.velocity).toBe(55);
+  });
+
+  it('clamps a negative downbeat offset so the result can re-enter the event pipeline', () => {
+    const template: GrooveTemplate = {
+      subdivision: 4,
+      slotsPerBar: 16,
+      slots: [
+        { timingOffset: -0.01, velocity: null },
+        ...new Array(15).fill(null).map(() => ({ timingOffset: 0, velocity: null })),
+      ],
+    };
+    const applied = applyGrooveTemplate(
+      [{ pitch: 36, startBeat: 0, durationBeat: 1, velocity: 100 }],
+      template,
+      FOUR_FOUR,
+    );
+    expect(applied[0]?.startBeat).toBe(0);
+    expect(() => humanize(applied)).not.toThrow();
   });
 
   it('applies a genuine velocity-0 slot instead of leaving the event untouched', () => {
@@ -226,5 +252,15 @@ describe('applyGrooveTemplate', () => {
       const humanizedEvent = humanized[i] as NoteEvent;
       expect(Math.abs(humanizedEvent.startBeat - groovyEvent.startBeat)).toBeLessThan(1e-6);
     }
+  });
+});
+
+describe('groove-template meter validation', () => {
+  it('keeps even an extremely short valid meter usable', () => {
+    const template = extractGrooveTemplate(makeEvents([0]), {
+      numerator: 1,
+      denominator: 1_000_000,
+    });
+    expect(template.slotsPerBar).toBeGreaterThanOrEqual(1);
   });
 });

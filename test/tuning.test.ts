@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   centsBetweenFreq,
+  centsFromNearestStep,
   centsOfSteps,
   edo,
   frequencyOf,
   justDeviationCents,
   nearestStep,
   ratioToCents,
+  stepOf,
+  stepsOfCents,
   TWELVE_TET,
 } from '../src/core/tuning/index.js';
 
@@ -52,6 +55,14 @@ describe('microtonal EDO', () => {
 
   it('keeps the reference pitch fixed across tunings', () => {
     expect(frequencyOf(69, edo(31))).toBeCloseTo(440, 6);
+  });
+
+  it('keeps fractional steps and cents conversion mutually consistent', () => {
+    const tuning = edo(19);
+    const frequency = frequencyOf(69.5, tuning);
+    expect(stepOf(frequency, tuning)).toBeCloseTo(69.5, 10);
+    expect(centsFromNearestStep(frequency, tuning)).toBeCloseTo(centsOfSteps(-0.5, tuning), 10);
+    expect(stepsOfCents(centsOfSteps(3.25, tuning), tuning)).toBeCloseTo(3.25, 10);
   });
 });
 

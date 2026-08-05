@@ -1,3 +1,4 @@
+import { pitchClassOf } from '../../core/pitch/index.js';
 import { type Chord, type ChordToneRole, chordToneRole } from '../chord/index.js';
 
 /**
@@ -58,8 +59,8 @@ export type VoicedRole = {
  * @category Functional Harmony
  */
 export function roleOf(pitch: number, chord: Chord, chordId = 0): VoicedRole {
-  const interval = (((Math.trunc(pitch) - chord.rootPc) % 12) + 12) % 12;
-  const tones = new Set(chord.intervals.map((i) => ((i % 12) + 12) % 12));
+  const interval = (pitchClassOf(pitch) - pitchClassOf(chord.rootPc) + 12) % 12;
+  const tones = new Set(chord.intervals.map(pitchClassOf));
   const hasThird = tones.has(3) || tones.has(4);
   const isSuspendedTone =
     !hasThird && ((interval === 5 && tones.has(5)) || (interval === 2 && tones.has(2)));

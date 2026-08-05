@@ -56,6 +56,16 @@ describe('progressionsByStyle', () => {
 });
 
 describe('generateProgression', () => {
+  it('uses a major dominant for cadence-oriented minor progressions', () => {
+    const chords = generateProgression({
+      key: minorKey(9),
+      presetId: 'classic',
+      style: 'rock',
+      bars: 4,
+    });
+    expect(chords.map((chord) => chord.quality)).toEqual(['min', 'min', 'maj', 'min']);
+  });
+
   it('lays out fourChordPop over four bars', () => {
     const chords = generateProgression({
       presetId: 'fourChordPop',
@@ -101,6 +111,19 @@ describe('generateProgression', () => {
       ext: 'maj7',
     });
     expect(chords.every((c) => c.quality === 'maj7')).toBe(true);
+  });
+
+  it('rejects unrecognised custom degrees and extensions', () => {
+    const base = { key: cMajor, style: 'idol' as const, bars: 1 };
+    expect(() =>
+      generateProgression({ ...base, preset: { degrees: [Number.NaN] as never[] } }),
+    ).toThrow(RangeError);
+    expect(() => generateProgression({ ...base, preset: { degrees: [7] as never[] } })).toThrow(
+      /supported progression degree/,
+    );
+    expect(() => generateProgression({ ...base, ext: 'nonsense' as never })).toThrow(
+      /progression extension/,
+    );
   });
 
   it('derives diatonic qualities from a minor key', () => {

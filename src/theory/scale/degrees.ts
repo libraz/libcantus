@@ -1,5 +1,6 @@
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
+import { clampToMidi } from '../../core/validation/index.js';
 
 /** Scale offset of a pitch relative to the key root, in [0, 11]. */
 function scaleOffset(pitch: number, key: KeyScale): number {
@@ -40,14 +41,14 @@ export function isScaleTone(pitch: number, key: KeyScale): boolean {
  * @category Scales
  */
 export function nearestScaleTone(pitch: number, key: KeyScale): number {
-  const base = Math.round(pitch);
+  const base = clampToMidi(Math.round(pitch), 'pitch');
   for (let distance = 0; distance < 12; distance += 1) {
     const lower = base - distance;
-    if (isScaleTone(lower, key)) {
+    if (lower >= 0 && isScaleTone(lower, key)) {
       return lower;
     }
     const higher = base + distance;
-    if (isScaleTone(higher, key)) {
+    if (higher <= 127 && isScaleTone(higher, key)) {
       return higher;
     }
   }

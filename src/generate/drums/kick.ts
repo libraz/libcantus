@@ -1,4 +1,3 @@
-import { hasHit } from './euclid.js';
 import type { DrumStyle, SectionType } from './internal.js';
 import type { DrumRng } from './rng.js';
 
@@ -43,21 +42,6 @@ export function isInPreChorusLift(
     return false;
   }
   return bar >= sectionBars - 2;
-}
-
-/** Convert a 16-step euclidean bitmask into an 8th-slot kick pattern. */
-export function euclideanToKickPattern(mask: number): KickPattern {
-  const slot = (step: number) => hasHit(mask, step) || hasHit(mask, (step + 15) % 16);
-  return {
-    beat1: slot(0),
-    beat1and: slot(2),
-    beat2: slot(4),
-    beat2and: slot(6),
-    beat3: slot(8),
-    beat3and: slot(10),
-    beat4: slot(12),
-    beat4and: slot(14),
-  };
 }
 
 /**

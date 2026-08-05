@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   chordPitchClasses,
+  chordQualities,
   chordToneRole,
   diatonicSeventh,
   diatonicTriad,
+  isChordMember,
   makeChord,
 } from '../src/theory/chord/index.js';
-import { majorKey, scaleByName } from '../src/theory/scale/index.js';
+import { majorKey, maskFromOffsets, scaleByName } from '../src/theory/scale/index.js';
 
 describe('extended chord vocabulary', () => {
   it('builds a half-diminished seventh', () => {
@@ -51,6 +53,19 @@ describe('chordToneRole with sixths and diminished sevenths', () => {
     expect(chordToneRole(10, makeChord(0, 'maj'))).toBeNull();
     expect(chordToneRole(11, makeChord(0, 'maj'))).toBeNull();
   });
+
+  it('never assigns a basic role to a non-member or altered duplicate', () => {
+    for (const quality of chordQualities()) {
+      const chord = makeChord(0, quality);
+      for (let interval = 0; interval < 12; interval += 1) {
+        if (chordToneRole(interval, chord) !== null) {
+          expect(isChordMember(interval, chord), `${quality} at ${interval}`).toBe(true);
+        }
+      }
+    }
+    expect(chordToneRole(3, makeChord(0, '7alt'))).toBeNull();
+    expect(chordToneRole(9, makeChord(0, 'dim'))).toBeNull();
+  });
 });
 
 describe('diatonic stacking', () => {
@@ -83,6 +98,14 @@ describe('diatonic stacking', () => {
     expect(makeChord(chord.rootPc, chord.quality).intervals).toEqual(chord.intervals);
   });
 
+  it('labels a flattened-fifth dominant with its matching template', () => {
+    const doubleHarmonic = { rootPc: 0, modeMask12: maskFromOffsets([0, 1, 4, 5, 7, 8, 11]) };
+    const chord = diatonicSeventh(4, doubleHarmonic);
+    expect(chord.quality).toBe('7b5');
+    expect(chord.intervals).toEqual([0, 4, 6, 10]);
+    expect(makeChord(chord.rootPc, chord.quality).intervals).toEqual(chord.intervals);
+  });
+
   it('rejects non-heptatonic scales instead of returning a mismatched quality template', () => {
     for (const name of ['majorPentatonic', 'wholeTone', 'octatonicHalfWhole', 'chromatic']) {
       const scale = scaleByName(name, 0);
@@ -90,4 +113,12 @@ describe('diatonic stacking', () => {
       expect(() => diatonicSeventh(0, scale), name).toThrow(/heptatonic/);
     }
   });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, 1.5])(
+    'rejects an invalid stacking degree %s',
+    (degree) => {
+      expect(() => diatonicTriad(degree, cMajor)).toThrow(RangeError);
+      expect(() => diatonicSeventh(degree, cMajor)).toThrow(RangeError);
+    },
+  );
 });

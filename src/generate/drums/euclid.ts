@@ -27,22 +27,6 @@ export function euclideanRhythm(pulses: number, steps: number, rotation = 0): bo
   return base.map((_, i) => base[(i - shift + steps) % steps] ?? false);
 }
 
-/** True when the 16-step bitmask has an onset at `step`. */
-export function hasHit(mask: number, step: number): boolean {
-  return ((mask >> step) & 1) === 1;
-}
-
-/** Convert a euclidean boolean pattern to a 16-step bitmask (LSB = step 0). */
-export function patternToMask(pattern: boolean[]): number {
-  let mask = 0;
-  for (let i = 0; i < pattern.length; i += 1) {
-    if (pattern[i]) {
-      mask |= 1 << i;
-    }
-  }
-  return mask;
-}
-
 function bjorklund(pulses: number, steps: number): boolean[] {
   if (pulses === 0) {
     return Array.from({ length: steps }, () => false);

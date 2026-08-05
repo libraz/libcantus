@@ -7,8 +7,10 @@ import { createRng } from '../../core/random/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
   assertGenerationBudget,
+  assertNoteEvents,
   assertRange,
   assertTimeSignature,
+  soundingNotesOnly,
 } from '../../core/validation/index.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { chordPitchClasses, diatonicTriad, makeChord } from '../../theory/chord/index.js';
@@ -447,16 +449,18 @@ function harmonizeOnce(
  * @category Reharmonization
  */
 export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
-  const noteIndex = createNoteEventIndex(opts.melody, { allowNonPositiveDuration: true });
+  assertNoteEvents(opts.melody, 'harmonize melody', { allowNonPositiveDuration: true });
+  const soundingMelody = soundingNotesOnly(opts.melody);
+  const noteIndex = createNoteEventIndex(soundingMelody);
   const ts = opts.ts ?? DEFAULT_METER;
   assertTimeSignature(ts);
   const requestedKey = opts.key ?? 'infer';
-  const key = requestedKey === 'infer' ? inferKey(opts.melody) : requestedKey;
+  const key = requestedKey === 'infer' ? inferKey(soundingMelody) : requestedKey;
   const placement = opts.placement ?? DEFAULT_PLACEMENT;
   // Nothing to harmonize: inventing a tonic bar here would silently insert a
   // ghost chord into a chart built by harmonizing sections and concatenating
   // them. The sibling generators return an empty result for empty input too.
-  if (noteIndex.notes.every((indexed) => indexed.note.durationBeat <= 0)) {
+  if (noteIndex.notes.length === 0) {
     return { transposeSemitones: 0, key, chords: [], melodyRoles: [] };
   }
   const candidates = buildCandidates(key, opts.reharmonize ?? 'diatonic');
@@ -464,7 +468,11 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   const rng = createRng(opts.seed ?? 0);
   const jitter = candidates.map(() => rng.next() * TIE_BREAK_JITTER);
 
-  const melodyEnd = noteIndex.notes.reduce((m, n) => Math.max(m, n.endBeat), 0);
+  const melodyStart = noteIndex.notes.reduce(
+    (start, indexed) => Math.min(start, indexed.note.startBeat),
+    Number.POSITIVE_INFINITY,
+  );
+  const melodyEnd = noteIndex.notes.reduce((end, indexed) => Math.max(end, indexed.endBeat), 0);
   // Any positive value is honoured, matching chordTimelineFromNotes: a silent
   // clamp here would make the same option name mean different things on the
   // analysis and generation sides. A value small enough to make the search
@@ -475,23 +483,23 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
     Number.MAX_SAFE_INTEGER,
     'harmonic rhythm',
   );
-  const segCount = Math.max(1, Math.ceil(melodyEnd / hr));
+  const segmentStart = Math.floor(melodyStart / hr) * hr;
+  const segCount = Math.max(1, Math.ceil((melodyEnd - segmentStart) / hr));
   assertGenerationBudget(segCount, 'harmonic segments');
-  assertGenerationBudget(segCount * candidates.length * candidates.length, 'harmonization search');
   const segments: Segment[] = Array.from({ length: segCount }, (_, s) => ({
-    startBeat: s * hr,
-    endBeat: (s + 1) * hr,
+    startBeat: segmentStart + s * hr,
+    endBeat: segmentStart + (s + 1) * hr,
     noteIndices: [],
   }));
   // Associate each note only with the windows it actually spans. This replaces
   // the former per-window full melody scan and creates no temporary note objects.
   let memberships = 0;
   for (const indexed of noteIndex.notes) {
-    if (indexed.note.durationBeat <= 0) {
-      continue; // never sounds, so it belongs to no segment
-    }
-    const first = Math.max(0, Math.floor(indexed.note.startBeat / hr));
-    const lastExclusive = Math.min(segCount, Math.ceil(indexed.endBeat / hr - Number.EPSILON));
+    const first = Math.max(0, Math.floor((indexed.note.startBeat - segmentStart) / hr));
+    const lastExclusive = Math.min(
+      segCount,
+      Math.ceil((indexed.endBeat - segmentStart) / hr - Number.EPSILON),
+    );
     memberships += Math.max(0, lastExclusive - first);
     assertGenerationBudget(memberships, 'note-to-segment memberships');
     for (let segment = first; segment < lastExclusive; segment += 1) {
@@ -514,6 +522,10 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
       }
     }
   }
+  assertGenerationBudget(
+    transposes.length * segCount * candidates.length * candidates.length,
+    'harmonization placement search',
+  );
 
   let bestCost = Number.POSITIVE_INFINITY;
   let bestTs = 0;
@@ -536,7 +548,7 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
     const chord: ChordSpan = {
       rootPc: cand.rootPc,
       quality: cand.quality,
-      startBeat: segments[s]?.startBeat ?? s * hr,
+      startBeat: segments[s]?.startBeat ?? segmentStart + s * hr,
     };
     if (cand.degree !== undefined) {
       chord.degree = cand.degree;

@@ -88,6 +88,16 @@ describe('harmonizeMelody', () => {
     expect(result.key.rootPc).toBe(7); // G major
   });
 
+  it('does not let a zero-length imported artefact change the inferred key', () => {
+    const melody = [{ pitch: 72, startBeat: 0, durationBeat: 4 }];
+    const base = harmonizeMelody({ melody, key: 'infer' });
+    const withSilentArtefact = harmonizeMelody({
+      melody: [...melody, { pitch: 66, startBeat: 60, durationBeat: 0 }],
+      key: 'infer',
+    });
+    expect(withSilentArtefact.key).toEqual(base.key);
+  });
+
   it('infers a minor key for a clearly minor melody instead of the relative major', () => {
     // A C E C A G A: centered and cadencing on A, using natural-minor tones
     // (including G natural). The relative major (C) shares the same pitch
@@ -198,6 +208,22 @@ describe('harmonizeMelody', () => {
     expect(result.melodyRoles).toEqual([]);
     expect(result.transposeSemitones).toBe(0);
     expect(result.key).toEqual(cMajor);
+  });
+
+  it('starts the harmonic grid at the first sounding section instead of adding an intro', () => {
+    const result = harmonizeMelody({
+      melody: [60, 64, 67, 65].map((pitch, index) => ({
+        pitch,
+        startBeat: 8 + index,
+        durationBeat: 1,
+      })),
+      key: cMajor,
+      harmonicRhythm: 2,
+      reharmonize: 'diatonic',
+      placement: { transposeSearch: false, octaveSearch: false },
+    });
+    expect(result.chords[0]?.startBeat).toBe(8);
+    expect(result.chords.map((chord) => chord.startBeat)).toEqual([8, 10]);
   });
 
   it('honours a harmonic rhythm finer than a quarter note', () => {

@@ -7,6 +7,7 @@
  * A harmonic minor spells its seventh as G#.
  */
 
+import { InvalidInputError } from '../../core/errors/index.js';
 import type { Note } from '../../core/pitch/index.js';
 import {
   formatNote,
@@ -110,6 +111,17 @@ function pickSpelling(
   return preferFlat ? flat : sharp;
 }
 
+/**
+ * Keep a conventional chromatic degree unless its key-letter spelling costs
+ * two or more accidentals than the enharmonic alternative. This preserves Db
+ * for C-major bII while avoiding Bbb in Ab major, where A is more readable.
+ */
+function capChromaticAccidentals(preferred: Note, alternative: Note | undefined): Note {
+  return alternative !== undefined && Math.abs(preferred.alter) - Math.abs(alternative.alter) >= 2
+    ? alternative
+    : preferred;
+}
+
 /** Whether the key's scale is a seven-note (heptatonic) scale. */
 function isHeptatonic(key: KeyScale): boolean {
   return scaleTonesInDegreeOrder(key).length === 7;
@@ -156,9 +168,19 @@ export function spellPitchClass(pc: number, tonic: Note, key: KeyScale): Note {
       return { letter, alter: alterFor(letter, pc) };
     }
     const degreeOffset = CHROMATIC_SPELLING[offset];
-    if (degreeOffset !== undefined) {
-      const letter = mod7(tonic.letter + degreeOffset);
-      return { letter, alter: alterFor(letter, pc) };
+    const preferred = letterFor(tonic, degreeOffset, pc);
+    if (preferred !== undefined) {
+      const flat = letterFor(tonic, CHROMATIC_SPELLING_FLAT[offset], pc);
+      const sharp = letterFor(tonic, CHROMATIC_SPELLING_SHARP[offset], pc);
+      // The conventional heptatonic degree is usually the flat-side candidate;
+      // use the other side only when it avoids a double (or worse) accidental.
+      const alternative =
+        flat?.letter === preferred.letter
+          ? sharp
+          : sharp?.letter === preferred.letter
+            ? flat
+            : undefined;
+      return capChromaticAccidentals(preferred, alternative);
     }
   } else {
     // A scale that is not heptatonic has no letter-per-degree spelling to
@@ -274,10 +296,13 @@ function chordLetterOffset(interval: number, chord: Chord): number {
 /**
  * Spell chord tones from an already chosen root spelling.
  *
- * This is exported for the model layer's inversion support; the package
- * barrels intentionally expose the key-aware {@link spellChord} entry point.
+ * This is public for callers that already know the desired root spelling;
+ * {@link spellChord} instead derives that spelling from the chord and key.
  */
 export function spellChordFromRoot(chord: Chord, root: Note): Note[] {
+  if (mod12(naturalPc(root.letter) + root.alter) !== mod12(chord.rootPc)) {
+    throw new InvalidInputError('chord root spelling must match chord.rootPc');
+  }
   return chord.intervals.map((interval) => {
     const letter = mod7(root.letter + chordLetterOffset(interval, chord));
     const pc = mod12(chord.rootPc + interval);

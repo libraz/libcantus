@@ -245,7 +245,8 @@ export function extractGrooveTemplate(
   assertNoteEvents(events, 'groove source events', { allowNonPositiveDuration: true });
   assertPositiveInt(subdivision, 'groove subdivision');
   const barBeats = beatsPerBar(ts);
-  const slotsPerBar = Math.round(barBeats * subdivision);
+  const slotsPerBar = Math.ceil(barBeats * subdivision);
+  assertPositiveInt(slotsPerBar, 'groove template slots');
   assertGenerationBudget(slotsPerBar, 'groove template slots');
   const offsetSums = new Array<number>(slotsPerBar).fill(0);
   const velocitySums = new Array<number>(slotsPerBar).fill(0);
@@ -293,6 +294,8 @@ export function extractGrooveTemplate(
  * Velocity is set to the slot's recorded average when it recorded one (a
  * non-`null` velocity, including a genuine 0); otherwise the event's own
  * velocity is left untouched.
+ * Non-positive-duration input artefacts are omitted, so output positions do
+ * not retain a one-to-one correspondence with the input array.
  *
  * If the template carries a time signature (see {@link GrooveTemplate.ts}) it
  * must match `ts`, since a differing bar length would misalign the per-bar
@@ -351,7 +354,7 @@ export function applyGrooveTemplate(
       template.slotsPerBar,
     );
     const slot = template.slots[slotIndex];
-    const startBeat = quantizedBeat + (slot?.timingOffset ?? 0);
+    const startBeat = Math.max(0, quantizedBeat + (slot?.timingOffset ?? 0));
     const velocity =
       slot && slot.velocity !== null && slot.velocity !== undefined
         ? Math.round(slot.velocity)

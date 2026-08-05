@@ -6,6 +6,8 @@ import {
   noteToPitchClass,
   parseNote,
   spelledInterval,
+  transposeByInterval,
+  transposeNote,
 } from '../src/core/pitch/index.js';
 
 describe('parseNote / formatNote', () => {
@@ -22,6 +24,7 @@ describe('parseNote / formatNote', () => {
   it('rejects invalid text', () => {
     expect(() => parseNote('H')).toThrow();
     expect(() => parseNote('')).toThrow();
+    expect(() => parseNote(60 as never)).toThrow(/note must be a string/);
   });
 
   it('rejects contradictory mixed accidentals but allows same-direction stacks', () => {
@@ -77,6 +80,17 @@ describe('pitch-class and MIDI conversion', () => {
   });
 });
 
+describe('chromatic transposition', () => {
+  it('restores spelling and octave after an inverse transposition', () => {
+    for (const name of ['C4', 'D4', 'G#4', 'Bb3']) {
+      for (const semitones of [-19, -12, -6, -1, 0, 1, 6, 12, 19]) {
+        const moved = transposeNote(parseNote(name), semitones);
+        expect(formatNote(transposeNote(moved, -semitones)), `${name} / ${semitones}`).toBe(name);
+      }
+    }
+  });
+});
+
 describe('spelledInterval', () => {
   it('distinguishes augmented fourth from diminished fifth', () => {
     const aug4 = spelledInterval(parseNote('C4'), parseNote('F#4'));
@@ -114,6 +128,54 @@ describe('spelledInterval', () => {
     const down = spelledInterval(parseNote('G4'), parseNote('C4'));
     expect(down.semitones).toBe(-7);
     expect(down.number).toBe(5);
+  });
+
+  it('retains descending letter direction when an enharmonic interval spans zero semitones', () => {
+    const from = parseNote('Fb4');
+    const to = parseNote('E4');
+    const interval = spelledInterval(from, to);
+    expect(interval).toMatchObject({ number: 2, quality: 'd', semitones: 0, descending: true });
+    expect(formatNote(transposeByInterval(from, interval))).toBe('E4');
+  });
+
+  it('round-trips a matrix of altered note pairs through their spelled interval', () => {
+    const names = [
+      'Cbb4',
+      'Cb4',
+      'C4',
+      'C#4',
+      'C##4',
+      'Ebb4',
+      'Eb4',
+      'E4',
+      'E#4',
+      'E##4',
+      'Fb4',
+      'F4',
+      'F#4',
+      'F##4',
+      'Bbb4',
+      'Bb4',
+      'B4',
+      'B#4',
+      'B##4',
+    ];
+    for (const fromName of names) {
+      for (const toName of names) {
+        const from = parseNote(fromName);
+        const to = parseNote(toName);
+        const interval = spelledInterval(from, to);
+        expect(formatNote(transposeByInterval(from, interval)), `${fromName} -> ${toName}`).toBe(
+          toName,
+        );
+      }
+    }
+  });
+
+  it('accepts and reapplies its own compound interval across the supported octave range', () => {
+    const from = parseNote('C-100');
+    const to = parseNote('C100');
+    expect(formatNote(transposeByInterval(from, spelledInterval(from, to)))).toBe('C100');
   });
 
   it('names a compound alteration by the direction the letters move', () => {

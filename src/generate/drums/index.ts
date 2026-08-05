@@ -1,9 +1,11 @@
+import { beatsPerBar, type TimeSignature } from '../../core/meter/index.js';
 import {
   assertGenerationBudget,
   assertInteger,
   assertOneOf,
   assertPositiveInt,
   assertRange,
+  assertTimeSignature,
 } from '../../core/validation/index.js';
 import {
   type BeatCtx,
@@ -13,6 +15,7 @@ import {
   generatePreChorusBuildup,
   generateSnareForBeat,
   type SectionCtx,
+  swing16,
 } from './beat.js';
 import { euclideanRhythm } from './euclid.js';
 import { type FillType, generateFill, getFillStartBeat, selectFillType } from './fills.js';
@@ -108,16 +111,15 @@ export type EuclideanKick = {
  */
 export type DrumsOptions = {
   /**
-   * Number of bars to generate. Bars are four quarter-note beats long: the
-   * patterns are written for 4/4 and there is no meter option, so a `bars`
-   * count shared with a meter-aware generator such as
-   * {@link generateRhythm} only lines up when that generator is also in 4/4.
+   * Number of bars to generate.
    */
   bars: number;
   bpm: number;
   style: GrooveStyle;
   section: Section;
   density: number;
+  /** Time signature; defaults to 4/4. */
+  ts?: TimeSignature;
   /**
    * Replace the final bar with a fill.
    *
@@ -139,8 +141,9 @@ export type DrumsOptions = {
    * - `'fxOnly'`: no kick, snare, ghost notes, timekeeping hi-hat, or fills —
    *   only the fx and auxiliary voices.
    *
-   * The ordering holds in every style and section: a busier role never emits
-   * fewer or quieter voices than a sparser one.
+   * Roles express orchestration priority and peak dynamics, not a strict hit
+   * count: style-specific ride, foot-hi-hat, and auxiliary patterns may make a
+   * sparser role emit more individual onsets in a particular bar.
    *
    * @defaultValue `'full'`
    */
@@ -226,6 +229,9 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
     opts.feel === undefined ? mapping.feel : assertOneOf(opts.feel, DRUM_FEELS, 'drum feel');
   const role: DrumRole =
     opts.role === undefined ? 'full' : assertOneOf(opts.role, DRUM_ROLES, 'drum role');
+  const ts = opts.ts ?? { numerator: 4, denominator: 4 };
+  assertTimeSignature(ts, 'drum time signature');
+  const barBeats = beatsPerBar(ts);
   // fxOnly leaves only fx/aux voices: the main kick, snare, ghost, and fill
   // voices are suppressed just as timekeeping hi-hats already are.
   const playMainVoices = role !== 'fxOnly';
@@ -275,7 +281,7 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
   let sectionKick: KickPattern | undefined;
 
   for (let bar = 0; bar < opts.bars; bar += 1) {
-    const barStart = bar * 4;
+    const barStart = bar * barBeats;
     const isLastBar = bar === opts.bars - 1;
 
     if (bar === 0 && section === 'chorus') {
@@ -304,7 +310,7 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
     const inLift = isInPreChorusLift(section, bar, opts.bars, nextSection === 'chorus');
     let currentFill: FillType = 'snareRoll';
 
-    for (let beat = 0; beat < 4; beat += 1) {
+    for (let beat = 0; beat < barBeats; beat += 1) {
       const beatTick = barStart + beat;
       const velocity = calculateVelocity(section, beat);
 
@@ -347,14 +353,14 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
           generatePreChorusBuildup(ctx, sec, isLastBar);
         }
         if (euclidKick && !inLift) {
-          const stepLength = 4 / euclidSteps;
+          const stepLength = barBeats / euclidSteps;
           for (let step = 0; step < euclidKick.length; step += 1) {
             const onset = step * stepLength;
             if (euclidKick[step] && Math.floor(onset) === beat) {
               const wholeBeat = Math.abs(onset - Math.round(onset)) < 1e-9;
               track.add(
                 GM.BD,
-                barStart + onset,
+                swing16(barStart + onset, sec, swingAmount),
                 Math.min(0.5, stepLength),
                 velocity * (wholeBeat ? 1 : 0.85),
               );
@@ -372,7 +378,7 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
     }
 
     if (sec.useFootHh && shouldPlayHiHat(role)) {
-      for (let fhhBeat = 0; fhhBeat < 4; fhhBeat += 2) {
+      for (let fhhBeat = 0; fhhBeat < barBeats; fhhBeat += 2) {
         const fhhTick = barStart + fhhBeat;
         if (!track.hasOnset(GM.FHH, fhhTick)) {
           track.add(GM.FHH, fhhTick, 0.5, footHiHatVelocity(rng));
@@ -402,11 +408,17 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
       densityMult,
       rng,
       opts.bpm,
+      sec,
+      swingAmount,
+      barBeats,
     );
   }
 
   // Foot hi-hats and auxiliary percussion are appended after the beat loop, so
   // the accumulated list is not monotonic within a bar. A consumer writing MIDI
   // reads these in order and would emit a negative delta time.
-  return [...track.hits].sort((a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch);
+  const endBeat = opts.bars * barBeats;
+  return track.hits
+    .filter((hit) => hit.startBeat < endBeat)
+    .sort((a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch);
 }

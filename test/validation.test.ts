@@ -1,6 +1,15 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { analyzeArrangement } from '../src/analyze/arrange/index.js';
+import {
+  analyzeArrangement,
+  tensionCurve,
+  tensionCurveFrom,
+} from '../src/analyze/arrange/index.js';
+import { detectKeyFromNotes } from '../src/analyze/detect/index.js';
 import { chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
+import { analyzeVoice } from '../src/analyze/voice/index.js';
+import { InvalidInputError } from '../src/core/errors/index.js';
 import { createNoteEventIndex } from '../src/core/event-index/index.js';
 import {
   classifyInterval,
@@ -34,26 +43,30 @@ import {
 } from '../src/core/tuning/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import {
+  assertDegree,
   assertFiniteNumber,
+  assertFiniteSemitones,
   assertGenerationBudget,
+  assertMidiPitch,
   assertNoteEvent,
   assertNoteEvents,
   assertPositiveInt,
   assertRange,
   assertTimeSignature,
+  clampToMidi,
   dropSilentNotes,
 } from '../src/core/validation/index.js';
-import { generateBassLine } from '../src/generate/bass/index.js';
+import { BASS_STYLES, generateBassLine } from '../src/generate/bass/index.js';
 import { generateCounterMelody } from '../src/generate/countermelody/index.js';
-import { generateDrums } from '../src/generate/drums/index.js';
+import { DRUM_NOTES, generateDrums } from '../src/generate/drums/index.js';
 import {
   applyGrooveTemplate,
   extractGrooveTemplate,
   humanize,
 } from '../src/generate/groove/index.js';
 import { harmonizeMelody } from '../src/generate/harmonize/index.js';
-import { generateMotif, transformMotif } from '../src/generate/motif/index.js';
-import { generateProgression } from '../src/generate/progression/index.js';
+import { developMotif, generateMotif, transformMotif } from '../src/generate/motif/index.js';
+import { BORROWED_DEGREES, generateProgression } from '../src/generate/progression/index.js';
 import { generateRhythm } from '../src/generate/rhythm/index.js';
 import { Note } from '../src/model/index.js';
 import { makeChord } from '../src/theory/chord/index.js';
@@ -76,6 +89,19 @@ describe('shared numeric input contracts', () => {
     expect(() => assertRange(-1, 0, 1, 'ratio')).toThrow(RangeError);
     expect(assertGenerationBudget(10, 'events', 10)).toBe(10);
     expect(() => assertGenerationBudget(11, 'events', 10)).toThrow(RangeError);
+    expect(assertDegree(7)).toBe(7);
+    expect(() => assertDegree(1.5)).toThrow(RangeError);
+    expect(() => assertFiniteSemitones(Number.NaN)).toThrow(RangeError);
+  });
+
+  it('shares the MIDI pitch contract between rejection and generator clamping', () => {
+    expect(assertMidiPitch(0)).toBe(0);
+    expect(assertMidiPitch(127)).toBe(127);
+    expect(() => assertMidiPitch(127.5)).toThrow(RangeError);
+    expect(() => assertMidiPitch(128)).toThrow(RangeError);
+    expect(clampToMidi(-12)).toBe(0);
+    expect(clampToMidi(140)).toBe(127);
+    expect(() => clampToMidi(60.5)).toThrow(RangeError);
   });
 
   it('validates meter grouping before downbeat and off-pulse early returns', () => {
@@ -124,6 +150,10 @@ describe('shared numeric input contracts', () => {
 });
 
 describe('core guards reject what would otherwise flow on as garbage', () => {
+  it('reports a non-array event collection as invalid input', () => {
+    expect(() => assertNoteEvents(null as unknown as NoteEvent[])).toThrow(InvalidInputError);
+  });
+
   it('rejects a non-finite MIDI number instead of naming it CNaN', () => {
     expect(() => midiToNote(Number.NaN)).toThrow(RangeError);
     expect(() => midiToNote(Number.POSITIVE_INFINITY)).toThrow(RangeError);
@@ -262,6 +292,119 @@ describe('every note-event guard has a rejection path', () => {
   });
 });
 
+// This registry intentionally names every public entry point that directly
+// invokes assertNoteEvents. Add a row alongside any new public consumer so a
+// bad imported MIDI event cannot bypass the shared contract unnoticed.
+const PUBLIC_NOTE_EVENT_ENTRIES = [
+  'analyzeArrangement',
+  'analyzeVoice',
+  'applyGrooveTemplate',
+  'chordTimelineFromNotes',
+  'createNoteEventIndex',
+  'detectKeyFromNotes',
+  'developMotif',
+  'extractGrooveTemplate',
+  'humanize',
+  'tensionCurve',
+  'tensionCurveFrom',
+  'transformMotif',
+] as const;
+
+// The direct callers are discovered from these source modules below. Keep the
+// list separate from the indirect `tensionCurveFrom` wrapper in the public
+// execution matrix: a new direct assertNoteEvents caller must make this test
+// fail until it receives an invalid-event regression case.
+const DIRECT_NOTE_EVENT_ENTRIES = [
+  'analyzeArrangement',
+  'analyzeVoice',
+  'applyGrooveTemplate',
+  'chordTimelineFromNotes',
+  'createNoteEventIndex',
+  'detectKeyFromNotes',
+  'developMotif',
+  'extractGrooveTemplate',
+  'humanize',
+  'tensionCurve',
+  'transformMotif',
+] as const;
+
+const NOTE_EVENT_CALLER_SOURCES = [
+  'src/analyze/arrange/tension.ts',
+  'src/analyze/arrange/tracks.ts',
+  'src/analyze/detect/index.ts',
+  'src/analyze/timeline/index.ts',
+  'src/analyze/voice/index.ts',
+  'src/core/event-index/index.ts',
+  'src/generate/groove/index.ts',
+  'src/generate/motif/index.ts',
+] as const;
+
+function exportedNoteEventCallers(source: string): string[] {
+  const exports = [...source.matchAll(/^export function (\w+)\(/gm)];
+  return exports.flatMap((match, index) => {
+    const start = match.index ?? 0;
+    const end = exports[index + 1]?.index ?? source.length;
+    return source.slice(start, end).includes('assertNoteEvents(') ? [match[1] ?? ''] : [];
+  });
+}
+
+function noteEventEntries(
+  events: NoteEvent[],
+): Record<(typeof PUBLIC_NOTE_EVENT_ENTRIES)[number], () => unknown> {
+  const valid: NoteEvent[] = [{ pitch: 60, startBeat: 0, durationBeat: 1 }];
+  const ts = parseTimeSignature('4/4');
+  const template = extractGrooveTemplate(valid, ts);
+  const analysis = analyzeArrangement([{ notes: valid }]);
+  const chord = makeChord(0, 'maj');
+  return {
+    analyzeArrangement: () => analyzeArrangement([{ notes: events }]),
+    analyzeVoice: () => analyzeVoice(events, () => chord, majorKey(0)),
+    applyGrooveTemplate: () => applyGrooveTemplate(events, template, ts),
+    chordTimelineFromNotes: () => chordTimelineFromNotes(events),
+    createNoteEventIndex: () => createNoteEventIndex(events),
+    detectKeyFromNotes: () => detectKeyFromNotes(events),
+    developMotif: () => developMotif({ notes: events }, analysis.timeline, majorKey(0), 1),
+    extractGrooveTemplate: () => extractGrooveTemplate(events, ts),
+    humanize: () => humanize(events),
+    tensionCurve: () => tensionCurve([{ notes: events }]),
+    tensionCurveFrom: () => tensionCurveFrom([{ notes: events }], analysis),
+    transformMotif: () => transformMotif({ notes: events }, 'retrograde'),
+  };
+}
+
+describe('public NoteEvent validation entry points', () => {
+  it('discovers every direct public assertNoteEvents entrance from source', () => {
+    const discovered = NOTE_EVENT_CALLER_SOURCES.flatMap((path) =>
+      exportedNoteEventCallers(readFileSync(resolve(process.cwd(), path), 'utf8')),
+    ).sort();
+    expect(discovered).toEqual([...DIRECT_NOTE_EVENT_ENTRIES].sort());
+  });
+
+  it.each([
+    ['NaN pitch', { pitch: Number.NaN, startBeat: 0, durationBeat: 1 }],
+    ['infinite pitch', { pitch: Number.POSITIVE_INFINITY, startBeat: 0, durationBeat: 1 }],
+    ['out-of-range pitch', { pitch: 128, startBeat: 0, durationBeat: 1 }],
+  ])('rejects %s at every registered public entrance', (_label, event) => {
+    const entries = noteEventEntries([event]);
+    expect(Object.keys(entries).sort()).toEqual([...PUBLIC_NOTE_EVENT_ENTRIES].sort());
+    for (const [name, entry] of Object.entries(entries)) {
+      expect(entry, name).toThrow(RangeError);
+    }
+  });
+
+  it('applies the documented zero-length policy at every public entrance', () => {
+    const entries = noteEventEntries([{ pitch: 60, startBeat: 0, durationBeat: 0 }]);
+    const rejectsSilentNotes = new Set(['createNoteEventIndex', 'developMotif', 'transformMotif']);
+    for (const [name, entry] of Object.entries(entries)) {
+      if (rejectsSilentNotes.has(name)) {
+        expect(entry, name).toThrow(RangeError);
+      } else {
+        expect(entry, name).not.toThrow();
+      }
+    }
+  });
+});
+
 describe('lookup tables cannot be reached through the prototype chain', () => {
   it('rejects an inherited property name as a scale', () => {
     for (const name of [
@@ -287,8 +430,12 @@ describe('lookup tables cannot be reached through the prototype chain', () => {
     expect(Object.isFrozen(TWELVE_TET)).toBe(true);
     expect(Object.isFrozen(NAMED_SCALES)).toBe(true);
     expect(Object.isFrozen(JUST_RATIOS)).toBe(true);
+    expect(Object.isFrozen(JUST_RATIOS[7])).toBe(true);
     expect(Object.isFrozen(SATB_RANGES)).toBe(true);
     expect(SATB_RANGES.every((range) => Object.isFrozen(range))).toBe(true);
+    expect(Object.isFrozen(DRUM_NOTES)).toBe(true);
+    expect(Object.isFrozen(BASS_STYLES)).toBe(true);
+    expect(Object.isFrozen(BORROWED_DEGREES)).toBe(true);
   });
 });
 
@@ -376,5 +523,34 @@ describe('silent notes across the pipeline', () => {
   it('exposes the same filter the library applies', () => {
     expect(dropSilentNotes(withArtefacts())).toHaveLength(3);
     expect(dropSilentNotes([])).toEqual([]);
+  });
+});
+
+describe('generator MIDI-output contract', () => {
+  const allMidi = (notes: readonly NoteEvent[]) =>
+    notes.every((note) => Number.isInteger(note.pitch) && note.pitch >= 0 && note.pitch <= 127);
+
+  it('keeps counter melodies, motifs, and bass lines in range under extreme valid inputs', () => {
+    const counter = generateCounterMelody({
+      melody: [{ pitch: 10, startBeat: 0, durationBeat: 4 }],
+      chordAt: () => makeChord(0, 'maj'),
+      key: majorKey(0),
+      pitchLow: 200,
+      pitchHigh: 220,
+    });
+    const motif = generateMotif({ key: majorKey(0), bars: 40, contour: 'ascending' });
+    const bass = generateBassLine({
+      segments: [{ startBeat: 0, endBeat: 4, chord: makeChord(11, 'maj') }],
+      key: majorKey(0),
+      octave: 8,
+      style: 'arpeggio',
+    });
+
+    expect(allMidi(counter)).toBe(true);
+    expect(allMidi(motif.notes)).toBe(true);
+    expect(allMidi(bass)).toBe(true);
+    const generated = [...counter, ...motif.notes, ...bass];
+    expect(() => analyzeArrangement([{ notes: humanize(generated) }])).not.toThrow();
+    expect(() => transformMotif(motif, 'transposeChromatic', 0.5)).toThrow(RangeError);
   });
 });

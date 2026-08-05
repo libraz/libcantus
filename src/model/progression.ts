@@ -1,6 +1,7 @@
 import {
   type Cadence,
   type ChordAnalysis,
+  type ChordToRomanOptions,
   detectCadence,
   type HarmonicFunction,
 } from '../analyze/functional/index.js';
@@ -9,6 +10,7 @@ import type { Note as NoteData } from '../core/pitch/index.js';
 import type { KeyScale } from '../core/types.js';
 import type { Chord as ChordData, ChordSpan } from '../theory/chord/index.js';
 import { makeChord } from '../theory/chord/index.js';
+import { type ScaleChoice, scalesForChanges } from '../theory/chordscale/index.js';
 import { type VoicingOptions, voiceProgression } from '../theory/voicing/index.js';
 import type { Chord } from './chord.js';
 import { Chord as ChordClass } from './chord.js';
@@ -39,8 +41,15 @@ export class Progression {
    * @param key Optional key context for analysis methods.
    */
   constructor(chords: readonly Chord[], key?: Key) {
-    this.#chords = Object.freeze([...chords]);
+    this.#chords = Object.freeze(Progression.#attachKey(chords, key));
     this.#key = key;
+  }
+
+  /** Attach a progression key to chord members that do not already carry one. */
+  static #attachKey(chords: readonly Chord[], key: Key | undefined): Chord[] {
+    return key === undefined
+      ? [...chords]
+      : chords.map((chord) => (chord.key === undefined ? chord.withKey(key) : chord));
   }
 
   /**
@@ -63,11 +72,10 @@ export class Progression {
    * ```
    */
   static fromSpans(spans: readonly ChordSpan[], key?: Key): Progression {
-    const chords = spans.map((span) => {
-      const chord = ChordClass.from(makeChord(span.rootPc, span.quality, span.bassPc));
-      return key === undefined ? chord : chord.withKey(key);
-    });
-    return key === undefined ? new Progression(chords) : new Progression(chords, key);
+    const chords = spans.map((span) =>
+      ChordClass.from(makeChord(span.rootPc, span.quality, span.bassPc)),
+    );
+    return new Progression(chords, key);
   }
 
   /**
@@ -167,9 +175,10 @@ export class Progression {
    * @throws If any chord admits no voicing within the given ranges.
    */
   voice(opts?: VoicingOptions): number[][] {
+    const key = opts?.key ?? this.#key?.scale;
     return voiceProgression(
       this.#chords.map((chord) => chord.data),
-      opts,
+      key === undefined ? opts : { ...opts, key },
     );
   }
 
@@ -177,12 +186,13 @@ export class Progression {
    * The Roman numeral of each chord in a key.
    *
    * @param key Key to analyze in; falls back to the carried context.
+   * @param opts Applied-numeral rendering options.
    * @returns One numeral per chord.
    * @throws If no key is given and none is carried.
    */
-  roman(key?: Key): string[] {
+  roman(key?: Key, opts?: ChordToRomanOptions): string[] {
     const resolved = this.#resolveKey(key);
-    return this.#chords.map((chord) => chord.roman(resolved));
+    return this.#chords.map((chord) => chord.roman(resolved, opts));
   }
 
   /**
@@ -204,12 +214,13 @@ export class Progression {
    * progression has fewer than two chords.
    *
    * @param key Key to analyze in; falls back to the carried context.
+   * @param opts Applied-numeral rendering options.
    * @returns Per-chord analyses and the closing cadence.
    * @throws If no key is given and none is carried.
    */
-  analyze(key?: Key): { chords: ChordAnalysis[]; cadence: Cadence } {
+  analyze(key?: Key, opts?: ChordToRomanOptions): { chords: ChordAnalysis[]; cadence: Cadence } {
     const resolved = this.#resolveKey(key);
-    const chords = this.#chords.map((chord) => chord.analyze(resolved));
+    const chords = this.#chords.map((chord) => chord.analyze(resolved, opts));
     const from = this.#chords[this.#chords.length - 2];
     const to = this.#chords[this.#chords.length - 1];
     const cadence =
@@ -217,6 +228,15 @@ export class Progression {
         ? detectCadence(from.data, to.data, resolved.scale)
         : null;
     return { chords, cadence };
+  }
+
+  /**
+   * Choose one compatible scale for every chord, favoring smooth changes.
+   *
+   * @returns One scale choice per chord in this progression.
+   */
+  scales(): ScaleChoice[] {
+    return scalesForChanges(this.#chords.map((chord) => chord.data));
   }
 
   /**
@@ -251,7 +271,7 @@ export class Progression {
       // sharps in a flat key.
       return key !== undefined && moved.key === undefined ? moved.withKey(key) : moved;
     });
-    return key === undefined ? new Progression(chords) : new Progression(chords, key);
+    return new Progression(chords, key);
   }
 
   /**
@@ -264,9 +284,17 @@ export class Progression {
     return this.#chords.map((chord) => chord.symbol()).join(' ');
   }
 
+  /**
+   * The plain progression data, for JSON serialization.
+   *
+   * Private class fields do not serialize, so this preserves both the chord
+   * data and any carried key in `JSON.stringify(progression)`.
+   *
+   * @returns The chord data sequence and the carried key, if any.
+   */
   toJSON(): { chords: ChordData[]; key: { scale: KeyScale; tonic: NoteData } | undefined } {
     return {
-      chords: this.#chords.map((chord) => chord.data),
+      chords: this.#chords.map((chord) => chord.toJSON()),
       key: this.#key?.toJSON(),
     };
   }

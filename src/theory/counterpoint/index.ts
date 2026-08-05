@@ -46,7 +46,7 @@ export function isForbiddenMelodicLeap(prev: number, cur: number): boolean {
 
 /** Reduce an interval to its simple class in [0, 11]. */
 function simpleClass(semitones: number): number {
-  return Math.abs(semitones) % 12;
+  return pitchClass(Math.abs(semitones));
 }
 
 /** Whether a simple interval class is a perfect kind (unison/octave or fifth). */

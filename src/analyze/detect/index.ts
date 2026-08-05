@@ -7,7 +7,12 @@
 import { InvalidInputError } from '../../core/errors/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
-import { assertFiniteNumber, assertGenerationBudget } from '../../core/validation/index.js';
+import {
+  assertFiniteNumber,
+  assertGenerationBudget,
+  assertMidiPitch,
+  assertNoteEvents,
+} from '../../core/validation/index.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { chordPitchClasses, chordQualities, makeChord } from '../../theory/chord/index.js';
 import {
@@ -106,6 +111,12 @@ export type DetectKeyOptions = {
    * histogram.
    */
   weights?: readonly number[];
+  /**
+   * Upper bound on the input pitches processed by this detection call.
+   *
+   * @defaultValue {@link DEFAULT_GENERATION_BUDGET}
+   */
+  budget?: number;
 };
 
 /** Unique pitch classes of the input, sorted ascending. */
@@ -113,10 +124,14 @@ function uniquePitchClasses(pitches: readonly number[]): number[] {
   return [...new Set(pitches.map(pitchClass))].sort((a, b) => a - b);
 }
 
-function assertPitches(pitches: readonly number[]): void {
-  assertGenerationBudget(pitches.length, 'detection pitches');
+function assertPitches(
+  pitches: readonly number[],
+  name: string,
+  budget: number | undefined = undefined,
+): void {
+  assertGenerationBudget(pitches.length, name, budget);
   for (let index = 0; index < pitches.length; index += 1) {
-    assertFiniteNumber(pitches[index] ?? Number.NaN, `pitches[${index}]`);
+    assertMidiPitch(pitches[index] ?? Number.NaN, `pitches[${index}]`);
   }
 }
 
@@ -144,7 +159,7 @@ export function detectChord(
   pitches: readonly number[],
   opts: DetectChordOptions = {},
 ): ChordMatch[] {
-  assertPitches(pitches);
+  assertPitches(pitches, 'chord detection pitches');
   if (opts.bassPc !== undefined) assertFiniteNumber(opts.bassPc, 'bassPc');
   const input = uniquePitchClasses(pitches);
   if (input.length === 0) {
@@ -165,6 +180,9 @@ export function detectChord(
   const inputSet = new Set(input);
   const matches: ChordMatch[] = [];
   const qualities = chordQualities();
+  const toneCounts = new Map(
+    qualities.map((quality) => [quality, chordPitchClasses(makeChord(0, quality)).length]),
+  );
   for (const rootPc of input) {
     for (const quality of qualities) {
       const chord = makeChord(rootPc, quality);
@@ -211,8 +229,8 @@ export function detectChord(
     if ((a.inversion === 0) !== (b.inversion === 0)) {
       return a.inversion === 0 ? -1 : 1;
     }
-    const aSize = chordPitchClasses(makeChord(a.rootPc, a.quality)).length;
-    const bSize = chordPitchClasses(makeChord(b.rootPc, b.quality)).length;
+    const aSize = toneCounts.get(a.quality) ?? 0;
+    const bSize = toneCounts.get(b.quality) ?? 0;
     return bSize - aSize;
   });
   return matches;
@@ -282,11 +300,7 @@ const MAJOR_VARIANTS = [{ variant: 'major', mask: MAJOR_MASK }] as const satisfi
  * @category Recognition
  */
 export function detectKey(pitches: readonly number[], opts: DetectKeyOptions = {}): KeyMatch[] {
-  assertPitches(pitches);
-  const input = uniquePitchClasses(pitches);
-  if (input.length === 0) {
-    return [];
-  }
+  assertPitches(pitches, 'key detection pitches', opts.budget);
   const weights = opts.weights;
   if (weights !== undefined && weights.length !== pitches.length) {
     throw new InvalidInputError('weights must have one entry per pitch');
@@ -306,6 +320,7 @@ export function detectKey(pitches: readonly number[], opts: DetectKeyOptions = {
   if (total === 0) {
     return [];
   }
+  const input = [...counts.keys()];
   const results: KeyMatch[] = [];
   for (let tonic = 0; tonic < 12; tonic += 1) {
     for (const mode of ['major', 'minor'] as const) {
@@ -365,6 +380,7 @@ const DEFAULT_VELOCITY = 100;
  * or negative duration) are ignored.
  *
  * @param notes The note events to weigh.
+ * @param opts Budget for processing imported note events.
  * @returns Ranked key interpretations (empty when nothing sounds).
  * @example
  * ```ts
@@ -373,11 +389,21 @@ const DEFAULT_VELOCITY = 100;
  * ```
  * @category Recognition
  */
-export function detectKeyFromNotes(notes: readonly NoteEvent[]): KeyMatch[] {
+export function detectKeyFromNotes(
+  notes: readonly NoteEvent[],
+  opts: Omit<DetectKeyOptions, 'weights'> = {},
+): KeyMatch[] {
+  assertNoteEvents(notes, 'key detection notes', {
+    allowNonPositiveDuration: true,
+    budget: opts.budget,
+  });
   const sounding = notes.filter((note) => note.durationBeat > 0);
   return detectKey(
     sounding.map((note) => note.pitch),
-    { weights: sounding.map((note) => note.durationBeat * (note.velocity ?? DEFAULT_VELOCITY)) },
+    {
+      weights: sounding.map((note) => note.durationBeat * (note.velocity ?? DEFAULT_VELOCITY)),
+      budget: opts.budget,
+    },
   );
 }
 

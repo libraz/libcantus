@@ -9,10 +9,12 @@ import { createRng } from '../../core/random/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
   assertGenerationBudget,
-  assertInteger,
+  assertNoteEvents,
   assertOneOf,
   assertRange,
   assertTimeSignature,
+  clampToMidi,
+  soundingNotesOnly,
 } from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
 import { chordToneRole } from '../../theory/chord/index.js';
@@ -423,8 +425,8 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
   // The counter line writes against the voice on its own side of the texture,
   // so a chord in the melody track resolves to that voice rather than to
   // whichever note the caller happened to store last.
-  const melody = createNoteEventIndex(opts.melody, {
-    allowNonPositiveDuration: true,
+  assertNoteEvents(opts.melody, 'countermelody melody', { allowNonPositiveDuration: true });
+  const melody = createNoteEventIndex(soundingNotesOnly(opts.melody), {
     tieBreak: register === 'below' ? 'highest' : 'lowest',
   });
   const ts = opts.ts ?? DEFAULT_TS;
@@ -432,15 +434,9 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
   const rhythm = assertOneOf(opts.rhythm ?? 'complement', ['complement', 'follow'], 'rhythm');
   const profile = assertOneOf(opts.profile ?? 'pop', ['strict', 'pop'], 'safety profile');
   const rng = createRng(opts.seed ?? 0);
-  if (opts.pitchLow !== undefined) {
-    assertInteger(opts.pitchLow, 'countermelody pitchLow');
-  }
-  if (opts.pitchHigh !== undefined) {
-    assertInteger(opts.pitchHigh, 'countermelody pitchHigh');
-  }
   // The options are checked before the empty-melody exit, so a call with a
   // malformed option is rejected whether or not the melody happens to sound.
-  if (melody.notes.every((indexed) => indexed.note.durationBeat <= 0)) {
+  if (melody.notes.length === 0) {
     return [];
   }
 
@@ -450,10 +446,14 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
   const meanPitch = melody.notes.reduce((sum, n) => sum + n.note.pitch, 0) / melody.notes.length;
   const defaultCenter =
     register === 'below' ? meanPitch - REGISTER_OFFSET : meanPitch + REGISTER_OFFSET;
-  const low = opts.pitchLow ?? Math.round(defaultCenter) - DEFAULT_HALF_RANGE;
-  const high = opts.pitchHigh ?? Math.round(defaultCenter) + DEFAULT_HALF_RANGE;
-  assertInteger(low, 'countermelody pitchLow');
-  assertInteger(high, 'countermelody pitchHigh');
+  const low = clampToMidi(
+    opts.pitchLow ?? Math.round(defaultCenter) - DEFAULT_HALF_RANGE,
+    'countermelody pitchLow',
+  );
+  const high = clampToMidi(
+    opts.pitchHigh ?? Math.round(defaultCenter) + DEFAULT_HALF_RANGE,
+    'countermelody pitchHigh',
+  );
   if (low > high) {
     throw new InvalidInputError(
       `countermelody pitchLow must not exceed pitchHigh; received ${low} > ${high}`,
@@ -573,7 +573,12 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
       1,
       Math.min(127, Math.round((melNote?.velocity ?? DEFAULT_MELODY_VELOCITY) - VELOCITY_DROP)),
     );
-    out.push({ pitch, startBeat: beat, durationBeat: endBeat - beat, velocity });
+    out.push({
+      pitch: clampToMidi(pitch),
+      startBeat: beat,
+      durationBeat: endBeat - beat,
+      velocity,
+    });
     prevPitch = pitch;
   }
   return out;

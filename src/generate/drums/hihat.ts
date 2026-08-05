@@ -26,6 +26,9 @@ export function roleHiHatInstrument(role: DrumRole, useRide: boolean): number {
   if (role === 'ambient') {
     return GM.RIDE;
   }
+  if (role === 'minimal') {
+    return GM.FHH;
+  }
   return useRide ? GM.RIDE : GM.CHH;
 }
 

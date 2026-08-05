@@ -14,11 +14,21 @@ import { majorKey, minorKey, scaleByName } from '../src/theory/scale/index.js';
 const cMajor = majorKey(0);
 const aMinor = minorKey(9);
 
+describe('minor-key function', () => {
+  it('reads the diatonic submediant as tonic-function, matching a deceptive cadence', () => {
+    expect(functionOf(makeChord(8, 'maj'), minorKey(0))).toBe('tonic');
+  });
+});
+
 describe('romanToChord', () => {
   it('parses diatonic numerals with case-based quality', () => {
     expect(romanToChord('V7', cMajor)).toMatchObject({ rootPc: 7, quality: 'dom7' });
     expect(romanToChord('ii', cMajor)).toMatchObject({ rootPc: 2, quality: 'min' });
     expect(romanToChord('Imaj7', cMajor)).toMatchObject({ rootPc: 0, quality: 'maj7' });
+  });
+
+  it.each(['iV', 'Iv'])('rejects mixed-case Roman numeral %s', (roman) => {
+    expect(() => romanToChord(roman, cMajor)).toThrow();
   });
 
   it('parses borrowed and altered numerals', () => {
@@ -192,6 +202,14 @@ describe('detectCadence', () => {
     expect(detectCadence(makeChord(7, 'maj'), makeChord(7, 'maj'), cMajor)).toBeNull();
   });
 
+  it('requires a dominant sound and recognizes the diminished leading tone', () => {
+    expect(detectCadence(makeChord(7, 'maj'), makeChord(0, 'maj'), cMajor)).toBe('authentic');
+    expect(detectCadence(makeChord(7, 'min'), makeChord(0, 'min'), cMajor)).toBeNull();
+    expect(detectCadence(makeChord(7, 'sus4'), makeChord(0, 'maj'), cMajor)).toBeNull();
+    expect(detectCadence(makeChord(11, 'dim'), makeChord(0, 'maj'), cMajor)).toBe('authentic');
+    expect(detectCadence(makeChord(7, 'dim'), makeChord(0, 'maj'), cMajor)).toBeNull();
+  });
+
   it('treats V to the borrowed flat-submediant bVI as deceptive in major', () => {
     expect(detectCadence(makeChord(7, 'maj'), makeChord(8, 'maj'), cMajor)).toBe('deceptive');
     // The diatonic submediant vi (offset 9) remains deceptive too.
@@ -202,6 +220,12 @@ describe('detectCadence', () => {
 describe('secondaryDominant', () => {
   it('builds V7 of a target degree', () => {
     expect(secondaryDominant(4, cMajor)).toMatchObject({ rootPc: 2, quality: 'dom7' });
+  });
+
+  it('validates target degrees against the actual scale length', () => {
+    const pentatonic = scaleByName('majorPentatonic', 0);
+    expect(() => secondaryDominant(5, pentatonic)).toThrow(RangeError);
+    expect(secondaryDominant(4, pentatonic)).toMatchObject({ rootPc: 4, quality: 'dom7' });
   });
 });
 
@@ -339,6 +363,7 @@ describe('applied dominants keep dominant function', () => {
     expect(functionOf(makeChord(2, 'dom7'), cMajor)).toBe('dominant'); // D7 -> V
     expect(functionOf(makeChord(4, 'dom7'), cMajor)).toBe('dominant'); // E7 -> vi
     expect(functionOf(makeChord(0, 'dom7'), cMajor)).toBe('dominant'); // C7 -> IV
+    expect(functionOf(makeChord(4, 'maj'), cMajor)).toBe('dominant'); // E -> vi
   });
 
   it('keeps a tritone substitute dominant', () => {
@@ -449,6 +474,7 @@ describe('applied Roman numerals', () => {
     expect(chordToRoman(makeChord(4, 'maj'), cMajor, { applied: true })).toBe('V/vi');
     expect(chordToRoman(makeChord(0, 'dom7'), cMajor, { applied: true })).toBe('V7/IV');
     expect(chordToRoman(makeChord(6, 'dim7'), cMajor, { applied: true })).toBe('viio7/V');
+    expect(chordToRoman(secondaryDominant(6, cMajor), cMajor, { applied: true })).toBe('V7/vii');
   });
 
   it('round-trips every secondary dominant the library builds', () => {

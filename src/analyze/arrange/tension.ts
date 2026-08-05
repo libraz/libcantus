@@ -118,7 +118,7 @@ export function tensionCurve(
         })
       : {
           timeline: opts.timeline,
-          key: opts.key ?? detectKeyFromNotes(pooled)[0]?.key ?? majorKey(0),
+          key: opts.key ?? detectKeyFromNotes(pooled, { budget })[0]?.key ?? majorKey(0),
         };
 
   const prepared = prepareTracks(tracks);
@@ -128,7 +128,11 @@ export function tensionCurve(
   // The per-sample cost is one lookup per sub-voice, so it is their product —
   // not either dimension alone — that has to stay inside the budget.
   const voiceCount = prepared.reduce((sum, track) => sum + track.voices.length, 0);
-  assertGenerationBudget(sampleCount * voiceCount, 'tension sample-voice lookups', budget);
+  assertGenerationBudget(
+    sampleCount * Math.min(128, voiceCount) * voiceCount,
+    'tension sample-voice comparisons',
+    budget,
+  );
   for (let i = 0; i < sampleCount; i += 1) {
     const beat = i * step;
     points.push({ beat, tension: sampleTension(prepared, timeline, key, ts, profile, beat) });
@@ -207,23 +211,30 @@ function sampleTension(
   const strongBeat = isStrongBeat(beat, ts);
   let nonChord = 0;
   let dissonant = 0;
-  for (let i = 0; i < sounding.length; i += 1) {
-    const voice = sounding[i];
-    if (!voice) {
-      continue;
-    }
+  // A coarse tension sample supplies no individual voice history. Every voice
+  // at the same MIDI pitch consequently receives the same safety verdict, so
+  // a dense pad needs at most 128 evaluations instead of one per voice.
+  const pitches = new Map<number, number>();
+  for (const voice of sounding) {
+    pitches.set(voice.pitch, (pitches.get(voice.pitch) ?? 0) + 1);
+  }
+  for (const [pitch, count] of pitches) {
     // Non-chord-tone share only applies when a chord is sounding; at a timeline
     // gap there is no reference harmony, so vertical dissonance alone drives the
     // dissonance term (the chord function term is already 0 there).
-    if (chordPcs && !chordPcs.has(pitchClass(voice.pitch))) {
-      nonChord += 1;
+    if (chordPcs && !chordPcs.has(pitchClass(pitch))) {
+      nonChord += count;
     }
-    const others = sounding.filter((_, j) => j !== i).map((s) => ({ pitch: s.pitch }));
+    const others = [...pitches].flatMap(([otherPitch, otherCount]) =>
+      Array.from({ length: otherCount - (otherPitch === pitch ? 1 : 0) }, () => ({
+        pitch: otherPitch,
+      })),
+    );
     // Only the verdict is read, so the replacement-pitch search is skipped.
     const result = evaluateSafety(
       {
         profile,
-        candidatePitch: voice.pitch,
+        candidatePitch: pitch,
         chord,
         key,
         otherVoices: others,
@@ -232,7 +243,7 @@ function sampleTension(
       { suggestions: false },
     );
     if (result.safety === NoteSafety.Dissonant) {
-      dissonant += 1;
+      dissonant += count;
     }
   }
   const dissonanceScore = Math.max(nonChord, dissonant) / sounding.length;

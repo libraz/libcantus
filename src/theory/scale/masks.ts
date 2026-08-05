@@ -1,3 +1,6 @@
+import { InvalidInputError } from '../../core/errors/index.js';
+import { assertInteger } from '../../core/validation/index.js';
+
 /**
  * Build a 12-bit mode mask from a list of semitone offsets above the root.
  *
@@ -6,10 +9,10 @@
  *
  * @category Scales
  */
-import { InvalidInputError } from '../../core/errors/index.js';
 export function maskFromOffsets(offsets: readonly number[]): number {
   let mask = 1;
-  for (const offset of offsets) {
+  for (const [index, offset] of offsets.entries()) {
+    assertInteger(offset, `offsets[${index}]`);
     mask |= 1 << (((offset % 12) + 12) % 12);
   }
   return mask;

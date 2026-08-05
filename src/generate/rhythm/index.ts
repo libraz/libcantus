@@ -99,8 +99,7 @@ export type RhythmOptions = {
   subdivision?: number;
   /**
    * Overall onset density in [0, 1]. Scales the per-slot onset probability, so
-   * higher values fill more grid slots. Values outside [0, 1] are clamped into
-   * range.
+   * higher values fill more grid slots. Values outside [0, 1] are rejected.
    *
    * @defaultValue 0.5
    */
@@ -141,7 +140,7 @@ export function onsetWeightCurve(weight: number): number {
  * and sampled from the seeded PRNG. Every bar's downbeat is always an onset, so
  * a pattern of any length has a reliable pulse independent of the seed. Each
  * event's duration extends to the next onset, and the last event extends to the
- * end of the span. `density` is clamped to [0, 1].
+ * end of the span. `density` must be in [0, 1].
  *
  * @param ts The time signature.
  * @param opts Generation options.
@@ -166,23 +165,30 @@ export function generateRhythm(ts: TimeSignature, opts: RhythmOptions = {}): Rhy
   const barBeats = beatsPerBar(ts);
   const spanBeats = barBeats * bars;
   const step = 1 / subdivision;
-  const slotCount = Math.round(spanBeats * subdivision);
+  const slotsPerBar = Math.ceil(barBeats * subdivision);
+  const slotCount = slotsPerBar * bars;
   assertGenerationBudget(slotCount, 'rhythm grid slots');
-  const slotsPerBar = Math.round(barBeats * subdivision);
   const rng = createRng(seed);
 
   const positions: number[] = [];
-  for (let i = 0; i < slotCount; i += 1) {
-    const position = i * step;
-    // Force every bar's downbeat so the pulse is reliable regardless of seed.
-    if (i % slotsPerBar === 0) {
-      positions.push(position);
-      continue;
-    }
-    const weight = metricWeight(position, ts);
-    const probability = onsetWeightCurve(weight) * density;
-    if (rng.prob(probability)) {
-      positions.push(position);
+  for (let bar = 0; bar < bars; bar += 1) {
+    const barStart = bar * barBeats;
+    const barEnd = barStart + barBeats;
+    for (let slot = 0; slot < slotsPerBar; slot += 1) {
+      const position = barStart + slot * step;
+      if (position >= barEnd - Number.EPSILON) {
+        break;
+      }
+      // Force every bar's downbeat so the pulse is reliable regardless of seed.
+      if (slot === 0) {
+        positions.push(position);
+        continue;
+      }
+      const weight = metricWeight(position, ts);
+      const probability = onsetWeightCurve(weight) * density;
+      if (rng.prob(probability)) {
+        positions.push(position);
+      }
     }
   }
 

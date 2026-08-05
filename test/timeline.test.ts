@@ -23,6 +23,18 @@ function cfgcNotes(): NoteEvent[] {
 }
 
 describe('chordTimelineFromNotes', () => {
+  it('does not invent a slash bass when the actual bass was filtered as noise', () => {
+    const result = chordTimelineFromNotes(
+      [
+        { pitch: 36, startBeat: 0, durationBeat: 4, velocity: 10 },
+        { pitch: 64, startBeat: 0, durationBeat: 4, velocity: 100 },
+        { pitch: 67, startBeat: 0, durationBeat: 4, velocity: 100 },
+      ],
+      { key: majorKey(0) },
+    );
+    expect(result.timeline[0]?.chord.bassPc).toBeUndefined();
+  });
+
   it('recovers a C-F-G-C progression, one chord per bar', () => {
     const result = chordTimelineFromNotes(cfgcNotes());
     const roots = result.timeline.segments.map((seg) => seg.chord.rootPc);

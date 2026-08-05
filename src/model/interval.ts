@@ -39,11 +39,18 @@ export class Interval {
   readonly #number: number;
   readonly #quality: IntervalQualityLabel;
   readonly #semitones: number;
+  readonly #descending: boolean;
 
-  private constructor(numberValue: number, quality: IntervalQualityLabel, semitones: number) {
+  private constructor(
+    numberValue: number,
+    quality: IntervalQualityLabel,
+    semitones: number,
+    descending = semitones < 0,
+  ) {
     this.#number = numberValue;
     this.#quality = quality;
     this.#semitones = semitones;
+    this.#descending = descending;
   }
 
   /**
@@ -85,7 +92,12 @@ export class Interval {
    * @returns The wrapped interval.
    */
   static fromData(data: SpelledInterval): Interval {
-    return new Interval(data.number, data.quality, data.semitones);
+    return new Interval(
+      data.number,
+      data.quality,
+      data.semitones,
+      data.descending ?? data.semitones < 0,
+    );
   }
 
   /**
@@ -139,7 +151,9 @@ export class Interval {
    * @returns The inverted interval, e.g. `M3` becomes `m6`.
    */
   invert(): Interval {
-    const simple = ((this.#number - 1) % 7) + 1;
+    // An octave inverts to a unison and vice versa. Other compound intervals
+    // reduce to their simple class before inversion (M10 -> m6).
+    const simple = this.#number === 8 ? 8 : ((this.#number - 1) % 7) + 1;
     const numberValue = INVERSION_SUM - simple;
     const quality = invertQuality(this.#quality);
     return Interval.of(numberValue, quality, intervalSemitones(numberValue, quality));
@@ -169,7 +183,8 @@ export class Interval {
     return (
       this.#number === other.number &&
       this.#quality === other.quality &&
-      this.#semitones === other.semitones
+      this.#semitones === other.semitones &&
+      this.#descending === other.#descending
     );
   }
 
@@ -182,7 +197,21 @@ export class Interval {
    * @returns The diatonic number, quality, and semitone span.
    */
   toJSON(): SpelledInterval {
-    return { number: this.#number, quality: this.#quality, semitones: this.#semitones };
+    return this.#descending
+      ? {
+          number: this.#number,
+          quality: this.#quality,
+          semitones: this.#semitones,
+          descending: true,
+        }
+      : this.#semitones < 0
+        ? {
+            number: this.#number,
+            quality: this.#quality,
+            semitones: this.#semitones,
+            descending: false,
+          }
+        : { number: this.#number, quality: this.#quality, semitones: this.#semitones };
   }
 
   /**

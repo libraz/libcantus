@@ -1,9 +1,14 @@
 import { InvalidInputError } from '../../core/errors/index.js';
 import { createRng } from '../../core/random/index.js';
 import type { KeyScale } from '../../core/types.js';
-import { assertGenerationBudget, assertPositiveInt } from '../../core/validation/index.js';
+import {
+  assertDegree,
+  assertGenerationBudget,
+  assertOneOf,
+  assertPositiveInt,
+} from '../../core/validation/index.js';
 import type { ChordQuality, ChordSpan } from '../../theory/chord/index.js';
-import { diatonicTriad } from '../../theory/chord/index.js';
+import { chordQualities, diatonicTriad } from '../../theory/chord/index.js';
 import { scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
 
 export type { ChordSpan } from '../../theory/chord/index.js';
@@ -41,7 +46,8 @@ export type ProgressionPreset = {
 
 /**
  * The borrowed (non-diatonic) chord roots a preset can name, as their semitone
- * offset above the tonic.
+ * code for a borrowed degree. These are stable identifiers, not semitone
+ * offsets: their pitch-class offsets are resolved internally.
  *
  * Scale degrees 0..6 address the key's own chords; these codes continue the
  * numbering for the chromatic chords a pop progression borrows, so a preset is
@@ -59,7 +65,7 @@ export type ProgressionPreset = {
  * ```
  * @category Composition
  */
-export const BORROWED_DEGREES = {
+export const BORROWED_DEGREES = Object.freeze({
   /** Flat submediant: bVI. */
   bVI: 8,
   /** Flat subtonic: bVII. */
@@ -72,7 +78,7 @@ export const BORROWED_DEGREES = {
   bII: 13,
   /** Sharp subdominant, the diminished #IV. */
   sharpIV: 14,
-} as const;
+} as const);
 
 /**
  * A chord root in a preset: a scale degree 0..6, or one of
@@ -314,8 +320,14 @@ function degreeToRootPc(degree: number, key: KeyScale): number {
  * keys yield diatonic chords. Borrowed degrees keep their fixed chromatic
  * qualities (`#IV` diminished, `iv` minor, the rest major).
  */
-function autoQuality(degree: number, key: KeyScale): ChordQuality {
+function autoQuality(degree: number, key: KeyScale, harmonicDominant: boolean): ChordQuality {
   if (degree >= 0 && degree <= 6) {
+    const isMinor = ((key.modeMask12 >> 3) & 1) === 1 && ((key.modeMask12 >> 4) & 1) === 0;
+    // A cadence-oriented progression needs a leading tone in minor too: use
+    // the conventional harmonic-minor V rather than the natural-minor v.
+    if (harmonicDominant && isMinor && degree === 4) {
+      return 'maj';
+    }
     return diatonicTriad(degree, key).quality;
   }
   if (degree === 14) {
@@ -347,13 +359,15 @@ function resolveCycle(
   degrees: readonly number[],
   key: KeyScale,
   ext: ProgressionOptions['ext'],
+  harmonicDominant: boolean,
 ): CycleStep[] {
   const steps: CycleStep[] = [];
   for (const degree of degrees) {
     const step: CycleStep = {
       source: degree,
       rootPc: degreeToRootPc(degree, key),
-      quality: ext !== undefined && ext !== 'auto' ? ext : autoQuality(degree, key),
+      quality:
+        ext !== undefined && ext !== 'auto' ? ext : autoQuality(degree, key, harmonicDominant),
     };
     if (degree >= 0 && degree <= 6) {
       step.degree = degree;
@@ -457,7 +471,18 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
     preset = {
       id: opts.preset.id ?? 'custom',
       name: opts.preset.name ?? 'Custom',
-      degrees: opts.preset.degrees,
+      degrees: opts.preset.degrees.map((degree, index) => {
+        assertDegree(degree, `progression preset degrees[${index}]`);
+        const supported =
+          (degree >= 0 && degree <= 6) ||
+          (Object.values(BORROWED_DEGREES) as number[]).includes(degree);
+        if (!supported) {
+          throw new InvalidInputError(
+            `progression preset degrees[${index}] is not a supported progression degree; received ${degree}`,
+          );
+        }
+        return degree;
+      }),
       functional: opts.preset.functional ?? 'loop',
       styles: opts.preset.styles ?? [opts.style],
     };
@@ -469,7 +494,16 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
     }
   }
   preset ??= pickProgressionPreset(opts.style, seed);
-  const cycle = resolveCycle(preset?.degrees ?? [0], opts.key, opts.ext);
+  const ext =
+    opts.ext === undefined
+      ? 'auto'
+      : assertOneOf(opts.ext, ['auto', ...chordQualities()], 'progression extension');
+  const cycle = resolveCycle(
+    preset?.degrees ?? [0],
+    opts.key,
+    ext,
+    preset?.functional === 'cadenceStrong',
+  );
   const chords: ChordSpan[] = [];
   for (let bar = 0; bar < opts.bars; bar += 1) {
     const step = cycle[bar % cycle.length];
@@ -487,6 +521,7 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
   if (opts.reharmonize) {
     const tonicPc = (((opts.key.rootPc % 12) + 12) % 12) as number;
     const rrng = createRng((seed ^ 0x9e3779b9) >>> 0);
+    let tonicStatements = chords.filter((chord) => chord.rootPc === tonicPc).length;
     for (let i = 0; i < chords.length - 1; i += 1) {
       const cur = chords[i];
       const next = chords[i + 1];
@@ -495,14 +530,18 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
       }
       const domRoot = (next.rootPc + 7) % 12;
       const targetsTonic = (next.rootPc - tonicPc + 12) % 12 === 0;
+      const isLastTonicStatement = cur.rootPc === tonicPc && tonicStatements <= 1;
       const alreadySecondary = cur.rootPc === domRoot && cur.quality === 'dom7';
       // A secondary dominant inserted at i-1 resolves onto this chord; replacing
       // it here would orphan that dominant.
       const isResolutionTarget = chords[i - 1]?.secondaryDominant === true;
-      if (targetsTonic || alreadySecondary || isResolutionTarget) {
+      if (targetsTonic || isLastTonicStatement || alreadySecondary || isResolutionTarget) {
         continue;
       }
       if (rrng.next() < 0.5) {
+        if (cur.rootPc === tonicPc) {
+          tonicStatements -= 1;
+        }
         chords[i] = {
           rootPc: domRoot,
           quality: 'dom7',

@@ -42,6 +42,27 @@ export function assertInteger(
   return value;
 }
 
+/** Require an integer MIDI pitch in the inclusive range 0..127. */
+export function assertMidiPitch(value: number, name = 'MIDI pitch'): number {
+  return assertInteger(value, name, 0, 127);
+}
+
+/** Clamp an integer MIDI pitch to the inclusive range 0..127. */
+export function clampToMidi(value: number, name = 'MIDI pitch'): number {
+  assertInteger(value, name);
+  return Math.min(127, Math.max(0, value));
+}
+
+/** Require a bounded integer scale/chord degree. */
+export function assertDegree(value: number, name = 'degree'): number {
+  return assertInteger(value, name, -1000, 1000);
+}
+
+/** Require a finite semitone offset before pitch-class reduction. */
+export function assertFiniteSemitones(value: number, name = 'semitones'): number {
+  return assertFiniteNumber(value, name);
+}
+
 /**
  * Drop the notes that never sound.
  *
@@ -62,6 +83,9 @@ export function assertInteger(
 export function dropSilentNotes(events: readonly NoteEvent[]): NoteEvent[] {
   return events.filter((event) => event !== undefined && event.durationBeat > 0);
 }
+
+/** Alias that makes the shared positive-duration policy explicit at API entrances. */
+export const soundingNotesOnly = dropSilentNotes;
 
 /**
  * Require a value to be one of a fixed set of names.
@@ -197,7 +221,7 @@ export function assertNoteEvent(
   name = 'note event',
   options: NoteEventAssertOptions = {},
 ): NoteEvent {
-  assertInteger(event.pitch, `${name}.pitch`, 0, 127);
+  assertMidiPitch(event.pitch, `${name}.pitch`);
   assertRange(event.startBeat, 0, Number.MAX_SAFE_INTEGER, `${name}.startBeat`);
   // The positivity check comes first so the common failure — a zero-length note
   // from a MIDI import — reads as such instead of naming a denormal lower bound.
@@ -230,7 +254,7 @@ export function assertNoteEvents(
   options: NoteEventAssertOptions = {},
 ): NoteEvent[] {
   if (!Array.isArray(events)) {
-    throw new TypeError(`${name} must be an array; received ${typeof events}`);
+    throw new InvalidInputError(`${name} must be an array; received ${typeof events}`);
   }
   assertGenerationBudget(events.length, `${name} count`, options.budget);
   for (let index = 0; index < events.length; index += 1) {

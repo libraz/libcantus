@@ -89,6 +89,18 @@ describe('analyzeVoice', () => {
     expect(analyzed[1]?.labels).toContainEqual({ kind: 'passing' });
   });
 
+  it('keeps melodic labels across small humanized gaps and overlaps', () => {
+    for (const middleStart of [1.02, 0.98]) {
+      const voice: VoiceNote[] = [
+        { id: 1, pitch: 60, startBeat: 0, durationBeat: 1 },
+        { id: 2, pitch: 62, startBeat: middleStart, durationBeat: 1 },
+        { id: 3, pitch: 64, startBeat: 2, durationBeat: 1 },
+      ];
+      const analyzed = analyzeVoice(voice, () => cMaj, cMajor, noOtherVoices);
+      expect(analyzed[1]?.labels).toContainEqual({ kind: 'passing' });
+    }
+  });
+
   it('does not invent melodic labels or resolutions across a rest', () => {
     const voice: VoiceNote[] = [
       { id: 1, pitch: 60, startBeat: 0, durationBeat: 1 },

@@ -76,17 +76,6 @@ function isDominantType(chord: Chord): boolean {
   return hasInterval(chord, 4) && hasInterval(chord, 10);
 }
 
-/**
- * A chord that can be tonicized: it has a perfect fifth and a third but is not
- * itself a dominant seventh (which is an unstable, tonicizing sonority rather
- * than a stable target).
- */
-function isStableTarget(chord: Chord): boolean {
-  const hasFifth = hasInterval(chord, 7);
-  const hasThird = hasInterval(chord, 3) || hasInterval(chord, 4);
-  return hasFifth && hasThird && !isDominantType(chord);
-}
-
 /** Count the pitch classes shared between two pitch-class sets. */
 function commonToneCount(a: number[], b: number[]): number {
   const set = new Set(b);
@@ -134,8 +123,6 @@ const THIRD_OFFSETS = [3, 4, 8, 9] as const;
  * original chord and each other:
  *
  * - `tritone`: for a dominant-type chord, the dominant seventh a tritone away.
- * - `secondaryDominant`: for a stable target, the dominant seventh a fifth
- *   above its root (tonicizing it).
  * - `relative`: a diatonic triad a third away that shares two common tones.
  * - `borrowed`: a triad from the parallel mode with the same harmonic function.
  * - `chromaticMediant`: a major/minor triad a third away sharing one common
@@ -172,14 +159,6 @@ export function substituteChord(
   // Tritone substitution: only for dominant-type chords.
   if (isDominantType(chord)) {
     candidates.push({ chord: makeChord(mod12(chord.rootPc + 6), 'dom7'), type: 'tritone' });
-  }
-
-  // Secondary dominant: the V7 tonicizing a stable target.
-  if (isStableTarget(chord)) {
-    candidates.push({
-      chord: makeChord(mod12(chord.rootPc + 7), 'dom7'),
-      type: 'secondaryDominant',
-    });
   }
 
   // Relative: a diatonic triad a third away sharing two common tones.
@@ -287,7 +266,7 @@ export function modalInterchangePalette(key: KeyScale): BorrowedChord[] {
   };
 
   for (const triad of diatonicTriadsOf(parallelKey(key))) {
-    if (!isDiatonic(triad, key)) {
+    if (!isDiatonic(triad, key) && borrowedSource(triad, key) !== null) {
       add(triad);
     }
   }

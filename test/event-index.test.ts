@@ -26,4 +26,15 @@ describe('note event timeline index', () => {
       expect(timeline.at(index * 0.25)?.note.pitch).toBe(60 + (index % 12));
     }
   });
+
+  it('keeps a defensive snapshot and finds notes after a long held pad', () => {
+    const source = [
+      { pitch: 48, startBeat: 0, durationBeat: 10_000 },
+      { pitch: 72, startBeat: 9_999, durationBeat: 0.5 },
+    ];
+    const timeline = createNoteEventIndex(source);
+    source.push({ pitch: 84, startBeat: 1, durationBeat: 1 });
+    expect(timeline.notes).toHaveLength(2);
+    expect(timeline.at(9_999)?.note.pitch).toBe(72);
+  });
 });

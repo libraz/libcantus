@@ -29,6 +29,9 @@ function copyNote(data: NoteData): NoteData {
   if (data.octave !== undefined) {
     copy.octave = data.octave;
   }
+  // Delegate alteration and octave bounds to the same guard used by the core
+  // pitch functions. The class must not accept data its own methods reject.
+  noteToPitchClass(copy);
   return copy;
 }
 

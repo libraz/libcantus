@@ -92,8 +92,8 @@ export function toVoiceNotes(events: readonly NoteEvent[]): IdentifiedVoiceNote[
   return events.map((event, index) => ({ ...event, id: index, originalIndex: index }));
 }
 
-/** Float tolerance for beat comparisons. */
-const EPS = 1e-9;
+/** Maximum gap/overlap treated as adjacent after MIDI humanization. */
+const HUMANIZE_ADJACENCY = 0.05;
 
 /**
  * Interval class of a pitch above the actual sounding bass.
@@ -232,9 +232,11 @@ export function analyzeVoice(
         : prevNote.startBeat + prevNote.durationBeat;
     const noteEnd = note.startBeat + note.durationBeat;
     const prev =
-      prevNote !== undefined && Math.abs(prevEnd - note.startBeat) <= EPS ? prevNote : undefined;
+      prevNote !== undefined && Math.abs(prevEnd - note.startBeat) <= HUMANIZE_ADJACENCY
+        ? prevNote
+        : undefined;
     const next =
-      nextNote !== undefined && Math.abs(noteEnd - nextNote.startBeat) <= EPS
+      nextNote !== undefined && Math.abs(noteEnd - nextNote.startBeat) <= HUMANIZE_ADJACENCY
         ? nextNote
         : undefined;
     const chord = chordAtBeat(note.startBeat);

@@ -1,4 +1,5 @@
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
+import { assertGenerationBudget, assertPositiveInt } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
 import { chordPitchClasses } from '../chord/index.js';
 import type { ScaleNameInput } from '../scale/index.js';
@@ -82,10 +83,35 @@ const SCALE_PREFERENCE = [
   'locrian',
 ] as const;
 
+/** Conventional first choices that pure set-fit ranking cannot express. */
+const IDIOMATIC_SCALES: Partial<Record<Chord['quality'], readonly string[]>> = {
+  aug: ['wholeTone'],
+  m7b5: ['locrian'],
+};
+
 /** Position of a scale in {@link SCALE_PREFERENCE}, or last when unlisted. */
 function conventionalRank(name: string): number {
   const index = (SCALE_PREFERENCE as readonly string[]).indexOf(name);
   return index < 0 ? SCALE_PREFERENCE.length : index;
+}
+
+/** Whether this scale is an idiomatic color choice for the chord quality. */
+function idiomaticRank(chord: Chord, name: string): number {
+  const choices = IDIOMATIC_SCALES[chord.quality];
+  if (choices === undefined) {
+    return 0;
+  }
+  const index = choices.indexOf(name);
+  return index < 0 ? choices.length + 1 : index;
+}
+
+/**
+ * An ordinary dominant seventh may use altered colors while retaining its
+ * perfect fifth in the voicing; the `7alt` quality makes that alteration
+ * explicit, but lead sheets commonly write the shorter `7` here.
+ */
+function isAlteredDominant(chord: Chord, scaleName: string): boolean {
+  return chord.quality === 'dom7' && scaleName === 'altered';
 }
 
 /**
@@ -95,8 +121,8 @@ function conventionalRank(name: string): number {
  * conventional chord-scale relationship. Every entry of {@link NAMED_SCALES}
  * whose pitch-class set is a superset of the chord's is returned once per
  * distinct pitch-class set (aliased masks such as major/ionian report only the
- * modal name), ranked by fewest extra scale tones beyond the chord, then by
- * scale size (heptatonic before larger scales), then by conventional
+ * modal name), ranked by fewest extra scale tones beyond the chord and then by
+ * conventional
  * preference. For bare triads and smaller chords, heptatonic scales rank before
  * pentatonics and other sizes: a pentatonic adds no modal color over a triad,
  * so the seven-note modes are the more useful answer. The chromatic scale is
@@ -134,7 +160,7 @@ export function chordScales(chord: Chord): ChordScaleMatch[] {
       continue;
     }
     seenMasks.add(mask);
-    if (scaleMatchesChord(chordPcs, mask, rootPc)) {
+    if (scaleMatchesChord(chordPcs, mask, rootPc) || isAlteredDominant(chord, name)) {
       const size = popcount12(mask);
       ranked.push({ name, extra: size - chordPcs.length, size });
     }
@@ -149,14 +175,16 @@ export function chordScales(chord: Chord): ChordScaleMatch[] {
   }
   const preferHeptatonic = chordPcs.length <= 3;
   ranked.sort((a, b) => {
+    const idiomaticA = idiomaticRank(chord, a.name);
+    const idiomaticB = idiomaticRank(chord, b.name);
+    if (idiomaticA !== idiomaticB) {
+      return idiomaticA - idiomaticB;
+    }
     if (preferHeptatonic && (a.size === HEPTATONIC_SIZE) !== (b.size === HEPTATONIC_SIZE)) {
       return a.size === HEPTATONIC_SIZE ? -1 : 1;
     }
     if (a.extra !== b.extra) {
       return a.extra - b.extra;
-    }
-    if (a.size !== b.size) {
-      return a.size - b.size;
     }
     const rankA = conventionalRank(a.name);
     const rankB = conventionalRank(b.name);
@@ -188,7 +216,8 @@ export function avoidNotes(chord: Chord, scaleName: ScaleNameInput): number[] {
   const mask = requireScaleMask(scaleName);
   const rootPc = pitchClass(chord.rootPc);
   const chordPcs = chordPitchClasses(chord);
-  if (!scaleMatchesChord(chordPcs, mask, rootPc)) {
+  const alteredDominant = isAlteredDominant(chord, scaleName);
+  if (!scaleMatchesChord(chordPcs, mask, rootPc) && !alteredDominant) {
     return [];
   }
   const chordSet = new Set(chordPcs);
@@ -197,7 +226,9 @@ export function avoidNotes(chord: Chord, scaleName: ScaleNameInput): number[] {
     if (!maskHasPitchClass(mask, rootPc, pc) || chordSet.has(pc)) {
       continue;
     }
-    if (chordSet.has(pitchClass(pc - 1))) {
+    const suspendedThird =
+      chord.quality === 'sus4' || chord.quality === '7sus4' ? pc === pitchClass(rootPc + 4) : false;
+    if (!alteredDominant && (chordSet.has(pitchClass(pc - 1)) || suspendedThird)) {
       avoid.push(pc);
     }
   }
@@ -229,11 +260,12 @@ export function availableTensions(chord: Chord, scaleName: ScaleNameInput): numb
   const mask = requireScaleMask(scaleName);
   const rootPc = pitchClass(chord.rootPc);
   const chordPcs = chordPitchClasses(chord);
-  if (!scaleMatchesChord(chordPcs, mask, rootPc)) {
+  const alteredDominant = isAlteredDominant(chord, scaleName);
+  if (!scaleMatchesChord(chordPcs, mask, rootPc) && !alteredDominant) {
     return [];
   }
   const chordSet = new Set(chordPcs);
-  const avoidSet = new Set(avoidNotes(chord, scaleName));
+  const avoidSet = alteredDominant ? new Set<number>() : new Set(avoidNotes(chord, scaleName));
   const tensions: number[] = [];
   for (let pc = 0; pc < 12; pc += 1) {
     if (!maskHasPitchClass(mask, rootPc, pc) || chordSet.has(pc) || avoidSet.has(pc)) {
@@ -269,8 +301,11 @@ export type ChordScaleReportEntry = {
  * @category Scales
  */
 export function chordScaleReport(chord: Chord, limit?: number): ChordScaleReportEntry[] {
+  if (limit !== undefined) {
+    assertPositiveInt(limit, 'chord-scale report limit');
+  }
   const matches = chordScales(chord);
-  const chosen = limit === undefined ? matches : matches.slice(0, Math.max(0, limit));
+  const chosen = limit === undefined ? matches : matches.slice(0, limit);
   return chosen.map((match) => ({
     name: match.name,
     rootPc: match.rootPc,
@@ -342,6 +377,7 @@ function symmetricDifferenceSize(a: Set<number>, b: Set<number>): number {
  * @category Scales
  */
 export function scalesForChanges(chords: Chord[]): ScaleChoice[] {
+  assertGenerationBudget(chords.length, 'chord-scale changes');
   if (chords.length === 0) {
     return [];
   }

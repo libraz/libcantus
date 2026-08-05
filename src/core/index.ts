@@ -71,15 +71,20 @@ export {
 export type { KeyScale, NoteEvent } from './types.js';
 export type { NoteEventAssertOptions } from './validation/index.js';
 export {
+  assertDegree,
   assertFiniteNumber,
+  assertFiniteSemitones,
   assertGenerationBudget,
   assertInteger,
+  assertMidiPitch,
   assertNoteEvent,
   assertNoteEvents,
   assertOneOf,
   assertPositiveInt,
   assertRange,
   assertTimeSignature,
+  clampToMidi,
   DEFAULT_GENERATION_BUDGET,
   dropSilentNotes,
+  soundingNotesOnly,
 } from './validation/index.js';

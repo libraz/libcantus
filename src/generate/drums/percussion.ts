@@ -1,3 +1,4 @@
+import { type SectionCtx, swing16 } from './beat.js';
 import { HH_16TH_BPM_THRESHOLD } from './hihat.js';
 import type { HitList } from './hit.js';
 import type { DrumRole, SectionType } from './internal.js';
@@ -69,13 +70,16 @@ export function generateAuxPercussionForBar(
   densityMult: number,
   rng: DrumRng,
   bpm: number,
+  sec: SectionCtx,
+  swingAmount: number,
+  barBeats = 4,
 ): void {
   if (role === 'minimal') {
     return;
   }
 
   if (config.tambourine) {
-    for (let beat = 1; beat <= 3; beat += 2) {
+    for (let beat = 1; beat < barBeats; beat += 2) {
       const raw = 70 * densityMult * rng.float(0.9, 1.1);
       track.add(GM.TAMBOURINE, barStart + beat, EIGHTH, Math.max(40, Math.min(90, raw)));
     }
@@ -85,12 +89,12 @@ export function generateAuxPercussionForBar(
     const use16th = config.shaker16th && bpm < HH_16TH_BPM_THRESHOLD;
     if (use16th) {
       const velCurve = [0.75, 0.45, 0.6, 0.45];
-      for (let beat = 0; beat < 4; beat += 1) {
+      for (let beat = 0; beat < barBeats; beat += 1) {
         for (let sub = 0; sub < 4; sub += 1) {
           const raw = 80 * (velCurve[sub] ?? 0.5) * densityMult * rng.float(0.9, 1.1);
           track.add(
             GM.SHAKER,
-            barStart + beat + sub * SIXTEENTH,
+            swing16(barStart + beat + sub * SIXTEENTH, sec, swingAmount),
             SIXTEENTH,
             Math.max(25, Math.min(85, raw)),
           );
@@ -98,12 +102,12 @@ export function generateAuxPercussionForBar(
       }
     } else {
       const velCurve = [0.75, 0.55];
-      for (let beat = 0; beat < 4; beat += 1) {
+      for (let beat = 0; beat < barBeats; beat += 1) {
         for (let sub = 0; sub < 2; sub += 1) {
           const raw = 80 * (velCurve[sub] ?? 0.6) * densityMult * rng.float(0.9, 1.1);
           track.add(
             GM.SHAKER,
-            barStart + beat + sub * EIGHTH,
+            swing16(barStart + beat + sub * EIGHTH, sec, swingAmount),
             EIGHTH,
             Math.max(25, Math.min(85, raw)),
           );
@@ -113,7 +117,7 @@ export function generateAuxPercussionForBar(
   }
 
   if (config.handclap) {
-    for (let beat = 1; beat <= 3; beat += 2) {
+    for (let beat = 1; beat < barBeats; beat += 2) {
       const raw = 85 * densityMult * rng.float(0.9, 1.1);
       track.add(GM.HANDCLAP, barStart + beat, EIGHTH, Math.max(50, Math.min(100, raw)));
     }
