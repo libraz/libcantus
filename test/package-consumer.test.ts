@@ -144,7 +144,8 @@ describe('packed package consumer matrix', () => {
     expect(
       [...packedPaths].filter(
         (file) =>
-          !file.startsWith('dist/') && !['package.json', 'README.md', 'LICENSE'].includes(file),
+          !file.startsWith('dist/') &&
+          !['package.json', 'README.md', 'README_ja.md', 'LICENSE'].includes(file),
       ),
     ).toEqual([]);
 
