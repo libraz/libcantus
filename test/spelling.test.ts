@@ -505,12 +505,12 @@ describe('Chord spelling agrees with the symbol it renders as', () => {
   });
 
   it('re-spells when a different key is attached, whatever the order', () => {
-    const chord = Key.major('C').chord(1); // Dm, spelled from C major
+    const chord = Key.major('C').chord(2); // Dm, spelled from C major
     const viaTwo = chord.withKey(Key.major('Db')).withKey(Key.major('D'));
     const direct = chord.withKey(Key.major('D'));
     expect(viaTwo.symbol()).toBe(direct.symbol());
     // The same chord, first spelled by a flat key, then re-keyed to a sharp one.
-    const gSharpMinor = Key.major('Cb').chord(5); // Ab minor in Cb major
+    const gSharpMinor = Key.major('Cb').chord(6); // Ab minor in Cb major
     expect(gSharpMinor.symbol()).toBe('Abm');
     expect(gSharpMinor.withKey(Key.major('B')).symbol()).toBe('G#m');
   });

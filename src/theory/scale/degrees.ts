@@ -56,11 +56,15 @@ export function nearestScaleTone(pitch: number, key: KeyScale): number {
 }
 
 /**
- * Get the 0-based scale degree of a pitch.
+ * Get the scale degree of a pitch, counted from 1: the tonic is degree 1.
+ *
+ * A pitch outside the scale answers -1 rather than 0, so a caller testing the
+ * result for a degree cannot mistake the "not in the scale" answer for the
+ * tonic.
  *
  * @param pitch MIDI pitch or bare pitch class.
  * @param key The key/scale to measure against.
- * @returns The 0-based degree, or -1 if the pitch is not in the scale.
+ * @returns The 1-based degree, or -1 if the pitch is not in the scale.
  *
  * @category Scales
  */
@@ -69,7 +73,7 @@ export function pitchToScaleDegree(pitch: number, key: KeyScale): number {
   if (((key.modeMask12 >> offset) & 1) === 0) {
     return -1;
   }
-  let degree = 0;
+  let degree = 1;
   for (let n = 0; n < offset; n += 1) {
     if (((key.modeMask12 >> n) & 1) === 1) {
       degree += 1;
@@ -100,8 +104,8 @@ export function diatonicPitchClasses(key: KeyScale): number[] {
 /**
  * List the pitch classes of a key's scale in ascending scale-degree order.
  *
- * Degree 0 is the root; degrees follow the mask bits in offset order rather
- * than sorted pitch-class order.
+ * The first entry is the root (degree 1); degrees follow the mask bits in
+ * offset order rather than sorted pitch-class order.
  *
  * @param key The key/scale to enumerate.
  * @returns The member pitch classes ordered by scale degree.

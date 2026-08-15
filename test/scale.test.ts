@@ -77,9 +77,9 @@ describe('key construction', () => {
 });
 
 describe('pitchToScaleDegree', () => {
-  it('reports 0-based degrees for scale tones', () => {
-    expect(pitchToScaleDegree(60, cMajor)).toBe(0);
-    expect(pitchToScaleDegree(64, cMajor)).toBe(2);
+  it('reports 1-based degrees for scale tones', () => {
+    expect(pitchToScaleDegree(60, cMajor)).toBe(1);
+    expect(pitchToScaleDegree(64, cMajor)).toBe(3);
   });
 
   it('returns -1 for non-scale tones', () => {

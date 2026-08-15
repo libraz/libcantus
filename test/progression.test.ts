@@ -15,9 +15,9 @@ const cMajor: KeyScale = { rootPc: 0, modeMask12: MAJOR_MASK };
 describe('progressions', () => {
   it('includes the named presets with the expected degrees', () => {
     const byId = new Map(progressions().map((p) => [p.id, p]));
-    expect(byId.get('royalRoad')?.degrees).toEqual([3, 4, 2, 5]);
-    expect(byId.get('cityPop')?.degrees).toEqual([0, 5, 1, 4]);
-    expect(byId.get('fourChordPop')?.degrees).toEqual([0, 4, 5, 3]);
+    expect(byId.get('royalRoad')?.degrees).toEqual([4, 5, 3, 6]);
+    expect(byId.get('cityPop')?.degrees).toEqual([1, 6, 2, 5]);
+    expect(byId.get('fourChordPop')?.degrees).toEqual([1, 5, 6, 4]);
   });
 
   it('exposes presets with unique ids and well-formed fields', () => {
@@ -27,9 +27,9 @@ describe('progressions', () => {
     const ids = presets.map((p) => p.id);
     expect(new Set(ids).size).toBe(ids.length); // ids are unique
 
-    // Degrees the generator can actually place: diatonic 0..6 plus the mapped
+    // Degrees the generator can actually place: diatonic 1..7 plus the mapped
     // borrowed degrees. Any other value would silently collapse to the tonic.
-    const validDegrees = new Set([0, 1, 2, 3, 4, 5, 6, 8, 10, 11, 12, 13, 14]);
+    const validDegrees = new Set([1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14]);
     const validStyles = new Set(['minimal', 'dance', 'idol', 'rock']);
     const validFunctions = new Set(['loop', 'tensionBuild', 'cadenceStrong', 'stable']);
 
@@ -121,8 +121,11 @@ describe('generateProgression', () => {
     expect(() =>
       generateProgression({ ...base, preset: { degrees: [Number.NaN] as never[] } }),
     ).toThrow(RangeError);
-    expect(() => generateProgression({ ...base, preset: { degrees: [7] as never[] } })).toThrow(
+    expect(() => generateProgression({ ...base, preset: { degrees: [9] as never[] } })).toThrow(
       /supported progression degree/,
+    );
+    expect(() => generateProgression({ ...base, preset: { degrees: [0] as never[] } })).toThrow(
+      RangeError,
     );
     expect(() => generateProgression({ ...base, ext: 'nonsense' as never })).toThrow(
       /progression extension/,
@@ -231,7 +234,7 @@ describe('preset degeneracy across keys', () => {
   });
 
   it('keeps a preset that closes on its own tonic intact', () => {
-    // `I IV V I` names degree 0 twice on purpose; that repeat is not degeneracy.
+    // `I IV V I` names degree 1 twice on purpose; that repeat is not degeneracy.
     const chords = generateProgression({
       key: majorKey(0),
       style: 'rock',

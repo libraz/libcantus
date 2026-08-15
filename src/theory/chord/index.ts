@@ -1,7 +1,7 @@
 import { InvalidInputError } from '../../core/errors/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import { assertFiniteNumber, assertInteger } from '../../core/validation/index.js';
+import { assertDegree, assertFiniteNumber, assertInteger } from '../../core/validation/index.js';
 import { scaleTonesInDegreeOrder } from '../scale/index.js';
 
 /**
@@ -116,7 +116,7 @@ export type ChordSpan = {
    * case yields the same chord.
    */
   intervals?: number[];
-  /** 0-based scale degree of the chord root, when known. */
+  /** 1-based scale degree of the chord root, when known. */
   degree?: number;
   /** True when the chord is a secondary dominant tonicizing another degree. */
   secondaryDominant?: boolean;
@@ -209,23 +209,27 @@ export function chordQualities(): ChordQuality[] {
  *
  * The root pitch class is the degree's diatonic pitch class in `key`; the
  * quality's interval template is attached unchanged. Degrees beyond the scale
- * length wrap around.
+ * length wrap around, so degree 8 of a heptatonic scale is its degree 1.
  *
- * @param degree 0-based scale degree of the chord root.
+ * @param degree 1-based scale degree of the chord root: 1 is the tonic.
  * @param ext Chord quality to apply.
  * @param key Key context supplying the diatonic root.
  * @returns The constructed chord.
+ * @throws If `degree` is not a positive integer, or `ext` is not a known
+ *   quality.
  *
  * @category Chords
  */
 export function chordFromDegree(degree: number, ext: ChordQuality, key: KeyScale): Chord {
-  assertInteger(degree, 'chord degree', -1000, 1000);
+  // Degree 0 is rejected rather than wrapped onto the last degree: a caller
+  // still counting from zero gets an error instead of a plausible chord.
+  assertDegree(degree, 'chord degree');
   if (!Object.hasOwn(QUALITY_INTERVALS, ext)) {
     throw new InvalidInputError(`Unknown chord quality: ${String(ext)}`);
   }
   const tones = scaleTonesInDegreeOrder(key);
   const length = tones.length;
-  const index = length > 0 ? ((degree % length) + length) % length : 0;
+  const index = length > 0 ? (degree - 1) % length : 0;
   const rootPc = tones[index] ?? pitchClass(key.rootPc);
   return { rootPc, quality: ext, intervals: [...QUALITY_INTERVALS[ext]] };
 }
@@ -582,9 +586,14 @@ function matchesQualityIntervals(quality: ChordQuality, intervals: readonly numb
   );
 }
 
-/** Stack scale thirds from a scale degree into a chord of `size` notes. */
+/**
+ * Stack scale thirds from a 1-based scale degree into a chord of `size` notes.
+ * Degrees beyond the scale length wrap around.
+ */
 function stackThirds(degree: number, key: KeyScale, size: 3 | 4): Chord {
-  assertInteger(degree, 'chord degree', -1000, 1000);
+  // Degree 0 is rejected rather than wrapped onto the last degree: a caller
+  // still counting from zero gets an error instead of a plausible chord.
+  assertDegree(degree, 'chord degree');
   const tones = scaleTonesInDegreeOrder(key);
   const length = tones.length;
   if (length !== 7) {
@@ -592,7 +601,7 @@ function stackThirds(degree: number, key: KeyScale, size: 3 | 4): Chord {
       `diatonic chord stacking requires a heptatonic scale (received ${length} tones)`,
     );
   }
-  const idx = (step: number) => (((degree + step) % length) + length) % length;
+  const idx = (step: number) => (degree - 1 + step) % length;
   const rootPc = tones[idx(0)] ?? pitchClass(key.rootPc);
   const offsets = [0, 2, 4, 6].slice(0, size).map((step) => {
     const pc = tones[idx(step)] ?? rootPc;
@@ -619,7 +628,7 @@ function stackThirds(degree: number, key: KeyScale, size: 3 | 4): Chord {
  * rather than supplied, so degrees yield their scale-correct triads (e.g. a
  * diminished triad on the leading tone of a major key).
  *
- * @param degree 0-based scale degree of the chord root.
+ * @param degree 1-based scale degree of the chord root: 1 is the tonic.
  * @param key Key/scale context.
  * @returns The diatonic triad.
  * @throws If the scale is not heptatonic. Stacking thirds means skipping every
@@ -630,7 +639,7 @@ function stackThirds(degree: number, key: KeyScale, size: 3 | 4): Chord {
  * @example
  * ```ts
  * import { majorKey, diatonicTriad } from '@libraz/libcantus';
- * const tonic = diatonicTriad(0, majorKey(0)); // C major triad (degree 0 of C major)
+ * const tonic = diatonicTriad(1, majorKey(0)); // C major triad (degree 1 of C major)
  * ```
  *
  * @category Chords
@@ -642,7 +651,7 @@ export function diatonicTriad(degree: number, key: KeyScale): Chord {
 /**
  * Build the diatonic seventh chord rooted on a scale degree.
  *
- * @param degree 0-based scale degree of the chord root.
+ * @param degree 1-based scale degree of the chord root: 1 is the tonic.
  * @param key Key/scale context.
  * @returns The diatonic seventh chord.
  * @throws If the scale is not heptatonic, for the reason given on

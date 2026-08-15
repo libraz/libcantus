@@ -241,7 +241,7 @@ describe('transposing without a string round trip', () => {
   });
 
   it('carries the key, so the degree survives the transposition', () => {
-    const chord = Key.major('C').chord(4); // G major, the dominant
+    const chord = Key.major('C').chord(5); // G major, the dominant
     expect(chord.roman()).toBe('V');
     const moved = chord.transpose(2);
     expect(moved.symbol()).toBe('A');
@@ -268,7 +268,7 @@ describe('transposing without a string round trip', () => {
 
   it('passes its carried key to voiceProgression', () => {
     const key = Key.major('C');
-    const progression = new Progression([key.chord(4), key.chord(0)], key);
+    const progression = new Progression([key.chord(5), key.chord(1)], key);
     expect(progression.voice()).toEqual(
       voiceProgression(
         progression.chords.map((chord) => chord.data),
@@ -455,14 +455,14 @@ describe('Key', () => {
 
   it('builds degree chords carrying the key context', () => {
     const cMajor = Key.major('C');
-    expect(cMajor.chord(0).quality).toBe('maj');
-    expect(cMajor.chord(6).quality).toBe('dim');
-    expect(cMajor.chord(4, 'dom7').roman()).toBe('V7');
-    expect(cMajor.diatonicTriad(5).quality).toBe('min');
-    expect(cMajor.diatonicSeventh(1).quality).toBe('min7');
+    expect(cMajor.chord(1).quality).toBe('maj');
+    expect(cMajor.chord(7).quality).toBe('dim');
+    expect(cMajor.chord(5, 'dom7').roman()).toBe('V7');
+    expect(cMajor.diatonicTriad(6).quality).toBe('min');
+    expect(cMajor.diatonicSeventh(2).quality).toBe('min7');
   });
 
-  it.each([Number.NaN, Number.POSITIVE_INFINITY, 1.5])(
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, 1.5, 0, -1])(
     'validates every degree-chord overload for degree %s',
     (degree) => {
       const key = Key.major('C');
@@ -474,8 +474,8 @@ describe('Key', () => {
   );
 
   it('keeps the key spelling on degree and Roman-numeral chords', () => {
-    expect(Key.major('Eb').chord(0).symbol()).toBe('Eb');
-    expect(Key.major('Bb').diatonicTriad(3).symbol()).toBe('Eb');
+    expect(Key.major('Eb').chord(1).symbol()).toBe('Eb');
+    expect(Key.major('Bb').diatonicTriad(4).symbol()).toBe('Eb');
     expect(Key.major('C').roman('V7/vi').symbol()).toBe('E7');
   });
 
@@ -500,7 +500,7 @@ describe('Chord', () => {
   });
 
   it('supports the fluent degree-chord chain', () => {
-    expect(Key.major('C').chord(4, 'dom7').pitchClasses()).toEqual([2, 5, 7, 11]);
+    expect(Key.major('C').chord(5, 'dom7').pitchClasses()).toEqual([2, 5, 7, 11]);
   });
 
   it('voices a secondary dominant built from a Roman numeral', () => {
@@ -540,7 +540,7 @@ describe('Chord', () => {
 
   it('inverts by chord-tone index, wrapping and keeping context', () => {
     const cMajor = Key.major('C');
-    const tonic = cMajor.chord(0, 'maj');
+    const tonic = cMajor.chord(1, 'maj');
     expect(tonic.invert(1).bassPc).toBe(4);
     expect(tonic.invert(2).bassPc).toBe(7);
     // invert(3) wraps to index 0 = root position, so it carries no slash bass.
@@ -640,8 +640,8 @@ describe('Chord', () => {
 describe('Progression', () => {
   it('flows key context from Key-produced chords through progressionTo', () => {
     const result = Key.major('C')
-      .chord(0, 'maj')
-      .progressionTo(Key.major('C').chord(7, 'dom7'))
+      .chord(1, 'maj')
+      .progressionTo(Key.major('C').chord(8, 'dom7'))
       .analyze();
     expect(result.chords).toHaveLength(2);
     expect(result).toHaveProperty('cadence');
@@ -650,8 +650,8 @@ describe('Progression', () => {
   it('analyzes a ii-V-I with an authentic cadence', () => {
     const cMajor = Key.major('C');
     const prog = cMajor
-      .chord(1, 'min7')
-      .progressionTo(cMajor.chord(4, 'dom7'), cMajor.chord(0, 'maj'));
+      .chord(2, 'min7')
+      .progressionTo(cMajor.chord(5, 'dom7'), cMajor.chord(1, 'maj'));
     expect(prog.length).toBe(3);
     expect(prog.roman()).toEqual(['ii7', 'V7', 'I']);
     expect(prog.functions()).toEqual(['subdominant', 'dominant', 'tonic']);
@@ -666,8 +666,8 @@ describe('Progression', () => {
   it('voices with smooth voice leading', () => {
     const cMajor = Key.major('C');
     const voicings = cMajor
-      .chord(1, 'min7')
-      .progressionTo(cMajor.chord(4, 'dom7'), cMajor.chord(0, 'maj'))
+      .chord(2, 'min7')
+      .progressionTo(cMajor.chord(5, 'dom7'), cMajor.chord(1, 'maj'))
       .voice();
     expect(voicings).toHaveLength(3);
     for (const voicing of voicings) {
@@ -699,8 +699,8 @@ describe('Progression', () => {
 
   it('is immutable: add returns a new progression', () => {
     const cMajor = Key.major('C');
-    const prog = new Progression([cMajor.chord(0)], cMajor);
-    const longer = prog.add(cMajor.chord(4, 'dom7'));
+    const prog = new Progression([cMajor.chord(1)], cMajor);
+    const longer = prog.add(cMajor.chord(5, 'dom7'));
     expect(longer).not.toBe(prog);
     expect(prog.length).toBe(1);
     expect(longer.length).toBe(2);
@@ -709,7 +709,7 @@ describe('Progression', () => {
 
   it('serializes to plain progression data instead of {}', () => {
     const cMajor = Key.major('C');
-    const prog = cMajor.chord(0, 'maj').progressionTo(cMajor.chord(4, 'dom7'));
+    const prog = cMajor.chord(1, 'maj').progressionTo(cMajor.chord(5, 'dom7'));
     const json = prog.toJSON();
     expect(json.chords).toEqual([
       {
@@ -763,7 +763,7 @@ describe('Progression', () => {
 
 describe('Chord letter-name spelling and plain-data construction', () => {
   it('spells its tones using the carried key context', () => {
-    const g7 = Key.major('C').chord(4, 'dom7');
+    const g7 = Key.major('C').chord(5, 'dom7');
     expect(g7.spell().map((note) => note.name)).toEqual(['G', 'B', 'D', 'F']);
   });
 
@@ -783,7 +783,7 @@ describe('Chord letter-name spelling and plain-data construction', () => {
 
   it('exposes the carried key on a progression', () => {
     const key = Key.minor('A');
-    const prog = new Progression([key.chord(0)], key);
+    const prog = new Progression([key.chord(1)], key);
     expect(prog.key?.isMinor).toBe(true);
   });
 
@@ -818,7 +818,7 @@ describe('Chord symbols, styled voicings, and negative harmony', () => {
     // In C major the axis reflects each pitch class p -> (7 - p) mod 12, turning
     // G7 into the {C, D, F, Ab} subdominant-function collection, and the result
     // carries no spurious slash bass.
-    const g7 = Key.major('C').chord(4, 'dom7');
+    const g7 = Key.major('C').chord(5, 'dom7');
     const mirrored = g7.negativeHarmony();
     const expected = new Set(g7.pitchClasses().map((pc) => (((7 - pc) % 12) + 12) % 12));
     expect(new Set(mirrored.pitchClasses())).toEqual(expected);

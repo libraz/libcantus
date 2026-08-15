@@ -72,26 +72,26 @@ describe('diatonic stacking', () => {
   const cMajor = majorKey(0);
 
   it('stacks the correct diatonic triad qualities in C major', () => {
-    expect(diatonicTriad(0, cMajor).quality).toBe('maj');
-    expect(diatonicTriad(1, cMajor).quality).toBe('min');
-    expect(diatonicTriad(6, cMajor).quality).toBe('dim');
+    expect(diatonicTriad(1, cMajor).quality).toBe('maj');
+    expect(diatonicTriad(2, cMajor).quality).toBe('min');
+    expect(diatonicTriad(7, cMajor).quality).toBe('dim');
   });
 
   it('stacks diatonic seventh chords in C major', () => {
-    expect(diatonicSeventh(0, cMajor).quality).toBe('maj7');
-    expect(diatonicSeventh(4, cMajor).quality).toBe('dom7');
-    expect(diatonicSeventh(6, cMajor).quality).toBe('m7b5');
+    expect(diatonicSeventh(1, cMajor).quality).toBe('maj7');
+    expect(diatonicSeventh(5, cMajor).quality).toBe('dom7');
+    expect(diatonicSeventh(7, cMajor).quality).toBe('m7b5');
   });
 
   it('handles harmonic-minor sevenths', () => {
     const aHarmonic = scaleByName('harmonicMinor', 9);
-    expect(diatonicSeventh(0, aHarmonic).quality).toBe('minMaj7');
-    expect(diatonicSeventh(6, aHarmonic).quality).toBe('dim7');
+    expect(diatonicSeventh(1, aHarmonic).quality).toBe('minMaj7');
+    expect(diatonicSeventh(7, aHarmonic).quality).toBe('dim7');
   });
 
   it('labels the harmonic-minor mediant seventh as augMaj7 with matching intervals', () => {
     const aHarmonic = scaleByName('harmonicMinor', 9);
-    const chord = diatonicSeventh(2, aHarmonic);
+    const chord = diatonicSeventh(3, aHarmonic);
     expect(chord.intervals).toEqual([0, 4, 8, 11]);
     expect(chord.quality).toBe('augMaj7');
     // The reported quality must rebuild the same intervals.
@@ -100,7 +100,7 @@ describe('diatonic stacking', () => {
 
   it('labels a flattened-fifth dominant with its matching template', () => {
     const doubleHarmonic = { rootPc: 0, modeMask12: maskFromOffsets([0, 1, 4, 5, 7, 8, 11]) };
-    const chord = diatonicSeventh(4, doubleHarmonic);
+    const chord = diatonicSeventh(5, doubleHarmonic);
     expect(chord.quality).toBe('7b5');
     expect(chord.intervals).toEqual([0, 4, 6, 10]);
     expect(makeChord(chord.rootPc, chord.quality).intervals).toEqual(chord.intervals);
@@ -109,12 +109,12 @@ describe('diatonic stacking', () => {
   it('rejects non-heptatonic scales instead of returning a mismatched quality template', () => {
     for (const name of ['majorPentatonic', 'wholeTone', 'octatonicHalfWhole', 'chromatic']) {
       const scale = scaleByName(name, 0);
-      expect(() => diatonicTriad(0, scale), name).toThrow(/heptatonic/);
-      expect(() => diatonicSeventh(0, scale), name).toThrow(/heptatonic/);
+      expect(() => diatonicTriad(1, scale), name).toThrow(/heptatonic/);
+      expect(() => diatonicSeventh(1, scale), name).toThrow(/heptatonic/);
     }
   });
 
-  it.each([Number.NaN, Number.POSITIVE_INFINITY, 1.5])(
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, 1.5, 0, -1])(
     'rejects an invalid stacking degree %s',
     (degree) => {
       expect(() => diatonicTriad(degree, cMajor)).toThrow(RangeError);

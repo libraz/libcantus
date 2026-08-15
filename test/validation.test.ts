@@ -89,7 +89,9 @@ describe('shared numeric input contracts', () => {
     expect(() => assertRange(-1, 0, 1, 'ratio')).toThrow(RangeError);
     expect(assertGenerationBudget(10, 'events', 10)).toBe(10);
     expect(() => assertGenerationBudget(11, 'events', 10)).toThrow(RangeError);
+    expect(assertDegree(1)).toBe(1);
     expect(assertDegree(7)).toBe(7);
+    expect(() => assertDegree(0)).toThrow(RangeError);
     expect(() => assertDegree(1.5)).toThrow(RangeError);
     expect(() => assertFiniteSemitones(Number.NaN)).toThrow(RangeError);
   });

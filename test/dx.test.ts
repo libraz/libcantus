@@ -162,7 +162,7 @@ describe('progression presets are addressable', () => {
       key: cMajor,
       style: 'rock',
       bars: 4,
-      preset: { degrees: [0, BORROWED_DEGREES.bVII, 3, 0] },
+      preset: { degrees: [1, BORROWED_DEGREES.bVII, 4, 1] },
     });
     expect(chords.map((chord) => chord.rootPc)).toEqual([0, 10, 5, 0]);
     expect(() =>

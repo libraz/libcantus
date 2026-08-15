@@ -75,9 +75,10 @@ describe('spelled intervals refuse an undefined comparison', () => {
 
 describe('a scale degree outside the scale is an error', () => {
   it('does not wrap around to tonicize some other degree', () => {
-    expect(() => secondaryDominant(7, majorKey(0))).toThrow(RangeError);
+    expect(() => secondaryDominant(8, majorKey(0))).toThrow(RangeError);
+    expect(() => secondaryDominant(0, majorKey(0))).toThrow(RangeError);
     expect(() => secondaryDominant(-1, majorKey(0))).toThrow(RangeError);
-    expect(secondaryDominant(4, majorKey(0)).rootPc).toBe(2); // V/V in C is D7
+    expect(secondaryDominant(5, majorKey(0)).rootPc).toBe(2); // V/V in C is D7
   });
 });
 

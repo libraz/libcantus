@@ -49,7 +49,7 @@ export type ProgressionPreset = {
  * code for a borrowed degree. These are stable identifiers, not semitone
  * offsets: their pitch-class offsets are resolved internally.
  *
- * Scale degrees 0..6 address the key's own chords; these codes continue the
+ * Scale degrees 1..7 address the key's own chords; these codes continue the
  * numbering for the chromatic chords a pop progression borrows, so a preset is
  * one flat list of degree codes.
  *
@@ -60,7 +60,7 @@ export type ProgressionPreset = {
  *   key: majorKey(0),
  *   style: 'rock',
  *   bars: 4,
- *   preset: { degrees: [0, BORROWED_DEGREES.bVII, 3, 0] },
+ *   preset: { degrees: [1, BORROWED_DEGREES.bVII, 4, 1] },
  * });
  * ```
  * @category Composition
@@ -81,7 +81,7 @@ export const BORROWED_DEGREES = Object.freeze({
 } as const);
 
 /**
- * A chord root in a preset: a scale degree 0..6, or one of
+ * A chord root in a preset: a scale degree 1..7, or one of
  * {@link BORROWED_DEGREES}.
  *
  * @category Composition
@@ -122,154 +122,154 @@ const PRESETS: ProgressionPreset[] = [
   {
     id: 'fourChordPop',
     name: 'Four Chord Pop',
-    degrees: [0, 4, 5, 3],
+    degrees: [1, 5, 6, 4],
     functional: 'loop',
     styles: ['minimal', 'dance', 'idol'],
   },
   {
     id: 'pop1',
     name: 'Pop 1',
-    degrees: [0, 5, 3, 4],
+    degrees: [1, 6, 4, 5],
     functional: 'loop',
     styles: ['minimal', 'dance', 'idol'],
   },
   {
     id: 'axis',
     name: 'Axis',
-    degrees: [5, 3, 0, 4],
+    degrees: [6, 4, 1, 5],
     functional: 'loop',
     styles: ['minimal', 'dance', 'idol', 'rock'],
   },
   {
     id: 'pop2',
     name: 'Pop 2',
-    degrees: [3, 0, 4, 5],
+    degrees: [4, 1, 5, 6],
     functional: 'loop',
     styles: ['minimal', 'dance', 'idol'],
   },
   {
     id: 'classic',
     name: 'Classic',
-    degrees: [0, 3, 4, 0],
+    degrees: [1, 4, 5, 1],
     functional: 'cadenceStrong',
     styles: ['dance', 'idol', 'rock'],
   },
   {
     id: 'pop3',
     name: 'Pop 3',
-    degrees: [0, 3, 5, 4],
+    degrees: [1, 4, 6, 5],
     functional: 'loop',
     styles: ['minimal', 'dance', 'idol'],
   },
   {
     id: 'royalRoad',
     name: 'Royal Road',
-    degrees: [3, 4, 2, 5],
+    degrees: [4, 5, 3, 6],
     functional: 'tensionBuild',
     styles: ['dance', 'idol'],
   },
   {
     id: 'minor1',
     name: 'Minor 1',
-    degrees: [5, 4, 3, 4],
+    degrees: [6, 5, 4, 5],
     functional: 'tensionBuild',
     styles: ['idol', 'rock'],
   },
   {
     id: 'minor2',
     name: 'Minor 2',
-    degrees: [5, 3, 4, 0],
+    degrees: [6, 4, 5, 1],
     functional: 'tensionBuild',
     styles: ['idol', 'rock'],
   },
   {
     id: 'pop4',
     name: 'Pop 4',
-    degrees: [0, 4, 2, 3],
+    degrees: [1, 5, 3, 4],
     functional: 'loop',
     styles: ['minimal', 'dance', 'idol'],
   },
   {
     id: 'pop5',
     name: 'Pop 5',
-    degrees: [0, 2, 3, 4],
+    degrees: [1, 3, 4, 5],
     functional: 'stable',
     styles: ['minimal', 'dance', 'idol'],
   },
   {
     id: 'rock1',
     name: 'Rock 1',
-    degrees: [0, 10, 3, 0],
+    degrees: [1, 10, 4, 1],
     functional: 'tensionBuild',
     styles: ['rock'],
   },
   {
     id: 'rock2',
     name: 'Rock 2',
-    degrees: [0, 3, 10, 0],
+    degrees: [1, 4, 10, 1],
     functional: 'tensionBuild',
     styles: ['rock'],
   },
   {
     id: 'extended4',
     name: 'Extended 4',
-    degrees: [0, 4, 5, 2],
+    degrees: [1, 5, 6, 3],
     functional: 'stable',
     styles: ['minimal', 'dance'],
   },
   {
     id: 'minor3',
     name: 'Minor 3',
-    degrees: [5, 0, 4, 3],
+    degrees: [6, 1, 5, 4],
     functional: 'loop',
     styles: ['dance', 'idol'],
   },
   {
     id: 'aeolianPop',
     name: 'Aeolian Pop',
-    degrees: [5, 8, 10, 0],
+    degrees: [6, 8, 10, 1],
     functional: 'tensionBuild',
     styles: ['minimal', 'dance', 'idol', 'rock'],
   },
   {
     id: 'animeHighEnergy1',
     name: 'Anime High Energy 1',
-    degrees: [5, 2, 3, 0],
+    degrees: [6, 3, 4, 1],
     functional: 'loop',
     styles: ['dance', 'idol'],
   },
   {
     id: 'jazzPop',
     name: 'Jazz Pop',
-    degrees: [1, 4, 0, 5],
+    degrees: [2, 5, 1, 6],
     functional: 'cadenceStrong',
     styles: ['minimal', 'dance'],
   },
   {
     id: 'animeHighEnergy2',
     name: 'Anime High Energy 2',
-    degrees: [5, 1, 4, 0],
+    degrees: [6, 2, 5, 1],
     functional: 'cadenceStrong',
     styles: ['dance', 'idol'],
   },
   {
     id: 'cityPop',
     name: 'City Pop',
-    degrees: [0, 5, 1, 4],
+    degrees: [1, 6, 2, 5],
     functional: 'stable',
     styles: ['minimal', 'dance'],
   },
   {
     id: 'extended5',
     name: 'Extended 5',
-    degrees: [0, 4, 5, 2, 3],
+    degrees: [1, 5, 6, 3, 4],
     functional: 'loop',
     styles: ['minimal', 'dance', 'idol'],
   },
   {
     id: 'neapolitanPop',
     name: 'Neapolitan Pop',
-    degrees: [5, 12, 13, 4, 0],
+    degrees: [6, 12, 13, 5, 1],
     functional: 'cadenceStrong',
     styles: ['minimal', 'dance', 'idol'],
   },
@@ -305,9 +305,11 @@ export function progressionsByStyle(style: ProgStyle): ProgressionPreset[] {
 
 /** Root pitch class of a scale degree in the given key, including borrowed degrees. */
 function degreeToRootPc(degree: number, key: KeyScale): number {
-  if (degree >= 0 && degree <= 6) {
+  if (degree >= 1 && degree <= 7) {
     const tones = scaleTonesInDegreeOrder(key);
-    return tones.length > 0 ? (tones[degree % tones.length] ?? key.rootPc % 12) : key.rootPc % 12;
+    return tones.length > 0
+      ? (tones[(degree - 1) % tones.length] ?? key.rootPc % 12)
+      : key.rootPc % 12;
   }
   const offset = BORROWED_OFFSET[degree] ?? 0;
   return ((((key.rootPc % 12) + offset) % 12) + 12) % 12;
@@ -316,16 +318,16 @@ function degreeToRootPc(degree: number, key: KeyScale): number {
 /**
  * Diatonic (or borrowed) triad quality of a degree in the given key.
  *
- * Diatonic degrees (0-6) take their scale-correct triad quality, so non-major
+ * Diatonic degrees (1-7) take their scale-correct triad quality, so non-major
  * keys yield diatonic chords. Borrowed degrees keep their fixed chromatic
  * qualities (`#IV` diminished, `iv` minor, the rest major).
  */
 function autoQuality(degree: number, key: KeyScale, harmonicDominant: boolean): ChordQuality {
-  if (degree >= 0 && degree <= 6) {
+  if (degree >= 1 && degree <= 7) {
     const isMinor = ((key.modeMask12 >> 3) & 1) === 1 && ((key.modeMask12 >> 4) & 1) === 0;
     // A cadence-oriented progression needs a leading tone in minor too: use
     // the conventional harmonic-minor V rather than the natural-minor v.
-    if (harmonicDominant && isMinor && degree === 4) {
+    if (harmonicDominant && isMinor && degree === 5) {
       return 'maj';
     }
     return diatonicTriad(degree, key).quality;
@@ -369,7 +371,7 @@ function resolveCycle(
       quality:
         ext !== undefined && ext !== 'auto' ? ext : autoQuality(degree, key, harmonicDominant),
     };
-    if (degree >= 0 && degree <= 6) {
+    if (degree >= 1 && degree <= 7) {
       step.degree = degree;
     }
     const previous = steps[steps.length - 1];
@@ -474,7 +476,7 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
       degrees: opts.preset.degrees.map((degree, index) => {
         assertDegree(degree, `progression preset degrees[${index}]`);
         const supported =
-          (degree >= 0 && degree <= 6) ||
+          (degree >= 1 && degree <= 7) ||
           (Object.values(BORROWED_DEGREES) as number[]).includes(degree);
         if (!supported) {
           throw new InvalidInputError(

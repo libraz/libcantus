@@ -29,8 +29,8 @@ describe('generateProgression reharmonize', () => {
     ).toEqual([
       { rootPc: 5, quality: 'dom7', startBeat: 0, secondaryDominant: true },
       { rootPc: 10, quality: 'maj', startBeat: 4 },
-      { rootPc: 5, quality: 'maj', startBeat: 8, degree: 3 },
-      { rootPc: 0, quality: 'maj', startBeat: 12, degree: 0 },
+      { rootPc: 5, quality: 'maj', startBeat: 8, degree: 4 },
+      { rootPc: 0, quality: 'maj', startBeat: 12, degree: 1 },
     ]);
   });
 

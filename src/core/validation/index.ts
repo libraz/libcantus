@@ -53,9 +53,13 @@ export function clampToMidi(value: number, name = 'MIDI pitch'): number {
   return Math.min(127, Math.max(0, value));
 }
 
-/** Require a bounded integer scale/chord degree. */
+/**
+ * Require a bounded scale/chord degree, counted from 1 the way musicians count
+ * degrees: 1 is the tonic, 5 the dominant. Zero and negative degrees name no
+ * degree at all and are rejected.
+ */
 export function assertDegree(value: number, name = 'degree'): number {
-  return assertInteger(value, name, -1000, 1000);
+  return assertInteger(value, name, 1, 1000);
 }
 
 /** Require a finite semitone offset before pitch-class reduction. */

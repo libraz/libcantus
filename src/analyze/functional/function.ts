@@ -237,7 +237,8 @@ export function analyzeChord(
 /**
  * The secondary dominant (V7) that tonicizes a scale degree.
  *
- * @param targetDegree 0-based scale degree to tonicize.
+ * @param targetDegree 1-based scale degree to tonicize: 5 is the dominant, so
+ *   `secondaryDominant(5, majorKey(0))` is the V of V.
  * @param key The prevailing key.
  * @returns A dominant-seventh chord a fifth above the target's root.
  * @throws If `targetDegree` is not an integer naming a degree in `key`.
@@ -249,8 +250,8 @@ export function secondaryDominant(targetDegree: number, key: KeyScale): Chord {
   // A degree outside the scale is a caller error, not a wrap-around: silently
   // tonicizing some other degree produces a chord that reads as intentional.
   const degreeCount = scaleTonesInDegreeOrder(key).length;
-  assertInteger(targetDegree, 'targetDegree', 0, degreeCount - 1);
-  const targetRoot = degreeRootPc(targetDegree + 1, key);
+  assertInteger(targetDegree, 'targetDegree', 1, degreeCount);
+  const targetRoot = degreeRootPc(targetDegree, key);
   return makeChord(mod12(targetRoot + 7), 'dom7');
 }
 

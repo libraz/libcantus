@@ -13,6 +13,6 @@ describe('public entry point', () => {
     const cMajor = majorKey(0);
     expect(classifyInterval(7)).toBe(ConsonanceClass.PerfectConsonance);
     expect(diatonicPitchClasses(cMajor)).toEqual([0, 2, 4, 5, 7, 9, 11]);
-    expect(chordPitchClasses(chordFromDegree(0, 'maj7', cMajor))).toEqual([0, 4, 7, 11]);
+    expect(chordPitchClasses(chordFromDegree(1, 'maj7', cMajor))).toEqual([0, 4, 7, 11]);
   });
 });

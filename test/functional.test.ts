@@ -226,13 +226,14 @@ describe('detectCadence', () => {
 
 describe('secondaryDominant', () => {
   it('builds V7 of a target degree', () => {
-    expect(secondaryDominant(4, cMajor)).toMatchObject({ rootPc: 2, quality: 'dom7' });
+    expect(secondaryDominant(5, cMajor)).toMatchObject({ rootPc: 2, quality: 'dom7' });
   });
 
   it('validates target degrees against the actual scale length', () => {
     const pentatonic = scaleByName('majorPentatonic', 0);
-    expect(() => secondaryDominant(5, pentatonic)).toThrow(RangeError);
-    expect(secondaryDominant(4, pentatonic)).toMatchObject({ rootPc: 4, quality: 'dom7' });
+    expect(() => secondaryDominant(6, pentatonic)).toThrow(RangeError);
+    expect(() => secondaryDominant(0, pentatonic)).toThrow(RangeError);
+    expect(secondaryDominant(5, pentatonic)).toMatchObject({ rootPc: 4, quality: 'dom7' });
   });
 });
 
@@ -242,7 +243,8 @@ describe('secondaryDominantOf', () => {
     ['A minor', aMinor],
   ] as const) {
     it(`agrees with the degree-based entry point on every degree of ${name}`, () => {
-      scaleTonesInDegreeOrder(key).forEach((rootPc, degree) => {
+      scaleTonesInDegreeOrder(key).forEach((rootPc, index) => {
+        const degree = index + 1;
         expect(secondaryDominantOf(makeChord(rootPc, 'maj')), `degree ${degree}`).toEqual(
           secondaryDominant(degree, key),
         );
@@ -253,7 +255,7 @@ describe('secondaryDominantOf', () => {
   it('tonicizes a chromatic target that has no degree in the key', () => {
     // C major has seven degrees, so the degree-based entry point cannot name
     // the borrowed bVI or the Neapolitan at all.
-    expect(() => secondaryDominant(7, cMajor)).toThrow(RangeError);
+    expect(() => secondaryDominant(8, cMajor)).toThrow(RangeError);
     expect(secondaryDominantOf(makeChord(8, 'maj'))).toMatchObject({ rootPc: 3, quality: 'dom7' });
     expect(secondaryDominantOf(makeChord(1, 'maj'))).toMatchObject({ rootPc: 8, quality: 'dom7' });
   });
@@ -517,12 +519,12 @@ describe('applied Roman numerals', () => {
     expect(chordToRoman(makeChord(4, 'maj'), cMajor, { applied: true })).toBe('V/vi');
     expect(chordToRoman(makeChord(0, 'dom7'), cMajor, { applied: true })).toBe('V7/IV');
     expect(chordToRoman(makeChord(6, 'dim7'), cMajor, { applied: true })).toBe('viio7/V');
-    expect(chordToRoman(secondaryDominant(6, cMajor), cMajor, { applied: true })).toBe('V7/vii');
+    expect(chordToRoman(secondaryDominant(7, cMajor), cMajor, { applied: true })).toBe('V7/vii');
   });
 
   it('round-trips every secondary dominant the library builds', () => {
     for (const key of [cMajor, aMinor, scaleByName('dorian', 2)]) {
-      for (let degree = 0; degree < 7; degree += 1) {
+      for (let degree = 1; degree <= 7; degree += 1) {
         const chord = secondaryDominant(degree, key);
         const roman = chordToRoman(chord, key, { applied: true });
         expect(romanToChord(roman, key).rootPc, `${roman} in ${key.rootPc}`).toBe(chord.rootPc);
