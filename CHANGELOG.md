@@ -13,10 +13,23 @@ assumed; keys become relatable and transposable by named interval; scale
 degrees are counted the way musicians count them; and the vocabulary grows to
 cover what a harmony exercise actually asks for — note names in German and
 Japanese, augmented sixths, figured bass, part-writing violations, transposing
-instruments, and a cadence that knows whether it is perfect. See **Changed**
-first — the degree change, the removal of `ChordTimelineResult.key`, and the
-replacement of `Cadence` are all breaking, and the degree change looks silent
-at the call site.
+instruments, and a cadence that knows whether it is perfect.
+
+Beyond that, the analysis gains units larger than the chord — phrases, sections,
+hypermeter, motifs and a structural/passing reading of a progression — and
+starts explaining itself: `analyzeChord`, `detectCadence`, `detectKey` and the
+new `explainRoman` return the reasoning and the readings they rejected. Metre
+may change mid-piece and a pickup may sound before the downbeat. Chords are
+modelled as a base plus a set of alterations rather than a closed list of
+names, so `C7(b9,#11)` parses; every parser gains a non-throwing sibling.
+Generation gains articulation, instrument profiles that know which notes exist
+on a four-string bass, a genre vocabulary held as data instead of branches, and
+one continuous complexity dial in place of five differently-shaped knobs.
+
+See **Changed** first — the degree change, the removal of
+`ChordTimelineResult.key`, the replacement of `Cadence`, the meter map, and the
+re-addressed random number stream are all breaking, and the degree change looks
+silent at the call site.
 
 ### Changed
 
@@ -105,6 +118,55 @@ at the call site.
   be perfect. `CadenceHit.type` becomes `CadenceHit.cadence`, and
   `Progression.analyze().cadence` returns the same structure. The `Cadence`
   type is gone; read `CadenceResult['type']` for the old value.
+
+- **The metre may change during a piece.** Analysis carried one
+  `ts: TimeSignature` for a whole work, so a metre change could not be
+  expressed and every bar line after it was wrong. `chordTimelineFromNotes`,
+  `keyTimelineFromNotes` and `analyzeArrangement` take
+  `meters: { startBeat, ts }[]`; `ts` remains accepted as sugar for a
+  one-element map, and naming both is an error. Everything positional —
+  `metricWeight`, `isStrongBeat`, `beatToBarPosition` and the rest — takes
+  `MeterLike` and derives its position from the bar in force rather than from a
+  single global modulo, so a 4/4 → 3/4 change puts the accents where the score
+  puts them.
+
+- **A pickup may sound before the downbeat.** `NoteEvent.startBeat` was
+  required to be non-negative, and the documented workaround — shift the whole
+  piece — moved every strong beat off its bar line and made metric analysis
+  musically wrong. Negative onsets are now how an anacrusis is written: the
+  downbeat is beat 0, the pickup is bar -1, and `pickupBeats` declares how far
+  back a note may legitimately start. Nonsensical onsets are still rejected.
+
+- **A melody is harmonized from its structural tones.** `harmonizeMelody`
+  weighed an accented non-chord tone more heavily than `V→I` and a descending
+  fifth combined, so note coverage beat functional harmony: Twinkle in C major
+  came back as `C C F Em F Am Dm`, ending away from the tonic, and under
+  `reharmonize: 'secondaryDominant'` the tonic never appeared at all. Ornamental
+  tones are now classified from the melody and its metre *before* any chord is
+  chosen and left out of the fit cost, the cost table is scaled so the harmonic
+  terms are of the same order, and a phrase-final cadence carries comparable
+  weight. Twinkle returns `C F C F C G C`. `transposeSearch` moves the melody
+  into the target key and harmonizes it there — it used to move the melody and
+  leave the key behind, so the two disagreed — and the register adjustment it
+  was documented to perform is now `octaveSearch`.
+
+- **Generation draws its randomness by position rather than by call order.**
+  Changing a parameter in the middle of a piece redrew the whole stream. Each
+  decision is now addressed by where it happens (bar, beat, voice) from a seed
+  derived per part, so a change anywhere leaves everything else alone. The same
+  seed produces different output than before; `algorithmVersion` is the contract
+  a caller pins to.
+
+- **Complexity is one continuous dial.** `density` was quantised to three values
+  inside the drum generator — 0.1 and 0.3 were the same 32 hits, 0.7 and 0.9 the
+  same 80 — and every other generator expressed "how elaborate" as a different
+  kind of thing: an enum, a boolean, a contour. `GenerationContext.complexity`
+  carries `rhythmic`, `harmonic` and `ornament` on 0..1 with a `difficulty`
+  ceiling. The additive dials are monotone by construction — raising one only
+  adds events, and what was already sounding stays where it was. Above the
+  neutral middle, `rhythmic` also syncopates the figures drawn from the genre
+  vocabulary, which displaces onsets rather than adding them. `bpm` moves onto
+  the context, so the bass generator can finally see it.
 
 ### Added
 
@@ -196,6 +258,120 @@ at the call site.
 - `parseInterval` and `Interval.parse` accept a leading `-` for a descending
   interval (`'-A4'`), and `Interval` gained `isDescending` and `negate`.
 
+- **Units larger than the chord.** `phrasesFromTimeline` splits a piece into
+  phrases from cadences, rests, repetition and hypermetric position, each with
+  its closing cadence and a confidence; `structuralCadences` ranks them, so
+  "the cadence of this piece" is answerable rather than a flat list.
+  `hypermeter` infers the grouping of bars into hyperbars, and
+  `sectionsFromNotes` recovers an A/B/A form from repetition. Sections are
+  lettered, never named "chorus" — repetition alone cannot tell a chorus from a
+  second verse.
+
+- **Melodic analysis.** `extractMotifs` finds recurring cells by interval
+  contour and rhythmic profile, so a restatement at another pitch level or in
+  wider note values is recognised as the same figure. `relateMotifs` names how
+  two statements relate — repetition, transposition, inversion, retrograde,
+  retrograde inversion, augmentation, diminution — and distinguishes a real
+  sequence from a tonal one, which is the difference the key makes.
+  `melodicSimilarity` and `melodicContour` cover the cases no exact
+  transformation explains.
+
+- **A structural reading of a progression.** `reduceProgression` marks each
+  chord `structural`, `passing` or `auxiliary`, so `Cmaj7 → C#dim7 → Dm7` is no
+  longer three chords of equal standing. The default position — a chord is
+  structural unless it is demonstrably an embellishment — is stated in the
+  module, and the salience reading is available as `basis: 'duration'`.
+
+- **The analysis explains itself.** `analyzeChord`, `detectCadence` and
+  `detectKey` carry a `rationale` in the style `analyzeVoice` already used, plus
+  the readings they considered and rejected. `explainRoman` returns a Roman
+  numeral together with the reasoning behind it, derived from the same pass that
+  produces the numeral so the two cannot drift apart.
+
+- **Whole-line spelling.** `spellLine` solves a voice's spelling as one path
+  instead of note by note, so a line stops alternating between sharp and flat
+  readings of the same idea. A rising chromatic line takes sharps and a falling
+  one flats; a tone the chord names follows the chord's spelling, which is what
+  makes the seventh of `Db7` read `Cb`.
+
+- **Incremental re-analysis.** `createArrangementSession` recomputes only the
+  beats an edit affects and splices them into the previous analysis, for callers
+  re-analysing on every keystroke. The result equals a full re-analysis of the
+  same input; where it cannot be made equal, the session falls back to a full
+  pass rather than returning something close.
+
+- **Modal key candidates.** `detectKey` can rank the church modes alongside the
+  24 major and minor keys under `{ modes: true }`, reporting the mode in
+  `KeyMatch.scaleName` while `mode` stays the major or minor key it leans on.
+  Off by default, and the default ranking is unchanged.
+
+- **Pitch material from outside the Western canon.** `WORLD_SCALES` holds the
+  Japanese *in* and *yo* scales, four maqāmāt and the Hindustani *thāṭ* sets,
+  each documenting the tradition it comes from. `ScaleSystem` and
+  `supportsFunctionalHarmony` let analysis decline to apply Roman-numeral
+  function to material that does not take it. The maqāmāt built on half-flat
+  degrees are absent rather than approximated, which is stated where a reader
+  will look for them.
+
+- **A structured chord model.** `ChordSpec` describes a chord as a base, an
+  optional seventh, and sets of alterations, additions and omissions, so
+  `Cmaj7(#11)`, `C7(b9,#11)`, `C7(13)`, `Csus4(add9)` and `C-∆9` parse — a
+  closed list of names could never cover the combinations a lead sheet writes.
+  The 45 existing quality names remain, `Chord.quality` is derived, and pitch
+  content, inversion and symbol formatting all run through the spec.
+
+- **Non-throwing parsers.** `Chord.tryParse`, `tryParseChordSymbol`,
+  `tryParseNote` and `tryParseInterval` return
+  `{ ok: true; value } | { ok: false; error }`, so a chord-entry field does not
+  need a try/catch per keystroke. The throwing versions are built on them.
+
+- **Tempo and note values.** `beatsToSeconds` / `secondsToBeats` integrate a
+  piecewise-constant `TempoMap` exactly across tempo changes, with
+  `beatsToTicks` / `ticksToBeats` for a PPQ grid. `beatsToDuration` spells a
+  length the way it is notated — 1.5 beats is a dotted quarter, a third of a
+  beat is an eighth triplet — and `beatsToTiedDurations` decomposes what no
+  single note value spells.
+
+- **Species counterpoint and voice independence.** `checkSpecies` grades the
+  five species against the shared part-writing violation vocabulary. The
+  counterpoint predicates take spelled notes, so an augmented second is no
+  longer indistinguishable from a minor third and the melodic prohibition on it
+  is detectable at all. `voiceIndependence` measures motion, rhythmic
+  complementarity, registral separation and consecutive perfect consonances and
+  returns numbers rather than a verdict, because species rules applied to pop
+  music flag parallel thirds and pedal points as errors. `imitate` writes a
+  canonic entry, real or tonal, which `transformMotif` could not express.
+
+- **Articulation and playability.** `NoteEvent` and `DrumHit` carry an optional
+  `articulation`; the flam that was hard-coded as a pair of notes inside one
+  drum fill is now an attribute any material can take. `InstrumentProfile`
+  derives an instrument's range from its tuning and fret count rather than
+  storing it, so a five-string bass, drop D and a seven-string guitar all fall
+  out of one formula. `playability` reports what does not exist, what cannot be
+  fingered, and what cannot be reached in time — the first two depending on the
+  instrument alone. A bass line whose register leaves the instrument is folded
+  by the octave, as a player would; passing no profile leaves generation exactly
+  as it was.
+
+- **Genre vocabulary as data.** The drum fill archetypes, kick figures and ghost
+  densities move out of `switch` statements into dictionaries, and bass gains a
+  lick dictionary held as chord-relative degrees. `Vocabulary<T>` carries each
+  figure's applicability — genre, section, tempo range, metre, difficulty — so
+  selection is a lookup. Genre selects the material, complexity deforms it and
+  difficulty rejects it, which keeps the three from fighting.
+  `GenerationContext.vocabulary` lets a caller bring their own. `KickPattern`
+  widens to a sixteenth grid, without which most of what belongs in the
+  dictionary cannot be written. No entry reproduces a phrase from a particular
+  recording; each records the basis on which it qualifies as common currency.
+
+- **Ornamentation as a separate pass.** `ornament(notes, …)` adds ghosts, flams,
+  drags and slides to material that already exists, in the same position as
+  `humanize`, so making one fill easier no longer means generating it again.
+
+- **Randomness primitives.** `deriveSeed` derives every part from one project
+  seed; `createPositionalRng` answers by position rather than by call order; and
+  `includeAt` makes a complexity dial monotone by construction.
+
 ### Fixed
 
 - `Key.transpose` spells its result the way the key is written, as its
@@ -207,6 +383,23 @@ at the call site.
   not only an `Interval` instance. It previously threw `TypeError`, which
   contradicted the documented interoperability of the functional and class
   styles.
+- `spellScale` gives every tone of a gapped scale its own letter. A hemitonic
+  pentatonic has no third for the existing rule to lean on, so the semitone
+  above the tonic was spelled as a raised tonic and reused a letter: C miyako-
+  bushi read `C C# F G G#` instead of `C Db F G Ab`. Scales that already had one
+  letter per tone are unchanged, and a set with more tones than there are
+  letters keeps the previous reading.
+- `chordTimelineFromNotes` reports its key regions from the same beat the
+  analysis starts on when the caller supplies a key. It began at beat 0 while
+  the inferring path began at the pickup, so a note before the downbeat fell
+  outside every region.
+- `keyTimelineFromNotes` reads the notes of a pickup instead of dropping them,
+  and weighs each beat in the metre actually in force there.
+- `voiceProgression` and the chord-boundary search hold their tables in typed
+  arrays rather than allocating an object per cell. Voicing a 200-chord
+  progression drops from 13.9 ms to 3.2 ms with scavenging collections down by
+  96%, and the boundary search allocates 86% less. The output is unchanged, and
+  pinned as such.
 
 ## [0.9.5] - 2026-08-05
 
