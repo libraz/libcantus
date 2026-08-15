@@ -1,5 +1,5 @@
 import { BudgetExceededError, InvalidInputError } from '../errors/index.js';
-import type { TimeSignature } from '../meter/index.js';
+import type { MeterMap, TimeSignature } from '../meter/index.js';
 import { isCompoundNumerator } from '../meter/internal.js';
 import type { NoteEvent } from '../types.js';
 
@@ -200,6 +200,41 @@ export function assertTimeSignature(ts: TimeSignature, name = 'time signature'):
 }
 
 /**
+ * Validate a meter map: a non-empty run of time signatures, each with the beat
+ * it takes effect at, in strictly increasing beat order.
+ *
+ * The first entry also governs everything before it, so a map need not start at
+ * beat 0 — that is what lets a pickup at a negative beat be read in the
+ * signature the piece opens in.
+ *
+ * @category Core
+ */
+export function assertMeterMap(meters: MeterMap, name = 'meters'): MeterMap {
+  if (!Array.isArray(meters)) {
+    throw new InvalidInputError(`${name} must be an array; received ${typeof meters}`);
+  }
+  if (meters.length === 0) {
+    throw new InvalidInputError(`${name} must not be empty`);
+  }
+  let previous = Number.NEGATIVE_INFINITY;
+  for (let index = 0; index < meters.length; index += 1) {
+    const entry = meters[index];
+    if (entry === undefined) {
+      throw new InvalidInputError(`${name}[${index}] must be a meter change; received undefined`);
+    }
+    assertFiniteNumber(entry.startBeat, `${name}[${index}].startBeat`);
+    if (index > 0 && entry.startBeat <= previous) {
+      throw new InvalidInputError(
+        `${name}[${index}].startBeat must be greater than ${previous}; received ${entry.startBeat}`,
+      );
+    }
+    previous = entry.startBeat;
+    assertTimeSignature(entry.ts, `${name}[${index}].ts`);
+  }
+  return meters;
+}
+
+/**
  * How strictly {@link assertNoteEvent} and {@link assertNoteEvents} read an
  * event array.
  *
@@ -213,6 +248,15 @@ export type NoteEventAssertOptions = {
   allowNonPositiveDuration?: boolean;
   /** Upper bound on the event count; defaults to the generation budget. */
   budget?: number;
+  /**
+   * Earliest accepted onset. Onsets are unbounded below by default, because a
+   * pickup sounds before the downbeat and the downbeat is beat 0; pass
+   * `-pickupBeats` to reject a note starting earlier than the pickup a caller
+   * has declared.
+   *
+   * @defaultValue `-Number.MAX_SAFE_INTEGER`
+   */
+  minStartBeat?: number;
 };
 
 /**
@@ -226,7 +270,12 @@ export function assertNoteEvent(
   options: NoteEventAssertOptions = {},
 ): NoteEvent {
   assertMidiPitch(event.pitch, `${name}.pitch`);
-  assertRange(event.startBeat, 0, Number.MAX_SAFE_INTEGER, `${name}.startBeat`);
+  // An onset is not bounded below: the downbeat is beat 0, so a pickup sounds
+  // at a negative beat. A nonsensical onset is still rejected — the bound is
+  // finite, and a caller that knows its pickup narrows it further.
+  const minStartBeat = options.minStartBeat ?? -Number.MAX_SAFE_INTEGER;
+  assertFiniteNumber(minStartBeat, 'minStartBeat');
+  assertRange(event.startBeat, minStartBeat, Number.MAX_SAFE_INTEGER, `${name}.startBeat`);
   // The positivity check comes first so the common failure — a zero-length note
   // from a MIDI import — reads as such instead of naming a denormal lower bound.
   assertFiniteNumber(event.durationBeat, `${name}.durationBeat`);

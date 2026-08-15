@@ -4,20 +4,29 @@
  *
  * Positions and durations are measured in quarter-note beats, matching the rest
  * of the library's beat convention (four quarter-note beats per bar in 4/4).
+ * Beat 0 is the first downbeat, so a pickup sounds at negative beats, and a
+ * piece that changes meter is described by a {@link MeterMap} rather than by
+ * one signature.
  */
 
 import { InvalidInputError } from '../errors/index.js';
 import {
   assertFiniteNumber,
   assertInteger,
+  assertMeterMap,
   assertPositiveInt,
   assertRange,
   assertTimeSignature,
 } from '../validation/index.js';
 import {
   barBeatsOf,
+  barIndexOf,
+  barStartOf,
+  beatOfBarIndex,
+  entryIndexOf,
   isAdditiveReading,
   isCompoundNumerator,
+  isMeterMap,
   pulseBeatsOf,
   pulseCountOf,
 } from './internal.js';
@@ -51,12 +60,61 @@ export type TimeSignature = {
 };
 
 /**
+ * One time signature and the beat at which it takes effect.
+ *
+ * @category Rhythm & Meter
+ */
+export type MeterChange = {
+  /** Absolute quarter-note beat the signature takes effect at. */
+  startBeat: number;
+  /** The signature in force from that beat until the next change. */
+  ts: TimeSignature;
+};
+
+/**
+ * A piece's meter over time: the signatures in force, in beat order.
+ *
+ * A meter change starts a new bar, so a span that does not divide evenly into
+ * its own bars ends with a short bar rather than spilling across the change.
+ * The first entry also governs everything before it, which is what reads a
+ * pickup written at negative beats in the signature the piece opens in.
+ *
+ * @category Rhythm & Meter
+ */
+export type MeterMap = MeterChange[];
+
+/**
+ * Either a single time signature or a full meter map.
+ *
+ * Every meter-aware function takes this, so a piece in one meter reads as
+ * `4/4` and a piece that changes meter reads as the map, without the caller
+ * choosing a different function for each.
+ *
+ * @category Rhythm & Meter
+ */
+export type MeterLike = TimeSignature | MeterMap;
+
+/** Validate whichever of the two forms was given. */
+function assertMeter(meter: MeterLike, name = 'meter'): MeterLike {
+  if (isMeterMap(meter)) {
+    assertMeterMap(meter, name);
+  } else {
+    assertTimeSignature(meter, name);
+  }
+  return meter;
+}
+
+/**
  * A position expressed as a bar index and a quarter-note offset within the bar.
  *
  * @category Rhythm & Meter
  */
 export type BarPosition = {
-  /** 0-based bar index. {@link formatBarPosition} renders it 1-based. */
+  /**
+   * 0-based bar index, counting the first full bar as 0.
+   * {@link formatBarPosition} renders it 1-based. A pickup sounds before that
+   * bar, so its notes report bar -1.
+   */
   bar: number;
   /**
    * Quarter-note offset from the start of the bar — not the felt beat. In 6/8
@@ -67,6 +125,9 @@ export type BarPosition = {
 };
 
 const EPS = 1e-9;
+
+/** The meter assumed when a caller names none. */
+const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
 
 /** Whether `value` is an integer multiple of `unit` (within a float tolerance). */
 function isMultiple(value: number, unit: number): boolean {
@@ -169,6 +230,146 @@ export function beatsPerBar(ts: TimeSignature): number {
 }
 
 /**
+ * The time signature in force at a beat.
+ *
+ * @param beatInQuarters Absolute position in quarter-note beats.
+ * @param meter A single signature, or the piece's meter map.
+ * @returns The signature governing that beat.
+ * @example
+ * ```ts
+ * import { meterAt, parseTimeSignature } from '@libraz/libcantus';
+ * const meters = [
+ *   { startBeat: 0, ts: parseTimeSignature('4/4') },
+ *   { startBeat: 8, ts: parseTimeSignature('3/4') },
+ * ];
+ * meterAt(9, meters); // { numerator: 3, denominator: 4 }
+ * ```
+ * @category Rhythm & Meter
+ */
+export function meterAt(beatInQuarters: number, meter: MeterLike): TimeSignature {
+  assertFiniteNumber(beatInQuarters, 'beat');
+  assertMeter(meter);
+  return meterAtChecked(beatInQuarters, meter);
+}
+
+/** {@link meterAt} without re-validating an already validated meter. */
+function meterAtChecked(beatInQuarters: number, meter: MeterLike): TimeSignature {
+  if (!isMeterMap(meter)) {
+    return meter;
+  }
+  return meter[entryIndexOf(meter, beatInQuarters)]?.ts ?? DEFAULT_TS;
+}
+
+/**
+ * Absolute beat at which the bar containing `beatInQuarters` begins.
+ *
+ * @param beatInQuarters Absolute position in quarter-note beats.
+ * @param meter A single signature, or the piece's meter map.
+ * @returns The bar's first beat, negative inside a pickup.
+ * @category Rhythm & Meter
+ */
+export function barStartBeat(beatInQuarters: number, meter: MeterLike): number {
+  assertFiniteNumber(beatInQuarters, 'beat');
+  assertMeter(meter);
+  return barStartChecked(beatInQuarters, meter);
+}
+
+/** {@link barStartBeat} without re-validating an already validated meter. */
+function barStartChecked(beatInQuarters: number, meter: MeterLike): number {
+  if (isMeterMap(meter)) {
+    return barStartOf(meter, beatInQuarters);
+  }
+  const barLen = barBeatsOf(meter);
+  return Math.floor(beatInQuarters / barLen + EPS) * barLen;
+}
+
+/**
+ * Bar index of a beat: 0 for the first full bar, negative inside a pickup.
+ *
+ * Bars accumulate across meter changes, so the bar after a 4/4-to-3/4 change is
+ * the next bar and not the first bar of a new count.
+ *
+ * @param beatInQuarters Absolute position in quarter-note beats.
+ * @param meter A single signature, or the piece's meter map.
+ * @returns The 0-based bar index.
+ * @example
+ * ```ts
+ * import { barIndexAt, parseTimeSignature } from '@libraz/libcantus';
+ * const meters = [
+ *   { startBeat: 0, ts: parseTimeSignature('4/4') },
+ *   { startBeat: 8, ts: parseTimeSignature('3/4') },
+ * ];
+ * barIndexAt(11, meters); // 3
+ * ```
+ * @category Rhythm & Meter
+ */
+export function barIndexAt(beatInQuarters: number, meter: MeterLike): number {
+  assertFiniteNumber(beatInQuarters, 'beat');
+  assertMeter(meter);
+  return barIndexChecked(beatInQuarters, meter);
+}
+
+/** {@link barIndexAt} without re-validating an already validated meter. */
+function barIndexChecked(beatInQuarters: number, meter: MeterLike): number {
+  if (isMeterMap(meter)) {
+    return barIndexOf(meter, beatInQuarters);
+  }
+  return Math.floor(beatInQuarters / barBeatsOf(meter) + EPS);
+}
+
+/**
+ * Length in quarter-note beats of the bar containing a beat.
+ *
+ * The meter-map counterpart of {@link beatsPerBar}, which answers for one
+ * signature and so cannot be asked about a piece that changes meter.
+ *
+ * @param beatInQuarters Absolute position in quarter-note beats.
+ * @param meter A single signature, or the piece's meter map.
+ * @returns The bar length in quarter notes.
+ * @category Rhythm & Meter
+ */
+export function beatsPerBarAt(beatInQuarters: number, meter: MeterLike): number {
+  return barBeatsOf(meterAt(beatInQuarters, meter));
+}
+
+/**
+ * Read the meter out of a pair of options that accept either form.
+ *
+ * Entry points take `meters` for a piece that changes meter and keep `ts` as
+ * sugar for a piece that does not, so this is the one place that resolves the
+ * pair — including the rule that naming both is an input error rather than one
+ * of them silently winning.
+ *
+ * @param opts The options carrying `ts`, `meters`, or neither.
+ * @param name What the options belong to, for the error message.
+ * @returns The meter map to analyse against; 4/4 throughout when neither is given.
+ * @throws If both `ts` and `meters` are given, or the map is malformed.
+ * @example
+ * ```ts
+ * import { parseTimeSignature, resolveMeters } from '@libraz/libcantus';
+ * resolveMeters({ ts: parseTimeSignature('3/4') });
+ * // [{ startBeat: 0, ts: { numerator: 3, denominator: 4 } }]
+ * ```
+ * @category Rhythm & Meter
+ */
+export function resolveMeters(
+  opts: { ts?: TimeSignature; meters?: MeterMap },
+  name = 'meters',
+): MeterMap {
+  if (opts.ts !== undefined && opts.meters !== undefined) {
+    throw new InvalidInputError(
+      `${name} and ts name the same thing; give one or the other, not both`,
+    );
+  }
+  if (opts.meters !== undefined) {
+    return assertMeterMap(opts.meters, name);
+  }
+  const ts = opts.ts ?? DEFAULT_TS;
+  assertTimeSignature(ts);
+  return [{ startBeat: 0, ts }];
+}
+
+/**
  * Number of main pulses (felt beats) per bar: the numerator for simple meters,
  * a third of it for compound meters.
  *
@@ -203,7 +404,7 @@ function isGroupHead(grouping: number[], pulseIndex: number): boolean {
  * Convert an absolute quarter-note position to a bar index and in-bar offset.
  *
  * @param beatInQuarters Absolute position in quarter-note beats.
- * @param ts The time signature.
+ * @param meter A single signature, or the piece's meter map.
  * @returns The bar and in-bar quarter-note offset.
  * @example
  * ```ts
@@ -213,12 +414,13 @@ function isGroupHead(grouping: number[], pulseIndex: number): boolean {
  * ```
  * @category Rhythm & Meter
  */
-export function beatToBarPosition(beatInQuarters: number, ts: TimeSignature): BarPosition {
+export function beatToBarPosition(beatInQuarters: number, meter: MeterLike): BarPosition {
   assertFiniteNumber(beatInQuarters, 'beat');
-  assertTimeSignature(ts);
-  const barLen = barBeatsOf(ts);
-  const bar = Math.floor(beatInQuarters / barLen);
-  return { bar, beat: beatInQuarters - bar * barLen };
+  assertMeter(meter);
+  return {
+    bar: barIndexChecked(beatInQuarters, meter),
+    beat: beatInQuarters - barStartChecked(beatInQuarters, meter),
+  };
 }
 
 /**
@@ -250,7 +452,7 @@ export function pulseBeats(ts: TimeSignature): number {
  * shows.
  *
  * @param pos The bar position.
- * @param ts The time signature.
+ * @param meter A single signature, or the piece's meter map.
  * @returns The 1-based felt-beat number, fractional between pulses.
  * @example
  * ```ts
@@ -259,10 +461,19 @@ export function pulseBeats(ts: TimeSignature): number {
  * ```
  * @category Rhythm & Meter
  */
-export function barPositionToPulse(pos: BarPosition, ts: TimeSignature): number {
+export function barPositionToPulse(pos: BarPosition, meter: MeterLike): number {
   assertFiniteNumber(pos.beat, 'position.beat');
-  assertTimeSignature(ts);
-  return pos.beat / pulseBeatsOf(ts) + 1;
+  assertMeter(meter);
+  return pos.beat / pulseBeatsOf(meterAtBarChecked(pos.bar, meter)) + 1;
+}
+
+/** The signature governing a bar index, on an already validated meter. */
+function meterAtBarChecked(bar: number, meter: MeterLike): TimeSignature {
+  if (!isMeterMap(meter)) {
+    return meter;
+  }
+  assertFiniteNumber(bar, 'position.bar');
+  return meterAtChecked(beatOfBarIndex(meter, bar), meter);
 }
 
 /**
@@ -270,7 +481,7 @@ export function barPositionToPulse(pos: BarPosition, ts: TimeSignature): number 
  * 1-based bar, 1-based felt beat.
  *
  * @param beatInQuarters Absolute position in quarter-note beats.
- * @param ts The time signature.
+ * @param meter A single signature, or the piece's meter map.
  * @param decimals Digits of the fractional beat to keep.
  * @returns The formatted position, e.g. `'3.2'` for bar 3, felt beat 2.
  * @example
@@ -280,9 +491,10 @@ export function barPositionToPulse(pos: BarPosition, ts: TimeSignature): number 
  * ```
  * @category Rhythm & Meter
  */
-export function formatBarPosition(beatInQuarters: number, ts: TimeSignature, decimals = 2): string {
+export function formatBarPosition(beatInQuarters: number, meter: MeterLike, decimals = 2): string {
   assertInteger(decimals, 'decimals', 0, 100);
-  const position = beatToBarPosition(beatInQuarters, ts);
+  const position = beatToBarPosition(beatInQuarters, meter);
+  const ts = meterAtChecked(beatInQuarters, meter);
   const pulse = barPositionToPulse(position, ts);
   const rounded = Number(pulse.toFixed(decimals));
   if (rounded >= pulsesPerBar(ts) + 1) {
@@ -300,15 +512,18 @@ export function formatBarPosition(beatInQuarters: number, ts: TimeSignature, dec
  * position.
  *
  * @param pos The bar position.
- * @param ts The time signature.
+ * @param meter A single signature, or the piece's meter map.
  * @returns The absolute position in quarter-note beats.
  * @category Rhythm & Meter
  */
-export function barPositionToBeat(pos: BarPosition, ts: TimeSignature): number {
+export function barPositionToBeat(pos: BarPosition, meter: MeterLike): number {
   assertInteger(pos.bar, 'bar position bar');
   assertFiniteNumber(pos.beat, 'bar position beat');
-  assertTimeSignature(ts);
-  return pos.bar * barBeatsOf(ts) + pos.beat;
+  assertMeter(meter);
+  if (isMeterMap(meter)) {
+    return beatOfBarIndex(meter, pos.bar) + pos.beat;
+  }
+  return pos.bar * barBeatsOf(meter) + pos.beat;
 }
 
 /**
@@ -323,11 +538,17 @@ export function barPositionToBeat(pos: BarPosition, ts: TimeSignature): number {
  * non-downbeat main pulse of such a meter weighs 1 (flat, evenly divided
  * pulses).
  *
- * @param beatInQuarters Absolute or in-bar quarter-note position.
- * @param ts The time signature.
+ * Given a meter map, the weight follows the signature in force at that beat, so
+ * beat 5 of a piece is a mid-bar accent in 4/4 and a plain main pulse in 3/4.
+ * The downbeat is beat 0 however much pickup precedes it, so a note in the
+ * pickup weighs as the upbeat it is rather than as a downbeat.
+ *
+ * @param beatInQuarters Absolute quarter-note position, or an in-bar offset
+ *   when the meter is a single signature.
+ * @param meter A single signature, or the piece's meter map.
  * @returns The metric weight (0–3).
- * @throws If the time signature is malformed, including a grouping that is not
- *   a positive-integer list summing to the pulse count or the numerator.
+ * @throws If the meter is malformed, including a grouping that is not a
+ *   positive-integer list summing to the pulse count or the numerator.
  * @example
  * ```ts
  * import { parseTimeSignature, metricWeight } from '@libraz/libcantus';
@@ -336,11 +557,11 @@ export function barPositionToBeat(pos: BarPosition, ts: TimeSignature): number {
  * ```
  * @category Rhythm & Meter
  */
-export function metricWeight(beatInQuarters: number, ts: TimeSignature): number {
+export function metricWeight(beatInQuarters: number, meter: MeterLike): number {
   assertFiniteNumber(beatInQuarters, 'beat');
-  assertTimeSignature(ts);
-  const barLen = barBeatsOf(ts);
-  const beat = beatInQuarters - Math.floor(beatInQuarters / barLen) * barLen;
+  assertMeter(meter);
+  const ts = meterAtChecked(beatInQuarters, meter);
+  const beat = beatInQuarters - barStartChecked(beatInQuarters, meter);
   const pulse = pulseBeatsOf(ts);
   if (!isMultiple(beat, pulse)) {
     return 0;
@@ -364,13 +585,14 @@ export function metricWeight(beatInQuarters: number, ts: TimeSignature): number 
  * Whether a position is metrically accented (weight 2 or more — a downbeat or a
  * secondary strong pulse).
  *
- * @param beatInQuarters Absolute or in-bar quarter-note position.
- * @param ts The time signature.
+ * @param beatInQuarters Absolute quarter-note position, or an in-bar offset
+ *   when the meter is a single signature.
+ * @param meter A single signature, or the piece's meter map.
  * @returns True on strong beats.
  * @category Rhythm & Meter
  */
-export function isStrongBeat(beatInQuarters: number, ts: TimeSignature): boolean {
-  return metricWeight(beatInQuarters, ts) >= 2;
+export function isStrongBeat(beatInQuarters: number, meter: MeterLike): boolean {
+  return metricWeight(beatInQuarters, meter) >= 2;
 }
 
 /**

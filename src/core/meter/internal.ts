@@ -8,7 +8,16 @@
  * than the result of dividing two floats.
  */
 
-import type { TimeSignature } from './index.js';
+import type { MeterLike, MeterMap, TimeSignature } from './index.js';
+
+/**
+ * Tolerance for the divisions below.
+ *
+ * A bar boundary reached by accumulating tuplet durations lands an epsilon
+ * short of it, and a beat an epsilon short of a bar line belongs to the bar it
+ * is arriving at, not to the one it is leaving.
+ */
+const EPS = 1e-9;
 
 /** Length of one denominator unit in quarter-note beats. */
 export function unitBeatsOf(ts: TimeSignature): number {
@@ -68,4 +77,94 @@ export function pulseBeatsOf(ts: TimeSignature): number {
 /** Length of a bar in quarter-note beats. */
 export function barBeatsOf(ts: TimeSignature): number {
   return ts.numerator * unitBeatsOf(ts);
+}
+
+/** Whether a meter argument is a map of changes rather than one signature. */
+export function isMeterMap(meter: MeterLike): meter is MeterMap {
+  return Array.isArray(meter);
+}
+
+/**
+ * Index of the map entry in force at a beat.
+ *
+ * The first entry also covers everything before it, so a pickup written at
+ * negative beats is read in the signature the piece opens in.
+ */
+export function entryIndexOf(map: MeterMap, beat: number): number {
+  let index = 0;
+  for (let i = 1; i < map.length; i += 1) {
+    if ((map[i]?.startBeat ?? Number.POSITIVE_INFINITY) > beat + EPS) {
+      break;
+    }
+    index = i;
+  }
+  return index;
+}
+
+/**
+ * Bars completed before the entry at `index`.
+ *
+ * A meter change starts a new bar, so a span that does not divide evenly into
+ * its own bars still contributes a whole final bar — an incomplete bar before a
+ * change is a bar all the same.
+ */
+function barsBeforeEntry(map: MeterMap, index: number): number {
+  let bars = 0;
+  for (let i = 0; i < index; i += 1) {
+    const entry = map[i];
+    const next = map[i + 1];
+    if (entry === undefined || next === undefined) {
+      break;
+    }
+    bars += Math.max(1, Math.ceil((next.startBeat - entry.startBeat) / barBeatsOf(entry.ts) - EPS));
+  }
+  return bars;
+}
+
+/** Absolute beat at which the bar containing `beat` begins. */
+export function barStartOf(map: MeterMap, beat: number): number {
+  const entry = map[entryIndexOf(map, beat)];
+  if (entry === undefined) {
+    return 0;
+  }
+  const barLen = barBeatsOf(entry.ts);
+  return entry.startBeat + Math.floor((beat - entry.startBeat) / barLen + EPS) * barLen;
+}
+
+/**
+ * Bar index of a beat, counting the map's first bar as 0.
+ *
+ * Beats before that bar count backwards, which is what numbers a pickup bar as
+ * bar -1 rather than folding it into the first full bar.
+ */
+export function barIndexOf(map: MeterMap, beat: number): number {
+  const index = entryIndexOf(map, beat);
+  const entry = map[index];
+  if (entry === undefined) {
+    return 0;
+  }
+  const barLen = barBeatsOf(entry.ts);
+  return barsBeforeEntry(map, index) + Math.floor((beat - entry.startBeat) / barLen + EPS);
+}
+
+/** Absolute beat at which bar `barIndex` begins. */
+export function beatOfBarIndex(map: MeterMap, barIndex: number): number {
+  let base = 0;
+  for (let i = 0; i < map.length; i += 1) {
+    const entry = map[i];
+    if (entry === undefined) {
+      continue;
+    }
+    const barLen = barBeatsOf(entry.ts);
+    const next = map[i + 1];
+    if (next === undefined) {
+      return entry.startBeat + (barIndex - base) * barLen;
+    }
+    const bars = Math.max(1, Math.ceil((next.startBeat - entry.startBeat) / barLen - EPS));
+    if (barIndex < base + bars) {
+      return entry.startBeat + (barIndex - base) * barLen;
+    }
+    base += bars;
+  }
+  return 0;
 }

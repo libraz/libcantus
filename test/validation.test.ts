@@ -198,8 +198,8 @@ describe('every note-event guard has a rejection path', () => {
   it.each([
     ['non-finite pitch', { pitch: Number.NaN, startBeat: 0, durationBeat: 1 }],
     ['infinite pitch', { pitch: Number.POSITIVE_INFINITY, startBeat: 0, durationBeat: 1 }],
-    ['negative onset', { pitch: 60, startBeat: -1, durationBeat: 1 }],
     ['non-finite onset', { pitch: 60, startBeat: Number.NaN, durationBeat: 1 }],
+    ['infinitely early onset', { pitch: 60, startBeat: Number.NEGATIVE_INFINITY, durationBeat: 1 }],
     ['zero duration', { pitch: 60, startBeat: 0, durationBeat: 0 }],
     ['negative duration', { pitch: 60, startBeat: 0, durationBeat: -1 }],
     ['velocity above 127', { pitch: 60, startBeat: 0, durationBeat: 1, velocity: 128 }],
@@ -207,6 +207,19 @@ describe('every note-event guard has a rejection path', () => {
   ])('rejects a note with a %s', (_label, event) => {
     expect(() => assertNoteEvent(event)).toThrow(RangeError);
     expect(() => assertNoteEvents([event])).toThrow(RangeError);
+  });
+
+  it('accepts an onset before the downbeat, which is where a pickup sounds', () => {
+    const upbeat = { pitch: 60, startBeat: -1, durationBeat: 1 };
+    expect(() => assertNoteEvent(upbeat)).not.toThrow();
+    expect(() => assertNoteEvents([upbeat])).not.toThrow();
+    // A caller that knows how long its pickup is says so, and anything
+    // starting before it is out of the piece rather than in the upbeat.
+    expect(() => assertNoteEvent(upbeat, 'note', { minStartBeat: -1 })).not.toThrow();
+    expect(() => assertNoteEvent(upbeat, 'note', { minStartBeat: 0 })).toThrow(RangeError);
+    expect(() =>
+      assertNoteEvent({ pitch: 60, startBeat: -2, durationBeat: 1 }, 'note', { minStartBeat: -1 }),
+    ).toThrow(RangeError);
   });
 
   it('accepts a silent note only when the caller opts in', () => {
@@ -267,7 +280,8 @@ describe('every note-event guard has a rejection path', () => {
     ],
     [
       'arrangement tracks',
-      () => analyzeArrangement([{ notes: [{ pitch: 60, startBeat: -1, durationBeat: 1 }] }]),
+      () =>
+        analyzeArrangement([{ notes: [{ pitch: 60, startBeat: Number.NaN, durationBeat: 1 }] }]),
     ],
     [
       'event index',
@@ -316,11 +330,16 @@ const PUBLIC_NOTE_EVENT_ENTRIES = [
 // list separate from the indirect `tensionCurveFrom` wrapper in the public
 // execution matrix: a new direct assertNoteEvents caller must make this test
 // fail until it receives an invalid-event regression case.
+//
+// `analyzeArrangementWith` and `analyzeTimeline` are the evidence-carrying
+// implementations behind `analyzeArrangement` and `chordTimelineFromNotes`.
+// The public pair delegates to them, so validation still runs on the same path
+// — the execution matrix above is what proves the public entrances throw.
 const DIRECT_NOTE_EVENT_ENTRIES = [
-  'analyzeArrangement',
+  'analyzeArrangementWith',
+  'analyzeTimeline',
   'analyzeVoice',
   'applyGrooveTemplate',
-  'chordTimelineFromNotes',
   'createNoteEventIndex',
   'detectKeyFromNotes',
   'developMotif',

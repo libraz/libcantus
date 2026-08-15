@@ -1,3 +1,5 @@
+import type { Articulation } from './instrument/articulation.js';
+
 /**
  * A key/scale definition anchored on a root pitch class.
  *
@@ -35,4 +37,12 @@ export type NoteEvent = {
   durationBeat: number;
   /** MIDI velocity in [0, 127], when known. */
   velocity?: number;
+  /**
+   * How the note is played, when the writer had an intent to record. The
+   * library carries the intent only: turning `slide` into pitch bend or `ghost`
+   * into a velocity floor depends on the instrument and controller layout at
+   * the far end, so it is the reader's decision. Optional, so a reader that
+   * knows nothing of articulation reads the note exactly as before.
+   */
+  articulation?: Articulation;
 };
