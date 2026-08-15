@@ -4,8 +4,6 @@ import type { NoteEventIndex } from '../../core/event-index/index.js';
 import { createNoteEventIndex } from '../../core/event-index/index.js';
 import type { TimeSignature } from '../../core/meter/index.js';
 import { isStrongBeat } from '../../core/meter/index.js';
-import type { Rng } from '../../core/random/index.js';
-import { createRng } from '../../core/random/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
   assertGenerationBudget,
@@ -19,8 +17,14 @@ import {
 import type { Chord } from '../../theory/chord/index.js';
 import { chordToneRole } from '../../theory/chord/index.js';
 import { createsParallelPerfect, isForbiddenMelodicLeap } from '../../theory/counterpoint/index.js';
-import type { VoiceSnapshot } from '../../theory/safety/index.js';
-import { enumerateSafePitches, evaluateSafety, NoteSafety } from '../../theory/safety/index.js';
+import type { ProfileWeights, VoiceSnapshot } from '../../theory/safety/index.js';
+import {
+  enumerateSafePitches,
+  evaluateSafety,
+  NoteSafety,
+  profileWeights,
+} from '../../theory/safety/index.js';
+import { type Draw, type GenerationContextInput, resolveContextWith } from '../context/index.js';
 
 /**
  * Options controlling {@link generateCounterMelody}.
@@ -75,11 +79,21 @@ export type CounterMelodyOptions = {
    */
   rhythm?: 'complement' | 'follow';
   /**
-   * Safety profile applied to candidate pitches.
+   * Style profile applied to candidate pitches. It sets what is rejected
+   * outright and, through {@link PROFILE_WEIGHTS}, what is preferred among the
+   * candidates that remain: `'strict'` seeks contrary motion and avoids
+   * similar, `'pop'` treats a run of parallel thirds or sixths as the harmony
+   * line an arranger would write.
    *
    * @defaultValue 'pop'
    */
   profile?: 'strict' | 'pop';
+  /**
+   * Per-field overrides of the profile's ranking weights, for a preference the
+   * two stock profiles do not express — a line that should leap more freely, or
+   * one that should hold a pedal wherever it can.
+   */
+  weights?: Partial<ProfileWeights>;
   /** Lowest MIDI pitch the counter line may use (default derived from `register`). */
   pitchLow?: number;
   /** Highest MIDI pitch the counter line may use (default derived from `register`). */
@@ -89,11 +103,18 @@ export type CounterMelodyOptions = {
    * equally good candidate pitches; the same seed always yields the same line.
    * Where the constraints leave only one good answer — which is common with
    * `rhythm: 'follow'`, whose onsets are fixed by the melody — changing the seed
-   * changes nothing.
+   * changes nothing. Sugar for `ctx: { seed }`; the context wins where both are
+   * given.
    *
    * @defaultValue 0
    */
   seed?: number;
+  /**
+   * The generation context. Its `seed` replaces `seed`, so the counter line is
+   * drawn from the same project source as every other part and no two parts
+   * collide.
+   */
+  ctx?: GenerationContextInput;
 };
 
 /** Meter assumed when none is supplied. */
@@ -177,13 +198,17 @@ function followOnsets(melody: NoteEventIndex): number[] {
  * taken, positions where the melody sustains are taken probabilistically, and
  * strong beats the melody also attacks are occasionally reinforced. A minimum
  * gap between accepted onsets keeps the line sparse.
+ *
+ * Each grid position is drawn for by where it falls rather than by how many
+ * positions preceded it, so editing one bar of the melody leaves the onsets of
+ * every other bar where they were.
  */
 function complementOnsets(
   melody: NoteEventIndex,
   ts: TimeSignature,
   spanStart: number,
   spanEnd: number,
-  rng: Rng,
+  draw: Draw,
 ): number[] {
   const onsets: number[] = [];
   const gridStart = Math.floor(spanStart / GRID_STEP) * GRID_STEP;
@@ -195,9 +220,9 @@ function complementOnsets(
     if (!attacked && !sounding) {
       place = isWholeBeat(beat);
     } else if (!attacked) {
-      place = rng.prob(isWholeBeat(beat) ? HOLD_ON_BEAT_PROB : HOLD_OFF_BEAT_PROB);
+      place = draw.prob(isWholeBeat(beat) ? HOLD_ON_BEAT_PROB : HOLD_OFF_BEAT_PROB, 'hold', beat);
     } else if (isStrongBeat(beat, ts)) {
-      place = rng.prob(REINFORCE_PROB);
+      place = draw.prob(REINFORCE_PROB, 'reinforce', beat);
     }
     if (place && beat - last >= MIN_ONSET_GAP - EPS) {
       onsets.push(beat);
@@ -207,11 +232,32 @@ function complementOnsets(
   return onsets;
 }
 
+/** Whether an interval class is a third or a sixth (an imperfect consonance). */
+function imperfectClass(ic: number): boolean {
+  return ic === 3 || ic === 4 || ic === 8 || ic === 9;
+}
+
 /**
- * Preference score for one candidate counter pitch. Rewards imperfect
- * consonance with the melody, chord-tone membership, contrary or oblique
- * motion, and stepwise movement; penalizes wide or forbidden leaps, weak-beat
- * clashes, and drifting from the register centre.
+ * Whether two successive intervals are the same imperfect consonance, so the
+ * voices are running in parallel thirds or parallel sixths.
+ *
+ * Thirds and sixths are grouped by size rather than by quality: a minor third
+ * followed by a major third is the parallel-third texture an arranger hears,
+ * and a bare pitch cannot tell the two qualities apart in any case.
+ */
+function keepsImperfectInterval(before: number, now: number): boolean {
+  if (!imperfectClass(before) || !imperfectClass(now)) {
+    return false;
+  }
+  return before <= 4 === now <= 4;
+}
+
+/**
+ * Preference score for one candidate counter pitch, under the weights the
+ * profile carries. Every term names a situation the weight table prices:
+ * consonance with the melody, chord-tone membership, the kind of motion the two
+ * voices make, the size of the melodic move, and the drift from the register
+ * centre. The weights decide which of those the caller's style actually wants.
  */
 function scoreCandidate(
   pitch: number,
@@ -220,43 +266,48 @@ function scoreCandidate(
   prevPitch: number | undefined,
   chord: Chord | null,
   center: number,
+  weights: ProfileWeights,
 ): number {
   let score = 0;
-  if (melPitch !== undefined) {
-    const ic = Math.abs(pitch - melPitch) % 12;
-    if (ic === 3 || ic === 4 || ic === 8 || ic === 9) {
-      score += 2; // imperfect consonance: thirds and sixths
+  const ic = melPitch === undefined ? undefined : Math.abs(pitch - melPitch) % 12;
+  if (ic !== undefined) {
+    if (imperfectClass(ic)) {
+      score += weights.imperfectConsonance;
     } else if (ic === 0 || ic === 7) {
-      score += 0.5; // perfect consonance: allowed but less colourful
+      score += weights.perfectConsonance;
     } else if (ic === 1 || ic === 2 || ic === 6 || ic === 10 || ic === 11) {
-      score -= 2; // dissonant even on weak beats
+      // The fourth is left unpriced: whether it is a dissonance depends on what
+      // is under it, which the safety verdict has already ruled on.
+      score += weights.dissonance;
     }
   }
   if (chord && chordToneRole(pitch, chord) !== null) {
-    score += 1;
+    score += weights.chordTone;
   }
   if (prevPitch !== undefined) {
     const move = pitch - prevPitch;
     const dist = Math.abs(move);
-    score -= dist * 0.3;
+    score += dist * weights.melodicDistance;
     if (dist > 0 && dist <= 2) {
-      score += 1; // stepwise motion
+      score += weights.stepwise;
     }
     if (isForbiddenMelodicLeap(prevPitch, pitch)) {
-      score -= 6;
+      score += weights.forbiddenLeap;
     }
-    if (melPitch !== undefined && melPrev !== undefined) {
+    if (melPitch !== undefined && melPrev !== undefined && ic !== undefined) {
       const melMove = melPitch - melPrev;
       if ((move > 0 && melMove < 0) || (move < 0 && melMove > 0)) {
-        score += 2; // contrary motion
+        score += weights.contraryMotion;
       } else if (move === 0 || melMove === 0) {
-        score += 1; // oblique motion
+        score += weights.obliqueMotion;
+      } else if (keepsImperfectInterval(Math.abs(prevPitch - melPrev) % 12, ic)) {
+        score += weights.parallelImperfect;
       } else {
-        score -= 1; // similar motion
+        score += weights.similarMotion;
       }
     }
   }
-  score -= Math.abs(pitch - center) * 0.02;
+  score += Math.abs(pitch - center) * weights.registerDrift;
   return score;
 }
 
@@ -387,8 +438,10 @@ function heldPitchSafety(
  * is picked from the safe pitches in the counter register (chord tones and
  * consonant tensions against the sounding melody note), rejecting candidates
  * that would form a parallel perfect interval with the melody or sit on the
- * wrong side of it, then scored to favour contrary or oblique motion, imperfect
- * consonance, and stepwise movement. Ties are broken by a seeded perturbation far
+ * wrong side of it, then ranked by the profile's weights — which is where the
+ * two styles part company: `'strict'` prefers contrary motion and penalizes
+ * similar, `'pop'` rewards a run of parallel thirds or sixths and is content
+ * with a pedal. Ties are broken by a seeded perturbation far
  * below any real score difference (see `TIE_BREAK_JITTER`), so the same
  * seed always yields the same line while a different seed can only reshuffle
  * candidates that were already equally good. Notes extend to the next counter
@@ -433,7 +486,8 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
   assertTimeSignature(ts);
   const rhythm = assertOneOf(opts.rhythm ?? 'complement', ['complement', 'follow'], 'rhythm');
   const profile = assertOneOf(opts.profile ?? 'pop', ['strict', 'pop'], 'safety profile');
-  const rng = createRng(opts.seed ?? 0);
+  const weights = profileWeights(profile, opts.weights);
+  const draw = resolveContextWith(opts.ctx, { seed: opts.seed }).part('countermelody');
   // The options are checked before the empty-melody exit, so a call with a
   // malformed option is rejected whether or not the melody happens to sound.
   if (melody.notes.length === 0) {
@@ -474,7 +528,7 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
   const onsets =
     rhythm === 'follow'
       ? followOnsets(melody)
-      : complementOnsets(melody, ts, spanStart, spanEnd, rng);
+      : complementOnsets(melody, ts, spanStart, spanEnd, draw);
   // Each candidate pitch is evaluated at every boundary its note spans, and the
   // boundaries partition the melody's span, so the whole search is bounded by
   // the total boundary count times the register width.
@@ -484,7 +538,10 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
     melody.notes.length +
     chordChangeBeats.length;
   assertGenerationBudget(boundaryEstimate * (high - low + 1), 'countermelody search');
-  const jitter = Array.from({ length: high - low + 1 }, () => rng.next() * TIE_BREAK_JITTER);
+  const jitter = Array.from(
+    { length: high - low + 1 },
+    (_, index) => draw.at('jitter', index) * TIE_BREAK_JITTER,
+  );
 
   const out: NoteEvent[] = [];
   let prevPitch: number | undefined;
@@ -547,7 +604,7 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
         }
       }
       const score =
-        scoreCandidate(candidate, melPitch, melPrev, prevPitch, chord, center) +
+        scoreCandidate(candidate, melPitch, melPrev, prevPitch, chord, center, weights) +
         (jitter[candidate - low] ?? 0);
       const tie =
         Math.abs(score - bestScore) <= EPS && candidate < (bestPitch ?? Number.POSITIVE_INFINITY);
@@ -583,3 +640,6 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
   }
   return out;
 }
+
+export type { ImitationAnswer, ImitationOptions } from './imitation.js';
+export { imitate } from './imitation.js';
