@@ -80,12 +80,12 @@ import { Chord, Key, Note } from '@libraz/libcantus';
 
 const c = Key.major('C');
 
-c.chord(4, 'dom7').pitchClasses(); // [2, 5, 7, 11]  (G7)
+c.chord(5, 'dom7').pitchClasses(); // [2, 5, 7, 11]  (G7)
 c.roman('V7/V').voice(); // [ ...SATB MIDI ]  (secondary dominant, voiced)
 Note.of('C4').transpose(7).name; // 'G4'
 
 // A ii–V–I, built and analyzed in one line:
-c.chord(1, 'min').progressionTo(c.chord(4, 'dom7'), c.chord(0, 'maj')).analyze();
+c.chord(2, 'min').progressionTo(c.chord(5, 'dom7'), c.chord(1, 'maj')).analyze();
 // { chords: [...functional analysis...], cadence: 'authentic' }
 
 Chord.detect([60, 64, 67])[0].quality; // 'maj'
@@ -101,7 +101,7 @@ import { chordFromDegree, chordPitchClasses, classifyInterval, ConsonanceClass, 
 const cMajor = majorKey(0);
 
 classifyInterval(7); // ConsonanceClass.PerfectConsonance
-chordPitchClasses(chordFromDegree(4, 'dom7', cMajor)); // [2, 5, 7, 11]  (G7)
+chordPitchClasses(chordFromDegree(5, 'dom7', cMajor)); // [2, 5, 7, 11]  (G7)
 ```
 
 ## Name and move notes
@@ -128,6 +128,52 @@ scales; `MAJOR_MASK` / `NATURAL_MINOR_MASK` let you define custom keys.
 `nearestScaleTone` snaps a pitch to the closest in-scale MIDI pitch (preferring
 the lower on a tie) — handy when constraining generated notes to a key.
 
+## Relate and move keys
+
+A key knows its signature, the keys around it, and how to reach them. Every
+relation is computed on the circle of fifths, so the answer comes back spelled
+the way the key is written — the relative of Db major is Bb minor, not A# minor:
+
+```ts
+import { Key } from '@libraz/libcantus';
+
+Key.major('Db').fifths; // -5
+Key.major('C').relative().toString(); // 'A minor'
+Key.minor('G#').parallel().toString(); // 'G# major'
+Key.major('Db').enharmonic()?.toString(); // 'C# major'
+Key.major('C').relatedKeys(); // relative, parallel, dominant, subdominant, and the last two's relatives
+Key.major('C').relationTo(Key.minor('A')); // 'relative'
+```
+
+Transposition takes a named interval, so an augmented fourth and a diminished
+fifth no longer collapse into the same six semitones. `Note`, `Chord`, `Key`,
+and `Progression` all take an interval name, plain interval data, or an
+`Interval`:
+
+```ts
+import { Key } from '@libraz/libcantus';
+
+Key.minor('D').transposeBy('A4').toString(); // 'G# minor'
+Key.minor('D').transposeBy('d5').toString(); // 'Ab minor'
+Key.minor('G#').transposeBy('-A4').toString(); // 'D minor'  (a leading '-' descends)
+```
+
+Scale degrees are counted from 1 the way musicians name them, and a degree can
+carry a whole key, which is what questions about modulation are usually built
+out of:
+
+```ts
+import { Key } from '@libraz/libcantus';
+
+Key.minor('A').degree(4).name; // 'D'
+Key.minor('A').keyOnDegree(4).toString(); // 'D minor'  (mode read off the diatonic triad)
+Key.minor('D').keyHavingTonicAsDegree(4).toString(); // 'A minor'  (the inverse)
+
+// "A key modulates to the key on the fourth degree of its relative, is then
+//  transposed up an augmented fourth, and ends up G# minor. What was it?"
+Key.minor('G#').transposeBy('-A4').keyHavingTonicAsDegree(4).relative().toString(); // 'C major'
+```
+
 ## Build chords and progressions
 
 From scale degrees, Roman numerals, or lead-sheet symbols — and back again:
@@ -138,7 +184,7 @@ import { Chord, Key } from '@libraz/libcantus';
 const c = Key.major('C');
 
 c.roman('V7/V').symbol(); // 'D7'  (a secondary dominant)
-c.chord(4, 'dom7').roman(); // 'V7'
+c.chord(5, 'dom7').roman(); // 'V7'
 Chord.parse('F#m7b5').pitchClasses(); // [0, 4, 6, 9]
 ```
 
@@ -192,7 +238,7 @@ Key.named('harmonicMinor', 'A').noteNames(); // ['A', 'B', 'C', 'D', 'E', 'F', '
 Key.minor('E').noteNames(); // ['E', 'F#', 'G', 'A', 'B', 'C', 'D']
 
 // Chords spell in a key's context too:
-Key.major('C').chord(4, 'dom7').spell().map((n) => n.name); // ['G', 'B', 'D', 'F']
+Key.major('C').chord(5, 'dom7').spell().map((n) => n.name); // ['G', 'B', 'D', 'F']
 ```
 
 ## Reharmonize
@@ -204,7 +250,7 @@ modal-interchange palettes — with the functions:
 ```ts
 import { Chord, Key, majorKey, parseChordSymbol, substituteChord } from '@libraz/libcantus';
 
-Key.major('C').chord(4, 'dom7').negativeHarmony().symbol(); // 'Dm7b5'
+Key.major('C').chord(5, 'dom7').negativeHarmony().symbol(); // 'Dm7b5'
 
 // Substitution/palette search returns lists, so it stays functional:
 substituteChord(parseChordSymbol('G7'), majorKey(0));
@@ -235,7 +281,7 @@ import { Chord, Key } from '@libraz/libcantus';
 const c = Key.major('C');
 
 // A whole progression, voiced with minimal motion:
-c.chord(0, 'maj').progressionTo(c.chord(5, 'maj'), c.chord(4, 'dom7'), c.chord(0, 'maj')).voice();
+c.chord(1, 'maj').progressionTo(c.chord(6, 'maj'), c.chord(5, 'dom7'), c.chord(1, 'maj')).voice();
 // [[...], [...], [...], [...]]  (one ascending pitch per voice)
 
 // A single chord in a shell comping voicing:
@@ -275,8 +321,11 @@ import {
   analyzeArrangement, chordTimelineFromNotes, generateBassLine, generateCounterMelody,
 } from '@libraz/libcantus';
 
-// Infer a chord progression (and the key) from played notes:
-const { timeline, key } = chordTimelineFromNotes(melodyAndChordNotes);
+// Infer a chord progression from played notes. Chord boundaries are searched
+// for, not assumed, and so is the key: `keys` holds one region per key area, so
+// a piece that modulates is not read against the key it started in.
+const { timeline, keys, prevailingKey } = chordTimelineFromNotes(melodyAndChordNotes);
+keys[0]?.modulation; // how a region's key relates to the one before it
 
 // Whole-piece analysis: inferred chords, cadences, per-note theory labels, and
 // notes that clash with the sounding harmony (with reasons and suggestions):
@@ -287,9 +336,30 @@ const report = analyzeArrangement([
 report.conflicts; // [{ beat, trackName, pitch, safety, reasons, rationale }, ...]
 
 // Generate the missing parts from the recovered timeline:
-generateBassLine({ segments: timeline.segments, key, style: 'walking', seed: 1 });
-generateCounterMelody({ melody: melodyNotes, timeline, key, register: 'below' });
+generateBassLine({ segments: timeline.segments, key: prevailingKey, style: 'walking', seed: 1 });
+generateCounterMelody({ melody: melodyNotes, timeline, key: prevailingKey, register: 'below' });
 ```
+
+Because the key is followed over time, a modulating piece is read against the
+key actually in force. `keys` holds one region per key area, with its relation
+to the region before it and the chord the modulation pivoted on:
+
+```ts
+import { analyzeArrangement, chordToRoman } from '@libraz/libcantus';
+
+const analysis = analyzeArrangement([{ role: 'harmony', notes: modulatingNotes }]);
+analysis.keys.map((region) => region.modulation); // [undefined, 'dominant', ...]
+analysis.keys[1]?.pivot; // { chord, romanFrom: 'I', romanTo: 'IV' }
+
+// Read each chord against the key covering its beat, not against the opening key:
+const keyAt = (beat: number) =>
+  analysis.keys.find((r) => beat >= r.startBeat && beat < r.endBeat)?.key ?? analysis.prevailingKey;
+analysis.timeline.segments.map((s) => chordToRoman(s.chord, keyAt(s.startBeat)));
+```
+
+`keyTimelineFromNotes` and `detectModulations` expose the same search on its
+own, and `pivotChords(from, to)` lists the triads any two keys share with their
+Roman numeral in each.
 
 `harmonizeMelody` goes the other way — given a bare melody, it searches for the
 best key, transpose, and chord path (with optional reharmonization) to harmonize

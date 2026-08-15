@@ -5,6 +5,136 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+The key stops being a single answer for a whole piece and becomes something the
+analysis follows over time; chord boundaries are searched for rather than
+assumed; keys become relatable and transposable by named interval; and scale
+degrees are counted the way musicians count them. See **Changed** first — the
+degree change and the removal of `ChordTimelineResult.key` are both breaking,
+and the degree change looks silent at the call site.
+
+### Changed
+
+- **The key is analyzed over time instead of once for the whole piece.**
+  `chordTimelineFromNotes` and `analyzeArrangement` used to infer a single key
+  from every note pooled together, so a piece that modulates had every Roman
+  numeral, harmonic function, cadence and note-safety verdict after the
+  modulation judged against the key it started in. Both now return
+  `keys: KeyRegion[]` — one region per key area, each carrying its confidence,
+  its relation to the region before it, and the pivot chord the modulation
+  turned on where the chords name one — alongside `prevailingKey`, the key held
+  longest, for callers that want a single answer.
+
+  `ChordTimelineResult.key` and `ArrangementAnalysis.key` are gone; read
+  `prevailingKey` for the old whole-piece value, or `keys` to follow the
+  modulations. Passing `key` still pins one key across the whole span, since
+  that is the caller answering the question rather than asking it; the new
+  `keys` option supplies regions a previous pass already worked out.
+
+  `detectCadences` and `analyzeVoice` now accept a key callback as well as a
+  single key, so a cadence is classified in the key it arrives in and a leading
+  tone is judged against the tonic it resolves onto. Passing a plain `KeyScale`
+  behaves exactly as before.
+
+- **`chordTimelineFromNotes` searches for chord boundaries instead of assuming
+  them.** The span used to be cut every `harmonicRhythm` beats — one bar by
+  default — so a bar holding two chords collapsed into one segment and a chord
+  crossing a bar line was split in two. Boundaries are now chosen by a dynamic
+  program over fine slots, trading each slot's harmonic fit against a cost per
+  chord change that a strong beat discounts, so segments follow the harmonic
+  rhythm the notes actually have. Under the new default, `harmonicRhythm` is a
+  prior on the expected chord length rather than the window size, and
+  `minChordBeats` (default one beat) bounds how fine a change may be reported.
+  Pass `segmentation: 'grid'` for the previous fixed-window behaviour.
+
+  Segment boundaries, segment counts, `segmentConfidence`, and the `atBeat` of
+  every cadence found by `detectCadences` therefore move for inputs whose
+  harmony did not change exactly once per `harmonicRhythm`. The chord reported
+  for a settled segment is inferred exactly as before.
+
+- **`detectKey` ranks by key-profile correlation instead of scale membership.**
+  Every scale tone used to count the same, so a key and its relative — which
+  share all seven pitch classes — were separated only by a flat bonus on the
+  tonic, and on a bare scale they tied outright. Candidates are now ranked by
+  the Pearson correlation between the weighted pitch-class distribution and the
+  candidate key's profile, which is what the standard key-finding algorithms
+  do. `score` is that correlation, in [-1, 1], where it was previously a
+  membership sum in [0, 1.5]. A new `profile` option selects
+  `'krumhansl'` (the default), `'temperley'`, `'flat'` (the previous
+  membership behaviour), or a caller's own pair of 12-entry vectors.
+
+  Minor-variant selection is now independent of ranking: candidates are ranked
+  with the minor profile, and the reported `variant` is whichever of natural,
+  harmonic, and melodic minor best covers the input. `fit` is unchanged.
+  Ranking is deterministic, with ties broken by fit, then tonic, then mode.
+
+- **Scale degrees are 1-based throughout the public API.** Degree 1 is the
+  tonic and degree 5 the dominant, so the numbering agrees with the Roman
+  numerals the same classes already speak. `chordFromDegree`, `diatonicTriad`,
+  `diatonicSeventh`, `secondaryDominant`, `Key.chord`, `Key.diatonicTriad`,
+  `Key.diatonicSeventh` and `assertDegree` all take a degree from 1;
+  `pitchToScaleDegree` returns one from 1, keeping `-1` for a pitch outside the
+  scale. Degree 0 is rejected rather than wrapping onto the leading tone, so an
+  un-migrated call throws instead of quietly naming the wrong chord. Degrees
+  past the end of the scale still wrap, so degree 8 of a heptatonic key is the
+  tonic. Progression presets follow: diatonic codes in a `degrees` array move to
+  1..7, while the `BORROWED_DEGREES` codes are unchanged, and `ChordSpan.degree`
+  is now the 1-based degree its documentation always described.
+
+  Upgrading: add one to every degree argument. The presets, chord qualities and
+  pitch classes they produce are unchanged.
+
+### Added
+
+- **Key regions.** `keyTimelineFromNotes` finds where the key changes in raw
+  notes by correlating each slot against all 24 key profiles and choosing the
+  run of keys that best explains the piece, paying a cost per modulation that
+  rises with the distance travelled around the circle of fifths and falls on
+  strong beats. `detectModulations` does the same from a chord sequence, where a
+  dominant seventh resolving to its tonic is read as the cadence it is, and
+  names the pivot chord each modulation turned on. `prevailingKeyOf` reduces a
+  run of regions to the key held longest.
+
+- **`pivotChords(from, to)`** lists the triads two keys share, each with its
+  Roman numeral in both — the chords a modulation between them can pivot on.
+
+- **`spelledKeyOf(key)`** gives a `KeyScale` the tonic spelling its key
+  signature would use, so pitch class 1 major comes back as Db and pitch class 6
+  minor as F#.
+
+- Key relations, on the circle of fifths so the result is spelled the way the
+  key is written: `relativeKeyOf`, `parallelKeyOf`, `dominantKeyOf`,
+  `subdominantKeyOf`, `enharmonicKeyOf`, `relatedKeysOf`, and
+  `keyRelationBetween`, with the `SpelledKey`, `KeyRelation`, and `KeyMode`
+  types.
+- The same relations on the `Key` class — `relative`, `parallel`,
+  `dominantKey`, `subdominantKey`, `enharmonic`, `relatedKeys`, `relationTo` —
+  plus `fifths` and `Key.fromFifths`, which put the existing key-signature
+  functions within reach of the class API.
+- Scale degrees on `Key`: `degree`, `keyOnDegree`, and
+  `keyHavingTonicAsDegree`, the last two being inverses.
+- Transposition by a named interval: `Key.transposeBy`, `Chord.transposeBy`,
+  `Progression.transposeBy`, `Progression.transposeTo`, and `Key.intervalTo`.
+  An augmented fourth and a diminished fifth now transpose to different
+  spellings.
+- `toSpelledInterval` and the `IntervalLike` type, so any entry point taking an
+  interval accepts a name, plain interval data, or an `Interval` instance.
+- `parseInterval` and `Interval.parse` accept a leading `-` for a descending
+  interval (`'-A4'`), and `Interval` gained `isDescending` and `negate`.
+
+### Fixed
+
+- `Key.transpose` spells its result the way the key is written, as its
+  documentation always claimed: `Key.major('Db').transpose(1)` is D major, not
+  Ebb major. A result needing more than seven sharps or flats is respelled to
+  its enharmonic key; keys inside that range are untouched, so
+  `Key.major('C').transpose(6)` is still F# major.
+- `Note.transposeBy` accepts the plain interval data `parseInterval` returns,
+  not only an `Interval` instance. It previously threw `TypeError`, which
+  contradicted the documented interoperability of the functional and class
+  styles.
+
 ## [0.9.5] - 2026-08-05
 
 Additive across the public API — no export was removed and no signature was

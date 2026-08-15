@@ -55,12 +55,12 @@ import { Chord, Key, Note } from '@libraz/libcantus';
 
 const c = Key.major('C');
 
-c.chord(4, 'dom7').pitchClasses(); // [2, 5, 7, 11]  (G7)
+c.chord(5, 'dom7').pitchClasses(); // [2, 5, 7, 11]  (G7)
 c.roman('V7/V').voice(); // [ ...SATB の MIDI ノート ]  (セカンダリードミナントをボイシング)
 Note.of('C4').transpose(7).name; // 'G4'
 
 // ii–V–I を組み立てて、そのまま 1 行で解析する:
-c.chord(1, 'min').progressionTo(c.chord(4, 'dom7'), c.chord(0, 'maj')).analyze();
+c.chord(2, 'min').progressionTo(c.chord(5, 'dom7'), c.chord(1, 'maj')).analyze();
 // { chords: [...機能和声の解析...], cadence: 'authentic' }
 
 Chord.detect([60, 64, 67])[0].quality; // 'maj'
@@ -74,7 +74,7 @@ import { chordFromDegree, chordPitchClasses, classifyInterval, ConsonanceClass, 
 const cMajor = majorKey(0);
 
 classifyInterval(7); // ConsonanceClass.PerfectConsonance
-chordPitchClasses(chordFromDegree(4, 'dom7', cMajor)); // [2, 5, 7, 11]  (G7)
+chordPitchClasses(chordFromDegree(5, 'dom7', cMajor)); // [2, 5, 7, 11]  (G7)
 ```
 
 ## 音名を扱う
@@ -96,6 +96,45 @@ Interval.between(Note.of('C4'), Note.of('Gb4')).name; // 'd5'  (減五度)
 
 `nearestScaleTone` は与えた音高を最も近いスケール構成音の MIDI ノートにスナップします（同距離なら低い方を優先）。生成した音をキーに収める場面で使えます。
 
+## キーどうしの関係と移調
+
+キーは自分の調号と、周囲のキーと、そこへの行き方を知っています。関係の計算は五度圏の上で行うので、返ってくるキーはそのキーが実際に書かれる綴りになります。変ニ長調の平行調は変ロ短調であって嬰イ短調ではありません。
+
+```ts
+import { Key } from '@libraz/libcantus';
+
+Key.major('Db').fifths; // -5
+Key.major('C').relative().toString(); // 'A minor'
+Key.minor('G#').parallel().toString(); // 'G# major'
+Key.major('Db').enharmonic()?.toString(); // 'C# major'
+Key.major('C').relatedKeys(); // 平行調・同主調・属調・下属調と、属調/下属調の平行調
+Key.major('C').relationTo(Key.minor('A')); // 'relative'
+```
+
+移調は音程名で指定できます。増四度と減五度が同じ 6 半音に潰れることはもうありません。`Note`, `Chord`, `Key`, `Progression` のいずれも、音程名・素の音程データ・`Interval` インスタンスを受け取ります。
+
+```ts
+import { Key } from '@libraz/libcantus';
+
+Key.minor('D').transposeBy('A4').toString(); // 'G# minor'
+Key.minor('D').transposeBy('d5').toString(); // 'Ab minor'
+Key.minor('G#').transposeBy('-A4').toString(); // 'D minor'  先頭の '-' で下行
+```
+
+音度は音楽で数えるとおり 1 から数えます。音度はキーそのものを担うこともでき、転調を問う設問はたいていこの組み合わせでできています。
+
+```ts
+import { Key } from '@libraz/libcantus';
+
+Key.minor('A').degree(4).name; // 'D'
+Key.minor('A').keyOnDegree(4).toString(); // 'D minor'  調性はその度数の三和音から読む
+Key.minor('D').keyHavingTonicAsDegree(4).toString(); // 'A minor'  その逆
+
+// 「ある曲の調が、その平行調の第Ⅳ音を主音とする調に転調し、
+//   さらに増四度高い調に移調された結果 gis moll となった。元の調は何か」
+Key.minor('G#').transposeBy('-A4').keyHavingTonicAsDegree(4).relative().toString(); // 'C major'
+```
+
 ## コードと進行を組み立てる
 
 スケール度数、ローマ数字、リードシート記号のいずれからでも組み立てられ、逆方向にも戻せます。
@@ -106,7 +145,7 @@ import { Chord, Key } from '@libraz/libcantus';
 const c = Key.major('C');
 
 c.roman('V7/V').symbol(); // 'D7'  (セカンダリードミナント)
-c.chord(4, 'dom7').roman(); // 'V7'
+c.chord(5, 'dom7').roman(); // 'V7'
 Chord.parse('F#m7b5').pitchClasses(); // [0, 4, 6, 9]
 ```
 
@@ -156,7 +195,7 @@ Key.named('harmonicMinor', 'A').noteNames(); // ['A', 'B', 'C', 'D', 'E', 'F', '
 Key.minor('E').noteNames(); // ['E', 'F#', 'G', 'A', 'B', 'C', 'D']
 
 // コードもキーの文脈に沿って綴られる:
-Key.major('C').chord(4, 'dom7').spell().map((n) => n.name); // ['G', 'B', 'D', 'F']
+Key.major('C').chord(5, 'dom7').spell().map((n) => n.name); // ['G', 'B', 'D', 'F']
 ```
 
 ## リハーモナイズする
@@ -166,7 +205,7 @@ Key.major('C').chord(4, 'dom7').spell().map((n) => n.name); // ['G', 'B', 'D', '
 ```ts
 import { Chord, Key, majorKey, parseChordSymbol, substituteChord } from '@libraz/libcantus';
 
-Key.major('C').chord(4, 'dom7').negativeHarmony().symbol(); // 'Dm7b5'
+Key.major('C').chord(5, 'dom7').negativeHarmony().symbol(); // 'Dm7b5'
 
 // 代理コードやパレットの検索はリストを返すので関数として提供される:
 substituteChord(parseChordSymbol('G7'), majorKey(0));
@@ -194,7 +233,7 @@ import { Chord, Key } from '@libraz/libcantus';
 const c = Key.major('C');
 
 // 進行全体を、動きが最小になるようボイシングする:
-c.chord(0, 'maj').progressionTo(c.chord(5, 'maj'), c.chord(4, 'dom7'), c.chord(0, 'maj')).voice();
+c.chord(1, 'maj').progressionTo(c.chord(6, 'maj'), c.chord(5, 'dom7'), c.chord(1, 'maj')).voice();
 // [[...], [...], [...], [...]]  (各声部の音高が昇順に並ぶ)
 
 // 単体のコードをシェルボイシングで:
@@ -229,8 +268,11 @@ import {
   analyzeArrangement, chordTimelineFromNotes, generateBassLine, generateCounterMelody,
 } from '@libraz/libcantus';
 
-// 演奏されたノートからコード進行（とキー）を推定する:
-const { timeline, key } = chordTimelineFromNotes(melodyAndChordNotes);
+// 演奏されたノートからコード進行を推定する。和音の切れ目もキーも決め打ちでは
+// なく探索される。`keys` はキー区間の配列なので、転調する曲を最初のキーのまま
+// 解析してしまうことがない:
+const { timeline, keys, prevailingKey } = chordTimelineFromNotes(melodyAndChordNotes);
+keys[0]?.modulation; // 直前の区間のキーとの関係
 
 // 曲全体の解析。推定されたコード、終止、ノート単位の理論ラベル、そして
 // 鳴っている和声とぶつかるノート（理由と修正候補つき）が得られる:
@@ -241,9 +283,26 @@ const report = analyzeArrangement([
 report.conflicts; // [{ beat, trackName, pitch, safety, reasons, rationale }, ...]
 
 // 復元されたタイムラインから、足りないパートを生成する:
-generateBassLine({ segments: timeline.segments, key, style: 'walking', seed: 1 });
-generateCounterMelody({ melody: melodyNotes, timeline, key, register: 'below' });
+generateBassLine({ segments: timeline.segments, key: prevailingKey, style: 'walking', seed: 1 });
+generateCounterMelody({ melody: melodyNotes, timeline, key: prevailingKey, register: 'below' });
 ```
+
+キーは時間軸上で追跡されるので、転調する曲もその時点で有効なキーに対して解析されます。`keys` はキー区間の配列で、直前の区間との関係と、転調が経由したピボット和音を持ちます。
+
+```ts
+import { analyzeArrangement, chordToRoman } from '@libraz/libcantus';
+
+const analysis = analyzeArrangement([{ role: 'harmony', notes: modulatingNotes }]);
+analysis.keys.map((region) => region.modulation); // [undefined, 'dominant', ...]
+analysis.keys[1]?.pivot; // { chord, romanFrom: 'I', romanTo: 'IV' }
+
+// 各コードを、その拍を含む区間のキーで読む（冒頭のキーではなく）:
+const keyAt = (beat: number) =>
+  analysis.keys.find((r) => beat >= r.startBeat && beat < r.endBeat)?.key ?? analysis.prevailingKey;
+analysis.timeline.segments.map((s) => chordToRoman(s.chord, keyAt(s.startBeat)));
+```
+
+同じ探索は `keyTimelineFromNotes` と `detectModulations` として単体でも使えます。`pivotChords(from, to)` は任意の 2 つのキーが共有する三和音を、それぞれのローマ数字つきで返します。
 
 `harmonizeMelody` は逆方向を担当します。旋律だけを渡すと、それを和声づけするのに最適なキー・移調量・コードの経路を（必要ならリハーモナイズも含めて）探索します。
 
