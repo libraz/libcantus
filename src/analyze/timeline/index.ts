@@ -15,7 +15,7 @@ import { chordFromSpan, chordPitchClasses, makeChord } from '../../theory/chord/
 import { isScaleTone, majorKey } from '../../theory/scale/index.js';
 import type { ChordMatch } from '../detect/index.js';
 import { detectChord } from '../detect/index.js';
-import type { Cadence } from '../functional/index.js';
+import type { CadenceResult } from '../functional/index.js';
 import { detectCadence } from '../functional/index.js';
 import type { WindowWeights } from '../histogram.js';
 import { windowWeights } from '../histogram.js';
@@ -802,7 +802,12 @@ export function chordTimelineFromNotes(
 export type CadenceHit = {
   /** The beat where the cadence arrives (the second chord's onset). */
   atBeat: number;
-  type: Exclude<Cadence, null>;
+  /**
+   * The cadence formed by the pair. Its `type` is never null: a pair forming no
+   * cadence is not a hit. A timeline names no voicing, so `strength` is null for
+   * an authentic cadence whose chords are both in root position.
+   */
+  cadence: CadenceResult;
   from: Chord;
   to: Chord;
 };
@@ -844,9 +849,9 @@ export function detectCadences(timeline: ChordTimeline, key: KeyContext): Cadenc
     if (Math.abs(cur.startBeat - prev.endBeat) > EPS) {
       continue; // A rest separates the chords; no cadential motion across it.
     }
-    const type = detectCadence(prev.chord, cur.chord, keyAt(cur.startBeat));
-    if (type !== null) {
-      hits.push({ atBeat: cur.startBeat, type, from: prev.chord, to: cur.chord });
+    const cadence = detectCadence(prev.chord, cur.chord, keyAt(cur.startBeat));
+    if (cadence.type !== null) {
+      hits.push({ atBeat: cur.startBeat, cadence, from: prev.chord, to: cur.chord });
     }
   }
   return hits;

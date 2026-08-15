@@ -77,10 +77,10 @@ describe('half-diminished supertonic in a minor key', () => {
 
 describe('detectCadence in a minor key', () => {
   it('recognizes the raised-dominant authentic cadence', () => {
-    expect(detectCadence(makeChord(4, 'maj'), makeChord(9, 'min'), aMinor)).toBe('authentic');
+    expect(detectCadence(makeChord(4, 'maj'), makeChord(9, 'min'), aMinor).type).toBe('authentic');
   });
 
   it('treats V to flat-VI as deceptive in minor', () => {
-    expect(detectCadence(makeChord(4, 'maj'), makeChord(5, 'maj'), aMinor)).toBe('deceptive');
+    expect(detectCadence(makeChord(4, 'maj'), makeChord(5, 'maj'), aMinor).type).toBe('deceptive');
   });
 });

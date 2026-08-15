@@ -197,30 +197,30 @@ describe('functionOf', () => {
 
 describe('detectCadence', () => {
   it('classifies the common cadences', () => {
-    expect(detectCadence(makeChord(7, 'dom7'), makeChord(0, 'maj'), cMajor)).toBe('authentic');
-    expect(detectCadence(makeChord(5, 'maj'), makeChord(0, 'maj'), cMajor)).toBe('plagal');
-    expect(detectCadence(makeChord(7, 'maj'), makeChord(9, 'min'), cMajor)).toBe('deceptive');
-    expect(detectCadence(makeChord(2, 'min'), makeChord(7, 'maj'), cMajor)).toBe('half');
-    expect(detectCadence(makeChord(0, 'maj'), makeChord(2, 'min'), cMajor)).toBeNull();
+    expect(detectCadence(makeChord(7, 'dom7'), makeChord(0, 'maj'), cMajor).type).toBe('authentic');
+    expect(detectCadence(makeChord(5, 'maj'), makeChord(0, 'maj'), cMajor).type).toBe('plagal');
+    expect(detectCadence(makeChord(7, 'maj'), makeChord(9, 'min'), cMajor).type).toBe('deceptive');
+    expect(detectCadence(makeChord(2, 'min'), makeChord(7, 'maj'), cMajor).type).toBe('half');
+    expect(detectCadence(makeChord(0, 'maj'), makeChord(2, 'min'), cMajor).type).toBeNull();
   });
 
   it('does not treat a static V-to-V repeat as a cadence', () => {
-    expect(detectCadence(makeChord(7, 'dom7'), makeChord(7, 'dom7'), cMajor)).toBeNull();
-    expect(detectCadence(makeChord(7, 'maj'), makeChord(7, 'maj'), cMajor)).toBeNull();
+    expect(detectCadence(makeChord(7, 'dom7'), makeChord(7, 'dom7'), cMajor).type).toBeNull();
+    expect(detectCadence(makeChord(7, 'maj'), makeChord(7, 'maj'), cMajor).type).toBeNull();
   });
 
   it('requires a dominant sound and recognizes the diminished leading tone', () => {
-    expect(detectCadence(makeChord(7, 'maj'), makeChord(0, 'maj'), cMajor)).toBe('authentic');
-    expect(detectCadence(makeChord(7, 'min'), makeChord(0, 'min'), cMajor)).toBeNull();
-    expect(detectCadence(makeChord(7, 'sus4'), makeChord(0, 'maj'), cMajor)).toBeNull();
-    expect(detectCadence(makeChord(11, 'dim'), makeChord(0, 'maj'), cMajor)).toBe('authentic');
-    expect(detectCadence(makeChord(7, 'dim'), makeChord(0, 'maj'), cMajor)).toBeNull();
+    expect(detectCadence(makeChord(7, 'maj'), makeChord(0, 'maj'), cMajor).type).toBe('authentic');
+    expect(detectCadence(makeChord(7, 'min'), makeChord(0, 'min'), cMajor).type).toBeNull();
+    expect(detectCadence(makeChord(7, 'sus4'), makeChord(0, 'maj'), cMajor).type).toBeNull();
+    expect(detectCadence(makeChord(11, 'dim'), makeChord(0, 'maj'), cMajor).type).toBe('authentic');
+    expect(detectCadence(makeChord(7, 'dim'), makeChord(0, 'maj'), cMajor).type).toBeNull();
   });
 
   it('treats V to the borrowed flat-submediant bVI as deceptive in major', () => {
-    expect(detectCadence(makeChord(7, 'maj'), makeChord(8, 'maj'), cMajor)).toBe('deceptive');
+    expect(detectCadence(makeChord(7, 'maj'), makeChord(8, 'maj'), cMajor).type).toBe('deceptive');
     // The diatonic submediant vi (offset 9) remains deceptive too.
-    expect(detectCadence(makeChord(7, 'maj'), makeChord(9, 'min'), cMajor)).toBe('deceptive');
+    expect(detectCadence(makeChord(7, 'maj'), makeChord(9, 'min'), cMajor).type).toBe('deceptive');
   });
 });
 

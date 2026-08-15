@@ -1,5 +1,5 @@
 import {
-  type Cadence,
+  type CadenceResult,
   type ChordAnalysis,
   type ChordToRomanOptions,
   detectCadence,
@@ -216,7 +216,10 @@ export class Progression {
    * @returns Per-chord analyses and the closing cadence.
    * @throws If no key is given and none is carried.
    */
-  analyze(key?: Key, opts?: ChordToRomanOptions): { chords: ChordAnalysis[]; cadence: Cadence } {
+  analyze(
+    key?: Key,
+    opts?: ChordToRomanOptions,
+  ): { chords: ChordAnalysis[]; cadence: CadenceResult | null } {
     const resolved = this.#resolveKey(key);
     const chords = this.#chords.map((chord) => chord.analyze(resolved, opts));
     const from = this.#chords[this.#chords.length - 2];

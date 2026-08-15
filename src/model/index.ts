@@ -22,7 +22,7 @@ export type {
 // wrapper, or emit declarations under `isolatedDeclarations`.
 export type {
   BorrowedSource,
-  Cadence,
+  CadenceResult,
   ChordAnalysis,
   ChordToRomanOptions,
   HarmonicFunction,
@@ -31,6 +31,8 @@ export type {
   IntervalLike,
   IntervalQualityLabel,
   Note as NoteData,
+  NoteNameOptions,
+  NoteNameSystem,
   SpelledInterval,
 } from '../core/pitch/index.js';
 export type { KeyScale } from '../core/types.js';
@@ -38,6 +40,7 @@ export type {
   Chord as ChordData,
   ChordQuality,
   ChordSpan,
+  ChordToneRole,
   PitchSpelling,
 } from '../theory/chord/index.js';
 export type { ChordScaleMatch, ScaleChoice } from '../theory/chordscale/index.js';
@@ -48,6 +51,11 @@ export type {
   ScaleNameInput,
   SpelledKey,
 } from '../theory/scale/index.js';
+export type { ChordSymbolOptions } from '../theory/symbol/index.js';
+export type {
+  TransposingInstrument,
+  TransposingInstrumentName,
+} from '../theory/transposition/index.js';
 export type {
   StyledVoicingOptions,
   VoiceRange,

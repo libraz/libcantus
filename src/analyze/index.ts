@@ -6,6 +6,7 @@
 // Types from the layers below that this layer's own signatures name, so a
 // consumer importing only `@libraz/libcantus/analyze` can still spell them.
 export type { TimeSignature } from '../core/meter/index.js';
+export type { Note as NoteData } from '../core/pitch/index.js';
 export type { KeyScale, NoteEvent } from '../core/types.js';
 export type {
   Chord as ChordData,
@@ -46,15 +47,19 @@ export {
   detectKeyFromNotes,
 } from './detect/index.js';
 export type {
+  AugmentedSixthKind,
   BorrowedSource,
-  Cadence,
+  CadenceResult,
   ChordAnalysis,
   ChordToRomanOptions,
+  DetectCadenceOptions,
   HarmonicFunction,
   PivotChord,
 } from './functional/index.js';
 export {
   analyzeChord,
+  augmentedSixthChord,
+  augmentedSixthKind,
   borrowedSource,
   chordToRoman,
   detectCadence,
@@ -67,6 +72,7 @@ export {
   romanToChord,
   secondaryDominant,
   secondaryDominantOf,
+  spellAugmentedSixth,
 } from './functional/index.js';
 export type { KeyRegion, KeyTimelineOptions } from './keys/index.js';
 export { detectModulations, keyTimelineFromNotes, prevailingKeyOf } from './keys/index.js';

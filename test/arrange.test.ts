@@ -89,7 +89,7 @@ describe('analyzeArrangement', () => {
 
   it('reports the closing authentic cadence', () => {
     const analysis = analyzeArrangement(baseArrangement(), { key: majorKey(0) });
-    const authentic = analysis.cadences.find((c) => c.type === 'authentic');
+    const authentic = analysis.cadences.find((c) => c.cadence.type === 'authentic');
     expect(authentic).toBeDefined();
     expect(authentic?.atBeat).toBe(12);
   });

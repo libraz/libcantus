@@ -153,7 +153,7 @@ describe('detectCadences', () => {
   it('finds the half and authentic cadences in C-F-G-C', () => {
     const { timeline } = chordTimelineFromNotes(cfgcNotes(), { key: majorKey(0) });
     const hits = detectCadences(timeline, majorKey(0));
-    expect(hits.map((hit) => ({ atBeat: hit.atBeat, type: hit.type }))).toEqual([
+    expect(hits.map((hit) => ({ atBeat: hit.atBeat, type: hit.cadence.type }))).toEqual([
       { atBeat: 8, type: 'half' },
       { atBeat: 12, type: 'authentic' },
     ]);

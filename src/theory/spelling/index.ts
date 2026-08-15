@@ -16,7 +16,7 @@ import {
   naturalPitchClassOf as naturalPc,
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import type { Chord } from '../chord/index.js';
+import { type Chord, chordToneSpellings } from '../chord/index.js';
 import { isScaleTone, scaleTonesInDegreeOrder } from '../scale/index.js';
 
 /**
@@ -476,17 +476,45 @@ function chordLetterOffset(interval: number, chord: Chord): number {
 }
 
 /**
+ * The letter distance above the root each of a chord's own tone spellings
+ * implies, or undefined when the chord names none this function can trust.
+ *
+ * This is the one route by which a chord can spell a tone {@link chordLetterOffset}
+ * cannot: the augmented sixth over the lowered submediant is ten semitones like
+ * a minor seventh, but five letters above its root rather than six, and no
+ * rotation of the chord makes that a stack of thirds. Distances are read out of
+ * the hint rather than letters, and the distances are measured from the hint's
+ * own root tone, so the tones follow whichever spelling of the root is in
+ * force: the German sixth spells Ab C Eb F# from an Ab root and G# B# D# E##
+ * from a G# one.
+ */
+function hintedLetterOffsets(chord: Chord): number[] | undefined {
+  const hints = chordToneSpellings(chord);
+  const rootHint = hints?.[chord.intervals.findIndex((interval) => mod12(interval) === 0)];
+  if (hints === undefined || rootHint === undefined) {
+    return undefined;
+  }
+  return hints.map((hint) => mod7(hint.letter - rootHint.letter));
+}
+
+/**
  * Spell chord tones from an already chosen root spelling.
  *
  * This is public for callers that already know the desired root spelling;
  * {@link spellChord} instead derives that spelling from the chord and key.
+ *
+ * Letters follow the chord's own tone spellings when it carries a usable set,
+ * and otherwise the diatonic distance each interval implies in a stack of
+ * thirds. Accidentals are always recomputed from the sounding pitch class, so
+ * the tones name exactly the chord's own pitch classes either way.
  */
 export function spellChordFromRoot(chord: Chord, root: Note): Note[] {
   if (mod12(naturalPc(root.letter) + root.alter) !== mod12(chord.rootPc)) {
     throw new InvalidInputError('chord root spelling must match chord.rootPc');
   }
-  return chord.intervals.map((interval) => {
-    const letter = mod7(root.letter + chordLetterOffset(interval, chord));
+  const hinted = hintedLetterOffsets(chord);
+  return chord.intervals.map((interval, index) => {
+    const letter = mod7(root.letter + (hinted?.[index] ?? chordLetterOffset(interval, chord)));
     const pc = mod12(chord.rootPc + interval);
     return { letter, alter: alterFor(letter, pc) };
   });
@@ -499,6 +527,12 @@ export function spellChordFromRoot(chord: Chord, root: Note): Note[] {
  * tones take their conventional spelling; enharmonically ambiguous altered
  * tensions may be spelled by the general convention rather than by chord
  * function.
+ *
+ * A chord carrying its own tone spellings is spelled by them, since a chord
+ * whose letters do not follow from stacking thirds can say so no other way:
+ * that is what keeps the German sixth of C major on its F#, the note that
+ * resolves outward to the dominant, rather than the Gb a dominant seventh
+ * would put there.
  *
  * @param chord The chord.
  * @param tonic The spelled tonic of the key.
@@ -578,5 +612,7 @@ export function spellPitch(
  * @category Pitch & Intervals
  */
 export function noteNames(notes: Note[]): string[] {
-  return notes.map(formatNote);
+  // Wrapped rather than passed by reference: `map` supplies an index that
+  // `formatNote`'s options parameter would read as a naming system.
+  return notes.map((note) => formatNote(note));
 }

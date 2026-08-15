@@ -655,7 +655,7 @@ describe('Progression', () => {
     expect(prog.length).toBe(3);
     expect(prog.roman()).toEqual(['ii7', 'V7', 'I']);
     expect(prog.functions()).toEqual(['subdominant', 'dominant', 'tonic']);
-    expect(prog.analyze().cadence).toBe('authentic');
+    expect(prog.analyze().cadence).toMatchObject({ type: 'authentic', strength: null });
   });
 
   it('yields no cadence for fewer than two chords', () => {
@@ -694,7 +694,7 @@ describe('Progression', () => {
     const keyless = Chord.of(0, 'maj').progressionTo(Chord.of(7, 'dom7'));
     expect(() => keyless.analyze()).toThrow(/key/);
     // Motion onto the dominant is a half cadence.
-    expect(keyless.withKey(Key.major('C')).analyze().cadence).toBe('half');
+    expect(keyless.withKey(Key.major('C')).analyze().cadence).toMatchObject({ type: 'half' });
   });
 
   it('is immutable: add returns a new progression', () => {

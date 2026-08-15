@@ -18,6 +18,7 @@ import {
   NATURAL_MINOR_MASK,
   scaleTonesInDegreeOrder,
 } from '../../theory/scale/index.js';
+import { augmentedSixthKind } from './augmented-sixth.js';
 import { type BorrowedSource, borrowedSource } from './borrowed.js';
 import { degreeRootPc, isAppliedDominantSonority, isNeapolitan, mod12 } from './internal.js';
 import { type ChordToRomanOptions, chordToRoman } from './roman.js';
@@ -87,6 +88,10 @@ export function isMinorKey(key: KeyScale): boolean {
  *   tonicizes ii) and its tritone substitute (`Db7`) read as dominant rather
  *   than inheriting the function of the degree they happen to sit on.
  * - The Neapolitan is subdominant.
+ * - An augmented sixth is subdominant. All three are altered predominants that
+ *   resolve outward onto the dominant, so they take subdominant function even
+ *   though the German sixth sounds a dominant seventh and would otherwise read
+ *   as the tritone substitute it shares its pitch classes with.
  * - A major triad on bVI or bVII of a major key is subdominant — the borrowed
  *   pop cadence chord, distinct from the bVII7 above, which has a seventh and
  *   is a dominant sonority.
@@ -105,6 +110,9 @@ export function isMinorKey(key: KeyScale): boolean {
 export function functionOf(chord: Chord, key: KeyScale): HarmonicFunction {
   const offset = mod12(chord.rootPc - key.rootPc);
   if (isNeapolitan(chord, key)) {
+    return 'subdominant';
+  }
+  if (augmentedSixthKind(chord, key) !== null) {
     return 'subdominant';
   }
   if (isAppliedDominant(chord, key)) {

@@ -5,7 +5,14 @@
 
 // Types from the layers below that this layer's own signatures name, so a
 // consumer importing only `@libraz/libcantus/theory` can still spell them.
-export type { Note as NoteData } from '../core/pitch/index.js';
+export type {
+  IntervalLike,
+  IntervalQualityLabel,
+  Note as NoteData,
+  NoteNameOptions,
+  NoteNameSystem,
+  SpelledInterval,
+} from '../core/pitch/index.js';
 export type { KeyScale } from '../core/types.js';
 export type {
   Chord as ChordData,
@@ -54,8 +61,24 @@ export {
   isForbiddenMelodicLeap,
   isLeadingToneResolution,
 } from './counterpoint/index.js';
+export type {
+  FiguredBassRealization,
+  FiguredBassSuspension,
+} from './figured-bass/index.js';
+export {
+  figuredBassOf,
+  figuredBassRealization,
+  realizeFiguredBass,
+} from './figured-bass/index.js';
 export type { HarmonyRole, LockLevel, VoicedRole } from './harmony/index.js';
 export { roleOf } from './harmony/index.js';
+export type {
+  PartWritingOptions,
+  PartWritingViolation,
+  PartWritingViolationKind,
+  SpelledVoicing,
+} from './partwriting/index.js';
+export { checkPartWriting, spellVoicing } from './partwriting/index.js';
 export type {
   EvaluateSafetyOptions,
   SafetyProfile,
@@ -131,11 +154,22 @@ export {
   spellPitchClasses,
   spellScale,
 } from './spelling/index.js';
+export type { ChordSymbolOptions } from './symbol/index.js';
 export {
   formatChordSymbol,
   parseChordSymbol,
   transposeChordSymbol,
 } from './symbol/index.js';
+export type {
+  TransposingInstrument,
+  TransposingInstrumentName,
+} from './transposition/index.js';
+export {
+  instrumentTransposition,
+  TRANSPOSING_INSTRUMENTS,
+  toSoundingPitch,
+  toWrittenPitch,
+} from './transposition/index.js';
 export type {
   StyledVoicingOptions,
   VoiceRange,

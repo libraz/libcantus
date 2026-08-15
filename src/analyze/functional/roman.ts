@@ -3,7 +3,9 @@
  *
  * The {@link ROMAN_STYLE} table is the single source of truth for both
  * directions, so {@link chordToRoman} and {@link romanToChord} stay mutual
- * inverses by construction.
+ * inverses by construction. The chromatic chords no numeral can spell — the
+ * augmented sixths, and the Neapolitan under its figured name — are matched as
+ * whole symbols beside that table.
  */
 
 import { InvalidInputError } from '../../core/errors/index.js';
@@ -11,9 +13,11 @@ import type { KeyScale } from '../../core/types.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { chordPitchClasses, makeChord } from '../../theory/chord/index.js';
 import { isScaleTone, majorKey, scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
+import { augmentedSixthFromSymbol, augmentedSixthSymbol } from './augmented-sixth.js';
 import {
   degreeRootPc,
   isAppliedDominantSonority,
+  isNeapolitan,
   loweredDegrees,
   mod12,
   romanReference,
@@ -257,6 +261,28 @@ function parseSimpleRoman(
   return { rootPc: rootForQuality(quality), quality, inversion };
 }
 
+/** The conventional figured name for the Neapolitan in first inversion. */
+const NEAPOLITAN_SIXTH = 'N6';
+
+/**
+ * The chord a whole-token chromatic symbol names, or null when the text is an
+ * ordinary numeral.
+ *
+ * `It6`, `Fr6`, `Ger6` (also written `Ger65`) and `N6` are names rather than
+ * numerals: the degree-plus-figure grammar has no way to spell an augmented
+ * sixth, and `N6` is a name for a chord that grammar already spells as `bII6`.
+ * Both build the same chords their numeral counterparts would, so the two
+ * notations stay interchangeable.
+ */
+function chromaticSymbolChord(text: string, key: KeyScale): Chord | null {
+  if (text === NEAPOLITAN_SIXTH) {
+    // Exactly the chord `bII6` builds: the major triad on b2, third in the bass.
+    const rootPc = mod12(key.rootPc + 1);
+    return makeChord(rootPc, 'maj', mod12(rootPc + 4));
+  }
+  return augmentedSixthFromSymbol(text, key);
+}
+
 /** Build a chord from a parsed Roman numeral, attaching a bass for inversions. */
 function chordFromParsed(parsed: {
   rootPc: number;
@@ -290,6 +316,13 @@ function chordFromParsed(parsed: {
  * A figure string that is neither a recognized inversion nor a supported
  * quality suffix throws rather than silently degrading to a triad.
  *
+ * Four chromatic chords are named rather than numbered, and are accepted as
+ * whole symbols: the augmented sixths `It6`, `Fr6` and `Ger6` (also written
+ * `Ger65`), all three on the lowered submediant in the bass, and `N6` for the
+ * first-inversion Neapolitan, which builds exactly the chord `bII6` does.
+ * Each may be applied to a degree like any other numeral, so `Ger6/V` is the
+ * German sixth of the dominant.
+ *
  * @param text The Roman numeral.
  * @param key The prevailing key.
  * @returns The chord.
@@ -297,6 +330,7 @@ function chordFromParsed(parsed: {
  * ```ts
  * import { romanToChord, majorKey } from '@libraz/libcantus';
  * romanToChord('V7', majorKey(0)); // G7 in C major: { rootPc: 7, quality: 'dom7', ... }
+ * romanToChord('Ger6', majorKey(0)); // Ab C Eb F#, bass Ab
  * ```
  * @category Functional Harmony
  */
@@ -310,9 +344,12 @@ export function romanToChord(text: string, key: KeyScale): Chord {
     const target = trimmed.slice(slash + 1);
     const targetRoot = parseSimpleRoman(target, key).rootPc;
     const localKey = majorKey(targetRoot);
-    return chordFromParsed(parseSimpleRoman(applied, localKey));
+    return (
+      chromaticSymbolChord(applied, localKey) ??
+      chordFromParsed(parseSimpleRoman(applied, localKey))
+    );
   }
-  return chordFromParsed(parseSimpleRoman(trimmed, key));
+  return chromaticSymbolChord(trimmed, key) ?? chordFromParsed(parseSimpleRoman(trimmed, key));
 }
 
 /** Case and suffix for rendering a chord quality as a Roman numeral. */
@@ -483,6 +520,18 @@ export type ChordToRomanOptions = {
    * of {@link romanToChord} for the chords {@link secondaryDominant} builds.
    */
   applied?: boolean;
+  /**
+   * Render a first-inversion Neapolitan under its figured name `N6` instead of
+   * the numeral `bII6`.
+   *
+   * Off by default, for the opposite reason to `applied`: both spellings name
+   * the same chord and `bII6` is already correct, so which one to write is a
+   * house-style choice rather than an analysis. `romanToChord` accepts either
+   * whatever this is set to. The augmented sixths need no such switch — no
+   * numeral spells them at all, so they always render as `It6`, `Fr6`
+   * and `Ger6`.
+   */
+  neapolitan?: boolean;
 };
 
 /**
@@ -505,9 +554,14 @@ export type ChordToRomanOptions = {
  * is no unambiguous way to write such a bass; a caller that must keep it should
  * read `chord.bassPc` alongside the numeral.
  *
+ * A chord sounding one of the augmented sixths over an explicit bass on the
+ * lowered submediant renders as `It6`, `Fr6` or `Ger6`, since no numeral names
+ * those chords; see {@link augmentedSixthKind} for exactly when that applies.
+ *
  * @param chord The chord to name.
  * @param key The prevailing key.
- * @param opts `applied` renders tonicizing chords as `V7/V`-style numerals.
+ * @param opts `applied` renders tonicizing chords as `V7/V`-style numerals;
+ *   `neapolitan` renders a first-inversion Neapolitan as `N6`.
  * @returns The Roman numeral string.
  * @example
  * ```ts
@@ -518,6 +572,13 @@ export type ChordToRomanOptions = {
  * @category Functional Harmony
  */
 export function chordToRoman(chord: Chord, key: KeyScale, opts: ChordToRomanOptions = {}): string {
+  // The augmented sixths come first and unconditionally: their pitch classes
+  // also spell a dominant seventh or an altered supertonic seventh, but only
+  // this reading survives the bass they are standing on.
+  const augmented = augmentedSixthSymbol(chord, key);
+  if (augmented !== null) {
+    return augmented;
+  }
   if (opts.applied === true && !isDiatonicChord(chord, key)) {
     const target = appliedTarget(chord, key);
     if (target !== null) {
@@ -545,6 +606,9 @@ export function chordToRoman(chord: Chord, key: KeyScale, opts: ChordToRomanOpti
     if (idx > 0) {
       inversion = idx;
     }
+  }
+  if (opts.neapolitan === true && inversion === 1 && isNeapolitan(chord, key)) {
+    return NEAPOLITAN_SIXTH;
   }
   if (inversion > 0) {
     const figure = SEVENTH_FIGURE_QUALITIES.has(chord.quality)

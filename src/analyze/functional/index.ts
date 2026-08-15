@@ -7,9 +7,15 @@
  * spelled key signature.
  */
 
+export type { AugmentedSixthKind } from './augmented-sixth.js';
+export {
+  augmentedSixthChord,
+  augmentedSixthKind,
+  spellAugmentedSixth,
+} from './augmented-sixth.js';
 export type { BorrowedSource } from './borrowed.js';
 export { borrowedSource, isBorrowedChord } from './borrowed.js';
-export type { Cadence } from './cadence.js';
+export type { CadenceResult, DetectCadenceOptions } from './cadence.js';
 export { detectCadence } from './cadence.js';
 export type { ChordAnalysis, HarmonicFunction } from './function.js';
 export {
