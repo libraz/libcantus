@@ -19,6 +19,7 @@ export {
   isMinorKey,
   parallelKey,
   secondaryDominant,
+  secondaryDominantOf,
 } from './function.js';
 export type { ChordToRomanOptions } from './roman.js';
 export { chordToRoman, romanToChord } from './roman.js';

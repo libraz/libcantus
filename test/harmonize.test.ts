@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { type HarmonizeOptions, harmonizeMelody } from '../src/generate/harmonize/index.js';
-import { chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
+import { chordFromSpan, chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
 import {
   majorKey,
   minorKey,
@@ -242,6 +242,26 @@ describe('harmonizeMelody', () => {
     // Four eighth-of-a-beat slots, not one quarter-note slot rounded up.
     expect(result.chords).toHaveLength(4);
     expect(result.chords.map((chord) => chord.startBeat)).toEqual([0, 0.125, 0.25, 0.375]);
+  });
+
+  it('names its chords by quality alone, recording no interval template', () => {
+    const melody = [60, 64, 67, 72, 67, 64, 60, 72].map((pitch, i) => ({
+      pitch,
+      startBeat: i,
+      durationBeat: 1,
+    }));
+    const result = harmonizeMelody({
+      melody,
+      key: cMajor,
+      harmonicRhythm: 4,
+      reharmonize: 'diatonic',
+      placement: { transposeSearch: false, octaveSearch: false },
+    });
+    expect(result.chords.length).toBeGreaterThan(0);
+    for (const span of result.chords) {
+      expect('intervals' in span).toBe(false);
+      expect(chordFromSpan(span)).toEqual(makeChord(span.rootPc, span.quality, span.bassPc));
+    }
   });
 
   it('weights metric accents by the given time signature', () => {

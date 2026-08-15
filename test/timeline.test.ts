@@ -5,6 +5,8 @@ import {
   detectCadences,
 } from '../src/analyze/timeline/index.js';
 import type { NoteEvent } from '../src/core/types.js';
+import type { ChordSpan } from '../src/theory/chord/index.js';
+import { makeChord, spanFromChord } from '../src/theory/chord/index.js';
 import { MAJOR_MASK, majorKey, minorKey } from '../src/theory/scale/index.js';
 
 /** Build a block chord: every pitch sounding for the same span. */
@@ -205,5 +207,25 @@ describe('chordTimelineFromChords', () => {
       [0, 4],
     ]);
     expect(timeline.at(6)).toBeNull();
+  });
+
+  it('builds exactly the chord a span without a template always built', () => {
+    const timeline = chordTimelineFromChords(
+      [{ rootPc: 5, quality: 'maj', startBeat: 0, bassPc: 7 }],
+      4,
+    );
+    expect(timeline.segments[0]?.chord).toEqual(makeChord(5, 'maj', 7));
+  });
+
+  it('carries a custom interval template into the segment and back out', () => {
+    const span: ChordSpan = { rootPc: 0, quality: 'maj7', startBeat: 0, intervals: [0, 4, 11, 18] };
+    const timeline = chordTimelineFromChords([span], 4);
+    const segment = timeline.segments[0];
+    expect(segment?.chord.intervals).toEqual([0, 4, 11, 18]);
+    expect(timeline.at(2)?.intervals).toEqual([0, 4, 11, 18]);
+    expect(segment && spanFromChord(segment.chord, segment.startBeat)).toEqual(span);
+    // The segment holds its own template, not the caller's array.
+    segment?.chord.intervals.push(21);
+    expect(span.intervals).toEqual([0, 4, 11, 18]);
   });
 });

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { formatNote, parseNote } from '../src/core/pitch/index.js';
+import { formatNote, noteToMidi, parseNote } from '../src/core/pitch/index.js';
+import type { KeyScale } from '../src/core/types.js';
 import { Chord, Key, Note } from '../src/model/index.js';
 import { chordQualities, makeChord } from '../src/theory/chord/index.js';
-import { majorKey, minorKey, scaleByName } from '../src/theory/scale/index.js';
+import { isScaleTone, majorKey, minorKey, scaleByName } from '../src/theory/scale/index.js';
+import type { SpellingContext } from '../src/theory/spelling/index.js';
 import {
   noteNames,
   spellChord,
@@ -100,6 +102,220 @@ describe('spellPitchClass', () => {
   it('spells a sharp minor key raised sixth with a sharp letter (E# in G# minor)', () => {
     // G# natural minor's sixth degree is E; its raised sixth must spell E#, not F.
     expect(spellPitchClass(5, parseNote('G#'), minorKey(8))).toEqual({ letter: 2, alter: 1 });
+  });
+});
+
+describe('spellPitchClass with a spelling context', () => {
+  const pitchClasses = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+  const keys: { name: string; tonic: string; key: KeyScale }[] = [
+    { name: 'C major', tonic: 'C', key: majorKey(0) },
+    { name: 'Eb major', tonic: 'Eb', key: majorKey(3) },
+    { name: 'F# minor', tonic: 'F#', key: minorKey(6) },
+    { name: 'A harmonic minor', tonic: 'A', key: scaleByName('harmonicMinor', 9) },
+    { name: 'C blues', tonic: 'C', key: scaleByName('blues', 0) },
+  ];
+
+  it('spells every pitch class of C major as it always has when no context is given', () => {
+    expect(
+      pitchClasses.map((pc) => formatNote(spellPitchClass(pc, parseNote('C'), majorKey(0)))),
+    ).toEqual(['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']);
+  });
+
+  it('reproduces the key-only spelling for an empty context, in every key', () => {
+    for (const { name, tonic, key } of keys) {
+      for (const pc of pitchClasses) {
+        const bare = spellPitchClass(pc, parseNote(tonic), key);
+        expect(spellPitchClass(pc, parseNote(tonic), key, {}), `${name}/${pc}`).toEqual(bare);
+        expect(
+          spellPitchClass(pc, parseNote(tonic), key, {
+            chordRoot: undefined,
+            previous: undefined,
+            next: undefined,
+          }),
+          `${name}/${pc}`,
+        ).toEqual(bare);
+      }
+    }
+  });
+
+  it('never lets a context respell a scale tone or the tonic', () => {
+    // Db as the chord root would make E the minor third above it (Fb), but E is
+    // the third of the key and keeps the letter the key gave it.
+    expect(formatNote(spellPitchClass(4, parseNote('C'), majorKey(0), { chordRoot: 1 }))).toBe('E');
+    expect(
+      formatNote(spellPitchClass(0, parseNote('C'), majorKey(0), { chordRoot: 8, next: 1 })),
+    ).toBe('C');
+    for (const { name, tonic, key } of keys) {
+      for (const pc of pitchClasses) {
+        const bare = spellPitchClass(pc, parseNote(tonic), key);
+        if (!isScaleTone(pc, key)) {
+          continue;
+        }
+        for (const chordRoot of pitchClasses) {
+          expect(
+            spellPitchClass(pc, parseNote(tonic), key, {
+              chordRoot,
+              previous: pc - 1,
+              next: pc + 1,
+            }),
+            `${name}/${pc}`,
+          ).toEqual(bare);
+        }
+      }
+    }
+  });
+
+  it('spells the third of a secondary dominant from the chord root (F# in D7, not Gb)', () => {
+    // F major spells the tritone above its tonic Gb; as the third of D7 it is F#.
+    expect(formatNote(spellPitchClass(6, parseNote('F'), majorKey(5)))).toBe('Gb');
+    expect(formatNote(spellPitchClass(6, parseNote('F'), majorKey(5), { chordRoot: 2 }))).toBe(
+      'F#',
+    );
+  });
+
+  it('spells the third of E7 in C major as G#, not Ab', () => {
+    expect(formatNote(spellPitchClass(8, parseNote('C'), majorKey(0)))).toBe('Ab');
+    expect(formatNote(spellPitchClass(8, parseNote('C'), majorKey(0), { chordRoot: 4 }))).toBe(
+      'G#',
+    );
+  });
+
+  it('spells the fifth of F#7 in C major as C#, not Db', () => {
+    expect(formatNote(spellPitchClass(1, parseNote('C'), majorKey(0), { chordRoot: 6 }))).toBe(
+      'C#',
+    );
+  });
+
+  it('spells the minor seventh of Ab7 in C major as Gb, not F#', () => {
+    expect(formatNote(spellPitchClass(6, parseNote('C'), majorKey(0)))).toBe('F#');
+    expect(formatNote(spellPitchClass(6, parseNote('C'), majorKey(0), { chordRoot: 8 }))).toBe(
+      'Gb',
+    );
+  });
+
+  it('leaves an ambiguous interval above the chord root to the key', () => {
+    // A tritone over C is an augmented fourth or a diminished fifth by turns,
+    // so the chord gives no evidence and F major keeps its Gb.
+    expect(formatNote(spellPitchClass(6, parseNote('F'), majorKey(5), { chordRoot: 0 }))).toBe(
+      'Gb',
+    );
+  });
+
+  it('spells a semitone resolution upward as the leading tone of what follows', () => {
+    // The C# rising to D in D minor, and the F# rising to G in F major.
+    expect(formatNote(spellPitchClass(1, parseNote('D'), minorKey(2), { next: 2 }))).toBe('C#');
+    expect(formatNote(spellPitchClass(6, parseNote('F'), majorKey(5)))).toBe('Gb');
+    expect(formatNote(spellPitchClass(6, parseNote('F'), majorKey(5), { next: 7 }))).toBe('F#');
+    // Rising to A in C major makes the black key a G#, not the key's Ab.
+    expect(formatNote(spellPitchClass(8, parseNote('C'), majorKey(0), { next: 9 }))).toBe('G#');
+  });
+
+  it('spells a double-sharp leading tone when the note it resolves to is sharp (F## to G#)', () => {
+    // E major spells pitch class 7 as a plain G; rising a semitone into G# it is
+    // the leading tone below it, one letter down.
+    expect(formatNote(spellPitchClass(7, parseNote('E'), majorKey(4)))).toBe('G');
+    expect(formatNote(spellPitchClass(7, parseNote('E'), majorKey(4), { next: 8 }))).toBe('F##');
+  });
+
+  it('spells an ascending chromatic line with sharps, from the note before it', () => {
+    // F F# G in C major: the black key is the F inflected upward, on F's letter,
+    // and the note it came from is enough to say so.
+    expect(formatNote(spellPitchClass(6, parseNote('C'), majorKey(0), { previous: 5 }))).toBe('F#');
+    expect(
+      formatNote(spellPitchClass(6, parseNote('C'), majorKey(0), { previous: 5, next: 9 })),
+    ).toBe('F#');
+  });
+
+  it('spells an ascending inflection of an already sharp note as a double sharp', () => {
+    // E major spells pitch class 7 as a plain G; rising out of F# it is that F#
+    // inflected again, which the double-accidental cap still admits.
+    expect(formatNote(spellPitchClass(7, parseNote('E'), majorKey(4), { previous: 6 }))).toBe(
+      'F##',
+    );
+  });
+
+  it('spells a descending chromatic line with flats', () => {
+    // A Ab G in C major: the letter stays above the G that follows.
+    expect(
+      formatNote(spellPitchClass(8, parseNote('C'), majorKey(0), { previous: 9, next: 7 })),
+    ).toBe('Ab');
+    expect(
+      formatNote(spellPitchClass(6, parseNote('C'), majorKey(0), { previous: 7, next: 5 })),
+    ).toBe('Gb');
+  });
+
+  it('spells a descent from the note before it when nothing follows', () => {
+    // A Ab in C major, read from the A alone: the black key is that A inflected
+    // downward, on A's letter.
+    expect(formatNote(spellPitchClass(8, parseNote('C'), majorKey(0), { previous: 9 }))).toBe('Ab');
+    // The same reading under D gives Db, not C#.
+    expect(formatNote(spellPitchClass(1, parseNote('C'), majorKey(0), { previous: 2 }))).toBe('Db');
+  });
+
+  it('compares neighbours as pitch classes, so MIDI pitches work too', () => {
+    expect(formatNote(spellPitchClass(8, parseNote('C'), majorKey(0), { next: 69 }))).toBe('G#');
+    expect(
+      formatNote(spellPitchClass(8, parseNote('C'), majorKey(0), { previous: 81, next: 67 })),
+    ).toBe('Ab');
+  });
+
+  it('never returns more than a double accidental, whatever the context', () => {
+    for (const { name, tonic, key } of keys) {
+      for (const pc of pitchClasses) {
+        const contexts: SpellingContext[] = pitchClasses.flatMap((a) => [
+          { chordRoot: a },
+          { previous: a },
+          { next: a },
+          ...pitchClasses.map((b) => ({ previous: a, next: b })),
+          ...pitchClasses.map((b) => ({ chordRoot: a, previous: b, next: b + 1 })),
+        ]);
+        for (const context of contexts) {
+          const spelled = spellPitchClass(pc, parseNote(tonic), key, context);
+          expect(
+            Math.abs(spelled.alter),
+            `${name}/${pc}/${JSON.stringify(context)}`,
+          ).toBeLessThanOrEqual(2);
+        }
+      }
+    }
+  });
+});
+
+describe('spellPitch with a spelling context', () => {
+  it('keeps the octave that sounds the pitch when the context changes the letter', () => {
+    // MIDI 60 rising into C#4 is a B#, which belongs to octave 3, not 4.
+    expect(formatNote(spellPitch(60, parseNote('E'), majorKey(4)))).toBe('C4');
+    const leadingTone = spellPitch(60, parseNote('E'), majorKey(4), { next: 61 });
+    expect(formatNote(leadingTone)).toBe('B#3');
+    expect(noteToMidi(leadingTone)).toBe(60);
+  });
+
+  it('still sounds the input pitch for every context', () => {
+    const keys: { tonic: string; key: KeyScale }[] = [
+      { tonic: 'C', key: majorKey(0) },
+      { tonic: 'Eb', key: majorKey(3) },
+      { tonic: 'F#', key: minorKey(6) },
+      { tonic: 'A', key: scaleByName('harmonicMinor', 9) },
+    ];
+    for (const { tonic, key } of keys) {
+      for (let pitch = 48; pitch <= 84; pitch += 1) {
+        for (let neighbour = pitch - 2; neighbour <= pitch + 2; neighbour += 1) {
+          const context = { chordRoot: neighbour % 12, previous: neighbour, next: neighbour + 1 };
+          const spelled = spellPitch(pitch, parseNote(tonic), key, context);
+          expect(noteToMidi(spelled), `${tonic}/${pitch}/${neighbour}`).toBe(pitch);
+        }
+      }
+    }
+  });
+
+  it('spells exactly as it always has when no context is given', () => {
+    expect(formatNote(spellPitch(70, parseNote('Eb'), majorKey(3)))).toBe('Bb4');
+    expect(formatNote(spellPitch(59, parseNote('C'), majorKey(0)))).toBe('B3');
+    for (let pitch = 48; pitch <= 84; pitch += 1) {
+      expect(spellPitch(pitch, parseNote('C'), majorKey(0), {})).toEqual(
+        spellPitch(pitch, parseNote('C'), majorKey(0)),
+      );
+    }
   });
 });
 

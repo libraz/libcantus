@@ -11,7 +11,7 @@ import {
   assertTimeSignature,
 } from '../../core/validation/index.js';
 import type { Chord, ChordSpan } from '../../theory/chord/index.js';
-import { chordPitchClasses, makeChord } from '../../theory/chord/index.js';
+import { chordFromSpan, chordPitchClasses, makeChord } from '../../theory/chord/index.js';
 import { isScaleTone, majorKey } from '../../theory/scale/index.js';
 import type { ChordMatch } from '../detect/index.js';
 import { detectChord, detectKeyFromNotes } from '../detect/index.js';
@@ -71,7 +71,7 @@ export function chordTimelineFromChords(
       return {
         startBeat: gc.startBeat,
         endBeat,
-        chord: makeChord(gc.rootPc, gc.quality, gc.bassPc),
+        chord: chordFromSpan(gc),
       };
     })
     .filter((seg) => seg.endBeat > seg.startBeat);

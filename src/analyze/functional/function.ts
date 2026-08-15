@@ -7,8 +7,9 @@
  * spelled key signature.
  */
 
+import { transposeNote } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import { assertInteger } from '../../core/validation/index.js';
+import { assertFiniteNumber, assertInteger } from '../../core/validation/index.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { chordPitchClasses, makeChord } from '../../theory/chord/index.js';
 import {
@@ -240,6 +241,8 @@ export function analyzeChord(
  * @param key The prevailing key.
  * @returns A dominant-seventh chord a fifth above the target's root.
  * @throws If `targetDegree` is not an integer naming a degree in `key`.
+ * @see {@link secondaryDominantOf} to tonicize a chord that has no degree in
+ *   the key, or when no key is at hand.
  * @category Functional Harmony
  */
 export function secondaryDominant(targetDegree: number, key: KeyScale): Chord {
@@ -249,4 +252,39 @@ export function secondaryDominant(targetDegree: number, key: KeyScale): Chord {
   assertInteger(targetDegree, 'targetDegree', 0, degreeCount - 1);
   const targetRoot = degreeRootPc(targetDegree + 1, key);
   return makeChord(mod12(targetRoot + 7), 'dom7');
+}
+
+/**
+ * The secondary dominant (V7) that tonicizes a chord.
+ *
+ * {@link secondaryDominant} names its target by scale degree, so it only
+ * reaches the degrees a key actually has. This takes the target chord itself
+ * and needs no key at all, which is what lets a borrowed or chromatic target —
+ * bVI of a major key, a Neapolitan, any chord a modulation left behind — have
+ * its dominant built without first inventing a degree for it.
+ *
+ * A `rootSpelling` hint on the target moves with the root, so a flat-named
+ * target yields a flat-named dominant (Eb gives Bb7, not A#7).
+ *
+ * @param target The chord to tonicize.
+ * @returns A dominant-seventh chord a perfect fifth above the target's root.
+ * @throws If the target's root pitch class is not a finite number.
+ * @example
+ * ```ts
+ * import { makeChord, secondaryDominantOf } from '@libraz/libcantus';
+ * secondaryDominantOf(makeChord(8, 'maj'));
+ * // { rootPc: 3, quality: 'dom7' } — Eb7 tonicizes the borrowed bVI of C major
+ * ```
+ * @category Functional Harmony
+ */
+export function secondaryDominantOf(target: Chord): Chord {
+  assertFiniteNumber(target.rootPc, 'target chord rootPc');
+  const dominant = makeChord(mod12(target.rootPc + 7), 'dom7');
+  // Move an explicit spelling hint rather than deriving one: the dominant of a
+  // flat-named target is spelled flat, whatever key it is later read in.
+  if (target.rootSpelling !== undefined) {
+    const moved = transposeNote(target.rootSpelling, 7);
+    dominant.rootSpelling = { letter: moved.letter, alter: moved.alter };
+  }
+  return dominant;
 }

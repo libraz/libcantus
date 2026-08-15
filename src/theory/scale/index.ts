@@ -34,3 +34,4 @@ export {
   requireScaleMask,
   WHOLE_TONE_MASK,
 } from './masks.js';
+export { keyFromFifths, keySignatureFifths } from './signature.js';

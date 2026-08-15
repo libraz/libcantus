@@ -5,6 +5,9 @@ import {
   progressions,
   progressionsByStyle,
 } from '../src/generate/progression/index.js';
+import { Progression } from '../src/model/progression.js';
+import type { ChordSpan } from '../src/theory/chord/index.js';
+import { makeChord } from '../src/theory/chord/index.js';
 import { MAJOR_MASK, majorKey, minorKey } from '../src/theory/scale/index.js';
 
 const cMajor: KeyScale = { rootPc: 0, modeMask12: MAJOR_MASK };
@@ -145,6 +148,18 @@ describe('generateProgression', () => {
     expect(generateProgression(opts)).toEqual(generateProgression(opts));
   });
 
+  it('names its chords by quality alone, recording no interval template', () => {
+    const chords = generateProgression({
+      presetId: 'royalRoad',
+      key: cMajor,
+      style: 'idol',
+      bars: 4,
+    });
+    for (const chord of chords) {
+      expect('intervals' in chord).toBe(false);
+    }
+  });
+
   it('throws on an unknown presetId instead of falling back silently', () => {
     expect(() =>
       generateProgression({
@@ -154,6 +169,35 @@ describe('generateProgression', () => {
         bars: 4,
       }),
     ).toThrow(/noSuchPreset/);
+  });
+});
+
+describe('Progression.fromSpans', () => {
+  it('builds exactly the chord a span without a template always built', () => {
+    const progression = Progression.fromSpans([{ rootPc: 5, quality: 'maj', startBeat: 0 }]);
+    expect(progression.at(0)?.data).toEqual(makeChord(5, 'maj'));
+  });
+
+  it('keeps a custom interval template on the chord', () => {
+    const span: ChordSpan = { rootPc: 0, quality: 'maj7', startBeat: 0, intervals: [0, 4, 11, 18] };
+    const progression = Progression.fromSpans([span]);
+    expect(progression.at(0)?.intervals).toEqual([0, 4, 11, 18]);
+    // The progression holds its own template, not the caller's array.
+    span.intervals?.push(21);
+    expect(progression.at(0)?.intervals).toEqual([0, 4, 11, 18]);
+  });
+
+  it('carries a generated progression through unchanged', () => {
+    const spans = generateProgression({
+      presetId: 'fourChordPop',
+      key: cMajor,
+      style: 'idol',
+      bars: 4,
+    });
+    const progression = Progression.fromSpans(spans);
+    expect(progression.chords.map((chord) => chord.data)).toEqual(
+      spans.map((span) => makeChord(span.rootPc, span.quality, span.bassPc)),
+    );
   });
 });
 

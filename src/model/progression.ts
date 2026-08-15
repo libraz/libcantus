@@ -9,7 +9,7 @@ import { InvalidInputError } from '../core/errors/index.js';
 import type { Note as NoteData } from '../core/pitch/index.js';
 import type { KeyScale } from '../core/types.js';
 import type { Chord as ChordData, ChordSpan } from '../theory/chord/index.js';
-import { makeChord } from '../theory/chord/index.js';
+import { chordFromSpan } from '../theory/chord/index.js';
 import { type ScaleChoice, scalesForChanges } from '../theory/chordscale/index.js';
 import { type VoicingOptions, voiceProgression } from '../theory/voicing/index.js';
 import type { Chord } from './chord.js';
@@ -72,9 +72,7 @@ export class Progression {
    * ```
    */
   static fromSpans(spans: readonly ChordSpan[], key?: Key): Progression {
-    const chords = spans.map((span) =>
-      ChordClass.from(makeChord(span.rootPc, span.quality, span.bassPc)),
-    );
+    const chords = spans.map((span) => ChordClass.from(chordFromSpan(span)));
     return new Progression(chords, key);
   }
 

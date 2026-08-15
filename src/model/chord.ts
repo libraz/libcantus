@@ -10,6 +10,7 @@ import {
   functionOf,
   type HarmonicFunction,
   isBorrowedChord,
+  secondaryDominantOf,
 } from '../analyze/functional/index.js';
 import { InvalidInputError } from '../core/errors/index.js';
 import type { Note as NoteData } from '../core/pitch/index.js';
@@ -459,6 +460,27 @@ export class Chord {
     // Retain the key that anchored the reflection (explicit first, then carried)
     // so a later no-arg analysis method still has a key context.
     return new Chord(negativeHarmonyMirror(this.#data, resolved.scale), key ?? this.#key);
+  }
+
+  /**
+   * The V7 that tonicizes this chord: a dominant seventh a perfect fifth above
+   * this chord's root.
+   *
+   * The target is the chord itself, so no key is involved and a borrowed or
+   * chromatic chord gets its dominant as readily as a diatonic one. A root
+   * spelling this chord supplied moves with the root, so `Eb` gives `Bb7`.
+   *
+   * @returns The secondary dominant, keeping any key context.
+   * @example
+   * ```ts
+   * import { Chord } from '@libraz/libcantus';
+   * Chord.parse('Eb').secondaryDominant().symbol(); // 'Bb7'
+   * ```
+   */
+  secondaryDominant(): Chord {
+    // #given, not #data: only a caller-supplied spelling is transposed, so a
+    // spelling the key derived stays derived and follows the attached key.
+    return new Chord(secondaryDominantOf(this.#given), this.#key);
   }
 
   /**

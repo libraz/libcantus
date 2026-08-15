@@ -108,6 +108,14 @@ export type ChordSpan = {
   quality: ChordQuality;
   startBeat: number;
   bassPc?: number;
+  /**
+   * Semitone offsets from the root, for a chord the {@link ChordQuality} union
+   * cannot name exactly. Omitted for a standard chord: the template is then
+   * derived from `quality`, which is what every producer and consumer did
+   * before the field existed. Read a span with {@link chordFromSpan} so either
+   * case yields the same chord.
+   */
+  intervals?: number[];
   /** 0-based scale degree of the chord root, when known. */
   degree?: number;
   /** True when the chord is a secondary dominant tonicizing another degree. */
@@ -178,6 +186,9 @@ const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
   minAdd9: [0, 3, 7, 14],
   'min6/9': [0, 3, 7, 9, 14],
 };
+
+/** Widest semitone offset a custom interval template may name: one MIDI range. */
+const MAX_CHORD_INTERVAL = 127;
 
 /**
  * All chord qualities the builder understands, in declaration order.
@@ -256,6 +267,112 @@ export function makeChord(rootPc: number, quality: ChordQuality, bassPc?: number
     chord.bassPc = pitchClass(bassPc);
   }
   return chord;
+}
+
+/**
+ * Validate a span's custom interval template and return a defensive copy.
+ *
+ * Such a template reaches the library without passing any builder, so it is
+ * checked here: a fractional offset would place a chord tone between pitch
+ * classes, and a hole in the array would read as an undefined chord tone in
+ * every consumer downstream.
+ */
+function copySpanIntervals(intervals: readonly number[]): number[] {
+  const name = 'chord span intervals';
+  if (!Array.isArray(intervals)) {
+    throw new InvalidInputError(`${name} must be an array; received ${typeof intervals}`);
+  }
+  if (intervals.length === 0) {
+    throw new InvalidInputError(`${name} must name at least one interval`);
+  }
+  const copy: number[] = [];
+  for (let index = 0; index < intervals.length; index += 1) {
+    const interval = intervals[index];
+    if (interval === undefined) {
+      throw new InvalidInputError(
+        `${name}[${index}] must be a semitone offset; received undefined`,
+      );
+    }
+    copy.push(
+      assertInteger(interval, `${name}[${index}]`, -MAX_CHORD_INTERVAL, MAX_CHORD_INTERVAL),
+    );
+  }
+  return copy;
+}
+
+/** Whether a chord's template departs from the one its quality names. */
+function hasCustomIntervals(chord: Chord): boolean {
+  return !matchesQualityIntervals(chord.quality, chord.intervals);
+}
+
+/**
+ * Read a {@link ChordSpan} as a chord.
+ *
+ * The canonical way to cross from a span to a chord. A span carrying no
+ * `intervals` yields exactly the chord {@link makeChord} builds from its root,
+ * quality and bass; a span carrying an explicit template keeps it, so a color
+ * tone the {@link ChordQuality} union cannot name survives the trip through a
+ * progression, a timeline, or a generator. The template is copied, so the
+ * chord and the span never share an array.
+ *
+ * @param span The span to read.
+ * @returns The chord the span describes.
+ * @throws If the span's root, bass or quality is invalid, or its `intervals`
+ *   are not a non-empty array of integer semitone offsets.
+ *
+ * @example
+ * ```ts
+ * import { chordFromSpan } from '@libraz/libcantus';
+ * chordFromSpan({ rootPc: 0, quality: 'maj7', startBeat: 0 });
+ * // { rootPc: 0, quality: 'maj7', intervals: [0, 4, 7, 11] }
+ * chordFromSpan({ rootPc: 0, quality: 'maj7', startBeat: 0, intervals: [0, 4, 11, 18] });
+ * // the same span with a fifth-less, #11 voicing the quality cannot name
+ * ```
+ *
+ * @category Composition
+ */
+export function chordFromSpan(span: ChordSpan): Chord {
+  const chord = makeChord(span.rootPc, span.quality, span.bassPc);
+  if (span.intervals !== undefined) {
+    chord.intervals = copySpanIntervals(span.intervals);
+  }
+  return chord;
+}
+
+/**
+ * Place a chord at a beat as a {@link ChordSpan}.
+ *
+ * The interval template is recorded only when it departs from the one the
+ * chord's quality names, so a span built from a standard chord carries the
+ * same fields it always did while a custom template is not lost.
+ *
+ * @param chord The chord to place.
+ * @param startBeat Beat the chord starts on.
+ * @returns The span describing that chord at that beat.
+ * @throws If `startBeat` is not finite, or the chord's quality is unknown.
+ *
+ * @example
+ * ```ts
+ * import { makeChord, spanFromChord } from '@libraz/libcantus';
+ * spanFromChord(makeChord(0, 'maj7'), 4);
+ * // { rootPc: 0, quality: 'maj7', startBeat: 4 } — no intervals for a standard chord
+ * ```
+ *
+ * @category Composition
+ */
+export function spanFromChord(chord: Chord, startBeat: number): ChordSpan {
+  assertFiniteNumber(startBeat, 'chord span startBeat');
+  if (!Object.hasOwn(QUALITY_INTERVALS, chord.quality)) {
+    throw new InvalidInputError(`Unknown chord quality: ${String(chord.quality)}`);
+  }
+  const span: ChordSpan = { rootPc: chord.rootPc, quality: chord.quality, startBeat };
+  if (chord.bassPc !== undefined) {
+    span.bassPc = chord.bassPc;
+  }
+  if (hasCustomIntervals(chord)) {
+    span.intervals = [...chord.intervals];
+  }
+  return span;
 }
 
 /**

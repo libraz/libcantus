@@ -6,10 +6,17 @@ import {
   functionOf,
   romanToChord,
   secondaryDominant,
+  secondaryDominantOf,
 } from '../src/analyze/functional/index.js';
 import type { KeyScale } from '../src/core/types.js';
 import { chordPitchClasses, chordQualities, makeChord } from '../src/theory/chord/index.js';
-import { majorKey, minorKey, scaleByName } from '../src/theory/scale/index.js';
+import {
+  majorKey,
+  minorKey,
+  scaleByName,
+  scaleTonesInDegreeOrder,
+} from '../src/theory/scale/index.js';
+import { formatChordSymbol, parseChordSymbol } from '../src/theory/symbol/index.js';
 
 const cMajor = majorKey(0);
 const aMinor = minorKey(9);
@@ -226,6 +233,42 @@ describe('secondaryDominant', () => {
     const pentatonic = scaleByName('majorPentatonic', 0);
     expect(() => secondaryDominant(5, pentatonic)).toThrow(RangeError);
     expect(secondaryDominant(4, pentatonic)).toMatchObject({ rootPc: 4, quality: 'dom7' });
+  });
+});
+
+describe('secondaryDominantOf', () => {
+  for (const [name, key] of [
+    ['C major', cMajor],
+    ['A minor', aMinor],
+  ] as const) {
+    it(`agrees with the degree-based entry point on every degree of ${name}`, () => {
+      scaleTonesInDegreeOrder(key).forEach((rootPc, degree) => {
+        expect(secondaryDominantOf(makeChord(rootPc, 'maj')), `degree ${degree}`).toEqual(
+          secondaryDominant(degree, key),
+        );
+      });
+    });
+  }
+
+  it('tonicizes a chromatic target that has no degree in the key', () => {
+    // C major has seven degrees, so the degree-based entry point cannot name
+    // the borrowed bVI or the Neapolitan at all.
+    expect(() => secondaryDominant(7, cMajor)).toThrow(RangeError);
+    expect(secondaryDominantOf(makeChord(8, 'maj'))).toMatchObject({ rootPc: 3, quality: 'dom7' });
+    expect(secondaryDominantOf(makeChord(1, 'maj'))).toMatchObject({ rootPc: 8, quality: 'dom7' });
+  });
+
+  it('transposes the target spelling hint, so a flat target yields a flat dominant', () => {
+    expect(formatChordSymbol(secondaryDominantOf(parseChordSymbol('Eb')))).toBe('Bb7');
+    expect(formatChordSymbol(secondaryDominantOf(parseChordSymbol('Db')))).toBe('Ab7');
+    // Without a hint the default sharp spelling stands.
+    expect(formatChordSymbol(secondaryDominantOf(makeChord(3, 'maj')))).toBe('A#7');
+  });
+
+  it('rejects a target whose root is not a finite pitch class', () => {
+    expect(() => secondaryDominantOf({ ...makeChord(0, 'maj'), rootPc: Number.NaN })).toThrow(
+      RangeError,
+    );
   });
 });
 

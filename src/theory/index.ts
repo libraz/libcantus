@@ -17,6 +17,7 @@ export type {
 } from './chord/index.js';
 export {
   chordFromDegree,
+  chordFromSpan,
   chordPitchClasses,
   chordQualities,
   chordToneRole,
@@ -25,6 +26,7 @@ export {
   intervalAboveRoot,
   isChordMember,
   makeChord,
+  spanFromChord,
   transposeChord,
 } from './chord/index.js';
 export type {
@@ -76,6 +78,8 @@ export {
   diatonicPitchClasses,
   HARMONIC_MINOR_MASK,
   isScaleTone,
+  keyFromFifths,
+  keySignatureFifths,
   LOCRIAN_MASK,
   LOCRIAN_NATURAL2_MASK,
   LYDIAN_DOMINANT_MASK,
@@ -103,6 +107,7 @@ export {
   scaleTonesInDegreeOrder,
   WHOLE_TONE_MASK,
 } from './scale/index.js';
+export type { SpellingContext } from './spelling/index.js';
 export {
   noteNames,
   spellChord,

@@ -59,6 +59,7 @@ export {
   parallelKey,
   romanToChord,
   secondaryDominant,
+  secondaryDominantOf,
 } from './functional/index.js';
 export type {
   CadenceHit,
