@@ -105,21 +105,25 @@ describe('generateDrums richness', () => {
   });
 
   it('allows 16th-grid hats at moderate BPM but not at high BPM', () => {
-    const opts: DrumsOptions = {
+    const opts = (bpm: number, seed: number): DrumsOptions => ({
       bars: 1,
-      bpm: 120,
+      bpm,
       style: 'standard',
       section: 'chorus',
       density: 0.6,
-      seed: 7,
-    };
+      seed,
+    });
     const isHat = (p: number) => p === CLOSED_HAT || p === OPEN_HAT;
-    const slow = generateDrums(opts).filter((h) => isHat(h.pitch) && isOffGrid16(h.startBeat));
-    const fast = generateDrums({ ...opts, bpm: 180 }).filter(
-      (h) => isHat(h.pitch) && isOffGrid16(h.startBeat),
-    );
-    expect(slow.length).toBeGreaterThan(0);
-    expect(fast.length).toBe(0);
+    const offGridHats = (bpm: number, seed: number) =>
+      generateDrums(opts(bpm, seed)).filter((h) => isHat(h.pitch) && isOffGrid16(h.startBeat))
+        .length;
+    const seeds = [0, 1, 2, 3, 4, 5, 6, 7];
+    // Which seeds reach the 16th grid is the seed's business; that the grid is
+    // reachable at a moderate tempo and unreachable at a high one is not.
+    expect(seeds.some((seed) => offGridHats(120, seed) > 0)).toBe(true);
+    for (const seed of seeds) {
+      expect(offGridHats(180, seed), `seed ${seed}`).toBe(0);
+    }
   });
 
   it('delays off-beat hi-hats under a swing feel', () => {
@@ -224,16 +228,18 @@ describe('generateDrums richness', () => {
       seed,
       fills,
     });
-    const seeds = [0, 1, 2, 3, 4, 5];
+    const seeds = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
     // Every fill changes the last bar, regardless of archetype.
     for (const s of seeds) {
       const noFill = generateDrums(opts(s, false)).filter((h) => h.startBeat >= 12);
       const withFill = generateDrums(opts(s, true)).filter((h) => h.startBeat >= 12);
       expect(withFill).not.toEqual(noFill);
     }
-    // Some fill archetypes (e.g. snare rolls) use neither toms nor crash, so
-    // only require that at least one seed introduces a tom/crash voice.
-    const introducesTomOrCrash = seeds.some((s) =>
+    // Some fill archetypes (e.g. snare rolls) use neither toms nor crash, and
+    // only one of the eight a verse can draw does, so the sweep is wide enough
+    // to reach it rather than expecting a particular seed to.
+    const wideSweep = Array.from({ length: 30 }, (_, index) => index);
+    const introducesTomOrCrash = wideSweep.some((s) =>
       generateDrums(opts(s, true))
         .filter((h) => h.startBeat >= 12)
         .some((h) => isTom(h.pitch) || h.pitch === 49),

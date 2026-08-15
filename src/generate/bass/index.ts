@@ -13,14 +13,9 @@
  */
 
 import { InvalidInputError } from '../../core/errors/index.js';
-import {
-  beatsPerBar,
-  isStrongBeat,
-  pulseBeats,
-  type TimeSignature,
-} from '../../core/meter/index.js';
+import { foldIntoRange, type StringedProfile } from '../../core/instrument/index.js';
+import { isStrongBeat, type TimeSignature } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
-import { createRng } from '../../core/random/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
   assertGenerationBudget,
@@ -30,8 +25,33 @@ import {
   assertTimeSignature,
   clampToMidi,
 } from '../../core/validation/index.js';
-import type { Chord, ChordSegment } from '../../theory/chord/index.js';
-import { nearestScaleTone } from '../../theory/scale/index.js';
+import type { ChordSegment } from '../../theory/chord/index.js';
+import {
+  type Draw,
+  type GenerationContextInput,
+  resolveContextWith,
+  sustainsShift,
+} from '../context/index.js';
+import {
+  bandFloor,
+  bassPcOf,
+  beatPositions,
+  chordTonePcs,
+  EPS,
+  fifthPcOf,
+  approachNote as neighborOf,
+  placePc,
+  STRONG_VELOCITY,
+  WEAK_VELOCITY,
+} from './internal.js';
+
+export type {
+  BassLick,
+  LickMaterial,
+  LickNote,
+  PlaceLicksOptions,
+} from './licks.js';
+export { BASS_LICKS, isLickMaterial, placeLicks } from './licks.js';
 
 /**
  * A chord sounding over a half-open beat span `[startBeat, endBeat)`.
@@ -94,108 +114,36 @@ export type BassLineOptions = {
    */
   octave?: number;
   /**
-   * Seed for the deterministic PRNG.
+   * The instrument the line is written for. Giving one is itself the request
+   * that the line be playable on it: `octave` then says where in that
+   * instrument to aim rather than which absolute band to use, and where the two
+   * disagree the instrument wins — a note below the lowest string comes back an
+   * octave up, the way a player would take it. Leave it out for a programmed
+   * part, which is generated exactly as before.
+   */
+  instrument?: StringedProfile;
+  /**
+   * Seed for the deterministic PRNG. Sugar for `ctx: { seed }`.
    *
    * @defaultValue 0
    */
   seed?: number;
+  /**
+   * The generation context. Its `complexity.rhythmic` sets how often the `pop`
+   * style takes a weak-beat pickup, its `instruments.bass` names the instrument
+   * when `instrument` does not, and its `bpm` together with
+   * `complexity.difficulty` keeps leaps the hand could not make in time out of
+   * the line.
+   */
+  ctx?: GenerationContextInput;
 };
 
 const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
 const DEFAULT_STYLE: BassStyle = 'root';
 const DEFAULT_OCTAVE = 2;
 
-/** Velocity for notes on metrically strong positions. */
-const STRONG_VELOCITY = 100;
-/** Velocity for notes on weak positions. */
-const WEAK_VELOCITY = 80;
-/** Probability of a weak-beat pickup in the `pop` style. */
-const PICKUP_PROB = 0.35;
-
-const EPS = 1e-9;
-
-/**
- * Place a pitch class as a MIDI note near an anchor, clamped to the bass band.
- *
- * The octave nearest the anchor is chosen first (so motion from the previous
- * note is minimal), then the result is shifted by whole octaves into the band
- * `[low, low + 12]` if it falls outside.
- */
-function placePc(pc: number, anchor: number, low: number): number {
-  const high = low + 12;
-  let midi = pc + 12 * Math.round((anchor - pc) / 12);
-  while (midi < low) {
-    midi += 12;
-  }
-  while (midi > high) {
-    midi -= 12;
-  }
-  return midi;
-}
-
-/** Chord-tone pitch classes in stacked-thirds order, deduplicated. */
-function chordTonePcs(chord: Chord): number[] {
-  const seen = new Set<number>();
-  const pcs: number[] = [];
-  for (const interval of chord.intervals) {
-    const pc = pitchClass(chord.rootPc + interval);
-    if (!seen.has(pc)) {
-      seen.add(pc);
-      pcs.push(pc);
-    }
-  }
-  if (pcs.length === 0) {
-    pcs.push(pitchClass(chord.rootPc));
-  }
-  return pcs;
-}
-
-/**
- * The chord's fifth pitch class.
- *
- * Uses the perfect fifth when present, otherwise the chord's actual altered
- * fifth (diminished = 6, augmented = 8 semitones above the root), so dim/aug/
- * m7b5 chords sound their real fifth rather than a repeated root. Falls back to
- * the root only when the chord has no fifth degree at all.
- */
-function fifthPcOf(chord: Chord): number {
-  const fifths = new Set(chord.intervals.map((i) => pitchClass(i)));
-  const chosen = fifths.has(7) ? 7 : fifths.has(6) ? 6 : fifths.has(8) ? 8 : undefined;
-  return chosen === undefined ? pitchClass(chord.rootPc) : pitchClass(chord.rootPc + chosen);
-}
-
-/** The sounding bass pitch class of a chord: its slash bass, else its root. */
-function bassPcOf(chord: Chord): number {
-  return pitchClass(chord.bassPc ?? chord.rootPc);
-}
-
-/** Main-pulse positions within `[start, end)`, aligned to the global bar grid. */
-function beatPositions(start: number, end: number, ts: TimeSignature): number[] {
-  const positions: number[] = [];
-  const barBeats = beatsPerBar(ts);
-  const pulse = pulseBeats(ts);
-  const firstBar = Math.floor(start / barBeats);
-  const lastBar = Math.floor((end - EPS) / barBeats);
-  for (let bar = firstBar; bar <= lastBar; bar += 1) {
-    const barStart = bar * barBeats;
-    const firstPulse = Math.max(0, Math.ceil((start - barStart - EPS) / pulse));
-    for (let index = firstPulse; ; index += 1) {
-      const position = barStart + index * pulse;
-      if (position >= barStart + barBeats - EPS || position >= end - EPS) {
-        break;
-      }
-      if (position >= start - EPS) {
-        positions.push(position);
-      }
-    }
-  }
-  // A segment shorter than a pulse still needs a bass note. Its boundary is
-  // necessarily the harmonic placement rather than an invented local grid.
-  if (positions.length === 0) {
-    positions.push(start);
-  }
-  return positions;
-}
+/** How often the `pop` style takes a weak-beat pickup when nothing else says. */
+const DEFAULT_PICKUP_DENSITY = 0.35;
 
 type RawNote = { startBeat: number; pitch: number; velocity: number };
 
@@ -204,17 +152,27 @@ type BuildContext = {
   ts: TimeSignature;
   low: number;
   key: KeyScale;
-  rng: ReturnType<typeof createRng>;
+  /** Position-addressed draws: every decision is keyed by where it happens. */
+  draw: Draw;
   notes: RawNote[];
   prevMidi: number;
+  instrument: StringedProfile | undefined;
+  /** How often a weak beat takes a pickup, in [0, 1]. */
+  pickupDensity: number;
+  bpm: number | undefined;
+  difficulty: number | undefined;
 };
 
 /** Append a note for pitch class `pc` at `pos`, placed near the running anchor. */
 function emit(ctx: BuildContext, pos: number, pc: number, midiOverride?: number): number {
-  const midi = clampToMidi(
+  const placed = clampToMidi(
     midiOverride ?? placePc(pc, ctx.prevMidi, ctx.low),
     'generated bass pitch',
   );
+  // The band already sits inside the instrument, so this catches the placements
+  // that deliberately leave it — the pop octave pickup and walking approach
+  // notes — rather than transposing the line wholesale.
+  const midi = ctx.instrument ? foldIntoRange(placed, ctx.instrument) : placed;
   const velocity = isStrongBeat(pos, ctx.ts) ? STRONG_VELOCITY : WEAK_VELOCITY;
   ctx.notes.push({ startBeat: pos, pitch: midi, velocity });
   return midi;
@@ -235,7 +193,7 @@ function buildRootFifth(ctx: BuildContext, seg: BassSegment): void {
 }
 
 /** Root on every strong beat, with occasional octave/fifth pickups on weak beats. */
-function buildPop(ctx: BuildContext, seg: BassSegment): void {
+function buildPop(ctx: BuildContext, seg: BassSegment, index: number): void {
   const positions = beatPositions(seg.startBeat, seg.endBeat, ctx.ts);
   const rootPc = bassPcOf(seg.chord);
   let emitted = false;
@@ -243,8 +201,11 @@ function buildPop(ctx: BuildContext, seg: BassSegment): void {
     if (isStrongBeat(pos, ctx.ts)) {
       ctx.prevMidi = emit(ctx, pos, rootPc);
       emitted = true;
-    } else if (ctx.rng.prob(PICKUP_PROB)) {
-      if (ctx.rng.prob(0.5)) {
+    } else if (ctx.draw.prob(ctx.pickupDensity, 'pickup', index, pos)) {
+      // The octave pickup is a leap, so it is the candidate a difficulty
+      // ceiling rejects first: at that tempo the hand does not get there, and
+      // the player takes the fifth instead of dropping the pickup.
+      if (ctx.draw.prob(0.5, 'pickupKind', index, pos) && reachableLeap(ctx, pos, 12)) {
         // Octave pickup: the root an octave below where it would normally sit.
         // `placePc` already lands inside `[low, low + 12]`, so clamping the drop
         // back into that band would return the band's floor — pitch class 0 —
@@ -263,6 +224,18 @@ function buildPop(ctx: BuildContext, seg: BassSegment): void {
   }
 }
 
+/**
+ * Whether the hand covers a leap of `semitones` in the time since the last note.
+ *
+ * Answers true whenever no ceiling or no tempo was given: a limit nobody stated
+ * constrains nothing, which is what keeps the programmed case unchanged.
+ */
+function reachableLeap(ctx: BuildContext, pos: number, semitones: number): boolean {
+  const previous = ctx.notes[ctx.notes.length - 1];
+  const available = previous === undefined ? Number.POSITIVE_INFINITY : pos - previous.startBeat;
+  return sustainsShift(semitones, available, ctx.bpm, ctx.difficulty);
+}
+
 /** Cycle root -> third -> fifth (-> seventh) across the segment's beats. */
 function buildArpeggio(ctx: BuildContext, seg: BassSegment): void {
   const tones = chordTonePcs(seg.chord);
@@ -274,38 +247,22 @@ function buildArpeggio(ctx: BuildContext, seg: BassSegment): void {
 }
 
 /**
- * A diatonic or chromatic neighbor of `target`, a step toward `from`.
+ * The neighbour a walking line leads into the next chord with.
  *
- * The result is folded back into the register band: an approach note is emitted
- * with an explicit MIDI value, bypassing the placement clamp, and a target on
- * the band edge would otherwise put it a semitone outside — below MIDI 0 at the
- * lowest accepted octave.
+ * Whether it is the semitone or the scale step is drawn per segment, so the
+ * choice is fixed by where in the piece it happens.
  */
-function approachNote(ctx: BuildContext, target: number, from: number): number {
-  const dir = from <= target ? -1 : 1;
-  const chromatic = target + dir;
-  if (ctx.rng.prob(0.5)) {
-    return foldIntoBand(chromatic, ctx.low);
-  }
-  const cand = nearestScaleTone(target + dir * 2, ctx.key);
-  const step = Math.abs(cand - target);
-  return foldIntoBand(step >= 1 && step <= 2 ? cand : chromatic, ctx.low);
-}
-
-/** Shift a pitch by whole octaves until it lies in the band `[low, low + 12]`. */
-function foldIntoBand(midi: number, low: number): number {
-  let result = midi;
-  while (result < low) {
-    result += 12;
-  }
-  while (result > low + 12) {
-    result -= 12;
-  }
-  return result;
+function approachNote(ctx: BuildContext, target: number, from: number, index: number): number {
+  return neighborOf(target, from, ctx.low, ctx.key, ctx.draw.prob(0.5, 'approach', index));
 }
 
 /** A quarter-note line of chord tones that leads by step into each chord change. */
-function buildWalking(ctx: BuildContext, seg: BassSegment, next: BassSegment | undefined): void {
+function buildWalking(
+  ctx: BuildContext,
+  seg: BassSegment,
+  next: BassSegment | undefined,
+  index: number,
+): void {
   const tones = chordTonePcs(seg.chord);
   const positions = beatPositions(seg.startBeat, seg.endBeat, ctx.ts);
   const count = positions.length;
@@ -316,7 +273,7 @@ function buildWalking(ctx: BuildContext, seg: BassSegment, next: BassSegment | u
     }
     if (next && count > 1 && i === count - 1) {
       const nextBass = placePc(bassPcOf(next.chord), ctx.prevMidi, ctx.low);
-      const midi = approachNote(ctx, nextBass, ctx.prevMidi);
+      const midi = approachNote(ctx, nextBass, ctx.prevMidi, index);
       ctx.prevMidi = emit(ctx, pos, pitchClass(midi), midi);
       return;
     }
@@ -332,6 +289,14 @@ function buildWalking(ctx: BuildContext, seg: BassSegment, next: BassSegment | u
  * style; consecutive notes are kept within roughly a fifth. Every note's
  * duration extends to the next onset (the final note extends to the last
  * segment's end). Given a seed the output is fully reproducible.
+ *
+ * The `pop` style's pickups are drawn per position, so raising
+ * `complexity.rhythmic` adds pickups without moving the notes already written.
+ *
+ * With an `instrument` the line is written for that instrument: the register
+ * band is moved into its range and any note still outside comes back an octave,
+ * so every pitch has a fret. Nothing is dropped or replaced — the rhythm and
+ * the note count are the same either way.
  *
  * @param opts Segments, key, and generation options.
  * @returns Bass notes sorted by onset, non-overlapping.
@@ -385,15 +350,23 @@ export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
     0,
   );
   assertGenerationBudget(estimatedNotes, 'bass notes');
-  const low = octave * 12 + 12;
+  const resolved = resolveContextWith(opts.ctx, { seed: opts.seed });
+  const named = resolved.instrument('bass');
+  const instrument =
+    opts.instrument ?? (named !== undefined && named.kind === 'stringed' ? named : undefined);
+  const low = bandFloor(octave * 12 + 12, instrument);
 
   const ctx: BuildContext = {
     ts,
     low,
     key: opts.key,
-    rng: createRng(opts.seed ?? 0),
+    draw: resolved.part('bass'),
     notes: [],
     prevMidi: low,
+    instrument,
+    pickupDensity: resolved.rhythmic ?? DEFAULT_PICKUP_DENSITY,
+    bpm: resolved.bpm,
+    difficulty: resolved.difficulty,
   };
 
   for (let s = 0; s < segments.length; s += 1) {
@@ -406,10 +379,10 @@ export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
         buildRootFifth(ctx, seg);
         break;
       case 'pop':
-        buildPop(ctx, seg);
+        buildPop(ctx, seg, s);
         break;
       case 'walking':
-        buildWalking(ctx, seg, segments[s + 1]);
+        buildWalking(ctx, seg, segments[s + 1], s);
         break;
       case 'arpeggio':
         buildArpeggio(ctx, seg);

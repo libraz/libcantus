@@ -1,5 +1,5 @@
-import type { BackingDensity, SectionType } from './internal.js';
-import { MoodCategory, sectionIndex } from './internal.js';
+import type { SectionType } from './internal.js';
+import { MoodCategory } from './internal.js';
 
 /** Ghost-note position within a beat: the "e" (1st 16th) or "a" (3rd 16th). */
 export type GhostPosition = 'e' | 'a';
@@ -7,28 +7,27 @@ export type GhostPosition = 'e' | 'a';
 /** Ghost density level ordinal (0 = none, 3 = heavy). */
 type GhostDensityLevel = 0 | 1 | 2 | 3;
 
-// Ghost density level per [section index][mood category].
-const GHOST_DENSITY_TABLE: GhostDensityLevel[][] = [
-  /* intro     */ [0, 1, 1],
-  /* a         */ [0, 1, 2],
-  /* b         */ [1, 2, 2],
-  /* chorus    */ [1, 2, 3],
-  /* bridge    */ [1, 1, 2],
-  /* interlude */ [0, 1, 1],
-  /* outro     */ [0, 1, 1],
-];
+/**
+ * How much a groove ghosts, per section and mood.
+ *
+ * A row is read by mood category, in the order those categories are declared:
+ * calm, standard, energetic.
+ */
+export const GHOST_DENSITY_TABLE: Readonly<Record<SectionType, readonly GhostDensityLevel[]>> =
+  Object.freeze({
+    intro: [0, 1, 1],
+    a: [0, 1, 2],
+    b: [1, 2, 2],
+    chorus: [1, 2, 3],
+    bridge: [1, 1, 2],
+    outro: [0, 1, 1],
+  });
+
+/** Trigger probability at each density level. */
+const GHOST_LEVEL_PROBABILITY = Object.freeze([0, 0.15, 0.3, 0.45] as const);
 
 function levelToProbability(level: GhostDensityLevel): number {
-  switch (level) {
-    case 0:
-      return 0;
-    case 1:
-      return 0.15;
-    case 2:
-      return 0.3;
-    case 3:
-      return 0.45;
-  }
+  return GHOST_LEVEL_PROBABILITY[level];
 }
 
 function clampLevel(level: number): GhostDensityLevel {
@@ -45,22 +44,15 @@ function adjustForBpm(level: GhostDensityLevel, bpm: number): GhostDensityLevel 
   return level;
 }
 
-/** Ghost-note trigger probability for a section, mood, density, and tempo. */
-export function getGhostDensity(
-  mood: MoodCategory,
-  section: SectionType,
-  backingDensity: BackingDensity,
-  bpm: number,
-): number {
-  const row = GHOST_DENSITY_TABLE[sectionIndex(section)] ?? GHOST_DENSITY_TABLE[1];
-  const level = adjustForBpm((row?.[mood] ?? 0) as GhostDensityLevel, bpm);
-
-  if (backingDensity === 'thin' && level !== 0) {
-    return levelToProbability(clampLevel(level - 1));
-  }
-  if (backingDensity === 'thick' && level !== 3) {
-    return levelToProbability(clampLevel(level + 1));
-  }
+/**
+ * Ghost-note trigger probability for a section, mood, and tempo.
+ *
+ * How much of it survives is the ornament dial's business, applied by the
+ * caller: this is the groove's own appetite for ghosts before any dial.
+ */
+export function getGhostDensity(mood: MoodCategory, section: SectionType, bpm: number): number {
+  const row = GHOST_DENSITY_TABLE[section] ?? GHOST_DENSITY_TABLE.a;
+  const level = adjustForBpm(row[mood] ?? 0, bpm);
   return levelToProbability(level);
 }
 

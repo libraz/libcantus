@@ -1,3 +1,4 @@
+import type { Articulation } from '../../core/instrument/index.js';
 import { clampVel, GM } from './internal.js';
 
 /**
@@ -67,6 +68,13 @@ export type DrumHit = {
   startBeat: number;
   durationBeat: number;
   velocity: number;
+  /**
+   * How the stroke is played, when it is more than a plain hit. A flam is one
+   * onset carrying `'flam'`, not a pair of notes a fraction of a beat apart, so
+   * the grace stroke is the reader's to place — as a second note, a key switch,
+   * or a sample layer — and any pattern can carry one.
+   */
+  articulation?: Articulation;
 };
 
 /** Rounding used to key onsets by beat: a 128th note, finer than any grid used. */
@@ -85,14 +93,26 @@ export class HitList {
   readonly #onsets = new Set<string>();
 
   /** Append a hit, clamping velocity and dropping non-positive positions. */
-  add(pitch: number, startBeat: number, durationBeat: number, velocity: number): void {
+  add(
+    pitch: number,
+    startBeat: number,
+    durationBeat: number,
+    velocity: number,
+    articulation?: Articulation,
+  ): void {
     const beat = Math.max(0, startBeat);
-    this.hits.push({
+    const hit: DrumHit = {
       pitch,
       startBeat: beat,
       durationBeat,
       velocity: clampVel(velocity),
-    });
+    };
+    // Left off entirely rather than set to undefined, so a plain stroke stays
+    // deep-equal to the same stroke written before articulations existed.
+    if (articulation !== undefined) {
+      hit.articulation = articulation;
+    }
+    this.hits.push(hit);
     this.#onsets.add(onsetKey(pitch, beat));
   }
 

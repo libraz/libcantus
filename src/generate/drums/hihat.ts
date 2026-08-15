@@ -1,6 +1,7 @@
+import type { Draw } from '../context/index.js';
+import { sustainsStrokes } from '../context/index.js';
 import type { DrumRole, DrumStyle, SectionType } from './internal.js';
 import { GM } from './internal.js';
-import type { DrumRng } from './rng.js';
 
 /** Hi-hat subdivision level. */
 export type HiHatLevel = 'quarter' | 'eighth' | 'sixteenth';
@@ -52,39 +53,56 @@ function denser(level: HiHatLevel): HiHatLevel {
   return 'sixteenth';
 }
 
-/** Choose the hi-hat subdivision for a section/style/density/BPM. */
+/** Beats between consecutive strokes at a hi-hat subdivision. */
+export function hiHatStep(level: HiHatLevel): number {
+  if (level === 'sixteenth') {
+    return 0.25;
+  }
+  return level === 'eighth' ? 0.5 : 1;
+}
+
+/**
+ * Choose the hi-hat subdivision for a section, style, rhythmic dial, and tempo.
+ *
+ * The style and section propose a level; the dial then moves it, and it moves
+ * in one direction only. Both of its tests read a draw fixed by position — one
+ * for thinning out, one for filling in — so as the dial rises the thinning
+ * switches off before the filling switches on, and the level never falls.
+ *
+ * A difficulty ceiling can thin the level further: with a tempo to measure
+ * against, a subdivision the player cannot keep up is a candidate to reject,
+ * not a level to write and hope.
+ *
+ * The two dial draws are addressed by bar, so the dial moves the hats a bar at
+ * a time rather than switching a whole section between two subdivisions.
+ */
 export function getHiHatLevel(
   section: SectionType,
   style: DrumStyle,
-  backingDensity: 'thin' | 'normal' | 'thick',
+  rhythmic: number,
   bpm: number,
-  rng: DrumRng,
+  draw: Draw,
+  difficulty: number | undefined,
+  bar: number,
 ): HiHatLevel {
   const allow16th = bpm < HH_16TH_BPM_THRESHOLD;
   let base: HiHatLevel = 'eighth';
+  let dialed = true;
 
   if (style === 'sparse') {
     base = section === 'chorus' ? 'eighth' : 'quarter';
   } else if (style === 'fourOnFloor') {
-    if (allow16th && section === 'chorus' && rng.prob(0.25)) {
-      return 'sixteenth';
-    }
-    return 'eighth';
+    base = allow16th && section === 'chorus' && draw.prob(0.25, 'hhLevel') ? 'sixteenth' : 'eighth';
+    dialed = false;
   } else if (style === 'synth') {
-    if (!allow16th) {
-      return 'eighth';
-    }
-    if (section === 'a' && rng.prob(0.2)) {
-      return 'eighth';
-    }
-    return 'sixteenth';
+    base = !allow16th || (section === 'a' && draw.prob(0.2, 'hhLevel')) ? 'eighth' : 'sixteenth';
+    dialed = false;
   } else if (style === 'trap') {
-    return allow16th ? 'sixteenth' : 'eighth';
+    base = allow16th ? 'sixteenth' : 'eighth';
+    dialed = false;
   } else if (style === 'latin') {
-    if (allow16th && section === 'chorus' && rng.prob(0.3)) {
-      return 'sixteenth';
-    }
-    return 'eighth';
+    base = allow16th && section === 'chorus' && draw.prob(0.3, 'hhLevel') ? 'sixteenth' : 'eighth';
+    dialed = false;
   } else {
     switch (section) {
       case 'intro':
@@ -94,13 +112,13 @@ export function getHiHatLevel(
         base = 'eighth';
         break;
       case 'a':
-        base = rng.prob(0.3) ? 'quarter' : 'eighth';
+        base = draw.prob(0.3, 'hhLevel') ? 'quarter' : 'eighth';
         break;
       case 'b':
-        base = allow16th && rng.prob(0.25) ? 'sixteenth' : 'eighth';
+        base = allow16th && draw.prob(0.25, 'hhLevel') ? 'sixteenth' : 'eighth';
         break;
       case 'chorus':
-        base = allow16th && rng.prob(0.35) ? 'sixteenth' : 'eighth';
+        base = allow16th && draw.prob(0.35, 'hhLevel') ? 'sixteenth' : 'eighth';
         break;
       case 'bridge':
         base = 'eighth';
@@ -108,36 +126,47 @@ export function getHiHatLevel(
     }
   }
 
-  if (backingDensity === 'thin') {
-    base = sparser(base);
-  } else if (backingDensity === 'thick') {
-    base = denser(base);
+  let level = base;
+  if (dialed) {
+    // The middle of the dial is the style's own level, so the two halves are
+    // read separately: the lower half thins the level out, the upper half
+    // fills it in, and each transition is spread across its half instead of
+    // landing on one bucket boundary.
+    if (draw.at('hhThin', bar) >= 2 * rhythmic) {
+      level = sparser(level);
+    }
+    if (draw.at('hhFill', bar) < 2 * rhythmic - 1) {
+      level = denser(level);
+    }
   }
 
-  if (!allow16th && base === 'sixteenth') {
-    base = 'eighth';
+  if (!allow16th && level === 'sixteenth') {
+    level = 'eighth';
   }
-  return base;
+  while (level !== 'quarter' && !sustainsStrokes(hiHatStep(level), bpm, difficulty)) {
+    level = sparser(level);
+  }
+  return level;
 }
 
-/** Metric velocity multiplier for a 16th position within a beat. */
-export function hiHatVelocityMultiplier(sixteenth: number, rng: DrumRng): number {
-  let baseValue: number;
+/**
+ * Metric velocity multiplier for a 16th position within a beat.
+ *
+ * @param sixteenth Position within the beat, 0 to 3.
+ * @param jitter Humanizing factor around 1, drawn by the caller for that
+ *   position so the same 16th of the same bar always sounds the same.
+ */
+export function hiHatVelocityMultiplier(sixteenth: number, jitter: number): number {
   switch (sixteenth) {
     case 0:
-      baseValue = 0.95;
-      break;
+      return 0.95 * jitter;
     case 2:
-      baseValue = 0.75;
-      break;
+      return 0.75 * jitter;
     case 1:
-      baseValue = 0.55;
-      break;
+      return 0.55 * jitter;
     default:
-      baseValue = 0.5;
-      break;
+      return 0.5 * jitter;
   }
-  return baseValue * rng.float(0.95, 1.05);
 }
 
 /** Bars between dynamic open hi-hat accents (0 disables them). */
@@ -162,9 +191,9 @@ export function openHiHatBarInterval(section: SectionType, style: DrumStyle): nu
 }
 
 /** Beat that receives the dynamic open hi-hat within a bar. */
-export function openHiHatBeat(section: SectionType, rng: DrumRng): number {
+export function openHiHatBeat(section: SectionType, draw: Draw, bar: number): number {
   if (section === 'chorus') {
-    const choice = rng.range(0, 3);
+    const choice = draw.range(0, 3, 'ohhBeat', bar);
     if (choice < 2) {
       return 3;
     }
@@ -259,26 +288,26 @@ export function shouldAddOpenHHAccent(
   section: SectionType,
   beat: number,
   bar: number,
-  rng: DrumRng,
+  draw: Draw,
 ): boolean {
   if (section !== 'chorus' && section !== 'b') {
     return false;
   }
   if (section === 'chorus') {
     if (beat === 1 || beat === 3) {
-      return rng.prob(0.6);
+      return draw.prob(0.6, 'ohhAccent', bar, beat);
     }
     return false;
   }
   if (beat === 3 && bar % 2 === 1) {
-    return rng.prob(0.4);
+    return draw.prob(0.4, 'ohhAccent', bar, beat);
   }
   return false;
 }
 
-/** Foot hi-hat velocity with slight humanization. */
-export function footHiHatVelocity(rng: DrumRng): number {
-  return rng.range(FHH_VEL_MIN, FHH_VEL_MAX);
+/** Foot hi-hat velocity with slight humanization, drawn for its own position. */
+export function footHiHatVelocity(draw: Draw, bar: number, beat: number): number {
+  return draw.range(FHH_VEL_MIN, FHH_VEL_MAX, 'fhhVelocity', bar, beat);
 }
 
 /** Whether the section uses a ride cymbal instead of hi-hats. */

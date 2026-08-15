@@ -40,8 +40,8 @@ export type Feel = (typeof DRUM_FEELS)[number];
 /** Reduced section set the engine reasons about. */
 export type SectionType = 'intro' | 'a' | 'b' | 'chorus' | 'bridge' | 'outro';
 
-/** Backing density bucket derived from the public density knob. */
-export type BackingDensity = 'thin' | 'normal' | 'thick';
+/** Rhythmic density assumed when the caller names none. */
+export const DEFAULT_RHYTHMIC = 0.5;
 
 /** Section energy level, used to shape fills. */
 export type SectionEnergy = 'low' | 'medium' | 'high' | 'peak';
@@ -154,15 +154,30 @@ export function mapSection(section: PublicSection): SectionType {
   }
 }
 
-/** Bucket the 0..1 density knob into a backing-density level. */
-export function mapDensity(density: number): BackingDensity {
-  if (density < 0.34) {
-    return 'thin';
-  }
-  if (density < 0.67) {
-    return 'normal';
-  }
-  return 'thick';
+/**
+ * How loudly the backing sits, as a factor on the section's density.
+ *
+ * The dial used to be bucketed into three levels, which made two thirds of a
+ * slider's travel do nothing and the remaining third jump by half. Reading it
+ * as the continuous quantity it always was is what lets it be a slider.
+ */
+export function backingScale(rhythmic: number): number {
+  return BACKING_SCALE_FLOOR + (BACKING_SCALE_CEILING - BACKING_SCALE_FLOOR) * rhythmic;
+}
+
+/** Backing weight at the bottom and the top of the rhythmic dial. */
+const BACKING_SCALE_FLOOR = 0.75;
+const BACKING_SCALE_CEILING = 1.15;
+
+/**
+ * A probability leaned on by the rhythmic dial: unchanged at the middle
+ * setting, halved at the bottom, half again as likely at the top.
+ *
+ * Comparing the result against a draw fixed by position is what makes the dial
+ * monotone — raising it can only turn an onset on, never off.
+ */
+export function leanedBy(probability: number, rhythmic: number): number {
+  return Math.max(0, Math.min(1, probability * (0.5 + rhythmic)));
 }
 
 /** Swing amount (0..1) implied by a groove feel. */

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { resolveContext } from '../src/generate/context/index.js';
 import { euclideanRhythm } from '../src/generate/drums/euclid.js';
 import {
   type FillType,
@@ -15,7 +16,6 @@ import type {
   Section,
 } from '../src/generate/drums/index.js';
 import { generateDrums } from '../src/generate/drums/index.js';
-import { createRng } from '../src/generate/drums/rng.js';
 
 const STYLES: GrooveStyle[] = [
   'standard',
@@ -225,8 +225,9 @@ describe('fills', () => {
         // Velocity within the valid MIDI range.
         expect(h.velocity).toBeGreaterThanOrEqual(1);
         expect(h.velocity).toBeLessThanOrEqual(127);
-        // Hits stay inside the fill bar (a flam grace note may sit a fraction
-        // before the beat but never before the bar, and never past its end).
+        // Hits stay inside the fill bar. Ornaments are carried as articulations
+        // rather than as grace notes written early, so no onset sits before the
+        // beat it belongs to, let alone before the bar or past its end.
         expect(h.startBeat).toBeGreaterThanOrEqual(barStart);
         expect(h.startBeat).toBeLessThan(barStart + 4);
       }
@@ -343,8 +344,14 @@ describe('fills', () => {
       const allowed = new Set(expected);
       // Draw many times so the assertion covers the whole branch, not one path.
       for (let seed = 0; seed < 64; seed += 1) {
-        const rng = createRng(seed);
-        const picked = selectFillType(from, to, style, energy, rng);
+        const picked = selectFillType(
+          from,
+          to,
+          style,
+          energy,
+          resolveContext(seed).part('drums'),
+          0,
+        );
         expect(allowed.has(picked)).toBe(true);
       }
     }
@@ -366,8 +373,16 @@ describe('fills', () => {
         for (const style of styles) {
           for (const energy of energies) {
             for (let seed = 0; seed < 32; seed += 1) {
-              const rng = createRng(seed * 7 + 1);
-              seen.add(selectFillType(from, to, style, energy, rng));
+              seen.add(
+                selectFillType(
+                  from,
+                  to,
+                  style,
+                  energy,
+                  resolveContext(seed * 7 + 1).part('drums'),
+                  0,
+                ),
+              );
             }
           }
         }

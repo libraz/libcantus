@@ -1,3 +1,4 @@
+import { canSound, type InstrumentProfile } from '../../core/instrument/index.js';
 import { beatsPerBar, type TimeSignature } from '../../core/meter/index.js';
 import {
   assertGenerationBudget,
@@ -7,6 +8,8 @@ import {
   assertRange,
   assertTimeSignature,
 } from '../../core/validation/index.js';
+import { type GenerationContextInput, resolveContextWith } from '../context/index.js';
+import { selectVocabulary, vocabularyOfKind } from '../vocabulary/index.js';
 import {
   type BeatCtx,
   generateGhostNotesForBeat,
@@ -18,7 +21,15 @@ import {
   swing16,
 } from './beat.js';
 import { euclideanRhythm } from './euclid.js';
-import { type FillType, generateFill, getFillStartBeat, selectFillType } from './fills.js';
+import {
+  FILL_ARCHETYPES,
+  type FillArchetype,
+  fillArchetypeFor,
+  generateFill,
+  getFillStartBeat,
+  isFillArchetype,
+  selectFillType,
+} from './fills.js';
 import {
   footHiHatVelocity,
   getHiHatLevel,
@@ -30,7 +41,9 @@ import {
 } from './hihat.js';
 import { type DrumHit, HitList } from './hit.js';
 import {
+  backingScale,
   calculateVelocity,
+  DEFAULT_RHYTHMIC,
   DRUM_FEELS,
   DRUM_ROLES,
   type DrumRole,
@@ -40,7 +53,6 @@ import {
   GROOVE_STYLES,
   type GrooveStyle,
   ghostMoodCategory,
-  mapDensity,
   mapSection,
   mapStyle,
   PUBLIC_SECTIONS,
@@ -51,8 +63,9 @@ import {
 } from './internal.js';
 import { getKickPattern, isInPreChorusLift, type KickPattern } from './kick.js';
 import { generateAuxPercussionForBar, getPercussionConfig } from './percussion.js';
-import { createRng } from './rng.js';
 
+export type { FillArchetype, FillStroke, FillType, FillVelocity } from './fills.js';
+export { FILL_ARCHETYPES, FILL_TYPES, isFillArchetype } from './fills.js';
 /**
  * A single drum onset emitted by {@link generateDrums}.
  *
@@ -60,6 +73,16 @@ import { createRng } from './rng.js';
  */
 export type { DrumHit, DrumVoice } from './hit.js';
 export { DRUM_NOTES, drumVoiceOf } from './hit.js';
+export type { KickFigure, KickPattern, KickSlot } from './kick.js';
+export { KICK_FIGURES, KICK_STEPS } from './kick.js';
+export { DRUM_KIT } from './kit.js';
+export type {
+  DrumPattern,
+  DrumPatternOptions,
+  DrumStroke,
+  DrumVocabulary,
+} from './vocabulary.js';
+export { DRUM_PATTERNS, isDrumPattern, placeDrumPattern } from './vocabulary.js';
 
 /**
  * Groove feel (the swing/straight rhythmic character) for {@link generateDrums}.
@@ -73,7 +96,13 @@ export type GrooveFeel = Feel;
  *
  * @category Composition
  */
-export type { DrumRole, GrooveStyle } from './internal.js';
+export type {
+  DrumRole,
+  DrumStyle,
+  GrooveStyle,
+  PublicSection,
+  SectionType,
+} from './internal.js';
 
 /**
  * Public section identifiers for {@link generateDrums}.
@@ -114,10 +143,26 @@ export type DrumsOptions = {
    * Number of bars to generate.
    */
   bars: number;
-  bpm: number;
+  /**
+   * Tempo in quarter-note beats per minute. Sugar for `ctx: { bpm }`, which is
+   * where a tempo belongs now that every part needs one; the context wins where
+   * both are given.
+   *
+   * @defaultValue 120
+   */
+  bpm?: number;
   style: GrooveStyle;
   section: Section;
-  density: number;
+  /**
+   * How busy the backing is, in [0, 1]. Sugar for
+   * `ctx: { complexity: { rhythmic } }`; the context wins where both are given.
+   *
+   * The dial is continuous: every value moves the result, and raising it only
+   * adds onsets — the ones already sounding stay where they were.
+   *
+   * @defaultValue 0.5
+   */
+  density?: number;
   /** Time signature; defaults to 4/4. */
   ts?: TimeSignature;
   /**
@@ -149,11 +194,19 @@ export type DrumsOptions = {
    */
   role?: DrumRole;
   /**
-   * Seed for the deterministic PRNG.
+   * Seed for the deterministic PRNG. Sugar for `ctx: { seed }`.
    *
    * @defaultValue 0
    */
   seed?: number;
+  /**
+   * The generation context: the tempo, the complexity dials, and the kit this
+   * part is written for. `complexity.ornament` sets how many ghost notes
+   * survive, `complexity.difficulty` caps how fast the generator writes, and
+   * `instruments.drums` — a percussion profile — restricts the output to voices
+   * that kit actually has.
+   */
+  ctx?: GenerationContextInput;
   /**
    * Section the final-bar fill leads into. Shapes which fill archetype is
    * chosen (into-chorus and out-of-intro fills differ from generic ones).
@@ -169,6 +222,9 @@ export type DrumsOptions = {
 
 /** Generous upper bound on onsets emitted for a single bar, used for budgeting. */
 const MAX_HITS_PER_BAR = 128;
+
+/** Tempo assumed when neither the context nor the options name one. */
+const DEFAULT_BPM = 120;
 
 /**
  * Generate a drum performance as a flat list of onsets.
@@ -202,8 +258,12 @@ const MAX_HITS_PER_BAR = 128;
  */
 export function generateDrums(opts: DrumsOptions): DrumHit[] {
   assertPositiveInt(opts.bars, 'drum bars');
-  assertRange(opts.bpm, Number.MIN_VALUE, 1000, 'drum bpm');
-  assertRange(opts.density, 0, 1, 'drum density');
+  if (opts.bpm !== undefined) {
+    assertRange(opts.bpm, Number.MIN_VALUE, 1000, 'drum bpm');
+  }
+  if (opts.density !== undefined) {
+    assertRange(opts.density, 0, 1, 'drum density');
+  }
   // Generation is linear in bar count — every lookup inside the bar loop is
   // indexed — so the estimate is the hit count itself.
   assertGenerationBudget(opts.bars * MAX_HITS_PER_BAR, 'drum hits');
@@ -222,7 +282,18 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
     assertOneOf(opts.nextSection, PUBLIC_SECTIONS, 'drum nextSection');
   }
   const track = new HitList();
-  const rng = createRng(opts.seed ?? 0);
+  const resolved = resolveContextWith(opts.ctx, {
+    seed: opts.seed,
+    bpm: opts.bpm,
+    rhythmic: opts.density,
+  });
+  const draw = resolved.part('drums');
+  const bpm = resolved.bpm ?? DEFAULT_BPM;
+  const rhythmic = resolved.rhythmic ?? DEFAULT_RHYTHMIC;
+  // Ghosts follow the ornament dial; with none named the rhythmic dial stands
+  // in, so a caller who only ever moves `density` still gets one knob.
+  const ornamentDial = resolved.ornament ?? rhythmic;
+  const difficulty = resolved.difficulty;
   const mapping = mapStyle(publicStyle);
   const style = mapping.style;
   const feel: Feel =
@@ -236,22 +307,16 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
   // voices are suppressed just as timekeeping hi-hats already are.
   const playMainVoices = role !== 'fxOnly';
   const section = mapSection(publicSection);
-  const backingDensity = mapDensity(opts.density);
   const swingAmount = feelSwingAmount(feel);
-
-  let densityMult = sectionDensityMultiplier(section);
-  if (backingDensity === 'thin') {
-    densityMult *= 0.75;
-  } else if (backingDensity === 'thick') {
-    densityMult *= 1.15;
-  }
+  const densityMult = sectionDensityMultiplier(section) * backingScale(rhythmic);
 
   const sec: SectionCtx = {
     style,
     feel,
     densityMult,
-    backingDensity,
-    hhLevel: getHiHatLevel(section, style, backingDensity, opts.bpm, rng),
+    rhythmic,
+    ornament: ornamentDial,
+    difficulty,
     useGhostNotes:
       (section === 'b' || section === 'chorus' || section === 'bridge') && style !== 'sparse',
     ghostBoost: mapping.ghostBoost,
@@ -272,6 +337,16 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
   const nextSection = opts.nextSection ? mapSection(opts.nextSection) : section;
   const nextEnergy = sectionEnergy(nextSection);
 
+  // Fills a caller brought for this piece. They are filtered by the conditions
+  // they state — section, tempo, and the difficulty ceiling — and then offered
+  // after the built-in table, so the built-in choices keep the draws they had.
+  const callerFillEntries = selectVocabulary(
+    vocabularyOfKind(resolved.vocabulary, isFillArchetype),
+    { section: publicSection, bpm, difficulty },
+  );
+  const callerFills = new Map(callerFillEntries.map((entry) => [entry.id, entry.material]));
+  const callerFillIds = callerFillEntries.map((entry) => entry.id);
+
   const euclidSteps = opts.euclideanKick?.steps ?? 16;
   const euclidKick = opts.euclideanKick
     ? euclideanRhythm(opts.euclideanKick.pulses, euclidSteps, opts.euclideanKick.rotation ?? 0)
@@ -283,6 +358,7 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
   for (let bar = 0; bar < opts.bars; bar += 1) {
     const barStart = bar * barBeats;
     const isLastBar = bar === opts.bars - 1;
+    const hhLevel = getHiHatLevel(section, style, rhythmic, bpm, draw, difficulty, bar);
 
     if (bar === 0 && section === 'chorus') {
       track.add(GM.CRASH, barStart, 0.5, 100 * densityMult);
@@ -291,16 +367,16 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
     let barHasOpenHh = false;
     let openHhBeatIndex = 3;
     if (ohhBarInterval > 0 && bar % ohhBarInterval === ohhBarInterval - 1) {
-      openHhBeatIndex = openHiHatBeat(section, rng);
+      openHhBeatIndex = openHiHatBeat(section, draw, bar);
       barHasOpenHh = !track.hasCrashNear(barStart + openHhBeatIndex);
     }
 
     let kick: KickPattern | undefined;
     if (!euclidKick && reuseSectionKick) {
-      sectionKick ??= getKickPattern(section, style, 0, rng);
+      sectionKick ??= getKickPattern(section, style, 0, draw, rhythmic);
       kick = sectionKick;
     } else if (!euclidKick) {
-      kick = getKickPattern(section, style, bar, rng);
+      kick = getKickPattern(section, style, bar, draw, rhythmic);
     }
 
     // The lift is a build into a chorus, so what follows decides it. Passing
@@ -308,7 +384,7 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
     // which is always true inside a pre-chorus: the lift then fired whatever
     // `nextSection` said, and suppressed the fill the caller asked for.
     const inLift = isInPreChorusLift(section, bar, opts.bars, nextSection === 'chorus');
-    let currentFill: FillType = 'snareRoll';
+    let currentFill: FillArchetype | undefined = FILL_ARCHETYPES.snareRoll;
 
     for (let beat = 0; beat < barBeats; beat += 1) {
       const beatTick = barStart + beat;
@@ -316,11 +392,16 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
 
       if (opts.fills && isLastBar && !inLift && beat >= fillStartBeat) {
         if (beat === fillStartBeat) {
-          currentFill = selectFillType(section, nextSection, style, nextEnergy, rng);
+          currentFill = fillArchetypeFor(
+            selectFillType(section, nextSection, style, nextEnergy, draw, bar, callerFillIds),
+            callerFills,
+          );
         }
         if (playMainVoices) {
           const before = track.hits.length;
-          generateFill(track, beatTick, beat, currentFill, velocity);
+          if (currentFill) {
+            generateFill(track, beatTick, beat, currentFill, velocity);
+          }
           if (track.hits.length > before) {
             continue;
           }
@@ -338,14 +419,15 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
         beat,
         velocity,
         section,
-        bpm: opts.bpm,
+        bpm,
         bar,
         sectionBars: opts.bars,
         inPrechorusLift: inLift,
         swingAmount,
         barHasOpenHh,
         openHhBeat: openHhBeatIndex,
-        rng,
+        hhLevel,
+        draw,
       };
 
       if (playMainVoices) {
@@ -381,7 +463,7 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
       for (let fhhBeat = 0; fhhBeat < barBeats; fhhBeat += 2) {
         const fhhTick = barStart + fhhBeat;
         if (!track.hasOnset(GM.FHH, fhhTick)) {
-          track.add(GM.FHH, fhhTick, 0.5, footHiHatVelocity(rng));
+          track.add(GM.FHH, fhhTick, 0.5, footHiHatVelocity(draw, bar, fhhBeat));
         }
       }
     }
@@ -406,8 +488,8 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
       percussionConfig,
       role,
       densityMult,
-      rng,
-      opts.bpm,
+      draw,
+      bpm,
       sec,
       swingAmount,
       barBeats,
@@ -418,7 +500,20 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
   // the accumulated list is not monotonic within a bar. A consumer writing MIDI
   // reads these in order and would emit a negative delta time.
   const endBeat = opts.bars * barBeats;
+  const kit = resolved.instrument('drums');
   return track.hits
-    .filter((hit) => hit.startBeat < endBeat)
+    .filter((hit) => hit.startBeat < endBeat && playableOn(kit, hit.pitch))
     .sort((a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch);
+}
+
+/**
+ * Whether a kit has the voice a hit asks for.
+ *
+ * Naming a kit is the request that the part be playable on it, so this holds
+ * whatever the difficulty ceiling says: a voice the kit does not have is not a
+ * hard stroke but an absent one. Without a kit there is no such constraint, and
+ * the programmed case is unchanged.
+ */
+function playableOn(kit: InstrumentProfile | undefined, pitch: number): boolean {
+  return kit === undefined || canSound(kit, pitch);
 }

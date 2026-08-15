@@ -1,3 +1,5 @@
+import type { Draw } from '../context/index.js';
+import { sustainsStrokes } from '../context/index.js';
 import {
   getGhostDensity,
   getGhostProbabilityAtPosition,
@@ -18,10 +20,9 @@ import {
   shouldUseBridgeCrossStick,
 } from './hihat.js';
 import type { HitList } from './hit.js';
-import type { BackingDensity, DrumRole, DrumStyle, Feel, SectionType } from './internal.js';
-import { EIGHTH, GM, type MoodCategory, SIXTEENTH } from './internal.js';
+import type { DrumRole, DrumStyle, Feel, SectionType } from './internal.js';
+import { EIGHTH, GM, leanedBy, type MoodCategory, SIXTEENTH } from './internal.js';
 import type { KickPattern } from './kick.js';
-import type { DrumRng } from './rng.js';
 import { effectiveSwing, quantizeSwing } from './swing.js';
 
 /** Per-section drum state shared across the bars of a section. */
@@ -29,8 +30,12 @@ export type SectionCtx = {
   style: DrumStyle;
   feel: Feel;
   densityMult: number;
-  backingDensity: BackingDensity;
-  hhLevel: HiHatLevel;
+  /** Rhythmic dial in [0, 1]: subdivision and syncopation. */
+  rhythmic: number;
+  /** Ornament dial in [0, 1]: how many ghosts and decorations survive. */
+  ornament: number;
+  /** Difficulty ceiling, or undefined when the caller set none. */
+  difficulty: number | undefined;
   useGhostNotes: boolean;
   ghostBoost: boolean;
   useRide: boolean;
@@ -54,7 +59,9 @@ export type BeatCtx = {
   swingAmount: number;
   barHasOpenHh: boolean;
   openHhBeat: number;
-  rng: DrumRng;
+  /** Hi-hat subdivision for this bar. */
+  hhLevel: HiHatLevel;
+  draw: Draw;
 };
 
 /**
@@ -88,20 +95,35 @@ export function swing16(tick: number, sec: SectionCtx, swingAmount: number): num
   return quantizeSwing(tick, sectionSwing(sec, swingAmount), 'sixteenth');
 }
 
-/** Emit the kick for one beat. */
+/**
+ * Emit the kick for one beat.
+ *
+ * The grid is sixteenths. The downbeat of the beat sounds as written; every
+ * other step is an off-beat kick, so it goes through the section's shared swung
+ * grid and sits a little below the downbeat, as a player would place it. A kick
+ * on an odd sixteenth is the one the ceiling can refuse: at that tempo the foot
+ * does not get there, and the stroke is dropped rather than moved.
+ */
 export function generateKickForBeat(ctx: BeatCtx, sec: SectionCtx, kick: KickPattern): void {
   if (ctx.inPrechorusLift) {
     return;
   }
-  const on = [kick.beat1, kick.beat2, kick.beat3, kick.beat4][ctx.beat] ?? false;
-  const and = [kick.beat1and, kick.beat2and, kick.beat3and, kick.beat4and][ctx.beat] ?? false;
-
-  if (on) {
-    ctx.track.add(GM.BD, ctx.beatTick, EIGHTH, ctx.velocity);
-  }
-  if (and) {
-    const andTick = swing16(ctx.beatTick + EIGHTH, sec, ctx.swingAmount);
-    ctx.track.add(GM.BD, andTick, EIGHTH, ctx.velocity * 0.85);
+  const sixteenths = kick.length / 4;
+  for (let step = 0; step < sixteenths; step += 1) {
+    const index = ctx.beat * sixteenths + step;
+    if (!kick[index]) {
+      continue;
+    }
+    if (step === 0) {
+      ctx.track.add(GM.BD, ctx.beatTick, EIGHTH, ctx.velocity);
+      continue;
+    }
+    const offBeat = step % 2 === 1;
+    if (offBeat && !sustainsStrokes(SIXTEENTH, ctx.bpm, sec.difficulty)) {
+      continue;
+    }
+    const tick = swing16(ctx.beatTick + step * SIXTEENTH, sec, ctx.swingAmount);
+    ctx.track.add(GM.BD, tick, offBeat ? SIXTEENTH : EIGHTH, ctx.velocity * 0.85);
   }
 }
 
@@ -147,8 +169,13 @@ export function generateGhostNotesForBeat(ctx: BeatCtx, sec: SectionCtx): void {
   if (ctx.beat !== 0 && ctx.beat !== 2) {
     return;
   }
+  // A ghost is decoration, so the ornament dial decides how many survive; the
+  // ceiling decides whether 16ths are reachable at this tempo at all.
+  if (!sustainsStrokes(SIXTEENTH, ctx.bpm, sec.difficulty)) {
+    return;
+  }
   const positions = selectGhostPositions(sec.ghostMood);
-  let ghostProb = getGhostDensity(sec.ghostMood, ctx.section, sec.backingDensity, ctx.bpm);
+  let ghostProb = leanedBy(getGhostDensity(sec.ghostMood, ctx.section, ctx.bpm), sec.ornament);
   if (sec.ghostBoost) {
     ghostProb = Math.min(1, ghostProb * 1.4);
   }
@@ -156,10 +183,10 @@ export function generateGhostNotesForBeat(ctx: BeatCtx, sec: SectionCtx): void {
   for (const pos of positions) {
     const sixteenthInBeat = pos === 'e' ? 1 : 3;
     const posProb = getGhostProbabilityAtPosition(ctx.beat, sixteenthInBeat);
-    if (!ctx.rng.prob(ghostProb * posProb)) {
+    if (!ctx.draw.prob(ghostProb * posProb, 'ghost', ctx.bar, ctx.beat, pos)) {
       continue;
     }
-    const variation = ctx.rng.float(0.85, 1.15);
+    const variation = ctx.draw.float(0.85, 1.15, 'ghostVelocity', ctx.bar, ctx.beat, pos);
     const ghostBase = getGhostVelocity(ctx.section, ctx.beat / 2);
     let ghostVel = ctx.velocity * ghostBase * variation;
     if (pos === 'a') {
@@ -214,7 +241,7 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
   const allowsOpenHiHat = sec.role !== 'ambient' && sec.role !== 'minimal';
   const dm = sec.densityMult;
 
-  if (sec.hhLevel === 'quarter') {
+  if (ctx.hhLevel === 'quarter') {
     const introRest = ctx.section === 'intro' && ctx.beat !== 0;
     if (!introRest) {
       if (isDynamicOpen && allowsOpenHiHat) {
@@ -233,12 +260,12 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
         );
       }
     } else if (sec.useFootHh) {
-      ctx.track.add(GM.FHH, ctx.beatTick, EIGHTH, footHiHatVelocity(ctx.rng));
+      ctx.track.add(GM.FHH, ctx.beatTick, EIGHTH, footHiHatVelocity(ctx.draw, ctx.bar, ctx.beat));
     }
     return;
   }
 
-  if (sec.hhLevel === 'eighth') {
+  if (ctx.hhLevel === 'eighth') {
     for (let eighth = 0; eighth < 2; eighth += 1) {
       let hhTick = ctx.beatTick + eighth * EIGHTH;
       if (eighth === 1) {
@@ -246,7 +273,7 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
       }
       if (ctx.section === 'intro' && eighth === 1) {
         if (sec.useFootHh && ctx.beat % 2 === 0) {
-          ctx.track.add(GM.FHH, hhTick, EIGHTH, footHiHatVelocity(ctx.rng));
+          ctx.track.add(GM.FHH, hhTick, EIGHTH, footHiHatVelocity(ctx.draw, ctx.bar, ctx.beat));
         }
         continue;
       }
@@ -258,9 +285,11 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
       let useOpen = false;
       if (sec.style === 'fourOnFloor' && eighth === 1) {
         const openProb = Math.max(0.15, Math.min(0.8, 45 / ctx.bpm));
-        useOpen = (ctx.beat === 1 || ctx.beat === 3) && ctx.rng.prob(openProb);
+        useOpen =
+          (ctx.beat === 1 || ctx.beat === 3) &&
+          ctx.draw.prob(openProb, 'openHat', ctx.bar, ctx.beat, eighth);
       } else if (eighth === 0) {
-        useOpen = shouldAddOpenHHAccent(ctx.section, ctx.beat, ctx.bar, ctx.rng);
+        useOpen = shouldAddOpenHHAccent(ctx.section, ctx.beat, ctx.bar, ctx.draw);
       }
       if (useOpen && allowsOpenHiHat) {
         ctx.track.add(hiHatNote('open'), hhTick, EIGHTH, Math.max(20, hhVel * 1.1));
@@ -279,7 +308,10 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
     if (sixteenth !== 0) {
       hhTick = swing16(hhTick, sec, ctx.swingAmount);
     }
-    const metricVel = hiHatVelocityMultiplier(sixteenth, ctx.rng);
+    const metricVel = hiHatVelocityMultiplier(
+      sixteenth,
+      ctx.draw.float(0.95, 1.05, 'hatVelocity', ctx.bar, ctx.beat, sixteenth),
+    );
     const hhVel = Math.max(20, ctx.velocity * dm * typeMult * metricVel);
     if (isDynamicOpen && allowsOpenHiHat && sixteenth === 0) {
       ctx.track.add(GM.OHH, hhTick, SIXTEENTH, hhVel + OHH_VEL_BOOST);
@@ -287,7 +319,7 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
     }
     if (allowsOpenHiHat && ctx.beat === 3 && sixteenth === 3) {
       const openProb = Math.max(0.1, Math.min(0.4, 30 / ctx.bpm));
-      if (ctx.rng.prob(openProb)) {
+      if (ctx.draw.prob(openProb, 'openHat', ctx.bar, ctx.beat, sixteenth)) {
         ctx.track.add(GM.OHH, hhTick, SIXTEENTH, Math.max(20, hhVel * 1.2));
         continue;
       }

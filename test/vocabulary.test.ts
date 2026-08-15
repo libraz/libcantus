@@ -1,0 +1,247 @@
+import { describe, expect, it } from 'vitest';
+import { resolveContext } from '../src/generate/context/index.js';
+import {
+  BAR_STEPS,
+  deform,
+  double,
+  doubleTime,
+  fitsQuery,
+  GENRES,
+  type GridEvent,
+  halfTime,
+  mergeVocabulary,
+  metricWeight,
+  ornamentBy,
+  PROVENANCE_BASES,
+  pickVocabulary,
+  selectVocabulary,
+  syncopate,
+  thin,
+  type Vocabulary,
+  vocabularyOfKind,
+  withinCeiling,
+} from '../src/generate/vocabulary/index.js';
+import { assertVocabulary } from '../src/generate/vocabulary/types.js';
+
+type Material = { tag: 'test'; strokes: GridEvent[] };
+
+function entry(id: string, over: Partial<Vocabulary<Material>> = {}): Vocabulary<Material> {
+  return {
+    id,
+    genre: 'funk',
+    material: { tag: 'test', strokes: [{ step: 0, velocity: 1 }] },
+    articulations: [],
+    difficulty: 3,
+    provenance: { basis: 'idiom', note: 'a figure with no owner' },
+    ...over,
+  };
+}
+
+const draw = resolveContext(7).part('test');
+
+describe('vocabulary model', () => {
+  it('treats an absent condition as no restriction', () => {
+    const plain = entry('plain');
+    expect(fitsQuery(plain, { section: 'chorus', bpm: 200, quality: 'dim7' })).toBe(true);
+  });
+
+  it('filters on every condition an entry states', () => {
+    const narrow = entry('narrow', {
+      sections: ['chorus'],
+      tempoRange: [90, 120],
+      ts: { numerator: 4, denominator: 4 },
+      fitsOver: ['maj7'],
+    });
+    expect(fitsQuery(narrow, { section: 'chorus', bpm: 100, quality: 'maj7' })).toBe(true);
+    expect(fitsQuery(narrow, { section: 'verse' })).toBe(false);
+    expect(fitsQuery(narrow, { bpm: 140 })).toBe(false);
+    expect(fitsQuery(narrow, { quality: 'min7' })).toBe(false);
+    expect(fitsQuery(narrow, { ts: { numerator: 3, denominator: 4 } })).toBe(false);
+    expect(fitsQuery(narrow, { genre: 'gospel' })).toBe(false);
+  });
+
+  it('rejects an entry above the difficulty ceiling and never simplifies it', () => {
+    const hard = entry('hard', { difficulty: 5 });
+    expect(fitsQuery(hard, { difficulty: 3 })).toBe(false);
+    expect(selectVocabulary([hard], { difficulty: 3 })).toEqual([]);
+    // The entry itself is untouched: rejection is the ceiling's only power.
+    expect(hard.difficulty).toBe(5);
+  });
+
+  it('keeps dictionary order in the candidate list', () => {
+    const dict = [entry('a'), entry('b'), entry('c')];
+    expect(selectVocabulary(dict, {}).map((e) => e.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('picks deterministically and by position', () => {
+    const dict = [entry('a'), entry('b'), entry('c')];
+    const first = pickVocabulary(dict, {}, draw, 'bar', 3);
+    expect(pickVocabulary(dict, {}, draw, 'bar', 3)?.id).toBe(first?.id);
+    // A different position may pick differently, but each position is stable.
+    expect(pickVocabulary(dict, {}, draw, 'bar', 4)?.id).toBe(
+      pickVocabulary(dict, {}, draw, 'bar', 4)?.id,
+    );
+  });
+
+  it('answers undefined when nothing fits', () => {
+    expect(pickVocabulary([entry('a')], { genre: 'samba' }, draw, 'bar', 0)).toBeUndefined();
+  });
+
+  it('names every genre and provenance basis as a frozen list', () => {
+    expect(GENRES).toContain('motown');
+    expect(PROVENANCE_BASES).toEqual(['idiom', 'construction', 'traditional']);
+    expect(Object.isFrozen(GENRES)).toBe(true);
+  });
+
+  it('validates a caller entry on the way in', () => {
+    expect(() => assertVocabulary(entry('bad', { difficulty: 40 }))).toThrow();
+    expect(() => assertVocabulary(entry('bad', { tempoRange: [140, 90] }))).toThrow();
+    expect(assertVocabulary(entry('good')).id).toBe('good');
+  });
+});
+
+describe('caller dictionaries', () => {
+  it('appends caller entries after the built-ins', () => {
+    const merged = mergeVocabulary([entry('a'), entry('b')], [entry('z')]);
+    expect(merged.map((e) => e.id)).toEqual(['a', 'b', 'z']);
+  });
+
+  it('replaces a built-in when the caller reuses its id', () => {
+    const merged = mergeVocabulary([entry('a'), entry('b')], [entry('a', { difficulty: 1 })]);
+    expect(merged.map((e) => e.id)).toEqual(['a', 'b']);
+    expect(merged[0]?.difficulty).toBe(1);
+  });
+
+  it('leaves the built-ins alone when the caller brings nothing', () => {
+    const builtIn = [entry('a')];
+    expect(mergeVocabulary(builtIn, undefined)).toEqual(builtIn);
+    expect(mergeVocabulary(builtIn, [])).toEqual(builtIn);
+  });
+
+  it('hides material another part would misread', () => {
+    const mixed: Vocabulary<unknown>[] = [
+      entry('mine'),
+      { ...entry('theirs'), material: { other: 1 } },
+    ];
+    const isMine = (m: unknown): m is Material => (m as Material)?.tag === 'test';
+    expect(vocabularyOfKind(mixed, isMine).map((e) => e.id)).toEqual(['mine']);
+  });
+});
+
+describe('transformation rules', () => {
+  const figure: GridEvent[] = [
+    { step: 0, velocity: 1 },
+    { step: 3, velocity: 0.5 },
+    { step: 4, velocity: 0.9 },
+    { step: 8, velocity: 0.9 },
+    { step: 12, velocity: 0.9 },
+  ];
+
+  it('ranks positions by how much of the metre they carry', () => {
+    expect(metricWeight(0)).toBe(4);
+    expect(metricWeight(8)).toBe(3);
+    expect(metricWeight(4)).toBe(2);
+    expect(metricWeight(2)).toBe(1);
+    expect(metricWeight(3)).toBe(0);
+  });
+
+  it('thins from the weakest position upward, and monotonically', () => {
+    expect(thin(figure, 0)).toHaveLength(figure.length);
+    const light = thin(figure, 0.3).map((e) => e.step);
+    const lighter = thin(figure, 0.6).map((e) => e.step);
+    expect(light).not.toContain(3);
+    // Thinning further can only take more away, never bring anything back.
+    expect(lighter.every((step) => light.includes(step))).toBe(true);
+    expect(thin(figure, 1).map((e) => e.step)).toEqual([0]);
+  });
+
+  it('doubles into the gaps without moving what was there', () => {
+    const doubled = double(
+      [
+        { step: 0, velocity: 1 },
+        { step: 8, velocity: 1 },
+      ],
+      BAR_STEPS,
+    );
+    expect(doubled.map((e) => e.step)).toEqual([0, 4, 8, 12]);
+    expect(doubled[1]?.velocity).toBeLessThan(1);
+  });
+
+  it('halves and doubles the rate, keeping the bar full', () => {
+    const stretched = halfTime(
+      [
+        { step: 0, velocity: 1 },
+        { step: 4, velocity: 1 },
+      ],
+      BAR_STEPS,
+    );
+    expect(stretched.map((e) => e.step)).toEqual([0, 8]);
+    const compressed = doubleTime(
+      [
+        { step: 0, velocity: 1 },
+        { step: 8, velocity: 1 },
+      ],
+      BAR_STEPS,
+    );
+    expect(compressed.map((e) => e.step)).toEqual([0, 4, 8, 12]);
+  });
+
+  it('drops what half-time pushes past the bar', () => {
+    expect(halfTime([{ step: 12, velocity: 1 }], BAR_STEPS)).toEqual([]);
+  });
+
+  it('anticipates beats when syncopating, and never the downbeat', () => {
+    const heavy = syncopate(figure, 1, draw, 'bar', 0);
+    expect(heavy.some((e) => e.step === 0)).toBe(true);
+    expect(heavy.map((e) => e.step)).toEqual([...heavy.map((e) => e.step)].sort((a, b) => a - b));
+    // Every displaced note landed one step before a beat it could have sat on.
+    for (const event of heavy) {
+      expect(figure.some((f) => f.step === event.step || f.step === event.step + 1)).toBe(true);
+    }
+  });
+
+  it('syncopates the same way for the same position', () => {
+    expect(syncopate(figure, 0.7, draw, 'bar', 2)).toEqual(syncopate(figure, 0.7, draw, 'bar', 2));
+  });
+
+  it('keeps more ornament as the dial rises, and never moves the rest', () => {
+    const withGhosts = [
+      { step: 0, velocity: 1 },
+      { step: 2, velocity: 0.3 },
+      { step: 6, velocity: 0.3 },
+      { step: 10, velocity: 0.3 },
+      { step: 14, velocity: 0.3 },
+    ];
+    const isOrnament = (e: GridEvent) => e.velocity < 0.5;
+    const quiet = ornamentBy(withGhosts, isOrnament, 0.2, draw, 'bar', 0).map((e) => e.step);
+    const busy = ornamentBy(withGhosts, isOrnament, 0.9, draw, 'bar', 0).map((e) => e.step);
+    expect(quiet.every((step) => busy.includes(step))).toBe(true);
+    expect(quiet).toContain(0);
+    expect(busy.length).toBeGreaterThanOrEqual(quiet.length);
+  });
+
+  it('leaves a figure as written at the neutral rhythmic setting', () => {
+    expect(deform(figure, { rhythmic: 0.5 }, draw, 'bar', 0)).toEqual(
+      [...figure].sort((a, b) => a.step - b.step),
+    );
+  });
+
+  it('thins below the middle and syncopates above it', () => {
+    expect(deform(figure, { rhythmic: 0 }, draw, 'bar', 0).map((e) => e.step)).toEqual([0]);
+    const busy = deform(figure, { rhythmic: 1 }, draw, 'bar', 0);
+    expect(busy).toHaveLength(figure.length);
+  });
+
+  it('rejects a figure faster than the ceiling sustains, at that tempo', () => {
+    const sixteenths = [
+      { step: 0, velocity: 1 },
+      { step: 1, velocity: 1 },
+      { step: 2, velocity: 1 },
+    ];
+    expect(withinCeiling(sixteenths, 160, 1)).toBe(false);
+    expect(withinCeiling(sixteenths, 160, 5)).toBe(true);
+    // A limit nobody stated constrains nothing.
+    expect(withinCeiling(sixteenths, undefined, 1)).toBe(true);
+    expect(withinCeiling(sixteenths, 160, undefined)).toBe(true);
+  });
+});

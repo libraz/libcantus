@@ -1,23 +1,264 @@
+/**
+ * The fill vocabulary, as data.
+ *
+ * Every archetype is a list of strokes on the bar's grid and every selection is
+ * a table indexed by a draw, so a fill can be added, replaced, or supplied by a
+ * caller without touching a generator. The generator's part is to look one up.
+ */
+
+import type { Articulation } from '../../core/instrument/index.js';
+import type { Draw } from '../context/index.js';
 import type { HitList } from './hit.js';
 import type { DrumStyle, SectionEnergy, SectionType } from './internal.js';
 import { EIGHTH, GM, SIXTEENTH } from './internal.js';
-import type { DrumRng } from './rng.js';
+
+/** The thirteen fill archetypes for section transitions, in declaration order. */
+export const FILL_TYPES = Object.freeze([
+  'snareRoll',
+  'tomDescend',
+  'tomAscend',
+  'snareTomCombo',
+  'simpleCrash',
+  'linearFill',
+  'ghostToAccent',
+  'bdSnareAlternate',
+  'hiHatChoke',
+  'tomShuffle',
+  'breakdownFill',
+  'flamsAndDrags',
+  'halfTimeFill',
+] as const);
 
 /** The thirteen fill archetypes for section transitions. */
-export type FillType =
-  | 'snareRoll'
-  | 'tomDescend'
-  | 'tomAscend'
-  | 'snareTomCombo'
-  | 'simpleCrash'
-  | 'linearFill'
-  | 'ghostToAccent'
-  | 'bdSnareAlternate'
-  | 'hiHatChoke'
-  | 'tomShuffle'
-  | 'breakdownFill'
-  | 'flamsAndDrags'
-  | 'halfTimeFill';
+export type FillType = (typeof FILL_TYPES)[number];
+
+/**
+ * How loud one stroke of a fill is.
+ *
+ * A fill's dynamics are written against the beat's own velocity rather than in
+ * absolute terms, so the same archetype sounds right in a verse and a chorus:
+ * `fill` is the body of the fill, `accent` the stroke that lands.
+ */
+export type FillVelocity = {
+  base: 'fill' | 'accent';
+  /** Factor on the base, for a crescendo or a ghosted stroke. */
+  scale?: number;
+  /** Fixed offset in MIDI velocity, for a stroke a little above or below. */
+  offset?: number;
+};
+
+/** One stroke of a fill, positioned within the beat it belongs to. */
+export type FillStroke = {
+  /** General MIDI note number of the voice struck. */
+  voice: number;
+  /** Offset from the start of the beat, in quarter-note beats. */
+  offset: number;
+  /** Sounding length, in quarter-note beats. */
+  duration: number;
+  velocity: FillVelocity;
+  /** How the stroke is played, when it is more than a plain hit. */
+  articulation?: Articulation;
+};
+
+/**
+ * A fill archetype: what each beat of the fill bar plays.
+ *
+ * Beats are indexed from the start of the bar. A beat with no entry is silent,
+ * which is how the sparse archetypes leave the earlier beats to the groove.
+ */
+export type FillArchetype = {
+  /** Strokes per beat of the bar, indexed 0..3. */
+  atBeat: readonly (readonly FillStroke[])[];
+  /**
+   * Whether a bar longer than four beats keeps playing the last beat's strokes.
+   * The archetypes are written against a four-beat bar; most read naturally when
+   * extended, but the half-time figure is a bar-long gesture and stops there.
+   */
+  boundToBar?: boolean;
+};
+
+const S = SIXTEENTH;
+const E = EIGHTH;
+
+/** Body velocity with an optional factor and offset. */
+function fill(scale?: number, offset?: number): FillVelocity {
+  return {
+    base: 'fill',
+    ...(scale === undefined ? {} : { scale }),
+    ...(offset === undefined ? {} : { offset }),
+  };
+}
+
+/** Accent velocity: the stroke the fill lands on. */
+const accent: FillVelocity = { base: 'accent' };
+
+/** One stroke. */
+function at(
+  voice: number,
+  offset: number,
+  duration: number,
+  velocity: FillVelocity,
+  articulation?: Articulation,
+): FillStroke {
+  return { voice, offset, duration, velocity, ...(articulation ? { articulation } : {}) };
+}
+
+/**
+ * The pickup beats every archetype shares: a fill that starts at beat 2 is
+ * approached the same way whichever archetype follows.
+ */
+const PICKUP_BEAT_0: FillStroke[] = [at(GM.BD, 0, E, fill()), at(GM.SD, E, E, fill(undefined, -5))];
+const PICKUP_BEAT_1: FillStroke[] = [
+  at(GM.SD, 0, E, fill()),
+  at(GM.TOM_H, E, E, fill(undefined, -3)),
+];
+
+/** A crescendo of `count` snare sixteenths starting from `from`. */
+function snareCrescendo(count: number, from: number): FillStroke[] {
+  return Array.from({ length: count }, (_, i) => at(GM.SD, i * S, S, fill(from + 0.1 * i)));
+}
+
+/** An accelerating ghost-to-accent run of four snare sixteenths. */
+function ghostRun(): FillStroke[] {
+  return Array.from({ length: 4 }, (_, i) => at(GM.SD, i * S, S, fill(0.4, i * 10)));
+}
+
+/** Build an archetype from its beat-2 and beat-3 strokes. */
+function archetype(
+  beat2: readonly FillStroke[],
+  beat3: readonly FillStroke[],
+  boundToBar?: boolean,
+): FillArchetype {
+  return {
+    atBeat: [PICKUP_BEAT_0, PICKUP_BEAT_1, beat2, beat3],
+    ...(boundToBar ? { boundToBar } : {}),
+  };
+}
+
+/**
+ * The fill dictionary.
+ *
+ * Provenance: every archetype here is a rudiment or a stock phrase-end gesture
+ * — a snare crescendo, a descending tom run, a crash on the last off-beat — of
+ * the kind every drummer plays and nobody owns. None reproduces a fill from a
+ * particular recording.
+ */
+export const FILL_ARCHETYPES: Readonly<Record<FillType, FillArchetype>> = Object.freeze({
+  snareRoll: archetype(snareCrescendo(4, 0.6), [
+    ...snareCrescendo(3, 0.7),
+    at(GM.SD, 3 * S, S, accent),
+  ]),
+  tomDescend: archetype(
+    [at(GM.SD, 0, E, fill()), at(GM.TOM_H, E, E, fill(undefined, -5))],
+    [
+      at(GM.TOM_H, 0, S, fill()),
+      at(GM.TOM_M, S, S, fill(undefined, -3)),
+      at(GM.TOM_M, E, S, fill(undefined, -5)),
+      at(GM.TOM_L, E + S, S, accent),
+    ],
+  ),
+  tomAscend: archetype(
+    [at(GM.SD, 0, E, fill()), at(GM.TOM_L, E, E, fill(undefined, -5))],
+    [
+      at(GM.TOM_L, 0, S, fill()),
+      at(GM.TOM_M, S, S, fill(undefined, 3)),
+      at(GM.TOM_M, E, S, fill(undefined, 5)),
+      at(GM.TOM_H, E + S, S, accent),
+    ],
+  ),
+  snareTomCombo: archetype(
+    [at(GM.SD, 0, E, fill()), at(GM.SD, E, S, fill(undefined, -5)), at(GM.TOM_H, E + S, S, fill())],
+    [
+      at(GM.TOM_M, 0, S, fill()),
+      at(GM.SD, S, S, fill(undefined, -3)),
+      at(GM.TOM_L, E, S, fill(undefined, 2)),
+      at(GM.BD, E + S, S, accent),
+    ],
+  ),
+  simpleCrash: archetype([], [at(GM.BD, E + S, S, accent), at(GM.CRASH, E + S, E, accent)]),
+  linearFill: archetype(
+    [
+      at(GM.BD, 0, S, fill()),
+      at(GM.SD, S, S, fill()),
+      at(GM.TOM_H, 2 * S, S, fill()),
+      at(GM.TOM_M, 3 * S, S, fill()),
+    ],
+    [
+      at(GM.TOM_L, 0, S, fill(undefined, 3)),
+      at(GM.SD, S, S, fill(undefined, 5)),
+      at(GM.BD, 2 * S, S, fill(undefined, 7)),
+      at(GM.SD, 3 * S, S, accent),
+    ],
+  ),
+  ghostToAccent: archetype(ghostRun(), [at(GM.SD, 0, E, fill()), at(GM.SD, E, E, accent)]),
+  bdSnareAlternate: archetype(
+    [
+      at(GM.BD, 0, S, fill()),
+      at(GM.SD, S, S, fill()),
+      at(GM.BD, 2 * S, S, fill(undefined, 3)),
+      at(GM.SD, 3 * S, S, fill(undefined, 3)),
+    ],
+    [
+      at(GM.BD, 0, S, fill(undefined, 5)),
+      at(GM.SD, S, S, fill(undefined, 5)),
+      at(GM.BD, 2 * S, S, accent),
+      at(GM.SD, 3 * S, S, accent),
+    ],
+  ),
+  hiHatChoke: archetype(
+    [at(GM.OHH, 0, E, fill()), at(GM.OHH, E, E, fill(undefined, 5))],
+    [at(GM.OHH, 0, S, fill(undefined, 8)), at(GM.CHH, S, S, accent), at(GM.SD, E, E, accent)],
+  ),
+  tomShuffle: archetype(
+    [at(GM.TOM_H, 0, E, fill()), at(GM.TOM_M, E + S / 2, S, fill(undefined, -5))],
+    [at(GM.TOM_M, 0, E, fill()), at(GM.TOM_L, E + S / 2, S, fill(undefined, 5))],
+  ),
+  breakdownFill: archetype([], [at(GM.SD, E, S, accent)]),
+  flamsAndDrags: archetype(
+    // The ornaments are attributes of the principal stroke, not extra onsets:
+    // one flammed note rather than a grace note written a 64th early, one
+    // dragged note rather than a pair of soft strokes before it.
+    [at(GM.SD, 0, E, fill(), 'flam'), at(GM.SD, E + S, E, fill(), 'drag')],
+    [at(GM.SD, 0, 1, accent, 'flam')],
+  ),
+  halfTimeFill: archetype(
+    [at(GM.SD, 0, 1, accent), at(GM.BD, 0, 1, fill())],
+    // At low energy the fill spans only beat 3, so this beat keeps the phrase
+    // end from going silent: a broad half-time backbeat snare with a light
+    // pickup into the next section.
+    [at(GM.SD, 0, EIGHTH, accent), at(GM.SD, E, S, fill(0.6)), at(GM.SD, E + S, S, accent)],
+    true,
+  ),
+});
+
+/**
+ * Whether a caller's material is a fill.
+ *
+ * A context carries one dictionary for the whole piece, so each generator has
+ * to recognise its own material; a bass lick reaching the fill selector would
+ * otherwise be rendered as silence.
+ */
+export function isFillArchetype(material: unknown): material is FillArchetype {
+  return (
+    typeof material === 'object' &&
+    material !== null &&
+    Array.isArray((material as FillArchetype).atBeat)
+  );
+}
+
+/**
+ * The archetype an id names.
+ *
+ * @param id Archetype name, built-in or supplied.
+ * @param supplied The caller's archetypes, keyed by id.
+ * @returns The archetype, or undefined when nothing carries that name.
+ */
+export function fillArchetypeFor(
+  id: string,
+  supplied?: ReadonlyMap<string, FillArchetype>,
+): FillArchetype | undefined {
+  return supplied?.get(id) ?? FILL_ARCHETYPES[id as FillType];
+}
 
 /** Beat at which a fill begins, widening with section energy. */
 export function getFillStartBeat(energy: SectionEnergy): number {
@@ -33,139 +274,133 @@ export function getFillStartBeat(energy: SectionEnergy): number {
 }
 
 /**
- * Pick a fill archetype for a section transition.
+ * The archetype offered at each draw, per transition context.
  *
- * The transition-specific archetypes (into a chorus, out of an intro) are
- * checked before the generic energy fills so every variation stays reachable;
- * with `from === to` the caller effectively asks for a within-section fill.
+ * A table is read by index, so an archetype named twice is simply twice as
+ * likely; that is the whole weighting mechanism, and it is visible in the data
+ * rather than buried in the branches of a switch.
+ */
+type FillTable = readonly FillType[];
+
+/** Sparse styles keep the phrase end small whatever the transition. */
+const SPARSE_FILLS: FillTable = ['simpleCrash', 'breakdownFill'];
+
+/** Dropping into a low-energy section: keep the phrase end gentle. */
+const LOW_ENERGY_FILLS: FillTable = ['simpleCrash', 'breakdownFill', 'halfTimeFill'];
+
+/** Big lead-ins to a chorus, from a high-energy style. */
+const TO_CHORUS_HIGH_FILLS: FillTable = [
+  'tomDescend',
+  'tomDescend',
+  'snareRoll',
+  'linearFill',
+  'bdSnareAlternate',
+  'flamsAndDrags',
+  'tomShuffle',
+  'ghostToAccent',
+];
+
+/** Lead-ins to a chorus from the remaining styles. */
+const TO_CHORUS_FILLS: FillTable = [
+  'snareTomCombo',
+  'snareTomCombo',
+  'tomDescend',
+  'ghostToAccent',
+  'hiHatChoke',
+  'linearFill',
+  'snareRoll',
+  'snareRoll',
+];
+
+/** Leaving the intro: lighter, building character. */
+const FROM_INTRO_FILLS: FillTable = [
+  'snareRoll',
+  'snareRoll',
+  'simpleCrash',
+  'ghostToAccent',
+  'breakdownFill',
+  'halfTimeFill',
+];
+
+/** Generic medium/high/peak fills for a high-energy style. */
+const GENERIC_HIGH_FILLS: FillTable = [
+  'tomDescend',
+  'snareRoll',
+  'tomAscend',
+  'snareTomCombo',
+  'linearFill',
+  'bdSnareAlternate',
+  'flamsAndDrags',
+  'tomShuffle',
+];
+
+/** Generic medium/high/peak fills for the remaining styles. */
+const GENERIC_FILLS: FillTable = [
+  'snareRoll',
+  'snareRoll',
+  'snareTomCombo',
+  'ghostToAccent',
+  'hiHatChoke',
+  'halfTimeFill',
+  'breakdownFill',
+  'breakdownFill',
+];
+
+/**
+ * The table a transition reads from.
+ *
+ * The transition-specific tables (into a chorus, out of an intro) are checked
+ * before the generic energy tables so every archetype stays reachable; with
+ * `from === to` the caller effectively asks for a within-section fill.
+ */
+function fillTableFor(
+  from: SectionType,
+  to: SectionType,
+  style: DrumStyle,
+  nextEnergy: SectionEnergy,
+): FillTable {
+  if (style === 'sparse') {
+    return SPARSE_FILLS;
+  }
+  const highEnergy = style === 'rock' || style === 'fourOnFloor';
+  if (nextEnergy === 'low') {
+    return LOW_ENERGY_FILLS;
+  }
+  if (to === 'chorus') {
+    return highEnergy ? TO_CHORUS_HIGH_FILLS : TO_CHORUS_FILLS;
+  }
+  if (from === 'intro') {
+    return FROM_INTRO_FILLS;
+  }
+  return highEnergy ? GENERIC_HIGH_FILLS : GENERIC_FILLS;
+}
+
+/**
+ * Pick a fill archetype for a section transition.
  *
  * @param from Section the fill leaves.
  * @param to Section the fill leads into.
  * @param style Internal drum style.
  * @param nextEnergy Energy of the section the fill leads into.
- * @param rng Deterministic PRNG.
+ * @param draw Position-addressed draws for the fill.
+ * @param bar Bar the fill occupies; the choice is addressed by it, so a fill
+ *   elsewhere in the piece is unaffected by this one.
+ * @param extra Ids a caller's dictionary contributes for this transition. They
+ *   are offered after the built-in table, so the built-in choices keep the draws
+ *   they had and a caller adds to the vocabulary rather than displacing it.
  */
 export function selectFillType(
   from: SectionType,
   to: SectionType,
   style: DrumStyle,
   nextEnergy: SectionEnergy,
-  rng: DrumRng,
-): FillType {
-  if (style === 'sparse') {
-    return rng.range(0, 1) === 0 ? 'simpleCrash' : 'breakdownFill';
-  }
-
-  const toChorus = to === 'chorus';
-  const fromIntro = from === 'intro';
-  const highEnergy = style === 'rock' || style === 'fourOnFloor';
-
-  // Dropping into a low-energy section: keep the phrase end gentle.
-  if (nextEnergy === 'low') {
-    switch (rng.range(0, 2)) {
-      case 0:
-        return 'simpleCrash';
-      case 1:
-        return 'breakdownFill';
-      default:
-        return 'halfTimeFill';
-    }
-  }
-
-  // Big lead-ins to a chorus take precedence over the generic energy fills.
-  if (toChorus) {
-    const choice = rng.range(0, 7);
-    if (highEnergy) {
-      switch (choice) {
-        case 0:
-        case 1:
-          return 'tomDescend';
-        case 2:
-          return 'snareRoll';
-        case 3:
-          return 'linearFill';
-        case 4:
-          return 'bdSnareAlternate';
-        case 5:
-          return 'flamsAndDrags';
-        case 6:
-          return 'tomShuffle';
-        default:
-          return 'ghostToAccent';
-      }
-    }
-    switch (choice) {
-      case 0:
-      case 1:
-        return 'snareTomCombo';
-      case 2:
-        return 'tomDescend';
-      case 3:
-        return 'ghostToAccent';
-      case 4:
-        return 'hiHatChoke';
-      case 5:
-        return 'linearFill';
-      default:
-        return 'snareRoll';
-    }
-  }
-
-  // Leaving the intro: lighter, building character.
-  if (fromIntro) {
-    switch (rng.range(0, 5)) {
-      case 0:
-      case 1:
-        return 'snareRoll';
-      case 2:
-        return 'simpleCrash';
-      case 3:
-        return 'ghostToAccent';
-      case 4:
-        return 'breakdownFill';
-      default:
-        return 'halfTimeFill';
-    }
-  }
-
-  // Generic medium/high/peak fills, split by style energy.
-  const choice = rng.range(0, 7);
-  if (highEnergy) {
-    switch (choice) {
-      case 0:
-        return 'tomDescend';
-      case 1:
-        return 'snareRoll';
-      case 2:
-        return 'tomAscend';
-      case 3:
-        return 'snareTomCombo';
-      case 4:
-        return 'linearFill';
-      case 5:
-        return 'bdSnareAlternate';
-      case 6:
-        return 'flamsAndDrags';
-      default:
-        return 'tomShuffle';
-    }
-  }
-
-  switch (choice) {
-    case 0:
-    case 1:
-      return 'snareRoll';
-    case 2:
-      return 'snareTomCombo';
-    case 3:
-      return 'ghostToAccent';
-    case 4:
-      return 'hiHatChoke';
-    case 5:
-      return 'halfTimeFill';
-    default:
-      return 'breakdownFill';
-  }
+  draw: Draw,
+  bar: number,
+  extra: readonly string[] = [],
+): string {
+  const table = fillTableFor(from, to, style, nextEnergy);
+  const candidates = extra.length === 0 ? table : [...table, ...extra];
+  return candidates[draw.range(0, candidates.length - 1, 'fill', bar)] ?? table[0] ?? 'snareRoll';
 }
 
 /**
@@ -174,183 +409,38 @@ export function selectFillType(
  * @param track Hit accumulator.
  * @param beatTick Absolute beat position of this beat.
  * @param beat Beat index within the bar (0-3).
- * @param fillType Selected fill archetype.
+ * @param fillType Selected archetype, by name or as material of its own.
  * @param velocity Base velocity for the beat.
  */
 export function generateFill(
   track: HitList,
   beatTick: number,
   beat: number,
-  fillType: FillType,
+  fillType: FillType | FillArchetype,
   velocity: number,
 ): void {
+  const shape =
+    typeof fillType === 'string' ? FILL_ARCHETYPES[fillType] : (fillType as FillArchetype);
+  if (!shape) {
+    return;
+  }
+  const lastBeat = shape.atBeat.length - 1;
+  const index = beat > lastBeat ? (shape.boundToBar ? -1 : lastBeat) : beat;
+  const strokes = shape.atBeat[index];
+  if (!strokes) {
+    return;
+  }
   const fillVel = velocity * 0.9;
   const accentVel = velocity * 0.95;
-  const S = SIXTEENTH;
-  const E = EIGHTH;
-
-  if (beat === 0) {
-    track.add(GM.BD, beatTick, E, fillVel);
-    track.add(GM.SD, beatTick + E, E, fillVel - 5);
-    return;
-  }
-  if (beat === 1) {
-    track.add(GM.SD, beatTick, E, fillVel);
-    track.add(GM.TOM_H, beatTick + E, E, fillVel - 3);
-    return;
-  }
-
-  switch (fillType) {
-    case 'snareRoll':
-      if (beat === 2) {
-        for (let i = 0; i < 4; i += 1) {
-          track.add(GM.SD, beatTick + i * S, S, fillVel * (0.6 + 0.1 * i));
-        }
-      } else {
-        for (let i = 0; i < 3; i += 1) {
-          track.add(GM.SD, beatTick + i * S, S, fillVel * (0.7 + 0.1 * i));
-        }
-        track.add(GM.SD, beatTick + 3 * S, S, accentVel);
-      }
-      break;
-
-    case 'tomDescend':
-      if (beat === 2) {
-        track.add(GM.SD, beatTick, E, fillVel);
-        track.add(GM.TOM_H, beatTick + E, E, fillVel - 5);
-      } else {
-        track.add(GM.TOM_H, beatTick, S, fillVel);
-        track.add(GM.TOM_M, beatTick + S, S, fillVel - 3);
-        track.add(GM.TOM_M, beatTick + E, S, fillVel - 5);
-        track.add(GM.TOM_L, beatTick + E + S, S, accentVel);
-      }
-      break;
-
-    case 'tomAscend':
-      if (beat === 2) {
-        track.add(GM.SD, beatTick, E, fillVel);
-        track.add(GM.TOM_L, beatTick + E, E, fillVel - 5);
-      } else {
-        track.add(GM.TOM_L, beatTick, S, fillVel);
-        track.add(GM.TOM_M, beatTick + S, S, fillVel + 3);
-        track.add(GM.TOM_M, beatTick + E, S, fillVel + 5);
-        track.add(GM.TOM_H, beatTick + E + S, S, accentVel);
-      }
-      break;
-
-    case 'snareTomCombo':
-      if (beat === 2) {
-        track.add(GM.SD, beatTick, E, fillVel);
-        track.add(GM.SD, beatTick + E, S, fillVel - 5);
-        track.add(GM.TOM_H, beatTick + E + S, S, fillVel);
-      } else {
-        track.add(GM.TOM_M, beatTick, S, fillVel);
-        track.add(GM.SD, beatTick + S, S, fillVel - 3);
-        track.add(GM.TOM_L, beatTick + E, S, fillVel + 2);
-        track.add(GM.BD, beatTick + E + S, S, accentVel);
-      }
-      break;
-
-    case 'simpleCrash':
-      if (beat === 3) {
-        track.add(GM.BD, beatTick + E + S, S, accentVel);
-        track.add(GM.CRASH, beatTick + E + S, E, accentVel);
-      }
-      break;
-
-    case 'linearFill':
-      if (beat === 2) {
-        track.add(GM.BD, beatTick, S, fillVel);
-        track.add(GM.SD, beatTick + S, S, fillVel);
-        track.add(GM.TOM_H, beatTick + 2 * S, S, fillVel);
-        track.add(GM.TOM_M, beatTick + 3 * S, S, fillVel);
-      } else {
-        track.add(GM.TOM_L, beatTick, S, fillVel + 3);
-        track.add(GM.SD, beatTick + S, S, fillVel + 5);
-        track.add(GM.BD, beatTick + 2 * S, S, fillVel + 7);
-        track.add(GM.SD, beatTick + 3 * S, S, accentVel);
-      }
-      break;
-
-    case 'ghostToAccent':
-      if (beat === 2) {
-        const ghost = fillVel * 0.4;
-        track.add(GM.SD, beatTick, S, ghost);
-        track.add(GM.SD, beatTick + S, S, ghost + 10);
-        track.add(GM.SD, beatTick + 2 * S, S, ghost + 20);
-        track.add(GM.SD, beatTick + 3 * S, S, ghost + 30);
-      } else {
-        track.add(GM.SD, beatTick, E, fillVel);
-        track.add(GM.SD, beatTick + E, E, accentVel);
-      }
-      break;
-
-    case 'bdSnareAlternate':
-      if (beat === 2) {
-        track.add(GM.BD, beatTick, S, fillVel);
-        track.add(GM.SD, beatTick + S, S, fillVel);
-        track.add(GM.BD, beatTick + 2 * S, S, fillVel + 3);
-        track.add(GM.SD, beatTick + 3 * S, S, fillVel + 3);
-      } else {
-        track.add(GM.BD, beatTick, S, fillVel + 5);
-        track.add(GM.SD, beatTick + S, S, fillVel + 5);
-        track.add(GM.BD, beatTick + 2 * S, S, accentVel);
-        track.add(GM.SD, beatTick + 3 * S, S, accentVel);
-      }
-      break;
-
-    case 'hiHatChoke':
-      if (beat === 2) {
-        track.add(GM.OHH, beatTick, E, fillVel);
-        track.add(GM.OHH, beatTick + E, E, fillVel + 5);
-      } else {
-        track.add(GM.OHH, beatTick, S, fillVel + 8);
-        track.add(GM.CHH, beatTick + S, S, accentVel);
-        track.add(GM.SD, beatTick + E, E, accentVel);
-      }
-      break;
-
-    case 'tomShuffle':
-      if (beat === 2) {
-        track.add(GM.TOM_H, beatTick, E, fillVel);
-        track.add(GM.TOM_M, beatTick + E + S / 2, S, fillVel - 5);
-      } else {
-        track.add(GM.TOM_M, beatTick, E, fillVel);
-        track.add(GM.TOM_L, beatTick + E + S / 2, S, fillVel + 5);
-      }
-      break;
-
-    case 'breakdownFill':
-      if (beat === 3) {
-        track.add(GM.SD, beatTick + E, S, accentVel);
-      }
-      break;
-
-    case 'flamsAndDrags':
-      if (beat === 2) {
-        track.add(GM.SD, beatTick - S / 4, S / 4, fillVel * 0.5);
-        track.add(GM.SD, beatTick, E, fillVel);
-        track.add(GM.SD, beatTick + E, S / 2, fillVel * 0.6);
-        track.add(GM.SD, beatTick + E + S / 2, S / 2, fillVel * 0.6);
-        track.add(GM.SD, beatTick + E + S, E, fillVel);
-      } else {
-        track.add(GM.SD, beatTick - S / 4, S / 4, fillVel * 0.5);
-        track.add(GM.SD, beatTick, 1, accentVel);
-      }
-      break;
-
-    case 'halfTimeFill':
-      if (beat === 2) {
-        track.add(GM.SD, beatTick, 1, accentVel);
-        track.add(GM.BD, beatTick, 1, fillVel);
-      } else if (beat === 3) {
-        // At low energy the fill spans only beat 3, so this branch keeps the
-        // phrase end from going silent: a broad half-time backbeat snare with a
-        // light pickup into the next section.
-        track.add(GM.SD, beatTick, EIGHTH, accentVel);
-        track.add(GM.SD, beatTick + E, S, fillVel * 0.6);
-        track.add(GM.SD, beatTick + E + S, S, accentVel);
-      }
-      break;
+  for (const stroke of strokes) {
+    const base = stroke.velocity.base === 'accent' ? accentVel : fillVel;
+    const scaled = stroke.velocity.scale === undefined ? base : base * stroke.velocity.scale;
+    track.add(
+      stroke.voice,
+      beatTick + stroke.offset,
+      stroke.duration,
+      scaled + (stroke.velocity.offset ?? 0),
+      stroke.articulation,
+    );
   }
 }

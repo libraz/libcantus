@@ -1,9 +1,10 @@
+import type { Draw } from '../context/index.js';
+import { sustainsStrokes } from '../context/index.js';
 import { type SectionCtx, swing16 } from './beat.js';
 import { HH_16TH_BPM_THRESHOLD } from './hihat.js';
 import type { HitList } from './hit.js';
 import type { DrumRole, SectionType } from './internal.js';
 import { EIGHTH, GM, PercMoodCategory, SIXTEENTH, sectionIndex } from './internal.js';
-import type { DrumRng } from './rng.js';
 
 /** Enabled auxiliary percussion voices for a section. */
 export type PercussionConfig = {
@@ -61,14 +62,20 @@ export function getPercussionConfig(
   };
 }
 
-/** Emit one bar of auxiliary percussion (tambourine/shaker/handclap). */
+/**
+ * Emit one bar of auxiliary percussion (tambourine/shaker/handclap).
+ *
+ * The shaker's off-16ths are where the rhythmic dial reaches this voice: each
+ * has its own draw, so turning the dial up fills the subdivision in one
+ * position at a time rather than switching the whole bar between two patterns.
+ */
 export function generateAuxPercussionForBar(
   track: HitList,
   barStart: number,
   config: PercussionConfig,
   role: DrumRole,
   densityMult: number,
-  rng: DrumRng,
+  draw: Draw,
   bpm: number,
   sec: SectionCtx,
   swingAmount: number,
@@ -80,18 +87,30 @@ export function generateAuxPercussionForBar(
 
   if (config.tambourine) {
     for (let beat = 1; beat < barBeats; beat += 2) {
-      const raw = 70 * densityMult * rng.float(0.9, 1.1);
+      const raw = 70 * densityMult * draw.float(0.9, 1.1, 'tambourine', barStart, beat);
       track.add(GM.TAMBOURINE, barStart + beat, EIGHTH, Math.max(40, Math.min(90, raw)));
     }
   }
 
   if (config.shaker) {
-    const use16th = config.shaker16th && bpm < HH_16TH_BPM_THRESHOLD;
+    const use16th =
+      config.shaker16th &&
+      bpm < HH_16TH_BPM_THRESHOLD &&
+      sustainsStrokes(SIXTEENTH, bpm, sec.difficulty);
     if (use16th) {
       const velCurve = [0.75, 0.45, 0.6, 0.45];
       for (let beat = 0; beat < barBeats; beat += 1) {
         for (let sub = 0; sub < 4; sub += 1) {
-          const raw = 80 * (velCurve[sub] ?? 0.5) * densityMult * rng.float(0.9, 1.1);
+          // The on-beat and mid-beat shakes carry the pattern; the two between
+          // them are the dial's to add.
+          if (sub % 2 === 1 && !draw.prob(sec.rhythmic, 'shaker16', barStart, beat, sub)) {
+            continue;
+          }
+          const raw =
+            80 *
+            (velCurve[sub] ?? 0.5) *
+            densityMult *
+            draw.float(0.9, 1.1, 'shaker', barStart, beat, sub);
           track.add(
             GM.SHAKER,
             swing16(barStart + beat + sub * SIXTEENTH, sec, swingAmount),
@@ -104,7 +123,11 @@ export function generateAuxPercussionForBar(
       const velCurve = [0.75, 0.55];
       for (let beat = 0; beat < barBeats; beat += 1) {
         for (let sub = 0; sub < 2; sub += 1) {
-          const raw = 80 * (velCurve[sub] ?? 0.6) * densityMult * rng.float(0.9, 1.1);
+          const raw =
+            80 *
+            (velCurve[sub] ?? 0.6) *
+            densityMult *
+            draw.float(0.9, 1.1, 'shaker', barStart, beat, sub);
           track.add(
             GM.SHAKER,
             swing16(barStart + beat + sub * EIGHTH, sec, swingAmount),
@@ -118,7 +141,7 @@ export function generateAuxPercussionForBar(
 
   if (config.handclap) {
     for (let beat = 1; beat < barBeats; beat += 2) {
-      const raw = 85 * densityMult * rng.float(0.9, 1.1);
+      const raw = 85 * densityMult * draw.float(0.9, 1.1, 'handclap', barStart, beat);
       track.add(GM.HANDCLAP, barStart + beat, EIGHTH, Math.max(50, Math.min(100, raw)));
     }
   }
