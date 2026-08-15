@@ -481,3 +481,93 @@ describe('tendency-tone resolution', () => {
     expect(voicing.filter((pitch) => pc(pitch) === 11)).toHaveLength(1);
   });
 });
+
+describe('voiceProgression exact output', () => {
+  // Every rule the search applies is a weight, and every weight is compared
+  // against another, so a change in how candidates are held or in what order
+  // they are visited moves the winner without breaking any single rule. These
+  // pin the pitches themselves across a spread of voice counts, keys, and
+  // candidate caps, so such a move is caught rather than merely permitted.
+  const cases: {
+    name: string;
+    chords: Chord[];
+    opts?: Parameters<typeof voiceProgression>[1];
+    expected: number[][];
+  }[] = [
+    {
+      name: 'a four-bar turnaround with no key',
+      chords: [makeChord(0, 'maj'), makeChord(9, 'min'), makeChord(5, 'maj'), makeChord(7, 'maj')],
+      expected: [
+        [48, 60, 64, 67],
+        [45, 60, 64, 69],
+        [41, 60, 65, 69],
+        [43, 59, 62, 67],
+      ],
+    },
+    {
+      name: 'a ii-V-I in a known key',
+      chords: [makeChord(2, 'min7'), makeChord(7, 'dom7'), makeChord(0, 'maj7')],
+      opts: { key: majorKey(0) },
+      expected: [
+        [50, 60, 65, 69],
+        [55, 59, 62, 65],
+        [48, 55, 59, 64],
+      ],
+    },
+    {
+      name: 'three voices over a slash chord',
+      chords: [
+        makeChord(0, 'maj'),
+        makeChord(7, 'maj', 11),
+        makeChord(9, 'min'),
+        makeChord(5, 'maj'),
+        makeChord(7, 'dom7'),
+        makeChord(0, 'maj'),
+      ],
+      opts: { voices: 3, key: majorKey(0) },
+      expected: [
+        [48, 64, 67],
+        [47, 62, 67],
+        [45, 64, 72],
+        [53, 69, 72],
+        [55, 65, 71],
+        [48, 64, 72],
+      ],
+    },
+    {
+      name: 'five voices with wide spacing',
+      chords: [makeChord(0, 'maj9'), makeChord(9, '7b9'), makeChord(2, 'min9'), makeChord(7, '13')],
+      opts: { voices: 5, maxSpacing: 14 },
+      expected: [
+        [48, 55, 62, 64, 71],
+        [45, 55, 61, 64, 70],
+        [50, 53, 60, 64, 69],
+        [43, 53, 59, 64, 69],
+      ],
+    },
+    {
+      name: 'a search stopped early by the candidate cap',
+      chords: [
+        makeChord(10, 'maj'),
+        makeChord(3, 'maj'),
+        makeChord(5, 'dom7'),
+        makeChord(10, 'maj'),
+      ],
+      opts: { maxCandidates: 300, key: majorKey(10) },
+      expected: [
+        [46, 62, 65, 70],
+        [51, 63, 67, 70],
+        [53, 60, 63, 69],
+        [46, 58, 62, 70],
+      ],
+    },
+  ];
+
+  for (const { name, chords, opts, expected } of cases) {
+    it(`voices ${name} to fixed pitches`, () => {
+      expect(voiceProgression(chords, opts)).toEqual(expected);
+      // The first chord goes through voiceChord, so it is pinned there too.
+      expect(voiceChord(chords[0] ?? makeChord(0, 'maj'), opts)).toEqual(expected[0]);
+    });
+  }
+});

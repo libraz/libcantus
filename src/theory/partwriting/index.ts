@@ -22,7 +22,7 @@ import {
   spelledInterval,
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import type { Chord } from '../chord/index.js';
+import type { Chord, ChordQuality } from '../chord/index.js';
 import { chordPitchClasses, chordToneRole } from '../chord/index.js';
 import {
   createsHiddenParallelPerfect,
@@ -30,6 +30,7 @@ import {
   createsVoiceCrossing,
   createsVoiceOverlap,
   exceedsSpacing,
+  isAugmentedMelodicInterval,
   isLeadingToneResolution,
 } from '../counterpoint/index.js';
 import { spelledKeyOf } from '../scale/index.js';
@@ -37,6 +38,7 @@ import { spellPitch } from '../spelling/index.js';
 import type { VoiceRange } from '../voicing/index.js';
 import { SATB_RANGES } from '../voicing/index.js';
 import { DEFAULT_MAX_SPACING } from '../voicing/internal.js';
+import { intervalWord, violation } from './internal.js';
 
 /**
  * The rule a {@link PartWritingViolation} breaks.
@@ -53,6 +55,22 @@ import { DEFAULT_MAX_SPACING } from '../voicing/internal.js';
  *   go where it must.
  * - `augmentedMelodicInterval`: a single voice moves by an augmented interval.
  *
+ * The rest are raised by {@link checkSpecies} alone, since they describe faults
+ * only a species exercise can commit:
+ *
+ * - `wrongRhythmicRatio`: the counterpoint does not present the number of notes
+ *   per cantus-firmus note its species requires.
+ * - `unpreparedDissonance`: a dissonance falls where the species allows none, or
+ *   is reached or left by leap where it must be passed through by step.
+ * - `unresolvedSuspension`: a fourth-species suspension that does not fall by
+ *   step onto the following consonance.
+ * - `illegalLeap`: a melodic leap the style forbids — either seventh, the
+ *   tritone, or anything wider than an octave.
+ * - `battuta`: an octave or unison reached by contrary motion with the upper
+ *   voice leaping down.
+ * - `missingCadence`: the exercise does not open or close on the formula its
+ *   species requires.
+ *
  * @category Voicing & Counterpoint
  */
 export type PartWritingViolationKind =
@@ -66,7 +84,13 @@ export type PartWritingViolationKind =
   | 'range'
   | 'unresolvedLeadingTone'
   | 'unresolvedSeventh'
-  | 'augmentedMelodicInterval';
+  | 'augmentedMelodicInterval'
+  | 'wrongRhythmicRatio'
+  | 'unpreparedDissonance'
+  | 'unresolvedSuspension'
+  | 'illegalLeap'
+  | 'battuta'
+  | 'missingCadence';
 
 /**
  * One broken rule, located in the progression and in the texture.
@@ -80,10 +104,15 @@ export type PartWritingViolation = {
    * The voices involved, by index into a voicing (0 = lowest). A rule about a
    * pair names both, ascending; a rule about a single line names one. A
    * `crossRelation` is the exception: it names the voice holding the earlier
-   * note first, whichever is higher.
+   * note first, whichever is higher. In a species exercise there are only two
+   * voices and they are named by role instead: 0 is the cantus firmus and 1 the
+   * counterpoint, whichever lies above.
    */
   voices: number[];
-  /** Index of the chord the motion starts on. */
+  /**
+   * Index of the chord the motion starts on; in a species exercise, the index
+   * into the counterpoint.
+   */
   fromIndex: number;
   /** Index of the chord it ends on; equal to `fromIndex` for a vertical rule. */
   toIndex: number;
@@ -124,34 +153,6 @@ export type PartWritingOptions = {
   maxSpacing?: number;
 };
 
-/** Diatonic names of the interval numbers a melodic step or leap can span. */
-const INTERVAL_WORDS = [
-  'unison',
-  'second',
-  'third',
-  'fourth',
-  'fifth',
-  'sixth',
-  'seventh',
-  'octave',
-] as const;
-
-/** Name an interval number, falling back to a bare noun beyond the octave. */
-function intervalWord(numberValue: number): string {
-  return INTERVAL_WORDS[numberValue - 1] ?? 'interval';
-}
-
-/** Build one violation record, so the field order is written once. */
-function violation(
-  kind: PartWritingViolationKind,
-  voices: number[],
-  fromIndex: number,
-  toIndex: number,
-  rationale: string,
-): PartWritingViolation {
-  return { kind, voices, fromIndex, toIndex, rationale };
-}
-
 /** A note without its octave, for naming it in a rationale. */
 function bare(note: Note): Note {
   return { letter: note.letter, alter: note.alter };
@@ -165,16 +166,32 @@ function midiOf(note: Note, index: number, voice: number): number {
   return noteToMidi(note);
 }
 
-/** Whether a melodic interval is augmented by at least one semitone. */
-function isAugmented(interval: SpelledInterval): boolean {
-  // The augmented unison is left out: a chromatic inflection of the note a
-  // voice already holds is ordinary voice leading, not a forbidden leap.
-  return interval.number >= 2 && interval.quality.startsWith('A');
-}
-
 /** Whether a melodic interval descends by a diatonic step. */
 function isDescendingStep(interval: SpelledInterval): boolean {
   return interval.number === 2 && (interval.semitones === -1 || interval.semitones === -2);
+}
+
+/** The qualities a leading-tone chord takes: the diminished triad and sevenths. */
+const LEADING_TONE_QUALITIES: ReadonlySet<ChordQuality> = new Set(['dim', 'dim7', 'm7b5']);
+
+/**
+ * Whether the key's leading tone is functioning as one in a chord.
+ *
+ * The tendency is the dominant's, not the pitch class's: the leading tone must
+ * rise where it is the third of a chord built on the dominant degree, or the
+ * root of a leading-tone chord, which are the two places it carries dominant
+ * function. The same pitch class is an ordinary chord tone elsewhere — the
+ * fifth of iii, say — and is free to move as the line asks.
+ */
+function isFunctioningLeadingTone(chord: Chord, leadingTonePc: number, key: KeyScale): boolean {
+  const role = chordToneRole(leadingTonePc, chord);
+  if (role === 'third') {
+    return pitchClassOf(chord.rootPc) === pitchClassOf(key.rootPc + 7);
+  }
+  if (role === 'root') {
+    return LEADING_TONE_QUALITIES.has(chord.quality);
+  }
+  return false;
 }
 
 /** The chord's own seventh as a pitch class, or undefined when it has none. */
@@ -375,9 +392,11 @@ function crossRelationViolations(transition: Transition): PartWritingViolation[]
  *
  * A chordal seventh is a dissonance, so the voice carrying it falls by step
  * unless the next chord holds it as a common tone. A leading tone rises to the
- * tonic whenever the next chord contains one and has dropped the leading tone
- * itself — the same reading the voicer scores its candidates by, in every voice
- * rather than the outer ones alone.
+ * tonic when it is functioning as one — the third of a dominant chord or the
+ * root of a leading-tone chord — and the next chord contains the tonic and has
+ * dropped the leading tone itself. Elsewhere the same pitch class is an
+ * ordinary chord tone, so `iii` moving to `IV` is not asked to resolve its
+ * fifth. The rule is judged in every voice rather than the outer ones alone.
  */
 function melodicViolations(transition: Transition): PartWritingViolation[] {
   const found: PartWritingViolation[] = [];
@@ -401,7 +420,7 @@ function melodicViolations(transition: Transition): PartWritingViolation[] {
       continue;
     }
     const interval = spelledInterval(earlier, later);
-    if (isAugmented(interval)) {
+    if (isAugmentedMelodicInterval(earlier, later)) {
       found.push(
         violation(
           'augmentedMelodicInterval',
@@ -426,6 +445,7 @@ function melodicViolations(transition: Transition): PartWritingViolation[] {
     }
     if (
       earlierPc === leadingTonePc &&
+      isFunctioningLeadingTone(from.chord, leadingTonePc, key) &&
       nextPcs.has(tonicPc) &&
       !nextPcs.has(earlierPc) &&
       !isLeadingToneResolution(earlierPitch, laterPitch, key)
@@ -558,3 +578,6 @@ export function checkPartWriting(
   }
   return violations;
 }
+
+export type { Species, SpeciesOptions } from './species.js';
+export { checkSpecies } from './species.js';

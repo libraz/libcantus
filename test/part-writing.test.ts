@@ -202,6 +202,58 @@ describe('tendency tones', () => {
       { kind: 'unresolvedLeadingTone', voices: [1], fromIndex: 0, toIndex: 1 },
     ]);
   });
+
+  it('flags the root of a leading-tone chord that does not rise', () => {
+    // viio to I with the bass B falling to G instead of stepping up to C.
+    const chords = [makeChord(11, 'dim'), makeChord(0, 'maj')];
+    const voicings = spellExercise(
+      [
+        [59, 62, 65, 67],
+        [55, 60, 64, 67],
+      ],
+      chords,
+    );
+    const unresolved = checkPartWriting(voicings, chords, C_MAJOR).filter(
+      (v) => v.kind === 'unresolvedLeadingTone',
+    );
+    expect(summarize(unresolved)).toEqual([
+      { kind: 'unresolvedLeadingTone', voices: [0], fromIndex: 0, toIndex: 1 },
+    ]);
+  });
+
+  it('leaves the leading tone alone where it is not functioning as one', () => {
+    // iii to IV: the alto's B is the fifth of iii, free to fall to A, and the C
+    // in F is that chord's fifth rather than a resolution the B owes.
+    const toSubdominant = [makeChord(4, 'min'), makeChord(5, 'maj')];
+    expect(
+      checkPartWriting(
+        spellExercise(
+          [
+            [52, 59, 64, 67],
+            [53, 57, 65, 69],
+          ],
+          toSubdominant,
+        ),
+        toSubdominant,
+        C_MAJOR,
+      ).filter((v) => v.kind === 'unresolvedLeadingTone'),
+    ).toEqual([]);
+    // The same for iii to vi, where the B is again the fifth of the chord.
+    const toSubmediant = [makeChord(4, 'min'), makeChord(9, 'min')];
+    expect(
+      checkPartWriting(
+        spellExercise(
+          [
+            [52, 59, 64, 67],
+            [57, 60, 64, 69],
+          ],
+          toSubmediant,
+        ),
+        toSubmediant,
+        C_MAJOR,
+      ).filter((v) => v.kind === 'unresolvedLeadingTone'),
+    ).toEqual([]);
+  });
 });
 
 describe('augmented melodic intervals', () => {

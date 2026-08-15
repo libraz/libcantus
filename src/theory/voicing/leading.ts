@@ -1,12 +1,14 @@
 import { InvalidInputError, NoSolutionError } from '../../core/errors/index.js';
 import { assertFiniteNumber } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
-import { createsHiddenParallelPerfect } from '../counterpoint/index.js';
 import {
   enumerateVoicings,
+  leadingCost,
   RESOLUTION_PENALTY,
+  resolutionTables,
   resolutionViolations,
   structuralPenalty,
+  structuralTables,
   VIOLATION_PENALTY,
   violationCount,
 } from './internal.js';
@@ -14,16 +16,8 @@ import type { VoicingOptions } from './satb.js';
 import { resolveMaxCandidates, resolveMaxSpacing, resolveRanges } from './satb.js';
 
 /**
- * Moderate penalty for a hidden/direct perfect fifth or octave reached on the
- * outer-voice (bass–soprano) pair. Unlike a true parallel perfect it is
- * discouraged rather than forbidden, so the weight sits alongside voice-leading
- * motion rather than the hard {@link VIOLATION_PENALTY}.
- */
-const HIDDEN_PERFECT_PENALTY = 6;
-
-/**
  * Total voice-leading cost between two voicings: the sum of absolute semitone
- * motion across voices, plus a moderate `HIDDEN_PERFECT_PENALTY` when the
+ * motion across voices, plus a moderate hidden-perfect penalty when the
  * outer-voice (bass–soprano) pair reaches a hidden/direct perfect fifth or
  * octave by similar motion. The arrays must be the same length; when they
  * differ the voicings are not comparable and the cost is `Infinity`.
@@ -38,33 +32,7 @@ export function voiceLeadingCost(from: number[], to: number[]): number {
   if (from.length !== to.length) {
     return Number.POSITIVE_INFINITY;
   }
-  let total = 0;
-  for (let i = 0; i < from.length; i += 1) {
-    const a = from[i];
-    const b = to[i];
-    if (a === undefined || b === undefined) {
-      continue;
-    }
-    total += Math.abs(b - a);
-  }
-  // Discourage hidden/direct perfects between the outermost voices, where they
-  // are most audible. True parallels are handled (and forbidden) elsewhere.
-  if (from.length >= 2) {
-    const bassPrev = from[0];
-    const bassCur = to[0];
-    const sopPrev = from[from.length - 1];
-    const sopCur = to[to.length - 1];
-    if (
-      bassPrev !== undefined &&
-      bassCur !== undefined &&
-      sopPrev !== undefined &&
-      sopCur !== undefined &&
-      createsHiddenParallelPerfect(bassPrev, bassCur, sopPrev, sopCur)
-    ) {
-      total += HIDDEN_PERFECT_PENALTY;
-    }
-  }
-  return total;
+  return leadingCost(from, 0, to, 0, from.length);
 }
 
 /**
@@ -129,24 +97,29 @@ export function nextVoicing(current: number[], chord: Chord, opts?: VoicingOptio
   const maxSpacing = resolveMaxSpacing(opts);
   const candidates = enumerateVoicings(chord, ranges, maxSpacing, resolveMaxCandidates(opts));
   const previousChord = opts?.previousChord;
-  let best: number[] | undefined;
+  const structure = structuralTables(chord, opts?.key);
+  const resolution =
+    previousChord === undefined ? undefined : resolutionTables(previousChord, chord, opts?.key);
+  const { pitches, voices } = candidates;
+  let bestOffset = -1;
   let bestScore = Number.POSITIVE_INFINITY;
-  for (const candidate of candidates) {
+  for (let candidate = 0; candidate < candidates.count; candidate += 1) {
+    const offset = candidate * voices;
     const score =
-      structuralPenalty(candidate, chord, opts?.key) +
-      voiceLeadingCost(source, candidate) +
-      VIOLATION_PENALTY * violationCount(source, candidate) +
+      structuralPenalty(structure, pitches, offset, voices) +
+      leadingCost(source, 0, pitches, offset, voices) +
+      VIOLATION_PENALTY * violationCount(source, 0, pitches, offset, voices) +
       RESOLUTION_PENALTY *
-        (previousChord === undefined
+        (resolution === undefined
           ? 0
-          : resolutionViolations(source, candidate, previousChord, chord, opts?.key));
+          : resolutionViolations(resolution, source, 0, pitches, offset, voices));
     if (score < bestScore) {
       bestScore = score;
-      best = candidate;
+      bestOffset = offset;
     }
   }
-  if (best === undefined) {
+  if (bestOffset < 0) {
     throw new NoSolutionError('no voicing satisfies the given ranges');
   }
-  return best;
+  return [...pitches.subarray(bestOffset, bestOffset + voices)];
 }

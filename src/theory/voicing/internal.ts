@@ -6,7 +6,11 @@ import { NoSolutionError } from '../../core/errors/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { Chord } from '../chord/index.js';
 import { chordPitchClasses, chordToneRole } from '../chord/index.js';
-import { createsParallelPerfect, createsVoiceOverlap } from '../counterpoint/index.js';
+import {
+  createsHiddenParallelPerfect,
+  createsParallelPerfect,
+  createsVoiceOverlap,
+} from '../counterpoint/index.js';
 import type { VoiceRange } from './satb.js';
 
 /** Default maximum spacing between adjacent upper voices (one octave). */
@@ -53,6 +57,41 @@ const DEFAULT_MAX_CANDIDATES = 4000;
 const SEARCH_NODES_PER_CANDIDATE = 16;
 
 /**
+ * Moderate penalty for a hidden/direct perfect fifth or octave reached on the
+ * outer-voice (bass–soprano) pair. Unlike a true parallel perfect it is
+ * discouraged rather than forbidden, so the weight sits alongside voice-leading
+ * motion rather than the hard {@link VIOLATION_PENALTY}.
+ */
+const HIDDEN_PERFECT_PENALTY = 6;
+
+/**
+ * Candidate voicings of one chord, held flat: voice `v` of candidate `i` sits at
+ * `pitches[i * voices + v]`.
+ *
+ * A four-voice search reaches four thousand candidates, so a voicing per
+ * candidate would be four thousand short arrays per chord — the bulk of what
+ * voicing a lead sheet allocates. One buffer holds them all instead, and
+ * {@link voiceProgression} reuses the same buffer for every chord, so the whole
+ * progression allocates it once.
+ */
+export type VoicingCandidates = {
+  /** The candidate pitches, valid up to `count * voices`. */
+  pitches: Int32Array;
+  /** How many candidates the last enumeration wrote. */
+  count: number;
+  /** Voices per candidate, i.e. the stride of `pitches`. */
+  voices: number;
+};
+
+/** Candidates a fresh buffer holds before it has to grow. */
+const INITIAL_CANDIDATE_CAPACITY = 512;
+
+/** An empty candidate buffer, ready to be filled by {@link enumerateVoicings}. */
+export function createCandidateBuffer(): VoicingCandidates {
+  return { pitches: new Int32Array(0), count: 0, voices: 0 };
+}
+
+/**
  * All MIDI pitches of a pitch class inside an inclusive range, ordered from the
  * centre of the range outward (ties break toward the lower pitch). Enumerating
  * centre-outward keeps the candidate set balanced around the register when it
@@ -88,6 +127,9 @@ function pitchesForPc(pc: number, range: VoiceRange): number[] {
  * immediately: continuing would explore every combination of the voices below
  * it only to reach no leaf.
  *
+ * @param into A buffer to fill, reused and grown in place. Pass the same one
+ *   for every chord of a progression so the search allocates once rather than
+ *   once per chord.
  * @throws If any voice's range contains no pitch of any chord tone.
  */
 export function enumerateVoicings(
@@ -95,7 +137,8 @@ export function enumerateVoicings(
   ranges: VoiceRange[],
   maxSpacing: number,
   maxCandidates = DEFAULT_MAX_CANDIDATES,
-): number[][] {
+  into: VoicingCandidates = createCandidateBuffer(),
+): VoicingCandidates {
   const chordPcs = chordPitchClasses(chord);
   const bassPc = pitchClass(chord.bassPc ?? chord.rootPc);
   // Pitch-class-major order, matching the enumeration order of the search.
@@ -107,20 +150,34 @@ export function enumerateVoicings(
       throw new NoSolutionError('no voicing satisfies the given ranges');
     }
   }
-  const results: number[][] = [];
-  const current: number[] = [];
+  const voices = ranges.length;
+  into.voices = voices;
+  into.count = 0;
+  let capacity = Math.floor(into.pitches.length / Math.max(1, voices));
+  if (capacity === 0) {
+    capacity = Math.min(maxCandidates, INITIAL_CANDIDATE_CAPACITY);
+    into.pitches = new Int32Array(capacity * voices);
+  }
+  const current = new Int32Array(voices);
   let nodes = 0;
   const maxSearchNodes = maxCandidates * SEARCH_NODES_PER_CANDIDATE;
   const build = (voice: number): void => {
     nodes += 1;
-    if (results.length >= maxCandidates || nodes > maxSearchNodes) {
+    if (into.count >= maxCandidates || nodes > maxSearchNodes) {
       return;
     }
-    if (voice === ranges.length) {
-      results.push([...current]);
+    if (voice === voices) {
+      if (into.count === capacity) {
+        capacity = Math.min(maxCandidates, capacity * 2);
+        const grown = new Int32Array(capacity * voices);
+        grown.set(into.pitches.subarray(0, into.count * voices));
+        into.pitches = grown;
+      }
+      into.pitches.set(current, into.count * voices);
+      into.count += 1;
       return;
     }
-    const prev = current[voice - 1];
+    const prev = voice === 0 ? undefined : current[voice - 1];
     for (const pitch of byVoice[voice] ?? []) {
       if (prev !== undefined) {
         if (pitch < prev) {
@@ -131,69 +188,145 @@ export function enumerateVoicings(
           continue;
         }
       }
-      current.push(pitch);
+      current[voice] = pitch;
       build(voice + 1);
-      current.pop();
     }
   };
   build(0);
-  return results;
+  return into;
 }
 
 /**
- * Structural quality penalty of a single voicing: heavily penalize missing
- * chord tones (mildly for the fifth, which carries no identity), mildly
- * penalize doubling anything other than the root or fifth, and — when a key is
- * known — heavily penalize doubling its leading tone.
+ * The per-chord tables {@link structuralPenalty} reads.
+ *
+ * Every entry is a function of the chord and key alone, so it is worked out
+ * once per chord instead of once per candidate — which is what keeps a
+ * four-thousand-candidate search from rebuilding the chord's pitch-class set,
+ * and re-deriving every tone's role, four thousand times.
+ */
+export type StructuralTables = {
+  /** The chord's pitch classes, ascending. */
+  tones: readonly number[];
+  /** Penalty for the tone at the same index of `tones` being absent. */
+  missing: readonly number[];
+  /** Penalty per extra copy of each pitch class 0-11. */
+  doubling: Float64Array;
+};
+
+/**
+ * Build the structural tables for one chord: heavily penalize missing chord
+ * tones (mildly for the fifth, which carries no identity), mildly penalize
+ * doubling anything other than the root or fifth, and — when a key is known —
+ * heavily penalize doubling its leading tone.
  *
  * The exempt fifth is the chord's own fifth, whatever its size: a diminished,
  * augmented, or absent fifth would leave the root as the only freely doubled
  * tone, which is what forces a doubled leading tone in a `viio` chord.
  */
-export function structuralPenalty(pitches: number[], chord: Chord, key?: KeyScale): number {
-  const counts = new Map<number, number>();
-  for (const pitch of pitches) {
-    const pc = pitchClass(pitch);
-    counts.set(pc, (counts.get(pc) ?? 0) + 1);
+export function structuralTables(chord: Chord, key?: KeyScale): StructuralTables {
+  const tones = chordPitchClasses(chord);
+  const missing = tones.map((pc) =>
+    chordToneRole(pc, chord) === 'fifth' ? MISSING_FIFTH_PENALTY : MISSING_TONE_PENALTY,
+  );
+  const rootPc = pitchClass(chord.rootPc);
+  const leadingTonePc = key === undefined ? -1 : pitchClass(key.rootPc - 1);
+  const doubling = new Float64Array(12);
+  for (let pc = 0; pc < 12; pc += 1) {
+    if (pc === leadingTonePc) {
+      doubling[pc] = LEADING_TONE_DOUBLING_PENALTY;
+    } else if (pc !== rootPc && chordToneRole(pc, chord) !== 'fifth') {
+      doubling[pc] = POOR_DOUBLING_PENALTY;
+    }
   }
+  return { tones, missing, doubling };
+}
+
+/**
+ * Pitch-class tally shared by every structural evaluation. The scoring loop
+ * calls nothing that could re-enter it, so one buffer serves the whole search.
+ */
+const PITCH_CLASS_COUNTS = new Int32Array(12);
+
+/**
+ * Structural quality penalty of the candidate at `offset` in `pitches`, read
+ * off the chord's {@link StructuralTables}.
+ */
+export function structuralPenalty(
+  tables: StructuralTables,
+  pitches: ArrayLike<number>,
+  offset: number,
+  voices: number,
+): number {
+  PITCH_CLASS_COUNTS.fill(0);
   let penalty = 0;
-  for (let index = 1; index < pitches.length; index += 1) {
-    if (pitches[index] === pitches[index - 1]) {
+  for (let index = 0; index < voices; index += 1) {
+    const pitch = pitches[offset + index];
+    if (pitch === undefined) {
+      continue;
+    }
+    const pc = pitchClass(pitch);
+    PITCH_CLASS_COUNTS[pc] = (PITCH_CLASS_COUNTS[pc] ?? 0) + 1;
+    if (index > 0 && pitch === pitches[offset + index - 1]) {
       penalty += UNISON_PENALTY;
     }
   }
-  for (const pc of chordPitchClasses(chord)) {
-    if (!counts.has(pc)) {
-      penalty +=
-        chordToneRole(pc, chord) === 'fifth' ? MISSING_FIFTH_PENALTY : MISSING_TONE_PENALTY;
+  for (let index = 0; index < tables.tones.length; index += 1) {
+    const pc = tables.tones[index];
+    if (pc !== undefined && PITCH_CLASS_COUNTS[pc] === 0) {
+      penalty += tables.missing[index] ?? 0;
     }
   }
-  const rootPc = pitchClass(chord.rootPc);
-  const leadingTonePc = key === undefined ? undefined : pitchClass(key.rootPc - 1);
-  for (const [pc, count] of counts) {
-    if (count <= 1) {
-      continue;
-    }
-    if (pc === leadingTonePc) {
-      penalty += (count - 1) * LEADING_TONE_DOUBLING_PENALTY;
-      continue;
-    }
-    if (pc !== rootPc && chordToneRole(pc, chord) !== 'fifth') {
-      penalty += (count - 1) * POOR_DOUBLING_PENALTY;
+  for (let pc = 0; pc < 12; pc += 1) {
+    const count = PITCH_CLASS_COUNTS[pc] ?? 0;
+    if (count > 1) {
+      penalty += (count - 1) * (tables.doubling[pc] ?? 0);
     }
   }
   return penalty;
 }
 
-/** The chord's own seventh as a pitch class, or undefined when it has none. */
-function seventhPcOf(chord: Chord): number | undefined {
+/** The chord's own seventh as a pitch class, or -1 when it has none. */
+function seventhPcOf(chord: Chord): number {
   for (const interval of chord.intervals) {
     const pc = pitchClass(chord.rootPc + interval);
     if (chordToneRole(pc, chord) === 'seventh') {
       return pc;
     }
   }
-  return undefined;
+  return -1;
+}
+
+/**
+ * The per-chord-pair tables {@link resolutionViolations} reads, worked out once
+ * per chord rather than once per candidate.
+ */
+export type ResolutionTables = {
+  /** The leaving chord's seventh, or -1 when it has none. */
+  seventhPc: number;
+  /** The key's leading tone, or -1 without a key. */
+  leadingTonePc: number;
+  /** The key's tonic, or -1 without a key. */
+  tonicPc: number;
+  /** Whether the arriving chord contains each pitch class 0-11. */
+  nextHas: Uint8Array;
+};
+
+/** Build the resolution tables for one chord-to-chord move. */
+export function resolutionTables(
+  prevChord: Chord,
+  nextChord: Chord,
+  key?: KeyScale,
+): ResolutionTables {
+  const nextHas = new Uint8Array(12);
+  for (const pc of chordPitchClasses(nextChord)) {
+    nextHas[pc] = 1;
+  }
+  return {
+    seventhPc: seventhPcOf(prevChord),
+    leadingTonePc: key === undefined ? -1 : pitchClass(key.rootPc - 1),
+    tonicPc: key === undefined ? -1 : pitchClass(key.rootPc),
+    nextHas,
+  };
 }
 
 /**
@@ -206,39 +339,79 @@ function seventhPcOf(chord: Chord): number | undefined {
  * leading tone to speak of, so that half of the rule is skipped.
  */
 export function resolutionViolations(
-  prev: number[],
-  cur: number[],
-  prevChord: Chord,
-  nextChord: Chord,
-  key?: KeyScale,
+  tables: ResolutionTables,
+  prev: ArrayLike<number>,
+  prevOffset: number,
+  cur: ArrayLike<number>,
+  curOffset: number,
+  voices: number,
 ): number {
-  const seventhPc = seventhPcOf(prevChord);
-  const leadingTonePc = key === undefined ? undefined : pitchClass(key.rootPc - 1);
-  const tonicPc = key === undefined ? undefined : pitchClass(key.rootPc);
-  const nextPcs = new Set(chordPitchClasses(nextChord));
+  const { seventhPc, leadingTonePc, tonicPc, nextHas } = tables;
   let count = 0;
-  for (let voice = 0; voice < prev.length && voice < cur.length; voice += 1) {
-    const from = prev[voice];
-    const to = cur[voice];
+  for (let voice = 0; voice < voices; voice += 1) {
+    const from = prev[prevOffset + voice];
+    const to = cur[curOffset + voice];
     if (from === undefined || to === undefined) {
       continue;
     }
     const fromPc = pitchClass(from);
     const motion = to - from;
-    if (fromPc === seventhPc && !nextPcs.has(fromPc) && motion !== -1 && motion !== -2) {
+    if (fromPc === seventhPc && nextHas[fromPc] === 0 && motion !== -1 && motion !== -2) {
       count += 1;
     }
     if (
       fromPc === leadingTonePc &&
-      tonicPc !== undefined &&
-      nextPcs.has(tonicPc) &&
-      !nextPcs.has(fromPc) &&
+      tonicPc >= 0 &&
+      nextHas[tonicPc] === 1 &&
+      nextHas[fromPc] === 0 &&
       motion !== 1
     ) {
       count += 1;
     }
   }
   return count;
+}
+
+/**
+ * Total voice-leading cost from the voicing at `prevOffset` to the one at
+ * `curOffset`: summed absolute semitone motion, plus
+ * {@link HIDDEN_PERFECT_PENALTY} when the outer-voice pair reaches a
+ * hidden/direct perfect fifth or octave by similar motion.
+ */
+export function leadingCost(
+  prev: ArrayLike<number>,
+  prevOffset: number,
+  cur: ArrayLike<number>,
+  curOffset: number,
+  voices: number,
+): number {
+  let total = 0;
+  for (let voice = 0; voice < voices; voice += 1) {
+    const a = prev[prevOffset + voice];
+    const b = cur[curOffset + voice];
+    if (a === undefined || b === undefined) {
+      continue;
+    }
+    total += Math.abs(b - a);
+  }
+  // Discourage hidden/direct perfects between the outermost voices, where they
+  // are most audible. True parallels are handled (and forbidden) elsewhere.
+  if (voices >= 2) {
+    const bassPrev = prev[prevOffset];
+    const bassCur = cur[curOffset];
+    const sopPrev = prev[prevOffset + voices - 1];
+    const sopCur = cur[curOffset + voices - 1];
+    if (
+      bassPrev !== undefined &&
+      bassCur !== undefined &&
+      sopPrev !== undefined &&
+      sopCur !== undefined &&
+      createsHiddenParallelPerfect(bassPrev, bassCur, sopPrev, sopCur)
+    ) {
+      total += HIDDEN_PERFECT_PENALTY;
+    }
+  }
+  return total;
 }
 
 /**
@@ -252,14 +425,20 @@ export function resolutionViolations(
  * that reaches here cannot exhibit either. Overlap involves the previous
  * voicing and so is still live.
  */
-export function violationCount(prev: number[], cur: number[]): number {
+export function violationCount(
+  prev: ArrayLike<number>,
+  prevOffset: number,
+  cur: ArrayLike<number>,
+  curOffset: number,
+  voices: number,
+): number {
   let count = 0;
-  for (let lower = 0; lower < cur.length; lower += 1) {
-    for (let upper = lower + 1; upper < cur.length; upper += 1) {
-      const prevLower = prev[lower];
-      const prevUpper = prev[upper];
-      const curLower = cur[lower];
-      const curUpper = cur[upper];
+  for (let lower = 0; lower < voices; lower += 1) {
+    for (let upper = lower + 1; upper < voices; upper += 1) {
+      const prevLower = prev[prevOffset + lower];
+      const prevUpper = prev[prevOffset + upper];
+      const curLower = cur[curOffset + lower];
+      const curUpper = cur[curOffset + upper];
       if (
         prevLower === undefined ||
         prevUpper === undefined ||

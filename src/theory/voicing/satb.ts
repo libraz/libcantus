@@ -8,15 +8,18 @@ import {
 import type { Chord } from '../chord/index.js';
 import { formatChordSymbol } from '../symbol/index.js';
 import {
+  createCandidateBuffer,
   DEFAULT_MAX_SPACING,
   enumerateVoicings,
+  leadingCost,
   RESOLUTION_PENALTY,
+  resolutionTables,
   resolutionViolations,
   structuralPenalty,
+  structuralTables,
   VIOLATION_PENALTY,
   violationCount,
 } from './internal.js';
-import { voiceLeadingCost } from './leading.js';
 
 /**
  * An inclusive MIDI pitch range for a single voice.
@@ -189,12 +192,15 @@ export function voiceChord(chord: Chord, opts?: VoicingOptions): number[] {
   const ranges = resolveRanges(opts);
   const maxSpacing = resolveMaxSpacing(opts);
   const candidates = enumerateVoicings(chord, ranges, maxSpacing, resolveMaxCandidates(opts));
-  let best: number[] | undefined;
+  const tables = structuralTables(chord, opts?.key);
+  const { pitches, voices } = candidates;
+  let bestOffset = -1;
   let bestScore = Number.POSITIVE_INFINITY;
-  for (const candidate of candidates) {
-    let score = structuralPenalty(candidate, chord, opts?.key);
-    for (let i = 0; i < candidate.length; i += 1) {
-      const pitch = candidate[i];
+  for (let index = 0; index < candidates.count; index += 1) {
+    const offset = index * voices;
+    let score = structuralPenalty(tables, pitches, offset, voices);
+    for (let i = 0; i < voices; i += 1) {
+      const pitch = pitches[offset + i];
       const range = ranges[i];
       if (pitch === undefined || range === undefined) {
         continue;
@@ -205,15 +211,15 @@ export function voiceChord(chord: Chord, opts?: VoicingOptions): number[] {
     }
     if (score < bestScore) {
       bestScore = score;
-      best = candidate;
+      bestOffset = offset;
     }
   }
-  if (best === undefined) {
+  if (bestOffset < 0) {
     throw new NoSolutionError(
       `no voicing satisfies the given ranges for ${formatChordSymbol(chord)}`,
     );
   }
-  return best;
+  return [...pitches.subarray(bestOffset, bestOffset + voices)];
 }
 
 /**
@@ -287,6 +293,9 @@ export function voiceProgression(chords: readonly Chord[], opts?: VoicingOptions
   const maxSpacing = resolveMaxSpacing(opts);
   const maxCandidates = resolveMaxCandidates(opts);
   const result: number[][] = [];
+  // One candidate buffer serves the whole progression: the search overwrites it
+  // per chord, so a lead sheet allocates it once rather than once per chord.
+  const buffer = createCandidateBuffer();
   let prev: number[] | undefined;
   let prevChord: Chord | undefined;
   for (let index = 0; index < chords.length; index += 1) {
@@ -301,28 +310,34 @@ export function voiceProgression(chords: readonly Chord[], opts?: VoicingOptions
       continue;
     }
     const candidates = locate(index, chord, () =>
-      enumerateVoicings(chord, ranges, maxSpacing, maxCandidates),
+      enumerateVoicings(chord, ranges, maxSpacing, maxCandidates, buffer),
     );
-    let best: number[] | undefined;
+    const { pitches, voices } = candidates;
+    const structure = structuralTables(chord, opts?.key);
+    const resolution =
+      prevChord === undefined ? undefined : resolutionTables(prevChord, chord, opts?.key);
+    let bestOffset = -1;
     let bestScore = Number.POSITIVE_INFINITY;
-    for (const candidate of candidates) {
+    for (let candidate = 0; candidate < candidates.count; candidate += 1) {
+      const offset = candidate * voices;
       const unresolved =
-        prevChord === undefined
+        resolution === undefined
           ? 0
-          : resolutionViolations(prev, candidate, prevChord, chord, opts?.key);
+          : resolutionViolations(resolution, prev, 0, pitches, offset, voices);
       const score =
-        structuralPenalty(candidate, chord, opts?.key) +
-        voiceLeadingCost(prev, candidate) +
-        VIOLATION_PENALTY * violationCount(prev, candidate) +
+        structuralPenalty(structure, pitches, offset, voices) +
+        leadingCost(prev, 0, pitches, offset, voices) +
+        VIOLATION_PENALTY * violationCount(prev, 0, pitches, offset, voices) +
         RESOLUTION_PENALTY * unresolved;
       if (score < bestScore) {
         bestScore = score;
-        best = candidate;
+        bestOffset = offset;
       }
     }
-    if (best === undefined) {
+    if (bestOffset < 0) {
       throw noSolutionAt(index, chord);
     }
+    const best = [...pitches.subarray(bestOffset, bestOffset + voices)];
     result.push(best);
     prev = best;
     prevChord = chord;

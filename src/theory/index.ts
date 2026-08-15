@@ -6,6 +6,14 @@
 // Types from the layers below that this layer's own signatures name, so a
 // consumer importing only `@libraz/libcantus/theory` can still spell them.
 export type {
+  BudgetExceededError,
+  InvalidInputError,
+  LibcantusError,
+  NoSolutionError,
+  ParseResult,
+} from '../core/errors/index.js';
+export type { ConsonanceClass } from '../core/interval/index.js';
+export type {
   IntervalLike,
   IntervalQualityLabel,
   Note as NoteData,
@@ -15,18 +23,27 @@ export type {
 } from '../core/pitch/index.js';
 export type { KeyScale } from '../core/types.js';
 export type {
+  Alteration,
+  AlteredDegree,
   Chord as ChordData,
+  ChordBase,
   ChordQuality,
   ChordSegment,
+  ChordSeventh,
   ChordSpan,
+  ChordSpec,
   ChordToneRole,
   PitchSpelling,
 } from './chord/index.js';
 export {
   chordFromDegree,
   chordFromSpan,
+  chordFromSpec,
   chordPitchClasses,
   chordQualities,
+  chordSpecIntervals,
+  chordSpecOf,
+  chordSpecQuality,
   chordToneRole,
   diatonicSeventh,
   diatonicTriad,
@@ -49,7 +66,13 @@ export {
   scaleMatchesChord,
   scalesForChanges,
 } from './chordscale/index.js';
+export type {
+  VoiceIndependenceOptions,
+  VoiceIndependenceReport,
+} from './counterpoint/index.js';
 export {
+  classifySpelledInterval,
+  createsBattuta,
   createsHiddenParallelPerfect,
   createsParallelOctave,
   createsParallelPerfect,
@@ -58,8 +81,10 @@ export {
   createsVoiceCrossing,
   createsVoiceOverlap,
   exceedsSpacing,
+  isAugmentedMelodicInterval,
   isForbiddenMelodicLeap,
   isLeadingToneResolution,
+  voiceIndependence,
 } from './counterpoint/index.js';
 export type {
   FiguredBassRealization,
@@ -76,11 +101,14 @@ export type {
   PartWritingOptions,
   PartWritingViolation,
   PartWritingViolationKind,
+  Species,
+  SpeciesOptions,
   SpelledVoicing,
 } from './partwriting/index.js';
-export { checkPartWriting, spellVoicing } from './partwriting/index.js';
+export { checkPartWriting, checkSpecies, spellVoicing } from './partwriting/index.js';
 export type {
   EvaluateSafetyOptions,
+  ProfileWeights,
   SafetyProfile,
   SafetyQuery,
   SafetyResult,
@@ -90,20 +118,26 @@ export {
   enumerateSafePitches,
   evaluateSafety,
   NoteSafety,
+  PROFILE_WEIGHTS,
+  profileWeights,
   ReasonFlag,
 } from './safety/index.js';
 export type {
   KeyMode,
   KeyRelation,
+  ScaleAliasName,
   ScaleName,
   ScaleNameInput,
+  ScaleSystem,
   SpelledKey,
+  WorldScaleName,
 } from './scale/index.js';
 export {
   ALTERED_MASK,
   BLUES_MASK,
   CHROMATIC_MASK,
   DORIAN_MASK,
+  DOUBLE_HARMONIC_MASK,
   diatonicPitchClasses,
   dominantKeyOf,
   enharmonicKeyOf,
@@ -118,10 +152,12 @@ export {
   LYDIAN_MASK,
   MAJOR_MASK,
   MAJOR_PENTATONIC_MASK,
+  MARWA_MASK,
   MELODIC_MINOR_MASK,
   MINOR_PENTATONIC_MASK,
   MIXOLYDIAN_B13_MASK,
   MIXOLYDIAN_MASK,
+  MIYAKO_BUSHI_MASK,
   majorKey,
   maskFromOffsets,
   minorKey,
@@ -133,16 +169,26 @@ export {
   OCTATONIC_WHOLE_HALF_MASK,
   PHRYGIAN_DOMINANT_MASK,
   PHRYGIAN_MASK,
+  PURVI_MASK,
   parallelKeyOf,
   pitchToScaleDegree,
+  RITSU_MASK,
+  RYUKYU_MASK,
   relatedKeysOf,
   relativeKeyOf,
   requireScaleMask,
+  resolveScaleName,
+  SCALE_ALIASES,
+  SCALE_SYSTEMS,
   scaleByName,
+  scaleSystemOf,
   scaleTonesInDegreeOrder,
   spelledKeyOf,
   subdominantKeyOf,
+  supportsFunctionalHarmony,
+  TODI_MASK,
   WHOLE_TONE_MASK,
+  WORLD_SCALES,
 } from './scale/index.js';
 export type { SpellingContext } from './spelling/index.js';
 export {
@@ -159,6 +205,7 @@ export {
   formatChordSymbol,
   parseChordSymbol,
   transposeChordSymbol,
+  tryParseChordSymbol,
 } from './symbol/index.js';
 export type {
   TransposingInstrument,

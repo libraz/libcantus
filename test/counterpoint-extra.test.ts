@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { parseNote } from '../src/core/pitch/index.js';
 import {
   createsHiddenParallelPerfect,
   createsParallelOctave,
@@ -103,5 +104,27 @@ describe('spacing and overlap', () => {
   it('detects excessive spacing between upper voices', () => {
     expect(exceedsSpacing(80, 60)).toBe(true);
     expect(exceedsSpacing(67, 60)).toBe(false);
+  });
+});
+
+describe('spelled and sounding forms agree where spelling cannot matter', () => {
+  const note = (name: string) => parseNote(name);
+
+  it('reads the perfect classes the same either way', () => {
+    expect(createsParallelPerfect(note('G4'), note('A4'), note('C4'), note('D4'))).toBe(true);
+    expect(createsParallelOctave(note('C5'), note('D5'), note('C4'), note('D4'))).toBe(true);
+    expect(createsParallelUnison(note('C4'), note('D4'), note('C4'), note('D4'))).toBe(true);
+    expect(createsHiddenParallelPerfect(note('E4'), note('G4'), note('G3'), note('C4'))).toBe(true);
+  });
+
+  it('reads the register rules the same either way', () => {
+    expect(createsVoiceOverlap(note('G4'), note('Bb3'), note('C4'), note('D4'))).toBe(true);
+    expect(exceedsSpacing(note('Ab5'), note('C4'))).toBe(true);
+    expect(exceedsSpacing(note('G4'), note('C4'))).toBe(false);
+  });
+
+  it('still reads a bare pitch, for a caller that holds no spelling', () => {
+    expect(isForbiddenMelodicLeap(60, 70)).toBe(true);
+    expect(isForbiddenMelodicLeap(note('C4'), note('Bb4'))).toBe(true);
   });
 });
