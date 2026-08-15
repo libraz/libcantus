@@ -200,12 +200,28 @@ describe('detectKey', () => {
   });
 
   it('validates every NoteEvent field before duration weighting', () => {
-    expect(() => detectKeyFromNotes([{ pitch: 60, startBeat: -1, durationBeat: 4 }])).toThrow(
-      RangeError,
-    );
+    expect(() =>
+      detectKeyFromNotes([{ pitch: 60, startBeat: Number.NEGATIVE_INFINITY, durationBeat: 4 }]),
+    ).toThrow(RangeError);
+    expect(() =>
+      detectKeyFromNotes([{ pitch: 60, startBeat: 0, durationBeat: Number.NaN }]),
+    ).toThrow(RangeError);
     // Import artefacts that never sound stay accepted just like the other
     // event-consuming analysis entry points.
     expect(detectKeyFromNotes([{ pitch: 60, startBeat: 0, durationBeat: 0 }])).toEqual([]);
+  });
+
+  it('weighs a pickup, which sounds before the first downbeat', () => {
+    // The downbeat is beat 0, so an upbeat is written at a negative onset. That
+    // is an ordinary position, not a malformed one, and the note counts towards
+    // the key exactly as its duration and velocity say it should.
+    const pickup = detectKeyFromNotes([
+      { pitch: 67, startBeat: -1, durationBeat: 1 },
+      { pitch: 60, startBeat: 0, durationBeat: 4 },
+      { pitch: 64, startBeat: 4, durationBeat: 4 },
+    ]);
+    expect(pickup).toHaveLength(24);
+    expect(pickup[0]?.key.rootPc).toBe(0);
   });
 
   it('uses the caller budget at both pitch and NoteEvent key-detection entrances', () => {

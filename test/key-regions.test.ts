@@ -7,6 +7,8 @@ import {
 } from '../src/analyze/keys/index.js';
 import { chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
 import { InvalidInputError } from '../src/core/errors/index.js';
+import type { MeterMap } from '../src/core/meter/index.js';
+import { parseTimeSignature } from '../src/core/meter/index.js';
 import { formatNote } from '../src/core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../src/core/types.js';
 import type { ChordQuality, ChordSegment } from '../src/theory/chord/index.js';
@@ -331,6 +333,77 @@ describe('keyTimelineFromNotes options', () => {
     expect(() => keyTimelineFromNotes(notes, { expectedKeyBeats: Number.NaN })).toThrow(
       InvalidInputError,
     );
+  });
+});
+
+describe('keyTimelineFromNotes and the meter', () => {
+  /**
+   * Two bars of 4/4 then two of 3/4, one triad per bar: C, F, G, C. The bar
+   * lines fall at 0, 4, 8 and 11, so the last two downbeats are exactly the
+   * beats a reading stuck in 4/4 would call weak.
+   */
+  const CHANGING: MeterMap = [
+    { startBeat: 0, ts: parseTimeSignature('4/4') },
+    { startBeat: 8, ts: parseTimeSignature('3/4') },
+  ];
+
+  /** A triad sounding across one bar. */
+  function triad(root: number, startBeat: number, durationBeat: number): NoteEvent[] {
+    return [root, root + 4, root + 7].map((pitch) => ({ pitch, startBeat, durationBeat }));
+  }
+
+  const CHANGING_PIECE: NoteEvent[] = [
+    ...triad(60, 0, 4), // C
+    ...triad(65, 4, 4), // F
+    ...triad(67, 8, 3), // G
+    ...triad(60, 11, 3), // C
+  ];
+
+  it('reads a piece that changes metre in the metre it is in', () => {
+    const regions = keyTimelineFromNotes(CHANGING_PIECE, { meters: CHANGING });
+    expect(keyNames(regions)).toEqual(['C major']);
+    expectWellFormed(regions, { contiguous: true, span: [0, 14] });
+    // Every onset after the change is a downbeat of its own bar, so each one
+    // carries the accent bonus a downbeat earns. Reading the same notes in 4/4
+    // throughout puts those accents on beats 8 and 12 instead — the second of
+    // which no note starts on — so the two readings weigh the music
+    // differently even though they agree on the key.
+    const asCommon = keyTimelineFromNotes(CHANGING_PIECE, { ts: parseTimeSignature('4/4') });
+    expect(regions[0]?.confidence).not.toBe(asCommon[0]?.confidence);
+  });
+
+  it('rejects naming the meter twice', () => {
+    expect(() =>
+      keyTimelineFromNotes(CHANGING_PIECE, { ts: parseTimeSignature('4/4'), meters: CHANGING }),
+    ).toThrow(InvalidInputError);
+    expect(() =>
+      detectModulations(C_TO_G_CHORDS, { ts: parseTimeSignature('4/4'), meters: CHANGING }),
+    ).toThrow(InvalidInputError);
+  });
+
+  it('reads the notes of a pickup instead of dropping them', () => {
+    // Two bars outlining C E G, a quarter note per beat. The outline alone is
+    // as much an E minor statement as a C major one, and the weight it puts on
+    // E is enough to settle it as E minor.
+    const body: NoteEvent[] = [60, 64, 67, 64, 60, 64, 67, 64].map((pitch, i) => ({
+      pitch,
+      startBeat: i,
+      durationBeat: 1,
+    }));
+    // An F natural upbeat: foreign to E minor, diatonic to C major, and the
+    // only tone in the piece that tells the two apart. It sounds before the
+    // first downbeat, so it is written at a negative beat.
+    const pickup: NoteEvent = { pitch: 65, startBeat: -1, durationBeat: 1 };
+    const withPickup = keyTimelineFromNotes([pickup, ...body]);
+    const withoutPickup = keyTimelineFromNotes(body);
+    // The grid runs back a whole bar to reach the upbeat, so the regions cover
+    // it rather than starting at the first downbeat and leaving it outside.
+    expect(withPickup[0]?.startBeat).toBe(-4);
+    expectWellFormed(withPickup, { contiguous: true, span: [-4, 8] });
+    // One upbeat note against eight in the body, and it changes the answer —
+    // which it can only do if the pickup was analyzed at all.
+    expect(keyNames(withPickup)).toEqual(['C major']);
+    expect(keyNames(withoutPickup)).toEqual(['E minor']);
   });
 });
 

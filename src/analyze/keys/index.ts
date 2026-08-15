@@ -8,15 +8,14 @@
  * turned on.
  */
 
-import type { TimeSignature } from '../../core/meter/index.js';
-import { beatsPerBar, metricWeight, parseTimeSignature } from '../../core/meter/index.js';
+import type { MeterLike, MeterMap, TimeSignature } from '../../core/meter/index.js';
+import { beatsPerBarAt, metricWeight, resolveMeters } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
   assertGenerationBudget,
   assertNoteEvents,
   assertRange,
-  assertTimeSignature,
 } from '../../core/validation/index.js';
 import type { Chord, ChordSegment } from '../../theory/chord/index.js';
 import { chordPitchClasses } from '../../theory/chord/index.js';
@@ -79,27 +78,38 @@ export type KeyRegion = {
  */
 export type KeyTimelineOptions = {
   /**
-   * Time signature used for metric accents; defaults to 4/4.
+   * A single time signature held across the whole span, as sugar for a
+   * one-element `meters`; defaults to 4/4. Giving both is an input error.
    *
    * @defaultValue `4/4`
    */
   ts?: TimeSignature;
   /**
-   * Expected length of one key area in beats; defaults to four bars of `ts`.
+   * The meter as it changes over the span. Bar lines, downbeats and the metric
+   * accents the search discounts a modulation by all follow the signature in
+   * force at the beat in question, so a piece that changes meter is not read in
+   * the one it opened in.
+   *
+   * @defaultValue 4/4 throughout
+   */
+  meters?: MeterMap;
+  /**
+   * Expected length of one key area in beats; defaults to four bars of the
+   * opening meter.
    *
    * This is a prior, not a window: the longer a key is expected to hold, the
    * more evidence a modulation needs before the search will report one. Keys
    * change far more slowly than chords do, which is why the default is measured
    * in bars rather than beats.
    *
-   * @defaultValue four bars of `ts`
+   * @defaultValue four bars of the opening meter
    */
   expectedKeyBeats?: number;
   /**
    * Shortest key area the search may report, in beats; defaults to one bar of
-   * `ts`. Values above `expectedKeyBeats` are clamped to it.
+   * the opening meter. Values above `expectedKeyBeats` are clamped to it.
    *
-   * @defaultValue one bar of `ts`
+   * @defaultValue one bar of the opening meter
    */
   minKeyBeats?: number;
   /**
@@ -220,7 +230,7 @@ type KeySlot = {
  * predecessor and every pair is considered. With 24 candidates that is 576
  * comparisons per slot, which is nothing next to building the slots.
  */
-function chooseKeys(slots: readonly KeySlot[], changeCost: number, ts: TimeSignature): number[] {
+function chooseKeys(slots: readonly KeySlot[], changeCost: number, meter: MeterLike): number[] {
   const count = KEY_CANDIDATES.length;
   if (slots.length === 0) {
     return [];
@@ -230,7 +240,7 @@ function chooseKeys(slots: readonly KeySlot[], changeCost: number, ts: TimeSigna
   for (let i = 1; i < slots.length; i += 1) {
     const slot = slots[i];
     const previous = costs;
-    const accent = metricWeight(slot?.startBeat ?? 0, ts);
+    const accent = metricWeight(slot?.startBeat ?? 0, meter);
     const metricFactor = 1 - (STRONG_BEAT_DISCOUNT * accent) / MAX_METRIC_WEIGHT;
     const next = new Array<number>(count).fill(0);
     const back = new Int32Array(count);
@@ -331,6 +341,12 @@ function withRelations(regions: KeyRegion[]): KeyRegion[] {
  * fifths and falls on strong beats. Adjacent slots agreeing on a key become one
  * region.
  *
+ * The metric accents that discount a modulation follow the signature in force
+ * at the beat in question, so a piece that changes meter is read in the meter
+ * it is actually in. The first downbeat is beat 0, so a pickup is written at
+ * negative beats and its notes argue for the key like any others rather than
+ * falling outside the span.
+ *
  * Pivot chords are not reported here: naming one requires knowing which chord
  * sounded at the boundary, which raw notes do not say. Use
  * {@link detectModulations} when a chord timeline is in hand.
@@ -354,9 +370,8 @@ export function keyTimelineFromNotes(
   notes: NoteEvent[],
   opts: KeyTimelineOptions = {},
 ): KeyRegion[] {
-  const ts = opts.ts ?? parseTimeSignature('4/4');
-  assertTimeSignature(ts);
-  const bar = beatsPerBar(ts);
+  const meters = resolveMeters(opts, 'key timeline meters');
+  const bar = beatsPerBarAt(0, meters);
   const expectedKeyBeats = opts.expectedKeyBeats ?? bar * 4;
   assertRange(expectedKeyBeats, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'expectedKeyBeats');
   const minKeyBeats = opts.minKeyBeats ?? bar;
@@ -369,7 +384,13 @@ export function keyTimelineFromNotes(
   assertRange(totalBeats, 0, Number.MAX_SAFE_INTEGER, 'key timeline totalBeats');
 
   const slotBeats = Math.min(minKeyBeats, expectedKeyBeats);
-  const slotCount = Math.max(0, Math.ceil(totalBeats / slotBeats - EPS));
+  // A pickup sounds before beat 0, so the grid has to start there too — but a
+  // whole number of slots before it, or every slot boundary after the pickup
+  // would sit off the bar lines by the length of the upbeat. Dropping those
+  // notes instead would throw away the very bar that establishes the key.
+  const firstOnset = sounding.reduce((first, n) => Math.min(first, n.startBeat), 0);
+  const origin = Math.min(0, Math.floor(firstOnset / slotBeats + EPS) * slotBeats);
+  const slotCount = Math.max(0, Math.ceil((totalBeats - origin) / slotBeats - EPS));
   assertGenerationBudget(slotCount, 'key timeline slots', budget);
   if (slotCount === 0 || sounding.length === 0) {
     return [];
@@ -380,16 +401,26 @@ export function keyTimelineFromNotes(
   let weightSum = 0;
   let soundingSlots = 0;
   for (let i = 0; i < slotCount; i += 1) {
-    const startBeat = i * slotBeats;
+    const startBeat = origin + i * slotBeats;
     const endBeat = Math.min(startBeat + slotBeats, totalBeats);
     // One bar in isolation says very little — a bar of G major triad inside C
     // major looks exactly like a bar of tonic G — so the neighbouring bars are
     // heard too. They are heard more quietly than the bar itself, which is what
     // keeps the boundary where the music actually turns instead of smearing it
     // across the bars either side.
-    const own = windowWeights(sounding, startBeat, endBeat, ts);
-    const before = windowWeights(sounding, Math.max(0, startBeat - slotBeats), startBeat, ts);
-    const after = windowWeights(sounding, endBeat, Math.min(totalBeats, endBeat + slotBeats), ts);
+    const own = windowWeights(sounding, startBeat, endBeat, meters);
+    const before = windowWeights(
+      sounding,
+      Math.max(origin, startBeat - slotBeats),
+      startBeat,
+      meters,
+    );
+    const after = windowWeights(
+      sounding,
+      endBeat,
+      Math.min(totalBeats, endBeat + slotBeats),
+      meters,
+    );
     const weights = own.weights.map(
       (weight, pc) =>
         weight +
@@ -419,13 +450,13 @@ export function keyTimelineFromNotes(
 
   const meanSlotWeight = weightSum / soundingSlots;
   const changeCost = MODULATION_COST * meanSlotWeight * (expectedKeyBeats / slotBeats);
-  const path = chooseKeys(slots, changeCost, ts);
+  const path = chooseKeys(slots, changeCost, meters);
   const grouped = regionsFromPath(slots, path);
 
   const regions = grouped.map((region) => {
     const candidate = KEY_CANDIDATES[region.candidate];
     const key = candidate?.key ?? majorKey(0);
-    const { weights } = windowWeights(sounding, region.startBeat, region.endBeat, ts);
+    const { weights } = windowWeights(sounding, region.startBeat, region.endBeat, meters);
     const correlation = profileScore(
       weights,
       candidate?.minor ? profile.minor : profile.major,
@@ -525,9 +556,8 @@ export function detectModulations(
   chords: readonly ChordSegment[],
   opts: KeyTimelineOptions = {},
 ): KeyRegion[] {
-  const ts = opts.ts ?? parseTimeSignature('4/4');
-  assertTimeSignature(ts);
-  const bar = beatsPerBar(ts);
+  const meters = resolveMeters(opts, 'modulation meters');
+  const bar = beatsPerBarAt(0, meters);
   const expectedKeyBeats = opts.expectedKeyBeats ?? bar * 4;
   assertRange(expectedKeyBeats, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'expectedKeyBeats');
   assertGenerationBudget(chords.length, 'modulation chord segments', opts.budget);
@@ -579,7 +609,7 @@ export function detectModulations(
   // Here a slot's weight is its length in beats outright, so one expected key
   // area's worth of evidence is just `expectedKeyBeats` and no mean is needed.
   const changeCost = CHORD_MODULATION_COST * expectedKeyBeats;
-  const path = chooseKeys(slots, changeCost, ts);
+  const path = chooseKeys(slots, changeCost, meters);
   const grouped = regionsFromPath(slots, path);
 
   const regions: KeyRegion[] = grouped.map((region) => {

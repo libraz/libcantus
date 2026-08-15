@@ -5,7 +5,7 @@
  */
 
 import { InvalidInputError } from '../../core/errors/index.js';
-import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
+import { formatNote, pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
   assertFiniteNumber,
@@ -15,15 +15,22 @@ import {
 } from '../../core/validation/index.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { chordPitchClasses, chordQualities, makeChord } from '../../theory/chord/index.js';
+import type { ScaleName } from '../../theory/scale/index.js';
 import {
   HARMONIC_MINOR_MASK,
   MAJOR_MASK,
   MELODIC_MINOR_MASK,
   NATURAL_MINOR_MASK,
+  spelledKeyOf,
 } from '../../theory/scale/index.js';
+import type { RejectedCandidate } from '../functional/rationale.js';
+import type { ModalScaleName } from './modes.js';
+import { modalProfileVector, resolveModalCandidates } from './modes.js';
 import type { KeyProfileName, KeyProfilePair } from './profiles.js';
 import { profileScore, resolveKeyProfile } from './profiles.js';
 
+export type { ModalCandidate, ModalScaleName } from './modes.js';
+export { MODAL_SCALE_NAMES } from './modes.js';
 export type { KeyProfileName, KeyProfilePair } from './profiles.js';
 
 /**
@@ -75,13 +82,29 @@ export type DetectChordOptions = {
 export type KeyMatch = {
   /** The scale that scored best for this tonic and mode, `variant` included. */
   key: KeyScale;
+  /**
+   * The major or minor key this match is closest to. A modal match reports the
+   * mode it leans on — dorian, phrygian and locrian are minor, lydian and
+   * mixolydian major — so a caller that reads nothing but `mode` still gets a
+   * musically sane answer; `scaleName` is where the mode itself is named.
+   */
   mode: 'major' | 'minor';
   /**
    * Which scale form `key` uses. Minor keys report whichever of the natural,
    * harmonic and melodic masks covers the most input weight; the variant does
-   * not take part in ranking.
+   * not take part in ranking. A church mode reports `'modal'`, since its scale
+   * is neither of the major nor one of the three minor forms.
    */
   variant: KeyVariant;
+  /**
+   * The entry of `NAMED_SCALES` whose mask is `key.modeMask12`, naming the scale
+   * exactly where `mode` and `variant` only place it: `'major'`,
+   * `'naturalMinor'`, `'harmonicMinor'`, `'melodicMinor'`, or one of the church
+   * modes when {@link DetectKeyOptions.modes} put them in the running. Ionian
+   * and Aeolian are reported as `'major'` and `'naturalMinor'`, the names of the
+   * candidates they are the same scale as.
+   */
+  scaleName: ScaleName;
   /**
    * Fraction of the distinct input pitch classes that belong to `key`, in
    * [0, 1]. Measured against the returned scale, so it always agrees with
@@ -100,6 +123,24 @@ export type KeyMatch = {
    * the degenerate case.
    */
   score: number;
+  /**
+   * Why this candidate scored what it did, in the phrasing
+   * {@link analyzeVoice} uses for a note.
+   *
+   * Present only when {@link DetectKeyOptions.explain} asked for it: a ranking
+   * is 24 candidates before the modes are counted, and most callers read the
+   * first one or two.
+   */
+  rationale?: string;
+  /**
+   * The candidates that were considered and rejected, and why each ranked
+   * below this one.
+   *
+   * Carried by the top-ranked match alone — the rivals of a runner-up are the
+   * rest of the list, which the caller already holds — and only when
+   * {@link DetectKeyOptions.explain} asked for it.
+   */
+  alternatives?: RejectedCandidate[];
 };
 
 /**
@@ -107,7 +148,7 @@ export type KeyMatch = {
  *
  * @category Recognition
  */
-export type KeyVariant = 'major' | 'natural' | 'harmonic' | 'melodic';
+export type KeyVariant = 'major' | 'natural' | 'harmonic' | 'melodic' | 'modal';
 
 /**
  * Input weighting for {@link detectKey}.
@@ -144,6 +185,36 @@ export type DetectKeyOptions = {
    * @defaultValue `'krumhansl'`
    */
   profile?: KeyProfileName | KeyProfilePair;
+  /**
+   * Whether the church modes join the 24 major and minor keys as candidates.
+   *
+   * Off by default, because a modal candidate can only change a ranking by
+   * outranking something: a caller working in common-practice repertoire, where
+   * a raised sixth over a minor tonic is a melodic-minor inflection rather than
+   * a dorian tonality, should keep reading the answer it reads today. Turn it on
+   * (`true` for all five, or a list to name the modes a repertoire actually
+   * uses) and each enabled mode adds one candidate per tonic, ranked on a
+   * profile derived from its parallel major or minor key.
+   *
+   * Ionian and Aeolian are not on the list: they are the major and natural minor
+   * candidates, which already carry `scaleName` `'major'` and `'naturalMinor'`.
+   *
+   * @defaultValue `false`
+   */
+  modes?: boolean | readonly ModalScaleName[];
+  /**
+   * Attach a {@link KeyMatch.rationale} to every candidate, and
+   * {@link KeyMatch.alternatives} to the top-ranked one.
+   *
+   * Off by default, and the one explanation in the library that is: the other
+   * entry points explain a single reading, while a ranking explains 24 of them
+   * (36 or more with the modes on), each needing a phrase built for a candidate
+   * nobody asked about. That cost outweighs the detection itself, so it is paid
+   * only on request.
+   *
+   * @defaultValue false
+   */
+  explain?: boolean;
   /**
    * Upper bound on the input pitches processed by this detection call.
    *
@@ -300,16 +371,114 @@ export function detectChordBest(
  * diatonic reading.
  */
 const MINOR_VARIANTS = [
-  { variant: 'natural', mask: NATURAL_MINOR_MASK },
-  { variant: 'harmonic', mask: HARMONIC_MINOR_MASK },
-  { variant: 'melodic', mask: MELODIC_MINOR_MASK },
-] as const satisfies readonly { variant: KeyVariant; mask: number }[];
+  { variant: 'natural', mask: NATURAL_MINOR_MASK, scaleName: 'naturalMinor' },
+  { variant: 'harmonic', mask: HARMONIC_MINOR_MASK, scaleName: 'harmonicMinor' },
+  { variant: 'melodic', mask: MELODIC_MINOR_MASK, scaleName: 'melodicMinor' },
+] as const satisfies readonly { variant: KeyVariant; mask: number; scaleName: ScaleName }[];
 
 /** The single major form, kept in the same shape as the minor variants. */
-const MAJOR_VARIANTS = [{ variant: 'major', mask: MAJOR_MASK }] as const satisfies readonly {
-  variant: KeyVariant;
-  mask: number;
-}[];
+const MAJOR_VARIANTS = [
+  { variant: 'major', mask: MAJOR_MASK, scaleName: 'major' },
+] as const satisfies readonly { variant: KeyVariant; mask: number; scaleName: ScaleName }[];
+
+/**
+ * Tie-break order over the scales a candidate can report, applied last so that
+ * two candidates on the same tonic which score and fit identically — as every
+ * candidate does on a perfectly even distribution — still rank in an order the
+ * input alone decides. Major before the minor forms reproduces the order the 24
+ * keys have always ranked in; the modes follow, in candidate order.
+ */
+const SCALE_NAME_ORDER: readonly ScaleName[] = [
+  'major',
+  'naturalMinor',
+  'harmonicMinor',
+  'melodicMinor',
+  'dorian',
+  'phrygian',
+  'lydian',
+  'mixolydian',
+  'locrian',
+];
+
+/** Rank of a reported scale in {@link SCALE_NAME_ORDER}. */
+function scaleNameRank(name: ScaleName): number {
+  return SCALE_NAME_ORDER.indexOf(name);
+}
+
+/**
+ * How many runners-up the winning match names in its `alternatives`.
+ *
+ * Every candidate below the winner was rejected, so the list has to stop
+ * somewhere; three is the neighbourhood a disagreement actually lives in — the
+ * relative, the parallel and the neighbouring fifth — and the caller holding
+ * the full ranking can read further itself.
+ */
+const EXPLAINED_RIVALS = 3;
+
+/** Decimal places a correlation is quoted to in a rationale. */
+const SCORE_DIGITS = 2;
+
+/**
+ * Decimal places a comparison of two correlations may grow to.
+ *
+ * Two candidates can be separated by a margin the two quoted decimals hide,
+ * which would read as "ranked below (0.68 against 0.68)" — the very thing a
+ * rationale exists to prevent. The comparison quotes further digits until the
+ * two differ, up to the point where the difference stops being a musical fact.
+ */
+const MAX_SCORE_DIGITS = 6;
+
+/** Two correlations, quoted to enough digits to tell them apart. */
+function quoteScores(rival: number, winner: number): string {
+  let digits = SCORE_DIGITS;
+  while (digits < MAX_SCORE_DIGITS && rival.toFixed(digits) === winner.toFixed(digits)) {
+    digits += 1;
+  }
+  return `${rival.toFixed(digits)} against ${winner.toFixed(digits)}`;
+}
+
+/** The key a match names, spelled the way its signature would be written. */
+function keyLabel(match: KeyMatch): string {
+  const tonic = formatNote(spelledKeyOf(match.key).tonic);
+  // Scale names are camelCase identifiers; a rationale reads them as prose.
+  const scale = match.scaleName.replace(/([A-Z])/g, ' $1').toLowerCase();
+  return `${tonic} ${scale}`;
+}
+
+/** Why a candidate scored what it did: the correlation and the coverage. */
+function describeKeyMatch(match: KeyMatch, inputSize: number): string {
+  // `fit` is the coverage share; the count behind it is what a reader checks.
+  const inScale = Math.round(match.fit * inputSize);
+  return `${keyLabel(match)}: profile correlation ${match.score.toFixed(SCORE_DIGITS)}, with ${inScale} of ${inputSize} input pitch classes in the scale`;
+}
+
+/** Which link of the documented tie-break chain put a rival below the winner. */
+function keyRivalReason(winner: KeyMatch, rival: KeyMatch): string {
+  if (rival.score !== winner.score) {
+    return `Ranked below on profile correlation (${quoteScores(rival.score, winner.score)})`;
+  }
+  if (rival.fit !== winner.fit) {
+    return 'Tied on correlation, ranked below on the share of the input its scale covers';
+  }
+  if (rival.key.rootPc !== winner.key.rootPc) {
+    return 'Tied on correlation and coverage, ranked below by tonic pitch class';
+  }
+  return 'Tied on correlation and coverage on the same tonic, ranked below by scale, which takes major before the minor forms and the modes last';
+}
+
+/** Attach the rationale to every candidate and the rivals to the winner. */
+function explainMatches(results: KeyMatch[], inputSize: number): void {
+  for (const match of results) {
+    match.rationale = describeKeyMatch(match, inputSize);
+  }
+  const winner = results[0];
+  if (winner === undefined) {
+    return;
+  }
+  winner.alternatives = results
+    .slice(1, EXPLAINED_RIVALS + 1)
+    .map((rival) => ({ label: keyLabel(rival), reason: keyRivalReason(winner, rival) }));
+}
 
 /**
  * Rank major and minor keys by how well a set of pitch classes is distributed
@@ -332,19 +501,31 @@ const MAJOR_VARIANTS = [{ variant: 'major', mask: MAJOR_MASK }] as const satisfi
  * cadence ranks its own tonic first without the harmonic variant having to win
  * a scoring contest against the natural one.
  *
- * Ties are broken by `fit` descending, then tonic pitch class ascending, then
- * major before minor, so the order is fully determined by the input rather than
- * by the order candidates happen to be built in. Returns all 24 keys ranked
- * best-first, or an empty array for an empty input (mirroring
- * {@link detectChord}).
+ * {@link DetectKeyOptions.modes} adds the church modes to the same contest, one
+ * candidate per mode per tonic, each ranked on a profile derived from its
+ * parallel major or minor key. A modal winner reports the mode in `scaleName`
+ * and still reports the key it leans on in `mode`. The option is off by default,
+ * so a caller that does not ask for modes gets the ranking of the 24 keys it has
+ * always got.
+ *
+ * Ties are broken by `fit` descending, then tonic pitch class ascending, then by
+ * scale — major, the minor forms, then the modes — so the order is fully
+ * determined by the input rather than by the order candidates happen to be built
+ * in. Returns all 24 keys ranked best-first, plus 12 more per enabled mode, or
+ * an empty array for an empty input (mirroring {@link detectChord}).
+ *
+ * {@link DetectKeyOptions.explain} adds a `rationale` to every candidate and,
+ * to the winner, the runners-up it beat with the link of that tie-break chain
+ * that separated each. It is off by default; see the option for why.
  *
  * @param pitches MIDI pitches or bare pitch classes.
- * @param opts How to weigh the input and which profile to rank with; see
- *   {@link DetectKeyOptions}.
+ * @param opts How to weigh the input, which profile to rank with, and whether
+ *   the modes take part; see {@link DetectKeyOptions}.
  * @returns Ranked key interpretations (empty for an empty input), each carrying
  *   a finite `score` in [-1, 1].
  * @throws {InvalidInputError} When `weights` does not have one entry per pitch,
- *   or `profile` is not a known name or a valid pair of 12-entry vectors.
+ *   `profile` is not a known name or a valid pair of 12-entry vectors, or
+ *   `modes` names something that is not a church mode.
  * @throws {RangeError} When a pitch is outside the MIDI domain or the input
  *   exceeds the budget.
  * @example
@@ -353,6 +534,8 @@ const MAJOR_VARIANTS = [{ variant: 'major', mask: MAJOR_MASK }] as const satisfi
  * const keys = detectKey([60, 62, 64, 65, 67, 69, 71]); // C major scale
  * keys[0].mode; // 'major', with keys[0].key.rootPc === 0
  * keys[1].mode; // 'minor' on 9: A minor, the relative, ranked just below
+ * const riff = detectKey([62, 62, 65, 69, 71, 69, 65, 62], { modes: true });
+ * riff[0].scaleName; // 'dorian', on rootPc 2, still reported as mode 'minor'
  * ```
  * @category Recognition
  */
@@ -363,6 +546,12 @@ export function detectKey(pitches: readonly number[], opts: DetectKeyOptions = {
     throw new InvalidInputError('weights must have one entry per pitch');
   }
   const profile = resolveKeyProfile(opts.profile);
+  // Derived once per call: a mode's vector depends on the profile, not on which
+  // tonic it is being rotated onto.
+  const modalCandidates = resolveModalCandidates(opts.modes).map((candidate) => ({
+    candidate,
+    vector: modalProfileVector(profile, candidate),
+  }));
   const counts = new Map<number, number>();
   let total = 0;
   for (let index = 0; index < pitches.length; index += 1) {
@@ -397,7 +586,7 @@ export function detectKey(pitches: readonly number[], opts: DetectKeyOptions = {
       const variants = mode === 'major' ? MAJOR_VARIANTS : MINOR_VARIANTS;
       let covered = Number.NEGATIVE_INFINITY;
       let inScale = 0;
-      let best: { variant: KeyVariant; mask: number } = variants[0];
+      let best: { variant: KeyVariant; mask: number; scaleName: ScaleName } = variants[0];
       for (const candidate of variants) {
         let candidateCovered = 0;
         let candidateInScale = 0;
@@ -418,8 +607,27 @@ export function detectKey(pitches: readonly number[], opts: DetectKeyOptions = {
         key: { rootPc: tonic, modeMask12: best.mask },
         mode,
         variant: best.variant,
+        scaleName: best.scaleName,
         fit: inScale / input.length,
         score,
+      });
+    }
+    // A mode has one scale, so there is no variant to choose: it is ranked on
+    // its derived profile and reports the mask it was ranked with.
+    for (const { candidate, vector } of modalCandidates) {
+      let inScale = 0;
+      for (const pc of counts.keys()) {
+        if ((candidate.mask >> ((pc - tonic + 12) % 12)) & 1) {
+          inScale += 1;
+        }
+      }
+      results.push({
+        key: { rootPc: tonic, modeMask12: candidate.mask },
+        mode: candidate.mode,
+        variant: 'modal',
+        scaleName: candidate.scaleName,
+        fit: inScale / input.length,
+        score: profileScore(dist, vector, tonic),
       });
     }
   }
@@ -436,11 +644,13 @@ export function detectKey(pitches: readonly number[], opts: DetectKeyOptions = {
     if (a.key.rootPc !== b.key.rootPc) {
       return a.key.rootPc - b.key.rootPc;
     }
-    if (a.mode === b.mode) {
-      return 0;
-    }
-    return a.mode === 'major' ? -1 : 1;
+    return scaleNameRank(a.scaleName) - scaleNameRank(b.scaleName);
   });
+  if (opts.explain === true) {
+    // After the sort, so a rival's reason can name the link of the tie-break
+    // chain that actually separated it from the winner.
+    explainMatches(results, input.length);
+  }
   return results;
 }
 
@@ -460,11 +670,13 @@ const DEFAULT_VELOCITY = 100;
  * so `score` is a finite correlation in [-1, 1].
  *
  * @param notes The note events to weigh.
- * @param opts Which profile to rank with, and the budget for processing
- *   imported note events; the weights are derived from the notes themselves.
+ * @param opts Which profile to rank with, whether the modes take part, and the
+ *   budget for processing imported note events; the weights are derived from the
+ *   notes themselves.
  * @returns Ranked key interpretations (empty when nothing sounds).
  * @throws {InvalidInputError} When `profile` is not a known name or a valid
- *   pair of 12-entry vectors.
+ *   pair of 12-entry vectors, or `modes` names something that is not a church
+ *   mode.
  * @throws {RangeError} When a note event is malformed or the input exceeds the
  *   budget.
  * @example
@@ -488,6 +700,8 @@ export function detectKeyFromNotes(
     {
       weights: sounding.map((note) => note.durationBeat * (note.velocity ?? DEFAULT_VELOCITY)),
       profile: opts.profile,
+      modes: opts.modes,
+      explain: opts.explain,
       budget: opts.budget,
     },
   );
@@ -503,12 +717,17 @@ export function detectKeyFromNotes(
  * deterministic tie-break {@link detectKey} applies, so its `score` is a finite
  * correlation in [-1, 1] rather than a membership share.
  *
+ * This is where {@link DetectKeyOptions.explain} earns its keep: the winner is
+ * the only match a caller of this function sees, and with `explain` it carries
+ * both its own rationale and the candidates it beat.
+ *
  * @param pitches MIDI pitches or bare pitch classes.
- * @param opts How to weigh the input and which profile to rank with; see
- *   {@link DetectKeyOptions}.
+ * @param opts How to weigh the input, which profile to rank with, and whether
+ *   the modes take part; see {@link DetectKeyOptions}.
  * @returns The top-ranked key, or null when nothing sounds.
  * @throws {InvalidInputError} When `weights` does not have one entry per pitch,
- *   or `profile` is not a known name or a valid pair of 12-entry vectors.
+ *   `profile` is not a known name or a valid pair of 12-entry vectors, or
+ *   `modes` names something that is not a church mode.
  * @throws {RangeError} When a pitch is outside the MIDI domain or the input
  *   exceeds the budget.
  * @example
