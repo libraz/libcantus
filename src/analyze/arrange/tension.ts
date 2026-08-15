@@ -5,14 +5,15 @@
  * registral span into a single normalized reading.
  */
 
-import { isStrongBeat, parseTimeSignature, type TimeSignature } from '../../core/meter/index.js';
+import type { MeterMap } from '../../core/meter/index.js';
+import { isStrongBeat, meterAt, resolveMeters } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
+import type { NoteEventAssertOptions } from '../../core/validation/index.js';
 import {
   assertGenerationBudget,
   assertNoteEvents,
   assertRange,
-  assertTimeSignature,
 } from '../../core/validation/index.js';
 import { chordPitchClasses } from '../../theory/chord/index.js';
 import { evaluateSafety, NoteSafety, type SafetyProfile } from '../../theory/safety/index.js';
@@ -87,15 +88,16 @@ export function tensionCurve(
   tracks: ArrangementTrack[],
   opts: ArrangementOptions & { step?: number } = {},
 ): TensionPoint[] {
-  const ts = opts.ts ?? parseTimeSignature('4/4');
-  assertTimeSignature(ts);
+  const meters = resolveMeters(opts, 'arrangement meters');
   const budget = opts.budget;
+  const noteOptions: NoteEventAssertOptions = { allowNonPositiveDuration: true, budget };
+  if (opts.pickupBeats !== undefined) {
+    assertRange(opts.pickupBeats, 0, Number.MAX_SAFE_INTEGER, 'arrangement pickupBeats');
+    noteOptions.minStartBeat = -opts.pickupBeats;
+  }
   assertGenerationBudget(tracks.length, 'arrangement tracks', budget);
   for (let index = 0; index < tracks.length; index += 1) {
-    assertNoteEvents(tracks[index]?.notes ?? [], `tracks[${index}].notes`, {
-      allowNonPositiveDuration: true,
-      budget,
-    });
+    assertNoteEvents(tracks[index]?.notes ?? [], `tracks[${index}].notes`, noteOptions);
   }
   const profile: SafetyProfile = opts.profile ?? 'pop';
   const step = opts.step ?? 1;
@@ -104,26 +106,36 @@ export function tensionCurve(
   const harmonyTracks =
     opts.harmonyTracks === undefined ? undefined : new Set(opts.harmonyTracks.map(Math.trunc));
   const pooled = poolNotes(tracks, harmonyTracks);
-  const totalBeats = poolNotes(tracks).reduce(
-    (end, n) => Math.max(end, n.startBeat + n.durationBeat),
-    0,
-  );
-  const { timeline, keys, prevailingKey } =
+  const all = poolNotes(tracks);
+  const totalBeats = all.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
+  // A pickup sounds before beat 0, so the curve starts there — a whole number
+  // of steps before it, so the samples still land on the beats they would have
+  // without one.
+  const firstOnset = all.reduce((first, n) => Math.min(first, n.startBeat), 0);
+  const sampleStart = Math.min(0, Math.floor(firstOnset / step + EPS) * step);
+  // A caller-supplied timeline still needs key regions to be read against: the
+  // ones the caller gave, the single key they named, or the ones the notes
+  // themselves give, since supplying chords answers nothing about the key.
+  const suppliedKeys =
     opts.timeline === undefined
+      ? undefined
+      : (opts.keys ??
+        (opts.key !== undefined
+          ? [{ startBeat: 0, endBeat: totalBeats, key: opts.key, confidence: 1 }]
+          : keyTimelineFromNotes(pooled, { ts: meterAt(0, meters), totalBeats, budget })));
+  const { timeline, keys, prevailingKey } =
+    opts.timeline === undefined || suppliedKeys === undefined
       ? chordTimelineFromNotes(pooled, {
           key: opts.key,
-          ts,
+          meters,
+          pickupBeats: opts.pickupBeats,
           harmonicRhythm: opts.harmonicRhythm,
           budget,
         })
       : {
           timeline: opts.timeline,
-          keys:
-            opts.keys ??
-            (opts.key !== undefined
-              ? [{ startBeat: 0, endBeat: totalBeats, key: opts.key, confidence: 1 }]
-              : keyTimelineFromNotes(pooled, { ts, totalBeats, budget })),
-          prevailingKey: majorKey(0),
+          keys: suppliedKeys,
+          prevailingKey: prevailingKeyOf(suppliedKeys) ?? majorKey(0),
         };
   // Harmonic tension is judged against the key in force at the sample, not
   // against one key for the piece: a chord is only tense relative to a tonic.
@@ -132,7 +144,7 @@ export function tensionCurve(
 
   const prepared = prepareTracks(tracks);
   const points: TensionPoint[] = [];
-  const sampleCount = Math.max(0, Math.ceil(totalBeats / step - EPS));
+  const sampleCount = Math.max(0, Math.ceil((totalBeats - sampleStart) / step - EPS));
   assertGenerationBudget(sampleCount, 'tension samples', budget);
   // The per-sample cost is one lookup per sub-voice, so it is their product —
   // not either dimension alone — that has to stay inside the budget.
@@ -143,10 +155,10 @@ export function tensionCurve(
     budget,
   );
   for (let i = 0; i < sampleCount; i += 1) {
-    const beat = i * step;
+    const beat = sampleStart + i * step;
     points.push({
       beat,
-      tension: sampleTension(prepared, timeline, keyAt(beat), ts, profile, beat),
+      tension: sampleTension(prepared, timeline, keyAt(beat), meters, profile, beat),
     });
   }
   return points;
@@ -212,7 +224,7 @@ function sampleTension(
   prepared: PreparedTrack[],
   timeline: ChordTimeline,
   key: KeyScale,
-  ts: TimeSignature,
+  meters: MeterMap,
   profile: SafetyProfile,
   beat: number,
 ): number {
@@ -224,7 +236,7 @@ function sampleTension(
   const functionScore = chord ? FUNCTION_TENSION[functionOf(chord, key)] : 0;
 
   const chordPcs = chord ? new Set(chordPitchClasses(chord)) : null;
-  const strongBeat = isStrongBeat(beat, ts);
+  const strongBeat = isStrongBeat(beat, meters);
   let nonChord = 0;
   let dissonant = 0;
   // A coarse tension sample supplies no individual voice history. Every voice

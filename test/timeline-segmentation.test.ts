@@ -224,6 +224,61 @@ describe('chordTimelineFromNotes dynamic segmentation', () => {
   });
 });
 
+describe('chordTimelineFromNotes exact output', () => {
+  /** A reproducible eight-bar piece: block sevenths under a random line. */
+  function pseudoPiece(bars: number, seed: number): NoteEvent[] {
+    let state = seed >>> 0;
+    const rand = () => {
+      state = (state * 1664525 + 1013904223) >>> 0;
+      return state / 4294967296;
+    };
+    const notes: NoteEvent[] = [];
+    const degrees = [0, 5, 7, 9, 2, 4, 5, 7];
+    for (let bar = 0; bar < bars; bar += 1) {
+      const root = 48 + (degrees[bar % degrees.length] ?? 0);
+      notes.push(...blockChord([root, root + 4, root + 7, root + 11], bar * 4));
+      for (let eighth = 0; eighth < 8; eighth += 1) {
+        notes.push({
+          pitch: root + 24 + Math.floor(rand() * 12),
+          startBeat: bar * 4 + eighth * 0.5,
+          durationBeat: 0.5,
+        });
+      }
+    }
+    return notes;
+  }
+
+  it('places the same boundaries and reports the same confidences', () => {
+    // The boundary search weighs every slot against every chord in its lexicon
+    // and settles the run by shortest path, so a change in how the cost table is
+    // held — or in which candidate a tie hands the run to — moves a boundary
+    // without breaking any of the qualitative expectations above. This pins the
+    // numbers themselves on a piece long enough for the search to have room.
+    const result = chordTimelineFromNotes(pseudoPiece(8, 12345), {
+      key: C_MAJOR,
+      minChordBeats: 0.5,
+    });
+    expect(bounds(result)).toEqual([
+      [0, 4],
+      [4, 8],
+      [8, 12],
+      [12, 16],
+      [16, 20],
+      [20, 24],
+      [24, 28],
+      [28, 32],
+    ]);
+    expect(roots(result)).toEqual([0, 5, 7, 9, 2, 4, 5, 7]);
+    for (const segment of result.timeline.segments) {
+      expect(segment.chord.quality).toBe('maj7');
+    }
+    expect(result.segmentConfidence).toEqual([
+      0.9147982062780268, 0.9417040358744395, 0.968609865470852, 0.8744394618834082,
+      0.8968609865470851, 0.9417040358744395, 0.7318385650224214, 0.8968609865470853,
+    ]);
+  });
+});
+
 describe('chordTimelineFromNotes dynamic segmentation on degenerate input', () => {
   const cases: { name: string; notes: NoteEvent[] }[] = [
     { name: 'a single sustained note', notes: [{ pitch: 60, startBeat: 0, durationBeat: 4 }] },

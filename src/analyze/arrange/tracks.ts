@@ -6,12 +6,14 @@
  */
 
 import { InvalidInputError } from '../../core/errors/index.js';
-import { isStrongBeat, parseTimeSignature, type TimeSignature } from '../../core/meter/index.js';
+import type { MeterMap, TimeSignature } from '../../core/meter/index.js';
+import { isStrongBeat, meterAt, resolveMeters } from '../../core/meter/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
+import type { NoteEventAssertOptions } from '../../core/validation/index.js';
 import {
   assertGenerationBudget,
   assertNoteEvents,
-  assertTimeSignature,
+  assertRange,
 } from '../../core/validation/index.js';
 import {
   evaluateSafety,
@@ -22,11 +24,13 @@ import {
 import { majorKey } from '../../theory/scale/index.js';
 import { type KeyRegion, keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
 import {
+  analyzeTimeline,
   type CadenceHit,
   type ChordTimeline,
   type ChordTimelineResult,
-  chordTimelineFromNotes,
+  type DirtySlots,
   detectCadences,
+  type TimelineEvidence,
 } from '../timeline/index.js';
 import {
   type AnalyzedNote,
@@ -138,7 +142,7 @@ function callerTimeline(
   key: KeyScale | undefined,
   given: KeyRegion[] | undefined,
   pooled: NoteEvent[],
-  ts: TimeSignature,
+  meters: MeterMap,
   budget: number | undefined,
 ): {
   timeline: ChordTimeline;
@@ -151,7 +155,7 @@ function callerTimeline(
     given ??
     (key !== undefined
       ? [{ startBeat: 0, endBeat: totalBeats, key, confidence: 1 }]
-      : keyTimelineFromNotes(pooled, { ts, totalBeats, budget }));
+      : keyTimelineFromNotes(pooled, { ts: meterAt(0, meters), totalBeats, budget }));
   return {
     timeline,
     keys,
@@ -219,15 +223,33 @@ export type ArrangementOptions = {
    */
   minSeverity?: NoteSafety;
   /**
-   * Time signature; defaults to 4/4.
+   * A single time signature held across the whole arrangement, as sugar for a
+   * one-element `meters`; defaults to 4/4. Giving both is an input error.
    *
    * @defaultValue `4/4`
    */
   ts?: TimeSignature;
   /**
-   * Chord-slot length in beats; defaults to one bar of `ts`.
+   * The meter as it changes over the arrangement. Bar lines, downbeats and
+   * metric weight all follow the signature in force at the beat in question.
    *
-   * @defaultValue one bar of `ts`
+   * @defaultValue 4/4 throughout
+   */
+  meters?: MeterMap;
+  /**
+   * Length of the pickup in beats, when the piece starts with one.
+   *
+   * The first downbeat is beat 0, so an upbeat is written at negative beats.
+   * Declaring its length rejects a note that starts before the pickup does;
+   * leave it unset to accept any finite onset.
+   *
+   * @defaultValue no declared pickup
+   */
+  pickupBeats?: number;
+  /**
+   * Chord-slot length in beats; defaults to the length of the opening bar.
+   *
+   * @defaultValue the length of the opening bar
    */
   harmonicRhythm?: number;
   /**
@@ -344,10 +366,11 @@ function evaluationBeats(note: VoiceNote, timeline: ChordTimeline): number[] {
 }
 
 /**
- * Analyse a whole arrangement against a single inferred harmony.
+ * Analyse a whole arrangement against the harmony inferred from it.
  *
- * The chord timeline and key are inferred from the pooled notes of every
- * pitched track (see {@link chordTimelineFromNotes}); pooling all voices is
+ * The chord timeline and the key regions it is read against are inferred from
+ * the pooled notes of every pitched track (see
+ * {@link chordTimelineFromNotes}); pooling all voices is
  * robust even when roles are absent or a track doubles the harmony, so it is
  * preferred over deriving the harmony from a subset. A track marked
  * `role: 'drums'` is excluded — its pitches name instruments, not harmony, and
@@ -394,9 +417,44 @@ export function analyzeArrangement(
   tracks: ArrangementTrack[],
   opts: ArrangementOptions = {},
 ): ArrangementAnalysis {
-  const ts = opts.ts ?? parseTimeSignature('4/4');
-  assertTimeSignature(ts);
+  return analyzeArrangementWith(tracks, opts).analysis;
+}
+
+/**
+ * Analyse an arrangement, carrying over the harmonic evidence an edit cannot
+ * reach and handing back the evidence this pass leaves behind.
+ *
+ * Only the harmony is carried over. The per-note annotation pass is re-run in
+ * full because neither half of it is local to the edit: sub-voice lane
+ * assignment is a greedy left-to-right pass over the whole track, so an inserted
+ * note can re-lane every note after it, and every note is evaluated against the
+ * other voices sounding beneath it, so an edit in one track changes what every
+ * other track hears at those beats.
+ *
+ * Not part of the public surface: the evidence is the private state of an
+ * incremental re-analysis, and a caller holding it could pair it with notes it
+ * was never derived from.
+ *
+ * @param tracks The tracks to analyse.
+ * @param opts Analysis options.
+ * @param previous Evidence from the analysis being updated, when there is one.
+ * @param dirty The slots the edit may have changed.
+ * @returns The analysis, and the evidence behind it when the harmony was
+ *   inferred rather than supplied.
+ */
+export function analyzeArrangementWith(
+  tracks: ArrangementTrack[],
+  opts: ArrangementOptions = {},
+  previous?: TimelineEvidence,
+  dirty?: DirtySlots,
+): { analysis: ArrangementAnalysis; evidence?: TimelineEvidence } {
+  const meters = resolveMeters(opts, 'arrangement meters');
   const budget = opts.budget;
+  const noteOptions: NoteEventAssertOptions = { allowNonPositiveDuration: true, budget };
+  if (opts.pickupBeats !== undefined) {
+    assertRange(opts.pickupBeats, 0, Number.MAX_SAFE_INTEGER, 'arrangement pickupBeats');
+    noteOptions.minStartBeat = -opts.pickupBeats;
+  }
   assertGenerationBudget(tracks.length, 'arrangement tracks', budget);
   let noteCount = 0;
   for (let index = 0; index < tracks.length; index += 1) {
@@ -408,10 +466,7 @@ export function analyzeArrangement(
         `tracks[${index}].notes must be an array; received ${typeof notes}`,
       );
     }
-    assertNoteEvents(notes, `tracks[${index}].notes`, {
-      allowNonPositiveDuration: true,
-      budget,
-    });
+    assertNoteEvents(notes, `tracks[${index}].notes`, noteOptions);
     noteCount += notes.length;
   }
   // The pooled total is what the downstream timeline analysis actually sizes
@@ -423,18 +478,26 @@ export function analyzeArrangement(
     opts.harmonyTracks === undefined ? undefined : new Set(opts.harmonyTracks.map(Math.trunc));
   const pooled = poolNotes(tracks, harmonyTracks);
 
-  const inferred =
-    opts.timeline === undefined
-      ? withGivenKeys(
-          chordTimelineFromNotes(pooled, {
-            key: opts.key,
-            ts,
-            harmonicRhythm: opts.harmonicRhythm,
-            budget,
-          }),
-          opts.keys,
-        )
-      : callerTimeline(opts.timeline, opts.key, opts.keys, pooled, ts, budget);
+  let evidence: TimelineEvidence | undefined;
+  let inferred: ChordTimelineResult;
+  if (opts.timeline === undefined) {
+    const run = analyzeTimeline(
+      pooled,
+      {
+        key: opts.key,
+        meters,
+        pickupBeats: opts.pickupBeats,
+        harmonicRhythm: opts.harmonicRhythm,
+        budget,
+      },
+      previous,
+      dirty,
+    );
+    evidence = run.evidence;
+    inferred = withGivenKeys(run.result, opts.keys);
+  } else {
+    inferred = callerTimeline(opts.timeline, opts.key, opts.keys, pooled, meters, budget);
+  }
   const { timeline, keys, prevailingKey, segmentConfidence } = inferred;
   const keyAt = keyLookup(keys, prevailingKey);
   // A cadence is heard in the key it arrives in, which after a modulation is
@@ -484,7 +547,7 @@ export function analyzeArrangement(
             chord: timeline.at(beat),
             key: keyAt(beat),
             otherVoices: otherVoicesSounding(prepared, t, v, beat, soundingCache),
-            strongBeat: isStrongBeat(beat, ts),
+            strongBeat: isStrongBeat(beat, meters),
           };
           // Most evaluations become no reportable conflict. Avoid their
           // replacement-pitch scan (up to 24 recursive safety checks), then
@@ -526,7 +589,7 @@ export function analyzeArrangement(
 
   conflicts.sort((a, b) => b.safety - a.safety || a.beat - b.beat);
 
-  return {
+  const analysis: ArrangementAnalysis = {
     keys,
     prevailingKey,
     timeline,
@@ -535,4 +598,5 @@ export function analyzeArrangement(
     tracks: trackAnalyses,
     conflicts,
   };
+  return evidence === undefined ? { analysis } : { analysis, evidence };
 }

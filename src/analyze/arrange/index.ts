@@ -8,6 +8,8 @@
  * curve is sampled across the piece.
  */
 
+export type { ArrangementSession, TrackEdit } from './session.js';
+export { createArrangementSession } from './session.js';
 export type { TensionPoint } from './tension.js';
 export { tensionCurve, tensionCurveFrom } from './tension.js';
 export type {

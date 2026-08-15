@@ -167,6 +167,24 @@ describe('detectCadences', () => {
     expect(detectCadences(timeline, majorKey(0))).toEqual([]);
   });
 
+  it('takes the key straight off the analysis result', () => {
+    // The pairing the documented entry point makes: the result names its keys
+    // as `keys` and `prevailingKey`, and the latter is what a caller wanting
+    // one key hands to the cadence scan.
+    const result = chordTimelineFromNotes(cfgcNotes());
+    expect(Object.keys(result).sort()).toEqual([
+      'keys',
+      'prevailingKey',
+      'segmentConfidence',
+      'timeline',
+    ]);
+    const { timeline, prevailingKey } = result;
+    expect(detectCadences(timeline, prevailingKey).map((hit) => hit.cadence.type)).toEqual([
+      'half',
+      'authentic',
+    ]);
+  });
+
   it('does not pair segments separated by a rest', () => {
     // G major, a bar of silence, then C major: V-(rest)-I is not a cadence.
     const notes = [...blockChord([55, 59, 62], 0), ...blockChord([48, 52, 55], 8)];

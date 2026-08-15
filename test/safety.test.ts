@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { KeyScale } from '../src/core/types.js';
+import { generateCounterMelody } from '../src/generate/countermelody/index.js';
 import type { Chord } from '../src/theory/chord/index.js';
 import { chordPitchClasses, chordQualities, makeChord } from '../src/theory/chord/index.js';
 import {
   enumerateSafePitches,
   evaluateSafety,
   NoteSafety,
+  PROFILE_WEIGHTS,
+  profileWeights,
   ReasonFlag,
   type SafetyQuery,
 } from '../src/theory/safety/index.js';
@@ -386,5 +389,66 @@ describe('enumerateSafePitches', () => {
   it('rejects a non-finite bound instead of hanging', () => {
     expect(() => enumerateSafePitches(query({}), 60, Number.POSITIVE_INFINITY)).toThrow(RangeError);
     expect(() => enumerateSafePitches(query({}), Number.NaN, 67)).toThrow(RangeError);
+  });
+});
+
+describe('profile weights', () => {
+  it('gives each profile a complete table', () => {
+    for (const profile of ['strict', 'pop'] as const) {
+      expect(Object.keys(PROFILE_WEIGHTS[profile]).sort()).toEqual(
+        Object.keys(PROFILE_WEIGHTS.strict).sort(),
+      );
+    }
+  });
+
+  it('states the difference between the two styles as a preference', () => {
+    // Neither profile rejects parallel thirds; they disagree about wanting them.
+    expect(PROFILE_WEIGHTS.pop.parallelImperfect).toBeGreaterThan(
+      PROFILE_WEIGHTS.strict.parallelImperfect,
+    );
+    expect(PROFILE_WEIGHTS.strict.contraryMotion).toBeGreaterThan(
+      PROFILE_WEIGHTS.strict.similarMotion,
+    );
+    expect(PROFILE_WEIGHTS.pop.similarMotion).toBeGreaterThan(PROFILE_WEIGHTS.strict.similarMotion);
+  });
+
+  it('applies overrides field by field', () => {
+    const weights = profileWeights('pop', { parallelImperfect: 9 });
+    expect(weights.parallelImperfect).toBe(9);
+    expect(weights.contraryMotion).toBe(PROFILE_WEIGHTS.pop.contraryMotion);
+  });
+
+  it('ranks a counter melody differently under each profile', () => {
+    const melody = [72, 74, 76, 77, 76, 74, 72, 71].map((pitch, index) => ({
+      pitch,
+      startBeat: index,
+      durationBeat: 1,
+    }));
+    const chords = ['maj', 'min', 'maj', 'maj'] as const;
+    const chordAt = (beat: number) =>
+      makeChord([0, 9, 5, 7][Math.floor(beat / 2) % 4] ?? 0, chords[Math.floor(beat / 2) % 4]);
+    const line = (profile: 'strict' | 'pop') =>
+      generateCounterMelody({ melody, chordAt, key: cMajor, profile, rhythm: 'follow' }).map(
+        (note) => note.pitch,
+      );
+    expect(line('pop')).not.toEqual(line('strict'));
+  });
+
+  it('lets a weight override move the line without changing the profile', () => {
+    const melody = [72, 74, 76, 77].map((pitch, index) => ({
+      pitch,
+      startBeat: index,
+      durationBeat: 1,
+    }));
+    const chordAt = () => makeChord(0, 'maj');
+    const plain = generateCounterMelody({ melody, chordAt, key: cMajor, rhythm: 'follow' });
+    const pedal = generateCounterMelody({
+      melody,
+      chordAt,
+      key: cMajor,
+      rhythm: 'follow',
+      weights: { obliqueMotion: 12 },
+    });
+    expect(pedal.map((note) => note.pitch)).not.toEqual(plain.map((note) => note.pitch));
   });
 });

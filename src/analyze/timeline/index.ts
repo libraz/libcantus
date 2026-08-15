@@ -1,20 +1,21 @@
 import { createNoteEventIndex } from '../../core/event-index/index.js';
-import type { TimeSignature } from '../../core/meter/index.js';
-import { beatsPerBar, metricWeight, parseTimeSignature } from '../../core/meter/index.js';
+import type { MeterMap, TimeSignature } from '../../core/meter/index.js';
+import { beatsPerBarAt, metricWeight, resolveMeters } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
+import type { NoteEventAssertOptions } from '../../core/validation/index.js';
 import {
   assertFiniteNumber,
   assertGenerationBudget,
   assertNoteEvents,
   assertRange,
-  assertTimeSignature,
 } from '../../core/validation/index.js';
 import type { Chord, ChordQuality, ChordSpan } from '../../theory/chord/index.js';
 import { chordFromSpan, chordPitchClasses, makeChord } from '../../theory/chord/index.js';
 import { isScaleTone, majorKey } from '../../theory/scale/index.js';
 import type { ChordMatch } from '../detect/index.js';
 import { detectChord } from '../detect/index.js';
+import { augmentedSixthFromPitchClasses } from '../functional/augmented-sixth.js';
 import type { CadenceResult } from '../functional/index.js';
 import { detectCadence } from '../functional/index.js';
 import type { WindowWeights } from '../histogram.js';
@@ -58,9 +59,10 @@ export function chordTimelineFromChords(
   assertRange(totalBeats, 0, Number.MAX_SAFE_INTEGER, 'timeline totalBeats');
   assertGenerationBudget(chords.length, 'timeline chords');
   for (let index = 0; index < chords.length; index += 1) {
+    // Unbounded below, like a note onset: a chord may sound in the pickup.
     assertRange(
       chords[index]?.startBeat ?? Number.NaN,
-      0,
+      -Number.MAX_SAFE_INTEGER,
       Number.MAX_SAFE_INTEGER,
       `chords[${index}].startBeat`,
     );
@@ -157,11 +159,31 @@ export type ChordTimelineOptions = {
    */
   key?: KeyScale;
   /**
-   * Time signature used for metric accents; defaults to 4/4.
+   * A single time signature held across the whole span, as sugar for a
+   * one-element `meters`; defaults to 4/4. Giving both is an input error.
    *
    * @defaultValue `4/4`
    */
   ts?: TimeSignature;
+  /**
+   * The meter as it changes over the span. Bar lines, downbeats and metric
+   * weight all follow the signature in force at the beat in question, so a
+   * piece that changes meter is not read in the one it opened in.
+   *
+   * @defaultValue 4/4 throughout
+   */
+  meters?: MeterMap;
+  /**
+   * Length of the pickup in beats, when the piece starts with one.
+   *
+   * The first downbeat is beat 0 whatever precedes it, so an upbeat is written
+   * at negative beats — a one-beat pickup in 4/4 sounds at beat -1. Declaring
+   * its length rejects a note that starts before the pickup does; leave it
+   * unset to accept any finite onset.
+   *
+   * @defaultValue no declared pickup
+   */
+  pickupBeats?: number;
   /**
    * Where chord boundaries may fall; defaults to `'dynamic'`.
    *
@@ -169,13 +191,13 @@ export type ChordTimelineOptions = {
    */
   segmentation?: ChordSegmentation;
   /**
-   * Expected chord length in beats; defaults to one bar of `ts`.
+   * Expected chord length in beats; defaults to the length of the opening bar.
    *
    * Under `'grid'` segmentation this is the exact window length. Under
    * `'dynamic'` it is a prior: the longer a chord is expected to last, the more
    * evidence a change needs before the search will place one.
    *
-   * @defaultValue one bar of `ts`
+   * @defaultValue the length of the opening bar
    */
   harmonicRhythm?: number;
   /**
@@ -218,7 +240,9 @@ export type ChordTimelineResult = {
    * The key regions the analysis ran against, in time order. A piece that does
    * not modulate yields one region covering the whole span; a given `key`
    * yields exactly one region too, since the caller has already answered the
-   * question. Pivot chords are filled in where the chords support one.
+   * question. Either way the first region starts where the analysis does, which
+   * is before beat 0 when the piece opens with a pickup. Pivot chords are filled
+   * in where the chords support one.
    */
   keys: KeyRegion[];
   /**
@@ -291,14 +315,14 @@ function analyzeWindow(
   notes: readonly NoteEvent[],
   windowStart: number,
   windowEnd: number,
-  ts: TimeSignature,
+  meters: MeterMap,
   key: KeyScale,
 ): WindowChord | null {
   const { weights, totalWeight, maxWeight, lowestPitch } = windowWeights(
     notes,
     windowStart,
     windowEnd,
-    ts,
+    meters,
   );
   if (totalWeight <= EPS) {
     return null;
@@ -335,6 +359,20 @@ function analyzeWindow(
     }
   }
   if (bestMatch) {
+    // An augmented sixth is a bass and an interval rather than a stack of
+    // thirds, so no tertian match can carry one: over the lowered submediant
+    // the same pitch classes are read as bVI7, whose seventh is spelled a
+    // semitone below where the augmented sixth is. The reading is made here,
+    // where the sounding bass and the key are both known, and the chord it
+    // yields carries the spelling that keeps it.
+    const augmented = hasBass ? augmentedSixthFromPitchClasses(selected, bassPc, key) : null;
+    if (augmented !== null) {
+      // Its tones are exactly the window's, so it explains them exactly.
+      return {
+        chord: augmented,
+        confidence: chordConfidence(augmented, weights, totalWeight, true),
+      };
+    }
     const chord = makeChord(bestMatch.rootPc, bestMatch.quality, bestMatch.bassPc);
     return { chord, confidence: chordConfidence(chord, weights, totalWeight, bestMatch.exact) };
   }
@@ -371,21 +409,31 @@ const SEGMENTATION_QUALITIES: readonly ChordQuality[] = [
   'min6',
 ];
 
-/** A boundary-search candidate: a root plus the pitch classes it sounds. */
-type SegmentationCandidate = {
-  rootPc: number;
-  tones: number[];
-};
-
-/** The 12 x {@link SEGMENTATION_QUALITIES} lexicon, built once. */
-const SEGMENTATION_LEXICON: readonly SegmentationCandidate[] = (() => {
-  const candidates: SegmentationCandidate[] = [];
+/**
+ * The 12 x {@link SEGMENTATION_QUALITIES} lexicon, built once and held flat.
+ *
+ * Candidate `c` has root `LEXICON_ROOTS[c]` and sounds the pitch classes in
+ * `LEXICON_TONES` from `LEXICON_TONE_START[c]` up to `LEXICON_TONE_START[c + 1]`.
+ * The search scores every candidate against every slot of the piece, so the
+ * inner loop reads a flat table rather than chasing one object and one array per
+ * candidate.
+ */
+const LEXICON_SIZE = 12 * SEGMENTATION_QUALITIES.length;
+const LEXICON_ROOTS = new Int32Array(LEXICON_SIZE);
+const LEXICON_TONE_START = new Int32Array(LEXICON_SIZE + 1);
+const LEXICON_TONES: Int32Array = (() => {
+  const tones: number[] = [];
+  let candidate = 0;
   for (let rootPc = 0; rootPc < 12; rootPc += 1) {
     for (const quality of SEGMENTATION_QUALITIES) {
-      candidates.push({ rootPc, tones: chordPitchClasses(makeChord(rootPc, quality)) });
+      LEXICON_ROOTS[candidate] = rootPc;
+      LEXICON_TONE_START[candidate] = tones.length;
+      tones.push(...chordPitchClasses(makeChord(rootPc, quality)));
+      candidate += 1;
     }
   }
-  return candidates;
+  LEXICON_TONE_START[candidate] = tones.length;
+  return Int32Array.from(tones);
 })();
 
 /** Weight of a slot's non-chord tones, relative to its chord tones. */
@@ -420,31 +468,103 @@ const MAX_METRIC_WEIGHT = 3;
  * of itself that are missing.
  */
 function candidateScore(
-  candidate: SegmentationCandidate,
+  candidate: number,
   weights: readonly number[],
   totalWeight: number,
 ): number {
+  const first = LEXICON_TONE_START[candidate] ?? 0;
+  const last = LEXICON_TONE_START[candidate + 1] ?? first;
   let covered = 0;
   let missing = 0;
-  for (const pc of candidate.tones) {
-    const weight = weights[pc] ?? 0;
+  for (let index = first; index < last; index += 1) {
+    const weight = weights[LEXICON_TONES[index] ?? 0] ?? 0;
     covered += weight;
     if (weight <= EPS) {
       missing += 1;
     }
   }
   const outside = totalWeight - covered;
-  const averageToneWeight = totalWeight / candidate.tones.length;
+  const averageToneWeight = totalWeight / (last - first);
   return (
     covered -
     OUTSIDE_TONE_PENALTY * outside -
     MISSING_TONE_PENALTY * missing * averageToneWeight +
-    ROOT_PRESENCE_BONUS * (weights[candidate.rootPc] ?? 0)
+    ROOT_PRESENCE_BONUS * (weights[LEXICON_ROOTS[candidate] ?? 0] ?? 0)
   );
 }
 
 /** A half-open span of slots the boundary search settled on. */
 type BoundarySpan = { startBeat: number; endBeat: number };
+
+/**
+ * The grid the span is examined in: equal slots of `slotBeats`, starting at
+ * `origin`.
+ *
+ * The origin is 0 for a piece that starts on the downbeat and negative for one
+ * that starts with a pickup. It stays a whole number of slots away from beat 0
+ * either way, so the grid's boundaries keep falling on the bar lines rather
+ * than being pushed off them by the length of the upbeat.
+ */
+type SlotGrid = { origin: number; slotBeats: number };
+
+/** First beat of slot `index`. */
+function beatOfSlot(grid: SlotGrid, index: number): number {
+  return grid.origin + index * grid.slotBeats;
+}
+
+/** Index of the slot containing `beat`, unclamped. */
+function slotOfBeat(grid: SlotGrid, beat: number): number {
+  return (beat - grid.origin) / grid.slotBeats;
+}
+
+/**
+ * The tables the boundary search runs on, sized once for the whole piece.
+ *
+ * Every field is indexed by absolute slot, so a run of slots is searched by
+ * bounds rather than by being copied out — and a cell of the recurrence is a
+ * pair of numbers in a typed array rather than an object. The score table is
+ * also the only part of the search that depends on what the notes are, which is
+ * what lets an unchanged slot's row be carried over from a previous analysis.
+ */
+export type BoundaryTables = {
+  /** Fit of slot `i` to candidate `c`, at `scores[i * LEXICON_SIZE + c]`. */
+  scores: Float64Array;
+  /** Chosen predecessor of slot `i`, candidate `c`, at the same index. */
+  back: Int32Array;
+  /** The two rolling cost rows the recurrence alternates between. */
+  costs: Float64Array;
+  spare: Float64Array;
+  /** The winning candidate of each slot, filled by the backward pass. */
+  path: Int32Array;
+};
+
+/** Allocate the boundary-search tables for a piece of `slotCount` slots. */
+export function createBoundaryTables(slotCount: number): BoundaryTables {
+  return {
+    scores: new Float64Array(slotCount * LEXICON_SIZE),
+    back: new Int32Array(slotCount * LEXICON_SIZE),
+    costs: new Float64Array(LEXICON_SIZE),
+    spare: new Float64Array(LEXICON_SIZE),
+    path: new Int32Array(slotCount),
+  };
+}
+
+/**
+ * Score one slot against the whole lexicon, into its row of the score table.
+ *
+ * A slot carrying no weight scores zero everywhere, which is what the row
+ * already holds, so silence costs nothing to score.
+ */
+export function scoreSlot(tables: BoundaryTables, slot: WindowWeights, index: number): void {
+  const base = index * LEXICON_SIZE;
+  if (slot.totalWeight <= EPS) {
+    tables.scores.fill(0, base, base + LEXICON_SIZE);
+    return;
+  }
+  for (let c = 0; c < LEXICON_SIZE; c += 1) {
+    tables.scores[base + c] = candidateScore(c, slot.weights, slot.totalWeight);
+  }
+}
 
 /**
  * Choose chord boundaries over one run of slots by dynamic programming.
@@ -458,85 +578,72 @@ type BoundarySpan = { startBeat: number; endBeat: number };
  * rather than quadratic.
  */
 function chooseBoundaries(
-  slotWeights: readonly WindowWeights[],
+  tables: BoundaryTables,
   from: number,
   to: number,
-  slotBeats: number,
-  ts: TimeSignature,
+  grid: SlotGrid,
+  meters: MeterMap,
   changeCost: number,
 ): BoundarySpan[] {
   const width = to - from;
   if (width <= 0) {
     return [];
   }
-  const lexiconSize = SEGMENTATION_LEXICON.length;
-  const scores: number[][] = [];
-  for (let i = from; i < to; i += 1) {
-    const slot = slotWeights[i];
-    const row = new Array<number>(lexiconSize).fill(0);
-    if (slot && slot.totalWeight > EPS) {
-      for (let c = 0; c < lexiconSize; c += 1) {
-        const candidate = SEGMENTATION_LEXICON[c];
-        row[c] = candidate ? candidateScore(candidate, slot.weights, slot.totalWeight) : 0;
-      }
-    }
-    scores.push(row);
-  }
-
+  const { scores, back, path } = tables;
   // Costs are negated scores, so the search minimises.
-  let costs = (scores[0] ?? []).map((score) => -score);
-  const cameFrom: Int32Array[] = [];
+  let costs = tables.costs;
+  let next = tables.spare;
+  for (let c = 0; c < LEXICON_SIZE; c += 1) {
+    costs[c] = -(scores[from * LEXICON_SIZE + c] ?? 0);
+  }
   for (let i = 1; i < width; i += 1) {
-    const previous = costs;
     let cheapest = Number.POSITIVE_INFINITY;
     let cheapestIndex = 0;
-    for (let c = 0; c < lexiconSize; c += 1) {
-      const cost = previous[c] ?? Number.POSITIVE_INFINITY;
+    for (let c = 0; c < LEXICON_SIZE; c += 1) {
+      const cost = costs[c] ?? Number.POSITIVE_INFINITY;
       if (cost < cheapest) {
         cheapest = cost;
         cheapestIndex = c;
       }
     }
-    const slotStart = (from + i) * slotBeats;
-    const accent = metricWeight(slotStart, ts);
+    const slotStart = beatOfSlot(grid, from + i);
+    const accent = metricWeight(slotStart, meters);
     const penalty = changeCost * (1 - (STRONG_BEAT_DISCOUNT * accent) / MAX_METRIC_WEIGHT);
-    const row = scores[i] ?? [];
-    const next = new Array<number>(lexiconSize).fill(0);
-    const back = new Int32Array(lexiconSize);
-    for (let c = 0; c < lexiconSize; c += 1) {
-      const stay = previous[c] ?? Number.POSITIVE_INFINITY;
-      const change = cheapest + penalty;
+    const rowBase = (from + i) * LEXICON_SIZE;
+    const change = cheapest + penalty;
+    for (let c = 0; c < LEXICON_SIZE; c += 1) {
+      const stay = costs[c] ?? Number.POSITIVE_INFINITY;
       // Ties hold the current chord: a change has to be strictly better.
       const carried = stay <= change ? stay : change;
-      back[c] = stay <= change ? c : cheapestIndex;
-      next[c] = carried - (row[c] ?? 0);
+      back[rowBase + c] = stay <= change ? c : cheapestIndex;
+      next[c] = carried - (scores[rowBase + c] ?? 0);
     }
+    const previous = costs;
     costs = next;
-    cameFrom.push(back);
+    next = previous;
   }
 
   let best = 0;
-  for (let c = 1; c < lexiconSize; c += 1) {
+  for (let c = 1; c < LEXICON_SIZE; c += 1) {
     if ((costs[c] ?? Number.POSITIVE_INFINITY) < (costs[best] ?? Number.POSITIVE_INFINITY)) {
       best = c;
     }
   }
-  const path = new Array<number>(width);
   let current = best;
   for (let i = width - 1; i >= 0; i -= 1) {
-    path[i] = current;
+    path[from + i] = current;
     if (i > 0) {
-      current = cameFrom[i - 1]?.[current] ?? current;
+      current = back[(from + i) * LEXICON_SIZE + current] ?? current;
     }
   }
 
   const spans: BoundarySpan[] = [];
   let runStart = 0;
   for (let i = 1; i <= width; i += 1) {
-    if (i === width || path[i] !== path[runStart]) {
+    if (i === width || path[from + i] !== path[from + runStart]) {
       spans.push({
-        startBeat: (from + runStart) * slotBeats,
-        endBeat: (from + i) * slotBeats,
+        startBeat: beatOfSlot(grid, from + runStart),
+        endBeat: beatOfSlot(grid, from + i),
       });
       runStart = i;
     }
@@ -548,10 +655,10 @@ function chooseBoundaries(
 const DEFAULT_MIN_CHORD_BEATS = 1;
 
 /** One span per slot: the fixed grid, unchanged. */
-function gridSpans(slotCount: number, slotBeats: number): BoundarySpan[] {
+function gridSpans(slotCount: number, grid: SlotGrid): BoundarySpan[] {
   return Array.from({ length: slotCount }, (_, i) => ({
-    startBeat: i * slotBeats,
-    endBeat: (i + 1) * slotBeats,
+    startBeat: beatOfSlot(grid, i),
+    endBeat: beatOfSlot(grid, i + 1),
   }));
 }
 
@@ -564,28 +671,21 @@ function gridSpans(slotCount: number, slotBeats: number): BoundarySpan[] {
  * players took a breath.
  */
 function dynamicSpans(
-  slotNotes: readonly NoteEvent[][],
-  slotBeats: number,
+  slotWeights: readonly WindowWeights[],
+  tables: BoundaryTables,
+  grid: SlotGrid,
   harmonicRhythm: number,
-  totalBeats: number,
-  ts: TimeSignature,
+  meters: MeterMap,
 ): BoundarySpan[] {
-  const slotCount = slotNotes.length;
-  const slotWeights: WindowWeights[] = [];
+  const slotBeats = grid.slotBeats;
+  const slotCount = slotWeights.length;
   let soundingSlots = 0;
   let weightSum = 0;
   for (let i = 0; i < slotCount; i += 1) {
-    const start = i * slotBeats;
-    const weights = windowWeights(
-      slotNotes[i] ?? [],
-      start,
-      Math.min(start + slotBeats, totalBeats),
-      ts,
-    );
-    slotWeights.push(weights);
-    if (weights.totalWeight > EPS) {
+    const weight = slotWeights[i]?.totalWeight ?? 0;
+    if (weight > EPS) {
       soundingSlots += 1;
-      weightSum += weights.totalWeight;
+      weightSum += weight;
     }
   }
   if (soundingSlots === 0) {
@@ -633,7 +733,7 @@ function dynamicSpans(
     while (end < slotCount && !breaks[end]) {
       end += 1;
     }
-    spans.push(...chooseBoundaries(slotWeights, i, end, slotBeats, ts, changeCost));
+    spans.push(...chooseBoundaries(tables, i, end, grid, meters, changeCost));
     i = end;
   }
   return spans;
@@ -643,10 +743,10 @@ function dynamicSpans(
 function notesOfSpan(
   slotNotes: readonly NoteEvent[][],
   span: BoundarySpan,
-  slotBeats: number,
+  grid: SlotGrid,
 ): NoteEvent[] {
-  const first = Math.round(span.startBeat / slotBeats);
-  const lastExclusive = Math.round(span.endBeat / slotBeats);
+  const first = Math.round(slotOfBeat(grid, span.startBeat));
+  const lastExclusive = Math.round(slotOfBeat(grid, span.endBeat));
   if (lastExclusive - first === 1) {
     return [...(slotNotes[first] ?? [])];
   }
@@ -684,9 +784,16 @@ function notesOfSpan(
  * ingest: they contribute to neither the key inference, the span, nor any
  * window's histogram.
  *
+ * Bar lines, downbeats and the metric accents the boundary search discounts by
+ * all follow the signature in force at the beat in question, so a piece that
+ * changes meter is read in the meter it is actually in. The first downbeat is
+ * beat 0, so a pickup is written at negative beats and the search still finds
+ * the bar lines where the score has them.
+ *
  * @param notes The notes to analyze (any number of tracks, flattened).
  * @param opts Analysis options; see {@link ChordTimelineOptions}.
- * @returns The inferred timeline, the key used, and per-segment confidences.
+ * @returns The inferred timeline, the key regions it ran against, the key that
+ *   prevails across them, and per-segment confidences.
  * @throws If `harmonicRhythm` is not positive.
  * @example
  * ```ts
@@ -696,8 +803,9 @@ function notesOfSpan(
  *   { pitch: 64, startBeat: 0, durationBeat: 2 }, // E
  *   { pitch: 67, startBeat: 0, durationBeat: 2 }, // G
  * ];
- * const { timeline, key } = chordTimelineFromNotes(notes);
+ * const { timeline, prevailingKey } = chordTimelineFromNotes(notes);
  * timeline.at(0); // the chord inferred over beat 0, or null
+ * prevailingKey; // the key held longest across the piece
  * ```
  * @category Arrangement & Analysis
  */
@@ -705,15 +813,168 @@ export function chordTimelineFromNotes(
   notes: NoteEvent[],
   opts: ChordTimelineOptions = {},
 ): ChordTimelineResult {
-  const ts = opts.ts ?? parseTimeSignature('4/4');
-  assertTimeSignature(ts);
-  const harmonicRhythm = opts.harmonicRhythm ?? beatsPerBar(ts);
+  return analyzeTimeline(notes, opts).result;
+}
+
+/**
+ * The slot-level evidence one chord-timeline analysis drew from the notes.
+ *
+ * Everything here is a pure function of the notes overlapping one slot, so a
+ * slot the edit cannot reach carries over to the next analysis unchanged. The
+ * grid itself is recorded alongside, because a carried-over row only means the
+ * same thing if the slot it indexes still covers the same beats.
+ *
+ * Not part of the public surface: it is the private state of an incremental
+ * re-analysis, and a caller holding it could pair it with notes it was never
+ * derived from.
+ */
+export type TimelineEvidence = {
+  /** The grid the slots were cut on. */
+  grid: SlotGrid;
+  slotCount: number;
+  totalBeats: number;
+  segmentation: ChordSegmentation;
+  harmonicRhythm: number;
+  /** Whether the key was given rather than searched for. */
+  keyGiven: boolean;
+  slotWeights: WindowWeights[];
+  tables: BoundaryTables;
+  /**
+   * The chord inferred over each settled span, keyed by the span's bounds and
+   * the key it was read in — the two things besides the span's notes that
+   * {@link analyzeWindow} depends on.
+   */
+  windows: Map<string, WindowChord | null>;
+};
+
+/** A half-open run of slots whose contents an edit may have changed. */
+export type DirtySlots = { from: number; to: number };
+
+/**
+ * How many slots either side of an edit are treated as dirty on top of the
+ * slots it actually overlaps.
+ *
+ * The evidence itself needs none: a slot's histogram sees exactly the notes
+ * overlapping it, so an edit confined to `[startBeat, endBeat)` cannot change a
+ * slot it does not touch. The extra slot is there so that an onset landing a
+ * floating-point hair either side of a slot boundary cannot leave a stale row
+ * behind, which would be wrong output rather than merely slow output.
+ */
+const DIRTY_SLOT_MARGIN = 1;
+
+/**
+ * The slots an edit over `[startBeat, endBeat)` may have changed.
+ *
+ * @param evidence Evidence from the analysis being updated, whose grid the
+ *   slots are numbered on.
+ * @param startBeat First beat the edit touched.
+ * @param endBeat End of the beats the edit touched, exclusive.
+ * @returns The half-open run of slots to recompute.
+ */
+export function dirtySlotsFor(
+  evidence: TimelineEvidence,
+  startBeat: number,
+  endBeat: number,
+): DirtySlots {
+  const first = Math.floor(slotOfBeat(evidence.grid, startBeat)) - DIRTY_SLOT_MARGIN;
+  const lastExclusive = Math.ceil(slotOfBeat(evidence.grid, endBeat)) + DIRTY_SLOT_MARGIN;
+  return {
+    from: Math.max(0, Math.min(evidence.slotCount, first)),
+    to: Math.max(0, Math.min(evidence.slotCount, lastExclusive)),
+  };
+}
+
+/** Whether every slot a span covers lies outside the dirty run. */
+function spanIsClean(
+  grid: SlotGrid,
+  span: BoundarySpan,
+  dirtyFrom: number,
+  dirtyTo: number,
+): boolean {
+  const first = Math.round(slotOfBeat(grid, span.startBeat));
+  const lastExclusive = Math.round(slotOfBeat(grid, span.endBeat));
+  return lastExclusive <= dirtyFrom || first >= dirtyTo;
+}
+
+/** Identity of a key, for keying the per-span chord cache. */
+function keyId(key: KeyScale): string {
+  return `${key.rootPc}:${key.modeMask12}`;
+}
+
+/** Cache key of one settled span read in one key. */
+function windowId(startBeat: number, endBeat: number, key: KeyScale): string {
+  return `${startBeat}|${endBeat}|${keyId(key)}`;
+}
+
+/**
+ * Whether previous evidence describes the same grid as this analysis, and so
+ * may have rows carried over from it. A different grid means slot `i` no longer
+ * covers the beats it did, which would silently pair a row with the wrong slot.
+ */
+function evidenceFits(
+  previous: TimelineEvidence,
+  grid: SlotGrid,
+  slotCount: number,
+  totalBeats: number,
+  segmentation: ChordSegmentation,
+  harmonicRhythm: number,
+  keyGiven: boolean,
+): boolean {
+  return (
+    previous.grid.origin === grid.origin &&
+    previous.grid.slotBeats === grid.slotBeats &&
+    previous.slotCount === slotCount &&
+    previous.totalBeats === totalBeats &&
+    previous.segmentation === segmentation &&
+    previous.harmonicRhythm === harmonicRhythm &&
+    previous.keyGiven === keyGiven
+  );
+}
+
+/**
+ * Infer a chord timeline, carrying over every slot the edit cannot reach.
+ *
+ * The dependency margin is worked out per stage rather than guessed at once:
+ *
+ * - A slot's histogram sees exactly the notes overlapping it, so the slots
+ *   whose evidence an edit can change are the slots overlapping the edited
+ *   beats — margin zero, rounded outward to whole slots.
+ * - The boundary search has no finite margin inside a run. It is a Viterbi over
+ *   the run's slots, so the winning path at any slot depends on every other
+ *   slot of the run; and its change cost is calibrated on the mean weight of
+ *   every sounding slot in the piece, which couples the runs to each other.
+ *   The recurrence is therefore re-run over the whole piece — pure arithmetic
+ *   over the carried-over score table, with no per-cell allocation.
+ * - A settled span's chord depends only on the notes overlapping it, so it is
+ *   carried over when the span's bounds, its key, and its slots are all
+ *   unchanged. Bounds may move anywhere within a run, so which spans qualify is
+ *   read off the freshly chosen boundaries rather than assumed.
+ *
+ * @param notes The notes to analyze.
+ * @param opts Analysis options.
+ * @param previous Evidence from the analysis being updated, when there is one.
+ * @param dirty The slots the edit may have changed; every slot when omitted.
+ * @returns The analysis and the evidence behind it.
+ */
+export function analyzeTimeline(
+  notes: NoteEvent[],
+  opts: ChordTimelineOptions = {},
+  previous?: TimelineEvidence,
+  dirty?: DirtySlots,
+): { result: ChordTimelineResult; evidence: TimelineEvidence } {
+  const meters = resolveMeters(opts, 'timeline meters');
+  const harmonicRhythm = opts.harmonicRhythm ?? beatsPerBarAt(0, meters);
   assertRange(harmonicRhythm, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'harmonic rhythm');
   const segmentation = opts.segmentation ?? 'dynamic';
   const minChordBeats = opts.minChordBeats ?? DEFAULT_MIN_CHORD_BEATS;
   assertRange(minChordBeats, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'minChordBeats');
   const budget = opts.budget;
-  assertNoteEvents(notes, 'timeline notes', { allowNonPositiveDuration: true, budget });
+  const noteOptions: NoteEventAssertOptions = { allowNonPositiveDuration: true, budget };
+  if (opts.pickupBeats !== undefined) {
+    assertRange(opts.pickupBeats, 0, Number.MAX_SAFE_INTEGER, 'timeline pickupBeats');
+    noteOptions.minStartBeat = -opts.pickupBeats;
+  }
+  assertNoteEvents(notes, 'timeline notes', noteOptions);
   // Zero/negative-length notes never sound; drop them before any inference.
   const soundingIndex = createNoteEventIndex(
     notes.filter((note) => note.durationBeat > 0),
@@ -723,29 +984,39 @@ export function chordTimelineFromNotes(
   const lastNoteEnd = sounding.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
   const totalBeats = opts.totalBeats ?? lastNoteEnd;
   assertRange(totalBeats, 0, Number.MAX_SAFE_INTEGER, 'timeline totalBeats');
+  const slotBeats =
+    segmentation === 'grid' ? harmonicRhythm : Math.min(minChordBeats, harmonicRhythm);
+  // A pickup sounds before beat 0, so the grid has to start there too — but a
+  // whole number of slots before it, or every slot boundary after the pickup
+  // would sit off the bar lines by the length of the upbeat.
+  const firstOnset = sounding.reduce((first, n) => Math.min(first, n.startBeat), 0);
+  const grid: SlotGrid = {
+    origin: Math.min(0, Math.floor(firstOnset / slotBeats + EPS) * slotBeats),
+    slotBeats,
+  };
   // A given key is taken as read across the whole span: the caller has already
   // answered the question, and second-guessing it would make the option mean
-  // "a hint" when it reads as an instruction. Otherwise the key is searched for
-  // over time, so a piece that modulates is not analysed against the wrong key
-  // for every bar after it does.
+  // "a hint" when it reads as an instruction. Its one region starts where the
+  // analysis does rather than at beat 0, so a piece opening with a pickup is
+  // covered from its first note however the key was arrived at. Otherwise the
+  // key is searched for over time, so a piece that modulates is not analysed
+  // against the wrong key for every bar after it does.
   const keys: KeyRegion[] =
     opts.key !== undefined
-      ? [{ startBeat: 0, endBeat: totalBeats, key: opts.key, confidence: 1 }]
-      : keyTimelineFromNotes(sounding, { ts, totalBeats, budget });
+      ? [{ startBeat: grid.origin, endBeat: totalBeats, key: opts.key, confidence: 1 }]
+      : keyTimelineFromNotes(sounding, { meters, totalBeats, budget });
   const prevailingKey = prevailingKeyOf(keys) ?? majorKey(0);
   const keyAt = keyLookup(keys, prevailingKey);
 
   const segments: ChordSegment[] = [];
   const segmentConfidence: number[] = [];
-  const slotBeats =
-    segmentation === 'grid' ? harmonicRhythm : Math.min(minChordBeats, harmonicRhythm);
-  const slotCount = Math.max(0, Math.ceil(totalBeats / slotBeats - EPS));
+  const slotCount = Math.max(0, Math.ceil((totalBeats - grid.origin) / slotBeats - EPS));
   assertGenerationBudget(slotCount, 'timeline windows', budget);
   const slotNotes: NoteEvent[][] = Array.from({ length: slotCount }, () => []);
   let memberships = 0;
   for (const indexed of soundingIndex.notes) {
-    const first = Math.max(0, Math.floor(indexed.note.startBeat / slotBeats));
-    const lastExclusive = Math.min(slotCount, Math.ceil(indexed.endBeat / slotBeats));
+    const first = Math.max(0, Math.floor(slotOfBeat(grid, indexed.note.startBeat)));
+    const lastExclusive = Math.min(slotCount, Math.ceil(slotOfBeat(grid, indexed.endBeat)));
     memberships += Math.max(0, lastExclusive - first);
     assertGenerationBudget(memberships, 'timeline note-to-window memberships', budget);
     for (let slot = first; slot < lastExclusive; slot += 1) {
@@ -753,21 +1024,67 @@ export function chordTimelineFromNotes(
     }
   }
 
+  const carried =
+    previous !== undefined &&
+    dirty !== undefined &&
+    evidenceFits(
+      previous,
+      grid,
+      slotCount,
+      totalBeats,
+      segmentation,
+      harmonicRhythm,
+      opts.key !== undefined,
+    )
+      ? previous
+      : undefined;
+  const dirtyFrom = carried === undefined ? 0 : Math.max(0, dirty?.from ?? 0);
+  const dirtyTo = carried === undefined ? slotCount : Math.min(slotCount, dirty?.to ?? slotCount);
+
+  const tables = createBoundaryTables(slotCount);
+  const slotWeights: WindowWeights[] = new Array<WindowWeights>(slotCount);
+  if (carried !== undefined) {
+    tables.scores.set(carried.tables.scores);
+  }
+  for (let i = 0; i < slotCount; i += 1) {
+    const reusable = i < dirtyFrom || i >= dirtyTo ? carried?.slotWeights[i] : undefined;
+    if (reusable !== undefined) {
+      slotWeights[i] = reusable;
+      continue;
+    }
+    const start = beatOfSlot(grid, i);
+    const weights = windowWeights(
+      slotNotes[i] ?? [],
+      start,
+      Math.min(start + slotBeats, totalBeats),
+      meters,
+    );
+    slotWeights[i] = weights;
+    scoreSlot(tables, weights, i);
+  }
+
   const spans =
     segmentation === 'grid'
-      ? gridSpans(slotCount, slotBeats)
-      : dynamicSpans(slotNotes, slotBeats, harmonicRhythm, totalBeats, ts);
+      ? gridSpans(slotCount, grid)
+      : dynamicSpans(slotWeights, tables, grid, harmonicRhythm, meters);
 
+  const windows = new Map<string, WindowChord | null>();
   for (const span of spans) {
     const start = span.startBeat;
     const end = Math.min(span.endBeat, totalBeats);
-    const inferred = analyzeWindow(
-      notesOfSpan(slotNotes, span, slotBeats),
-      start,
-      end,
-      ts,
-      keyAt(start),
-    );
+    const spanKey = keyAt(start);
+    const id = windowId(start, end, spanKey);
+    // A span whose slots are all clean holds exactly the notes it held before,
+    // so its chord and confidence are the same numbers over the same input.
+    const cached =
+      carried !== undefined && spanIsClean(grid, span, dirtyFrom, dirtyTo)
+        ? carried.windows.get(id)
+        : undefined;
+    const inferred =
+      cached !== undefined
+        ? cached
+        : analyzeWindow(notesOfSpan(slotNotes, span, grid), start, end, meters, spanKey);
+    windows.set(id, inferred);
     if (!inferred) {
       continue;
     }
@@ -787,10 +1104,23 @@ export function chordTimelineFromNotes(
   }
 
   return {
-    timeline: { at: segmentLookup(segments), segments },
-    keys: attachPivots(keys, segments),
-    prevailingKey,
-    segmentConfidence,
+    result: {
+      timeline: { at: segmentLookup(segments), segments },
+      keys: attachPivots(keys, segments),
+      prevailingKey,
+      segmentConfidence,
+    },
+    evidence: {
+      grid,
+      slotCount,
+      totalBeats,
+      segmentation,
+      harmonicRhythm,
+      keyGiven: opts.key !== undefined,
+      slotWeights,
+      tables,
+      windows,
+    },
   };
 }
 
@@ -830,8 +1160,8 @@ export type CadenceHit = {
  *   { pitch: 67, startBeat: 0, durationBeat: 4 }, // G, a dominant
  *   { pitch: 60, startBeat: 4, durationBeat: 4 }, // C, the tonic
  * ];
- * const { timeline, key } = chordTimelineFromNotes(notes);
- * const cadences = detectCadences(timeline, key);
+ * const { timeline, prevailingKey } = chordTimelineFromNotes(notes);
+ * const cadences = detectCadences(timeline, prevailingKey);
  * ```
  * @category Arrangement & Analysis
  */

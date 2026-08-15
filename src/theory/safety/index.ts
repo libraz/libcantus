@@ -17,11 +17,120 @@ import {
 import { isScaleTone } from '../scale/index.js';
 
 /**
- * Severity policy: `strict` counterpoint vs. lenient `pop` voice-leading.
+ * Style policy: `strict` counterpoint vs. `pop` voice leading.
+ *
+ * A profile says two things. It sets the severity of each reason
+ * {@link evaluateSafety} finds, which decides what is rejected outright, and it
+ * carries the {@link ProfileWeights} that rank whatever survives — because most
+ * of what separates the two styles is preference rather than prohibition.
  *
  * @category Arrangement & Analysis
  */
 export type SafetyProfile = 'strict' | 'pop';
+
+/**
+ * How a profile ranks the candidates its severity table has let through.
+ *
+ * Each field is a score contribution, added when the situation it names occurs;
+ * a negative value is a penalty. The scale is arbitrary but shared, so only the
+ * relative sizes matter. Nothing here can make an unsafe pitch usable: rejection
+ * is the severity table's business, and these weights only order what is left.
+ *
+ * @category Arrangement & Analysis
+ */
+export type ProfileWeights = {
+  /** A third or a sixth against the other voice. */
+  imperfectConsonance: number;
+  /** A unison, fifth or octave against the other voice. */
+  perfectConsonance: number;
+  /** A second, seventh or tritone against the other voice. */
+  dissonance: number;
+  /** The candidate belongs to the sounding chord. */
+  chordTone: number;
+  /** The two voices move in opposite directions. */
+  contraryMotion: number;
+  /** One voice holds while the other moves. */
+  obliqueMotion: number;
+  /** Both voices move the same way into a different interval. */
+  similarMotion: number;
+  /** Both voices move the same way, keeping the same imperfect consonance. */
+  parallelImperfect: number;
+  /** The candidate is a step from the previous note of its own line. */
+  stepwise: number;
+  /** Per semitone of melodic movement, so a leap costs more than a step. */
+  melodicDistance: number;
+  /** The move is a leap strict counterpoint forbids outright. */
+  forbiddenLeap: number;
+  /** Per semitone away from the centre of the line's register. */
+  registerDrift: number;
+};
+
+/**
+ * The weight table each profile ranks candidates by.
+ *
+ * `strict` states the sixteenth-century preferences: contrary motion is worth
+ * seeking, similar motion is worth avoiding, imperfect consonances carry the
+ * line, and a run of parallel thirds earns nothing. `pop` inverts two of those.
+ * Parallel thirds and sixths are the harmony line an arranger writes on purpose,
+ * a pedal or a held unison under a moving lead is a texture rather than a fault,
+ * and similar motion is simply how two parts often move together — while a bass
+ * moving against the lead is still worth preferring where it is available.
+ *
+ * @category Arrangement & Analysis
+ */
+export const PROFILE_WEIGHTS: Readonly<Record<SafetyProfile, Readonly<ProfileWeights>>> =
+  Object.freeze({
+    strict: Object.freeze({
+      imperfectConsonance: 2,
+      perfectConsonance: 0.5,
+      dissonance: -2,
+      chordTone: 1,
+      contraryMotion: 2,
+      obliqueMotion: 1,
+      similarMotion: -1,
+      parallelImperfect: 0,
+      stepwise: 1,
+      melodicDistance: -0.3,
+      forbiddenLeap: -6,
+      registerDrift: -0.02,
+    }),
+    pop: Object.freeze({
+      imperfectConsonance: 2.5,
+      perfectConsonance: 1,
+      dissonance: -2,
+      chordTone: 1.5,
+      contraryMotion: 1.5,
+      obliqueMotion: 1.25,
+      similarMotion: 0,
+      parallelImperfect: 2,
+      stepwise: 0.75,
+      melodicDistance: -0.2,
+      forbiddenLeap: -6,
+      registerDrift: -0.02,
+    }),
+  });
+
+/**
+ * Resolve a profile to the weights that rank its candidates, with per-field
+ * overrides applied on top.
+ *
+ * @param profile The profile whose table to start from.
+ * @param overrides Fields to replace; anything absent keeps the profile's value.
+ * @returns The complete weight table to score with.
+ * @example
+ * ```ts
+ * import { profileWeights } from '@libraz/libcantus';
+ * profileWeights('pop', { parallelImperfect: 4 }).contraryMotion; // 1.5 — the rest is untouched
+ * ```
+ * @category Arrangement & Analysis
+ */
+export function profileWeights(
+  profile: SafetyProfile,
+  overrides?: Partial<ProfileWeights>,
+): ProfileWeights {
+  const base = PROFILE_WEIGHTS[profile] ?? PROFILE_WEIGHTS.pop;
+  return { ...base, ...overrides };
+}
 
 /**
  * Overall placeability verdict for a candidate pitch.

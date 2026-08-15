@@ -7,7 +7,7 @@
  * boundary and a key boundary be compared on the same scale.
  */
 
-import type { TimeSignature } from '../core/meter/index.js';
+import type { MeterLike } from '../core/meter/index.js';
 import { metricWeight } from '../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../core/pitch/index.js';
 import type { NoteEvent } from '../core/types.js';
@@ -35,17 +35,23 @@ export type WindowWeights = {
  * adjacent windows: a note held across a boundary counts in each window only
  * for the part of it that sounds there.
  *
+ * The accents are read from the meter itself rather than from the signature in
+ * force at the window's start, so an onset under a meter change is weighed
+ * against the bar it actually falls in and a pickup at a negative beat is
+ * weighed as the upbeat it is.
+ *
  * @param notes The notes to weigh; those not overlapping the window are ignored.
  * @param windowStart First beat of the window.
  * @param windowEnd End of the window, exclusive.
- * @param ts Time signature supplying the metric accents.
+ * @param meter A single signature, or the piece's meter map, supplying the
+ *   metric accents.
  * @returns The histogram and its summaries.
  */
 export function windowWeights(
   notes: readonly NoteEvent[],
   windowStart: number,
   windowEnd: number,
-  ts: TimeSignature,
+  meter: MeterLike,
 ): WindowWeights {
   const weights = new Array<number>(12).fill(0);
   let lowestPitch = Number.POSITIVE_INFINITY;
@@ -57,7 +63,7 @@ export function windowWeights(
     }
     const velocityFactor = note.velocity !== undefined ? note.velocity / 127 : 1;
     const onsetInWindow = note.startBeat >= windowStart - EPS && note.startBeat < windowEnd - EPS;
-    const accent = onsetInWindow ? 1 + metricWeight(note.startBeat, ts) / 3 : 1;
+    const accent = onsetInWindow ? 1 + metricWeight(note.startBeat, meter) / 3 : 1;
     const pc = pitchClass(note.pitch);
     weights[pc] = (weights[pc] ?? 0) + overlap * velocityFactor * accent;
     if (note.pitch < lowestPitch) {
