@@ -3,10 +3,20 @@
  * generative modules (rhythm, drums, bass, groove, counter-melody). A single
  * mulberry32 core exposes the small set of samplers those modules need; given a
  * seed the stream is fully reproducible.
+ *
+ * Around that core sit the pieces that make a whole project reproducible: seeds
+ * derived hierarchically from one project number, draws addressed by position
+ * rather than by call order, and the algorithm version the output is pinned to.
  */
 
 import { InvalidInputError } from '../errors/index.js';
 import { assertFiniteNumber, assertInteger, assertRange } from '../validation/index.js';
+
+export type { PositionalRng } from './positional.js';
+export { createPositionalRng, includeAt } from './positional.js';
+export type { SeedPath } from './seed.js';
+export { deriveSeed } from './seed.js';
+export { ALGORITHM_VERSION, MIN_ALGORITHM_VERSION, resolveAlgorithmVersion } from './version.js';
 
 /**
  * A deterministic PRNG with the sampling helpers the generators need.
