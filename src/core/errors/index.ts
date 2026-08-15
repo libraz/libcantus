@@ -26,6 +26,71 @@
 export type LibcantusErrorCode = 'INVALID_INPUT' | 'NO_SOLUTION' | 'BUDGET_EXCEEDED';
 
 /**
+ * Any error this library raises, as a union of its three classes.
+ *
+ * The type a non-throwing entry point reports its failure as: a caller that
+ * holds one of these already knows it carries a {@link LibcantusErrorCode} and
+ * a message worth showing.
+ *
+ * @category Core
+ */
+export type LibcantusError = InvalidInputError | NoSolutionError | BudgetExceededError;
+
+/**
+ * The outcome of a parse that reports failure instead of throwing it.
+ *
+ * A text field is parsed on every keystroke, and most of those keystrokes are
+ * halfway through a valid symbol, so failure is the normal case rather than an
+ * exceptional one. The error travels in the result — not as `null` — because an
+ * input field has to say what is wrong with what was typed.
+ *
+ * @typeParam T The value a successful parse produces.
+ * @category Core
+ * @example
+ * ```ts
+ * import { tryParseChordSymbol } from '@libraz/libcantus';
+ * const result = tryParseChordSymbol('Cmaj');
+ * const label = result.ok ? result.value.quality : result.error.message;
+ * ```
+ */
+export type ParseResult<T> = { ok: true; value: T } | { ok: false; error: LibcantusError };
+
+/**
+ * Report a caught value as a failed parse, or re-throw what is not ours.
+ *
+ * Not part of the package's public surface: the non-throwing parsers share it
+ * so that a bug inside one of them surfaces as the crash it is instead of being
+ * reported as invalid input.
+ *
+ * @param error The caught value.
+ * @returns The failed parse result.
+ */
+export function parseFailure(error: unknown): { ok: false; error: LibcantusError } {
+  if (isLibcantusError(error)) {
+    return { ok: false, error };
+  }
+  throw error;
+}
+
+/**
+ * Read a parse result, throwing its error when it failed.
+ *
+ * Not part of the package's public surface: it is how each throwing parser is
+ * written on top of its non-throwing sibling, so the two cannot disagree about
+ * what is valid.
+ *
+ * @param result The result to read.
+ * @returns The parsed value.
+ * @throws The result's own error when the parse failed.
+ */
+export function unwrapParse<T>(result: ParseResult<T>): T {
+  if (result.ok) {
+    return result.value;
+  }
+  throw result.error;
+}
+
+/**
  * A rejected argument: malformed, out of range, or naming something unknown.
  *
  * @category Core

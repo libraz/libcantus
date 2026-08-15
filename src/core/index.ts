@@ -3,7 +3,14 @@
  * also available from the package root.
  */
 
-export type { LibcantusErrorCode } from './errors/index.js';
+export type { Duration, NoteValue, SpelledDuration, Tuplet } from './duration/index.js';
+export {
+  beatsToDuration,
+  beatsToTiedDurations,
+  durationToBeats,
+  NOTE_VALUES,
+} from './duration/index.js';
+export type { LibcantusError, LibcantusErrorCode, ParseResult } from './errors/index.js';
 export {
   BudgetExceededError,
   InvalidInputError,
@@ -12,26 +19,64 @@ export {
 } from './errors/index.js';
 export type { IndexedNoteEvent, NoteEventIndex, OnsetTieBreak } from './event-index/index.js';
 export { createNoteEventIndex } from './event-index/index.js';
+export type {
+  Articulation,
+  InstrumentProfile,
+  InstrumentProfileCommon,
+  Limb,
+  NotePlacement,
+  PercussionProfile,
+  PlayabilityIssue,
+  PlayabilityIssueType,
+  PlayabilityLayer,
+  PlayabilityReport,
+  StringedProfile,
+  StringFingering,
+} from './instrument/index.js';
+export {
+  ARTICULATIONS,
+  BASS_4_STRING,
+  BASS_5_STRING,
+  canSound,
+  fingeringsFor,
+  foldIntoRange,
+  GUITAR_DROP_D,
+  GUITAR_STANDARD,
+  instrumentRange,
+  LIMBS,
+  playability,
+} from './instrument/index.js';
 export {
   ConsonanceClass,
   classifyInterval,
   isConsonantInterval,
   isPerfectInterval,
 } from './interval/index.js';
-export type { BarPosition, TimeSignature } from './meter/index.js';
+export type {
+  BarPosition,
+  MeterChange,
+  MeterLike,
+  MeterMap,
+  TimeSignature,
+} from './meter/index.js';
 export {
+  barIndexAt,
   barPositionToBeat,
   barPositionToPulse,
+  barStartBeat,
   beatsPerBar,
+  beatsPerBarAt,
   beatToBarPosition,
   formatBarPosition,
   formatTimeSignature,
   isCompound,
   isStrongBeat,
+  meterAt,
   metricWeight,
   parseTimeSignature,
   pulseBeats,
   pulsesPerBar,
+  resolveMeters,
   tuplet,
 } from './meter/index.js';
 export type {
@@ -61,9 +106,28 @@ export {
   toSpelledInterval,
   transposeByInterval,
   transposeNote,
+  tryParseInterval,
+  tryParseNote,
 } from './pitch/index.js';
-export type { Rng } from './random/index.js';
-export { createRng } from './random/index.js';
+export type { PositionalRng, Rng, SeedPath } from './random/index.js';
+export {
+  ALGORITHM_VERSION,
+  createPositionalRng,
+  createRng,
+  deriveSeed,
+  includeAt,
+  MIN_ALGORITHM_VERSION,
+  resolveAlgorithmVersion,
+} from './random/index.js';
+export type { TempoEvent, TempoMap } from './tempo/index.js';
+export {
+  beatsToSeconds,
+  beatsToTicks,
+  durationToSeconds,
+  secondsToBeats,
+  tempoAt,
+  ticksToBeats,
+} from './tempo/index.js';
 export type { Tuning } from './tuning/index.js';
 export {
   centsBetweenFreq,
@@ -88,6 +152,7 @@ export {
   assertFiniteSemitones,
   assertGenerationBudget,
   assertInteger,
+  assertMeterMap,
   assertMidiPitch,
   assertNoteEvent,
   assertNoteEvents,

@@ -9,7 +9,7 @@
  * preserved.
  */
 
-import { InvalidInputError } from '../errors/index.js';
+import { InvalidInputError, type ParseResult, parseFailure, unwrapParse } from '../errors/index.js';
 import { assertFiniteNumber, assertInteger, assertOneOf } from '../validation/index.js';
 import type { KeyName, NoteNameOptions } from './naming.js';
 import { readKeyName, readNoteName, writeKeyName, writeNoteName } from './naming.js';
@@ -163,6 +163,8 @@ const mod7 = diatonicLetterOf;
  *   detecting it.
  * @returns The parsed note.
  * @throws If the text is not a valid note in the given (or detected) system.
+ *   Use {@link tryParseNote} where failure is ordinary, such as a note field
+ *   read on every keystroke.
  * @example
  * ```ts
  * import { parseNote, noteToMidi, noteToPitchClass } from '@libraz/libcantus';
@@ -173,10 +175,37 @@ const mod7 = diatonicLetterOf;
  * @category Pitch & Intervals
  */
 export function parseNote(text: string, opts?: NoteNameOptions): Note {
-  if (typeof text !== 'string') {
-    throw new InvalidInputError(`note must be a string; received ${typeof text}`);
+  return unwrapParse(tryParseNote(text, opts));
+}
+
+/**
+ * Parse a note name, reporting failure instead of throwing it.
+ *
+ * The same reading as {@link parseNote} — that function is this one with its
+ * error thrown — for the callers where a name that does not parse yet is the
+ * normal state of the input rather than a fault.
+ *
+ * @param text The note name.
+ * @param opts `system` reads the name in that notation system instead of
+ *   detecting it.
+ * @returns The note, or the error explaining why the text is not one.
+ * @example
+ * ```ts
+ * import { tryParseNote } from '@libraz/libcantus';
+ * const result = tryParseNote('C#4');
+ * result.ok ? result.value.letter : result.error.message;
+ * ```
+ * @category Pitch & Intervals
+ */
+export function tryParseNote(text: string, opts?: NoteNameOptions): ParseResult<Note> {
+  try {
+    if (typeof text !== 'string') {
+      throw new InvalidInputError(`note must be a string; received ${typeof text}`);
+    }
+    return { ok: true, value: assertNote(readNoteName(text, opts), `note ${text}`) };
+  } catch (error) {
+    return parseFailure(error);
   }
-  return assertNote(readNoteName(text, opts), `note ${text}`);
 }
 
 /**
@@ -542,7 +571,8 @@ const INTERVAL_NAME_PATTERN = /^(-?)(P|M|m|A+|d+)(\d+)$/;
  * @returns The spelled interval. An ascending name carries a non-negative span
  *   and no `descending` flag.
  * @throws If the name is not a quality label followed by a number, or the two
- *   cannot describe the same interval.
+ *   cannot describe the same interval. Use {@link tryParseInterval} where
+ *   failure is ordinary, such as an interval field read on every keystroke.
  * @example
  * ```ts
  * import { parseInterval } from '@libraz/libcantus';
@@ -552,21 +582,49 @@ const INTERVAL_NAME_PATTERN = /^(-?)(P|M|m|A+|d+)(\d+)$/;
  * @category Pitch & Intervals
  */
 export function parseInterval(name: string): SpelledInterval {
-  const match = typeof name === 'string' ? name.trim().match(INTERVAL_NAME_PATTERN) : null;
-  const quality = match?.[2] as IntervalQualityLabel | undefined;
-  const numberValue = Number(match?.[3]);
-  if (quality === undefined || !Number.isFinite(numberValue)) {
-    throw new InvalidInputError(
-      `interval must be a quality followed by a number, such as 'P5'; received ${JSON.stringify(name)}`,
-    );
+  return unwrapParse(tryParseInterval(name));
+}
+
+/**
+ * Parse an interval name, reporting failure instead of throwing it.
+ *
+ * The same reading as {@link parseInterval} — that function is this one with
+ * its error thrown — for the callers where a name that does not parse yet is
+ * the normal state of the input rather than a fault.
+ *
+ * @param name The interval name.
+ * @returns The interval, or the error explaining why the text is not one.
+ * @example
+ * ```ts
+ * import { tryParseInterval } from '@libraz/libcantus';
+ * const result = tryParseInterval('M5');
+ * result.ok ? result.value.semitones : result.error.message; // a fifth cannot be major
+ * ```
+ * @category Pitch & Intervals
+ */
+export function tryParseInterval(name: string): ParseResult<SpelledInterval> {
+  try {
+    const match = typeof name === 'string' ? name.trim().match(INTERVAL_NAME_PATTERN) : null;
+    const quality = match?.[2] as IntervalQualityLabel | undefined;
+    const numberValue = Number(match?.[3]);
+    if (quality === undefined || !Number.isFinite(numberValue)) {
+      throw new InvalidInputError(
+        `interval must be a quality followed by a number, such as 'P5'; received ${JSON.stringify(name)}`,
+      );
+    }
+    const span = intervalSemitones(numberValue, quality);
+    if (match?.[1] !== '-') {
+      return { ok: true, value: { number: numberValue, quality, semitones: span } };
+    }
+    // Negating a zero span yields -0, which compares unequal to 0 under
+    // Object.is and would leak into every equality check downstream.
+    return {
+      ok: true,
+      value: { number: numberValue, quality, semitones: span === 0 ? 0 : -span, descending: true },
+    };
+  } catch (error) {
+    return parseFailure(error);
   }
-  const span = intervalSemitones(numberValue, quality);
-  if (match?.[1] !== '-') {
-    return { number: numberValue, quality, semitones: span };
-  }
-  // Negating a zero span yields -0, which compares unequal to 0 under Object.is
-  // and would leak into every equality check downstream.
-  return { number: numberValue, quality, semitones: span === 0 ? 0 : -span, descending: true };
 }
 
 /**
