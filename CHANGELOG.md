@@ -9,10 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 The key stops being a single answer for a whole piece and becomes something the
 analysis follows over time; chord boundaries are searched for rather than
-assumed; keys become relatable and transposable by named interval; and scale
-degrees are counted the way musicians count them. See **Changed** first — the
-degree change and the removal of `ChordTimelineResult.key` are both breaking,
-and the degree change looks silent at the call site.
+assumed; keys become relatable and transposable by named interval; scale
+degrees are counted the way musicians count them; and the vocabulary grows to
+cover what a harmony exercise actually asks for — note names in German and
+Japanese, augmented sixths, figured bass, part-writing violations, transposing
+instruments, and a cadence that knows whether it is perfect. See **Changed**
+first — the degree change, the removal of `ChordTimelineResult.key`, and the
+replacement of `Cadence` are all breaking, and the degree change looks silent
+at the call site.
 
 ### Changed
 
@@ -85,7 +89,76 @@ and the degree change looks silent at the call site.
   Upgrading: add one to every degree argument. The presets, chord qualities and
   pitch classes they produce are unchanged.
 
+- **A cadence is a description rather than a label.** `detectCadence` returned
+  one of four strings, which could not say whether an authentic cadence was
+  perfect, and had no name for the Phrygian cadence, the bVII–I of rock and
+  pop, or a dominant that resolves onto an inversion. It now returns a
+  `CadenceResult` carrying `type` — widened with `'phrygian'` and `'modal'` —
+  along with `strength` for the perfect/imperfect distinction, the `soprano`
+  scale-degree role, whether both chords stand in `rootPosition`, and whether
+  the arrival is `evaded`.
+
+  A perfect authentic cadence needs root position in both chords and the tonic
+  in the soprano, so `detectCadence` takes an optional `voicing`. Without one
+  the soprano is unknowable and `strength` is `null` rather than a guess; a
+  leading-tone approach is reported `'imperfect'` even so, since it can never
+  be perfect. `CadenceHit.type` becomes `CadenceHit.cadence`, and
+  `Progression.analyze().cadence` returns the same structure. The `Cadence`
+  type is gone; read `CadenceResult['type']` for the old value.
+
 ### Added
+
+- **Note names in German, Japanese and Italian.** `parseNote` and `formatNote`
+  take a `system` of `'english'`, `'german'`, `'japanese'`, `'italian'` or
+  `'fixedDo'`, and `parseKeyName` / `formatKeyName` / `Key.parse` /
+  `key.toString` do the same for key names, so `gis moll` and 嬰ト短調 can be
+  written as they are written. Double accidentals round-trip in every system.
+
+  With no `system`, the notation is detected, and a name that reads as English
+  is read as English: `B` stays B natural, and German is chosen only on a cue
+  no other system uses — `H`, an `-is` or `-es` ending, or `dur` / `moll`. A
+  name that mixes systems, such as `gis major`, is rejected rather than
+  guessed. `detectNoteNameSystem` exposes the same decision.
+
+  Chord symbols take the same option but never detect, because `B` is B flat in
+  German and B natural in English with no mode word to separate them:
+  `parseChordSymbol('H7', { system: 'german' })` is a B dominant seventh, while
+  the default reading of every existing symbol is unchanged.
+
+- **Augmented sixths and the Neapolitan sixth.** `romanToChord` and
+  `chordToRoman` speak `It6`, `Fr6`, `Ger6` and `Ger65`, applied to a degree
+  like any other numeral, so `Ger6/V` is read. All three stand on the lowered
+  submediant with the augmented sixth above it — spelled as an augmented sixth,
+  never as the minor seventh it sounds like — and all three are classified as
+  predominants. `augmentedSixthChord`, `spellAugmentedSixth` and
+  `augmentedSixthKind` are available directly. A first-inversion Neapolitan
+  renders as `N6` under `chordToRoman(..., { neapolitan: true })`, with `bII6`
+  remaining the default.
+
+- **Figured bass.** `realizeFiguredBass(bass, figures, key)` reads a figured
+  bass into a chord: the triad and seventh-chord positions, accidentals
+  attached to a figure or standing alone to raise the third, and moving
+  suspensions such as `4-3`. Every unfigured interval is the one the key gives,
+  so the same `6` names a different chord on each scale degree.
+  `figuredBassRealization` returns the spelled notes and the suspensions
+  alongside the chord, and `figuredBassOf` writes the figures back.
+
+- **Part-writing violations.** `checkPartWriting(voicings, chords, key)` walks a
+  progression and reports parallel fifths and octaves, hidden perfects, cross
+  relations, voice crossing, overlap, spacing, range, unresolved leading tones
+  and sevenths, and augmented melodic intervals — each with the voices, the
+  chord indices, and a sentence saying why. It takes spelled notes rather than
+  MIDI numbers, which is what lets it tell an augmented second from a minor
+  third and a cross relation from an ordinary chromatic step; `spellVoicing`
+  converts a voicing that only has integers.
+
+- **Transposing instruments.** `toSoundingPitch` and `toWrittenPitch` convert
+  between written and sounding pitch for the `TRANSPOSING_INSTRUMENTS` table or
+  any interval of your own, and `Key.forInstrument` gives the key a player
+  reads. Each transposition is a spelled interval, so a written D♯ on a
+  clarinet in A sounds B♯ rather than C, and the octave rides in the interval:
+  an alto saxophone sounds a major sixth lower where an E♭ clarinet sounds a
+  minor third higher.
 
 - **Key regions.** `keyTimelineFromNotes` finds where the key changes in raw
   notes by correlating each slot against all 24 key profiles and choosing the

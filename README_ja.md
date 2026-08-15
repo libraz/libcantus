@@ -17,6 +17,7 @@ TypeScript だけで書かれた音楽理論エンジンです。MIDI ノート�
 - **音名を扱う** — `C4` のパース、移調、MIDI との相互変換、異名同音を区別した音程の綴り（`F#` と `Gb`）。
 - **コードと進行を組み立てる** — スケール度数、ローマ数字（`V7/V`）、リードシート記号（`Cmaj7`, `F#m7b5`, `C/G`）のいずれからでも。
 - **和声を解析する** — ローマ数字解析、和声機能、終止形の検出、借用和音とモーダルインターチェンジ。
+- **和声課題を解く** — 独語・日本語の音名、数字付き低音、増六の和音、移調楽器、そして理由つきで返る声部書法の禁則。
 - **コードとキーを判定する** — ノートを入れるとコードやキーが返る、組み立ての逆方向の処理。
 - **リハーモナイズする** — 裏コード、クロマチックメディアント、ネガティブハーモニー、モーダルインターチェンジのパレット。
 - **コードをボイシングする** — 声部の動きを最小化した 4 声（SATB）に加えて、drop-2/3、シェル、ルートレスのコンピングスタイル。
@@ -170,6 +171,42 @@ import { Chord, Key } from '@libraz/libcantus';
 // 長調に現れる短調の iv は、借用されたサブドミナントとして解釈される:
 Chord.of('F', 'min').analyze(Key.major('C'));
 // { function: 'subdominant', borrowed: true, source: 'parallelMinor', roman: 'iv' }
+```
+
+## 和声課題を解く
+
+設問を、書かれているとおりに書けます。音名と調名は英語だけでなく独語・日本語・伊語で読み書きでき、数字付き低音はその調に対して実施され、4 声の進行は何を犯しているかが返ります。
+
+```ts
+import { Key, formatNote, parseNote, realizeFiguredBass, spellChord } from '@libraz/libcantus';
+
+// 独語・日本語の調名は入出力の両方向:
+Key.parse('gis moll').toString(); // 'G# minor'
+Key.parse('嬰ト短調').toString({ system: 'german' }); // 'gis moll'
+
+// 数字の付かない音程は調から取るので、同じ 6 でも度数ごとに別の和音になる:
+const sixth = realizeFiguredBass(parseNote('D'), '6', Key.major('C').scale);
+spellChord(sixth, parseNote('B'), Key.major('C').scale).map((note) => formatNote(note));
+// ['B', 'D', 'F'] —— 導音上の三和音が、その第 3 音を低音にして鳴っている
+
+// A 管クラリネットは実音より短 3 度高く記譜する:
+Key.major('C').forInstrument('clarinetA').toString(); // 'Eb major'
+```
+
+独6の和音は、響きの上では属七でも増 6 度として綴られます。声部書法の検査は、該当する声部と理由を添えて返します。
+
+```ts
+import { Chord, Key, checkPartWriting, parseNote, romanToChord } from '@libraz/libcantus';
+
+romanToChord('Ger6', Key.major('C').scale).bassPc; // 8 —— 第Ⅵ音の低次
+
+const voicings = [
+  [parseNote('C3'), parseNote('E4'), parseNote('G4')],
+  [parseNote('D3'), parseNote('F#4'), parseNote('A4')],
+];
+const chords = [Chord.of('C', 'maj').data, Chord.of('D', 'maj').data];
+checkPartWriting(voicings, chords, Key.major('C').scale).map((v) => v.kind);
+// ['parallelFifth'] —— 各違反は声部と根拠（rationale）を持つ
 ```
 
 ## コードとキーを判定する

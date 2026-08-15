@@ -28,6 +28,9 @@ the two share no code and neither requires the other.
   (`V7/V`), or lead-sheet symbols (`Cmaj7`, `F#m7b5`, `C/G`).
 - **Analyze harmony** — Roman-numeral analysis, harmonic function, cadence
   detection, and borrowed / modal-interchange chords.
+- **Work through a harmony exercise** — note names in German and Japanese,
+  figured bass, augmented sixths, transposing instruments, and part-writing
+  violations reported with a reason.
 - **Recognize chords and keys** — notes in, chord or key out (the inverse of the
   builders).
 - **Reharmonize** — tritone subs, chromatic mediants, negative harmony, modal
@@ -212,6 +215,47 @@ import { Chord, Key } from '@libraz/libcantus';
 // A minor iv in a major key reads as a borrowed subdominant:
 Chord.of('F', 'min').analyze(Key.major('C'));
 // { function: 'subdominant', borrowed: true, source: 'parallelMinor', roman: 'iv' }
+```
+
+## Work through a harmony exercise
+
+Write the exercise the way it is written. Note and key names read in German,
+Japanese and Italian as well as English, a figured bass realizes against the
+key it is in, and a four-part progression is checked for what it breaks:
+
+```ts
+import { Key, formatNote, parseNote, realizeFiguredBass, spellChord } from '@libraz/libcantus';
+
+// German and Japanese key names, in and out:
+Key.parse('gis moll').toString(); // 'G# minor'
+Key.parse('嬰ト短調').toString({ system: 'german' }); // 'gis moll'
+
+// A figured bass takes its unfigured intervals from the key, so the same
+// figure names a different chord on each degree:
+const sixth = realizeFiguredBass(parseNote('D'), '6', Key.major('C').scale);
+spellChord(sixth, parseNote('B'), Key.major('C').scale).map((note) => formatNote(note));
+// ['B', 'D', 'F'] — the leading-tone triad, sounding over its third
+
+// A clarinet in A part is written a minor third above what it sounds:
+Key.major('C').forInstrument('clarinetA').toString(); // 'Eb major'
+```
+
+A German sixth is spelled as an augmented sixth rather than the dominant
+seventh it sounds like, and a part-writing check reports the voices and the
+reason:
+
+```ts
+import { Chord, Key, checkPartWriting, parseNote, romanToChord } from '@libraz/libcantus';
+
+romanToChord('Ger6', Key.major('C').scale).bassPc; // 8 — the lowered submediant
+
+const voicings = [
+  [parseNote('C3'), parseNote('E4'), parseNote('G4')],
+  [parseNote('D3'), parseNote('F#4'), parseNote('A4')],
+];
+const chords = [Chord.of('C', 'maj').data, Chord.of('D', 'maj').data];
+checkPartWriting(voicings, chords, Key.major('C').scale).map((v) => v.kind);
+// ['parallelFifth'] — and each violation carries the voices and a rationale
 ```
 
 ## Recognize chords and keys
