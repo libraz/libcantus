@@ -179,7 +179,93 @@ export const ALTERED_MASK = maskFromOffsets([0, 1, 3, 4, 6, 8, 10]);
 export const PHRYGIAN_DOMINANT_MASK = maskFromOffsets([0, 1, 4, 5, 7, 8, 10]);
 
 /**
+ * Miyako-bushi (都節), the hemitonic pentatonic of Japanese urban art music —
+ * shamisen and koto song: offsets {0,1,5,7,8}.
+ *
+ * Two miyako-bushi tetrachords a fourth apart, in the terms of Koizumi's
+ * tetrachord theory: between the two nuclear tones of each tetrachord sits a
+ * note a semitone above the lower one.
+ *
+ * The mask fixes the pitch classes and nothing else: the repertoire's
+ * intonation is not twelve-tone equal temperament, and the scale is a pair of
+ * tetrachords around nuclear tones rather than a ladder of degrees above a
+ * tonic. Cents and non-12 temperaments are the tuning module's business.
+ *
+ * @category Scales
+ */
+export const MIYAKO_BUSHI_MASK = maskFromOffsets([0, 1, 5, 7, 8]);
+
+/**
+ * Ritsu (律), the anhemitonic pentatonic of Japanese court music and Buddhist
+ * chant: offsets {0,2,5,7,9}.
+ *
+ * Two ritsu tetrachords a fourth apart: the middle note sits a whole tone above
+ * the lower nuclear tone. The result is the same five pitch classes as the
+ * major pentatonic a fourth below, which is why the mask alone cannot say which
+ * tradition is meant.
+ *
+ * @category Scales
+ */
+export const RITSU_MASK = maskFromOffsets([0, 2, 5, 7, 9]);
+
+/**
+ * Ryūkyū (琉球), the pentatonic of Okinawan music: offsets {0,4,5,7,11}.
+ *
+ * Two ryūkyū tetrachords a fourth apart: the middle note sits a major third
+ * above the lower nuclear tone, which is what puts the two semitone steps under
+ * the fourth and the octave.
+ *
+ * @category Scales
+ */
+export const RYUKYU_MASK = maskFromOffsets([0, 4, 5, 7, 11]);
+
+/**
+ * The heptatonic set with two augmented seconds: offsets {0,1,4,5,7,8,11}.
+ *
+ * Maqam Hijazkar in Arabic practice, thaat Bhairav in Hindustani practice, and
+ * the double harmonic major scale in English-language scale lists — one
+ * pitch-class set that three traditions arrived at separately and treat
+ * differently.
+ *
+ * @category Scales
+ */
+export const DOUBLE_HARMONIC_MASK = maskFromOffsets([0, 1, 4, 5, 7, 8, 11]);
+
+/**
+ * Thaat Todi of Hindustani classical music — S r g M' P d N: offsets
+ * {0,1,3,6,7,8,11}.
+ *
+ * @category Scales
+ */
+export const TODI_MASK = maskFromOffsets([0, 1, 3, 6, 7, 8, 11]);
+
+/**
+ * Thaat Marwa of Hindustani classical music — S r G M' P D N: offsets
+ * {0,1,4,6,7,9,11}.
+ *
+ * The thaat carries the fifth; raga Marwa itself leaves it out, which is the
+ * kind of distinction a pitch-class mask cannot make.
+ *
+ * @category Scales
+ */
+export const MARWA_MASK = maskFromOffsets([0, 1, 4, 6, 7, 9, 11]);
+
+/**
+ * Thaat Purvi of Hindustani classical music — S r G M' P d N: offsets
+ * {0,1,4,6,7,8,11}.
+ *
+ * @category Scales
+ */
+export const PURVI_MASK = maskFromOffsets([0, 1, 4, 6, 7, 8, 11]);
+
+/**
  * Named scale masks addressable by {@link scaleByName}.
+ *
+ * These are the scales of Western common practice and of jazz, the vocabulary
+ * chord-scale theory is stated in. Scales belonging to traditions that chord
+ * function does not organise live in {@link WORLD_SCALES}, which
+ * {@link scaleByName} resolves just as readily; {@link scaleSystemOf} says
+ * which kind a name is.
  *
  * @category Scales
  */
@@ -218,6 +304,125 @@ export const NAMED_SCALES = Object.freeze({
 export type ScaleName = keyof typeof NAMED_SCALES;
 
 /**
+ * Scale masks from traditions outside Western common practice, addressable by
+ * {@link scaleByName} exactly as {@link NAMED_SCALES} is.
+ *
+ * They are kept apart from {@link NAMED_SCALES} because chord-scale theory is a
+ * Western practice: a raga offered as the scale over an augmented major seventh
+ * would read as an answer while being a category error. Nothing else separates
+ * them — a `KeyScale` built from one of these masks behaves like any other.
+ *
+ * Three limits are worth stating plainly rather than leaving a caller to
+ * discover:
+ *
+ * - A twelve-bit mask can only hold what twelve-tone equal temperament can
+ *   express. The maqamat that turn on half-flat degrees — Rast, Bayati, Saba,
+ *   Sikah — are therefore absent rather than approximated, and the entries that
+ *   are here are not tuned the way their traditions tune them. Cents, arbitrary
+ *   equal divisions and just ratios live in the tuning module.
+ * - A thaat is the pitch material a raga draws on, not the raga: ascent and
+ *   descent, the notes a phrase leans on, and the ornaments belong to the raga
+ *   and have no place in a mask.
+ * - Several of these sets are the same pitch classes as a Western mode. The
+ *   name is what carries the tradition, so pass the name, not the mask,
+ *   wherever the tradition matters ({@link scaleSystemOf} reads both).
+ *
+ * @category Scales
+ */
+export const WORLD_SCALES = Object.freeze({
+  /** Miyako-bushi (都節), the hemitonic pentatonic of Japanese art music. */
+  miyakoBushi: MIYAKO_BUSHI_MASK,
+  /** Ritsu (律), the anhemitonic pentatonic of Japanese court music and chant. */
+  ritsu: RITSU_MASK,
+  /**
+   * Min'yō (民謡), the pentatonic of Japanese folk song, called inaka-bushi
+   * (田舎節) opposite miyako-bushi. The same five pitch classes as the minor
+   * pentatonic.
+   */
+  minyo: MINOR_PENTATONIC_MASK,
+  /** Ryūkyū (琉球), the pentatonic of Okinawan music. */
+  ryukyu: RYUKYU_MASK,
+  /** Maqam Ajam of Arabic practice; the same pitch classes as the major scale. */
+  ajam: MAJOR_MASK,
+  /**
+   * Maqam Nahawand of Arabic practice; the same pitch classes as the natural
+   * minor, though practice raises the seventh degree at a cadence.
+   */
+  nahawand: NATURAL_MINOR_MASK,
+  /** Maqam Kurd of Arabic practice; the same pitch classes as the phrygian mode. */
+  kurd: PHRYGIAN_MASK,
+  /**
+   * Maqam Hijaz of Arabic practice; the same pitch classes as the phrygian
+   * dominant. Played intonation stretches the augmented second beyond its
+   * tempered size, which is the sound the mask cannot carry.
+   */
+  hijaz: PHRYGIAN_DOMINANT_MASK,
+  /** Maqam Hijazkar of Arabic practice: Hijaz over Hijaz, with two augmented seconds. */
+  hijazkar: DOUBLE_HARMONIC_MASK,
+  /** Thaat Bilaval of Hindustani classical music; the same pitch classes as the major scale. */
+  bilaval: MAJOR_MASK,
+  /** Thaat Khamaj; the same pitch classes as the mixolydian mode. */
+  khamaj: MIXOLYDIAN_MASK,
+  /** Thaat Kafi; the same pitch classes as the dorian mode. */
+  kafi: DORIAN_MASK,
+  /** Thaat Asavari; the same pitch classes as the natural minor. */
+  asavari: NATURAL_MINOR_MASK,
+  /** Thaat Bhairavi; the same pitch classes as the phrygian mode. */
+  bhairavi: PHRYGIAN_MASK,
+  /** Thaat Bhairav, with komal Re and komal Dha against a natural third and seventh. */
+  bhairav: DOUBLE_HARMONIC_MASK,
+  /** Thaat Kalyan; the same pitch classes as the lydian mode. */
+  kalyan: LYDIAN_MASK,
+  /** Thaat Marwa, with komal Re and tivra Ma. */
+  marwa: MARWA_MASK,
+  /** Thaat Purvi, Marwa's komal Dha counterpart. */
+  purvi: PURVI_MASK,
+  /** Thaat Todi, with komal Re, komal Ga, komal Dha and tivra Ma. */
+  todi: TODI_MASK,
+});
+
+/**
+ * The name of a scale in {@link WORLD_SCALES}.
+ *
+ * @category Scales
+ */
+export type WorldScaleName = keyof typeof WORLD_SCALES;
+
+/**
+ * Alternative names that resolve to a canonical scale name.
+ *
+ * A scale carrying several names gets one canonical entry and its other names
+ * here, so that two spellings of one tradition's scale cannot drift into two
+ * entries with two masks. Transliterations vary, and one pitch-class set is
+ * often named differently in different repertoires.
+ *
+ * @category Scales
+ */
+export const SCALE_ALIASES = Object.freeze({
+  /** Inaka-bushi (田舎節), the name the in/yō pairing gives the min'yō scale. */
+  inakaBushi: 'minyo',
+  /** The Okinawan scale, the usual English name for the ryūkyū scale. */
+  okinawan: 'ryukyu',
+  /** Turkish spelling of Hijaz. */
+  hicaz: 'hijaz',
+  /** The English-language scale-list name for the Hijazkar/Bhairav set. */
+  doubleHarmonic: 'hijazkar',
+  /** Transliteration variant of Bilaval. */
+  bilawal: 'bilaval',
+  /** Transliteration variant of Marwa. */
+  marva: 'marwa',
+  /** Transliteration variant of Purvi. */
+  poorvi: 'purvi',
+} as const satisfies Readonly<Record<string, ScaleName | WorldScaleName>>);
+
+/**
+ * An alternative scale name that {@link resolveScaleName} maps to a canonical one.
+ *
+ * @category Scales
+ */
+export type ScaleAliasName = keyof typeof SCALE_ALIASES;
+
+/**
  * A scale name that completes to the built-in names but still accepts any
  * string, so a caller with a name from configuration is not forced to cast.
  *
@@ -226,18 +431,56 @@ export type ScaleName = keyof typeof NAMED_SCALES;
 export type ScaleNameInput = ScaleName | (string & {});
 
 /**
+ * The canonical name a scale name stands for, or undefined when it names no
+ * built-in scale.
+ *
+ * A canonical name resolves to itself; an entry of {@link SCALE_ALIASES}
+ * resolves to the name it is an alias of. The lookup goes through
+ * `Object.hasOwn` for the same reason {@link namedScaleMask} does.
+ *
+ * @param name The scale name or alias.
+ * @returns The canonical name, or undefined for an unknown one.
+ * @example
+ * ```ts
+ * import { resolveScaleName } from '@libraz/libcantus';
+ * resolveScaleName('okinawan'); // 'ryukyu'
+ * resolveScaleName('dorian'); // 'dorian'
+ * ```
+ * @category Scales
+ */
+export function resolveScaleName(name: ScaleNameInput): ScaleName | WorldScaleName | undefined {
+  if (Object.hasOwn(NAMED_SCALES, name)) {
+    return name as ScaleName;
+  }
+  if (Object.hasOwn(WORLD_SCALES, name)) {
+    return name as WorldScaleName;
+  }
+  return Object.hasOwn(SCALE_ALIASES, name) ? SCALE_ALIASES[name as ScaleAliasName] : undefined;
+}
+
+/**
  * The mask of a named scale, or undefined when the name is not one.
+ *
+ * Names of {@link NAMED_SCALES}, of {@link WORLD_SCALES} and of
+ * {@link SCALE_ALIASES} all answer here, so a caller never has to know which
+ * register a scale is kept in.
  *
  * Looking the name up through this helper is what keeps `'constructor'` or
  * `'toString'` from resolving to something inherited from `Object.prototype`
  * and producing a scale whose mask is a function.
  *
- * @param name The scale name.
+ * @param name The scale name or alias.
  * @returns The 12-bit mask, or undefined for an unknown name.
  * @category Scales
  */
 export function namedScaleMask(name: ScaleNameInput): number | undefined {
-  return Object.hasOwn(NAMED_SCALES, name) ? NAMED_SCALES[name as ScaleName] : undefined;
+  const canonical = resolveScaleName(name);
+  if (canonical === undefined) {
+    return undefined;
+  }
+  return Object.hasOwn(NAMED_SCALES, canonical)
+    ? NAMED_SCALES[canonical as ScaleName]
+    : WORLD_SCALES[canonical as WorldScaleName];
 }
 
 /**
