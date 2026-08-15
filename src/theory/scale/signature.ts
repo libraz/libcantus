@@ -9,6 +9,22 @@ import { assertInteger, assertOneOf } from '../../core/validation/index.js';
 import { majorKey, minorKey } from './key.js';
 import { MAJOR_MASK } from './masks.js';
 
+/**
+ * Which of the two modes a key signature is read in.
+ *
+ * A signature names two keys — three sharps is both A major and F# minor — so
+ * every entry point that turns a signature into a key, or that names the mode
+ * of a key relation, selects between them with this.
+ *
+ * @example
+ * ```ts
+ * import type { KeyMode } from '@libraz/libcantus';
+ * const mode: KeyMode = 'minor';
+ * ```
+ * @category Scales
+ */
+export type KeyMode = 'major' | 'minor';
+
 /** Position of each natural letter on the circle of fifths: F=-1, C=0, ... B=5. */
 const LETTER_FIFTHS = [0, 2, 4, -1, 1, 3, 5] as const;
 
@@ -126,7 +142,7 @@ export function keySignatureFifths(tonic: Note, key: KeyScale): number {
  */
 export function keyFromFifths(
   fifths: number,
-  mode: 'major' | 'minor' = 'major',
+  mode: KeyMode = 'major',
 ): { tonic: Note; key: KeyScale } {
   assertInteger(fifths, 'fifths', -MAX_FIFTHS, MAX_FIFTHS);
   const which = assertOneOf(mode, ['major', 'minor'], 'mode');

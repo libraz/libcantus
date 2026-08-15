@@ -13,6 +13,8 @@ export type {
   DetectChordOptions,
   DetectKeyOptions,
   KeyMatch,
+  KeyProfileName,
+  KeyProfilePair,
   KeyVariant,
 } from '../analyze/detect/index.js';
 // The classes' own signatures name these plain types; without them a consumer
@@ -26,6 +28,7 @@ export type {
   HarmonicFunction,
 } from '../analyze/functional/index.js';
 export type {
+  IntervalLike,
   IntervalQualityLabel,
   Note as NoteData,
   SpelledInterval,
@@ -38,7 +41,13 @@ export type {
   PitchSpelling,
 } from '../theory/chord/index.js';
 export type { ChordScaleMatch, ScaleChoice } from '../theory/chordscale/index.js';
-export type { ScaleName, ScaleNameInput } from '../theory/scale/index.js';
+export type {
+  KeyMode,
+  KeyRelation,
+  ScaleName,
+  ScaleNameInput,
+  SpelledKey,
+} from '../theory/scale/index.js';
 export type {
   StyledVoicingOptions,
   VoiceRange,

@@ -69,16 +69,25 @@ export {
   NoteSafety,
   ReasonFlag,
 } from './safety/index.js';
-export type { ScaleName, ScaleNameInput } from './scale/index.js';
+export type {
+  KeyMode,
+  KeyRelation,
+  ScaleName,
+  ScaleNameInput,
+  SpelledKey,
+} from './scale/index.js';
 export {
   ALTERED_MASK,
   BLUES_MASK,
   CHROMATIC_MASK,
   DORIAN_MASK,
   diatonicPitchClasses,
+  dominantKeyOf,
+  enharmonicKeyOf,
   HARMONIC_MINOR_MASK,
   isScaleTone,
   keyFromFifths,
+  keyRelationBetween,
   keySignatureFifths,
   LOCRIAN_MASK,
   LOCRIAN_NATURAL2_MASK,
@@ -101,10 +110,15 @@ export {
   OCTATONIC_WHOLE_HALF_MASK,
   PHRYGIAN_DOMINANT_MASK,
   PHRYGIAN_MASK,
+  parallelKeyOf,
   pitchToScaleDegree,
+  relatedKeysOf,
+  relativeKeyOf,
   requireScaleMask,
   scaleByName,
   scaleTonesInDegreeOrder,
+  spelledKeyOf,
+  subdominantKeyOf,
   WHOLE_TONE_MASK,
 } from './scale/index.js';
 export type { SpellingContext } from './spelling/index.js';

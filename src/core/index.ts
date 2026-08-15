@@ -34,7 +34,12 @@ export {
   pulsesPerBar,
   tuplet,
 } from './meter/index.js';
-export type { IntervalQualityLabel, Note as NoteData, SpelledInterval } from './pitch/index.js';
+export type {
+  IntervalLike,
+  IntervalQualityLabel,
+  Note as NoteData,
+  SpelledInterval,
+} from './pitch/index.js';
 export {
   diatonicLetterOf,
   formatNote,
@@ -47,6 +52,7 @@ export {
   parseNote,
   pitchClassOf,
   spelledInterval,
+  toSpelledInterval,
   transposeByInterval,
   transposeNote,
 } from './pitch/index.js';

@@ -111,10 +111,11 @@ export class Interval {
   }
 
   /**
-   * Parse an interval name such as `'P5'`, `'m3'`, or `'AA4'`.
+   * Parse an interval name such as `'P5'`, `'m3'`, `'AA4'`, or `'-m3'`.
    *
-   * @param name The interval name.
-   * @returns The ascending interval of that name.
+   * @param name The interval name; a leading `'-'` names the interval taken
+   *   downward.
+   * @returns The interval of that name, descending when the name is prefixed.
    * @throws If the name is not a quality label followed by a diatonic number.
    */
   static parse(name: string): Interval {
@@ -134,6 +135,14 @@ export class Interval {
   /** Signed semitone span. */
   get semitones(): number {
     return this.#semitones;
+  }
+
+  /**
+   * Whether the interval moves downward. A descending unison spans zero
+   * semitones, so this flag is the only record of its direction.
+   */
+  get isDescending(): boolean {
+    return this.#descending;
   }
 
   /** A readable label composed of quality and number, e.g. `'P5'` or `'M3'`. */
@@ -157,6 +166,31 @@ export class Interval {
     const numberValue = INVERSION_SUM - simple;
     const quality = invertQuality(this.#quality);
     return Interval.of(numberValue, quality, intervalSemitones(numberValue, quality));
+  }
+
+  /**
+   * The same interval taken in the opposite direction.
+   *
+   * The number and quality are untouched — only the direction changes, so an
+   * ascending major third becomes a descending major third rather than its
+   * inversion.
+   *
+   * @returns The interval with its direction flipped.
+   * @example
+   * ```ts
+   * import { Interval } from '@libraz/libcantus';
+   * Interval.parse('M3').negate().toString(); // 'M3', descending
+   * ```
+   */
+  negate(): Interval {
+    // The flag is flipped rather than derived from the negated span: a unison
+    // spans zero semitones, whose negation is indistinguishable from itself.
+    return new Interval(
+      this.#number,
+      this.#quality,
+      this.#semitones === 0 ? 0 : -this.#semitones,
+      !this.#descending,
+    );
   }
 
   /**

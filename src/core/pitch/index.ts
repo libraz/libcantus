@@ -468,31 +468,122 @@ export function intervalSemitones(numberValue: number, quality: IntervalQualityL
   throw new InvalidInputError(`unknown interval quality ${JSON.stringify(quality)}`);
 }
 
+/** Interval name grammar: an optional descent marker, a quality, a number. */
+const INTERVAL_NAME_PATTERN = /^(-?)(P|M|m|A+|d+)(\d+)$/;
+
 /**
- * Parse an interval name such as `'P5'`, `'m3'`, or `'AA4'`.
+ * Parse an interval name such as `'P5'`, `'m3'`, `'AA4'`, or `'-m3'`.
  *
- * @param name The interval name: a quality label followed by a diatonic number.
- * @returns The spelled interval. Diminished unisons have a descending
- *   (negative) semitone span; all other supported names are ascending.
+ * A leading `'-'` names the same interval taken downward: the span is negated
+ * and `descending` is set. The flag is not redundant with the sign — a
+ * descending unison spans zero semitones, so only the flag records that the
+ * letters move down.
+ *
+ * @param name The interval name: an optional `'-'`, a quality label, and a
+ *   diatonic number. Surrounding whitespace is ignored.
+ * @returns The spelled interval. An ascending name carries a non-negative span
+ *   and no `descending` flag.
  * @throws If the name is not a quality label followed by a number, or the two
  *   cannot describe the same interval.
  * @example
  * ```ts
  * import { parseInterval } from '@libraz/libcantus';
  * parseInterval('m3'); // { number: 3, quality: 'm', semitones: 3 }
+ * parseInterval('-m3'); // { number: 3, quality: 'm', semitones: -3, descending: true }
  * ```
  * @category Pitch & Intervals
  */
 export function parseInterval(name: string): SpelledInterval {
-  const match = /^(P|M|m|A+|d+)(\d+)$/.exec(name);
-  const quality = match?.[1] as IntervalQualityLabel | undefined;
-  const numberValue = Number(match?.[2]);
+  const match = typeof name === 'string' ? name.trim().match(INTERVAL_NAME_PATTERN) : null;
+  const quality = match?.[2] as IntervalQualityLabel | undefined;
+  const numberValue = Number(match?.[3]);
   if (quality === undefined || !Number.isFinite(numberValue)) {
     throw new InvalidInputError(
       `interval must be a quality followed by a number, such as 'P5'; received ${JSON.stringify(name)}`,
     );
   }
-  return { number: numberValue, quality, semitones: intervalSemitones(numberValue, quality) };
+  const span = intervalSemitones(numberValue, quality);
+  if (match?.[1] !== '-') {
+    return { number: numberValue, quality, semitones: span };
+  }
+  // Negating a zero span yields -0, which compares unequal to 0 under Object.is
+  // and would leak into every equality check downstream.
+  return { number: numberValue, quality, semitones: span === 0 ? 0 : -span, descending: true };
+}
+
+/**
+ * Anything that names a spelled interval: an interval name, plain interval
+ * data, or a value that serializes to interval data such as the `Interval`
+ * class.
+ *
+ * @category Pitch & Intervals
+ */
+export type IntervalLike =
+  | string
+  | SpelledInterval
+  | {
+      /** The interval data this value stands for. */
+      toJSON(): SpelledInterval;
+    };
+
+/** Validate plain interval data and return it in the canonical shape. */
+function normalizedInterval(data: SpelledInterval): SpelledInterval {
+  assertInteger(data.number, 'interval.number', 1);
+  assertFiniteNumber(data.semitones, 'interval.semitones');
+  const expected = intervalSemitones(data.number, data.quality);
+  if (Math.abs(data.semitones) !== expected) {
+    throw new InvalidInputError(
+      `${data.quality}${data.number} spans ${expected} semitones; received ${data.semitones}`,
+    );
+  }
+  const normalized: SpelledInterval = {
+    number: data.number,
+    quality: data.quality,
+    semitones: data.semitones,
+  };
+  // An ascending interval leaves the flag out entirely, so a parsed name, this
+  // function, and the model layer's `toJSON` all produce the same object.
+  if (data.descending ?? data.semitones < 0) {
+    normalized.descending = true;
+  }
+  return normalized;
+}
+
+/**
+ * Resolve any interval-shaped value to plain {@link SpelledInterval} data.
+ *
+ * This is what lets an entry point accept an interval name, the plain data the
+ * pitch module returns, or an `Interval` instance without every caller
+ * branching on the form. An instance is accepted through its `toJSON` method
+ * rather than by its type, because the core layer cannot import the model layer
+ * that defines the class.
+ *
+ * @param value An interval name, plain interval data, or a value whose `toJSON`
+ *   returns interval data.
+ * @returns The validated interval data, carrying `descending` only when the
+ *   interval descends.
+ * @throws If the value is not interval-shaped, or its number, quality, and span
+ *   do not describe the same interval.
+ * @example
+ * ```ts
+ * import { toSpelledInterval } from '@libraz/libcantus';
+ * toSpelledInterval('P5'); // { number: 5, quality: 'P', semitones: 7 }
+ * toSpelledInterval({ number: 5, quality: 'P', semitones: -7 });
+ * // { number: 5, quality: 'P', semitones: -7, descending: true }
+ * ```
+ * @category Pitch & Intervals
+ */
+export function toSpelledInterval(value: IntervalLike): SpelledInterval {
+  if (typeof value === 'string') {
+    return parseInterval(value);
+  }
+  if (typeof value === 'object' && value !== null) {
+    const data = 'toJSON' in value && typeof value.toJSON === 'function' ? value.toJSON() : value;
+    return normalizedInterval(data as SpelledInterval);
+  }
+  throw new InvalidInputError(
+    `interval must be a name or spelled interval data; received ${typeof value}`,
+  );
 }
 
 /**

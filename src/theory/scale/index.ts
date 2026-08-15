@@ -34,4 +34,16 @@ export {
   requireScaleMask,
   WHOLE_TONE_MASK,
 } from './masks.js';
+export type { KeyRelation, SpelledKey } from './relations.js';
+export {
+  dominantKeyOf,
+  enharmonicKeyOf,
+  keyRelationBetween,
+  parallelKeyOf,
+  relatedKeysOf,
+  relativeKeyOf,
+  spelledKeyOf,
+  subdominantKeyOf,
+} from './relations.js';
+export type { KeyMode } from './signature.js';
 export { keyFromFifths, keySignatureFifths } from './signature.js';

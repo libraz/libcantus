@@ -1,12 +1,14 @@
 import { InvalidInputError } from '../core/errors/index.js';
 import {
   formatNote,
+  type IntervalLike,
   midiToNote,
   type Note as NoteData,
   noteToMidi,
   noteToPitchClass,
   parseNote,
   spelledInterval,
+  toSpelledInterval,
   transposeByInterval,
   transposeNote,
 } from '../core/pitch/index.js';
@@ -183,16 +185,19 @@ export class Note {
    * count, the interval's diatonic number decides the letter: C up an
    * augmented second is D#, not Eb.
    *
-   * @param interval The interval to apply; a descending interval moves down.
+   * @param interval An interval name (e.g. `'A2'`, `'-m3'`), plain interval
+   *   data, or an {@link Interval}; a descending interval moves down.
    * @returns The transposed note.
    * @example
    * ```ts
    * import { Interval, Note } from '@libraz/libcantus';
+   * Note.of('C4').transposeBy('A2').name; // 'D#4'
    * Note.of('C4').transposeBy(Interval.parse('A2')).name; // 'D#4'
+   * Note.of('C4').transposeBy('A4').name; // 'F#4', not 'Gb4'
    * ```
    */
-  transposeBy(interval: Interval): Note {
-    return new Note(transposeByInterval(this.#data, interval.toJSON()));
+  transposeBy(interval: IntervalLike): Note {
+    return new Note(transposeByInterval(this.#data, toSpelledInterval(interval)));
   }
 
   /**

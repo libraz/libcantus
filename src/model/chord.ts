@@ -13,8 +13,13 @@ import {
   secondaryDominantOf,
 } from '../analyze/functional/index.js';
 import { InvalidInputError } from '../core/errors/index.js';
-import type { Note as NoteData } from '../core/pitch/index.js';
-import { noteToPitchClass, transposeNote } from '../core/pitch/index.js';
+import type { IntervalLike, Note as NoteData, SpelledInterval } from '../core/pitch/index.js';
+import {
+  noteToPitchClass,
+  toSpelledInterval,
+  transposeByInterval,
+  transposeNote,
+} from '../core/pitch/index.js';
 import { negativeHarmonyMirror } from '../generate/reharmony/index.js';
 import {
   type Chord as ChordData,
@@ -58,6 +63,24 @@ function transposeHint(
     return undefined;
   }
   const moved = transposeNote(hint, semitones);
+  return { letter: moved.letter, alter: moved.alter };
+}
+
+/**
+ * Move an explicit spelling hint by a spelled interval.
+ *
+ * The interval's diatonic number picks the letter, so a C chord taken up an
+ * augmented fourth is spelled F# and up a diminished fifth Gb — the distinction
+ * {@link transposeHint} cannot make from a semitone count alone.
+ */
+function transposeHintByInterval(
+  hint: PitchSpelling | undefined,
+  interval: SpelledInterval,
+): PitchSpelling | undefined {
+  if (hint === undefined) {
+    return undefined;
+  }
+  const moved = transposeByInterval(hint, interval);
   return { letter: moved.letter, alter: moved.alter };
 }
 
@@ -541,6 +564,41 @@ export class Chord {
       moved.bassSpelling = bassSpelling;
     }
     return new Chord(moved, this.#key?.transpose(semitones));
+  }
+
+  /**
+   * Transpose the chord by a spelled interval.
+   *
+   * Unlike {@link Chord.transpose}, which picks letters from a semitone count,
+   * the interval's diatonic number decides them: a C chord up an augmented
+   * fourth is F#, up a diminished fifth Gb. As with the semitone form, the
+   * quality and interval template are carried over and a carried key moves with
+   * the chord.
+   *
+   * @param interval An interval name (e.g. `'A4'`, `'-m3'`), plain interval
+   *   data, or an {@link Interval}; a descending interval moves down.
+   * @returns The transposed chord, in the transposed key when one is carried.
+   * @example
+   * ```ts
+   * import { Chord } from '@libraz/libcantus';
+   * Chord.parse('C').transposeBy('A4').symbol(); // 'F#'
+   * Chord.parse('C').transposeBy('d5').symbol(); // 'Gb'
+   * ```
+   */
+  transposeBy(interval: IntervalLike): Chord {
+    const spelled = toSpelledInterval(interval);
+    const moved = transposeChord(this.#given, spelled.semitones);
+    // #given, not #data: only a caller-supplied spelling is transposed, so a
+    // spelling the key derived stays derived and follows the transposed key.
+    const rootSpelling = transposeHintByInterval(this.#given.rootSpelling, spelled);
+    const bassSpelling = transposeHintByInterval(this.#given.bassSpelling, spelled);
+    if (rootSpelling !== undefined) {
+      moved.rootSpelling = rootSpelling;
+    }
+    if (bassSpelling !== undefined) {
+      moved.bassSpelling = bassSpelling;
+    }
+    return new Chord(moved, this.#key?.transposeBy(spelled));
   }
 
   /**

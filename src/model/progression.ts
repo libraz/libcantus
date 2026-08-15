@@ -6,7 +6,7 @@ import {
   type HarmonicFunction,
 } from '../analyze/functional/index.js';
 import { InvalidInputError } from '../core/errors/index.js';
-import type { Note as NoteData } from '../core/pitch/index.js';
+import type { IntervalLike, Note as NoteData } from '../core/pitch/index.js';
 import type { KeyScale } from '../core/types.js';
 import type { Chord as ChordData, ChordSpan } from '../theory/chord/index.js';
 import { chordFromSpan } from '../theory/chord/index.js';
@@ -270,6 +270,63 @@ export class Progression {
       return key !== undefined && moved.key === undefined ? moved.withKey(key) : moved;
     });
     return new Progression(chords, key);
+  }
+
+  /**
+   * Transpose every chord by a spelled interval.
+   *
+   * Unlike {@link Progression.transpose}, which picks letters from a semitone
+   * count, the interval's diatonic number decides them, so a progression taken
+   * up an augmented fourth is spelled with sharps and one taken up a diminished
+   * fifth with flats. A carried key moves with the chords.
+   *
+   * @param interval An interval name (e.g. `'A4'`, `'-m3'`), plain interval
+   *   data, or an {@link Interval}; a descending interval moves down.
+   * @returns The transposed progression.
+   * @example
+   * ```ts
+   * import { Chord, Progression } from '@libraz/libcantus';
+   * new Progression([Chord.parse('C'), Chord.parse('G7')]).transposeBy('A4').toString();
+   * // 'F# C#7'
+   * ```
+   */
+  transposeBy(interval: IntervalLike): Progression {
+    const key = this.#key?.transposeBy(interval);
+    const chords = this.#chords.map((chord) => {
+      const moved = chord.transposeBy(interval);
+      // A chord that carried no key of its own is spelled by this progression's
+      // key, so it has to receive the transposed one or it would fall back to
+      // sharps in a flat key.
+      return key !== undefined && moved.key === undefined ? moved.withKey(key) : moved;
+    });
+    return new Progression(chords, key);
+  }
+
+  /**
+   * Transpose the progression so that its key becomes `target`.
+   *
+   * The interval from the carried key to the target decides the spelling, so
+   * moving C major to Gb major writes flats while moving it to F# major writes
+   * sharps.
+   *
+   * @param target The key the transposed progression should be in.
+   * @returns The transposed progression, carrying `target` as its key.
+   * @throws If the progression carries no key context to measure from.
+   * @example
+   * ```ts
+   * import { Chord, Key, Progression } from '@libraz/libcantus';
+   * const progression = new Progression([Chord.parse('C'), Chord.parse('G7')], Key.major('C'));
+   * progression.transposeTo(Key.major('Eb')).toString(); // 'Eb Bb7'
+   * ```
+   */
+  transposeTo(target: Key): Progression {
+    const from = this.#key;
+    if (from === undefined) {
+      throw new InvalidInputError(
+        'progression has no key context; attach one with withKey() before transposing to another key',
+      );
+    }
+    return this.transposeBy(from.intervalTo(target));
   }
 
   /**
