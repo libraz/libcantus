@@ -122,9 +122,18 @@ function capChromaticAccidentals(preferred: Note, alternative: Note | undefined)
     : preferred;
 }
 
+/**
+ * How many letters a spelling has to share out: one per diatonic letter name.
+ *
+ * A scale with more tones than this cannot give every tone a letter of its own
+ * however it is read, so the octatonic and chromatic sets are spelled tone by
+ * tone instead.
+ */
+const DIATONIC_LETTER_COUNT = 7;
+
 /** Whether the key's scale is a seven-note (heptatonic) scale. */
 function isHeptatonic(key: KeyScale): boolean {
-  return scaleTonesInDegreeOrder(key).length === 7;
+  return scaleTonesInDegreeOrder(key).length === DIATONIC_LETTER_COUNT;
 }
 
 /** Whether the scale has a minor third and no major third — it leans flat. */
@@ -134,15 +143,137 @@ function hasMinorThird(key: KeyScale): boolean {
   return tones.includes(mod12(root + 3)) && !tones.includes(mod12(root + 4));
 }
 
+/** Which way a scale leans: a flat tonic and a minor third both mean flats. */
+function leansFlat(tonic: Note, key: KeyScale): boolean {
+  return tonic.alter < 0 || hasMinorThird(key);
+}
+
+/**
+ * The conventional spellings of the tone `offset` semitones above the tonic,
+ * the side the scale leans towards first.
+ *
+ * The two chromatic tables name at most two letters for an offset — the flat
+ * side's and the sharp side's — and an offset both tables agree on has only the
+ * one. Nothing outside them is offered, so a tone is never pushed onto a letter
+ * no reading of the interval supports.
+ */
+function gappedCandidates(tonic: Note, offset: number, pc: number, preferFlat: boolean): Note[] {
+  const flat = letterFor(tonic, CHROMATIC_SPELLING_FLAT[offset], pc);
+  const sharp = letterFor(tonic, CHROMATIC_SPELLING_SHARP[offset], pc);
+  const preferred = pickSpelling(flat, sharp, preferFlat);
+  if (preferred === undefined) {
+    return [];
+  }
+  const alternative = preferred === flat ? sharp : flat;
+  return alternative === undefined || alternative.letter === preferred.letter
+    ? [preferred]
+    : [preferred, alternative];
+}
+
+/**
+ * Choose one candidate per tone so that no two share a letter, or undefined
+ * when no such choice exists.
+ *
+ * `reserved` is the letter the tonic has already taken. Every tone offers at
+ * most two candidates, so the whole space is small enough to walk: the lightest
+ * assignment wins — fewest accidentals overall, and on a tie the one that keeps
+ * most tones on the side the scale leans.
+ *
+ * Because each tone's leading candidate is already its lightest, the
+ * tone-by-tone spelling is itself the winner whenever its letters happen to be
+ * distinct, which is what keeps a scale of whole tones or wider spelled exactly
+ * as it always reads.
+ */
+function assignDistinctLetters(candidates: Note[][], reserved: number): Note[] | undefined {
+  let best: Note[] | undefined;
+  let bestAlter = 0;
+  let bestDeviations = 0;
+  for (let choice = 0; choice < 1 << candidates.length; choice += 1) {
+    const picked: Note[] = [];
+    let letters = reserved;
+    let alter = 0;
+    let deviations = 0;
+    for (const [index, options] of candidates.entries()) {
+      const preferred = options[0];
+      const note = options[(choice >> index) & 1] ?? preferred;
+      if (note === undefined || (letters & (1 << note.letter)) !== 0) {
+        break;
+      }
+      letters |= 1 << note.letter;
+      alter += Math.abs(note.alter);
+      deviations += note === preferred ? 0 : 1;
+      picked.push(note);
+    }
+    if (picked.length !== candidates.length) {
+      continue;
+    }
+    if (
+      best === undefined ||
+      alter < bestAlter ||
+      (alter === bestAlter && deviations < bestDeviations)
+    ) {
+      best = picked;
+      bestAlter = alter;
+      bestDeviations = deviations;
+    }
+  }
+  return best;
+}
+
+/**
+ * Spell every tone of a scale that is not heptatonic, one letter per tone.
+ *
+ * A heptatonic key spells by degree, which hands every tone its own letter for
+ * free. A gapped scale has no such rule, so its tones are spelled together
+ * rather than one at a time: the semitone above the tonic of a hemitonic
+ * pentatonic is a flattened second (C miyako-bushi spells C Db F G Ab) because
+ * the tonic already holds the C, not because a table said so.
+ *
+ * The answer is undefined — and the caller falls back to spelling tone by tone
+ * — when the scale has more tones than there are letters, and when its tones
+ * cannot be told apart by letter at all: the blues scale sounds both the fifth
+ * and the flattened fifth against a fourth that fixes the letter below them, so
+ * one letter is bound to be used twice however the scale is read.
+ *
+ * @returns A spelling per scale pitch class, or undefined if there is no
+ *   one-letter-per-tone reading.
+ */
+function spellGappedScale(tonic: Note, key: KeyScale): Map<number, Note> | undefined {
+  const tones = scaleTonesInDegreeOrder(key);
+  if (tones.length > DIATONIC_LETTER_COUNT) {
+    return undefined;
+  }
+  const tonicPc = mod12(naturalPc(tonic.letter) + tonic.alter);
+  const tonicNote: Note = { letter: mod7(tonic.letter), alter: tonic.alter };
+  const preferFlat = leansFlat(tonic, key);
+  const rest = tones.filter((pc) => mod12(pc - tonicPc) !== 0);
+  const chosen = assignDistinctLetters(
+    rest.map((pc) => gappedCandidates(tonic, mod12(pc - tonicPc), pc, preferFlat)),
+    1 << tonicNote.letter,
+  );
+  if (chosen === undefined) {
+    return undefined;
+  }
+  const spellings = new Map<number, Note>([[tonicPc, tonicNote]]);
+  for (const [index, pc] of rest.entries()) {
+    const note = chosen[index];
+    if (note !== undefined) {
+      spellings.set(mod12(pc), note);
+    }
+  }
+  return spellings;
+}
+
 /**
  * Spell a single pitch class from the key alone, with no surrounding context.
  *
  * The tonic always spells as itself. In a heptatonic key each scale degree takes
  * the next letter above the tonic, so the scale spells with one letter per
- * degree. Every other pitch class — a chromatic tone in a heptatonic key, or any
- * tone of a scale that is not heptatonic (pentatonic, blues, octatonic) — takes
- * the conventional interval spelling above the tonic's letter, so a flat-side
- * key keeps flat-side names.
+ * degree. A gapped scale reaches the same one-letter-per-tone spelling through
+ * {@link spellGappedScale} wherever its pitch set allows one. Every other pitch
+ * class — a chromatic tone, or a tone of a scale whose letters cannot all
+ * differ — takes the conventional interval spelling above the tonic's letter,
+ * so a flat-side key keeps flat-side names.
  */
 function spellByKey(pc: number, tonic: Note, key: KeyScale): Note {
   const tonicPc = mod12(naturalPc(tonic.letter) + tonic.alter);
@@ -178,14 +309,21 @@ function spellByKey(pc: number, tonic: Note, key: KeyScale): Note {
     }
   } else {
     // A scale that is not heptatonic has no letter-per-degree spelling to
-    // follow, so take whichever conventional letter needs the smaller
-    // accidental. Ties go to the side the scale itself leans: a flat tonic or a
-    // minor third both mean flats (C blues spells Gb and Bb, not F# and A#).
-    const flat = letterFor(tonic, CHROMATIC_SPELLING_FLAT[offset], pc);
-    const sharp = letterFor(tonic, CHROMATIC_SPELLING_SHARP[offset], pc);
-    const best = pickSpelling(flat, sharp, tonic.alter < 0 || hasMinorThird(key));
-    if (best !== undefined) {
-      return best;
+    // follow, so its own tones are spelled together, one letter each.
+    if (isScaleTone(pc, key)) {
+      const assigned = spellGappedScale(tonic, key)?.get(mod12(pc));
+      if (assigned !== undefined) {
+        return assigned;
+      }
+    }
+    // Anything that joint spelling does not reach — a chromatic tone, or a
+    // scale whose tones cannot each hold a letter — takes whichever
+    // conventional letter needs the smaller accidental. Ties go to the side the
+    // scale itself leans: a flat tonic or a minor third both mean flats (C
+    // blues spells Gb and Bb, not F# and A#).
+    const [preferred] = gappedCandidates(tonic, offset, pc, leansFlat(tonic, key));
+    if (preferred !== undefined) {
+      return preferred;
     }
   }
 
@@ -324,9 +462,10 @@ function refineByContext(
  * refined by the music around it.
  *
  * Without a context the key decides alone: the tonic spells as itself, each
- * degree of a heptatonic key takes the next letter above the tonic, and every
- * other pitch class takes the conventional interval spelling above the tonic's
- * letter, so a flat-side key keeps flat-side names.
+ * degree of a heptatonic key takes the next letter above the tonic, a gapped
+ * scale gives each of its own tones a letter wherever its pitch set allows one,
+ * and every other pitch class takes the conventional interval spelling above
+ * the tonic's letter, so a flat-side key keeps flat-side names.
  *
  * A context only ever refines a pitch class the key leaves ambiguous — one that
  * is not a tone of `key`. Scale tones, and the tonic, keep their key spelling
@@ -386,9 +525,11 @@ export function spellPitchClass(
 /**
  * Spell every pitch class of a scale, in ascending scale-degree order.
  *
- * Correct for heptatonic scales (each degree gets the next letter). A scale that
- * is not heptatonic is spelled tone by tone, on the accidental side the scale
- * leans towards.
+ * Correct for heptatonic scales (each degree gets the next letter). A gapped
+ * scale gives each of its tones a letter of its own wherever its pitch set
+ * allows one — C miyako-bushi spells C Db F G Ab — and is spelled tone by tone,
+ * on the accidental side the scale leans towards, where it does not: the blues
+ * scale has to name one letter twice however it is read.
  *
  * @param tonic The spelled tonic.
  * @param key The key/scale.
