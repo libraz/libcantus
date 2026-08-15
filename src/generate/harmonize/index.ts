@@ -74,9 +74,11 @@ export type HarmonizeOptions = {
    */
   key?: KeyScale | 'infer';
   /**
-   * Length of each chord slot in beats. Any positive value is honoured, as in
-   * {@link chordTimelineFromNotes}; a value fine enough to make the search
-   * explode is rejected by the generation budget rather than rounded up.
+   * Length of each chord slot in beats. Harmonization places chords on a fixed
+   * grid of this length — unlike {@link chordTimelineFromNotes}, which searches
+   * for the boundaries an existing piece already implies. Any positive value is
+   * honoured; a value fine enough to make the search explode is rejected by the
+   * generation budget rather than rounded up.
    *
    * @defaultValue 2
    */
@@ -218,7 +220,10 @@ function inferKey(melody: readonly MelodyNote[]): KeyScale {
 /** Enumerate candidate chords for the key, gated by reharmonization strength. */
 function buildCandidates(key: KeyScale, reharmonize: HarmonizeOptions['reharmonize']): Candidate[] {
   const tones = scaleTonesInDegreeOrder(key);
-  const candidates: Candidate[] = tones.map((rootPc, degree) => {
+  const candidates: Candidate[] = tones.map((rootPc, index) => {
+    // Scale degrees are 1-based across the library, while the array index is
+    // not; the candidate records the degree, which is what reaches the caller.
+    const degree = index + 1;
     const quality = diatonicTriad(degree, key).quality;
     return {
       rootPc,
@@ -231,8 +236,11 @@ function buildCandidates(key: KeyScale, reharmonize: HarmonizeOptions['reharmoni
   });
 
   if (reharmonize !== 'diatonic') {
-    for (const target of [1, 3, 4, 5]) {
-      const targetRoot = tones[target] ?? 0;
+    // ii, IV, V and vi — the degrees a secondary dominant conventionally
+    // tonicizes. Kept in the same 1-based space as `Candidate.degree`, which
+    // the voice-leading cost compares them against.
+    for (const target of [2, 4, 5, 6]) {
+      const targetRoot = tones[target - 1] ?? 0;
       const rootPc = (targetRoot + 7) % 12;
       candidates.push({
         rootPc,
@@ -248,7 +256,7 @@ function buildCandidates(key: KeyScale, reharmonize: HarmonizeOptions['reharmoni
   if (reharmonize === 'borrowed') {
     const parallel = parallelKey(key);
     const parallelTones = scaleTonesInDegreeOrder(parallel);
-    for (let degree = 0; degree < parallelTones.length; degree += 1) {
+    for (let degree = 1; degree <= parallelTones.length; degree += 1) {
       const chord = diatonicTriad(degree, parallel);
       if (!isDiatonic(chord, key)) {
         candidates.push({
@@ -473,10 +481,10 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
     Number.POSITIVE_INFINITY,
   );
   const melodyEnd = noteIndex.notes.reduce((end, indexed) => Math.max(end, indexed.endBeat), 0);
-  // Any positive value is honoured, matching chordTimelineFromNotes: a silent
-  // clamp here would make the same option name mean different things on the
-  // analysis and generation sides. A value small enough to make the search
-  // explode is caught by the budget assertions below, not rounded away.
+  // Any positive value is honoured: a silent clamp would make the option mean
+  // something different here than it does on the analysis side. A value small
+  // enough to make the search explode is caught by the budget assertions below,
+  // not rounded away.
   const hr = assertRange(
     opts.harmonicRhythm ?? DEFAULT_HARMONIC_RHYTHM,
     Number.MIN_VALUE,

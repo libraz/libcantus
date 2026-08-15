@@ -65,7 +65,7 @@ function baseArrangement(): ArrangementTrack[] {
 describe('analyzeArrangement', () => {
   it('infers C major and the right chord per bar', () => {
     const analysis = analyzeArrangement(baseArrangement(), { key: majorKey(0) });
-    expect(analysis.key.rootPc).toBe(0);
+    expect(analysis.prevailingKey.rootPc).toBe(0);
     const roots = analysis.timeline.segments.map((seg) => seg.chord.rootPc);
     expect(roots).toEqual([0, 5, 7, 0]);
     expect(analysis.timeline.at(0)?.rootPc).toBe(0);
@@ -389,7 +389,7 @@ describe('percussion tracks', () => {
       ...baseArrangement(),
       { name: 'drums', role: 'drums', notes: drumTrack() },
     ]);
-    expect(withDrums.key).toEqual(withoutDrums.key);
+    expect(withDrums.prevailingKey).toEqual(withoutDrums.prevailingKey);
     expect(withDrums.timeline.segments).toEqual(withoutDrums.timeline.segments);
     expect(withDrums.segmentConfidence).toEqual(withoutDrums.segmentConfidence);
   });

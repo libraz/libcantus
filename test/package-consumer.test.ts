@@ -53,7 +53,7 @@ const modules = [root, core, theory, analyze, generate, model];
 if (modules.some((value) => Object.keys(value).length === 0)) {
   throw new Error('an exported package layer was empty');
 }
-if (root.majorKey(0).rootPc !== 0 || model.Key.major('Eb').chord(0).symbol() !== 'Eb') {
+if (root.majorKey(0).rootPc !== 0 || model.Key.major('Eb').chord(1).symbol() !== 'Eb') {
   throw new Error('package runtime returned an unexpected result');
 }
 // A class reached through the root entry and the same class reached through the
@@ -243,6 +243,14 @@ const melodyAndChordNotes = [
 ];
 const melodyNotes = [{ pitch: 72, startBeat: 0, durationBeat: 4 }];
 const chordNotes = melodyAndChordNotes;
+// Four bars of C major (I IV V7 I) then four of G major (I IV V7 I), so a
+// snippet claiming to show a modulation is executed against one.
+const modulatingNotes = [
+  [0, [48, 60, 64, 67]], [4, [41, 60, 65, 69]], [8, [43, 59, 62, 65]], [12, [36, 60, 64, 67]],
+  [16, [43, 62, 67, 71]], [20, [48, 60, 64, 67]], [24, [38, 66, 69, 72]], [28, [43, 62, 67, 71]],
+].flatMap(([startBeat, pitches]) =>
+  (pitches as number[]).map((pitch) => ({ pitch, startBeat: startBeat as number, durationBeat: 4 })),
+);
 `;
     const docsFiles = snippets.map((snippet, index) => {
       const filename = `example-${index}.mts`;

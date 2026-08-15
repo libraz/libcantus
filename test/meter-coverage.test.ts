@@ -28,10 +28,8 @@ function triadNotes(beats: number): NoteEvent[] {
 }
 
 describe('the meter reaches the analysis entry points', () => {
-  it('sizes the default chord window by the bar of the given meter', () => {
-    // The default harmonic rhythm is one bar, and a 6/8 bar is three quarter
-    // notes rather than four, so the segment boundaries have to move. The
-    // harmony here changes every three beats, which only a 6/8 window follows.
+  /** Four bars of 6/8, alternating C and G, so the harmony turns every 3 beats. */
+  function threeBeatHarmony(): NoteEvent[] {
     const notes: NoteEvent[] = [];
     for (let bar = 0; bar < 4; bar += 1) {
       const pitches = bar % 2 === 0 ? [60, 64, 67] : [67, 71, 74];
@@ -39,13 +37,33 @@ describe('the meter reaches the analysis entry points', () => {
         notes.push({ pitch, startBeat: bar * 3, durationBeat: 3 });
       }
     }
-    const compound = chordTimelineFromNotes(notes, { ts: COMPOUND });
+    return notes;
+  }
+
+  it('sizes the default chord window by the bar of the given meter', () => {
+    // The default harmonic rhythm is one bar, and a 6/8 bar is three quarter
+    // notes rather than four, so a fixed grid's boundaries have to move with
+    // the meter. The harmony turns every three beats, which only a 6/8 grid
+    // follows; a 4/4 grid cuts across it.
+    const notes = threeBeatHarmony();
+    const compound = chordTimelineFromNotes(notes, { ts: COMPOUND, segmentation: 'grid' });
     expect(compound.timeline.segments.map((segment) => segment.startBeat)).toEqual([0, 3, 6, 9]);
     expect(compound.timeline.segments.map((segment) => segment.chord.rootPc)).toEqual([0, 7, 0, 7]);
-    // The same notes read in 4/4 land on four-beat windows instead.
-    const common = chordTimelineFromNotes(notes, { ts: COMMON });
+    const common = chordTimelineFromNotes(notes, { ts: COMMON, segmentation: 'grid' });
     expect(common.timeline.segments[0]?.endBeat).toBe(beatsPerBar(COMMON));
     expect(common.timeline.segments.map((segment) => segment.startBeat)).not.toEqual([0, 3, 6, 9]);
+  });
+
+  it('recovers the sounding harmonic rhythm whatever meter it is read in', () => {
+    // The default segmentation follows the notes, not the bar line, so the
+    // three-beat harmony is found even when the piece is barred in 4/4 — the
+    // reading a fixed grid can only reach when handed the right meter.
+    const notes = threeBeatHarmony();
+    for (const ts of [COMPOUND, COMMON]) {
+      const { timeline } = chordTimelineFromNotes(notes, { ts });
+      expect(timeline.segments.map((segment) => segment.startBeat)).toEqual([0, 3, 6, 9]);
+      expect(timeline.segments.map((segment) => segment.chord.rootPc)).toEqual([0, 7, 0, 7]);
+    }
   });
 
   it('accepts an additive metre through the arrangement analysis', () => {

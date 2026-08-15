@@ -79,6 +79,22 @@ export type VoiceNote = NoteEvent & { id?: number; originalIndex?: number };
 export type IdentifiedVoiceNote = VoiceNote & { id: number };
 
 /**
+ * A key that applies to the whole voice, or the key in force at a given beat.
+ *
+ * The callback form is what a piece that modulates needs: it is asked for the
+ * key at a specific beat, the same way a chord is asked for with `chordAtBeat`.
+ *
+ * @example
+ * ```ts
+ * import { majorKey } from '@libraz/libcantus';
+ * const wholePiece = majorKey(0); // C major throughout
+ * const modulating = (beat: number) => (beat < 8 ? majorKey(5) : majorKey(0));
+ * ```
+ * @category Arrangement & Analysis
+ */
+export type KeyContext = KeyScale | ((beat: number) => KeyScale);
+
+/**
  * Give plain note events the ids {@link analyzeVoice} reports back.
  *
  * The id is only an identity handle, so the array position serves; this exists
@@ -178,7 +194,8 @@ function stepResolution(pitch: number, chord: Chord): number | undefined {
  * (prepared by an identical consonant pitch and resolving by step), passing
  * tones, neighbors, anticipations, and escape tones, then fall back to tension,
  * avoid, or an unresolved-dissonance label. Leading-tone resolutions are noted
- * additionally.
+ * additionally, judged against the key in force at the beat the resolution
+ * lands on, so a modulation is heard from its new tonic.
  *
  * The voice is expected to be monophonic (one note at a time). Notes sharing an
  * onset are treated as simultaneous cluster members, not melodic neighbors, so
@@ -189,7 +206,9 @@ function stepResolution(pitch: number, chord: Chord): number | undefined {
  * @param voice The monophonic voice, in time order. A note without an `id` is
  *   identified by its position, so plain note events can be passed straight in.
  * @param chordAtBeat Chord sounding at a given beat, or null.
- * @param key Key context for leading-tone detection.
+ * @param key Key context for leading-tone detection: a single {@link KeyScale}
+ *   covering the whole voice, or a callback giving the key in force at a given
+ *   beat, for music that modulates.
  * @param otherVoicesAtBeat Other sounding voices at a given beat; defaults to
  *   none, which is the whole story for a solo line.
  * @returns One annotation per input note.
@@ -204,16 +223,21 @@ function stepResolution(pitch: number, chord: Chord): number | undefined {
  * const cMajor = makeChord(0, 'maj');
  * const labels = analyzeVoice(voice, () => cMajor, majorKey(0));
  * labels; // one AnalyzedNote per input note, in the same order
+ * // A voice that modulates to C major at beat 2:
+ * analyzeVoice(voice, () => cMajor, (beat) => (beat < 2 ? majorKey(5) : majorKey(0)));
  * ```
  * @category Arrangement & Analysis
  */
 export function analyzeVoice(
   voice: readonly VoiceNote[],
   chordAtBeat: (beat: number) => Chord | null,
-  key: KeyScale,
+  key: KeyContext,
   otherVoicesAtBeat: (beat: number) => VoiceSnapshot[] = () => [],
 ): AnalyzedNote[] {
   assertNoteEvents(voice, 'voice notes', { allowNonPositiveDuration: true });
+  // A KeyScale is a plain object, so a callable value can only be the per-beat
+  // form; normalising here keeps the classification below beat-oriented.
+  const keyAt: (beat: number) => KeyScale = typeof key === 'function' ? key : () => key;
   const result: AnalyzedNote[] = [];
 
   for (let i = 0; i < voice.length; i += 1) {
@@ -348,7 +372,11 @@ export function analyzeVoice(
       }
     }
 
-    if (next && isLeadingToneResolution(note.pitch, next.pitch, key)) {
+    // A leading tone is only one because of the tonic it arrives on, so the
+    // key is read at the beat of that arrival rather than at this note's own
+    // beat: a modulation places its key change on the new tonic, and the
+    // leading tone that carries the voice into it still sits in the old key.
+    if (next && isLeadingToneResolution(note.pitch, next.pitch, keyAt(next.startBeat))) {
       labels.push({ kind: 'leadingTone', resolveTo: next.pitch });
     }
 

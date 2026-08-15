@@ -20,10 +20,11 @@ import {
   type VoiceSnapshot,
 } from '../../theory/safety/index.js';
 import { majorKey } from '../../theory/scale/index.js';
-import { detectKeyFromNotes } from '../detect/index.js';
+import { type KeyRegion, keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
 import {
   type CadenceHit,
   type ChordTimeline,
+  type ChordTimelineResult,
   chordTimelineFromNotes,
   detectCadences,
 } from '../timeline/index.js';
@@ -107,12 +108,73 @@ export type Conflict = {
 };
 
 /**
+ * Override an inferred result's key regions with ones the caller already had.
+ *
+ * The chords stay as inferred: they were found against the caller's regions
+ * only if the caller also passed them down, and quietly re-deriving them here
+ * would make the same options produce different chords depending on which pass
+ * ran first.
+ */
+function withGivenKeys(
+  result: ChordTimelineResult,
+  given: KeyRegion[] | undefined,
+): ChordTimelineResult {
+  if (given === undefined) {
+    return result;
+  }
+  return { ...result, keys: given, prevailingKey: prevailingKeyOf(given) ?? result.prevailingKey };
+}
+
+/**
+ * Build the same result shape from a timeline the caller already had.
+ *
+ * The timeline was not inferred from these notes, so it carries no measured
+ * confidence — reporting 1 would turn every confidence gate into an
+ * unconditional pass. The key regions still come from the notes, because the
+ * caller supplied chords, not an answer about the key.
+ */
+function callerTimeline(
+  timeline: ChordTimeline,
+  key: KeyScale | undefined,
+  given: KeyRegion[] | undefined,
+  pooled: NoteEvent[],
+  ts: TimeSignature,
+  budget: number | undefined,
+): {
+  timeline: ChordTimeline;
+  keys: KeyRegion[];
+  prevailingKey: KeyScale;
+  segmentConfidence: number[];
+} {
+  const totalBeats = timeline.segments.reduce((end, segment) => Math.max(end, segment.endBeat), 0);
+  const keys =
+    given ??
+    (key !== undefined
+      ? [{ startBeat: 0, endBeat: totalBeats, key, confidence: 1 }]
+      : keyTimelineFromNotes(pooled, { ts, totalBeats, budget }));
+  return {
+    timeline,
+    keys,
+    prevailingKey: prevailingKeyOf(keys) ?? majorKey(0),
+    segmentConfidence: timeline.segments.map(() => 0),
+  };
+}
+
+/**
  * The full result of {@link analyzeArrangement}.
  *
  * @category Arrangement & Analysis
  */
 export type ArrangementAnalysis = {
-  key: KeyScale;
+  /**
+   * The key regions the analysis ran against, in time order. Roman numerals,
+   * harmonic function and note safety are all judged against the region
+   * covering the beat, so a piece that modulates is not read against the key it
+   * started in for every bar after it leaves.
+   */
+  keys: KeyRegion[];
+  /** The key held longest across {@link ArrangementAnalysis.keys}. */
+  prevailingKey: KeyScale;
   timeline: ChordTimeline;
   segmentConfidence: number[];
   cadences: CadenceHit[];
@@ -127,8 +189,18 @@ export type ArrangementAnalysis = {
  * @category Arrangement & Analysis
  */
 export type ArrangementOptions = {
-  /** Key context; inferred from the pooled notes when omitted. */
+  /**
+   * A single key held across the whole arrangement. Omit it, and `keys` with
+   * it, to have the key searched for over time so a modulating piece is read
+   * against the key actually in force.
+   */
   key?: KeyScale;
+  /**
+   * Key regions to judge against, when a previous pass already worked them out.
+   * Takes precedence over `key`; supplying both is answering the same question
+   * twice, and the more specific answer wins.
+   */
+  keys?: KeyRegion[];
   /**
    * A chord timeline to analyse against, instead of inferring one from the
    * notes. Supply it to analyse a hand-written progression, or to reuse the
@@ -353,22 +425,21 @@ export function analyzeArrangement(
 
   const inferred =
     opts.timeline === undefined
-      ? chordTimelineFromNotes(pooled, {
-          key: opts.key,
-          ts,
-          harmonicRhythm: opts.harmonicRhythm,
-          budget,
-        })
-      : {
-          timeline: opts.timeline,
-          key: opts.key ?? detectKeyFromNotes(pooled, { budget })[0]?.key ?? majorKey(0),
-          // A caller-provided timeline was not inferred from these notes, so
-          // it has no measured confidence. Reporting 1 would turn confidence
-          // gates into unconditional passes.
-          segmentConfidence: opts.timeline.segments.map(() => 0),
-        };
-  const { timeline, key, segmentConfidence } = inferred;
-  const cadences = detectCadences(timeline, key);
+      ? withGivenKeys(
+          chordTimelineFromNotes(pooled, {
+            key: opts.key,
+            ts,
+            harmonicRhythm: opts.harmonicRhythm,
+            budget,
+          }),
+          opts.keys,
+        )
+      : callerTimeline(opts.timeline, opts.key, opts.keys, pooled, ts, budget);
+  const { timeline, keys, prevailingKey, segmentConfidence } = inferred;
+  const keyAt = keyLookup(keys, prevailingKey);
+  // A cadence is heard in the key it arrives in, which after a modulation is
+  // not the key the piece opened in.
+  const cadences = detectCadences(timeline, keyAt);
   const prepared = prepareTracks(tracks);
   const soundingCache = new Map<number, SoundingVoice[]>();
 
@@ -392,7 +463,7 @@ export function analyzeArrangement(
       if (!subVoice) {
         continue;
       }
-      const analyzed = analyzeVoice(subVoice.voice, timeline.at, key, (beat) =>
+      const analyzed = analyzeVoice(subVoice.voice, timeline.at, keyAt, (beat) =>
         otherVoicesSounding(prepared, t, v, beat, soundingCache),
       );
       notes.push(...analyzed.map((note) => ({ ...note, trackIndex: track.trackIndex })));
@@ -411,7 +482,7 @@ export function analyzeArrangement(
             candidatePitch: note.pitch,
             prevPitch: atOnset ? preparedNote.prevPitch : note.pitch,
             chord: timeline.at(beat),
-            key,
+            key: keyAt(beat),
             otherVoices: otherVoicesSounding(prepared, t, v, beat, soundingCache),
             strongBeat: isStrongBeat(beat, ts),
           };
@@ -455,5 +526,13 @@ export function analyzeArrangement(
 
   conflicts.sort((a, b) => b.safety - a.safety || a.beat - b.beat);
 
-  return { key, timeline, segmentConfidence, cadences, tracks: trackAnalyses, conflicts };
+  return {
+    keys,
+    prevailingKey,
+    timeline,
+    segmentConfidence,
+    cadences,
+    tracks: trackAnalyses,
+    conflicts,
+  };
 }

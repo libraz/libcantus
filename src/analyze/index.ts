@@ -16,6 +16,9 @@ export type {
 } from '../theory/chord/index.js';
 export type { SafetyProfile, VoiceSnapshot } from '../theory/safety/index.js';
 export { NoteSafety } from '../theory/safety/index.js';
+// `KeyRegion.modulation` names this, so the layer barrel has to carry it even
+// though the relation vocabulary itself belongs to the scale layer.
+export type { KeyRelation } from '../theory/scale/index.js';
 export type {
   ArrangementAnalysis,
   ArrangementOptions,
@@ -31,6 +34,8 @@ export type {
   DetectChordOptions,
   DetectKeyOptions,
   KeyMatch,
+  KeyProfileName,
+  KeyProfilePair,
   KeyVariant,
 } from './detect/index.js';
 export {
@@ -46,6 +51,7 @@ export type {
   ChordAnalysis,
   ChordToRomanOptions,
   HarmonicFunction,
+  PivotChord,
 } from './functional/index.js';
 export {
   analyzeChord,
@@ -57,13 +63,17 @@ export {
   isDiatonic,
   isMinorKey,
   parallelKey,
+  pivotChords,
   romanToChord,
   secondaryDominant,
   secondaryDominantOf,
 } from './functional/index.js';
+export type { KeyRegion, KeyTimelineOptions } from './keys/index.js';
+export { detectModulations, keyTimelineFromNotes, prevailingKeyOf } from './keys/index.js';
 export type {
   CadenceHit,
   ChordSegment,
+  ChordSegmentation,
   ChordTimeline,
   ChordTimelineOptions,
   ChordTimelineResult,
@@ -76,6 +86,7 @@ export {
 export type {
   AnalyzedNote,
   IdentifiedVoiceNote,
+  KeyContext,
   SuspensionFigure,
   TheoryLabel,
   VoiceNote,

@@ -34,7 +34,7 @@ describe('chordTimelineFromNotes', () => {
       ],
       { key: majorKey(0) },
     );
-    expect(result.timeline[0]?.chord.bassPc).toBeUndefined();
+    expect(result.timeline.segments[0]?.chord.bassPc).toBeUndefined();
   });
 
   it('recovers a C-F-G-C progression, one chord per bar', () => {
@@ -52,15 +52,15 @@ describe('chordTimelineFromNotes', () => {
 
   it('infers the key when omitted', () => {
     const result = chordTimelineFromNotes(cfgcNotes());
-    expect(result.key.rootPc).toBe(0);
-    expect(result.key.modeMask12).toBe(MAJOR_MASK);
+    expect(result.prevailingKey.rootPc).toBe(0);
+    expect(result.prevailingKey.modeMask12).toBe(MAJOR_MASK);
   });
 
   it('respects an explicitly given key', () => {
     const aMinor = minorKey(9);
     const result = chordTimelineFromNotes(cfgcNotes(), { key: aMinor });
-    expect(result.key.rootPc).toBe(9);
-    expect(result.key.modeMask12).toBe(aMinor.modeMask12);
+    expect(result.prevailingKey.rootPc).toBe(9);
+    expect(result.prevailingKey.modeMask12).toBe(aMinor.modeMask12);
     // The diatonic block chords are still recovered under the relative minor.
     expect(result.timeline.segments.map((seg) => seg.chord.rootPc)).toEqual([0, 5, 7, 0]);
   });
@@ -141,9 +141,9 @@ describe('chordTimelineFromNotes', () => {
     ];
     const clean = chordTimelineFromNotes(blockChord([60, 64, 67], 0));
     const noisy = chordTimelineFromNotes([...blockChord([60, 64, 67], 0), ...ghosts]);
-    expect(noisy.key).toEqual(clean.key);
-    expect(noisy.key.rootPc).toBe(0);
-    expect(noisy.key.modeMask12).toBe(MAJOR_MASK);
+    expect(noisy.prevailingKey).toEqual(clean.prevailingKey);
+    expect(noisy.prevailingKey.rootPc).toBe(0);
+    expect(noisy.prevailingKey.modeMask12).toBe(MAJOR_MASK);
     expect(noisy.timeline.segments).toEqual(clean.timeline.segments);
     expect(noisy.segmentConfidence).toEqual(clean.segmentConfidence);
   });

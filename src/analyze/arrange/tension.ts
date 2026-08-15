@@ -17,8 +17,8 @@ import {
 import { chordPitchClasses } from '../../theory/chord/index.js';
 import { evaluateSafety, NoteSafety, type SafetyProfile } from '../../theory/safety/index.js';
 import { majorKey } from '../../theory/scale/index.js';
-import { detectKeyFromNotes } from '../detect/index.js';
 import { functionOf } from '../functional/index.js';
+import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
 import { type ChordTimeline, chordTimelineFromNotes } from '../timeline/index.js';
 import { EPS, isPercussion, type PreparedTrack, poolNotes, prepareTracks } from './internal.js';
 import type { ArrangementAnalysis, ArrangementOptions, ArrangementTrack } from './tracks.js';
@@ -108,7 +108,7 @@ export function tensionCurve(
     (end, n) => Math.max(end, n.startBeat + n.durationBeat),
     0,
   );
-  const { timeline, key } =
+  const { timeline, keys, prevailingKey } =
     opts.timeline === undefined
       ? chordTimelineFromNotes(pooled, {
           key: opts.key,
@@ -118,8 +118,17 @@ export function tensionCurve(
         })
       : {
           timeline: opts.timeline,
-          key: opts.key ?? detectKeyFromNotes(pooled, { budget })[0]?.key ?? majorKey(0),
+          keys:
+            opts.keys ??
+            (opts.key !== undefined
+              ? [{ startBeat: 0, endBeat: totalBeats, key: opts.key, confidence: 1 }]
+              : keyTimelineFromNotes(pooled, { ts, totalBeats, budget })),
+          prevailingKey: majorKey(0),
         };
+  // Harmonic tension is judged against the key in force at the sample, not
+  // against one key for the piece: a chord is only tense relative to a tonic.
+  const regions = opts.keys ?? keys;
+  const keyAt = keyLookup(regions, prevailingKeyOf(regions) ?? prevailingKey);
 
   const prepared = prepareTracks(tracks);
   const points: TensionPoint[] = [];
@@ -135,7 +144,10 @@ export function tensionCurve(
   );
   for (let i = 0; i < sampleCount; i += 1) {
     const beat = i * step;
-    points.push({ beat, tension: sampleTension(prepared, timeline, key, ts, profile, beat) });
+    points.push({
+      beat,
+      tension: sampleTension(prepared, timeline, keyAt(beat), ts, profile, beat),
+    });
   }
   return points;
 }
@@ -166,7 +178,11 @@ export function tensionCurveFrom(
   analysis: ArrangementAnalysis,
   opts: ArrangementOptions & { step?: number } = {},
 ): TensionPoint[] {
-  return tensionCurve(tracks, { ...opts, timeline: analysis.timeline, key: analysis.key });
+  return tensionCurve(tracks, {
+    ...opts,
+    timeline: analysis.timeline,
+    keys: analysis.keys,
+  });
 }
 
 /**
