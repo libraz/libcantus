@@ -29,7 +29,7 @@
     "generative-music"
   ],
   "engines": {
-    "node": ">=22 <23"
+    "node": ">=22"
   },
   "packageManager": "yarn@4.18.0",
   "main": "./dist/index.cjs",
@@ -140,7 +140,7 @@
     "prepublishOnly": "yarn build"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.6",
+    "@biomejs/biome": "2.5.8",
     "@libraz/typedoc-theme": "^0.1.1",
     "@vitest/coverage-v8": "4.1.10",
     "tsup": "8.5.1",

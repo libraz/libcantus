@@ -15,15 +15,23 @@ permissions:
 
 jobs:
   ci:
-    runs-on: ubuntu-latest
+    # The published `engines` range is `>=22`, so every supported major is
+    # exercised. Coverage is uploaded once, from the ubuntu/22 combination that
+    # matches mise.toml.
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: [22, 24]
     steps:
       - uses: actions/checkout@v7
 
-      - name: Setup Node.js (major matches mise.toml)
-        uses: actions/setup-node@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
 
       - name: Enable Corepack and pin Yarn
         run: |
@@ -49,6 +57,7 @@ jobs:
       - run: yarn test:coverage
 
       - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest' && matrix.node == 22
         uses: codecov/codecov-action@v7
         with:
           files: ./coverage/lcov.info
