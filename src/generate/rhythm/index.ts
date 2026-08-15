@@ -12,7 +12,6 @@
  */
 
 import { beatsPerBar, metricWeight, type TimeSignature } from '../../core/meter/index.js';
-import { createRng } from '../../core/random/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import {
   assertFiniteNumber,
@@ -20,6 +19,7 @@ import {
   assertPositiveInt,
   assertRange,
 } from '../../core/validation/index.js';
+import { type GenerationContextInput, resolveContextWith } from '../context/index.js';
 
 /**
  * A single rhythmic note: an onset position and how long it sounds.
@@ -101,9 +101,17 @@ export type RhythmOptions = {
    * Overall onset density in [0, 1]. Scales the per-slot onset probability, so
    * higher values fill more grid slots. Values outside [0, 1] are rejected.
    *
+   * Sugar for `ctx: { complexity: { rhythmic } }`; the context wins where both
+   * are given.
+   *
    * @defaultValue 0.5
    */
   density?: number;
+  /**
+   * The generation context. Its `complexity.rhythmic` is this generator's
+   * density, and its `seed` replaces `seed`.
+   */
+  ctx?: GenerationContextInput;
 };
 
 const DEFAULT_SUBDIVISION = 2;
@@ -136,9 +144,11 @@ export function onsetWeightCurve(weight: number): number {
 /**
  * Generate a deterministic rhythmic pattern over `bars` bars of a time
  * signature. A grid is built at the chosen subdivision; each slot becomes an
- * onset with a probability derived from its metric weight scaled by `density`
- * and sampled from the seeded PRNG. Every bar's downbeat is always an onset, so
- * a pattern of any length has a reliable pulse independent of the seed. Each
+ * onset when the draw belonging to that slot falls under its metric weight
+ * scaled by `density`. Because the draw belongs to the slot rather than to the
+ * order the slots were visited, raising `density` only adds onsets: everything
+ * already sounding stays where it was. Every bar's downbeat is always an onset,
+ * so a pattern of any length has a reliable pulse independent of the seed. Each
  * event's duration extends to the next onset, and the last event extends to the
  * end of the span. `density` must be in [0, 1].
  *
@@ -154,10 +164,13 @@ export function onsetWeightCurve(weight: number): number {
  * @category Rhythm & Meter
  */
 export function generateRhythm(ts: TimeSignature, opts: RhythmOptions = {}): RhythmEvent[] {
-  const seed = opts.seed ?? 0;
   const bars = opts.bars ?? DEFAULT_BARS;
   const subdivision = opts.subdivision ?? DEFAULT_SUBDIVISION;
-  const density = assertRange(opts.density ?? DEFAULT_DENSITY, 0, 1, 'rhythm density');
+  if (opts.density !== undefined) {
+    assertRange(opts.density, 0, 1, 'rhythm density');
+  }
+  const ctx = resolveContextWith(opts.ctx, { seed: opts.seed, rhythmic: opts.density });
+  const density = ctx.rhythmic ?? DEFAULT_DENSITY;
 
   assertPositiveInt(bars, 'rhythm bars');
   assertPositiveInt(subdivision, 'rhythm subdivision');
@@ -168,7 +181,7 @@ export function generateRhythm(ts: TimeSignature, opts: RhythmOptions = {}): Rhy
   const slotsPerBar = Math.ceil(barBeats * subdivision);
   const slotCount = slotsPerBar * bars;
   assertGenerationBudget(slotCount, 'rhythm grid slots');
-  const rng = createRng(seed);
+  const draw = ctx.part('rhythm');
 
   const positions: number[] = [];
   for (let bar = 0; bar < bars; bar += 1) {
@@ -186,7 +199,7 @@ export function generateRhythm(ts: TimeSignature, opts: RhythmOptions = {}): Rhy
       }
       const weight = metricWeight(position, ts);
       const probability = onsetWeightCurve(weight) * density;
-      if (rng.prob(probability)) {
+      if (draw.prob(probability, 'onset', bar, slot)) {
         positions.push(position);
       }
     }

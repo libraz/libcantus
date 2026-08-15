@@ -17,7 +17,7 @@ describe('generateProgression reharmonize', () => {
     expect(generateProgression(opts)).toEqual(generateProgression(opts));
   });
 
-  it('preserves the seeded public-output golden after RNG consolidation', () => {
+  it('returns the same progression for a given seed', () => {
     expect(
       generateProgression({
         key: cMajor,
@@ -27,9 +27,9 @@ describe('generateProgression reharmonize', () => {
         reharmonize: true,
       }),
     ).toEqual([
-      { rootPc: 5, quality: 'dom7', startBeat: 0, secondaryDominant: true },
-      { rootPc: 10, quality: 'maj', startBeat: 4 },
-      { rootPc: 5, quality: 'maj', startBeat: 8, degree: 4 },
+      { rootPc: 9, quality: 'min', startBeat: 0, degree: 6 },
+      { rootPc: 8, quality: 'maj', startBeat: 4 },
+      { rootPc: 10, quality: 'maj', startBeat: 8 },
       { rootPc: 0, quality: 'maj', startBeat: 12, degree: 1 },
     ]);
   });

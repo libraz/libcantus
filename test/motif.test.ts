@@ -202,10 +202,14 @@ describe('generateMotif', () => {
       seed: 4,
     });
     expect(withJitter).toEqual(again);
-    expect(withJitter.notes.map((note) => note.pitch)).toEqual([62, 64, 62, 64]);
-    // Enabling jitter perturbs the plain contour.
+    // Enabling jitter perturbs the plain contour, and never by more than the
+    // single diatonic step the nudge is defined as.
     const plain = generateMotif({ key: cMajor, bars: 2, contour: 'ascending', seed: 4 });
     expect(withJitter).not.toEqual(plain);
+    withJitter.notes.forEach((note, index) => {
+      const straight = plain.notes[index]?.pitch ?? note.pitch;
+      expect(Math.abs(note.pitch - straight)).toBeLessThanOrEqual(2);
+    });
   });
 });
 

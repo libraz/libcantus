@@ -3,7 +3,6 @@ import { InvalidInputError } from '../../core/errors/index.js';
 import type { TimeSignature } from '../../core/meter/index.js';
 import { beatsPerBar } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
-import { createRng } from '../../core/random/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
   assertFiniteNumber,
@@ -16,6 +15,7 @@ import {
 import type { Chord } from '../../theory/chord/index.js';
 import { chordPitchClasses } from '../../theory/chord/index.js';
 import { isScaleTone, nearestScaleTone } from '../../theory/scale/index.js';
+import { type GenerationContextInput, resolveContextWith } from '../context/index.js';
 
 /**
  * A transformation applicable to a motif cell.
@@ -87,15 +87,23 @@ export type MotifOptions = {
    * variety without biasing the line off its contour. Default 0, which
    * reproduces the requested contour exactly (no drift, tails return to tonic).
    *
+   * Sugar for `ctx: { complexity: { ornament } }` — a nudge off the contour is
+   * decoration rather than rhythm; the context wins where both are given.
+   *
    * @defaultValue 0
    */
   jitter?: number;
   /**
-   * Seed for the deterministic PRNG.
+   * Seed for the deterministic PRNG. Sugar for `ctx: { seed }`.
    *
    * @defaultValue 0
    */
   seed?: number;
+  /**
+   * The generation context. Its `complexity.ornament` is this generator's
+   * jitter, and its `seed` replaces `seed`.
+   */
+  ctx?: GenerationContextInput;
 };
 
 /**
@@ -245,9 +253,13 @@ export function generateMotif(opts: MotifOptions): MotifCell {
   const noteCount = Math.max(3, bars * 2);
   assertGenerationBudget(noteCount, 'motif notes');
   const beatsPerNote = totalBeats / noteCount;
-  const rng = createRng(opts.seed ?? 0);
   const requestedJitter = assertFiniteNumber(opts.jitter ?? 0, 'motif jitter');
-  const jitterProb = Math.min(1, Math.max(0, requestedJitter));
+  const ctx = resolveContextWith(opts.ctx, {
+    seed: opts.seed,
+    ornament: Math.min(1, Math.max(0, requestedJitter)),
+  });
+  const jitterProb = ctx.ornament ?? 0;
+  const draw = ctx.part('motif');
   const tonic = pitchClass(opts.key.rootPc) + 60;
   const offsets = contourOffsets(contour, noteCount);
 
@@ -255,10 +267,12 @@ export function generateMotif(opts: MotifOptions): MotifCell {
   for (let i = 0; i < noteCount; i += 1) {
     // Opt-in, direction-balanced jitter: disabled by default so the contour is
     // preserved exactly. When enabled it nudges up or down with equal odds,
-    // avoiding the upward bias that used to drift arch/wave tails off the tonic.
+    // avoiding the upward bias that used to drift arch/wave tails off the
+    // tonic. Each note's draw belongs to its own index, so raising the dial
+    // nudges further notes while the ones already nudged keep their nudge.
     let jitter = 0;
-    if (jitterProb > 0 && rng.next() < jitterProb) {
-      jitter = rng.next() < 0.5 ? 1 : -1;
+    if (draw.prob(jitterProb, 'jitter', i)) {
+      jitter = draw.prob(0.5, 'direction', i) ? 1 : -1;
     }
     let pitch = stepDiatonic(tonic, (offsets[i] ?? 0) + jitter, opts.key);
     const startBeat = i * beatsPerNote;

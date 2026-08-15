@@ -1,5 +1,4 @@
 import { InvalidInputError } from '../../core/errors/index.js';
-import { createRng } from '../../core/random/index.js';
 import type { KeyScale } from '../../core/types.js';
 import {
   assertDegree,
@@ -10,6 +9,7 @@ import {
 import type { ChordQuality, ChordSpan } from '../../theory/chord/index.js';
 import { chordQualities, diatonicTriad } from '../../theory/chord/index.js';
 import { scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
+import { type GenerationContextInput, resolveContext } from '../context/index.js';
 
 export type { ChordSpan } from '../../theory/chord/index.js';
 
@@ -109,13 +109,25 @@ export type ProgressionOptions = {
    */
   preset?: Partial<ProgressionPreset> & { degrees: ProgressionDegree[] };
   ext?: ChordQuality | 'auto';
+  /**
+   * Replace chords with the secondary dominant of what follows. Sugar for
+   * `ctx: { complexity: { harmonic } }` at the middle setting, which is what
+   * this flag has always meant; a context names how much instead of whether.
+   */
   reharmonize?: boolean;
   /**
-   * Seed for the deterministic preset choice and reharmonization.
+   * Seed for the deterministic preset choice and reharmonization. Sugar for
+   * `ctx: { seed }`.
    *
    * @defaultValue 0
    */
   seed?: number;
+  /**
+   * The generation context. Its `complexity.harmonic` sets how much of the
+   * progression is reharmonized — 0 leaves it alone, 1 takes every chord the
+   * voice-leading rules allow — and its `seed` replaces `seed`.
+   */
+  ctx?: GenerationContextInput;
 };
 
 const PRESETS: ProgressionPreset[] = [
@@ -275,6 +287,12 @@ const PRESETS: ProgressionPreset[] = [
   },
 ];
 
+/** Seed used when neither a context nor a seed is given. */
+const DEFAULT_SEED = 0;
+
+/** Share of the eligible chords `reharmonize: true` replaces. */
+const DEFAULT_REHARMONIZE_STRENGTH = 0.5;
+
 /** Chromatic semitone offset from the tonic for borrowed (non-diatonic) degrees. */
 const BORROWED_OFFSET: Record<number, number> = {
   [BORROWED_DEGREES.bVI]: 8,
@@ -427,8 +445,9 @@ export function pickProgressionPreset(style: ProgStyle, seed = 0): ProgressionPr
   if (pool.length === 0) {
     throw new InvalidInputError(`Unknown progression style: ${style}`);
   }
-  const rng = createRng(seed);
-  const index = Math.floor(rng.next() * pool.length) % pool.length;
+  const index = resolveContext(seed)
+    .part('progression')
+    .range(0, pool.length - 1, 'preset');
   return pool[index] ?? (PRESETS[0] as ProgressionPreset);
 }
 
@@ -464,7 +483,8 @@ export function pickProgressionPreset(style: ProgStyle, seed = 0): ProgressionPr
 export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
   assertPositiveInt(opts.bars, 'progression bars');
   assertGenerationBudget(opts.bars, 'progression chords');
-  const seed = opts.seed ?? 0;
+  const ctx = resolveContext(opts.ctx ?? opts.seed ?? DEFAULT_SEED);
+  const seed = ctx.seed;
   let preset: ProgressionPreset | undefined;
   if (opts.preset !== undefined) {
     if (opts.preset.degrees.length === 0) {
@@ -520,9 +540,12 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
     chords.push(chord);
   }
 
-  if (opts.reharmonize) {
+  // `reharmonize` names the middle of the dial: the flag has always meant
+  // "replace about half of what the rules allow", so it keeps meaning that.
+  const harmonic = ctx.harmonic ?? (opts.reharmonize ? DEFAULT_REHARMONIZE_STRENGTH : 0);
+  if (harmonic > 0) {
     const tonicPc = (((opts.key.rootPc % 12) + 12) % 12) as number;
-    const rrng = createRng((seed ^ 0x9e3779b9) >>> 0);
+    const draw = ctx.part('progression');
     let tonicStatements = chords.filter((chord) => chord.rootPc === tonicPc).length;
     for (let i = 0; i < chords.length - 1; i += 1) {
       const cur = chords[i];
@@ -540,7 +563,7 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
       if (targetsTonic || isLastTonicStatement || alreadySecondary || isResolutionTarget) {
         continue;
       }
-      if (rrng.next() < 0.5) {
+      if (draw.prob(harmonic, 'reharmonize', i)) {
         if (cur.rootPc === tonicPc) {
           tonicStatements -= 1;
         }
