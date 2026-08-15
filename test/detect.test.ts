@@ -129,9 +129,9 @@ describe('detectKey', () => {
   });
 
   it('detects A minor for a minor cadence containing the leading tone', () => {
-    // Am - E7 - Am (A C E / E G# B D / A C E): the leading tone G# must count
-    // toward A minor via its harmonic-minor variant instead of handing the win
-    // to C major.
+    // Am - E7 - Am (A C E / E G# B D / A C E): the minor profile expects weight
+    // on the leading tone, so G# argues for A minor rather than handing the win
+    // to C major, and the reported variant covers it.
     const matches = detectKey([9, 0, 4, 4, 8, 11, 2, 9, 0, 4]);
     const best = matches[0];
     expect(best?.mode).toBe('minor');
@@ -139,8 +139,9 @@ describe('detectKey', () => {
     expect(best?.fit).toBe(1);
   });
 
-  it('breaks a major/minor tie on the same tonic toward major', () => {
-    // A lone C fits C major and C minor equally; mode order keeps major first.
+  it('reads a lone C as its own tonic in both modes', () => {
+    // Both profiles put their peak on the tonic, so a lone C correlates almost
+    // identically with C major and C minor and they take the top two places.
     const matches = detectKey([0]);
     expect(matches[0]).toMatchObject({ mode: 'major' });
     expect(matches[0]?.key.rootPc).toBe(0);
@@ -148,8 +149,9 @@ describe('detectKey', () => {
     expect(matches[1]?.key.rootPc).toBe(0);
   });
 
-  it('breaks ties between keys sharing the input toward the weighted tonic', () => {
-    // G D fit many keys; the tonic bonus must rank G-rooted keys first.
+  it('resolves keys sharing the input toward the weighted tonic', () => {
+    // G D belong to many keys; the weight sits on G, which is where only the
+    // G-rooted profiles expect their peak.
     const best = detectKey([7, 7, 2])[0];
     expect(best?.key.rootPc).toBe(7);
   });
@@ -176,9 +178,9 @@ describe('detectKey', () => {
     }
   });
 
-  it('names the minor variant that won', () => {
-    // The leading tone G# is what carries A minor, so the harmonic variant wins
-    // and is what the match reports.
+  it('names the minor variant that covers the input', () => {
+    // Ranking is settled on the minor profile alone; the variant is then the
+    // mask covering the most input weight, which here has to include G#.
     const best = detectKey([9, 0, 4, 4, 8, 11, 2, 9, 0, 4])[0];
     expect(best).toMatchObject({ mode: 'minor', variant: 'harmonic' });
     expect(isScaleTone(8, best?.key ?? majorKey(0))).toBe(true);

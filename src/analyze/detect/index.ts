@@ -21,6 +21,10 @@ import {
   MELODIC_MINOR_MASK,
   NATURAL_MINOR_MASK,
 } from '../../theory/scale/index.js';
+import type { KeyProfileName, KeyProfilePair } from './profiles.js';
+import { profileScore, resolveKeyProfile } from './profiles.js';
+
+export type { KeyProfileName, KeyProfilePair } from './profiles.js';
 
 /**
  * A candidate chord interpretation of a pitch set.
@@ -72,7 +76,11 @@ export type KeyMatch = {
   /** The scale that scored best for this tonic and mode, `variant` included. */
   key: KeyScale;
   mode: 'major' | 'minor';
-  /** Which scale form `key` uses; minor keys pick the best-scoring of the three. */
+  /**
+   * Which scale form `key` uses. Minor keys report whichever of the natural,
+   * harmonic and melodic masks covers the most input weight; the variant does
+   * not take part in ranking.
+   */
   variant: KeyVariant;
   /**
    * Fraction of the distinct input pitch classes that belong to `key`, in
@@ -82,10 +90,14 @@ export type KeyMatch = {
    */
   fit: number;
   /**
-   * The value the results are ranked by, in [0, 1.5]. Unlike `fit` it counts
-   * every occurrence rather than every distinct pitch class, so a repeated tone
-   * weighs more, and it adds half a count per sounding of the tonic itself to
-   * break ties between keys that contain the same notes.
+   * The value the results are ranked by, in [-1, 1]: the Pearson correlation
+   * between the weighted pitch-class distribution of the input and this
+   * candidate's key profile rotated onto its tonic. 1 is a distribution shaped
+   * exactly like the profile, 0 no relationship, negative an anti-correlation.
+   * Unlike `fit` it is a distribution measure, not a membership count, so where
+   * the weight falls among the scale degrees is what separates a key from its
+   * relative. Always a finite number; see {@link DetectKeyOptions.profile} for
+   * the degenerate case.
    */
   score: number;
 };
@@ -111,6 +123,27 @@ export type DetectKeyOptions = {
    * histogram.
    */
   weights?: readonly number[];
+  /**
+   * Which key profile ranks the candidates: the 12 degree weights a key is
+   * expected to distribute its music over, correlated against the distribution
+   * actually observed.
+   *
+   * `'krumhansl'` (the default) uses the Krumhansl–Kessler probe-tone ratings,
+   * `'temperley'` the Kostka–Payne corpus proportions, and `'flat'` a flat
+   * profile over the scale, which reduces the ranking to plain scale membership
+   * — the behaviour this detector had before profile correlation, kept as a way
+   * back for a caller that depends on it. A custom pair supplies two 12-entry
+   * vectors indexed from the tonic (index 0 = tonic, 1 = flat second, and so on
+   * to 11 = major seventh).
+   *
+   * When either the distribution or the rotated profile has zero variance the
+   * correlation is undefined; such a candidate is scored by the normalized dot
+   * product (cosine similarity) of the same two vectors instead, so a result
+   * never carries NaN.
+   *
+   * @defaultValue `'krumhansl'`
+   */
+  profile?: KeyProfileName | KeyProfilePair;
   /**
    * Upper bound on the input pitches processed by this detection call.
    *
@@ -260,10 +293,11 @@ export function detectChordBest(
 }
 
 /**
- * Minor-scale variants scored for each minor-key candidate. Scoring against all
- * three lets the raised sixth and seventh (e.g. the leading tone G# in A minor)
- * count toward their own tonic instead of only penalizing it. Natural minor
- * comes first so it wins a tie as the most diatonic reading.
+ * Minor-scale variants a minor-key candidate may report. Ranking no longer
+ * consults them: the minor profile already expects weight on the raised sixth
+ * and seventh, so the variant is chosen afterwards as the mask that covers the
+ * most input weight. Natural minor comes first so it wins a tie as the most
+ * diatonic reading.
  */
 const MINOR_VARIANTS = [
   { variant: 'natural', mask: NATURAL_MINOR_MASK },
@@ -278,24 +312,47 @@ const MAJOR_VARIANTS = [{ variant: 'major', mask: MAJOR_MASK }] as const satisfi
 }[];
 
 /**
- * Rank major and minor keys by how well they contain a set of pitch classes.
+ * Rank major and minor keys by how well a set of pitch classes is distributed
+ * like each key.
  *
- * Ranking is by `score`, which counts repetitions and adds a tonic weight so
- * that, among equally-fitting keys, the one whose root is actually sounded is
- * preferred. Minor candidates are scored against the natural, harmonic, and
- * melodic minor variants and keep the best of the three, so a minor cadence
- * containing the leading tone still resolves to its own tonic; the winning
- * variant is what `key` and `variant` report, so `fit` describes the scale the
- * caller receives. Returns all 24 keys ranked best-first, or an empty array for
- * an empty input (mirroring {@link detectChord}).
+ * The input becomes a weighted pitch-class distribution, and every one of the
+ * 24 candidates is scored by the Pearson correlation between that distribution
+ * and its key profile rotated onto the candidate tonic (see
+ * {@link DetectKeyOptions.profile}). Correlating against a profile rather than
+ * counting scale members is what tells a key apart from its relative: C major
+ * and A minor contain the same seven pitch classes, so a membership count can
+ * only separate them by a tie-break, while their profiles expect the weight on
+ * different degrees.
+ *
+ * Choosing the minor variant is deliberately not part of the ranking. A minor
+ * candidate is ranked once, on the minor profile, which already expects some
+ * weight on the raised sixth and seventh; only then does it report whichever of
+ * the natural, harmonic and melodic masks covers the most input weight, and
+ * `fit` is measured against that mask. That split is why a harmonic-minor
+ * cadence ranks its own tonic first without the harmonic variant having to win
+ * a scoring contest against the natural one.
+ *
+ * Ties are broken by `fit` descending, then tonic pitch class ascending, then
+ * major before minor, so the order is fully determined by the input rather than
+ * by the order candidates happen to be built in. Returns all 24 keys ranked
+ * best-first, or an empty array for an empty input (mirroring
+ * {@link detectChord}).
  *
  * @param pitches MIDI pitches or bare pitch classes.
- * @returns Ranked key interpretations (empty for an empty input).
+ * @param opts How to weigh the input and which profile to rank with; see
+ *   {@link DetectKeyOptions}.
+ * @returns Ranked key interpretations (empty for an empty input), each carrying
+ *   a finite `score` in [-1, 1].
+ * @throws {InvalidInputError} When `weights` does not have one entry per pitch,
+ *   or `profile` is not a known name or a valid pair of 12-entry vectors.
+ * @throws {RangeError} When a pitch is outside the MIDI domain or the input
+ *   exceeds the budget.
  * @example
  * ```ts
  * import { detectKey } from '@libraz/libcantus';
  * const keys = detectKey([60, 62, 64, 65, 67, 69, 71]); // C major scale
  * keys[0].mode; // 'major', with keys[0].key.rootPc === 0
+ * keys[1].mode; // 'minor' on 9: A minor, the relative, ranked just below
  * ```
  * @category Recognition
  */
@@ -305,6 +362,7 @@ export function detectKey(pitches: readonly number[], opts: DetectKeyOptions = {
   if (weights !== undefined && weights.length !== pitches.length) {
     throw new InvalidInputError('weights must have one entry per pitch');
   }
+  const profile = resolveKeyProfile(opts.profile);
   const counts = new Map<number, number>();
   let total = 0;
   for (let index = 0; index < pitches.length; index += 1) {
@@ -321,48 +379,68 @@ export function detectKey(pitches: readonly number[], opts: DetectKeyOptions = {
     return [];
   }
   const input = [...counts.keys()];
+  // The distribution the profiles are correlated against: one bin per pitch
+  // class, holding the total weight that landed on it.
+  const dist = new Array<number>(12).fill(0);
+  for (const [pc, count] of counts) {
+    dist[pc] = count;
+  }
   const results: KeyMatch[] = [];
   for (let tonic = 0; tonic < 12; tonic += 1) {
     for (const mode of ['major', 'minor'] as const) {
+      const vector = mode === 'major' ? profile.major : profile.minor;
+      const score = profileScore(dist, vector, tonic);
+      // Ranking is settled; the variant only decides which scale the caller is
+      // handed, so it is the mask covering the most input weight. Ties keep the
+      // earlier (more diatonic) variant, and `fit` is measured against the very
+      // scale that wins here.
       const variants = mode === 'major' ? MAJOR_VARIANTS : MINOR_VARIANTS;
-      // Score each scale variant and keep the best; ties keep the earlier
-      // (more diatonic) variant. The winner is what the match reports, so its
-      // fit is measured against the very scale the caller receives.
+      let covered = Number.NEGATIVE_INFINITY;
       let inScale = 0;
-      let weighted = Number.NEGATIVE_INFINITY;
       let best: { variant: KeyVariant; mask: number } = variants[0];
       for (const candidate of variants) {
-        let variantInScale = 0;
-        let variantWeighted = 0;
-        for (const pc of input) {
-          const offset = (pc - tonic + 12) % 12;
-          if ((candidate.mask >> offset) & 1) {
-            variantInScale += 1;
-          }
-        }
+        let candidateCovered = 0;
+        let candidateInScale = 0;
         for (const [pc, count] of counts) {
           const offset = (pc - tonic + 12) % 12;
           if ((candidate.mask >> offset) & 1) {
-            variantWeighted += count;
+            candidateCovered += count;
+            candidateInScale += 1;
           }
         }
-        if (variantWeighted > weighted) {
-          weighted = variantWeighted;
-          inScale = variantInScale;
+        if (candidateCovered > covered) {
+          covered = candidateCovered;
+          inScale = candidateInScale;
           best = candidate;
         }
       }
-      weighted += (counts.get(tonic) ?? 0) * 0.5;
       results.push({
         key: { rootPc: tonic, modeMask12: best.mask },
         mode,
         variant: best.variant,
         fit: inScale / input.length,
-        score: weighted / total,
+        score,
       });
     }
   }
-  results.sort((a, b) => b.score - a.score);
+  // Floating-point scores tie often enough — a chromatic input ties all 24 —
+  // that leaving the order to the sort's stability would make construction
+  // order the contract. Rank on the reported fields instead.
+  results.sort((a, b) => {
+    if (a.score !== b.score) {
+      return b.score - a.score;
+    }
+    if (a.fit !== b.fit) {
+      return b.fit - a.fit;
+    }
+    if (a.key.rootPc !== b.key.rootPc) {
+      return a.key.rootPc - b.key.rootPc;
+    }
+    if (a.mode === b.mode) {
+      return 0;
+    }
+    return a.mode === 'major' ? -1 : 1;
+  });
   return results;
 }
 
@@ -377,11 +455,18 @@ const DEFAULT_VELOCITY = 100;
  * notes outvote the sustained harmony that establishes the key. This weighs
  * each note by duration times velocity, the same measure chord inference uses,
  * so the two agree on what the music emphasises. Notes that never sound (zero
- * or negative duration) are ignored.
+ * or negative duration) are ignored. The weighted distribution is then ranked
+ * exactly as {@link detectKey} ranks it, by correlation against a key profile,
+ * so `score` is a finite correlation in [-1, 1].
  *
  * @param notes The note events to weigh.
- * @param opts Budget for processing imported note events.
+ * @param opts Which profile to rank with, and the budget for processing
+ *   imported note events; the weights are derived from the notes themselves.
  * @returns Ranked key interpretations (empty when nothing sounds).
+ * @throws {InvalidInputError} When `profile` is not a known name or a valid
+ *   pair of 12-entry vectors.
+ * @throws {RangeError} When a note event is malformed or the input exceeds the
+ *   budget.
  * @example
  * ```ts
  * import { detectKeyFromNotes } from '@libraz/libcantus';
@@ -402,6 +487,7 @@ export function detectKeyFromNotes(
     sounding.map((note) => note.pitch),
     {
       weights: sounding.map((note) => note.durationBeat * (note.velocity ?? DEFAULT_VELOCITY)),
+      profile: opts.profile,
       budget: opts.budget,
     },
   );
@@ -412,11 +498,19 @@ export function detectKeyFromNotes(
  *
  * The counterpart of {@link detectChordBest}: the ranked list is the general
  * answer, but a caller that just wants "what key is this" should not have to
- * index into it and assert the result is there.
+ * index into it and assert the result is there. The winner is the candidate
+ * whose key profile correlates best with the input distribution, with the same
+ * deterministic tie-break {@link detectKey} applies, so its `score` is a finite
+ * correlation in [-1, 1] rather than a membership share.
  *
  * @param pitches MIDI pitches or bare pitch classes.
- * @param opts How to weigh the input; see {@link DetectKeyOptions}.
+ * @param opts How to weigh the input and which profile to rank with; see
+ *   {@link DetectKeyOptions}.
  * @returns The top-ranked key, or null when nothing sounds.
+ * @throws {InvalidInputError} When `weights` does not have one entry per pitch,
+ *   or `profile` is not a known name or a valid pair of 12-entry vectors.
+ * @throws {RangeError} When a pitch is outside the MIDI domain or the input
+ *   exceeds the budget.
  * @example
  * ```ts
  * import { detectKeyBest } from '@libraz/libcantus';
