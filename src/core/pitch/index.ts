@@ -10,7 +10,12 @@
  */
 
 import { InvalidInputError } from '../errors/index.js';
-import { assertFiniteNumber, assertInteger } from '../validation/index.js';
+import { assertFiniteNumber, assertInteger, assertOneOf } from '../validation/index.js';
+import type { KeyName, NoteNameOptions } from './naming.js';
+import { readKeyName, readNoteName, writeKeyName, writeNoteName } from './naming.js';
+
+export type { KeyName, NoteNameOptions, NoteNameSystem } from './naming.js';
+export { detectNoteNameSystem } from './naming.js';
 
 /** Semitone offset of each natural letter above C: C D E F G A B. */
 const LETTER_SEMITONES = [0, 2, 4, 5, 7, 9, 11] as const;
@@ -32,9 +37,6 @@ function assertNote(note: Note, name: string): Note {
   }
   return note;
 }
-
-/** Letter glyphs indexed by letter number (0 = C .. 6 = B). */
-const LETTER_NAMES = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
 
 /**
  * A spelled note: a diatonic letter, a chromatic alteration, and an optional
@@ -139,79 +141,135 @@ export function naturalPitchClassOf(letter: number): number {
 const mod7 = diatonicLetterOf;
 
 /**
- * Parse scientific pitch notation into a {@link Note}.
+ * Parse a note name into a {@link Note}, in any supported notation system.
  *
- * Accepts a letter (case-insensitive) followed by any number of same-direction
+ * English (the default when a name could be read in more than one system)
+ * accepts a letter (case-insensitive) followed by any number of same-direction
  * accidentals and an optional octave, e.g. `"C"`, `"C#4"`, `"Bb"`, `"F##3"`,
  * `"Ebb2"`. Both `#` and `x` (double-sharp) are accepted for sharps; `b` for
  * flats. Mixing sharps and flats (e.g. `"C#b"`) is rejected.
  *
- * @param text The note text.
+ * Without a `system` the name is attributed by {@link detectNoteNameSystem},
+ * which reads a name any two systems could claim as English: `"B"` is the B
+ * natural, never the German B flat. German is chosen only for a German-only
+ * name such as `"H"`, `"fis"` or `"es"`.
+ *
+ * A scientific octave may follow the name in every system (`"gis4"`,
+ * `"嬰ト4"`), which is what makes formatting and parsing exact inverses for an
+ * octave-bearing note.
+ *
+ * @param text The note name.
+ * @param opts `system` reads the name in that notation system instead of
+ *   detecting it.
  * @returns The parsed note.
- * @throws If the text is not a valid note.
+ * @throws If the text is not a valid note in the given (or detected) system.
  * @example
  * ```ts
- * import { parseNote, noteToMidi } from '@libraz/libcantus';
- * const n = parseNote('C#4');
- * noteToMidi(n); // 61
+ * import { parseNote, noteToMidi, noteToPitchClass } from '@libraz/libcantus';
+ * noteToMidi(parseNote('C#4')); // 61
+ * noteToPitchClass(parseNote('gis')); // 8 — the German G sharp
+ * noteToPitchClass(parseNote('B', { system: 'german' })); // 10 — the German B flat
  * ```
  * @category Pitch & Intervals
  */
-export function parseNote(text: string): Note {
+export function parseNote(text: string, opts?: NoteNameOptions): Note {
   if (typeof text !== 'string') {
     throw new InvalidInputError(`note must be a string; received ${typeof text}`);
   }
-  const match = /^([A-Ga-g])([#x]*|b*)(-?\d+)?$/.exec(text.trim());
-  if (!match) {
-    throw new InvalidInputError(`Invalid note: ${text}`);
-  }
-  const letterGlyph = (match[1] ?? '').toUpperCase();
-  const letter = LETTER_NAMES.indexOf(letterGlyph as (typeof LETTER_NAMES)[number]);
-  let alter = 0;
-  for (const ch of match[2] ?? '') {
-    if (ch === '#') {
-      alter += 1;
-    } else if (ch === 'x') {
-      alter += 2;
-    } else if (ch === 'b') {
-      alter -= 1;
-    }
-  }
-  const note: Note = { letter, alter };
-  if (match[3] !== undefined) {
-    note.octave = Number.parseInt(match[3], 10);
-  }
-  return assertNote(note, `note ${text}`);
-}
-
-/** Render an alteration as accidental glyphs (`##`, `b`, empty for natural). */
-function formatAlter(alter: number): string {
-  if (alter > 0) {
-    return '#'.repeat(alter);
-  }
-  if (alter < 0) {
-    return 'b'.repeat(-alter);
-  }
-  return '';
+  return assertNote(readNoteName(text, opts), `note ${text}`);
 }
 
 /**
- * Render a {@link Note} as scientific pitch notation.
+ * Render a {@link Note} as a note name, in any supported notation system.
+ *
+ * The inverse of {@link parseNote} in every system, including double
+ * accidentals and octaves.
  *
  * @param note The note to format.
- * @returns The note text, including the octave when present.
+ * @param opts `system` writes the name in that notation system instead of
+ *   English.
+ * @returns The note name, including the octave when present.
  * @example
  * ```ts
  * import { formatNote, parseNote } from '@libraz/libcantus';
  * formatNote(parseNote('C#4')); // 'C#4'
+ * formatNote(parseNote('G#'), { system: 'german' }); // 'gis'
+ * formatNote(parseNote('G#'), { system: 'japanese' }); // '嬰ト'
  * ```
  * @category Pitch & Intervals
  */
-export function formatNote(note: Note): string {
+export function formatNote(note: Note, opts?: NoteNameOptions): string {
   assertNote(note, 'note');
-  const glyph = LETTER_NAMES[mod7(note.letter)] ?? 'C';
-  const octave = note.octave === undefined ? '' : String(note.octave);
-  return `${glyph}${formatAlter(note.alter)}${octave}`;
+  return writeNoteName({ letter: mod7(note.letter), alter: note.alter, octave: note.octave }, opts);
+}
+
+/**
+ * Parse a key name such as `'C major'`, `'gis moll'` or `'嬰ト短調'`.
+ *
+ * The name is a tonic followed by a mode word, in any of the supported
+ * notation systems; German also accepts its hyphenated form (`'gis-Moll'`).
+ * Without a `system` the name is attributed by {@link detectNoteNameSystem},
+ * so a mode word is itself enough to pick one: `'B dur'` is B flat major while
+ * `'B major'` is B major.
+ *
+ * German carries the mode twice, in the word and in the case of the tonic
+ * (`C dur`, `c moll`). When the two disagree the word wins — `'C moll'` is C
+ * minor — because the word is what the writer said and the case only what they
+ * typed. A German name with no mode word is decided by its case alone
+ * (`'gis'` is G sharp minor, `'Gis'` G sharp major); a bare tonic in any other
+ * system names a major key.
+ *
+ * @param text The key name.
+ * @param opts `system` reads the name in that notation system instead of
+ *   detecting it.
+ * @returns The spelled tonic and the mode.
+ * @throws If the text is not a key name in the given (or detected) system, if
+ *   it mixes two systems, or if the tonic carries an octave.
+ * @example
+ * ```ts
+ * import { formatNote, parseKeyName } from '@libraz/libcantus';
+ * const key = parseKeyName('gis moll');
+ * formatNote(key.tonic); // 'G#'
+ * key.mode; // 'minor'
+ * ```
+ * @category Scales
+ */
+export function parseKeyName(text: string, opts?: NoteNameOptions): KeyName {
+  if (typeof text !== 'string') {
+    throw new InvalidInputError(`key name must be a string; received ${typeof text}`);
+  }
+  const key = readKeyName(text, opts);
+  assertNote(key.tonic, `key ${text}`);
+  return key;
+}
+
+/**
+ * Render a spelled tonic and a mode as a key name.
+ *
+ * The inverse of {@link parseKeyName}. German is written the way it is read,
+ * with the mode in the case of the tonic as well as in the word.
+ *
+ * @param key The spelled tonic and mode; any octave on the tonic is dropped,
+ *   since a key has no register.
+ * @param opts `system` writes the name in that notation system instead of
+ *   English.
+ * @returns The key name.
+ * @throws If the tonic or the mode is not valid.
+ * @example
+ * ```ts
+ * import { formatKeyName, parseNote } from '@libraz/libcantus';
+ * formatKeyName({ tonic: parseNote('G#'), mode: 'minor' }); // 'G# minor'
+ * formatKeyName({ tonic: parseNote('G#'), mode: 'minor' }, { system: 'german' }); // 'gis moll'
+ * ```
+ * @category Scales
+ */
+export function formatKeyName(key: KeyName, opts?: NoteNameOptions): string {
+  assertNote(key.tonic, 'key.tonic');
+  const mode = assertOneOf(key.mode, ['major', 'minor'], 'key.mode');
+  return writeKeyName(
+    { tonic: { letter: mod7(key.tonic.letter), alter: key.tonic.alter }, mode },
+    opts,
+  );
 }
 
 /**

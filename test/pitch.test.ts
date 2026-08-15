@@ -22,7 +22,9 @@ describe('parseNote / formatNote', () => {
   });
 
   it('rejects invalid text', () => {
-    expect(() => parseNote('H')).toThrow();
+    // 'H' is no longer among these: it is the German B natural, which
+    // `parseNote` reads once a name can be written in another system.
+    expect(() => parseNote('Q')).toThrow();
     expect(() => parseNote('')).toThrow();
     expect(() => parseNote(60 as never)).toThrow(/note must be a string/);
   });

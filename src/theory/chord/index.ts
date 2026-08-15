@@ -1,5 +1,9 @@
 import { InvalidInputError } from '../../core/errors/index.js';
-import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
+import {
+  diatonicLetterOf,
+  noteToPitchClass,
+  pitchClassOf as pitchClass,
+} from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import { assertDegree, assertFiniteNumber, assertInteger } from '../../core/validation/index.js';
 import { scaleTonesInDegreeOrder } from '../scale/index.js';
@@ -85,6 +89,15 @@ export type PitchSpelling = {
  * them; a hint is only trusted when its pitch class still matches the
  * corresponding `rootPc`/`bassPc`.
  *
+ * `toneSpellings` is the same kind of hint for the tones themselves, one
+ * spelling per entry in `intervals`. It exists for the chords whose letters do
+ * not follow from stacking thirds: an augmented sixth is ten semitones like a
+ * minor seventh but is five letters above its root rather than six, and no
+ * {@link ChordQuality} can say so. Builders that know better attach it, and
+ * {@link spellChordFromRoot} reads the letter distances back out of it; a hint
+ * is trusted as a whole or not at all, and only while every spelling still
+ * names the pitch class its interval names.
+ *
  * @category Chords
  */
 export type Chord = {
@@ -94,6 +107,7 @@ export type Chord = {
   bassPc?: number;
   rootSpelling?: PitchSpelling;
   bassSpelling?: PitchSpelling;
+  toneSpellings?: PitchSpelling[];
 };
 
 /**
@@ -413,6 +427,39 @@ export function transposeChord(chord: Chord, semitones: number): Chord {
     moved.bassPc = pitchClass(chord.bassPc + steps);
   }
   return moved;
+}
+
+/**
+ * A chord's per-tone spelling hints, when they still describe its own tones.
+ *
+ * The hint is trusted as a whole or not at all: it must name one spelling per
+ * interval, and each spelling must still sound the pitch class its interval
+ * names. A hint that has fallen out of step with the template — one left behind
+ * by a transposition that moved the intervals and not the letters — is dropped
+ * rather than half-applied, the same discipline a stale `rootSpelling` gets.
+ *
+ * Not part of the package's public surface: the readers of the hint
+ * ({@link spellChordFromRoot} and the class API) share this check so they
+ * cannot disagree about which hints are usable.
+ */
+export function chordToneSpellings(chord: Chord): PitchSpelling[] | undefined {
+  const hints = chord.toneSpellings;
+  if (hints === undefined || hints.length !== chord.intervals.length) {
+    return undefined;
+  }
+  const usable: PitchSpelling[] = [];
+  for (let index = 0; index < hints.length; index += 1) {
+    const hint = hints[index];
+    const interval = chord.intervals[index];
+    if (hint === undefined || interval === undefined) {
+      return undefined;
+    }
+    if (noteToPitchClass(hint) !== pitchClass(chord.rootPc + interval)) {
+      return undefined;
+    }
+    usable.push({ letter: diatonicLetterOf(hint.letter), alter: hint.alter });
+  }
+  return usable;
 }
 
 /**

@@ -13,7 +13,12 @@ import {
   secondaryDominantOf,
 } from '../analyze/functional/index.js';
 import { InvalidInputError } from '../core/errors/index.js';
-import type { IntervalLike, Note as NoteData, SpelledInterval } from '../core/pitch/index.js';
+import type {
+  IntervalLike,
+  Note as NoteData,
+  NoteNameOptions,
+  SpelledInterval,
+} from '../core/pitch/index.js';
 import {
   noteToPitchClass,
   toSpelledInterval,
@@ -25,6 +30,7 @@ import {
   type Chord as ChordData,
   type ChordQuality,
   chordPitchClasses,
+  chordToneSpellings,
   makeChord,
   type PitchSpelling,
   transposeChord,
@@ -37,7 +43,11 @@ import {
 } from '../theory/chordscale/index.js';
 import type { ScaleNameInput } from '../theory/scale/index.js';
 import { spellChord, spellChordFromRoot, spellPitchClass } from '../theory/spelling/index.js';
-import { formatChordSymbol, parseChordSymbol } from '../theory/symbol/index.js';
+import {
+  type ChordSymbolOptions,
+  formatChordSymbol,
+  parseChordSymbol,
+} from '../theory/symbol/index.js';
 import {
   type StyledVoicingOptions,
   type VoicingOptions,
@@ -85,13 +95,42 @@ function transposeHintByInterval(
 }
 
 /**
+ * Move a chord's per-tone spelling hints with the chord.
+ *
+ * Every tone takes the same letter distance, so the distances between them
+ * survive: the German sixth's augmented sixth is still five letters above its
+ * root afterwards, whichever letters the two of them land on.
+ */
+function transposeToneHints(
+  hints: PitchSpelling[] | undefined,
+  semitones: number,
+): PitchSpelling[] | undefined {
+  return hints?.map((hint) => {
+    const moved = transposeNote(hint, semitones);
+    return { letter: moved.letter, alter: moved.alter };
+  });
+}
+
+/** Move a chord's per-tone spelling hints by a spelled interval. */
+function transposeToneHintsByInterval(
+  hints: PitchSpelling[] | undefined,
+  interval: SpelledInterval,
+): PitchSpelling[] | undefined {
+  return hints?.map((hint) => {
+    const moved = transposeByInterval(hint, interval);
+    return { letter: moved.letter, alter: moved.alter };
+  });
+}
+
+/**
  * Defensive copy of a plain chord.
  *
  * Enharmonic spelling hints (`rootSpelling`/`bassSpelling`, populated by
- * `parseChordSymbol`) are carried through so a flat-named chord round-trips
- * through the class API — but only while they still name their own pitch
- * class. A stale hint is dropped here rather than passed on, so that everything
- * downstream, including the derived bass spelling, reads a hint it can trust.
+ * `parseChordSymbol`, and the per-tone `toneSpellings` an augmented sixth
+ * carries) are carried through so a flat-named chord round-trips through the
+ * class API — but only while they still name their own pitch class. A stale
+ * hint is dropped here rather than passed on, so that everything downstream,
+ * including the derived bass spelling, reads a hint it can trust.
  */
 function copyChord(data: ChordData): ChordData {
   const copy: ChordData = {
@@ -101,6 +140,10 @@ function copyChord(data: ChordData): ChordData {
   };
   if (data.bassPc !== undefined) {
     copy.bassPc = data.bassPc;
+  }
+  const tones = chordToneSpellings(data);
+  if (tones !== undefined) {
+    copy.toneSpellings = tones;
   }
   if (hintMatches(data.rootSpelling, data.rootPc) && data.rootSpelling !== undefined) {
     copy.rootSpelling = { letter: data.rootSpelling.letter, alter: data.rootSpelling.alter };
@@ -257,12 +300,23 @@ export class Chord {
   /**
    * Parse a lead-sheet chord symbol (e.g. `'Cmaj7'`, `'F#m7b5'`, `'C/G'`).
    *
+   * A symbol is English unless a system is asked for: unlike {@link Key.parse},
+   * which reads the notation system off the name, `'B'` here is always the B
+   * natural until `'german'` says otherwise.
+   *
    * @param symbol The chord symbol.
+   * @param opts `system` reads the root and bass in that notation system
+   *   instead of English.
    * @returns The chord (without key context).
    * @throws If the root or quality is not recognized.
+   * @example
+   * ```ts
+   * import { Chord } from '@libraz/libcantus';
+   * Chord.parse('H7', { system: 'german' }).symbol(); // 'B7'
+   * ```
    */
-  static parse(symbol: string): Chord {
-    return new Chord(parseChordSymbol(symbol));
+  static parse(symbol: string, opts?: NoteNameOptions): Chord {
+    return new Chord(parseChordSymbol(symbol, opts));
   }
 
   /**
@@ -436,10 +490,16 @@ export class Chord {
   /**
    * The chord rendered as a lead-sheet symbol (e.g. `'Cmaj7'`, `'F#m7'`, `'C/G'`).
    *
-   * @param opts Set `flats: true` to spell the root/bass with flats.
+   * @param opts Set `flats: true` to spell the root/bass with flats, or
+   *   `system` to write them in another notation system.
    * @returns The chord symbol.
+   * @example
+   * ```ts
+   * import { Chord } from '@libraz/libcantus';
+   * Chord.parse('Bb7').symbol({ system: 'german' }); // 'B7'
+   * ```
    */
-  symbol(opts?: { flats?: boolean }): string {
+  symbol(opts?: ChordSymbolOptions): string {
     return formatChordSymbol(this.#data, opts);
   }
 
@@ -557,11 +617,15 @@ export class Chord {
     const moved = transposeChord(this.#given, semitones);
     const rootSpelling = transposeHint(this.#given.rootSpelling, semitones);
     const bassSpelling = transposeHint(this.#given.bassSpelling, semitones);
+    const toneSpellings = transposeToneHints(this.#given.toneSpellings, semitones);
     if (rootSpelling !== undefined) {
       moved.rootSpelling = rootSpelling;
     }
     if (bassSpelling !== undefined) {
       moved.bassSpelling = bassSpelling;
+    }
+    if (toneSpellings !== undefined) {
+      moved.toneSpellings = toneSpellings;
     }
     return new Chord(moved, this.#key?.transpose(semitones));
   }
@@ -592,11 +656,15 @@ export class Chord {
     // spelling the key derived stays derived and follows the transposed key.
     const rootSpelling = transposeHintByInterval(this.#given.rootSpelling, spelled);
     const bassSpelling = transposeHintByInterval(this.#given.bassSpelling, spelled);
+    const toneSpellings = transposeToneHintsByInterval(this.#given.toneSpellings, spelled);
     if (rootSpelling !== undefined) {
       moved.rootSpelling = rootSpelling;
     }
     if (bassSpelling !== undefined) {
       moved.bassSpelling = bassSpelling;
+    }
+    if (toneSpellings !== undefined) {
+      moved.toneSpellings = toneSpellings;
     }
     return new Chord(moved, this.#key?.transposeBy(spelled));
   }

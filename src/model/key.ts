@@ -2,8 +2,19 @@ import type { DetectKeyOptions, KeyMatch, KeyVariant } from '../analyze/detect/i
 import { detectKey, detectKeyBest } from '../analyze/detect/index.js';
 import { isMinorKey, romanToChord } from '../analyze/functional/index.js';
 import { InvalidInputError } from '../core/errors/index.js';
-import type { IntervalLike, Note as NoteData, SpelledInterval } from '../core/pitch/index.js';
-import { spelledInterval, toSpelledInterval, transposeByInterval } from '../core/pitch/index.js';
+import type {
+  IntervalLike,
+  Note as NoteData,
+  NoteNameOptions,
+  SpelledInterval,
+} from '../core/pitch/index.js';
+import {
+  formatKeyName,
+  parseKeyName,
+  spelledInterval,
+  toSpelledInterval,
+  transposeByInterval,
+} from '../core/pitch/index.js';
 import type { KeyScale } from '../core/types.js';
 import { assertFiniteNumber, assertInteger } from '../core/validation/index.js';
 import {
@@ -33,6 +44,8 @@ import {
   subdominantKeyOf,
 } from '../theory/scale/index.js';
 import { spellScale } from '../theory/spelling/index.js';
+import type { TransposingInstrument } from '../theory/transposition/index.js';
+import { toWrittenPitch } from '../theory/transposition/index.js';
 import { Chord } from './chord.js';
 import { Interval } from './interval.js';
 import { Note } from './note.js';
@@ -196,6 +209,38 @@ export class Key {
     }
     const scale = scaleByName(name, mod12(root));
     return new Key(scale, bestTonicForScale(mod12(root), scale));
+  }
+
+  /**
+   * Parse a key name, in any of the supported note-name systems.
+   *
+   * The name is a tonic and a mode word — `'C major'`, `'gis moll'`,
+   * `'嬰ト短調'`, `'la minore'` — and the system is detected from the name
+   * itself unless one is given. A German name may also be written with a
+   * hyphen (`'gis-Moll'`), and its case carries the mode on its own, so `'Gis'`
+   * is G sharp major and `'gis'` G sharp minor; see {@link parseKeyName} for
+   * how a name whose case and mode word disagree is read.
+   *
+   * The result is always a plain major or minor key. Only the tonic's spelling
+   * survives from the name, so `'ges dur'` is G flat major, not F sharp major.
+   *
+   * @param text The key name.
+   * @param opts `system` reads the name in that notation system instead of
+   *   detecting it.
+   * @returns The key.
+   * @throws If the text is not a key name in the given (or detected) system,
+   *   or if it mixes two systems.
+   * @example
+   * ```ts
+   * import { Key } from '@libraz/libcantus';
+   * Key.parse('gis moll').toString(); // 'G# minor'
+   * Key.parse('B dur').toString(); // 'Bb major' — the German B is a B flat
+   * Key.parse('B major').toString(); // 'B major'
+   * ```
+   */
+  static parse(text: string, opts?: NoteNameOptions): Key {
+    const { tonic, mode } = parseKeyName(text, opts);
+    return Key.#modeOn(mode, new Note(tonic));
   }
 
   /**
@@ -687,6 +732,45 @@ export class Key {
   }
 
   /**
+   * The key a transposing instrument's part is written in, for this key at
+   * concert pitch.
+   *
+   * The direction is written-side: the part is transposed *away* from what the
+   * instrument sounds, so a B flat instrument — which sounds a major second
+   * lower than it reads — has its part written a major second higher, and a
+   * concert C major becomes D major. The tonic is spelled by the interval, so
+   * a concert E flat major reads as F major on that instrument rather than as
+   * E sharp major, and the mode mask is untouched.
+   *
+   * The opposite reading, a written key back to the key it sounds in, is
+   * {@link Key.transposeBy} applied to {@link instrumentTransposition} — the
+   * instrument's own written-to-sounding interval.
+   *
+   * @param instrument A built-in instrument name, or an interval naming a
+   *   transposition the table does not carry.
+   * @returns The key the player reads.
+   * @throws If the instrument is neither a known name nor a spelled interval.
+   * @example
+   * ```ts
+   * import { Key, instrumentTransposition } from '@libraz/libcantus';
+   * Key.major('C').forInstrument('clarinetBb').toString(); // 'D major'
+   * Key.major('C').forInstrument('hornF').toString(); // 'G major'
+   * // And back: what a part written in C major on a clarinet in A sounds as.
+   * Key.major('C').transposeBy(instrumentTransposition('clarinetA')).toString(); // 'A major'
+   * ```
+   */
+  forInstrument(instrument: TransposingInstrument): Key {
+    // Routed through the same conversion the notes use, so a key and the notes
+    // of its part can never disagree about the direction or the spelling.
+    const tonic = new Note(toWrittenPitch(this.#tonic.data, instrument));
+    return new Key(
+      { rootPc: tonic.pitchClass, modeMask12: this.#scale.modeMask12 },
+      tonic,
+      this.#variant,
+    );
+  }
+
+  /**
    * The spelled scale, one note per degree (e.g. C D E F G A B for C major).
    *
    * @returns Spelled octave-less notes in scale-degree order.
@@ -803,9 +887,29 @@ export class Key {
    * The key's tonic and mode, so a template literal or a log line reads as the
    * key. Detected harmonic and melodic minor keys retain their scale form.
    *
-   * @returns The name, e.g. `'C major'` or `'A minor'`.
+   * A `system` names the key the way that notation system writes it, including
+   * German's case convention. The scale form is an English-only qualifier —
+   * the other systems have no word for it — so a detected harmonic minor names
+   * its parallel plain minor there.
+   *
+   * @param opts `system` writes the name in that notation system instead of
+   *   English.
+   * @returns The name, e.g. `'C major'`, `'A minor'` or `'gis moll'`.
+   * @example
+   * ```ts
+   * import { Key } from '@libraz/libcantus';
+   * Key.minor('G#').toString(); // 'G# minor'
+   * Key.minor('G#').toString({ system: 'german' }); // 'gis moll'
+   * Key.minor('G#').toString({ system: 'japanese' }); // '嬰ト短調'
+   * ```
    */
-  toString(): string {
+  toString(opts?: NoteNameOptions): string {
+    if (opts?.system !== undefined && opts.system !== 'english') {
+      return formatKeyName(
+        { tonic: this.#tonic.data, mode: this.isMinor ? 'minor' : 'major' },
+        opts,
+      );
+    }
     if (this.#variant === 'harmonic' || this.#variant === 'melodic') {
       return `${this.#tonic.name} ${this.#variant} minor`;
     }

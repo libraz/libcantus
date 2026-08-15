@@ -37,11 +37,16 @@ export {
 export type {
   IntervalLike,
   IntervalQualityLabel,
+  KeyName,
   Note as NoteData,
+  NoteNameOptions,
+  NoteNameSystem,
   SpelledInterval,
 } from './pitch/index.js';
 export {
+  detectNoteNameSystem,
   diatonicLetterOf,
+  formatKeyName,
   formatNote,
   intervalSemitones,
   midiToNote,
@@ -49,6 +54,7 @@ export {
   noteToMidi,
   noteToPitchClass,
   parseInterval,
+  parseKeyName,
   parseNote,
   pitchClassOf,
   spelledInterval,
