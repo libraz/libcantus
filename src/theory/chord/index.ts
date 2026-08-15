@@ -7,56 +7,25 @@ import {
 import type { KeyScale } from '../../core/types.js';
 import { assertDegree, assertFiniteNumber, assertInteger } from '../../core/validation/index.js';
 import { scaleTonesInDegreeOrder } from '../scale/index.js';
+import type { ChordQuality, ChordSpec } from './spec.js';
+import {
+  assertChordSpec,
+  chordSpecForQuality,
+  chordSpecFromIntervals,
+  chordSpecIntervals,
+  chordSpecQuality,
+  QUALITY_INTERVALS,
+} from './spec.js';
 
-/**
- * Chord quality identifiers understood by the chord builder.
- *
- * @category Chords
- */
-export type ChordQuality =
-  | 'maj'
-  | 'min'
-  | 'dim'
-  | 'aug'
-  | 'maj7'
-  | 'min7'
-  | 'dom7'
-  | 'dim7'
-  | 'm7b5'
-  | 'minMaj7'
-  | 'minMaj9'
-  | 'minMaj11'
-  | 'minMaj13'
-  | 'aug7'
-  | 'augMaj7'
-  | 'majb5'
-  | '6'
-  | 'min6'
-  | '6/9'
-  | 'sus2'
-  | 'sus4'
-  | 'add9'
-  | 'add11'
-  | 'maj9'
-  | 'min9'
-  | 'dom9'
-  | '7b9'
-  | '7#9'
-  | '7#11'
-  | '7b13'
-  | '11'
-  | '13'
-  | '5'
-  | '7sus4'
-  | '7b5'
-  | '7alt'
-  | '13b9'
-  | 'maj13'
-  | 'maj7#11'
-  | 'min11'
-  | 'min13'
-  | 'minAdd9'
-  | 'min6/9';
+export type {
+  Alteration,
+  AlteredDegree,
+  ChordBase,
+  ChordQuality,
+  ChordSeventh,
+  ChordSpec,
+} from './spec.js';
+export { chordSpecIntervals, chordSpecQuality } from './spec.js';
 
 /**
  * The basic role a chord tone plays: the degrees a chord's own template names.
@@ -82,6 +51,15 @@ export type PitchSpelling = {
 
 /**
  * A chord expressed as a root pitch class plus semitone offsets.
+ *
+ * `intervals` is what the chord sounds and `quality` is what it is called. The
+ * two are not equally expressive: a chart writes any set of alterations over a
+ * base, while {@link ChordQuality} is a closed list of names, so `quality` is a
+ * *derived* label — the name that fits the chord exactly, or else the nearest
+ * name inside it (see {@link chordSpecQuality}). Read the structure with
+ * {@link chordSpecOf} rather than the name when the alterations matter; that is
+ * also what {@link formatChordSymbol} does, so a chord no name covers still
+ * writes itself out in full.
  *
  * `rootSpelling`/`bassSpelling` are optional enharmonic hints recorded by
  * parsers (e.g. `parseChordSymbol('Bb7')`) so formatters can reproduce the
@@ -149,56 +127,6 @@ export type ChordSegment = {
   startBeat: number;
   endBeat: number;
   chord: Chord;
-};
-
-/** Semitone offsets from the root for each supported chord quality. */
-const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
-  maj: [0, 4, 7],
-  min: [0, 3, 7],
-  dim: [0, 3, 6],
-  aug: [0, 4, 8],
-  majb5: [0, 4, 6],
-  maj7: [0, 4, 7, 11],
-  min7: [0, 3, 7, 10],
-  dom7: [0, 4, 7, 10],
-  dim7: [0, 3, 6, 9],
-  m7b5: [0, 3, 6, 10],
-  minMaj7: [0, 3, 7, 11],
-  minMaj9: [0, 3, 7, 11, 14],
-  minMaj11: [0, 3, 7, 11, 14, 17],
-  minMaj13: [0, 3, 7, 11, 14, 21],
-  aug7: [0, 4, 8, 10],
-  augMaj7: [0, 4, 8, 11],
-  '6': [0, 4, 7, 9],
-  min6: [0, 3, 7, 9],
-  '6/9': [0, 4, 7, 9, 14],
-  sus2: [0, 2, 7],
-  sus4: [0, 5, 7],
-  add9: [0, 4, 7, 14],
-  add11: [0, 4, 7, 17],
-  maj9: [0, 4, 7, 11, 14],
-  min9: [0, 3, 7, 10, 14],
-  dom9: [0, 4, 7, 10, 14],
-  '7b9': [0, 4, 7, 10, 13],
-  '7#9': [0, 4, 7, 10, 15],
-  '7#11': [0, 4, 7, 10, 18],
-  '7b13': [0, 4, 7, 10, 20],
-  '11': [0, 7, 10, 14, 17],
-  '13': [0, 4, 7, 10, 14, 21],
-  '5': [0, 7],
-  '7sus4': [0, 5, 7, 10],
-  '7b5': [0, 4, 6, 10],
-  // The altered dominant as it is voiced from a lead sheet: a dominant seventh
-  // with a raised fifth and a raised ninth. The full seven-note altered stack
-  // has no seven-letter spelling, so it is not what this symbol denotes.
-  '7alt': [0, 4, 8, 10, 15],
-  '13b9': [0, 4, 7, 10, 13, 21],
-  maj13: [0, 4, 7, 11, 14, 21],
-  'maj7#11': [0, 4, 7, 11, 18],
-  min11: [0, 3, 7, 10, 14, 17],
-  min13: [0, 3, 7, 10, 14, 21],
-  minAdd9: [0, 3, 7, 14],
-  'min6/9': [0, 3, 7, 9, 14],
 };
 
 /** Widest semitone offset a custom interval template may name: one MIDI range. */
@@ -285,6 +213,88 @@ export function makeChord(rootPc: number, quality: ChordQuality, bassPc?: number
     chord.bassPc = pitchClass(bassPc);
   }
   return chord;
+}
+
+/**
+ * Build a chord from a {@link ChordSpec}.
+ *
+ * The structural way in, for the chords a quality name cannot reach: the tones
+ * come from the spec, and `quality` is the name that fits it, or the nearest
+ * name when none does. A chord built this way is an ordinary {@link Chord} —
+ * every consumer reads its `intervals` as before, and
+ * {@link formatChordSymbol} writes the alterations back out.
+ *
+ * @param spec The chord spec; its `rootPc`/`bassPc` become the chord's.
+ * @returns The constructed chord.
+ * @throws If any part of the spec is not one the model defines.
+ *
+ * @example
+ * ```ts
+ * import { chordFromSpec } from '@libraz/libcantus';
+ * chordFromSpec({
+ *   rootPc: 0,
+ *   base: 'maj',
+ *   seventh: 'maj7',
+ *   alterations: [{ degree: 11, alter: 1 }],
+ *   additions: [],
+ *   omissions: [],
+ * });
+ * // { rootPc: 0, quality: 'maj7#11', intervals: [0, 4, 7, 11, 18] }
+ * ```
+ *
+ * @category Chords
+ */
+export function chordFromSpec(spec: ChordSpec): Chord {
+  const checked = assertChordSpec(spec);
+  const chord: Chord = {
+    rootPc: pitchClass(checked.rootPc),
+    quality: chordSpecQuality(checked),
+    intervals: chordSpecIntervals(checked),
+  };
+  if (checked.bassPc !== undefined) {
+    chord.bassPc = pitchClass(checked.bassPc);
+  }
+  return chord;
+}
+
+/**
+ * Read a chord structurally: which base, seventh, alterations and omissions it
+ * is made of.
+ *
+ * The reading comes from the tones themselves, so it describes a chord whatever
+ * built it — a parsed symbol, a detected pitch set, a span carrying a template
+ * no name covers. Only a template with no structural reading at all falls back
+ * to the one its `quality` names.
+ *
+ * @param chord The chord to read.
+ * @returns The spec, carrying the chord's own root and slash bass.
+ * @throws If the chord's template has no reading and its quality is unknown.
+ *
+ * @example
+ * ```ts
+ * import { chordSpecOf, parseChordSymbol } from '@libraz/libcantus';
+ * chordSpecOf(parseChordSymbol('C7(b9,#11)')).alterations;
+ * // [{ degree: 9, alter: -1 }, { degree: 11, alter: 1 }]
+ * ```
+ *
+ * @category Chords
+ */
+export function chordSpecOf(chord: Chord): ChordSpec {
+  assertFiniteNumber(chord.rootPc, 'chord rootPc');
+  const rootPc = pitchClass(chord.rootPc);
+  const bassPc = chord.bassPc === undefined ? undefined : pitchClass(chord.bassPc);
+  // A chord with no tones at all says nothing about its own structure, so the
+  // name it carries is the only thing left to read it by.
+  const intervals = chord.intervals ?? [];
+  const read = intervals.length === 0 ? undefined : chordSpecFromIntervals(intervals);
+  if (read === undefined) {
+    return chordSpecForQuality(chord.quality, rootPc, bassPc);
+  }
+  read.rootPc = rootPc;
+  if (bassPc !== undefined) {
+    read.bassPc = bassPc;
+  }
+  return read;
 }
 
 /**

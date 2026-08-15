@@ -16,6 +16,7 @@ export type {
   KeyProfileName,
   KeyProfilePair,
   KeyVariant,
+  ModalScaleName,
 } from '../analyze/detect/index.js';
 // The classes' own signatures name these plain types; without them a consumer
 // importing only `@libraz/libcantus/model` cannot declare a variable, write a
@@ -26,7 +27,15 @@ export type {
   ChordAnalysis,
   ChordToRomanOptions,
   HarmonicFunction,
+  RejectedCandidate,
 } from '../analyze/functional/index.js';
+export type {
+  BudgetExceededError,
+  InvalidInputError,
+  LibcantusError,
+  NoSolutionError,
+  ParseResult,
+} from '../core/errors/index.js';
 export type {
   IntervalLike,
   IntervalQualityLabel,

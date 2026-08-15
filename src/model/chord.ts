@@ -12,7 +12,7 @@ import {
   isBorrowedChord,
   secondaryDominantOf,
 } from '../analyze/functional/index.js';
-import { InvalidInputError } from '../core/errors/index.js';
+import { InvalidInputError, type ParseResult } from '../core/errors/index.js';
 import type {
   IntervalLike,
   Note as NoteData,
@@ -47,6 +47,7 @@ import {
   type ChordSymbolOptions,
   formatChordSymbol,
   parseChordSymbol,
+  tryParseChordSymbol,
 } from '../theory/symbol/index.js';
 import {
   type StyledVoicingOptions,
@@ -317,6 +318,31 @@ export class Chord {
    */
   static parse(symbol: string, opts?: NoteNameOptions): Chord {
     return new Chord(parseChordSymbol(symbol, opts));
+  }
+
+  /**
+   * Parse a lead-sheet chord symbol, reporting failure instead of throwing it.
+   *
+   * The same reading as {@link Chord.parse}, for the callers where a symbol
+   * that does not parse yet is the normal state of the input rather than a
+   * fault: a chord field can show what is wrong with what has been typed so far
+   * without a `try` around every keystroke.
+   *
+   * @param symbol The chord symbol.
+   * @param opts `system` reads the root and bass in that notation system
+   *   instead of English.
+   * @returns The chord (without key context), or the error explaining why the
+   *   text is not one.
+   * @example
+   * ```ts
+   * import { Chord } from '@libraz/libcantus';
+   * const result = Chord.tryParse('Cmaj7(#11)');
+   * result.ok ? result.value.symbol() : result.error.message; // 'Cmaj7#11'
+   * ```
+   */
+  static tryParse(symbol: string, opts?: NoteNameOptions): ParseResult<Chord> {
+    const parsed = tryParseChordSymbol(symbol, opts);
+    return parsed.ok ? { ok: true, value: new Chord(parsed.value) } : parsed;
   }
 
   /**
