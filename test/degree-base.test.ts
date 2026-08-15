@@ -69,10 +69,10 @@ describe('scale degrees are 1-based', () => {
         .withKey(key)
         .chords.map((chord) => chord.symbol());
 
-    // Seed 42 in the dance pool selects `minor3` (vi I V IV).
+    // Seed 42 in the dance pool selects `extended5` (I V vi iii).
     expect(
       symbolsOf(generateProgression({ key: key.scale, style: 'dance', bars: 4, seed: 42 })),
-    ).toEqual(['Am', 'C', 'G', 'F']);
+    ).toEqual(['C', 'G', 'Am', 'Em']);
 
     expect(
       symbolsOf(

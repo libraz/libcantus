@@ -38,6 +38,8 @@ describe('modal interchange in C major', () => {
       borrowed: true,
       source: 'parallelMinor',
       roman: 'iv',
+      rationale: expect.any(String),
+      alternatives: [],
     });
   });
 
@@ -49,6 +51,8 @@ describe('modal interchange in C major', () => {
       borrowed: true,
       source: 'parallelMinor',
       roman: 'bVI',
+      rationale: expect.any(String),
+      alternatives: [],
     });
   });
 
@@ -60,6 +64,8 @@ describe('modal interchange in C major', () => {
       borrowed: true,
       source: 'parallelMinor',
       roman: 'bVII',
+      rationale: expect.any(String),
+      alternatives: [],
     });
   });
 
@@ -74,6 +80,8 @@ describe('modal interchange in C major', () => {
       borrowed: true,
       source: 'neapolitan',
       roman: 'bII',
+      rationale: expect.any(String),
+      alternatives: [],
     });
   });
 

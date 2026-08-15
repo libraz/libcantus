@@ -9,9 +9,12 @@ import {
   romanToChord,
   spellAugmentedSixth,
 } from '../src/analyze/functional/index.js';
+import { chordTimelineFromNotes, detectCadences } from '../src/analyze/timeline/index.js';
 import { noteToPitchClass, parseNote, spelledInterval } from '../src/core/pitch/index.js';
+import type { NoteEvent } from '../src/core/types.js';
 import { Chord, Key } from '../src/model/index.js';
 import { chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
+import { realizeFiguredBass } from '../src/theory/figured-bass/index.js';
 import { majorKey, minorKey } from '../src/theory/scale/index.js';
 import { noteNames, spellChord, spellChordFromRoot } from '../src/theory/spelling/index.js';
 
@@ -164,16 +167,25 @@ describe('augmentedSixthKind', () => {
   });
 
   it('needs the lowered submediant in the bass', () => {
-    // Without the bass the same pitch classes are an ordinary bVI7.
-    expect(augmentedSixthKind(makeChord(8, 'dom7'), cMajor)).toBeNull();
-    // With some other bass they are that chord inverted, not an augmented sixth.
+    // With some other bass the same pitch classes are that chord inverted, not
+    // an augmented sixth.
     expect(augmentedSixthKind(makeChord(8, 'dom7', 0), cMajor)).toBeNull();
+  });
+
+  it('needs the augmented sixth spelled as one', () => {
+    // Ab C Eb Gb over an Ab bass: the same pitch classes, written as the
+    // dominant seventh they stack into, which is an ordinary bVI7.
+    expect(augmentedSixthKind(makeChord(8, 'dom7', 8), cMajor)).toBeNull();
+    // The same chord naming no bass at all sounds its root lowest, so it is
+    // read the same way rather than escaping the test.
+    expect(augmentedSixthKind(makeChord(8, 'dom7'), cMajor)).toBeNull();
   });
 
   it('reads the chord from its sounding tones, not from the root it is measured from', () => {
     // The German sixth of C major, measured from its own third instead.
     const fromThird = makeChord(0, 'min', 8);
     fromThird.intervals = [0, 3, 6, 8];
+    fromThird.toneSpellings = hints('C', 'Eb', 'F#', 'Ab');
     expect(augmentedSixthKind(fromThird, cMajor)).toBe('german');
   });
 
@@ -230,6 +242,54 @@ describe('chordToRoman with augmented-sixth symbols', () => {
     expect(chordToRoman(flatSubmediantSeventh, cMajor)).toBe('bVI7');
     expect(functionOf(flatSubmediantSeventh, cMajor)).toBe('dominant');
   });
+
+  it('leaves a bVI7 standing on its own root alone', () => {
+    // Ab7 with the Ab sounding in the bass is where the two chords sound alike;
+    // its seventh is a Gb, so it is the numeral and not the symbol.
+    expect(chordToRoman(makeChord(8, 'dom7', 8), cMajor)).toBe('bVI7');
+  });
+
+  it('leaves a minor seventh the figures spelled alone', () => {
+    // `b7` over an Ab bass in C minor writes a Gb, a minor seventh above the
+    // bass — the note an augmented sixth is precisely not.
+    const chord = realizeFiguredBass(parseNote('Ab'), 'b7', cMinor);
+    expect(noteNames(spellChord(chord, parseNote('C'), cMinor))).toEqual(['Ab', 'C', 'Eb', 'Gb']);
+    expect(chordToRoman(chord, cMinor)).toBe('VI7');
+  });
+});
+
+describe('augmented sixths in analysed music', () => {
+  /** The three sixths of C major as sounding pitches, over their Ab bass. */
+  const SOUNDING = {
+    italian: [56, 60, 66],
+    french: [56, 60, 62, 66],
+    german: [56, 60, 63, 66],
+  } as const;
+
+  /** The chord held for a bar, then the dominant it resolves onto. */
+  function ontoTheDominant(pitches: readonly number[]): NoteEvent[] {
+    return [
+      ...pitches.map((pitch) => ({ pitch, startBeat: 0, durationBeat: 4 })),
+      ...[55, 59, 62, 67].map((pitch) => ({ pitch, startBeat: 4, durationBeat: 4 })),
+    ];
+  }
+
+  it.each(KINDS)('reads the %s sixth off the notes rather than as a bVI7', (kind) => {
+    const { timeline } = chordTimelineFromNotes(ontoTheDominant(SOUNDING[kind]), { key: cMajor });
+    const chord = timeline.segments[0]?.chord;
+    expect(chord).toBeDefined();
+    if (chord === undefined) return;
+    // The pitches carry no accidentals, so the analysis makes the reading and
+    // hands back the chord that keeps it: same tones, spelled as the family.
+    expect(chord).toEqual(augmentedSixthChord(kind, cMajor));
+    expect(chordToRoman(chord, cMajor)).toBe(SYMBOLS[kind]);
+    expect(augmentedSixthKind(chord, cMajor)).toBe(kind);
+  });
+
+  it('names the half cadence the analysis walks into', () => {
+    const { timeline } = chordTimelineFromNotes(ontoTheDominant(SOUNDING.german), { key: cMajor });
+    expect(detectCadences(timeline, cMajor).map((hit) => hit.cadence.type)).toEqual(['half']);
+  });
 });
 
 describe('augmented sixths as predominants', () => {
@@ -250,6 +310,8 @@ describe('augmented sixths as predominants', () => {
       borrowed: false,
       source: null,
       roman: 'Ger6',
+      rationale: expect.any(String),
+      alternatives: [],
     });
   });
 });

@@ -22,6 +22,7 @@ import {
   mod12,
   romanReference,
 } from './internal.js';
+import type { RejectedCandidate } from './rationale.js';
 
 /** Roman numeral glyphs indexed by degree number - 1. */
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'] as const;
@@ -569,21 +570,65 @@ export type ChordToRomanOptions = {
  * chordToRoman(makeChord(7, 'dom7'), majorKey(0)); // => 'V7' (G7 in C major)
  * chordToRoman(makeChord(2, 'dom7'), majorKey(0), { applied: true }); // => 'V7/V'
  * ```
+ * @see {@link explainRoman} for the same numeral with the reasoning behind it.
  * @category Functional Harmony
  */
 export function chordToRoman(chord: Chord, key: KeyScale, opts: ChordToRomanOptions = {}): string {
+  return renderRoman(chord, key, opts).roman;
+}
+
+/**
+ * Where a chord's bass ended up in the numeral.
+ *
+ * `'figured'` is an inversion a figure spells losslessly; the last two are the
+ * cases where a bass exists and the numeral cannot carry it, which is what a
+ * reader wondering where the slash chord went needs told.
+ */
+type RomanBass = 'root' | 'figured' | 'unfigurable' | 'foreign';
+
+/**
+ * How a numeral was arrived at, as the facts themselves rather than as prose.
+ *
+ * {@link chordToRoman} is called once per chord by arrangement analysis, so the
+ * rendering path carries data and leaves the phrasing to {@link explainRoman};
+ * deriving both from one pass is what keeps the explanation from drifting away
+ * from the numeral it explains.
+ */
+type RomanDerivation =
+  | { kind: 'augmentedSixth' }
+  | { kind: 'applied'; target: string }
+  | { kind: 'neapolitan' }
+  | {
+      kind: 'degree';
+      degreeNumber: number;
+      accidental: string;
+      quality: ChordQuality;
+      bass: RomanBass;
+      figure?: string;
+    };
+
+/** Render a chord as a numeral, keeping the facts that decided it. */
+function renderRoman(
+  chord: Chord,
+  key: KeyScale,
+  opts: ChordToRomanOptions,
+): { roman: string; derivation: RomanDerivation } {
   // The augmented sixths come first and unconditionally: their pitch classes
   // also spell a dominant seventh or an altered supertonic seventh, but only
   // this reading survives the bass they are standing on.
   const augmented = augmentedSixthSymbol(chord, key);
   if (augmented !== null) {
-    return augmented;
+    return { roman: augmented, derivation: { kind: 'augmentedSixth' } };
   }
   if (opts.applied === true && !isDiatonicChord(chord, key)) {
     const target = appliedTarget(chord, key);
     if (target !== null) {
       const local = chordToRoman(chord, majorKey(target.rootPc));
-      return `${local}/${numeralFor(target.degreeNumber, target.lower)}`;
+      const numeral = numeralFor(target.degreeNumber, target.lower);
+      return {
+        roman: `${local}/${numeral}`,
+        derivation: { kind: 'applied', target: numeral },
+      };
     }
   }
   const { degreeNumber, accidental: spelledAccidental } = romanSpelling(chord.rootPc, key);
@@ -601,14 +646,17 @@ export function chordToRoman(chord: Chord, key: KeyScale, opts: ChordToRomanOpti
       : spelledAccidental;
 
   let inversion = 0;
+  let bass: RomanBass = 'root';
   if (chord.bassPc !== undefined) {
     const idx = chord.intervals.findIndex((iv) => mod12(chord.rootPc + iv) === chord.bassPc);
     if (idx > 0) {
       inversion = idx;
+    } else if (idx < 0) {
+      bass = 'foreign';
     }
   }
   if (opts.neapolitan === true && inversion === 1 && isNeapolitan(chord, key)) {
-    return NEAPOLITAN_SIXTH;
+    return { roman: NEAPOLITAN_SIXTH, derivation: { kind: 'neapolitan' } };
   }
   if (inversion > 0) {
     const figure = SEVENTH_FIGURE_QUALITIES.has(chord.quality)
@@ -617,12 +665,183 @@ export function chordToRoman(chord: Chord, key: KeyScale, opts: ChordToRomanOpti
         ? TRIAD_FIGURES[inversion]
         : undefined;
     if (figure !== undefined) {
-      return `${accidental}${cased}${baseMarker(chord.quality)}${figure}`;
+      return {
+        roman: `${accidental}${cased}${baseMarker(chord.quality)}${figure}`,
+        derivation: {
+          kind: 'degree',
+          degreeNumber,
+          accidental,
+          quality: chord.quality,
+          bass: 'figured',
+          figure,
+        },
+      };
     }
     // No lossless figured-bass symbol exists — the quality is an added-tone or
     // extended chord, or the bass falls on a tension beyond the seventh — so
     // fall back to root-position rendering with the quality suffix rather than
     // emitting a figure that would re-parse as a different chord.
+    bass = 'unfigurable';
   }
-  return `${accidental}${cased}${suffix}`;
+  return {
+    roman: `${accidental}${cased}${suffix}`,
+    derivation: { kind: 'degree', degreeNumber, accidental, quality: chord.quality, bass },
+  };
+}
+
+/** Ordinal names of the seven scale degrees, indexed by degree number - 1. */
+const DEGREE_NAMES = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'] as const;
+
+/** The phrase naming where a numeral's root came from. */
+function describeDegree(degreeNumber: number, accidental: string): string {
+  const name = DEGREE_NAMES[degreeNumber - 1] ?? `${degreeNumber}th`;
+  if (accidental === '') {
+    return `the root is the ${name} degree of the key`;
+  }
+  const direction = accidental === 'b' ? 'lowered' : 'raised';
+  return `the root is chromatic, spelled as the ${name} degree ${direction} a semitone`;
+}
+
+/** The phrase naming what became of the chord's bass. */
+function describeBass(bass: RomanBass, figure: string | undefined): string {
+  switch (bass) {
+    case 'root':
+      return 'and the chord stands on its own root';
+    case 'figured':
+      return figure === undefined
+        ? 'and the bass is an inversion'
+        : `and the bass is an inversion, figured ${figure}`;
+    case 'unfigurable':
+      return 'and the bass names no lossless figure for this quality, so the numeral is written in root position';
+    case 'foreign':
+      return 'and the bass is not a chord tone, so the numeral names the upper chord alone';
+  }
+}
+
+/** Build the rationale for a rendered numeral. */
+function describeRoman(roman: string, derivation: RomanDerivation): string {
+  switch (derivation.kind) {
+    case 'augmentedSixth':
+      return `${roman}: an augmented sixth, which no numeral spells, standing on the lowered submediant`;
+    case 'applied':
+      return `${roman}: an applied chord, named in the local key its target degree ${derivation.target} makes a tonic`;
+    case 'neapolitan':
+      return `${roman}: the first-inversion Neapolitan under its figured name, the chord bII6 also spells`;
+    case 'degree':
+      return `${roman}: ${describeDegree(derivation.degreeNumber, derivation.accidental)}, the case and suffix come from the ${derivation.quality} quality, ${describeBass(derivation.bass, derivation.figure)}`;
+  }
+}
+
+/**
+ * The numerals the options turned down for this chord.
+ *
+ * Both switches of {@link ChordToRomanOptions} name a spelling the caller could
+ * have had instead, so the rival is exactly what the other setting renders —
+ * derived by rendering it rather than by describing it, so the two can never
+ * disagree. A setting that changes nothing for this chord produces no rival.
+ */
+export function romanAlternatives(
+  chord: Chord,
+  key: KeyScale,
+  opts: ChordToRomanOptions,
+): RejectedCandidate[] {
+  const emitted = chordToRoman(chord, key, opts);
+  const out: RejectedCandidate[] = [];
+  const flippedApplied = chordToRoman(chord, key, { ...opts, applied: opts.applied !== true });
+  if (flippedApplied !== emitted) {
+    out.push({
+      label: flippedApplied,
+      reason:
+        opts.applied === true
+          ? 'Naming the root against the home key is always a correct spelling; `applied` asked for the tonicizing reading instead'
+          : 'Whether a chromatic dominant is genuinely applied is a reading only the caller can make, so the root is named against the home key unless `applied` asks otherwise',
+    });
+  }
+  const flippedNeapolitan = chordToRoman(chord, key, {
+    ...opts,
+    neapolitan: opts.neapolitan !== true,
+  });
+  if (flippedNeapolitan !== emitted) {
+    out.push({
+      label: flippedNeapolitan,
+      reason:
+        'Both spellings name the same chord, so which one to write is a house-style choice `neapolitan` settles',
+    });
+  }
+  return out;
+}
+
+/**
+ * A numeral with the reasoning behind it.
+ *
+ * @category Functional Harmony
+ */
+export type RomanExplanation = {
+  /** The numeral, exactly as {@link chordToRoman} renders it. */
+  roman: string;
+  /** How the numeral was arrived at: the degree, the quality, and the bass. */
+  rationale: string;
+  /**
+   * The spellings the options turned down, empty unless
+   * {@link ExplainRomanOptions.alternatives} asked for them.
+   */
+  alternatives: RejectedCandidate[];
+};
+
+/**
+ * Options for {@link explainRoman}: {@link ChordToRomanOptions} plus the switch
+ * for the rival spellings.
+ *
+ * @category Functional Harmony
+ */
+export type ExplainRomanOptions = ChordToRomanOptions & {
+  /**
+   * Report the numerals the other option settings would have rendered, and why
+   * this one was rendered instead.
+   *
+   * Off by default: each rival costs a further rendering pass, and a caller
+   * that only wants the numeral explained should not pay for the ones it did
+   * not get.
+   *
+   * @defaultValue false
+   */
+  alternatives?: boolean;
+};
+
+/**
+ * Render a chord as a Roman numeral and say how the numeral was arrived at.
+ *
+ * The numeral is exactly what {@link chordToRoman} returns for the same
+ * arguments — this is that function with its reasoning attached, for teaching
+ * material and for any interface whose users argue with the analysis. The
+ * rationale names the degree the root was spelled as, the quality that set the
+ * numeral's case and suffix, and what became of the bass, including the two
+ * cases where a bass exists and no numeral can carry it.
+ *
+ * @param chord The chord to name.
+ * @param key The prevailing key.
+ * @param opts The rendering options of {@link chordToRoman}, plus
+ *   `alternatives` to collect the spellings they turned down.
+ * @returns The numeral, its rationale, and the rejected spellings.
+ * @example
+ * ```ts
+ * import { explainRoman, makeChord, majorKey } from '@libraz/libcantus';
+ * explainRoman(makeChord(7, 'dom7'), majorKey(0)).rationale;
+ * // 'V7: the root is the fifth degree of the key, ...'
+ * explainRoman(makeChord(2, 'dom7'), majorKey(0), { alternatives: true }).alternatives;
+ * // [{ label: 'V7/V', reason: '...' }]
+ * ```
+ * @category Functional Harmony
+ */
+export function explainRoman(
+  chord: Chord,
+  key: KeyScale,
+  opts: ExplainRomanOptions = {},
+): RomanExplanation {
+  const { roman, derivation } = renderRoman(chord, key, opts);
+  return {
+    roman,
+    rationale: describeRoman(roman, derivation),
+    alternatives: opts.alternatives === true ? romanAlternatives(chord, key, opts) : [],
+  };
 }

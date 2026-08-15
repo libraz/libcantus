@@ -21,7 +21,8 @@ import {
 import { augmentedSixthKind } from './augmented-sixth.js';
 import { type BorrowedSource, borrowedSource } from './borrowed.js';
 import { degreeRootPc, isAppliedDominantSonority, isNeapolitan, mod12 } from './internal.js';
-import { type ChordToRomanOptions, chordToRoman } from './roman.js';
+import { capitalize, type RejectedCandidate } from './rationale.js';
+import { type ChordToRomanOptions, chordToRoman, romanAlternatives } from './roman.js';
 
 /**
  * The three broad harmonic functions of tonal music.
@@ -108,21 +109,44 @@ export function isMinorKey(key: KeyScale): boolean {
  * @category Functional Harmony
  */
 export function functionOf(chord: Chord, key: KeyScale): HarmonicFunction {
+  return functionWithReason(chord, key).function;
+}
+
+/**
+ * Which of the rules in {@link functionOf} settled the function.
+ *
+ * `'degree'` is the baseline mapping from the root's offset above the tonic;
+ * the other four are the sonority-aware rules that override it, and naming
+ * which one fired is what lets the analysis say why it disagreed with the
+ * degree the chord stands on.
+ */
+type FunctionReason = 'neapolitan' | 'augmentedSixth' | 'applied' | 'flatSideMajor' | 'degree';
+
+/** The function the root's offset above the tonic maps to, before any override. */
+function degreeFunction(chord: Chord, key: KeyScale): HarmonicFunction {
+  const functions = isMinorKey(key) ? MINOR_FUNCTION_BY_OFFSET : FUNCTION_BY_OFFSET;
+  return functions[mod12(chord.rootPc - key.rootPc)] ?? 'tonic';
+}
+
+/** {@link functionOf}, keeping the rule that decided the answer. */
+function functionWithReason(
+  chord: Chord,
+  key: KeyScale,
+): { function: HarmonicFunction; reason: FunctionReason } {
   const offset = mod12(chord.rootPc - key.rootPc);
   if (isNeapolitan(chord, key)) {
-    return 'subdominant';
+    return { function: 'subdominant', reason: 'neapolitan' };
   }
   if (augmentedSixthKind(chord, key) !== null) {
-    return 'subdominant';
+    return { function: 'subdominant', reason: 'augmentedSixth' };
   }
   if (isAppliedDominant(chord, key)) {
-    return 'dominant';
+    return { function: 'dominant', reason: 'applied' };
   }
   if (!isMinorKey(key) && hasMajorThird(chord) && (offset === 8 || offset === 10)) {
-    return 'subdominant';
+    return { function: 'subdominant', reason: 'flatSideMajor' };
   }
-  const functions = isMinorKey(key) ? MINOR_FUNCTION_BY_OFFSET : FUNCTION_BY_OFFSET;
-  return functions[offset] ?? 'tonic';
+  return { function: degreeFunction(chord, key), reason: 'degree' };
 }
 
 /**
@@ -161,7 +185,108 @@ export type ChordAnalysis = {
   borrowed: boolean;
   source: BorrowedSource;
   roman: string;
+  /**
+   * Why the chord reads this way: the rule that settled its function, and where
+   * it was borrowed from when it was borrowed. Always present, in the phrasing
+   * {@link analyzeVoice} uses for a note.
+   */
+  rationale: string;
+  /**
+   * The readings that were considered and rejected, empty unless
+   * {@link AnalyzeChordOptions.alternatives} asked for them.
+   */
+  alternatives: RejectedCandidate[];
 };
+
+/**
+ * Options for {@link analyzeChord}: {@link ChordToRomanOptions} plus the switch
+ * for the rival readings.
+ *
+ * @category Functional Harmony
+ */
+export type AnalyzeChordOptions = ChordToRomanOptions & {
+  /**
+   * Report the readings this analysis turned down: the function the chord's
+   * degree alone would have carried, the tonicizing reading a dominant sonority
+   * could have had, and the numerals the other rendering options would emit.
+   *
+   * Off by default. The rationale is built from facts the analysis already
+   * established, but a rival costs work nothing else needs — a second and third
+   * numeral rendering among them — and most callers read the conclusion only.
+   *
+   * @defaultValue false
+   */
+  alternatives?: boolean;
+};
+
+/** What a rule overriding the degree table found, phrased for a rationale. */
+const FUNCTION_REASON_PHRASE: Record<Exclude<FunctionReason, 'degree'>, string> = {
+  neapolitan: 'the Neapolitan, an altered predominant on the lowered second degree',
+  augmentedSixth: 'an augmented sixth, an altered predominant resolving outward onto the dominant',
+  applied: 'an applied dominant sonority resolving onto a diatonic degree',
+  flatSideMajor: 'a major triad on the flat side, the borrowed cadence chord',
+};
+
+/** Where a borrowed chord came from, phrased for a rationale. */
+const BORROWED_SOURCE_PHRASE: Record<Exclude<BorrowedSource, null>, string> = {
+  parallelMinor: 'borrowed from the parallel minor',
+  parallelMajor: 'borrowed from the parallel major',
+  neapolitan: 'belonging to neither parallel mode',
+};
+
+/** Build the rationale for a chord's function and borrowing. */
+function describeChord(
+  fn: HarmonicFunction,
+  reason: FunctionReason,
+  roman: string,
+  source: BorrowedSource,
+): string {
+  const head =
+    reason === 'degree'
+      ? `${capitalize(fn)}: ${roman} takes the ${fn} function of its degree in the key`
+      : `${capitalize(fn)}: ${roman} is ${FUNCTION_REASON_PHRASE[reason]}`;
+  // The Neapolitan rule already says where the chord comes from; repeating the
+  // source would make the rationale name it twice.
+  return source === null || reason === 'neapolitan'
+    ? head
+    : `${head}, ${BORROWED_SOURCE_PHRASE[source]}`;
+}
+
+/** The readings of the chord's function that were considered and rejected. */
+function functionAlternatives(
+  chord: Chord,
+  key: KeyScale,
+  reason: FunctionReason,
+  accepted: HarmonicFunction,
+): RejectedCandidate[] {
+  const out: RejectedCandidate[] = [];
+  if (reason === 'degree') {
+    // The sonority could tonicize, and only its being in the key stopped it.
+    if (isAppliedDominantSonority(chord) && isDiatonic(chord, key)) {
+      out.push({
+        label: 'applied dominant',
+        reason:
+          'The chord is diatonic to the key, so it keeps the function of its degree rather than tonicizing another',
+      });
+    }
+  } else {
+    const byDegree = degreeFunction(chord, key);
+    if (byDegree !== accepted) {
+      out.push({
+        label: `${byDegree} by scale degree`,
+        reason: `The degree the root stands on reads as ${byDegree}, but the chord is ${FUNCTION_REASON_PHRASE[reason]}`,
+      });
+    }
+  }
+  if (augmentedSixthKind(chord, key) === 'german') {
+    out.push({
+      label: 'tritone substitute',
+      reason:
+        'The German sixth sounds a dominant seventh, but the lowered submediant under it fixes the reading as an augmented sixth',
+    });
+  }
+  return out;
+}
 
 /**
  * Whether every pitch class of a chord belongs to the key's scale.
@@ -216,29 +341,43 @@ function hasMajorThird(chord: Chord): boolean {
  * including the Neapolitan, which the stricter parallel-mode predicate
  * {@link isBorrowedChord} does not count.
  *
+ * The `rationale` says which of those rules settled the function, so a reader
+ * who disagrees can see what the reading rests on. `alternatives` is empty
+ * unless asked for, and then names the readings that were turned down.
+ *
  * @param chord The chord to analyze.
  * @param key The prevailing key.
- * @param opts Options used when rendering the Roman numeral.
+ * @param opts Options used when rendering the Roman numeral, plus
+ *   `alternatives` to collect the rejected readings.
  * @returns The chord analysis.
  * @example
  * ```ts
  * import { analyzeChord, makeChord, majorKey } from '@libraz/libcantus';
  * analyzeChord(makeChord(7, 'dom7'), majorKey(0));
- * // { function: 'dominant', borrowed: false, source: null, roman: 'V7' }
+ * // { function: 'dominant', borrowed: false, source: null, roman: 'V7', ... }
+ * analyzeChord(makeChord(9, 'dom7'), majorKey(0), { alternatives: true }).alternatives;
+ * // [{ label: 'tonic by scale degree', reason: '...' }, ...]
  * ```
  * @category Functional Harmony
  */
 export function analyzeChord(
   chord: Chord,
   key: KeyScale,
-  opts: ChordToRomanOptions = {},
+  opts: AnalyzeChordOptions = {},
 ): ChordAnalysis {
   const source = borrowedSource(chord, key);
+  const { function: fn, reason } = functionWithReason(chord, key);
+  const roman = chordToRoman(chord, key, opts);
   return {
-    function: functionOf(chord, key),
+    function: fn,
     borrowed: source !== null,
     source,
-    roman: chordToRoman(chord, key, opts),
+    roman,
+    rationale: describeChord(fn, reason, roman, source),
+    alternatives:
+      opts.alternatives === true
+        ? [...functionAlternatives(chord, key, reason, fn), ...romanAlternatives(chord, key, opts)]
+        : [],
   };
 }
 

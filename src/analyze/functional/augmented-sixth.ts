@@ -5,17 +5,25 @@
  * augmented sixth above it, and all three are predominants whose two outer
  * voices resolve outward onto the dominant. The family is defined by that bass
  * and that interval rather than by a stack of thirds, so a chord is recognized
- * here from the pitch classes sounding over an explicit bass rather than
- * through the Roman-numeral degree tables.
+ * here from the tones sounding over that bass rather than through the
+ * Roman-numeral degree tables.
+ *
+ * The interval is spelled, so recognition reads letters and not only pitch
+ * classes: over an Ab bass the augmented sixth is F# and the minor seventh of
+ * the bVI7 it otherwise sounds exactly like is Gb. A caller holding pitch
+ * classes alone — an analysis of a MIDI track, which names no accidentals —
+ * makes that reading with {@link augmentedSixthFromPitchClasses}, and the chord
+ * it hands back carries the spelling that decided it.
  */
 
 import type { Note, SpelledInterval } from '../../core/pitch/index.js';
-import { parseInterval, transposeByInterval } from '../../core/pitch/index.js';
+import { diatonicLetterOf, parseInterval, transposeByInterval } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import { assertOneOf } from '../../core/validation/index.js';
 import type { Chord, ChordQuality, PitchSpelling } from '../../theory/chord/index.js';
 import { chordPitchClasses, makeChord } from '../../theory/chord/index.js';
 import { spelledKeyOf } from '../../theory/scale/index.js';
+import { spellChord } from '../../theory/spelling/index.js';
 import { mod12 } from './internal.js';
 
 /**
@@ -176,21 +184,61 @@ export function augmentedSixthChord(kind: AugmentedSixthKind, key: KeyScale): Ch
   return chord;
 }
 
+/** The kind whose tones over `bass` are exactly `pcs`, or null for none. */
+function kindOfPitchClasses(pcs: ReadonlySet<number>, bass: number): AugmentedSixthKind | null {
+  for (const kind of KINDS) {
+    const tones = TONES_ABOVE_BASS[kind];
+    if (pcs.size === tones.length && tones.every((tone) => pcs.has(mod12(bass + tone)))) {
+      return kind;
+    }
+  }
+  return null;
+}
+
+/** A spelled note or hint reduced to the letter/alter pair spellings compare by. */
+function spellingId(note: Note | PitchSpelling): string {
+  return `${diatonicLetterOf(note.letter)}:${note.alter}`;
+}
+
+/**
+ * Whether a chord's own letters are the kind's.
+ *
+ * The chord is spelled the way the rest of the library spells it, which is by
+ * its tone spellings when it carries them and by stacking thirds when it does
+ * not. That is the whole test: a stack of thirds writes the top tone as a minor
+ * seventh above the bass, and only a chord that says otherwise sounds the
+ * augmented sixth the family is named for.
+ */
+function spellsAugmentedSixth(chord: Chord, kind: AugmentedSixthKind, key: KeyScale): boolean {
+  const tonic = spelledKeyOf(key).tonic;
+  const written = new Set(spellChord(chord, tonic, key).map(spellingId));
+  const tones = spellAugmentedSixth(kind, tonic).map(spellingId);
+  return written.size === tones.length && tones.every((tone) => written.has(tone));
+}
+
 /**
  * Identify a chord as one of the augmented sixths, or null when it is none.
  *
- * A chord qualifies when it sounds an explicit bass on the lowered submediant
- * of `key` and its pitch classes are exactly one of the three sets built over
- * that bass. The bass is required: without it the same pitch classes are an
- * ordinary bVI7 or an altered supertonic seventh, and which reading applies is
- * not something the pitch classes alone can settle.
+ * A chord qualifies when it sounds the lowered submediant of `key` in the bass,
+ * its pitch classes are exactly one of the three sets built over that bass, and
+ * its own letters spell the augmented sixth above it. All three are needed: the
+ * same pitch classes over the same bass are an ordinary bVI7 when the tone ten
+ * semitones above the bass is written as a minor seventh, and the letters are
+ * the only place that distinction lives.
+ *
+ * A chord naming no `bassPc` sounds its root lowest, which is how the two
+ * conventions for that field — the sounding bass always, or only a bass that
+ * differs from the root — are read alike here.
  *
  * The root the chord is measured from is not consulted, so a chord voiced or
- * rebuilt around any of its own tones still identifies.
+ * rebuilt around any of its own tones still identifies as long as it keeps its
+ * spelling.
  *
  * @param chord The chord to test.
  * @param key The prevailing key.
  * @returns The kind of augmented sixth, or null.
+ * @see {@link augmentedSixthFromPitchClasses} to make the reading from pitch
+ *   classes that carry no spelling at all.
  * @example
  * ```ts
  * import { augmentedSixthKind, majorKey, romanToChord } from '@libraz/libcantus';
@@ -199,22 +247,48 @@ export function augmentedSixthChord(kind: AugmentedSixthKind, key: KeyScale): Ch
  * @category Functional Harmony
  */
 export function augmentedSixthKind(chord: Chord, key: KeyScale): AugmentedSixthKind | null {
-  const bassPc = chord.bassPc;
-  if (bassPc === undefined) {
+  const bass = bassPcOf(key);
+  if (mod12(chord.bassPc ?? chord.rootPc) !== bass) {
     return null;
   }
+  const kind = kindOfPitchClasses(new Set(chordPitchClasses(chord)), bass);
+  if (kind === null || !spellsAugmentedSixth(chord, kind, key)) {
+    return null;
+  }
+  return kind;
+}
+
+/**
+ * Read a set of sounding pitch classes over a sounding bass as an augmented
+ * sixth, or null when they are none.
+ *
+ * The reading a caller holding no spelling has to make for itself: pitch
+ * classes name no accidentals, so nothing downstream can tell the German sixth
+ * from the bVI7 it sounds like once the letters are gone. The chord returned is
+ * the one {@link augmentedSixthChord} builds, spelling and all, so it keeps
+ * identifying as an augmented sixth everywhere it travels.
+ *
+ * Not every b6-1-b3-#4 over a b6 bass is an augmented sixth, and this cannot
+ * know which one is: it answers what the tones would spell, and the caller
+ * decides whether that reading is the one the music supports.
+ *
+ * @param pcs The sounding pitch classes; duplicates and unreduced values are
+ *   fine.
+ * @param bassPc The pitch class sounding in the bass.
+ * @param key The prevailing key.
+ * @returns The augmented-sixth chord, or null.
+ */
+export function augmentedSixthFromPitchClasses(
+  pcs: readonly number[],
+  bassPc: number,
+  key: KeyScale,
+): Chord | null {
   const bass = bassPcOf(key);
   if (mod12(bassPc) !== bass) {
     return null;
   }
-  const pcs = new Set(chordPitchClasses(chord));
-  for (const kind of KINDS) {
-    const tones = TONES_ABOVE_BASS[kind];
-    if (pcs.size === tones.length && tones.every((tone) => pcs.has(mod12(bass + tone)))) {
-      return kind;
-    }
-  }
-  return null;
+  const kind = kindOfPitchClasses(new Set(pcs.map(mod12)), bass);
+  return kind === null ? null : augmentedSixthChord(kind, key);
 }
 
 /**

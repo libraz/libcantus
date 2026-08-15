@@ -11,6 +11,7 @@ import type { Chord, ChordToneRole } from '../../theory/chord/index.js';
 import { chordToneRole } from '../../theory/chord/index.js';
 import { isMinorKey } from './function.js';
 import { mod12 } from './internal.js';
+import type { RejectedCandidate } from './rationale.js';
 
 /** Whether a chord carries a major third above its root. */
 function hasMajorThird(chord: Chord): boolean {
@@ -108,6 +109,21 @@ export type CadenceResult = {
    * cadential weight is withheld even though the type still holds.
    */
   evaded: boolean;
+  /**
+   * Why the pair reads this way: the motion the type rests on, what graded an
+   * authentic cadence, and what a null type failed to be. Always present, in
+   * the phrasing {@link analyzeVoice} uses for a note.
+   */
+  rationale: string;
+  /**
+   * The cadences that were considered and rejected, empty unless
+   * {@link DetectCadenceOptions.alternatives} asked for them.
+   *
+   * These are the near misses — the readings a condition or two away from
+   * holding — rather than every type that did not fire, which for most pairs
+   * would be all of them.
+   */
+  alternatives: RejectedCandidate[];
 };
 
 /**
@@ -126,6 +142,17 @@ export type DetectCadenceOptions = {
    * perfect authentic cadence cannot be told from an imperfect one.
    */
   voicing?: [number[], number[]];
+  /**
+   * Report the cadences this pair came close to forming and why each was
+   * turned down.
+   *
+   * Off by default: the rationale is built from facts the classification
+   * already established, while a rival has to be phrased against conditions
+   * that did not fire, and most callers read the type only.
+   *
+   * @defaultValue false
+   */
+  alternatives?: boolean;
 };
 
 /**
@@ -206,6 +233,131 @@ function authenticStrength(
 }
 
 /**
+ * The facts a rationale and its rejected rivals are phrased from: the reading
+ * that was reached, plus the conditions the rules were testing when they did.
+ */
+type CadenceFacts = {
+  type: CadenceResult['type'];
+  strength: CadenceResult['strength'];
+  rootPosition: boolean;
+  evaded: boolean;
+  /** The approach is a leading-tone chord standing in for the dominant. */
+  leadingTone: boolean;
+  fromOffset: number;
+  toOffset: number;
+  minor: boolean;
+  /** The arrival stands on the fifth degree, whatever its third. */
+  onFifthDegree: boolean;
+};
+
+/** Which of the three conditions of a perfect authentic cadence went unmet. */
+function imperfectReason(facts: CadenceFacts): string {
+  if (facts.leadingTone) {
+    return 'the dominant root never sounds under the leading-tone chord';
+  }
+  if (!facts.rootPosition) {
+    return 'a chord stands on something other than its own root';
+  }
+  return 'the soprano does not land on the tonic';
+}
+
+/** The rationale for a pair that forms no cadence at all. */
+function describeNonCadence(facts: CadenceFacts): string {
+  if (facts.fromOffset === facts.toOffset) {
+    return 'No cadence: the harmony repeats, so there is no root motion to cadence with';
+  }
+  if (facts.toOffset === 0) {
+    return 'No cadence: the tonic is approached by none of the chords that cadence onto it';
+  }
+  if (facts.onFifthDegree) {
+    return 'No cadence: the arrival stands on the fifth degree but sounds no major third, so it is not the dominant a half cadence rests on';
+  }
+  return 'No cadence: the motion arrives on neither the tonic nor the dominant';
+}
+
+/** Build the rationale for a classified pair. */
+function describeCadence(facts: CadenceFacts): string {
+  let text: string;
+  switch (facts.type) {
+    case 'authentic': {
+      const approach = facts.leadingTone ? 'leading-tone chord' : 'dominant';
+      const head = `Authentic cadence: the ${approach} resolves onto the tonic`;
+      text =
+        facts.strength === 'perfect'
+          ? `${head}, perfect with both chords on their roots and the tonic in the soprano`
+          : facts.strength === 'imperfect'
+            ? `${head}, imperfect because ${imperfectReason(facts)}`
+            : `${head}; no voicing names the soprano, so it is graded neither perfect nor imperfect`;
+      break;
+    }
+    case 'plagal':
+      text = 'Plagal cadence: the subdominant falls onto the tonic';
+      break;
+    case 'modal':
+      text =
+        'Modal cadence: the major triad on the subtonic rises onto the tonic with no leading tone';
+      break;
+    case 'deceptive':
+      text = 'Deceptive cadence: the dominant resolves onto the submediant in place of the tonic';
+      break;
+    case 'phrygian':
+      text =
+        'Phrygian cadence: the bass falls a semitone from the lowered submediant onto the dominant, and the motion rests there';
+      break;
+    case 'half':
+      text = 'Half cadence: the motion comes to rest on the dominant';
+      break;
+    case null:
+      text = describeNonCadence(facts);
+      break;
+  }
+  return facts.evaded
+    ? `${text}; the tonic arrives inverted, so the arrival the ear was promised is withheld`
+    : text;
+}
+
+/** The cadences the pair came close to forming, and why each was turned down. */
+function cadenceAlternatives(facts: CadenceFacts): RejectedCandidate[] {
+  const out: RejectedCandidate[] = [];
+  if (facts.type === 'deceptive') {
+    out.push({
+      label: 'authentic',
+      reason: 'The dominant was prepared, but the arrival is the submediant rather than the tonic',
+    });
+  } else if (facts.type !== 'authentic' && facts.toOffset === 0) {
+    out.push({
+      label: 'authentic',
+      reason:
+        'The arrival is the tonic, but the chord before it is neither the dominant nor a leading-tone chord',
+    });
+  }
+  if (facts.type === 'authentic' && facts.strength !== 'perfect') {
+    out.push({
+      label: 'perfect authentic',
+      reason:
+        facts.strength === null
+          ? 'The chords meet every condition a voicing can be judged without, but no voicing names the soprano'
+          : `The cadence is authentic, but ${imperfectReason(facts)}`,
+    });
+  }
+  if (facts.type === 'half' && facts.minor && facts.fromOffset === 5) {
+    out.push({
+      label: 'phrygian',
+      reason:
+        'The dominant is approached from the subdominant, but the bass does not fall a semitone from the lowered submediant onto it',
+    });
+  }
+  if (facts.type === null && facts.onFifthDegree && facts.fromOffset !== facts.toOffset) {
+    out.push({
+      label: 'half',
+      reason:
+        'The arrival stands on the fifth degree, but a half cadence rests on a major dominant',
+    });
+  }
+  return out;
+}
+
+/**
  * Classify the cadence formed by moving from one chord to the next.
  *
  * - authentic: V (dominant a fifth above the tonic) to I
@@ -227,16 +379,21 @@ function authenticStrength(
  * soprano, so without one the grade is null — the pair could still be either,
  * and reporting perfect would be a guess.
  *
+ * The `rationale` says which motion the reading rests on, including for a pair
+ * that cadences not at all; `alternatives` is empty unless asked for, and then
+ * names the cadences the pair came close to forming.
+ *
  * @param from The penultimate chord.
  * @param to The final chord.
  * @param key The prevailing key.
- * @param opts Voice-leading detail; see {@link DetectCadenceOptions}.
+ * @param opts Voice-leading detail and whether to collect the rejected
+ *   readings; see {@link DetectCadenceOptions}.
  * @returns The cadence, its strength, and the facts behind them.
  * @example
  * ```ts
  * import { detectCadence, makeChord, majorKey } from '@libraz/libcantus';
  * detectCadence(makeChord(7, 'maj'), makeChord(0, 'maj'), majorKey(0));
- * // { type: 'authentic', strength: null, rootPosition: true, evaded: false }
+ * // { type: 'authentic', strength: null, rootPosition: true, evaded: false, ... }
  * detectCadence(makeChord(7, 'maj'), makeChord(0, 'maj'), majorKey(0), {
  *   voicing: [[55, 62, 71], [48, 64, 72]],
  * });
@@ -260,21 +417,30 @@ export function detectCadence(
   const soprano = toOuter.soprano === undefined ? null : chordToneRole(toOuter.soprano, to);
 
   const type = cadenceType(from, to, key, fromBassPc, toBassPc);
-  const result: CadenceResult = {
+  const leadingTone = isLeadingToneOf(from, key);
+  const facts: CadenceFacts = {
     type,
     strength:
       type === 'authentic'
-        ? authenticStrength(
-            isLeadingToneOf(from, key),
-            rootPosition,
-            toOuter.soprano !== undefined,
-            soprano,
-          )
+        ? authenticStrength(leadingTone, rootPosition, toOuter.soprano !== undefined, soprano)
         : null,
     rootPosition,
     // The dominant resolved, but onto an inverted tonic: the arrival the ear was
     // promised is the one it does not get.
     evaded: type === 'authentic' && !toRootPosition,
+    leadingTone,
+    fromOffset: mod12(from.rootPc - key.rootPc),
+    toOffset: mod12(to.rootPc - key.rootPc),
+    minor: isMinorKey(key),
+    onFifthDegree: mod12(to.rootPc - key.rootPc) === 7,
+  };
+  const result: CadenceResult = {
+    type: facts.type,
+    strength: facts.strength,
+    rootPosition: facts.rootPosition,
+    evaded: facts.evaded,
+    rationale: describeCadence(facts),
+    alternatives: opts.alternatives === true ? cadenceAlternatives(facts) : [],
   };
   if (soprano !== null) {
     result.soprano = soprano;

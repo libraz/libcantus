@@ -21,6 +21,8 @@ describe('authentic cadence strength', () => {
       soprano: 'root',
       rootPosition: true,
       evaded: false,
+      rationale: expect.any(String),
+      alternatives: [],
     });
   });
 
@@ -44,6 +46,8 @@ describe('authentic cadence strength', () => {
       strength: null,
       rootPosition: true,
       evaded: false,
+      rationale: expect.any(String),
+      alternatives: [],
     });
     expect(result.soprano).toBeUndefined();
   });
@@ -155,6 +159,8 @@ describe('non-cadences', () => {
       strength: null,
       rootPosition: true,
       evaded: false,
+      rationale: expect.any(String),
+      alternatives: [],
     });
   });
 

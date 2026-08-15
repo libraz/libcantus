@@ -17,7 +17,7 @@ export type { BorrowedSource } from './borrowed.js';
 export { borrowedSource, isBorrowedChord } from './borrowed.js';
 export type { CadenceResult, DetectCadenceOptions } from './cadence.js';
 export { detectCadence } from './cadence.js';
-export type { ChordAnalysis, HarmonicFunction } from './function.js';
+export type { AnalyzeChordOptions, ChordAnalysis, HarmonicFunction } from './function.js';
 export {
   analyzeChord,
   functionOf,
@@ -29,5 +29,6 @@ export {
 } from './function.js';
 export type { PivotChord } from './pivot.js';
 export { pivotChords } from './pivot.js';
-export type { ChordToRomanOptions } from './roman.js';
-export { chordToRoman, romanToChord } from './roman.js';
+export type { RejectedCandidate } from './rationale.js';
+export type { ChordToRomanOptions, ExplainRomanOptions, RomanExplanation } from './roman.js';
+export { chordToRoman, explainRoman, romanToChord } from './roman.js';
