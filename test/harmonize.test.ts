@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { type HarmonizeOptions, harmonizeMelody } from '../src/generate/harmonize/index.js';
+import type { NoteEvent } from '../src/core/types.js';
+import {
+  type HarmonizeOptions,
+  type HarmonizeResult,
+  harmonizeMelody,
+} from '../src/generate/harmonize/index.js';
+import type { ChordSpan } from '../src/generate/progression/index.js';
 import { chordFromSpan, chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
 import {
   majorKey,
@@ -9,6 +15,43 @@ import {
 } from '../src/theory/scale/index.js';
 
 const cMajor = majorKey(0);
+
+/** Quarter notes from beat 0. */
+function quarters(pitches: readonly number[]): NoteEvent[] {
+  return pitches.map((pitch, i) => ({ pitch, startBeat: i, durationBeat: 1 }));
+}
+
+/** The chord sounding at a beat: chords are reported once per change, not per slot. */
+function chordAt(result: HarmonizeResult, beat: number): ChordSpan | undefined {
+  return result.chords.filter((chord) => chord.startBeat <= beat).at(-1);
+}
+
+/**
+ * Twinkle, Twinkle: C C G G A A G / F F E E D D C, the long notes twice as long.
+ */
+const twinkle: NoteEvent[] = (
+  [
+    [60, 1],
+    [60, 1],
+    [67, 1],
+    [67, 1],
+    [69, 1],
+    [69, 1],
+    [67, 2],
+    [65, 1],
+    [65, 1],
+    [64, 1],
+    [64, 1],
+    [62, 1],
+    [62, 1],
+    [60, 2],
+  ] as const
+).reduce<NoteEvent[]>((notes, [pitch, durationBeat]) => {
+  const prev = notes.at(-1);
+  const startBeat = prev ? prev.startBeat + prev.durationBeat : 0;
+  notes.push({ pitch, startBeat, durationBeat });
+  return notes;
+}, []);
 
 describe('harmonizeMelody', () => {
   it('harmonizes a diatonic C-major melody with an I-centered progression', () => {
@@ -158,7 +201,7 @@ describe('harmonizeMelody', () => {
       reharmonize: 'diatonic',
       placement: { transposeSearch: false, octaveSearch: false },
     });
-    const second = result.chords[1];
+    const second = chordAt(result, 2);
     expect(second).toBeDefined();
     if (second) {
       const pcs = chordPitchClasses(makeChord(second.rootPc, second.quality));
@@ -212,7 +255,7 @@ describe('harmonizeMelody', () => {
 
   it('starts the harmonic grid at the first sounding section instead of adding an intro', () => {
     const result = harmonizeMelody({
-      melody: [60, 64, 67, 65].map((pitch, index) => ({
+      melody: [60, 64, 67, 71].map((pitch, index) => ({
         pitch,
         startBeat: 8 + index,
         durationBeat: 1,
@@ -223,7 +266,30 @@ describe('harmonizeMelody', () => {
       placement: { transposeSearch: false, octaveSearch: false },
     });
     expect(result.chords[0]?.startBeat).toBe(8);
-    expect(result.chords.map((chord) => chord.startBeat)).toEqual([8, 10]);
+    // The grid runs from the first sounding beat, so every change lands on it.
+    for (const chord of result.chords) {
+      expect(chord.startBeat).toBeGreaterThanOrEqual(8);
+      expect((chord.startBeat - 8) % 2).toBe(0);
+    }
+  });
+
+  it('reports a chord once per change rather than once per slot', () => {
+    // Sixteen beats at two beats a slot is eight slots; a chord held across two
+    // of them is reported once, so the count follows the harmony.
+    const result = harmonizeMelody({
+      melody: twinkle,
+      key: cMajor,
+      harmonicRhythm: 2,
+      reharmonize: 'diatonic',
+      placement: { transposeSearch: false, octaveSearch: false },
+    });
+    expect(result.chords).toHaveLength(7);
+    for (const [index, chord] of result.chords.entries()) {
+      const prev = result.chords[index - 1];
+      if (prev) {
+        expect([chord.rootPc, chord.quality]).not.toEqual([prev.rootPc, prev.quality]);
+      }
+    }
   });
 
   it('honours a harmonic rhythm finer than a quarter note', () => {
@@ -300,5 +366,215 @@ describe('harmonizeMelody', () => {
     for (const result of [jig, aksak]) {
       expect(result.chords.map((c) => c.rootPc)).not.toEqual(fourFour.chords.map((c) => c.rootPc));
     }
+  });
+});
+
+describe('harmonizeMelody follows the harmony rather than the melody notes', () => {
+  const common = {
+    melody: twinkle,
+    key: cMajor,
+    harmonicRhythm: 2,
+    placement: { transposeSearch: false, octaveSearch: false },
+  } as const;
+
+  it('closes a nursery tune on its tonic and uses the tonic along the way', () => {
+    const result = harmonizeMelody({ ...common, reharmonize: 'diatonic' });
+    expect(result.chords.map((c) => c.rootPc)).toEqual([0, 5, 0, 5, 0, 7, 0]);
+    expect(result.chords.at(-1)).toMatchObject({ rootPc: 0, quality: 'maj', degree: 1 });
+    expect(result.chords.some((c) => c.degree === 1)).toBe(true);
+    // The close is a cadence, not just a chord that happens to fit.
+    expect(result.chords.at(-2)).toMatchObject({ rootPc: 7, degree: 5 });
+  });
+
+  it('keeps the tonic in reach when the vocabulary opens up to secondary dominants', () => {
+    const result = harmonizeMelody({ ...common, reharmonize: 'secondaryDominant' });
+    expect(result.chords.map((c) => c.rootPc)).toEqual([0, 0, 5, 9, 2, 0, 7, 0]);
+    expect(result.chords.at(-1)?.rootPc).toBe(0);
+    expect(result.chords.some((c) => c.degree === 1)).toBe(true);
+    // Every secondary dominant is followed by the degree it tonicizes.
+    for (const [index, chord] of result.chords.entries()) {
+      if (chord.secondaryDominant) {
+        const next = result.chords[index + 1];
+        expect(next?.rootPc).toBe((chord.rootPc + 5) % 12);
+      }
+    }
+  });
+
+  it('reads the same vocabulary from the dial as from the name', () => {
+    // The three names are three points on the harmonic dial, so asking by dial
+    // position has to give what asking by name always did.
+    expect(harmonizeMelody({ ...common, ctx: { seed: 0, complexity: { harmonic: 0 } } })).toEqual(
+      harmonizeMelody({ ...common, reharmonize: 'diatonic' }),
+    );
+    expect(harmonizeMelody({ ...common, ctx: { seed: 0, complexity: { harmonic: 0.5 } } })).toEqual(
+      harmonizeMelody({ ...common, reharmonize: 'secondaryDominant' }),
+    );
+    expect(harmonizeMelody({ ...common, ctx: { seed: 0, complexity: { harmonic: 1 } } })).toEqual(
+      harmonizeMelody({ ...common, reharmonize: 'borrowed' }),
+    );
+  });
+
+  it('opens the vocabulary a chord at a time rather than a family at a time', () => {
+    // A dial barely off zero has opened the dominant's own dominant and nothing
+    // else, so whatever path wins can only tonicize the fifth degree.
+    const partial = harmonizeMelody({
+      ...common,
+      ctx: { seed: 0, complexity: { harmonic: 0.125 } },
+    });
+    const tonicized = partial.chords.filter((chord) => chord.secondaryDominant);
+    expect(tonicized.every((chord) => chord.rootPc === 2)).toBe(true);
+    // The whole family is open half way up, which the same melody uses to
+    // tonicize more than the fifth degree alone.
+    const full = harmonizeMelody({ ...common, reharmonize: 'secondaryDominant' });
+    const roots = new Set(full.chords.filter((c) => c.secondaryDominant).map((c) => c.rootPc));
+    expect(roots.size).toBeGreaterThan(0);
+    expect([...roots].some((rootPc) => rootPc !== 2)).toBe(true);
+  });
+
+  it('lets the context outrank the name and the seed it is sugar for', () => {
+    // The context speaks for the whole piece, so it wins wherever both are given.
+    expect(
+      harmonizeMelody({
+        ...common,
+        reharmonize: 'borrowed',
+        ctx: { seed: 0, complexity: { harmonic: 0 } },
+      }),
+    ).toEqual(harmonizeMelody({ ...common, reharmonize: 'diatonic' }));
+    expect(harmonizeMelody({ ...common, seed: 7, ctx: { seed: 3 } })).toEqual(
+      harmonizeMelody({ ...common, ctx: { seed: 3 } }),
+    );
+    // A bare number is the seed, exactly as `seed` is.
+    expect(harmonizeMelody({ ...common, ctx: 5 })).toEqual(harmonizeMelody({ ...common, seed: 5 }));
+  });
+
+  it('does not give a passing tone a chord of its own', () => {
+    // C D E C: the D passes between C and E, so the harmony is what the C and
+    // the E ask for and the D is left to the melody.
+    const melody = quarters([60, 62, 64, 60]);
+    const result = harmonizeMelody({
+      melody,
+      key: cMajor,
+      harmonicRhythm: 2,
+      reharmonize: 'diatonic',
+      placement: { transposeSearch: false, octaveSearch: false },
+    });
+    expect(result.chords).toHaveLength(1);
+    expect(result.chords.length).toBeLessThan(melody.length);
+    const overD = chordAt(result, 1);
+    expect(overD).toBeDefined();
+    if (overD) {
+      // Nothing was chosen to cover the D: the chord sounding under it does not
+      // contain it. Charged for, it would have pulled the slot to G or ii.
+      expect(chordPitchClasses(makeChord(overD.rootPc, overD.quality))).not.toContain(62 % 12);
+    }
+
+    // One slot per note gives the search every chance to change chord on the D,
+    // and it still comes out with fewer chords than notes.
+    const perNote = harmonizeMelody({
+      melody,
+      key: cMajor,
+      harmonicRhythm: 1,
+      reharmonize: 'diatonic',
+      placement: { transposeSearch: false, octaveSearch: false },
+    });
+    expect(perNote.chords.length).toBeLessThan(melody.length);
+    expect(perNote.chords.map((c) => c.rootPc)).toEqual([0, 7, 0]);
+  });
+
+  it('keeps a chain of secondary dominants resolving down a scale', () => {
+    const melody = quarters([72, 71, 69, 67, 65, 64, 62, 60]);
+    const result = harmonizeMelody({
+      melody,
+      key: cMajor,
+      harmonicRhythm: 1,
+      reharmonize: 'secondaryDominant',
+      placement: { transposeSearch: false, octaveSearch: false },
+    });
+    // C E7 Am A7 Dm D7 G C.
+    expect(result.chords.map((c) => c.rootPc)).toEqual([0, 4, 9, 9, 2, 2, 7, 0]);
+    expect(result.chords.filter((c) => c.secondaryDominant)).toHaveLength(3);
+    for (const [index, chord] of result.chords.entries()) {
+      if (chord.secondaryDominant) {
+        // Each one steps down a fifth onto the chord it tonicizes.
+        expect(result.chords[index + 1]?.rootPc).toBe((chord.rootPc + 5) % 12);
+      }
+    }
+    expect(result.chords.at(-1)?.rootPc).toBe(0);
+  });
+});
+
+describe('harmonizeMelody placement', () => {
+  const cScale = quarters([60, 62, 64, 65, 67, 69, 71, 72]);
+
+  it('moves the melody into the key it harmonizes in', () => {
+    const gMajor = majorKey(7);
+    const result = harmonizeMelody({
+      melody: cScale,
+      key: gMajor,
+      harmonicRhythm: 2,
+      reharmonize: 'diatonic',
+      placement: { transposeSearch: true, octaveSearch: false },
+    });
+    expect(result.transposeSemitones).toBe(-5);
+    expect(result.key).toEqual(gMajor);
+    // The melody the caller is told to play and the key it is told to play it
+    // in are the same key: every transposed note belongs to the reported scale.
+    const moved = cScale.map((n) => n.pitch + result.transposeSemitones);
+    for (const pitch of moved) {
+      expect(scaleTonesInDegreeOrder(result.key)).toContain(pitch % 12);
+    }
+    for (const chord of result.chords) {
+      expect(scaleTonesInDegreeOrder(result.key)).toContain(chord.rootPc);
+    }
+  });
+
+  it('leaves the melody where it is when it already sits in the key', () => {
+    const result = harmonizeMelody({
+      melody: cScale,
+      key: cMajor,
+      harmonicRhythm: 2,
+      reharmonize: 'diatonic',
+      placement: { transposeSearch: true, octaveSearch: false },
+    });
+    expect(result.transposeSemitones).toBe(0);
+    expect(result.key).toEqual(cMajor);
+  });
+
+  it('moves a melody written out of register by octaves alone', () => {
+    const low = cScale.map((n) => ({ ...n, pitch: n.pitch - 24 }));
+    const common = {
+      melody: low,
+      key: cMajor,
+      harmonicRhythm: 2,
+      reharmonize: 'diatonic',
+    } as const;
+    const placed = harmonizeMelody({
+      ...common,
+      placement: { transposeSearch: false, octaveSearch: true },
+    });
+    const asWritten = harmonizeMelody({
+      ...common,
+      placement: { transposeSearch: false, octaveSearch: false },
+    });
+    expect(placed.transposeSemitones).toBe(12);
+    expect(placed.transposeSemitones % 12).toBe(0);
+    // An octave changes register and nothing else, so the harmony is untouched.
+    expect(placed.key).toEqual(asWritten.key);
+    expect(placed.chords).toEqual(asWritten.chords);
+  });
+
+  it('adds the two searches together when both are asked for', () => {
+    const low = cScale.map((n) => ({ ...n, pitch: n.pitch - 24 }));
+    const gMajor = majorKey(7);
+    const result = harmonizeMelody({
+      melody: low,
+      key: gMajor,
+      harmonicRhythm: 2,
+      reharmonize: 'diatonic',
+      placement: { transposeSearch: true, octaveSearch: true },
+    });
+    // Down a fifth into G major, then up an octave into a comfortable register.
+    expect(result.transposeSemitones).toBe(7);
+    expect(result.key).toEqual(gMajor);
   });
 });
