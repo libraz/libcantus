@@ -21,5 +21,7 @@ export {
   secondaryDominant,
   secondaryDominantOf,
 } from './function.js';
+export type { PivotChord } from './pivot.js';
+export { pivotChords } from './pivot.js';
 export type { ChordToRomanOptions } from './roman.js';
 export { chordToRoman, romanToChord } from './roman.js';
