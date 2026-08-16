@@ -1,7 +1,7 @@
 import { InvalidInputError } from '../core/errors/index.js';
 import type { InstrumentProfile } from '../core/instrument/profile.js';
 import type { MeterLike, MeterMap, TimeSignature } from '../core/meter/index.js';
-import { beatsPerBar, meterAt, resolveMeters } from '../core/meter/index.js';
+import { beatsPerBar, meterAt, resolveMeters, toMeterData } from '../core/meter/index.js';
 import type { KeyScale } from '../core/types.js';
 import { assertFiniteNumber } from '../core/validation/index.js';
 import type { BassLineOptions, BassSegment } from '../generate/bass/index.js';
@@ -30,7 +30,7 @@ import { Timeline } from './timeline.js';
 export type ComposerOptions = {
   /** The key the parts are written in. */
   key?: KeyLike;
-  /** The meter, as one time signature or a map of changes. */
+  /** The meter, as one time signature — `'6/8'` or its data — or a map of changes. */
   meters?: MeterLike;
   /** Tempo in quarter-note beats per minute. */
   bpm?: number;
@@ -107,9 +107,10 @@ function metersFrom(meters: MeterLike | undefined): MeterMap {
   if (meters === undefined) {
     return resolveMeters({}, 'composer meters');
   }
-  return Array.isArray(meters)
-    ? resolveMeters({ meters }, 'composer meters')
-    : resolveMeters({ ts: meters }, 'composer meters');
+  const meter = toMeterData(meters, 'composer meters');
+  return Array.isArray(meter)
+    ? resolveMeters({ meters: meter }, 'composer meters')
+    : resolveMeters({ ts: meter }, 'composer meters');
 }
 
 /** A copy of the dials, carrying only the ones the caller named. */

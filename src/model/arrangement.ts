@@ -11,7 +11,8 @@ import { createArrangementSession, tensionCurveFrom } from '../analyze/arrange/i
 import type { KeyRegion } from '../analyze/keys/index.js';
 import type { ChordTimeline } from '../analyze/timeline/index.js';
 import { InvalidInputError } from '../core/errors/index.js';
-import { resolveMeters } from '../core/meter/index.js';
+import type { MeterLike, MeterMap } from '../core/meter/index.js';
+import { resolveMeters, toMeterData } from '../core/meter/index.js';
 import type { NoteEvent } from '../core/types.js';
 import {
   assertInteger,
@@ -49,9 +50,15 @@ export type ArrangementSettings = Omit<ArrangementOptions, 'timeline'> & {
  * named any way the library names one and the harmony given as the timeline
  * the analysis functions take.
  */
-export type ArrangementSetup = Omit<ArrangementSettings, 'key' | 'timeline'> & {
+export type ArrangementSetup = Omit<ArrangementSettings, 'key' | 'meters' | 'timeline'> & {
   /** The key the tracks are read in, when it is already known. */
   key?: KeyLike;
+  /**
+   * The meter the tracks are read against, as one time signature — `'6/8'` or
+   * its data — or as the map of a piece that changes meter. Naming it here and
+   * as `ts` too is an input error, since the two name the same thing.
+   */
+  meters?: MeterLike;
   /**
    * A chord timeline to analyse against, instead of inferring one from the
    * notes.
@@ -263,15 +270,26 @@ function arrangementData(
   return data;
 }
 
+/** The meter map an {@link ArrangementSetup.meters} value names. */
+function metersFrom(meters: MeterLike): MeterMap {
+  const meter = toMeterData(meters, 'arrangement meters');
+  return Array.isArray(meter)
+    ? resolveMeters({ meters: meter }, 'arrangement meters')
+    : resolveMeters({ ts: meter }, 'arrangement meters');
+}
+
 /** The settings a caller's setup describes, in the plain form data carries. */
 function settingsFrom(setup: ArrangementSetup | undefined): ArrangementSettings | undefined {
   if (setup === undefined) {
     return undefined;
   }
-  const { key, timeline, ...rest } = setup;
+  const { key, meters, timeline, ...rest } = setup;
   const settings: ArrangementSettings = { ...rest };
   if (key !== undefined) {
     settings.key = toKeyScale(key);
+  }
+  if (meters !== undefined) {
+    settings.meters = metersFrom(meters);
   }
   if (timeline !== undefined) {
     settings.timeline = [...timeline.segments];
@@ -279,15 +297,22 @@ function settingsFrom(setup: ArrangementSetup | undefined): ArrangementSettings 
   return settings;
 }
 
-/** A caller's setup as the analysis functions take it: only the key differs. */
+/** A caller's setup as the analysis functions take it: the key and the meter differ. */
 function analysisOptionsOf(
   setup: ArrangementTensionOptions | undefined,
 ): ArrangementOptions & { step?: number } {
   if (setup === undefined) {
     return {};
   }
-  const { key, ...rest } = setup;
-  return key === undefined ? { ...rest } : { ...rest, key: toKeyScale(key) };
+  const { key, meters, ...rest } = setup;
+  const opts: ArrangementOptions & { step?: number } = { ...rest };
+  if (key !== undefined) {
+    opts.key = toKeyScale(key);
+  }
+  if (meters !== undefined) {
+    opts.meters = metersFrom(meters);
+  }
+  return opts;
 }
 
 /**

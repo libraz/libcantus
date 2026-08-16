@@ -22,7 +22,7 @@ import type { PlayabilityReport } from '../core/instrument/playability.js';
 import { playability } from '../core/instrument/playability.js';
 import type { InstrumentProfile } from '../core/instrument/profile.js';
 import type { BarPosition, MeterLike, MeterMap, TimeSignature } from '../core/meter/index.js';
-import { beatToBarPosition, meterAt, resolveMeters } from '../core/meter/index.js';
+import { beatToBarPosition, meterAt, resolveMeters, toMeterData } from '../core/meter/index.js';
 import type { IntervalLike } from '../core/pitch/index.js';
 import { toSpelledInterval } from '../core/pitch/index.js';
 import type { TempoMap } from '../core/tempo/index.js';
@@ -52,7 +52,7 @@ export type ScoreData = {
 
 /** How a score is built: the notes, plus the context they are read against. */
 export type ScoreOptions = {
-  /** The meter, as one time signature or a map of changes. */
+  /** The meter, as one time signature — `'6/8'` or its data — or a map of changes. */
   meters?: MeterLike;
   /** The tempo, as one bpm or a map of changes. */
   tempo?: TempoMap | number;
@@ -151,9 +151,10 @@ function metersFrom(meters: MeterLike | undefined): MeterMap {
   if (meters === undefined) {
     return resolveMeters({}, 'score meters');
   }
-  return Array.isArray(meters)
-    ? resolveMeters({ meters }, 'score meters')
-    : resolveMeters({ ts: meters }, 'score meters');
+  const meter = toMeterData(meters, 'score meters');
+  return Array.isArray(meter)
+    ? resolveMeters({ meters: meter }, 'score meters')
+    : resolveMeters({ ts: meter }, 'score meters');
 }
 
 /** The tempo map a {@link ScoreOptions.tempo} value names. */

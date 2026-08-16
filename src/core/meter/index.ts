@@ -18,6 +18,7 @@ import {
   assertRange,
   assertTimeSignature,
 } from '../validation/index.js';
+import type { MeterData } from './internal.js';
 import {
   barBeatsOf,
   barIndexOf,
@@ -92,24 +93,63 @@ export type MeterChange = {
 export type MeterMap = MeterChange[];
 
 /**
- * Either a single time signature or a full meter map.
+ * Anything that names a meter: a signature text such as `'6/8'`, a plain
+ * {@link TimeSignature}, a full {@link MeterMap}, or a value that serializes to
+ * one of those such as the `Meter` class.
  *
  * Every meter-aware function takes this, so a piece in one meter reads as
- * `4/4` and a piece that changes meter reads as the map, without the caller
- * choosing a different function for each.
+ * `'4/4'` and a piece that changes meter reads as the map, without the caller
+ * choosing a different function for each. Only a signature has a text form — a
+ * meter map is a run of changes and is given as the data it is.
  *
  * @category Rhythm & Meter
  */
-export type MeterLike = TimeSignature | MeterMap;
+export type MeterLike =
+  | string
+  | TimeSignature
+  | MeterMap
+  | {
+      /** The meter data this value stands for. */
+      toJSON(): TimeSignature | MeterMap;
+    };
 
-/** Validate whichever of the two forms was given. */
-function assertMeter(meter: MeterLike, name = 'meter'): MeterLike {
-  if (isMeterMap(meter)) {
-    assertMeterMap(meter, name);
-  } else {
-    assertTimeSignature(meter, name);
+/**
+ * Resolve any meter-shaped value to the plain meter data the library reads.
+ *
+ * The counterpart of {@link toNoteData} for meters: an entry point takes
+ * whatever form the caller has — the signature a meter field holds, the data
+ * the meter module returns, the map of a piece that changes meter, or a `Meter`
+ * instance — and gets one of two shapes back. An instance is accepted through
+ * its `toJSON` method rather than by its type, so the core layer can read a
+ * class it cannot import.
+ *
+ * Text is read by {@link parseTimeSignature} and nothing else, so every entry
+ * point that takes a meter accepts exactly the signatures that parser accepts,
+ * the additive `'2+2+3/8'` included and nothing besides. A meter map has no text
+ * form — it is a run of changes, each with the beat it starts at — so text
+ * always names a single signature.
+ *
+ * @param value A signature text, a plain time signature, a meter map, or a
+ *   value whose `toJSON` returns one of those.
+ * @param name What the meter is called in an error message, so a caller that
+ *   holds several of them hears which one was malformed.
+ * @returns The validated signature, or the validated map.
+ * @throws If the value names no meter, or the meter it names is malformed.
+ */
+export function toMeterData(value: MeterLike, name = 'meter'): MeterData {
+  if (typeof value === 'string') {
+    return parseTimeSignature(value);
   }
-  return meter;
+  if (typeof value === 'object' && value !== null) {
+    const data =
+      !Array.isArray(value) && 'toJSON' in value && typeof value.toJSON === 'function'
+        ? value.toJSON()
+        : (value as MeterData);
+    return isMeterMap(data) ? assertMeterMap(data, name) : assertTimeSignature(data, name);
+  }
+  throw new InvalidInputError(
+    `${name} must be a time signature, a meter map, or a signature name; received ${typeof value}`,
+  );
 }
 
 /**
@@ -298,12 +338,11 @@ export function beatsPerBar(ts: TimeSignature): number {
  */
 export function meterAt(beatInQuarters: number, meter: MeterLike): TimeSignature {
   assertFiniteNumber(beatInQuarters, 'beat');
-  assertMeter(meter);
-  return meterAtChecked(beatInQuarters, meter);
+  return meterAtChecked(beatInQuarters, toMeterData(meter));
 }
 
-/** {@link meterAt} without re-validating an already validated meter. */
-function meterAtChecked(beatInQuarters: number, meter: MeterLike): TimeSignature {
+/** {@link meterAt} without re-reading an already resolved meter. */
+function meterAtChecked(beatInQuarters: number, meter: MeterData): TimeSignature {
   if (!isMeterMap(meter)) {
     return meter;
   }
@@ -320,12 +359,11 @@ function meterAtChecked(beatInQuarters: number, meter: MeterLike): TimeSignature
  */
 export function barStartBeat(beatInQuarters: number, meter: MeterLike): number {
   assertFiniteNumber(beatInQuarters, 'beat');
-  assertMeter(meter);
-  return barStartChecked(beatInQuarters, meter);
+  return barStartChecked(beatInQuarters, toMeterData(meter));
 }
 
-/** {@link barStartBeat} without re-validating an already validated meter. */
-function barStartChecked(beatInQuarters: number, meter: MeterLike): number {
+/** {@link barStartBeat} without re-reading an already resolved meter. */
+function barStartChecked(beatInQuarters: number, meter: MeterData): number {
   if (isMeterMap(meter)) {
     return barStartOf(meter, beatInQuarters);
   }
@@ -355,12 +393,11 @@ function barStartChecked(beatInQuarters: number, meter: MeterLike): number {
  */
 export function barIndexAt(beatInQuarters: number, meter: MeterLike): number {
   assertFiniteNumber(beatInQuarters, 'beat');
-  assertMeter(meter);
-  return barIndexChecked(beatInQuarters, meter);
+  return barIndexChecked(beatInQuarters, toMeterData(meter));
 }
 
-/** {@link barIndexAt} without re-validating an already validated meter. */
-function barIndexChecked(beatInQuarters: number, meter: MeterLike): number {
+/** {@link barIndexAt} without re-reading an already resolved meter. */
+function barIndexChecked(beatInQuarters: number, meter: MeterData): number {
   if (isMeterMap(meter)) {
     return barIndexOf(meter, beatInQuarters);
   }
@@ -477,7 +514,11 @@ function isUniformGrouping(grouping: number[]): boolean {
  */
 export function beatToBarPosition(beatInQuarters: number, meter: MeterLike): BarPosition {
   assertFiniteNumber(beatInQuarters, 'beat');
-  assertMeter(meter);
+  return barPositionChecked(beatInQuarters, toMeterData(meter));
+}
+
+/** {@link beatToBarPosition} without re-reading an already resolved meter. */
+function barPositionChecked(beatInQuarters: number, meter: MeterData): BarPosition {
   return {
     bar: barIndexChecked(beatInQuarters, meter),
     beat: beatInQuarters - barStartChecked(beatInQuarters, meter),
@@ -524,12 +565,16 @@ export function pulseBeats(ts: TimeSignature): number {
  */
 export function barPositionToPulse(pos: BarPosition, meter: MeterLike): number {
   assertFiniteNumber(pos.beat, 'position.beat');
-  assertMeter(meter);
+  return pulseChecked(pos, toMeterData(meter));
+}
+
+/** {@link barPositionToPulse} without re-reading an already resolved meter. */
+function pulseChecked(pos: BarPosition, meter: MeterData): number {
   return pos.beat / pulseBeatsOf(meterAtBarChecked(pos.bar, meter)) + 1;
 }
 
-/** The signature governing a bar index, on an already validated meter. */
-function meterAtBarChecked(bar: number, meter: MeterLike): TimeSignature {
+/** The signature governing a bar index, on an already resolved meter. */
+function meterAtBarChecked(bar: number, meter: MeterData): TimeSignature {
   if (!isMeterMap(meter)) {
     return meter;
   }
@@ -559,17 +604,21 @@ function meterAtBarChecked(bar: number, meter: MeterLike): TimeSignature {
  */
 export function formatBarPosition(beatInQuarters: number, meter: MeterLike, decimals = 2): string {
   assertInteger(decimals, 'decimals', 0, 100);
-  const position = beatToBarPosition(beatInQuarters, meter);
-  const ts = meterAtChecked(beatInQuarters, meter);
-  const pulse = barPositionToPulse(position, ts);
+  assertFiniteNumber(beatInQuarters, 'beat');
+  const resolved = toMeterData(meter);
+  const position = barPositionChecked(beatInQuarters, resolved);
+  const ts = meterAtChecked(beatInQuarters, resolved);
+  const pulse = pulseChecked(position, ts);
   const rounded = Number(pulse.toFixed(decimals));
-  const barLength = isMeterMap(meter) ? barLengthOf(meter, beatInQuarters) : barBeatsOf(meter);
+  const barLength = isMeterMap(resolved)
+    ? barLengthOf(resolved, beatInQuarters)
+    : barBeatsOf(resolved);
   // A short bar has a whole final pulse only in the sense that the pulse it
   // started is cut off, so the count rounds up: 2 beats of 4/4 hold felt beats
   // 1 and 2, and anything past those belongs to the next bar.
   const pulsesInBar = Math.ceil(barLength / pulseBeatsOf(ts) - EPS);
   if (rounded >= pulsesInBar + 1) {
-    return `${barIndexChecked(barStartChecked(beatInQuarters, meter) + barLength, meter) + 1}.1`;
+    return `${barIndexChecked(barStartChecked(beatInQuarters, resolved) + barLength, resolved) + 1}.1`;
   }
   const wholePulse = Math.floor(rounded);
   const fraction = Number((rounded - wholePulse).toFixed(decimals));
@@ -590,11 +639,11 @@ export function formatBarPosition(beatInQuarters: number, meter: MeterLike, deci
 export function barPositionToBeat(pos: BarPosition, meter: MeterLike): number {
   assertInteger(pos.bar, 'bar position bar');
   assertFiniteNumber(pos.beat, 'bar position beat');
-  assertMeter(meter);
-  if (isMeterMap(meter)) {
-    return beatOfBarIndex(meter, pos.bar) + pos.beat;
+  const resolved = toMeterData(meter);
+  if (isMeterMap(resolved)) {
+    return beatOfBarIndex(resolved, pos.bar) + pos.beat;
   }
-  return pos.bar * barBeatsOf(meter) + pos.beat;
+  return pos.bar * barBeatsOf(resolved) + pos.beat;
 }
 
 /**
@@ -632,9 +681,9 @@ export function barPositionToBeat(pos: BarPosition, meter: MeterLike): number {
  */
 export function metricWeight(beatInQuarters: number, meter: MeterLike): number {
   assertFiniteNumber(beatInQuarters, 'beat');
-  assertMeter(meter);
-  const ts = meterAtChecked(beatInQuarters, meter);
-  const beat = beatInQuarters - barStartChecked(beatInQuarters, meter);
+  const resolved = toMeterData(meter);
+  const ts = meterAtChecked(beatInQuarters, resolved);
+  const beat = beatInQuarters - barStartChecked(beatInQuarters, resolved);
   const pulse = pulseBeatsOf(ts);
   if (!isMultiple(beat, pulse)) {
     return 0;

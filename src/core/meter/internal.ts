@@ -8,7 +8,16 @@
  * than the result of dividing two floats.
  */
 
-import type { MeterLike, MeterMap, TimeSignature } from './index.js';
+import type { MeterMap, TimeSignature } from './index.js';
+
+/**
+ * A meter in the plain data the library reads it as: one signature, or the map
+ * of a piece that changes meter.
+ *
+ * What {@link MeterLike} resolves to, and the type every function below the
+ * entry points works in — the text form is read once, at the boundary.
+ */
+export type MeterData = TimeSignature | MeterMap;
 
 /**
  * Tolerance for the divisions below.
@@ -112,7 +121,7 @@ export function barBeatsOf(ts: TimeSignature): number {
 }
 
 /** Whether a meter argument is a map of changes rather than one signature. */
-export function isMeterMap(meter: MeterLike): meter is MeterMap {
+export function isMeterMap(meter: MeterData): meter is MeterMap {
   return Array.isArray(meter);
 }
 
