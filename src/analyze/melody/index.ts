@@ -191,7 +191,7 @@ export type MotifOccurrence = {
  *
  * @category Arrangement & Analysis
  */
-export type Motif = {
+export type MotifData = {
   /** The first statement, exactly as it sounds in the melody. */
   notes: NoteEvent[];
   /**
@@ -301,7 +301,7 @@ export type MotifRelation = {
  *
  * @category Arrangement & Analysis
  */
-export type MelodicPhrase = Motif | readonly NoteEvent[];
+export type MelodicPhrase = MotifData | readonly NoteEvent[];
 
 /**
  * How alike two lines are, and how the answer was reached.
@@ -533,7 +533,7 @@ function listBeats(occurrences: readonly MotifOccurrence[]): string {
 }
 
 /** Build the motif a group of identical windows stands for. */
-function motifFromGroup(group: WindowGroup, notes: readonly NoteEvent[]): Motif {
+function motifFromGroup(group: WindowGroup, notes: readonly NoteEvent[]): MotifData {
   const first = group.starts[0] ?? 0;
   const prime = notes.slice(first, first + group.length).map((note) => ({ ...note }));
   const primePitch = prime[0]?.pitch ?? 0;
@@ -610,7 +610,7 @@ function motifFromGroup(group: WindowGroup, notes: readonly NoteEvent[]): Motif 
 export function extractMotifs(
   notes: readonly NoteEvent[],
   opts: ExtractMotifsOptions = {},
-): Motif[] {
+): MotifData[] {
   const minNotes = assertInteger(opts.minNotes ?? MIN_CELL_NOTES, 'motif minNotes', 2, 64);
   const maxNotes = assertInteger(opts.maxNotes ?? MAX_CELL_NOTES, 'motif maxNotes', 2, 64);
   if (maxNotes < minNotes) {
@@ -699,7 +699,7 @@ export function extractMotifs(
  * ```
  * @category Arrangement & Analysis
  */
-export function motifFromNotes(notes: readonly NoteEvent[]): Motif {
+export function motifFromNotes(notes: readonly NoteEvent[]): MotifData {
   const sounding = orderedNotes(notes, 'motif notes').map((note) => ({ ...note }));
   return motifFromGroup(
     { signature: windowSignature(sounding) ?? '', length: sounding.length, starts: [0] },
@@ -789,7 +789,7 @@ function stretchPhrase(ratio: number): string {
  * ```
  * @category Arrangement & Analysis
  */
-export function relateMotifs(a: Motif, b: Motif, key?: KeyScale): MotifRelation | null {
+export function relateMotifs(a: MotifData, b: MotifData, key?: KeyScale): MotifRelation | null {
   const model = a.notes;
   const answer = b.notes;
   if (model.length === 0 || model.length !== answer.length) {

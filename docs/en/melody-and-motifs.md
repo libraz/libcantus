@@ -44,7 +44,7 @@ motifs.length >= 1; // true
 motifs[0]?.occurrences.length >= 2; // true
 ```
 
-Each `Motif` carries its interval-and-rhythm pattern and every occurrence with its onset. The two phrases above are the same shape a fifth apart, so they are one motif with two occurrences rather than two motifs.
+Each `MotifData` carries its interval-and-rhythm pattern and every occurrence with its onset. The two phrases above are the same shape a fifth apart, so they are one motif with two occurrences rather than two motifs.
 
 ## Naming the relationship between two statements
 

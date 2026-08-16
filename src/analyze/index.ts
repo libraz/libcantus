@@ -120,7 +120,7 @@ export type {
   MelodicContour,
   MelodicContourShape,
   MelodicPhrase,
-  Motif,
+  MotifData,
   MotifOccurrence,
   MotifRelation,
   MotifRelationKind,
