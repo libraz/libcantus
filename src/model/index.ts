@@ -129,6 +129,7 @@ export type {
   BassLineOptions,
   BassSegment,
   BassStyle,
+  BorrowedChord,
   Complexity,
   CounterMelodyOptions,
   DrumRole,
@@ -165,14 +166,20 @@ export type {
   RhythmOptions,
   Section,
   SubstituteOptions,
+  Substitution,
   SubstitutionType,
   Vocabulary,
 } from '../generate/index.js';
 export type {
+  Alteration,
+  AlteredDegree,
   Chord as ChordData,
+  ChordBase,
   ChordQuality,
   ChordSegment,
+  ChordSeventh,
   ChordSpan,
+  ChordSpec,
   ChordToneRole,
   PitchSpelling,
 } from '../theory/chord/index.js';

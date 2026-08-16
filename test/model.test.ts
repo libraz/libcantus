@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { detectKeyBest } from '../src/analyze/detect/index.js';
 import { detectCadence } from '../src/analyze/functional/index.js';
 import { InvalidInputError } from '../src/core/errors/index.js';
-import { parseNote } from '../src/core/pitch/index.js';
+import { noteToMidi, parseNote, transposeByInterval } from '../src/core/pitch/index.js';
+import { edo, frequencyOf } from '../src/core/tuning/index.js';
 import { generateProgression } from '../src/generate/progression/index.js';
-import { substituteChord } from '../src/generate/reharmony/index.js';
+import { modalInterchangePalette, substituteChord } from '../src/generate/reharmony/index.js';
 import {
   Chord,
   type ChordData,
@@ -13,14 +14,24 @@ import {
   Note,
   Progression,
   Timeline,
+  Tuning,
 } from '../src/model/index.js';
 import {
+  chordSpecOf,
+  chordToneRole,
+  isChordMember,
+  spanFromChord,
+} from '../src/theory/chord/index.js';
+import { figuredBassOf } from '../src/theory/figured-bass/index.js';
+import {
   majorKey,
+  minorKey,
   NAMED_SCALES,
   nearestScaleTone,
   pitchToScaleDegree,
 } from '../src/theory/scale/index.js';
 import { transposeChordSymbol } from '../src/theory/symbol/index.js';
+import { toWrittenPitch } from '../src/theory/transposition/index.js';
 import { voiceProgression } from '../src/theory/voicing/index.js';
 
 describe('Note', () => {
@@ -730,6 +741,179 @@ describe('Chord', () => {
     // Mutating exposed copies never affects the chord.
     original.intervals.push(99);
     expect(original.intervals).toEqual([0, 4, 7]);
+  });
+});
+
+describe('Chord members over the chord functions', () => {
+  const cMajor = Key.major('C');
+
+  it('answers membership and chord-tone role as the functions do', () => {
+    const chord = Chord.parse('Cmaj7/E');
+    for (const pitch of [59, 60, 62, 64, 66, 67, 71, 73]) {
+      expect(chord.contains(pitch), `${pitch}`).toBe(isChordMember(pitch, chord.data));
+      expect(chord.roleOf(pitch), `${pitch}`).toBe(chordToneRole(pitch, chord.data));
+    }
+    // The two disagree about a tension, which is what makes them separate reads:
+    // a ninth belongs to no basic role while still not being a chord tone.
+    expect(chord.contains(62)).toBe(false);
+    expect(chord.roleOf(62)).toBeNull();
+    expect(chord.contains(64)).toBe(true);
+    expect(chord.roleOf(64)).toBe('third');
+  });
+
+  it('reads its structure and places itself on a beat as the functions do', () => {
+    const chord = Chord.parse('Cmaj7/E');
+    expect(chord.spec).toEqual(chordSpecOf(chord.data));
+    expect(chord.span(4)).toEqual(spanFromChord(chord.data, 4));
+    // A template no quality names travels through both the same way.
+    const custom = Chord.fromData({ rootPc: 0, quality: 'maj', intervals: [0, 4, 7, 14] });
+    expect(custom.spec).toEqual(chordSpecOf(custom.data));
+    expect(custom.span(0)).toEqual(spanFromChord(custom.data, 0));
+    expect(() => chord.span(Number.NaN)).toThrow(RangeError);
+  });
+
+  it('figures a bass, substitutes, and borrows as the functions do', () => {
+    const chord = Chord.parse('G7/D').withKey(cMajor);
+    expect(chord.figuredBass()).toBe(figuredBassOf(chord.data, cMajor.scale));
+    expect(chord.substitutions()).toEqual(substituteChord(chord.data, cMajor.scale));
+    expect(chord.modalInterchange()).toEqual(modalInterchangePalette(cMajor.scale));
+  });
+
+  it('passes the melody constraint through to substituteChord', () => {
+    const chord = Chord.parse('G7').withKey(cMajor);
+    const opts = { melodyPcs: [2] };
+    expect(chord.substitutions(undefined, opts)).toEqual(
+      substituteChord(chord.data, cMajor.scale, opts),
+    );
+    // The constraint is doing something: it turns candidates away.
+    expect(chord.substitutions(undefined, opts).length).toBeLessThan(chord.substitutions().length);
+  });
+
+  it('reads a key in every shape the coercion accepts', () => {
+    const chord = Chord.parse('G7/D');
+    const figures = figuredBassOf(chord.data, majorKey(0));
+    expect(chord.figuredBass('C major')).toBe(figures);
+    expect(chord.figuredBass(majorKey(0))).toBe(figures);
+    expect(chord.figuredBass(cMajor)).toBe(figures);
+    expect(chord.substitutions('C major')).toEqual(substituteChord(chord.data, majorKey(0)));
+    expect(chord.modalInterchange('C major')).toEqual(modalInterchangePalette(majorKey(0)));
+  });
+
+  it('lets an explicit key win over the carried context', () => {
+    const chord = Chord.parse('G7').withKey(cMajor);
+    expect(chord.modalInterchange(Key.minor('A'))).toEqual(modalInterchangePalette(minorKey(9)));
+    expect(chord.modalInterchange(Key.minor('A'))).not.toEqual(chord.modalInterchange());
+    expect(chord.substitutions('F major')).toEqual(substituteChord(chord.data, majorKey(5)));
+    expect(chord.figuredBass('Eb major')).toBe(figuredBassOf(chord.data, majorKey(3)));
+  });
+
+  it('throws a clear error when no key is given and none is carried', () => {
+    const keyless = Chord.parse('G7/D');
+    expect(() => keyless.figuredBass()).toThrow(/key/);
+    expect(() => keyless.substitutions()).toThrow(/key/);
+    expect(() => keyless.modalInterchange()).toThrow(/key/);
+  });
+});
+
+describe('Note members over the tuning, transposition, and scale functions', () => {
+  it('reports a frequency under the default and a given temperament', () => {
+    expect(Note.parse('A4').frequency()).toBe(frequencyOf(69));
+    expect(Note.parse('C4').frequency()).toBe(frequencyOf(60));
+    const et19 = edo(19);
+    expect(Note.parse('C4').frequency(et19)).toBe(frequencyOf(60, et19));
+    expect(Note.parse('C4').frequency(et19)).not.toBe(Note.parse('C4').frequency());
+    // A Tuning carries the three fields a table does, so an instance is a table.
+    expect(Note.parse('C4').frequency(Tuning.edo(19))).toBe(frequencyOf(60, et19));
+    expect(() => Note.parse('C').frequency()).toThrow(/octave/);
+  });
+
+  it('writes a part for a transposing instrument the way a key does', () => {
+    for (const instrument of ['clarinetBb', 'clarinetA', 'altoSax', 'hornF', 'piccolo'] as const) {
+      const note = Note.parse('C4');
+      expect(note.forInstrument(instrument).data, instrument).toEqual(
+        toWrittenPitch(note.data, instrument),
+      );
+      // The note and the key of its part agree on the direction.
+      expect(note.forInstrument(instrument).pitchClass, instrument).toBe(
+        Key.major('C').forInstrument(instrument).tonic.pitchClass,
+      );
+    }
+  });
+
+  it('respells onto the letter above and the letter below', () => {
+    const up = { number: 2, quality: 'd', semitones: 0 } as const;
+    const down = { number: 2, quality: 'd', semitones: 0, descending: true } as const;
+    const note = Note.parse('C#4');
+    expect(note.enharmonic().map((other) => other.data)).toEqual([
+      transposeByInterval(note.data, up),
+      transposeByInterval(note.data, down),
+    ]);
+    // Every spelling sounds the pitch it was made from.
+    for (const other of note.enharmonic()) {
+      expect(other.midi, other.name).toBe(note.midi);
+      expect(other.equals(note)).toBe(false);
+    }
+    // The letter above Cb would need a triple flat, so only one spelling is left.
+    expect(
+      Note.parse('Cb4')
+        .enharmonic()
+        .map((other) => other.name),
+    ).toEqual(['B3']);
+    // An octave-less note stays octave-less.
+    expect(
+      Note.parse('F#')
+        .enharmonic()
+        .map((other) => other.name),
+    ).toEqual(['Gb', 'E##']);
+  });
+
+  it('places a note in another octave without respelling it', () => {
+    expect(Note.parse('Cb4').withOctave(3).data).toEqual({ letter: 0, alter: -1, octave: 3 });
+    expect(Note.parse('C#').withOctave(4).midi).toBe(61);
+    expect(Note.parse('Eb5').withOctave(3).name).toBe('Eb3');
+    // The same range plain note data is held to.
+    expect(() => Note.parse('C4').withOctave(1.5)).toThrow(RangeError);
+    expect(() => Note.parse('C4').withOctave(Number.NaN)).toThrow(RangeError);
+  });
+
+  it('orders by sounding pitch, leaving an enharmonic pair as it found it', () => {
+    const notes = [Note.parse('G4'), Note.parse('Db4'), Note.parse('C4'), Note.parse('C#4')];
+    const sorted = [...notes].sort((a, b) => a.compareTo(b));
+    expect(sorted.map((note) => note.name)).toEqual(['C4', 'Db4', 'C#4', 'G4']);
+    // Enharmonics sound the same pitch, so they compare equal while the
+    // spelling comparison keeps them apart.
+    expect(Note.parse('C#4').compareTo(Note.parse('Db4'))).toBe(0);
+    expect(Note.parse('C#4').equals(Note.parse('Db4'))).toBe(false);
+    // The sign is the sign of the MIDI distance the pitch module measures.
+    for (const [a, b] of [
+      ['B3', 'C4'],
+      ['C4', 'B3'],
+      ['C4', 'C4'],
+      ['G4', 'C4'],
+    ] as const) {
+      expect(Math.sign(Note.parse(a).compareTo(Note.parse(b))), `${a}/${b}`).toBe(
+        Math.sign(noteToMidi(parseNote(a)) - noteToMidi(parseNote(b))),
+      );
+    }
+    // Octave-less notes are ordered by pitch class among themselves.
+    expect(
+      [Note.parse('G'), Note.parse('C'), Note.parse('E')]
+        .sort((a, b) => a.compareTo(b))
+        .map((note) => note.name),
+    ).toEqual(['C', 'E', 'G']);
+  });
+
+  it('reads a scale degree as the scale function does, with null for a miss', () => {
+    for (const name of ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'F#4', 'Ab4', 'B#4']) {
+      const note = Note.parse(name);
+      const degree = pitchToScaleDegree(note.pitchClass, majorKey(0));
+      expect(note.degreeIn('C major'), name).toBe(degree === -1 ? null : degree);
+    }
+    expect(Note.parse('E4').degreeIn(majorKey(0))).toBe(3);
+    expect(Note.parse('E4').degreeIn(Key.major('C'))).toBe(3);
+    expect(Note.parse('F#4').degreeIn('C major')).toBeNull();
+    // The degree follows the sounding pitch, not the letter.
+    expect(Note.parse('B#4').degreeIn('C major')).toBe(1);
   });
 });
 

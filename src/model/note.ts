@@ -7,12 +7,16 @@ import {
   type NoteNameOptions,
   noteToMidi,
   noteToPitchClass,
+  type SpelledInterval,
   spelledInterval,
   toSpelledInterval,
   transposeByInterval,
   transposeNote,
   tryParseNote,
 } from '../core/pitch/index.js';
+import { frequencyOf, type TuningTable } from '../core/tuning/index.js';
+import { type KeyLike, pitchToScaleDegree, toKeyScale } from '../theory/scale/index.js';
+import { type TransposingInstrument, toWrittenPitch } from '../theory/transposition/index.js';
 import { Interval } from './interval.js';
 
 /**
@@ -61,6 +65,29 @@ function letterNumberOf(letter: number | string): number {
     );
   }
   return unwrapParse(tryParseNote(letter)).letter;
+}
+
+/** Widest alteration an enharmonic spelling may carry: a double accidental. */
+const DOUBLE_ACCIDENTAL = 2;
+
+/** The zero-semitone second onto the next letter up, which respells a note. */
+const DIMINISHED_SECOND: SpelledInterval = { number: 2, quality: 'd', semitones: 0 };
+
+/** The same second taken downwards, onto the letter below. */
+const DESCENDING_DIMINISHED_SECOND: SpelledInterval = {
+  ...DIMINISHED_SECOND,
+  descending: true,
+};
+
+/**
+ * The number a note is ordered by.
+ *
+ * The MIDI number where there is an octave to place the note in, and the bare
+ * pitch class where there is not — one number per note either way, so a list
+ * sorts consistently however its notes were written.
+ */
+function soundingOrder(note: NoteData): number {
+  return note.octave === undefined ? noteToPitchClass(note) : noteToMidi(note);
 }
 
 /**
@@ -254,6 +281,33 @@ export class Note {
   }
 
   /**
+   * The note's frequency in Hz.
+   *
+   * The note's MIDI number is read as a step index, which is how the tuning
+   * module numbers steps: under twelve divisions the two coincide, and under
+   * any other the step index keeps counting from the same reference. A
+   * {@link Tuning} carries the three fields this takes, so an instance of it
+   * can be passed here directly.
+   *
+   * @param tuning The temperament to read the note under; twelve-tone equal
+   *   temperament with A4 = 440 Hz by default.
+   * @returns The frequency in Hz.
+   * @throws If the note has no octave and therefore no fixed pitch, if the
+   *   temperament describes no tuning, or if the frequency falls outside the
+   *   range a number holds.
+   * @example
+   * ```ts
+   * import { Note, Tuning } from '@libraz/libcantus';
+   * Note.parse('A4').frequency(); // 440
+   * Math.round(Note.parse('C4').frequency()); // 262
+   * Note.parse('A4').frequency(Tuning.edo(19)); // 440, the reference step of any EDO
+   * ```
+   */
+  frequency(tuning?: TuningTable): number {
+    return frequencyOf(this.midi, tuning);
+  }
+
+  /**
    * Transpose by a signed number of semitones, keeping the spelling.
    *
    * The letter moves by the diatonic distance of the conventional interval for
@@ -317,6 +371,110 @@ export class Note {
   }
 
   /**
+   * The same spelled note in another octave.
+   *
+   * The letter and the alteration are untouched, so this places a note in a
+   * register rather than moving it by an interval: `Cb4` given octave 3 is
+   * `Cb3`, not the `B3` it sounds as.
+   *
+   * @param octave The octave (scientific pitch notation), where middle C is C4.
+   * @returns The note in that octave.
+   * @throws If the octave is not an integer in -100..100.
+   * @example
+   * ```ts
+   * import { Note } from '@libraz/libcantus';
+   * Note.parse('C#').withOctave(4).name; // 'C#4'
+   * Note.parse('Eb5').withOctave(3).name; // 'Eb3'
+   * ```
+   */
+  withOctave(octave: number): Note {
+    return new Note({ letter: this.#data.letter, alter: this.#data.alter, octave });
+  }
+
+  /**
+   * The note a transposing instrument must read to sound this one.
+   *
+   * The direction is written-side, as {@link Key.forInstrument} is for a key:
+   * the part is transposed *away* from what the instrument sounds, so a B flat
+   * instrument — which sounds a major second lower than it reads — has a
+   * concert C4 written as D4. The interval decides the letter, so a concert
+   * E flat 3 reads as C4 on an alto saxophone rather than as B sharp 3.
+   *
+   * The opposite reading, a written note back to the pitch it sounds, is
+   * {@link Note.transposeBy} applied to {@link instrumentTransposition} — the
+   * instrument's own written-to-sounding interval.
+   *
+   * @param instrument A built-in instrument name, or an interval naming a
+   *   transposition the table does not carry.
+   * @returns The note the player reads.
+   * @throws If the instrument is neither a known name nor a spelled interval.
+   * @example
+   * ```ts
+   * import { instrumentTransposition, Note } from '@libraz/libcantus';
+   * Note.parse('C4').forInstrument('clarinetBb').name; // 'D4'
+   * Note.parse('Eb3').forInstrument('altoSax').name; // 'C4'
+   * // And back: what a written C4 on a clarinet in A sounds as.
+   * Note.parse('C4').transposeBy(instrumentTransposition('clarinetA')).name; // 'A3'
+   * ```
+   */
+  forInstrument(instrument: TransposingInstrument): Note {
+    // The same conversion the key uses, so a part and its key signature can
+    // never disagree about the direction or the spelling.
+    return new Note(toWrittenPitch(this.#data, instrument));
+  }
+
+  /**
+   * The other ways this note can be spelled: the same sounding pitch written on
+   * the letter above and on the letter below.
+   *
+   * A list rather than a single answer, because a note has no one enharmonic
+   * partner the way a key has: `C#4` is both `Db4` and `B##3`. Only spellings
+   * within a double accidental are offered — the letters two steps away would
+   * need a triple one — so a note whose neighbours are unwritable gets a
+   * shorter list, and an octave-less note stays octave-less.
+   *
+   * @returns The alternative spellings, the letter above first.
+   * @example
+   * ```ts
+   * import { Note } from '@libraz/libcantus';
+   * Note.parse('C#4').enharmonic().map((note) => note.name); // ['Db4', 'B##3']
+   * Note.parse('Cb4').enharmonic().map((note) => note.name); // ['B3']
+   * ```
+   */
+  enharmonic(): Note[] {
+    return [DIMINISHED_SECOND, DESCENDING_DIMINISHED_SECOND]
+      .map((interval) => transposeByInterval(this.#data, interval))
+      .filter((note) => Math.abs(note.alter) <= DOUBLE_ACCIDENTAL)
+      .map((note) => new Note(note));
+  }
+
+  /**
+   * The scale degree this note occupies in a key, counted from 1 at the tonic.
+   *
+   * The degree is read from the sounding pitch, so an enharmonic spelling
+   * answers for the pitch it sounds: in C major both `F#` and `Gb` are outside
+   * the scale, and both `B#` and `C` are the tonic.
+   *
+   * @param key The key to measure against; a key name, a plain key/scale, or a
+   *   {@link Key}.
+   * @returns The 1-based degree, or null when the note is not in the scale.
+   * @throws If the value names no key.
+   * @example
+   * ```ts
+   * import { Note } from '@libraz/libcantus';
+   * Note.parse('E4').degreeIn('C major'); // 3
+   * Note.parse('F#4').degreeIn('C major'); // null
+   * ```
+   */
+  degreeIn(key: KeyLike): number | null {
+    // The scale function reports -1 for a pitch it does not contain; the class
+    // API says "no answer" with null, as `Key.enharmonic` and `Chord.detectBest`
+    // do, so a caller cannot read the miss as a degree.
+    const degree = pitchToScaleDegree(this.pitchClass, toKeyScale(key));
+    return degree === -1 ? null : degree;
+  }
+
+  /**
    * Rebuild a note from its {@link Note.toJSON} output.
    *
    * @param data The serialized note.
@@ -325,6 +483,35 @@ export class Note {
    */
   static fromJSON(data: NoteData): Note {
     return new Note(data);
+  }
+
+  /**
+   * Order two notes by the pitch they sound, for `Array.prototype.sort`.
+   *
+   * Sounding pitch, not spelling: an enharmonic pair compares equal, so `C#4`
+   * and `Db4` keep the order they were given in while every note that sounds
+   * lower comes before them. {@link Note.equals} is the spelling comparison,
+   * and the two deliberately disagree about enharmonics.
+   *
+   * A note carrying an octave is ordered by its MIDI number and an octave-less
+   * one by its pitch class, so the octave-less notes of a mixed list gather at
+   * the bottom rather than being placed in a register they do not name.
+   *
+   * @param other The note to compare with.
+   * @returns Negative when this note sounds lower, zero when the two sound the
+   *   same pitch, positive when it sounds higher.
+   * @example
+   * ```ts
+   * import { Note } from '@libraz/libcantus';
+   * const notes = [Note.parse('G4'), Note.parse('C4'), Note.parse('E4')];
+   * notes.sort((a, b) => a.compareTo(b)).map((note) => note.name); // ['C4', 'E4', 'G4']
+   * Note.parse('C#4').compareTo(Note.parse('Db4')); // 0
+   * ```
+   */
+  compareTo(other: Note): number {
+    // The other note is read through its public accessor rather than its
+    // private field, as `equals` is, so two copies of the class still compare.
+    return soundingOrder(this.#data) - soundingOrder(other.data);
   }
 
   /**

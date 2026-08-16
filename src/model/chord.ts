@@ -27,15 +27,30 @@ import {
   transposeByInterval,
   transposeNote,
 } from '../core/pitch/index.js';
+import type { KeyScale } from '../core/types.js';
 import { assertFiniteNumber } from '../core/validation/index.js';
-import { negativeHarmonyMirror } from '../generate/reharmony/index.js';
+import {
+  type BorrowedChord,
+  modalInterchangePalette,
+  negativeHarmonyMirror,
+  type SubstituteOptions,
+  type Substitution,
+  substituteChord,
+} from '../generate/reharmony/index.js';
 import {
   type Chord as ChordData,
   type ChordQuality,
+  type ChordSpan,
+  type ChordSpec,
+  type ChordToneRole,
   chordPitchClasses,
+  chordSpecOf,
+  chordToneRole,
   chordToneSpellings,
+  isChordMember,
   makeChord,
   type PitchSpelling,
+  spanFromChord,
   transposeChord,
 } from '../theory/chord/index.js';
 import {
@@ -46,7 +61,8 @@ import {
   type ChordScaleMatch,
   chordScales,
 } from '../theory/chordscale/index.js';
-import type { ScaleNameInput } from '../theory/scale/index.js';
+import { figuredBassOf } from '../theory/figured-bass/index.js';
+import { type KeyLike, type ScaleNameInput, toKeyScale } from '../theory/scale/index.js';
 import { spellChord, spellChordFromRoot, spellPitchClass } from '../theory/spelling/index.js';
 import {
   type ChordSymbolOptions,
@@ -432,6 +448,27 @@ export class Chord {
     return this.#data;
   }
 
+  /**
+   * The chord read structurally: the triad it is built on, its seventh, and the
+   * alterations, additions and omissions on top of them.
+   *
+   * The reading comes from the tones themselves, so a chord no symbol names —
+   * a detected pitch set, a custom interval template — still describes itself;
+   * only a template with no structural reading at all falls back to the one its
+   * quality names.
+   *
+   * @throws If the chord's template has no reading and its quality is unknown.
+   * @example
+   * ```ts
+   * import { Chord } from '@libraz/libcantus';
+   * Chord.parse('Cmaj7').spec.base; // 'maj'
+   * Chord.parse('C/E').spec.bassPc; // 4
+   * ```
+   */
+  get spec(): ChordSpec {
+    return chordSpecOf(this.#data);
+  }
+
   /** The carried key context, if any. */
   get key(): Key | undefined {
     return this.#key;
@@ -470,6 +507,49 @@ export class Chord {
    */
   pitchClasses(opts?: { includeBass?: boolean }): number[] {
     return chordPitchClasses(this.#data, opts);
+  }
+
+  /**
+   * Whether a pitch is one of the chord's tones, ignoring octave.
+   *
+   * A slash bass counts, as it does in {@link Chord.pitchClasses}: the chord
+   * sounds it.
+   *
+   * @param pitch A MIDI pitch or a bare pitch class.
+   * @returns True when the pitch class belongs to the chord.
+   * @example
+   * ```ts
+   * import { Chord } from '@libraz/libcantus';
+   * Chord.parse('Cmaj7').contains(64); // true
+   * Chord.parse('Cmaj7').contains(62); // false
+   * ```
+   */
+  contains(pitch: number): boolean {
+    return isChordMember(pitch, this.#data);
+  }
+
+  /**
+   * A pitch's harmonic role in the chord: root, third, fifth, sixth, or
+   * seventh.
+   *
+   * The role follows the pitch's interval above the root, so it answers for the
+   * chord's own template rather than for the interval alone: the diminished
+   * fifth of a half-diminished seventh is its fifth, while the same interval
+   * over a chord that already has a perfect fifth is a `#11` tension and has no
+   * basic role.
+   *
+   * @param pitch A MIDI pitch or a bare pitch class.
+   * @returns The chord-tone role, or null when the pitch is a tension or a
+   *   foreign note.
+   * @example
+   * ```ts
+   * import { Chord } from '@libraz/libcantus';
+   * Chord.parse('Cmaj7').roleOf(67); // 'fifth'
+   * Chord.parse('Cmaj7').roleOf(62); // null
+   * ```
+   */
+  roleOf(pitch: number): ChordToneRole | null {
+    return chordToneRole(pitch, this.#data);
   }
 
   /**
@@ -535,6 +615,86 @@ export class Chord {
    */
   borrowedSource(key?: Key): BorrowedSource {
     return borrowedSource(this.#data, this.#resolveKey(key).scale);
+  }
+
+  /**
+   * The chord written as the figures a bass would carry under it: `6`, `64`,
+   * `7`, `65`, `43`, `42`, or nothing at all for a root-position triad, with an
+   * accidental on any interval the key does not already give.
+   *
+   * The bass the figures are measured above is the chord's own slash bass, or
+   * its root in root position.
+   *
+   * @param key Key deciding which intervals need no accidental; a key name, a
+   *   plain key/scale, or a {@link Key}. Falls back to the carried context.
+   * @returns The figures, as `realizeFiguredBass` reads them.
+   * @throws If no key is given and none is carried, if the key is not
+   *   heptatonic, or if no figure names the chord — its bass is not one of its
+   *   tones, its tones do not stack in diatonic thirds above that bass, or it
+   *   is an added-tone or extended chord the notation has no abbreviation for.
+   * @example
+   * ```ts
+   * import { Chord, Key } from '@libraz/libcantus';
+   * Chord.parse('G/B').figuredBass(Key.major('C')); // '6'
+   * Chord.parse('G7/D').figuredBass('C major'); // '43'
+   * ```
+   */
+  figuredBass(key?: KeyLike): string {
+    return figuredBassOf(this.#data, this.#resolveScale(key));
+  }
+
+  /**
+   * The chords that can stand in for this one in a key: its tritone substitute,
+   * the diatonic triads a third away that share two of its tones, the
+   * parallel-mode chords with its harmonic function, and its chromatic
+   * mediants.
+   *
+   * Each candidate carries the relationship it realizes, its Roman numeral, and
+   * its harmonic function in the key.
+   *
+   * @param key Key the substitution is read in; a key name, a plain key/scale,
+   *   or a {@link Key}. Falls back to the carried context.
+   * @param opts Set `melodyPcs` to the pitch classes a melody holds over this
+   *   chord, so only substitutions that keep every one of them a chord tone are
+   *   proposed.
+   * @returns The deduplicated candidates; the chords are plain data, spelled
+   *   the way the key writes them.
+   * @throws If no key is given and none is carried.
+   * @example
+   * ```ts
+   * import { Chord, Key } from '@libraz/libcantus';
+   * const subs = Chord.parse('G7').withKey(Key.major('C')).substitutions();
+   * subs.find((sub) => sub.type === 'tritone')?.chord.rootPc; // 1
+   * ```
+   */
+  substitutions(key?: KeyLike, opts?: SubstituteOptions): Substitution[] {
+    return substituteChord(this.#data, this.#resolveScale(key), opts);
+  }
+
+  /**
+   * The modal-interchange palette of the chord's key: the parallel mode's
+   * triads that the key itself does not contain, plus the Neapolitan, each with
+   * its Roman numeral and its borrowing source.
+   *
+   * The palette belongs to the key rather than to this chord, so it is the same
+   * list for every chord in it; it is reachable here because a chord is where a
+   * caller looking for somewhere else to go already is.
+   *
+   * @param key Key to borrow into; a key name, a plain key/scale, or a
+   *   {@link Key}. Falls back to the carried context.
+   * @returns The borrowed chords, spelled the way the mode they come from
+   *   writes them.
+   * @throws If no key is given and none is carried.
+   * @example
+   * ```ts
+   * import { Chord, formatChordSymbol, Key } from '@libraz/libcantus';
+   * const palette = Chord.parse('C').withKey(Key.major('C')).modalInterchange();
+   * palette.map((borrowed) => formatChordSymbol(borrowed.chord));
+   * // ['Cm', 'Ddim', 'Eb', 'Fm', 'Gm', 'Ab', 'Bb', 'Db']
+   * ```
+   */
+  modalInterchange(key?: KeyLike): BorrowedChord[] {
+    return modalInterchangePalette(this.#resolveScale(key));
   }
 
   /**
@@ -832,6 +992,28 @@ export class Chord {
   }
 
   /**
+   * The chord placed at a beat, as the {@link ChordSpan} the arrangement and
+   * generation functions take.
+   *
+   * The interval template is recorded only when it departs from the one the
+   * quality names, so a standard chord yields the same span it always did while
+   * a custom template is not lost. Key context and spelling hints are not part
+   * of a span and are left behind.
+   *
+   * @param startBeat Beat the chord starts on.
+   * @returns The span describing this chord at that beat.
+   * @throws If `startBeat` is not finite, or the chord's quality is unknown.
+   * @example
+   * ```ts
+   * import { Chord } from '@libraz/libcantus';
+   * Chord.parse('Cmaj7').span(4); // { rootPc: 0, quality: 'maj7', startBeat: 4 }
+   * ```
+   */
+  span(startBeat: number): ChordSpan {
+    return spanFromChord(this.#data, startBeat);
+  }
+
+  /**
    * Whether another chord has the same root, quality, intervals, and bass.
    * Key context is not compared.
    *
@@ -868,6 +1050,14 @@ export class Chord {
    */
   toString(): string {
     return this.symbol();
+  }
+
+  /**
+   * Resolve the key/scale for a method that takes any key-shaped value:
+   * explicit first, then carried, by the same rule {@link Chord.roman} follows.
+   */
+  #resolveScale(key?: KeyLike): KeyScale {
+    return key === undefined ? this.#resolveKey().scale : toKeyScale(key);
   }
 
   /** Resolve the key for an analysis method: explicit first, then carried. */
