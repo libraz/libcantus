@@ -41,7 +41,23 @@ chordToRoman(g7.data, majorKey(0)); // 'V7'
 
 ## Analyze a short timeline
 
-The functional API accepts note events. This example supplies four bars of block chords, finds their timeline and prevailing key, and labels each segment:
+A `Score` is note events together with the context they are read against, and the questions you would ask of a piece are its methods. This example supplies four bars of block chords, reads their harmony, and labels each segment:
+
+```ts
+import { Score } from '@libraz/libcantus';
+
+const notes = [[48, 60, 64, 67], [41, 60, 65, 69], [43, 59, 62, 65], [48, 60, 64, 67]].flatMap(
+  (pitches, bar) => pitches.map((pitch) => ({ pitch, startBeat: bar * 4, durationBeat: 4 })),
+);
+
+Score.of(notes)
+  .timeline()
+  .roman()
+  .map((entry) => entry.roman);
+// ['I', 'IV', 'V7', 'I']
+```
+
+Every class here is a thin skin over the functional core, so the same reading is available a function at a time. Which style you write is a preference, not a capability:
 
 ```ts
 import { chordTimelineFromNotes, chordToRoman } from '@libraz/libcantus';

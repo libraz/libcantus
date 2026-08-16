@@ -41,7 +41,23 @@ chordToRoman(g7.data, majorKey(0)); // 'V7'
 
 ## 短いタイムラインを解析する
 
-関数 API はノートイベントを受け取ります。次の例は4小節のブロックコードを渡し、そのタイムラインと主要な調を求め、各区間にラベルを付けます。
+`Score` はノートイベントと、それを読むための文脈をひとまとめにした値です。曲に対して尋ねたいことは、そのメソッドとして並んでいます。次の例は4小節のブロックコードを渡し、その和声を読み、各区間にラベルを付けます。
+
+```ts
+import { Score } from '@libraz/libcantus';
+
+const notes = [[48, 60, 64, 67], [41, 60, 65, 69], [43, 59, 62, 65], [48, 60, 64, 67]].flatMap(
+  (pitches, bar) => pitches.map((pitch) => ({ pitch, startBeat: bar * 4, durationBeat: 4 })),
+);
+
+Score.of(notes)
+  .timeline()
+  .roman()
+  .map((entry) => entry.roman);
+// ['I', 'IV', 'V7', 'I']
+```
+
+クラスはいずれも関数コアの薄い外皮なので、同じ読み取りを関数ひとつずつでも書けます。どちらのスタイルを選ぶかは好みの問題で、できることは変わりません。
 
 ```ts
 import { chordTimelineFromNotes, chordToRoman } from '@libraz/libcantus';
