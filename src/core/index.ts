@@ -130,7 +130,7 @@ export {
   tempoAt,
   ticksToBeats,
 } from './tempo/index.js';
-export type { Tuning } from './tuning/index.js';
+export type { TuningTable } from './tuning/index.js';
 export {
   centsBetweenFreq,
   centsFromNearestStep,

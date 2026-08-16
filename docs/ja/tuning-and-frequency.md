@@ -6,7 +6,7 @@
 
 ## 周波数
 
-`Tuning` は基準ピッチとオクターブの等分数から成ります。12等分ではステップ番号がそのまま MIDI ノート番号になるため、既定値はどこでも `TWELVE_TET` です。
+`TuningTable` は基準ピッチとオクターブの等分数から成ります。12等分ではステップ番号がそのまま MIDI ノート番号になるため、既定値はどこでも `TWELVE_TET` です。
 
 ```ts
 import { frequencyOf, nearestStep, stepOf, TWELVE_TET } from '@libraz/libcantus';
@@ -78,7 +78,7 @@ Math.round(justDeviationCents(4) * 100) / 100; // -13.69
 ## アプリケーションでの用途
 
 - **チューナー・音程表示**: 正確な位置に `stepOf`、針の振れに `centsFromNearestStep`、ラベルに `midiToNote`。
-- **微分音の再生**: 呼び出し側が組んだ `Tuning` に `frequencyOf`、または12音のピッチを曲げる場合は `centsToRatio`。
+- **微分音の再生**: 呼び出し側が組んだ `TuningTable` に `frequencyOf`、または12音のピッチを曲げる場合は `centsToRatio`。
 - **合成・解析との橋渡し**: 検出した周波数を `nearestStep` で量子化し、ライブラリの他の部分が読めるピッチにします。
 - **資料・教材**: 平均律の音程がうなる理由を示すのに `justDeviationCents`。
 

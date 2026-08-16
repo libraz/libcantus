@@ -22,7 +22,7 @@ import {
  *
  * @category Pitch & Intervals
  */
-export type Tuning = {
+export type TuningTable = {
   /** Step index (MIDI number when `divisions` is 12) whose frequency is `refFreq`. */
   readonly refStep: number;
   /** Frequency in Hz of `refStep`. */
@@ -36,9 +36,9 @@ export type Tuning = {
  *
  * @category Pitch & Intervals
  */
-export const TWELVE_TET: Tuning = Object.freeze({ refStep: 69, refFreq: 440, divisions: 12 });
+export const TWELVE_TET: TuningTable = Object.freeze({ refStep: 69, refFreq: 440, divisions: 12 });
 
-function assertTuning(tuning: Tuning): Tuning {
+function assertTuning(tuning: TuningTable): TuningTable {
   assertFiniteNumber(tuning.refStep, 'tuning.refStep');
   assertRange(tuning.refFreq, Number.MIN_VALUE, Number.MAX_VALUE, 'tuning.refFreq');
   assertPositiveInt(tuning.divisions, 'tuning.divisions');
@@ -60,7 +60,7 @@ function assertTuning(tuning: Tuning): Tuning {
  * ```
  * @category Pitch & Intervals
  */
-export function edo(n: number, refFreq = 440, refStep = 69): Tuning {
+export function edo(n: number, refFreq = 440, refStep = 69): TuningTable {
   assertPositiveInt(n, 'EDO divisions');
   assertRange(refFreq, Number.MIN_VALUE, Number.MAX_VALUE, 'reference frequency');
   assertFiniteNumber(refStep, 'reference step');
@@ -81,7 +81,7 @@ export function edo(n: number, refFreq = 440, refStep = 69): Tuning {
  * ```
  * @category Pitch & Intervals
  */
-export function frequencyOf(step: number, tuning: Tuning = TWELVE_TET): number {
+export function frequencyOf(step: number, tuning: TuningTable = TWELVE_TET): number {
   assertFiniteNumber(step, 'step');
   assertTuning(tuning);
   const result = tuning.refFreq * 2 ** ((step - tuning.refStep) / tuning.divisions);
@@ -97,7 +97,7 @@ export function frequencyOf(step: number, tuning: Tuning = TWELVE_TET): number {
  * @returns The nearest step index.
  * @category Pitch & Intervals
  */
-export function nearestStep(freq: number, tuning: Tuning = TWELVE_TET): number {
+export function nearestStep(freq: number, tuning: TuningTable = TWELVE_TET): number {
   assertRange(freq, Number.MIN_VALUE, Number.MAX_VALUE, 'frequency');
   assertTuning(tuning);
   return Math.round(tuning.refStep + tuning.divisions * Math.log2(freq / tuning.refFreq));
@@ -120,7 +120,7 @@ export function nearestStep(freq: number, tuning: Tuning = TWELVE_TET): number {
  * ```
  * @category Pitch & Intervals
  */
-export function stepOf(freq: number, tuning: Tuning = TWELVE_TET): number {
+export function stepOf(freq: number, tuning: TuningTable = TWELVE_TET): number {
   assertRange(freq, Number.MIN_VALUE, Number.MAX_VALUE, 'frequency');
   assertTuning(tuning);
   return tuning.refStep + tuning.divisions * Math.log2(freq / tuning.refFreq);
@@ -141,7 +141,7 @@ export function stepOf(freq: number, tuning: Tuning = TWELVE_TET): number {
  * ```
  * @category Pitch & Intervals
  */
-export function centsFromNearestStep(freq: number, tuning: Tuning = TWELVE_TET): number {
+export function centsFromNearestStep(freq: number, tuning: TuningTable = TWELVE_TET): number {
   const exact = stepOf(freq, tuning);
   return centsOfSteps(exact - Math.round(exact), tuning);
 }
@@ -155,7 +155,7 @@ export function centsFromNearestStep(freq: number, tuning: Tuning = TWELVE_TET):
  * @returns The fractional step count.
  * @category Pitch & Intervals
  */
-export function stepsOfCents(cents: number, tuning: Tuning = TWELVE_TET): number {
+export function stepsOfCents(cents: number, tuning: TuningTable = TWELVE_TET): number {
   assertFiniteNumber(cents, 'cents');
   assertTuning(tuning);
   return assertFiniteNumber((cents * tuning.divisions) / 1200, 'steps result');
@@ -204,7 +204,7 @@ export function centsBetweenFreq(a: number, b: number): number {
  * @returns The cents.
  * @category Pitch & Intervals
  */
-export function centsOfSteps(steps: number, tuning: Tuning = TWELVE_TET): number {
+export function centsOfSteps(steps: number, tuning: TuningTable = TWELVE_TET): number {
   assertFiniteNumber(steps, 'steps');
   assertTuning(tuning);
   return assertFiniteNumber((steps * 1200) / tuning.divisions, 'cents result');

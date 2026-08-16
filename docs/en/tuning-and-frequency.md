@@ -6,7 +6,7 @@ Nothing here feeds back into harmonic analysis. A 19-EDO step index is not a pit
 
 ## Frequencies
 
-`Tuning` is a reference pitch plus a number of equal divisions of the octave. Under twelve divisions a step index is an ordinary MIDI number, which is why `TWELVE_TET` is the default everywhere:
+`TuningTable` is a reference pitch plus a number of equal divisions of the octave. Under twelve divisions a step index is an ordinary MIDI number, which is why `TWELVE_TET` is the default everywhere:
 
 ```ts
 import { frequencyOf, nearestStep, stepOf, TWELVE_TET } from '@libraz/libcantus';
@@ -78,7 +78,7 @@ A positive deviation means the just interval is wider than the tempered one. The
 ## Where this fits in an application
 
 - **Tuner and intonation display**: `stepOf` for the exact position, `centsFromNearestStep` for the needle, `midiToNote` for the label.
-- **Microtonal playback**: `frequencyOf` under a caller-built `Tuning`, or `centsToRatio` to bend a twelve-tone pitch.
+- **Microtonal playback**: `frequencyOf` under a caller-built `TuningTable`, or `centsToRatio` to bend a twelve-tone pitch.
 - **Synthesis and analysis bridges**: `nearestStep` to quantize a detected frequency into a pitch the rest of the library can read.
 - **Documentation and teaching**: `justDeviationCents` to show why a tempered interval beats.
 
