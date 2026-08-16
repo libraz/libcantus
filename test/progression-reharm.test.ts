@@ -23,8 +23,7 @@ describe('generateProgression reharmonize', () => {
         key: cMajor,
         style: 'rock',
         bars: 4,
-        seed: 42,
-        reharmonize: true,
+        ctx: { seed: 42, complexity: { harmonic: 0.5 } },
       }),
     ).toEqual([
       { rootPc: 9, quality: 'min', startBeat: 0, degree: 6 },
@@ -42,8 +41,7 @@ describe('generateProgression reharmonize', () => {
         key: cMajor,
         style: 'idol',
         bars: 8,
-        reharmonize: true,
-        seed,
+        ctx: { complexity: { harmonic: 0.5 }, seed: seed },
       });
       for (const chord of chords) {
         if (chord.secondaryDominant) {
@@ -65,8 +63,7 @@ describe('generateProgression reharmonize', () => {
         key: cMajor,
         style: 'idol',
         bars: 8,
-        reharmonize: true,
-        seed,
+        ctx: { complexity: { harmonic: 0.5 }, seed: seed },
       });
       for (let i = 0; i < chords.length - 1; i += 1) {
         if (chords[i]?.secondaryDominant) {
@@ -82,8 +79,7 @@ describe('generateProgression reharmonize', () => {
       key: cMajor,
       style: 'idol',
       bars: 8,
-      reharmonize: true,
-      seed: 4,
+      ctx: { complexity: { harmonic: 0.5 }, seed: 4 },
     });
     expect(chords.some((chord) => chord.rootPc === 0 && chord.secondaryDominant !== true)).toBe(
       true,

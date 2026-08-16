@@ -69,22 +69,17 @@ export type OrnamentOptions = {
    */
   amount?: number;
   /**
-   * Seed for the deterministic choice of which notes are decorated. Sugar for
-   * `ctx: { seed }`.
-   *
-   * @defaultValue 0
-   */
-  seed?: number;
-  /**
    * Time signature, used to tell strong positions from weak ones.
    *
    * @defaultValue 4/4
    */
   ts?: TimeSignature;
   /**
-   * The generation context. Its `complexity.ornament` sets the amount, and its
+   * The generation context. Its `complexity.ornament` sets the amount, its
    * `complexity.difficulty` — with a tempo — keeps ornaments off passages too
-   * fast to play them in.
+   * fast to play them in, and its `seed` fixes which notes are decorated.
+   *
+   * @defaultValue `{ seed: 0 }`
    */
   ctx?: GenerationContextInput;
 };
@@ -168,7 +163,7 @@ function clampVelocity(velocity: number): number {
  * kind of candidate a ceiling exists to reject.
  *
  * @param notes The material to decorate.
- * @param opts Style, amount, seed, meter, and context.
+ * @param opts Style, amount, meter, and context.
  * @returns Copies of the sounding notes, in input order, with ornaments applied.
  * @example
  * ```ts
@@ -178,7 +173,7 @@ function clampVelocity(velocity: number): number {
  *   key: majorKey(0),
  *   style: 'pop',
  * });
- * ornament(line, { style: 'ghost', amount: 0.4, seed: 3 });
+ * ornament(line, { style: 'ghost', amount: 0.4, ctx: 3 });
  * ```
  * Notes with a zero or negative duration never sound and are dropped, so the
  * result can be shorter than the input.
@@ -193,7 +188,7 @@ export function ornament(notes: readonly NoteEvent[], opts: OrnamentOptions = {}
   if (opts.amount !== undefined) {
     assertRange(opts.amount, 0, 1, 'ornament amount');
   }
-  const ctx = resolveContextWith(opts.ctx, { seed: opts.seed, ornament: opts.amount });
+  const ctx = resolveContextWith(opts.ctx, { ornament: opts.amount });
   const amount = ctx.ornament ?? DEFAULT_AMOUNT;
   const draw = ctx.part('ornament');
 

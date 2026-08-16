@@ -11,14 +11,14 @@ import { generateRhythm, parseTimeSignature, rhythmDensity } from '@libraz/libca
 
 const ts = parseTimeSignature('4/4');
 
-const sparse = generateRhythm(ts, { seed: 42, density: 0.2, bars: 2 });
-const dense = generateRhythm(ts, { seed: 42, density: 0.9, bars: 2 });
+const sparse = generateRhythm(ts, { ctx: { seed: 42, complexity: { rhythmic: 0.2 } }, bars: 2 });
+const dense = generateRhythm(ts, { ctx: { seed: 42, complexity: { rhythmic: 0.9 } }, bars: 2 });
 
 sparse.length <= dense.length; // true
 rhythmDensity(dense, ts) >= rhythmDensity(sparse, ts); // true
 ```
 
-`subdivision` は4分音符1拍あたりのステップ数で表した格子の細かさです。2は8分、4は16分、3は8分3連になります。`density` はスロットごとの確率を倍率で変え、`ctx.complexity.rhythmic` の略記です。
+`subdivision` は4分音符1拍あたりのステップ数で表した格子の細かさです。2は8分、4は16分、3は8分3連になります。スロットごとの確率を倍率で変えるのは `ctx.complexity.rhythmic` で、既定値は0.5、[0, 1] を外れた値は丸めずに拒否します。
 
 重みづけ自体は `onsetWeightCurve` で取得できます。拍節強度0（拍から外れた位置）から3（強拍）に対する基本確率で、独自の配置ロジックを組む場合に使います。
 
@@ -35,7 +35,7 @@ onsetWeightCurve(3) > onsetWeightCurve(0); // true
 ```ts
 import { generateRhythm, parseTimeSignature, rhythmToNoteEvents } from '@libraz/libcantus';
 
-const rhythm = generateRhythm(parseTimeSignature('4/4'), { seed: 3, bars: 1 });
+const rhythm = generateRhythm(parseTimeSignature('4/4'), { ctx: { seed: 3 }, bars: 1 });
 const notes = rhythmToNoteEvents(rhythm, 38);
 
 notes.every((note) => note.pitch === 38); // true
@@ -55,7 +55,7 @@ const quantized = [
   { pitch: 38, startBeat: 1, durationBeat: 1, velocity: 80 },
 ];
 
-const played = humanize(quantized, { seed: 1, timing: 0.03 });
+const played = humanize(quantized, { ctx: { seed: 1 }, timing: 0.03 });
 
 played.length; // 2
 quantized[0]?.startBeat; // 0

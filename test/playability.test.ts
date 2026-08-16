@@ -307,10 +307,9 @@ describe('playability placements', () => {
   it('names the limb behind every stroke of a generated groove', () => {
     const hits = generateDrums({
       bars: 2,
-      bpm: 100,
+      ctx: { bpm: 100, complexity: { rhythmic: 0.5 } },
       style: 'standard',
       section: 'verse',
-      density: 0.5,
     });
     const report = playability(hits, DRUM_KIT, 100);
     expect(report.placements).toHaveLength(hits.length);
@@ -345,7 +344,7 @@ describe('generateBassLine against an instrument', () => {
             key: cMajor,
             style,
             octave,
-            seed,
+            ctx: { seed: seed },
             instrument: BASS_4_STRING,
           });
           for (const written of notes) {
@@ -359,13 +358,19 @@ describe('generateBassLine against an instrument', () => {
 
   it('folds the register instead of dropping or replacing notes', () => {
     for (const octave of [0, 1]) {
-      const plain = generateBassLine({ segments, key: cMajor, octave, style: 'pop', seed: 4 });
+      const plain = generateBassLine({
+        segments,
+        key: cMajor,
+        octave,
+        style: 'pop',
+        ctx: { seed: 4 },
+      });
       const fitted = generateBassLine({
         segments,
         key: cMajor,
         octave,
         style: 'pop',
-        seed: 4,
+        ctx: { seed: 4 },
         instrument: BASS_4_STRING,
       });
       expect(fitted).toHaveLength(plain.length);
@@ -391,10 +396,9 @@ describe('an explicit request outranks a difficulty ceiling', () => {
     const bpm = 300;
     const hits = generateDrums({
       bars: 1,
-      bpm,
+      ctx: { bpm: bpm, complexity: { rhythmic: 0.5 } },
       style: 'standard',
       section: 'chorus',
-      density: 0.5,
       euclideanKick: { pulses: 16, steps: 16 },
     });
     const kicks = hits.filter((hit) => hit.pitch === DRUM_NOTES.kick);

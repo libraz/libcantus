@@ -74,7 +74,7 @@ describe('one sign convention for startBeat', () => {
     expect(metricWeight(upbeat.startBeat, COMMON)).toBe(1);
     expect(beatToBarPosition(upbeat.startBeat, COMMON).bar).toBe(-1);
     expect(chordTimelineFromNotes(WITH_PICKUP).timeline.segments[0]?.startBeat).toBe(-1);
-    expect(humanize(WITH_PICKUP, { seed: 3, timing: 0.02 })[0]?.startBeat).toBeLessThan(0);
+    expect(humanize(WITH_PICKUP, { ctx: { seed: 3 }, timing: 0.02 })[0]?.startBeat).toBeLessThan(0);
   });
 });
 

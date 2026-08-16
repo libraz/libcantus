@@ -18,14 +18,19 @@
 import { generateMotif, generateProgression, majorKey } from '@libraz/libcantus';
 
 const key = majorKey(0);
-const chords = generateProgression({ key, style: 'idol', bars: 8, reharmonize: true, seed: 1 });
-const motif = generateMotif({ key, bars: 2, contour: 'arch', seed: 1 });
+const chords = generateProgression({
+  key,
+  style: 'idol',
+  bars: 8,
+  ctx: { seed: 1, complexity: { harmonic: 0.5 } },
+});
+const motif = generateMotif({ key, bars: 2, contour: 'arch', ctx: { seed: 1 } });
 
 chords.length; // 8
 motif.notes.length >= 1; // true
 ```
 
-`generateProgression` は1小節につき1つの `ChordSpan` を返します。`style` はプリセットの候補群を選び、`presetId` は特定のプリセットを指定し、`preset` は度数列を直接渡します。`reharmonize` フラグと代理和音の語彙は[リハーモナイズ](reharmonization.md)を参照してください。
+`generateProgression` は1小節につき1つの `ChordSpan` を返します。`style` はプリセットの候補群を選び、`presetId` は特定のプリセットを指定し、`preset` は度数列を直接渡します。後続和音のセカンダリドミナントへ置き換える割合は `ctx.complexity.harmonic` が決め、既定の0では進行に手を加えません。このダイヤルと代理和音の語彙は[リハーモナイズ](reharmonization.md)を参照してください。
 
 `generateRhythm`、`motifToNoteEvents`、`developMotif`、`transformMotif` は、素材の選択と配置・変形を分離します。[旋律とモチーフ](melody-and-motifs.md)と[リズムとグルーヴ](rhythm-and-groove.md)を参照してください。
 
@@ -72,7 +77,7 @@ const notes = [60, 62, 64, 65, 67, 65, 64, 62].map((pitch, i) => ({
   durationBeat: 0.5,
 }));
 
-ornament(notes, { style: 'ghost', amount: 0.6, seed: 4 }).length; // 8
+ornament(notes, { style: 'ghost', amount: 0.6, ctx: { seed: 4 } }).length; // 8
 ```
 
 同じ種類のパスに `imitate`、`applyGrooveTemplate`、`humanize` があります。素材を受け取って素材を返すため、ホストは元の素材と各パスのオプションを保存しておき、変更したパスだけを再生成できます。

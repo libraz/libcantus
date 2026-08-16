@@ -85,7 +85,7 @@ describe('the meter reaches the analysis entry points', () => {
       key: majorKey(0),
       style: 'root',
       ts: COMPOUND,
-      seed: 1,
+      ctx: { seed: 1 },
     });
     expect(line.length).toBeGreaterThan(0);
     for (const note of line) {

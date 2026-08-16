@@ -115,7 +115,9 @@ describe('classifyMelodyTones', () => {
   it('classifies a humanized melody as it classifies the melody itself', () => {
     const written = quarters([60, 62, 64, 65, 67, 65, 64, 62]);
     for (let seed = 0; seed < 16; seed += 1) {
-      expect(roles(humanize(written, { timing: 0.02, seed }))).toEqual(roles(written));
+      expect(roles(humanize(written, { timing: 0.02, ctx: { seed: seed } }))).toEqual(
+        roles(written),
+      );
     }
   });
 
@@ -130,7 +132,7 @@ describe('classifyMelodyTones', () => {
       const written = quarters(pitches);
       const chords = harmonizeMelody({ melody: written }).chords;
       for (let seed = 0; seed < 16; seed += 1) {
-        const played = humanize(written, { timing: 0.02, seed });
+        const played = humanize(written, { timing: 0.02, ctx: { seed: seed } });
         expect(harmonizeMelody({ melody: played }).chords).toEqual(chords);
       }
     }

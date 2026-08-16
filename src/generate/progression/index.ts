@@ -9,11 +9,7 @@ import {
 import type { ChordQuality, ChordSpan } from '../../theory/chord/index.js';
 import { chordQualities, diatonicTriad } from '../../theory/chord/index.js';
 import { scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
-import {
-  type GenerationContextInput,
-  resolveContext,
-  resolveContextWith,
-} from '../context/index.js';
+import { type GenerationContextInput, resolveContext } from '../context/index.js';
 
 export type { ChordSpan } from '../../theory/chord/index.js';
 
@@ -114,22 +110,15 @@ export type ProgressionOptions = {
   preset?: Partial<ProgressionPreset> & { degrees: ProgressionDegree[] };
   ext?: ChordQuality | 'auto';
   /**
-   * Replace chords with the secondary dominant of what follows. Sugar for
-   * `ctx: { complexity: { harmonic } }` at the middle setting, which is what
-   * this flag has always meant; a context names how much instead of whether.
-   */
-  reharmonize?: boolean;
-  /**
-   * Seed for the deterministic preset choice and reharmonization. Sugar for
-   * `ctx: { seed }`.
+   * The generation context.
    *
-   * @defaultValue 0
-   */
-  seed?: number;
-  /**
-   * The generation context. Its `complexity.harmonic` sets how much of the
-   * progression is reharmonized — 0 leaves it alone, 1 takes every chord the
-   * voice-leading rules allow — and its `seed` replaces `seed`.
+   * Its `complexity.harmonic` sets how much of the progression is replaced by
+   * the secondary dominant of what follows: 0 — the default — leaves it alone,
+   * 0.5 takes about half of what the voice-leading rules allow, and 1 takes
+   * every one of them. Its `seed` fixes both the preset choice and which chords
+   * are replaced, so the same seed always yields the same progression.
+   *
+   * @defaultValue `{ seed: 0 }`
    */
   ctx?: GenerationContextInput;
 };
@@ -291,8 +280,8 @@ const PRESETS: ProgressionPreset[] = [
   },
 ];
 
-/** Share of the eligible chords `reharmonize: true` replaces. */
-const DEFAULT_REHARMONIZE_STRENGTH = 0.5;
+/** Share of the eligible chords replaced when the caller names no dial. */
+const DEFAULT_HARMONIC = 0;
 
 /** Chromatic semitone offset from the tonic for borrowed (non-diatonic) degrees. */
 const BORROWED_OFFSET: Record<number, number> = {
@@ -456,17 +445,17 @@ export function pickProgressionPreset(style: ProgStyle, seed = 0): ProgressionPr
  * Generate a chord progression laid out one chord per bar.
  *
  * A preset is chosen by `presetId` when given, otherwise deterministically from
- * the presets matching `style`, seeded by `seed`. An unknown `presetId`, or a
- * `style` no preset claims, is a caller error and throws rather than silently
- * falling back to a random preset. The preset's degrees cycle to
+ * the presets matching `style`, seeded by the context's `seed`. An unknown
+ * `presetId`, or a `style` no preset claims, is a caller error and throws rather
+ * than silently falling back to a random preset. The preset's degrees cycle to
  * fill `bars`; each bar is four beats, so `startBeat` is `barIndex * 4`. Chord
  * roots come from the key's diatonic scale-degree mapping. When `ext` is
  * omitted or `'auto'`, each chord takes its diatonic triad quality; otherwise
- * `ext` is forced on every chord — except a chord replaced by `reharmonize`,
- * which is a secondary dominant and is therefore always a `dom7`; those carry
- * `secondaryDominant: true`. When `reharmonize` is set, some chords are
- * deterministically replaced with the secondary dominant (V7) of the following
- * chord, flagged with `secondaryDominant`.
+ * `ext` is forced on every chord — except a reharmonized chord, which is a
+ * secondary dominant and is therefore always a `dom7`. With
+ * `complexity.harmonic` above 0, some chords are deterministically replaced with
+ * the secondary dominant (V7) of the following chord, flagged with
+ * `secondaryDominant`.
  *
  * @param opts Generation options.
  * @returns One chord per bar in timeline order.
@@ -477,6 +466,13 @@ export function pickProgressionPreset(style: ProgStyle, seed = 0): ProgressionPr
  * import { generateProgression, majorKey } from '@libraz/libcantus';
  * const chords = generateProgression({ key: majorKey(0), style: 'dance', bars: 4 });
  * // Deterministic for a given seed (defaults to 0); one ChordSpan per bar.
+ * const richer = generateProgression({
+ *   key: majorKey(0),
+ *   style: 'dance',
+ *   bars: 4,
+ *   ctx: { seed: 3, complexity: { harmonic: 0.5 } },
+ * });
+ * // Some chords are now the secondary dominant of the chord that follows.
  * ```
  *
  * @category Composition
@@ -484,7 +480,7 @@ export function pickProgressionPreset(style: ProgStyle, seed = 0): ProgressionPr
 export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
   assertPositiveInt(opts.bars, 'progression bars');
   assertGenerationBudget(opts.bars, 'progression chords');
-  const ctx = resolveContextWith(opts.ctx, { seed: opts.seed });
+  const ctx = resolveContext(opts.ctx);
   const seed = ctx.seed;
   let preset: ProgressionPreset | undefined;
   if (opts.preset !== undefined) {
@@ -541,9 +537,7 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
     chords.push(chord);
   }
 
-  // `reharmonize` names the middle of the dial: the flag has always meant
-  // "replace about half of what the rules allow", so it keeps meaning that.
-  const harmonic = ctx.harmonic ?? (opts.reharmonize ? DEFAULT_REHARMONIZE_STRENGTH : 0);
+  const harmonic = ctx.harmonic ?? DEFAULT_HARMONIC;
   if (harmonic > 0) {
     const tonicPc = (((opts.key.rootPc % 12) + 12) % 12) as number;
     const draw = ctx.part('progression');

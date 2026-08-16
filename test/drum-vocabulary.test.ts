@@ -50,12 +50,10 @@ function grooveDigest(): string {
         for (const density of [0.2, 0.55, 0.9]) {
           const opts: DrumsOptions = {
             bars: 4,
-            bpm: 128,
+            ctx: { bpm: 128, complexity: { rhythmic: density }, seed: 11 },
             style,
             section,
             nextSection,
-            density,
-            seed: 11,
             fills: true,
           };
           for (const hit of generateDrums(opts)) {
@@ -381,11 +379,10 @@ describe('a caller-supplied drum dictionary', () => {
     };
     const base: DrumsOptions = {
       bars: 2,
-      bpm: 120,
+      ctx: { bpm: 120, seed: 4 },
       style: 'standard',
       section: 'verse',
       fills: true,
-      seed: 4,
     };
     const withCaller = generateDrums({ ...base, ctx: { seed: 4, bpm: 120, vocabulary: [fill] } });
     expect(withCaller.length).toBeGreaterThan(0);

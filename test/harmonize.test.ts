@@ -178,11 +178,13 @@ describe('harmonizeMelody', () => {
       reharmonize: 'diatonic',
       placement: { transposeSearch: false, octaveSearch: false },
     };
-    const a = harmonizeMelody({ ...base, seed: 1 });
-    const b = harmonizeMelody({ ...base, seed: 9999 });
+    const a = harmonizeMelody({ ...base, ctx: { seed: 1 } });
+    const b = harmonizeMelody({ ...base, ctx: { seed: 9999 } });
     expect(a.chords).toEqual(b.chords);
     // And the same seed is always reproducible.
-    expect(harmonizeMelody({ ...base, seed: 1 })).toEqual(harmonizeMelody({ ...base, seed: 1 }));
+    expect(harmonizeMelody({ ...base, ctx: { seed: 1 } })).toEqual(
+      harmonizeMelody({ ...base, ctx: { seed: 1 } }),
+    );
   });
 
   it('avoids clashing with a note sustained across a segment boundary', () => {
@@ -217,7 +219,7 @@ describe('harmonizeMelody', () => {
       harmonicRhythm: 2,
       reharmonize: 'borrowed',
       placement: { transposeSearch: true, octaveSearch: true },
-      seed: 99,
+      ctx: { seed: 99 },
     };
     expect(harmonizeMelody(opts)).toEqual(harmonizeMelody(opts));
   });
@@ -471,11 +473,13 @@ describe('harmonizeMelody follows the harmony rather than the melody notes', () 
         ctx: { seed: 0, complexity: { harmonic: 0 } },
       }),
     ).toEqual(harmonizeMelody({ ...common, reharmonize: 'diatonic' }));
-    expect(harmonizeMelody({ ...common, seed: 7, ctx: { seed: 3 } })).toEqual(
+    expect(harmonizeMelody({ ...common, ctx: { seed: 3 } })).toEqual(
       harmonizeMelody({ ...common, ctx: { seed: 3 } }),
     );
     // A bare number is the seed, exactly as `seed` is.
-    expect(harmonizeMelody({ ...common, ctx: 5 })).toEqual(harmonizeMelody({ ...common, seed: 5 }));
+    expect(harmonizeMelody({ ...common, ctx: 5 })).toEqual(
+      harmonizeMelody({ ...common, ctx: { seed: 5 } }),
+    );
   });
 
   it('does not give a passing tone a chord of its own', () => {

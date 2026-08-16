@@ -42,11 +42,9 @@ describe('generateDrums coverage matrix', () => {
         for (const density of [0.2, 0.55, 0.9]) {
           const opts: DrumsOptions = {
             bars: 4,
-            bpm: 128,
+            ctx: { bpm: 128, complexity: { rhythmic: density }, seed: 11 },
             style,
             section,
-            density,
-            seed: 11,
             fills: true,
           };
           const hits = generateDrums(opts);
@@ -69,12 +67,10 @@ describe('generateDrums coverage matrix', () => {
       for (const section of SECTIONS) {
         const hits = generateDrums({
           bars: 4,
-          bpm: 120,
+          ctx: { bpm: 120, complexity: { rhythmic: 0.8 }, seed: 7 },
           style,
           section,
-          density: 0.8,
           role: 'fxOnly',
-          seed: 7,
           fills: true,
         });
         expect(hits.some((h) => h.pitch === KICK)).toBe(false);
@@ -89,13 +85,11 @@ describe('generateDrums coverage matrix', () => {
         for (const bpm of [88, 120, 165]) {
           const opts: DrumsOptions = {
             bars: 2,
-            bpm,
+            ctx: { bpm: bpm, complexity: { rhythmic: 0.8 }, seed: 4 },
             style: 'funk',
             section: 'chorus',
-            density: 0.8,
             feel,
             role,
-            seed: 4,
           };
           expect(generateDrums(opts)).toEqual(generateDrums(opts));
         }
@@ -135,11 +129,9 @@ describe('euclid', () => {
   it('drives the kick from a euclidean option in generateDrums', () => {
     const opts: DrumsOptions = {
       bars: 2,
-      bpm: 120,
+      ctx: { bpm: 120, complexity: { rhythmic: 0.5 }, seed: 3 },
       style: 'standard',
       section: 'verse',
-      density: 0.5,
-      seed: 3,
     };
     // A default standard verse kicks only on beats 1 and 3.
     const defaultKicks = generateDrums(opts)
@@ -161,10 +153,9 @@ describe('euclid', () => {
   it('scales Euclidean steps across the whole bar', () => {
     const hits = generateDrums({
       bars: 1,
-      bpm: 120,
+      ctx: { bpm: 120, complexity: { rhythmic: 0.5 } },
       style: 'standard',
       section: 'verse',
-      density: 0.5,
       euclideanKick: { pulses: 4, steps: 8 },
     });
     expect(hits.filter((hit) => hit.pitch === 36).map((hit) => hit.startBeat)).toEqual([
@@ -176,10 +167,9 @@ describe('euclid', () => {
     for (let steps = 1; steps <= 16; steps += 1) {
       const options: DrumsOptions = {
         bars: 1,
-        bpm: 120,
+        ctx: { bpm: 120, complexity: { rhythmic: 0.5 } },
         style: 'standard',
         section: 'verse',
-        density: 0.5,
         euclideanKick: { pulses: steps, steps },
       };
       const kicks = generateDrums(options).filter((hit) => hit.pitch === 36);

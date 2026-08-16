@@ -6,14 +6,9 @@ import {
   assertInteger,
   assertOneOf,
   assertPositiveInt,
-  assertRange,
   assertTimeSignature,
 } from '../../core/validation/index.js';
-import {
-  type GenerationContextInput,
-  resolveContextWith,
-  sustainsStrokes,
-} from '../context/index.js';
+import { type GenerationContextInput, resolveContext, sustainsStrokes } from '../context/index.js';
 import { selectVocabulary, vocabularyOfKind } from '../vocabulary/index.js';
 import {
   type BeatCtx,
@@ -149,26 +144,8 @@ export type DrumsOptions = {
    * Number of bars to generate.
    */
   bars: number;
-  /**
-   * Tempo in quarter-note beats per minute. Sugar for `ctx: { bpm }`, which is
-   * where a tempo belongs now that every part needs one; the context wins where
-   * both are given.
-   *
-   * @defaultValue 120
-   */
-  bpm?: number;
   style: GrooveStyle;
   section: Section;
-  /**
-   * How busy the backing is, in [0, 1]. Sugar for
-   * `ctx: { complexity: { rhythmic } }`; the context wins where both are given.
-   *
-   * The dial is continuous: every value moves the result, and raising it only
-   * adds onsets — the ones already sounding stay where they were.
-   *
-   * @defaultValue 0.5
-   */
-  density?: number;
   /**
    * Time signature.
    *
@@ -217,17 +194,18 @@ export type DrumsOptions = {
    */
   role?: DrumRole;
   /**
-   * Seed for the deterministic PRNG. Sugar for `ctx: { seed }`.
-   *
-   * @defaultValue 0
-   */
-  seed?: number;
-  /**
    * The generation context: the tempo, the complexity dials, and the kit this
-   * part is written for. `complexity.ornament` sets how many ghost notes
-   * survive, `complexity.difficulty` caps how fast the generator writes, and
+   * part is written for.
+   *
+   * `bpm` is the tempo in quarter-note beats per minute. `complexity.rhythmic`
+   * is how busy the backing is, in [0, 1]; the dial is continuous, so every
+   * value moves the result and raising it only adds onsets — the ones already
+   * sounding stay where they were. `complexity.ornament` sets how many ghost
+   * notes survive, `complexity.difficulty` caps how fast the generator writes,
    * `instruments.drums` — a percussion profile — restricts the output to voices
-   * that kit actually has.
+   * that kit actually has, and `seed` fixes every deterministic choice.
+   *
+   * @defaultValue `{ seed: 0, bpm: 120, complexity: { rhythmic: 0.5 } }`
    */
   ctx?: GenerationContextInput;
   /**
@@ -263,13 +241,13 @@ const DEFAULT_BPM = 120;
  * Every voice (kick, snare, ghost snares, closed/open/foot hi-hats, ride, toms,
  * crash, and auxiliary percussion) is emitted as a {@link DrumHit} distinguished
  * by its General MIDI pitch. Groove style selects an internal style and feel;
- * `density` sets the backing-density level; `section` shapes kick, hi-hat, ghost,
- * and percussion density. 16th-note hi-hats drop to 8ths at or above 150 BPM.
- * When `fills` is true the final bar is replaced with a fill whose archetype is
- * shaped by `nextSection`; a fill that would emit nothing on its beat falls back
- * to the normal groove so the phrase end is never silent. `euclideanKick`
- * overrides the kick with an evenly-spread Euclidean pattern. Output is fully
- * determined by the options plus `seed`.
+ * `complexity.rhythmic` sets the backing-density level; `section` shapes kick,
+ * hi-hat, ghost, and percussion density. 16th-note hi-hats drop to 8ths at or
+ * above 150 BPM. When `fills` is true the final bar is replaced with a fill whose
+ * archetype is shaped by `nextSection`; a fill that would emit nothing on its
+ * beat falls back to the normal groove so the phrase end is never silent.
+ * `euclideanKick` overrides the kick with an evenly-spread Euclidean pattern.
+ * Output is fully determined by the options plus the context's seed.
  *
  * The patterns are 4/4 only — backbeats, hi-hat subdivisions, and fills are all
  * written against a four-beat bar — so beat positions are quarter notes and bar
@@ -281,20 +259,20 @@ const DEFAULT_BPM = 120;
  * @example
  * ```ts
  * import { generateDrums } from '@libraz/libcantus';
- * const hits = generateDrums({ bars: 4, bpm: 120, style: 'standard', section: 'chorus', density: 0.6, fills: true });
- * // Fully determined by the options plus seed (defaults to 0).
+ * const hits = generateDrums({
+ *   bars: 4,
+ *   style: 'standard',
+ *   section: 'chorus',
+ *   fills: true,
+ *   ctx: { seed: 0, bpm: 120, complexity: { rhythmic: 0.6 } },
+ * });
+ * // Fully determined by the options plus the context's seed (defaults to 0).
  * ```
  *
  * @category Composition
  */
 export function generateDrums(opts: DrumsOptions): DrumHit[] {
   assertPositiveInt(opts.bars, 'drum bars');
-  if (opts.bpm !== undefined) {
-    assertRange(opts.bpm, Number.MIN_VALUE, 1000, 'drum bpm');
-  }
-  if (opts.density !== undefined) {
-    assertRange(opts.density, 0, 1, 'drum density');
-  }
   // Generation is linear in bar count — every lookup inside the bar loop is
   // indexed — so the estimate is the hit count itself.
   assertGenerationBudget(opts.bars * MAX_HITS_PER_BAR, 'drum hits', opts.budget);
@@ -313,11 +291,7 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
     assertOneOf(opts.nextSection, PUBLIC_SECTIONS, 'drum nextSection');
   }
   const track = new HitList();
-  const resolved = resolveContextWith(opts.ctx, {
-    seed: opts.seed,
-    bpm: opts.bpm,
-    rhythmic: opts.density,
-  });
+  const resolved = resolveContext(opts.ctx);
   const draw = resolved.part('drums');
   const bpm = resolved.bpm ?? DEFAULT_BPM;
   const rhythmic = resolved.rhythmic ?? DEFAULT_RHYTHMIC;

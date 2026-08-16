@@ -67,8 +67,13 @@ export type Complexity = {
  * @category Composition
  */
 export type GenerationContext = {
-  /** The project seed every part derives its own randomness from. */
-  seed: number;
+  /**
+   * The project seed every part derives its own randomness from. Optional, and
+   * zero when left out: a context naming only a tempo is a whole request, and
+   * requiring the seed beside it would make the commonest context unwritable
+   * now that it is the only place a seed can go.
+   */
+  seed?: number;
   /** The dials; see {@link Complexity}. */
   complexity?: Complexity;
   /**
@@ -214,56 +219,27 @@ export function resolveContext(input?: GenerationContextInput): ResolvedContext 
 }
 
 /**
- * Fill a context's seed in from the generator's own option where the context
- * named none.
+ * Merge a generator's own dial into a context.
+ *
+ * A generator that names one of the dials in its own vocabulary — the motif's
+ * `jitter`, the ornament's `amount` — resolves it here, so the dial reaches the
+ * generator by one path whichever surface named it. The context wins where both
+ * are given, since it is the one thing that speaks for the whole piece.
  *
  * @param input The context or bare seed, if any.
- * @param seed The generator's own seed option, if any.
- * @returns The context to resolve, or undefined when neither named anything.
- */
-function withSeed(
-  input: GenerationContextInput | undefined,
-  seed: number | undefined,
-): GenerationContextInput | undefined {
-  if (typeof input === 'number' || seed === undefined) return input;
-  if (input === undefined) return { seed };
-  return { ...input, seed: input.seed ?? seed };
-}
-
-/**
- * Merge a generator's own options into a context.
- *
- * Every generator kept a `seed` of its own, the drums a `bpm`, and the drums
- * and the rhythm generator a `density`; those stay, as the short way to say the
- * same thing. Where both are given the context wins, since it is the one thing
- * that speaks for the whole piece.
- *
- * @param input The context or bare seed, if any.
- * @param sugar The generator's own options.
- * @returns The resolved context, with the sugar filled in where the context was
+ * @param sugar The generator's own dial.
+ * @returns The resolved context, with the dial filled in where the context was
  *   silent.
  */
 export function resolveContextWith(
   input: GenerationContextInput | undefined,
-  sugar: { seed?: number; bpm?: number; rhythmic?: number; ornament?: number },
+  sugar: { ornament?: number },
 ): ResolvedContext {
-  // The seed resolves like every other field: what the context named, then the
-  // sugar, then the default. Reading it off the context only when no context was
-  // given at all would drop `seed` the moment the caller passed a `ctx` carrying
-  // nothing but a tempo.
-  const base = resolveContext(withSeed(input, sugar.seed));
-  const bpm =
-    base.bpm ??
-    (sugar.bpm === undefined ? undefined : assertRange(sugar.bpm, Number.MIN_VALUE, 1000, 'bpm'));
-  const rhythmic =
-    base.rhythmic ??
-    (sugar.rhythmic === undefined
-      ? undefined
-      : assertRange(sugar.rhythmic, 0, 1, 'complexity rhythmic'));
+  const base = resolveContext(input);
   const ornament =
     base.ornament ??
     (sugar.ornament === undefined
       ? undefined
       : assertRange(sugar.ornament, 0, 1, 'complexity ornament'));
-  return { ...base, bpm, rhythmic, ornament };
+  return { ...base, ornament };
 }

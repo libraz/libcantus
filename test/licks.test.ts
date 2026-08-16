@@ -47,12 +47,12 @@ describe('the bass lick dictionary', () => {
 
 describe('placeLicks', () => {
   it('is fully determined by the options and the seed', () => {
-    const opts = { genre: 'motown' as const, seed: 5, bpm: 112 };
+    const opts = { genre: 'motown' as const, ctx: { seed: 5, bpm: 112 } };
     expect(placeLicks(TIMELINE, KEY, opts)).toEqual(placeLicks(TIMELINE, KEY, opts));
   });
 
   it('places notes inside the timeline, in onset order, without overlapping', () => {
-    const notes = placeLicks(TIMELINE, KEY, { genre: 'soul', seed: 3, bpm: 96 });
+    const notes = placeLicks(TIMELINE, KEY, { genre: 'soul', ctx: { seed: 3, bpm: 96 } });
     expect(notes.length).toBeGreaterThan(0);
     for (let i = 0; i < notes.length; i += 1) {
       const note = notes[i];
@@ -75,7 +75,7 @@ describe('placeLicks', () => {
     const overDim = placeLicks(
       [{ startBeat: 0, endBeat: 4, chord: makeChord(0, 'dim') }],
       minorKey(0),
-      { genre: 'country', seed: 1, density: 1, bpm: 100 },
+      { genre: 'country', ctx: { seed: 1, bpm: 100, complexity: { rhythmic: 1 } } },
     );
     const pcs = new Set(overDim.map((note) => note.pitch % 12));
     expect(pcs.has(6)).toBe(true);
@@ -92,7 +92,10 @@ describe('placeLicks', () => {
       { genre: 'funk', bpm: 100, rootStep: 0, octaveStep: 3 },
     ] as const;
     for (const { genre, bpm, rootStep, octaveStep } of cases) {
-      const notes = placeLicks([FIRST_SPAN], KEY, { genre, seed: 3, density: 1, bpm });
+      const notes = placeLicks([FIRST_SPAN], KEY, {
+        genre,
+        ctx: { seed: 3, bpm, complexity: { rhythmic: 1 } },
+      });
       const at = (step: number) => notes.find((note) => Math.abs(note.startBeat - step / 4) < 1e-9);
       const root = at(rootStep);
       const octave = at(octaveStep);
@@ -125,7 +128,12 @@ describe('placeLicks', () => {
               const notes = placeLicks(
                 [{ startBeat: 0, endBeat: 4, chord: makeChord(rootPc, quality) }],
                 key,
-                { genre: lick.genre, density: 1, difficulty: 5, seed: 2, bpm, octave },
+                {
+                  genre: lick.genre,
+                  ctx: { seed: 2, bpm, complexity: { rhythmic: 1 } },
+                  difficulty: 5,
+                  octave,
+                },
               );
               const soundedAt = (step: number) =>
                 notes
@@ -154,27 +162,29 @@ describe('placeLicks', () => {
     // take it; the line still sounds, on its root.
     const notes = placeLicks([{ startBeat: 0, endBeat: 4, chord: makeChord(2, 'm7b5') }], KEY, {
       genre: 'motown',
-      seed: 2,
-      density: 1,
-      bpm: 112,
+      ctx: { seed: 2, bpm: 112, complexity: { rhythmic: 1 } },
     });
     expect(notes).toHaveLength(1);
     expect(notes[0]?.pitch % 12).toBe(2);
   });
 
   it('falls back to the root when the genre has nothing for this tempo', () => {
-    const notes = placeLicks(TIMELINE, KEY, { genre: 'motown', seed: 2, density: 1, bpm: 240 });
+    const notes = placeLicks(TIMELINE, KEY, {
+      genre: 'motown',
+      ctx: { seed: 2, bpm: 240, complexity: { rhythmic: 1 } },
+    });
     expect(notes).toHaveLength(TIMELINE.length);
     expect(notes.map((note) => note.pitch % 12)).toEqual([0, 9, 5, 7]);
   });
 
   it('rejects a figure above the ceiling rather than simplifying it', () => {
-    const free = placeLicks(TIMELINE, KEY, { genre: 'funk', seed: 8, density: 1, bpm: 112 });
+    const free = placeLicks(TIMELINE, KEY, {
+      genre: 'funk',
+      ctx: { seed: 8, bpm: 112, complexity: { rhythmic: 1 } },
+    });
     const capped = placeLicks(TIMELINE, KEY, {
       genre: 'funk',
-      seed: 8,
-      density: 1,
-      bpm: 112,
+      ctx: { seed: 8, bpm: 112, complexity: { rhythmic: 1 } },
       difficulty: 1,
     });
     expect(free.length).toBeGreaterThan(capped.length);
@@ -184,8 +194,14 @@ describe('placeLicks', () => {
   });
 
   it('plays fewer figures as the density falls', () => {
-    const sparse = placeLicks(TIMELINE, KEY, { genre: 'blues', seed: 4, density: 0, bpm: 120 });
-    const busy = placeLicks(TIMELINE, KEY, { genre: 'blues', seed: 4, density: 1, bpm: 120 });
+    const sparse = placeLicks(TIMELINE, KEY, {
+      genre: 'blues',
+      ctx: { seed: 4, bpm: 120, complexity: { rhythmic: 0 } },
+    });
+    const busy = placeLicks(TIMELINE, KEY, {
+      genre: 'blues',
+      ctx: { seed: 4, bpm: 120, complexity: { rhythmic: 1 } },
+    });
     expect(sparse).toHaveLength(TIMELINE.length);
     expect(busy.length).toBeGreaterThan(sparse.length);
   });
@@ -196,7 +212,10 @@ describe('placeLicks', () => {
     // stopped and the note it stopped on was written as a twelve-beat ornament.
     const vamp = [{ startBeat: 0, endBeat: 16, chord: makeChord(0, 'maj7') }];
     for (const genre of ['motown', 'soul', 'jazz', 'country'] as const) {
-      const notes = placeLicks(vamp, KEY, { genre, seed: 3, density: 1, bpm: 100 });
+      const notes = placeLicks(vamp, KEY, {
+        genre,
+        ctx: { seed: 3, bpm: 100, complexity: { rhythmic: 1 } },
+      });
       for (let bar = 0; bar < 4; bar += 1) {
         const inBar = notes.filter(
           (note) => note.startBeat >= bar * 4 && note.startBeat < (bar + 1) * 4,
@@ -216,8 +235,11 @@ describe('placeLicks', () => {
 
   it('says the same thing whether the documented default is written out or left out', () => {
     for (const genre of ['motown', 'blues', 'gospel'] as const) {
-      const omitted = placeLicks(TIMELINE, KEY, { genre, seed: 4, bpm: 100 });
-      const explicit = placeLicks(TIMELINE, KEY, { genre, seed: 4, bpm: 100, density: 0.6 });
+      const omitted = placeLicks(TIMELINE, KEY, { genre, ctx: { seed: 4, bpm: 100 } });
+      const explicit = placeLicks(TIMELINE, KEY, {
+        genre,
+        ctx: { seed: 4, bpm: 100, complexity: { rhythmic: 0.6 } },
+      });
       expect(explicit, genre).toEqual(omitted);
     }
   });
@@ -235,7 +257,10 @@ describe('placeLicks', () => {
   });
 
   it('leads into the next chord by step where the figure leaves room', () => {
-    const notes = placeLicks(TIMELINE, KEY, { genre: 'jazz', seed: 1, density: 0, bpm: 140 });
+    const notes = placeLicks(TIMELINE, KEY, {
+      genre: 'jazz',
+      ctx: { seed: 1, bpm: 140, complexity: { rhythmic: 0 } },
+    });
     // With no figures taken every segment is a root, so the connecting tones are
     // the only other notes that can appear.
     expect(notes.length).toBeGreaterThanOrEqual(TIMELINE.length);
@@ -243,7 +268,11 @@ describe('placeLicks', () => {
 
   it('keeps the line inside the requested register', () => {
     for (const octave of [1, 2, 3]) {
-      const notes = placeLicks(TIMELINE, KEY, { genre: 'gospel', seed: 6, bpm: 84, octave });
+      const notes = placeLicks(TIMELINE, KEY, {
+        genre: 'gospel',
+        ctx: { seed: 6, bpm: 84 },
+        octave,
+      });
       for (const note of notes) {
         expect(note.pitch).toBeGreaterThanOrEqual(octave * 12 + 12 - 12);
         // Roots land in the octave band the caller asked for; a figure is then
@@ -255,7 +284,10 @@ describe('placeLicks', () => {
   });
 
   it('carries the articulations the figure asks for', () => {
-    const notes = placeLicks(TIMELINE, KEY, { genre: 'funk', seed: 8, density: 1, bpm: 100 });
+    const notes = placeLicks(TIMELINE, KEY, {
+      genre: 'funk',
+      ctx: { seed: 8, bpm: 100, complexity: { rhythmic: 1 } },
+    });
     expect(notes.some((note) => note.articulation === 'mute')).toBe(true);
   });
 
@@ -275,7 +307,12 @@ describe('placeLicks', () => {
   it('leaves the phrase-shape generator alone', () => {
     // The lick layer is an addition, not a replacement: the styled generator is
     // reached the same way and answers the same as before.
-    const line = generateBassLine({ segments: TIMELINE, key: KEY, style: 'walking', seed: 1 });
+    const line = generateBassLine({
+      segments: TIMELINE,
+      key: KEY,
+      style: 'walking',
+      ctx: { seed: 1 },
+    });
     expect(line.length).toBeGreaterThan(0);
   });
 });
@@ -299,15 +336,15 @@ describe('a caller-supplied lick dictionary', () => {
   it('reaches a genre the library ships nothing for', () => {
     const notes = placeLicks(TIMELINE, KEY, {
       genre: 'hiphop',
-      density: 1,
-      seed: 1,
-      bpm: 90,
-      ctx: { seed: 1, bpm: 90, vocabulary: [ownLick] },
+      ctx: { seed: 1, bpm: 90, vocabulary: [ownLick], complexity: { rhythmic: 1 } },
     });
     expect(notes.length).toBeGreaterThan(TIMELINE.length);
     // Without the caller's dictionary the genre has nothing, so every segment
     // falls back to its root.
-    const bare = placeLicks(TIMELINE, KEY, { genre: 'hiphop', density: 1, seed: 1, bpm: 90 });
+    const bare = placeLicks(TIMELINE, KEY, {
+      genre: 'hiphop',
+      ctx: { seed: 1, bpm: 90, complexity: { rhythmic: 1 } },
+    });
     expect(bare).toHaveLength(TIMELINE.length);
   });
 
@@ -319,10 +356,7 @@ describe('a caller-supplied lick dictionary', () => {
     };
     const notes = placeLicks([FIRST_SPAN], KEY, {
       genre: 'country',
-      density: 1,
-      seed: 1,
-      bpm: 120,
-      ctx: { seed: 1, bpm: 120, vocabulary: [replacement] },
+      ctx: { seed: 1, bpm: 120, vocabulary: [replacement], complexity: { rhythmic: 1 } },
     });
     // Root and fifth: the caller's figure, not the four-note built-in it took
     // the name of. At a full dial the fifth is also anticipated, which is the
@@ -332,10 +366,7 @@ describe('a caller-supplied lick dictionary', () => {
     // quieter setting is a subset of this one rather than a different figure.
     const quieter = placeLicks([FIRST_SPAN], KEY, {
       genre: 'country',
-      density: 0.8,
-      seed: 1,
-      bpm: 120,
-      ctx: { seed: 1, bpm: 120, vocabulary: [replacement] },
+      ctx: { seed: 1, bpm: 120, vocabulary: [replacement], complexity: { rhythmic: 0.8 } },
     });
     const busier = new Set(notes.map((note) => note.startBeat));
     for (const note of quieter) {

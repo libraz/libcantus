@@ -19,7 +19,7 @@ import {
   assertPositiveInt,
   assertRange,
 } from '../../core/validation/index.js';
-import { type GenerationContextInput, resolveContextWith } from '../context/index.js';
+import { type GenerationContextInput, resolveContext } from '../context/index.js';
 
 /**
  * A single rhythmic note: an onset position and how long it sounds.
@@ -78,12 +78,6 @@ export function rhythmToNoteEvents(
  */
 export type RhythmOptions = {
   /**
-   * Seed for the deterministic PRNG.
-   *
-   * @defaultValue 0
-   */
-  seed?: number;
-  /**
    * Number of bars to generate.
    *
    * @defaultValue 1
@@ -98,18 +92,14 @@ export type RhythmOptions = {
    */
   subdivision?: number;
   /**
-   * Overall onset density in [0, 1]. Scales the per-slot onset probability, so
-   * higher values fill more grid slots. Values outside [0, 1] are rejected.
+   * The generation context.
    *
-   * Sugar for `ctx: { complexity: { rhythmic } }`; the context wins where both
-   * are given.
+   * Its `complexity.rhythmic` is this generator's overall onset density: it
+   * scales the per-slot onset probability, so higher values fill more grid
+   * slots. A value outside [0, 1] is rejected. Its `seed` fixes which slots are
+   * taken, so the same seed always yields the same pattern.
    *
-   * @defaultValue 0.5
-   */
-  density?: number;
-  /**
-   * The generation context. Its `complexity.rhythmic` is this generator's
-   * density, and its `seed` replaces `seed`.
+   * @defaultValue `{ seed: 0, complexity: { rhythmic: 0.5 } }`
    */
   ctx?: GenerationContextInput;
 };
@@ -145,12 +135,12 @@ export function onsetWeightCurve(weight: number): number {
  * Generate a deterministic rhythmic pattern over `bars` bars of a time
  * signature. A grid is built at the chosen subdivision; each slot becomes an
  * onset when the draw belonging to that slot falls under its metric weight
- * scaled by `density`. Because the draw belongs to the slot rather than to the
- * order the slots were visited, raising `density` only adds onsets: everything
- * already sounding stays where it was. Every bar's downbeat is always an onset,
- * so a pattern of any length has a reliable pulse independent of the seed. Each
- * event's duration extends to the next onset, and the last event extends to the
- * end of the span. `density` must be in [0, 1].
+ * scaled by the density dial. Because the draw belongs to the slot rather than
+ * to the order the slots were visited, raising the dial only adds onsets:
+ * everything already sounding stays where it was. Every bar's downbeat is always
+ * an onset, so a pattern of any length has a reliable pulse independent of the
+ * seed. Each event's duration extends to the next onset, and the last event
+ * extends to the end of the span.
  *
  * @param ts The time signature.
  * @param opts Generation options.
@@ -159,17 +149,15 @@ export function onsetWeightCurve(weight: number): number {
  * ```ts
  * import { parseTimeSignature, generateRhythm } from '@libraz/libcantus';
  * const ts = parseTimeSignature('4/4');
- * generateRhythm(ts, { seed: 42, density: 0.6 }); // onset events over one bar
+ * generateRhythm(ts, { ctx: { seed: 42, complexity: { rhythmic: 0.6 } } });
+ * // onset events over one bar
  * ```
  * @category Rhythm & Meter
  */
 export function generateRhythm(ts: TimeSignature, opts: RhythmOptions = {}): RhythmEvent[] {
   const bars = opts.bars ?? DEFAULT_BARS;
   const subdivision = opts.subdivision ?? DEFAULT_SUBDIVISION;
-  if (opts.density !== undefined) {
-    assertRange(opts.density, 0, 1, 'rhythm density');
-  }
-  const ctx = resolveContextWith(opts.ctx, { seed: opts.seed, rhythmic: opts.density });
+  const ctx = resolveContext(opts.ctx);
   const density = ctx.rhythmic ?? DEFAULT_DENSITY;
 
   assertPositiveInt(bars, 'rhythm bars');

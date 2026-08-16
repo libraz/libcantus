@@ -77,7 +77,7 @@ relateMotifs(subject, answer, majorKey(0))?.kind; // 'transposition'
 ```ts
 import { generateMotif, majorKey, motifToNoteEvents } from '@libraz/libcantus';
 
-const cell = generateMotif({ key: majorKey(0), bars: 2, contour: 'arch', seed: 1 });
+const cell = generateMotif({ key: majorKey(0), bars: 2, contour: 'arch', ctx: { seed: 1 } });
 const notes = motifToNoteEvents(cell);
 
 notes.length >= 1; // true
@@ -93,7 +93,7 @@ notes.every((note) => note.durationBeat > 0); // true
 ```ts
 import { generateMotif, majorKey, transformMotif } from '@libraz/libcantus';
 
-const cell = generateMotif({ key: majorKey(0), bars: 1, seed: 2 });
+const cell = generateMotif({ key: majorKey(0), bars: 1, ctx: { seed: 2 } });
 const inverted = transformMotif(cell, 'invert');
 const retrograde = transformMotif(cell, 'retrograde');
 
@@ -154,7 +154,7 @@ const timeline = chordTimelineFromChords(
   8,
 );
 
-const developed = developMotif(generateMotif({ key, bars: 1, seed: 3 }), timeline, key, 2);
+const developed = developMotif(generateMotif({ key, bars: 1, ctx: { seed: 3 } }), timeline, key, 2);
 
 developed.notes.length >= 1; // true
 ```

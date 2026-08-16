@@ -141,10 +141,9 @@ describe('shared numeric input contracts', () => {
     () =>
       generateDrums({
         bars: 1,
-        bpm: 120,
+        ctx: { bpm: 120, complexity: { rhythmic: Number.NaN } },
         style: 'standard',
         section: 'verse',
-        density: Number.NaN,
         fills: false,
       }),
     () =>

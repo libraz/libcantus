@@ -24,7 +24,7 @@ import {
   NoteSafety,
   profileWeights,
 } from '../../theory/safety/index.js';
-import { type Draw, type GenerationContextInput, resolveContextWith } from '../context/index.js';
+import { type Draw, type GenerationContextInput, resolveContext } from '../context/index.js';
 
 /**
  * Options controlling {@link generateCounterMelody}.
@@ -99,20 +99,16 @@ export type CounterMelodyOptions = {
   /** Highest MIDI pitch the counter line may use (default derived from `register`). */
   pitchHigh?: number;
   /**
-   * PRNG seed. It places the `'complement'` onsets and breaks ties between
-   * equally good candidate pitches; the same seed always yields the same line.
-   * Where the constraints leave only one good answer — which is common with
-   * `rhythm: 'follow'`, whose onsets are fixed by the melody — changing the seed
-   * changes nothing. Sugar for `ctx: { seed }`; the context wins where both are
-   * given.
+   * The generation context, so the counter line is drawn from the same project
+   * source as every other part and no two parts collide.
    *
-   * @defaultValue 0
-   */
-  seed?: number;
-  /**
-   * The generation context. Its `seed` replaces `seed`, so the counter line is
-   * drawn from the same project source as every other part and no two parts
-   * collide.
+   * Its `seed` places the `'complement'` onsets and breaks ties between equally
+   * good candidate pitches; the same seed always yields the same line. Where the
+   * constraints leave only one good answer — which is common with
+   * `rhythm: 'follow'`, whose onsets are fixed by the melody — changing the seed
+   * changes nothing.
+   *
+   * @defaultValue `{ seed: 0 }`
    */
   ctx?: GenerationContextInput;
 };
@@ -487,7 +483,7 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
   const rhythm = assertOneOf(opts.rhythm ?? 'complement', ['complement', 'follow'], 'rhythm');
   const profile = assertOneOf(opts.profile ?? 'pop', ['strict', 'pop'], 'safety profile');
   const weights = profileWeights(profile, opts.weights);
-  const draw = resolveContextWith(opts.ctx, { seed: opts.seed }).part('countermelody');
+  const draw = resolveContext(opts.ctx).part('countermelody');
   // The options are checked before the empty-melody exit, so a call with a
   // malformed option is rejected whether or not the melody happens to sound.
   if (melody.notes.length === 0) {

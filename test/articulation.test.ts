@@ -59,13 +59,11 @@ describe('Articulation', () => {
     for (let seed = 0; seed < 40; seed += 1) {
       for (const hit of generateDrums({
         bars: 2,
-        bpm: 120,
+        ctx: { bpm: 120, complexity: { rhythmic: 0.7 }, seed: seed },
         style: 'breakbeat',
         section: 'verse',
         nextSection: 'chorus',
-        density: 0.7,
         fills: true,
-        seed,
       })) {
         if (hit.articulation !== undefined) {
           articulations.add(hit.articulation);

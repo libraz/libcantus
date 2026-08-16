@@ -97,14 +97,10 @@ export type MotifOptions = {
    */
   jitter?: number;
   /**
-   * Seed for the deterministic PRNG. Sugar for `ctx: { seed }`.
-   *
-   * @defaultValue 0
-   */
-  seed?: number;
-  /**
    * The generation context. Its `complexity.ornament` is this generator's
-   * jitter, and its `seed` replaces `seed`.
+   * jitter, and its `seed` fixes which notes are nudged.
+   *
+   * @defaultValue `{ seed: 0 }`
    */
   ctx?: GenerationContextInput;
 };
@@ -248,7 +244,7 @@ function contourOffsets(contour: MotifContour, count: number): number[] {
  * per-note variation without biasing the contour; it is off by default, so the
  * contour is reproduced exactly. Output is deterministic for a given seed.
  *
- * @param opts Key, optional chord, length, contour, jitter, and seed.
+ * @param opts Key, optional chord, length, contour, jitter, and context.
  * @returns The generated motif cell.
  *
  * @example
@@ -272,7 +268,7 @@ export function generateMotif(opts: MotifOptions): MotifCell {
   // context's ornament dial, so it has to accept and reject exactly what the
   // context does. Clamping here would make the sugar take a value its own
   // desugared form refuses, which is a different option wearing the same name.
-  const ctx = resolveContextWith(opts.ctx, { seed: opts.seed, ornament: opts.jitter });
+  const ctx = resolveContextWith(opts.ctx, { ornament: opts.jitter });
   const jitterProb = ctx.ornament ?? 0;
   const draw = ctx.part('motif');
   const tonic = pitchClass(opts.key.rootPc) + 60;

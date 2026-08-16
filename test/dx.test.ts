@@ -49,10 +49,9 @@ describe('drum voices are nameable', () => {
   it('names the note numbers the generator emits', () => {
     const hits = generateDrums({
       bars: 2,
-      bpm: 120,
+      ctx: { bpm: 120, complexity: { rhythmic: 0.7 } },
       style: 'standard',
       section: 'chorus',
-      density: 0.7,
       fills: false,
     });
     expect(hits.some((hit) => hit.pitch === DRUM_NOTES.kick)).toBe(true);
@@ -69,7 +68,7 @@ describe('drum voices are nameable', () => {
 
 describe('generator output feeds the shared note-event pipeline', () => {
   it('converts a rhythm into note events', () => {
-    const rhythm = generateRhythm(parseTimeSignature('4/4'), { bars: 2, seed: 1 });
+    const rhythm = generateRhythm(parseTimeSignature('4/4'), { bars: 2, ctx: { seed: 1 } });
     const notes = rhythmToNoteEvents(rhythm, 38, 100);
     expect(notes).toHaveLength(rhythm.length);
     expect(notes[0]?.pitch).toBe(38);
@@ -176,9 +175,9 @@ describe('progression presets are addressable', () => {
   it('names the preset a style and seed would choose', () => {
     for (const seed of [0, 1, 2, 7]) {
       const preset = pickProgressionPreset('dance', seed);
-      expect(generateProgression({ key: cMajor, style: 'dance', bars: 4, seed })).toEqual(
-        generateProgression({ key: cMajor, style: 'dance', bars: 4, presetId: preset.id }),
-      );
+      expect(
+        generateProgression({ key: cMajor, style: 'dance', bars: 4, ctx: { seed: seed } }),
+      ).toEqual(generateProgression({ key: cMajor, style: 'dance', bars: 4, presetId: preset.id }));
     }
     expect(() => pickProgressionPreset('nonsense' as never)).toThrow();
   });

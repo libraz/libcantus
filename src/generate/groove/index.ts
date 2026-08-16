@@ -24,7 +24,7 @@ import {
   assertTimeSignature,
   dropSilentNotes,
 } from '../../core/validation/index.js';
-import { type GenerationContextInput, resolveContextWith } from '../context/index.js';
+import { type GenerationContextInput, resolveContext } from '../context/index.js';
 
 /**
  * Options controlling {@link humanize}.
@@ -63,14 +63,11 @@ export type HumanizeOptions = {
    */
   baseVelocity?: number;
   /**
-   * Seed for the deterministic PRNG. Sugar for `ctx: { seed }`.
-   *
-   * @defaultValue 0
-   */
-  seed?: number;
-  /**
    * The generation context, so one project seed covers this call as well as the
-   * generators that wrote the notes.
+   * generators that wrote the notes. Its `seed` fixes the jitter, so the same
+   * seed always humanizes the same way.
+   *
+   * @defaultValue `{ seed: 0 }`
    */
   ctx?: GenerationContextInput;
   /**
@@ -129,7 +126,7 @@ const MAX_VELOCITY = 127;
  * ```ts
  * import { humanize } from '@libraz/libcantus';
  * const events = [{ pitch: 60, startBeat: 0, durationBeat: 1, velocity: 80 }];
- * humanize(events, { seed: 1, timing: 0.03 }); // copies with jittered timing and accented velocity
+ * humanize(events, { ctx: 1, timing: 0.03 }); // copies with jittered timing and accented velocity
  * humanize(events, { ctx: { seed: 42 }, part: 'lead' }); // under a project context
  * ```
  * Notes with a zero or negative duration never sound and are dropped, so the
@@ -153,7 +150,7 @@ export function humanize(events: readonly NoteEvent[], opts: HumanizeOptions = {
   assertRange(velocityJitter, 0, 127, 'humanize velocity jitter');
   assertRange(accent, 0, 127, 'humanize accent');
   assertRange(baseVelocity, 0, 127, 'humanize base velocity');
-  const ctx = resolveContextWith(opts.ctx, { seed: opts.seed });
+  const ctx = resolveContext(opts.ctx);
   const draw = ctx.part(opts.part ?? DEFAULT_PART);
 
   return sounding.map((event) => {

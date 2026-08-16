@@ -28,11 +28,7 @@ import {
 } from '../../core/validation/index.js';
 import type { Chord, ChordSegment } from '../../theory/chord/index.js';
 import { nearestScaleTone } from '../../theory/scale/index.js';
-import {
-  assertDifficulty,
-  type GenerationContextInput,
-  resolveContextWith,
-} from '../context/index.js';
+import { assertDifficulty, type GenerationContextInput, resolveContext } from '../context/index.js';
 import {
   BEAT_STEPS,
   deform,
@@ -403,23 +399,10 @@ export type PlaceLicksOptions = {
    */
   genre: Genre;
   /**
-   * How busy the line is, in [0, 1]. It decides both how often a segment takes
-   * a figure at all and, above its middle setting, how much the figure is
-   * syncopated — one dial, because "less busy" means both. Sugar for
-   * `ctx: { complexity: { rhythmic } }`; the context wins over both.
-   *
-   * @defaultValue 0.6
-   */
-  density?: number;
-  /**
    * The hardest figure that may be used, 1 to 5. Sugar for
    * `ctx: { complexity: { difficulty } }`; the context wins over both.
    */
   difficulty?: number;
-  /** Seed for the deterministic PRNG. Sugar for `ctx: { seed }`. */
-  seed?: number;
-  /** Tempo in BPM. Sugar for `ctx: { bpm }`. */
-  bpm?: number;
   /** Time signature; defaults to 4/4. */
   ts?: TimeSignature;
   /**
@@ -434,6 +417,14 @@ export type PlaceLicksOptions = {
    * The generation context. Its `vocabulary` brings the caller's own figures,
    * its `complexity.ornament` decides how much decoration survives, and its
    * `complexity.difficulty` is the ceiling figures are rejected against.
+   *
+   * Its `complexity.rhythmic` is how busy the line is, in [0, 1]: it decides
+   * both how often a segment takes a figure at all and, above its middle
+   * setting, how much the figure is syncopated — one dial, because "less busy"
+   * means both. Its `bpm` is the tempo the ceiling is measured against, and its
+   * `seed` fixes which figures are chosen and where they land.
+   *
+   * @defaultValue `{ seed: 0, bpm: 120, complexity: { rhythmic: 0.6 } }`
    */
   ctx?: GenerationContextInput;
   /**
@@ -495,9 +486,6 @@ export function placeLicks(
   assertTimeSignature(ts, 'lick time signature');
   const octave = opts.octave ?? DEFAULT_OCTAVE;
   assertInteger(octave, 'lick octave', -1, 8);
-  if (opts.density !== undefined) {
-    assertRange(opts.density, 0, 1, 'lick density');
-  }
   const segments = [...timeline].sort((a, b) => a.startBeat - b.startBeat);
   for (const segment of segments) {
     assertRange(segment.startBeat, 0, Number.MAX_SAFE_INTEGER, 'lick segment startBeat');
@@ -511,11 +499,7 @@ export function placeLicks(
     return [];
   }
 
-  const resolved = resolveContextWith(opts.ctx, {
-    seed: opts.seed,
-    bpm: opts.bpm,
-    rhythmic: opts.density,
-  });
+  const resolved = resolveContext(opts.ctx);
   const draw = resolved.part('bass');
   const bpm = resolved.bpm ?? DEFAULT_BPM;
   const density = resolved.rhythmic ?? DEFAULT_LICK_DENSITY;
@@ -725,8 +709,8 @@ function fitToSegment(
   material: LickMaterial,
   spanBeats: number,
   density: number,
-  resolved: ReturnType<typeof resolveContextWith>,
-  draw: ReturnType<ReturnType<typeof resolveContextWith>['part']>,
+  resolved: ReturnType<typeof resolveContext>,
+  draw: ReturnType<ReturnType<typeof resolveContext>['part']>,
   path: readonly (string | number)[],
   bpm: number,
   difficulty: number | undefined,

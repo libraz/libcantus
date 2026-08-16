@@ -27,11 +27,9 @@ const isOffGrid16 = (beat: number) => {
 
 const base: DrumsOptions = {
   bars: 1,
-  bpm: 120,
+  ctx: { bpm: 120, complexity: { rhythmic: 0.5 }, seed: 1 },
   style: 'standard',
   section: 'verse',
-  density: 0.5,
-  seed: 1,
 };
 
 describe('generateDrums basic groove', () => {
@@ -69,21 +67,31 @@ describe('generateDrums basic groove', () => {
   });
 
   it('adds hits monotonically with density', () => {
-    const sparse = generateDrums({ ...base, density: 0.3 });
-    const dense = generateDrums({ ...base, density: 0.8 });
+    const sparse = generateDrums({
+      ...base,
+      ctx: { bpm: 120, complexity: { rhythmic: 0.3 }, seed: 1 },
+    });
+    const dense = generateDrums({
+      ...base,
+      ctx: { bpm: 120, complexity: { rhythmic: 0.8 }, seed: 1 },
+    });
     expect(dense.length).toBeGreaterThanOrEqual(sparse.length);
   });
 
   it('suppresses 16th-note hats at high BPM', () => {
     const countHats = (opts: DrumsOptions) =>
       generateDrums(opts).filter((h) => h.pitch === CLOSED_HAT).length;
-    const slow = countHats({ ...base, density: 0.8, bpm: 110 });
-    const fast = countHats({ ...base, density: 0.8, bpm: 180 });
+    const slow = countHats({ ...base, ctx: { bpm: 110, complexity: { rhythmic: 0.8 }, seed: 1 } });
+    const fast = countHats({ ...base, ctx: { bpm: 180, complexity: { rhythmic: 0.8 }, seed: 1 } });
     expect(fast).toBeLessThanOrEqual(slow);
   });
 
   it('replaces only the last bar when fills are enabled', () => {
-    const opts: DrumsOptions = { ...base, bars: 4, seed: 0 };
+    const opts: DrumsOptions = {
+      ...base,
+      bars: 4,
+      ctx: { bpm: 120, complexity: { rhythmic: 0.5 }, seed: 0 },
+    };
     const noFill = generateDrums(opts);
     const withFill = generateDrums({ ...opts, fills: true });
 
@@ -100,11 +108,9 @@ describe('generateDrums richness', () => {
     const render = (seed: number) =>
       generateDrums({
         bars: 2,
-        bpm: 120,
+        ctx: { bpm: 120, complexity: { rhythmic: 0.7 }, seed: seed },
         style: 'standard',
         section: 'chorus',
-        density: 0.7,
-        seed,
       });
     const seeds = [0, 1, 2, 3, 4, 5, 6, 7];
     const hasGhost = seeds.some((s) =>
@@ -118,11 +124,9 @@ describe('generateDrums richness', () => {
   it('allows 16th-grid hats at moderate BPM but not at high BPM', () => {
     const opts = (bpm: number, seed: number): DrumsOptions => ({
       bars: 1,
-      bpm,
+      ctx: { bpm: bpm, complexity: { rhythmic: 0.6 }, seed: seed },
       style: 'standard',
       section: 'chorus',
-      density: 0.6,
-      seed,
     });
     const isHat = (p: number) => p === CLOSED_HAT || p === OPEN_HAT;
     const offGridHats = (bpm: number, seed: number) =>
@@ -140,11 +144,9 @@ describe('generateDrums richness', () => {
   it('delays off-beat hi-hats under a swing feel', () => {
     const common: DrumsOptions = {
       bars: 1,
-      bpm: 120,
+      ctx: { bpm: 120, complexity: { rhythmic: 0.5 }, seed: 3 },
       style: 'standard',
       section: 'verse',
-      density: 0.5,
-      seed: 3,
     };
     const offBeat = (feel: 'straight' | 'swing') =>
       generateDrums({ ...common, feel }).find(
@@ -179,7 +181,7 @@ describe('generateDrums richness', () => {
     const preChorus = generateDrums({
       ...base,
       bars: 3,
-      bpm: 170,
+      ctx: { bpm: 170, complexity: { rhythmic: 0.5 }, seed: 1 },
       section: 'prechorus',
       feel: 'shuffle',
       nextSection: 'chorus',
@@ -199,19 +201,15 @@ describe('generateDrums richness', () => {
   it('adds auxiliary percussion only in energetic sections', () => {
     const chorus = generateDrums({
       bars: 1,
-      bpm: 128,
+      ctx: { bpm: 128, complexity: { rhythmic: 0.8 }, seed: 5 },
       style: 'funk',
       section: 'chorus',
-      density: 0.8,
-      seed: 5,
     });
     const intro = generateDrums({
       bars: 1,
-      bpm: 128,
+      ctx: { bpm: 128, complexity: { rhythmic: 0.2 }, seed: 5 },
       style: 'funk',
       section: 'intro',
-      density: 0.2,
-      seed: 5,
     });
     const auxCount = (hits: typeof chorus) =>
       hits.filter((h) => h.pitch === TAMBOURINE || h.pitch === HANDCLAP).length;
@@ -222,7 +220,12 @@ describe('generateDrums richness', () => {
   it('keeps only FX/auxiliary voices in fxOnly and never returns an accidental empty bar', () => {
     const main = new Set([KICK, SNARE, CLOSED_HAT, OPEN_HAT]);
     for (const section of ['intro', 'verse', 'chorus', 'outro'] as const) {
-      const hits = generateDrums({ ...base, section, role: 'fxOnly', density: 0.8 });
+      const hits = generateDrums({
+        ...base,
+        section,
+        role: 'fxOnly',
+        ctx: { complexity: { rhythmic: 0.8 } },
+      });
       expect(hits.length, section).toBeGreaterThan(0);
       expect(
         hits.some((hit) => main.has(hit.pitch)),
@@ -234,11 +237,9 @@ describe('generateDrums richness', () => {
   it('produces a recognizable fill in the last bar', () => {
     const opts = (seed: number, fills: boolean): DrumsOptions => ({
       bars: 4,
-      bpm: 120,
+      ctx: { bpm: 120, complexity: { rhythmic: 0.5 }, seed: seed },
       style: 'standard',
       section: 'verse',
-      density: 0.5,
-      seed,
       fills,
     });
     const seeds = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
@@ -263,11 +264,9 @@ describe('generateDrums richness', () => {
   it('is deterministic for identical options and seed', () => {
     const opts: DrumsOptions = {
       bars: 4,
-      bpm: 124,
+      ctx: { bpm: 124, complexity: { rhythmic: 0.75 }, seed: 99 },
       style: 'funk',
       section: 'chorus',
-      density: 0.75,
-      seed: 99,
       fills: true,
     };
     expect(generateDrums(opts)).toEqual(generateDrums(opts));
@@ -290,11 +289,9 @@ describe('generateDrums richness', () => {
       for (const section of sections) {
         const opts: DrumsOptions = {
           bars: 3,
-          bpm: 132,
+          ctx: { bpm: 132, complexity: { rhythmic: 0.7 }, seed: 123 },
           style,
           section,
-          density: 0.7,
-          seed: 123,
           fills: true,
           nextSection: 'chorus',
         };
@@ -319,11 +316,9 @@ describe('generateDrums phrase-end fills', () => {
         for (let seed = 0; seed < 40; seed += 1) {
           const hits = generateDrums({
             bars,
-            bpm: 120,
+            ctx: { bpm: 120, complexity: { rhythmic: 0.5 }, seed: seed },
             style,
             section,
-            density: 0.5,
-            seed,
             fills: true,
           });
           const fillWindow = hits.filter((h) => h.startBeat >= lastBarStart + 3);
@@ -340,13 +335,11 @@ describe('a fill is a lift, not a dip', () => {
       for (const section of ['verse', 'chorus', 'bridge'] as const) {
         const hits = generateDrums({
           bars: 4,
-          bpm: 120,
+          ctx: { bpm: 120, complexity: { rhythmic: 0.6 }, seed: 2 },
           style,
           section,
           nextSection: 'chorus',
-          density: 0.6,
           fills: true,
-          seed: 2,
         });
         const backbeats = hits.filter(
           (hit) =>
@@ -508,12 +501,10 @@ describe('generateDrums onset ordering', () => {
     for (const style of ['standard', 'funk', 'shuffle', 'trap', 'house'] as const) {
       const hits = generateDrums({
         bars: 4,
-        bpm: 120,
+        ctx: { bpm: 120, complexity: { rhythmic: 0.8 }, seed: 5 },
         style,
         section: 'chorus',
-        density: 0.8,
         fills: true,
-        seed: 5,
       });
       expect(hits.length).toBeGreaterThan(0);
       for (let i = 1; i < hits.length; i += 1) {
@@ -584,7 +575,13 @@ describe('generateDrums shuffle alignment', () => {
     };
     for (const density of [0.3, 0.6, 0.9]) {
       for (const style of ['shuffle', 'standard', 'funk'] as const) {
-        const hits = generateDrums({ ...base, bars: 2, style, section: 'chorus', density });
+        const hits = generateDrums({
+          ...base,
+          bars: 2,
+          style,
+          section: 'chorus',
+          ctx: { complexity: { rhythmic: density } },
+        });
         for (let beat = 0; beat < 8; beat += 1) {
           const inBeat = hits.filter((h) => h.startBeat >= beat && h.startBeat < beat + 1);
           const kickAnd = inBeat.find((h) => h.pitch === KICK && isAnd(h.startBeat));
@@ -609,14 +606,14 @@ describe('generateDrums role ordering', () => {
       bars: 4,
       section: 'chorus',
       role: 'ambient',
-      seed: 1,
+      ctx: { seed: 1 },
     });
     const minimal = generateDrums({
       ...base,
       bars: 4,
       section: 'chorus',
       role: 'minimal',
-      seed: 1,
+      ctx: { seed: 1 },
     });
     expect(ambient.some((hit) => hit.pitch === 51)).toBe(true);
     expect(ambient.some((hit) => hit.pitch === OPEN_HAT)).toBe(false);
@@ -662,7 +659,7 @@ describe('generateDrums prechorus fills', () => {
         section: 'chorus',
         style: 'house',
         fills: true,
-        seed,
+        ctx: { seed: seed },
       });
       signatures.add(
         hits

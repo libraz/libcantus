@@ -18,14 +18,19 @@ Keeping the passes separate is what lets a host regenerate one of them. Changing
 import { generateMotif, generateProgression, majorKey } from '@libraz/libcantus';
 
 const key = majorKey(0);
-const chords = generateProgression({ key, style: 'idol', bars: 8, reharmonize: true, seed: 1 });
-const motif = generateMotif({ key, bars: 2, contour: 'arch', seed: 1 });
+const chords = generateProgression({
+  key,
+  style: 'idol',
+  bars: 8,
+  ctx: { seed: 1, complexity: { harmonic: 0.5 } },
+});
+const motif = generateMotif({ key, bars: 2, contour: 'arch', ctx: { seed: 1 } });
 
 chords.length; // 8
 motif.notes.length >= 1; // true
 ```
 
-`generateProgression` returns one `ChordSpan` per bar. `style` selects the preset pool; `presetId` names one outright, and `preset` supplies degrees directly. See [Reharmonization](reharmonization.md) for the `reharmonize` flag and the substitution vocabulary.
+`generateProgression` returns one `ChordSpan` per bar. `style` selects the preset pool; `presetId` names one outright, and `preset` supplies degrees directly. `ctx.complexity.harmonic` decides how many chords are replaced by the secondary dominant of what follows — 0, the default, leaves the progression alone. See [Reharmonization](reharmonization.md) for that dial and the substitution vocabulary.
 
 `generateRhythm`, `motifToNoteEvents`, `developMotif`, and `transformMotif` separate material choice from placement and transformation; see [Melody and motifs](melody-and-motifs.md) and [Rhythm and groove](rhythm-and-groove.md).
 
@@ -72,7 +77,7 @@ const notes = [60, 62, 64, 65, 67, 65, 64, 62].map((pitch, i) => ({
   durationBeat: 0.5,
 }));
 
-ornament(notes, { style: 'ghost', amount: 0.6, seed: 4 }).length; // 8
+ornament(notes, { style: 'ghost', amount: 0.6, ctx: { seed: 4 } }).length; // 8
 ```
 
 `imitate`, `applyGrooveTemplate`, and `humanize` are the other passes of this kind. Because they take material and return material, a host can store the source and each pass's options and regenerate only the pass that changed.

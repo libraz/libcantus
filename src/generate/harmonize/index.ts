@@ -21,7 +21,7 @@ import {
   minorKey,
   scaleTonesInDegreeOrder,
 } from '../../theory/scale/index.js';
-import { type GenerationContextInput, resolveContextWith } from '../context/index.js';
+import { type GenerationContextInput, resolveContext } from '../context/index.js';
 import type { ChordSpan } from '../progression/index.js';
 import { classifyMelodyTones, snapToPulse } from './nct.js';
 
@@ -124,13 +124,6 @@ export type HarmonizeOptions = {
    */
   placement?: HarmonizePlacement;
   /**
-   * Seed for the deterministic tie-break perturbation. Sugar for
-   * `ctx: { seed }`; the context wins where both are given.
-   *
-   * @defaultValue 0
-   */
-  seed?: number;
-  /**
    * Beats at which the melody's phrases end, so a longer line closes at each of
    * them instead of only at its end.
    *
@@ -164,7 +157,9 @@ export type HarmonizeOptions = {
    * The generation context. Its `complexity.harmonic` is how far the chord
    * vocabulary reaches beyond the key's own triads — 0 uses them alone, 0.5 has
    * every secondary dominant, 1 the parallel mode's chords as well — and its
-   * `seed` replaces `seed`.
+   * `seed` drives the deterministic tie-break perturbation.
+   *
+   * @defaultValue `{ seed: 0 }`
    */
   ctx?: GenerationContextInput;
 };
@@ -1038,7 +1033,7 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   const requestedKey = opts.key ?? 'infer';
   const key = requestedKey === 'infer' ? inferKey(soundingMelody) : requestedKey;
   const placement = opts.placement ?? DEFAULT_PLACEMENT;
-  const ctx = resolveContextWith(opts.ctx, { seed: opts.seed });
+  const ctx = resolveContext(opts.ctx);
   // `reharmonize` names three points on the dial the context sets continuously,
   // so a caller who says `'secondaryDominant'` gets exactly the vocabulary that
   // name has always meant.

@@ -43,7 +43,7 @@ const drums: DrumsOptions = {
   bars: 2,
   style: 'standard',
   section: 'chorus',
-  seed: 5,
+  ctx: { seed: 5 },
 };
 
 /** Onsets as `pitch@beat`, which is what "the same note sounds" means here. */
@@ -64,21 +64,16 @@ describe('the seed alone is a context', () => {
   it('accepts a bare number wherever a context goes', () => {
     const bare = generateRhythm(ts, { ctx: 9, bars: 2 });
     expect(bare).toEqual(generateRhythm(ts, { ctx: { seed: 9 }, bars: 2 }));
-    expect(bare).toEqual(generateRhythm(ts, { seed: 9, bars: 2 }));
-  });
-
-  it('lets the context outrank a generator option', () => {
-    const viaContext = generateDrums({ ...drums, ctx: { seed: 5, bpm: 90 }, bpm: 200 });
-    expect(onsets(viaContext)).toEqual(onsets(generateDrums({ ...drums, bpm: 90 })));
+    expect(bare).toEqual(generateRhythm(ts, { ctx: { seed: 9 }, bars: 2 }));
   });
 
   it('keeps every generator on the same seed vocabulary', () => {
     for (const seed of [0, 1, 4096]) {
       expect(generateMotif({ key: cMajor, bars: 2, jitter: 0.5, ctx: seed })).toEqual(
-        generateMotif({ key: cMajor, bars: 2, jitter: 0.5, seed }),
+        generateMotif({ key: cMajor, bars: 2, jitter: 0.5, ctx: { seed: seed } }),
       );
       expect(generateProgression({ key: cMajor, style: 'dance', bars: 4, ctx: seed })).toEqual(
-        generateProgression({ key: cMajor, style: 'dance', bars: 4, seed }),
+        generateProgression({ key: cMajor, style: 'dance', bars: 4, ctx: { seed: seed } }),
       );
     }
   });
@@ -103,12 +98,12 @@ describe('the seed resolves like every other context field', () => {
     { startBeat: 12, endBeat: 16, chord: makeChord(0, 'maj7') },
   ];
 
-  /** Every entry point that offers `seed` as sugar for `ctx: { seed }`. */
+  /** Every entry point that draws on the context's seed. */
   const entries: {
     name: string;
     /** What every call is given besides the seed under test. */
     ctx: GenerationContext;
-    run: (opts: { seed?: number; ctx: GenerationContextInput }) => unknown;
+    run: (opts: { ctx: GenerationContextInput }) => unknown;
   }[] = [
     {
       name: 'generateDrums',
@@ -174,34 +169,32 @@ describe('the seed resolves like every other context field', () => {
     },
   ];
 
-  it.each(entries)('carries the seed sugar into $name past a context', ({ ctx, run }) => {
-    // The context names a tempo and dials but no seed, which is the transport
-    // a host builds once and passes to every part.
-    const viaSugar = run({ seed: 12345, ctx });
-    const viaContext = run({ ctx: { ...ctx, seed: 12345 } });
-    expect(viaSugar).toEqual(viaContext);
-    // Where the seed moves this generator at all it has to move it here too:
-    // silently reading the default instead renders the whole piece at seed 0.
-    const atDefaultSeed = run({ ctx });
-    if (JSON.stringify(viaContext) !== JSON.stringify(atDefaultSeed)) {
-      expect(viaSugar).not.toEqual(atDefaultSeed);
-    }
+  it.each(entries)('$name reads its seed from the context', ({ ctx, run }) => {
+    // The context is the only place a seed can be named, so a context that
+    // names none has to mean the default seed rather than an absent one — a
+    // host that builds one transport for the whole piece passes a tempo and
+    // dials without always naming a seed.
+    expect(run({ ctx })).toEqual(run({ ctx: { ...ctx, seed: 0 } }));
+    // And a seed that is named settles the part, the same way every time.
+    expect(run({ ctx: { ...ctx, seed: 12345 } })).toEqual(run({ ctx: { ...ctx, seed: 12345 } }));
   });
 
-  it.each(entries)('lets $name read the context seed over the sugar', ({ ctx, run }) => {
-    expect(run({ seed: 12345, ctx: { ...ctx, seed: 99 } })).toEqual(
-      run({ ctx: { ...ctx, seed: 99 } }),
-    );
+  it('reaches a generator the seed actually moves', () => {
+    // The check above holds vacuously for a generator that ignores its seed at
+    // these settings, so one that does not is named here: if the seed stopped
+    // reaching the drums, the whole table above would still pass.
+    const drumsAt = (seed: number) =>
+      generateDrums({
+        bars: 2,
+        style: 'funk',
+        section: 'chorus',
+        ctx: { bpm: 120, complexity: { rhythmic: 0.9, ornament: 0.6 }, seed },
+      });
+    expect(onsets(drumsAt(12345))).not.toEqual(onsets(drumsAt(0)));
   });
 });
 
 describe('the tempo lives in the context', () => {
-  it('says the same thing whether the drums or the context carry it', () => {
-    expect(onsets(generateDrums({ ...drums, bpm: 168 }))).toEqual(
-      onsets(generateDrums({ ...drums, ctx: { seed: 5, bpm: 168 } })),
-    );
-  });
-
   it('reaches the bass line, which had no tempo of its own', () => {
     const line = (ctx: Record<string, unknown>) =>
       generateBassLine({ segments, key: cMajor, style: 'pop', ctx: ctx as never });
@@ -221,19 +214,21 @@ describe('the tempo lives in the context', () => {
   });
 
   it('defaults to a stated tempo rather than demanding one', () => {
+    // A context may name a seed and no tempo; the generator writes at the
+    // stated default instead of refusing, and says which default that is.
     expect(() => generateDrums(drums)).not.toThrow();
-    expect(onsets(generateDrums(drums))).toEqual(onsets(generateDrums({ ...drums, bpm: 120 })));
+    expect(onsets(generateDrums(drums))).toEqual(
+      onsets(generateDrums({ ...drums, ctx: { seed: 5, bpm: 120 } })),
+    );
   });
 });
 
 describe('difficulty is a ceiling, not a strength', () => {
   const dense: DrumsOptions = {
     bars: 2,
-    bpm: 170,
+    ctx: { bpm: 170, complexity: { rhythmic: 1 }, seed: 3 },
     style: 'funk',
     section: 'chorus',
-    density: 1,
-    seed: 3,
   };
 
   it('never adds anything the dials did not propose', () => {
@@ -338,7 +333,7 @@ describe('instruments named in the context', () => {
       key: cMajor,
       octave: 0,
       style: 'walking',
-      seed: 6,
+      ctx: { seed: 6 },
       instrument: BASS_4_STRING,
     });
     const viaContext = generateBassLine({
@@ -362,8 +357,8 @@ describe('instruments named in the context', () => {
     };
     const hits = generateDrums({
       ...drums,
-      density: 0.9,
-      ctx: { seed: 5, bpm: 120, instruments: { drums: stripped } },
+
+      ctx: { seed: 5, bpm: 120, instruments: { drums: stripped }, complexity: { rhythmic: 0.9 } },
     });
     expect(hits.length).toBeGreaterThan(0);
     for (const hit of hits) {
@@ -432,15 +427,15 @@ describe('every part draws from its own address space', () => {
 
 describe('drawing by position rather than by call order', () => {
   it('leaves earlier bars untouched when the piece grows', () => {
-    const short = generateRhythm(ts, { ctx: 21, bars: 2, density: 0.7 });
-    const long = generateRhythm(ts, { ctx: 21, bars: 6, density: 0.7 });
+    const short = generateRhythm(ts, { ctx: { seed: 21, complexity: { rhythmic: 0.7 } }, bars: 2 });
+    const long = generateRhythm(ts, { ctx: { seed: 21, complexity: { rhythmic: 0.7 } }, bars: 6 });
     const firstTwoBars = long.filter((event) => event.position < 8).map((event) => event.position);
     expect(firstTwoBars).toEqual(short.map((event) => event.position));
   });
 
   it('leaves every other bar untouched when one bar changes', () => {
-    const plain = generateDrums({ ...drums, bars: 4, bpm: 120 });
-    const filled = generateDrums({ ...drums, bars: 4, bpm: 120, fills: true });
+    const plain = generateDrums({ ...drums, bars: 4, ctx: { bpm: 120 } });
+    const filled = generateDrums({ ...drums, bars: 4, ctx: { bpm: 120 }, fills: true });
     const earlyBars = (hits: typeof plain) => onsets(hits.filter((hit) => hit.startBeat < 12));
     expect(earlyBars(filled)).toEqual(earlyBars(plain));
   });

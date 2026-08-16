@@ -77,8 +77,8 @@ describe('countermelody seeding', () => {
   it('is reproducible per seed and stays consonant across seeds', () => {
     for (const rhythm of ['complement', 'follow'] as const) {
       for (const seed of [0, 1, 2, 17, 512]) {
-        const line = generate({ rhythm, seed });
-        expect(generate({ rhythm, seed })).toEqual(line);
+        const line = generate({ rhythm, ctx: { seed: seed } });
+        expect(generate({ rhythm, ctx: { seed: seed } })).toEqual(line);
         for (const note of line) {
           const mel = soundingAt(melody, note.startBeat);
           if (mel) {
@@ -92,7 +92,8 @@ describe('countermelody seeding', () => {
   });
 
   it('fixes follow onsets to the melody regardless of seed', () => {
-    const onsets = (seed: number) => generate({ rhythm: 'follow', seed }).map((n) => n.startBeat);
+    const onsets = (seed: number) =>
+      generate({ rhythm: 'follow', ctx: { seed: seed } }).map((n) => n.startBeat);
     expect(onsets(3)).toEqual(onsets(0));
   });
 });
@@ -175,7 +176,7 @@ describe('generateCounterMelody', () => {
       rhythm: 'complement',
       pitchLow: 55,
       pitchHigh: 67,
-      seed: 7,
+      ctx: { seed: 7 },
     });
     const held = counter.find(
       (note) => note.startBeat <= 2 && 2 < note.startBeat + note.durationBeat,
@@ -205,7 +206,7 @@ describe('generateCounterMelody', () => {
       rhythm: 'complement',
       pitchLow: 55,
       pitchHigh: 67,
-      seed: 7,
+      ctx: { seed: 7 },
     });
     const held = counter.find(
       (note) => note.startBeat <= 1.75 && 1.75 < note.startBeat + note.durationBeat,
@@ -337,11 +338,11 @@ describe('generateCounterMelody', () => {
   });
 
   it('is deterministic for a given seed', () => {
-    const a = generate({ seed: 7 });
-    const b = generate({ seed: 7 });
+    const a = generate({ ctx: { seed: 7 } });
+    const b = generate({ ctx: { seed: 7 } });
     expect(a).toEqual(b);
     // A different seed still yields a valid, safe line (it may or may not differ).
-    const c = generate({ seed: 8 });
+    const c = generate({ ctx: { seed: 8 } });
     expect(Array.isArray(c)).toBe(true);
     for (let i = 1; i < c.length; i += 1) {
       expect(c[i]?.startBeat ?? 0).toBeGreaterThan(c[i - 1]?.startBeat ?? 0);

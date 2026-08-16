@@ -11,14 +11,14 @@ import { generateRhythm, parseTimeSignature, rhythmDensity } from '@libraz/libca
 
 const ts = parseTimeSignature('4/4');
 
-const sparse = generateRhythm(ts, { seed: 42, density: 0.2, bars: 2 });
-const dense = generateRhythm(ts, { seed: 42, density: 0.9, bars: 2 });
+const sparse = generateRhythm(ts, { ctx: { seed: 42, complexity: { rhythmic: 0.2 } }, bars: 2 });
+const dense = generateRhythm(ts, { ctx: { seed: 42, complexity: { rhythmic: 0.9 } }, bars: 2 });
 
 sparse.length <= dense.length; // true
 rhythmDensity(dense, ts) >= rhythmDensity(sparse, ts); // true
 ```
 
-`subdivision` is the grid resolution in steps per quarter-note beat: 2 is an eighth-note grid, 4 a sixteenth, 3 an eighth-note triplet. `density` scales the per-slot probability and is sugar for `ctx.complexity.rhythmic`.
+`subdivision` is the grid resolution in steps per quarter-note beat: 2 is an eighth-note grid, 4 a sixteenth, 3 an eighth-note triplet. `ctx.complexity.rhythmic` scales the per-slot probability; it defaults to 0.5, and a value outside [0, 1] is rejected rather than clamped.
 
 `onsetWeightCurve` exposes the weighting itself — the base probability for a metric weight from 0 (off-pulse) to 3 (downbeat) — for a host building its own placement:
 
@@ -35,7 +35,7 @@ onsetWeightCurve(3) > onsetWeightCurve(0); // true
 ```ts
 import { generateRhythm, parseTimeSignature, rhythmToNoteEvents } from '@libraz/libcantus';
 
-const rhythm = generateRhythm(parseTimeSignature('4/4'), { seed: 3, bars: 1 });
+const rhythm = generateRhythm(parseTimeSignature('4/4'), { ctx: { seed: 3 }, bars: 1 });
 const notes = rhythmToNoteEvents(rhythm, 38);
 
 notes.every((note) => note.pitch === 38); // true
@@ -55,7 +55,7 @@ const quantized = [
   { pitch: 38, startBeat: 1, durationBeat: 1, velocity: 80 },
 ];
 
-const played = humanize(quantized, { seed: 1, timing: 0.03 });
+const played = humanize(quantized, { ctx: { seed: 1 }, timing: 0.03 });
 
 played.length; // 2
 quantized[0]?.startBeat; // 0

@@ -17,7 +17,7 @@ import {
   assertRange,
   assertTimeSignature,
 } from '../../core/validation/index.js';
-import { type GenerationContextInput, resolveContextWith } from '../context/index.js';
+import { type GenerationContextInput, resolveContext } from '../context/index.js';
 import {
   BAR_STEPS,
   deform,
@@ -313,16 +313,15 @@ export type DrumPatternOptions = {
   section?: PublicSection;
   /** Time signature; defaults to 4/4. */
   ts?: TimeSignature;
-  /** Tempo in BPM. Sugar for `ctx: { bpm }`; the context wins over both. */
-  bpm?: number;
-  /** Seed for the deterministic PRNG. Sugar for `ctx: { seed }`. */
-  seed?: number;
   /**
-   * The generation context. `complexity.rhythmic` thins the figure below its
-   * middle setting and syncopates it above, `complexity.ornament` decides how
-   * many ghosts survive, `complexity.difficulty` rejects a figure the player
-   * could not keep up at this tempo, and `vocabulary` brings figures of the
-   * caller's own.
+   * The generation context. `bpm` is the tempo, `complexity.rhythmic` thins the
+   * figure below its middle setting and syncopates it above,
+   * `complexity.ornament` decides how many ghosts survive,
+   * `complexity.difficulty` rejects a figure the player could not keep up at
+   * this tempo, `vocabulary` brings figures of the caller's own, and `seed`
+   * fixes which figure is chosen for each bar.
+   *
+   * @defaultValue `{ seed: 0, bpm: 120 }`
    */
   ctx?: GenerationContextInput;
   /**
@@ -402,7 +401,7 @@ export function placeDrumPattern(opts: DrumPatternOptions): DrumHit[] {
     assertRange(opts.velocity, 1, 127, 'drum pattern velocity');
   }
   const feel = opts.feel === undefined ? 'straight' : assertOneOf(opts.feel, DRUM_FEELS, 'feel');
-  const resolved = resolveContextWith(opts.ctx, { seed: opts.seed, bpm: opts.bpm });
+  const resolved = resolveContext(opts.ctx);
   const bpm = resolved.bpm ?? DEFAULT_BPM;
   const draw = resolved.part('drums');
   const baseVelocity = opts.velocity ?? DEFAULT_VELOCITY;

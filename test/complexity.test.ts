@@ -26,10 +26,9 @@ const segments: BassSegment[] = [
 
 const drums: DrumsOptions = {
   bars: 4,
-  bpm: 110,
+  ctx: { bpm: 110, seed: 8 },
   style: 'funk',
   section: 'chorus',
-  seed: 8,
 };
 
 /**
@@ -86,7 +85,9 @@ describe('the rhythmic dial is continuous', () => {
 
   it('moves the rhythm generator at every step it is given', () => {
     expect(
-      distinctAcrossDial((density) => generateRhythm(ts, { ctx: 4, bars: 4, density })),
+      distinctAcrossDial((density) =>
+        generateRhythm(ts, { ctx: { seed: 4, complexity: { rhythmic: density } }, bars: 4 }),
+      ),
     ).toBeGreaterThanOrEqual(10);
   });
 });
@@ -115,7 +116,9 @@ describe('raising a dial only adds material', { timeout: 30_000 }, () => {
 
   it('holds for the rhythm generator', () => {
     expectMonotone('rhythm', (density) =>
-      generateRhythm(ts, { ctx: 4, bars: 4, density }).map((event) => event.position),
+      generateRhythm(ts, { ctx: { seed: 4, complexity: { rhythmic: density } }, bars: 4 }).map(
+        (event) => event.position,
+      ),
     );
   });
 
@@ -254,7 +257,7 @@ describe('raising a dial only adds material', { timeout: 30_000 }, () => {
       velocity: 90,
     }));
     const ghosted = (amount: number) =>
-      ornament(line, { style: 'ghost', amount, seed: 5 })
+      ornament(line, { style: 'ghost', amount, ctx: { seed: 5 } })
         .filter((note) => note.articulation === 'ghost')
         .map((note) => note.startBeat);
     expectMonotone('ornament', ghosted);
@@ -265,7 +268,7 @@ describe('raising a dial only adds material', { timeout: 30_000 }, () => {
 
 describe('a dial nobody moved leaves the generator as it was', () => {
   it('keeps the motif on its contour until the ornament dial is raised', () => {
-    const plain = generateMotif({ key: cMajor, bars: 2, contour: 'arch', seed: 3 });
+    const plain = generateMotif({ key: cMajor, bars: 2, contour: 'arch', ctx: { seed: 3 } });
     expect(generateMotif({ key: cMajor, bars: 2, contour: 'arch', ctx: 3 })).toEqual(plain);
     const decorated = generateMotif({
       key: cMajor,
@@ -327,8 +330,7 @@ describe('the harmonic dial reharmonizes by degrees', () => {
         style: 'idol',
         presetId: 'fourChordPop',
         bars: 8,
-        seed: 9,
-        reharmonize: true,
+        ctx: { seed: 9, complexity: { harmonic: 0.5 } },
       }),
     ).toEqual(progression(0.5));
   });

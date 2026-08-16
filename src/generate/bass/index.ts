@@ -29,7 +29,7 @@ import type { ChordSegment } from '../../theory/chord/index.js';
 import {
   type Draw,
   type GenerationContextInput,
-  resolveContextWith,
+  resolveContext,
   sustainsShift,
 } from '../context/index.js';
 import {
@@ -123,17 +123,13 @@ export type BassLineOptions = {
    */
   instrument?: StringedProfile;
   /**
-   * Seed for the deterministic PRNG. Sugar for `ctx: { seed }`.
-   *
-   * @defaultValue 0
-   */
-  seed?: number;
-  /**
    * The generation context. Its `complexity.rhythmic` sets how often the `pop`
    * style takes a weak-beat pickup, its `instruments.bass` names the instrument
-   * when `instrument` does not, and its `bpm` together with
+   * when `instrument` does not, its `bpm` together with
    * `complexity.difficulty` keeps leaps the hand could not make in time out of
-   * the line.
+   * the line, and its `seed` fixes every deterministic choice the line makes.
+   *
+   * @defaultValue `{ seed: 0 }`
    */
   ctx?: GenerationContextInput;
   /**
@@ -358,7 +354,7 @@ export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
     0,
   );
   assertGenerationBudget(estimatedNotes, 'bass notes', opts.budget);
-  const resolved = resolveContextWith(opts.ctx, { seed: opts.seed });
+  const resolved = resolveContext(opts.ctx);
   const named = resolved.instrument('bass');
   const instrument =
     opts.instrument ?? (named !== undefined && named.kind === 'stringed' ? named : undefined);

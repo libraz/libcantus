@@ -30,16 +30,16 @@ describe('onsetWeightCurve', () => {
 
 describe('generateRhythm determinism', () => {
   it('produces identical output for the same seed and options', () => {
-    const a = generateRhythm(FOUR_FOUR, { seed: 42, bars: 2 });
-    const b = generateRhythm(FOUR_FOUR, { seed: 42, bars: 2 });
+    const a = generateRhythm(FOUR_FOUR, { ctx: { seed: 42 }, bars: 2 });
+    const b = generateRhythm(FOUR_FOUR, { ctx: { seed: 42 }, bars: 2 });
     expect(a).toEqual(b);
   });
 
   it('is deeply equal on repeat across a range of option combinations', () => {
     const optionSets = [
-      { seed: 0, bars: 1, subdivision: 2, density: 0.3 },
-      { seed: 3, bars: 3, subdivision: 4, density: 0.7 },
-      { seed: 99, bars: 2, subdivision: 3, density: 1 },
+      { ctx: { seed: 0, complexity: { rhythmic: 0.3 } }, bars: 1, subdivision: 2 },
+      { ctx: { seed: 3, complexity: { rhythmic: 0.7 } }, bars: 3, subdivision: 4 },
+      { ctx: { seed: 99, complexity: { rhythmic: 1 } }, bars: 2, subdivision: 3 },
     ];
     for (const opts of optionSets) {
       expect(generateRhythm(SIX_EIGHT, opts)).toEqual(generateRhythm(SIX_EIGHT, opts));
@@ -48,10 +48,10 @@ describe('generateRhythm determinism', () => {
   });
 
   it('generally differs across seeds', () => {
-    const base = generateRhythm(FOUR_FOUR, { seed: 1, subdivision: 4 });
+    const base = generateRhythm(FOUR_FOUR, { ctx: { seed: 1 }, subdivision: 4 });
     let differing = 0;
     for (let seed = 2; seed <= 20; seed += 1) {
-      const other = generateRhythm(FOUR_FOUR, { seed, subdivision: 4 });
+      const other = generateRhythm(FOUR_FOUR, { ctx: { seed: seed }, subdivision: 4 });
       if (JSON.stringify(other) !== JSON.stringify(base)) {
         differing += 1;
       }
@@ -66,7 +66,7 @@ describe('generateRhythm downbeats', () => {
     const barBeats = beatsPerBar(FOUR_FOUR);
     const downbeats = Array.from({ length: bars }, (_, b) => b * barBeats);
     for (let seed = 0; seed < 20; seed += 1) {
-      const events = generateRhythm(FOUR_FOUR, { seed, bars, subdivision: 4 });
+      const events = generateRhythm(FOUR_FOUR, { ctx: { seed: seed }, bars, subdivision: 4 });
       const positions = new Set(events.map((e) => e.position));
       for (const downbeat of downbeats) {
         expect(positions.has(downbeat)).toBe(true);
@@ -78,7 +78,11 @@ describe('generateRhythm downbeats', () => {
     const bars = 4;
     const barBeats = beatsPerBar(FOUR_FOUR);
     for (let seed = 0; seed < 10; seed += 1) {
-      const events = generateRhythm(FOUR_FOUR, { seed, bars, subdivision: 4, density: 0 });
+      const events = generateRhythm(FOUR_FOUR, {
+        ctx: { seed, complexity: { rhythmic: 0 } },
+        bars,
+        subdivision: 4,
+      });
       // With no probabilistic onsets, exactly the bar downbeats remain.
       expect(events.map((e) => e.position)).toEqual([0, barBeats, 2 * barBeats, 3 * barBeats]);
     }
@@ -96,9 +100,11 @@ describe('generateRhythm downbeats', () => {
     (ts, subdivision) => {
       const bars = 4;
       const positions = new Set(
-        generateRhythm(ts, { seed: 1, bars, subdivision, density: 1 }).map(
-          (event) => event.position,
-        ),
+        generateRhythm(ts, {
+          ctx: { seed: 1, complexity: { rhythmic: 1 } },
+          bars,
+          subdivision,
+        }).map((event) => event.position),
       );
       for (let bar = 0; bar < bars; bar += 1) {
         expect(positions.has(bar * beatsPerBar(ts))).toBe(true);
@@ -109,7 +115,11 @@ describe('generateRhythm downbeats', () => {
 
 describe('generateRhythm density clamping', () => {
   it('treats density 0 as no probabilistic onsets (downbeats only)', () => {
-    const events = generateRhythm(FOUR_FOUR, { seed: 5, bars: 2, subdivision: 4, density: 0 });
+    const events = generateRhythm(FOUR_FOUR, {
+      ctx: { seed: 5, complexity: { rhythmic: 0 } },
+      bars: 2,
+      subdivision: 4,
+    });
     expect(events.map((e) => e.position)).toEqual([0, 4]);
   });
 
@@ -117,13 +127,25 @@ describe('generateRhythm density clamping', () => {
     // The same contract as generateDrums: a slider wired to both generators
     // must not clamp on one side and throw on the other.
     expect(() =>
-      generateRhythm(FOUR_FOUR, { seed: 9, bars: 2, subdivision: 4, density: 1.5 }),
+      generateRhythm(FOUR_FOUR, {
+        ctx: { seed: 9, complexity: { rhythmic: 1.5 } },
+        bars: 2,
+        subdivision: 4,
+      }),
     ).toThrow(RangeError);
     expect(() =>
-      generateRhythm(FOUR_FOUR, { seed: 9, bars: 2, subdivision: 4, density: -0.5 }),
+      generateRhythm(FOUR_FOUR, {
+        ctx: { seed: 9, complexity: { rhythmic: -0.5 } },
+        bars: 2,
+        subdivision: 4,
+      }),
     ).toThrow(RangeError);
     expect(() =>
-      generateRhythm(FOUR_FOUR, { seed: 9, bars: 2, subdivision: 4, density: Number.NaN }),
+      generateRhythm(FOUR_FOUR, {
+        ctx: { seed: 9, complexity: { rhythmic: Number.NaN } },
+        bars: 2,
+        subdivision: 4,
+      }),
     ).toThrow(RangeError);
   });
 });
@@ -138,13 +160,13 @@ describe('generateRhythm structure', () => {
     describe(name, () => {
       it('always includes the downbeat at position 0', () => {
         for (let seed = 0; seed < 10; seed += 1) {
-          const events = generateRhythm(ts, { seed, bars: 2 });
+          const events = generateRhythm(ts, { ctx: { seed: seed }, bars: 2 });
           expect(events[0]?.position).toBe(0);
         }
       });
 
       it('is sorted by position and non-overlapping', () => {
-        const events = generateRhythm(ts, { seed: 7, bars: 2, subdivision: 4 });
+        const events = generateRhythm(ts, { ctx: { seed: 7 }, bars: 2, subdivision: 4 });
         for (let i = 1; i < events.length; i += 1) {
           const prev = events[i - 1] as RhythmEvent;
           const curr = events[i] as RhythmEvent;
@@ -155,14 +177,14 @@ describe('generateRhythm structure', () => {
 
       it('has durations summing to the full span', () => {
         const bars = 3;
-        const events = generateRhythm(ts, { seed: 11, bars, subdivision: 4 });
+        const events = generateRhythm(ts, { ctx: { seed: 11 }, bars, subdivision: 4 });
         const total = events.reduce((sum, e) => sum + e.duration, 0);
         expect(total).toBeCloseTo(beatsPerBar(ts) * bars, 9);
       });
 
       it('has all onsets on grid and positive durations', () => {
         const subdivision = 4;
-        const events = generateRhythm(ts, { seed: 3, bars: 2, subdivision });
+        const events = generateRhythm(ts, { ctx: { seed: 3 }, bars: 2, subdivision });
         for (const e of events) {
           expect(e.duration).toBeGreaterThan(0);
           const steps = e.position * subdivision;
@@ -176,8 +198,14 @@ describe('generateRhythm structure', () => {
 describe('generateRhythm density', () => {
   it('higher density yields at least as many onsets on the same seed', () => {
     for (let seed = 0; seed < 20; seed += 1) {
-      const low = generateRhythm(FOUR_FOUR, { seed, density: 0.2, subdivision: 4 });
-      const high = generateRhythm(FOUR_FOUR, { seed, density: 0.9, subdivision: 4 });
+      const low = generateRhythm(FOUR_FOUR, {
+        ctx: { seed, complexity: { rhythmic: 0.2 } },
+        subdivision: 4,
+      });
+      const high = generateRhythm(FOUR_FOUR, {
+        ctx: { seed, complexity: { rhythmic: 0.9 } },
+        subdivision: 4,
+      });
       expect(high.length).toBeGreaterThanOrEqual(low.length);
     }
   });
@@ -200,7 +228,11 @@ describe('metric preference', () => {
     const seeds = 200;
 
     for (let seed = 0; seed < seeds; seed += 1) {
-      const events = generateRhythm(ts, { seed, bars, subdivision, density: 0.5 });
+      const events = generateRhythm(ts, {
+        ctx: { seed, complexity: { rhythmic: 0.5 } },
+        bars,
+        subdivision,
+      });
       const onsetSet = new Set(events.map((e) => Math.round(e.position * subdivision)));
       // Skip slot 0, which is always forced on.
       for (let i = 1; i < slotCount; i += 1) {
@@ -224,7 +256,7 @@ describe('metric preference', () => {
 
 describe('rhythmDensity', () => {
   it('reports the mean onset count per bar', () => {
-    const events = generateRhythm(FOUR_FOUR, { seed: 5, bars: 2, subdivision: 4 });
+    const events = generateRhythm(FOUR_FOUR, { ctx: { seed: 5 }, bars: 2, subdivision: 4 });
     const perBar = rhythmDensity(events, FOUR_FOUR);
     expect(perBar).toBeCloseTo(events.length / 2, 9);
   });

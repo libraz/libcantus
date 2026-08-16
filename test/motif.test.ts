@@ -132,14 +132,14 @@ describe('transformMotif shifts', () => {
 
 describe('generateMotif', () => {
   it('is deterministic for a given seed', () => {
-    const a = generateMotif({ key: cMajor, bars: 2, contour: 'arch', seed: 7 });
-    const b = generateMotif({ key: cMajor, bars: 2, contour: 'arch', seed: 7 });
+    const a = generateMotif({ key: cMajor, bars: 2, contour: 'arch', ctx: { seed: 7 } });
+    const b = generateMotif({ key: cMajor, bars: 2, contour: 'arch', ctx: { seed: 7 } });
     expect(a).toEqual(b);
   });
 
   it('produces in-scale pitches for every contour', () => {
     for (const contour of ['arch', 'ascending', 'descending', 'wave'] as const) {
-      const motif = generateMotif({ key: cMajor, bars: 1, contour, seed: 3 });
+      const motif = generateMotif({ key: cMajor, bars: 1, contour, ctx: { seed: 3 } });
       for (const note of motif.notes) {
         expect([0, 2, 4, 5, 7, 9, 11]).toContain(pitchClass(note.pitch));
       }
@@ -179,7 +179,7 @@ describe('generateMotif', () => {
       key: cMajor,
       bars: 1,
       contour: 'ascending',
-      seed: 5,
+      ctx: { seed: 5 },
     }).notes.map((n) => n.pitch);
     expect(pitches).toEqual([60, 62, 64]);
     for (let i = 1; i < pitches.length; i += 1) {
@@ -188,8 +188,8 @@ describe('generateMotif', () => {
   });
 
   it('ignores the seed while jitter is off (contour is seed-independent)', () => {
-    const a = generateMotif({ key: cMajor, bars: 2, contour: 'wave', seed: 1 });
-    const b = generateMotif({ key: cMajor, bars: 2, contour: 'wave', seed: 999 });
+    const a = generateMotif({ key: cMajor, bars: 2, contour: 'wave', ctx: { seed: 1 } });
+    const b = generateMotif({ key: cMajor, bars: 2, contour: 'wave', ctx: { seed: 999 } });
     expect(a).toEqual(b);
   });
 
@@ -199,19 +199,19 @@ describe('generateMotif', () => {
       bars: 2,
       contour: 'ascending',
       jitter: 1,
-      seed: 4,
+      ctx: { seed: 4 },
     });
     const again = generateMotif({
       key: cMajor,
       bars: 2,
       contour: 'ascending',
       jitter: 1,
-      seed: 4,
+      ctx: { seed: 4 },
     });
     expect(withJitter).toEqual(again);
     // Enabling jitter perturbs the plain contour, and never by more than the
     // single diatonic step the nudge is defined as.
-    const plain = generateMotif({ key: cMajor, bars: 2, contour: 'ascending', seed: 4 });
+    const plain = generateMotif({ key: cMajor, bars: 2, contour: 'ascending', ctx: { seed: 4 } });
     expect(withJitter).not.toEqual(plain);
     withJitter.notes.forEach((note, index) => {
       const straight = plain.notes[index]?.pitch ?? note.pitch;

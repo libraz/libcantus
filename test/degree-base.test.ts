@@ -71,7 +71,9 @@ describe('scale degrees are 1-based', () => {
 
     // Seed 42 in the dance pool selects `extended5` (I V vi iii).
     expect(
-      symbolsOf(generateProgression({ key: key.scale, style: 'dance', bars: 4, seed: 42 })),
+      symbolsOf(
+        generateProgression({ key: key.scale, style: 'dance', bars: 4, ctx: { seed: 42 } }),
+      ),
     ).toEqual(['C', 'G', 'Am', 'Em']);
 
     expect(

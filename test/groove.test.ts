@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseTimeSignature } from '../src/core/meter/index.js';
 import type { NoteEvent } from '../src/core/types.js';
-import type { GenerationContext } from '../src/generate/context/index.js';
 import {
   applyGrooveTemplate,
   extractGrooveTemplate,
@@ -24,16 +23,16 @@ describe('humanize', () => {
   const events = makeEvents([0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5]);
 
   it('is deterministic for the same seed', () => {
-    const a = humanize(events, { seed: 7 });
-    const b = humanize(events, { seed: 7 });
+    const a = humanize(events, { ctx: { seed: 7 } });
+    const b = humanize(events, { ctx: { seed: 7 } });
     expect(a).toEqual(b);
   });
 
   it('generally differs across seeds', () => {
-    const base = humanize(events, { seed: 1 });
+    const base = humanize(events, { ctx: { seed: 1 } });
     let differing = 0;
     for (let seed = 2; seed <= 20; seed += 1) {
-      const other = humanize(events, { seed });
+      const other = humanize(events, { ctx: { seed: seed } });
       if (JSON.stringify(other) !== JSON.stringify(base)) {
         differing += 1;
       }
@@ -41,30 +40,28 @@ describe('humanize', () => {
     expect(differing).toBeGreaterThan(15);
   });
 
-  it('takes a generation context, with the context winning over the seed sugar', () => {
-    // The eleventh entry point onto the same rule: a project context speaks for
-    // the whole piece, so it settles the seed the sugar only suggests.
-    expect(humanize(events, { ctx: { seed: 7 } })).toEqual(humanize(events, { seed: 7 }));
-    expect(humanize(events, { ctx: { seed: 7 }, seed: 99 })).toEqual(
-      humanize(events, { ctx: { seed: 7 } }),
+  it('takes its seed from the generation context, and nowhere else', () => {
+    // The context is the only place a seed can be named, so a bare number and
+    // the object it stands for have to mean the same thing here as everywhere.
+    expect(humanize(events, { ctx: 7 })).toEqual(humanize(events, { ctx: { seed: 7 } }));
+    // The tempo travels beside the seed without disturbing it.
+    expect(humanize(events, { ctx: { seed: 0, bpm: 96 } })).toEqual(
+      humanize(events, { ctx: { seed: 0 } }),
     );
-    expect(humanize(events, { ctx: 7 })).toEqual(humanize(events, { seed: 7 }));
-    // A context that names a seed of its own settles it, even when it is 0.
-    expect(humanize(events, { ctx: { seed: 0, bpm: 96 }, seed: 7 })).toEqual(
-      humanize(events, { seed: 0 }),
+    // A context carrying nothing but a tempo is the default seed, not a refusal.
+    expect(humanize(events, { ctx: { bpm: 96 } })).toEqual(humanize(events, { ctx: { seed: 0 } }));
+    // And the seed is what actually moves the part.
+    expect(humanize(events, { ctx: { seed: 7 }, timing: 0.04 })).not.toEqual(
+      humanize(events, { ctx: { seed: 8 }, timing: 0.04 }),
     );
-    // One carrying nothing but a tempo lets the sugar name it, which is the
-    // rule the other entry points follow.
-    const tempoOnly = { bpm: 96 } as GenerationContext;
-    expect(humanize(events, { ctx: tempoOnly, seed: 7 })).toEqual(humanize(events, { seed: 7 }));
   });
 
   it('draws by position, so an inserted note leaves the others where they were', () => {
     // The coupling positional addressing exists to remove: with draws taken in
     // array order, one note added at the front redraws the whole part.
-    const before = humanize(events, { seed: 3, timing: 0.04 });
+    const before = humanize(events, { ctx: { seed: 3 }, timing: 0.04 });
     const inserted = humanize([{ pitch: 61, startBeat: -0.25, durationBeat: 0.5 }, ...events], {
-      seed: 3,
+      ctx: { seed: 3 },
       timing: 0.04,
     });
     expect(inserted.slice(1)).toEqual(before);
@@ -84,7 +81,7 @@ describe('humanize', () => {
   it('keeps timing jitter within the configured bound', () => {
     const timing = 0.03;
     for (let seed = 0; seed < 30; seed += 1) {
-      const result = humanize(events, { seed, timing });
+      const result = humanize(events, { ctx: { seed: seed }, timing });
       for (let i = 0; i < result.length; i += 1) {
         const original = events[i] as NoteEvent;
         const shifted = result[i] as NoteEvent;
@@ -99,7 +96,7 @@ describe('humanize', () => {
     // report both at beat 0 — one sound where the input has two.
     const acrossZero = makeEvents([-0.5, 0]);
     for (let seed = 0; seed < 30; seed += 1) {
-      const result = humanize(acrossZero, { seed, timing: 0.05 });
+      const result = humanize(acrossZero, { ctx: { seed: seed }, timing: 0.05 });
       const onsets = result.map((event) => event.startBeat);
       expect(new Set(onsets).size).toBe(onsets.length);
       expect(onsets[0]).toBeLessThan(onsets[1] as number);
@@ -117,7 +114,12 @@ describe('humanize', () => {
       durationBeat: 0.5,
     }));
     for (let seed = 0; seed < 30; seed += 1) {
-      const result = humanize(plain, { seed, velocity: velocityJitter, accent, baseVelocity });
+      const result = humanize(plain, {
+        ctx: { seed: seed },
+        velocity: velocityJitter,
+        accent,
+        baseVelocity,
+      });
       for (const event of result) {
         expect(event.velocity).toBeGreaterThanOrEqual(1);
         expect(event.velocity).toBeLessThanOrEqual(127);
@@ -128,7 +130,7 @@ describe('humanize', () => {
   });
 
   it('preserves pitch and duration', () => {
-    const result = humanize(events, { seed: 3 });
+    const result = humanize(events, { ctx: { seed: 3 } });
     for (let i = 0; i < result.length; i += 1) {
       expect(result[i]?.pitch).toBe(events[i]?.pitch);
       expect(result[i]?.durationBeat).toBe(events[i]?.durationBeat);
@@ -142,8 +144,8 @@ describe('humanize', () => {
     let weakTotal = 0;
     const seeds = 100;
     for (let seed = 0; seed < seeds; seed += 1) {
-      const strongResult = humanize(strongBeats, { seed });
-      const weakResult = humanize(weakBeats, { seed });
+      const strongResult = humanize(strongBeats, { ctx: { seed: seed } });
+      const weakResult = humanize(weakBeats, { ctx: { seed: seed } });
       strongTotal += strongResult.reduce((sum, e) => sum + (e.velocity ?? 0), 0);
       weakTotal += weakResult.reduce((sum, e) => sum + (e.velocity ?? 0), 0);
     }
@@ -159,7 +161,7 @@ describe('humanize', () => {
     // and no later pass can tell there was a pickup at all.
     const pickup = makeEvents([-1, -0.5, 0]);
     for (let seed = 0; seed < 30; seed += 1) {
-      const played = humanize(pickup, { seed, timing: 0.02 });
+      const played = humanize(pickup, { ctx: { seed: seed }, timing: 0.02 });
       const onsets = played.map((event) => event.startBeat);
       expect(new Set(onsets).size).toBe(3);
       expect(onsets[0]).toBeLessThan(onsets[1] as number);
