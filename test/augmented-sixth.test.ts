@@ -482,14 +482,14 @@ describe('spelling an augmented sixth through the ordinary chord speller', () =>
 describe('an augmented sixth through the class API', () => {
   it('renders the German sixth as a chord symbol on the bass it stands on', () => {
     // Ab7, never the G#7 a bare pitch class would name.
-    expect(Chord.from(romanToChord('Ger6', cMajor)).symbol()).toBe('Ab7');
-    expect(Chord.from(romanToChord('It6', cMajor)).symbol()).toBe('Ab7');
-    expect(Chord.from(romanToChord('Fr6', cMajor)).symbol()).toBe('D7b5/Ab');
+    expect(Chord.fromData(romanToChord('Ger6', cMajor)).symbol()).toBe('Ab7');
+    expect(Chord.fromData(romanToChord('It6', cMajor)).symbol()).toBe('Ab7');
+    expect(Chord.fromData(romanToChord('Fr6', cMajor)).symbol()).toBe('D7b5/Ab');
     expect(Key.major('C').roman('Ger6').symbol()).toBe('Ab7');
   });
 
   it('spells itself with or without a key attached', () => {
-    const chord = Chord.from(romanToChord('Ger6', cMajor));
+    const chord = Chord.fromData(romanToChord('Ger6', cMajor));
     expect(chord.spell().map((note) => note.name)).toEqual(['Ab', 'C', 'Eb', 'F#']);
     expect(
       chord
@@ -505,7 +505,7 @@ describe('an augmented sixth through the class API', () => {
   });
 
   it('carries its spelling through a transposition', () => {
-    const chord = Chord.from(romanToChord('Ger6', cMajor));
+    const chord = Chord.fromData(romanToChord('Ger6', cMajor));
     // The German sixth of D major: the augmented sixth above Bb is G#, not Ab.
     expect(chord.transpose(2).symbol()).toBe('Bb7');
     expect(
@@ -528,7 +528,7 @@ describe('an augmented sixth through the class API', () => {
     // A natural where the chord sounds a lowered submediant: the first
     // spelling no longer names the pitch class its interval names.
     expect(
-      Chord.from({ ...chord, toneSpellings: hints('A', 'C', 'Eb', 'F#') }).data.toneSpellings,
+      Chord.fromData({ ...chord, toneSpellings: hints('A', 'C', 'Eb', 'F#') }).data.toneSpellings,
     ).toBeUndefined();
   });
 });

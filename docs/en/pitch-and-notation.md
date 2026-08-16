@@ -2,12 +2,12 @@
 
 ## Notes and MIDI
 
-`Note` preserves a letter, an alteration, and an optional octave. Use `Note.of` for a class value, or `parseNote` for the plain-data API. A note without an octave has a pitch class but no MIDI number.
+`Note` preserves a letter, an alteration, and an optional octave. Use `Note.parse` to read a name into a class value, `Note.of` to build one from its parts, or `parseNote` for the plain-data API. A note without an octave has a pitch class but no MIDI number.
 
 ```ts
 import { Note, parseNote, tryParseNote } from '@libraz/libcantus';
 
-const c4 = Note.of('C4');
+const c4 = Note.parse('C4');
 c4.name; // 'C4'
 c4.midi; // 60
 c4.transpose(7).name; // 'G4'
@@ -37,9 +37,9 @@ An interval includes both its diatonic number and chromatic span. That distincti
 ```ts
 import { Interval, Note } from '@libraz/libcantus';
 
-Interval.between(Note.of('C4'), Note.of('F#4')).name; // 'A4'
-Interval.between(Note.of('C4'), Note.of('Gb4')).name; // 'd5'
-Note.of('C4').transposeBy('A4').name; // 'F#4'
+Interval.between(Note.parse('C4'), Note.parse('F#4')).name; // 'A4'
+Interval.between(Note.parse('C4'), Note.parse('Gb4')).name; // 'd5'
+Note.parse('C4').transposeBy('A4').name; // 'F#4'
 ```
 
 The functional equivalents are `spelledInterval`, `parseInterval`, `transposeByInterval`, and `transposeNote`.

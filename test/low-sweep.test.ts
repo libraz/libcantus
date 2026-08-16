@@ -85,7 +85,7 @@ describe('a scale degree outside the scale is an error', () => {
 describe('a stale spelling hint is dropped, not trusted', () => {
   it('ignores a root spelling that no longer names the root', () => {
     // The hint says Bb while the root is C; the formatter must not print Bb.
-    const chord = Chord.from({
+    const chord = Chord.fromData({
       rootPc: 0,
       quality: 'maj',
       intervals: [0, 4, 7],

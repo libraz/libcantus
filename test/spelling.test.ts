@@ -537,16 +537,16 @@ describe('Key factories agree on numeric roots', () => {
   });
 
   it('rejects a tonic that does not spell the scale root', () => {
-    expect(() => Key.of(majorKey(0), Note.of('F#'))).toThrow(RangeError);
+    expect(() => Key.of(majorKey(0), Note.parse('F#'))).toThrow(RangeError);
   });
 });
 
 describe('Note.transpose keeps the spelling', () => {
   it('moves the letter by the interval, not by a sharp table', () => {
-    expect(Note.of('Ab4').transpose(2).name).toBe('Bb4');
-    expect(Note.of('Eb4').transpose(5).name).toBe('Ab4');
-    expect(Note.of('F#3').transpose(2).name).toBe('G#3');
-    expect(Note.of('Bb').transpose(7).name).toBe('F');
+    expect(Note.parse('Ab4').transpose(2).name).toBe('Bb4');
+    expect(Note.parse('Eb4').transpose(5).name).toBe('Ab4');
+    expect(Note.parse('F#3').transpose(2).name).toBe('G#3');
+    expect(Note.parse('Bb').transpose(7).name).toBe('F');
   });
 
   it('is an exact inverse of itself for every note and offset', () => {
@@ -555,7 +555,7 @@ describe('Note.transpose keeps the spelling', () => {
         // A tritone is the one ambiguous distance: ascending it is an augmented
         // fourth and descending it a diminished fifth, so it is not self-inverse.
         if (Math.abs(semitones) % 12 === 6) continue;
-        const note = Note.of(name);
+        const note = Note.parse(name);
         const round = note.transpose(semitones).transpose(-semitones);
         expect(round.name, `${name} +-${semitones}`).toBe(note.name);
       }
@@ -563,14 +563,14 @@ describe('Note.transpose keeps the spelling', () => {
   });
 
   it('spells a tritone by direction: up an augmented fourth, down a diminished fifth', () => {
-    expect(Note.of('C4').transpose(6).name).toBe('F#4');
-    expect(Note.of('C4').transpose(-6).name).toBe('Gb3');
-    expect(Note.of('Ab4').transpose(-6).name).toBe('Ebb4');
+    expect(Note.parse('C4').transpose(6).name).toBe('F#4');
+    expect(Note.parse('C4').transpose(-6).name).toBe('Gb3');
+    expect(Note.parse('Ab4').transpose(-6).name).toBe('Ebb4');
   });
 
   it('honours an explicit spelling preference', () => {
-    expect(Note.of('Ab4').transpose(2, { spelling: 'sharp' }).name).toBe('A#4');
-    expect(Note.of('C4').transpose(1, { spelling: 'flat' }).name).toBe('Db4');
+    expect(Note.parse('Ab4').transpose(2, { spelling: 'sharp' }).name).toBe('A#4');
+    expect(Note.parse('C4').transpose(1, { spelling: 'flat' }).name).toBe('Db4');
   });
 });
 
@@ -612,6 +612,6 @@ describe('non-heptatonic scales lean the way the scale does', () => {
         .spell()
         .map((n) => n.name),
     ).toEqual(['F#', 'A', 'C#']);
-    expect(() => Chord.from(makeChord(0, 'maj')).spell()).toThrow();
+    expect(() => Chord.fromData(makeChord(0, 'maj')).spell()).toThrow();
   });
 });

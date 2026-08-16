@@ -262,9 +262,9 @@ export class Chord {
    * @returns The chord (without key context).
    */
   static of(root: string | number, quality: ChordQuality, bass?: string | number): Chord {
-    const bassNote = typeof bass === 'string' ? Note.of(bass) : undefined;
+    const bassNote = typeof bass === 'string' ? Note.parse(bass) : undefined;
     const bassPc = bassNote !== undefined ? bassNote.pitchClass : (bass as number | undefined);
-    const rootNote = typeof root === 'string' ? Note.of(root) : undefined;
+    const rootNote = typeof root === 'string' ? Note.parse(root) : undefined;
     const data = makeChord(
       rootNote !== undefined ? rootNote.pitchClass : (root as number),
       quality,
@@ -281,17 +281,6 @@ export class Chord {
 
   /**
    * Wrap an existing plain chord object.
-   *
-   * @param data The plain chord.
-   * @returns The wrapped chord (without key context).
-   */
-  static from(data: ChordData): Chord {
-    return new Chord(data);
-  }
-
-  /**
-   * Alias of {@link Chord.from}, matching the `fromData` factory on the other
-   * classes.
    *
    * @param data The plain chord.
    * @returns The wrapped chord (without key context).

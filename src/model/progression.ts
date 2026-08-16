@@ -86,7 +86,7 @@ export class Progression {
    * ```
    */
   static fromSpans(spans: readonly ChordSpan[], key?: Key): Progression {
-    const chords = spans.map((span) => ChordClass.from(chordFromSpan(span)));
+    const chords = spans.map((span) => ChordClass.fromData(chordFromSpan(span)));
     return new Progression(chords, key);
   }
 

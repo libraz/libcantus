@@ -59,7 +59,7 @@ describe('scale degrees are 1-based', () => {
   });
 
   it('tonicizes degree 5 with the dominant of the dominant', () => {
-    expect(Chord.from(secondaryDominant(5, majorKey(0))).symbol()).toBe('D7');
+    expect(Chord.fromData(secondaryDominant(5, majorKey(0))).symbol()).toBe('D7');
   });
 
   it('plays the same chords from the renumbered progression presets', () => {

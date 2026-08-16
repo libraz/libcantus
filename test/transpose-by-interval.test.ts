@@ -3,24 +3,24 @@ import { Chord, Interval, Key, Note, Progression, parseInterval } from '../src/i
 
 describe('Note.transposeBy', () => {
   it('accepts a name, plain interval data, and an Interval alike', () => {
-    const note = Note.of('C4');
+    const note = Note.parse('C4');
     expect(note.transposeBy('A2').name).toBe('D#4');
     expect(note.transposeBy(parseInterval('A2')).name).toBe('D#4');
     expect(note.transposeBy(Interval.parse('A2')).name).toBe('D#4');
   });
 
   it('distinguishes the augmented fourth from the diminished fifth', () => {
-    expect(Note.of('C4').transposeBy('A4').name).toBe('F#4');
-    expect(Note.of('C4').transposeBy('d5').name).toBe('Gb4');
+    expect(Note.parse('C4').transposeBy('A4').name).toBe('F#4');
+    expect(Note.parse('C4').transposeBy('d5').name).toBe('Gb4');
   });
 
   it('moves down for a descending interval', () => {
-    expect(Note.of('G#4').transposeBy('-A4').name).toBe('D4');
-    expect(Note.of('C4').transposeBy('-m3').name).toBe('A3');
+    expect(Note.parse('G#4').transposeBy('-A4').name).toBe('D4');
+    expect(Note.parse('C4').transposeBy('-m3').name).toBe('A3');
   });
 
   it('is the identity for a perfect unison', () => {
-    expect(Note.of('Bb3').transposeBy('P1').name).toBe('Bb3');
+    expect(Note.parse('Bb3').transposeBy('P1').name).toBe('Bb3');
   });
 });
 

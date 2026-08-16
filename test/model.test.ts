@@ -3,14 +3,14 @@ import { detectKeyBest } from '../src/analyze/detect/index.js';
 import { InvalidInputError } from '../src/core/errors/index.js';
 import { parseNote } from '../src/core/pitch/index.js';
 import { generateProgression } from '../src/generate/progression/index.js';
-import { Chord, Interval, Key, Note, Progression } from '../src/model/index.js';
+import { Chord, type ChordData, Interval, Key, Note, Progression } from '../src/model/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
 import { transposeChordSymbol } from '../src/theory/symbol/index.js';
 import { voiceProgression } from '../src/theory/voicing/index.js';
 
 describe('Note', () => {
   it('parses, formats, and converts name -> pitch class -> MIDI', () => {
-    const note = Note.of('C4');
+    const note = Note.parse('C4');
     expect(note.name).toBe('C4');
     expect(note.pitchClass).toBe(0);
     expect(note.midi).toBe(60);
@@ -28,6 +28,45 @@ describe('Note', () => {
     expect(Note.fromData({ letter: 6, alter: -1, octave: 3 }).name).toBe('Bb3');
   });
 
+  it('builds from parts, by letter number or by bare letter name', () => {
+    expect(Note.of(0, 0, 4).name).toBe('C4');
+    expect(Note.of(6, -1, 3).name).toBe('Bb3');
+    expect(Note.of('B', -1, 3).name).toBe('Bb3');
+    expect(Note.of('F', 1, 4).equals(Note.parse('F#4'))).toBe(true);
+    // Every letter name means the same letter number the parser reads it as.
+    for (const [index, name] of ['C', 'D', 'E', 'F', 'G', 'A', 'B'].entries()) {
+      expect(Note.of(name).letter, name).toBe(index);
+    }
+  });
+
+  it('defaults the alteration to natural and leaves an omitted octave out', () => {
+    const bare = Note.of('E');
+    expect(bare.alter).toBe(0);
+    expect(bare.octave).toBeUndefined();
+    expect(bare.name).toBe('E');
+    expect(bare.toJSON()).toEqual({ letter: 2, alter: 0 });
+    expect(Note.of(4, 0).octave).toBeUndefined();
+    expect(Note.of(4, 0, 5).octave).toBe(5);
+  });
+
+  it('refuses a name that has to be parsed, naming the parser that reads it', () => {
+    // `of` takes parts; anything carrying an accidental or an octave is text,
+    // and a caller reaching for it here needs to be sent to `parse`.
+    for (const text of ['Bb', 'C#4', 'C4', 'gis', 'H', 'b', '']) {
+      expect(() => Note.of(text), text).toThrow(InvalidInputError);
+      expect(() => Note.of(text), text).toThrow(/Note\.parse/);
+    }
+    expect(() => Note.of('Bb')).toThrow(/Note\.parse\("Bb"\)/);
+    expect(Note.parse('Bb').name).toBe('Bb');
+    expect(Note.parse('C#4').name).toBe('C#4');
+  });
+
+  it('holds a letter number to the range plain data is held to', () => {
+    expect(() => Note.of(7)).toThrow(/letter/);
+    expect(() => Note.of(-1)).toThrow(/letter/);
+    expect(() => Note.of(0, Number.NaN)).toThrow(RangeError);
+  });
+
   it('rejects a letter outside 0..6 instead of accepting a name-equal mismatch', () => {
     // 7 and 0 both print as C and both report pitch class 0, but `equals`
     // compares letters directly, so an unreduced letter would be a note that
@@ -43,33 +82,33 @@ describe('Note', () => {
   });
 
   it('transposes up and down via MIDI when an octave is present', () => {
-    expect(Note.of('C4').transpose(7).name).toBe('G4');
-    expect(Note.of('G4').transpose(-7).name).toBe('C4');
-    expect(Note.of('B3').transpose(1).name).toBe('C4');
+    expect(Note.parse('C4').transpose(7).name).toBe('G4');
+    expect(Note.parse('G4').transpose(-7).name).toBe('C4');
+    expect(Note.parse('B3').transpose(1).name).toBe('C4');
   });
 
   it('keeps an octave-less note octave-less when transposing', () => {
-    const transposed = Note.of('C').transpose(7);
+    const transposed = Note.parse('C').transpose(7);
     expect(transposed.name).toBe('G');
     expect(transposed.octave).toBeUndefined();
   });
 
   it('throws a clear error when asking an octave-less note for MIDI', () => {
-    expect(() => Note.of('C').midi).toThrow(/octave/);
+    expect(() => Note.parse('C').midi).toThrow(/octave/);
   });
 
   it('measures spelled intervals', () => {
-    expect(Note.of('C4').intervalTo(Note.of('G4')).toJSON()).toEqual({
+    expect(Note.parse('C4').intervalTo(Note.parse('G4')).toJSON()).toEqual({
       number: 5,
       quality: 'P',
       semitones: 7,
     });
-    expect(Note.of('C4').intervalTo(Note.of('E4')).name).toBe('M3');
+    expect(Note.parse('C4').intervalTo(Note.parse('E4')).name).toBe('M3');
   });
 
   it('carries a zero-semitone descending interval through the class API', () => {
-    const from = Note.of('Fb4');
-    const interval = from.intervalTo(Note.of('E4'));
+    const from = Note.parse('Fb4');
+    const interval = from.intervalTo(Note.parse('E4'));
     expect(interval.toJSON()).toMatchObject({
       number: 2,
       quality: 'd',
@@ -80,12 +119,12 @@ describe('Note', () => {
   });
 
   it('compares by spelling', () => {
-    expect(Note.of('C#4').equals(Note.of('C#4'))).toBe(true);
-    expect(Note.of('C#4').equals(Note.of('Db4'))).toBe(false);
+    expect(Note.parse('C#4').equals(Note.parse('C#4'))).toBe(true);
+    expect(Note.parse('C#4').equals(Note.parse('Db4'))).toBe(false);
   });
 
   it('is immutable: transpose returns a new instance', () => {
-    const original = Note.of('C4');
+    const original = Note.parse('C4');
     const transposed = original.transpose(2);
     expect(transposed).not.toBe(original);
     expect(original.name).toBe('C4');
@@ -93,27 +132,27 @@ describe('Note', () => {
 
   it('transposes by zero as the identity, preserving the exact spelling', () => {
     // A naive MIDI round-trip would respell Eb4 as D#4; zero must keep Eb4.
-    expect(Note.of('Eb4').transpose(0).name).toBe('Eb4');
-    expect(Note.of('D#4').transpose(0).name).toBe('D#4');
-    expect(Note.of('Cb').transpose(0).name).toBe('Cb');
-    const eb = Note.of('Eb4');
+    expect(Note.parse('Eb4').transpose(0).name).toBe('Eb4');
+    expect(Note.parse('D#4').transpose(0).name).toBe('D#4');
+    expect(Note.parse('Cb').transpose(0).name).toBe('Cb');
+    const eb = Note.parse('Eb4');
     const same = eb.transpose(0);
     expect(same).not.toBe(eb);
     expect(same.equals(eb)).toBe(true);
   });
 
   it('serializes to plain note data instead of {}', () => {
-    expect(Note.of('Bb3').toJSON()).toEqual({ letter: 6, alter: -1, octave: 3 });
+    expect(Note.parse('Bb3').toJSON()).toEqual({ letter: 6, alter: -1, octave: 3 });
     // Round-trips through JSON back into an equal note.
-    const restored = Note.fromData(JSON.parse(JSON.stringify(Note.of('F#4'))));
-    expect(restored.equals(Note.of('F#4'))).toBe(true);
+    const restored = Note.fromData(JSON.parse(JSON.stringify(Note.parse('F#4'))));
+    expect(restored.equals(Note.parse('F#4'))).toBe(true);
   });
 });
 
 describe('class API string conversion', () => {
   it('reads as itself in a template literal instead of [object Object]', () => {
-    expect(`${Note.of('Bb3')}`).toBe('Bb3');
-    expect(`${Note.of('C4').intervalTo(Note.of('E4'))}`).toBe('M3');
+    expect(`${Note.parse('Bb3')}`).toBe('Bb3');
+    expect(`${Note.parse('C4').intervalTo(Note.parse('E4'))}`).toBe('M3');
     expect(`${Key.major('C')}`).toBe('C major');
     expect(`${Key.minor('A')}`).toBe('A minor');
     expect(`${Chord.parse('Cmaj7')}`).toBe('Cmaj7');
@@ -124,7 +163,7 @@ describe('class API string conversion', () => {
 
 describe('plain data round trips and collection access', () => {
   it('rebuilds every class from its own JSON', () => {
-    const note = Note.of('F#4');
+    const note = Note.parse('F#4');
     expect(Note.fromJSON(JSON.parse(JSON.stringify(note))).equals(note)).toBe(true);
     const chord = Chord.parse('Cmaj7');
     expect(Chord.fromJSON(JSON.parse(JSON.stringify(chord))).equals(chord)).toBe(true);
@@ -223,7 +262,7 @@ describe('transposing without a string round trip', () => {
     expect(Chord.parse('C/G').transpose(2).symbol()).toBe('D/A');
     // A symbol round trip has no way to express this chord, so a transpose that
     // went through text would either throw or lose the added tone.
-    const custom = Chord.from({ rootPc: 0, quality: 'maj', intervals: [0, 4, 7, 14] });
+    const custom = Chord.fromData({ rootPc: 0, quality: 'maj', intervals: [0, 4, 7, 14] });
     expect(custom.transpose(3).pitchClasses()).toEqual([3, 5, 7, 10]);
   });
 
@@ -282,7 +321,7 @@ describe('transposing without a string round trip', () => {
 
   it('preserves spelling across class identity transpositions', () => {
     for (const semitones of [-12, 0, 12]) {
-      expect(Note.of('C#').transpose(semitones).name).toBe('C#');
+      expect(Note.parse('C#').transpose(semitones).name).toBe('C#');
       expect(Key.major('C#').transpose(semitones).toString()).toBe('C# major');
       expect(Chord.parse('Bb7').transpose(semitones).symbol()).toBe('Bb7');
       expect(`${new Progression([Chord.parse('Bb7')], Key.major('Db')).transpose(semitones)}`).toBe(
@@ -364,12 +403,12 @@ describe('Interval as a usable value', () => {
   });
 
   it('applies to a note by diatonic number, not by semitone count', () => {
-    expect(Note.of('C4').transposeBy(Interval.parse('A2')).name).toBe('D#4');
-    expect(Note.of('C4').transposeBy(Interval.parse('m3')).name).toBe('Eb4');
-    expect(Note.of('C4').transposeBy(Interval.parse('P5')).name).toBe('G4');
-    expect(Note.of('C4').transposeBy(Interval.of(3, 'M', -4)).name).toBe('Ab3');
+    expect(Note.parse('C4').transposeBy(Interval.parse('A2')).name).toBe('D#4');
+    expect(Note.parse('C4').transposeBy(Interval.parse('m3')).name).toBe('Eb4');
+    expect(Note.parse('C4').transposeBy(Interval.parse('P5')).name).toBe('G4');
+    expect(Note.parse('C4').transposeBy(Interval.of(3, 'M', -4)).name).toBe('Ab3');
     // An octave-less note stays octave-less.
-    const bare = Note.of('C').transposeBy(Interval.parse('P5'));
+    const bare = Note.parse('C').transposeBy(Interval.parse('P5'));
     expect(bare.name).toBe('G');
     expect(bare.octave).toBeUndefined();
   });
@@ -382,7 +421,7 @@ describe('Interval as a usable value', () => {
 
 describe('Interval', () => {
   it('builds from two notes', () => {
-    const third = Interval.between(Note.of('C4'), Note.of('E4'));
+    const third = Interval.between(Note.parse('C4'), Note.parse('E4'));
     expect(third.name).toBe('M3');
     expect(third.number).toBe(3);
     expect(third.quality).toBe('M');
@@ -397,7 +436,7 @@ describe('Interval', () => {
 
   it('serializes to plain interval data instead of {}', () => {
     expect(Interval.of(5, 'P', 7).toJSON()).toEqual({ number: 5, quality: 'P', semitones: 7 });
-    expect(Interval.between(Note.of('C4'), Note.of('E4')).toJSON()).toEqual({
+    expect(Interval.between(Note.parse('C4'), Note.parse('E4')).toJSON()).toEqual({
       number: 3,
       quality: 'M',
       semitones: 4,
@@ -491,8 +530,8 @@ describe('Key', () => {
     const cMajor = Key.major('C');
     expect(cMajor.contains(7)).toBe(true);
     expect(cMajor.contains(6)).toBe(false);
-    expect(cMajor.contains(Note.of('F#'))).toBe(false);
-    expect(cMajor.contains(Note.of('E4'))).toBe(true);
+    expect(cMajor.contains(Note.parse('F#'))).toBe(false);
+    expect(cMajor.contains(Note.parse('E4'))).toBe(true);
   });
 
   it('builds degree chords carrying the key context', () => {
@@ -846,10 +885,25 @@ describe('Chord letter-name spelling and plain-data construction', () => {
     expect(g7.spell().map((note) => note.name)).toEqual(['G', 'B', 'D', 'F']);
   });
 
-  it('wraps a plain chord object with Chord.from', () => {
-    const chord = Chord.from({ rootPc: 0, quality: 'maj', intervals: [0, 4, 7] });
+  it('wraps a plain chord object with Chord.fromData', () => {
+    const chord = Chord.fromData({ rootPc: 0, quality: 'maj', intervals: [0, 4, 7] });
     expect(chord.pitchClasses()).toEqual([0, 4, 7]);
     expect(chord.key).toBeUndefined();
+  });
+
+  it('round-trips plain chord data through both rebuild factories', () => {
+    // `fromData` takes what `.data` hands out and `fromJSON` what a serialized
+    // chord carries; the two are the only way back in, so both must return the
+    // chord the data came from.
+    const original = Chord.parse('Ebmaj7/Bb');
+    const fromData = Chord.fromData(original.data);
+    const fromJSON = Chord.fromJSON(JSON.parse(JSON.stringify(original)) as ChordData);
+    expect(fromData.data).toEqual(original.data);
+    expect(fromJSON.data).toEqual(original.toJSON());
+    expect(fromData.equals(original)).toBe(true);
+    expect(fromJSON.equals(original)).toBe(true);
+    expect(fromData.symbol()).toBe('Ebmaj7/Bb');
+    expect(fromJSON.symbol()).toBe('Ebmaj7/Bb');
   });
 
   it('exposes Key.spell as an alias of the spelled scale', () => {
@@ -867,7 +921,7 @@ describe('Chord letter-name spelling and plain-data construction', () => {
   });
 
   it('refuses to invert a chord with no intervals', () => {
-    const empty = Chord.from({ rootPc: 0, quality: 'maj', intervals: [] });
+    const empty = Chord.fromData({ rootPc: 0, quality: 'maj', intervals: [] });
     expect(() => empty.invert(0)).toThrow(/invert/);
   });
 });

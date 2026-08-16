@@ -71,8 +71,8 @@ if (root.majorKey(0).rootPc !== 0 || model.Key.major('Eb').chord(1).symbol() !==
 // /model subpath must be the same class: without shared chunks the CommonJS
 // build emits two copies, and every cross-entry comparison throws on the brand
 // check instead of answering.
-const fromRoot = root.Note.of('C4');
-const fromModel = model.Note.of('D4');
+const fromRoot = root.Note.parse('C4');
+const fromModel = model.Note.parse('D4');
 if (fromRoot.equals(fromModel) !== false) {
   throw new Error('cross-entry Note.equals disagreed');
 }

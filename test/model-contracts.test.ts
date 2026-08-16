@@ -77,7 +77,7 @@ const SAMPLES: Record<string, { data: unknown; equals(other: never): boolean }> 
   Interval: Interval.parse('-m3'),
   // A detected key, so the scale form a plain minor does not carry is exercised.
   Key: Key.detectBest([57, 59, 60, 62, 64, 65, 68]) ?? Key.minor('A'),
-  Note: Note.of('F#4'),
+  Note: Note.parse('F#4'),
   Progression: new Progression([Chord.parse('C'), Chord.parse('G7')], Key.major('C')),
 };
 
@@ -241,7 +241,7 @@ describe('data arriving from outside is checked, not trusted', () => {
     // C# up to Dbb climbs a letter while losing a semitone: a doubly
     // diminished second that ascends, which the span's sign alone calls a
     // descent.
-    const climbing = Note.of('C#4').intervalTo(Note.of('Dbb4'));
+    const climbing = Note.parse('C#4').intervalTo(Note.parse('Dbb4'));
     expect(climbing.semitones).toBeLessThan(0);
     expect(climbing.isDescending).toBe(false);
     expect(Interval.fromData(climbing.data).isDescending).toBe(false);
@@ -255,8 +255,8 @@ describe('data arriving from outside is checked, not trusted', () => {
       Interval.parse('P1'),
       Interval.parse('P1').negate(),
       Interval.of(3, 'M', -4),
-      Note.of('C#4').intervalTo(Note.of('Dbb4')),
-      Note.of('Fb4').intervalTo(Note.of('E4')),
+      Note.parse('C#4').intervalTo(Note.parse('Dbb4')),
+      Note.parse('Fb4').intervalTo(Note.parse('E4')),
     ]) {
       const json = interval.toJSON();
       // `descending` appears only on an interval that descends: the pitch
@@ -268,7 +268,7 @@ describe('data arriving from outside is checked, not trusted', () => {
   });
 
   it('reduces a chord root and bass to pitch classes at the boundary', () => {
-    const wrapped = Chord.from({ rootPc: 25, quality: 'maj', intervals: [0, 4, 7] });
+    const wrapped = Chord.fromData({ rootPc: 25, quality: 'maj', intervals: [0, 4, 7] });
     expect(wrapped.rootPc).toBe(1);
     expect(wrapped.data.rootPc).toBe(1);
     expect(Chord.of(1, 'maj').equals(wrapped)).toBe(true);
@@ -277,7 +277,7 @@ describe('data arriving from outside is checked, not trusted', () => {
     expect(slash.rootPc).toBe(0);
     expect(slash.bassPc).toBe(7);
     expect(slash.symbol()).toBe('C/G');
-    expect(() => Chord.from({ rootPc: Number.NaN, quality: 'maj', intervals: [0] })).toThrow(
+    expect(() => Chord.fromData({ rootPc: Number.NaN, quality: 'maj', intervals: [0] })).toThrow(
       RangeError,
     );
   });
@@ -302,13 +302,13 @@ describe('equals compares through the public surface', () => {
     expect(Interval.parse('P5').equals(other.Interval.parse('P4'))).toBe(false);
     expect(Interval.parse('M3').negate().equals(other.Interval.parse('M3').negate())).toBe(true);
     expect(Interval.parse('M3').equals(other.Interval.parse('M3').negate())).toBe(false);
-    expect(Note.of('C4').equals(other.Note.of('C4'))).toBe(true);
+    expect(Note.parse('C4').equals(other.Note.parse('C4'))).toBe(true);
     expect(Key.major('C').equals(other.Key.major('C'))).toBe(true);
     expect(Chord.parse('Cmaj7').equals(other.Chord.parse('Cmaj7'))).toBe(true);
     expect(
       new Progression([Chord.parse('C')]).equals(new other.Progression([other.Chord.parse('C')])),
     ).toBe(true);
-    expect(Note.of('C4').intervalTo(other.Note.of('G4')).name).toBe('P5');
+    expect(Note.parse('C4').intervalTo(other.Note.parse('G4')).name).toBe('P5');
   });
 });
 
@@ -558,11 +558,11 @@ describe('methods offer the options their delegate accepts', () => {
   });
 
   it('names a note and a scale in every notation system the functions read', () => {
-    expect(Note.of('B', { system: 'german' }).name).toBe('Bb');
-    expect(Note.of('gis').name).toBe('G#');
-    expect(Note.of('G#').format({ system: 'german' })).toBe('gis');
-    expect(Note.of('G#4').toString({ system: 'japanese' })).toBe('嬰ト4');
-    expect(Note.of('G#').toString()).toBe('G#');
+    expect(Note.parse('B', { system: 'german' }).name).toBe('Bb');
+    expect(Note.parse('gis').name).toBe('G#');
+    expect(Note.parse('G#').format({ system: 'german' })).toBe('gis');
+    expect(Note.parse('G#4').toString({ system: 'japanese' })).toBe('嬰ト4');
+    expect(Note.parse('G#').toString()).toBe('G#');
     expect(Key.minor('G#').noteNames({ system: 'german' })[0]).toBe('gis');
     expect(Key.minor('G#').noteNames()[0]).toBe('G#');
   });
@@ -640,8 +640,8 @@ describe('interval inversion', () => {
     expect(Interval.parse('P15').invert().name).toBe('P1');
     expect(Interval.parse('P22').invert().name).toBe('P1');
     expect(Interval.parse('P1').invert().name).toBe('P8');
-    expect(Note.of('C2').intervalTo(Note.of('C4')).invert().name).toBe('P1');
-    expect(Note.of('C2').intervalTo(Note.of('C4')).invert().invert().number).toBe(8);
+    expect(Note.parse('C2').intervalTo(Note.parse('C4')).invert().name).toBe('P1');
+    expect(Note.parse('C2').intervalTo(Note.parse('C4')).invert().invert().number).toBe(8);
   });
 
   it('is an identity on the simple interval when applied twice', () => {

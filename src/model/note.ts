@@ -38,6 +38,31 @@ function copyNote(data: NoteData): NoteData {
   return copy;
 }
 
+/** A bare natural letter name, the only text {@link Note.of} reads. */
+const NATURAL_LETTER = /^[A-G]$/;
+
+/**
+ * The letter number a `Note.of` letter argument names.
+ *
+ * A letter name is read through the note parser rather than a table of its
+ * own, so the letter ordering has one definition. Anything the parser would
+ * have to interpret — an accidental, an octave, a non-English glyph — is
+ * refused here instead, because `of` builds from parts and `parse` reads text.
+ */
+function letterNumberOf(letter: number | string): number {
+  if (typeof letter === 'number') {
+    // Left to copyNote, which rejects the same out-of-range letters a plain
+    // note object arriving from outside is rejected for.
+    return letter;
+  }
+  if (!NATURAL_LETTER.test(letter)) {
+    throw new InvalidInputError(
+      `Note.of takes a letter number 0..6 or a bare letter name 'C'..'B'; received ${JSON.stringify(letter)}. Use Note.parse(${JSON.stringify(letter)}) to read a note name with an accidental or an octave.`,
+    );
+  }
+  return unwrapParse(tryParseNote(letter)).letter;
+}
+
 /**
  * An immutable spelled note: a diatonic letter plus a chromatic alteration and
  * an optional octave. Wraps the plain note object and delegates to the pitch
@@ -47,7 +72,7 @@ function copyNote(data: NoteData): NoteData {
  * @example
  * ```ts
  * import { Note } from '@libraz/libcantus';
- * Note.of('C4').transpose(7).name; // 'G4'
+ * Note.parse('C4').transpose(7).name; // 'G4'
  * ```
  */
 export class Note {
@@ -64,6 +89,36 @@ export class Note {
   }
 
   /**
+   * Build a note from its parts, without reading any text.
+   *
+   * The parts are the fields a note holds, so nothing here is interpreted:
+   * {@link Note.parse} is what reads `'Bb'` or `'C#4'`, and a letter name given
+   * here may carry neither an accidental nor an octave.
+   *
+   * @param letter The diatonic letter, as a number 0..6 (C..B) or a bare
+   *   natural letter name `'C'`..`'B'`.
+   * @param alter The chromatic alteration in semitones; defaults to natural.
+   * @param octave The octave (scientific pitch notation); omit it for a bare
+   *   pitch class.
+   * @returns The note.
+   * @throws If the letter is out of range, if a letter name carries an
+   *   accidental or an octave, or if the alteration or octave is out of range.
+   * @example
+   * ```ts
+   * import { Note } from '@libraz/libcantus';
+   * Note.of(1, -1, 4).name; // 'Db4'
+   * Note.parse('G').name; // 'G'
+   * ```
+   */
+  static of(letter: number | string, alter = 0, octave?: number): Note {
+    const data: NoteData = { letter: letterNumberOf(letter), alter };
+    if (octave !== undefined) {
+      data.octave = octave;
+    }
+    return new Note(data);
+  }
+
+  /**
    * Parse a note name (e.g. `'C#4'`, `'Bb'`, `'F##3'`), in any of the
    * supported note-name systems.
    *
@@ -71,7 +126,7 @@ export class Note {
    * {@link Key.parse} reads a key name: `'gis'` is a G sharp, while a bare
    * `'B'` is the English B natural until `'german'` says otherwise.
    *
-   * @param name The note text.
+   * @param text The note text.
    * @param opts `system` reads the name in that notation system instead of
    *   detecting it.
    * @returns The parsed note.
@@ -80,19 +135,20 @@ export class Note {
    * @example
    * ```ts
    * import { Note } from '@libraz/libcantus';
-   * Note.of('gis').name; // 'G#'
-   * Note.of('B', { system: 'german' }).name; // 'Bb'
+   * Note.parse('gis').name; // 'G#'
+   * Note.parse('B', { system: 'german' }).name; // 'Bb'
    * ```
    */
-  static of(name: string, opts?: NoteNameOptions): Note {
-    return unwrapParse(Note.tryParse(name, opts));
+  static parse(text: string, opts?: NoteNameOptions): Note {
+    return unwrapParse(Note.tryParse(text, opts));
   }
 
   /**
    * Parse a note name, reporting failure instead of throwing it.
    *
-   * The same reading as {@link Note.of}, for the callers where text that does
-   * not name a note yet is the normal state of the input rather than a fault.
+   * The same reading as {@link Note.parse}, for the callers where text that
+   * does not name a note yet is the normal state of the input rather than a
+   * fault.
    *
    * @param name The note text.
    * @param opts `system` reads the name in that notation system instead of
@@ -143,7 +199,7 @@ export class Note {
   /**
    * The note name written in a notation system.
    *
-   * The counterpart of {@link Note.of}: a getter cannot take an argument, so
+   * The counterpart of {@link Note.parse}: a getter cannot take an argument, so
    * the system is named here instead of on {@link Note.name}.
    *
    * @param opts `system` writes the name in that notation system instead of
@@ -152,8 +208,8 @@ export class Note {
    * @example
    * ```ts
    * import { Note } from '@libraz/libcantus';
-   * Note.of('G#').format({ system: 'german' }); // 'gis'
-   * Note.of('G#').format({ system: 'japanese' }); // '嬰ト'
+   * Note.parse('G#').format({ system: 'german' }); // 'gis'
+   * Note.parse('G#').format({ system: 'japanese' }); // '嬰ト'
    * ```
    */
   format(opts?: NoteNameOptions): string {
@@ -213,8 +269,8 @@ export class Note {
    * @example
    * ```ts
    * import { Note } from '@libraz/libcantus';
-   * Note.of('Ab4').transpose(2).name; // 'Bb4'
-   * Note.of('Ab4').transpose(2, { spelling: 'sharp' }).name; // 'A#4'
+   * Note.parse('Ab4').transpose(2).name; // 'Bb4'
+   * Note.parse('Ab4').transpose(2, { spelling: 'sharp' }).name; // 'A#4'
    * ```
    */
   transpose(semitones: number, opts?: { spelling?: 'sharp' | 'flat' }): Note {
@@ -251,9 +307,9 @@ export class Note {
    * @example
    * ```ts
    * import { Interval, Note } from '@libraz/libcantus';
-   * Note.of('C4').transposeBy('A2').name; // 'D#4'
-   * Note.of('C4').transposeBy(Interval.parse('A2')).name; // 'D#4'
-   * Note.of('C4').transposeBy('A4').name; // 'F#4', not 'Gb4'
+   * Note.parse('C4').transposeBy('A2').name; // 'D#4'
+   * Note.parse('C4').transposeBy(Interval.parse('A2')).name; // 'D#4'
+   * Note.parse('C4').transposeBy('A4').name; // 'F#4', not 'Gb4'
    * ```
    */
   transposeBy(interval: IntervalLike): Note {
@@ -307,7 +363,7 @@ export class Note {
    * @example
    * ```ts
    * import { Note } from '@libraz/libcantus';
-   * Note.of('G#4').toString({ system: 'japanese' }); // '嬰ト4'
+   * Note.parse('G#4').toString({ system: 'japanese' }); // '嬰ト4'
    * ```
    */
   toString(opts?: NoteNameOptions): string {

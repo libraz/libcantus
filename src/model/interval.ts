@@ -48,7 +48,7 @@ function invertQuality(quality: IntervalQualityLabel): IntervalQualityLabel {
  * @example
  * ```ts
  * import { Interval, Note } from '@libraz/libcantus';
- * Interval.between(Note.of('C4'), Note.of('G4')).name; // 'P5'
+ * Interval.between(Note.parse('C4'), Note.parse('G4')).name; // 'P5'
  * ```
  */
 export class Interval {

@@ -219,7 +219,7 @@ export class Key {
    */
   static major(root: string | number): Key {
     if (typeof root === 'string') {
-      const tonic = Note.of(root);
+      const tonic = Note.parse(root);
       return new Key(majorKey(tonic.pitchClass), tonic);
     }
     const scale = majorKey(root);
@@ -236,7 +236,7 @@ export class Key {
    */
   static minor(root: string | number): Key {
     if (typeof root === 'string') {
-      const tonic = Note.of(root);
+      const tonic = Note.parse(root);
       return new Key(minorKey(tonic.pitchClass), tonic);
     }
     const scale = minorKey(root);
@@ -255,7 +255,7 @@ export class Key {
    */
   static named(name: ScaleNameInput, root: string | number): Key {
     if (typeof root === 'string') {
-      const tonic = Note.of(root);
+      const tonic = Note.parse(root);
       return new Key(scaleByName(name, tonic.pitchClass), tonic);
     }
     const scale = scaleByName(name, mod12(root));
