@@ -71,7 +71,14 @@ A lone `B` from an unknown source is far more often English. Pass `system` expli
 ## Design decisions
 
 **Why are there both a class API and a functional API?**
-They answer different needs. `Note`, `Chord`, `Key`, and `Progression` make small values convenient to build and question; collections and timelines are handled by pure functions over arrays. A class exposes its plain value through `.data`, so the two interoperate freely.
+The functions are the library. Every class is a thin skin over them that holds a value and its context together, so that a chain of calls does not have to re-state the same facts. A class exposes its plain value through `.data` and takes plain data back, so the two interoperate freely and neither is a walled garden.
+
+**Which should I use?**
+Whichever reads better where you are. They give the same answers, and a test in this repo compares them member by member to keep it that way.
+
+Reach for a class when several calls share a subject: a `Score` carries its notes, meter, tempo, and key, so reading the harmony, the phrases, and the sections is three method calls instead of three functions wired together by hand. A `Composer` carries the key, tempo, and seed for a whole piece, so each part is one call rather than one call plus a repeated context.
+
+Reach for a function when you have one question and already hold the data — or when you are writing something that should not depend on the class layer at all, such as a plugin boundary that only passes JSON.
 
 **Why is analysis separate from generation?**
 So that inspecting a passage never rewrites it. `playability` answers "can this be played" for a chart a player was handed, and never edits the chart.
