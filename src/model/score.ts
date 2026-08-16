@@ -28,7 +28,8 @@ import type { NoteEventIndex, NoteEventIndexOptions } from '../core/event-index/
 import { createNoteEventIndex } from '../core/event-index/index.js';
 import type { PlayabilityReport } from '../core/instrument/playability.js';
 import { playability } from '../core/instrument/playability.js';
-import type { InstrumentProfile } from '../core/instrument/profile.js';
+import type { InstrumentProfile, InstrumentProfileLike } from '../core/instrument/profile.js';
+import { toInstrumentProfile } from '../core/instrument/profile.js';
 import type { BarPosition, MeterLike, MeterMap, TimeSignature } from '../core/meter/index.js';
 import { beatToBarPosition, meterAt, resolveMeters, toMeterData } from '../core/meter/index.js';
 import type { IntervalLike } from '../core/pitch/index.js';
@@ -539,7 +540,8 @@ export class Score {
    * unless the options name others.
    *
    * @param opts Analysis options; see {@link ChordTimelineOptions}.
-   * @returns The inferred timeline, carrying the key regions the analysis found.
+   * @returns The inferred timeline, carrying the key regions the analysis found
+   *   and how sure it is of each segment.
    */
   timeline(opts?: ChordTimelineOptions): Timeline {
     const result = chordTimelineFromNotes(this.#data.notes, this.#analysisOptions(opts));
@@ -547,6 +549,7 @@ export class Score {
       segments: result.timeline.segments,
       totalBeats: opts?.totalBeats ?? this.totalBeats,
       keys: result.keys,
+      segmentConfidence: result.segmentConfidence,
     });
   }
 
@@ -662,9 +665,32 @@ export class Score {
   /**
    * The motifs the melody repeats.
    *
+   * The plain analysis record comes back rather than a {@link Motif}, as it
+   * does from every other reader here that is not {@link Score.timeline} or
+   * {@link Score.key}: a `Motif` holds a bare cell of notes, so wrapping the
+   * record would drop the intervals, the rhythmic profile, every later
+   * occurrence and the rationale — the findings the extraction was asked for.
+   * A record is a cell, so `Motif.fromData(found)` reaches the
+   * transformations without anything being rebuilt by hand.
+   *
    * @param opts Cell-length bounds and the recurrence threshold; see
    *   {@link ExtractMotifsOptions}.
    * @returns The motifs found, longest first.
+   * @example
+   * ```ts
+   * import { Motif, Score } from '@libraz/libcantus';
+   * const score = Score.of([
+   *   { pitch: 60, startBeat: 0, durationBeat: 1 },
+   *   { pitch: 62, startBeat: 1, durationBeat: 1 },
+   *   { pitch: 64, startBeat: 2, durationBeat: 1 },
+   *   { pitch: 60, startBeat: 3, durationBeat: 1 },
+   *   { pitch: 62, startBeat: 4, durationBeat: 1 },
+   *   { pitch: 64, startBeat: 5, durationBeat: 1 },
+   * ]);
+   * const found = score.motifs()[0];
+   * found?.occurrences.length; // 2
+   * found === undefined ? undefined : Motif.fromData(found).notes.length; // 3
+   * ```
    */
   motifs(opts?: ExtractMotifsOptions): MotifData[] {
     return extractMotifs(this.#data.notes, opts);
@@ -713,11 +739,24 @@ export class Score {
    *
    * The tempo the third layer needs is the score's own, read at beat 0.
    *
-   * @param instrument The instrument to play it on.
+   * @param instrument The instrument to play it on: a plain
+   *   {@link InstrumentProfile} or an {@link Instrument}.
    * @returns Difficulty, the issues found, and each note's placement.
+   * @throws If the value names no instrument, or the instrument it names is
+   *   contradictory.
+   * @example
+   * ```ts
+   * import { Instrument, Score } from '@libraz/libcantus';
+   * const score = Score.of([{ pitch: 27, startBeat: 0, durationBeat: 1 }]);
+   * score.playability(Instrument.bass4()).issues[0]?.type; // 'noteOutOfRange'
+   * ```
    */
-  playability(instrument: InstrumentProfile): PlayabilityReport {
-    return playability(this.#data.notes, instrument, tempoAt(0, this.#data.tempo));
+  playability(instrument: InstrumentProfileLike): PlayabilityReport {
+    return playability(
+      this.#data.notes,
+      toInstrumentProfile(instrument),
+      tempoAt(0, this.#data.tempo),
+    );
   }
 
   /**

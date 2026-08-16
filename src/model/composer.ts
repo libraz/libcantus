@@ -1,5 +1,7 @@
+import type { ChordTimeline } from '../analyze/timeline/index.js';
 import { InvalidInputError } from '../core/errors/index.js';
-import type { InstrumentProfile } from '../core/instrument/profile.js';
+import type { InstrumentProfile, InstrumentProfileLike } from '../core/instrument/profile.js';
+import { toStringedProfile } from '../core/instrument/profile.js';
 import type { MeterLike, MeterMap, TimeSignature } from '../core/meter/index.js';
 import { beatsPerBar, meterAt, resolveMeters, toMeterData } from '../core/meter/index.js';
 import type { KeyScale } from '../core/types.js';
@@ -38,10 +40,53 @@ export type ComposerOptions = {
   seed?: number;
   /** The complexity dials. */
   complexity?: Complexity;
-  /** The instrument each named part is written for. */
-  instruments?: Record<string, InstrumentProfile>;
+  /**
+   * The instrument each named part is written for, as a plain
+   * {@link InstrumentProfile} or an {@link Instrument}. The settings a composer
+   * hands back carry the plain form, the way a key handed in as a name comes
+   * back as key/scale data.
+   */
+  instruments?: Record<string, InstrumentProfileLike>;
   /** Extra material the generators may draw from. */
   vocabulary?: readonly Vocabulary<unknown>[];
+};
+
+/**
+ * How a bass line is written: what {@link BassLineOptions} asks for minus the
+ * settings the composer already holds, with the instrument taken the way the
+ * rest of the class API takes one.
+ */
+export type BassLineSettings = Omit<
+  BassLineOptions,
+  'segments' | 'key' | 'ts' | 'ctx' | 'instrument'
+> & {
+  /**
+   * The instrument the line is written for, as a plain {@link StringedProfile}
+   * or an {@link Instrument}. Giving one is itself the request that the line be
+   * playable on it: `octave` then says where in that instrument to aim rather
+   * than which absolute band to use, and where the two disagree the instrument
+   * wins — a note below the lowest string comes back an octave up, the way a
+   * player would take it. Leave it out for a programmed part.
+   */
+  instrument?: InstrumentProfileLike;
+};
+
+/**
+ * How a counter line is written: what {@link CounterMelodyOptions} asks for
+ * minus the settings the composer already holds, with the harmony taken the way
+ * {@link Composer.bass} takes it.
+ */
+export type CounterMelodySettings = Omit<
+  CounterMelodyOptions,
+  'melody' | 'key' | 'ts' | 'ctx' | 'timeline'
+> & {
+  /**
+   * The harmony to write against, as a {@link Timeline} or the plain chord
+   * timeline the analysis layer hands out. A timeline carries its own segment
+   * boundaries, so a chord change anywhere — including off the generator's
+   * half-beat probe grid — is seen; prefer it over `chordAt`.
+   */
+  timeline?: Timeline | ChordTimeline;
 };
 
 /** What a harmonization gives back: the chords, and the melody they fit. */
@@ -102,6 +147,17 @@ function copyPlain<T>(value: T, name: string): T {
   return value;
 }
 
+/**
+ * The plain chord timeline a harmony value stands for.
+ *
+ * Read through the public surface rather than by `instanceof`, so a timeline
+ * built by a second copy of the module is followed like any other — the same
+ * reading {@link Composer.bass} and {@link Motif.develop} take.
+ */
+function toChordTimeline(harmony: Timeline | ChordTimeline): ChordTimeline {
+  return 'chordTimeline' in harmony ? harmony.chordTimeline : harmony;
+}
+
 /** The meter map a {@link ComposerOptions.meters} value names. */
 function metersFrom(meters: MeterLike | undefined): MeterMap {
   if (meters === undefined) {
@@ -127,7 +183,7 @@ function copyComplexity(complexity: Complexity): Complexity {
 
 /** A copy of the instrument each part is written for, each one validated. */
 function copyInstruments(
-  instruments: Record<string, InstrumentProfile>,
+  instruments: Record<string, InstrumentProfileLike>,
 ): Record<string, InstrumentProfile> {
   const copy: Record<string, InstrumentProfile> = {};
   for (const [part, profile] of Object.entries(instruments)) {
@@ -347,21 +403,31 @@ export class Composer {
    * @param source The harmony to follow: a timeline, or the chord segments one
    *   is made of.
    * @param opts Everything the bass generator takes but the segments, the key,
-   *   the meter and the context.
+   *   the meter and the context; see {@link BassLineSettings}.
    * @returns The line, as a score in the composer's key.
+   * @throws If the instrument names a kit, which has no strings for a bass line
+   *   to be placed on.
+   * @example
+   * ```ts
+   * import { Composer, Instrument } from '@libraz/libcantus';
+   * const composer = Composer.of({ key: 'C major', seed: 3 });
+   * const plan = composer.progression({ style: 'dance', bars: 2 });
+   * composer.bass(plan, { style: 'pop', instrument: Instrument.bass4() }).notes.length > 0; // true
+   * ```
    */
-  bass(
-    source: Timeline | readonly BassSegment[],
-    opts?: Omit<BassLineOptions, 'segments' | 'key' | 'ts' | 'ctx'>,
-  ): Score {
+  bass(source: Timeline | readonly BassSegment[], opts?: BassLineSettings): Score {
     // Read through the public surface rather than by `instanceof`, so a
     // timeline built by a second copy of the module is followed like any other.
     const segments: readonly BassSegment[] = Array.isArray(source)
       ? (source as readonly BassSegment[])
       : (source as Timeline).segments;
     const key = this.#keyScale();
+    const { instrument, ...rest } = opts ?? {};
     const notes = generateBassLine({
-      ...opts,
+      ...rest,
+      ...(instrument === undefined
+        ? {}
+        : { instrument: toStringedProfile(instrument, 'bass instrument') }),
       segments,
       key,
       ts: this.#openingMeter(),
@@ -377,18 +443,21 @@ export class Composer {
    * line is written against are the composer's, so a counter line and the part
    * it answers are read in one context.
    *
+   * The harmony crosses over the way {@link Composer.bass} takes it: a
+   * {@link Timeline} or the plain chord timeline, so a caller holding the
+   * class does not have to unwrap it for one of the two methods.
+   *
    * @param melody The lead line to write against.
    * @param opts Everything the counter-melody generator takes but the melody,
-   *   the key, the meter and the context.
+   *   the key, the meter and the context; see {@link CounterMelodySettings}.
    * @returns The counter line, as a score in the composer's key.
    */
-  counterMelody(
-    melody: Score,
-    opts?: Omit<CounterMelodyOptions, 'melody' | 'key' | 'ts' | 'ctx'>,
-  ): Score {
+  counterMelody(melody: Score, opts?: CounterMelodySettings): Score {
     const key = this.#keyScale();
+    const { timeline, ...rest } = opts ?? {};
     const notes = generateCounterMelody({
-      ...opts,
+      ...rest,
+      ...(timeline === undefined ? {} : { timeline: toChordTimeline(timeline) }),
       melody: melody.notes,
       key,
       ts: this.#openingMeter(),

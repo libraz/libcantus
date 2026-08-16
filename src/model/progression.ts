@@ -70,6 +70,27 @@ export class Progression {
   }
 
   /**
+   * Start from a chord sequence, matching the `of` factory on the other
+   * classes.
+   *
+   * The same reading as the constructor, so a progression reads like
+   * `Chord.of` and `Score.of` do at the point it is built.
+   *
+   * @param chords The chords in order; the array is copied.
+   * @param key Optional key context for the analysis methods.
+   * @returns The progression.
+   * @example
+   * ```ts
+   * import { Chord, Key, Progression } from '@libraz/libcantus';
+   * Progression.of([Chord.parse('C'), Chord.parse('G7')], Key.major('C')).roman();
+   * // ['I', 'V7']
+   * ```
+   */
+  static of(chords: readonly Chord[], key?: Key): Progression {
+    return new Progression(chords, key);
+  }
+
+  /**
    * Build a progression from the {@link ChordSpan} records the generators
    * return, keeping their order.
    *

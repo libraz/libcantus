@@ -100,6 +100,7 @@ export type {
   Articulation,
   InstrumentProfile,
   InstrumentProfileCommon,
+  InstrumentProfileLike,
   Limb,
   NotePlacement,
   PercussionProfile,
@@ -244,7 +245,13 @@ export {
   type ArrangementTensionOptions,
 } from './arrangement.js';
 export { Chord } from './chord.js';
-export { Composer, type ComposerOptions, type HarmonizedMelody } from './composer.js';
+export {
+  type BassLineSettings,
+  Composer,
+  type ComposerOptions,
+  type CounterMelodySettings,
+  type HarmonizedMelody,
+} from './composer.js';
 export { Duration } from './duration.js';
 export { Instrument } from './instrument.js';
 export { Interval } from './interval.js';

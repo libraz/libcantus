@@ -30,6 +30,12 @@ export type TimelineData = {
   segments: ChordSegment[];
   totalBeats: number;
   keys?: KeyRegion[];
+  /**
+   * How sure the analysis is of each segment's chord, in [0, 1] and in segment
+   * order. Carried only by a timeline read from notes: chords a caller placed
+   * are not a reading, so a timeline built from them has nothing to report.
+   */
+  segmentConfidence?: number[];
 };
 
 /**
@@ -85,6 +91,31 @@ function copyKeyRegion(region: KeyRegion): KeyRegion {
     };
   }
   return copy;
+}
+
+/**
+ * A validated copy of the per-segment confidences, one per segment.
+ *
+ * The list is meaningless unless it lines up with the segments — it carries no
+ * beats of its own and is read by position — so a list of another length is
+ * refused rather than silently paired off against the segments it happens to
+ * cover.
+ */
+function copyConfidence(
+  confidence: readonly number[] | undefined,
+  segments: number,
+): readonly number[] {
+  if (confidence === undefined) {
+    return [];
+  }
+  if (confidence.length !== segments) {
+    throw new InvalidInputError(
+      `timeline segmentConfidence must hold one value per segment; received ${confidence.length} for ${segments}`,
+    );
+  }
+  return confidence.map((value, index) =>
+    assertRange(value, 0, 1, `timeline segmentConfidence[${index}]`),
+  );
 }
 
 /**
@@ -148,13 +179,15 @@ export class Timeline {
   readonly #segments: readonly ChordSegment[];
   readonly #totalBeats: number;
   readonly #keys: readonly KeyRegion[];
+  readonly #segmentConfidence: readonly number[];
 
   /**
    * Wrap plain timeline data.
    *
    * @param data The segments and the span they cover; copied, never retained.
    * @throws If the span, a segment, or a key region carries a number it cannot
-   *   hold — a beat that is not finite, a mode mask that names no scale.
+   *   hold — a beat that is not finite, a mode mask that names no scale — or if
+   *   the confidences do not run one per segment.
    */
   constructor(data: TimelineData) {
     this.#segments = Object.freeze(data.segments.map(copySegment));
@@ -165,6 +198,9 @@ export class Timeline {
       'timeline totalBeats',
     );
     this.#keys = Object.freeze((data.keys ?? []).map(copyKeyRegion));
+    this.#segmentConfidence = Object.freeze(
+      copyConfidence(data.segmentConfidence, this.#segments.length),
+    );
   }
 
   /**
@@ -203,11 +239,11 @@ export class Timeline {
    * @returns The inferred timeline, carrying the key regions the analysis found.
    */
   static fromNotes(notes: readonly NoteEvent[], opts?: ChordTimelineOptions): Timeline {
-    const { timeline, keys } = chordTimelineFromNotes(notes, opts);
+    const { timeline, keys, segmentConfidence } = chordTimelineFromNotes(notes, opts);
     // The analysis reports where the chords and the keys end rather than the
     // span it ran over, so the span is read back off them unless it was given.
     const totalBeats = opts?.totalBeats ?? spanEnd(timeline.segments, keys);
-    return new Timeline({ segments: timeline.segments, totalBeats, keys });
+    return new Timeline({ segments: timeline.segments, totalBeats, keys, segmentConfidence });
   }
 
   /**
@@ -283,6 +319,31 @@ export class Timeline {
   /** Every key region under the span, in time order. */
   get keys(): readonly KeyRegion[] {
     return this.#keys.map(copyKeyRegion);
+  }
+
+  /**
+   * How sure the analysis is of each segment's chord, in [0, 1] and in segment
+   * order, so a reading is paired with the segment it describes by position.
+   *
+   * A confidence answers the question a chord symbol cannot: whether the notes
+   * really spell that chord, or whether a passing figure was the best of a bad
+   * set of candidates. Empty on a timeline whose chords were placed rather than
+   * inferred — {@link Timeline.fromChords} and {@link Timeline.fromProgression}
+   * are given the harmony, so there is no reading to report.
+   *
+   * @example
+   * ```ts
+   * import { Timeline } from '@libraz/libcantus';
+   * const timeline = Timeline.fromNotes([
+   *   { pitch: 60, startBeat: 0, durationBeat: 4 },
+   *   { pitch: 64, startBeat: 0, durationBeat: 4 },
+   *   { pitch: 67, startBeat: 0, durationBeat: 4 },
+   * ]);
+   * timeline.segmentConfidence.length === timeline.length; // true
+   * ```
+   */
+  get segmentConfidence(): readonly number[] {
+    return [...this.#segmentConfidence];
   }
 
   /** How many segments the timeline holds. */
@@ -383,11 +444,21 @@ export class Timeline {
       spans
         .map((span) => clipSpan(span, fromBeat, toBeat))
         .filter((span): span is T => span !== null);
-    return new Timeline({
+    // The confidences travel with the segments they describe: they are read by
+    // position, so dropping a segment without dropping its reading would shift
+    // every later one onto the wrong chord.
+    const kept = this.#segments
+      .map((segment, index) => ({ segment, index }))
+      .filter(({ segment }) => clipSpan(segment, fromBeat, toBeat) !== null);
+    const data: TimelineData = {
       segments: clip(this.#segments),
       totalBeats: Math.max(0, Math.min(toBeat, this.#totalBeats)),
       keys: clip(this.#keys),
-    });
+    };
+    if (this.#segmentConfidence.length > 0) {
+      data.segmentConfidence = kept.map(({ index }) => this.#segmentConfidence[index] ?? 0);
+    }
+    return new Timeline(data);
   }
 
   /**
@@ -467,6 +538,9 @@ export class Timeline {
     if (this.#keys.length > 0) {
       data.keys = this.#keys.map(copyKeyRegion);
     }
+    if (this.#segmentConfidence.length > 0) {
+      data.segmentConfidence = [...this.#segmentConfidence];
+    }
     return data;
   }
 
@@ -528,6 +602,12 @@ export class Timeline {
       }
       return moved;
     });
-    return new Timeline({ segments, totalBeats: this.#totalBeats, keys });
+    const data: TimelineData = { segments, totalBeats: this.#totalBeats, keys };
+    // Transposition moves the chords without re-reading them, so each segment
+    // is exactly as well attested where it lands as where it came from.
+    if (this.#segmentConfidence.length > 0) {
+      data.segmentConfidence = [...this.#segmentConfidence];
+    }
+    return new Timeline(data);
   }
 }

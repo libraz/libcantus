@@ -2,6 +2,7 @@ import { InvalidInputError } from '../core/errors/index.js';
 import type {
   Articulation,
   InstrumentProfile,
+  InstrumentProfileLike,
   Limb,
   PercussionProfile,
   PlayabilityReport,
@@ -18,6 +19,7 @@ import {
   GUITAR_STANDARD,
   instrumentRange,
   playability,
+  toInstrumentProfile,
 } from '../core/instrument/index.js';
 import type { NoteLike } from '../core/pitch/index.js';
 import { toNoteData } from '../core/pitch/index.js';
@@ -82,8 +84,8 @@ function copyProfile(profile: InstrumentProfile): InstrumentProfile {
  * the range it reports, the positions it offers and the passages it accepts are
  * all read off these numbers.
  */
-function checkedProfile(profile: InstrumentProfile): InstrumentProfile {
-  const copy = copyProfile(profile);
+function checkedProfile(profile: InstrumentProfileLike): InstrumentProfile {
+  const copy = copyProfile(toInstrumentProfile(profile));
   assertPositiveInt(copy.polyphony, `${copy.name} polyphony`);
   if (copy.kind === 'stringed') {
     for (const [index, open] of copy.tuning.entries()) {
@@ -126,7 +128,12 @@ export class Instrument {
   /**
    * Wrap a plain instrument profile, whether a built-in one or a caller's own.
    *
-   * @param profile The plain profile.
+   * An `Instrument` is accepted too, and comes back as an equal one: the
+   * factory is the boundary a profile crosses everywhere in the library, so it
+   * takes the same {@link InstrumentProfileLike} every other entry point does
+   * rather than making a caller unwrap what it already holds.
+   *
+   * @param profile The plain profile, or an instrument standing for one.
    * @returns The wrapped instrument.
    * @throws If the profile describes no instrument: a neck with no strings, a
    *   fret count that is not a whole number, a kit no limb reaches, or a
@@ -138,7 +145,7 @@ export class Instrument {
    * Instrument.of(GUITAR_DROP_D).range().low; // 38
    * ```
    */
-  static of(profile: InstrumentProfile): Instrument {
+  static of(profile: InstrumentProfileLike): Instrument {
     return new Instrument(checkedProfile(profile));
   }
 
