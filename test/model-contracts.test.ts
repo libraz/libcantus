@@ -13,8 +13,10 @@ import {
   Interval,
   Key,
   Meter,
+  Motif,
   Note,
   Progression,
+  Rhythm,
   Score,
   Tempo,
   Timeline,
@@ -117,6 +119,8 @@ const SAMPLES: Record<string, { data: unknown; equals(other: never): boolean }> 
   Instrument: Instrument.guitar(),
   // Compound, so the pulse grouping is exercised rather than assumed.
   Meter: Meter.parse('6/8'),
+  Motif: Motif.generate({ key: 'C major', bars: 2, ctx: { seed: 7 } }),
+  Rhythm: Rhythm.generate({ numerator: 4, denominator: 4 }, { bars: 2, ctx: { seed: 3 } }),
   Tempo: Tempo.of(120),
   Score: Score.of(
     [
@@ -484,13 +488,22 @@ describe('methods offer the options their delegate accepts', () => {
    *
    * An intersection counts: a method that reaches two delegates names the
    * options of both, as `Progression.analyze` does.
+   *
+   * Every property must be optional. That is what separates a bag of settings
+   * from a value that happens to be an object: `KeyScale` requires `rootPc` and
+   * `modeMask12`, and a delegate taking an optional key would otherwise read as
+   * a delegate taking two optional settings — so a wrapper accepting the key as
+   * a `KeyLike`, which is how every entry point in the library takes one, would
+   * be reported as dropping them.
    */
   function isOptionsType(type: ts.Type): boolean {
+    const properties = type.getProperties();
     return (
       (type.getFlags() & (ts.TypeFlags.Object | ts.TypeFlags.Intersection)) !== 0 &&
       type.getCallSignatures().length === 0 &&
       !checker.isArrayType(type) &&
-      type.getProperties().length > 0
+      properties.length > 0 &&
+      properties.every((property) => (property.getFlags() & ts.SymbolFlags.Optional) !== 0)
     );
   }
 

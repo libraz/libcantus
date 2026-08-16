@@ -55,6 +55,8 @@ export type {
   MelodicContourShape,
   MotifData,
   MotifOccurrence,
+  MotifRelation,
+  MotifRelationKind,
   Phrase,
   PhraseOptions,
   PhraseSignal,
@@ -135,6 +137,7 @@ export type {
   GenerationContext,
   GenerationContextInput,
   Genre,
+  GridEvent,
   GrooveFeel,
   GrooveSlot,
   GrooveStyle,
@@ -143,6 +146,10 @@ export type {
   HarmonizePlacement,
   HumanizeOptions,
   MelodyNote,
+  MotifCell,
+  MotifContour,
+  MotifNote,
+  MotifTransform,
   OrnamentOptions,
   OrnamentStyle,
   ProfileWeights,
@@ -154,6 +161,8 @@ export type {
   Provenance,
   ProvenanceBasis,
   PublicSection,
+  RhythmEvent,
+  RhythmOptions,
   Section,
   SubstituteOptions,
   SubstitutionType,
@@ -227,8 +236,10 @@ export { Instrument } from './instrument.js';
 export { Interval } from './interval.js';
 export { type DetectedKeyMatch, Key, type KeyData } from './key.js';
 export { Meter } from './meter.js';
+export { Motif, type MotifGenerateOptions } from './motif.js';
 export { Note } from './note.js';
 export { Progression, type ProgressionData } from './progression.js';
+export { Rhythm, type RhythmData, type RhythmDeformOptions } from './rhythm.js';
 export { Score, type ScoreData, type ScoreOptions } from './score.js';
 export { Tempo, type TempoData } from './tempo.js';
 export { Timeline, type TimelineData, type TimelineRoman } from './timeline.js';
