@@ -14,22 +14,25 @@ import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { makeChord } from '../../theory/chord/index.js';
 import {
   isScaleTone,
-  MAJOR_MASK,
-  NATURAL_MINOR_MASK,
+  type KeyLike,
   scaleTonesInDegreeOrder,
+  toKeyScale,
 } from '../../theory/scale/index.js';
-import { augmentedSixthKind } from './augmented-sixth.js';
-import { type BorrowedSource, borrowedSource } from './borrowed.js';
+import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
+import { augmentedSixthKindOf } from './augmented-sixth.js';
+import { type BorrowedSource, borrowedSourceOf } from './borrowed.js';
 import {
   degreeRootPc,
   hasMajorThird,
   isAppliedDominantSonority,
   isDiatonicChord,
+  isMinorScale,
   isNeapolitan,
   mod12,
+  parallelScale,
 } from './internal.js';
 import { capitalize, type RejectedCandidate } from './rationale.js';
-import { type ChordToRomanOptions, chordToRoman, romanAlternatives } from './roman.js';
+import { type ChordToRomanOptions, renderRoman, romanAlternatives } from './roman.js';
 
 /**
  * The three broad harmonic functions of tonal music.
@@ -73,14 +76,12 @@ const MINOR_FUNCTION_BY_OFFSET: readonly HarmonicFunction[] = [
 /**
  * Whether a key's scale has a minor third and no major third (a minor key).
  *
+ * @param key The key to test, as a key name, a key/scale, or a `Key`.
+ * @returns True if the key's scale is a minor one.
  * @category Functional Harmony
  */
-export function isMinorKey(key: KeyScale): boolean {
-  // Named for the mask bits they read, so neither shadows the chord predicate
-  // of the same idea that the shared helpers export.
-  const minorThirdBit = (key.modeMask12 >> 3) & 1;
-  const majorThirdBit = (key.modeMask12 >> 4) & 1;
-  return Boolean(minorThirdBit) && !majorThirdBit;
+export function isMinorKey(key: KeyLike): boolean {
+  return isMinorScale(toKeyScale(key));
 }
 
 /**
@@ -106,19 +107,19 @@ export function isMinorKey(key: KeyScale): boolean {
  *   pop cadence chord, distinct from the bVII7 above, which has a seventh and
  *   is a dominant sonority.
  *
- * @param chord The chord.
- * @param key The prevailing key.
+ * @param chord The chord, as a chord symbol, chord data, or a `Chord`.
+ * @param key The prevailing key, as a key name, a key/scale, or a `Key`.
  * @returns The harmonic function.
  * @example
  * ```ts
  * import { functionOf, makeChord, majorKey } from '@libraz/libcantus';
  * functionOf(makeChord(9, 'dom7'), majorKey(0)); // 'dominant' — A7 tonicizes ii
- * functionOf(makeChord(10, 'maj'), majorKey(0)); // 'subdominant' — borrowed bVII
+ * functionOf('Bb', 'C major'); // 'subdominant' — borrowed bVII
  * ```
  * @category Functional Harmony
  */
-export function functionOf(chord: Chord, key: KeyScale): HarmonicFunction {
-  return functionWithReason(chord, key).function;
+export function functionOf(chord: ChordLike, key: KeyLike): HarmonicFunction {
+  return functionWithReason(toChordData(chord), toKeyScale(key)).function;
 }
 
 /**
@@ -133,12 +134,12 @@ type FunctionReason = 'neapolitan' | 'augmentedSixth' | 'applied' | 'flatSideMaj
 
 /** The function the root's offset above the tonic maps to, before any override. */
 function degreeFunction(chord: Chord, key: KeyScale): HarmonicFunction {
-  const functions = isMinorKey(key) ? MINOR_FUNCTION_BY_OFFSET : FUNCTION_BY_OFFSET;
+  const functions = isMinorScale(key) ? MINOR_FUNCTION_BY_OFFSET : FUNCTION_BY_OFFSET;
   return functions[mod12(chord.rootPc - key.rootPc)] ?? 'tonic';
 }
 
 /** {@link functionOf}, keeping the rule that decided the answer. */
-function functionWithReason(
+export function functionWithReason(
   chord: Chord,
   key: KeyScale,
 ): { function: HarmonicFunction; reason: FunctionReason } {
@@ -146,13 +147,13 @@ function functionWithReason(
   if (isNeapolitan(chord, key)) {
     return { function: 'subdominant', reason: 'neapolitan' };
   }
-  if (augmentedSixthKind(chord, key) !== null) {
+  if (augmentedSixthKindOf(chord, key) !== null) {
     return { function: 'subdominant', reason: 'augmentedSixth' };
   }
   if (isAppliedDominant(chord, key)) {
     return { function: 'dominant', reason: 'applied' };
   }
-  if (!isMinorKey(key) && hasMajorThird(chord) && (offset === 8 || offset === 10)) {
+  if (!isMinorScale(key) && hasMajorThird(chord) && (offset === 8 || offset === 10)) {
     return { function: 'subdominant', reason: 'flatSideMajor' };
   }
   return { function: degreeFunction(chord, key), reason: 'degree' };
@@ -173,7 +174,7 @@ function functionWithReason(
  * other supertonic chord, reading as a predominant rather than a dominant.
  */
 function isAppliedDominant(chord: Chord, key: KeyScale): boolean {
-  if (isDiatonic(chord, key)) {
+  if (isDiatonicChord(chord, key)) {
     return false;
   }
   const root = mod12(chord.rootPc);
@@ -271,7 +272,7 @@ function functionAlternatives(
   const out: RejectedCandidate[] = [];
   if (reason === 'degree') {
     // The sonority could tonicize, and only its being in the key stopped it.
-    if (isAppliedDominantSonority(chord) && isDiatonic(chord, key)) {
+    if (isAppliedDominantSonority(chord) && isDiatonicChord(chord, key)) {
       out.push({
         label: 'applied dominant',
         reason:
@@ -287,7 +288,7 @@ function functionAlternatives(
       });
     }
   }
-  if (augmentedSixthKind(chord, key) === 'german') {
+  if (augmentedSixthKindOf(chord, key) === 'german') {
     out.push({
       label: 'tritone substitute',
       reason:
@@ -305,13 +306,13 @@ function functionAlternatives(
  * leading tone lies outside the mask. Borrowing predicates treat that case as
  * an in-key alteration separately (see {@link isBorrowedChord}).
  *
- * @param chord The chord to test.
- * @param key The prevailing key.
+ * @param chord The chord to test, as a chord symbol, chord data, or a `Chord`.
+ * @param key The prevailing key, as a key name, a key/scale, or a `Key`.
  * @returns True if all chord pitch classes are scale tones.
  * @category Functional Harmony
  */
-export function isDiatonic(chord: Chord, key: KeyScale): boolean {
-  return isDiatonicChord(chord, key);
+export function isDiatonic(chord: ChordLike, key: KeyLike): boolean {
+  return isDiatonicChord(toChordData(chord), toKeyScale(key));
 }
 
 /**
@@ -325,17 +326,14 @@ export function isDiatonic(chord: Chord, key: KeyScale): boolean {
  * root is pitch class 0, and whether that is written C or B# is a question this
  * layer does not ask. Both name the same key.
  *
- * @param key The key to mirror.
+ * @param key The key to mirror, as a key name, a key/scale, or a `Key`.
  * @returns The parallel major or natural-minor key on the same tonic.
  * @see {@link parallelKeyOf} for the spelled form, which takes a tonic note and
  *   returns a `SpelledKey` with the tonic spelling preserved.
  * @category Functional Harmony
  */
-export function parallelKey(key: KeyScale): KeyScale {
-  return {
-    rootPc: mod12(key.rootPc),
-    modeMask12: isMinorKey(key) ? MAJOR_MASK : NATURAL_MINOR_MASK,
-  };
+export function parallelKey(key: KeyLike): KeyScale {
+  return parallelScale(toKeyScale(key));
 }
 
 /** Diminished-family qualities: diminished triad, dim7, half-diminished. */
@@ -356,8 +354,9 @@ function isDiminishedQuality(quality: ChordQuality): boolean {
  * who disagrees can see what the reading rests on. `alternatives` is empty
  * unless asked for, and then names the readings that were turned down.
  *
- * @param chord The chord to analyze.
- * @param key The prevailing key.
+ * @param chord The chord to analyze, as a chord symbol, chord data, or a
+ *   `Chord`.
+ * @param key The prevailing key, as a key name, a key/scale, or a `Key`.
  * @param opts Options used when rendering the Roman numeral, plus
  *   `alternatives` to collect the rejected readings.
  * @returns The chord analysis.
@@ -372,13 +371,15 @@ function isDiminishedQuality(quality: ChordQuality): boolean {
  * @category Functional Harmony
  */
 export function analyzeChord(
-  chord: Chord,
-  key: KeyScale,
+  chord: ChordLike,
+  key: KeyLike,
   opts: AnalyzeChordOptions = {},
 ): ChordAnalysis {
-  const source = borrowedSource(chord, key);
-  const { function: fn, reason } = functionWithReason(chord, key);
-  const roman = chordToRoman(chord, key, opts);
+  const data = toChordData(chord);
+  const scale = toKeyScale(key);
+  const source = borrowedSourceOf(data, scale);
+  const { function: fn, reason } = functionWithReason(data, scale);
+  const roman = renderRoman(data, scale, opts).roman;
   return {
     function: fn,
     borrowed: source !== null,
@@ -387,7 +388,10 @@ export function analyzeChord(
     rationale: describeChord(fn, reason, roman, source),
     alternatives:
       opts.alternatives === true
-        ? [...functionAlternatives(chord, key, reason, fn), ...romanAlternatives(chord, key, opts)]
+        ? [
+            ...functionAlternatives(data, scale, reason, fn),
+            ...romanAlternatives(data, scale, opts),
+          ]
         : [],
   };
 }
@@ -397,19 +401,20 @@ export function analyzeChord(
  *
  * @param targetDegree 1-based scale degree to tonicize: 5 is the dominant, so
  *   `secondaryDominant(5, majorKey(0))` is the V of V.
- * @param key The prevailing key.
+ * @param key The prevailing key, as a key name, a key/scale, or a `Key`.
  * @returns A dominant-seventh chord a fifth above the target's root.
  * @throws If `targetDegree` is not an integer naming a degree in `key`.
  * @see {@link secondaryDominantOf} to tonicize a chord that has no degree in
  *   the key, or when no key is at hand.
  * @category Functional Harmony
  */
-export function secondaryDominant(targetDegree: number, key: KeyScale): Chord {
+export function secondaryDominant(targetDegree: number, key: KeyLike): Chord {
+  const scale = toKeyScale(key);
   // A degree outside the scale is a caller error, not a wrap-around: silently
   // tonicizing some other degree produces a chord that reads as intentional.
-  const degreeCount = scaleTonesInDegreeOrder(key).length;
+  const degreeCount = scaleTonesInDegreeOrder(scale).length;
   assertInteger(targetDegree, 'targetDegree', 1, degreeCount);
-  const targetRoot = degreeRootPc(targetDegree, key);
+  const targetRoot = degreeRootPc(targetDegree, scale);
   return makeChord(mod12(targetRoot + 7), 'dom7');
 }
 
@@ -425,7 +430,8 @@ export function secondaryDominant(targetDegree: number, key: KeyScale): Chord {
  * A `rootSpelling` hint on the target moves with the root, so a flat-named
  * target yields a flat-named dominant (Eb gives Bb7, not A#7).
  *
- * @param target The chord to tonicize.
+ * @param target The chord to tonicize, as a chord symbol, chord data, or a
+ *   `Chord`.
  * @returns A dominant-seventh chord a perfect fifth above the target's root.
  * @throws If the target's root pitch class is not a finite number.
  * @example
@@ -436,13 +442,14 @@ export function secondaryDominant(targetDegree: number, key: KeyScale): Chord {
  * ```
  * @category Functional Harmony
  */
-export function secondaryDominantOf(target: Chord): Chord {
-  assertFiniteNumber(target.rootPc, 'target chord rootPc');
-  const dominant = makeChord(mod12(target.rootPc + 7), 'dom7');
+export function secondaryDominantOf(target: ChordLike): Chord {
+  const data = toChordData(target);
+  assertFiniteNumber(data.rootPc, 'target chord rootPc');
+  const dominant = makeChord(mod12(data.rootPc + 7), 'dom7');
   // Move an explicit spelling hint rather than deriving one: the dominant of a
   // flat-named target is spelled flat, whatever key it is later read in.
-  if (target.rootSpelling !== undefined) {
-    const moved = transposeNote(target.rootSpelling, 7);
+  if (data.rootSpelling !== undefined) {
+    const moved = transposeNote(data.rootSpelling, 7);
     dominant.rootSpelling = { letter: moved.letter, alter: moved.alter };
   }
   return dominant;

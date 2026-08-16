@@ -9,9 +9,16 @@
 import type { KeyScale } from '../../core/types.js';
 import type { Chord, ChordToneRole } from '../../theory/chord/index.js';
 import { chordToneRole } from '../../theory/chord/index.js';
-import { isScaleTone } from '../../theory/scale/index.js';
-import { isMinorKey, parallelKey } from './function.js';
-import { degreeRootPc, hasMajorThird, mod12, romanReference } from './internal.js';
+import { isScaleTone, type KeyLike, toKeyScale } from '../../theory/scale/index.js';
+import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
+import {
+  degreeRootPc,
+  hasMajorThird,
+  isMinorScale,
+  mod12,
+  parallelScale,
+  romanReference,
+} from './internal.js';
 import type { RejectedCandidate } from './rationale.js';
 
 /** The scale degrees the cadence rules are stated in. */
@@ -48,10 +55,10 @@ function thirdBelongsToKey(chord: Chord, key: KeyScale): boolean {
  */
 function deceptiveTargets(key: KeyScale): number[] {
   const submediant = degreeOffset(SUBMEDIANT_DEGREE, key);
-  if (isMinorKey(key)) {
+  if (isMinorScale(key)) {
     return [submediant];
   }
-  const borrowed = degreeOffset(SUBMEDIANT_DEGREE, parallelKey(key));
+  const borrowed = degreeOffset(SUBMEDIANT_DEGREE, parallelScale(key));
   return borrowed === submediant ? [submediant] : [submediant, borrowed];
 }
 
@@ -260,9 +267,14 @@ export type DetectCadenceOptions = {
    * the chord before the dominant settles that, and a caller reading a pair at
    * a time has it to hand; without it the pair is classified on its own, as
    * before.
+   *
+   * Accepted as a chord symbol, chord data, or a `Chord`.
    */
-  approach?: Chord;
+  approach?: ChordLike;
 };
+
+/** {@link DetectCadenceOptions} with its approach chord already coerced. */
+type CadenceOptions = Omit<DetectCadenceOptions, 'approach'> & { approach?: Chord };
 
 /**
  * Classify the motion between two chords, before inversion is weighed.
@@ -312,7 +324,7 @@ function cadenceType(
   // in the bass, b6 to 5, which is what iv6 to V sounds in a minor key.
   if (
     half &&
-    isMinorKey(key) &&
+    isMinorScale(key) &&
     fromOffset === 5 &&
     mod12(fromBassPc - tonic) === 8 &&
     mod12(toBassPc - tonic) === 7
@@ -525,9 +537,10 @@ function cadenceAlternatives(facts: CadenceFacts): RejectedCandidate[] {
  * that cadences not at all; `alternatives` is empty unless asked for, and then
  * names the cadences the pair came close to forming.
  *
- * @param from The penultimate chord.
- * @param to The final chord.
- * @param key The prevailing key.
+ * @param from The penultimate chord, as a chord symbol, chord data, or a
+ *   `Chord`.
+ * @param to The final chord, in any of the same forms.
+ * @param key The prevailing key, as a key name, a key/scale, or a `Key`.
  * @param opts Voice-leading detail, the chord before `from`, and whether to
  *   collect the rejected readings; see {@link DetectCadenceOptions}.
  * @returns The cadence, its strength, and the facts behind them.
@@ -550,10 +563,26 @@ function cadenceAlternatives(facts: CadenceFacts): RejectedCandidate[] {
  * @category Functional Harmony
  */
 export function detectCadence(
+  from: ChordLike,
+  to: ChordLike,
+  key: KeyLike,
+  opts: DetectCadenceOptions = {},
+): CadenceResult {
+  const { approach, ...rest } = opts;
+  return cadenceBetween(
+    toChordData(from),
+    toChordData(to),
+    toKeyScale(key),
+    approach === undefined ? rest : { ...rest, approach: toChordData(approach) },
+  );
+}
+
+/** {@link detectCadence} on data already read into its narrow form. */
+export function cadenceBetween(
   from: Chord,
   to: Chord,
   key: KeyScale,
-  opts: DetectCadenceOptions = {},
+  opts: CadenceOptions = {},
 ): CadenceResult {
   const [fromVoicing, toVoicing] = opts.voicing ?? [];
   const fromOuter = outerPitches(fromVoicing ?? []);
@@ -579,7 +608,7 @@ export function detectCadence(
     leadingTone,
     fromOffset: mod12(from.rootPc - key.rootPc),
     toOffset: mod12(to.rootPc - key.rootPc),
-    minor: isMinorKey(key),
+    minor: isMinorScale(key),
     onFifthDegree: mod12(to.rootPc - key.rootPc) === degreeOffset(DOMINANT_DEGREE, key),
     sixFour: opts.approach !== undefined && isCadentialSixFour(opts.approach, from, key),
     withinSixFour: isCadentialSixFour(from, to, key),

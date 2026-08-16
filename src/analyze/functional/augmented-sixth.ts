@@ -16,14 +16,20 @@
  * it hands back carries the spelling that decided it.
  */
 
-import type { Note, SpelledInterval } from '../../core/pitch/index.js';
-import { diatonicLetterOf, parseInterval, transposeByInterval } from '../../core/pitch/index.js';
+import type { Note, NoteLike, SpelledInterval } from '../../core/pitch/index.js';
+import {
+  diatonicLetterOf,
+  parseInterval,
+  toNoteData,
+  transposeByInterval,
+} from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import { assertOneOf } from '../../core/validation/index.js';
 import type { Chord, ChordQuality, PitchSpelling } from '../../theory/chord/index.js';
 import { chordPitchClasses, makeChord } from '../../theory/chord/index.js';
-import { spelledKeyOf } from '../../theory/scale/index.js';
+import { type KeyLike, spelledKeyOf, toKeyScale } from '../../theory/scale/index.js';
 import { spellChord } from '../../theory/spelling/index.js';
+import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
 import { mod12 } from './internal.js';
 
 /**
@@ -128,7 +134,7 @@ function bareSpelling(note: Note): PitchSpelling {
  * step with the intervals, so both orderings stay derived from one table.
  */
 function spelledInChordOrder(kind: AugmentedSixthKind, tonic: Note): Note[] {
-  const tones = spellAugmentedSixth(kind, tonic);
+  const tones = spelledFromTonic(kind, tonic);
   const rootIndex = TONES_ABOVE_BASS[kind].indexOf(CHORD_SHAPE[kind].rootAboveBass);
   return [...tones.slice(rootIndex), ...tones.slice(0, rootIndex)];
 }
@@ -153,7 +159,7 @@ function spelledInChordOrder(kind: AugmentedSixthKind, tonic: Note): Note[] {
  * prevailing scale.
  *
  * @param kind Which of the three augmented sixths to build.
- * @param key The prevailing key.
+ * @param key The prevailing key, as a key name, a key/scale, or a `Key`.
  * @returns The chord, with its bass on the lowered submediant.
  * @throws If `kind` is not one of the three, or the key's root is not finite.
  * @see {@link spellAugmentedSixth} to spell the family from a tonic without
@@ -166,7 +172,12 @@ function spelledInChordOrder(kind: AugmentedSixthKind, tonic: Note): Note[] {
  * ```
  * @category Functional Harmony
  */
-export function augmentedSixthChord(kind: AugmentedSixthKind, key: KeyScale): Chord {
+export function augmentedSixthChord(kind: AugmentedSixthKind, key: KeyLike): Chord {
+  return augmentedSixthOn(kind, toKeyScale(key));
+}
+
+/** {@link augmentedSixthChord} on a key already read into its narrow form. */
+function augmentedSixthOn(kind: AugmentedSixthKind, key: KeyScale): Chord {
   const checked = assertOneOf(kind, KINDS, 'augmented sixth kind');
   const shape = CHORD_SHAPE[checked];
   const bassPc = bassPcOf(key);
@@ -212,7 +223,7 @@ function spellingId(note: Note | PitchSpelling): string {
 function spellsAugmentedSixth(chord: Chord, kind: AugmentedSixthKind, key: KeyScale): boolean {
   const tonic = spelledKeyOf(key).tonic;
   const written = new Set(spellChord(chord, tonic, key).map(spellingId));
-  const tones = spellAugmentedSixth(kind, tonic).map(spellingId);
+  const tones = spelledFromTonic(kind, tonic).map(spellingId);
   return written.size === tones.length && tones.every((tone) => written.has(tone));
 }
 
@@ -234,8 +245,8 @@ function spellsAugmentedSixth(chord: Chord, kind: AugmentedSixthKind, key: KeySc
  * rebuilt around any of its own tones still identifies as long as it keeps its
  * spelling.
  *
- * @param chord The chord to test.
- * @param key The prevailing key.
+ * @param chord The chord to test, as a chord symbol, chord data, or a `Chord`.
+ * @param key The prevailing key, as a key name, a key/scale, or a `Key`.
  * @returns The kind of augmented sixth, or null.
  * @see {@link augmentedSixthFromPitchClasses} to make the reading from pitch
  *   classes that carry no spelling at all.
@@ -246,7 +257,12 @@ function spellsAugmentedSixth(chord: Chord, kind: AugmentedSixthKind, key: KeySc
  * ```
  * @category Functional Harmony
  */
-export function augmentedSixthKind(chord: Chord, key: KeyScale): AugmentedSixthKind | null {
+export function augmentedSixthKind(chord: ChordLike, key: KeyLike): AugmentedSixthKind | null {
+  return augmentedSixthKindOf(toChordData(chord), toKeyScale(key));
+}
+
+/** {@link augmentedSixthKind} on data already read into its narrow form. */
+export function augmentedSixthKindOf(chord: Chord, key: KeyScale): AugmentedSixthKind | null {
   const bass = bassPcOf(key);
   if (mod12(chord.bassPc ?? chord.rootPc) !== bass) {
     return null;
@@ -275,7 +291,7 @@ export function augmentedSixthKind(chord: Chord, key: KeyScale): AugmentedSixthK
  * @param pcs The sounding pitch classes; duplicates and unreduced values are
  *   fine.
  * @param bassPc The pitch class sounding in the bass.
- * @param key The prevailing key.
+ * @param key The prevailing key, as a key name, a key/scale, or a `Key`.
  * @returns The augmented-sixth chord, or null.
  * @see {@link augmentedSixthKind} to read a chord that already carries its
  *   spelling.
@@ -290,6 +306,18 @@ export function augmentedSixthKind(chord: Chord, key: KeyScale): AugmentedSixthK
 export function augmentedSixthFromPitchClasses(
   pcs: readonly number[],
   bassPc: number,
+  key: KeyLike,
+): Chord | null {
+  return augmentedSixthOverBass(pcs, bassPc, toKeyScale(key));
+}
+
+/**
+ * {@link augmentedSixthFromPitchClasses} on a key already read into its narrow
+ * form.
+ */
+export function augmentedSixthOverBass(
+  pcs: readonly number[],
+  bassPc: number,
   key: KeyScale,
 ): Chord | null {
   const bass = bassPcOf(key);
@@ -297,7 +325,7 @@ export function augmentedSixthFromPitchClasses(
     return null;
   }
   const kind = kindOfPitchClasses(new Set(pcs.map(mod12)), bass);
-  return kind === null ? null : augmentedSixthChord(kind, key);
+  return kind === null ? null : augmentedSixthOn(kind, key);
 }
 
 /**
@@ -314,18 +342,24 @@ export function augmentedSixthFromPitchClasses(
  * bass; an octave-less tonic yields octave-less notes.
  *
  * @param kind Which of the three augmented sixths to spell.
- * @param tonic The spelled tonic of the key.
+ * @param tonic The spelled tonic of the key, as a note name, a MIDI number,
+ *   note data, or a `Note`.
  * @returns The spelled tones, bass first and ascending.
  * @throws If `kind` is not one of the three, or `tonic` is not a note.
  * @example
  * ```ts
  * import { noteNames, parseNote, spellAugmentedSixth } from '@libraz/libcantus';
  * noteNames(spellAugmentedSixth('german', parseNote('C'))); // ['Ab', 'C', 'Eb', 'F#']
- * noteNames(spellAugmentedSixth('italian', parseNote('E'))); // ['C', 'E', 'A#']
+ * noteNames(spellAugmentedSixth('italian', 'E')); // ['C', 'E', 'A#']
  * ```
  * @category Functional Harmony
  */
-export function spellAugmentedSixth(kind: AugmentedSixthKind, tonic: Note): Note[] {
+export function spellAugmentedSixth(kind: AugmentedSixthKind, tonic: NoteLike): Note[] {
+  return spelledFromTonic(kind, toNoteData(tonic));
+}
+
+/** {@link spellAugmentedSixth} on a tonic already read into its narrow form. */
+function spelledFromTonic(kind: AugmentedSixthKind, tonic: Note): Note[] {
   const checked = assertOneOf(kind, KINDS, 'augmented sixth kind');
   const bass = transposeByInterval(tonic, BASS_INTERVAL);
   return SPELLED_ABOVE_BASS[checked].map((interval) => transposeByInterval(bass, interval));
@@ -334,11 +368,11 @@ export function spellAugmentedSixth(kind: AugmentedSixthKind, tonic: Note): Note
 /** The chord an augmented-sixth symbol names in a key, or null for other text. */
 export function augmentedSixthFromSymbol(symbol: string, key: KeyScale): Chord | null {
   const kind = KIND_BY_SYMBOL.get(symbol);
-  return kind === undefined ? null : augmentedSixthChord(kind, key);
+  return kind === undefined ? null : augmentedSixthOn(kind, key);
 }
 
 /** The symbol a chord renders as when it is an augmented sixth, else null. */
 export function augmentedSixthSymbol(chord: Chord, key: KeyScale): string | null {
-  const kind = augmentedSixthKind(chord, key);
+  const kind = augmentedSixthKindOf(chord, key);
   return kind === null ? null : SYMBOL_BY_KIND[kind];
 }

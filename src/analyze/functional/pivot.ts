@@ -10,9 +10,9 @@ import { InvalidInputError } from '../../core/errors/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { Chord } from '../../theory/chord/index.js';
 import { diatonicTriad } from '../../theory/chord/index.js';
-import { scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
-import { isDiatonic } from './function.js';
-import { chordToRoman } from './roman.js';
+import { type KeyLike, scaleTonesInDegreeOrder, toKeyScale } from '../../theory/scale/index.js';
+import { isDiatonicChord } from './internal.js';
+import { renderRoman } from './roman.js';
 
 /** Degree count of a scale that stacks thirds into triads. */
 const HEPTATONIC_DEGREES = 7;
@@ -51,8 +51,8 @@ export type PivotChord = {
  * so it may be any scale; its numerals then follow the {@link chordToRoman}
  * fallback of naming roots against the parallel major.
  *
- * @param from The key being left.
- * @param to The key being entered.
+ * @param from The key being left, as a key name, a key/scale, or a `Key`.
+ * @param to The key being entered, in any of the same forms.
  * @returns The shared triads, ascending by their degree in `from`.
  * @example
  * ```ts
@@ -62,7 +62,12 @@ export type PivotChord = {
  * ```
  * @category Functional Harmony
  */
-export function pivotChords(from: KeyScale, to: KeyScale): PivotChord[] {
+export function pivotChords(from: KeyLike, to: KeyLike): PivotChord[] {
+  return pivotsBetween(toKeyScale(from), toKeyScale(to));
+}
+
+/** {@link pivotChords} on keys already read into their narrow form. */
+export function pivotsBetween(from: KeyScale, to: KeyScale): PivotChord[] {
   // Testing the degree count keeps a key with no diatonic triads an empty
   // result rather than letting the stacking throw.
   if (scaleTonesInDegreeOrder(from).length !== HEPTATONIC_DEGREES) {
@@ -72,7 +77,7 @@ export function pivotChords(from: KeyScale, to: KeyScale): PivotChord[] {
   const seen = new Set<string>();
   for (let degree = 1; degree <= HEPTATONIC_DEGREES; degree += 1) {
     const chord = stackedTriad(degree, from);
-    if (chord === null || !isDiatonic(chord, to)) {
+    if (chord === null || !isDiatonicChord(chord, to)) {
       continue;
     }
     // Candidates are identified by sonority, so a scale whose degrees repeat a
@@ -84,8 +89,8 @@ export function pivotChords(from: KeyScale, to: KeyScale): PivotChord[] {
     seen.add(identity);
     pivots.push({
       chord,
-      romanFrom: chordToRoman(chord, from),
-      romanTo: chordToRoman(chord, to),
+      romanFrom: renderRoman(chord, from, {}).roman,
+      romanTo: renderRoman(chord, to, {}).roman,
     });
   }
   return pivots;

@@ -12,7 +12,13 @@ import { InvalidInputError } from '../../core/errors/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { makeChord } from '../../theory/chord/index.js';
-import { majorKey, scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
+import {
+  type KeyLike,
+  majorKey,
+  scaleTonesInDegreeOrder,
+  toKeyScale,
+} from '../../theory/scale/index.js';
+import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
 import { augmentedSixthFromSymbol, augmentedSixthSymbol } from './augmented-sixth.js';
 import {
   degreeRootPc,
@@ -326,7 +332,7 @@ function chordFromParsed(parsed: {
  * German sixth of the dominant.
  *
  * @param text The Roman numeral.
- * @param key The prevailing key.
+ * @param key The prevailing key, as a key name, a key/scale, or a `Key`.
  * @returns The chord.
  * @example
  * ```ts
@@ -336,7 +342,8 @@ function chordFromParsed(parsed: {
  * ```
  * @category Functional Harmony
  */
-export function romanToChord(text: string, key: KeyScale): Chord {
+export function romanToChord(text: string, key: KeyLike): Chord {
+  const scale = toKeyScale(key);
   // Accept the conventional slashes in figured bass (`V6/4`, `V6/5`) while
   // retaining `/` as the separator for applied dominants (`V7/V`).
   const trimmed = text.trim().replace(/(\d)\/(?=\d)/g, '$1');
@@ -344,14 +351,14 @@ export function romanToChord(text: string, key: KeyScale): Chord {
   if (slash >= 0) {
     const applied = trimmed.slice(0, slash);
     const target = trimmed.slice(slash + 1);
-    const targetRoot = parseSimpleRoman(target, key).rootPc;
+    const targetRoot = parseSimpleRoman(target, scale).rootPc;
     const localKey = majorKey(targetRoot);
     return (
       chromaticSymbolChord(applied, localKey) ??
       chordFromParsed(parseSimpleRoman(applied, localKey))
     );
   }
-  return chromaticSymbolChord(trimmed, key) ?? chordFromParsed(parseSimpleRoman(trimmed, key));
+  return chromaticSymbolChord(trimmed, scale) ?? chordFromParsed(parseSimpleRoman(trimmed, scale));
 }
 
 /** Case and suffix for rendering a chord quality as a Roman numeral. */
@@ -593,8 +600,8 @@ export type ChordToRomanOptions = {
  * lowered submediant renders as `It6`, `Fr6` or `Ger6`, since no numeral names
  * those chords; see {@link augmentedSixthKind} for exactly when that applies.
  *
- * @param chord The chord to name.
- * @param key The prevailing key.
+ * @param chord The chord to name, as a chord symbol, chord data, or a `Chord`.
+ * @param key The prevailing key, as a key name, a key/scale, or a `Key`.
  * @param opts `applied` renders tonicizing chords as `V7/V`-style numerals;
  *   `neapolitan` renders a first-inversion Neapolitan as `N6`.
  * @returns The Roman numeral string.
@@ -607,8 +614,12 @@ export type ChordToRomanOptions = {
  * @see {@link explainRoman} for the same numeral with the reasoning behind it.
  * @category Functional Harmony
  */
-export function chordToRoman(chord: Chord, key: KeyScale, opts: ChordToRomanOptions = {}): string {
-  return renderRoman(chord, key, opts).roman;
+export function chordToRoman(
+  chord: ChordLike,
+  key: KeyLike,
+  opts: ChordToRomanOptions = {},
+): string {
+  return renderRoman(toChordData(chord), toKeyScale(key), opts).roman;
 }
 
 /**
@@ -642,7 +653,7 @@ type RomanDerivation =
     };
 
 /** Render a chord as a numeral, keeping the facts that decided it. */
-function renderRoman(
+export function renderRoman(
   chord: Chord,
   key: KeyScale,
   opts: ChordToRomanOptions,
@@ -657,7 +668,7 @@ function renderRoman(
   if (opts.applied === true && !isDiatonicChord(chord, key)) {
     const target = appliedTarget(chord, key);
     if (target !== null) {
-      const local = chordToRoman(chord, majorKey(target.rootPc));
+      const local = renderRoman(chord, majorKey(target.rootPc), {}).roman;
       const numeral = numeralFor(target.degreeNumber, target.lower);
       return {
         roman: `${local}/${numeral}`,
@@ -789,9 +800,12 @@ export function romanAlternatives(
   key: KeyScale,
   opts: ChordToRomanOptions,
 ): RejectedCandidate[] {
-  const emitted = chordToRoman(chord, key, opts);
+  const emitted = renderRoman(chord, key, opts).roman;
   const out: RejectedCandidate[] = [];
-  const flippedApplied = chordToRoman(chord, key, { ...opts, applied: opts.applied !== true });
+  const flippedApplied = renderRoman(chord, key, {
+    ...opts,
+    applied: opts.applied !== true,
+  }).roman;
   if (flippedApplied !== emitted) {
     out.push({
       label: flippedApplied,
@@ -801,10 +815,10 @@ export function romanAlternatives(
           : 'Whether a chromatic dominant is genuinely applied is a reading only the caller can make, so the root is named against the home key unless `applied` asks otherwise',
     });
   }
-  const flippedNeapolitan = chordToRoman(chord, key, {
+  const flippedNeapolitan = renderRoman(chord, key, {
     ...opts,
     neapolitan: opts.neapolitan !== true,
-  });
+  }).roman;
   if (flippedNeapolitan !== emitted) {
     out.push({
       label: flippedNeapolitan,
@@ -862,8 +876,8 @@ export type ExplainRomanOptions = ChordToRomanOptions & {
  * numeral's case and suffix, and what became of the bass, including the two
  * cases where a bass exists and no numeral can carry it.
  *
- * @param chord The chord to name.
- * @param key The prevailing key.
+ * @param chord The chord to name, as a chord symbol, chord data, or a `Chord`.
+ * @param key The prevailing key, as a key name, a key/scale, or a `Key`.
  * @param opts The rendering options of {@link chordToRoman}, plus
  *   `alternatives` to collect the spellings they turned down.
  * @returns The numeral, its rationale, and the rejected spellings.
@@ -878,14 +892,16 @@ export type ExplainRomanOptions = ChordToRomanOptions & {
  * @category Functional Harmony
  */
 export function explainRoman(
-  chord: Chord,
-  key: KeyScale,
+  chord: ChordLike,
+  key: KeyLike,
   opts: ExplainRomanOptions = {},
 ): RomanExplanation {
-  const { roman, derivation } = renderRoman(chord, key, opts);
+  const data = toChordData(chord);
+  const scale = toKeyScale(key);
+  const { roman, derivation } = renderRoman(data, scale, opts);
   return {
     roman,
     rationale: describeRoman(roman, derivation),
-    alternatives: opts.alternatives === true ? romanAlternatives(chord, key, opts) : [],
+    alternatives: opts.alternatives === true ? romanAlternatives(data, scale, opts) : [],
   };
 }

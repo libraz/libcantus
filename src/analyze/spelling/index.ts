@@ -15,16 +15,17 @@
  * their answers against the shape of the line they sit in.
  */
 
-import type { Note } from '../../core/pitch/index.js';
+import type { Note, NoteLike } from '../../core/pitch/index.js';
 import {
   diatonicLetterOf as mod7,
   pitchClassOf as mod12,
   naturalPitchClassOf as naturalPc,
+  toNoteData,
 } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import { assertGenerationBudget, assertNoteEvents } from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
-import { isScaleTone, spelledKeyOf } from '../../theory/scale/index.js';
+import { isScaleTone, type KeyLike, spelledKeyOf, toKeyScale } from '../../theory/scale/index.js';
 import { assertTonicOf, spellChord, spellPitchClass } from '../../theory/spelling/index.js';
 import type { ChordTimeline } from '../timeline/index.js';
 
@@ -132,9 +133,10 @@ export type SpellLineOptions = {
    * Tonic spelling to anchor the key, for a caller that already knows how the
    * piece is written. It must sound the key's own root pitch class; anything
    * else is rejected rather than spelled. Defaults to the conventional
-   * spelling `spelledKeyOf` gives the key.
+   * spelling `spelledKeyOf` gives the key. Accepted as a note name, a MIDI
+   * number, note data, or a `Note`.
    */
-  tonic?: Note;
+  tonic?: NoteLike;
   /** Upper bound on the work the line may cost; defaults to the generation budget. */
   budget?: number;
 };
@@ -341,7 +343,8 @@ function transitionCost(from: LineState, source: Note, to: LineState, target: No
  *   are read as consecutive, so split polyphonic material into voices first.
  * @param timeline The chords sounding under the line, or null when only the key
  *   is known. Each note is judged against the chord at its own onset.
- * @param key The key the line is written in.
+ * @param key The key the line is written in, as a key name, a key/scale, or a
+ *   `Key`.
  * @param opts Optional tonic spelling and work budget.
  * @returns One spelled note per input note, in input order, each carrying the
  *   octave that reproduces its pitch.
@@ -368,9 +371,11 @@ function transitionCost(from: LineState, source: Note, to: LineState, target: No
 export function spellLine(
   notes: readonly NoteEvent[],
   timeline: ChordTimeline | null,
-  key: KeyScale,
+  key: KeyLike,
   opts: SpellLineOptions = {},
 ): Note[] {
+  const scale = toKeyScale(key);
+  const given = opts.tonic === undefined ? undefined : toNoteData(opts.tonic);
   assertNoteEvents(notes, 'line notes', {
     allowNonPositiveDuration: true,
     budget: opts.budget,
@@ -382,15 +387,15 @@ export function spellLine(
     'line spelling states',
     opts.budget,
   );
-  if (opts.tonic !== undefined) {
-    assertTonicOf(opts.tonic, key, 'spellLine');
+  if (given !== undefined) {
+    assertTonicOf(given, scale, 'spellLine');
   }
   if (notes.length === 0) {
     return [];
   }
-  const tonic = opts.tonic ?? spelledKeyOf(key).tonic;
+  const tonic = given ?? spelledKeyOf(scale).tonic;
   const states = notes.map((note) =>
-    stateFor(note.pitch, timeline?.at(note.startBeat) ?? null, tonic, key),
+    stateFor(note.pitch, timeline?.at(note.startBeat) ?? null, tonic, scale),
   );
 
   // Viterbi across the line: `costs` holds the cheapest path reaching each

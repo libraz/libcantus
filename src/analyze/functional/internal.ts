@@ -17,8 +17,26 @@ import {
   isScaleTone,
   MAJOR_MASK,
   majorKey,
+  NATURAL_MINOR_MASK,
   scaleTonesInDegreeOrder,
 } from '../../theory/scale/index.js';
+
+/** Whether a scale has a minor third and no major third (a minor key). */
+export function isMinorScale(key: KeyScale): boolean {
+  // Named for the mask bits they read, so neither shadows the chord predicate
+  // of the same idea that the shared helpers export.
+  const minorThirdBit = (key.modeMask12 >> 3) & 1;
+  const majorThirdBit = (key.modeMask12 >> 4) & 1;
+  return Boolean(minorThirdBit) && !majorThirdBit;
+}
+
+/** The parallel key of a scale: same tonic, opposite mode. */
+export function parallelScale(key: KeyScale): KeyScale {
+  return {
+    rootPc: mod12(key.rootPc),
+    modeMask12: isMinorScale(key) ? MAJOR_MASK : NATURAL_MINOR_MASK,
+  };
+}
 
 /** Diatonic pitch class of a 1-based scale degree in a key. */
 export function degreeRootPc(degreeNumber: number, key: KeyScale): number {

@@ -10,6 +10,7 @@ export type { MeterChange, MeterLike, MeterMap, TimeSignature } from '../core/me
 export type {
   IntervalQualityLabel,
   Note as NoteData,
+  NoteLike,
   SpelledInterval,
 } from '../core/pitch/index.js';
 export type { KeyScale, NoteEvent } from '../core/types.js';
@@ -24,7 +25,8 @@ export type { SafetyProfile, VoiceSnapshot } from '../theory/safety/index.js';
 export { NoteSafety } from '../theory/safety/index.js';
 // `KeyRegion.modulation` names this, so the layer barrel has to carry it even
 // though the relation vocabulary itself belongs to the scale layer.
-export type { KeyRelation, ScaleName } from '../theory/scale/index.js';
+export type { KeyLike, KeyRelation, ScaleName } from '../theory/scale/index.js';
+export type { ChordLike } from '../theory/symbol/index.js';
 export type {
   ArrangementAnalysis,
   ArrangementOptions,
