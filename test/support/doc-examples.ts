@@ -45,6 +45,61 @@ export function codeBlocks(source: string): CodeBlock[] {
   return blocks;
 }
 
+/**
+ * Extract the fenced blocks of every `@example` tag in a TypeScript source
+ * file's TSDoc, with the line number of each opening fence.
+ *
+ * The examples are what the API reference prints and what an editor shows on
+ * hover, so they are collected the same way the guides are and run the same
+ * way. Comments tagged `@internal` are skipped: TypeDoc drops them, so they are
+ * not part of what ships.
+ */
+export function tsdocExamples(source: string): CodeBlock[] {
+  const lines = source.split('\n');
+  const found: CodeBlock[] = [];
+  let comment: CodeBlock[] | null = null;
+  let internal = false;
+  let inExample = false;
+  let open: { lang: string; line: number; body: string[] } | null = null;
+  for (let i = 0; i < lines.length; i += 1) {
+    const trimmed = (lines[i] ?? '').trim();
+    if (comment === null) {
+      if (trimmed.startsWith('/**')) {
+        comment = [];
+        internal = false;
+        inExample = false;
+        open = null;
+      }
+      continue;
+    }
+    if (trimmed.startsWith('*/')) {
+      if (!internal) found.push(...comment);
+      comment = null;
+      continue;
+    }
+    // A doc line carries a leading asterisk; everything after it is the text,
+    // indentation of the code included.
+    const text = trimmed.replace(/^\*\s?/, '');
+    if (open === null && text.startsWith('@')) {
+      inExample = text.startsWith('@example');
+      if (text.startsWith('@internal')) internal = true;
+      continue;
+    }
+    if (!inExample) continue;
+    if (text.startsWith('```')) {
+      if (open) {
+        comment.push({ lang: open.lang, code: open.body.join('\n'), line: open.line });
+        open = null;
+      } else {
+        open = { lang: text.slice(3).trim(), line: i + 1, body: [] };
+      }
+      continue;
+    }
+    open?.body.push(text);
+  }
+  return found;
+}
+
 /** Split a line into its code part and its trailing line comment, ignoring quoted text. */
 function splitComment(line: string): { code: string; comment: string | null } {
   let quote: string | null = null;
@@ -64,6 +119,21 @@ function splitComment(line: string): { code: string; comment: string | null } {
     }
   }
   return { code: line, comment: null };
+}
+
+/**
+ * A snippet with its line comments removed and its blank lines closed up.
+ *
+ * This is how a translated page is compared with the English one it mirrors:
+ * the prose in a comment is translated and the code around it is not, so a
+ * signature that changes on one side cannot be left stale on the other.
+ */
+export function withoutComments(code: string): string {
+  return code
+    .split('\n')
+    .map((line) => splitComment(line).code.trimEnd())
+    .filter((line) => line !== '')
+    .join('\n');
 }
 
 /** Net bracket depth contributed by a code fragment, ignoring quoted text. */
@@ -251,21 +321,101 @@ export function toRunnable(code: string): Runnable {
   return { imports, body, assertions };
 }
 
-/** Render the generated vitest module for one documentation snippet. */
-export function renderTestModule(label: string, code: string): string {
-  const { imports, body } = toRunnable(code);
+/** One snippet ready to render: what to call it, and the code it publishes. */
+export interface Example {
+  label: string;
+  code: string;
+}
+
+/** Render one snippet as an `it`, its body indented into the callback. */
+function renderTest(label: string, body: string[]): string {
   const joined = body.join('\n');
   const indented = joined
     .split('\n')
     .map((line) => (line.trim() === '' ? '' : `  ${line}`))
     .join('\n');
   return [
-    "import { expect, it } from 'vitest';",
-    ...imports,
-    '',
     `it(${JSON.stringify(label)}, ${/\bawait\b/.test(joined) ? 'async ' : ''}() => {`,
     indented,
     '});',
+  ].join('\n');
+}
+
+/** Render the generated vitest module for one documentation snippet. */
+export function renderTestModule(label: string, code: string): string {
+  const { imports, body } = toRunnable(code);
+  return ["import { expect, it } from 'vitest';", ...imports, '', renderTest(label, body), ''].join(
+    '\n',
+  );
+}
+
+/** A named import, split into where it comes from and what it binds. */
+const NAMED_IMPORT = /^import\s+(type\s+)?\{([^}]*)\}\s+from\s+['"]([^'"]+)['"];?\s*$/;
+
+/** The name an import statement binds locally, which an alias renames. */
+function localName(name: string): string {
+  const parts = name.split(/\s+as\s+/);
+  return (parts[parts.length - 1] ?? name).trim();
+}
+
+/**
+ * Merge the import statements of several snippets into one set, or null when
+ * they cannot be merged — an import this does not recognize, or one name
+ * arriving from two different modules, which would collide in a shared scope.
+ */
+function mergeImports(statements: string[]): string[] | null {
+  const byModule = new Map<string, { values: Set<string>; types: Set<string> }>();
+  const origin = new Map<string, string>();
+  for (const statement of statements) {
+    const match = statement.trim().match(NAMED_IMPORT);
+    if (!match) return null;
+    const [, typeOnly, names = '', specifier = ''] = match;
+    const bucket = byModule.get(specifier) ?? { values: new Set(), types: new Set() };
+    for (const name of names.split(',').map((part) => part.trim().replace(/\s+/g, ' '))) {
+      if (name === '') continue;
+      const local = localName(name);
+      if ((origin.get(local) ?? specifier) !== specifier) return null;
+      origin.set(local, specifier);
+      // A name wanted as a value anywhere is imported as one everywhere; the
+      // type-only form of the same binding would be a duplicate declaration.
+      if (typeOnly === undefined) {
+        bucket.values.add(name);
+        bucket.types.delete(name);
+      } else if (!bucket.values.has(name)) {
+        bucket.types.add(name);
+      }
+    }
+    byModule.set(specifier, bucket);
+  }
+  const merged: string[] = [];
+  for (const [specifier, { values, types }] of byModule) {
+    const sorted = (names: Set<string>) => [...names].sort().join(', ');
+    if (types.size > 0) merged.push(`import type { ${sorted(types)} } from '${specifier}';`);
+    if (values.size > 0) merged.push(`import { ${sorted(values)} } from '${specifier}';`);
+  }
+  return merged;
+}
+
+/**
+ * Render several snippets from one source as a single vitest module, or null
+ * when their imports cannot be shared.
+ *
+ * Each snippet is a test of its own, so a failure still names the file and line
+ * it was written on; only the import of the library is shared. That import is
+ * the expensive part — every module pays it again — and a source publishes a
+ * dozen examples of the same few entry points.
+ */
+export function renderTestSuite(examples: Example[]): string | null {
+  const runnable = examples.map((example) => ({
+    label: example.label,
+    ...toRunnable(example.code),
+  }));
+  const imports = mergeImports(runnable.flatMap((example) => example.imports));
+  if (imports === null) return null;
+  return [
+    "import { expect, it } from 'vitest';",
+    ...imports,
     '',
+    ...runnable.map((example) => `${renderTest(example.label, example.body)}\n`),
   ].join('\n');
 }

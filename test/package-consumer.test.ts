@@ -1,5 +1,13 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +15,9 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const temp = mkdtempSync(path.join(tmpdir(), 'libcantus-consumer-'));
+
+/** The directory the build writes and the package ships. */
+const BUILD_DIR = 'dist';
 
 afterAll(() => rmSync(temp, { recursive: true, force: true }));
 
@@ -115,13 +126,48 @@ void modelKey;
 `;
 
 describe('packed package consumer matrix', () => {
+  it('ships the directory a plain build writes to', async () => {
+    // The pack below stages the build output explicitly, so this states what
+    // the old shape got for free by building in place: the directory the build
+    // tool writes by default is the one the manifest ships and the one every
+    // `exports` path is written against.
+    const config = ((await import('../tsup.config.js')) as { default: { outDir?: string } })
+      .default;
+    const manifest = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as {
+      files: string[];
+      exports: Record<string, unknown>;
+    };
+    expect(config.outDir ?? 'dist').toBe(BUILD_DIR);
+    expect(manifest.files).toContain(BUILD_DIR);
+    expect(JSON.stringify(manifest.exports)).toContain(`./${BUILD_DIR}/index.js`);
+  });
+
   it('typechecks and executes root/subpaths through ESM and CJS NodeNext conditions', () => {
-    run('yarn', ['build']);
+    // The package is staged in a directory of this test's own rather than built
+    // into the repository's `dist`. That directory is shared mutable state: the
+    // build tool empties it before it writes, so a second suite running at the
+    // same time — a parallel CI job, a second checkout of the same tree — would
+    // clear it out between this build and this pack, and the tarball would lose
+    // the declarations this test exists to check. Staging costs no extra build:
+    // it is the same build, pointed elsewhere.
+    const staging = path.join(temp, 'package');
+    mkdirSync(staging, { recursive: true });
+    run('yarn', ['build', '--out-dir', path.join(staging, BUILD_DIR)]);
+    const manifest = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as {
+      files: string[];
+    };
+    // Everything the manifest ships beside the build output, read off `files`
+    // rather than listed here, so a newly shipped file is staged too and the
+    // packed-contents assertion below is what decides whether it belongs.
+    for (const file of ['package.json', ...manifest.files.filter((entry) => entry !== BUILD_DIR)]) {
+      copyFileSync(path.join(ROOT, file), path.join(staging, file));
+    }
     // Read the tarball contents with `tar` rather than parsing `npm pack --json`.
     // When the suite runs under `yarn`, npm inherits Yarn's user-agent env and
     // executes the `prepare` lifecycle script despite `--ignore-scripts`, so the
     // build tool's stdout leaks into the `--json` payload and breaks JSON.parse.
-    run('npm', ['pack', '--ignore-scripts', '--pack-destination', temp]);
+    // In the staging directory that script finds no build tool and exits.
+    run('npm', ['pack', '--ignore-scripts', '--pack-destination', temp], staging);
     const tarballName = readdirSync(temp).find((file) => file.endsWith('.tgz'));
     expect(tarballName, 'npm pack produced a tarball').toBeDefined();
     const tarball = path.join(temp, tarballName ?? 'missing.tgz');

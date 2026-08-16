@@ -1,8 +1,20 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { codeBlocks, markdownFiles } from './support/doc-examples.js';
-import { DOCS_EN, DOCS_JA, ROOT } from './support/generate-doc-examples.js';
+import {
+  codeBlocks,
+  markdownFiles,
+  tsdocExamples,
+  withoutComments,
+} from './support/doc-examples.js';
+import {
+  DOCS_EN,
+  DOCS_JA,
+  PENDING_EXAMPLE_SOURCES,
+  ROOT,
+  SRC,
+  sourceFiles,
+} from './support/generate-doc-examples.js';
 
 const english = markdownFiles(DOCS_EN);
 
@@ -19,11 +31,14 @@ describe('bilingual guides', () => {
   });
 
   // The README pair carries the same examples with translated code comments, so
-  // only the block structure is compared; the guides under docs/ share their
-  // blocks verbatim and are checked above.
-  it('README.md and README_ja.md carry the same example blocks', () => {
-    const shape = (file: string) => blocksOf(path.join(ROOT, file)).map((block) => block.lang);
-    expect(shape('README_ja.md')).toEqual(shape('README.md'));
+  // the code is compared with the comments taken out rather than verbatim; the
+  // guides under docs/ share their blocks whole and are checked above. Only the
+  // English README is executed, so this is what keeps the Japanese one from
+  // showing an API that no longer exists.
+  it('README.md and README_ja.md carry the same examples', () => {
+    const code = (file: string) =>
+      blocksOf(path.join(ROOT, file)).map((block) => [block.lang, withoutComments(block.code)]);
+    expect(code('README_ja.md')).toEqual(code('README.md'));
   });
 });
 
@@ -52,5 +67,33 @@ describe('links', () => {
     const source = readFileSync(path.join(dir, file), 'utf8');
     const other = lang === 'en' ? 'ja' : 'en';
     expect(targets(source).filter((target) => target.split('/').includes(other))).toEqual([]);
+  });
+});
+
+describe('TSDoc examples', () => {
+  const examplesOf = (file: string) =>
+    tsdocExamples(readFileSync(path.join(SRC, file), 'utf8')).filter(
+      (block) => block.lang === 'ts',
+    );
+  const documented = sourceFiles().filter((file) => examplesOf(file).length > 0);
+
+  it('collects the examples the API reference prints', () => {
+    // The examples in the sources outnumber the ones in the guides several
+    // times over, and every one of them ships: in the reference, in an editor
+    // tooltip, and in whatever reads the type declarations. A harness that
+    // quietly went back to reading the guides alone would leave all of them
+    // unrun, which is what this count is here to catch.
+    const pending = new Set(PENDING_EXAMPLE_SOURCES);
+    const collected = documented
+      .filter((file) => !pending.has(file))
+      .flatMap((file) => examplesOf(file));
+    expect(collected.length).toBeGreaterThan(200);
+  });
+
+  it('lists no source as pending that has no example to run', () => {
+    for (const file of PENDING_EXAMPLE_SOURCES) {
+      expect(existsSync(path.join(SRC, file)), `${file} is listed but absent`).toBe(true);
+      expect(examplesOf(file).length, `${file} is listed but has no example`).toBeGreaterThan(0);
+    }
   });
 });
