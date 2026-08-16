@@ -110,7 +110,7 @@ timeline.segments.map((segment) => chordToRoman(segment.chord, majorKey(0)));
 // ['I', 'IV', 'V7']
 ```
 
-`chordTimelineFromNotes` はタイムライン以外も返します。`keys` は解析が対象とした調区間、`prevailingKey` はもっとも長く保たれた調、`segmentConfidence` は区間順に1つずつの信頼度です。`Timeline` も同じ調区間を `timeline.keys` と `timeline.key` として持ちます。`key` を渡さないことで、転調する曲をその時点で実際に効いている調に対して解析できます。渡した場合は区間が1つになります。呼び出し側がすでに答えを出しているためです。
+`chordTimelineFromNotes` はタイムライン以外も返します。`keys` は解析が対象とした調区間、`prevailingKey` はもっとも長く保たれた調、`segmentConfidence` は区間順に1つずつの信頼度です。`Timeline` は3つとも持ちます。`timeline.keys`、`timeline.key`、`timeline.segmentConfidence` です。`key` を渡さないことで、転調する曲をその時点で実際に効いている調に対して解析できます。渡した場合は区間が1つになります。呼び出し側がすでに答えを出しているためです。
 
 `timeline.cadences()` は範囲全体の到達点にラベルを付け、それぞれが到達する拍もあわせて返します。
 

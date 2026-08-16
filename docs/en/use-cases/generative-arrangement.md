@@ -14,7 +14,7 @@ const composer = Composer.of({
 });
 
 const plan = composer.progression({ style: 'idol', bars: 8 });
-const bass = composer.bass(plan, { style: 'pop', instrument: bass4.data });
+const bass = composer.bass(plan, { style: 'pop', instrument: bass4 });
 const drums = composer.drums({ bars: 8, style: 'funk', section: 'chorus' });
 
 plan.segments.length; // 8
@@ -77,11 +77,11 @@ loosened.notes.length; // 2
 melody.notes[0]?.startBeat; // 0
 ```
 
-The counter-melody generator reads the harmony as a plain chord timeline rather than as a `Timeline`, which is what `plan.chordTimeline` hands it; the bass generator takes the timeline itself.
+The counter-melody generator takes the harmony either way: the `Timeline` itself, or the plain chord timeline `plan.chordTimeline` hands over.
 
 ## Before exporting
 
-Name the instrument in the generator options — as `bass4.data`, since the generators take the profile rather than the class around it — then verify the result against the same instrument:
+Name the instrument in the generator options, then verify the result against the same instrument:
 
 ```ts
 import { Instrument } from '@libraz/libcantus';

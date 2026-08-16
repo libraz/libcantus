@@ -14,7 +14,7 @@ const composer = Composer.of({
 });
 
 const plan = composer.progression({ style: 'idol', bars: 8 });
-const bass = composer.bass(plan, { style: 'pop', instrument: bass4.data });
+const bass = composer.bass(plan, { style: 'pop', instrument: bass4 });
 const drums = composer.drums({ bars: 8, style: 'funk', section: 'chorus' });
 
 plan.segments.length; // 8
@@ -77,11 +77,11 @@ loosened.notes.length; // 2
 melody.notes[0]?.startBeat; // 0
 ```
 
-対旋律のジェネレータは、和声を `Timeline` ではなくプレーンなコードタイムラインとして受け取ります。それを渡すのが `plan.chordTimeline` です。ベースのジェネレータはタイムラインそのものを受け取ります。
+対旋律のジェネレータは和声をどちらの形でも受け取ります。`Timeline` そのものでも、`plan.chordTimeline` が渡すプレーンなコードタイムラインでも構いません。
 
 ## 書き出しの前に
 
-ジェネレータのオプションで楽器を指定します。ジェネレータが受け取るのはクラスではなくプロファイルなので `bass4.data` を渡します。そのうえで、同じ楽器に対して結果を確認します。
+ジェネレータのオプションで楽器を指定し、そのうえで同じ楽器に対して結果を確認します。
 
 ```ts
 import { Instrument } from '@libraz/libcantus';

@@ -110,7 +110,7 @@ timeline.segments.map((segment) => chordToRoman(segment.chord, majorKey(0)));
 // ['I', 'IV', 'V7']
 ```
 
-`chordTimelineFromNotes` returns more than the timeline: `keys` holds the key regions the analysis ran against, `prevailingKey` the one held longest, and `segmentConfidence` one value per segment in segment order. A `Timeline` carries the same regions as `timeline.keys` and `timeline.key`. Omitting `key` is what lets a piece that modulates be analyzed against the key actually in force; supplying one yields a single region because the caller has already answered the question.
+`chordTimelineFromNotes` returns more than the timeline: `keys` holds the key regions the analysis ran against, `prevailingKey` the one held longest, and `segmentConfidence` one value per segment in segment order. A `Timeline` carries all three: `timeline.keys`, `timeline.key`, and `timeline.segmentConfidence`. Omitting `key` is what lets a piece that modulates be analyzed against the key actually in force; supplying one yields a single region because the caller has already answered the question.
 
 `timeline.cadences()` labels every arrival across a whole span, each with the beat it lands on:
 

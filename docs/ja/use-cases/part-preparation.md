@@ -12,12 +12,12 @@ const part = Score.of(
 );
 
 // The score reads itself against the instrument, at its own tempo:
-part.playability(bass.data).issues[0]?.type; // 'noteOutOfRange'
+part.playability(bass).issues[0]?.type; // 'noteOutOfRange'
 
 const fitted = part.map((note) => ({ ...note, pitch: bass.foldIntoRange(note.pitch) }));
 
 fitted.notes.every((note) => bass.canSound(note.pitch)); // true
-fitted.playability(bass.data).issues.length; // 0
+fitted.playability(bass).issues.length; // 0
 bass.range(); // { low: 28, high: 67 }
 ```
 
