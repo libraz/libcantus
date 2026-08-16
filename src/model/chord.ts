@@ -8,21 +8,26 @@ import {
   type ChordAnalysis,
   type ChordToRomanOptions,
   chordToRoman,
+  type ExplainRomanOptions,
+  explainRoman,
   functionOf,
   type HarmonicFunction,
   isBorrowedChord,
+  type RomanExplanation,
   secondaryDominantOf,
 } from '../analyze/functional/index.js';
 import { InvalidInputError, type ParseResult, unwrapParse } from '../core/errors/index.js';
 import type {
   IntervalLike,
   Note as NoteData,
+  NoteLike,
   NoteNameOptions,
   SpelledInterval,
 } from '../core/pitch/index.js';
 import {
   noteToPitchClass,
   pitchClassOf,
+  toNoteData,
   toSpelledInterval,
   transposeByInterval,
   transposeNote,
@@ -59,9 +64,11 @@ import {
   availableTensions,
   avoidNotes,
   type ChordScaleMatch,
+  type ChordScaleReportEntry,
+  chordScaleReport,
   chordScales,
 } from '../theory/chordscale/index.js';
-import { figuredBassOf } from '../theory/figured-bass/index.js';
+import { figuredBassOf, realizeFiguredBass } from '../theory/figured-bass/index.js';
 import { type KeyLike, type ScaleNameInput, toKeyScale } from '../theory/scale/index.js';
 import { spellChord, spellChordFromRoot, spellPitchClass } from '../theory/spelling/index.js';
 import {
@@ -319,6 +326,41 @@ export class Chord {
   }
 
   /**
+   * The chord a figured bass names: a bass note, the figures written under it,
+   * and the key that supplies every interval the figures leave unaltered.
+   *
+   * The inverse of {@link Chord.figuredBass}, and a static because the figures
+   * build a chord rather than read one. The result carries the given bass as
+   * its slash bass, so an inversion reads as one wherever a bass is measured
+   * against a root, and it keeps the letters the figures asked for. A moving
+   * figure such as `4-3` yields the chord it resolves into.
+   *
+   * No key context is attached — the key here decides what the figures mean,
+   * not how the chord is later analyzed — so use {@link Chord.withKey} to carry
+   * one on.
+   *
+   * @param bass The bass note, spelled, as a note name, a MIDI number, or a
+   *   {@link Note}; its octave, if any, is not used.
+   * @param figures The figures written under the bass; empty for an unfigured
+   *   note.
+   * @param key The prevailing key; a key name, a plain key/scale, or a
+   *   {@link Key}.
+   * @returns The chord the figures name (without key context).
+   * @throws If the figures are malformed or name no chord, if the key is not
+   *   heptatonic, or if the figures sound a chord no {@link ChordQuality}
+   *   names.
+   * @example
+   * ```ts
+   * import { Chord } from '@libraz/libcantus';
+   * Chord.fromFiguredBass('B', '6', 'C major').symbol(); // 'G/B'
+   * Chord.fromFiguredBass('G', '#', 'C minor').symbol(); // 'G'
+   * ```
+   */
+  static fromFiguredBass(bass: NoteLike, figures: string, key: KeyLike): Chord {
+    return new Chord(realizeFiguredBass(toNoteData(bass), figures, toKeyScale(key)));
+  }
+
+  /**
    * Parse a lead-sheet chord symbol (e.g. `'Cmaj7'`, `'F#m7b5'`, `'C/G'`).
    *
    * A symbol is English unless a system is asked for: unlike {@link Key.parse},
@@ -562,6 +604,35 @@ export class Chord {
    */
   roman(key?: Key, opts?: ChordToRomanOptions): string {
     return chordToRoman(this.#data, this.#resolveKey(key).scale, opts);
+  }
+
+  /**
+   * The chord's Roman numeral together with the reasoning behind it: the degree
+   * its root was read as, the quality that set the numeral's case and suffix,
+   * and what became of the bass.
+   *
+   * The numeral is exactly the one {@link Chord.roman} gives for the same
+   * arguments, so this is that method with its rationale attached — for
+   * teaching material, and for any interface whose users argue with the
+   * analysis. Ask for `alternatives` to see the numerals the other option
+   * settings would have rendered, and why this one was rendered instead.
+   *
+   * @param key Key to analyze in; a key name, a plain key/scale, or a
+   *   {@link Key}. Falls back to the carried context.
+   * @param opts The rendering options {@link Chord.roman} takes, plus
+   *   `alternatives` to collect the readings this one turned down; see
+   *   {@link ExplainRomanOptions}.
+   * @returns The numeral, its rationale, and the rejected readings.
+   * @throws If no key is given and none is carried.
+   * @example
+   * ```ts
+   * import { Chord, Key } from '@libraz/libcantus';
+   * Chord.parse('G7').explain(Key.major('C')).roman; // 'V7'
+   * Chord.parse('D7').explain('C major', { alternatives: true }).alternatives.length;
+   * ```
+   */
+  explain(key?: KeyLike, opts?: ExplainRomanOptions): RomanExplanation {
+    return explainRoman(this.#data, this.#resolveScale(key), opts);
   }
 
   /**
@@ -887,6 +958,29 @@ export class Chord {
    */
   scales(): ChordScaleMatch[] {
     return chordScales(this.#data);
+  }
+
+  /**
+   * The scales that fit over this chord, each with the tones it does not state
+   * sorted by what may be done with them: the ones to avoid outright, the ones
+   * a line may pass through, and the ones that may be added freely as color.
+   *
+   * {@link Chord.scales} ranks the same scales in the same order; this is that
+   * ranking read as playing advice, so a caller does not have to pair it with
+   * {@link Chord.avoidNotes} and {@link Chord.tensions} once per scale.
+   *
+   * @param limit Greatest number of scales to report; all of them by default.
+   * @returns One entry per reported scale, best fit first; see
+   *   {@link ChordScaleReportEntry}.
+   * @throws If `limit` is not a positive integer.
+   * @example
+   * ```ts
+   * import { Chord } from '@libraz/libcantus';
+   * Chord.of('C', 'maj7').scaleReport(1)[0]?.passing; // [5]
+   * ```
+   */
+  scaleReport(limit?: number): ChordScaleReportEntry[] {
+    return chordScaleReport(this.#data, limit);
   }
 
   /**

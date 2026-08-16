@@ -19,8 +19,13 @@ import {
   instrumentRange,
   playability,
 } from '../core/instrument/index.js';
+import type { NoteLike } from '../core/pitch/index.js';
+import { toNoteData } from '../core/pitch/index.js';
 import type { NoteEvent } from '../core/types.js';
 import { assertInteger, assertPositiveInt } from '../core/validation/index.js';
+import type { TransposingInstrument } from '../theory/transposition/index.js';
+import { toSoundingPitch } from '../theory/transposition/index.js';
+import { Note } from './note.js';
 
 /** Whether two lists hold the same values in the same order. */
 function sameList<T>(a: readonly T[], b: readonly T[]): boolean {
@@ -286,6 +291,39 @@ export class Instrument {
    */
   foldIntoRange(pitch: number): number {
     return foldIntoRange(pitch, this.#profile);
+  }
+
+  /**
+   * The pitch this instrument sounds for a note written in its part.
+   *
+   * Most parts are written at the pitch they sound, but some are not: a guitar
+   * part is printed an octave above concert pitch, and a part for an instrument
+   * in B flat or in A is printed in a different key altogether. The instrument
+   * is looked up by its own name, so an instrument the transposition table
+   * carries needs nothing said; name a transposition to read a part for one it
+   * does not, which is every instrument whose profile is the caller's own.
+   *
+   * The interval decides the letter, so the spelling of the part survives: on a
+   * clarinet in A a written D sharp sounds B sharp, where a semitone count
+   * alone would answer C natural and lose the letter the part is written on.
+   *
+   * @param note A note name, a MIDI number, plain note data, or a `Note`, as
+   *   the player reads it.
+   * @param transposition The written-to-sounding transposition to read the part
+   *   under; the instrument's own name by default.
+   * @returns The sounding note, at concert pitch.
+   * @throws If the note is malformed, or the transposition is neither a known
+   *   instrument name nor a spelled interval — which is what an instrument the
+   *   table does not carry reports when none is named.
+   * @example
+   * ```ts
+   * import { Instrument } from '@libraz/libcantus';
+   * Instrument.guitar().soundingPitch('C4').name; // 'C3'
+   * Instrument.bass4().soundingPitch('C4', '-P8').name; // 'C3'
+   * ```
+   */
+  soundingPitch(note: NoteLike, transposition: TransposingInstrument = this.#profile.name): Note {
+    return new Note(toSoundingPitch(toNoteData(note), transposition));
   }
 
   /**

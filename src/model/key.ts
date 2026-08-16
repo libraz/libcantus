@@ -5,18 +5,20 @@ import { InvalidInputError, type ParseResult, unwrapParse } from '../core/errors
 import type {
   IntervalLike,
   Note as NoteData,
+  NoteLike,
   NoteNameOptions,
   SpelledInterval,
 } from '../core/pitch/index.js';
 import {
   formatKeyName,
   spelledInterval,
+  toNoteData,
   toSpelledInterval,
   transposeByInterval,
   tryParseKeyName,
 } from '../core/pitch/index.js';
 import type { KeyScale } from '../core/types.js';
-import { assertFiniteNumber, assertInteger } from '../core/validation/index.js';
+import { assertFiniteNumber, assertInteger, assertOneOf } from '../core/validation/index.js';
 import {
   type ChordQuality,
   chordFromDegree,
@@ -24,6 +26,7 @@ import {
   diatonicTriad,
 } from '../theory/chord/index.js';
 import {
+  diatonicPitchClasses,
   dominantKeyOf,
   enharmonicKeyOf,
   isScaleTone,
@@ -43,13 +46,16 @@ import {
   relativeKeyOf,
   type ScaleName,
   type ScaleNameInput,
+  type ScaleSystem,
   type SpelledKey,
   scaleByName,
+  scaleSystemOf,
   scaleTonesInDegreeOrder,
   spelledKeyOf,
   subdominantKeyOf,
+  supportsFunctionalHarmony,
 } from '../theory/scale/index.js';
-import { spellScale } from '../theory/spelling/index.js';
+import { spellPitchClasses, spellScale } from '../theory/spelling/index.js';
 import type { TransposingInstrument } from '../theory/transposition/index.js';
 import { toWrittenPitch } from '../theory/transposition/index.js';
 import { Chord } from './chord.js';
@@ -516,12 +522,80 @@ export class Key {
   }
 
   /**
-   * The scale's pitch classes in ascending scale-degree order (the tonic first).
+   * The scale's pitch classes.
    *
+   * They come in scale-degree order by default — the tonic first, then each
+   * scale tone above it — so D dorian starts on 2 and wraps past 11 to 0. Ask
+   * for `order: 'ascending'` where the answer is a pitch-class set rather than
+   * a scale: sorted numerically, it compares directly against what
+   * {@link Chord.pitchClasses} reports and against any pitch-class set of the
+   * caller's own.
+   *
+   * @param opts Set `order: 'ascending'` to sort the pitch classes numerically
+   *   instead of by scale degree.
    * @returns One pitch class per scale degree.
+   * @throws If `order` is neither `'degree'` nor `'ascending'`.
+   * @example
+   * ```ts
+   * import { Key } from '@libraz/libcantus';
+   * Key.named('dorian', 'D').pitchClasses(); // [2, 4, 5, 7, 9, 11, 0]
+   * Key.named('dorian', 'D').pitchClasses({ order: 'ascending' }); // [0, 2, 4, 5, 7, 9, 11]
+   * ```
    */
-  pitchClasses(): number[] {
-    return scaleTonesInDegreeOrder(this.#scale);
+  pitchClasses(opts?: { order?: 'degree' | 'ascending' }): number[] {
+    const order =
+      opts?.order === undefined
+        ? 'degree'
+        : assertOneOf(opts.order, ['degree', 'ascending'], 'pitch-class order');
+    return order === 'ascending'
+      ? diatonicPitchClasses(this.#scale)
+      : scaleTonesInDegreeOrder(this.#scale);
+  }
+
+  /**
+   * The kind of pitch organisation this key's scale belongs to: the
+   * common-practice material functional harmony is defined on, a modal
+   * rotation of it, or a collection that carries no chord function of its own.
+   *
+   * A key holds a mode mask rather than a tradition, so the mask is read the
+   * Western way, exactly as {@link scaleSystemOf} reads a bare `KeyScale`: a
+   * key built on maqam Hijaz answers `'modal'`, because those seven pitch
+   * classes are also the phrygian dominant. A mask no built-in scale names has
+   * no system at all.
+   *
+   * @returns The scale system, or undefined for a mask that names no built-in
+   *   scale.
+   * @example
+   * ```ts
+   * import { Key } from '@libraz/libcantus';
+   * Key.major('C').system(); // 'common-practice'
+   * Key.named('dorian', 'D').system(); // 'modal'
+   * Key.named('majorPentatonic', 'C').system(); // 'non-functional'
+   * ```
+   */
+  system(): ScaleSystem | undefined {
+    return scaleSystemOf(this.#scale);
+  }
+
+  /**
+   * Whether functional (Roman-numeral) analysis describes this key.
+   *
+   * True for the common-practice and modal systems and false for everything
+   * classed as carrying no chord function, so code about to read a pentatonic
+   * or a raga as a chord progression can ask here first instead of imposing
+   * degrees on it. The mask is read the Western way, as {@link Key.system}
+   * reads it.
+   *
+   * @returns True when functional harmony describes the scale.
+   * @example
+   * ```ts
+   * import { Key } from '@libraz/libcantus';
+   * Key.named('harmonicMinor', 'A').supportsFunctionalHarmony(); // true
+   * Key.named('majorPentatonic', 'C').supportsFunctionalHarmony(); // false
+   * ```
+   */
+  supportsFunctionalHarmony(): boolean {
+    return supportsFunctionalHarmony(this.#scale);
   }
 
   /**
@@ -957,6 +1031,38 @@ export class Key {
    */
   noteNames(opts?: NoteNameOptions): string[] {
     return this.notes().map((note) => note.format(opts));
+  }
+
+  /**
+   * Spell arbitrary pitch classes the way this key writes them.
+   *
+   * The counterpart of {@link Key.notes} for pitches that are not scale
+   * degrees: a detected pitch-class set, an analysis result, or a voicing
+   * reduced to pitch classes gets the letters and accidentals the key implies,
+   * so in F major pitch class 10 reads as Bb while 11 reads as B natural
+   * rather than as Cb.
+   *
+   * Named for what it takes, because {@link Key.spell} already answers the
+   * scale itself.
+   *
+   * @param pcs The pitch classes, spelled in the order they are given.
+   * @param tonic Spelled tonic anchoring the letter names, as a note name, a
+   *   MIDI number, or a {@link Note}; defaults to this key's own tonic. It has
+   *   to sound this key's root pitch class, so it can only respell that tonic —
+   *   a Db major key spelled from C#.
+   * @returns Spelled octave-less notes, in input order.
+   * @throws If `tonic` does not sound this key's root pitch class.
+   * @example
+   * ```ts
+   * import { Key } from '@libraz/libcantus';
+   * Key.major('F')
+   *   .spellPitchClasses([10, 11])
+   *   .map((note) => note.name); // ['Bb', 'B']
+   * ```
+   */
+  spellPitchClasses(pcs: readonly number[], tonic?: NoteLike): Note[] {
+    const anchor = tonic === undefined ? this.#tonic.data : toNoteData(tonic);
+    return spellPitchClasses([...pcs], anchor, this.#scale).map((note) => new Note(note));
   }
 
   /**

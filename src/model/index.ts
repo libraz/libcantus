@@ -28,8 +28,10 @@ export type {
   ChordAnalysis,
   ChordToRomanOptions,
   DetectCadenceOptions,
+  ExplainRomanOptions,
   HarmonicFunction,
   RejectedCandidate,
+  RomanExplanation,
 } from '../analyze/functional/index.js';
 export type {
   AnalyzedNote,
@@ -48,6 +50,7 @@ export type {
   FormSectionOptions,
   Hypermeter,
   HypermeterOptions,
+  IdentifiedVoiceNote,
   KeyContext,
   KeyRegion,
   KeyTimelineOptions,
@@ -65,12 +68,14 @@ export type {
   ReduceProgressionOptions,
   ReductionBasis,
   ReductionLevel,
+  StructuralCadence,
   SuspensionFigure,
   TensionPoint,
   TheoryLabel,
   TrackAnalysis,
   TrackEdit,
   TrackRole,
+  VoiceNote,
 } from '../analyze/index.js';
 export type {
   DurationData,
@@ -188,6 +193,7 @@ export type {
   AvoidNotesOptions,
   AvoidNoteUse,
   ChordScaleMatch,
+  ChordScaleReportEntry,
   ScaleChoice,
 } from '../theory/chordscale/index.js';
 export type {
@@ -215,6 +221,7 @@ export type {
   KeyRelation,
   ScaleName,
   ScaleNameInput,
+  ScaleSystem,
   SpelledKey,
 } from '../theory/scale/index.js';
 export type { ChordLike, ChordSymbolOptions } from '../theory/symbol/index.js';

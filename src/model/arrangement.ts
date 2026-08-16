@@ -7,7 +7,11 @@ import type {
   TensionPoint,
   TrackEdit,
 } from '../analyze/arrange/index.js';
-import { createArrangementSession, tensionCurveFrom } from '../analyze/arrange/index.js';
+import {
+  analyzeArrangement,
+  createArrangementSession,
+  tensionCurveFrom,
+} from '../analyze/arrange/index.js';
 import type { KeyRegion } from '../analyze/keys/index.js';
 import type { ChordTimeline } from '../analyze/timeline/index.js';
 import { InvalidInputError } from '../core/errors/index.js';
@@ -517,14 +521,34 @@ export class Arrangement {
    * @returns One tension reading per sampled beat, in beat order.
    */
   tension(opts?: ArrangementTensionOptions): TensionPoint[] {
-    const theirs = analysisOptionsOf(opts);
-    const mine = this.#analysisOptions();
-    const { ts, meters, ...withoutMeter } = mine;
-    const inherited = theirs.ts === undefined && theirs.meters === undefined ? mine : withoutMeter;
-    return tensionCurveFrom([...this.#data.tracks], this.#session().analysis, {
-      ...inherited,
-      ...theirs,
-    });
+    return tensionCurveFrom(
+      [...this.#data.tracks],
+      this.#session().analysis,
+      this.#layered(analysisOptionsOf(opts)),
+    );
+  }
+
+  /**
+   * The whole reading of the arrangement in one call, made afresh.
+   *
+   * {@link Arrangement.analysis} answers the same question about the
+   * arrangement as it stands, and is the member to reach for: it is made once
+   * and kept across edits. This one runs {@link analyzeArrangement} again over
+   * the same tracks under settings laid on top of the arrangement's own, which
+   * is what a caller narrowing the conflict list, restricting the harmony to a
+   * few tracks, or reading the piece against a key it does not carry wants —
+   * without building a second arrangement to hold that reading.
+   *
+   * @param opts Any setting to lay over the arrangement's own; a meter named
+   *   here replaces the arrangement's, since `ts` and `meters` name the same
+   *   thing.
+   * @returns The inferred harmony, per-track annotations, cadences, and
+   *   conflicts.
+   * @throws If a setting carries a value the analysis cannot hold, or the
+   *   tracks exceed the budget.
+   */
+  analyze(opts?: ArrangementSetup): ArrangementAnalysis {
+    return analyzeArrangement([...this.#data.tracks], this.#layered(analysisOptionsOf(opts)));
   }
 
   /**
@@ -596,6 +620,20 @@ export class Arrangement {
     }
     const { timeline, ...rest } = settings;
     return timeline === undefined ? { ...rest } : { ...rest, timeline: chordTimelineOf(timeline) };
+  }
+
+  /**
+   * The arrangement's own options with a caller's laid over them.
+   *
+   * A meter named by the caller replaces the arrangement's rather than joining
+   * it: `ts` and `meters` name the same thing, and carrying one of each is the
+   * input error the resolver refuses.
+   */
+  #layered<T extends ArrangementOptions>(theirs: T): T & ArrangementOptions {
+    const mine = this.#analysisOptions();
+    const { ts, meters, ...withoutMeter } = mine;
+    const inherited = theirs.ts === undefined && theirs.meters === undefined ? mine : withoutMeter;
+    return { ...inherited, ...theirs };
   }
 
   /** The context one track's notes are read as a score against. */

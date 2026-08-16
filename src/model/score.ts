@@ -1,3 +1,5 @@
+import type { DetectKeyOptions, KeyMatch } from '../analyze/detect/index.js';
+import { detectKeyFromNotes } from '../analyze/detect/index.js';
 import type {
   FormSection,
   FormSectionOptions,
@@ -5,16 +7,22 @@ import type {
   HypermeterOptions,
   Phrase,
   PhraseOptions,
+  StructuralCadence,
 } from '../analyze/form/index.js';
-import { hypermeter, phrasesFromTimeline, sectionsFromNotes } from '../analyze/form/index.js';
+import {
+  hypermeter,
+  phrasesFromTimeline,
+  sectionsFromNotes,
+  structuralCadences,
+} from '../analyze/form/index.js';
 import type { KeyRegion, KeyTimelineOptions } from '../analyze/keys/index.js';
 import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../analyze/keys/index.js';
 import type { ExtractMotifsOptions, MelodicContour, MotifData } from '../analyze/melody/index.js';
 import { extractMotifs, melodicContour } from '../analyze/melody/index.js';
 import type { ChordTimeline, ChordTimelineOptions } from '../analyze/timeline/index.js';
 import { chordTimelineFromNotes } from '../analyze/timeline/index.js';
-import type { AnalyzedNote, KeyContext } from '../analyze/voice/index.js';
-import { analyzeVoice } from '../analyze/voice/index.js';
+import type { AnalyzedNote, IdentifiedVoiceNote, KeyContext } from '../analyze/voice/index.js';
+import { analyzeVoice, toVoiceNotes } from '../analyze/voice/index.js';
 import { InvalidInputError } from '../core/errors/index.js';
 import type { NoteEventIndex, NoteEventIndexOptions } from '../core/event-index/index.js';
 import { createNoteEventIndex } from '../core/event-index/index.js';
@@ -30,7 +38,12 @@ import { beatsToSeconds, beatsToTicks, tempoAt, ticksToBeats } from '../core/tem
 import type { KeyScale, NoteEvent } from '../core/types.js';
 import { assertFiniteNumber, assertNoteEvent, assertRange } from '../core/validation/index.js';
 import type { GrooveTemplate, HumanizeOptions, OrnamentOptions } from '../generate/index.js';
-import { applyGrooveTemplate, humanize, ornament } from '../generate/index.js';
+import {
+  applyGrooveTemplate,
+  extractGrooveTemplate,
+  humanize,
+  ornament,
+} from '../generate/index.js';
 import { type KeyLike, toKeyScale } from '../theory/scale/index.js';
 import type { KeyData } from './key.js';
 import { Key } from './key.js';
@@ -495,6 +508,31 @@ export class Score {
   }
 
   /**
+   * The feel of the score's own timing, as a template another score can take on.
+   *
+   * The other direction of {@link Score.groove}: a played-in take is measured
+   * slot by slot for how far ahead of or behind the grid it sits and how hard
+   * it is struck, and the reading is handed back as a template. Only the
+   * subdivision is named, because the score already holds the meter the grid is
+   * laid out against — its opening signature, which is the one the template
+   * records and the one an apply-time meter is checked against.
+   *
+   * @param subdivision Grid steps per quarter-note beat; a sixteenth-note grid
+   *   by default, which is where swing, push and drag are audible.
+   * @returns The template these notes describe.
+   * @throws If the subdivision is not a positive whole number.
+   * @example
+   * ```ts
+   * import { Score } from '@libraz/libcantus';
+   * const played = Score.of([{ pitch: 36, startBeat: 0.02, durationBeat: 1 }]);
+   * Score.of([{ pitch: 36, startBeat: 0, durationBeat: 1 }]).groove(played.grooveTemplate());
+   * ```
+   */
+  grooveTemplate(subdivision?: number): GrooveTemplate {
+    return extractGrooveTemplate(this.#data.notes, this.meterAt(0), subdivision);
+  }
+
+  /**
    * The harmony the notes spell out, in time.
    *
    * The score's meter map and its key, when it carries one, are read against
@@ -541,6 +579,33 @@ export class Score {
   }
 
   /**
+   * Every key the score could be in, ranked, read as one key across the whole
+   * of it.
+   *
+   * {@link Score.keys} divides the score into the regions it passes through;
+   * this ranks the readings of the score entire, so a caller can see what the
+   * winner beat and by how much. Each note counts for its duration times its
+   * velocity — the measure chord inference already weighs by — so the sustained
+   * harmony that establishes a key outweighs a run of ornaments over it, which
+   * is what makes a score the right thing to ask rather than a bare histogram
+   * of its pitches.
+   *
+   * @param opts Which profile to rank with, whether the church modes take part,
+   *   whether each candidate explains itself, and the budget; the weights come
+   *   from the notes themselves, so they are not on offer.
+   * @returns The candidates, best first; empty when nothing sounds.
+   * @example
+   * ```ts
+   * import { Score } from '@libraz/libcantus';
+   * const score = Score.of([{ pitch: 60, startBeat: 0, durationBeat: 4 }]);
+   * score.detectKeys()[0]?.key.rootPc; // 0
+   * ```
+   */
+  detectKeys(opts?: Omit<DetectKeyOptions, 'weights'>): KeyMatch[] {
+    return detectKeyFromNotes(this.#data.notes, opts);
+  }
+
+  /**
    * The phrases the notes fall into.
    *
    * The cadences are read from the score's own harmony, so the chord timeline
@@ -555,6 +620,23 @@ export class Score {
       ...(this.#key === undefined ? {} : { key: this.#key.scale }),
       ...opts,
     });
+  }
+
+  /**
+   * The cadences that close the score's phrases, ranked by how much structure
+   * each one closes.
+   *
+   * {@link Score.phrases} says where the phrases end; this says which of those
+   * endings matter. Two chords alone cannot tell the close of a piece from a
+   * passing confirmation halfway through a hyperbar, and a phrase reading can,
+   * because it knows what the cadence closes and where that sits. Phrases no
+   * cadence closes are left out.
+   *
+   * @param opts How the phrases are read; see {@link PhraseOptions}.
+   * @returns The cadences, heaviest first; ties keep the earlier one.
+   */
+  structuralCadences(opts?: PhraseOptions): StructuralCadence[] {
+    return structuralCadences(this.phrases(opts));
   }
 
   /**
@@ -609,6 +691,21 @@ export class Score {
   voices(key?: KeyLike): AnalyzedNote[] {
     const timeline = this.#chordTimeline();
     return analyzeVoice(this.#data.notes, timeline.at, this.#keyContext(key));
+  }
+
+  /**
+   * The notes carrying the ids the voice analysis reports them back under.
+   *
+   * {@link Score.voices} answers about the notes; this hands back the notes
+   * themselves with the handle each answer names, so a caller pairing an
+   * annotation or a conflict with the note it describes has something to pair
+   * it with. The id is the note's position in the score's own time order, which
+   * is not necessarily the order the notes arrived in.
+   *
+   * @returns One voice note per note, in the score's own time order.
+   */
+  voiceNotes(): IdentifiedVoiceNote[] {
+    return toVoiceNotes(this.#data.notes);
   }
 
   /**
