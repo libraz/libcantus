@@ -91,17 +91,20 @@ describe('Instrument plain data', () => {
   });
 
   it('keeps the profile it was given out of its own state', () => {
+    // The tuning is held apart so the caller's own array can be written to
+    // after the instrument was built.
+    const tuning = [40, 45, 50];
     const profile: StringedProfile = {
       kind: 'stringed',
       name: 'three-string',
-      tuning: [40, 45, 50],
+      tuning,
       frets: 12,
       maxStretch: 4,
       articulations: ['open'],
       polyphony: 3,
     };
     const instrument = Instrument.of(profile);
-    profile.tuning[0] = 0;
+    tuning[0] = 0;
     profile.frets = 24;
     expect(instrument.data).toEqual({ ...profile, tuning: [40, 45, 50], frets: 12 });
   });

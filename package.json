@@ -130,7 +130,8 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
-    "typecheck": "tsc --noEmit",
+    "examples": "vitest list >/dev/null",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json && yarn examples && tsc -p tsconfig.examples.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -142,6 +143,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.8",
     "@libraz/typedoc-theme": "^0.1.1",
+    "@types/node": "^26.2.0",
     "@vitest/coverage-v8": "4.1.10",
     "tsup": "8.5.1",
     "typedoc": "0.28.20",

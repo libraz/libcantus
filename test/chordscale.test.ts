@@ -17,9 +17,15 @@ import {
 import { NAMED_SCALES, scaleByName } from '../src/theory/scale/index.js';
 import { parseChordSymbol } from '../src/theory/symbol/index.js';
 
+/**
+ * The named-scale masks keyed by plain string: a chord-scale match names its
+ * scale as text, so the lookups here are made by a name the table may not hold.
+ */
+const SCALE_MASKS: ReadonlyMap<string, number> = new Map(Object.entries(NAMED_SCALES));
+
 /** Pitch-class set of a named scale rooted on `rootPc`. */
 function scalePitchClasses(name: string, rootPc: number): Set<number> {
-  const mask = NAMED_SCALES[name];
+  const mask = SCALE_MASKS.get(name);
   const pcs = new Set<number>();
   if (mask === undefined) {
     return pcs;
@@ -57,7 +63,7 @@ const SCALE_NAMES = Object.keys(NAMED_SCALES);
  * whose perfect fifth it does not contain.
  */
 function analysed(chord: Chord, name: string): boolean {
-  const mask = NAMED_SCALES[name] ?? 0;
+  const mask = SCALE_MASKS.get(name) ?? 0;
   return (
     scaleMatchesChord(chordPitchClasses(chord), mask, chord.rootPc) ||
     (chord.quality === 'dom7' && name === 'altered')
@@ -187,7 +193,7 @@ describe('chordScales', () => {
       // alias may appear.
       expect(names).not.toContain('major');
       expect(names).not.toContain('naturalMinor');
-      const masks = names.map((name) => NAMED_SCALES[name]);
+      const masks = names.map((name) => SCALE_MASKS.get(name));
       expect(new Set(masks).size).toBe(masks.length);
     }
   });

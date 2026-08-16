@@ -121,9 +121,8 @@ describe('evaluateSafety', () => {
     for (const p of sugg) {
       expect(evaluateSafety(query({ candidatePitch: p })).safety).toBe(NoteSafety.Safe);
     }
-    for (let i = 1; i < sugg.length; i += 1) {
-      expect(Math.abs(sugg[i] - 66)).toBeGreaterThanOrEqual(Math.abs(sugg[i - 1] - 66));
-    }
+    const distances = sugg.map((p) => Math.abs(p - 66));
+    expect(distances).toEqual([...distances].sort((a, b) => a - b));
     // A safe candidate carries no suggestions.
     expect(evaluateSafety(query({ candidatePitch: 64 })).suggestions).toBeUndefined();
   });
@@ -429,7 +428,10 @@ describe('profile weights', () => {
     }));
     const chords = ['maj', 'min', 'maj', 'maj'] as const;
     const chordAt = (beat: number) =>
-      makeChord([0, 9, 5, 7][Math.floor(beat / 2) % 4] ?? 0, chords[Math.floor(beat / 2) % 4]);
+      makeChord(
+        [0, 9, 5, 7][Math.floor(beat / 2) % 4] ?? 0,
+        chords[Math.floor(beat / 2) % 4] ?? 'maj',
+      );
     const line = (profile: 'strict' | 'pop') =>
       generateCounterMelody({ melody, chordAt, key: cMajor, profile, rhythm: 'follow' }).map(
         (note) => note.pitch,

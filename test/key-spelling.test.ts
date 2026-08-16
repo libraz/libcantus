@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Note as NoteData } from '../src/index.js';
+import type { NoteData } from '../src/index.js';
 import {
   DORIAN_MASK,
   formatNote,

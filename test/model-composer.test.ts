@@ -8,6 +8,7 @@ import { generateCounterMelody } from '../src/generate/countermelody/index.js';
 import { generateDrums } from '../src/generate/drums/index.js';
 import { harmonizeMelody } from '../src/generate/harmonize/index.js';
 import { generateProgression } from '../src/generate/progression/index.js';
+import type { Vocabulary } from '../src/generate/vocabulary/index.js';
 import type { ComposerOptions } from '../src/model/composer.js';
 import { Composer } from '../src/model/composer.js';
 import { Score } from '../src/model/score.js';
@@ -193,14 +194,14 @@ describe('data arriving from outside is checked, not trusted', () => {
   });
 
   it('checks a vocabulary entry to whatever depth its material goes', () => {
-    const entry = {
+    const entry: Vocabulary<{ grid: { beat: number; velocity: number }[] }> = {
       id: 'probe',
       genre: 'pop',
       material: { grid: [{ beat: 0, velocity: 100 }] },
       articulations: [],
       difficulty: 2,
       provenance: { basis: 'construction', note: 'a probe' },
-    } as const;
+    };
     expect(Composer.of({ vocabulary: [entry] }).data.vocabulary).toEqual([entry]);
     expect(() =>
       Composer.of({
@@ -323,11 +324,13 @@ describe('the parts a composer writes', () => {
     // are read in one key whether or not it moved.
     const held = Composer.of({ seed: 3 });
     const melody = Score.of(MELODY);
-    const harmonized = held.harmonize(melody, { placement: { transposeSearch: true } });
+    const harmonized = held.harmonize(melody, {
+      placement: { transposeSearch: true, octaveSearch: false },
+    });
     const result = harmonizeMelody({
       melody: MELODY,
       ts: TS,
-      placement: { transposeSearch: true },
+      placement: { transposeSearch: true, octaveSearch: false },
       ctx: { seed: 3 },
     });
     expect(harmonized.transposeSemitones).toBe(result.transposeSemitones);

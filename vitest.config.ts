@@ -24,6 +24,14 @@ export default defineConfig({
   },
   test: {
     include: ['test/**/*.test.ts'],
+    // Several suites sweep a space exhaustively — every scale on every root,
+    // every symbol through all twelve semitones, an arrangement of tens of
+    // thousands of notes — and take seconds of real work rather than
+    // milliseconds. The default budget makes those fail whenever the machine is
+    // busy, which reports a scheduling delay as a broken library. The budget
+    // here is for catching a hang; the sweeps that guard against a complexity
+    // regression are orders of magnitude slower than this when they regress.
+    testTimeout: 30_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

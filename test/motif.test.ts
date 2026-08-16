@@ -7,7 +7,7 @@ import {
   type MotifCell,
   transformMotif,
 } from '../src/generate/motif/index.js';
-import { chordPitchClasses } from '../src/theory/chord/index.js';
+import { type Chord, chordPitchClasses } from '../src/theory/chord/index.js';
 import { MAJOR_MASK, NATURAL_MINOR_MASK } from '../src/theory/scale/index.js';
 
 const cMajor: KeyScale = { rootPc: 0, modeMask12: MAJOR_MASK };
@@ -147,8 +147,14 @@ describe('generateMotif', () => {
   });
 
   it('snaps downbeat notes to chord tones when a chord is given', () => {
-    const chord = { rootPc: 0, quality: 'maj', intervals: [0, 4, 7] } as const;
-    const motif = generateMotif({ key: cMajor, chord, bars: 1, contour: 'ascending', seed: 1 });
+    const chord: Chord = { rootPc: 0, quality: 'maj', intervals: [0, 4, 7] };
+    const motif = generateMotif({
+      key: cMajor,
+      chord,
+      bars: 1,
+      contour: 'ascending',
+      ctx: { seed: 1 },
+    });
     const first = motif.notes[0];
     expect(first && chordPitchClasses(chord).includes(pitchClass(first.pitch))).toBe(true);
   });
@@ -237,7 +243,7 @@ describe('motif meter', () => {
   it('snaps the bar lines of the requested meter to chord tones', () => {
     // In 3/4 the second bar starts at beat 3, which a four-beat bar never treats
     // as a downbeat; F#, a non-chord tone, must still be pulled onto the chord.
-    const chord = { rootPc: 0, quality: 'maj', intervals: [0, 4, 7] } as const;
+    const chord: Chord = { rootPc: 0, quality: 'maj', intervals: [0, 4, 7] };
     const waltz = generateMotif({
       key: cMajor,
       chord,

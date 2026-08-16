@@ -516,8 +516,8 @@ describe('Score note transformation', () => {
       score.transpose(1),
       score.transposeBy('m2'),
       score.quantize(0.5),
-      score.humanize({ seed: 3 }),
-      score.ornament({ seed: 3 }),
+      score.humanize({ ctx: { seed: 3 } }),
+      score.ornament({ ctx: { seed: 3 } }),
       score.withMeters(parseTimeSignature('3/4')),
       score.withTempo(90),
       score.withKey('G major'),
@@ -533,18 +533,18 @@ describe('Score note transformation', () => {
 describe('Score performance shaping', () => {
   it('humanizes as the groove module does, reading the opening signature', () => {
     const score = Score.of(TUNE, { meters: METERS });
-    expect(score.humanize({ seed: 7 }).notes).toEqual(
-      humanize(score.notes, { ts: parseTimeSignature('4/4'), seed: 7 }),
+    expect(score.humanize({ ctx: { seed: 7 } }).notes).toEqual(
+      humanize(score.notes, { ts: parseTimeSignature('4/4'), ctx: { seed: 7 } }),
     );
-    expect(score.humanize({ seed: 7, ts: parseTimeSignature('3/4') }).notes).toEqual(
-      humanize(score.notes, { ts: parseTimeSignature('3/4'), seed: 7 }),
+    expect(score.humanize({ ctx: { seed: 7 }, ts: parseTimeSignature('3/4') }).notes).toEqual(
+      humanize(score.notes, { ts: parseTimeSignature('3/4'), ctx: { seed: 7 } }),
     );
   });
 
   it('ornaments as the ornament module does', () => {
     const score = Score.of(TUNE);
-    expect(score.ornament({ style: 'accent', seed: 2 }).notes).toEqual(
-      ornament(score.notes, { ts: parseTimeSignature('4/4'), style: 'accent', seed: 2 }),
+    expect(score.ornament({ style: 'accent', ctx: { seed: 2 } }).notes).toEqual(
+      ornament(score.notes, { ts: parseTimeSignature('4/4'), style: 'accent', ctx: { seed: 2 } }),
     );
   });
 

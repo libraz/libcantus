@@ -89,9 +89,15 @@ function fillDigest(): string {
       for (const style of styles) {
         for (const energy of energies) {
           for (let seed = 0; seed < 32; seed += 1) {
-            hash.update(
-              selectFillType(from, to, style, energy, resolveContext(seed).part('drums'), seed % 4),
+            const fill = selectFillType(
+              from,
+              to,
+              style,
+              energy,
+              resolveContext(seed).part('drums'),
+              seed % 4,
             );
+            hash.update(fill ?? '');
             hash.update('|');
           }
         }

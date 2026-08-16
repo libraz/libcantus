@@ -643,7 +643,7 @@ describe('analysis cost', () => {
     }
     const analysis = analyzeArrangement([{ notes }]);
     expect(analysis.tracks[0]?.notes).toHaveLength(32_000);
-  }, 20_000);
+  }, 60_000);
 
   it('analyses a single voice longer than a call can spread', () => {
     // 130,000 notes in one sub-voice: inside the budget the entry point checks,

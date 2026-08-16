@@ -28,7 +28,7 @@ describe('maskFromOffsets', () => {
 
 describe('named scales', () => {
   it('exposes the expected scale set', () => {
-    for (const name of ['dorian', 'lydian', 'blues', 'wholeTone', 'octatonicHalfWhole']) {
+    for (const name of ['dorian', 'lydian', 'blues', 'wholeTone', 'octatonicHalfWhole'] as const) {
       expect(NAMED_SCALES[name]).toBeGreaterThan(0);
     }
   });

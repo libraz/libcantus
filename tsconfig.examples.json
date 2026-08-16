@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "noUncheckedIndexedAccess": false,
+    "types": ["node"],
+    "paths": {
+      "@libraz/libcantus": ["./src/index.ts"],
+      "@libraz/libcantus/core": ["./src/core/index.ts"],
+      "@libraz/libcantus/theory": ["./src/theory/index.ts"],
+      "@libraz/libcantus/analyze": ["./src/analyze/index.ts"],
+      "@libraz/libcantus/generate": ["./src/generate/index.ts"],
+      "@libraz/libcantus/model": ["./src/model/index.ts"]
+    }
+  },
+  // `test/generated` is written by the vitest config as it loads, so the
+  // `examples` script runs `vitest list` to produce it before this project is
+  // checked — on a fresh checkout the directory does not exist yet, and a
+  // project with no inputs would pass by checking nothing. The generator is
+  // named alongside what it writes so the project always has at least one.
+  "include": ["test/generated", "test/support/generate-doc-examples.ts"]
+}

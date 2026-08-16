@@ -165,7 +165,7 @@ describe('placeLicks', () => {
       ctx: { seed: 2, bpm: 112, complexity: { rhythmic: 1 } },
     });
     expect(notes).toHaveLength(1);
-    expect(notes[0]?.pitch % 12).toBe(2);
+    expect(notes.map((note) => note.pitch % 12)).toEqual([2]);
   });
 
   it('falls back to the root when the genre has nothing for this tempo', () => {

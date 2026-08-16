@@ -96,7 +96,7 @@ describe('the rhythmic dial is continuous', () => {
 // setting, which is seconds of real generation rather than a slow assertion.
 // The default per-test budget leaves them almost no headroom, so on a loaded
 // machine they time out while computing the right answer.
-describe('raising a dial only adds material', { timeout: 30_000 }, () => {
+describe('raising a dial only adds material', () => {
   it('holds for the drums', () => {
     expectMonotone('drums', (rhythmic) =>
       onsetBeats(generateDrums({ ...drums, ctx: { seed: 8, bpm: 110, complexity: { rhythmic } } })),

@@ -8,6 +8,7 @@ import {
   Instrument,
   InvalidInputError,
   type NoteEvent,
+  NoteSafety,
   parseNote,
   phrasesFromTimeline,
   Score,
@@ -84,7 +85,7 @@ describe('Arrangement.analyze', () => {
     const arrangement = Arrangement.of(TRACKS, { key: 'C major' });
     // The narrower severity is the caller's, while the key stays the one the
     // arrangement was built with.
-    const narrowed = arrangement.analyze({ minSeverity: 3 });
+    const narrowed = arrangement.analyze({ minSeverity: NoteSafety.Dissonant });
     expect(narrowed.prevailingKey).toEqual(arrangement.analyze().prevailingKey);
     expect(narrowed.conflicts.length).toBeLessThan(arrangement.analyze().conflicts.length);
     // Every option reaches the function, so restricting the harmony to one
@@ -148,9 +149,10 @@ describe('Score.detectKeys', () => {
   });
 
   it('refuses a profile that names no ranking', () => {
-    expect(() => Score.of(CADENTIAL).detectKeys({ profile: 'nonesuch' })).toThrow(
-      InvalidInputError,
-    );
+    expect(() =>
+      // @ts-expect-error the profile names no ranking the detector holds.
+      Score.of(CADENTIAL).detectKeys({ profile: 'nonesuch' }),
+    ).toThrow(InvalidInputError);
   });
 });
 

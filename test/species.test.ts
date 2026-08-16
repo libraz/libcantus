@@ -320,12 +320,13 @@ describe('melodic shape', () => {
   it('is not applied by the four-part checker', () => {
     // A soprano that climbs by three leaps in a row, which a species exercise
     // would be charged for and a chorale is not.
-    const chords = [makeChord(0, 'maj'), makeChord(0, 'maj'), makeChord(0, 'maj')];
+    const tonic = makeChord(0, 'maj');
+    const chords = [tonic, tonic, tonic];
     const voicings = [
       [48, 55, 64, 72],
       [48, 55, 64, 76],
       [48, 55, 64, 79],
-    ].map((pitches, index) => spellVoicing(pitches, chords[index] ?? chords[0], C_MAJOR));
+    ].map((pitches) => spellVoicing(pitches, tonic, C_MAJOR));
     expect(kinds(checkPartWriting(voicings, chords, C_MAJOR))).not.toContain('melodicShape');
   });
 });

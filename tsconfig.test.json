@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["node"],
+    "paths": {
+      "@libraz/libcantus": ["./src/index.ts"],
+      "@libraz/libcantus/core": ["./src/core/index.ts"],
+      "@libraz/libcantus/theory": ["./src/theory/index.ts"],
+      "@libraz/libcantus/analyze": ["./src/analyze/index.ts"],
+      "@libraz/libcantus/generate": ["./src/generate/index.ts"],
+      "@libraz/libcantus/model": ["./src/model/index.ts"]
+    }
+  },
+  "include": ["test", "vitest.config.ts", "benchmark"],
+  "exclude": ["test/generated"]
+}

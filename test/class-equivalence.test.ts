@@ -228,6 +228,20 @@ function inScoreOrder(notes: readonly NoteEvent[]): NoteEvent[] {
   );
 }
 
+/**
+ * The element at `index` of a fixture, reported as a missing fixture rather
+ * than read as `undefined`.
+ *
+ * A comparison written against `fixture[2]` says nothing useful when the
+ * fixture is shorter than the test assumes: the class side and the function
+ * side both receive `undefined` and can agree on a wrong answer.
+ */
+function at<T>(items: readonly T[], index: number): T {
+  const item = items[index];
+  expect(item, `the fixture has no element at ${index}`).toBeDefined();
+  return item as T;
+}
+
 /** A key as the theory layer spells one: the scale, and the tonic it is written on. */
 function spelledOf(key: Key): SpelledKey {
   return { key: key.scale, tonic: key.tonic.data };
@@ -270,8 +284,8 @@ describe('Arrangement', () => {
 
   it('reads an edited arrangement as a fresh analysis of the edited tracks', () => {
     const edited = [
-      { ...PARTS[0], notes: [{ pitch: 74, startBeat: 0, durationBeat: 8 }] },
-      PARTS[1],
+      { ...at(PARTS, 0), notes: [{ pitch: 74, startBeat: 0, durationBeat: 8 }] },
+      at(PARTS, 1),
     ];
     const updated = Arrangement.of(PARTS).update([
       { trackIndex: 0, notes: [{ pitch: 74, startBeat: 0, durationBeat: 8 }] },
@@ -284,7 +298,7 @@ describe('Arrangement', () => {
   it('reads one track as a score over the notes it was given', () => {
     const arrangement = Arrangement.of(PARTS, { meters: '3/4', key: 'C major' });
     const lead = arrangement.track('lead');
-    expect(lead?.notes).toEqual(inScoreOrder(PARTS[0].notes));
+    expect(lead?.notes).toEqual(inScoreOrder(at(PARTS, 0).notes));
     // The score carries the arrangement's own context, so its bars and its key
     // are the ones the arrangement is read under.
     expect(lead?.meterAt(0)).toEqual({ numerator: 3, denominator: 4 });
@@ -832,20 +846,24 @@ describe('Progression', () => {
     const approach = Chord.parse('Am');
     const chords = progression.chords;
     expect(progression.cadences(undefined, { approach })).toEqual([
-      detectCadence(chords[0].data, chords[1].data, key.scale, { approach: approach.data }),
-      detectCadence(chords[1].data, chords[2].data, key.scale, { approach: chords[0].data }),
-      detectCadence(chords[2].data, chords[3].data, key.scale, { approach: chords[1].data }),
+      detectCadence(at(chords, 0).data, at(chords, 1).data, key.scale, { approach: approach.data }),
+      detectCadence(at(chords, 1).data, at(chords, 2).data, key.scale, {
+        approach: at(chords, 0).data,
+      }),
+      detectCadence(at(chords, 2).data, at(chords, 3).data, key.scale, {
+        approach: at(chords, 1).data,
+      }),
     ]);
     // The chord before each pair comes from the progression itself, so only the
     // first pair has the caller's approach chord to fall back on.
     expect(progression.cadences()[0]).toEqual(
-      detectCadence(chords[0].data, chords[1].data, key.scale, {}),
+      detectCadence(at(chords, 0).data, at(chords, 1).data, key.scale, {}),
     );
   });
 
   it('substitutes the chord the reharmonizer proposes for it', () => {
     const opts = { melodyPcs: [11] };
-    const [chosen] = substituteChord(progression.chords[2].data, key.scale, opts).filter(
+    const [chosen] = substituteChord(at(progression.chords, 2).data, key.scale, opts).filter(
       (candidate) => candidate.type === 'tritone',
     );
     expect(chosen).toBeDefined();
@@ -1052,7 +1070,7 @@ describe('Timeline', () => {
 
   it('places the chords the way the timeline builder places them', () => {
     expect(timeline.segments).toEqual(chordTimelineFromChords(spans, 16).segments);
-    expect(timeline.at(5)?.data).toEqual(Chord.fromData(SEGMENTS[1].chord).withKey(key).data);
+    expect(timeline.at(5)?.data).toEqual(Chord.fromData(at(SEGMENTS, 1).chord).withKey(key).data);
     expect(timeline.at(16)).toBeNull();
     expect(timeline.key?.scale).toEqual(key.scale);
   });

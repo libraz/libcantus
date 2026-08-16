@@ -331,7 +331,6 @@ describe('fills', () => {
       ],
     ];
     for (const [from, to, style, energy, expected] of contexts) {
-      const allowed = new Set(expected);
       // Draw many times so the assertion covers the whole branch, not one path.
       for (let seed = 0; seed < 64; seed += 1) {
         const picked = selectFillType(
@@ -342,13 +341,15 @@ describe('fills', () => {
           resolveContext(seed).part('drums'),
           0,
         );
-        expect(allowed.has(picked)).toBe(true);
+        expect(expected).toContain(picked);
       }
     }
   });
 
   it('reaches every fill archetype across transition contexts', () => {
-    const seen = new Set<FillType>();
+    // The selector answers a plain id, so the ids seen are collected as text
+    // and every archetype is looked for among them.
+    const seen = new Set<string>();
     const froms: Parameters<typeof selectFillType>[0][] = ['intro', 'a', 'b'];
     const tos: Parameters<typeof selectFillType>[1][] = ['chorus', 'a', 'outro'];
     const styles: Parameters<typeof selectFillType>[2][] = [
@@ -363,16 +364,16 @@ describe('fills', () => {
         for (const style of styles) {
           for (const energy of energies) {
             for (let seed = 0; seed < 32; seed += 1) {
-              seen.add(
-                selectFillType(
-                  from,
-                  to,
-                  style,
-                  energy,
-                  resolveContext(seed * 7 + 1).part('drums'),
-                  0,
-                ),
+              const picked = selectFillType(
+                from,
+                to,
+                style,
+                energy,
+                resolveContext(seed * 7 + 1).part('drums'),
+                0,
               );
+              expect(picked, 'every transition context offers a fill').toBeDefined();
+              seen.add(picked ?? '');
             }
           }
         }

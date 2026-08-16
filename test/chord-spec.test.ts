@@ -120,10 +120,12 @@ const MALFORMED_SPECS: [string, ChordSpec][] = [
   ['a hole in alterations', spec({ base: 'maj', alterations: [undefined as never] })],
   [
     'a degree the chord cannot alter',
+    // @ts-expect-error 7 is outside AlteredDegree: only 5, 9, 11 and 13 alter.
     spec({ base: 'maj', alterations: [{ degree: 7, alter: 0 }] }),
   ],
   [
     'an alteration wider than a semitone',
+    // @ts-expect-error an alteration is one semitone at most.
     spec({ base: 'maj', alterations: [{ degree: 9, alter: 2 }] }),
   ],
   ['a non-array additions', spec({ base: 'maj', additions: 9 as never })],

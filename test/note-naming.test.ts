@@ -350,10 +350,8 @@ describe('key names', () => {
   it('reports a name it cannot read instead of throwing it', () => {
     const parsed = tryParseKeyName('gis moll');
     expect(parsed.ok && parsed.value).toEqual({ tonic: { letter: 4, alter: 1 }, mode: 'minor' });
-    expect(tryParseKeyName('B dur').ok && tryParseKeyName('B dur').value.tonic).toEqual({
-      letter: 6,
-      alter: -1,
-    });
+    const german = tryParseKeyName('B dur');
+    expect(german.ok && german.value.tonic).toEqual({ letter: 6, alter: -1 });
     // Every way the throwing sibling fails is a reported failure here, carrying
     // the same message, so a caller can offer it to the user as it stands.
     for (const [text, message] of [

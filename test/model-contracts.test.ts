@@ -81,16 +81,22 @@ function isStatic(member: ts.MethodDeclaration): boolean {
   );
 }
 
-/** Every class the model barrel exports; its runtime members are all classes. */
+/** The constructors among the barrel's exports; everything else it exports is a type or an enum. */
+type ModelClass = Extract<(typeof model)[keyof typeof model], new (...args: never[]) => object>;
+
+/** Every class the model barrel exports; its callable members are all classes. */
 const CLASSES = Object.entries(model).filter(
-  (entry): entry is [string, new (...args: never[]) => object] => typeof entry[1] === 'function',
+  (entry): entry is [string, ModelClass] => typeof entry[1] === 'function',
 );
 
 /** The exported classes by name, so a discovered name reaches its class. */
 const CLASS_BY_NAME = new Map<string, unknown>(CLASSES);
 
+/** What every model instance offers, whatever class it came from. */
+type Sample = { data: unknown; toJSON(): unknown; equals(other: never): boolean };
+
 /** One instance per exported class, keyed by the name the barrel exports. */
-const SAMPLES: Record<string, { data: unknown; equals(other: never): boolean }> = {
+const SAMPLES: Record<string, Sample> = {
   Arrangement: Arrangement.of([
     {
       name: 'lead',
@@ -432,7 +438,7 @@ describe('non-throwing parser siblings', () => {
     let parsed = 0;
     let reported = 0;
     for (const text of PROBES) {
-      const result = cls.tryParse(text) as ParseResult<{ data: unknown }>;
+      const result = cls.tryParse?.(text) as ParseResult<{ data: unknown }>;
       let thrown: unknown;
       let value: { data: unknown } | undefined;
       try {
