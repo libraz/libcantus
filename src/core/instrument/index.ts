@@ -22,12 +22,21 @@ export { playability } from './playability.js';
 export type {
   InstrumentProfile,
   InstrumentProfileCommon,
+  InstrumentProfileLike,
   Limb,
   PercussionProfile,
   StringedProfile,
   StringFingering,
 } from './profile.js';
-export { canSound, fingeringsFor, foldIntoRange, instrumentRange, LIMBS } from './profile.js';
+export {
+  canSound,
+  fingeringsFor,
+  foldIntoRange,
+  instrumentRange,
+  LIMBS,
+  toInstrumentProfile,
+  toStringedProfile,
+} from './profile.js';
 export {
   BASS_4_STRING,
   BASS_5_STRING,

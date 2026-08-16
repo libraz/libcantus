@@ -28,6 +28,7 @@ export type {
   Articulation,
   InstrumentProfile,
   InstrumentProfileCommon,
+  InstrumentProfileLike,
   Limb,
   NotePlacement,
   PercussionProfile,

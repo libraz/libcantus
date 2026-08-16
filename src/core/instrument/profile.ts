@@ -83,6 +83,90 @@ export type PercussionProfile = InstrumentProfileCommon & {
 export type InstrumentProfile = StringedProfile | PercussionProfile;
 
 /**
+ * Anything that names an instrument: a plain {@link InstrumentProfile}, or a
+ * value that serializes to one such as the `Instrument` class.
+ *
+ * Every entry point that takes an instrument takes this, so a caller holding
+ * the class hands it over as it is instead of unwrapping it for one call and
+ * wrapping it again for the next.
+ *
+ * @category Core
+ */
+export type InstrumentProfileLike =
+  | InstrumentProfile
+  | {
+      /** The profile data this value stands for. */
+      toJSON(): InstrumentProfile;
+    };
+
+/**
+ * Resolve any instrument-shaped value to a plain {@link InstrumentProfile}.
+ *
+ * The counterpart of {@link toNoteData} for instruments: an entry point takes
+ * whatever form the caller has — the profile a project file holds, one of the
+ * built-in profiles, or an `Instrument` instance — and gets one shape back. An
+ * instance is accepted through its `toJSON` method rather than by its type,
+ * because the core layer cannot import the model layer that defines the class.
+ *
+ * @param value A plain profile, or a value whose `toJSON` returns one.
+ * @param name What the instrument is called in an error message, so a caller
+ *   holding several of them hears which one was malformed.
+ * @returns The validated profile.
+ * @throws If the value names no instrument, or the instrument it names is
+ *   contradictory — a neck with no strings, a fret count that is no count, or a
+ *   kit no limb reaches.
+ * @category Core
+ */
+export function toInstrumentProfile(
+  value: InstrumentProfileLike,
+  name = 'instrument',
+): InstrumentProfile {
+  if (typeof value !== 'object' || value === null) {
+    throw new InvalidInputError(`${name} must be an instrument profile; received ${typeof value}`);
+  }
+  const data =
+    'toJSON' in value && typeof value.toJSON === 'function'
+      ? value.toJSON()
+      : (value as InstrumentProfile);
+  const kind: unknown = data?.kind;
+  if (kind !== 'stringed' && kind !== 'percussion') {
+    throw new InvalidInputError(
+      `${name} must be a stringed or percussion profile; received kind ${String(kind)}`,
+    );
+  }
+  assertProfile(data);
+  return data;
+}
+
+/**
+ * Resolve any instrument-shaped value to a plain {@link StringedProfile}.
+ *
+ * What {@link toInstrumentProfile} is for an entry point that reads any
+ * instrument, this is for one that only has a neck to work with: a bass line
+ * placed on strings and frets cannot be written for a kit, and saying so by
+ * name is more use than a missing `tuning` surfacing later as a note the
+ * generator could not place.
+ *
+ * @param value A plain profile, or a value whose `toJSON` returns one.
+ * @param name What the instrument is called in an error message.
+ * @returns The validated profile, narrowed to the stringed family.
+ * @throws If the value names no instrument, or names one with no strings.
+ * @category Core
+ */
+export function toStringedProfile(
+  value: InstrumentProfileLike,
+  name = 'instrument',
+): StringedProfile {
+  const profile = toInstrumentProfile(value, name);
+  if (profile.kind !== 'stringed') {
+    throw new InvalidInputError(
+      `${name} must be a stringed instrument; ${profile.name} has no strings`,
+    );
+  }
+  return profile;
+}
+
+/**
  * A fretting-hand position: which string, and how far up the neck.
  *
  * @category Core
