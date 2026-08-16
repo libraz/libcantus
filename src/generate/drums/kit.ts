@@ -55,7 +55,12 @@ const KIT_ARTICULATIONS: readonly Articulation[] = Object.freeze([
  * @example
  * ```ts
  * import { DRUM_KIT, generateDrums, playability } from '@libraz/libcantus';
- * const hits = generateDrums({ bars: 1, bpm: 120, style: 'funk', section: 'chorus', density: 0.8 });
+ * const hits = generateDrums({
+ *   bars: 1,
+ *   style: 'funk',
+ *   section: 'chorus',
+ *   ctx: { bpm: 120, complexity: { rhythmic: 0.8 } },
+ * });
  * const report = playability(hits, DRUM_KIT, 120);
  * ```
  * @category Composition

@@ -140,7 +140,7 @@ context 自体は保存対象ではありません。`resolveContext` が返す�
 ```ts
 import { resolveContext } from '@libraz/libcantus';
 
-const saved = { seed: 7, algorithmVersion: 1, complexity: 0.4 };
+const saved = { seed: 7, algorithmVersion: 1, complexity: { rhythmic: 0.4 } };
 const context = resolveContext(saved);
 context.seed; // 7
 resolveContext(saved).seed === context.seed; // true

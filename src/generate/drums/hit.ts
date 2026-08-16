@@ -12,7 +12,12 @@ import { clampVel, GM } from './internal.js';
  * @example
  * ```ts
  * import { DRUM_NOTES, generateDrums } from '@libraz/libcantus';
- * const hits = generateDrums({ bars: 1, bpm: 120, style: 'standard', section: 'verse', density: 0.5 });
+ * const hits = generateDrums({
+ *   bars: 1,
+ *   style: 'standard',
+ *   section: 'verse',
+ *   ctx: { bpm: 120, complexity: { rhythmic: 0.5 } },
+ * });
  * const kick = hits.filter((hit) => hit.pitch === DRUM_NOTES.kick);
  * ```
  * @category Composition

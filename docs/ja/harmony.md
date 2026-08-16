@@ -86,7 +86,7 @@ const german = augmentedSixthChord('german', key);
 
 augmentedSixthKind(german, key); // 'german'
 chordToRoman(german, key); // 'Ger6'
-spellAugmentedSixth('german', parseNote('C')).map(formatNote); // ['Ab', 'C', 'Eb', 'F#']
+spellAugmentedSixth('german', parseNote('C')).map((note) => formatNote(note)); // ['Ab', 'C', 'Eb', 'F#']
 ```
 
 増六の和音を表すローマ数字は存在しないため、3種類は `It6`、`Fr6`、`Ger6` として出力されます。ナポリの和音にはローマ数字があり、第1転回形では `bII6` になります。`N6` になるのは `neapolitan: true` のときだけです。どちらの綴りも正しく、選択は表記の流儀だからです。
@@ -120,7 +120,7 @@ voicing;
 import { Key, formatNote, parseNote, realizeFiguredBass, spellChord } from '@libraz/libcantus';
 
 const chord = realizeFiguredBass(parseNote('D'), '6', Key.major('C').scale);
-spellChord(chord, parseNote('C'), Key.major('C').scale).map(formatNote);
+spellChord(chord, parseNote('C'), Key.major('C').scale).map((note) => formatNote(note));
 // ['B', 'D', 'F']
 ```
 

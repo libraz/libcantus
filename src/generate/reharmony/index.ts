@@ -248,8 +248,9 @@ function tritoneSubstituteRoot(dominant: Chord, tonic: Note, key: KeyScale): Not
  * ```ts
  * import { substituteChord, makeChord, majorKey, formatChordSymbol } from '@libraz/libcantus';
  * const subs = substituteChord(makeChord(7, 'dom7'), majorKey(0));
- * const tritone = subs.find((sub) => sub.type === 'tritone');
- * formatChordSymbol(tritone.chord); // 'Db7' — the bII7 of C major, not 'C#7'
+ * subs
+ *   .filter((sub) => sub.type === 'tritone')
+ *   .map((sub) => formatChordSymbol(sub.chord)); // ['Db7'] — the bII7 of C major, not 'C#7'
  * ```
  * @category Reharmonization
  */

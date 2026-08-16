@@ -67,7 +67,7 @@ const keys = [[48, 60, 64, 67], [41, 60, 65, 69], [43, 59, 62, 65], [48, 60, 64,
 
 const arrangement = Arrangement.of(
   [
-    { name: 'keys', role: 'pad', notes: keys },
+    { name: 'keys', role: 'harmony', notes: keys },
     { name: 'lead', role: 'melody', notes: [72, 72, 74, 72].map(bar) },
   ],
   { key: 'C major' },

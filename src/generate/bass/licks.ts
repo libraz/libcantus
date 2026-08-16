@@ -473,7 +473,7 @@ const EPS = 1e-9;
  *   { startBeat: 0, endBeat: 4, chord: makeChord(0, 'maj7') },
  *   { startBeat: 4, endBeat: 8, chord: makeChord(5, 'maj7') },
  * ];
- * const notes = placeLicks(timeline, majorKey(0), { genre: 'motown', seed: 7 });
+ * const notes = placeLicks(timeline, majorKey(0), { genre: 'motown', ctx: { seed: 7 } });
  * ```
  *
  * @category Composition

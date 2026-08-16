@@ -86,7 +86,7 @@ const german = augmentedSixthChord('german', key);
 
 augmentedSixthKind(german, key); // 'german'
 chordToRoman(german, key); // 'Ger6'
-spellAugmentedSixth('german', parseNote('C')).map(formatNote); // ['Ab', 'C', 'Eb', 'F#']
+spellAugmentedSixth('german', parseNote('C')).map((note) => formatNote(note)); // ['Ab', 'C', 'Eb', 'F#']
 ```
 
 No Roman numeral names an augmented sixth, so the three render as `It6`, `Fr6`, and `Ger6`. The Neapolitan does have a numeral — `bII6` in first inversion — and renders as `N6` only when `neapolitan: true`, since both spellings are correct and the choice is a house style.
@@ -120,7 +120,7 @@ Figured-bass intervals are taken from the key, so the same figure can produce di
 import { Key, formatNote, parseNote, realizeFiguredBass, spellChord } from '@libraz/libcantus';
 
 const chord = realizeFiguredBass(parseNote('D'), '6', Key.major('C').scale);
-spellChord(chord, parseNote('C'), Key.major('C').scale).map(formatNote);
+spellChord(chord, parseNote('C'), Key.major('C').scale).map((note) => formatNote(note));
 // ['B', 'D', 'F']
 ```
 

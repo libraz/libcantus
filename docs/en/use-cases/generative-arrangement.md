@@ -13,7 +13,7 @@ const composer = Composer.of({
   complexity: { rhythmic: 0.6, ornament: 0.3, difficulty: 3 },
 });
 
-const plan = composer.progression({ style: 'idol', bars: 8, reharmonize: true });
+const plan = composer.progression({ style: 'idol', bars: 8 });
 const bass = composer.bass(plan, { style: 'pop', instrument: bass4.data });
 const drums = composer.drums({ bars: 8, style: 'funk', section: 'chorus' });
 
@@ -59,7 +59,7 @@ composer.withSeed(25).progression({ style: 'idol', bars: 8 }).equals(plan); // f
 import { Composer, Score } from '@libraz/libcantus';
 
 const composer = Composer.of({ key: 'C major', bpm: 112, seed: 24 });
-const plan = composer.progression({ style: 'idol', bars: 8, reharmonize: true });
+const plan = composer.progression({ style: 'idol', bars: 8 });
 
 const melody = Score.of(
   [60, 62, 64, 65, 67, 65, 64, 62].map((pitch, index) => ({
@@ -69,7 +69,7 @@ const melody = Score.of(
   })),
 );
 
-const counter = composer.counterMelody(melody, { timeline: plan.chordTimeline, style: 'thirds' });
+const counter = composer.counterMelody(melody, { timeline: plan.chordTimeline, register: 'below' });
 const loosened = counter.humanize();
 
 counter.notes.length; // 2

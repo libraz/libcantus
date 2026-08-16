@@ -140,7 +140,7 @@ The context itself is not one of those records. `resolveContext` returns a live 
 ```ts
 import { resolveContext } from '@libraz/libcantus';
 
-const saved = { seed: 7, algorithmVersion: 1, complexity: 0.4 };
+const saved = { seed: 7, algorithmVersion: 1, complexity: { rhythmic: 0.4 } };
 const context = resolveContext(saved);
 context.seed; // 7
 resolveContext(saved).seed === context.seed; // true
