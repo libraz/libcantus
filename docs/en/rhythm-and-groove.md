@@ -4,7 +4,25 @@ Rhythm is handled as three separable steps: choose where the onsets go, turn tho
 
 ## Generating onsets
 
-`generateRhythm` places onsets on a grid, weighting each slot by its metric strength:
+A `Rhythm` is a pattern of onsets together with the meter they are counted in. It places them on a grid, weighting each slot by its metric strength, and reshapes a pattern without the meter having to travel beside it:
+
+```ts
+import { parseTimeSignature, Rhythm } from '@libraz/libcantus';
+
+const ts = parseTimeSignature('4/4');
+
+const sparse = Rhythm.generate(ts, { bars: 2, ctx: { seed: 42, complexity: { rhythmic: 0.2 } } });
+const dense = Rhythm.generate(ts, { bars: 2, ctx: { seed: 42, complexity: { rhythmic: 0.9 } } });
+
+sparse.events.length <= dense.events.length; // true
+dense.density() >= sparse.density(); // true
+sparse.syncopate(0.6, { seed: 42 }).events.length >= sparse.events.length; // true
+sparse.thin(0.5).events.length <= sparse.events.length; // true
+```
+
+`thin`, `syncopate`, `doubleTime`, `halfTime`, `ornamentBy`, and `deform` each hand back a new pattern, so a chain of them leaves the one in hand untouched; `withinCeiling` says whether a player at the context's difficulty sustains it at the context's tempo.
+
+`generateRhythm` produces the same onsets as a bare array, and `rhythmDensity` measures one:
 
 ```ts
 import { generateRhythm, parseTimeSignature, rhythmDensity } from '@libraz/libcantus';
@@ -30,7 +48,17 @@ onsetWeightCurve(3) > onsetWeightCurve(0); // true
 
 ## From onsets to notes
 
-`RhythmEvent` values carry position and length but no pitch. `rhythmToNoteEvents` attaches one:
+A rhythm carries position and length but no pitch. Giving it one turns it into a `Score`, which is where it reaches the rest of the library:
+
+```ts
+import { parseTimeSignature, Rhythm } from '@libraz/libcantus';
+
+const snare = Rhythm.generate(parseTimeSignature('4/4'), { bars: 1, ctx: { seed: 3 } }).toScore(38);
+
+snare.notes.every((note) => note.pitch === 38); // true
+```
+
+`RhythmEvent` values are that same pattern as plain data, and `rhythmToNoteEvents` attaches the pitch:
 
 ```ts
 import { generateRhythm, parseTimeSignature, rhythmToNoteEvents } from '@libraz/libcantus';
@@ -45,7 +73,23 @@ That separation is deliberate: a rhythm can be reused across pitches, and a melo
 
 ## Humanizing
 
-`humanize` moves events off the grid and shapes their velocities by metric position. It returns copies, so the quantized source stays intact:
+Humanizing moves events off the grid and shapes their velocities by metric position. It returns a new score, so the quantized source stays intact:
+
+```ts
+import { Score } from '@libraz/libcantus';
+
+const quantized = Score.of([
+  { pitch: 36, startBeat: 0, durationBeat: 1, velocity: 80 },
+  { pitch: 38, startBeat: 1, durationBeat: 1, velocity: 80 },
+]);
+
+const played = quantized.humanize({ ctx: { seed: 1 }, timing: 0.03 });
+
+played.notes.length; // 2
+quantized.notes[0]?.startBeat; // 0
+```
+
+`humanize` is the same pass over an array of note events, and takes the same options:
 
 ```ts
 import { humanize } from '@libraz/libcantus';
@@ -69,14 +113,14 @@ quantized[0]?.startBeat; // 0
 | `baseVelocity` | Velocity assumed for events that carry none. Defaults to 80. |
 | `ts` | The signature the metric accents are derived from. Defaults to 4/4. |
 
-Events with a zero or negative duration never sound and are dropped, so the result can be shorter than the input.
+A score humanizes against its own meter, so `ts` is the option a bare array needs and a score does not. Events with a zero or negative duration never sound and are dropped, so the result can be shorter than the input.
 
 ## Groove templates
 
-A groove template is a per-bar grid of timing and velocity deviations, captured from a performance. Extract it from playing that carries the intended feel, then impose it on material that does not:
+A groove template is a per-bar grid of timing and velocity deviations, captured from a performance. Extract it from playing that carries the intended feel with `extractGrooveTemplate`, then impose it on material that does not:
 
 ```ts
-import { applyGrooveTemplate, extractGrooveTemplate, parseTimeSignature } from '@libraz/libcantus';
+import { extractGrooveTemplate, parseTimeSignature, Score } from '@libraz/libcantus';
 
 const ts = parseTimeSignature('4/4');
 
@@ -89,6 +133,32 @@ const template = extractGrooveTemplate(performed, ts, 4);
 template.subdivision; // 4
 template.slotsPerBar; // 16
 
+const stiff = Score.of(
+  [
+    { pitch: 36, startBeat: 0, durationBeat: 1, velocity: 90 },
+    { pitch: 38, startBeat: 1, durationBeat: 1, velocity: 90 },
+  ],
+  { meters: ts },
+);
+
+stiff.groove(template).notes.length; // 2
+```
+
+`applyGrooveTemplate` is the same imposition over note events, with the meter named at the call:
+
+```ts
+import { applyGrooveTemplate, extractGrooveTemplate, parseTimeSignature } from '@libraz/libcantus';
+
+const ts = parseTimeSignature('4/4');
+const template = extractGrooveTemplate(
+  [
+    { pitch: 36, startBeat: 0.02, durationBeat: 1, velocity: 100 },
+    { pitch: 38, startBeat: 1.06, durationBeat: 1, velocity: 70 },
+  ],
+  ts,
+  4,
+);
+
 const stiff = [
   { pitch: 36, startBeat: 0, durationBeat: 1, velocity: 90 },
   { pitch: 38, startBeat: 1, durationBeat: 1, velocity: 90 },
@@ -100,11 +170,27 @@ grooved.length; // 2
 
 Each slot holds the average offset from the grid and the average velocity of the events that landed on it. A velocity of `null` means no event with a velocity landed there, which is not the same as a velocity of zero — that distinction is why the field is nullable.
 
-The template records the time signature it was extracted under, and `applyGrooveTemplate` requires the apply-time meter to match. A 4/4 groove laid over 3/4 would align its per-bar grid against the wrong bar length and drift without reporting anything, so the mismatch is rejected.
+The template records the time signature it was extracted under, and the apply-time meter has to match. A 4/4 groove laid over 3/4 would align its per-bar grid against the wrong bar length and drift without reporting anything, so the mismatch is rejected.
 
 ## Drums
 
-`generateDrums` produces a full kit part rather than a single line. Style, section, and role together decide the vocabulary:
+A drum part is a full kit rather than a single line. Style, section, and role together decide the vocabulary, and a composer supplies the meter, the tempo and the dials:
+
+```ts
+import { Composer } from '@libraz/libcantus';
+
+const composer = Composer.of({
+  bpm: 96,
+  seed: 11,
+  complexity: { rhythmic: 0.7, ornament: 0.4, difficulty: 3 },
+});
+const pattern = composer.drums({ bars: 4, style: 'funk', section: 'chorus', fills: true });
+
+pattern.notes.length > 0; // true
+pattern.notes.every((hit) => hit.durationBeat > 0); // true
+```
+
+`generateDrums` writes the same kit part and hands back `DrumHit[]` rather than a score:
 
 ```ts
 import { generateDrums } from '@libraz/libcantus';
@@ -123,7 +209,7 @@ pattern.every((hit) => hit.durationBeat > 0); // true
 
 Styles are `standard`, `funk`, `shuffle`, `bossa`, `trap`, `halftime`, `breakbeat`, `house`, and `synthpop`. Sections are `intro`, `verse`, `prechorus`, `chorus`, `bridge`, and `outro`, and they shape density and fills rather than naming a form.
 
-The groove is written against a four-beat bar throughout — the backbeat, the hi-hat subdivisions, the open-hat and crash beats, the beat a fill starts on — so `ts` accepts 4/4 alone and another meter is refused rather than returned with 4/4 accents inside a bar of a different length. `generateRhythm` and `placeDrumPattern` write in the meter they are given.
+The groove is written against a four-beat bar throughout — the backbeat, the hi-hat subdivisions, the open-hat and crash beats, the beat a fill starts on — so 4/4 is the only meter accepted and another is refused rather than returned with 4/4 accents inside a bar of a different length. A composer whose meter is something else is refused for the same reason. `generateRhythm` and `placeDrumPattern` write in the meter they are given.
 
 `fills: true` replaces the final bar with a fill. A pre-chorus leading into a chorus builds instead — the two-bar lift already marks the phrase end, so it takes precedence.
 
@@ -131,7 +217,7 @@ The `role` option gates which voices appear at all, from `full` through `ambient
 
 ## Genre vocabulary
 
-`generateDrums` writes a kit part from the style tables built into the generator. `placeDrumPattern` is the other route into the same `DrumHit[]`: it draws from the genre dictionary, where every figure is a data entry rather than code.
+`generateDrums`, and `composer.drums` above it, write a kit part from the style tables built into the generator. `placeDrumPattern` is the other route into the same `DrumHit[]`: it draws from the genre dictionary, where every figure is a data entry rather than code. It is a function with no composer method of its own, since the dictionary and the built-in tables are two different sources rather than two ways of asking for one part.
 
 ```ts
 import { DRUM_PATTERNS, GENRES, placeDrumPattern } from '@libraz/libcantus';
@@ -175,7 +261,7 @@ const own = placeDrumPattern({ bars: 1, genre: 'house', ctx: { seed: 3, vocabula
 own.length > 0; // true
 ```
 
-One dictionary serves the whole piece, so `ctx.vocabulary` carries entries for every generator at once and each generator recognises its own material: a bass figure is invisible to the drum generator rather than misread. Entries are validated when the context is resolved, so a figure with a tempo band or a time signature it could never match is rejected at the entrance instead of silently matching nothing.
+One dictionary serves the whole piece, so `ctx.vocabulary` — `Composer.of({ vocabulary })` on the class side — carries entries for every generator at once and each generator recognises its own material: a bass figure is invisible to the drum generator rather than misread. Entries are validated when the context is resolved, so a figure with a tempo band or a time signature it could never match is rejected at the entrance instead of silently matching nothing.
 
 ## Swing and feel
 
@@ -193,7 +279,7 @@ shuffled.some((hit) => hit.startBeat % 1 > 0.6); // true
 halved.length > 0; // true
 ```
 
-For material generated elsewhere, a groove template extracted from swung playing carries the same information and applies to any part, which is usually the more flexible route.
+Over a pattern a host already holds, `Rhythm.deform({ rate })` asks the note-value half of that question; the feel belongs to the drum surfaces, which apply it as they place the figure. For material generated elsewhere, a groove template extracted from swung playing carries the same information and applies to any part, which is usually the more flexible route.
 
 ## Where this connects
 

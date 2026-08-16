@@ -4,7 +4,25 @@
 
 ## 発音位置を生成する
 
-`generateRhythm` は格子上に発音位置を配置します。各スロットの重みは拍節上の強さで決まります。
+`Rhythm` は、発音位置のパターンと、それを数える拍子をひとまとめにした値です。各スロットの重みを拍節上の強さで決めて格子上に配置し、拍子を持ち回らずにパターンを変形できます。
+
+```ts
+import { parseTimeSignature, Rhythm } from '@libraz/libcantus';
+
+const ts = parseTimeSignature('4/4');
+
+const sparse = Rhythm.generate(ts, { bars: 2, ctx: { seed: 42, complexity: { rhythmic: 0.2 } } });
+const dense = Rhythm.generate(ts, { bars: 2, ctx: { seed: 42, complexity: { rhythmic: 0.9 } } });
+
+sparse.events.length <= dense.events.length; // true
+dense.density() >= sparse.density(); // true
+sparse.syncopate(0.6, { seed: 42 }).events.length >= sparse.events.length; // true
+sparse.thin(0.5).events.length <= sparse.events.length; // true
+```
+
+`thin`、`syncopate`、`doubleTime`、`halfTime`、`ornamentBy`、`deform` はいずれも新しいパターンを返すため、いくつ連ねても手元のパターンはそのまま残ります。`withinCeiling` は、コンテキストの難易度の奏者がコンテキストのテンポでそのパターンを維持できるかを答えます。
+
+`generateRhythm` は同じ発音位置を素の配列として生成し、`rhythmDensity` はその密度を測ります。
 
 ```ts
 import { generateRhythm, parseTimeSignature, rhythmDensity } from '@libraz/libcantus';
@@ -30,7 +48,17 @@ onsetWeightCurve(3) > onsetWeightCurve(0); // true
 
 ## 発音位置からノートへ
 
-`RhythmEvent` は位置と長さを持ちますが、ピッチを持ちません。`rhythmToNoteEvents` がそれを与えます。
+リズムは位置と長さを持ちますが、ピッチを持ちません。ピッチを与えると `Score` になり、そこからライブラリの他の部分に届きます。
+
+```ts
+import { parseTimeSignature, Rhythm } from '@libraz/libcantus';
+
+const snare = Rhythm.generate(parseTimeSignature('4/4'), { bars: 1, ctx: { seed: 3 } }).toScore(38);
+
+snare.notes.every((note) => note.pitch === 38); // true
+```
+
+同じパターンをプレーンデータとして表すのが `RhythmEvent` で、ピッチを与えるのが `rhythmToNoteEvents` です。
 
 ```ts
 import { generateRhythm, parseTimeSignature, rhythmToNoteEvents } from '@libraz/libcantus';
@@ -45,7 +73,23 @@ notes.every((note) => note.pitch === 38); // true
 
 ## ヒューマナイズ
 
-`humanize` はイベントを格子からずらし、拍節上の位置に応じてベロシティを整えます。返り値はコピーであるため、量子化された元データは保持されます。
+ヒューマナイズはイベントを格子からずらし、拍節上の位置に応じてベロシティを整えます。返るのは新しいスコアであるため、量子化された元データは保持されます。
+
+```ts
+import { Score } from '@libraz/libcantus';
+
+const quantized = Score.of([
+  { pitch: 36, startBeat: 0, durationBeat: 1, velocity: 80 },
+  { pitch: 38, startBeat: 1, durationBeat: 1, velocity: 80 },
+]);
+
+const played = quantized.humanize({ ctx: { seed: 1 }, timing: 0.03 });
+
+played.notes.length; // 2
+quantized.notes[0]?.startBeat; // 0
+```
+
+`humanize` はノートイベントの配列に対する同じパスで、オプションも同じです。
 
 ```ts
 import { humanize } from '@libraz/libcantus';
@@ -69,14 +113,14 @@ quantized[0]?.startBeat; // 0
 | `baseVelocity` | ベロシティを持たないイベントに仮定する値。既定は 80。 |
 | `ts` | 拍節アクセントを導く拍子。既定は 4/4。 |
 
-長さが0以下のイベントは鳴らないため取り除かれます。結果が入力より短くなることがあります。
+スコアは自身の拍子に対してヒューマナイズされるため、`ts` は素の配列にだけ必要なオプションです。長さが0以下のイベントは鳴らないため取り除かれ、結果が入力より短くなることがあります。
 
 ## グルーヴテンプレート
 
-グルーヴテンプレートは、演奏から取り出した1小節分のタイミングとベロシティのずれの格子です。目的のノリを持つ演奏から抽出し、それを持たない素材に適用します。
+グルーヴテンプレートは、演奏から取り出した1小節分のタイミングとベロシティのずれの格子です。目的のノリを持つ演奏から `extractGrooveTemplate` で抽出し、それを持たない素材に適用します。
 
 ```ts
-import { applyGrooveTemplate, extractGrooveTemplate, parseTimeSignature } from '@libraz/libcantus';
+import { extractGrooveTemplate, parseTimeSignature, Score } from '@libraz/libcantus';
 
 const ts = parseTimeSignature('4/4');
 
@@ -89,6 +133,32 @@ const template = extractGrooveTemplate(performed, ts, 4);
 template.subdivision; // 4
 template.slotsPerBar; // 16
 
+const stiff = Score.of(
+  [
+    { pitch: 36, startBeat: 0, durationBeat: 1, velocity: 90 },
+    { pitch: 38, startBeat: 1, durationBeat: 1, velocity: 90 },
+  ],
+  { meters: ts },
+);
+
+stiff.groove(template).notes.length; // 2
+```
+
+`applyGrooveTemplate` は、ノートイベントに対して同じ適用を行い、拍子を呼び出しごとに指定します。
+
+```ts
+import { applyGrooveTemplate, extractGrooveTemplate, parseTimeSignature } from '@libraz/libcantus';
+
+const ts = parseTimeSignature('4/4');
+const template = extractGrooveTemplate(
+  [
+    { pitch: 36, startBeat: 0.02, durationBeat: 1, velocity: 100 },
+    { pitch: 38, startBeat: 1.06, durationBeat: 1, velocity: 70 },
+  ],
+  ts,
+  4,
+);
+
 const stiff = [
   { pitch: 36, startBeat: 0, durationBeat: 1, velocity: 90 },
   { pitch: 38, startBeat: 1, durationBeat: 1, velocity: 90 },
@@ -100,11 +170,27 @@ grooved.length; // 2
 
 各スロットは、そこに落ちたイベントの格子からの平均ずれと平均ベロシティを持ちます。ベロシティが `null` の場合、ベロシティを持つイベントがそこに落ちなかったことを意味し、ベロシティ0とは区別されます。この区別のためにフィールドは null 許容です。
 
-テンプレートは抽出時の拍子を記録し、`applyGrooveTemplate` は適用時の拍子が一致することを要求します。4/4 のグルーヴを 3/4 に適用すると、1小節分の格子が異なる小節長に対応づけられ、何も報告されないままずれが蓄積するため、不一致は拒否されます。
+テンプレートは抽出時の拍子を記録し、適用時の拍子が一致することを要求します。4/4 のグルーヴを 3/4 に適用すると、1小節分の格子が異なる小節長に対応づけられ、何も報告されないままずれが蓄積するため、不一致は拒否されます。
 
 ## ドラム
 
-`generateDrums` は単一の線ではなくキット全体のパートを生成します。語彙はスタイル・セクション・ロールの3つで決まります。
+ドラムのパートは単一の線ではなくキット全体です。語彙はスタイル・セクション・ロールの3つで決まり、拍子・テンポ・つまみは composer が与えます。
+
+```ts
+import { Composer } from '@libraz/libcantus';
+
+const composer = Composer.of({
+  bpm: 96,
+  seed: 11,
+  complexity: { rhythmic: 0.7, ornament: 0.4, difficulty: 3 },
+});
+const pattern = composer.drums({ bars: 4, style: 'funk', section: 'chorus', fills: true });
+
+pattern.notes.length > 0; // true
+pattern.notes.every((hit) => hit.durationBeat > 0); // true
+```
+
+`generateDrums` は同じキットのパートを書き、スコアではなく `DrumHit[]` を返します。
 
 ```ts
 import { generateDrums } from '@libraz/libcantus';
@@ -123,7 +209,7 @@ pattern.every((hit) => hit.durationBeat > 0); // true
 
 スタイルは `standard`、`funk`、`shuffle`、`bossa`、`trap`、`halftime`、`breakbeat`、`house`、`synthpop` です。セクションは `intro`、`verse`、`prechorus`、`chorus`、`bridge`、`outro` で、形式を指定するものではなく密度とフィルを形づくります。
 
-グルーヴはバックビート、ハイハットの細分、オープンハットとクラッシュの拍、フィルの開始拍まですべて4拍の小節を前提に書かれています。そのため `ts` は 4/4 のみを受け付け、それ以外の拍子は、長さの違う小節の中に 4/4 のアクセントを置いた結果を返すのではなく拒否します。他の拍子で書くには `generateRhythm` と `placeDrumPattern` を使ってください。
+グルーヴはバックビート、ハイハットの細分、オープンハットとクラッシュの拍、フィルの開始拍まですべて4拍の小節を前提に書かれています。そのため受け付ける拍子は 4/4 のみで、それ以外の拍子は、長さの違う小節の中に 4/4 のアクセントを置いた結果を返すのではなく拒否します。composer の拍子がそれ以外の場合も同じ理由で拒否されます。他の拍子で書くには `generateRhythm` と `placeDrumPattern` を使ってください。
 
 `fills: true` は最終小節をフィルに置き換えます。ただしコーラスへ向かうプリコーラスでは代わりに盛り上げが入ります。2小節のリフトがすでにフレーズの終わりを示しているためです。
 
@@ -131,7 +217,7 @@ pattern.every((hit) => hit.durationBeat > 0); // true
 
 ## ジャンル語彙
 
-`generateDrums` は生成器に組み込まれたスタイル表からキットのパートを書きます。同じ `DrumHit[]` に至るもう1つの経路が `placeDrumPattern` です。こちらはジャンル辞書から図形を引きます。辞書の各エントリはコードではなくデータです。
+`generateDrums`、およびその上に立つ `composer.drums` は、生成器に組み込まれたスタイル表からキットのパートを書きます。同じ `DrumHit[]` に至るもう1つの経路が `placeDrumPattern` です。こちらはジャンル辞書から図形を引き、辞書の各エントリはコードではなくデータです。これに対応する composer のメソッドはありません。辞書と組み込みの表は、1つのパートを求める2通りの書き方ではなく、別々の供給源だからです。
 
 ```ts
 import { DRUM_PATTERNS, GENRES, placeDrumPattern } from '@libraz/libcantus';
@@ -175,7 +261,7 @@ const own = placeDrumPattern({ bars: 1, genre: 'house', ctx: { seed: 3, vocabula
 own.length > 0; // true
 ```
 
-辞書は曲全体で共有されます。`ctx.vocabulary` はすべての生成器のエントリをまとめて運び、各生成器は自分の素材だけを認識します。ベースの図形はドラム生成器からは見えないだけで、誤読されることはありません。エントリはコンテキストの解決時に検証されるため、決して一致し得ないテンポ帯や拍子を持つ図形は、黙って何にも一致しないのではなく入口で拒否されます。
+辞書は曲全体で共有されます。`ctx.vocabulary`、クラス側では `Composer.of({ vocabulary })` が、すべての生成器のエントリをまとめて運び、各生成器は自分の素材だけを認識します。ベースの図形はドラム生成器からは見えないだけで、誤読されることはありません。エントリはコンテキストの解決時に検証されるため、決して一致し得ないテンポ帯や拍子を持つ図形は、黙って何にも一致しないのではなく入口で拒否されます。
 
 ## スウィングとフィール
 
@@ -193,7 +279,7 @@ shuffled.some((hit) => hit.startBeat % 1 > 0.6); // true
 halved.length > 0; // true
 ```
 
-他の手段で生成した素材については、スウィングした演奏から抽出したグルーヴテンプレートが同じ情報を持ち、どのパートにも適用できます。
+すでに手元にあるパターンについては、`Rhythm.deform({ rate })` が音価の側の問いに答えます。feel のほうはドラムの面に属し、図形を配置する時点で適用されます。他の手段で生成した素材については、スウィングした演奏から抽出したグルーヴテンプレートが同じ情報を持ち、どのパートにも適用できます。
 
 ## 関連ページ
 
