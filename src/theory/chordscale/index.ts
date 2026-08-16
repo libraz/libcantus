@@ -87,6 +87,12 @@ const SCALE_PREFERENCE = [
 const IDIOMATIC_SCALES: Partial<Record<Chord['quality'], readonly string[]>> = {
   aug: ['wholeTone'],
   m7b5: ['locrian'],
+  // The diminished scale played over a diminished seventh is the whole-half
+  // octatonic. Its half-whole rotation belongs to the dominant it colours: over
+  // a diminished seventh every one of its non-chord tones lands a semitone
+  // above a chord tone, so it offers no tension at all.
+  dim7: ['octatonicWholeHalf'],
+  minMaj7: ['melodicMinor'],
 };
 
 /** Position of a scale in {@link SCALE_PREFERENCE}, or last when unlisted. */
@@ -149,7 +155,7 @@ function isAlteredDominant(chord: Chord, scaleName: string): boolean {
 export function chordScales(chord: Chord): ChordScaleMatch[] {
   const chordPcs = chordPitchClasses(chord);
   const rootPc = pitchClass(chord.rootPc);
-  const ranked: { name: string; extra: number; size: number }[] = [];
+  const ranked: { name: string; extra: number; size: number; avoid: number }[] = [];
   const seenMasks = new Set<number>();
   for (const name of Object.keys(NAMED_SCALES)) {
     if (name === 'chromatic' || ALIASED_SCALE_NAMES.has(name)) {
@@ -162,7 +168,12 @@ export function chordScales(chord: Chord): ChordScaleMatch[] {
     seenMasks.add(mask);
     if (scaleMatchesChord(chordPcs, mask, rootPc) || isAlteredDominant(chord, name)) {
       const size = popcount12(mask);
-      ranked.push({ name, extra: size - chordPcs.length, size });
+      ranked.push({
+        name,
+        extra: size - chordPcs.length,
+        size,
+        avoid: avoidNotes(chord, name).length,
+      });
     }
   }
   if (ranked.length === 0) {
@@ -191,28 +202,103 @@ export function chordScales(chord: Chord): ChordScaleMatch[] {
     if (rankA !== rankB) {
       return rankA - rankB;
     }
+    // Among scales the modal preference does not name — the symmetric and
+    // melodic-minor scales — the one that clashes with the chord least is the
+    // one a player reaches for. Alphabetical order answered with the rotation
+    // that leaves nothing playable.
+    if (a.avoid !== b.avoid) {
+      return a.avoid - b.avoid;
+    }
     return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
   });
   return ranked.map((entry) => ({ name: entry.name, rootPc }));
 }
 
 /**
+ * The tone standing in the third's place when a chord suspends its third.
+ *
+ * Read from the tones the chord sounds rather than from its quality name: one
+ * suspension is written `sus4`, `7sus4`, `9sus4`, `11` and `sus4(add9)`, and
+ * the eleventh chord states it by omitting the third rather than by naming a
+ * suspension, so a set of names can only ever cover part of it. A chord with no
+ * third that sounds a fourth suspends into that fourth; one that sounds a
+ * second suspends into the second.
+ *
+ * @param chordPcs The chord's pitch classes.
+ * @param rootPc The chord root's pitch class.
+ * @returns The suspended tone's pitch class, or undefined when the chord states
+ *   a third of its own.
+ */
+function suspendedTone(chordPcs: number[], rootPc: number): number | undefined {
+  const sounds = (semitones: number): boolean => chordPcs.includes(pitchClass(rootPc + semitones));
+  if (sounds(3) || sounds(4)) {
+    return undefined;
+  }
+  if (sounds(5)) {
+    return pitchClass(rootPc + 5);
+  }
+  if (sounds(2)) {
+    return pitchClass(rootPc + 2);
+  }
+  return undefined;
+}
+
+/**
+ * Which use an avoid note is judged for: sounding it, or passing through it.
+ *
+ * `'harmonic'` is the Berklee-style rule in full — a tone that must not be
+ * sounded against the chord. `'melodic'` keeps only what a line cannot pass
+ * through either, which is the semitone above the root; every other clash
+ * resolves as the line moves on.
+ *
+ * @category Scales
+ */
+export type AvoidNoteUse = 'harmonic' | 'melodic';
+
+/**
+ * Options for {@link avoidNotes}.
+ *
+ * @category Scales
+ */
+export type AvoidNotesOptions = {
+  use?: AvoidNoteUse;
+};
+
+/**
  * List a scale's avoid notes over a chord.
  *
  * An avoid note is a non-chord scale tone that lies a semitone directly above a
- * chord tone; sounding it against the chord clashes. The scale is rooted on the
- * chord root. If the scale does not contain the chord, no avoid notes exist.
+ * chord tone, or the third a suspension displaced; sounding it against the
+ * chord clashes. The scale is rooted on the chord root. If the scale does not
+ * contain the chord, no avoid notes exist.
+ *
+ * The rule states which tones must not be *sounded* against the chord, which is
+ * not the same question as which tones a line may not touch. Pass
+ * `{ use: 'melodic' }` for the melodic reading: only the semitone above the
+ * root survives it, so the result is always a subset of the harmonic one.
  *
  * @param chord The chord providing the chord tones.
  * @param scaleName A key of {@link NAMED_SCALES}.
+ * @param opts Set `use: 'melodic'` to judge a line rather than a voicing.
  * @returns The avoid-note pitch classes, sorted ascending in [0, 11].
  * @throws If `scaleName` is not a built-in scale. An empty result already
  *   means "this scale has no avoid notes over this chord"; answering a typo
  *   the same way would make the two indistinguishable.
  *
+ * @example
+ * ```ts
+ * import { makeChord, avoidNotes } from '@libraz/libcantus';
+ * avoidNotes(makeChord(0, 'maj7'), 'ionian'); // [5] — F clashes with the third
+ * avoidNotes(makeChord(0, 'maj7'), 'ionian', { use: 'melodic' }); // [] — a line may pass through it
+ * ```
+ *
  * @category Scales
  */
-export function avoidNotes(chord: Chord, scaleName: ScaleNameInput): number[] {
+export function avoidNotes(
+  chord: Chord,
+  scaleName: ScaleNameInput,
+  opts: AvoidNotesOptions = {},
+): number[] {
   const mask = requireScaleMask(scaleName);
   const rootPc = pitchClass(chord.rootPc);
   const chordPcs = chordPitchClasses(chord);
@@ -221,19 +307,67 @@ export function avoidNotes(chord: Chord, scaleName: ScaleNameInput): number[] {
     return [];
   }
   const chordSet = new Set(chordPcs);
+  const suspended = suspendedTone(chordPcs, rootPc);
+  // The tone the suspension displaced sits a semitone below it, and sounding it
+  // is what undoes the suspension.
+  const displacedThird = suspended === undefined ? undefined : pitchClass(suspended - 1);
+  const melodic = opts.use === 'melodic';
+  const semitoneAboveRoot = pitchClass(rootPc + 1);
   const avoid: number[] = [];
   for (let pc = 0; pc < 12; pc += 1) {
     if (!maskHasPitchClass(mask, rootPc, pc) || chordSet.has(pc)) {
       continue;
     }
-    const suspendedThird =
-      chord.quality === 'sus4' || chord.quality === '7sus4' ? pc === pitchClass(rootPc + 4) : false;
-    if (!alteredDominant && (chordSet.has(pitchClass(pc - 1)) || suspendedThird)) {
+    if (melodic && pc !== semitoneAboveRoot) {
+      continue;
+    }
+    if (!alteredDominant && (chordSet.has(pitchClass(pc - 1)) || pc === displacedThird)) {
       avoid.push(pc);
     }
   }
   return avoid.sort((a, b) => a - b);
 }
+
+/**
+ * Semitones above the root of the colors a dominant takes when it resolves to a
+ * minor tonic: the flat ninth, the sharp ninth, and the flat thirteenth.
+ *
+ * Over a dominant read on its own, each of them sits a semitone above a chord
+ * tone and is an avoid note. Heard as the dominant of a minor key they are the
+ * key's own tones, and standard practice, so the function the chord serves is
+ * what decides.
+ */
+const MINOR_RESOLUTION_TENSIONS = [1, 3, 8] as const;
+
+/** Whether this chord is a dominant seventh resolving down a fifth to minor. */
+function resolvesToMinorTonic(
+  chord: Chord,
+  chordPcs: number[],
+  target: Chord | undefined,
+): boolean {
+  if (target === undefined) {
+    return false;
+  }
+  const rootPc = pitchClass(chord.rootPc);
+  const sounds = (semitones: number): boolean => chordPcs.includes(pitchClass(rootPc + semitones));
+  if (!sounds(4) || !sounds(10)) {
+    return false;
+  }
+  const targetRootPc = pitchClass(target.rootPc);
+  if (targetRootPc !== pitchClass(rootPc + 5)) {
+    return false;
+  }
+  return chordPitchClasses(target).includes(pitchClass(targetRootPc + 3));
+}
+
+/**
+ * Options for {@link availableTensions}.
+ *
+ * @category Scales
+ */
+export type AvailableTensionsOptions = {
+  resolvesTo?: Chord;
+};
 
 /**
  * List a scale's available tensions over a chord.
@@ -243,8 +377,15 @@ export function avoidNotes(chord: Chord, scaleName: ScaleNameInput): number[] {
  * is rooted on the chord root. If the scale does not contain the chord, there
  * are no available tensions.
  *
+ * A tension's availability also depends on what the chord is doing. Pass
+ * `resolvesTo` to say which chord this one resolves to: a dominant seventh
+ * resolving down a fifth to a minor tonic takes its flat ninth, sharp ninth and
+ * flat thirteenth, which read on their own would each be an avoid note. Only
+ * scale tones are ever added, so the result stays within the scale.
+ *
  * @param chord The chord providing the chord tones.
  * @param scaleName A key of {@link NAMED_SCALES}.
+ * @param opts Set `resolvesTo` to the chord this one resolves to.
  * @returns The available-tension pitch classes, sorted ascending in [0, 11].
  * @throws If `scaleName` is not a built-in scale, as {@link avoidNotes} does.
  *
@@ -252,11 +393,17 @@ export function avoidNotes(chord: Chord, scaleName: ScaleNameInput): number[] {
  * ```ts
  * import { makeChord, availableTensions } from '@libraz/libcantus';
  * availableTensions(makeChord(0, 'maj7'), 'ionian'); // [2, 9] — color tones over Cmaj7
+ * availableTensions(makeChord(7, 'dom7'), 'phrygianDominant', { resolvesTo: makeChord(0, 'min') });
+ * // [3, 8] — the b13 and b9 the resolution to C minor makes available
  * ```
  *
  * @category Scales
  */
-export function availableTensions(chord: Chord, scaleName: ScaleNameInput): number[] {
+export function availableTensions(
+  chord: Chord,
+  scaleName: ScaleNameInput,
+  opts: AvailableTensionsOptions = {},
+): number[] {
   const mask = requireScaleMask(scaleName);
   const rootPc = pitchClass(chord.rootPc);
   const chordPcs = chordPitchClasses(chord);
@@ -266,9 +413,15 @@ export function availableTensions(chord: Chord, scaleName: ScaleNameInput): numb
   }
   const chordSet = new Set(chordPcs);
   const avoidSet = alteredDominant ? new Set<number>() : new Set(avoidNotes(chord, scaleName));
+  const functional = resolvesToMinorTonic(chord, chordPcs, opts.resolvesTo)
+    ? new Set(MINOR_RESOLUTION_TENSIONS.map((semitones) => pitchClass(rootPc + semitones)))
+    : undefined;
   const tensions: number[] = [];
   for (let pc = 0; pc < 12; pc += 1) {
-    if (!maskHasPitchClass(mask, rootPc, pc) || chordSet.has(pc) || avoidSet.has(pc)) {
+    if (!maskHasPitchClass(mask, rootPc, pc) || chordSet.has(pc)) {
+      continue;
+    }
+    if (avoidSet.has(pc) && functional?.has(pc) !== true) {
       continue;
     }
     tensions.push(pc);
@@ -277,7 +430,14 @@ export function availableTensions(chord: Chord, scaleName: ScaleNameInput): numb
 }
 
 /**
- * A scale fit over a chord together with its avoid notes and tensions.
+ * A scale fit over a chord, with its non-chord tones sorted by what may be done
+ * with them.
+ *
+ * `avoid`, `passing` and `tensions` partition the scale tones the chord does
+ * not state: `avoid` may not be played at all, `passing` may be passed through
+ * melodically but not sounded against the chord, and `tensions` may be added
+ * freely as color. `avoid` is {@link avoidNotes} under `use: 'melodic'`, and
+ * `avoid` together with `passing` is the harmonic reading.
  *
  * @category Scales
  */
@@ -285,6 +445,7 @@ export type ChordScaleReportEntry = {
   name: string;
   rootPc: number;
   avoid: number[];
+  passing: number[];
   tensions: number[];
 };
 
@@ -292,7 +453,9 @@ export type ChordScaleReportEntry = {
  * Report the best-fitting scales for a chord with their avoid notes and tensions.
  *
  * Combines {@link chordScales}, {@link avoidNotes}, and {@link availableTensions}
- * into a single ergonomic result, ordered best fit first.
+ * into a single ergonomic result, ordered best fit first. The report is read as
+ * playing advice, so the tones a line may pass through are reported apart from
+ * the ones it may not touch; see {@link ChordScaleReportEntry}.
  *
  * @param chord The chord to analyze.
  * @param limit Optional maximum number of scales to report; all by default.
@@ -306,12 +469,17 @@ export function chordScaleReport(chord: Chord, limit?: number): ChordScaleReport
   }
   const matches = chordScales(chord);
   const chosen = limit === undefined ? matches : matches.slice(0, limit);
-  return chosen.map((match) => ({
-    name: match.name,
-    rootPc: match.rootPc,
-    avoid: avoidNotes(chord, match.name),
-    tensions: availableTensions(chord, match.name),
-  }));
+  return chosen.map((match) => {
+    const harmonic = avoidNotes(chord, match.name);
+    const melodic = new Set(avoidNotes(chord, match.name, { use: 'melodic' }));
+    return {
+      name: match.name,
+      rootPc: match.rootPc,
+      avoid: harmonic.filter((pc) => melodic.has(pc)),
+      passing: harmonic.filter((pc) => !melodic.has(pc)),
+      tensions: availableTensions(chord, match.name),
+    };
+  });
 }
 
 /**

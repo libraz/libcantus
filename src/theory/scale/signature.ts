@@ -7,7 +7,7 @@ import {
 import type { KeyScale } from '../../core/types.js';
 import { assertInteger, assertOneOf } from '../../core/validation/index.js';
 import { majorKey, minorKey } from './key.js';
-import { MAJOR_MASK } from './masks.js';
+import { HARMONIC_MINOR_MASK, MAJOR_MASK, MELODIC_MINOR_MASK } from './masks.js';
 
 /**
  * Which of the two modes a key signature is read in.
@@ -82,6 +82,28 @@ function modeOffset(key: KeyScale): number {
     return diatonic;
   }
   return hasMinorThird(key.modeMask12) ? MINOR_MODE_OFFSET : 0;
+}
+
+/**
+ * Whether a key is one that is actually written with a key signature.
+ *
+ * Each of the seven diatonic modes has a signature of its own, and the harmonic
+ * and melodic minor are the minor key with a degree or two raised: G# harmonic
+ * minor is written with G# minor's five sharps and an F## in front of the note,
+ * which is why it is spelled G# and not Ab. Every other scale only borrows the
+ * signature of its parallel major or minor as an approximation, so nothing
+ * about how it is written follows from that signature — and how such a scale is
+ * spelled has to be decided from the scale itself.
+ *
+ * @param key The key/scale.
+ * @returns True when the signature is the key's own rather than a stand-in.
+ */
+export function isSignatureKey(key: KeyScale): boolean {
+  return (
+    DIATONIC_MODE_OFFSETS.has(key.modeMask12) ||
+    key.modeMask12 === HARMONIC_MINOR_MASK ||
+    key.modeMask12 === MELODIC_MINOR_MASK
+  );
 }
 
 /**

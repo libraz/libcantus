@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   BASS_4_STRING,
@@ -8,6 +10,7 @@ import {
   GUITAR_DROP_D,
   GUITAR_STANDARD,
   instrumentRange,
+  type PercussionProfile,
   type PlayabilityIssueType,
   playability,
 } from '../src/core/instrument/index.js';
@@ -17,6 +20,7 @@ import { DRUM_NOTES } from '../src/generate/drums/hit.js';
 import { DRUM_KIT, generateDrums } from '../src/generate/drums/index.js';
 import { makeChord } from '../src/theory/chord/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
+import { filesUnder, ROOT, SRC } from './support/source-files.js';
 
 const cMajor = majorKey(0);
 
@@ -165,6 +169,67 @@ describe('playability layer 2', () => {
       note(DRUM_NOTES.pedalHiHat, 0, 0.25),
     ];
     expect(issuesOfType(playability(hits, DRUM_KIT), 'limbConflict')).toHaveLength(0);
+  });
+});
+
+describe('a kit is bounded by the limbs the player has', () => {
+  /** The same kit played by someone whose left foot is not available. */
+  const THREE_LIMB_KIT: PercussionProfile = {
+    ...DRUM_KIT,
+    name: 'three-limb kit',
+    limbs: ['rightHand', 'leftHand', 'rightFoot'],
+  };
+
+  it('does not sound a voice only an absent limb reaches', () => {
+    // The pedal hi-hat is a left-foot voice and nothing else reaches it, so on
+    // this kit it is not a voice at all. Reading `reach` without `limbs` would
+    // report it as sounding.
+    expect(DRUM_KIT.reach[DRUM_NOTES.pedalHiHat]).toEqual(['leftFoot']);
+    expect(canSound(DRUM_KIT, DRUM_NOTES.pedalHiHat)).toBe(true);
+    expect(canSound(THREE_LIMB_KIT, DRUM_NOTES.pedalHiHat)).toBe(false);
+    // Every other voice is untouched: the kit lost a limb, not its drums.
+    expect(canSound(THREE_LIMB_KIT, DRUM_NOTES.kick)).toBe(true);
+    expect(canSound(THREE_LIMB_KIT, DRUM_NOTES.snare)).toBe(true);
+  });
+
+  it('reports the note the player cannot strike', () => {
+    const report = playability([note(DRUM_NOTES.pedalHiHat, 0, 0.25)], THREE_LIMB_KIT);
+    const found = issuesOfType(report, 'noteOutOfRange');
+    expect(found).toHaveLength(1);
+    expect(found[0]?.layer).toBe(1);
+    expect(found[0]?.impossible).toBe(true);
+    // The four-limb player has the same note under a foot, so nothing is wrong.
+    expect(
+      issuesOfType(playability([note(DRUM_NOTES.pedalHiHat, 0, 0.25)], DRUM_KIT), 'noteOutOfRange'),
+    ).toHaveLength(0);
+  });
+
+  it('asks the reach table in one place, so no entrance can answer alone', () => {
+    // What made this a bug was two answers to one question: `reachOf` read the
+    // limbs and `canSound` read the raw table. Reading the table anywhere but
+    // in the shared helper is how that comes back, whatever the next entrance
+    // is, so the lookup itself is what is pinned rather than today's callers.
+    const readers = filesUnder(SRC, '.ts').filter((file) =>
+      readFileSync(file, 'utf8').includes('.reach['),
+    );
+    expect(readers.map((file) => relative(ROOT, file).split(sep).join('/'))).toEqual([
+      'src/core/instrument/profile.ts',
+    ]);
+  });
+
+  it('keeps the range and the note-by-note answer telling the same story', () => {
+    const range = instrumentRange(THREE_LIMB_KIT);
+    expect(canSound(THREE_LIMB_KIT, range.low)).toBe(true);
+    expect(canSound(THREE_LIMB_KIT, range.high)).toBe(true);
+    // A kit with one voice, and no limb to strike it, has nothing in range.
+    const unplayable: PercussionProfile = {
+      ...DRUM_KIT,
+      name: 'no-limb kit',
+      limbs: ['rightHand'],
+      reach: { [DRUM_NOTES.pedalHiHat]: ['leftFoot'] },
+    };
+    expect(canSound(unplayable, DRUM_NOTES.pedalHiHat)).toBe(false);
+    expect(instrumentRange(unplayable).low).toBe(Number.POSITIVE_INFINITY);
   });
 });
 

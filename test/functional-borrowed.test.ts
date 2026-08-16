@@ -2,12 +2,20 @@ import { describe, expect, it } from 'vitest';
 import {
   analyzeChord,
   borrowedSource,
+  chordToRoman,
+  functionOf,
   isBorrowedChord,
   isDiatonic,
   parallelKey,
 } from '../src/analyze/functional/index.js';
 import { makeChord } from '../src/theory/chord/index.js';
-import { MAJOR_MASK, majorKey, minorKey, NATURAL_MINOR_MASK } from '../src/theory/scale/index.js';
+import {
+  MAJOR_MASK,
+  majorKey,
+  minorKey,
+  NATURAL_MINOR_MASK,
+  scaleByName,
+} from '../src/theory/scale/index.js';
 
 const cMajor = majorKey(0);
 const aMinor = minorKey(9);
@@ -156,6 +164,50 @@ describe('modal interchange in A minor', () => {
     for (const chord of [makeChord(9, 'min'), makeChord(2, 'min'), makeChord(5, 'maj')]) {
       expect(isBorrowedChord(chord, aMinor)).toBe(false);
       expect(borrowedSource(chord, aMinor)).toBeNull();
+    }
+  });
+});
+
+describe('a mode whose second degree is already lowered', () => {
+  // E phrygian and E locrian both have F natural as their second degree, so the
+  // major triad on it is the key's own II rather than an altered predominant.
+  const nativeSecond = [
+    { name: 'phrygian', key: scaleByName('phrygian', 4) },
+    { name: 'locrian', key: scaleByName('locrian', 4) },
+  ];
+
+  it.each(nativeSecond)('reads the II of a $name key as its own degree', ({ key }) => {
+    const two = makeChord(5, 'maj');
+    expect(isDiatonic(two, key)).toBe(true);
+    expect(isBorrowedChord(two, key)).toBe(false);
+    expect(borrowedSource(two, key)).toBeNull();
+    const analysis = analyzeChord(two, key);
+    expect(analysis).toMatchObject({ borrowed: false, source: null, roman: 'II' });
+    // A chord the analysis calls neither borrowed nor sourced cannot be
+    // explained as an alteration of a degree the key does not have.
+    expect(analysis.rationale).not.toContain('Neapolitan');
+    expect(analysis.rationale).not.toContain('lowered second degree');
+    expect(functionOf(two, key)).toBe('subdominant');
+  });
+
+  it.each(nativeSecond)('never renders that chord as N6 in a $name key', ({ key }) => {
+    const two = makeChord(5, 'maj', 9); // F major over A, the first inversion.
+    expect(chordToRoman(two, key, { neapolitan: true })).toBe('II6');
+    // The figured name is never offered as the rival spelling either, since the
+    // chord it names is not the one sounding.
+    expect(
+      analyzeChord(two, key, { alternatives: true }).alternatives.map((rival) => rival.label),
+    ).not.toContain('N6');
+  });
+
+  it('keeps the Neapolitan of the modes that do alter their second degree', () => {
+    for (const key of [cMajor, aMinor, scaleByName('dorian', 2), scaleByName('harmonicMinor', 9)]) {
+      const neapolitan = makeChord((key.rootPc + 1) % 12, 'maj');
+      expect(borrowedSource(neapolitan, key), `bII of ${key.rootPc}`).toBe('neapolitan');
+      expect(isBorrowedChord(neapolitan, key)).toBe(true);
+      expect(analyzeChord(neapolitan, key).function).toBe('subdominant');
+      const sixth = makeChord((key.rootPc + 1) % 12, 'maj', (key.rootPc + 5) % 12);
+      expect(chordToRoman(sixth, key, { neapolitan: true }), `N6 of ${key.rootPc}`).toBe('N6');
     }
   });
 });

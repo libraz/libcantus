@@ -9,15 +9,23 @@
  */
 
 import type { MeterLike } from '../../core/meter/index.js';
-import { barIndexAt, resolveMeters } from '../../core/meter/index.js';
+import { barIndexAt, beatsPerBarAt, resolveMeters } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import {
   assertGenerationBudget,
   assertNoteEvents,
   assertRange,
 } from '../../core/validation/index.js';
+import { gridOriginOf } from '../grid.js';
 import type { BarSlice } from './internal.js';
-import { clamp01, EPS, floorMod, harmonicNovelty, sliceBars } from './internal.js';
+import {
+  clamp01,
+  EPS,
+  firstSoundingBeat,
+  floorMod,
+  harmonicNovelty,
+  sliceBars,
+} from './internal.js';
 
 /**
  * The bar groupings the search considers.
@@ -210,7 +218,7 @@ function undecidedReading(slices: readonly BarSlice[]): Hypermeter {
 /**
  * Infer how a piece's bars group into hyperbars.
  *
- * Every grouping in {@link GROUP_CANDIDATES} is tried at every phase, and each
+ * Groupings of 2, 3, 4, 6, and 8 bars are tried at every phase, and each
  * reading is scored on two counts: how much more harmonic change lands on the
  * bars it calls group heads than on the bars between them, and how many of the
  * cadences it is given arrive where it says a hyperbar ends. The commonest
@@ -220,7 +228,9 @@ function undecidedReading(slices: readonly BarSlice[]): Hypermeter {
  * The meter is read at the beat in question rather than at the start, so a
  * piece that changes metre keeps being cut at its own bar lines. Bar 0 is the
  * first full bar however much pickup precedes it, so an upbeat is bar -1 and is
- * never taken for a hypermetric downbeat.
+ * never taken for a hypermetric downbeat. Whether there is an upbeat at all is
+ * decided the way the rest of the analysis decides it: a note a millibeat early
+ * is playing the downbeat, not anticipating it.
  *
  * @param notes The notes to read, in any order. Notes that never sound are
  *   dropped.
@@ -250,11 +260,21 @@ export function hypermeter(
     budget: opts.budget,
   });
   const sounding = notes.filter((note) => note.durationBeat > 0);
-  const firstOnset = sounding.reduce((first, n) => Math.min(first, n.startBeat), 0);
+  const firstOnset = firstSoundingBeat(sounding);
   const lastEnd = sounding.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
   const spanEnd = opts.totalBeats ?? lastEnd;
   assertRange(spanEnd, 0, Number.MAX_SAFE_INTEGER, 'hypermeter totalBeats');
-  const slices = sliceBars(sounding, meters, firstOnset, spanEnd, opts.budget);
+  // Whether the music starts before the downbeat is the analysis-wide pickup
+  // question, and the slot grids of chord and key inference answer it here: a
+  // note a millibeat early is playing beat 0, and only one a whole grid unit
+  // early is an upbeat. Reading a hair-early onset as a pickup would hand the
+  // phase search a silent bar of its own to group against. An excerpt that
+  // begins later keeps the beat it begins on.
+  const spanStart =
+    firstOnset < 0
+      ? gridOriginOf(firstOnset, beatsPerBarAt(firstOnset, meters)).startBeat
+      : firstOnset;
+  const slices = sliceBars(sounding, meters, spanStart, spanEnd, opts.budget);
 
   const candidates = GROUP_CANDIDATES.filter(
     (groupBars) => slices.length >= groupBars * MIN_GROUPS,
@@ -310,8 +330,11 @@ export function hypermeter(
       ? 1
       : clamp01((best.score - runnerUp.score) / best.score);
 
+  // A pickup bar is bar -1, and a phase can put it on a group head — but an
+  // upbeat is what leads into the first hyperbar, not what starts one, so it
+  // never becomes a hypermetric downbeat however the phase falls.
   const downbeats = slices
-    .filter((slice) => floorMod(slice.index - best.phase, best.groupBars) === 0)
+    .filter((slice) => slice.index >= 0 && floorMod(slice.index - best.phase, best.groupBars) === 0)
     .map((slice) => slice.startBeat);
   const cadencePart =
     cadenceBars.length === 0

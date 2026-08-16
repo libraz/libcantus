@@ -25,7 +25,7 @@ import type { KeyScale, NoteEvent } from '../../core/types.js';
 import { assertGenerationBudget, assertNoteEvents } from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
 import { isScaleTone, spelledKeyOf } from '../../theory/scale/index.js';
-import { spellChord, spellPitchClass } from '../../theory/spelling/index.js';
+import { assertTonicOf, spellChord, spellPitchClass } from '../../theory/spelling/index.js';
 import type { ChordTimeline } from '../timeline/index.js';
 
 /**
@@ -130,8 +130,9 @@ const CONVENTIONAL_LETTER_STEPS: readonly (readonly number[])[] = [
 export type SpellLineOptions = {
   /**
    * Tonic spelling to anchor the key, for a caller that already knows how the
-   * piece is written. Defaults to the conventional spelling `spelledKeyOf`
-   * gives the key.
+   * piece is written. It must sound the key's own root pitch class; anything
+   * else is rejected rather than spelled. Defaults to the conventional
+   * spelling `spelledKeyOf` gives the key.
    */
   tonic?: Note;
   /** Upper bound on the work the line may cost; defaults to the generation budget. */
@@ -344,8 +345,8 @@ function transitionCost(from: LineState, source: Note, to: LineState, target: No
  * @param opts Optional tonic spelling and work budget.
  * @returns One spelled note per input note, in input order, each carrying the
  *   octave that reproduces its pitch.
- * @throws If a note event is malformed, or the line is longer than the budget
- *   allows.
+ * @throws If `opts.tonic` does not sound the key's root pitch class, if a note
+ *   event is malformed, or if the line is longer than the budget allows.
  * @example
  * ```ts
  * import { chordTimelineFromChords, majorKey, noteNames, spellLine } from '@libraz/libcantus';
@@ -381,6 +382,9 @@ export function spellLine(
     'line spelling states',
     opts.budget,
   );
+  if (opts.tonic !== undefined) {
+    assertTonicOf(opts.tonic, key, 'spellLine');
+  }
   if (notes.length === 0) {
     return [];
   }

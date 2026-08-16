@@ -3,7 +3,7 @@ import { parseTimeSignature } from '../src/core/meter/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import { type BassSegment, generateBassLine } from '../src/generate/bass/index.js';
 import { DRUM_NOTES, generateDrums } from '../src/generate/drums/index.js';
-import { ORNAMENT_STYLES, ornament } from '../src/generate/ornament/index.js';
+import { ORNAMENT_STYLES, type OrnamentStyle, ornament } from '../src/generate/ornament/index.js';
 import { makeChord } from '../src/theory/chord/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
 
@@ -46,6 +46,16 @@ describe('ornament decorates material it is given', () => {
     const before = JSON.stringify(source);
     ornament(source, { style: 'ghost', amount: 1, seed: 3 });
     expect(JSON.stringify(source)).toBe(before);
+  });
+
+  it('drops the notes that never sound, as its doc says it does', () => {
+    const source: NoteEvent[] = [
+      { pitch: 60, startBeat: 0, durationBeat: 1, velocity: 90 },
+      { pitch: 62, startBeat: 1, durationBeat: 0, velocity: 90 },
+      { pitch: 64, startBeat: 2, durationBeat: 1, velocity: 90 },
+    ];
+    const decorated = ornament(source, { style: 'ghost', amount: 1, seed: 10 });
+    expect(decorated.map((note) => note.pitch)).toEqual([60, 64]);
   });
 
   it('is deterministic for a seed and independent of call order', () => {
@@ -104,6 +114,51 @@ describe('ornament styles pick the positions they belong on', () => {
     expect(slid[0]?.articulation).toBeUndefined();
     expect(slid[1]?.articulation).toBeUndefined();
     expect(slid[2]?.articulation).toBe('slide');
+  });
+
+  it('drags only into a strong position, not onto every weak one', () => {
+    const source = eighths();
+    const dragged = ornament(source, { style: 'drag', amount: 1, seed: 11 });
+    const onsets = source.map((note) => note.startBeat);
+    for (const note of dragged) {
+      if (note.articulation !== 'drag') continue;
+      const next = onsets.find((beat) => beat > note.startBeat);
+      expect(next).toBeDefined();
+      // A drag sits on a weak position and runs into the strong one after it.
+      expect(note.startBeat % 2).not.toBe(0);
+      expect((next as number) % 2).toBe(0);
+    }
+    expect(dragged.some((note) => note.articulation === 'drag')).toBe(true);
+  });
+
+  it('leaves a weak note leading nowhere plain', () => {
+    // The two offbeats run into weak positions, and the last note runs into
+    // nothing at all.
+    const line: NoteEvent[] = [2.5, 3.5, 5].map((startBeat) => ({
+      pitch: 60,
+      startBeat,
+      durationBeat: 0.5,
+      velocity: 90,
+    }));
+    const dragged = ornament(line, { style: 'drag', amount: 1, seed: 12 });
+    expect(dragged.map((note) => note.articulation)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it('gives each style its own eligible set rather than one shared rule', () => {
+    const source = eighths();
+    const marked = (style: OrnamentStyle) =>
+      ornament(source, { style, amount: 1, seed: 13 })
+        .map((note, index) => (note.articulation === undefined ? -1 : index))
+        .filter((index) => index >= 0);
+    // Ghost and drag both sit on weak positions; drag takes the subset that
+    // leads into a strong one. Slide reads the line, not the meter.
+    expect(marked('drag')).not.toEqual(marked('ghost'));
+    expect(marked('ghost')).not.toEqual(marked('flam'));
+    expect(marked('slide')).not.toEqual(marked('ghost'));
+    expect(marked('slide')).not.toEqual(marked('flam'));
+    for (const style of ORNAMENT_STYLES) {
+      expect(marked(style).length).toBeGreaterThan(0);
+    }
   });
 
   it('reads strong positions from the meter it is given', () => {

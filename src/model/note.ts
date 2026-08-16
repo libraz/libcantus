@@ -1,16 +1,17 @@
-import { InvalidInputError } from '../core/errors/index.js';
+import { InvalidInputError, type ParseResult, unwrapParse } from '../core/errors/index.js';
 import {
   formatNote,
   type IntervalLike,
   midiToNote,
   type Note as NoteData,
+  type NoteNameOptions,
   noteToMidi,
   noteToPitchClass,
-  parseNote,
   spelledInterval,
   toSpelledInterval,
   transposeByInterval,
   transposeNote,
+  tryParseNote,
 } from '../core/pitch/index.js';
 import { Interval } from './interval.js';
 
@@ -63,14 +64,50 @@ export class Note {
   }
 
   /**
-   * Parse scientific pitch notation (e.g. `'C#4'`, `'Bb'`, `'F##3'`).
+   * Parse a note name (e.g. `'C#4'`, `'Bb'`, `'F##3'`), in any of the
+   * supported note-name systems.
+   *
+   * The system is detected from the name itself unless one is given, exactly as
+   * {@link Key.parse} reads a key name: `'gis'` is a G sharp, while a bare
+   * `'B'` is the English B natural until `'german'` says otherwise.
    *
    * @param name The note text.
+   * @param opts `system` reads the name in that notation system instead of
+   *   detecting it.
    * @returns The parsed note.
-   * @throws If the text is not a valid note.
+   * @throws If the text is not a valid note. Use {@link Note.tryParse} where
+   *   failure is ordinary, such as a note field read on every keystroke.
+   * @example
+   * ```ts
+   * import { Note } from '@libraz/libcantus';
+   * Note.of('gis').name; // 'G#'
+   * Note.of('B', { system: 'german' }).name; // 'Bb'
+   * ```
    */
-  static of(name: string): Note {
-    return new Note(parseNote(name));
+  static of(name: string, opts?: NoteNameOptions): Note {
+    return unwrapParse(Note.tryParse(name, opts));
+  }
+
+  /**
+   * Parse a note name, reporting failure instead of throwing it.
+   *
+   * The same reading as {@link Note.of}, for the callers where text that does
+   * not name a note yet is the normal state of the input rather than a fault.
+   *
+   * @param name The note text.
+   * @param opts `system` reads the name in that notation system instead of
+   *   detecting it.
+   * @returns The note, or the error explaining why the text is not one.
+   * @example
+   * ```ts
+   * import { Note } from '@libraz/libcantus';
+   * const result = Note.tryParse('C#4');
+   * result.ok ? result.value.midi : result.error.message; // 61
+   * ```
+   */
+  static tryParse(name: string, opts?: NoteNameOptions): ParseResult<Note> {
+    const parsed = tryParseNote(name, opts);
+    return parsed.ok ? { ok: true, value: new Note(parsed.value) } : parsed;
   }
 
   /**
@@ -95,9 +132,32 @@ export class Note {
     return new Note(data);
   }
 
-  /** The note rendered as scientific pitch notation, e.g. `'G4'` or `'Bb'`. */
+  /**
+   * The note rendered as scientific pitch notation in English, e.g. `'G4'` or
+   * `'Bb'`. Use {@link Note.format} to write it in another notation system.
+   */
   get name(): string {
     return formatNote(this.#data);
+  }
+
+  /**
+   * The note name written in a notation system.
+   *
+   * The counterpart of {@link Note.of}: a getter cannot take an argument, so
+   * the system is named here instead of on {@link Note.name}.
+   *
+   * @param opts `system` writes the name in that notation system instead of
+   *   English.
+   * @returns The note name, including the octave when the note has one.
+   * @example
+   * ```ts
+   * import { Note } from '@libraz/libcantus';
+   * Note.of('G#').format({ system: 'german' }); // 'gis'
+   * Note.of('G#').format({ system: 'japanese' }); // '嬰ト'
+   * ```
+   */
+  format(opts?: NoteNameOptions): string {
+    return formatNote(this.#data, opts);
   }
 
   /** The pitch class (0..11), ignoring octave. */
@@ -241,9 +301,16 @@ export class Note {
   /**
    * The note's name, so a template literal or a log line reads as the note.
    *
+   * @param opts `system` writes the name in that notation system instead of
+   *   English, as {@link Key.toString} does for a key.
    * @returns The spelled name, e.g. `'Bb3'`.
+   * @example
+   * ```ts
+   * import { Note } from '@libraz/libcantus';
+   * Note.of('G#4').toString({ system: 'japanese' }); // '嬰ト4'
+   * ```
    */
-  toString(): string {
-    return this.name;
+  toString(opts?: NoteNameOptions): string {
+    return this.format(opts);
   }
 }

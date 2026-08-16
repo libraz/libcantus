@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import type { ReductionLevel } from '../src/analyze/reduction/index.js';
 import { reduceProgression } from '../src/analyze/reduction/index.js';
 import type { ChordTimeline } from '../src/analyze/timeline/index.js';
 import { chordTimelineFromChords } from '../src/analyze/timeline/index.js';
+import type { TheoryLabel } from '../src/analyze/voice/index.js';
+import { analyzeVoice } from '../src/analyze/voice/index.js';
+import { InvalidInputError } from '../src/core/errors/index.js';
+import { substituteChord } from '../src/generate/reharmony/index.js';
 import type { ChordSpan } from '../src/theory/chord/index.js';
-import { makeChord } from '../src/theory/chord/index.js';
+import { makeChord, spanFromChord } from '../src/theory/chord/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
 
 const cMajor = majorKey(0);
@@ -62,16 +67,16 @@ describe('reduceProgression', () => {
     );
   });
 
-  it('marks a chord that steps away and returns as auxiliary', () => {
+  it('marks a chord that steps away and returns as a neighbor', () => {
     const timeline = progression([
       { rootPc: 0, quality: 'maj' },
       { rootPc: 2, quality: 'min' },
       { rootPc: 0, quality: 'maj' },
     ]);
     const reduced = reduceProgression(timeline, cMajor);
-    expect(reduced.map((entry) => entry.level)).toEqual(['structural', 'auxiliary', 'structural']);
+    expect(reduced.map((entry) => entry.level)).toEqual(['structural', 'neighbor', 'structural']);
     expect(reduced[1]?.rationale).toBe(
-      'Auxiliary: its root steps away from the surrounding harmony and returns to it',
+      'Neighbor: its root steps away from the surrounding harmony and returns to it',
     );
   });
 
@@ -152,6 +157,109 @@ describe('reduceProgression', () => {
       expect(reduced[index]?.chord).toEqual(timeline.segments[index]?.chord);
       expect(reduced[index]?.rationale.startsWith('Structural')).toBe(true);
     }
+  });
+
+  it('carries the beat range of the segment it labels', () => {
+    const timeline = progression([
+      { rootPc: 0, quality: 'maj7' },
+      { rootPc: 1, quality: 'dim7' },
+      { rootPc: 2, quality: 'min7' },
+    ]);
+    expect(
+      reduceProgression(timeline, cMajor).map((entry) => [entry.startBeat, entry.endBeat]),
+    ).toEqual(timeline.segments.map((segment) => [segment.startBeat, segment.endBeat]));
+  });
+
+  it('keeps the frame where it sounded when a filtered reduction drives a rewrite', () => {
+    // The workflow the module documents: filter to the frame, hold those chords
+    // fixed, and rewrite the rest. Without a beat range on the entries the
+    // filtered chords no longer say when they sound, and the rewrite has to
+    // guess — which moves the harmony it was meant to preserve.
+    const spans: Omit<ChordSpan, 'startBeat'>[] = [
+      { rootPc: 0, quality: 'maj7' },
+      { rootPc: 1, quality: 'dim7' },
+      { rootPc: 2, quality: 'min7' },
+      { rootPc: 7, quality: 'dom7' },
+      { rootPc: 0, quality: 'maj7' },
+    ];
+    const timeline = progression(spans);
+    const reduced = reduceProgression(timeline, cMajor);
+    const structural = reduced.filter((entry) => entry.level === 'structural');
+    expect(structural.length).toBeLessThan(reduced.length);
+
+    const rewritten = reduced.map((entry) =>
+      entry.level === 'structural'
+        ? spanFromChord(entry.chord, entry.startBeat)
+        : spanFromChord(
+            substituteChord(entry.chord, cMajor)[0]?.chord ?? entry.chord,
+            entry.startBeat,
+          ),
+    );
+    const rebuilt = chordTimelineFromChords(rewritten, spans.length * 4);
+    for (const entry of structural) {
+      expect(rebuilt.at(entry.startBeat)?.rootPc).toBe(entry.chord.rootPc);
+      expect(rebuilt.at(entry.endBeat - 1)?.rootPc).toBe(entry.chord.rootPc);
+    }
+  });
+
+  it('names the neighbor figure the way the note level names it', () => {
+    // One legend for both levels of analysis: a host that colours `'neighbor'`
+    // reaches the chord-level figure and the note-level label with the same
+    // string, and these two assignments only typecheck while it does.
+    const figure = 'neighbor';
+    const chordLevel: ReductionLevel = figure;
+    const noteLevel: TheoryLabel['kind'] = figure;
+    expect(chordLevel).toBe(noteLevel);
+
+    const timeline = progression([
+      { rootPc: 0, quality: 'maj' },
+      { rootPc: 2, quality: 'min' },
+      { rootPc: 0, quality: 'maj' },
+    ]);
+    const chords = reduceProgression(timeline, cMajor).filter((entry) => entry.level === figure);
+    const notes = analyzeVoice(
+      [60, 62, 60].map((pitch, index) => ({ pitch, startBeat: index, durationBeat: 1 })),
+      () => makeChord(0, 'maj'),
+      cMajor,
+    ).filter((note) => note.labels.some((label) => label.kind === figure));
+    expect(chords).toHaveLength(1);
+    expect(notes).toHaveLength(1);
+  });
+
+  it('hears a cadential six-four as the dominant it stands on, not as the tonic', () => {
+    // I - I64 - V - I: the six-four's bass has already arrived on the dominant,
+    // so the tonic triad above it prolongs that dominant. Keeping it as the
+    // key's own tonic reported the frame one chord too early.
+    const timeline = progression([
+      { rootPc: 0, quality: 'maj' },
+      { rootPc: 0, quality: 'maj', bassPc: 7 },
+      { rootPc: 7, quality: 'maj' },
+      { rootPc: 0, quality: 'maj' },
+    ]);
+    const sixFour = reduceProgression(timeline, cMajor)[1];
+    expect(sixFour?.rationale).toBe(
+      'Structural: a tonic six-four on the bass of the dominant that follows, which prolongs that dominant rather than framing the tonic',
+    );
+  });
+
+  it('keeps reading a six-four the bass leaves as the inverted tonic it is', () => {
+    // IV - I64 - IV: the bass steps away and back, so nothing has arrived on
+    // the dominant and the six-four is an ordinary inverted tonic.
+    const timeline = progression([
+      { rootPc: 5, quality: 'maj' },
+      { rootPc: 0, quality: 'maj', bassPc: 7 },
+      { rootPc: 5, quality: 'maj' },
+    ]);
+    expect(reduceProgression(timeline, cMajor)[1]?.rationale).toBe(
+      'Structural: the tonic of the key, which the progression is heard against',
+    );
+  });
+
+  it('rejects a reading it does not have', () => {
+    const timeline = progression([{ rootPc: 0, quality: 'maj' }]);
+    expect(() => reduceProgression(timeline, cMajor, { basis: 'salience' as 'duration' })).toThrow(
+      InvalidInputError,
+    );
   });
 
   it('reduces the same input the same way every time', () => {

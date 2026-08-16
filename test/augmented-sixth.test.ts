@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   analyzeChord,
   augmentedSixthChord,
+  augmentedSixthFromPitchClasses,
   augmentedSixthKind,
   chordToRoman,
   detectCadence,
@@ -191,6 +192,33 @@ describe('augmentedSixthKind', () => {
 
   it('does not fire in a key that has no augmented sixth on that bass', () => {
     expect(augmentedSixthKind(augmentedSixthChord('german', cMajor), majorKey(5))).toBeNull();
+  });
+});
+
+describe('augmentedSixthFromPitchClasses', () => {
+  it.each(KINDS)('reads the %s sixth from pitch classes that carry no spelling', (kind) => {
+    for (const key of [cMajor, cMinor]) {
+      const built = augmentedSixthChord(kind, key);
+      const read = augmentedSixthFromPitchClasses(chordPitchClasses(built), built.bassPc ?? 0, key);
+      // The reading a MIDI caller has to make: the same chord, spelling and all,
+      // so it keeps identifying as an augmented sixth rather than as a bVI7.
+      expect(read).toEqual(built);
+      expect(read && augmentedSixthKind(read, key)).toBe(kind);
+    }
+  });
+
+  it('needs the lowered submediant in the bass', () => {
+    const german = augmentedSixthChord('german', cMajor);
+    expect(augmentedSixthFromPitchClasses(chordPitchClasses(german), 0, cMajor)).toBeNull();
+  });
+
+  it('answers null for tones that spell no augmented sixth', () => {
+    expect(augmentedSixthFromPitchClasses([8, 0, 3], 8, cMajor)).toBeNull();
+  });
+
+  it('takes duplicated and unreduced pitch classes', () => {
+    const german = augmentedSixthChord('german', cMajor);
+    expect(augmentedSixthFromPitchClasses([20, 8, 12, 3, 6, 6], 20, cMajor)).toEqual(german);
   });
 });
 

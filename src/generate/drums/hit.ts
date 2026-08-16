@@ -135,7 +135,13 @@ export class HitList {
   }
 }
 
-/** Key an onset by pitch and quantized beat. */
-function onsetKey(pitch: number, startBeat: number): string {
+/**
+ * Key an onset by pitch and quantized beat.
+ *
+ * Shared so a generator can name onsets of its own — the strokes a caller asked
+ * for exactly, which the difficulty ceiling leaves alone — in the same terms the
+ * accumulator indexes them by.
+ */
+export function onsetKey(pitch: number, startBeat: number): string {
   return `${pitch}:${Math.round(startBeat * ONSET_KEY_SCALE)}`;
 }

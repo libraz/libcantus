@@ -191,6 +191,54 @@ describe('chordTimelineFromNotes dynamic segmentation', () => {
     }
   });
 
+  it('finds the same chords at every resolution, dividing the expected chord or not', () => {
+    // C and G7 alternating every two beats, six chords over three bars. The
+    // resolution decides where a boundary may fall and nothing else, so every
+    // setting must find all six — including the ones that do not divide the
+    // four-beat expected chord, which used to step over the beats a change is
+    // discounted on and report two segments naming a chord that never sounded.
+    const notes: NoteEvent[] = [];
+    for (let i = 0; i < 6; i += 1) {
+      notes.push(
+        ...(i % 2 === 0
+          ? blockChord([60, 64, 67], i * 2, 2) // C E G
+          : blockChord([55, 59, 62, 65], i * 2, 2)), // G B D F
+      );
+    }
+    const changes = [0, 2, 4, 6, 8, 10];
+    for (const minChordBeats of [
+      0.25,
+      0.4,
+      0.5,
+      0.6,
+      0.75,
+      0.8,
+      0.9,
+      1,
+      1.2,
+      1.25,
+      4 / 3,
+      1.5,
+      2,
+    ]) {
+      const at = `minChordBeats=${minChordBeats}`;
+      const result = chordTimelineFromNotes(notes, { key: C_MAJOR, minChordBeats });
+      expect(roots(result), at).toEqual([0, 7, 0, 7, 0, 7]);
+      expect(
+        result.timeline.segments.map((segment) => segment.chord.quality),
+        at,
+      ).toEqual(['maj', 'dom7', 'maj', 'dom7', 'maj', 'dom7']);
+      // Each boundary lands within the resolution that was asked for, which is
+      // as close to the change as a grid of that size can put it.
+      result.timeline.segments.forEach((segment, i) => {
+        expect(
+          Math.abs(segment.startBeat - (changes[i] ?? 0)),
+          `${at} segment ${i}`,
+        ).toBeLessThanOrEqual(minChordBeats + 1e-9);
+      });
+    }
+  });
+
   it('needs more evidence to change when a longer chord is expected', () => {
     // harmonicRhythm is a prior, not a window: raising it past the span makes
     // the same notes read as one slow harmony rather than two chords.

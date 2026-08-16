@@ -32,7 +32,14 @@ import {
   withinCeiling,
 } from '../vocabulary/index.js';
 import { DRUM_NOTES, type DrumHit, type DrumVoice, HitList } from './hit.js';
-import { PUBLIC_SECTIONS, type PublicSection } from './internal.js';
+import {
+  DRUM_FEELS,
+  feelSwingAmount,
+  type GrooveFeel,
+  PUBLIC_SECTIONS,
+  type PublicSection,
+} from './internal.js';
+import { effectiveSwing, quantizeSwing } from './swing.js';
 
 /**
  * One stroke of a pattern, on the bar's sixteenth grid.
@@ -322,11 +329,31 @@ export type DrumPatternOptions = {
    * Play the figure at half or double its written rate. This is a deformation
    * like the dials, not a different figure: the dictionary entry is the same.
    *
+   * It is named for the note values it changes because `feel` names the swing
+   * the figure is played with, here and in {@link generateDrums} alike.
+   *
    * @defaultValue `'straight'`
    */
-  feel?: 'straight' | 'half' | 'double';
+  rate?: 'straight' | 'half' | 'double';
+  /**
+   * The swing the figure is played with. Some entries are written on the
+   * straight grid and are only themselves once a triplet feel is applied at
+   * render — the half-time shuffle is the plain case — so this is the surface
+   * those entries name when they say the feel comes from the performance.
+   *
+   * @defaultValue `'straight'`
+   */
+  feel?: GrooveFeel;
   /** Base velocity the figure's own factors are read against. */
   velocity?: number;
+  /**
+   * Maximum number of onsets {@link placeDrumPattern} may write. One figure is
+   * placed per bar, so this is the guard against an unbounded caller rather
+   * than a limit on any search.
+   *
+   * @defaultValue 1000000
+   */
+  budget?: number;
 };
 
 /** Base velocity a pattern's factors are read against when none is given. */
@@ -363,7 +390,7 @@ const MAX_STROKES_PER_BAR = 64;
  */
 export function placeDrumPattern(opts: DrumPatternOptions): DrumHit[] {
   assertPositiveInt(opts.bars, 'drum pattern bars');
-  assertGenerationBudget(opts.bars * MAX_STROKES_PER_BAR, 'drum pattern hits');
+  assertGenerationBudget(opts.bars * MAX_STROKES_PER_BAR, 'drum pattern hits', opts.budget);
   const genre = assertOneOf(opts.genre, GENRES, 'drum pattern genre');
   const section =
     opts.section === undefined
@@ -374,11 +401,14 @@ export function placeDrumPattern(opts: DrumPatternOptions): DrumHit[] {
   if (opts.velocity !== undefined) {
     assertRange(opts.velocity, 1, 127, 'drum pattern velocity');
   }
+  const feel = opts.feel === undefined ? 'straight' : assertOneOf(opts.feel, DRUM_FEELS, 'feel');
   const resolved = resolveContextWith(opts.ctx, { seed: opts.seed, bpm: opts.bpm });
   const bpm = resolved.bpm ?? DEFAULT_BPM;
   const draw = resolved.part('drums');
   const baseVelocity = opts.velocity ?? DEFAULT_VELOCITY;
   const barBeats = beatsPerBar(ts);
+  const kit = resolved.instrument('drums');
+  const swing = effectiveSwing(feel, feelSwingAmount(feel));
 
   const dictionary = mergeVocabulary(
     DRUM_PATTERNS,
@@ -389,7 +419,17 @@ export function placeDrumPattern(opts: DrumPatternOptions): DrumHit[] {
   for (let bar = 0; bar < opts.bars; bar += 1) {
     const entry = pickVocabulary(
       dictionary,
-      { genre, section, bpm, ts, difficulty: resolved.difficulty },
+      {
+        genre,
+        section,
+        bpm,
+        ts,
+        difficulty: resolved.difficulty,
+        // Naming a kit is the request that the part be playable on it, so a
+        // figure calling for a technique the kit has no way to produce is not
+        // offered at all rather than written and silently misread.
+        ...(kit === undefined ? {} : { articulations: kit.articulations }),
+      },
       draw,
       'pattern',
       bar,
@@ -403,7 +443,7 @@ export function placeDrumPattern(opts: DrumPatternOptions): DrumHit[] {
         ...(resolved.rhythmic === undefined ? {} : { rhythmic: resolved.rhythmic }),
         ...(resolved.ornament === undefined ? {} : { ornament: resolved.ornament }),
         isOrnament: (stroke) => (stroke as DrumStroke).articulation === 'ghost',
-        feel: opts.feel ?? 'straight',
+        rate: opts.rate ?? 'straight',
         spanSteps: entry.material.steps,
       },
       draw,
@@ -423,7 +463,7 @@ export function placeDrumPattern(opts: DrumPatternOptions): DrumHit[] {
       }
       track.add(
         pitch,
-        barStart + stroke.step * STEP_BEATS,
+        quantizeSwing(barStart + stroke.step * STEP_BEATS, swing, 'sixteenth'),
         stroke.duration ?? STEP_BEATS,
         baseVelocity * stroke.velocity,
         stroke.articulation,
@@ -434,7 +474,6 @@ export function placeDrumPattern(opts: DrumPatternOptions): DrumHit[] {
   // Naming a kit is the request that the part be playable on it, so a voice the
   // kit does not have is an absent stroke rather than a hard one.
   const endBeat = opts.bars * barBeats;
-  const kit = resolved.instrument('drums');
   return track.hits
     .filter((h) => h.startBeat < endBeat && (kit === undefined || canSound(kit, h.pitch)))
     .sort((a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch);

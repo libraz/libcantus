@@ -79,7 +79,7 @@ ornament(notes, { style: 'ghost', amount: 0.6, seed: 4 }).length; // 8
 
 ## コンテキストと再現性
 
-`GenerationContext` は、プロジェクトのシード、テンポ、楽器プロファイル、vocabulary、complexity、difficulty を保持します。`complexity` は `rhythmic`、`harmonic`、`ornament` を 0..1 で持ちます。`difficulty` は1から5の上限で、強度を上げるのではなく候補を削ります。
+`GenerationContext` は、プロジェクトのシード、テンポ、楽器プロファイル、vocabulary、complexity、difficulty を保持します。`complexity` は `rhythmic`、`harmonic`、`ornament` を 0..1 で持ちます。`difficulty` は1から5の上限で、強度を上げるのではなく候補を削ります。`vocabulary` は曲全体が引くジャンル辞書で、[リズムとグルーヴ](rhythm-and-groove.md)の「ジャンル語彙」で説明しています。
 
 `1` のような数値コンテキストは `{ seed: 1 }` の略記です。乱数の選択は位置から導かれ、`algorithmVersion` が生成の契約を固定します。生成したパートをそのまま開き直すためにプロジェクトファイルへ保存する項目は、[決定性とシード](determinism-and-seeding.md)を参照してください。
 

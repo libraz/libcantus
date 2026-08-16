@@ -1,6 +1,7 @@
 import type { ChordMatch, DetectChordOptions } from '../analyze/detect/index.js';
 import { detectChord, detectChordBest } from '../analyze/detect/index.js';
 import {
+  type AnalyzeChordOptions,
   analyzeChord,
   type BorrowedSource,
   borrowedSource,
@@ -12,7 +13,7 @@ import {
   isBorrowedChord,
   secondaryDominantOf,
 } from '../analyze/functional/index.js';
-import { InvalidInputError, type ParseResult } from '../core/errors/index.js';
+import { InvalidInputError, type ParseResult, unwrapParse } from '../core/errors/index.js';
 import type {
   IntervalLike,
   Note as NoteData,
@@ -21,10 +22,12 @@ import type {
 } from '../core/pitch/index.js';
 import {
   noteToPitchClass,
+  pitchClassOf,
   toSpelledInterval,
   transposeByInterval,
   transposeNote,
 } from '../core/pitch/index.js';
+import { assertFiniteNumber } from '../core/validation/index.js';
 import { negativeHarmonyMirror } from '../generate/reharmony/index.js';
 import {
   type Chord as ChordData,
@@ -36,6 +39,8 @@ import {
   transposeChord,
 } from '../theory/chord/index.js';
 import {
+  type AvailableTensionsOptions,
+  type AvoidNotesOptions,
   availableTensions,
   avoidNotes,
   type ChordScaleMatch,
@@ -46,7 +51,6 @@ import { spellChord, spellChordFromRoot, spellPitchClass } from '../theory/spell
 import {
   type ChordSymbolOptions,
   formatChordSymbol,
-  parseChordSymbol,
   tryParseChordSymbol,
 } from '../theory/symbol/index.js';
 import {
@@ -126,6 +130,12 @@ function transposeToneHintsByInterval(
 /**
  * Defensive copy of a plain chord.
  *
+ * The root and bass are reduced to pitch classes by the same helper
+ * {@link makeChord} uses, because this is the other way a chord is built: data
+ * arriving from a project file or a plugin would otherwise keep a root of 25
+ * that every getter reports verbatim and `equals` compares against a 1 it never
+ * matches.
+ *
  * Enharmonic spelling hints (`rootSpelling`/`bassSpelling`, populated by
  * `parseChordSymbol`, and the per-tone `toneSpellings` an augmented sixth
  * carries) are carried through so a flat-named chord round-trips through the
@@ -135,12 +145,17 @@ function transposeToneHintsByInterval(
  */
 function copyChord(data: ChordData): ChordData {
   const copy: ChordData = {
-    rootPc: data.rootPc,
+    rootPc: pitchClassOf(data.rootPc),
     quality: data.quality,
-    intervals: [...data.intervals],
+    // Each offset is checked rather than copied blind: a chord holding a NaN
+    // interval voices, spells and formats as a chord that looks real, and the
+    // failure surfaces wherever the number is finally used.
+    intervals: data.intervals.map((interval, index) =>
+      assertFiniteNumber(interval, `chord intervals[${index}]`),
+    ),
   };
   if (data.bassPc !== undefined) {
-    copy.bassPc = data.bassPc;
+    copy.bassPc = pitchClassOf(data.bassPc);
   }
   const tones = chordToneSpellings(data);
   if (tones !== undefined) {
@@ -309,7 +324,9 @@ export class Chord {
    * @param opts `system` reads the root and bass in that notation system
    *   instead of English.
    * @returns The chord (without key context).
-   * @throws If the root or quality is not recognized.
+   * @throws If the root or quality is not recognized. Use
+   *   {@link Chord.tryParse} where failure is ordinary, such as a chord field
+   *   read on every keystroke.
    * @example
    * ```ts
    * import { Chord } from '@libraz/libcantus';
@@ -317,7 +334,7 @@ export class Chord {
    * ```
    */
   static parse(symbol: string, opts?: NoteNameOptions): Chord {
-    return new Chord(parseChordSymbol(symbol, opts));
+    return unwrapParse(Chord.tryParse(symbol, opts));
   }
 
   /**
@@ -450,10 +467,20 @@ export class Chord {
   /**
    * The chord's sorted, deduplicated pitch classes.
    *
+   * A slash bass is one of them, because the chord sounds it.
+   *
+   * @param opts Set `includeBass: false` to enumerate the interval template
+   *   alone, leaving a slash bass out.
    * @returns Pitch classes ascending in [0, 11].
+   * @example
+   * ```ts
+   * import { Chord } from '@libraz/libcantus';
+   * Chord.parse('F/G').pitchClasses(); // [0, 5, 7, 9]
+   * Chord.parse('F/G').pitchClasses({ includeBass: false }); // [0, 5, 9]
+   * ```
    */
-  pitchClasses(): number[] {
-    return chordPitchClasses(this.#data);
+  pitchClasses(opts?: { includeBass?: boolean }): number[] {
+    return chordPitchClasses(this.#data, opts);
   }
 
   /**
@@ -480,14 +507,22 @@ export class Chord {
   }
 
   /**
-   * Full functional analysis: function, borrowing, and Roman numeral.
+   * Full functional analysis: function, borrowing, Roman numeral, and the
+   * rationale behind them.
    *
    * @param key Key to analyze in; falls back to the carried context.
-   * @param opts Applied-numeral rendering options.
+   * @param opts Applied-numeral rendering options, plus `alternatives` to
+   *   collect the readings this analysis turned down; see
+   *   {@link AnalyzeChordOptions}.
    * @returns The chord analysis.
    * @throws If no key is given and none is carried.
+   * @example
+   * ```ts
+   * import { Chord, Key } from '@libraz/libcantus';
+   * Chord.parse('D7').analyze(Key.major('C'), { alternatives: true }).alternatives.length;
+   * ```
    */
-  analyze(key?: Key, opts?: ChordToRomanOptions): ChordAnalysis {
+  analyze(key?: Key, opts?: AnalyzeChordOptions): ChordAnalysis {
     return analyzeChord(this.#data, this.#resolveKey(key).scale, opts);
   }
 
@@ -710,11 +745,21 @@ export class Chord {
    * scale over this chord.
    *
    * @param scaleName A named scale, rooted on the chord root.
+   * @param opts Set `resolvesTo` to the plain chord this one resolves to, so a
+   *   dominant resolving down a fifth onto a minor tonic takes the tensions
+   *   that resolution makes available; see {@link AvailableTensionsOptions}.
    * @returns Tension pitch classes, ascending in [0, 11].
    * @throws If `scaleName` is not a built-in scale.
+   * @example
+   * ```ts
+   * import { Chord } from '@libraz/libcantus';
+   * Chord.of('G', 'dom7').tensions('phrygianDominant', {
+   *   resolvesTo: Chord.of('C', 'min').data,
+   * }); // [3, 8]
+   * ```
    */
-  tensions(scaleName: ScaleNameInput): number[] {
-    return availableTensions(this.#data, scaleName);
+  tensions(scaleName: ScaleNameInput, opts?: AvailableTensionsOptions): number[] {
+    return availableTensions(this.#data, scaleName, opts);
   }
 
   /**
@@ -722,11 +767,20 @@ export class Chord {
    * over this chord.
    *
    * @param scaleName A named scale, rooted on the chord root.
+   * @param opts Set `use: 'melodic'` to judge a line rather than a voicing, so
+   *   a tone a line may pass through is not counted; see
+   *   {@link AvoidNotesOptions}.
    * @returns Avoid-note pitch classes, ascending in [0, 11].
    * @throws If `scaleName` is not a built-in scale.
+   * @example
+   * ```ts
+   * import { Chord } from '@libraz/libcantus';
+   * Chord.of('C', 'maj7').avoidNotes('ionian'); // [5]
+   * Chord.of('C', 'maj7').avoidNotes('ionian', { use: 'melodic' }); // []
+   * ```
    */
-  avoidNotes(scaleName: ScaleNameInput): number[] {
-    return avoidNotes(this.#data, scaleName);
+  avoidNotes(scaleName: ScaleNameInput, opts?: AvoidNotesOptions): number[] {
+    return avoidNotes(this.#data, scaleName, opts);
   }
 
   /**

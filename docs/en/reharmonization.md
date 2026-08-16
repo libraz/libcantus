@@ -18,7 +18,7 @@ formatChordSymbol(subs.find((sub) => sub.type === 'tritone')?.chord ?? makeChord
 
 The tritone substitute of G7 in C major is spelled Db7, not C#7 — it is the flat second degree of the key, and the spelling says so.
 
-The five relationships:
+The four relationships:
 
 | Type | Applies to | What it does |
 | --- | --- | --- |
@@ -26,7 +26,8 @@ The five relationships:
 | `relative` | Triads and sevenths | Swaps in a chord sharing two triad tones. |
 | `borrowed` | Any chord | Takes the same degree from the parallel mode. |
 | `chromaticMediant` | Any chord | A third away, with one common tone and a chromatic shift. |
-| `secondaryDominant` | Any chord | The applied dominant of the following harmony. |
+
+An applied dominant is not one of them. Which dominant applies is decided by the chord that follows, and `substituteChord` is asked about one chord in a key. Where the target is known, `secondaryDominantOf` builds the applied dominant of a named chord; where the whole progression is being chosen, `harmonizeMelody` opens its vocabulary with `reharmonize: 'secondaryDominant'`.
 
 ### Keeping the melody consonant
 
@@ -134,6 +135,8 @@ result.transposeSemitones; // 0
 ```
 
 `result.chords` holds one `ChordSpan` per chord change on the harmonic-rhythm grid, and `result.melodyRoles` gives each melody note's role in the chord that ended up under it. `result.key` is the key the chords are written in, and `transposeSemitones` is how far the melody was moved to get there — a melody that was not in a key the harmonizer could work in comes back with the offset that puts it there, rather than with chords in the wrong key.
+
+A melody is cadenced where it ends, which is what a caller who hands over one phrase at a time wants. A line longer than one phrase closes at each phrase end as well, and the harmonizer cannot see those closes for itself: `phrasesFromTimeline` finds them for a line that already carries chords, and harmonizing phrase by phrase gives each close a cadence of its own.
 
 `classifyMelodyTones` runs the non-chord-tone classification on its own, for a UI that shades passing and auxiliary tones without committing to a harmonization.
 

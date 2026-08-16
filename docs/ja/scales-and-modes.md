@@ -37,6 +37,22 @@ const hexatonic = { rootPc: 0, modeMask12: maskFromOffsets([0, 3, 4, 7, 8, 11]) 
 scaleTonesInDegreeOrder(hexatonic); // [0, 3, 4, 7, 8, 11]
 ```
 
+## 収録の範囲
+
+どちらの表でも、1つのエントリはピッチクラスの集合です。`WORLD_SCALES` の名前は、集合よりはるかに多くのものを持つ伝統から取られていますが、マスクが担うのは集合だけです。
+
+thāt は rāga ではありません。上行形と下行形（ārohaṇa / avarohaṇa）も、vādī / samvādī も、pakaḍ も持たないため、`todi` から得られるのは rāga Todi が用いる音組織だけで、rāga を演奏するための材料は揃いません。
+
+```ts
+import { scaleByName, scaleTonesInDegreeOrder } from '@libraz/libcantus';
+
+scaleTonesInDegreeOrder(scaleByName('todi', 0)); // [0, 1, 3, 6, 7, 8, 11]
+```
+
+他の名前も同じです。マカームは ajnās を組み合わせ、フレーズの進行に応じて移高・転換していく体系で、ここにある5つが指すのはマカームの音組織にとどまります。日本の音階は小泉文夫のテトラコルド理論では、核音が枠づけるテトラコルドとして説明されます。`miyakoBushi` と `minyo` の違いはテトラコルドの型の違いであり、ピッチクラス集合の違いはその結果を書き留めたものです。
+
+ピッチ集合としての響きが必要な場面で使ってください。旋法体系そのものを扱うにはその体系のモデルが要りますが、このライブラリは持っていません。
+
 ## 度数と所属
 
 ```ts
@@ -81,20 +97,37 @@ chordScales(makeChord(0, 'maj7'))[0]; // { name: 'ionian', rootPc: 0 }
 chordScales(makeChord(0, 'dom7'))[0]; // { name: 'mixolydian', rootPc: 0 }
 ```
 
-スケールが決まると、2つの問いが続きます。テンションは色として追加できる非コード構成音のスケール音、アボイドノートはコード構成音の半音上に位置する非コード構成音で、和音に重ねると濁ります。
+スケールが決まると、2つの問いが続きます。テンションは色として追加できる非コード構成音のスケール音、アボイドノートはコード構成音の半音上に位置する非コード構成音（またはサスペンションが追い出した3度）で、和音に重ねると濁ります。
+
+この規則が示すのは和音に**重ねて**はいけない音であり、ラインが触れてはいけない音とは別の問いです。`{ use: 'melodic' }` は後者を尋ねます。ここで残るのはルートの半音上だけなので、旋律的な答えは常に和声的な答えの部分集合になります。
 
 ```ts
 import { availableTensions, avoidNotes, chordScaleReport, makeChord } from '@libraz/libcantus';
 
 availableTensions(makeChord(0, 'maj7'), 'ionian'); // [2, 9]
 avoidNotes(makeChord(0, 'maj7'), 'ionian'); // [5]
+avoidNotes(makeChord(0, 'maj7'), 'ionian', { use: 'melodic' }); // []
 
 const report = chordScaleReport(makeChord(0, 'dom7'), 1);
 report[0]?.name; // 'mixolydian'
-report[0]?.avoid; // [5]
+report[0]?.avoid; // []
+report[0]?.passing; // [5]
+report[0]?.tensions; // [2, 9]
 ```
 
-`chordScaleReport` は上の3つを1つにまとめたもので、適合順に並び、件数の上限も指定できます。UI のパネルが必要とするのは通常この形です。
+`chordScaleReport` は上の3つを1つにまとめたもので、適合順に並び、件数の上限も指定できます。各エントリはコードが鳴らしていないスケール音を3つに分けます。`avoid` はまったく弾けない音、`passing` は経過的には通れるが和音に重ねてはいけない音、`tensions` は色として自由に足せる音です。UI のパネルが必要とするのは通常この形です。
+
+可用性はそのコードの働きにも左右されます。属七の和音を単独で読むと、短調のスケール上では使える音がありません。♭9・11・♭13 がいずれもコード構成音の半音上に来るからです。しかしその調の属和音として聴けば、♭9 と ♭13 はその調自身の音であり定石でもあります。解決先のコードを渡してください。
+
+```ts
+import { availableTensions, makeChord } from '@libraz/libcantus';
+
+availableTensions(makeChord(7, 'dom7'), 'phrygianDominant'); // []
+availableTensions(makeChord(7, 'dom7'), 'phrygianDominant', { resolvesTo: makeChord(0, 'min') });
+// [3, 8]
+```
+
+完全11度はアボイドノートのままです。解決によって使えるようになるのは変化した9度と♭13 であって、あらゆる衝突ではありません。
 
 ## 進行全体でスケールを選ぶ
 

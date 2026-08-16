@@ -17,12 +17,14 @@ chordSpecOf(altered.data).alterations;
 
 `Chord` の値は転回、移調、整形、進行への変換ができます。純粋関数の `makeChord`、`chordFromSpec`、`chordPitchClasses`、`formatChordSymbol` は、クラスラッパーなしで同じデータモデルを公開します。
 
-記号は往復しても保たれ、転回は音程リストの並べ替えではなくベースのピッチクラスとして保持されます。
+記号は往復しても保たれ（どの品質名にも当てはまらない和音を含みます）、転回は音程リストの並べ替えではなくベースのピッチクラスとして保持されます。
 
 ```ts
 import { Chord, formatChordSymbol, parseChordSymbol } from '@libraz/libcantus';
 
 formatChordSymbol(parseChordSymbol('Cmaj7')); // 'Cmaj7'
+formatChordSymbol(parseChordSymbol('Cmaj7sus4')); // 'Cmaj7sus4'
+formatChordSymbol(parseChordSymbol('C6/9(#11)')); // 'C6/9(#11)'
 Chord.parse('C/E').data.bassPc; // 4
 Chord.parse('C/E').pitchClasses(); // [0, 4, 7]
 ```
@@ -112,13 +114,13 @@ voicing;
 
 ## 通奏低音と対位法
 
-通奏低音の音程は調から取られるため、同じ数字でも度数が違えば異なる綴りになります。`realizeFiguredBass`、`spellChord`、`checkPartWriting`、`checkSpecies` は綴られた音を扱い、課題を黙って書き換えるのではなく違反や説明を返します。
+通奏低音の音程は調から取られるため、同じ数字でも度数が違えば異なる綴りになります。`realizeFiguredBass`、`spellChord`、`checkPartWriting`、`checkSpecies` は綴られた音を扱い、課題を黙って書き換えるのではなく違反や説明を返します。綴り関数にはその調自身の主音を渡してください。調の根音と異なるピッチクラスを鳴らす主音は、綴られずに拒否されます。
 
 ```ts
 import { Key, formatNote, parseNote, realizeFiguredBass, spellChord } from '@libraz/libcantus';
 
 const chord = realizeFiguredBass(parseNote('D'), '6', Key.major('C').scale);
-spellChord(chord, parseNote('B'), Key.major('C').scale).map(formatNote);
+spellChord(chord, parseNote('C'), Key.major('C').scale).map(formatNote);
 // ['B', 'D', 'F']
 ```
 

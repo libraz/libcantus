@@ -21,7 +21,15 @@ import {
 } from './hihat.js';
 import type { HitList } from './hit.js';
 import type { DrumRole, DrumStyle, Feel, SectionType } from './internal.js';
-import { EIGHTH, GM, leanedBy, type MoodCategory, SIXTEENTH } from './internal.js';
+import {
+  BACKBEAT_LIFT,
+  EIGHTH,
+  GM,
+  leanedBy,
+  type MoodCategory,
+  QUARTER,
+  SIXTEENTH,
+} from './internal.js';
 import type { KickPattern } from './kick.js';
 import { effectiveSwing, quantizeSwing } from './swing.js';
 
@@ -29,6 +37,11 @@ import { effectiveSwing, quantizeSwing } from './swing.js';
 export type SectionCtx = {
   style: DrumStyle;
   feel: Feel;
+  /**
+   * Whether the feel is the caller's own request rather than the one the style
+   * implies. A named feel is taken at its word by every style.
+   */
+  feelRequested: boolean;
   densityMult: number;
   /** Rhythmic dial in [0, 1]: subdivision and syncopation. */
   rhythmic: number;
@@ -65,8 +78,12 @@ export type BeatCtx = {
 };
 
 /**
- * How much of the feel's swing a style actually takes. Trap sits on a straight
- * (or triplet-hat) grid, latin only leans; everything else swings by half.
+ * How much of the feel's swing a style takes when the caller named no feel.
+ *
+ * These are the characters of the styles themselves: trap sits on a straight
+ * (or triplet-hat) grid and latin only leans. They apply to the feel a style
+ * implies, never to one the caller asked for — a request that comes back
+ * unrecognisable is worse than one that comes back refused.
  */
 function styleSwingFactor(style: DrumStyle): number {
   if (style === 'trap') {
@@ -75,7 +92,7 @@ function styleSwingFactor(style: DrumStyle): number {
   if (style === 'latin') {
     return 0.35;
   }
-  return 0.5;
+  return 1;
 }
 
 /**
@@ -87,7 +104,8 @@ function styleSwingFactor(style: DrumStyle): number {
  * rather than as groove.
  */
 function sectionSwing(sec: SectionCtx, swingAmount: number): number {
-  return effectiveSwing(sec.feel, swingAmount) * styleSwingFactor(sec.style);
+  const swing = effectiveSwing(sec.feel, swingAmount);
+  return sec.feelRequested ? swing : swing * styleSwingFactor(sec.style);
 }
 
 /** Place a tick on the section's shared swung 16th grid. */
@@ -140,7 +158,7 @@ export function generateSnareForBeat(ctx: BeatCtx, sec: SectionCtx, isIntroFirst
     return;
   }
 
-  const backbeatVel = Math.min(127, ctx.velocity + 16);
+  const backbeatVel = Math.min(127, ctx.velocity + BACKBEAT_LIFT);
   const promoteSparseChorus =
     sec.style === 'sparse' && ctx.section === 'chorus' && sec.role === 'full';
 
@@ -215,13 +233,21 @@ export function generatePreChorusBuildup(
   const barInLift = ctx.bar - (ctx.sectionBars - barsInLift);
   const progress = (barInLift * 4 + ctx.beat) / (barsInLift * 4);
   const buildupVel = ctx.velocity * (0.5 + 0.5 * progress);
-  ctx.track.add(GM.SD, ctx.beatTick, EIGHTH, buildupVel);
-  ctx.track.add(
-    GM.SD,
-    swing16(ctx.beatTick + EIGHTH, sec, ctx.swingAmount),
-    EIGHTH,
-    buildupVel * 0.85,
-  );
+  // The lift is a stream on one voice, so the ceiling decides how fine it may
+  // be written: the offbeat goes first, and where even the quarter is out of
+  // reach at this tempo the crash carries the phrase end alone.
+  const takesEighths = sustainsStrokes(EIGHTH, ctx.bpm, sec.difficulty);
+  if (takesEighths || sustainsStrokes(QUARTER, ctx.bpm, sec.difficulty)) {
+    ctx.track.add(GM.SD, ctx.beatTick, EIGHTH, buildupVel);
+  }
+  if (takesEighths) {
+    ctx.track.add(
+      GM.SD,
+      swing16(ctx.beatTick + EIGHTH, sec, ctx.swingAmount),
+      EIGHTH,
+      buildupVel * 0.85,
+    );
+  }
   if (isSectionLastBar && ctx.beat === 3) {
     ctx.track.add(GM.CRASH, ctx.beatTick + EIGHTH + SIXTEENTH, SIXTEENTH, ctx.velocity * 1.1);
   }

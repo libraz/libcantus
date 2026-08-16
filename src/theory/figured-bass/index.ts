@@ -522,6 +522,11 @@ export function realizeFiguredBass(bass: Note, figures: string, key: KeyScale): 
  * third of a dominant in a minor key emits `#3` rather than the bare `#` a
  * score would print — the figures this returns read back as the same chord.
  *
+ * What this returns is read back before it is returned, so the two directions
+ * cannot disagree: a chord the digits would name only approximately — an
+ * augmented sixth, whose tones do not stack in thirds over its bass — has no
+ * figures rather than figures that fail to realize.
+ *
  * @param chord The chord to figure; its `bassPc`, when present, is the bass the
  *   intervals are measured above.
  * @param key The prevailing key, which decides which intervals need no
@@ -579,8 +584,44 @@ export function figuredBassOf(chord: Chord, key: KeyScale): string {
   // Figures are written from the top down, and an altered interval the
   // abbreviation leaves implied has to be named for its accidental to land on
   // anything: a raised third under a `6` is written `6#3`, not `#6`.
-  return [...new Set([...digits, ...accidentals.keys()])]
+  const figures = [...new Set([...digits, ...accidentals.keys()])]
     .sort((a, b) => b - a)
     .map((number) => `${accidentals.get(number) ?? ''}${number}`)
     .join('');
+  assertRealizesAs(bass, figures, key, tones);
+  return figures;
+}
+
+/** The pitch classes a set of spelled notes sounds, ascending. */
+function pitchClassesOf(notes: readonly Note[]): number[] {
+  return [...new Set(notes.map(noteToPitchClass))].sort((a, b) => a - b);
+}
+
+/**
+ * Require the figures just written to read back as the chord they were written
+ * from, and report the ones that do not as having no figured bass.
+ *
+ * The digits are chosen by which intervals are written above the bass, which is
+ * a weaker test than the one a realization applies: a chord may occupy the
+ * interval positions of an inversion without stacking in thirds over its bass,
+ * and the augmented sixths do exactly that. Reading the figures back is what
+ * keeps the two directions from disagreeing about which chords the notation
+ * reaches, rather than a second table that would drift from the first.
+ */
+function assertRealizesAs(bass: Note, figures: string, key: KeyScale, tones: Note[]): void {
+  const noFigures = (detail: string): NoSolutionError =>
+    new NoSolutionError(
+      `no figured bass names ${noteNames(tones).join(' ')} over ${noteNames([bass])[0]}: the figures ${JSON.stringify(figures)} ${detail}`,
+    );
+  let realized: FiguredBassRealization;
+  try {
+    realized = figuredBassRealization(bass, figures, key);
+  } catch (error) {
+    throw error instanceof NoSolutionError ? noFigures('read back as no chord at all') : error;
+  }
+  const written = pitchClassesOf(realized.notes);
+  const expected = pitchClassesOf(tones);
+  if (written.length !== expected.length || written.some((pc, index) => pc !== expected[index])) {
+    throw noFigures(`sound ${noteNames(realized.notes).join(' ')} instead`);
+  }
 }

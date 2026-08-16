@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { chordToRoman } from '../src/analyze/functional/index.js';
+import { augmentedSixthChord, chordToRoman } from '../src/analyze/functional/index.js';
 import { isLibcantusError } from '../src/core/errors/index.js';
-import { parseNote } from '../src/core/pitch/index.js';
-import { makeChord } from '../src/theory/chord/index.js';
+import type { Note } from '../src/core/pitch/index.js';
+import { noteToPitchClass, parseNote, pitchClassOf } from '../src/core/pitch/index.js';
+import type { KeyScale } from '../src/core/types.js';
+import type { Chord } from '../src/theory/chord/index.js';
+import { chordPitchClasses, chordQualities, makeChord } from '../src/theory/chord/index.js';
 import {
   figuredBassOf,
   figuredBassRealization,
   realizeFiguredBass,
 } from '../src/theory/figured-bass/index.js';
-import { majorKey, minorKey, scaleByName } from '../src/theory/scale/index.js';
+import { majorKey, minorKey, scaleByName, spelledKeyOf } from '../src/theory/scale/index.js';
 import { noteNames, spellChord } from '../src/theory/spelling/index.js';
 
 const cMajor = majorKey(0);
@@ -292,5 +295,76 @@ describe('figuredBassOf writes the figures back', () => {
       caught = error;
     }
     expect(isLibcantusError(caught) && caught.code).toBe('NO_SOLUTION');
+  });
+});
+
+/** The bass a chord is figured over, spelled as the key spells it. */
+function bassNoteOf(chord: Chord, key: KeyScale): Note | undefined {
+  const bassPc = pitchClassOf(chord.bassPc ?? chord.rootPc);
+  return spellChord(chord, spelledKeyOf(key).tonic, key).find(
+    (tone) => noteToPitchClass(tone) === bassPc,
+  );
+}
+
+describe('the two directions of the figure grammar reach the same chords', () => {
+  /** Every chord the vocabulary builds, over each of its own tones as bass. */
+  function figurableChords(): [Chord, KeyScale][] {
+    const cases: [Chord, KeyScale][] = [];
+    for (const key of [cMajor, cMinor, aMinor]) {
+      for (const quality of chordQualities()) {
+        for (const rootPc of [0, 3, 7]) {
+          for (const bassPc of chordPitchClasses(makeChord(rootPc, quality))) {
+            cases.push([makeChord(rootPc, quality, bassPc), key]);
+          }
+        }
+      }
+    }
+    return cases;
+  }
+
+  it('accepts back every figure it writes, or writes none at all', () => {
+    for (const [chord, key] of figurableChords()) {
+      const label = `${chord.quality}/${chord.rootPc}/${chord.bassPc}`;
+      let figures: string;
+      try {
+        figures = figuredBassOf(chord, key);
+      } catch (error) {
+        // Refusing to figure a chord is a documented answer; failing to name
+        // the refusal as this library's own is not.
+        expect(isLibcantusError(error) && error.code, label).toBe('NO_SOLUTION');
+        continue;
+      }
+      const bass = bassNoteOf(chord, key);
+      expect(bass, label).toBeDefined();
+      if (bass === undefined) {
+        continue;
+      }
+      const realized = realizeFiguredBass(bass, figures, key);
+      expect(chordPitchClasses(realized), `${label} -> ${figures}`).toEqual(
+        chordPitchClasses(chord),
+      );
+    }
+  });
+
+  it('writes no figures for the augmented sixths the realization refuses', () => {
+    // The three of them occupy the interval positions of an inversion without
+    // stacking in thirds over the bass, so the digits alone would name a chord
+    // that cannot be realized back.
+    for (const kind of ['italian', 'french', 'german'] as const) {
+      const chord = augmentedSixthChord(kind, cMajor);
+      let figures: string | undefined;
+      try {
+        figures = figuredBassOf(chord, cMajor);
+      } catch (error) {
+        expect(isLibcantusError(error) && error.code, kind).toBe('NO_SOLUTION');
+        continue;
+      }
+      const bass = bassNoteOf(chord, cMajor);
+      expect(bass, kind).toBeDefined();
+      if (bass === undefined) {
+        continue;
+      }
+      expect(() => realizeFiguredBass(bass, figures ?? '', cMajor), kind).not.toThrow();
+    }
   });
 });

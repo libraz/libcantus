@@ -82,9 +82,13 @@ detectCadence(g, c, key).strength; // null
 
 ソプラノを特定できるボイシングがない場合、`strength` は null になります。ボイシングを渡すと、正格終止が完全・不完全に分類されます。根音進行のない V の反復は終止として報告されません。
 
+終止は固定の半音距離ではなく、その調が実際に持つ度数に対して判定されます。旋法は自身の下中音へ偽終止し、属和音が導音を持たない旋法（エオリアンやドリアンの `v`）では、その属和音への到達も半終止になります。長調は導音を持つため、借用した短調の `v` は半終止になりません。
+
+終止四六の和音は主和音の転回ではなく属和音そのものです。バスはすでに属音に到達しており、その上の音は属和音自身の構成音へ下行して解決します。属和音の前の和音を `approach` として渡すと、終止は1つの事象として報告されます。種類と拍は属和音の解決のまま変わらず、`rationale` が「終止は四六から始まった」と述べます。`IV–I64–IV` のようにバスが離れる四六は通常の主和音の転回として読まれます。
+
 ## 縮約と形式
 
-`reduceProgression` は各コードを `structural`、`passing`、`auxiliary` に分類し、理由を付けます。
+`reduceProgression` は各コードを `structural`、`passing`、`neighbor` に分類し、理由と、そのコードが鳴る拍の範囲を付けます。装飾の2つの図形は `analyzeVoice` が音符に付けるラベルと同じ綴りなので、1つの凡例で両方の層を扱えます。
 
 ```ts
 import { chordTimelineFromChords, majorKey, reduceProgression } from '@libraz/libcantus';
@@ -114,7 +118,7 @@ reduceProgression(timeline, majorKey(0)).map((entry) => entry.level);
 
 ## アレンジのレポート
 
-`analyzeArrangement` は、トラックの役割、コードタイムライン、調区間、理論ラベル、テンション、音符と現在の和声の衝突をまとめます。
+`analyzeArrangement` は、コードタイムライン、調区間、理論ラベル、音符と現在の和声の衝突をまとめます。レポートが持つのは `keys` と `prevailingKey`、`timeline` とその `segmentConfidence`、`cadences`、トラックごとの注釈である `tracks`、そして `conflicts` です。テンションはこれとは別の読みで、`tensionCurve` から得ます。
 
 ```ts
 import { analyzeArrangement } from '@libraz/libcantus';
@@ -135,3 +139,5 @@ Array.isArray(report.conflicts); // true
 ```
 
 アレンジ全体の結果が不要な場合は、`tensionCurve` と `analyzeVoice` がその一部を返します。`toVoiceNotes` は単一トラックを声部レベルの解析向けに整えます。編集をまたいで解析を保持する `createArrangementSession` については[パフォーマンス](performance.md)を参照してください。
+
+`analyzeVoice` が名指す装飾音の図形——経過音・刺繍音・掛留・倚音・先取音・逸音——は、同じ音に対して `classifyMelodyTones` が使う語と同一です。1つの旋律を解析から読んでもハーモナイザから読んでも、返る語彙は1つに揃います。ただし `analyzeVoice` は拍節を受け取らず旋律形だけを見るため、もう一方より図形を名指す箇所が少なくなります。名前が食い違うのではなく、名前が付く範囲が狭いということです。

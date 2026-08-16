@@ -8,7 +8,8 @@
 | --- | --- |
 | 音高・音程・コード・スケールの演算 | 定数時間。12ビットマスクのビット操作です。 |
 | `detectChord`、`detectKey` | 候補集合に比例。候補数は固定です。 |
-| `chordTimelineFromNotes` | 音符数 × ウィンドウ数に比例。ウィンドウ数は範囲と和声リズムから決まります。 |
+| `chordTimelineFromNotes` | 音符とウィンドウの帰属数に比例。各音符は自身が鳴るウィンドウでのみ読まれ、ウィンドウ数は範囲と和声リズムから決まります。 |
+| `keyTimelineFromNotes`、`detectModulations` | 同じ計算量を `minKeyBeats` のスロット単位で行い、加えてスロットごとに固定24候補の探索を行います。 |
 | `voiceChord` | `maxCandidates`（既定4000）で上限が決まります。 |
 | `voiceProgression` | コード数に比例。1コードあたりの探索に上限があるためです。 |
 | `analyzeArrangement` | 和声トラックを平坦化したタイムライン処理が支配的です。 |

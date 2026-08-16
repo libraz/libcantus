@@ -34,6 +34,26 @@ export function floorMod(value: number, modulus: number): number {
 }
 
 /**
+ * Where the analysed span starts: the earliest beat that sounds.
+ *
+ * Seeding this with 0 instead would anchor every analysis to bar 0 — an excerpt
+ * lifted from bar 9 would be reported as starting at beat 0 and as holding
+ * eight bars of silence it never had. The span runs back past beat 0 only for a
+ * genuine pickup, which sounds before the first downbeat.
+ *
+ * @param notes The sounding notes.
+ * @param fallback The beat to report when nothing sounds.
+ * @returns The earliest onset, or `fallback` for an empty span.
+ */
+export function firstSoundingBeat(notes: readonly NoteEvent[], fallback = 0): number {
+  let first = Number.POSITIVE_INFINITY;
+  for (const note of notes) {
+    first = Math.min(first, note.startBeat);
+  }
+  return Number.isFinite(first) ? first : fallback;
+}
+
+/**
  * Index of the last bar a span occupies.
  *
  * A span ending exactly on a bar line ends in the bar before it: the bar its

@@ -1,10 +1,10 @@
 import { isDiatonic, parallelKey } from '../../analyze/functional/index.js';
-import { createNoteEventIndex } from '../../core/event-index/index.js';
 import type { TimeSignature } from '../../core/meter/index.js';
-import { isStrongBeat } from '../../core/meter/index.js';
+import { beatsPerBar, isStrongBeat, pulseBeats } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
+  assertFiniteNumber,
   assertGenerationBudget,
   assertNoteEvents,
   assertRange,
@@ -19,12 +19,11 @@ import {
   isScaleTone,
   majorKey,
   minorKey,
-  NATURAL_MINOR_MASK,
   scaleTonesInDegreeOrder,
 } from '../../theory/scale/index.js';
 import { type GenerationContextInput, resolveContextWith } from '../context/index.js';
 import type { ChordSpan } from '../progression/index.js';
-import { classifyMelodyTones } from './nct.js';
+import { classifyMelodyTones, snapToPulse } from './nct.js';
 
 export type { ClassifiedMelodyTone, MelodyToneRole } from './nct.js';
 export { classifyMelodyTones } from './nct.js';
@@ -89,13 +88,17 @@ export type HarmonizeOptions = {
    * honoured; a value fine enough to make the search explode is rejected by the
    * generation budget rather than rounded up.
    *
-   * @defaultValue 2
+   * Left out, it is read from `ts`: half a bar where the half falls on a pulse,
+   * and the whole bar where it does not, so a waltz changes chord on its
+   * downbeats rather than across them. In 4/4 that is one chord per half bar.
+   *
+   * @defaultValue half a bar of `ts` — 2 in 4/4
    */
   harmonicRhythm?: number;
   /**
-   * Time signature used to weight metric accents; defaults to 4/4. A waltz or
-   * a jig harmonized against a 4/4 accent grid gets its chords placed on the
-   * wrong beats, and the error accumulates bar by bar.
+   * Time signature the melody is barred in. It weights the metric accents the
+   * chords are chosen against and sets the default chord grid, so a waltz or a
+   * jig is harmonized on its own beats rather than on a 4/4 reading of them.
    *
    * @defaultValue `4/4`
    */
@@ -128,6 +131,22 @@ export type HarmonizeOptions = {
    */
   seed?: number;
   /**
+   * Beats at which the melody's phrases end, so a longer line cadences at each
+   * of them instead of only at its close.
+   *
+   * The melody always cadences where it ends, whatever this says; these are the
+   * closes *inside* it. `phrasesFromTimeline` finds the phrases of a line
+   * already labelled with chords, and its `endBeat` values are what this
+   * expects, so a caller harmonizes a whole piece in one call rather than
+   * harmonizing each phrase and joining the results.
+   *
+   * A boundary landing exactly on a chord-slot boundary closes the slot before
+   * it — the beat a phrase ends on is where the next phrase begins.
+   *
+   * @defaultValue none — one cadence, at the close
+   */
+  phraseEnds?: readonly number[];
+  /**
    * The generation context. Its `complexity.harmonic` is how far the chord
    * vocabulary reaches beyond the key's own triads — 0 uses them alone, 0.5 has
    * every secondary dominant, 1 the parallel mode's chords as well — and its
@@ -154,7 +173,8 @@ export type HarmonizeResult = {
   melodyRoles: { noteIndex: number; role: HarmonyRole }[];
 };
 
-type Candidate = {
+/** One chord the search may place in a slot, with everything it is scored by. */
+export type Candidate = {
   rootPc: number;
   quality: ChordQuality;
   degree?: number;
@@ -169,6 +189,20 @@ type Candidate = {
   pcs: number[];
 };
 
+/**
+ * One note as a segment's emission term sees it: how much of the segment it
+ * sounds in and whether it lands on an accent. Neither depends on the candidate
+ * chord or on the transposition being tried, so both are found once.
+ */
+type CostNote = {
+  /** Index in the sounding melody. */
+  index: number;
+  /** Beats of the segment the note sounds in, floored so a short note still counts. */
+  weight: number;
+  /** Whether the note enters the segment on a metric accent. */
+  strong: boolean;
+};
+
 type Segment = {
   startBeat: number;
   endBeat: number;
@@ -179,7 +213,14 @@ type Segment = {
    * falling back to all of its notes when ornaments are all it has. A chord slot
    * with no note left to explain would be chosen by chord flow alone.
    */
-  costIndices: number[];
+  costNotes: CostNote[];
+  /** Total emission weight of `costNotes`: what covering the segment is worth. */
+  weight: number;
+  /**
+   * The last of `costNotes`, which is the tone a phrase closes on. Held as an
+   * index because the pitch it carries moves with the transposition being tried.
+   */
+  closingIndex?: number;
 };
 
 const FALLBACK: Candidate = {
@@ -190,8 +231,22 @@ const FALLBACK: Candidate = {
   pcs: chordPitchClasses(makeChord(0, 'maj')),
 };
 
-/** Chord slot length assumed when the caller names none: one chord per half bar. */
-const DEFAULT_HARMONIC_RHYTHM = 2;
+/**
+ * Chord slot length assumed when the caller names none: half a bar of the metre
+ * being harmonized in, or the whole bar where half of it does not fall on a
+ * pulse.
+ *
+ * A grid is anchored at the melody's first slot boundary and repeats, so a slot
+ * that is not a whole number of pulses long puts chord changes inside the bar
+ * and drifts further from the barline with every repeat. In 3/4 half a bar is a
+ * beat and a half; taking the bar instead is what makes a waltz change chord on
+ * its downbeats.
+ */
+function defaultHarmonicRhythm(ts: TimeSignature): number {
+  const bar = beatsPerBar(ts);
+  const half = bar / 2;
+  return half % pulseBeats(ts) === 0 ? half : bar;
+}
 
 /** Placement assumed when the caller names none: harmonize the melody as written. */
 const DEFAULT_PLACEMENT: HarmonizePlacement = { transposeSearch: false, octaveSearch: false };
@@ -211,27 +266,38 @@ const TESSITURA_WEIGHT = 0.001;
  * leaves an accented structural tone unexplained pays about what a cadence or a
  * dominant resolution is worth, not several times more.
  *
+ * **Every term is a rate per beat of music**, not per chord or per slot. The
+ * emission term is charged per structural note by the beats it sounds; the
+ * vocabulary term by the beats the slot's structural notes are worth; the
+ * transition and phrase-end terms by the length of the slot they apply to. That
+ * is what keeps the balance between melody fit and functional flow the same
+ * whichever harmonic rhythm the caller asks for: with per-chord constants,
+ * halving the slot length would double the total root-motion reward paid over
+ * the same melody while its emission cost stayed put, and a fine harmonic rhythm
+ * would spend chords the melody never asked for.
+ *
  * ```text
  * emission   per structural note, weighted by the beats it sounds in the segment
  *   non-chord tone on a strong beat                    +4
  *   non-chord tone on a weak beat                      +1
  *   note outside the key, on top of the above        +0.5
- * vocabulary per segment
+ * vocabulary per beat the slot's structural notes are worth
  *   degree, by tonal weight: I 0, V 0.1, IV 0.15,
  *   ii and vi 0.3, iii 0.45, vii 0.9
- *   secondary dominant                               +0.8
+ *   secondary dominant                               +0.5
  *   borrowed chord                                   +0.5
- * transition per chord change
- *   descending-fifth root motion                     -0.5
- *   ascending-fifth root motion                      +0.2
+ * transition per beat of the slot it enters
+ *   changing chord at all                            +0.8
+ *   descending-fifth root motion                     -0.4
+ *   ascending-fifth root motion                         0
  *   root motion by step or third                +0.15..0.2
  *   root motion by tritone                           +0.4
- *   V -> I                                           -0.8
- *   secondary dominant reaching its target           -1.0
- *   secondary dominant going anywhere else           +1.0
+ *   V -> I                                           -0.3
+ *   secondary dominant going anywhere but its target +1.0
  *   secondary dominant of the chord before it        +0.8
- * phrase end per phrase-final segment
- *   lands on the tonic                               -2.5
+ * phrase end per beat of the phrase-final slot, when the melody's own
+ *            closing tone is the tonic
+ *   lands on the tonic                                 -7
  *   approached from V, on top of the above           -0.5
  * placement per candidate placement of the melody
  *   note outside the target key, per beat            +3.0
@@ -253,23 +319,57 @@ const NON_SCALE_TONE = 0.5;
  * in minor, where the slots are i, ii, III, iv, v, VI and VII.
  */
 const DEGREE_BASE = [0, 0.3, 0.45, 0.15, 0.1, 0.3, 0.9];
-const SECONDARY_DOMINANT_BASE = 0.8;
+/**
+ * What a chord from outside the key's own triads costs — more than any of them,
+ * and more than the flow reward reaching it and leaving it can repay. A chromatic
+ * chord is therefore never reached by chord flow alone: the melody has to sound
+ * the note only that chord explains, which is worth several times as much.
+ * Widening the vocabulary adds the chords the melody asks for and leaves a
+ * melody with no accidental in it where it was.
+ */
+const SECONDARY_DOMINANT_BASE = 0.5;
 const BORROWED_BASE = 0.5;
-const DESCENDING_FIFTH = -0.5;
-const ASCENDING_FIFTH = 0.2;
-const DOMINANT_TO_TONIC = -0.8;
-const SECONDARY_RESOLVED = -1;
+/**
+ * What changing chord costs at all, before the motion is judged. It is more than
+ * the deepest discount any motion earns — a dominant resolving to its tonic —
+ * so no chord change is ever cheaper than holding the chord already sounding.
+ * Without it the discounts form a cycle a search can ride for free: I - IV - V -
+ * I pays less than staying on I, and the melody has no say in it, so a harmonic
+ * rhythm fine enough to fit the cycle in fills the whole melody with it.
+ * Functional flow still orders the changes the melody does ask for, which is all
+ * it is there to do.
+ */
+const CHORD_CHANGE = 0.8;
+const DESCENDING_FIFTH = -0.4;
+const ASCENDING_FIFTH = 0;
+const DOMINANT_TO_TONIC = -0.3;
+/**
+ * What a secondary dominant pays for not reaching the degree it tonicizes.
+ * Reaching it earns no separate discount: the descending fifth an applied
+ * dominant makes into its target is already priced, and paying it twice made
+ * borrowing a chromatic chord and resolving it cheaper than staying in the key.
+ */
 const SECONDARY_UNRESOLVED = 1;
 const SECONDARY_AFTER_TARGET = 0.8;
 /**
  * What other root motion costs, by the shorter distance in semitones between
  * the two roots: a third or a step asks a little, a tritone asks a lot. Motion
  * by a fifth is not priced here — it is the motion tonal harmony is built from
- * and is judged by direction instead, which is what keeps a chain of dominants
- * moving forward rather than cycling back and forth over one pair of chords.
+ * and is judged by direction instead, the descending one being the one a
+ * progression is driven by.
  */
 const ROOT_MOTION_COST = [0, 0.15, 0.15, 0.2, 0.2, 0, 0.4];
-const PHRASE_TONIC = -2.5;
+/**
+ * What closing a phrase on the tonic is worth, per beat of the closing slot. It
+ * is worth more than everything that slot can otherwise decide — covering every
+ * one of its structural tones, the widest vocabulary and root-motion difference
+ * between two candidates — because a phrase whose melody has come to rest on the
+ * tonic is closed, and a chord that covers one more note on a stronger beat does
+ * not reopen it. The bonus is paid only where the melody's own closing tone is
+ * the tonic, so a phrase ending anywhere else is still harmonized by what it
+ * sounds.
+ */
+const PHRASE_TONIC = -7;
 const PHRASE_AUTHENTIC = -0.5;
 const OUT_OF_KEY_PER_BEAT = 3;
 
@@ -281,6 +381,30 @@ const OUT_OF_KEY_PER_BEAT = 3;
  * never overrides melody fit or functional flow.
  */
 const TIE_BREAK_JITTER = 1e-6;
+
+/** Whether a key's scale is minor: it has a minor third and no major third. */
+function isMinorKey(key: KeyScale): boolean {
+  return ((key.modeMask12 >> 3) & 1) === 1 && ((key.modeMask12 >> 4) & 1) === 0;
+}
+
+/** The pitch class a semitone below the tonic, which a minor key cadences through. */
+function leadingTonePc(key: KeyScale): number {
+  return (pitchClass(key.rootPc) + 11) % 12;
+}
+
+/**
+ * Whether a pitch belongs to the key, counting the raised seventh of a minor
+ * key.
+ *
+ * A minor key cadences through its harmonic-minor dominant, so its leading tone
+ * is evidence for the key rather than a note foreign to it. Every term that asks
+ * whether a note is in the key reads it this way — key inference, the emission
+ * term's out-of-key surcharge, and the transposition search — so the dominant a
+ * minor phrase closes with is not paid for twice.
+ */
+function isKeyTone(pitch: number, key: KeyScale): boolean {
+  return isScaleTone(pitch, key) || (isMinorKey(key) && pitchClass(pitch) === leadingTonePc(key));
+}
 
 /**
  * Estimate the best-fit key from a melody's pitch-class weighting.
@@ -304,13 +428,11 @@ function inferKey(melody: readonly MelodyNote[]): KeyScale {
   }
   for (const key of candidates) {
     const tonic = pitchClass(key.rootPc);
-    const isMinor = key.modeMask12 === NATURAL_MINOR_MASK;
-    const leadingTone = (tonic + 11) % 12;
     let score = 0;
     for (const n of melody) {
       const w = Math.max(0.25, n.durationBeat);
       const pc = pitchClass(n.pitch);
-      if (isScaleTone(n.pitch, key) || (isMinor && pc === leadingTone)) {
+      if (isKeyTone(n.pitch, key)) {
         score += w;
       }
       if (pc === tonic) {
@@ -366,8 +488,13 @@ function admittedCount(fraction: number, size: number): number {
   return Math.max(0, Math.min(size, Math.ceil(fraction * size)));
 }
 
-/** Enumerate candidate chords for the key, gated by the harmonic dial. */
-function buildCandidates(key: KeyScale, harmonic: number): Candidate[] {
+/**
+ * Enumerate candidate chords for the key, gated by the harmonic dial.
+ *
+ * Exported for the tests that pin the vocabulary a dial position opens; it is
+ * not part of the package surface.
+ */
+export function buildCandidates(key: KeyScale, harmonic: number): Candidate[] {
   const tones = scaleTonesInDegreeOrder(key);
   const candidates: Candidate[] = tones.map((rootPc, index) => {
     // Scale degrees are 1-based across the library, while the array index is
@@ -383,6 +510,26 @@ function buildCandidates(key: KeyScale, harmonic: number): Candidate[] {
       pcs: chordPitchClasses(makeChord(rootPc, quality)),
     };
   });
+
+  // A minor key cadences through the harmonic-minor dominant, so the major triad
+  // a fifth above the tonic belongs to the key's own vocabulary rather than to
+  // any widening of it — the reading `generateProgression` already takes. Without
+  // it the dominant-to-tonic and cadence terms are unreachable in minor, and a
+  // minor melody can be harmonized but never closed. The natural-minor `v` stays
+  // alongside it and carries the same degree, so the search chooses between them
+  // on the melody. A major key already holds this chord as its diatonic V, and
+  // the duplicate filter below drops the repeat.
+  if (isMinorKey(key)) {
+    const rootPc = (pitchClass(key.rootPc) + 7) % 12;
+    candidates.push({
+      rootPc,
+      quality: 'maj',
+      degree: 5,
+      secondaryDominant: false,
+      base: DEGREE_BASE[4] ?? 0.6,
+      pcs: chordPitchClasses(makeChord(rootPc, 'maj')),
+    });
+  }
 
   // The degrees are kept in the same 1-based space as `Candidate.degree`, which
   // the voice-leading cost compares them against.
@@ -443,39 +590,31 @@ function buildCandidates(key: KeyScale, harmonic: number): Candidate[] {
 /**
  * Melody-fit cost of a candidate over a segment's structural notes.
  *
- * Only the segment's `costIndices` are charged: an ornament is explained by the
+ * Only the segment's `costNotes` are charged: an ornament is explained by the
  * melodic figure it forms, not by the chord under it, so making the chord cover
  * it would be paying twice. Each note is weighted by the portion of its duration
  * that overlaps the segment, so a note sustained across a boundary contributes
- * to every segment it sounds in rather than only the one it starts in.
+ * to every segment it sounds in rather than only the one it starts in. The
+ * candidate's own vocabulary cost is charged by the same total weight, so what a
+ * chord costs to use and what it costs to leave a note unexplained are measured
+ * against the same amount of music.
  */
 function emissionCost(
   seg: Segment,
   cand: Candidate,
   melody: readonly MelodyNote[],
   key: KeyScale,
-  ts: TimeSignature,
 ): number {
   const pcs = cand.pcs;
-  let cost = cand.base;
-  for (const idx of seg.costIndices) {
-    const note = melody[idx];
-    if (!note) {
+  let cost = cand.base * seg.weight;
+  for (const { index, weight, strong } of seg.costNotes) {
+    const note = melody[index];
+    if (!note || pcs.includes(pitchClass(note.pitch))) {
       continue;
     }
-    const overlapStart = Math.max(note.startBeat, seg.startBeat);
-    const overlap = Math.min(note.startBeat + note.durationBeat, seg.endBeat) - overlapStart;
-    if (overlap <= 0) {
-      continue;
-    }
-    const w = Math.max(0.25, overlap);
-    if (pcs.includes(pitchClass(note.pitch))) {
-      continue;
-    }
-    const strong = isStrongBeat(overlapStart, ts);
-    cost += (strong ? NON_CHORD_TONE_STRONG : NON_CHORD_TONE_WEAK) * w;
-    if (!isScaleTone(note.pitch, key)) {
-      cost += NON_SCALE_TONE * w;
+    cost += (strong ? NON_CHORD_TONE_STRONG : NON_CHORD_TONE_WEAK) * weight;
+    if (!isKeyTone(note.pitch, key)) {
+      cost += NON_SCALE_TONE * weight;
     }
   }
   return cost;
@@ -514,7 +653,7 @@ function isDominantOf(cand: Candidate, tonicPc: number): boolean {
 function keyFitCost(melody: readonly MelodyNote[], key: KeyScale): number {
   let cost = 0;
   for (const n of melody) {
-    if (!isScaleTone(n.pitch, key)) {
+    if (!isKeyTone(n.pitch, key)) {
       cost += Math.max(0.25, n.durationBeat) * OUT_OF_KEY_PER_BEAT;
     }
   }
@@ -546,9 +685,17 @@ function mergeRepeats(spans: ChordSpan[]): ChordSpan[] {
   return merged;
 }
 
-/** Functional-flow cost of moving from one candidate chord to the next. */
+/**
+ * Functional-flow cost of moving from one candidate chord to the next, per beat
+ * of the slot the move enters.
+ *
+ * The caller scales it by that slot's length: root motion is worth what the
+ * music it spans is worth, not what one grid boundary is worth, so dividing the
+ * same melody into finer slots cannot buy more flow reward than the melody's
+ * emission cost can answer for.
+ */
 function transitionCost(prev: Candidate, cur: Candidate, tonicPc: number): number {
-  let cost = 0;
+  let cost = prev.rootPc === cur.rootPc && prev.quality === cur.quality ? 0 : CHORD_CHANGE;
   const down = (prev.rootPc - cur.rootPc + 12) % 12;
   if (down === 7) {
     cost += DESCENDING_FIFTH;
@@ -560,8 +707,8 @@ function transitionCost(prev: Candidate, cur: Candidate, tonicPc: number): numbe
   if (isDominantOf(prev, tonicPc) && cur.rootPc === tonicPc) {
     cost += DOMINANT_TO_TONIC;
   }
-  if (prev.secondaryDominant) {
-    cost += cur.degree === prev.targetDegree ? SECONDARY_RESOLVED : SECONDARY_UNRESOLVED;
+  if (prev.secondaryDominant && cur.degree !== prev.targetDegree) {
+    cost += SECONDARY_UNRESOLVED;
   }
   // Reaching a chord's own dominant from that chord leads straight back where it
   // came from. Once it is cheaper to tonicize than to stay put, a search with no
@@ -573,29 +720,74 @@ function transitionCost(prev: Candidate, cur: Candidate, tonicPc: number): numbe
 }
 
 /**
- * Bonus for closing a phrase. A phrase that ends anywhere but the tonic ends
- * open, and the bonus is worth as much as covering the melody is, so a chord
- * cannot buy the last slot by matching one more note.
+ * Bonus for closing a phrase on the tonic, over the whole of what that slot is
+ * worth.
+ *
+ * A melody that has come to rest on the tonic has closed, so the chord under it
+ * is the tonic — whatever the rest of the slot sounds, and whatever chord the
+ * slot before it settled on. The bonus is therefore weighed against everything
+ * that slot can otherwise decide, which is why it is scaled by the slot's own
+ * emission weight rather than being a constant one accented note can outbid.
+ *
+ * It is paid only where the melody's own closing tone is the tonic: a phrase
+ * that comes to rest anywhere else — on the third, on the leading tone, on a
+ * degree the tonic chord cannot support — has not closed, and is harmonized by
+ * what it sounds.
  *
  * `prev` is the chord approaching the close, or null when the phrase is a single
  * chord long and there is nothing to approach it from.
  */
-function phraseEndBonus(prev: Candidate | null, cur: Candidate, tonicPc: number): number {
-  if (cur.rootPc !== tonicPc) {
+function phraseEndBonus(
+  prev: Candidate | null,
+  cur: Candidate,
+  tonicPc: number,
+  seg: Segment,
+  melody: readonly MelodyNote[],
+  slotBeats: number,
+): number {
+  if (cur.rootPc !== tonicPc || seg.closingIndex === undefined) {
     return 0;
   }
-  return PHRASE_TONIC + (prev !== null && isDominantOf(prev, tonicPc) ? PHRASE_AUTHENTIC : 0);
+  const closing = melody[seg.closingIndex];
+  if (!closing || pitchClass(closing.pitch) !== tonicPc) {
+    return 0;
+  }
+  const weight = Math.max(seg.weight, slotBeats);
+  return (
+    (PHRASE_TONIC + (prev !== null && isDominantOf(prev, tonicPc) ? PHRASE_AUTHENTIC : 0)) * weight
+  );
 }
 
+/** Tolerance for comparing a phrase boundary with a segment boundary, in beats. */
+const BEAT_EPS = 1e-9;
+
 /**
- * Segments that end a phrase and therefore have to cadence.
+ * Segments that close and therefore have to cadence.
  *
- * The library has no phrase layer yet, so the whole melody is one phrase and
- * only its last segment closes. Everything else reads the boundaries from here,
- * so supplying real ones later is a change to this function alone.
+ * The melody handed to the harmonizer closes at its end, so its last segment
+ * always cadences. A caller who knows where the phrases of a longer line fall —
+ * `phrasesFromTimeline` finds them — names their ends as beats, and the segment
+ * each end falls in cadences too, so one call harmonizes the whole line instead
+ * of the caller harmonizing each phrase and joining the results. Every cadence
+ * term reads the boundaries from here.
  */
-function phraseEndSegments(segmentCount: number): Set<number> {
-  return new Set(segmentCount > 0 ? [segmentCount - 1] : []);
+function phraseEndSegments(segments: readonly Segment[], ends: readonly number[]): Set<number> {
+  const closing = new Set(segments.length > 0 ? [segments.length - 1] : []);
+  for (const end of ends) {
+    // The phrase closes in the segment its last beat sounds in, which is the
+    // last segment beginning before that beat — a boundary landing exactly on a
+    // segment start belongs to the phrase that ended, not the one starting.
+    let index = -1;
+    for (let s = 0; s < segments.length; s += 1) {
+      if ((segments[s]?.startBeat ?? 0) < end - BEAT_EPS) {
+        index = s;
+      }
+    }
+    if (index >= 0) {
+      closing.add(index);
+    }
+  }
+  return closing;
 }
 
 /** Run one Viterbi harmonization pass over a fixed melody and key. */
@@ -605,20 +797,20 @@ function harmonizeOnce(
   candidates: Candidate[],
   segments: Segment[],
   jitter: number[],
-  ts: TimeSignature,
+  slotBeats: number,
+  phraseEnds: ReadonlySet<number>,
 ): { cost: number; path: number[] } {
   const tonicPc = pitchClass(key.rootPc);
   const n = candidates.length;
   const candAt = (i: number): Candidate => candidates[i] ?? FALLBACK;
-  const phraseEnds = phraseEndSegments(segments.length);
   const seg0 = segments[0];
 
   // A phrase one segment long has no approach chord, so its close is judged on
   // the chord alone.
   let dp = candidates.map(
     (c, ci) =>
-      (seg0 ? emissionCost(seg0, c, melody, key, ts) : 0) +
-      (phraseEnds.has(0) ? phraseEndBonus(null, c, tonicPc) : 0) +
+      (seg0 ? emissionCost(seg0, c, melody, key) : 0) +
+      (seg0 && phraseEnds.has(0) ? phraseEndBonus(null, c, tonicPc, seg0, melody, slotBeats) : 0) +
       (jitter[ci] ?? 0),
   );
   const back: number[][] = [];
@@ -640,14 +832,14 @@ function harmonizeOnce(
         // chosen for the cadence it makes.
         const cost =
           (dp[p] ?? Number.POSITIVE_INFINITY) +
-          transitionCost(candAt(p), candAt(c), tonicPc) +
-          (closes ? phraseEndBonus(candAt(p), candAt(c), tonicPc) : 0);
+          transitionCost(candAt(p), candAt(c), tonicPc) * slotBeats +
+          (closes ? phraseEndBonus(candAt(p), candAt(c), tonicPc, seg, melody, slotBeats) : 0);
         if (cost < best) {
           best = cost;
           bestPrev = p;
         }
       }
-      next[c] = best + emissionCost(seg, candAt(c), melody, key, ts) + (jitter[c] ?? 0);
+      next[c] = best + emissionCost(seg, candAt(c), melody, key) + (jitter[c] ?? 0);
       ptr[c] = bestPrev;
     }
     dp = next;
@@ -684,9 +876,11 @@ function harmonizeOnce(
  * secondary dominants, then the parallel mode's chords, one at a time as
  * `ctx.complexity.harmonic` rises from 0 to 1 — by the fit of those structural
  * tones, and a Viterbi search picks the lowest-cost path using a
- * functional-flow transition cost and a cadence bonus
- * at the end of the phrase. Runs of the same chord are reported once, so the
- * chord count follows the harmony rather than the grid.
+ * functional-flow transition cost and a cadence bonus at the end of the melody
+ * it is given — one cadence, at the close, unless `phraseEnds` names the closes
+ * inside a longer line, and then one at each of them as well. Runs of the same
+ * chord are reported once, so the chord count follows the harmony rather than
+ * the grid.
  *
  * With `placement.transposeSearch` the melody is moved into the key it is
  * harmonized in, and `transposeSemitones` reports how far; with
@@ -719,8 +913,11 @@ function harmonizeOnce(
  */
 export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   assertNoteEvents(opts.melody, 'harmonize melody', { allowNonPositiveDuration: true });
+  const phraseEnds = opts.phraseEnds ?? [];
+  for (const end of phraseEnds) {
+    assertFiniteNumber(end, 'harmonize phrase end');
+  }
   const soundingMelody = soundingNotesOnly(opts.melody);
-  const noteIndex = createNoteEventIndex(soundingMelody);
   const ts = opts.ts ?? DEFAULT_METER;
   assertTimeSignature(ts);
   const requestedKey = opts.key ?? 'infer';
@@ -734,7 +931,7 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   // Nothing to harmonize: inventing a tonic bar here would silently insert a
   // ghost chord into a chart built by harmonizing sections and concatenating
   // them. The sibling generators return an empty result for empty input too.
-  if (noteIndex.notes.length === 0) {
+  if (soundingMelody.length === 0) {
     return { transposeSemitones: 0, key, chords: [], melodyRoles: [] };
   }
   const candidates = buildCandidates(key, harmonic);
@@ -742,17 +939,28 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   const draw = ctx.part('harmony');
   const jitter = candidates.map((_, index) => draw.at('jitter', index) * TIE_BREAK_JITTER);
 
-  const melodyStart = noteIndex.notes.reduce(
-    (start, indexed) => Math.min(start, indexed.note.startBeat),
+  // Read every onset and release as the metric position it is playing. A melody
+  // arrives as note events from a DAW or MIDI track, so its beats carry the
+  // timing of a performance; without this a few milliseconds of jitter would put
+  // a note in the slot before the one it belongs to, weigh a sliver of it as if
+  // it sounded there, and change the chords chosen for the whole phrase.
+  const pulse = pulseBeats(ts);
+  const spans = soundingMelody.map((note) => ({
+    startBeat: snapToPulse(note.startBeat, pulse),
+    endBeat: snapToPulse(note.startBeat + note.durationBeat, pulse),
+  }));
+
+  const melodyStart = spans.reduce(
+    (start, span) => Math.min(start, span.startBeat),
     Number.POSITIVE_INFINITY,
   );
-  const melodyEnd = noteIndex.notes.reduce((end, indexed) => Math.max(end, indexed.endBeat), 0);
+  const melodyEnd = spans.reduce((end, span) => Math.max(end, span.endBeat), 0);
   // Any positive value is honoured: a silent clamp would make the option mean
   // something different here than it does on the analysis side. A value small
   // enough to make the search explode is caught by the budget assertions below,
   // not rounded away.
   const hr = assertRange(
-    opts.harmonicRhythm ?? DEFAULT_HARMONIC_RHYTHM,
+    opts.harmonicRhythm ?? defaultHarmonicRhythm(ts),
     Number.MIN_VALUE,
     Number.MAX_SAFE_INTEGER,
     'harmonic rhythm',
@@ -764,32 +972,58 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
     startBeat: segmentStart + s * hr,
     endBeat: segmentStart + (s + 1) * hr,
     noteIndices: [],
-    costIndices: [],
+    costNotes: [],
+    weight: 0,
   }));
-  // Associate each note only with the windows it actually spans. This replaces
-  // the former per-window full melody scan and creates no temporary note objects.
+  // Associate each note only with the windows it actually spans: each note is
+  // visited once per window it covers, and no temporary note objects are
+  // allocated.
   let memberships = 0;
-  for (const indexed of noteIndex.notes) {
-    const first = Math.max(0, Math.floor((indexed.note.startBeat - segmentStart) / hr));
+  for (const [index, span] of spans.entries()) {
+    const first = Math.max(0, Math.floor((span.startBeat - segmentStart) / hr));
     const lastExclusive = Math.min(
       segCount,
-      Math.ceil((indexed.endBeat - segmentStart) / hr - Number.EPSILON),
+      Math.ceil((span.endBeat - segmentStart) / hr - Number.EPSILON),
     );
     memberships += Math.max(0, lastExclusive - first);
     assertGenerationBudget(memberships, 'note-to-segment memberships');
     for (let segment = first; segment < lastExclusive; segment += 1) {
-      segments[segment]?.noteIndices.push(indexed.originalIndex);
+      segments[segment]?.noteIndices.push(index);
     }
   }
 
   // Classify the ornaments before any chord exists, and keep only the structural
   // tones in each slot's emission term. Transposing a melody moves every note
-  // alike, so the figures are the same at every placement and are found once.
+  // alike, so the figures are the same at every placement and are found once —
+  // and so is the metric weight of each note in each slot it sounds in.
   const tones = classifyMelodyTones(soundingMelody, ts);
   for (const segment of segments) {
     const structural = segment.noteIndices.filter((idx) => tones[idx]?.ornamental !== true);
-    segment.costIndices = structural.length > 0 ? structural : segment.noteIndices;
+    const costIndices = structural.length > 0 ? structural : segment.noteIndices;
+    let closingStart = Number.NEGATIVE_INFINITY;
+    for (const index of costIndices) {
+      const span = spans[index];
+      if (!span) {
+        continue;
+      }
+      const overlapStart = Math.max(span.startBeat, segment.startBeat);
+      const overlap = Math.min(span.endBeat, segment.endBeat) - overlapStart;
+      if (overlap <= 0) {
+        continue;
+      }
+      const weight = Math.max(0.25, overlap);
+      segment.costNotes.push({ index, weight, strong: isStrongBeat(overlapStart, ts) });
+      segment.weight += weight;
+      // The tone a phrase closes on is the last one to start, which is not the
+      // last one listed when a note held from earlier is still sounding under it.
+      if (span.startBeat >= closingStart) {
+        closingStart = span.startBeat;
+        segment.closingIndex = index;
+      }
+    }
   }
+
+  const closingSegments = phraseEndSegments(segments, phraseEnds);
 
   // Two independent axes: the semitone shift that puts the melody in the key it
   // is harmonized in, and the octave that puts it in a comfortable register.
@@ -814,7 +1048,15 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   let bestPath: number[] = [];
   for (const shift of transposes) {
     const shifted = soundingMelody.map((n) => ({ ...n, pitch: n.pitch + shift }));
-    const { cost, path } = harmonizeOnce(shifted, key, candidates, segments, jitter, ts);
+    const { cost, path } = harmonizeOnce(
+      shifted,
+      key,
+      candidates,
+      segments,
+      jitter,
+      hr,
+      closingSegments,
+    );
     const total = cost + keyFitCost(shifted, key) + tessituraCost(shifted);
     if (total < bestCost) {
       bestCost = total;

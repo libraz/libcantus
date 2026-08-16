@@ -9,13 +9,69 @@
 import type { KeyScale } from '../../core/types.js';
 import type { Chord, ChordToneRole } from '../../theory/chord/index.js';
 import { chordToneRole } from '../../theory/chord/index.js';
-import { isMinorKey } from './function.js';
-import { mod12 } from './internal.js';
+import { isScaleTone } from '../../theory/scale/index.js';
+import { isMinorKey, parallelKey } from './function.js';
+import { degreeRootPc, hasMajorThird, mod12, romanReference } from './internal.js';
 import type { RejectedCandidate } from './rationale.js';
 
-/** Whether a chord carries a major third above its root. */
-function hasMajorThird(chord: Chord): boolean {
-  return chord.intervals.some((interval) => mod12(interval) === 4);
+/** The scale degrees the cadence rules are stated in. */
+const DOMINANT_DEGREE = 5;
+const SUBMEDIANT_DEGREE = 6;
+
+/**
+ * How far above the tonic a scale degree lies, read in the heptatonic frame the
+ * key's degrees are numbered in.
+ *
+ * Which semitone a degree lands on is the mode's business — the submediant is a
+ * major sixth in dorian and a minor sixth in aeolian — so a cadence stated in
+ * semitones would hold for two modes and miss the rest. A key with no
+ * degree-for-degree numbering of its own is read against its parallel major,
+ * the same frame its numerals use.
+ */
+function degreeOffset(degreeNumber: number, key: KeyScale): number {
+  return mod12(degreeRootPc(degreeNumber, romanReference(key)) - key.rootPc);
+}
+
+/** Whether the chord's own third — major or minor — is a tone of the key. */
+function thirdBelongsToKey(chord: Chord, key: KeyScale): boolean {
+  return chord.intervals.some(
+    (interval) =>
+      (mod12(interval) === 3 || mod12(interval) === 4) &&
+      isScaleTone(mod12(chord.rootPc + interval), key),
+  );
+}
+
+/**
+ * The offsets a deceptive cadence may land on: the key's own submediant, and in
+ * a major key the borrowed lowered submediant as well, since the flat-side
+ * arrival evades the tonic the same way.
+ */
+function deceptiveTargets(key: KeyScale): number[] {
+  const submediant = degreeOffset(SUBMEDIANT_DEGREE, key);
+  if (isMinorKey(key)) {
+    return [submediant];
+  }
+  const borrowed = degreeOffset(SUBMEDIANT_DEGREE, parallelKey(key));
+  return borrowed === submediant ? [submediant] : [submediant, borrowed];
+}
+
+/**
+ * Whether an arrival on the dominant degree rests there as a half cadence.
+ *
+ * The dominant of a major or harmonic-minor key carries the leading tone, and
+ * that major third is what the cadence is heard through, so a borrowed minor
+ * `v` is not the chord the ear was left on. A mode whose own dominant has no
+ * leading tone — aeolian, dorian, the modal writing this is routine in — has
+ * only the dominant it does have, so there the arrival's own third serves,
+ * provided the key contains it.
+ */
+function restsOnDominant(to: Chord, key: KeyScale): boolean {
+  if (hasMajorThird(to)) {
+    return true;
+  }
+  const dominantPc = mod12(key.rootPc + degreeOffset(DOMINANT_DEGREE, key));
+  const leadingToneDominant = isScaleTone(mod12(dominantPc + 4), key);
+  return !leadingToneDominant && thirdBelongsToKey(to, key);
 }
 
 /** Whether a leading-tone chord is a diminished-family resolution chord. */
@@ -31,6 +87,48 @@ function isDominantOf(chord: Chord, key: KeyScale): boolean {
 /** Whether a chord is a leading-tone chord standing in for the dominant. */
 function isLeadingToneOf(chord: Chord, key: KeyScale): boolean {
   return mod12(chord.rootPc - key.rootPc) === 11 && isLeadingToneDiminished(chord);
+}
+
+/** Whether a chord is the key's tonic triad standing on its own fifth. */
+function isTonicSixFour(chord: Chord, key: KeyScale): boolean {
+  if (mod12(chord.rootPc - key.rootPc) !== 0 || chord.bassPc === undefined) {
+    return false;
+  }
+  const isTriad =
+    chord.intervals.length === 3 && chord.intervals.some((interval) => mod12(interval) === 7);
+  return isTriad && mod12(chord.bassPc - chord.rootPc) === 7;
+}
+
+/**
+ * Whether a chord is the cadential six-four of the chord that follows it.
+ *
+ * The cadential six-four is not an inverted tonic. Its bass has already
+ * arrived on the dominant, and the tonic and third sounding above it are
+ * appoggiaturas that resolve down onto the dominant's own leading tone and
+ * fifth — so the harmony is the dominant from the moment the six-four sounds,
+ * and a cadence it opens begins there rather than at the dominant's arrival.
+ *
+ * The reading rests on the bass: the tonic triad has to stand on the same
+ * pitch class the dominant does. A six-four the bass leaves — the passing
+ * `IV-I64-IV`, a neighbouring one over the tonic — is an ordinary inverted
+ * tonic and answers false, which is what keeps this from swallowing every
+ * second-inversion tonic in sight.
+ *
+ * The chord pair is enough to answer, so the layers that see time — cadence
+ * detection over a timeline, harmonic reduction — can all ask the same
+ * question of the same two chords instead of each deciding for itself.
+ *
+ * @param chord The candidate six-four.
+ * @param next The chord it moves to.
+ * @param key The prevailing key.
+ * @returns True when `chord` is the cadential six-four of `next`.
+ */
+export function isCadentialSixFour(chord: Chord, next: Chord, key: KeyScale): boolean {
+  return (
+    isTonicSixFour(chord, key) &&
+    isDominantOf(next, key) &&
+    mod12(chord.bassPc ?? chord.rootPc) === mod12(next.bassPc ?? next.rootPc)
+  );
 }
 
 /**
@@ -153,6 +251,17 @@ export type DetectCadenceOptions = {
    * @defaultValue false
    */
   alternatives?: boolean;
+  /**
+   * The chord before `from`, which is what tells a cadential six-four from an
+   * inverted tonic.
+   *
+   * A dominant reached from the tonic triad standing on its own bass was
+   * already sounding when that six-four did, so the cadence began there. Only
+   * the chord before the dominant settles that, and a caller reading a pair at
+   * a time has it to hand; without it the pair is classified on its own, as
+   * before.
+   */
+  approach?: Chord;
 };
 
 /**
@@ -171,6 +280,12 @@ function cadenceType(
   const tonic = mod12(key.rootPc);
   const fromOffset = mod12(from.rootPc - tonic);
   const toOffset = mod12(to.rootPc - tonic);
+  // The cadential six-four resolving onto its own dominant is one harmony
+  // moving inside itself, so there is no root motion to cadence with — the same
+  // reason a repeated dominant is no cadence.
+  if (isCadentialSixFour(from, to, key)) {
+    return null;
+  }
   const dominant = isDominantOf(from, key);
   if ((dominant || isLeadingToneOf(from, key)) && toOffset === 0) {
     return 'authentic';
@@ -185,16 +300,14 @@ function cadenceType(
   if (fromOffset === 10 && toOffset === 0 && hasMajorThird(from)) {
     return 'modal';
   }
-  // Deceptive targets: the diatonic submediant (vi at offset 9 in major, VI at
-  // offset 8 in minor) plus, in a major key, the borrowed flat-submediant bVI
-  // at offset 8.
-  const deceptiveTargets = isMinorKey(key) ? [8] : [8, 9];
-  if (dominant && deceptiveTargets.includes(toOffset)) {
+  if (dominant && deceptiveTargets(key).includes(toOffset)) {
     return 'deceptive';
   }
   // A move to the dominant is a half cadence, but a no-root-motion V-to-V repeat
   // is not a cadence at all.
-  const half = toOffset === 7 && hasMajorThird(to) && fromOffset !== 7;
+  const dominantOffset = degreeOffset(DOMINANT_DEGREE, key);
+  const half =
+    toOffset === dominantOffset && restsOnDominant(to, key) && fromOffset !== dominantOffset;
   // The Phrygian cadence is that half cadence approached by a semitone descent
   // in the bass, b6 to 5, which is what iv6 to V sounds in a minor key.
   if (
@@ -248,6 +361,10 @@ type CadenceFacts = {
   minor: boolean;
   /** The arrival stands on the fifth degree, whatever its third. */
   onFifthDegree: boolean;
+  /** The dominant was reached as a cadential six-four over its own bass. */
+  sixFour: boolean;
+  /** The pair is that six-four resolving inside the dominant it stands on. */
+  withinSixFour: boolean;
 };
 
 /** Which of the three conditions of a perfect authentic cadence went unmet. */
@@ -263,6 +380,9 @@ function imperfectReason(facts: CadenceFacts): string {
 
 /** The rationale for a pair that forms no cadence at all. */
 function describeNonCadence(facts: CadenceFacts): string {
+  if (facts.withinSixFour) {
+    return 'No cadence: the tonic six-four stands on the dominant already, so its resolution is one harmony moving inside itself rather than a motion between two';
+  }
   if (facts.fromOffset === facts.toOffset) {
     return 'No cadence: the harmony repeats, so there is no root motion to cadence with';
   }
@@ -270,7 +390,7 @@ function describeNonCadence(facts: CadenceFacts): string {
     return 'No cadence: the tonic is approached by none of the chords that cadence onto it';
   }
   if (facts.onFifthDegree) {
-    return 'No cadence: the arrival stands on the fifth degree but sounds no major third, so it is not the dominant a half cadence rests on';
+    return 'No cadence: the arrival stands on the fifth degree but sounds no third the key rests on, so it is not the dominant a half cadence comes to';
   }
   return 'No cadence: the motion arrives on neither the tonic nor the dominant';
 }
@@ -311,8 +431,13 @@ function describeCadence(facts: CadenceFacts): string {
       text = describeNonCadence(facts);
       break;
   }
-  return facts.evaded
-    ? `${text}; the tonic arrives inverted, so the arrival the ear was promised is withheld`
+  if (facts.evaded) {
+    text = `${text}; the tonic arrives inverted, so the arrival the ear was promised is withheld`;
+  }
+  // The six-four is the dominant already, so the cadence is one event that
+  // started when it sounded — the numeral I64 names the chord, not the harmony.
+  return facts.sixFour
+    ? `${text}; the dominant was reached as a cadential six-four, a double appoggiatura over the same bass, so the cadence begins there rather than at the dominant's own arrival`
     : text;
 }
 
@@ -351,7 +476,7 @@ function cadenceAlternatives(facts: CadenceFacts): RejectedCandidate[] {
     out.push({
       label: 'half',
       reason:
-        'The arrival stands on the fifth degree, but a half cadence rests on a major dominant',
+        "The arrival stands on the fifth degree, but a half cadence rests on the dominant the key has: the major third, or the mode's own third where that dominant carries no leading tone",
     });
   }
   return out;
@@ -363,14 +488,31 @@ function cadenceAlternatives(facts: CadenceFacts): RejectedCandidate[] {
  * - authentic: V (dominant a fifth above the tonic) to I
  * - plagal: IV (a fourth above the tonic) to I
  * - modal: bVII to I, the cadence of rock and modal writing
- * - deceptive: V to the submediant (diatonic vi or borrowed bVI in major, VI in
- *   minor)
+ * - deceptive: V to the key's own submediant, plus the borrowed bVI of a major
+ *   key
  * - phrygian: iv6 to V of a minor key, the half cadence whose bass falls a
  *   semitone from b6 to 5
  * - half: any other chord than the dominant itself to V
  *
+ * Both are read as scale degrees rather than as semitone distances, so a mode
+ * cadences onto the submediant and the dominant it actually has: the deceptive
+ * arrival of dorian is a major sixth above the tonic and that of phrygian a
+ * minor sixth. A half cadence normally rests on the major third that carries
+ * the leading tone, but where the key's own dominant has no leading tone —
+ * aeolian and dorian, the modal `v` of pop writing — the arrival's own third
+ * suffices as long as the key contains it. That relaxation never applies to a
+ * key whose dominant does carry the leading tone, so a borrowed minor `v` in a
+ * major key is no half cadence.
+ *
  * A static V-to-V repeat with no root motion is not a cadence and yields a null
- * type.
+ * type, and so is the tonic six-four resolving onto the dominant it already
+ * stands on: that pair is one harmony moving inside itself. Passing that
+ * six-four as `approach` when the dominant is the `from` chord is what lets the
+ * cadence be reported as the single event it is — the type and the beat are
+ * still the dominant's resolution, while the `rationale` says the cadence began
+ * at the six-four. A six-four the bass leaves instead (`IV-I64-IV`, or a
+ * neighbouring one over the tonic) is an ordinary inverted tonic and is read as
+ * one.
  *
  * An authentic cadence is graded perfect or imperfect. Perfect takes the
  * dominant to the tonic with both chords in root position and the tonic in the
@@ -386,8 +528,8 @@ function cadenceAlternatives(facts: CadenceFacts): RejectedCandidate[] {
  * @param from The penultimate chord.
  * @param to The final chord.
  * @param key The prevailing key.
- * @param opts Voice-leading detail and whether to collect the rejected
- *   readings; see {@link DetectCadenceOptions}.
+ * @param opts Voice-leading detail, the chord before `from`, and whether to
+ *   collect the rejected readings; see {@link DetectCadenceOptions}.
  * @returns The cadence, its strength, and the facts behind them.
  * @example
  * ```ts
@@ -398,6 +540,12 @@ function cadenceAlternatives(facts: CadenceFacts): RejectedCandidate[] {
  *   voicing: [[55, 62, 71], [48, 64, 72]],
  * });
  * // { type: 'authentic', strength: 'perfect', soprano: 'root', ... }
+ * const sixFour = detectCadence(makeChord(7, 'maj'), makeChord(0, 'maj'), majorKey(0), {
+ *   approach: makeChord(0, 'maj', 7), // C/G, the cadential six-four
+ * });
+ * sixFour.type; // 'authentic'
+ * // The rationale says where the cadence began.
+ * sixFour.rationale?.includes('cadential six-four'); // true
  * ```
  * @category Functional Harmony
  */
@@ -432,7 +580,9 @@ export function detectCadence(
     fromOffset: mod12(from.rootPc - key.rootPc),
     toOffset: mod12(to.rootPc - key.rootPc),
     minor: isMinorKey(key),
-    onFifthDegree: mod12(to.rootPc - key.rootPc) === 7,
+    onFifthDegree: mod12(to.rootPc - key.rootPc) === degreeOffset(DOMINANT_DEGREE, key),
+    sixFour: opts.approach !== undefined && isCadentialSixFour(opts.approach, from, key),
+    withinSixFour: isCadentialSixFour(from, to, key),
   };
   const result: CadenceResult = {
     type: facts.type,

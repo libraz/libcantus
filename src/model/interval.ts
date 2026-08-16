@@ -1,11 +1,27 @@
-import { InvalidInputError } from '../core/errors/index.js';
+import { type ParseResult, unwrapParse } from '../core/errors/index.js';
 import { isConsonantInterval } from '../core/interval/index.js';
 import type { IntervalQualityLabel, SpelledInterval } from '../core/pitch/index.js';
-import { intervalSemitones, parseInterval } from '../core/pitch/index.js';
+import { intervalSemitones, toSpelledInterval, tryParseInterval } from '../core/pitch/index.js';
 import type { Note } from './note.js';
 
 /** Number of diatonic degrees an interval and its inversion span together. */
 const INVERSION_SUM = 9;
+
+/** Diatonic size of an octave, the largest simple interval. */
+const OCTAVE_DEGREES = 8;
+
+/**
+ * The simple interval a diatonic number belongs to.
+ *
+ * Seven is subtracted while the number is larger than an octave, so the octave
+ * and its multiples (8, 15, 22, ...) reduce to the octave rather than to the
+ * unison: plain modulo-7 arithmetic folds them onto 1 and would then invert a
+ * double octave as if it were a unison.
+ */
+function simpleDegree(numberValue: number): number {
+  const reduced = ((numberValue - 1) % 7) + 1;
+  return reduced === 1 && numberValue > 1 ? OCTAVE_DEGREES : reduced;
+}
 
 /** The quality an interval's inversion carries. */
 function invertQuality(quality: IntervalQualityLabel): IntervalQualityLabel {
@@ -76,27 +92,33 @@ export class Interval {
    *   `P5` spanning 8 semitones is not a value any other method can produce.
    */
   static of(numberValue: number, quality: IntervalQualityLabel, semitones: number): Interval {
-    const expected = intervalSemitones(numberValue, quality);
-    if (Math.abs(semitones) !== expected) {
-      throw new InvalidInputError(
-        `${quality}${numberValue} spans ${expected} semitones; received ${semitones}`,
-      );
-    }
-    return new Interval(numberValue, quality, semitones);
+    return Interval.fromData({ number: numberValue, quality, semitones });
   }
 
   /**
    * Wrap a plain spelled interval, as returned by the pitch module.
    *
+   * The data is checked the way {@link Interval.of} checks its arguments: a
+   * deserialized interval enters through here, and an unchecked one would be a
+   * value no measurement produces — a `P5` spanning eight semitones names
+   * itself a fifth while sounding a sixth.
+   *
    * @param data The plain interval.
    * @returns The wrapped interval.
+   * @throws If the number, quality, and span do not describe the same interval.
    */
   static fromData(data: SpelledInterval): Interval {
+    // The direction is read off the canonical data rather than from the span's
+    // sign: an interval can climb a letter while losing a semitone — C# up to
+    // Dbb is a doubly diminished second — and only the pitch module's reading
+    // of number, quality and span together tells that from a descent. The
+    // canonical form carries the flag exactly when the interval descends.
+    const checked = toSpelledInterval(data);
     return new Interval(
-      data.number,
-      data.quality,
-      data.semitones,
-      data.descending ?? data.semitones < 0,
+      checked.number,
+      checked.quality,
+      checked.semitones,
+      checked.descending ?? false,
     );
   }
 
@@ -105,6 +127,7 @@ export class Interval {
    *
    * @param data The serialized interval.
    * @returns The wrapped interval.
+   * @throws If the number, quality, and span do not describe the same interval.
    */
   static fromJSON(data: SpelledInterval): Interval {
     return Interval.fromData(data);
@@ -117,9 +140,32 @@ export class Interval {
    *   downward.
    * @returns The interval of that name, descending when the name is prefixed.
    * @throws If the name is not a quality label followed by a diatonic number.
+   *   Use {@link Interval.tryParse} where failure is ordinary, such as an
+   *   interval field read on every keystroke.
    */
   static parse(name: string): Interval {
-    return Interval.fromData(parseInterval(name));
+    return unwrapParse(Interval.tryParse(name));
+  }
+
+  /**
+   * Parse an interval name, reporting failure instead of throwing it.
+   *
+   * The same reading as {@link Interval.parse}, for the callers where a name
+   * that does not parse yet is the normal state of the input rather than a
+   * fault.
+   *
+   * @param name The interval name.
+   * @returns The interval, or the error explaining why the text is not one.
+   * @example
+   * ```ts
+   * import { Interval } from '@libraz/libcantus';
+   * const result = Interval.tryParse('M5');
+   * result.ok ? result.value.name : result.error.message; // a major fifth does not exist
+   * ```
+   */
+  static tryParse(name: string): ParseResult<Interval> {
+    const parsed = tryParseInterval(name);
+    return parsed.ok ? { ok: true, value: Interval.fromData(parsed.value) } : parsed;
   }
 
   /** Diatonic size: 1 = unison, 2 = second, ... 8 = octave, and beyond. */
@@ -150,20 +196,29 @@ export class Interval {
     return `${this.#quality}${this.#number}`;
   }
 
+  /** A copy of the underlying plain interval data. */
+  get data(): SpelledInterval {
+    return this.toJSON();
+  }
+
   /**
    * The interval's inversion: the complement that completes the octave.
    *
    * A compound interval is reduced to its simple form first, and the result is
    * always ascending — an inversion answers "what is left of the octave",
-   * which has no direction of its own.
+   * which has no direction of its own. The reduction keeps the octave and its
+   * multiples on the octave, so the answer depends on the relation between the
+   * two notes and not on how many octaves apart they happen to sit: a double
+   * octave inverts to a unison exactly as a single octave does.
    *
    * @returns The inverted interval, e.g. `M3` becomes `m6`.
+   * @throws For an augmented octave, whose complement would be a diminished
+   *   unison: the letters do not move in a unison, so the pitch module reads
+   *   that relation as the descending `'-A1'` and refuses the name. Every other
+   *   interval inverts.
    */
   invert(): Interval {
-    // An octave inverts to a unison and vice versa. Other compound intervals
-    // reduce to their simple class before inversion (M10 -> m6).
-    const simple = this.#number === 8 ? 8 : ((this.#number - 1) % 7) + 1;
-    const numberValue = INVERSION_SUM - simple;
+    const numberValue = INVERSION_SUM - simpleDegree(this.#number);
     const quality = invertQuality(this.#quality);
     return Interval.of(numberValue, quality, intervalSemitones(numberValue, quality));
   }
@@ -214,11 +269,15 @@ export class Interval {
    * @returns True when number, quality, and span all match.
    */
   equals(other: Interval): boolean {
+    // The other interval is read through its public accessors rather than its
+    // private fields: a bundler that emits two copies of this class — as a
+    // CommonJS build without shared chunks does for the root and /model
+    // entries — would otherwise throw on the brand check.
     return (
       this.#number === other.number &&
       this.#quality === other.quality &&
       this.#semitones === other.semitones &&
-      this.#descending === other.#descending
+      this.#descending === other.isDescending
     );
   }
 
@@ -226,9 +285,13 @@ export class Interval {
    * The plain interval data, for JSON serialization.
    *
    * Private class fields do not serialize, so an explicit `toJSON` keeps
-   * `JSON.stringify(interval)` from collapsing to `{}`.
+   * `JSON.stringify(interval)` from collapsing to `{}`. The result is the
+   * canonical shape the pitch module produces: `descending` appears only on an
+   * interval that descends, so a measured interval, a parsed name, and this
+   * method all serialize to the same object.
    *
-   * @returns The diatonic number, quality, and semitone span.
+   * @returns The diatonic number, quality, and semitone span, with
+   *   `descending` when the interval descends.
    */
   toJSON(): SpelledInterval {
     return this.#descending
@@ -238,14 +301,7 @@ export class Interval {
           semitones: this.#semitones,
           descending: true,
         }
-      : this.#semitones < 0
-        ? {
-            number: this.#number,
-            quality: this.#quality,
-            semitones: this.#semitones,
-            descending: false,
-          }
-        : { number: this.#number, quality: this.#quality, semitones: this.#semitones };
+      : { number: this.#number, quality: this.#quality, semitones: this.#semitones };
   }
 
   /**

@@ -233,8 +233,10 @@ export function voiceChord(chord: Chord, opts?: VoicingOptions): number[] {
  * Tendency tones are resolved rather than merely moved economically: the voice
  * holding a chordal seventh falls by step unless the next chord keeps that tone,
  * and — when `opts.key` is given — the leading tone rises to the tonic and is
- * never doubled. Without a key the leading-tone rules cannot apply, since
- * nothing identifies which pitch class is the leading tone.
+ * never doubled, wherever it is functioning as a leading tone rather than
+ * sounding as an ordinary tone of some other chord. Without a key the
+ * leading-tone rules cannot apply, since nothing identifies which pitch class is
+ * the leading tone.
  *
  * @param chords The chords to voice in order.
  * @param opts Voicing options; defaults to four voices in {@link SATB_RANGES}.

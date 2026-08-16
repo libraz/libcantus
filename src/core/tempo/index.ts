@@ -35,8 +35,10 @@ export type TempoEvent = {
  * A tempo track: {@link TempoEvent}s sorted by `startBeat`, strictly ascending.
  *
  * The first entry is the time origin — {@link beatsToSeconds} returns 0 for its
- * `startBeat`, and beats before it have no elapsed time to report, so they are
- * rejected rather than extrapolated.
+ * `startBeat` — and its tempo also governs the beats before it, which is where
+ * a pickup sounds. A map cannot say anything else about that stretch, and a
+ * piece is played into its first downbeat at the tempo it starts in, so elapsed
+ * time there is negative rather than an error.
  *
  * @category Rhythm & Meter
  */
@@ -51,8 +53,12 @@ const SECONDS_PER_MINUTE = 60;
 const MAX_BPM = 1000;
 
 /**
- * Validate a tempo map: non-empty, strictly ascending, non-negative onsets, and
+ * Validate a tempo map: non-empty, strictly ascending, finite onsets, and
  * positive tempos.
+ *
+ * An onset is not bounded below, for the reason the note events are not: beat 0
+ * is the first downbeat, so a piece that opens with a pickup marks its tempo
+ * before it.
  *
  * An unsorted map is rejected rather than sorted: reordering it would silently
  * accept a data error, and two entries on the same beat name no segment at all.
@@ -66,7 +72,7 @@ function assertTempoMap(map: TempoMap, name = 'tempo map'): TempoMap {
     if (event === undefined) {
       throw new InvalidInputError(`${name}[${index}] must be a tempo event; received undefined`);
     }
-    assertRange(event.startBeat, 0, Number.MAX_SAFE_INTEGER, `${name}[${index}].startBeat`);
+    assertFiniteNumber(event.startBeat, `${name}[${index}].startBeat`);
     assertRange(event.bpm, Number.MIN_VALUE, MAX_BPM, `${name}[${index}].bpm`);
     const previous = map[index - 1];
     if (previous !== undefined && event.startBeat <= previous.startBeat) {
@@ -88,30 +94,27 @@ function firstEvent(map: TempoMap): TempoEvent {
   return first;
 }
 
-/** Reject a beat the map says nothing about, i.e. one before its first entry. */
-function assertCoveredBeat(beat: number, map: TempoMap, name: string): number {
-  const origin = firstEvent(map).startBeat;
-  if (beat < origin) {
-    throw new InvalidInputError(
-      `${name} must be at or after the tempo map's first event at beat ${origin}; received ${beat}`,
-    );
-  }
-  return beat;
-}
-
 /**
  * Elapsed seconds over `[fromBeat, toBeat]`, summed segment by segment. Both
- * bounds are assumed validated and ordered.
+ * bounds are assumed validated; a span running backwards reports negative time,
+ * which is what keeps the integral additive across the origin.
  */
 function integrateSeconds(map: TempoMap, fromBeat: number, toBeat: number): number {
+  if (toBeat < fromBeat) {
+    return -integrateSeconds(map, toBeat, fromBeat);
+  }
   let seconds = 0;
   for (let index = 0; index < map.length; index += 1) {
     const event = map[index];
     if (event === undefined) {
       continue;
     }
+    // The opening tempo reaches back before the beat it is marked on: a pickup
+    // is played at the tempo of the piece it leads into, and the map names no
+    // other one to play it at.
+    const segmentStart = index === 0 ? Number.NEGATIVE_INFINITY : event.startBeat;
     const segmentEnd = map[index + 1]?.startBeat ?? Number.POSITIVE_INFINITY;
-    const low = Math.max(fromBeat, event.startBeat);
+    const low = Math.max(fromBeat, segmentStart);
     const high = Math.min(toBeat, segmentEnd);
     if (high > low) {
       seconds += ((high - low) * SECONDS_PER_MINUTE) / event.bpm;
@@ -129,11 +132,14 @@ function integrateSeconds(map: TempoMap, fromBeat: number, toBeat: number): numb
  * The result integrates every tempo segment the span crosses; it is not the
  * tempo in effect at `beat` applied to the whole span.
  *
+ * A beat before the map's first event reports negative elapsed time, at the
+ * opening tempo: a pickup sounds before the downbeat, and asking when it sounds
+ * is a fair question.
+ *
  * @param beat Position in quarter-note beats.
  * @param map The tempo map; its first event is the time origin.
- * @returns Elapsed seconds, 0 at the map's first event.
- * @throws If the map is empty, unsorted, or carries a non-positive tempo, or if
- *   `beat` falls before the map's first event.
+ * @returns Elapsed seconds, 0 at the map's first event and negative before it.
+ * @throws If the map is empty, unsorted, or carries a non-positive tempo.
  * @example
  * ```ts
  * import { beatsToSeconds } from '@libraz/libcantus';
@@ -145,7 +151,6 @@ function integrateSeconds(map: TempoMap, fromBeat: number, toBeat: number): numb
 export function beatsToSeconds(beat: number, map: TempoMap): number {
   assertFiniteNumber(beat, 'beat');
   assertTempoMap(map);
-  assertCoveredBeat(beat, map, 'beat');
   return integrateSeconds(map, firstEvent(map).startBeat, beat);
 }
 
@@ -153,10 +158,11 @@ export function beatsToSeconds(beat: number, map: TempoMap): number {
  * The beat reached after a number of seconds — the inverse of
  * {@link beatsToSeconds}.
  *
- * @param seconds Elapsed seconds from the map's first event.
+ * @param seconds Elapsed seconds from the map's first event; negative for a
+ *   position before it, such as a pickup.
  * @param map The tempo map.
  * @returns The position in quarter-note beats.
- * @throws If the map is malformed or `seconds` is negative.
+ * @throws If the map is malformed or `seconds` is not finite.
  * @example
  * ```ts
  * import { secondsToBeats } from '@libraz/libcantus';
@@ -166,8 +172,14 @@ export function beatsToSeconds(beat: number, map: TempoMap): number {
  * @category Rhythm & Meter
  */
 export function secondsToBeats(seconds: number, map: TempoMap): number {
-  assertRange(seconds, 0, Number.MAX_SAFE_INTEGER, 'seconds');
+  assertFiniteNumber(seconds, 'seconds');
   assertTempoMap(map);
+  const origin = firstEvent(map);
+  if (seconds < 0) {
+    // Before the origin only the opening tempo is in force, which is the same
+    // segment {@link beatsToSeconds} integrates backwards over.
+    return origin.startBeat + (seconds * origin.bpm) / SECONDS_PER_MINUTE;
+  }
   let remaining = seconds;
   for (let index = 0; index < map.length - 1; index += 1) {
     const event = map[index];
@@ -196,12 +208,12 @@ export function secondsToBeats(seconds: number, map: TempoMap): number {
  * a short note late in a long piece does not lose precision to the subtraction
  * of two large elapsed times.
  *
- * @param startBeat Where the span begins, in quarter-note beats.
+ * @param startBeat Where the span begins, in quarter-note beats; a pickup
+ *   starts before the map's first event and is measured like any other span.
  * @param lengthBeats How long the span lasts, in quarter-note beats.
  * @param map The tempo map.
- * @returns The span's duration in seconds.
- * @throws If the map is malformed, the length is negative, or the span starts
- *   before the map's first event.
+ * @returns The span's duration in seconds, never negative.
+ * @throws If the map is malformed or the length is negative.
  * @example
  * ```ts
  * import { durationToSeconds } from '@libraz/libcantus';
@@ -214,17 +226,19 @@ export function durationToSeconds(startBeat: number, lengthBeats: number, map: T
   assertFiniteNumber(startBeat, 'startBeat');
   assertRange(lengthBeats, 0, Number.MAX_SAFE_INTEGER, 'lengthBeats');
   assertTempoMap(map);
-  assertCoveredBeat(startBeat, map, 'startBeat');
   return integrateSeconds(map, startBeat, startBeat + lengthBeats);
 }
 
 /**
  * The tempo in effect at a beat.
  *
+ * A beat before the first event reads the opening tempo, which is the tempo a
+ * pickup is played at.
+ *
  * @param beat Position in quarter-note beats.
  * @param map The tempo map.
  * @returns Quarter-note beats per minute.
- * @throws If the map is malformed or `beat` falls before its first event.
+ * @throws If the map is malformed.
  * @example
  * ```ts
  * import { tempoAt } from '@libraz/libcantus';
@@ -235,7 +249,6 @@ export function durationToSeconds(startBeat: number, lengthBeats: number, map: T
 export function tempoAt(beat: number, map: TempoMap): number {
   assertFiniteNumber(beat, 'beat');
   assertTempoMap(map);
-  assertCoveredBeat(beat, map, 'beat');
   let bpm = firstEvent(map).bpm;
   for (const event of map) {
     if (event.startBeat > beat) {
@@ -253,10 +266,13 @@ export function tempoAt(beat: number, map: TempoMap): number {
  * nearest tick; a beat that is not on the grid is not representable and comes
  * back quantized.
  *
+ * A position before the first downbeat is a negative tick count, which is how a
+ * pickup crosses the MIDI boundary and comes back.
+ *
  * @param beat Position or length in quarter-note beats.
  * @param ppq Pulses (ticks) per quarter note, e.g. 96, 480, or 960.
  * @returns The whole tick count.
- * @throws If `beat` is negative or `ppq` is not a positive integer.
+ * @throws If `beat` is not finite or `ppq` is not a positive integer.
  * @example
  * ```ts
  * import { beatsToTicks } from '@libraz/libcantus';
@@ -265,7 +281,7 @@ export function tempoAt(beat: number, map: TempoMap): number {
  * @category Rhythm & Meter
  */
 export function beatsToTicks(beat: number, ppq: number): number {
-  assertRange(beat, 0, Number.MAX_SAFE_INTEGER, 'beat');
+  assertFiniteNumber(beat, 'beat');
   assertPositiveInt(ppq, 'ppq');
   return Math.round(beat * ppq);
 }
@@ -273,11 +289,10 @@ export function beatsToTicks(beat: number, ppq: number): number {
 /**
  * Convert MIDI ticks to quarter-note beats.
  *
- * @param ticks Whole tick count.
+ * @param ticks Whole tick count, negative before the first downbeat.
  * @param ppq Pulses (ticks) per quarter note, e.g. 96, 480, or 960.
  * @returns The position or length in quarter-note beats.
- * @throws If `ticks` is not a non-negative integer or `ppq` is not a positive
- *   integer.
+ * @throws If `ticks` is not an integer or `ppq` is not a positive integer.
  * @example
  * ```ts
  * import { ticksToBeats } from '@libraz/libcantus';
@@ -286,7 +301,7 @@ export function beatsToTicks(beat: number, ppq: number): number {
  * @category Rhythm & Meter
  */
 export function ticksToBeats(ticks: number, ppq: number): number {
-  assertInteger(ticks, 'ticks', 0);
+  assertInteger(ticks, 'ticks');
   assertPositiveInt(ppq, 'ppq');
   return ticks / ppq;
 }

@@ -364,8 +364,8 @@ export function detectChordBest(
 }
 
 /**
- * Minor-scale variants a minor-key candidate may report. Ranking no longer
- * consults them: the minor profile already expects weight on the raised sixth
+ * Minor-scale variants a minor-key candidate may report. Ranking does not
+ * consult them: the minor profile already expects weight on the raised sixth
  * and seventh, so the variant is chosen afterwards as the mask that covers the
  * most input weight. Natural minor comes first so it wins a tie as the most
  * diatonic reading.

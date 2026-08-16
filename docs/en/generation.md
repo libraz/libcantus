@@ -79,7 +79,7 @@ ornament(notes, { style: 'ghost', amount: 0.6, seed: 4 }).length; // 8
 
 ## Context and reproducibility
 
-`GenerationContext` carries the project seed, tempo, instrument profiles, vocabulary, complexity, and difficulty. `complexity` has `rhythmic`, `harmonic`, and `ornament` controls in 0..1. `difficulty` is a ceiling from 1 to 5: it removes candidates instead of increasing intensity.
+`GenerationContext` carries the project seed, tempo, instrument profiles, vocabulary, complexity, and difficulty. `complexity` has `rhythmic`, `harmonic`, and `ornament` controls in 0..1. `difficulty` is a ceiling from 1 to 5: it removes candidates instead of increasing intensity. `vocabulary` is the genre dictionary the whole piece draws from, described under [Genre vocabulary](rhythm-and-groove.md).
 
 A numeric context such as `1` is shorthand for `{ seed: 1 }`. Random choices are derived by position, and `algorithmVersion` pins the generation contract. See [Determinism and seeding](determinism-and-seeding.md) for what a project file has to store to reopen a generated part as itself.
 

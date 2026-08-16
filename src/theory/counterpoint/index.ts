@@ -8,7 +8,10 @@
  * be seen in a MIDI integer. {@link createsVerticalDissonance} and
  * {@link isForbiddenMelodicLeap} therefore answer the spelled question when
  * given spelled notes, and the sounding question — all a bare pitch can support
- * — when given integers.
+ * — when given integers. {@link isAugmentedMelodicInterval} asks a question that
+ * has no sounding half at all, so its integer form answers false rather than
+ * refusing the call: every predicate here takes either form, and the ones that
+ * need spelling say so by degrading.
  *
  * The remaining rules compare registers or perfect classes, which spelling
  * cannot change: a parallel fifth is a parallel fifth however the two voices are
@@ -124,6 +127,12 @@ function isAlteredInterval(interval: SpelledInterval): boolean {
  * The augmented unison is excluded: raising or lowering the note a voice already
  * holds is a chromatic inflection, not a leap.
  *
+ * Every augmented interval sounds like a plain one — the augmented second like a
+ * minor third, the augmented fourth like a diminished fifth — so MIDI integers
+ * carry nothing this rule can read, and the numeric form always answers false.
+ * It exists so a host can run the whole predicate set over a bare pitch pair;
+ * take the spelled form wherever the exercise is written in notes.
+ *
  * @param prev Starting note.
  * @param cur Ending note.
  * @returns True when the move spans an augmented second or wider.
@@ -132,10 +141,16 @@ function isAlteredInterval(interval: SpelledInterval): boolean {
  * import { isAugmentedMelodicInterval, parseNote } from '@libraz/libcantus';
  * isAugmentedMelodicInterval(parseNote('Ab4'), parseNote('B4')); // true — A2 in C minor
  * isAugmentedMelodicInterval(parseNote('A4'), parseNote('C5')); // false — m3
+ * isAugmentedMelodicInterval(68, 71); // false — the same pitches carry no spelling
  * ```
  * @category Voicing & Counterpoint
  */
-export function isAugmentedMelodicInterval(prev: Note, cur: Note): boolean {
+export function isAugmentedMelodicInterval(prev: Note, cur: Note): boolean;
+export function isAugmentedMelodicInterval(prev: number, cur: number): boolean;
+export function isAugmentedMelodicInterval(prev: number | Note, cur: number | Note): boolean {
+  if (typeof prev === 'number' || typeof cur === 'number') {
+    return false;
+  }
   const interval = spelledInterval(prev, cur);
   return interval.number >= 2 && interval.quality.startsWith('A');
 }

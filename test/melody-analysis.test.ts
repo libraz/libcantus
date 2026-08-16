@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import {
   compareMelodies,
@@ -8,6 +12,8 @@ import {
   relateMotifs,
 } from '../src/analyze/melody/index.js';
 import type { NoteEvent } from '../src/core/types.js';
+import type { MotifCell, MotifContour, MotifTransform } from '../src/generate/motif/index.js';
+import { generateMotif, motifToNoteEvents, transformMotif } from '../src/generate/motif/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
 
 const cMajor = majorKey(0);
@@ -283,5 +289,165 @@ describe('melodicContour', () => {
 
   it('reads a motif as readily as raw notes', () => {
     expect(melodicContour(motifFromNotes(line(0, [60, 64, 67, 64, 60]))).shape).toBe('arch');
+  });
+});
+
+describe('the contour vocabulary the generator and the analysis share', () => {
+  /** Every cell length `generateMotif` can be asked for at the low end. */
+  const LENGTHS = [1, 2, 3, 4, 5, 6];
+  const shapeOf = (contour: MotifContour, bars: number) =>
+    melodicContour(motifToNoteEvents(generateMotif({ key: cMajor, bars, contour }))).shape;
+
+  it.each(['arch', 'ascending', 'descending'] as const)(
+    'reads a generated %s back under its own name at every length',
+    (contour) => {
+      for (const bars of LENGTHS) {
+        expect(shapeOf(contour, bars), `${contour} over ${bars} bars`).toBe(contour);
+      }
+    },
+  );
+
+  it('reads a generated wave back as a wave once the cell turns more than once', () => {
+    for (const bars of LENGTHS.filter((bars) => bars >= 3)) {
+      expect(shapeOf('wave', bars), `wave over ${bars} bars`).toBe('wave');
+    }
+  });
+
+  it('reads the shorter wave cells as the arches they are', () => {
+    // One and two bars give the generator three and four notes, and its wave
+    // turns once inside that: the guide documents the boundary rather than
+    // letting a caller discover it.
+    expect(shapeOf('wave', 1)).toBe('arch');
+    expect(shapeOf('wave', 2)).toBe('arch');
+  });
+});
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+/** The members of a string-literal union, in the order they are declared. */
+function unionMembers(file: string, name: string): string[] {
+  const source = ts.createSourceFile(
+    file,
+    readFileSync(file, 'utf8'),
+    ts.ScriptTarget.ES2022,
+    true,
+  );
+  for (const statement of source.statements) {
+    if (
+      ts.isTypeAliasDeclaration(statement) &&
+      statement.name.text === name &&
+      ts.isUnionTypeNode(statement.type)
+    ) {
+      return statement.type.types.map((member) =>
+        ts.isLiteralTypeNode(member) && ts.isStringLiteral(member.literal)
+          ? member.literal.text
+          : '',
+      );
+    }
+  }
+  throw new Error(`${name} is not a string-literal union in ${file}`);
+}
+
+/** Rows of the guide's correspondence table, as `[transform, relations]` cells. */
+function tableRows(file: string): string[][] {
+  return readFileSync(file, 'utf8')
+    .split('\n')
+    .filter((row) => row.startsWith('|'))
+    .map((row) =>
+      row
+        .split('|')
+        .slice(1, -1)
+        .map((cell) => cell.trim()),
+    )
+    .filter((cells) => !cells.every((cell) => /^-+$/.test(cell)))
+    .slice(1);
+}
+
+/** Names written in backticks, in the order they appear. */
+function quoted(text: string): string[] {
+  return [...text.matchAll(/`([A-Za-z_$][\w$]*)`/g)].map((match) => match[1] as string);
+}
+
+describe('the transform / relation correspondence the guide tabulates', () => {
+  const transforms = unionMembers(path.join(ROOT, 'src/generate/motif/index.ts'), 'MotifTransform');
+  const kinds = unionMembers(path.join(ROOT, 'src/analyze/melody/index.ts'), 'MotifRelationKind');
+  const guides = ['en', 'ja'].map((lang) => ({
+    lang,
+    file: path.join(ROOT, 'docs', lang, 'melody-and-motifs.md'),
+  }));
+
+  it.each(guides)('$lang tabulates every transform, in the order they are declared', ({ file }) => {
+    // The two directions carry different names for the same devices, so the
+    // table is the only thing tying them together; deriving both sides from the
+    // sources is what stops a new member from being added on one side alone.
+    expect(tableRows(file).map((cells) => quoted(cells[0] as string))).toEqual(
+      transforms.map((name) => [name]),
+    );
+  });
+
+  it.each(guides)('$lang names only real relations opposite them', ({ file }) => {
+    const named = tableRows(file).flatMap((cells) => quoted(cells[1] as string));
+    expect(named.filter((name) => !kinds.includes(name))).toEqual([]);
+  });
+
+  it.each(guides)('$lang accounts for every relation somewhere on the page', ({ file }) => {
+    const prose = readFileSync(file, 'utf8').replace(/^```[\s\S]*?^```/gm, '');
+    const named = new Set(quoted(prose));
+    expect(kinds.filter((kind) => !named.has(kind))).toEqual([]);
+  });
+
+  // Intervals +4, -2, +5 in even note values: asymmetrical enough that each
+  // transform answers to exactly one name, and even enough that the retrograde
+  // reads back to front in rhythm as well as in pitch.
+  const figure: MotifCell = {
+    notes: [60, 64, 62, 67].map((pitch, index) => ({
+      pitch,
+      startBeat: index,
+      durationBeat: 1,
+    })),
+  };
+  const model = motifFromNotes(motifToNoteEvents(figure));
+  const nameOf = (transform: MotifTransform, key = cMajor) =>
+    relateMotifs(
+      model,
+      motifFromNotes(motifToNoteEvents(transformMotif(figure, transform, 2, key))),
+      key,
+    )?.kind ?? null;
+
+  it('reports the relation the table promises for each transform', () => {
+    expect(nameOf('transposeDiatonic')).toBe('tonalTransposition');
+    expect(nameOf('transposeChromatic')).toBe('transposition');
+    expect(nameOf('invert')).toBe('inversion');
+    expect(nameOf('retrograde')).toBe('retrograde');
+    expect(nameOf('augment')).toBe('augmentation');
+    expect(nameOf('diminish')).toBe('diminution');
+  });
+
+  it('falls back to a chromatic reading of transposeDiatonic without a key', () => {
+    const shifted = transformMotif(figure, 'transposeDiatonic', 2);
+    expect(relateMotifs(model, motifFromNotes(motifToNoteEvents(shifted)))?.kind).toBe(
+      'transposition',
+    );
+  });
+
+  it('has no relation for sequence, and names its two halves instead', () => {
+    const sequenced = transformMotif(figure, 'sequence', 2, cMajor);
+    expect(nameOf('sequence')).toBeNull();
+    const half = sequenced.notes.length / 2;
+    const relation = relateMotifs(
+      motifFromNotes(sequenced.notes.slice(0, half).map((note) => ({ ...note }))),
+      motifFromNotes(sequenced.notes.slice(half).map((note) => ({ ...note }))),
+      cMajor,
+    );
+    expect(relation?.kind).toBe('tonalTransposition');
+    expect(relation?.sequence).toBe(true);
+  });
+
+  it('reaches the two relations no single transform produces', () => {
+    expect(relateMotifs(model, model, cMajor)?.kind).toBe('repetition');
+    const turned = transformMotif(transformMotif(figure, 'retrograde'), 'invert');
+    expect(relateMotifs(model, motifFromNotes(motifToNoteEvents(turned)), cMajor)?.kind).toBe(
+      'retrogradeInversion',
+    );
   });
 });

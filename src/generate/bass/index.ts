@@ -136,6 +136,14 @@ export type BassLineOptions = {
    * the line.
    */
   ctx?: GenerationContextInput;
+  /**
+   * Maximum number of segments, and of notes, {@link generateBassLine} may
+   * work through. The line is built segment by segment, so this is the guard
+   * against an unbounded caller rather than a limit on any search.
+   *
+   * @defaultValue 1000000
+   */
+  budget?: number;
 };
 
 const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
@@ -314,7 +322,7 @@ function buildWalking(
  * @category Composition
  */
 export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
-  assertGenerationBudget(opts.segments.length, 'bass segments');
+  assertGenerationBudget(opts.segments.length, 'bass segments', opts.budget);
   for (let index = 0; index < opts.segments.length; index += 1) {
     const segment = opts.segments[index];
     if (!segment) continue;
@@ -349,7 +357,7 @@ export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
     (count, segment) => count + Math.max(1, Math.ceil(segment.endBeat - segment.startBeat)),
     0,
   );
-  assertGenerationBudget(estimatedNotes, 'bass notes');
+  assertGenerationBudget(estimatedNotes, 'bass notes', opts.budget);
   const resolved = resolveContextWith(opts.ctx, { seed: opts.seed });
   const named = resolved.instrument('bass');
   const instrument =

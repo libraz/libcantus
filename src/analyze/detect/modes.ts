@@ -111,10 +111,11 @@ export const MODAL_SCALE_NAMES: readonly ModalScaleName[] = Object.freeze(
  * @returns A 12-entry vector indexed from the modal tonic.
  * @example
  * ```ts
- * import { KRUMHANSL_KESSLER_PROFILE } from './profiles.js';
- * import { MODAL_CANDIDATES, modalProfileVector } from './modes.js';
- * const dorian = modalProfileVector(KRUMHANSL_KESSLER_PROFILE, MODAL_CANDIDATES[0]);
- * dorian[9]; // 3.98, the weight minor expects on its flat sixth
+ * import { detectKey } from '@libraz/libcantus';
+ * // D dorian and C major hold the same seven pitch classes; the weight on the
+ * // natural sixth is what tells them apart.
+ * const dorian = [62, 64, 65, 67, 69, 71, 62, 69, 62];
+ * detectKey(dorian, { modes: ['dorian'] })[0]?.scaleName; // 'dorian'
  * ```
  */
 export function modalProfileVector(
@@ -141,9 +142,13 @@ export function modalProfileVector(
  *   names a mode that is not a church mode.
  * @example
  * ```ts
- * import { resolveModalCandidates } from './modes.js';
- * resolveModalCandidates(undefined).length; // 0
- * resolveModalCandidates(['dorian']).map((c) => c.scaleName); // ['dorian']
+ * import { detectKey, MODAL_SCALE_NAMES } from '@libraz/libcantus';
+ * const dorian = [62, 64, 65, 67, 69, 71, 62, 69, 62];
+ * // Without the option the 24 keys are ranked alone, so the nearest major or
+ * // minor key wins; naming a mode puts it in the running.
+ * detectKey(dorian)[0]?.scaleName; // 'major'
+ * detectKey(dorian, { modes: ['dorian'] })[0]?.scaleName; // 'dorian'
+ * MODAL_SCALE_NAMES.includes('dorian'); // true
  * ```
  */
 export function resolveModalCandidates(

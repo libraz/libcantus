@@ -55,6 +55,115 @@ export function nearestScaleTone(pitch: number, key: KeyScale): number {
   return base;
 }
 
+/** The key's scale offsets above its root, ascending within one octave. */
+function scaleOffsets(key: KeyScale): number[] {
+  const offsets: number[] = [];
+  for (let n = 0; n < 12; n += 1) {
+    if (((key.modeMask12 >> n) & 1) === 1) {
+      offsets.push(n);
+    }
+  }
+  return offsets;
+}
+
+/**
+ * Where a pitch sits on the key's ladder of scale tones.
+ *
+ * `rung` counts scale tones from the tonic and continues across octaves, so
+ * adding to it moves by scale degrees; it is negative below the tonic of octave
+ * 0. `offset` is how many semitones the pitch sounds above that rung, which is 0
+ * for a scale tone and positive for one between two of them.
+ */
+export type ScaleLadderPosition = {
+  rung: number;
+  offset: number;
+};
+
+/**
+ * Locate a pitch on the key's ladder of scale tones.
+ *
+ * Anything counting in scale degrees has to put a pitch on this ladder and back
+ * again afterwards. Keeping the chromatic offset apart from the rung is what
+ * lets a note between two scale tones survive the arithmetic as the note it was:
+ * without it a shift by any number of degrees — including none — would first
+ * flatten every chromatic pitch onto the scale.
+ *
+ * In C major, C# sits on the tonic's rung with an offset of one semitone.
+ *
+ * Layer-internal: the generators count degrees with it, and callers reach the
+ * same arithmetic through the transforms that use it.
+ *
+ * @param pitch MIDI pitch.
+ * @param key The key/scale to count along.
+ * @returns The rung the pitch sits on and its semitone offset above it.
+ */
+export function scaleLadderPosition(pitch: number, key: KeyScale): ScaleLadderPosition {
+  const offsets = scaleOffsets(key);
+  const size = offsets.length;
+  if (size === 0) {
+    return { rung: 0, offset: 0 };
+  }
+  const relative = pitch - pitchClass(key.rootPc);
+  const octave = Math.floor(relative / 12);
+  const within = relative - octave * 12;
+  let degree = 0;
+  for (let n = 0; n < size; n += 1) {
+    if ((offsets[n] ?? 0) <= within) {
+      degree = n;
+    }
+  }
+  return { rung: octave * size + degree, offset: within - (offsets[degree] ?? 0) };
+}
+
+/**
+ * The pitch a rung of the key's ladder of scale tones stands for.
+ *
+ * The inverse of {@link scaleLadderPosition}'s `rung`: adding the position's
+ * `offset` back to the result returns the pitch it came from.
+ *
+ * Layer-internal, like {@link scaleLadderPosition}.
+ *
+ * @param rung Scale tones counted from the tonic, negative below it.
+ * @param key The key/scale to count along.
+ * @returns The MIDI pitch of that scale tone.
+ */
+export function scaleLadderPitch(rung: number, key: KeyScale): number {
+  const offsets = scaleOffsets(key);
+  const size = offsets.length;
+  if (size === 0) {
+    return pitchClass(key.rootPc);
+  }
+  const octave = Math.floor(rung / size);
+  const degree = rung - octave * size;
+  return pitchClass(key.rootPc) + octave * 12 + (offsets[degree] ?? 0);
+}
+
+/**
+ * Shift a pitch by scale degrees along the key's ladder of scale tones.
+ *
+ * A pitch between two scale tones keeps its distance above the one below it, so
+ * a chromatic passing note is still a chromatic passing note after the shift,
+ * and a shift of no degrees returns the pitch untouched: a step up the C-major
+ * ladder answers C# with D#, not with D.
+ *
+ * Layer-internal. It is what `transposeDiatonic` and a tonal imitation both
+ * count along, so the two answer the same shift the same way; a caller reaches
+ * it through either of them.
+ *
+ * @param pitch MIDI pitch to shift.
+ * @param degrees Scale degrees to move by; negative moves down.
+ * @param key The key/scale to count along.
+ * @returns The shifted pitch.
+ */
+export function shiftByScaleDegrees(pitch: number, degrees: number, key: KeyScale): number {
+  const steps = Math.trunc(degrees);
+  if (steps === 0) {
+    return pitch;
+  }
+  const { rung, offset } = scaleLadderPosition(pitch, key);
+  return scaleLadderPitch(rung + steps, key) + offset;
+}
+
 /**
  * Get the scale degree of a pitch, counted from 1: the tonic is degree 1.
  *

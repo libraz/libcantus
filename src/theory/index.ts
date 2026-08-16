@@ -54,6 +54,9 @@ export {
   transposeChord,
 } from './chord/index.js';
 export type {
+  AvailableTensionsOptions,
+  AvoidNotesOptions,
+  AvoidNoteUse,
   ChordScaleMatch,
   ChordScaleReportEntry,
   ScaleChoice,

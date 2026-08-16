@@ -1,5 +1,5 @@
 import type { TimeSignature } from '../../core/meter/index.js';
-import { metricWeight } from '../../core/meter/index.js';
+import { metricWeight, pulseBeats } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import { assertNoteEvents, assertTimeSignature } from '../../core/validation/index.js';
 
@@ -33,6 +33,27 @@ export type ClassifiedMelodyTone = {
 
 /** Maximum gap or overlap still heard as one note leading into the next. */
 const ADJACENCY_TOLERANCE = 0.05;
+
+/**
+ * Read an onset as the metric position it is playing, snapping it to the pulse
+ * grid when it lies within the tolerance a performance stays inside.
+ *
+ * `metricWeight` answers for an exact grid position and reports no accent at
+ * all a fraction of a beat away from one, while a {@link NoteEvent} is the
+ * exchange format with a DAW or MIDI track — its onsets carry the timing of a
+ * performance. Without this the same phrase would form one set of figures as
+ * notated and another once played, and the chords chosen under it would change
+ * with a few milliseconds of jitter. The tolerance is the one the adjacency test
+ * already reads onsets with, so both sides of the classification agree about
+ * what counts as the same beat.
+ *
+ * @param beat The onset in quarter-note beats.
+ * @param pulse The metre's pulse length in quarter-note beats.
+ */
+export function snapToPulse(beat: number, pulse: number): number {
+  const snapped = Math.round(beat / pulse) * pulse;
+  return Math.abs(snapped - beat) <= ADJACENCY_TOLERANCE ? snapped : beat;
+}
 
 /** Largest interval still heard as a step; anything wider is a leap. */
 const STEP_SEMITONES = 2;
@@ -90,8 +111,9 @@ export function classifyMelodyTones(
 ): ClassifiedMelodyTone[] {
   assertNoteEvents(melody, 'melody notes', { allowNonPositiveDuration: true });
   assertTimeSignature(ts);
+  const pulse = pulseBeats(ts);
   return melody.map((_, index) => {
-    const role = roleOfNote(melody, index, ts);
+    const role = roleOfNote(melody, index, ts, pulse);
     return { noteIndex: index, role, ornamental: role !== 'structural' };
   });
 }
@@ -101,6 +123,7 @@ function roleOfNote(
   melody: readonly NoteEvent[],
   index: number,
   ts: TimeSignature,
+  pulse: number,
 ): MelodyToneRole {
   const note = melody[index];
   const prev = melody[index - 1];
@@ -116,9 +139,9 @@ function roleOfNote(
     return 'structural';
   }
 
-  const weight = metricWeight(note.startBeat, ts);
-  const weightPrev = metricWeight(prev.startBeat, ts);
-  const weightNext = metricWeight(next.startBeat, ts);
+  const weight = metricWeight(snapToPulse(note.startBeat, pulse), ts);
+  const weightPrev = metricWeight(snapToPulse(prev.startBeat, pulse), ts);
+  const weightNext = metricWeight(snapToPulse(next.startBeat, pulse), ts);
   // Subordinate: no stronger metrically and no longer than either neighbour, so
   // the ear hears the neighbours as the frame and this note as decoration.
   const subordinate =

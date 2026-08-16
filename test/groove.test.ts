@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseTimeSignature } from '../src/core/meter/index.js';
 import type { NoteEvent } from '../src/core/types.js';
+import type { GenerationContext } from '../src/generate/context/index.js';
 import {
   applyGrooveTemplate,
   extractGrooveTemplate,
@@ -40,6 +41,46 @@ describe('humanize', () => {
     expect(differing).toBeGreaterThan(15);
   });
 
+  it('takes a generation context, with the context winning over the seed sugar', () => {
+    // The eleventh entry point onto the same rule: a project context speaks for
+    // the whole piece, so it settles the seed the sugar only suggests.
+    expect(humanize(events, { ctx: { seed: 7 } })).toEqual(humanize(events, { seed: 7 }));
+    expect(humanize(events, { ctx: { seed: 7 }, seed: 99 })).toEqual(
+      humanize(events, { ctx: { seed: 7 } }),
+    );
+    expect(humanize(events, { ctx: 7 })).toEqual(humanize(events, { seed: 7 }));
+    // A context that names a seed of its own settles it, even when it is 0.
+    expect(humanize(events, { ctx: { seed: 0, bpm: 96 }, seed: 7 })).toEqual(
+      humanize(events, { seed: 0 }),
+    );
+    // One carrying nothing but a tempo lets the sugar name it, which is the
+    // rule the other entry points follow.
+    const tempoOnly = { bpm: 96 } as GenerationContext;
+    expect(humanize(events, { ctx: tempoOnly, seed: 7 })).toEqual(humanize(events, { seed: 7 }));
+  });
+
+  it('draws by position, so an inserted note leaves the others where they were', () => {
+    // The coupling positional addressing exists to remove: with draws taken in
+    // array order, one note added at the front redraws the whole part.
+    const before = humanize(events, { seed: 3, timing: 0.04 });
+    const inserted = humanize([{ pitch: 61, startBeat: -0.25, durationBeat: 0.5 }, ...events], {
+      seed: 3,
+      timing: 0.04,
+    });
+    expect(inserted.slice(1)).toEqual(before);
+  });
+
+  it('keeps two parts of one context independent', () => {
+    // Two parts doubling the same line: humanizing them under one name would
+    // give both the same jitter, which is a flanged unison rather than two
+    // players.
+    const lead = humanize(events, { ctx: { seed: 11 }, part: 'lead' });
+    const double = humanize(events, { ctx: { seed: 11 }, part: 'double' });
+    expect(double).not.toEqual(lead);
+    // Naming the same part twice is the same part, and reports the same thing.
+    expect(humanize(events, { ctx: { seed: 11 }, part: 'lead' })).toEqual(lead);
+  });
+
   it('keeps timing jitter within the configured bound', () => {
     const timing = 0.03;
     for (let seed = 0; seed < 30; seed += 1) {
@@ -53,13 +94,16 @@ describe('humanize', () => {
     }
   });
 
-  it('clamps timing jitter so startBeat never goes negative', () => {
-    const nearZero = makeEvents([0, 0.005]);
+  it('lets timing jitter cross beat 0 instead of piling notes onto it', () => {
+    // A pickup and the downbeat it leads into. Flooring the jitter at 0 would
+    // report both at beat 0 — one sound where the input has two.
+    const acrossZero = makeEvents([-0.5, 0]);
     for (let seed = 0; seed < 30; seed += 1) {
-      const result = humanize(nearZero, { seed, timing: 0.5 });
-      for (const event of result) {
-        expect(event.startBeat).toBeGreaterThanOrEqual(0);
-      }
+      const result = humanize(acrossZero, { seed, timing: 0.05 });
+      const onsets = result.map((event) => event.startBeat);
+      expect(new Set(onsets).size).toBe(onsets.length);
+      expect(onsets[0]).toBeLessThan(onsets[1] as number);
+      expect(onsets[0]).toBeLessThan(0);
     }
   });
 
@@ -106,6 +150,23 @@ describe('humanize', () => {
     expect(strongTotal / (seeds * strongBeats.length)).toBeGreaterThan(
       weakTotal / (seeds * weakBeats.length),
     );
+  });
+
+  it('keeps a two-note pickup two notes', () => {
+    // A whole-beat upbeat, a half-beat upbeat and the downbeat: onsets the
+    // validator accepts, and onsets the analysis side reads as bar -1. If the
+    // jitter is floored at 0 the two upbeats arrive together on the downbeat,
+    // and no later pass can tell there was a pickup at all.
+    const pickup = makeEvents([-1, -0.5, 0]);
+    for (let seed = 0; seed < 30; seed += 1) {
+      const played = humanize(pickup, { seed, timing: 0.02 });
+      const onsets = played.map((event) => event.startBeat);
+      expect(new Set(onsets).size).toBe(3);
+      expect(onsets[0]).toBeLessThan(onsets[1] as number);
+      expect(onsets[1]).toBeLessThan(onsets[2] as number);
+      expect(onsets[0]).toBeCloseTo(-1, 1);
+      expect(onsets[1]).toBeCloseTo(-0.5, 1);
+    }
   });
 });
 
@@ -195,7 +256,7 @@ describe('applyGrooveTemplate', () => {
     expect(result[0]?.velocity).toBe(55);
   });
 
-  it('clamps a negative downbeat offset so the result can re-enter the event pipeline', () => {
+  it('lets a laid-back downbeat slot push the note before beat 0', () => {
     const template: GrooveTemplate = {
       subdivision: 4,
       slotsPerBar: 16,
@@ -209,8 +270,30 @@ describe('applyGrooveTemplate', () => {
       template,
       FOUR_FOUR,
     );
-    expect(applied[0]?.startBeat).toBe(0);
+    // The recorded feel is the same one every other slot gets: an onset before
+    // beat 0 is where the template says the note is played, and the validator
+    // accepts it, so it re-enters the pipeline unchanged.
+    expect(applied[0]?.startBeat).toBeCloseTo(-0.01, 10);
     expect(() => humanize(applied)).not.toThrow();
+  });
+
+  it('keeps a pickup a pickup', () => {
+    // The two upbeats belong to the bar before the first, so they quantize
+    // against that bar's grid. Flooring their onsets at 0 would stack them on
+    // the downbeat, which is where the pickup stops being one.
+    const template: GrooveTemplate = {
+      subdivision: 4,
+      slotsPerBar: 16,
+      slots: new Array(16).fill(null).map(() => ({ timingOffset: 0.02, velocity: null })),
+    };
+    const pickup: NoteEvent[] = [-1, -0.5, 0].map((startBeat) => ({
+      pitch: 60,
+      startBeat,
+      durationBeat: 0.5,
+      velocity: 90,
+    }));
+    const applied = applyGrooveTemplate(pickup, template, FOUR_FOUR);
+    expect(applied.map((event) => event.startBeat)).toEqual([-0.98, -0.48, 0.02]);
   });
 
   it('applies a genuine velocity-0 slot instead of leaving the event untouched', () => {

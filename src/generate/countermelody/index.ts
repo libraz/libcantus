@@ -468,7 +468,7 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
   const timeline = opts.timeline;
   const chordAt = timeline === undefined ? opts.chordAt : (beat: number) => timeline.at(beat);
   if (chordAt === undefined) {
-    throw new TypeError('countermelody needs a timeline or a chordAt callback');
+    throw new InvalidInputError('countermelody needs a timeline or a chordAt callback');
   }
   const chordChangeBeats =
     timeline === undefined

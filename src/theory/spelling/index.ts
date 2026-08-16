@@ -5,6 +5,10 @@
  * G# and an Ab. Given a spelled tonic, this module assigns diatonic letters to
  * scale degrees and chord tones so a C major scale spells as C D E F G A B and
  * A harmonic minor spells its seventh as G#.
+ *
+ * Every entry point takes the spelled tonic *of the key it spells*: a tonic
+ * sounding a pitch class other than `key.rootPc` is rejected rather than
+ * spelled, because the letters counted from it name no reading of the key.
  */
 
 import { InvalidInputError } from '../../core/errors/index.js';
@@ -77,6 +81,41 @@ const CHROMATIC_SPELLING_SHARP: Record<number, number> = {
   10: 5, // #6
   11: 6, // M7
 };
+
+/** The pitch class a spelled note sounds. */
+function notePitchClass(note: Note): number {
+  return mod12(naturalPc(note.letter) + note.alter);
+}
+
+/**
+ * Reject a tonic that does not spell the key's own root.
+ *
+ * Every letter these functions assign is counted from the tonic's letter, so a
+ * tonic naming a different pitch class than `key.rootPc` does not produce
+ * another spelling of the same scale: it produces letters no reading of the key
+ * supports, and a heptatonic scale that names one letter twice. The class API
+ * rejects the pair in its `Key` constructor, so the functions that take the two
+ * apart check it here and both surfaces answer the same way.
+ *
+ * Not part of the package's public surface: it guards the entry points rather
+ * than being one.
+ *
+ * @param tonic The spelled tonic.
+ * @param key The key/scale the tonic is meant to spell.
+ * @param source The name of the function that received the pair.
+ * @throws If the tonic sounds a pitch class other than the key's root.
+ */
+export function assertTonicOf(tonic: Note, key: KeyScale, source: string): void {
+  const tonicPc = notePitchClass(tonic);
+  const rootPc = mod12(key.rootPc);
+  if (tonicPc !== rootPc) {
+    const name = formatNote({ letter: mod7(tonic.letter), alter: tonic.alter });
+    throw new InvalidInputError(
+      `${source}: tonic ${name} sounds pitch class ${tonicPc}, not the key root ${rootPc}; ` +
+        'pass a tonic that spells the key root, or take one from spelledKeyOf',
+    );
+  }
+}
 
 /** Shortest signed alteration (in [-6, 6]) taking a letter's natural pc to `pc`. */
 function alterFor(letter: number, pc: number): number {
@@ -498,6 +537,7 @@ function refineByContext(
  * @param context Optional surrounding evidence; an absent or empty context
  *   spells exactly as the key alone does.
  * @returns The spelled note (without octave).
+ * @throws If `tonic` does not sound the key's root pitch class.
  * @example
  * ```ts
  * import { spellPitchClass, formatNote, parseNote, majorKey } from '@libraz/libcantus';
@@ -516,6 +556,7 @@ export function spellPitchClass(
   key: KeyScale,
   context?: SpellingContext,
 ): Note {
+  assertTonicOf(tonic, key, 'spellPitchClass');
   const keySpelling = spellByKey(pc, tonic, key);
   return context === undefined
     ? keySpelling
@@ -534,6 +575,7 @@ export function spellPitchClass(
  * @param tonic The spelled tonic.
  * @param key The key/scale.
  * @returns Spelled notes, one per scale degree.
+ * @throws If `tonic` does not sound the key's root pitch class.
  * @example
  * ```ts
  * import { spellScale, noteNames, parseNote, majorKey } from '@libraz/libcantus';
@@ -543,6 +585,7 @@ export function spellPitchClass(
  * @category Pitch & Intervals
  */
 export function spellScale(tonic: Note, key: KeyScale): Note[] {
+  assertTonicOf(tonic, key, 'spellScale');
   return scaleTonesInDegreeOrder(key).map((pc) => spellPitchClass(pc, tonic, key));
 }
 
@@ -553,9 +596,11 @@ export function spellScale(tonic: Note, key: KeyScale): Note[] {
  * @param tonic The spelled tonic.
  * @param key The key/scale.
  * @returns Spelled notes, in input order.
+ * @throws If `tonic` does not sound the key's root pitch class.
  * @category Pitch & Intervals
  */
 export function spellPitchClasses(pcs: number[], tonic: Note, key: KeyScale): Note[] {
+  assertTonicOf(tonic, key, 'spellPitchClasses');
   return pcs.map((pc) => spellPitchClass(pc, tonic, key));
 }
 
@@ -679,6 +724,7 @@ export function spellChordFromRoot(chord: Chord, root: Note): Note[] {
  * @param tonic The spelled tonic of the key.
  * @param key The key/scale.
  * @returns Spelled chord tones, root first.
+ * @throws If `tonic` does not sound the key's root pitch class.
  * @example
  * ```ts
  * import { spellChord, noteNames, parseNote, majorKey, makeChord } from '@libraz/libcantus';
@@ -689,6 +735,7 @@ export function spellChordFromRoot(chord: Chord, root: Note): Note[] {
  * @category Pitch & Intervals
  */
 export function spellChord(chord: Chord, tonic: Note, key: KeyScale): Note[] {
+  assertTonicOf(tonic, key, 'spellChord');
   return spellChordFromRoot(chord, chordRootSpelling(chord, tonic, key));
 }
 
@@ -726,6 +773,7 @@ function chordRootSpelling(chord: Chord, tonic: Note, key: KeyScale): Note {
  * @param context Optional surrounding evidence, weighed exactly as
  *   {@link spellPitchClass} weighs it.
  * @returns The spelled note, carrying the octave that reproduces `pitch`.
+ * @throws If `tonic` does not sound the key's root pitch class.
  * @example
  * ```ts
  * import { spellPitch, formatNote, parseNote, majorKey } from '@libraz/libcantus';
@@ -739,6 +787,7 @@ export function spellPitch(
   key: KeyScale,
   context?: SpellingContext,
 ): Note {
+  assertTonicOf(tonic, key, 'spellPitch');
   const rounded = Math.round(pitch);
   const spelled = spellPitchClass(mod12(rounded), tonic, key, context);
   const octave = (rounded - naturalPc(spelled.letter) - spelled.alter) / 12 - 1;

@@ -123,13 +123,77 @@ pattern.every((hit) => hit.durationBeat > 0); // true
 
 スタイルは `standard`、`funk`、`shuffle`、`bossa`、`trap`、`halftime`、`breakbeat`、`house`、`synthpop` です。セクションは `intro`、`verse`、`prechorus`、`chorus`、`bridge`、`outro` で、形式を指定するものではなく密度とフィルを形づくります。
 
+グルーヴはバックビート、ハイハットの細分、オープンハットとクラッシュの拍、フィルの開始拍まですべて4拍の小節を前提に書かれています。そのため `ts` は 4/4 のみを受け付け、それ以外の拍子は、長さの違う小節の中に 4/4 のアクセントを置いた結果を返すのではなく拒否します。他の拍子で書くには `generateRhythm` と `placeDrumPattern` を使ってください。
+
 `fills: true` は最終小節をフィルに置き換えます。ただしコーラスへ向かうプリコーラスでは代わりに盛り上げが入ります。2小節のリフトがすでにフレーズの終わりを示しているためです。
 
 `role` はどの声部を鳴らすかを制限します。`full` から `ambient`、`minimal`、`fxOnly` の順に薄くなります。`drumVoiceOf` は生成された打点を名前付きの声部に対応づけ、`DRUM_NOTES` は General MIDI のノート番号を返します。書き出し処理で必要になるのは後者です。
 
+## ジャンル語彙
+
+`generateDrums` は生成器に組み込まれたスタイル表からキットのパートを書きます。同じ `DrumHit[]` に至るもう1つの経路が `placeDrumPattern` です。こちらはジャンル辞書から図形を引きます。辞書の各エントリはコードではなくデータです。
+
+```ts
+import { DRUM_PATTERNS, GENRES, placeDrumPattern } from '@libraz/libcantus';
+
+const hits = placeDrumPattern({
+  bars: 2,
+  genre: 'bossa',
+  section: 'verse',
+  ctx: { seed: 7, bpm: 130, complexity: { rhythmic: 0.6, ornament: 0.3, difficulty: 3 } },
+});
+
+hits.every((hit) => hit.durationBeat > 0); // true
+DRUM_PATTERNS.every((entry) => GENRES.includes(entry.genre)); // true
+```
+
+3つのつまみは互いに干渉しません。担当する段階が異なるためです。ジャンルはどの図形を候補にするかを選び、複雑度のつまみは選ばれた図形を変形し、難易度の上限は最短の打点間隔がその上限の奏者に維持できない図形を却下します。却下された図形は簡略化されるのではなく候補から外れます。簡略化された図形は別の図形だからです。
+
+`GENRES` は内蔵エントリが持つジャンルの一覧で、`pop` や `motown` から `bossa`、`dnb` までを含みます。`DRUM_PATTERNS` は辞書そのもので、凍結されています。各エントリは、ジャンル、1から5の難易度、適するセクションとテンポ帯、書かれている拍子、キットに要求するアーティキュレーション、そして公開の根拠となる出自を持ちます。出自として認めるのはジャンルの共有財産であり、特定の録音のフレーズは含めません。
+
+### 独自の図形を持ち込む
+
+ジャンルの一覧は型としては閉じていますが、考え方としては開いています。ライブラリが持たない素材は、呼び出し側が生成コンテキストを通してエントリを渡します。内蔵と同じ `id` を持つエントリは、その内蔵と競合するのではなく置き換えます。
+
+```ts
+import { type DrumVocabulary, placeDrumPattern } from '@libraz/libcantus';
+
+const ownFigure: DrumVocabulary = {
+  id: 'houseFourOnFloor',
+  genre: 'house',
+  difficulty: 2,
+  articulations: [],
+  material: {
+    steps: 16,
+    strokes: [0, 4, 8, 12].map((step) => ({ voice: 'kick', step, velocity: 1 })),
+  },
+  provenance: { basis: 'idiom', note: 'the four-on-the-floor pulse of the genre' },
+};
+
+const own = placeDrumPattern({ bars: 1, genre: 'house', ctx: { seed: 3, vocabulary: [ownFigure] } });
+
+own.length > 0; // true
+```
+
+辞書は曲全体で共有されます。`ctx.vocabulary` はすべての生成器のエントリをまとめて運び、各生成器は自分の素材だけを認識します。ベースの図形はドラム生成器からは見えないだけで、誤読されることはありません。エントリはコンテキストの解決時に検証されるため、決して一致し得ないテンポ帯や拍子を持つ図形は、黙って何にも一致しないのではなく入口で拒否されます。
+
 ## スウィングとフィール
 
-`feel` はドラム生成器における細分化の扱いを選びます。他の手段で生成した素材については、スウィングした演奏から抽出したグルーヴテンプレートが同じ情報を持ち、どのパートにも適用できます。
+`feel` はドラムの2つの面で細分化の扱いを選びます。`swing` は3連符位置へ3分の2だけ寄り、`shuffle` は3連符そのものです。明示した `feel` はどのスタイルでもそのとおりに扱われます。trap や house のように本来ストレートな性格を持つスタイルでも同じです。省略した場合はスタイル自身の feel が適用されます。
+
+辞書のエントリにはストレートな格子の上に書かれていて、レンダ時にその feel を当てて初めてそのものになるものがあります。ハーフタイム・シャッフルがその典型です。`placeDrumPattern` はそのために `feel` を受け取り、図形の音価をどうするかという別の問いには `rate`（`straight`、`half`、`double`）を受け取ります。
+
+```ts
+import { placeDrumPattern } from '@libraz/libcantus';
+
+const shuffled = placeDrumPattern({ bars: 1, genre: 'blues', feel: 'shuffle', ctx: { seed: 2, bpm: 88 } });
+const halved = placeDrumPattern({ bars: 1, genre: 'blues', rate: 'half', ctx: { seed: 2, bpm: 88 } });
+
+shuffled.some((hit) => hit.startBeat % 1 > 0.6); // true
+halved.length > 0; // true
+```
+
+他の手段で生成した素材については、スウィングした演奏から抽出したグルーヴテンプレートが同じ情報を持ち、どのパートにも適用できます。
 
 ## 関連ページ
 

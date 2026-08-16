@@ -29,7 +29,8 @@ export const STEP_BEATS = 1 / BEAT_STEPS;
  * An onset on the shared sixteenth grid.
  *
  * Both kinds of material are lists of these with their own extra fields, so a
- * transform is generic over the record and only ever reads these two.
+ * transform is generic over the record and only ever reads the fields named
+ * here.
  *
  * @category Composition
  */
@@ -38,21 +39,47 @@ export type GridEvent = {
   step: number;
   /** Loudness as a factor of the passage's base velocity. */
   velocity: number;
+  /**
+   * The voice this onset is played on, where the material has more than one.
+   * A figure written for a single voice — a bass lick — leaves it out.
+   */
+  voice?: string;
+  /**
+   * The limb that plays it, where the material names one. It outranks
+   * {@link GridEvent.voice} as the stream an onset belongs to, since what
+   * crowds a player is one limb rather than one drum.
+   */
+  limb?: string;
 };
 
 /**
- * How strongly a position is felt, from 4 (the downbeat) to 0 (an off sixteenth).
+ * The stream an onset belongs to: its limb, else its voice, else the one
+ * stream a single-voice figure has.
+ *
+ * Transforms and the ceiling both group by this. Two hands are two players, so
+ * a ghost snare neither blocks a hi-hat from anticipating nor makes the pair
+ * count as one limb repeating.
+ */
+function streamOf(event: GridEvent): string {
+  return event.limb ?? event.voice ?? '';
+}
+
+/**
+ * How strongly a position on the sixteenth grid is felt, from 4 (the downbeat)
+ * to 0 (an off sixteenth).
  *
  * This is the ranking the thinning rule works down: the notes a player drops
  * first when asked for something easier are the ones carrying the least of the
- * metre.
+ * metre. It is named for the grid it reads because the analysis layer has a
+ * metric weight of its own, on another scale and against a time signature; the
+ * two answer different questions and are deliberately not the same function.
  *
  * @param step Sixteenth index within the bar.
  * @returns The weight, 0 to 4.
  *
  * @category Composition
  */
-export function metricWeight(step: number): number {
+export function gridMetricWeight(step: number): number {
   const inBar = ((step % BAR_STEPS) + BAR_STEPS) % BAR_STEPS;
   if (inBar === 0) {
     return 4;
@@ -87,7 +114,7 @@ export function thin<T extends GridEvent>(events: readonly T[], amount: number):
   assertRange(amount, 0, 1, 'thin amount');
   // Five ranks (0..4), so a full turn of the dial reaches the downbeat alone.
   const floor = Math.min(4, Math.floor(amount * 5));
-  return events.filter((event) => metricWeight(event.step) >= floor);
+  return events.filter((event) => gridMetricWeight(event.step) >= floor);
 }
 
 /**
@@ -157,10 +184,11 @@ export function halfTime<T extends GridEvent>(events: readonly T[], spanSteps = 
 export function doubleTime<T extends GridEvent>(events: readonly T[], spanSteps = BAR_STEPS): T[] {
   const out: T[] = [];
   for (const event of events) {
-    const step = event.step / 2;
-    if (!Number.isInteger(step)) {
-      continue;
-    }
+    // An odd step halves onto no grid position, so it is placed on the nearest
+    // one. Dropping it instead took the "a" of the kick and three of the four
+    // ghosts out of the figure that names the genre, and returned the result as
+    // though it were the same figure played faster.
+    const step = Math.round(event.step / 2);
     out.push({ ...event, step });
     const repeated = step + spanSteps / 2;
     if (repeated < spanSteps) {
@@ -171,19 +199,30 @@ export function doubleTime<T extends GridEvent>(events: readonly T[], spanSteps 
 }
 
 /**
- * Pull notes off the beat they sit on, one sixteenth early.
+ * Anticipate beats, one sixteenth early.
  *
  * Anticipation is the direction syncopation runs in every genre this library
- * names: the note arrives before the beat it belongs to. Unlike the additive
- * rules this one displaces rather than adds, so raising the dial moves notes
- * instead of only introducing them; which notes move is fixed by position, so
- * the bar next door is unaffected either way.
+ * names: the note arrives before the beat it belongs to. It is written as an
+ * addition rather than a displacement — the anticipating stroke is softer, and
+ * the note it anticipates stays where it was, the way a player ties into the
+ * beat rather than abandoning it — because this is one of the dials that only
+ * ever add material. Displacing instead would move onsets around under the
+ * finger of anyone who puts the dial on a slider, and a saved project reopened
+ * one notch along would not contain the piece it was. Which beats are
+ * anticipated is fixed by position, so the bar next door is unaffected either
+ * way.
+ *
+ * A position already taken blocks the anticipation only within the same stream
+ * — the same limb, else the same voice. A ghost snare sitting where the hi-hat
+ * wants to anticipate is another hand playing, not an obstacle, and whether two
+ * limbs can actually strike together is the playability layer's question rather
+ * than this one's.
  *
  * @param events The figure.
  * @param amount How much syncopation, in [0, 1].
  * @param draw The position-addressed sampler.
  * @param path Where the figure sits, so the same bar always syncopates alike.
- * @returns The syncopated figure, sorted by position.
+ * @returns The figure with its anticipations, sorted by position.
  *
  * @category Composition
  */
@@ -194,19 +233,24 @@ export function syncopate<T extends GridEvent>(
   ...path: readonly (string | number)[]
 ): T[] {
   assertRange(amount, 0, 1, 'syncopate amount');
-  const occupied = new Set(events.map((event) => event.step));
-  const out = events.map((event) => {
+  const occupied = new Set(events.map((event) => `${streamOf(event)}@${event.step}`));
+  const out: T[] = [...events];
+  for (const event of events) {
     const anticipated = event.step - 1;
-    // The downbeat itself stays: pulling it back would move the note out of the
-    // bar the figure belongs to.
-    if (metricWeight(event.step) < 2 || anticipated < 1 || occupied.has(anticipated)) {
-      return event;
+    // The downbeat takes none: its anticipation would fall in the bar before
+    // the one the figure belongs to.
+    if (
+      gridMetricWeight(event.step) < 2 ||
+      anticipated < 1 ||
+      occupied.has(`${streamOf(event)}@${anticipated}`)
+    ) {
+      continue;
     }
     if (!draw.prob(amount, ...path, 'syncopate', event.step)) {
-      return event;
+      continue;
     }
-    return { ...event, step: anticipated };
-  });
+    out.push({ ...event, step: anticipated, velocity: event.velocity * ADDED_NOTE_VELOCITY });
+  }
   return out.sort((a, b) => a.step - b.step);
 }
 
@@ -256,8 +300,13 @@ export type DeformOptions = {
   ornament?: number;
   /** Which events are decoration, for the ornament dial. */
   isOrnament?: (event: GridEvent) => boolean;
-  /** Feel: stretch or compress the figure before the dials are applied. */
-  feel?: 'straight' | 'half' | 'double';
+  /**
+   * Rate: stretch or compress the figure before the dials are applied. It is
+   * named for what it does to the note values, since "feel" elsewhere in the
+   * drum surface names the swing a figure is played with — a different
+   * question, asked of the same figure.
+   */
+  rate?: 'straight' | 'half' | 'double';
   /** Length of the figure in sixteenths. */
   spanSteps?: number;
 };
@@ -280,8 +329,18 @@ const NEUTRAL_RHYTHMIC = 0.5;
  * @example
  * ```ts
  * import { deform, resolveContext } from '@libraz/libcantus';
+ * const figure = [
+ *   { step: 0, velocity: 1, limb: 'kick' },
+ *   { step: 4, velocity: 0.9, limb: 'snare' },
+ *   { step: 8, velocity: 1, limb: 'kick' },
+ *   { step: 12, velocity: 0.9, limb: 'snare' },
+ * ];
  * const draw = resolveContext(7).part('drums');
  * const busier = deform(figure, { rhythmic: 0.9 }, draw, 'bar', 0);
+ * // Above the neutral middle the figure is syncopated: onsets are added off
+ * // the beat, and the result comes back sorted by position.
+ * busier.length; // 7
+ * busier.map((event) => event.step); // [0, 3, 4, 7, 8, 11, 12]
  * ```
  *
  * @category Composition
@@ -294,9 +353,9 @@ export function deform<T extends GridEvent>(
 ): T[] {
   const spanSteps = opts.spanSteps ?? BAR_STEPS;
   let out: T[] =
-    opts.feel === 'half'
+    opts.rate === 'half'
       ? halfTime(events, spanSteps)
-      : opts.feel === 'double'
+      : opts.rate === 'double'
         ? doubleTime(events, spanSteps)
         : [...events];
 
@@ -323,9 +382,12 @@ export function deform<T extends GridEvent>(
  * Whether a figure is inside the difficulty ceiling at this tempo.
  *
  * The ceiling is measured against the closest pair of onsets the figure asks
- * one player for, which is the thing that actually stops a hand. A figure that
- * fails is rejected — never quietly simplified, because a simplified figure is
- * a different figure and the caller asked for this one.
+ * one player for, which is the thing that actually stops a hand — so the pairs
+ * are counted within a stream (the limb, else the voice) rather than across the
+ * whole kit, because a hi-hat and a kick a sixteenth apart are two limbs and not
+ * one hand playing twice. A figure that fails is rejected — never quietly
+ * simplified, because a simplified figure is a different figure and the caller
+ * asked for this one.
  *
  * @param events The figure.
  * @param bpm Tempo, or undefined when the caller gave none.
@@ -343,12 +405,24 @@ export function withinCeiling(
   if (difficulty === undefined || bpm === undefined || events.length < 2) {
     return true;
   }
-  const steps = [...new Set(events.map((event) => event.step))].sort((a, b) => a - b);
+  const byStream = new Map<string, Set<number>>();
+  for (const event of events) {
+    const stream = streamOf(event);
+    const steps = byStream.get(stream);
+    if (steps) {
+      steps.add(event.step);
+    } else {
+      byStream.set(stream, new Set([event.step]));
+    }
+  }
   let closest = Number.POSITIVE_INFINITY;
-  for (let i = 1; i < steps.length; i += 1) {
-    const gap = (steps[i] ?? 0) - (steps[i - 1] ?? 0);
-    if (gap > 0 && gap < closest) {
-      closest = gap;
+  for (const stream of byStream.values()) {
+    const steps = [...stream].sort((a, b) => a - b);
+    for (let i = 1; i < steps.length; i += 1) {
+      const gap = (steps[i] ?? 0) - (steps[i - 1] ?? 0);
+      if (gap > 0 && gap < closest) {
+        closest = gap;
+      }
     }
   }
   if (!Number.isFinite(closest)) {

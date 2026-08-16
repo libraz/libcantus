@@ -122,6 +122,11 @@ export type ContourDirection = 'up' | 'down' | 'same';
  * that dips and comes back — an arch upside down — reads as `'wave'`, since the
  * shared vocabulary has no name of its own for it.
  *
+ * A wave has to turn more than once to be heard as one, so a cell the generator
+ * writes for `'wave'` reads back as `'wave'` only from three bars up; the one-
+ * and two-bar cells turn once and read as `'arch'`. The other three shapes come
+ * back under their own name at every length.
+ *
  * @category Arrangement & Analysis
  */
 export type MelodicContourShape = 'arch' | 'ascending' | 'descending' | 'wave' | 'static';

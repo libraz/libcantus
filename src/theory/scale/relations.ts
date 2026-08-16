@@ -9,27 +9,51 @@
  * right: the relative of Db major comes out as Bb minor, not A# minor.
  *
  * A relation always returns a plain major or minor key, because those are the
- * only keys these relations name. A key that is not a diatonic mode — harmonic
- * minor, a pentatonic, an octatonic — is read through the signature
- * {@link keySignatureFifths} assigns it, which is the signature of its parallel
- * major or minor. {@link parallelKeyOf} is the one exception: it travels no
- * fifths, so it keeps the tonic spelling it was given.
+ * only keys these relations name; {@link enharmonicKeyOf} is the exception that
+ * proves it, since a respelling is the same key rather than another one and so
+ * keeps the mask it was handed. A key that is not a plain major or minor —
+ * a church mode, harmonic minor, a pentatonic, an octatonic — is read through
+ * the mode its third names, and the fifths are counted from where its tonic
+ * stands on the circle rather than from the key's own signature: a mode's
+ * signature carries its own offset (D dorian is two fifths flatter than D
+ * major), which {@link keyFromFifths} does not know how to give back.
+ * {@link parallelKeyOf} travels no fifths at all, so it keeps the tonic
+ * spelling it was given.
  */
 
 import type { Note } from '../../core/pitch/index.js';
 import { diatonicLetterOf, noteToPitchClass, pitchClassOf } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import { assertInteger } from '../../core/validation/index.js';
+import { spellScale } from '../spelling/index.js';
 import { majorKey, minorKey } from './key.js';
 import { CHROMATIC_MASK } from './masks.js';
 import type { KeyMode } from './signature.js';
-import { keyFromFifths, keySignatureFifths } from './signature.js';
+import { isSignatureKey, keyFromFifths, keySignatureFifths } from './signature.js';
 
 /** How many fifths apart the two spellings of one sounding key sit. */
 const ENHARMONIC_FIFTHS = 12;
 
 /** Widest signature a key is actually written with. */
 const MAX_CONVENTIONAL_FIFTHS = 7;
+
+/** An alteration of two sharps or two flats: the spelling a tonic should avoid. */
+const DOUBLE_ACCIDENTAL = 2;
+
+/** How many fifths a minor key's tonic stands above its signature: A minor is +3. */
+const MINOR_TONIC_FIFTHS = 3;
+
+/**
+ * The flattest and sharpest points on the circle a tonic is ever written at.
+ *
+ * A key is written with at most seven accidentals, which puts its tonic between
+ * Cb — the tonic of the seven-flat major key — and A#, the tonic of the
+ * seven-sharp minor one. Every pitch class is named once or twice inside that
+ * span, and those names are the only ones a key is spelled on: F# and Gb are
+ * both there, E# and Fb are not.
+ */
+const FLATTEST_TONIC_FIFTHS = -MAX_CONVENTIONAL_FIFTHS;
+const SHARPEST_TONIC_FIFTHS = MAX_CONVENTIONAL_FIFTHS + MINOR_TONIC_FIFTHS;
 
 /** Whether a mode mask has a minor third and no major third — it leans flat. */
 function isMinorMode(modeMask12: number): boolean {
@@ -56,9 +80,20 @@ function oppositeMode(mode: KeyMode): KeyMode {
   return mode === 'major' ? 'minor' : 'major';
 }
 
-/** Whether two keys sound alike: same root pitch class, same mode mask. */
+/**
+ * Whether two keys name the same key: same root pitch class, same mode.
+ *
+ * Both keys are read the way every relation here reads them — through the mode
+ * their third names — rather than by comparing masks. A relation answers with a
+ * plain major or minor key, so a key that arrives as A harmonic minor has to be
+ * met on the same terms as the A minor it is a form of; matching masks would
+ * make the relation hold in one direction and not in the other.
+ */
 function soundsLike(a: KeyScale, b: KeyScale): boolean {
-  return pitchClassOf(a.rootPc) === pitchClassOf(b.rootPc) && a.modeMask12 === b.modeMask12;
+  return (
+    pitchClassOf(a.rootPc) === pitchClassOf(b.rootPc) &&
+    isMinorMode(a.modeMask12) === isMinorMode(b.modeMask12)
+  );
 }
 
 /** Whether two tonics are written alike, octave aside. */
@@ -104,21 +139,78 @@ export type KeyRelation =
   | 'relativeOfSubdominant';
 
 /**
- * Spell a key's tonic the conventional way: the letter and accidental its key
- * signature would be written with, paired with the key exactly as given.
+ * What a candidate tonic costs the scale it is asked to spell: the double
+ * accidentals it forces, the accidentals it needs altogether, and how far round
+ * the circle of fifths the key it names is written.
+ */
+type TonicCost = { doubles: number; accidentals: number; fifths: number };
+
+/** How the scale reads when spelled from `tonic`. */
+function tonicCost(tonic: Note, key: KeyScale): TonicCost {
+  let doubles = 0;
+  let accidentals = 0;
+  for (const note of spellScale(tonic, key)) {
+    const alter = Math.abs(note.alter);
+    accidentals += alter;
+    if (alter >= DOUBLE_ACCIDENTAL) {
+      doubles += 1;
+    }
+  }
+  return { doubles, accidentals, fifths: Math.abs(keySignatureFifths(tonic, key)) };
+}
+
+/**
+ * Whether the first tonic spells the key better than the second; ties keep the
+ * first, which is the flatter one because the scan runs from the flat end.
  *
- * The mask's third picks the mode — a minor third and no major third reads as
- * minor, anything else as major — and the tonic is then read off the circle of
- * fifths: among the signatures in [-7, 7] whose key has this root pitch class,
- * the one with the fewest accidentals names it. That is why pitch class 1 in
- * major comes out as Db, five flats, rather than as C#, seven sharps, and why
- * pitch class 6 in minor comes out as F#, three sharps. Where the two spellings
- * are equally far out — pitch class 6 in major is F# at +6 and Gb at -6 — the
- * flat side is taken.
+ * A key that is written with a signature is spelled on the tonic that signature
+ * is written on — pitch class 8 in minor is G# with five sharps, not Ab with
+ * seven, and the F## its harmonic form writes is an accidental over that
+ * signature rather than a reason to respell the key. A scale that only borrows
+ * a signature has nothing to go on but how it reads, so there the double
+ * accidentals it forces come first and the borrowed signature only breaks ties.
+ */
+function spellsBetter(a: TonicCost, b: TonicCost, signatureKey: boolean): boolean {
+  const order: (keyof TonicCost)[] = signatureKey
+    ? ['fifths', 'doubles', 'accidentals']
+    : ['doubles', 'accidentals', 'fifths'];
+  for (const term of order) {
+    if (a[term] !== b[term]) {
+      return a[term] < b[term];
+    }
+  }
+  return false;
+}
+
+/**
+ * Spell a key's tonic the conventional way: the letter and accidental the key
+ * is written with, paired with the key exactly as given.
  *
- * The key is returned unchanged, so a scale that is not a diatonic mode keeps
- * its own mask and only borrows the tonic spelling of its parallel major or
- * minor: G# harmonic minor is spelled G#, not Ab, and stays harmonic minor.
+ * The candidates are the tonics keys are actually written on — everything from
+ * Cb to A#, which names each pitch class once or twice (C, but Db and C#) — and
+ * which of them names the key depends on whether the key has a signature of its
+ * own. A major or minor key, a church mode, and the harmonic and melodic minor
+ * are spelled on the tonic their signature is written on: pitch class 1 in
+ * major is Db, five flats, rather than C#, seven sharps; pitch class 8 in minor
+ * is G#, five sharps, rather than Ab, seven flats; and G# harmonic minor writes
+ * its raised seventh F## as an accidental over that signature rather than
+ * respelling the key. Where two signatures are equally long — pitch class 6 in
+ * major is F# at +6 and Gb at -6 — the flat side is taken.
+ *
+ * Every other scale only borrows the signature of its parallel major or minor,
+ * so nothing follows from it and the scale is spelled on the tonic it reads
+ * best from: the fewest double accidentals first, then the fewest accidentals
+ * altogether, and only then the shorter signature. That is why pitch class 1
+ * altered is C# — C# D E F G A B — rather than Db, which would have to write
+ * four double flats to say the same thing, and why pitch class 8 minor
+ * pentatonic is G# B C# D# F# rather than Ab B Db Eb Gb, which reads its third
+ * as an augmented second.
+ *
+ * The mask's third picks the mode the signature is measured in — a minor third
+ * and no major third reads as minor, anything else as major — and the key is
+ * returned unchanged, so a scale keeps its own mask and only borrows a tonic
+ * spelling. A caller that has a tonic spelling of its own always keeps it: this
+ * only answers for a key that arrives as a bare pitch class.
  *
  * Every 12-bit mask and every integer root is answered — a root outside [0, 11]
  * is reduced first, and a mask with no third at all counts as major.
@@ -130,26 +222,29 @@ export type KeyRelation =
  * import { formatNote, majorKey, scaleByName, spelledKeyOf } from '@libraz/libcantus';
  * formatNote(spelledKeyOf(majorKey(1)).tonic); // 'Db'
  * formatNote(spelledKeyOf(scaleByName('harmonicMinor', 8)).tonic); // 'G#'
+ * formatNote(spelledKeyOf(scaleByName('altered', 1)).tonic); // 'C#'
  * ```
  * @category Scales
  */
 export function spelledKeyOf(key: KeyScale): SpelledKey {
-  // The mask is read through `isMinorMode` rather than through `modeOf`, which
-  // rejects a malformed mask: spelling answers for whatever mask it is handed.
-  const mode: KeyMode = isMinorMode(key.modeMask12) ? 'minor' : 'major';
   const rootPc = pitchClassOf(key.rootPc);
-  // Every pitch class is named by a signature within ±7 in both modes, so the
-  // starting tonic here only stands in until the scan makes its first match.
-  let tonic: Note = keyFromFifths(0, mode).tonic;
-  let closest = Number.POSITIVE_INFINITY;
-  // Scanning from the flat end and keeping only a strictly closer candidate
-  // settles the two ties on the flat side: pitch class 6 in major is Gb, and
+  const signatureKey = isSignatureKey(key);
+  // Every pitch class is named somewhere in the span, so the starting tonic here
+  // only stands in until the scan makes its first match.
+  let tonic: Note = keyFromFifths(0).tonic;
+  let best: TonicCost | undefined;
+  // Scanning from the flat end and keeping only a strictly better candidate
+  // settles an even tie on the flat side: pitch class 6 in major is Gb, and
   // pitch class 3 in minor is Eb.
-  for (let fifths = -MAX_CONVENTIONAL_FIFTHS; fifths <= MAX_CONVENTIONAL_FIFTHS; fifths += 1) {
-    const candidate = keyFromFifths(fifths, mode);
-    if (candidate.key.rootPc === rootPc && Math.abs(fifths) < closest) {
-      tonic = candidate.tonic;
-      closest = Math.abs(fifths);
+  for (let fifths = FLATTEST_TONIC_FIFTHS; fifths <= SHARPEST_TONIC_FIFTHS; fifths += 1) {
+    const candidate = keyFromFifths(fifths).tonic;
+    if (noteToPitchClass(candidate) !== rootPc) {
+      continue;
+    }
+    const cost = tonicCost(candidate, key);
+    if (best === undefined || spellsBetter(cost, best, signatureKey)) {
+      tonic = candidate;
+      best = cost;
     }
   }
   return { tonic, key };
@@ -210,12 +305,54 @@ export function parallelKeyOf(tonic: Note, key: KeyScale): SpelledKey {
   };
 }
 
+/** Where a spelled tonic itself stands on the circle of fifths: C at 0, F# at +6. */
+function tonicPosition(tonic: Note): number {
+  return keySignatureFifths(tonic, majorKey(noteToPitchClass(tonic)));
+}
+
 /**
- * The dominant key: one sharp further round the circle of fifths, same mode.
+ * The signature the tonic's own plain major or minor key is written with.
+ *
+ * This, and not the key's signature, is what a relation that travels the circle
+ * steps from. The two agree for a plain major or minor key and part company
+ * everywhere else: G mixolydian has the signature of C major, so stepping from
+ * that signature and reading the tonic back with {@link keyFromFifths} — which
+ * knows only the major and minor offsets — would answer G major, a unison
+ * above, instead of D, a fifth above.
+ */
+function tonicFifths(tonic: Note, mode: KeyMode): number {
+  return tonicPosition(tonic) - (mode === 'minor' ? MINOR_TONIC_FIFTHS : 0);
+}
+
+/**
+ * Whether a key is actually written on this tonic — the same question
+ * {@link spelledKeyOf} asks, and answered the same way.
+ *
+ * A key with a signature of its own is written wherever that signature is: up
+ * to seven sharps or flats, which is what makes Ab minor and G# minor two
+ * spellings of one key and D# major none at all. A scale that only borrows a
+ * signature is written wherever it reads without a double accidental.
+ */
+function isWrittenTonic(tonic: Note, key: KeyScale): boolean {
+  const position = tonicPosition(tonic);
+  if (position < FLATTEST_TONIC_FIFTHS || position > SHARPEST_TONIC_FIFTHS) {
+    return false;
+  }
+  return isSignatureKey(key)
+    ? Math.abs(keySignatureFifths(tonic, key)) <= MAX_CONVENTIONAL_FIFTHS
+    : tonicCost(tonic, key).doubles === 0;
+}
+
+/**
+ * The dominant key: the key a fifth above, in the mode this key's third names.
+ *
+ * The fifth is measured from the tonic, so a key that is not a plain major or
+ * minor answers with the same move: the dominant of G mixolydian is D major and
+ * the dominant of D dorian is A minor.
  *
  * @param tonic The spelled tonic of the key.
  * @param key The key/scale; its mask decides the mode of the result.
- * @returns The key a fifth above, in the same mode.
+ * @returns The key a fifth above, in the mode this key's third names.
  * @throws If the tonic or the mask is malformed, or if the resulting signature
  *   falls outside [-12, 12] fifths — the dominant of a key already at +12.
  * @example
@@ -226,15 +363,17 @@ export function parallelKeyOf(tonic: Note, key: KeyScale): SpelledKey {
  * @category Scales
  */
 export function dominantKeyOf(tonic: Note, key: KeyScale): SpelledKey {
-  return keyFromFifths(keySignatureFifths(tonic, key) + 1, modeOf(key));
+  const mode = modeOf(key);
+  return keyFromFifths(tonicFifths(tonic, mode) + 1, mode);
 }
 
 /**
- * The subdominant key: one flat further round the circle of fifths, same mode.
+ * The subdominant key: the key a fifth below, in the mode this key's third
+ * names, and the exact inverse of {@link dominantKeyOf} on the tonic spelling.
  *
  * @param tonic The spelled tonic of the key.
  * @param key The key/scale; its mask decides the mode of the result.
- * @returns The key a fifth below, in the same mode.
+ * @returns The key a fifth below, in the mode this key's third names.
  * @throws If the tonic or the mask is malformed, or if the resulting signature
  *   falls outside [-12, 12] fifths — the subdominant of a key already at -12.
  * @example
@@ -245,26 +384,34 @@ export function dominantKeyOf(tonic: Note, key: KeyScale): SpelledKey {
  * @category Scales
  */
 export function subdominantKeyOf(tonic: Note, key: KeyScale): SpelledKey {
-  return keyFromFifths(keySignatureFifths(tonic, key) - 1, modeOf(key));
+  const mode = modeOf(key);
+  return keyFromFifths(tonicFifths(tonic, mode) - 1, mode);
 }
 
 /**
  * The same sounding key written the other way round the circle of fifths, or
  * null when it has no second spelling.
  *
- * Twelve fifths is one enharmonic turn of the circle, so a key's alternative
- * spelling sits at its signature ±12: Db major (-5) is also C# major (+7). Only
- * a candidate within ±7 is returned, because that is as far as keys are
- * actually written — past it the alternative needs double accidentals (D# major
- * would carry nine sharps) and no one spells the key that way. C major is
- * therefore alone, while Db major and F# major each answer with their twin.
+ * Twelve fifths is one enharmonic turn of the circle, so a tonic's alternative
+ * spelling sits at its own position ±12: Db (-5) is also C# (+7). It is offered
+ * only when the key is actually written there, by the same test
+ * {@link spelledKeyOf} spells with. That is why C major is alone while Db major
+ * and F# major each answer with their twin: Eb major's twin would be D# major
+ * and its nine sharps, and pitch class 3 altered is written D# but never Eb,
+ * which would need two double flats to say the same thing.
  *
- * The two candidates lie 24 fifths apart, so at most one of them can qualify;
- * the answer is unambiguous, and applying the relation to it returns the
- * original key.
+ * The answer is therefore always a spelling the key is written on, which makes
+ * the relation its own inverse for such a key. A key spelled some other way —
+ * a tonic a transposition drove out to Ebb, say — still names its written twin,
+ * so this is also the way back from a spelling no one writes.
+ *
+ * The relation respells rather than moves, so the mask is kept: the other
+ * spelling of C# lydian is Db lydian, and its root pitch class is the one it
+ * was handed.
  *
  * @param tonic The spelled tonic of the key.
- * @param key The key/scale; its mask decides the mode of the result.
+ * @param key The key/scale; its mask decides the mode the tonic is read in, and
+ *   is carried into the result.
  * @returns The other spelling of the key, or null when it is not written.
  * @throws If the tonic or the mask is malformed.
  * @example
@@ -277,12 +424,24 @@ export function subdominantKeyOf(tonic: Note, key: KeyScale): SpelledKey {
  * @category Scales
  */
 export function enharmonicKeyOf(tonic: Note, key: KeyScale): SpelledKey | null {
-  const mode = modeOf(key);
-  const fifths = keySignatureFifths(tonic, key);
-  for (const candidate of [fifths - ENHARMONIC_FIFTHS, fifths + ENHARMONIC_FIFTHS]) {
-    if (Math.abs(candidate) <= MAX_CONVENTIONAL_FIFTHS) {
-      return keyFromFifths(candidate, mode);
+  assertModeMask(key);
+  for (const position of [
+    tonicPosition(tonic) - ENHARMONIC_FIFTHS,
+    tonicPosition(tonic) + ENHARMONIC_FIFTHS,
+  ]) {
+    if (position < FLATTEST_TONIC_FIFTHS || position > SHARPEST_TONIC_FIFTHS) {
+      continue;
     }
+    const spelled = keyFromFifths(position).tonic;
+    if (!isWrittenTonic(spelled, key)) {
+      continue;
+    }
+    return {
+      tonic: spelled,
+      // The mask is the caller's; only the root is re-read, so a tonic that did
+      // not spell the mask's own root still comes back consistent.
+      key: { rootPc: noteToPitchClass(spelled), modeMask12: key.modeMask12 },
+    };
   }
   return null;
 }
@@ -318,10 +477,14 @@ const CLOSELY_RELATED: readonly {
 /**
  * The six closely related keys of a key, each tagged with its relation.
  *
- * These are the keys a piece modulates to without a change of signature worth
- * more than one accidental: the relative and parallel keys, the dominant and
+ * These are the keys the German and Japanese teaching tradition counts as a
+ * key's near relations: the relative and parallel keys, the dominant and the
  * subdominant, and the relatives of those two. For C major they are A minor,
- * C minor, G major, F major, E minor and D minor, in that order.
+ * C minor, G major, F major, E minor and D minor, in that order. Five of them
+ * are written within one accidental of the key's own signature — the relative
+ * shares it exactly and the other four stand one away; the parallel key does
+ * not — C minor is three flats away from C major — and belongs to the set for
+ * the tonic it shares rather than for the signature it carries.
  *
  * @param tonic The spelled tonic of the key.
  * @param key The key/scale.
@@ -350,8 +513,14 @@ export function relatedKeysOf(
  * The relations are tested in a fixed order — identity, enharmonic spelling,
  * then the six closely related keys in the order {@link relatedKeysOf} lists
  * them — and the first match is reported. Only the identity test looks at the
- * tonic spelling; every other test compares root pitch class and mode mask, so
+ * tonic spelling; every other test compares root pitch class and mode, so
  * C# minor and Db minor both read as the relative of E major.
+ *
+ * Both keys are read through the mode their third names, exactly as
+ * {@link relatedKeysOf} reads the key it is given, so A harmonic minor stands
+ * to C major as A minor does whichever of the two is asked about. That is what
+ * makes the answer symmetric: if one key's related keys name the other, the
+ * relation between them is reported from either side.
  *
  * @param a The key the relation is measured from.
  * @param b The key the relation is measured to.

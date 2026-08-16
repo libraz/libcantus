@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { analyzeArrangement } from '../src/analyze/arrange/index.js';
+import { keyTimelineFromNotes } from '../src/analyze/keys/index.js';
 import { chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
 import {
   barIndexAt,
@@ -11,6 +14,8 @@ import {
   parseTimeSignature,
 } from '../src/core/meter/index.js';
 import type { NoteEvent } from '../src/core/types.js';
+import { assertNoteEvent, assertNoteEvents } from '../src/core/validation/index.js';
+import { humanize } from '../src/generate/groove/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
 
 const COMMON = parseTimeSignature('4/4');
@@ -34,6 +39,44 @@ const SHIFTED: NoteEvent[] = WITH_PICKUP.map((note) => ({
   ...note,
   startBeat: note.startBeat + 1,
 }));
+
+/** The `startBeat` doc comment as an IDE hover shows it. */
+function startBeatDoc(): string {
+  const source = readFileSync(
+    fileURLToPath(new URL('../src/core/types.ts', import.meta.url)),
+    'utf8',
+  );
+  return source.match(/\/\*\*([\s\S]*?)\*\/\s*startBeat: number;/)?.[1] ?? '';
+}
+
+describe('one sign convention for startBeat', () => {
+  it('states the negative-beat convention where a reader hovers the field', () => {
+    // The type doc is what an editor shows, so a reader who follows it writes
+    // the pickup the analyzers read. Telling them to shift the piece instead
+    // moves every strong beat with it.
+    const doc = startBeatDoc();
+    expect(doc).toMatch(/pickup/);
+    expect(doc).toMatch(/unbounded below/);
+    expect(doc).toMatch(/negative onset/);
+    expect(doc).not.toMatch(/never negative|non-negative/);
+  });
+
+  it('is enforced the same way by every entry that reads an onset', () => {
+    const upbeat: NoteEvent = { pitch: 67, startBeat: -1, durationBeat: 1 };
+    // The validator accepts it by default and narrows on request, which is what
+    // the type doc points the reader at.
+    expect(assertNoteEvent(upbeat)).toBe(upbeat);
+    expect(() => assertNoteEvent(upbeat, 'note', { minStartBeat: -1 })).not.toThrow();
+    expect(() => assertNoteEvent(upbeat, 'note', { minStartBeat: 0 })).toThrow(RangeError);
+    expect(assertNoteEvents(WITH_PICKUP)).toEqual(WITH_PICKUP);
+    // The meter, the analyzers and the generators all read that same onset as
+    // an upbeat rather than as a downbeat.
+    expect(metricWeight(upbeat.startBeat, COMMON)).toBe(1);
+    expect(beatToBarPosition(upbeat.startBeat, COMMON).bar).toBe(-1);
+    expect(chordTimelineFromNotes(WITH_PICKUP).timeline.segments[0]?.startBeat).toBe(-1);
+    expect(humanize(WITH_PICKUP, { seed: 3, timing: 0.02 })[0]?.startBeat).toBeLessThan(0);
+  });
+});
 
 describe('a pickup is written before the downbeat', () => {
   it('gives the note after the upbeat the weight of a downbeat', () => {
@@ -112,14 +155,67 @@ describe('the analysis entry points read a pickup', () => {
     const inferred = chordTimelineFromNotes(notes, { pickupBeats: 1 });
     const given = chordTimelineFromNotes(notes, { pickupBeats: 1, key: majorKey(0) });
     // A given key answers the question for the whole span, upbeat included, so
-    // its one region cannot begin after the first segment does.
+    // its one region cannot begin after the first segment does. The searched
+    // path reads longer slots than the chord grid, but the piece has one first
+    // beat, so both paths name it — otherwise the same input reports its key as
+    // starting at two different beats depending on how the key was arrived at.
     expect(given.keys).toHaveLength(1);
     expect(given.keys[0]?.startBeat).toBe(given.timeline.segments[0]?.startBeat);
-    expect(given.keys[0]?.startBeat).toBeLessThan(0);
-    expect(inferred.keys[0]?.startBeat).toBeLessThanOrEqual(
-      inferred.timeline.segments[0]?.startBeat ?? 0,
+    expect(given.keys[0]?.startBeat).toBe(-1);
+    expect(inferred.keys[0]?.startBeat).toBe(inferred.timeline.segments[0]?.startBeat);
+    expect(inferred.keys[0]?.startBeat).toBe(given.keys[0]?.startBeat);
+  });
+
+  it('reports no chord and no key before the first note sounds', () => {
+    // Half a beat of upbeat: shorter than a chord slot and far shorter than a
+    // key slot, so both grids reach back past it. Nothing sounds in the stretch
+    // they reach into, and a stretch with no notes is not a segment.
+    const notes: NoteEvent[] = [
+      { pitch: 67, startBeat: -0.5, durationBeat: 0.5 },
+      ...[60, 64, 67].map((pitch) => ({ pitch, startBeat: 0, durationBeat: 4 })),
+      ...[67, 71, 74].map((pitch) => ({ pitch, startBeat: 4, durationBeat: 4 })),
+    ];
+    const { timeline, keys } = chordTimelineFromNotes(notes);
+    expect(timeline.segments[0]?.startBeat).toBe(-0.5);
+    expect(timeline.at(-0.5)).not.toBeNull();
+    expect(timeline.at(-0.75)).toBeNull();
+    expect(timeline.at(-1)).toBeNull();
+    expect(keys[0]?.startBeat).toBe(-0.5);
+    // The key path on its own reads the same first beat as the chord path.
+    expect(keyTimelineFromNotes(notes)[0]?.startBeat).toBe(-0.5);
+  });
+
+  it('reads a note a hair before the downbeat as the downbeat, not as an upbeat', () => {
+    // An export or a performance puts the first note a millibeat early. Reading
+    // that as a pickup hands the analysis a whole slot of silence in front of
+    // the music — a bar that sounds nowhere in the input.
+    const jittered: NoteEvent[] = [
+      ...[60, 64, 67].map((pitch) => ({ pitch, startBeat: -0.007, durationBeat: 4 })),
+      ...[67, 71, 74].map((pitch) => ({ pitch, startBeat: 4, durationBeat: 4 })),
+      ...[60, 64, 67].map((pitch) => ({ pitch, startBeat: 8, durationBeat: 4 })),
+    ];
+    const { timeline, keys } = chordTimelineFromNotes(jittered);
+    expect(timeline.segments[0]?.startBeat).toBe(0);
+    expect(timeline.at(-1)).toBeNull();
+    expect(timeline.at(-0.5)).toBeNull();
+    expect(keys[0]?.startBeat).toBe(0);
+    expect(keys.every((region) => region.startBeat >= 0)).toBe(true);
+
+    // The jitter is the only difference from a quantized take, and it changes
+    // nothing about where the analysis says the music is.
+    const quantized = jittered.map((note) => ({
+      ...note,
+      startBeat: note.startBeat < 0 ? 0 : note.startBeat,
+    }));
+    const exact = chordTimelineFromNotes(quantized);
+    expect(timeline.segments.map((s) => [s.startBeat, s.endBeat])).toEqual(
+      exact.timeline.segments.map((s) => [s.startBeat, s.endBeat]),
     );
-    expect(inferred.keys[0]?.startBeat).toBeLessThan(0);
+    // A declared pickup does not change the reading either: the jitter is not
+    // an upbeat whether or not the caller has one.
+    const declared = chordTimelineFromNotes(jittered, { pickupBeats: 1 });
+    expect(declared.timeline.segments[0]?.startBeat).toBe(0);
+    expect(declared.keys[0]?.startBeat).toBe(0);
   });
 
   it('rejects a note starting before the declared pickup', () => {

@@ -1,16 +1,23 @@
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { relative, sep } from 'node:path';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import {
   analyzeArrangement,
+  createArrangementSession,
   tensionCurve,
   tensionCurveFrom,
 } from '../src/analyze/arrange/index.js';
 import { detectKeyFromNotes } from '../src/analyze/detect/index.js';
+import { hypermeter, phrasesFromTimeline, sectionsFromNotes } from '../src/analyze/form/index.js';
+import { keyTimelineFromNotes } from '../src/analyze/keys/index.js';
+import { motifFromNotes } from '../src/analyze/melody/index.js';
+import { spellLine } from '../src/analyze/spelling/index.js';
 import { chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
 import { analyzeVoice } from '../src/analyze/voice/index.js';
 import { InvalidInputError } from '../src/core/errors/index.js';
 import { createNoteEventIndex } from '../src/core/event-index/index.js';
+import { GUITAR_STANDARD, playability } from '../src/core/instrument/index.js';
 import {
   classifyInterval,
   isConsonantInterval,
@@ -57,15 +64,16 @@ import {
   dropSilentNotes,
 } from '../src/core/validation/index.js';
 import { BASS_STYLES, generateBassLine } from '../src/generate/bass/index.js';
-import { generateCounterMelody } from '../src/generate/countermelody/index.js';
+import { generateCounterMelody, imitate } from '../src/generate/countermelody/index.js';
 import { DRUM_NOTES, generateDrums } from '../src/generate/drums/index.js';
 import {
   applyGrooveTemplate,
   extractGrooveTemplate,
   humanize,
 } from '../src/generate/groove/index.js';
-import { harmonizeMelody } from '../src/generate/harmonize/index.js';
+import { classifyMelodyTones, harmonizeMelody } from '../src/generate/harmonize/index.js';
 import { developMotif, generateMotif, transformMotif } from '../src/generate/motif/index.js';
+import { ornament } from '../src/generate/ornament/index.js';
 import { BORROWED_DEGREES, generateProgression } from '../src/generate/progression/index.js';
 import { generateRhythm } from '../src/generate/rhythm/index.js';
 import { Note } from '../src/model/index.js';
@@ -73,6 +81,7 @@ import { makeChord } from '../src/theory/chord/index.js';
 import { majorKey, NAMED_SCALES, scaleByName } from '../src/theory/scale/index.js';
 import { parseChordSymbol } from '../src/theory/symbol/index.js';
 import { SATB_RANGES } from '../src/theory/voicing/index.js';
+import { filesUnder, ROOT, SRC } from './support/source-files.js';
 
 describe('shared numeric input contracts', () => {
   it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
@@ -308,97 +317,165 @@ describe('every note-event guard has a rejection path', () => {
   });
 });
 
-// This registry intentionally names every public entry point that directly
-// invokes assertNoteEvents. Add a row alongside any new public consumer so a
-// bad imported MIDI event cannot bypass the shared contract unnoticed.
-const PUBLIC_NOTE_EVENT_ENTRIES = [
-  'analyzeArrangement',
-  'analyzeVoice',
-  'applyGrooveTemplate',
-  'chordTimelineFromNotes',
-  'createNoteEventIndex',
-  'detectKeyFromNotes',
-  'developMotif',
-  'extractGrooveTemplate',
-  'humanize',
-  'tensionCurve',
-  'tensionCurveFrom',
-  'transformMotif',
-] as const;
-
-// The direct callers are discovered from these source modules below. Keep the
-// list separate from the indirect `tensionCurveFrom` wrapper in the public
-// execution matrix: a new direct assertNoteEvents caller must make this test
-// fail until it receives an invalid-event regression case.
-//
-// `analyzeArrangementWith` and `analyzeTimeline` are the evidence-carrying
-// implementations behind `analyzeArrangement` and `chordTimelineFromNotes`.
-// The public pair delegates to them, so validation still runs on the same path
-// — the execution matrix above is what proves the public entrances throw.
-const DIRECT_NOTE_EVENT_ENTRIES = [
-  'analyzeArrangementWith',
-  'analyzeTimeline',
-  'analyzeVoice',
-  'applyGrooveTemplate',
-  'createNoteEventIndex',
-  'detectKeyFromNotes',
-  'developMotif',
-  'extractGrooveTemplate',
-  'humanize',
-  'tensionCurve',
-  'transformMotif',
-] as const;
-
-const NOTE_EVENT_CALLER_SOURCES = [
-  'src/analyze/arrange/tension.ts',
-  'src/analyze/arrange/tracks.ts',
-  'src/analyze/detect/index.ts',
-  'src/analyze/timeline/index.ts',
-  'src/analyze/voice/index.ts',
-  'src/core/event-index/index.ts',
-  'src/generate/groove/index.ts',
-  'src/generate/motif/index.ts',
-] as const;
-
-function exportedNoteEventCallers(source: string): string[] {
-  const exports = [...source.matchAll(/^export function (\w+)\(/gm)];
-  return exports.flatMap((match, index) => {
-    const start = match.index ?? 0;
-    const end = exports[index + 1]?.index ?? source.length;
-    return source.slice(start, end).includes('assertNoteEvents(') ? [match[1] ?? ''] : [];
-  });
+/** The function a call sits in, named the way the coverage registry names it. */
+function enclosingFunction(node: ts.Node): string {
+  for (let current: ts.Node | undefined = node; current; current = current.parent) {
+    if (
+      (ts.isFunctionDeclaration(current) ||
+        ts.isMethodDeclaration(current) ||
+        ts.isPropertyAssignment(current)) &&
+      current.name !== undefined &&
+      ts.isIdentifier(current.name)
+    ) {
+      return current.name.text;
+    }
+    if (
+      (ts.isFunctionExpression(current) || ts.isArrowFunction(current)) &&
+      current.parent !== undefined &&
+      ts.isVariableDeclaration(current.parent) &&
+      ts.isIdentifier(current.parent.name)
+    ) {
+      return current.parent.name.text;
+    }
+  }
+  return 'top level';
 }
 
-function noteEventEntries(
-  events: NoteEvent[],
-): Record<(typeof PUBLIC_NOTE_EVENT_ENTRIES)[number], () => unknown> {
+/**
+ * Every place in `src` that validates note events, as `file:function`.
+ *
+ * The tree is walked rather than listed, and the calling function is read from
+ * the syntax tree rather than matched by shape, so a validating helper inside a
+ * class or an object literal is found as surely as an exported function. This
+ * is what makes the registry below trustworthy: a new consumer is discovered
+ * because it exists, not because someone remembered to add a line for it.
+ */
+function noteEventCallSites(): string[] {
+  const found: string[] = [];
+  for (const file of filesUnder(SRC, '.ts')) {
+    const text = readFileSync(file, 'utf8');
+    if (!text.includes('assertNoteEvents(')) {
+      continue;
+    }
+    const parsed = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'assertNoteEvents'
+      ) {
+        found.push(`${relative(ROOT, file).split(sep).join('/')}:${enclosingFunction(node)}`);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(parsed);
+  }
+  return [...new Set(found)].sort();
+}
+
+/**
+ * The public entrances that carry each validating call into the matrix below.
+ *
+ * This registry is the one place a new consumer touches: the discovery walk
+ * fails the suite until the call site it found appears here, and the entrances
+ * named here are then exercised with malformed events and with zero-length
+ * ones, so a bad imported MIDI event cannot bypass the shared contract
+ * unnoticed.
+ *
+ * A row may name functions other than the one that validates. The public pair
+ * delegates to an evidence-carrying implementation — `chordTimelineFromNotes`
+ * to `analyzeTimeline` — a private helper is reached through the entrances that
+ * call it, and a shared validator names every entrance that reaches it, since
+ * each of them is a way in that the contract has to hold at.
+ */
+const NOTE_EVENT_VALIDATION_COVERAGE: Readonly<Record<string, readonly string[]>> = {
+  'src/analyze/arrange/internal.ts:assertTrackNotes': ['analyzeArrangement', 'tensionCurve'],
+  'src/analyze/arrange/session.ts:update': ['arrangementSessionUpdate'],
+  'src/analyze/detect/index.ts:detectKeyFromNotes': ['detectKeyFromNotes'],
+  'src/analyze/form/hypermeter.ts:hypermeter': ['hypermeter'],
+  'src/analyze/form/phrase.ts:phrasesFromTimeline': ['phrasesFromTimeline'],
+  'src/analyze/form/section.ts:sectionsFromNotes': ['sectionsFromNotes'],
+  'src/analyze/keys/index.ts:keyTimelineFromNotes': ['keyTimelineFromNotes'],
+  'src/analyze/melody/index.ts:orderedNotes': ['motifFromNotes'],
+  'src/analyze/spelling/index.ts:spellLine': ['spellLine'],
+  'src/analyze/timeline/index.ts:analyzeTimeline': ['chordTimelineFromNotes'],
+  'src/analyze/voice/index.ts:analyzeVoice': ['analyzeVoice'],
+  'src/core/event-index/index.ts:createNoteEventIndex': ['createNoteEventIndex'],
+  'src/core/instrument/playability.ts:playability': ['playability'],
+  'src/generate/countermelody/imitation.ts:imitate': ['imitate'],
+  'src/generate/countermelody/index.ts:generateCounterMelody': ['generateCounterMelody'],
+  'src/generate/groove/index.ts:applyGrooveTemplate': ['applyGrooveTemplate'],
+  'src/generate/groove/index.ts:extractGrooveTemplate': ['extractGrooveTemplate'],
+  'src/generate/groove/index.ts:humanize': ['humanize'],
+  'src/generate/harmonize/index.ts:harmonizeMelody': ['harmonizeMelody'],
+  'src/generate/harmonize/nct.ts:classifyMelodyTones': ['classifyMelodyTones'],
+  'src/generate/motif/index.ts:developMotif': ['developMotif'],
+  'src/generate/motif/index.ts:transformUnchecked': ['transformMotif'],
+  'src/generate/ornament/index.ts:ornament': ['ornament'],
+};
+
+/**
+ * The entrances the registry may name, each called with the events under test.
+ *
+ * `tensionCurveFrom` validates through no call of its own: it is the wrapper
+ * around an analysis the caller already holds, and it is kept here because the
+ * contract it inherits is the one the matrix is about.
+ */
+function noteEventEntries(events: NoteEvent[]): Record<string, () => unknown> {
   const valid: NoteEvent[] = [{ pitch: 60, startBeat: 0, durationBeat: 1 }];
-  const ts = parseTimeSignature('4/4');
-  const template = extractGrooveTemplate(valid, ts);
+  const fourFour = parseTimeSignature('4/4');
+  const template = extractGrooveTemplate(valid, fourFour);
   const analysis = analyzeArrangement([{ notes: valid }]);
+  const timeline = chordTimelineFromNotes(valid).timeline;
   const chord = makeChord(0, 'maj');
+  const key = majorKey(0);
   return {
     analyzeArrangement: () => analyzeArrangement([{ notes: events }]),
-    analyzeVoice: () => analyzeVoice(events, () => chord, majorKey(0)),
-    applyGrooveTemplate: () => applyGrooveTemplate(events, template, ts),
+    analyzeVoice: () => analyzeVoice(events, () => chord, key),
+    applyGrooveTemplate: () => applyGrooveTemplate(events, template, fourFour),
+    arrangementSessionUpdate: () =>
+      createArrangementSession([{ notes: valid }]).update([{ trackIndex: 0, notes: events }]),
     chordTimelineFromNotes: () => chordTimelineFromNotes(events),
+    classifyMelodyTones: () => classifyMelodyTones(events, fourFour),
     createNoteEventIndex: () => createNoteEventIndex(events),
     detectKeyFromNotes: () => detectKeyFromNotes(events),
-    developMotif: () => developMotif({ notes: events }, analysis.timeline, majorKey(0), 1),
-    extractGrooveTemplate: () => extractGrooveTemplate(events, ts),
+    developMotif: () => developMotif({ notes: events }, analysis.timeline, key, 1),
+    extractGrooveTemplate: () => extractGrooveTemplate(events, fourFour),
+    generateCounterMelody: () =>
+      generateCounterMelody({ melody: events, key, chordAt: () => chord }),
+    harmonizeMelody: () => harmonizeMelody({ melody: events, key }),
     humanize: () => humanize(events),
+    hypermeter: () => hypermeter(events),
+    imitate: () => imitate(events, { atBeat: 4, interval: 'P5', key }),
+    keyTimelineFromNotes: () => keyTimelineFromNotes(events),
+    motifFromNotes: () => motifFromNotes(events),
+    ornament: () => ornament(events),
+    phrasesFromTimeline: () => phrasesFromTimeline(timeline, events, { key }),
+    playability: () => playability(events, GUITAR_STANDARD),
+    sectionsFromNotes: () => sectionsFromNotes(events),
+    spellLine: () => spellLine(events, null, key),
     tensionCurve: () => tensionCurve([{ notes: events }]),
     tensionCurveFrom: () => tensionCurveFrom([{ notes: events }], analysis),
     transformMotif: () => transformMotif({ notes: events }, 'retrograde'),
   };
 }
 
+/** The entrances the registry names, deduplicated across shared validators. */
+const COVERED_ENTRANCES = [...new Set(Object.values(NOTE_EVENT_VALIDATION_COVERAGE).flat())].sort();
+
 describe('public NoteEvent validation entry points', () => {
-  it('discovers every direct public assertNoteEvents entrance from source', () => {
-    const discovered = NOTE_EVENT_CALLER_SOURCES.flatMap((path) =>
-      exportedNoteEventCallers(readFileSync(resolve(process.cwd(), path), 'utf8')),
-    ).sort();
-    expect(discovered).toEqual([...DIRECT_NOTE_EVENT_ENTRIES].sort());
+  it('discovers every assertNoteEvents call site by walking src', () => {
+    expect(noteEventCallSites()).toEqual(Object.keys(NOTE_EVENT_VALIDATION_COVERAGE).sort());
+  });
+
+  it('names an entrance the matrix can call for every discovered call site', () => {
+    const entrances = new Set(Object.keys(noteEventEntries([])));
+    expect(COVERED_ENTRANCES.filter((name) => !entrances.has(name))).toEqual([]);
+    // Everything the matrix runs is either a registered call site or the
+    // documented wrapper around one.
+    expect([...entrances].filter((name) => !COVERED_ENTRANCES.includes(name))).toEqual([
+      'tensionCurveFrom',
+    ]);
   });
 
   it.each([
@@ -406,9 +483,7 @@ describe('public NoteEvent validation entry points', () => {
     ['infinite pitch', { pitch: Number.POSITIVE_INFINITY, startBeat: 0, durationBeat: 1 }],
     ['out-of-range pitch', { pitch: 128, startBeat: 0, durationBeat: 1 }],
   ])('rejects %s at every registered public entrance', (_label, event) => {
-    const entries = noteEventEntries([event]);
-    expect(Object.keys(entries).sort()).toEqual([...PUBLIC_NOTE_EVENT_ENTRIES].sort());
-    for (const [name, entry] of Object.entries(entries)) {
+    for (const [name, entry] of Object.entries(noteEventEntries([event]))) {
       expect(entry, name).toThrow(RangeError);
     }
   });

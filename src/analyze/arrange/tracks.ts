@@ -5,16 +5,11 @@
  * conflicts.
  */
 
-import { InvalidInputError } from '../../core/errors/index.js';
 import type { MeterMap, TimeSignature } from '../../core/meter/index.js';
-import { isStrongBeat, meterAt, resolveMeters } from '../../core/meter/index.js';
+import { isStrongBeat, resolveMeters } from '../../core/meter/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import type { NoteEventAssertOptions } from '../../core/validation/index.js';
-import {
-  assertGenerationBudget,
-  assertNoteEvents,
-  assertRange,
-} from '../../core/validation/index.js';
+import { assertGenerationBudget, assertRange } from '../../core/validation/index.js';
 import {
   evaluateSafety,
   NoteSafety,
@@ -22,7 +17,13 @@ import {
   type VoiceSnapshot,
 } from '../../theory/safety/index.js';
 import { majorKey } from '../../theory/scale/index.js';
-import { type KeyRegion, keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
+import {
+  attachPivots,
+  type KeyRegion,
+  keyLookup,
+  keyTimelineFromNotes,
+  prevailingKeyOf,
+} from '../keys/index.js';
 import {
   analyzeTimeline,
   type CadenceHit,
@@ -38,7 +39,16 @@ import {
   type TheoryLabel,
   type VoiceNote,
 } from '../voice/index.js';
-import { EPS, isPercussion, type PreparedTrack, poolNotes, prepareTracks } from './internal.js';
+import {
+  arrangementProfile,
+  assertTrackNotes,
+  EPS,
+  harmonyTrackSet,
+  isPercussion,
+  type PreparedTrack,
+  poolNotes,
+  prepareTracks,
+} from './internal.js';
 
 /**
  * The musical role a track plays in the arrangement.
@@ -135,7 +145,9 @@ function withGivenKeys(
  * The timeline was not inferred from these notes, so it carries no measured
  * confidence — reporting 1 would turn every confidence gate into an
  * unconditional pass. The key regions still come from the notes, because the
- * caller supplied chords, not an answer about the key.
+ * caller supplied chords, not an answer about the key; they are read against the
+ * whole meter map and annotated with their pivots, exactly as the inferring path
+ * reads and annotates its own.
  */
 function callerTimeline(
   timeline: ChordTimeline,
@@ -151,11 +163,17 @@ function callerTimeline(
   segmentConfidence: number[];
 } {
   const totalBeats = timeline.segments.reduce((end, segment) => Math.max(end, segment.endBeat), 0);
+  // Caller-supplied regions are the caller's answer and are passed through as
+  // they are; the ones derived here are annotated like any other, since the
+  // chords a pivot is read from are in hand either way.
   const keys =
     given ??
-    (key !== undefined
-      ? [{ startBeat: 0, endBeat: totalBeats, key, confidence: 1 }]
-      : keyTimelineFromNotes(pooled, { ts: meterAt(0, meters), totalBeats, budget }));
+    attachPivots(
+      key !== undefined
+        ? [{ startBeat: 0, endBeat: totalBeats, key, confidence: 1 }]
+        : keyTimelineFromNotes(pooled, { meters, totalBeats, budget }),
+      timeline.segments,
+    );
   return {
     timeline,
     keys,
@@ -213,7 +231,8 @@ export type ArrangementOptions = {
   timeline?: ChordTimeline;
   /**
    * Indices of the tracks the harmony is inferred from. Defaults to every
-   * pitched track. Percussion tracks are excluded either way.
+   * pitched track. Percussion tracks are excluded either way. An index naming
+   * no track is an input error rather than one that matches nothing.
    */
   harmonyTracks?: number[];
   /**
@@ -408,7 +427,8 @@ function evaluationBeats(note: VoiceNote, timeline: ChordTimeline): number[] {
  *   { pitch: 60, startBeat: 0, durationBeat: 2 },
  *   { pitch: 67, startBeat: 2, durationBeat: 2 },
  * ];
- * const { key, conflicts } = analyzeArrangement([{ role: 'melody', notes: melody }]);
+ * const { prevailingKey, conflicts } = analyzeArrangement([{ role: 'melody', notes: melody }]);
+ * prevailingKey.rootPc; // the key held longest across the analysis
  * conflicts; // notes clashing with the inferred harmony, worst severity first
  * ```
  * @category Arrangement & Analysis
@@ -456,26 +476,21 @@ export function analyzeArrangementWith(
     noteOptions.minStartBeat = -opts.pickupBeats;
   }
   assertGenerationBudget(tracks.length, 'arrangement tracks', budget);
-  let noteCount = 0;
-  for (let index = 0; index < tracks.length; index += 1) {
-    const notes = tracks[index]?.notes;
-    // A missing array is rejected by name here rather than becoming a raw
-    // TypeError further down, where the message no longer says which track.
-    if (!Array.isArray(notes)) {
-      throw new InvalidInputError(
-        `tracks[${index}].notes must be an array; received ${typeof notes}`,
-      );
-    }
-    assertNoteEvents(notes, `tracks[${index}].notes`, noteOptions);
-    noteCount += notes.length;
-  }
+  const noteCount = assertTrackNotes(tracks, noteOptions);
   // The pooled total is what the downstream timeline analysis actually sizes
   // its work by, so it is checked here, under this layer's own name.
   assertGenerationBudget(noteCount, 'arrangement notes', budget);
-  const profile: SafetyProfile = opts.profile ?? 'pop';
+  const profile = arrangementProfile(opts.profile);
   const minSeverity = opts.minSeverity ?? NoteSafety.Warning;
-  const harmonyTracks =
-    opts.harmonyTracks === undefined ? undefined : new Set(opts.harmonyTracks.map(Math.trunc));
+  const harmonyTracks = harmonyTrackSet(opts.harmonyTracks, tracks.length);
+  const prepared = prepareTracks(tracks);
+  // Every note is evaluated against the other sub-voices sounding beneath it, so
+  // the work is the product of the two — not either dimension alone, which is
+  // all the scalar checks above measure. The sub-voices have to be derived to be
+  // counted, but that is the same O(n log n) pass the note checks already are,
+  // and the check still lands before the harmony is pooled and inferred.
+  const voiceCount = prepared.reduce((sum, track) => sum + track.voices.length, 0);
+  assertGenerationBudget(noteCount * voiceCount, 'arrangement note-voice comparisons', budget);
   const pooled = poolNotes(tracks, harmonyTracks);
 
   let evidence: TimelineEvidence | undefined;
@@ -503,7 +518,6 @@ export function analyzeArrangementWith(
   // A cadence is heard in the key it arrives in, which after a modulation is
   // not the key the piece opened in.
   const cadences = detectCadences(timeline, keyAt);
-  const prepared = prepareTracks(tracks);
   const soundingCache = new Map<number, SoundingVoice[]>();
 
   const trackAnalyses: TrackAnalysis[] = [];
@@ -529,7 +543,12 @@ export function analyzeArrangementWith(
       const analyzed = analyzeVoice(subVoice.voice, timeline.at, keyAt, (beat) =>
         otherVoicesSounding(prepared, t, v, beat, soundingCache),
       );
-      notes.push(...analyzed.map((note) => ({ ...note, trackIndex: track.trackIndex })));
+      // Appended one at a time: a spread of a long sub-voice passes every note
+      // as an argument, which overflows the call stack on a track the budget
+      // above accepts.
+      for (const note of analyzed) {
+        notes.push({ ...note, trackIndex: track.trackIndex });
+      }
       const labelsById = new Map(analyzed.map((note) => [note.noteId, note.labels]));
 
       for (let noteIndex = 0; noteIndex < subVoice.voice.length; noteIndex += 1) {

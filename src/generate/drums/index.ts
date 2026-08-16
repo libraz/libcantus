@@ -1,3 +1,4 @@
+import { InvalidInputError } from '../../core/errors/index.js';
 import { canSound, type InstrumentProfile } from '../../core/instrument/index.js';
 import { beatsPerBar, type TimeSignature } from '../../core/meter/index.js';
 import {
@@ -8,7 +9,11 @@ import {
   assertRange,
   assertTimeSignature,
 } from '../../core/validation/index.js';
-import { type GenerationContextInput, resolveContextWith } from '../context/index.js';
+import {
+  type GenerationContextInput,
+  resolveContextWith,
+  sustainsStrokes,
+} from '../context/index.js';
 import { selectVocabulary, vocabularyOfKind } from '../vocabulary/index.js';
 import {
   type BeatCtx,
@@ -25,6 +30,7 @@ import {
   FILL_ARCHETYPES,
   type FillArchetype,
   fillArchetypeFor,
+  fillWithinCeiling,
   generateFill,
   getFillStartBeat,
   isFillArchetype,
@@ -39,7 +45,7 @@ import {
   shouldUseFootHiHat,
   shouldUseRideForSection,
 } from './hihat.js';
-import { type DrumHit, HitList } from './hit.js';
+import { type DrumHit, HitList, onsetKey } from './hit.js';
 import {
   backingScale,
   calculateVelocity,
@@ -51,6 +57,7 @@ import {
   feelSwingAmount,
   GM,
   GROOVE_STYLES,
+  type GrooveFeel,
   type GrooveStyle,
   ghostMoodCategory,
   mapSection,
@@ -73,6 +80,25 @@ export { FILL_ARCHETYPES, FILL_TYPES, isFillArchetype } from './fills.js';
  */
 export type { DrumHit, DrumVoice } from './hit.js';
 export { DRUM_NOTES, drumVoiceOf } from './hit.js';
+/**
+ * Groove feel (the swing/straight rhythmic character) for {@link generateDrums}
+ * and {@link placeDrumPattern}.
+ *
+ * @category Composition
+ */
+/**
+ * Drum voicing role and groove style identifiers for {@link generateDrums}.
+ *
+ * @category Composition
+ */
+export type {
+  DrumRole,
+  DrumStyle,
+  GrooveFeel,
+  GrooveStyle,
+  PublicSection,
+  SectionType,
+} from './internal.js';
 export type { KickFigure, KickPattern, KickSlot } from './kick.js';
 export { KICK_FIGURES, KICK_STEPS } from './kick.js';
 export { DRUM_KIT } from './kit.js';
@@ -83,26 +109,6 @@ export type {
   DrumVocabulary,
 } from './vocabulary.js';
 export { DRUM_PATTERNS, isDrumPattern, placeDrumPattern } from './vocabulary.js';
-
-/**
- * Groove feel (the swing/straight rhythmic character) for {@link generateDrums}.
- *
- * @category Composition
- */
-export type GrooveFeel = Feel;
-
-/**
- * Drum voicing role and groove style identifiers for {@link generateDrums}.
- *
- * @category Composition
- */
-export type {
-  DrumRole,
-  DrumStyle,
-  GrooveStyle,
-  PublicSection,
-  SectionType,
-} from './internal.js';
 
 /**
  * Public section identifiers for {@link generateDrums}.
@@ -163,7 +169,18 @@ export type DrumsOptions = {
    * @defaultValue 0.5
    */
   density?: number;
-  /** Time signature; defaults to 4/4. */
+  /**
+   * Time signature.
+   *
+   * Only 4/4 is accepted: every shape this generator writes — the backbeat, the
+   * hi-hat subdivisions, the open-hat and crash beats, the beat a fill starts on
+   * — is written against a four-beat bar, so another meter would come back with
+   * 4/4 accents in a bar of the wrong length and no sign that anything was
+   * wrong. A meter it cannot place is refused rather than mis-placed. Use
+   * {@link generateRhythm} or {@link placeDrumPattern} for other meters.
+   *
+   * @defaultValue `{ numerator: 4, denominator: 4 }`
+   */
   ts?: TimeSignature;
   /**
    * Replace the final bar with a fill.
@@ -175,6 +192,12 @@ export type DrumsOptions = {
    * @defaultValue false
    */
   fills?: boolean;
+  /**
+   * The swing the groove is played with. Naming one is taken at its word by
+   * every style, including the ones whose own character is straight: a feel the
+   * caller asked for and did not get is worse than one it has to ask for twice.
+   * Left out, the style's own feel applies.
+   */
   feel?: GrooveFeel;
   /**
    * Voicing role, from busiest to sparsest:
@@ -218,6 +241,14 @@ export type DrumsOptions = {
    * style/section pattern, giving direct access to evenly spread onsets.
    */
   euclideanKick?: EuclideanKick;
+  /**
+   * Maximum number of onsets {@link generateDrums} may write. Generation is
+   * linear in bar count, so this is the guard against an unbounded caller
+   * rather than a limit on any search.
+   *
+   * @defaultValue 1000000
+   */
+  budget?: number;
 };
 
 /** Generous upper bound on onsets emitted for a single bar, used for budgeting. */
@@ -266,7 +297,7 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
   }
   // Generation is linear in bar count — every lookup inside the bar loop is
   // indexed — so the estimate is the hit count itself.
-  assertGenerationBudget(opts.bars * MAX_HITS_PER_BAR, 'drum hits');
+  assertGenerationBudget(opts.bars * MAX_HITS_PER_BAR, 'drum hits', opts.budget);
   if (opts.euclideanKick) {
     const steps = opts.euclideanKick.steps ?? 16;
     assertInteger(steps, 'euclidean steps', 1, 16);
@@ -302,6 +333,14 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
     opts.role === undefined ? 'full' : assertOneOf(opts.role, DRUM_ROLES, 'drum role');
   const ts = opts.ts ?? { numerator: 4, denominator: 4 };
   assertTimeSignature(ts, 'drum time signature');
+  // The groove is written against a four-beat bar throughout. Accepting another
+  // meter placed 4/4 accents inside a bar of a different length and reported
+  // nothing, which is the one outcome a caller cannot detect.
+  if (ts.numerator !== 4 || ts.denominator !== 4) {
+    throw new InvalidInputError(
+      `drum time signature must be 4/4; received ${ts.numerator}/${ts.denominator}`,
+    );
+  }
   const barBeats = beatsPerBar(ts);
   // fxOnly leaves only fx/aux voices: the main kick, snare, ghost, and fill
   // voices are suppressed just as timekeeping hi-hats already are.
@@ -313,6 +352,7 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
   const sec: SectionCtx = {
     style,
     feel,
+    feelRequested: opts.feel !== undefined,
     densityMult,
     rhythmic,
     ornament: ornamentDial,
@@ -330,6 +370,7 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
   const ohhBarInterval = openHiHatBarInterval(section, style);
   const energy = sectionEnergy(section);
   const fillStartBeat = getFillStartBeat(energy);
+  const fillVelocity = calculateVelocity(section, fillStartBeat);
   const percMood = percMoodCategory(style);
 
   // The final-bar fill is shaped by the section it leads into. When no next
@@ -354,6 +395,9 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
 
   const reuseSectionKick = (section === 'b' || section === 'chorus') && style !== 'sparse';
   let sectionKick: KickPattern | undefined;
+
+  /** Onsets written from a pattern the caller named, which the ceiling spares. */
+  const exemptOnsets = new Set<string>();
 
   for (let bar = 0; bar < opts.bars; bar += 1) {
     const barStart = bar * barBeats;
@@ -392,15 +436,34 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
 
       if (opts.fills && isLastBar && !inLift && beat >= fillStartBeat) {
         if (beat === fillStartBeat) {
-          currentFill = fillArchetypeFor(
-            selectFillType(section, nextSection, style, nextEnergy, draw, bar, callerFillIds),
-            callerFills,
+          // The ceiling applies to the phrase end as it does to the groove: an
+          // archetype whose strokes run faster than a player at this ceiling
+          // sustains is taken out of the table, and the draw runs over the rest.
+          const chosen = selectFillType(
+            section,
+            nextSection,
+            style,
+            nextEnergy,
+            draw,
+            bar,
+            callerFillIds,
+            (id) => {
+              const candidate = fillArchetypeFor(id, callerFills);
+              return (
+                candidate !== undefined &&
+                fillWithinCeiling(candidate, fillStartBeat, barBeats, bpm, difficulty)
+              );
+            },
           );
+          currentFill = chosen === undefined ? undefined : fillArchetypeFor(chosen, callerFills);
         }
         if (playMainVoices) {
           const before = track.hits.length;
           if (currentFill) {
-            generateFill(track, beatTick, beat, currentFill, velocity);
+            // One base velocity for the whole fill, read at the beat it starts
+            // on: a crescendo written across two beats is one gesture, and
+            // rereading the beat velocity partway through drops it.
+            generateFill(track, beatTick, beat, currentFill, fillVelocity);
           }
           if (track.hits.length > before) {
             continue;
@@ -440,12 +503,11 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
             const onset = step * stepLength;
             if (euclidKick[step] && Math.floor(onset) === beat) {
               const wholeBeat = Math.abs(onset - Math.round(onset)) < 1e-9;
-              track.add(
-                GM.BD,
-                swing16(barStart + onset, sec, swingAmount),
-                Math.min(0.5, stepLength),
-                velocity * (wholeBeat ? 1 : 0.85),
-              );
+              const tick = swing16(barStart + onset, sec, swingAmount);
+              // Naming the pattern is the request that it be written as given,
+              // so these strokes are the ones the ceiling does not touch.
+              exemptOnsets.add(onsetKey(GM.BD, tick));
+              track.add(GM.BD, tick, Math.min(0.5, stepLength), velocity * (wholeBeat ? 1 : 0.85));
             }
           }
         } else if (kick) {
@@ -501,9 +563,56 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
   // reads these in order and would emit a negative delta time.
   const endBeat = opts.bars * barBeats;
   const kit = resolved.instrument('drums');
-  return track.hits
+  const written = track.hits
     .filter((hit) => hit.startBeat < endBeat && playableOn(kit, hit.pitch))
     .sort((a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch);
+  return underCeiling(written, bpm, difficulty, exemptOnsets);
+}
+
+/**
+ * Drop the strokes a player at this ceiling could not reach in time.
+ *
+ * The ceiling is a property of the finished part rather than of any one voice
+ * that proposed a stroke: the groove, the fill, the lift and the auxiliary
+ * voices each judge their own material, and the bar where a fill meets the
+ * groove before it belongs to neither of them. Applying it once at the end is
+ * what makes "no voice repeats faster than the ceiling sustains" true of the
+ * output instead of true of each generator separately.
+ *
+ * The earlier of two strokes too close together is the one kept, since it is
+ * the one the passage was already committed to, and strokes at the same instant
+ * are left alone — two voices layered on one onset are not a stream.
+ *
+ * @param hits The finished part, in onset order.
+ * @param bpm Tempo.
+ * @param difficulty The ceiling, or undefined for no ceiling.
+ * @param exempt Onset keys the ceiling does not touch.
+ * @returns The strokes that survive, in the order given.
+ */
+function underCeiling(
+  hits: readonly DrumHit[],
+  bpm: number,
+  difficulty: number | undefined,
+  exempt: ReadonlySet<string>,
+): DrumHit[] {
+  if (difficulty === undefined) {
+    return [...hits];
+  }
+  const lastOnset = new Map<number, number>();
+  const kept: DrumHit[] = [];
+  for (const hit of hits) {
+    const previous = lastOnset.get(hit.pitch);
+    const reachable =
+      previous === undefined ||
+      exempt.has(onsetKey(hit.pitch, hit.startBeat)) ||
+      sustainsStrokes(hit.startBeat - previous, bpm, difficulty);
+    if (!reachable) {
+      continue;
+    }
+    kept.push(hit);
+    lastOnset.set(hit.pitch, hit.startBeat);
+  }
+  return kept;
 }
 
 /**

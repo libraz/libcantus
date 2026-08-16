@@ -1,5 +1,5 @@
 import type { NoteEvent } from '../types.js';
-import { assertNoteEvents } from '../validation/index.js';
+import { assertFiniteNumber, assertNoteEvents } from '../validation/index.js';
 
 /**
  * A validated note retaining its position in the caller's original array.
@@ -33,11 +33,21 @@ export type NoteEventIndex = {
   /**
    * Latest-onset note sounding at `beat`. Simultaneous onsets are resolved by
    * the index's {@link OnsetTieBreak}.
+   *
+   * @throws If `beat` is not finite.
    */
   at: (beat: number) => IndexedNoteEvent | undefined;
-  /** Whether one or more sounding notes attack at `beat`. */
+  /**
+   * Whether one or more sounding notes attack at `beat`.
+   *
+   * @throws If `beat` is not finite.
+   */
   attacksAt: (beat: number) => boolean;
-  /** Unique sounding-note attack beats strictly inside `(startBeat, endBeat)`. */
+  /**
+   * Unique sounding-note attack beats strictly inside `(startBeat, endBeat)`.
+   *
+   * @throws If either bound is not finite.
+   */
   onsetsBetween: (startBeat: number, endBeat: number) => number[];
 };
 
@@ -115,6 +125,11 @@ export function createNoteEventIndex(
   return {
     notes,
     at(beat) {
+      // A query beat comes from wherever the host got it — a scrub position, a
+      // parsed field — so it is checked like any other entry argument. `NaN`
+      // compares false against every bound, which would read as an open window
+      // rather than as the missing value it is.
+      assertFiniteNumber(beat, 'beat');
       const index = latestActiveIndex(upperBound(notes, beat + EPS), beat);
       if (index < 0) return undefined;
       const onset = notes[index]?.note.startBeat;
@@ -143,6 +158,7 @@ export function createNoteEventIndex(
       return best;
     },
     attacksAt(beat) {
+      assertFiniteNumber(beat, 'beat');
       // Only a sounding note attacks: a zero-length artefact must not make
       // `attacksAt(b)` true on a beat where `at(b)` finds nothing.
       let index = upperBound(notes, beat + EPS) - 1;
@@ -159,6 +175,8 @@ export function createNoteEventIndex(
       return false;
     },
     onsetsBetween(startBeat, endBeat) {
+      assertFiniteNumber(startBeat, 'startBeat');
+      assertFiniteNumber(endBeat, 'endBeat');
       const result: number[] = [];
       let index = upperBound(notes, startBeat + EPS);
       while (index < notes.length) {

@@ -29,6 +29,23 @@ export type Draw = {
 };
 
 /**
+ * One draw from a positional source, held to the range the source promises.
+ *
+ * A caller-supplied {@link PositionalRng} is part of the contract, so a source
+ * returning 1, a negative value or NaN is rejected here rather than becoming an
+ * index past the end of a vocabulary, a NaN pitch, or a bar silently dropped far
+ * from the cause. This is the guard `includeAt` already applies to `prob`, on
+ * the same predicate.
+ */
+function drawFrom(rng: PositionalRng, path: SeedPath): number {
+  const draw = rng.at(...path);
+  if (!(draw >= 0 && draw < 1)) {
+    throw new InvalidInputError(`positional draw must be in [0, 1); received ${draw}`);
+  }
+  return draw;
+}
+
+/**
  * Build the sampler set for one namespace of a positional source.
  *
  * The prefix separates parts that share a source: a caller-supplied
@@ -40,7 +57,7 @@ export type Draw = {
  * @returns The samplers, addressed under `prefix`.
  */
 export function drawsFrom(rng: PositionalRng, ...prefix: SeedPath): Draw {
-  const at = (...path: SeedPath) => rng.at(...prefix, ...path);
+  const at = (...path: SeedPath) => drawFrom(rng, [...prefix, ...path]);
   return {
     at,
     prob: (p, ...path) => includeAt(rng, p, ...prefix, ...path),

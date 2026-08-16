@@ -9,7 +9,11 @@ import {
 import type { ChordQuality, ChordSpan } from '../../theory/chord/index.js';
 import { chordQualities, diatonicTriad } from '../../theory/chord/index.js';
 import { scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
-import { type GenerationContextInput, resolveContext } from '../context/index.js';
+import {
+  type GenerationContextInput,
+  resolveContext,
+  resolveContextWith,
+} from '../context/index.js';
 
 export type { ChordSpan } from '../../theory/chord/index.js';
 
@@ -287,9 +291,6 @@ const PRESETS: ProgressionPreset[] = [
   },
 ];
 
-/** Seed used when neither a context nor a seed is given. */
-const DEFAULT_SEED = 0;
-
 /** Share of the eligible chords `reharmonize: true` replaces. */
 const DEFAULT_REHARMONIZE_STRENGTH = 0.5;
 
@@ -483,7 +484,7 @@ export function pickProgressionPreset(style: ProgStyle, seed = 0): ProgressionPr
 export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
   assertPositiveInt(opts.bars, 'progression bars');
   assertGenerationBudget(opts.bars, 'progression chords');
-  const ctx = resolveContext(opts.ctx ?? opts.seed ?? DEFAULT_SEED);
+  const ctx = resolveContextWith(opts.ctx, { seed: opts.seed });
   const seed = ctx.seed;
   let preset: ProgressionPreset | undefined;
   if (opts.preset !== undefined) {

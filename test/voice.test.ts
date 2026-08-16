@@ -187,6 +187,36 @@ describe('analyzeVoice', () => {
     expect(analyzed[0]?.labels).toContainEqual({ kind: 'needsResolution', resolveTo: 67 });
   });
 
+  it('labels every pitch sounding over a plain triad', () => {
+    // A note sounding against a chord is always classified, so an empty label
+    // list can only mean "no chord here". Eb, Bb and B over C major are the
+    // interval classes that reach none of the melodic figures and none of the
+    // tension or avoid branches, and so fall through to the last one.
+    for (let pitch = 60; pitch < 72; pitch += 1) {
+      const voice: VoiceNote[] = [{ id: 1, pitch, startBeat: 0, durationBeat: 1 }];
+      const analyzed = analyzeVoice(voice, () => cMaj, cMajor, noOtherVoices);
+      expect(analyzed[0]?.labels, `pitch ${pitch}`).not.toEqual([]);
+      expect(analyzed[0]?.rationale, `pitch ${pitch}`).not.toBe('Unclassified note');
+    }
+  });
+
+  it('names a resolution above the note when no chord tone lies below it', () => {
+    // B over C major has no chord tone a step below; the one a semitone above
+    // is where the note wants to go.
+    const voice: VoiceNote[] = [{ id: 1, pitch: 71, startBeat: 0, durationBeat: 1 }];
+    const analyzed = analyzeVoice(voice, () => cMaj, cMajor, noOtherVoices);
+    expect(analyzed[0]?.labels).toContainEqual({ kind: 'needsResolution', resolveTo: 72 });
+  });
+
+  it('labels a dissonance with no chord tone within a step at all', () => {
+    // An open fifth has no tone within a whole step of Eb, so the resolution is
+    // named by the nearest chord tone there is rather than left out.
+    const cFifth: Chord = { rootPc: 0, quality: 'maj', intervals: [0, 7] };
+    const voice: VoiceNote[] = [{ id: 1, pitch: 63, startBeat: 0, durationBeat: 1 }];
+    const analyzed = analyzeVoice(voice, () => cFifth, cMajor, noOtherVoices);
+    expect(analyzed[0]?.labels).toContainEqual({ kind: 'needsResolution', resolveTo: 60 });
+  });
+
   it('returns no labels without a chord', () => {
     const voice: VoiceNote[] = [{ id: 1, pitch: 61, startBeat: 0, durationBeat: 1 }];
     const analyzed = analyzeVoice(voice, () => null, cMajor, noOtherVoices);

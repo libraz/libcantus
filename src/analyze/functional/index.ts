@@ -10,6 +10,7 @@
 export type { AugmentedSixthKind } from './augmented-sixth.js';
 export {
   augmentedSixthChord,
+  augmentedSixthFromPitchClasses,
   augmentedSixthKind,
   spellAugmentedSixth,
 } from './augmented-sixth.js';

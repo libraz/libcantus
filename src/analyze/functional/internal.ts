@@ -12,7 +12,13 @@ export { pitchClassOf as mod12 } from '../../core/pitch/index.js';
 
 import type { KeyScale } from '../../core/types.js';
 import type { Chord } from '../../theory/chord/index.js';
-import { MAJOR_MASK, majorKey, scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
+import { chordPitchClasses } from '../../theory/chord/index.js';
+import {
+  isScaleTone,
+  MAJOR_MASK,
+  majorKey,
+  scaleTonesInDegreeOrder,
+} from '../../theory/scale/index.js';
 
 /** Diatonic pitch class of a 1-based scale degree in a key. */
 export function degreeRootPc(degreeNumber: number, key: KeyScale): number {
@@ -70,9 +76,38 @@ export function romanReference(key: KeyScale): KeyScale {
   return scaleTonesInDegreeOrder(key).length === 7 ? key : majorKey(mod12(key.rootPc));
 }
 
-/** Whether a chord is the Neapolitan: a major triad on the flat second degree. */
+/** Whether every pitch class of a chord belongs to the key's scale. */
+export function isDiatonicChord(chord: Chord, key: KeyScale): boolean {
+  return chordPitchClasses(chord).every((pc) => isScaleTone(pc, key));
+}
+
+/**
+ * Whether a chord's interval template carries a major third above its root.
+ *
+ * The interval is reduced first, so a third voiced as a tenth still counts: it
+ * is the same chord tone, and a dominant spread across two octaves is heard
+ * through the same leading tone as a close one.
+ */
+export function hasMajorThird(chord: Chord): boolean {
+  return chord.intervals.some((interval) => mod12(interval) === 4);
+}
+
+/**
+ * Whether a chord is the Neapolitan: a major triad on the flat second degree of
+ * a key that does not have that degree already.
+ *
+ * The Neapolitan is an altered predominant, so it has to be an alteration. A
+ * mode carrying a lowered second of its own — phrygian, locrian, and the
+ * phrygian-dominant scales of flamenco and modal jazz — sounds that triad as a
+ * native chord of the key, and calling it chromatic there would make the key's
+ * own II a borrowing every time it appeared.
+ */
 export function isNeapolitan(chord: Chord, key: KeyScale): boolean {
-  return mod12(chord.rootPc - key.rootPc) === 1 && chord.quality === 'maj';
+  return (
+    mod12(chord.rootPc - key.rootPc) === 1 &&
+    chord.quality === 'maj' &&
+    !isDiatonicChord(chord, key)
+  );
 }
 
 /** Whether a chord has the sonority that can tonicize another scale degree. */

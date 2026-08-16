@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { detectKeyBest } from '../src/analyze/detect/index.js';
+import { InvalidInputError } from '../src/core/errors/index.js';
+import { parseNote } from '../src/core/pitch/index.js';
 import { generateProgression } from '../src/generate/progression/index.js';
 import { Chord, Interval, Key, Note, Progression } from '../src/model/index.js';
+import { majorKey } from '../src/theory/scale/index.js';
 import { transposeChordSymbol } from '../src/theory/symbol/index.js';
 import { voiceProgression } from '../src/theory/voicing/index.js';
 
@@ -319,10 +322,24 @@ describe('Interval as a usable value', () => {
       }
     }
     for (const parsed of intervals) {
+      // The augmented octave is the one interval whose inversion has no name:
+      // its complement would be a diminished unison, and the letters do not
+      // move in a unison, so the pitch module reads that relation as the
+      // descending `-A1` instead. It is tested for its refusal below.
+      if (parsed.number === 8 && parsed.quality.startsWith('A')) {
+        continue;
+      }
       const built = Interval.of(parsed.number, parsed.quality, parsed.semitones);
       expect(built.invert().invert().equals(built), parsed.name).toBe(true);
     }
     expect(Interval.parse('AA7').invert().name).toBe('dd2');
+  });
+
+  it('refuses to name the inversion of an augmented octave', () => {
+    expect(() => Interval.parse('A8').invert()).toThrow(/unison cannot be diminished/);
+    expect(() => Interval.parse('AA8').invert()).toThrow(RangeError);
+    // The diminished octave still inverts: it is the augmented unison.
+    expect(Interval.parse('d8').invert().name).toBe('A1');
   });
 
   it('inverts to the complement that completes the octave', () => {
@@ -443,6 +460,31 @@ describe('Key', () => {
   it('rejects an invalid mode mask instead of constructing a tonic-less key', () => {
     expect(() => Key.of({ rootPc: 0, modeMask12: 0 })).toThrow(/modeMask12/);
     expect(() => Key.of({ rootPc: 0, modeMask12: 0b10 })).toThrow(/include the tonic/);
+  });
+
+  it('names the type of a tonic that is not the note this API takes', () => {
+    // A spelled note from the pitch functions is plain data with no pitch class
+    // of its own, so the mismatch message would otherwise read "tonic undefined
+    // does not match ..." and name neither what arrived nor the way to convert it.
+    const plain = parseNote('C');
+    expect(() => Key.of(majorKey(0), plain as unknown as Note)).toThrow(InvalidInputError);
+    expect(() => Key.of(majorKey(0), plain as unknown as Note)).toThrow(
+      /tonic must be the class API's Note; received plain note data; wrap plain note data with Note.fromData/,
+    );
+    // `Key.of` synthesizes a tonic when none is given, so the constructor is
+    // where a tonic that is present but unusable has to be named.
+    for (const [label, value] of [
+      ['undefined', undefined],
+      ['null', null],
+      ['a number', 60],
+      ['an unrelated object', { name: 'C' }],
+    ] as [string, unknown][]) {
+      expect(() => new Key(majorKey(0), value as Note), label).toThrow(
+        /tonic must be the class API's Note/,
+      );
+    }
+    // The conversion the message names is the one that works.
+    expect(Key.of(majorKey(0), Note.fromData(plain)).tonic.name).toBe('C');
   });
 
   it('tests scale membership for numbers and notes', () => {
@@ -742,6 +784,43 @@ describe('Progression', () => {
       expect(progression.chords[0]?.symbol()).toBe('Ab');
       expect(progression.chords[0]?.spell().map((note) => note.name)).toEqual(['Ab', 'C', 'Eb']);
     }
+  });
+
+  it('re-keys chords that already carry a key, whatever key they carried', () => {
+    const dbMajor = Key.major('Db');
+    const progression = new Progression([dbMajor.chord(1), dbMajor.chord(4)], dbMajor);
+    expect(`${progression}`).toBe('Db Gb');
+
+    const resharped = progression.withKey(Key.major('C#'));
+    for (const chord of resharped) {
+      expect(chord.key?.equals(Key.major('C#'))).toBe(true);
+    }
+    expect(`${resharped}`).toBe('C# F#');
+    expect(resharped.chords[1]?.spell().map((note) => note.name)).toEqual(['F#', 'A#', 'C#']);
+
+    // Neither the key the chords arrived with nor the number of re-keys shows.
+    expect(`${progression.withKey(Key.major('E')).withKey(Key.major('C#'))}`).toBe(`${resharped}`);
+    expect(`${new Progression([Chord.of(1, 'maj'), Chord.of(6, 'maj')], Key.major('C#'))}`).toBe(
+      `${resharped}`,
+    );
+  });
+
+  it('keeps a caller-supplied chord spelling through a progression re-key', () => {
+    // The chord's own hint outranks the progression key, so only the chord that
+    // was left to the key follows the modulation.
+    const progression = new Progression(
+      [Chord.parse('Db'), Chord.of(6, 'maj')],
+      Key.major('Db'),
+    ).withKey(Key.major('C#'));
+    expect(`${progression}`).toBe('Db F#');
+  });
+
+  it('re-keys the members when a chord that carries its own key is appended', () => {
+    const progression = new Progression([Chord.of(1, 'maj')], Key.major('C#')).add(
+      Chord.of(6, 'maj').withKey(Key.major('Db')),
+    );
+    expect(progression.chords[1]?.key?.equals(Key.major('C#'))).toBe(true);
+    expect(`${progression}`).toBe('C# F#');
   });
 
   it('uses an explicit spelling key and preserves only caller spelling hints through JSON', () => {

@@ -17,12 +17,14 @@ chordSpecOf(altered.data).alterations;
 
 `Chord` values can be inverted, transposed, formatted, and converted to a progression. The pure functions `makeChord`, `chordFromSpec`, `chordPitchClasses`, and `formatChordSymbol` expose the same data model without class wrappers.
 
-A symbol survives a round trip, and an inversion is carried as a bass pitch class rather than as a reordered interval list:
+A symbol survives a round trip — a chord no quality name covers included — and an inversion is carried as a bass pitch class rather than as a reordered interval list:
 
 ```ts
 import { Chord, formatChordSymbol, parseChordSymbol } from '@libraz/libcantus';
 
 formatChordSymbol(parseChordSymbol('Cmaj7')); // 'Cmaj7'
+formatChordSymbol(parseChordSymbol('Cmaj7sus4')); // 'Cmaj7sus4'
+formatChordSymbol(parseChordSymbol('C6/9(#11)')); // 'C6/9(#11)'
 Chord.parse('C/E').data.bassPc; // 4
 Chord.parse('C/E').pitchClasses(); // [0, 4, 7]
 ```
@@ -112,13 +114,13 @@ The functional voicing tools are `voiceChord`, `voiceProgression`, `nextVoicing`
 
 ## Figured bass and counterpoint
 
-Figured-bass intervals are taken from the key, so the same figure can produce different spellings at different degrees. `realizeFiguredBass`, `spellChord`, `checkPartWriting`, and `checkSpecies` work with spelled notes and return violations or explanations rather than silently rewriting the exercise.
+Figured-bass intervals are taken from the key, so the same figure can produce different spellings at different degrees. `realizeFiguredBass`, `spellChord`, `checkPartWriting`, and `checkSpecies` work with spelled notes and return violations or explanations rather than silently rewriting the exercise. Every spelling function is given the key's own tonic; a tonic sounding a different pitch class than the key root is rejected rather than spelled.
 
 ```ts
 import { Key, formatNote, parseNote, realizeFiguredBass, spellChord } from '@libraz/libcantus';
 
 const chord = realizeFiguredBass(parseNote('D'), '6', Key.major('C').scale);
-spellChord(chord, parseNote('B'), Key.major('C').scale).map(formatNote);
+spellChord(chord, parseNote('C'), Key.major('C').scale).map(formatNote);
 // ['B', 'D', 'F']
 ```
 

@@ -9,7 +9,11 @@ Two conventions carry everything:
 - **Pitch is a MIDI note number.** Middle C is 60. Nothing here uses frequencies unless [Tuning and frequency](tuning-and-frequency.md) is involved.
 - **Time is quarter-note beats.** `startBeat` and `durationBeat` are floating-point beats, not ticks and not seconds. Beat 0 is the first downbeat, and a pickup starts at a negative beat.
 
-Every value the library produces is plain JSON-compatible data — no class instances in the functional API, no hidden prototypes — so an analysis result can be serialized into a project file and read back without a revival step. The class API wraps the same data and exposes it through `.data`.
+Analysis and generation results are plain JSON-compatible data — no class instances in the functional API, no hidden prototypes — so a result can be serialized into a project file and read back without a revival step. The class API wraps the same data and exposes it through `.data`.
+
+One field is a lookup rather than data, and it is the only one: a chord timeline is its `segments` plus an `at` that reads them, and a function does not survive `JSON.stringify`. Every reported field of an analysis — including `timeline.segments` — round-trips as it stands, and `chordTimelineFromChords` rebuilds `at` over the segments that were stored, giving the same chord at every beat as the timeline it came from.
+
+The handles are the exception, and they are not results: `createNoteEventIndex`, `createArrangementSession`, `createRng`, `createPositionalRng` and `resolveContext` return live objects whose methods and function fields do not survive `JSON.stringify`. Store the input they were built from — the note events, the seed, the resolved `algorithmVersion` — and build them again on load; see [Determinism and seeding](determinism-and-seeding.md).
 
 ## Ticks and seconds
 
@@ -38,6 +42,8 @@ secondsToBeats(6, tempo); // 8
 
 `TempoMap` is piecewise constant and integrated across changes, so a note that spans a tempo change gets the right duration rather than one computed at either end.
 
+The map's first event is the time origin — `beatsToSeconds` reads 0 there. A pickup sounds before that, so its beats, seconds and ticks are all negative, and the opening tempo is what times them: `beatsToSeconds(-1, tempo)` is `-0.5`, and `beatsToTicks(-1, 480)` is `-480`. Nothing has to be shifted to be converted.
+
 ## Importing a MIDI file
 
 A typical import, using whatever MIDI parser the host already has:
@@ -45,7 +51,7 @@ A typical import, using whatever MIDI parser the host already has:
 1. Convert every event's tick position and length to beats with `ticksToBeats`.
 2. Drop or keep zero-length events deliberately — `dropSilentNotes` applies the analysis-side policy, and `assertNoteEvents` with `allowNonPositiveDuration` validates before that decision.
 3. Build the meter map from the file's time-signature events, and the tempo map from its tempo events.
-4. Flatten the tracks that contribute to harmony into one array for `chordTimelineFromNotes`; keep the others as separate `ArrangementTrack` entries for `analyzeArrangement`.
+4. Flatten the tracks that contribute to harmony into one array for `chordTimelineFromNotes`; keep the others as separate `ArrangementTrack` entries for `analyzeArrangement`. The note-reading entry points take a `readonly NoteEvent[]`, so an `ArrangementTrack.notes` goes straight in without a copy.
 
 ```ts
 import { assertNoteEvents, dropSilentNotes, ticksToBeats } from '@libraz/libcantus';

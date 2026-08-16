@@ -34,8 +34,13 @@ const SECTIONS: Section[] = ['intro', 'verse', 'prechorus', 'chorus', 'bridge', 
 
 /**
  * Digest of the whole style x section x nextSection x density matrix, fills
- * included. Pinned before the vocabulary was moved out of the generators'
- * control flow, so the move can be shown to have changed nothing.
+ * included. It pins the generated groove itself: a refactor that was meant to
+ * move code rather than notes shows up here, and a change of the notes has to
+ * be made deliberately by re-pinning it.
+ *
+ * It last moved when a named feel stopped being halved on its way to the grid —
+ * a shuffle is the triplet it is named for — and when the stroke a fill lands on
+ * was lifted above the backbeats around it.
  */
 function grooveDigest(): string {
   const hash = createHash('sha256');
@@ -99,8 +104,8 @@ function fillDigest(): string {
 }
 
 describe('moving the drum vocabulary into data', () => {
-  it('leaves every generated groove exactly as it was', () => {
-    expect(grooveDigest()).toBe('ecc01e2324a7197efb053f3d528bd362d481e297e1b6922b54c364f3d13b0524');
+  it('pins every generated groove', () => {
+    expect(grooveDigest()).toBe('a35ae5c8fa4e0bf60ab44a01a7750933f159b54f8505479875ce08fc1e4f5b06');
   });
 
   it('leaves every fill selection exactly as it was', () => {
@@ -256,11 +261,61 @@ describe('the drum pattern dictionary', () => {
     const halved = placeDrumPattern({
       bars: 1,
       genre: 'motown',
-      feel: 'half',
+      rate: 'half',
       ctx: { seed: 6, bpm: 120 },
     });
     expect(halved).not.toEqual(straight);
     expect(halved.length).toBeLessThanOrEqual(straight.length);
+  });
+
+  it('reaches the triplet feel an entry says is applied at render', () => {
+    // The half-time shuffle is written on the straight sixteenth grid and is
+    // only itself once the feel is applied, which its provenance says outright.
+    // Without a way to ask for that from the surface that renders it, the entry
+    // ships as something it says it is not.
+    const straight = placeDrumPattern({ bars: 1, genre: 'blues', ctx: { seed: 2, bpm: 88 } });
+    const shuffled = placeDrumPattern({
+      bars: 1,
+      genre: 'blues',
+      feel: 'shuffle',
+      ctx: { seed: 2, bpm: 88 },
+    });
+    expect(shuffled).not.toEqual(straight);
+    const offBeats = shuffled.map((hit) => hit.startBeat % 1).filter((f) => f > 0.4 && f < 0.72);
+    expect(offBeats.length).toBeGreaterThan(0);
+    for (const frac of offBeats) {
+      expect(frac).toBeCloseTo(2 / 3, 6);
+    }
+    // The two options are different questions: one changes the note values, the
+    // other where they land.
+    const halved = placeDrumPattern({
+      bars: 1,
+      genre: 'blues',
+      rate: 'half',
+      ctx: { seed: 2, bpm: 88 },
+    });
+    expect(halved).not.toEqual(shuffled);
+  });
+
+  it('answers the rhythmic dial in every genre it ships a figure for', () => {
+    // Blocking anticipation on another voice's onset made the upper half of the
+    // dial do nothing at all — byte for byte — in four of the built-in genres.
+    expect(DRUM_PATTERNS.length).toBeGreaterThan(5);
+    for (const entry of DRUM_PATTERNS) {
+      // Inside the band the entry itself states, so every figure is reachable.
+      const [low, high] = entry.tempoRange ?? [110, 110];
+      const bpm = (low + high) / 2;
+      const at = (rhythmic: number) =>
+        JSON.stringify(
+          placeDrumPattern({
+            bars: 2,
+            genre: entry.genre,
+            ctx: { seed: 1, bpm, complexity: { rhythmic } },
+          }),
+        );
+      expect(at(0.5), `${entry.id} plays nothing at ${bpm}`).not.toBe('[]');
+      expect(at(1), `${entry.id} ignores the top of the dial`).not.toBe(at(0.5));
+    }
   });
 });
 
@@ -336,6 +391,25 @@ describe('a caller-supplied drum dictionary', () => {
     expect(withCaller.length).toBeGreaterThan(0);
     // The built-in output is untouched when the caller brings nothing.
     expect(generateDrums({ ...base, ctx: { seed: 4, bpm: 120 } })).toEqual(generateDrums(base));
+  });
+
+  it('gives a caller fill that reuses a built-in id the built-in weight, not both', () => {
+    // Reusing an id is a replacement everywhere else in the vocabulary model:
+    // the material is read through the caller's map wherever the table names
+    // it, so offering it again as an extra candidate would hand that one fill a
+    // weight no other entry has and let it dominate the phrase ends.
+    const draw = resolveContext(5).part('drums');
+    for (let bar = 0; bar < 16; bar += 1) {
+      const plain = selectFillType('a', 'chorus', 'standard', 'high', draw, bar);
+      const collided = selectFillType('a', 'chorus', 'standard', 'high', draw, bar, ['snareRoll']);
+      expect(collided, `bar ${bar}`).toBe(plain);
+    }
+    // An id the library does not carry is an addition, and does change the odds.
+    const added = new Set<string | undefined>();
+    for (let bar = 0; bar < 16; bar += 1) {
+      added.add(selectFillType('a', 'chorus', 'standard', 'high', draw, bar, ['callerFill']));
+    }
+    expect(added.has('callerFill')).toBe(true);
   });
 
   it('refuses a caller entry whose difficulty is off the scale', () => {

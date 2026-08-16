@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import type { ArrangementTrack } from '../src/analyze/arrange/index.js';
+import { analyzeArrangement, tensionCurve } from '../src/analyze/arrange/index.js';
 import { detectChord } from '../src/analyze/detect/index.js';
 import { romanToChord } from '../src/analyze/functional/index.js';
 import { chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
@@ -10,6 +12,10 @@ import {
 } from '../src/core/errors/index.js';
 import { createNoteEventIndex } from '../src/core/event-index/index.js';
 import type { NoteEvent } from '../src/core/types.js';
+import { generateBassLine, placeLicks } from '../src/generate/bass/index.js';
+import { generateCounterMelody, imitate } from '../src/generate/countermelody/index.js';
+import { generateDrums, placeDrumPattern } from '../src/generate/drums/index.js';
+import { ornament } from '../src/generate/ornament/index.js';
 import { generateProgression } from '../src/generate/progression/index.js';
 import type { ChordQuality } from '../src/theory/chord/index.js';
 import { chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
@@ -54,6 +60,35 @@ describe('failures are told apart by code, not by message', () => {
     expect(isLibcantusError(budget) && budget.code).toBe('BUDGET_EXCEEDED');
   });
 
+  it('honours the budget at the entry points the guides send callers to', () => {
+    // A caller who hits BUDGET_EXCEEDED is told to raise the entry point's own
+    // budget, so every searching entry point has to have one and use it.
+    expect(() =>
+      generateDrums({ bars: 8, style: 'standard', section: 'verse', budget: 16 }),
+    ).toThrow(BudgetExceededError);
+    expect(
+      generateDrums({ bars: 1, style: 'standard', section: 'verse', budget: 200 }).length,
+    ).toBeGreaterThan(0);
+
+    expect(() => placeDrumPattern({ bars: 8, genre: 'funk', budget: 16 })).toThrow(
+      BudgetExceededError,
+    );
+    expect(placeDrumPattern({ bars: 1, genre: 'funk', budget: 100 }).length).toBeGreaterThan(0);
+
+    const segments = [
+      { startBeat: 0, endBeat: 4, chord: makeChord(0, 'maj') },
+      { startBeat: 4, endBeat: 8, chord: makeChord(7, 'maj') },
+    ];
+    const key = majorKey(0);
+    expect(() => generateBassLine({ segments, key, budget: 1 })).toThrow(BudgetExceededError);
+    expect(generateBassLine({ segments, key, budget: 8 }).length).toBeGreaterThan(0);
+
+    expect(() => placeLicks(segments, key, { genre: 'motown', budget: 1 })).toThrow(
+      BudgetExceededError,
+    );
+    expect(placeLicks(segments, key, { genre: 'motown', budget: 8 }).length).toBeGreaterThan(0);
+  });
+
   it('says which chord of a progression could not be voiced', () => {
     // C fits two voices pinned to C and E; Db, the next chord, contains neither.
     const chords = [parseChordSymbol('C'), parseChordSymbol('Db'), parseChordSymbol('D')];
@@ -77,6 +112,55 @@ describe('failures are told apart by code, not by message', () => {
     expect(thrown(() => romanToChord('nonsense', majorKey(0)))).toBeInstanceOf(RangeError);
     expect(thrown(() => detectChord([Number.NaN]))).toBeInstanceOf(RangeError);
     expect(isLibcantusError(new Error('plain'))).toBe(false);
+  });
+
+  it('reports a caller mistake at a generate or analyze entry point with a code, never as a built-in', () => {
+    // Every one of these is the caller's own argument problem: a missing
+    // required option, a reversed span, a name that is not in the vocabulary.
+    // A bare TypeError here would leave a host unable to tell "fix your input"
+    // from a bug in the library.
+    const mistakes: [string, () => unknown][] = [
+      [
+        'countermelody without a chord source',
+        () =>
+          generateCounterMelody({
+            melody: [{ pitch: 60, startBeat: 0, durationBeat: 1 }],
+            key: majorKey(0),
+          } as Parameters<typeof generateCounterMelody>[0]),
+      ],
+      [
+        'imitate with a reversed span',
+        () =>
+          imitate([{ pitch: 60, startBeat: 0, durationBeat: 1 }], {
+            atBeat: 4,
+            interval: 'P5',
+            key: majorKey(0),
+            from: 4,
+            to: 1,
+          }),
+      ],
+      [
+        'ornament with an unknown style',
+        () => ornament([{ pitch: 60, startBeat: 0, durationBeat: 1 }], { style: 'nope' as never }),
+      ],
+      [
+        'progression with an unknown style',
+        () => generateProgression({ key: majorKey(0), style: 'nope' as never, bars: 1 }),
+      ],
+      [
+        'arrangement analysis of a track without notes',
+        () => analyzeArrangement([{ role: 'melody' }] as unknown as ArrangementTrack[]),
+      ],
+      [
+        'tension curve of a track without notes',
+        () => tensionCurve([{ role: 'melody' }] as unknown as ArrangementTrack[]),
+      ],
+    ];
+    for (const [what, call] of mistakes) {
+      const error = thrown(call);
+      expect(isLibcantusError(error), what).toBe(true);
+      expect(isLibcantusError(error) && error.code, what).toBe('INVALID_INPUT');
+    }
   });
 
   it('recognizes the coded error contract across a second module copy', () => {

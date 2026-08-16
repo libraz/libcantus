@@ -1,21 +1,28 @@
 import {
+  type AnalyzeChordOptions,
   type CadenceResult,
   type ChordAnalysis,
   type ChordToRomanOptions,
+  type DetectCadenceOptions,
   detectCadence,
   type HarmonicFunction,
 } from '../analyze/functional/index.js';
 import { InvalidInputError } from '../core/errors/index.js';
-import type { IntervalLike, Note as NoteData } from '../core/pitch/index.js';
-import type { KeyScale } from '../core/types.js';
+import type { IntervalLike } from '../core/pitch/index.js';
 import type { Chord as ChordData, ChordSpan } from '../theory/chord/index.js';
 import { chordFromSpan } from '../theory/chord/index.js';
 import { type ScaleChoice, scalesForChanges } from '../theory/chordscale/index.js';
 import { type VoicingOptions, voiceProgression } from '../theory/voicing/index.js';
 import type { Chord } from './chord.js';
 import { Chord as ChordClass } from './chord.js';
-import type { Key } from './key.js';
+import type { Key, KeyData } from './key.js';
 import { Key as KeyClass } from './key.js';
+
+/**
+ * The plain form of a {@link Progression}: the chords as plain data, and the
+ * carried key as its own plain data when the progression has one.
+ */
+export type ProgressionData = { chords: ChordData[]; key: KeyData | undefined };
 
 /**
  * An immutable ordered sequence of chords, optionally carrying a {@link Key}
@@ -26,7 +33,7 @@ import { Key as KeyClass } from './key.js';
  * ```ts
  * import { Key } from '@libraz/libcantus';
  * const key = Key.major('C');
- * key.chord(1).progressionTo(key.chord(4), key.chord(0)).roman();
+ * key.chord(2).progressionTo(key.chord(5), key.chord(1)).roman();
  * // ['ii', 'V', 'I']
  * ```
  */
@@ -45,11 +52,18 @@ export class Progression {
     this.#key = key;
   }
 
-  /** Attach a progression key to chord members that do not already carry one. */
+  /**
+   * Attach the progression key to every chord member.
+   *
+   * The key is applied unconditionally, including to chords that already carry
+   * one, so the members never disagree with the progression about which key
+   * spells them and a re-key during a modulation reaches all of them.
+   * {@link Chord.withKey} keeps a spelling the caller supplied and re-derives
+   * the rest, so the result depends on neither the chords' previous key nor the
+   * number of times a key was attached.
+   */
   static #attachKey(chords: readonly Chord[], key: Key | undefined): Chord[] {
-    return key === undefined
-      ? [...chords]
-      : chords.map((chord) => (chord.key === undefined ? chord.withKey(key) : chord));
+    return key === undefined ? [...chords] : chords.map((chord) => chord.withKey(key));
   }
 
   /**
@@ -82,13 +96,21 @@ export class Progression {
    * @param data The serialized chords and key.
    * @returns The progression.
    */
-  static fromJSON(data: {
-    chords: ChordData[];
-    key?: { scale: KeyScale; tonic: NoteData } | undefined;
-  }): Progression {
+  static fromJSON(data: ProgressionData): Progression {
     const key = data.key === undefined ? undefined : KeyClass.fromJSON(data.key);
     const chords = data.chords.map((chord) => ChordClass.fromJSON(chord));
     return key === undefined ? new Progression(chords) : new Progression(chords, key);
+  }
+
+  /**
+   * Wrap plain progression data, matching the `fromData` factory on the other
+   * classes.
+   *
+   * @param data The plain progression, as {@link Progression.data} hands it out.
+   * @returns The progression.
+   */
+  static fromData(data: ProgressionData): Progression {
+    return Progression.fromJSON(data);
   }
 
   /**
@@ -104,6 +126,14 @@ export class Progression {
   /** The carried key context, if any. */
   get key(): Key | undefined {
     return this.#key;
+  }
+
+  /**
+   * A copy of the underlying plain progression data: the chords as plain
+   * objects and the carried key, if any, as its own plain data.
+   */
+  get data(): ProgressionData {
+    return this.toJSON();
   }
 
   /** The number of chords. */
@@ -211,14 +241,31 @@ export class Progression {
    * The cadence is detected on the final chord pair and is null when the
    * progression has fewer than two chords.
    *
+   * The options reach both analyses: `applied` and `alternatives` go to every
+   * chord, and `voicing` — the pitches of the last two chords, as
+   * {@link Progression.voice} produces them — to the cadence, which cannot tell
+   * a perfect authentic cadence from an imperfect one without knowing the
+   * soprano.
+   *
    * @param key Key to analyze in; falls back to the carried context.
-   * @param opts Applied-numeral rendering options.
+   * @param opts Applied-numeral rendering options, `alternatives` for the
+   *   readings both analyses turned down, and `voicing` for the cadence's
+   *   voice-leading detail; see {@link AnalyzeChordOptions} and
+   *   {@link DetectCadenceOptions}.
    * @returns Per-chord analyses and the closing cadence.
    * @throws If no key is given and none is carried.
+   * @example
+   * ```ts
+   * import { Chord, Key, Progression } from '@libraz/libcantus';
+   * const progression = new Progression([Chord.parse('G7'), Chord.parse('C')], Key.major('C'));
+   * const voiced = progression.voice();
+   * progression.analyze(undefined, { voicing: [voiced[0] ?? [], voiced[1] ?? []] }).cadence
+   *   ?.strength; // 'perfect'
+   * ```
    */
   analyze(
     key?: Key,
-    opts?: ChordToRomanOptions,
+    opts?: AnalyzeChordOptions & DetectCadenceOptions,
   ): { chords: ChordAnalysis[]; cadence: CadenceResult | null } {
     const resolved = this.#resolveKey(key);
     const chords = this.#chords.map((chord) => chord.analyze(resolved, opts));
@@ -226,7 +273,7 @@ export class Progression {
     const to = this.#chords[this.#chords.length - 1];
     const cadence =
       from !== undefined && to !== undefined
-        ? detectCadence(from.data, to.data, resolved.scale)
+        ? detectCadence(from.data, to.data, resolved.scale, opts)
         : null;
     return { chords, cadence };
   }
@@ -240,15 +287,6 @@ export class Progression {
     return scalesForChanges(this.#chords.map((chord) => chord.data));
   }
 
-  /**
-   * The plain progression data, for JSON serialization.
-   *
-   * Private class fields do not serialize, so an explicit `toJSON` keeps
-   * `JSON.stringify(progression)` from collapsing to `{}`. The chords are
-   * emitted as plain data and the carried key, when present, as its own data.
-   *
-   * @returns The chord data sequence and the carried key, if any.
-   */
   /**
    * Transpose every chord by a number of semitones.
    *
@@ -265,13 +303,10 @@ export class Progression {
    */
   transpose(semitones: number): Progression {
     const key = this.#key?.transpose(semitones);
-    const chords = this.#chords.map((chord) => {
-      const moved = chord.transpose(semitones);
-      // A chord that carried no key of its own is spelled by this progression's
-      // key, so it has to receive the transposed one or it would fall back to
-      // sharps in a flat key.
-      return key !== undefined && moved.key === undefined ? moved.withKey(key) : moved;
-    });
+    // The constructor hands the transposed key to every member, so a chord
+    // spelled by this progression's key follows it instead of falling back to
+    // sharps in a flat key.
+    const chords = this.#chords.map((chord) => chord.transpose(semitones));
     return new Progression(chords, key);
   }
 
@@ -295,22 +330,22 @@ export class Progression {
    */
   transposeBy(interval: IntervalLike): Progression {
     const key = this.#key?.transposeBy(interval);
-    const chords = this.#chords.map((chord) => {
-      const moved = chord.transposeBy(interval);
-      // A chord that carried no key of its own is spelled by this progression's
-      // key, so it has to receive the transposed one or it would fall back to
-      // sharps in a flat key.
-      return key !== undefined && moved.key === undefined ? moved.withKey(key) : moved;
-    });
+    // The constructor hands the transposed key to every member, so a chord
+    // spelled by this progression's key follows it instead of falling back to
+    // sharps in a flat key.
+    const chords = this.#chords.map((chord) => chord.transposeBy(interval));
     return new Progression(chords, key);
   }
 
   /**
    * Transpose the progression so that its key becomes `target`.
    *
-   * The interval from the carried key to the target decides the spelling, so
-   * moving C major to Gb major writes flats while moving it to F# major writes
-   * sharps.
+   * The interval between the two tonics moves the chords and decides their
+   * spelling, so moving C major to Gb major writes flats while moving it to F#
+   * major writes sharps. The result carries `target` itself, mode included: the
+   * chords move by interval but the key is replaced rather than transposed, so
+   * a target in another mode — a relative, parallel, or modal key — is the key
+   * the progression is then analyzed in.
    *
    * @param target The key the transposed progression should be in.
    * @returns The transposed progression, carrying `target` as its key.
@@ -329,7 +364,9 @@ export class Progression {
         'progression has no key context; attach one with withKey() before transposing to another key',
       );
     }
-    return this.transposeBy(from.intervalTo(target));
+    const interval = from.intervalTo(target);
+    const chords = this.#chords.map((chord) => chord.transposeBy(interval));
+    return new Progression(chords, target);
   }
 
   /**
@@ -350,7 +387,7 @@ export class Progression {
    *
    * @returns The chord data sequence and the carried key, if any.
    */
-  toJSON(): { chords: ChordData[]; key: { scale: KeyScale; tonic: NoteData } | undefined } {
+  toJSON(): ProgressionData {
     return {
       chords: this.#chords.map((chord) => chord.toJSON()),
       key: this.#key?.toJSON(),

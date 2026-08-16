@@ -1,3 +1,6 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import * as analyze from '../src/analyze/index.js';
 import * as core from '../src/core/index.js';
@@ -108,6 +111,7 @@ const EXPECTED_EXPORTS = [
   'assertTimeSignature',
   'assertVocabulary',
   'augmentedSixthChord',
+  'augmentedSixthFromPitchClasses',
   'augmentedSixthKind',
   'availableTensions',
   'avoidNotes',
@@ -210,6 +214,7 @@ const EXPECTED_EXPORTS = [
   'generateMotif',
   'generateProgression',
   'generateRhythm',
+  'gridMetricWeight',
   'halfTime',
   'harmonizeMelody',
   'humanize',
@@ -351,7 +356,9 @@ const EXPECTED_EXPORTS = [
   'transposeNote',
   'tryParseChordSymbol',
   'tryParseInterval',
+  'tryParseKeyName',
   'tryParseNote',
+  'tryParseTimeSignature',
   'tuplet',
   'vocabularyOfKind',
   'voiceChord',
@@ -364,6 +371,96 @@ const EXPECTED_EXPORTS = [
 
 /** Every layer barrel, in the order the root re-exports them. */
 const LAYERS = { core, theory, analyze, generate, model } as const;
+
+const SRC = fileURLToPath(new URL('../src', import.meta.url));
+const ROOT_ENTRY = path.join(SRC, 'index.ts');
+
+/** `{@link Target}`, `{@link Target | text}`, and the `{@link}` form of `@see`. */
+const INLINE_LINK = /\{@link(?:code|plain)?\s+([^}|\s]+)[^}]*\}/g;
+
+/** A bare `@see Target`, which carries no braces. */
+const BARE_SEE = /@see\s+(?!\{)([^\s\n*]+)/g;
+
+/** The symbol a link names, without the member or the punctuation after it. */
+function linkTarget(raw: string): string | null {
+  const base = (raw.split(/[.#]/)[0] ?? '').replace(/[(),;:]+$/, '');
+  return /^[A-Za-z_$][\w$]*$/.test(base) ? base : null;
+}
+
+/** Doc comments written on `node` itself, source text and all. */
+function docsOn(node: ts.Node): string[] {
+  return ts
+    .getJSDocCommentsAndTags(node)
+    .filter(ts.isJSDoc)
+    .map((doc) => doc.getFullText());
+}
+
+/**
+ * Every doc comment the API reference ships for a public symbol: the one on the
+ * declaration, plus the ones on the members a class, an interface, or an object
+ * type alias documents field by field.
+ */
+function publicDocs(symbol: ts.Symbol): string[] {
+  const out: string[] = [];
+  for (const declaration of symbol.getDeclarations() ?? []) {
+    if (!declaration.getSourceFile().fileName.startsWith(SRC)) {
+      continue;
+    }
+    out.push(...docsOn(declaration));
+    const members =
+      ts.isClassDeclaration(declaration) || ts.isInterfaceDeclaration(declaration)
+        ? declaration.members
+        : ts.isTypeAliasDeclaration(declaration) && ts.isTypeLiteralNode(declaration.type)
+          ? declaration.type.members
+          : undefined;
+    for (const member of members ?? []) {
+      out.push(...docsOn(member));
+    }
+  }
+  return out;
+}
+
+describe('documented cross-references', () => {
+  it('resolves every link a public doc comment makes to a public symbol', () => {
+    // The barrel chain is what a doc comment promises when it says "call this",
+    // and a symbol that never reached it leaves the reader with a name they
+    // cannot import and the API reference with a dangling link. Listing the
+    // exports cannot catch that; only reading the comments can.
+    const config = ts.readConfigFile(path.join(SRC, '..', 'tsconfig.json'), ts.sys.readFile);
+    const options = ts.parseJsonConfigFileContent(config.config, ts.sys, path.join(SRC, '..'));
+    const program = ts.createProgram([ROOT_ENTRY], { ...options.options, noEmit: true });
+    const checker = program.getTypeChecker();
+    const entry = program.getSourceFile(ROOT_ENTRY);
+    if (entry === undefined) {
+      throw new Error('the root barrel is missing from the program');
+    }
+    const entrySymbol = checker.getSymbolAtLocation(entry);
+    if (entrySymbol === undefined) {
+      throw new Error('the root barrel exports nothing');
+    }
+
+    const exported = checker.getExportsOfModule(entrySymbol);
+    const publicNames = new Set(exported.map((symbol) => symbol.name));
+    const unreachable: string[] = [];
+
+    for (const alias of exported) {
+      const symbol = alias.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(alias) : alias;
+      for (const doc of publicDocs(symbol)) {
+        for (const pattern of [INLINE_LINK, BARE_SEE]) {
+          pattern.lastIndex = 0;
+          for (const match of doc.matchAll(pattern)) {
+            const target = linkTarget(match[1] ?? '');
+            if (target !== null && !publicNames.has(target)) {
+              unreachable.push(`${alias.name} -> ${target}`);
+            }
+          }
+        }
+      }
+    }
+
+    expect([...new Set(unreachable)].sort()).toEqual([]);
+  });
+});
 
 describe('public API surface', () => {
   it('exports exactly the expected runtime members', () => {

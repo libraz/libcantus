@@ -54,7 +54,7 @@ Terms as this library uses them. Where a musical term has more than one common m
 
 **Augmented sixth** — Italian, French, and German chords built on the lowered submediant. No Roman numeral names them, so they render as `It6`, `Fr6`, and `Ger6`.
 
-**Neapolitan** — The major triad on the lowered second degree, written `bII6` in first inversion, or `N6` when `neapolitan: true`.
+**Neapolitan** — The major triad on the lowered second degree, written `bII6` in first inversion, or `N6` when `neapolitan: true`. It is an altered chord, so a mode that has a lowered second of its own — phrygian, locrian — sounds the same triad as its native `II` rather than as the Neapolitan.
 
 **Negative harmony** — Reflection of a chord across the axis of its key. A transformation with exactly one result, not a proposal.
 
@@ -62,7 +62,7 @@ Terms as this library uses them. Where a musical term has more than one common m
 
 **Mode** — A rotation of a scale that takes a different degree as tonic. Dorian and Ionian share a pitch-class set and differ in tonic.
 
-**Avoid note** — A non-chord scale tone a semitone directly above a chord tone. It clashes when sounded against the chord.
+**Avoid note** — A non-chord scale tone a semitone directly above a chord tone, or the third a suspension displaced. It clashes when sounded against the chord, though a line may pass through most of them; `avoidNotes` takes a `use` of `'harmonic'` or `'melodic'` for the two readings.
 
 **Available tension** — A non-chord scale tone that can be added to a chord as colour.
 

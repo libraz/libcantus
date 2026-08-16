@@ -1,4 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { InvalidInputError } from '../src/core/errors/index.js';
 import type { KeyScale } from '../src/core/types.js';
 import { generateCounterMelody } from '../src/generate/countermelody/index.js';
 import type { Chord } from '../src/theory/chord/index.js';
@@ -434,6 +437,13 @@ describe('profile weights', () => {
     expect(line('pop')).not.toEqual(line('strict'));
   });
 
+  it('refuses a profile name it does not have a table for', () => {
+    // The silent fallback this replaces scored a misspelled profile under the
+    // pop weights, so a caller asking for strict counterpoint got pop.
+    expect(() => profileWeights('popp' as never)).toThrow(InvalidInputError);
+    expect(() => profileWeights('Pop' as never)).toThrow(/safety profile/);
+  });
+
   it('lets a weight override move the line without changing the profile', () => {
     const melody = [72, 74, 76, 77].map((pitch, index) => ({
       pitch,
@@ -450,5 +460,92 @@ describe('profile weights', () => {
       weights: { obliqueMotion: 12 },
     });
     expect(pedal.map((note) => note.pitch)).not.toEqual(plain.map((note) => note.pitch));
+  });
+});
+
+/**
+ * The safety module's public functions, discovered from source rather than
+ * listed by hand: a new entrance fails this test until it appears in
+ * `SAFETY_ENTRIES` with the rejections its siblings already make.
+ */
+function publicSafetyEntries(): string[] {
+  const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
+  const surface = read('src/theory/index.ts');
+  return [...read('src/theory/safety/index.ts').matchAll(/^export function (\w+)/gm)]
+    .map((match) => match[1] ?? '')
+    .filter((name) => new RegExp(`\\b${name},`).test(surface))
+    .sort();
+}
+
+/** Each entrance called with one query, so one bad field is swept across all. */
+const SAFETY_ENTRIES: Record<string, (q: SafetyQuery) => unknown> = {
+  enumerateSafePitches: (q) => enumerateSafePitches(q, q.candidatePitch, q.candidatePitch),
+  evaluateSafety: (q) => evaluateSafety(q),
+  profileWeights: (q) => profileWeights(q.profile),
+};
+
+/** The entrances that read pitches; `profileWeights` reads only the profile. */
+const PITCH_ENTRIES = ['enumerateSafePitches', 'evaluateSafety'] as const;
+
+/** Assert that one call refused its input as this library's own error. */
+function expectRejected(call: () => unknown, label: string): void {
+  let caught: unknown;
+  try {
+    call();
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught, label).toBeInstanceOf(InvalidInputError);
+}
+
+describe('every safety entry point checks its profile and its pitches', () => {
+  it('discovers the public entry points from the module surface', () => {
+    expect(publicSafetyEntries()).toEqual(Object.keys(SAFETY_ENTRIES).sort());
+  });
+
+  it.each([
+    ['a misspelled profile', 'popp'],
+    ['a differently cased profile', 'Strict'],
+    ['an empty profile', ''],
+    ['a profile inherited from the prototype', 'toString'],
+    ['a profile that is not a string', 7],
+    ['a missing profile', undefined],
+  ])('rejects %s at every entry point', (label, profile) => {
+    const q = query({ profile: profile as never });
+    for (const [name, entry] of Object.entries(SAFETY_ENTRIES)) {
+      expectRejected(() => entry(q), `${name} accepted ${label}`);
+    }
+  });
+
+  it.each([
+    ['a candidate above the MIDI range', { candidatePitch: 128 }],
+    ['a candidate below the MIDI range', { candidatePitch: -1 }],
+    ['a fractional candidate', { candidatePitch: 60.5 }],
+    ['a non-finite candidate', { candidatePitch: Number.NaN }],
+    ['a previous pitch outside the MIDI range', { prevPitch: 200 }],
+    ['a vocal floor outside the MIDI range', { vocalLow: -12 }],
+    ['a vocal ceiling outside the MIDI range', { vocalHigh: 200 }],
+    ['another voice outside the MIDI range', { otherVoices: [{ pitch: 999 }] }],
+    ['another voice coming from outside it', { otherVoices: [{ pitch: 60, prevPitch: -5 }] }],
+    ['a voice collection that is not one', { otherVoices: undefined }],
+  ])('rejects %s at every entry point that reads a pitch', (label, over) => {
+    const q = query({ vocalLow: undefined, vocalHigh: undefined, ...over } as Partial<SafetyQuery>);
+    for (const name of PITCH_ENTRIES) {
+      expectRejected(() => SAFETY_ENTRIES[name]?.(q), `${name} accepted ${label}`);
+    }
+  });
+
+  it('refuses a range no note event could hold, and stays inside one it can', () => {
+    expect(() => enumerateSafePitches(query({}), 200, 205)).toThrow(InvalidInputError);
+    expect(() => enumerateSafePitches(query({}), -5, 10)).toThrow(InvalidInputError);
+    const pitches = enumerateSafePitches(
+      query({ vocalLow: undefined, vocalHigh: undefined }),
+      0,
+      127,
+    );
+    expect(pitches).not.toHaveLength(0);
+    expect(pitches.every((pitch) => Number.isInteger(pitch) && pitch >= 0 && pitch <= 127)).toBe(
+      true,
+    );
   });
 });

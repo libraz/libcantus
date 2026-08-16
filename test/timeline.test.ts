@@ -185,6 +185,77 @@ describe('detectCadences', () => {
     ]);
   });
 
+  it('reads a cadential six-four as the start of one cadence, not a cadence of its own', () => {
+    // I I64 V7 I. The six-four is a tonic triad standing on the dominant's own
+    // bass, so the dominant was already sounding under it: the passage holds
+    // one cadence, arriving on the final tonic, and the six-four is where it
+    // began rather than a half cadence in its own right.
+    const timeline = chordTimelineFromChords(
+      [
+        spanFromChord(makeChord(0, 'maj'), 0),
+        spanFromChord(makeChord(0, 'maj', 7), 4),
+        spanFromChord(makeChord(7, 'dom7'), 8),
+        spanFromChord(makeChord(0, 'maj'), 12),
+      ],
+      16,
+    );
+    const hits = detectCadences(timeline, majorKey(0));
+    expect(hits.map((hit) => ({ atBeat: hit.atBeat, type: hit.cadence.type }))).toEqual([
+      { atBeat: 12, type: 'authentic' },
+    ]);
+    expect(hits[0]?.cadence.rationale).toContain('six-four');
+  });
+
+  it('leaves a passing six-four reading as it was', () => {
+    // IV I64 IV V7 I. The six-four does not run into the dominant, so it is
+    // passing rather than cadential and every cadence around it stands.
+    const timeline = chordTimelineFromChords(
+      [
+        spanFromChord(makeChord(5, 'maj'), 0),
+        spanFromChord(makeChord(0, 'maj', 7), 4),
+        spanFromChord(makeChord(5, 'maj'), 8),
+        spanFromChord(makeChord(7, 'dom7'), 12),
+        spanFromChord(makeChord(0, 'maj'), 16),
+      ],
+      20,
+    );
+    expect(
+      detectCadences(timeline, majorKey(0)).map((hit) => ({
+        atBeat: hit.atBeat,
+        type: hit.cadence.type,
+      })),
+    ).toEqual([
+      { atBeat: 4, type: 'plagal' },
+      { atBeat: 12, type: 'half' },
+      { atBeat: 16, type: 'authentic' },
+    ]);
+  });
+
+  it('does not read a six-four across a rest as the approach', () => {
+    // I64, the players breathe, then V7 I. Nothing was still sounding when the
+    // dominant arrived, so the six-four is not what the cadence began on and
+    // the dominant-to-tonic pair is read on its own.
+    const timeline = chordTimelineFromChords(
+      [
+        spanFromChord(makeChord(0, 'maj', 7), 0),
+        spanFromChord(makeChord(7, 'dom7'), 4),
+        spanFromChord(makeChord(0, 'maj'), 8),
+      ],
+      12,
+    );
+    const gapped = {
+      at: timeline.at,
+      segments: timeline.segments.map((segment) =>
+        segment.startBeat === 0 ? { ...segment, endBeat: 3 } : segment,
+      ),
+    };
+    const hits = detectCadences(gapped, majorKey(0));
+    expect(hits.map((hit) => ({ atBeat: hit.atBeat, type: hit.cadence.type }))).toEqual([
+      { atBeat: 8, type: 'authentic' },
+    ]);
+    expect(hits[0]?.cadence.rationale).not.toContain('six-four');
+  });
+
   it('does not pair segments separated by a rest', () => {
     // G major, a bar of silence, then C major: V-(rest)-I is not a cadence.
     const notes = [...blockChord([55, 59, 62], 0), ...blockChord([48, 52, 55], 8)];

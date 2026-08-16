@@ -393,33 +393,17 @@ export function normalizeChordSpec(spec: ChordSpec): ChordSpec {
 }
 
 /**
- * The semitone offsets above the root a spec sounds, ascending.
+ * Derive the tones of a spec that is already validated and normalized.
  *
- * The library's single derivation of chord tones: a name contributes nothing
- * here, so a combination of alterations no name covers yields its intervals the
- * same way a `maj7` does.
+ * Not part of the package's public surface, and the one derivation that skips
+ * {@link assertChordSpec}: the alias table below is built from it before the
+ * checker's own tables are complete, and every other caller reaches it through
+ * a public entry point that has already checked its spec.
  *
- * @param spec The chord spec.
+ * @param normalized A normalized spec whose parts the model defines.
  * @returns Semitone offsets above the root, ascending and deduplicated.
- *
- * @example
- * ```ts
- * import { chordSpecIntervals } from '@libraz/libcantus';
- * chordSpecIntervals({
- *   rootPc: 0,
- *   base: 'maj',
- *   seventh: 'min7',
- *   alterations: [{ degree: 9, alter: -1 }, { degree: 11, alter: 1 }],
- *   additions: [],
- *   omissions: [],
- * });
- * // [0, 4, 7, 10, 13, 18] — the C7(b9,#11) no quality name covers
- * ```
- *
- * @category Chords
  */
-export function chordSpecIntervals(spec: ChordSpec): number[] {
-  const normalized = normalizeChordSpec(spec);
+function specIntervals(normalized: ChordSpec): number[] {
   const tones = new Map<number, number>(BASE_TONES[normalized.base]);
   for (const { degree, alter } of normalized.alterations) {
     if (degree === 5 && tones.has(5)) {
@@ -444,11 +428,43 @@ export function chordSpecIntervals(spec: ChordSpec): number[] {
   return [...offsets].sort((a, b) => a - b);
 }
 
+/**
+ * The semitone offsets above the root a spec sounds, ascending.
+ *
+ * The library's single derivation of chord tones: a name contributes nothing
+ * here, so a combination of alterations no name covers yields its intervals the
+ * same way a `maj7` does.
+ *
+ * @param spec The chord spec.
+ * @returns Semitone offsets above the root, ascending and deduplicated.
+ * @throws If any part of the spec is not one the model defines
+ *   ({@link InvalidInputError}), exactly as {@link chordFromSpec} rejects it.
+ *
+ * @example
+ * ```ts
+ * import { chordSpecIntervals } from '@libraz/libcantus';
+ * chordSpecIntervals({
+ *   rootPc: 0,
+ *   base: 'maj',
+ *   seventh: 'min7',
+ *   alterations: [{ degree: 9, alter: -1 }, { degree: 11, alter: 1 }],
+ *   additions: [],
+ *   omissions: [],
+ * });
+ * // [0, 4, 7, 10, 13, 18] — the C7(b9,#11) no quality name covers
+ * ```
+ *
+ * @category Chords
+ */
+export function chordSpecIntervals(spec: ChordSpec): number[] {
+  return specIntervals(assertChordSpec(spec));
+}
+
 /** Semitone offsets from the root for each supported chord quality. */
 export const QUALITY_INTERVALS: Record<ChordQuality, number[]> = Object.fromEntries(
   (Object.keys(QUALITY_SPECS) as ChordQuality[]).map((quality) => [
     quality,
-    chordSpecIntervals(QUALITY_SPECS[quality]),
+    specIntervals(normalizeChordSpec(QUALITY_SPECS[quality])),
   ]),
 ) as Record<ChordQuality, number[]>;
 
@@ -526,6 +542,8 @@ export function exactChordSpecQuality(spec: ChordSpec): ChordQuality | undefined
  * @param spec The chord spec.
  * @returns The name that fits the spec exactly, or the nearest one that fits
  *   inside it.
+ * @throws If any part of the spec is not one the model defines
+ *   ({@link InvalidInputError}), exactly as {@link chordFromSpec} rejects it.
  *
  * @example
  * ```ts
@@ -538,11 +556,12 @@ export function exactChordSpecQuality(spec: ChordSpec): ChordQuality | undefined
  * @category Chords
  */
 export function chordSpecQuality(spec: ChordSpec): ChordQuality {
-  const exact = exactChordSpecQuality(spec);
+  const checked = assertChordSpec(spec);
+  const exact = exactChordSpecQuality(checked);
   if (exact !== undefined) {
     return exact;
   }
-  const offsets = new Set(chordSpecIntervals(spec));
+  const offsets = new Set(specIntervals(checked));
   let nearest: ChordQuality | undefined;
   let size = 0;
   for (const quality of Object.keys(QUALITY_INTERVALS) as ChordQuality[]) {
@@ -552,7 +571,7 @@ export function chordSpecQuality(spec: ChordSpec): ChordQuality {
       size = template.length;
     }
   }
-  return nearest ?? BASE_QUALITY[normalizeChordSpec(spec).base];
+  return nearest ?? BASE_QUALITY[checked.base];
 }
 
 /** The degree and alteration each compound semitone offset names. */
@@ -650,7 +669,7 @@ export function chordSpecFromIntervals(intervals: readonly number[]): ChordSpec 
     spec.seventh = seventh;
   }
   const normalized = normalizeChordSpec(spec);
-  return sameOffsets(chordSpecIntervals(normalized), offsets) ? normalized : undefined;
+  return sameOffsets(specIntervals(normalized), offsets) ? normalized : undefined;
 }
 
 /** Reject a value that is not one of a fixed set of spec parts. */
@@ -673,21 +692,41 @@ function assertDegreeIn(value: number, allowed: readonly number[], name: string)
   return value;
 }
 
+/** Reject a list of degrees that is not a list, before it is iterated. */
+function assertDegreeList(
+  value: readonly number[],
+  allowed: readonly number[],
+  name: string,
+): void {
+  if (!Array.isArray(value)) {
+    throw new InvalidInputError(`${name} must be an array; received ${typeof value}`);
+  }
+  for (const degree of value) {
+    assertDegreeIn(degree, allowed, name);
+  }
+}
+
 /**
  * Validate a spec and return it in canonical form.
  *
  * A spec arrives from a caller as plain data, so every part is checked before
- * any of it reaches the interval derivation: an unknown base has no tones, and
- * an alteration of a degree the chord cannot alter would silently contribute
- * nothing.
+ * any of it reaches the interval derivation: an unknown base has no tones, an
+ * alteration of a degree the chord cannot alter would silently contribute
+ * nothing, and a list of degrees that is not a list would fail as a `TypeError`
+ * from inside the derivation rather than as this library's own error.
  *
  * @param spec The spec to check.
  * @returns The normalized spec.
- * @throws If any part of the spec is not one the model defines.
+ * @throws If the spec is not an object, if `alterations`, `additions` or
+ *   `omissions` is not an array, or if any part of the spec is not one the
+ *   model defines ({@link InvalidInputError}).
  *
  * @category Chords
  */
 export function assertChordSpec(spec: ChordSpec): ChordSpec {
+  if (spec === null || typeof spec !== 'object') {
+    throw new InvalidInputError(`chord spec must be an object; received ${typeof spec}`);
+  }
   assertFiniteNumber(spec.rootPc, 'chord spec rootPc');
   if (spec.bassPc !== undefined) {
     assertFiniteNumber(spec.bassPc, 'chord spec bassPc');
@@ -707,11 +746,7 @@ export function assertChordSpec(spec: ChordSpec): ChordSpec {
     assertDegreeIn(alteration?.degree, [5, 9, 11, 13], 'chord spec alteration degree');
     assertDegreeIn(alteration.alter, [-1, 0, 1], 'chord spec alteration');
   }
-  for (const degree of spec.additions ?? []) {
-    assertDegreeIn(degree, [6, 9, 11, 13], 'chord spec addition');
-  }
-  for (const degree of spec.omissions ?? []) {
-    assertDegreeIn(degree, OMITTABLE_DEGREES, 'chord spec omission');
-  }
+  assertDegreeList(spec.additions, [6, 9, 11, 13], 'chord spec additions');
+  assertDegreeList(spec.omissions, OMITTABLE_DEGREES, 'chord spec omissions');
   return normalizeChordSpec(spec);
 }

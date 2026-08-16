@@ -99,11 +99,30 @@ describe('createArrangementSession', () => {
   it('leaves the analysis untouched when an edit changes nothing', () => {
     const tracks = piece(6, 23);
     const session = createArrangementSession(tracks);
-    // The same notes in a different array order: no analysis here reads the
-    // order, so this must not be treated as an edit.
-    const shuffled = [...(tracks[1]?.notes ?? [])].reverse();
-    const next = session.update([{ trackIndex: 1, notes: shuffled }]);
+    // The same notes in the same places: nothing the analysis reads has moved,
+    // so the previous answer stands.
+    const same = [...(tracks[1]?.notes ?? [])];
+    const next = session.update([{ trackIndex: 1, notes: same }]);
     expect(next.analysis).toBe(session.analysis);
+  });
+
+  it('matches a full re-analysis after a re-ordering, down to originalIndex', () => {
+    // Reversing a track's array moves no note, but `originalIndex` reports a
+    // note's position in the caller's array, so every annotation and conflict
+    // has to come back pointing at the note that now sits there.
+    const tracks = piece(6, 23);
+    const session = createArrangementSession(tracks);
+    const reversed = [...(tracks[1]?.notes ?? [])].reverse();
+    const next = session.update([{ trackIndex: 1, notes: reversed }]);
+    const edited = tracks.map((track, index) =>
+      index === 1 ? { ...track, notes: reversed } : track,
+    );
+    expect(shape(next.analysis)).toBe(shape(analyzeArrangement(edited)));
+    // The reversal has to be visible in the result, or the comparison above
+    // would hold just as well for a session that ignored it.
+    const indices = (analysis: ReturnType<typeof analyzeArrangement>) =>
+      (analysis.tracks[1]?.notes ?? []).map((note) => note.originalIndex);
+    expect(indices(next.analysis)).not.toEqual(indices(session.analysis));
   });
 
   it('rejects an edit naming a track the session does not have', () => {

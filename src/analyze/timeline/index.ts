@@ -18,8 +18,9 @@ import { detectChord } from '../detect/index.js';
 import { augmentedSixthFromPitchClasses } from '../functional/augmented-sixth.js';
 import type { CadenceResult } from '../functional/index.js';
 import { detectCadence } from '../functional/index.js';
-import type { WindowWeights } from '../histogram.js';
-import { windowWeights } from '../histogram.js';
+import { gridOriginOf } from '../grid.js';
+import type { SlotGrid, WindowWeights } from '../histogram.js';
+import { bucketNotesBySlot, windowWeights } from '../histogram.js';
 import type { KeyRegion } from '../keys/index.js';
 import { attachPivots, keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
 import type { KeyContext } from '../voice/index.js';
@@ -205,6 +206,12 @@ export type ChordTimelineOptions = {
    * beat. Lower it to catch changes on off-beats, at the cost of proportionally
    * more work. Values above `harmonicRhythm` are clamped to it, and the option
    * is ignored under `'grid'` segmentation.
+   *
+   * The search reads it as a resolution rather than as an exact slot length: it
+   * rounds down to a whole division of `harmonicRhythm`, so `0.6` against a
+   * four-beat chord is read in sevenths of it. That keeps the beats one
+   * expected chord gives way to the next on the grid whatever resolution is
+   * asked for, and with them every change a coarser setting found.
    *
    * @defaultValue `1`
    */
@@ -497,15 +504,12 @@ function candidateScore(
 type BoundarySpan = { startBeat: number; endBeat: number };
 
 /**
- * The grid the span is examined in: equal slots of `slotBeats`, starting at
- * `origin`.
- *
- * The origin is 0 for a piece that starts on the downbeat and negative for one
- * that starts with a pickup. It stays a whole number of slots away from beat 0
- * either way, so the grid's boundaries keep falling on the bar lines rather
- * than being pushed off them by the length of the upbeat.
+ * The grid the span is examined in is the shared {@link SlotGrid}: equal slots
+ * of `slotBeats`, starting at `origin`. The origin is 0 for a piece that starts
+ * on the downbeat and negative for one that starts with a pickup;
+ * {@link gridOriginOf} places it, and the key search cuts its own slots on a
+ * grid of the same shape.
  */
-type SlotGrid = { origin: number; slotBeats: number };
 
 /** First beat of slot `index`. */
 function beatOfSlot(grid: SlotGrid, index: number): number {
@@ -653,6 +657,28 @@ function chooseBoundaries(
 
 /** Shortest chord the dynamic search reports unless the caller asks for finer. */
 const DEFAULT_MIN_CHORD_BEATS = 1;
+
+/**
+ * The slot length a requested resolution is read at: a whole division of the
+ * expected chord length, never coarser than the caller asked for.
+ *
+ * A change is discounted on strong beats, and the strongest of them are where
+ * one expected chord gives way to the next. A grid that steps over those beats
+ * never earns the discount, so the search reports no change anywhere and a run
+ * of alternating harmony comes back as one segment naming a chord that never
+ * sounded. Dividing the expected chord length keeps its own boundaries — and
+ * the bar lines with them — on the grid at every resolution, which is what
+ * makes the resolution a knob rather than a trap: every setting finds the
+ * changes the coarser settings found.
+ *
+ * @param harmonicRhythm Expected chord length in beats.
+ * @param minChordBeats Shortest chord the caller will accept, in beats.
+ * @returns The slot length, which divides `harmonicRhythm` exactly.
+ */
+function slotBeatsWithin(harmonicRhythm: number, minChordBeats: number): number {
+  const divisions = Math.max(1, Math.ceil(harmonicRhythm / minChordBeats - EPS));
+  return harmonicRhythm / divisions;
+}
 
 /** One span per slot: the fixed grid, unchanged. */
 function gridSpans(slotCount: number, grid: SlotGrid): BoundarySpan[] {
@@ -810,7 +836,7 @@ function notesOfSpan(
  * @category Arrangement & Analysis
  */
 export function chordTimelineFromNotes(
-  notes: NoteEvent[],
+  notes: readonly NoteEvent[],
   opts: ChordTimelineOptions = {},
 ): ChordTimelineResult {
   return analyzeTimeline(notes, opts).result;
@@ -957,7 +983,7 @@ function evidenceFits(
  * @returns The analysis and the evidence behind it.
  */
 export function analyzeTimeline(
-  notes: NoteEvent[],
+  notes: readonly NoteEvent[],
   opts: ChordTimelineOptions = {},
   previous?: TimelineEvidence,
   dirty?: DirtySlots,
@@ -985,25 +1011,21 @@ export function analyzeTimeline(
   const totalBeats = opts.totalBeats ?? lastNoteEnd;
   assertRange(totalBeats, 0, Number.MAX_SAFE_INTEGER, 'timeline totalBeats');
   const slotBeats =
-    segmentation === 'grid' ? harmonicRhythm : Math.min(minChordBeats, harmonicRhythm);
-  // A pickup sounds before beat 0, so the grid has to start there too — but a
-  // whole number of slots before it, or every slot boundary after the pickup
-  // would sit off the bar lines by the length of the upbeat.
+    segmentation === 'grid' ? harmonicRhythm : slotBeatsWithin(harmonicRhythm, minChordBeats);
   const firstOnset = sounding.reduce((first, n) => Math.min(first, n.startBeat), 0);
-  const grid: SlotGrid = {
-    origin: Math.min(0, Math.floor(firstOnset / slotBeats + EPS) * slotBeats),
-    slotBeats,
-  };
+  const { origin, startBeat: musicStart } = gridOriginOf(firstOnset, slotBeats);
+  const grid: SlotGrid = { origin, slotBeats };
   // A given key is taken as read across the whole span: the caller has already
   // answered the question, and second-guessing it would make the option mean
   // "a hint" when it reads as an instruction. Its one region starts where the
-  // analysis does rather than at beat 0, so a piece opening with a pickup is
-  // covered from its first note however the key was arrived at. Otherwise the
-  // key is searched for over time, so a piece that modulates is not analysed
-  // against the wrong key for every bar after it does.
+  // music does rather than at beat 0, so a piece opening with a pickup is
+  // covered from its first note however the key was arrived at — and the two
+  // paths name the same beat, since the search reads its origin from the same
+  // place. Otherwise the key is searched for over time, so a piece that
+  // modulates is not analysed against the wrong key for every bar after it does.
   const keys: KeyRegion[] =
     opts.key !== undefined
-      ? [{ startBeat: grid.origin, endBeat: totalBeats, key: opts.key, confidence: 1 }]
+      ? [{ startBeat: musicStart, endBeat: totalBeats, key: opts.key, confidence: 1 }]
       : keyTimelineFromNotes(sounding, { meters, totalBeats, budget });
   const prevailingKey = prevailingKeyOf(keys) ?? majorKey(0);
   const keyAt = keyLookup(keys, prevailingKey);
@@ -1012,17 +1034,10 @@ export function analyzeTimeline(
   const segmentConfidence: number[] = [];
   const slotCount = Math.max(0, Math.ceil((totalBeats - grid.origin) / slotBeats - EPS));
   assertGenerationBudget(slotCount, 'timeline windows', budget);
-  const slotNotes: NoteEvent[][] = Array.from({ length: slotCount }, () => []);
-  let memberships = 0;
-  for (const indexed of soundingIndex.notes) {
-    const first = Math.max(0, Math.floor(slotOfBeat(grid, indexed.note.startBeat)));
-    const lastExclusive = Math.min(slotCount, Math.ceil(slotOfBeat(grid, indexed.endBeat)));
-    memberships += Math.max(0, lastExclusive - first);
-    assertGenerationBudget(memberships, 'timeline note-to-window memberships', budget);
-    for (let slot = first; slot < lastExclusive; slot += 1) {
-      slotNotes[slot]?.push(indexed.note);
-    }
-  }
+  const slotNotes = bucketNotesBySlot(sounding, grid, slotCount, {
+    name: 'timeline note-to-window memberships',
+    budget,
+  });
 
   const carried =
     previous !== undefined &&
@@ -1070,7 +1085,11 @@ export function analyzeTimeline(
 
   const windows = new Map<string, WindowChord | null>();
   for (const span of spans) {
-    const start = span.startBeat;
+    // The slot before the pickup is analyzed — its notes are the pickup's — but
+    // the stretch of it that precedes the first note holds nothing, so the
+    // segment is reported from where the music starts, as the last one is
+    // reported to where it ends.
+    const start = Math.max(span.startBeat, musicStart);
     const end = Math.min(span.endBeat, totalBeats);
     const spanKey = keyAt(start);
     const id = windowId(start, end, spanKey);
@@ -1150,6 +1169,14 @@ export type CadenceHit = {
  * separated by a gap (a rest in the timeline) are not a chord-to-chord
  * progression, so they are never paired.
  *
+ * The segment before the pair is passed as the approach, which is what tells a
+ * cadential six-four from an inverted tonic: `I I64 V I` is one cadence
+ * arriving on the final tonic, described from the six-four the dominant was
+ * already sounding under, rather than a half cadence onto the dominant
+ * followed by an authentic one. A passing six-four — one whose dominant is not
+ * what follows it — is unaffected, and so is a pair whose predecessor is
+ * separated from it by a rest.
+ *
  * @param timeline The chord timeline to scan.
  * @param key The prevailing key, or the key in force at a given beat.
  * @returns The cadences found, in time order.
@@ -1179,7 +1206,16 @@ export function detectCadences(timeline: ChordTimeline, key: KeyContext): Cadenc
     if (Math.abs(cur.startBeat - prev.endBeat) > EPS) {
       continue; // A rest separates the chords; no cadential motion across it.
     }
-    const cadence = detectCadence(prev.chord, cur.chord, keyAt(cur.startBeat));
+    // The chord before the pair, when it sounded straight into it: a six-four
+    // across a rest was not still sounding when the dominant arrived.
+    const before = timeline.segments[i - 2];
+    const approach =
+      before !== undefined && Math.abs(prev.startBeat - before.endBeat) <= EPS
+        ? before.chord
+        : undefined;
+    const cadence = detectCadence(prev.chord, cur.chord, keyAt(cur.startBeat), {
+      ...(approach === undefined ? {} : { approach }),
+    });
     if (cadence.type !== null) {
       hits.push({ atBeat: cur.startBeat, cadence, from: prev.chord, to: cur.chord });
     }

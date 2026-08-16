@@ -50,6 +50,7 @@ export type {
   KeyProfileName,
   KeyProfilePair,
   KeyVariant,
+  ModalCandidate,
   ModalScaleName,
 } from './detect/index.js';
 export {
@@ -93,6 +94,7 @@ export type {
 export {
   analyzeChord,
   augmentedSixthChord,
+  augmentedSixthFromPitchClasses,
   augmentedSixthKind,
   borrowedSource,
   chordToRoman,

@@ -3,6 +3,7 @@ import { analyzeArrangement } from '../src/analyze/arrange/index.js';
 import { detectChord, detectChordBest, detectKeyFromNotes } from '../src/analyze/detect/index.js';
 import { chordTimelineFromChords, chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
 import { analyzeVoice, toVoiceNotes } from '../src/analyze/voice/index.js';
+import { InvalidInputError } from '../src/core/errors/index.js';
 import { parseTimeSignature } from '../src/core/meter/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import { generateBassLine } from '../src/generate/bass/index.js';
@@ -147,12 +148,14 @@ describe('countermelody takes a timeline', () => {
   });
 
   it('rejects being given neither a timeline nor a callback', () => {
+    // A missing required option is the caller's mistake, so it arrives with a
+    // code rather than as a built-in error a host cannot classify.
     expect(() =>
       generateCounterMelody({
         melody: [{ pitch: 72, startBeat: 0, durationBeat: 1 }],
         key: cMajor,
       }),
-    ).toThrow(TypeError);
+    ).toThrow(InvalidInputError);
   });
 });
 

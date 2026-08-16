@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Chord } from '../src/theory/chord/index.js';
+import { chordQualities, makeChord } from '../src/theory/chord/index.js';
 import { roleOf } from '../src/theory/harmony/index.js';
 
 const cMaj: Chord = { rootPc: 0, quality: 'maj', intervals: [0, 4, 7] };
@@ -56,6 +57,27 @@ describe('roleOf', () => {
 
   it('carries the chord id through', () => {
     expect(roleOf(0, cMaj, 42).belongsToChordId).toBe(42);
+  });
+
+  it('gives an eleventh chord one quality-defining tone, not two', () => {
+    // C11 sounds no third: the eleventh takes its place, while the ninth beside
+    // it is a tension. Folded into pitch classes the two are indistinguishable,
+    // which is what once made both of them answer as the third.
+    const eleventh = makeChord(0, '11');
+    expect(roleOf(5, eleventh)).toEqual({ role: 'third', lock: 'quality', belongsToChordId: 0 });
+    expect(roleOf(2, eleventh)).toEqual({ role: 'tension', lock: 'voicing', belongsToChordId: 0 });
+  });
+
+  it('names at most one interval class the third of any one chord', () => {
+    for (const quality of chordQualities()) {
+      for (const rootPc of [0, 5, 11]) {
+        const chord = makeChord(rootPc, quality);
+        const thirds = [...Array(12).keys()].filter(
+          (pitchClass) => roleOf(rootPc + pitchClass, chord).role === 'third',
+        );
+        expect(thirds.length, `${quality}/${rootPc}`).toBeLessThanOrEqual(1);
+      }
+    }
   });
 
   it('uses the shared rounded pitch-class contract', () => {

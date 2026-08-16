@@ -22,6 +22,8 @@ melodicContour(arch).peakIndex; // 2
 
 形状は `arch`、`ascending`、`descending`、`wave`、`static` です。最初の4つはモチーフ生成器の `contour` オプションと同じ語彙であるため、既存の線から読み取った形状をそのまま生成器に指定できます。`static` は生成側では要求されず、解析では頻繁に現れる形状で、動かない線を指します。いったん下がって戻る線は `wave` として読まれます。共有する語彙に、逆向きのアーチを表す名前がないためです。
 
+波と聞こえるには方向転換が2回以上必要です。そのため生成器との往復は、`arch`・`ascending`・`descending` については長さを問わず一致し、`wave` については3小節以上で一致します。`generateMotif` が `wave` に対して書く1〜2小節のセルは方向転換が1回しかなく、`arch` として読み戻されます。
+
 ## 旋律の中からモチーフを見つける
 
 ```ts
@@ -99,7 +101,44 @@ inverted.notes.length; // cell.notes.length
 retrograde.notes.length; // cell.notes.length
 ```
 
-変形は `transposeDiatonic`、`transposeChromatic`、`invert`、`retrograde`、`augment`、`diminish`、`sequence` です。`relateMotifs` が報告する一覧と同じであり、ホストが両者を往復できるようになっています。
+同じ操作でも生成側と解析側で名前が異なるため、対応関係を表として示します。
+
+| `transformMotif` | `relateMotifs` |
+| --- | --- |
+| `transposeDiatonic` | 調を渡せば `tonalTransposition`、渡さなければ `transposition` |
+| `transposeChromatic` | `transposition` |
+| `invert` | `inversion` |
+| `retrograde` | `retrograde` |
+| `augment` | `augmentation` |
+| `diminish` | `diminution` |
+| `sequence` | 対応なし |
+
+`sequence` だけは対応する関係を持ちません。移高した複製を後ろに連結するため、結果の音数はモデルの2倍になり、音を1つずつ対応させて比べる `relateMotifs` は null を返します。代わりに結果の前半と後半を比べてください。両者は `transposition` または `tonalTransposition` として、`sequence` フラグが立った状態で対応します。
+
+逆に、単独の変形が対応しない関係も2つあります。セルをそのまま繰り返す `repetition` と、`retrograde` に続けて `invert` を適用した `retrogradeInversion` です。
+
+```ts
+import {
+  majorKey,
+  motifFromNotes,
+  motifToNoteEvents,
+  relateMotifs,
+  transformMotif,
+} from '@libraz/libcantus';
+
+const key = majorKey(0);
+const figure = {
+  notes: [60, 64, 62, 67].map((pitch, i) => ({ pitch, startBeat: i, durationBeat: 1 })),
+};
+const model = motifFromNotes(motifToNoteEvents(figure));
+const name = (t: 'invert' | 'retrograde' | 'transposeDiatonic') =>
+  relateMotifs(model, motifFromNotes(motifToNoteEvents(transformMotif(figure, t, 2, key))), key)
+    ?.kind;
+
+name('invert'); // 'inversion'
+name('retrograde'); // 'retrograde'
+name('transposeDiatonic'); // 'tonalTransposition'
+```
 
 `developMotif` はコードタイムライン全体に対して変形を適用するため、展開された素材は和声の上で繰り返すのではなく、和声に沿います。
 
@@ -120,7 +159,7 @@ const developed = developMotif(generateMotif({ key, bars: 1, seed: 3 }), timelin
 developed.notes.length >= 1; // true
 ```
 
-セルは要求された長さを埋めるように連続して並べられ、各音は発音位置で鳴っているセグメントのもっとも近いコード構成音へ引き寄せられます。その結果、展開された線が背後の和声を綴ります。`developMotif` は他のモチーフ操作と同様に `MotifCell` を返すため、配置が必要な段階で `motifToNoteEvents` を呼びます。
+セルは要求された長さを埋めるように連続して並べられます。構造的に重い音——各タイルの先頭と小節線——は、その発音位置で鳴っているセグメントのもっとも近いコード構成音へ引き寄せられ、展開された線が背後の和声を綴ります。その間の音は経過音・隣接音として調内に留まります。セル内で異なるピッチは展開後も異なるため、結果はコードそのものではなく、新しい和声の下で鳴るモチーフとして読めます。`developMotif` は他のモチーフ操作と同様に `MotifCell` を返すため、配置が必要な段階で `motifToNoteEvents` を呼びます。
 
 ## 対旋律と模倣
 
@@ -135,6 +174,8 @@ const answer = imitate(lead, { atBeat: 2, interval: 'P5', key: majorKey(0) });
 answer.length; // 3
 answer[0]?.startBeat; // 2
 ```
+
+`answer: 'tonal'` は半音ではなく音階度で数え、`invert` は主題を最初の音を軸に反転してから移高します。調外の音は、その下にある音階音からの距離を保ったまま、他と同じように反転されます。半音階の経過音は経過音のまま応答に現れます。反転先が全音階の半音の内側に当たると音の入る余地がなく、そこの音階音に着地します。全体が半音階で動く主題では応答に同じ音が重なることがあり、そこが real の応答を選ぶ分かれ目です。鳴らない音は複製しないため、応答に含まれるのは実際に鳴る音だけです。
 
 `generateCounterMelody` は、メロディとその和声に対して自由な第2声部を書きます。
 
@@ -176,4 +217,4 @@ const line = [60, 62, 64, 65, 67, 65, 64, 62].map((pitch, i) => ({
 ornament(line, { style: 'ghost', amount: 0.6, seed: 4 }).length; // 8
 ```
 
-`ghost` は弱い位置の音を弱め、`accent` は強い位置の音を持ち上げ、`flam`・`drag`・`slide` は対応するアーティキュレーションを付けます。`amount` は影響を受ける音の割合を調整します。選択はシードに基づくため、同じオプションからは同じ結果が得られます。
+`ghost` は弱い位置の音を弱め、`accent` は強い位置の音を持ち上げます。`flam` は `accent` と同じ強い位置に付き、`drag` は次のオンセットが強い位置に来る弱い位置の音に付き、`slide` は跳躍で到達した音に付きます。`amount` は影響を受ける音の割合を調整します。選択はシードに基づくため、同じオプションからは同じ結果が得られます。鳴らない音は取り除かれるため、結果が入力より短くなることがあります。

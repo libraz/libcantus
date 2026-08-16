@@ -2,7 +2,7 @@
  * Reharmonization: chord substitution, modal-interchange palettes, and negative
  * harmony. These transforms take an existing chord (or a key) and propose
  * alternative harmonies that preserve a chosen relationship — a shared function,
- * a common tone, a tonicizing dominant, or a reflection across the key axis.
+ * a common tone, or a reflection across the key axis.
  *
  * Roots are pitch classes (0..11); no spelled key signature is required. Every
  * proposed chord nevertheless carries the spelling hints of the key it was asked
@@ -42,14 +42,15 @@ import { spellPitchClass, spellScale } from '../../theory/spelling/index.js';
 /**
  * The kind of substitution relationship a candidate realizes.
  *
+ * An applied dominant is not among them: which dominant applies is decided by
+ * the harmony that follows, and {@link substituteChord} is given one chord and a
+ * key. Build one with `secondaryDominantOf` where the target is known, or let
+ * `harmonizeMelody` open its vocabulary with `reharmonize: 'secondaryDominant'`
+ * where the progression is being chosen as a whole.
+ *
  * @category Reharmonization
  */
-export type SubstitutionType =
-  | 'tritone'
-  | 'relative'
-  | 'borrowed'
-  | 'chromaticMediant'
-  | 'secondaryDominant';
+export type SubstitutionType = 'tritone' | 'relative' | 'borrowed' | 'chromaticMediant';
 
 /**
  * A proposed chord substitution with its relationship, numeral, and function.
@@ -217,6 +218,10 @@ function tritoneSubstituteRoot(dominant: Chord, tonic: Note, key: KeyScale): Not
  * - `chromaticMediant`: a major/minor triad a third away sharing one common
  *   tone.
  *
+ * These four are the whole vocabulary. An applied dominant is not proposed
+ * because the chord it applies to is the one that follows, which a call about a
+ * single chord cannot see; `secondaryDominantOf` builds one from a named target.
+ *
  * Each result carries its Roman numeral and harmonic function in `key`. When
  * `opts.melodyPcs` is given, only substitutions whose pitch classes contain all
  * of those pitch classes are returned.
@@ -320,12 +325,7 @@ export function substituteChord(
     results.push({
       chord: candidate.chord,
       type: candidate.type,
-      // A secondary dominant is named as the applied chord it is, so the
-      // numeral re-parses to the chord that was proposed rather than to a
-      // chromatic chord on the same root.
-      roman: chordToRoman(candidate.chord, key, {
-        applied: candidate.type === 'secondaryDominant',
-      }),
+      roman: chordToRoman(candidate.chord, key),
       function: functionOf(candidate.chord, key),
     });
   }
@@ -354,7 +354,10 @@ export type BorrowedChord = {
  * Every chord is spelled as the mode it is borrowed from writes it, recorded as
  * a `rootSpelling` hint: C major borrows `Fm`, `Ab` and `Bb` from C minor and
  * takes `Db` as its Neapolitan, while a minor key borrows in the other direction
- * (A minor borrows `D`, `E` and `F#dim` from A major).
+ * (A minor borrows `A`, `D` and `F#m` from A major, with `Bb` as its
+ * Neapolitan). The major dominant of a minor key — `E` in A minor — is not among
+ * them: raising the seventh degree is an alteration inside the key rather than a
+ * chord taken from the parallel mode.
  *
  * @param key The prevailing key.
  * @returns The borrowed-chord palette.

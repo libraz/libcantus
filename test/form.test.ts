@@ -5,6 +5,7 @@ import {
   sectionsFromNotes,
   structuralCadences,
 } from '../src/analyze/form/index.js';
+import { choosePhrasePath, PHRASE_CUT_COST } from '../src/analyze/form/phrase.js';
 import { chordTimelineFromChords } from '../src/analyze/timeline/index.js';
 import type { MeterMap } from '../src/core/meter/index.js';
 import { parseTimeSignature } from '../src/core/meter/index.js';
@@ -339,6 +340,148 @@ describe('a pickup and a metre change', () => {
     const sections = sectionsFromNotes(notes, { meters, unitBars: 4 });
     expect(sections[0]?.startBeat).toBe(-1);
     expect(sections[sections.length - 1]?.endBeat).toBe(28);
+  });
+});
+
+describe('the phrase search does not invent a break-even boundary', () => {
+  // Three stops — the span's start, one candidate, and its end — with the
+  // length term switched off (`expected` 0), so the only thing separating the
+  // two readings is whether the candidate is cut at. A candidate worth exactly
+  // what a cut costs pays for itself and no more, which is the tie the rule is
+  // about.
+  const BEATS = [0, 8, 16];
+  const END_STRENGTH = 0.5;
+
+  it('leaves a boundary that exactly pays for itself uncut', () => {
+    const strengths = [0, PHRASE_CUT_COST, END_STRENGTH];
+    // Both readings score the same to the last stop: cutting at beat 8 earns
+    // exactly the cut's cost back, so the reading with the boundary and the one
+    // without are worth the same. The longer phrase wins.
+    expect(choosePhrasePath(BEATS, strengths, 1, 0)).toEqual([2]);
+  });
+
+  it('takes the boundary as soon as it is worth more than the cut', () => {
+    // Nothing is being suppressed: a hair more evidence and the search cuts.
+    const strengths = [0, PHRASE_CUT_COST + 0.01, END_STRENGTH];
+    expect(choosePhrasePath(BEATS, strengths, 1, 0)).toEqual([1, 2]);
+  });
+
+  it('does not depend on how many equally scored readings there are', () => {
+    // Four break-even candidates in a row: every reading that cuts at any
+    // subset of them scores the same, and the answer is still the one with no
+    // boundaries at all.
+    const beats = [0, 4, 8, 12, 16, 20];
+    const strengths = [0, PHRASE_CUT_COST, PHRASE_CUT_COST, PHRASE_CUT_COST, PHRASE_CUT_COST, 0.5];
+    expect(choosePhrasePath(beats, strengths, 1, 0)).toEqual([5]);
+  });
+
+  it('still reports the whole span when no reading reaches the end', () => {
+    // Every phrase would be shorter than the minimum, so the span is one phrase.
+    expect(choosePhrasePath([0, 4], [0, 0.5], 100, 0)).toEqual([1]);
+  });
+});
+
+describe('an upbeat is never a hypermetric downbeat', () => {
+  // A one-beat pickup, then harmony that turns at bars 3, 7 and 11 — a four-bar
+  // grouping in phase 3. Bar -1 sits on that phase too, which is exactly the
+  // reading that would put a hypermetric downbeat before the music starts.
+  const notes: NoteEvent[] = [
+    { pitch: 67, startBeat: -1, durationBeat: 1 },
+    ...[0, 4, 8].flatMap((at) => blockChord([60, 64, 67], at, 4)),
+    ...[12, 16, 20, 24].flatMap((at) => blockChord([65, 69, 72], at, 4)),
+    ...[28, 32, 36, 40].flatMap((at) => blockChord([67, 71, 74], at, 4)),
+    ...[44, 48, 52, 56].flatMap((at) => blockChord([60, 64, 67], at, 4)),
+  ];
+
+  it('leaves the pickup bar out of the downbeats', () => {
+    const result = hypermeter(notes);
+    expect(result.groupBars).toBe(4);
+    expect(result.downbeats).toEqual([12, 28, 44]);
+    expect(result.downbeats).not.toContain(-4);
+    for (const downbeat of result.downbeats) {
+      expect(downbeat).toBeGreaterThanOrEqual(-1);
+    }
+  });
+});
+
+describe('the analysis starts where the music does', () => {
+  /** Two four-bar statements, the second a restatement, lifted from bar 5. */
+  function excerpt(): NoteEvent[] {
+    return [
+      ...quarters([60, 62, 64, 65], 20),
+      ...quarters([67, 65, 64, 62], 24),
+      ...quarters([60, 62, 64, 65], 28),
+      ...quarters([67, 65, 64, 62], 32),
+    ];
+  }
+
+  it('does not invent bars in front of an excerpt', () => {
+    // Every note is at beat 20 or later. A span anchored at bar 0 would report
+    // five bars of silence as the opening section, and say the material was
+    // first heard at beat 0.
+    const sections = sectionsFromNotes(excerpt(), { unitBars: 4 });
+    expect(sections[0]?.startBeat).toBe(20);
+    expect(sections[sections.length - 1]?.endBeat).toBe(36);
+    for (const section of sections) {
+      expect(section.startBeat).toBeGreaterThanOrEqual(20);
+      expect(section.rationale).not.toContain('beat 0');
+    }
+  });
+
+  it('phases the hypermeter on the bars the excerpt has', () => {
+    const result = hypermeter(excerpt());
+    for (const downbeat of result.downbeats) {
+      expect(downbeat).toBeGreaterThanOrEqual(20);
+      expect(downbeat).toBeLessThan(36);
+    }
+  });
+
+  it('still lets a pickup pull the span below beat 0', () => {
+    // The span reaches back only for music that actually sounds there.
+    const withPickup: NoteEvent[] = [
+      { pitch: 67, startBeat: -1, durationBeat: 1 },
+      ...quarters([60, 62, 64, 65], 0),
+      ...quarters([67, 65, 64, 62], 4),
+    ];
+    expect(sectionsFromNotes(withPickup, { unitBars: 4 })[0]?.startBeat).toBe(-1);
+  });
+
+  it('reports no form for a span with nothing in it', () => {
+    expect(sectionsFromNotes([])).toEqual([]);
+    // Notes that never sound are dropped before the span is measured, so an
+    // array of artefacts is an empty span rather than one starting at beat 0.
+    expect(sectionsFromNotes([{ pitch: 60, startBeat: 8, durationBeat: 0 }])).toEqual([]);
+  });
+
+  it('gives the same first beat whichever form function is asked', () => {
+    // Sections, hyperbars and phrases read the same material three ways, and a
+    // host draws all three on one ruler: an answer of beat 20 next to one of
+    // beat 0 is not two opinions, it is one of them being wrong.
+    const chords = [span(0, 'maj', 20), span(7, 'maj', 24), span(2, 'min', 28), span(0, 'maj', 32)];
+    const notes = excerpt();
+    const phrases = phrasesFromTimeline(chordTimelineFromChords(chords, 36), notes, {
+      key: majorKey(0),
+    });
+    expect(sectionsFromNotes(notes, { unitBars: 4 })[0]?.startBeat).toBe(20);
+    expect(phrases[0]?.startBeat).toBe(20);
+    expect(Math.min(...hypermeter(notes).downbeats)).toBeGreaterThanOrEqual(20);
+  });
+
+  it('lets all three reach back for the same pickup', () => {
+    const pickupChords = [span(0, 'maj', 0), span(7, 'maj', 4), span(2, 'min', 8)];
+    const notes: NoteEvent[] = [
+      { pitch: 67, startBeat: -1, durationBeat: 1 },
+      ...quarters([60, 62, 64, 65], 0),
+      ...quarters([67, 65, 64, 62], 4),
+      ...quarters([60, 62, 64, 65], 8),
+    ];
+    const phrases = phrasesFromTimeline(chordTimelineFromChords(pickupChords, 12), notes, {
+      key: majorKey(0),
+    });
+    expect(sectionsFromNotes(notes, { unitBars: 4 })[0]?.startBeat).toBe(-1);
+    expect(phrases[0]?.startBeat).toBe(-1);
+    // The upbeat leads into the first hyperbar rather than starting one.
+    expect(hypermeter(notes).downbeats).not.toContain(-1);
   });
 });
 

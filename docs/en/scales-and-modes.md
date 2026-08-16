@@ -37,6 +37,22 @@ const hexatonic = { rootPc: 0, modeMask12: maskFromOffsets([0, 3, 4, 7, 8, 11]) 
 scaleTonesInDegreeOrder(hexatonic); // [0, 3, 4, 7, 8, 11]
 ```
 
+## What the entries cover
+
+An entry in either table is a set of pitch classes. `WORLD_SCALES` takes its names from traditions whose theory holds far more than a set, and the mask holds none of the rest.
+
+A thāt is not a rāga. It has no ārohaṇa and avarohaṇa, no vādī and samvādī, no pakaḍ, so `todi` gives the pitch material rāga Todi draws on and nothing that would let you play the rāga:
+
+```ts
+import { scaleByName, scaleTonesInDegreeOrder } from '@libraz/libcantus';
+
+scaleTonesInDegreeOrder(scaleByName('todi', 0)); // [0, 1, 3, 6, 7, 8, 11]
+```
+
+The other names work the same way. A maqām is assembled from ajnās that are transposed and exchanged as a phrase moves, and the five entries here name the pitch material of a maqām rather than that system. Japanese scales are described in Koizumi's tetrachord theory by the nuclear tones framing each tetrachord, so `miyakoBushi` and `minyo` differ by tetrachord type, a difference their pitch classes record without explaining.
+
+Reach for these entries when a pitch set is what is wanted. Working with the modal system itself needs a model of that system, which this library does not have.
+
 ## Degrees and membership
 
 ```ts
@@ -81,20 +97,37 @@ chordScales(makeChord(0, 'maj7'))[0]; // { name: 'ionian', rootPc: 0 }
 chordScales(makeChord(0, 'dom7'))[0]; // { name: 'mixolydian', rootPc: 0 }
 ```
 
-Two questions follow from a chosen scale. An **available tension** is a non-chord scale tone that can be added as colour; an **avoid note** is a non-chord scale tone a semitone directly above a chord tone, which clashes when sounded against it.
+Two questions follow from a chosen scale. An **available tension** is a non-chord scale tone that can be added as colour; an **avoid note** is a non-chord scale tone a semitone directly above a chord tone — or the third a suspension displaced — which clashes when sounded against it.
+
+That rule says which tones may not be *sounded* against the chord, which is not the same question as which tones a line may not touch. `{ use: 'melodic' }` asks the second one: only the semitone above the root survives it, so the melodic answer is always a subset of the harmonic one.
 
 ```ts
 import { availableTensions, avoidNotes, chordScaleReport, makeChord } from '@libraz/libcantus';
 
 availableTensions(makeChord(0, 'maj7'), 'ionian'); // [2, 9]
 avoidNotes(makeChord(0, 'maj7'), 'ionian'); // [5]
+avoidNotes(makeChord(0, 'maj7'), 'ionian', { use: 'melodic' }); // []
 
 const report = chordScaleReport(makeChord(0, 'dom7'), 1);
 report[0]?.name; // 'mixolydian'
-report[0]?.avoid; // [5]
+report[0]?.avoid; // []
+report[0]?.passing; // [5]
+report[0]?.tensions; // [2, 9]
 ```
 
-`chordScaleReport` is the three calls combined, ordered best fit first, with an optional limit. It is the shape a UI panel usually wants.
+`chordScaleReport` is the three calls combined, ordered best fit first, with an optional limit. Each entry splits the scale tones the chord does not state three ways: `avoid` may not be played at all, `passing` may be passed through melodically but not sounded against the chord, and `tensions` may be added freely as colour. It is the shape a UI panel usually wants.
+
+Availability also depends on what the chord is doing. Read on its own, a dominant seventh over the scale of its minor key offers nothing: its ♭9, 11 and ♭13 each sit a semitone above a chord tone. Heard as the dominant of that key, the ♭9 and ♭13 are the key's own tones and standard practice, so name the chord it resolves to:
+
+```ts
+import { availableTensions, makeChord } from '@libraz/libcantus';
+
+availableTensions(makeChord(7, 'dom7'), 'phrygianDominant'); // []
+availableTensions(makeChord(7, 'dom7'), 'phrygianDominant', { resolvesTo: makeChord(0, 'min') });
+// [3, 8]
+```
+
+The natural eleventh stays an avoid note: the resolution makes the altered ninths and the flat thirteenth available, not every clash.
 
 ## Choosing scales across a progression
 

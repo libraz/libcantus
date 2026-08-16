@@ -11,8 +11,10 @@
 
 import { assertRange } from '../../core/validation/index.js';
 
-/** The ceiling's lowest and highest levels. */
+/** The ceiling's lowest level: what a beginner sustains. */
 export const MIN_DIFFICULTY = 1;
+
+/** The ceiling's highest level: what a rudimental player sustains. */
 export const MAX_DIFFICULTY = 5;
 
 /**

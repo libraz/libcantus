@@ -1,11 +1,10 @@
 /**
  * Ornaments applied to material that already exists.
  *
- * Generation used to be all or nothing: the only way to put ghost notes under a
- * phrase was to generate the phrase again with a generator that happened to
- * write them. This layer takes notes and gives notes back, the way
- * {@link humanize} does, so a line from any source — a generator, a MIDI
- * import, a caller's own array — can be decorated after the fact.
+ * Decoration is not a property of generation: this layer takes notes and gives
+ * notes back, the way {@link humanize} does, so a line from any source — a
+ * generator, a MIDI import, a caller's own array — can be decorated without
+ * being generated again by whichever generator happens to write ghost notes.
  *
  * The decoration is carried as an {@link Articulation}, not baked into extra
  * onsets: a flam is one note marked `'flam'`, so the grace stroke stays the
@@ -40,8 +39,10 @@ export const ORNAMENT_STYLES = Object.freeze(['ghost', 'flam', 'drag', 'slide', 
  * The kind of ornament to apply.
  *
  * - `'ghost'`: soften weak-position notes into ghosted strokes.
- * - `'flam'`: mark accented notes as flammed.
- * - `'drag'`: mark notes leading into a strong position as dragged.
+ * - `'flam'`: mark accented notes as flammed — the strong positions `'accent'`
+ *   also takes, voiced as a grace stroke instead of a velocity lift.
+ * - `'drag'`: mark notes leading into a strong position as dragged. A weak-position
+ *   note qualifies only when the next onset in the material falls on a strong one.
  * - `'slide'`: mark a note reached by a step or a leap as slid into.
  * - `'accent'`: mark strong-position notes as accented, and lift their velocity.
  *
@@ -107,6 +108,7 @@ function eligible(
   style: OrnamentStyle,
   note: NoteEvent,
   previous: NoteEvent | undefined,
+  next: NoteEvent | undefined,
   ts: TimeSignature,
 ): boolean {
   const strong = isStrongBeat(note.startBeat, ts);
@@ -117,8 +119,9 @@ function eligible(
     case 'accent':
       return strong;
     case 'drag':
-      // A drag leads somewhere: it is the weak note before a strong one.
-      return !strong;
+      // A drag leads somewhere: it is the weak note before a strong one, so the
+      // next onset in the material has to be the strong position it runs into.
+      return !strong && next !== undefined && isStrongBeat(next.startBeat, ts);
     case 'slide':
       return previous !== undefined && Math.abs(note.pitch - previous.pitch) >= SLIDE_MIN_SEMITONES;
   }
@@ -151,14 +154,14 @@ function clampVelocity(velocity: number): number {
 /**
  * Decorate existing notes with an ornament.
  *
- * Which notes are eligible follows from the style and the meter — ghosts and
- * drags fall on weak positions, flams and accents on strong ones, slides on
- * notes reached by a leap — and `amount` decides how many of those eligible
- * notes are taken. The choice is addressed by each note's own position, so
- * raising `amount` adds ornaments without moving the ones already there, and no
- * onset is ever added, removed or shifted: a decorated note is the same note
- * carrying an {@link Articulation}. A note that already carries one is left
- * alone, so ornament passes can be layered.
+ * Which notes are eligible follows from the style and the meter — ghosts fall on
+ * weak positions, drags on the weak position before a strong one, flams and
+ * accents on strong ones, slides on notes reached by a leap — and `amount`
+ * decides how many of those eligible notes are taken. The choice is addressed by
+ * each note's own position, so raising `amount` adds ornaments without moving the
+ * ones already there, and no onset is ever added or shifted: a decorated note is
+ * the same note carrying an {@link Articulation}. A note that already carries one
+ * is left alone, so ornament passes can be layered.
  *
  * With a difficulty ceiling and a tempo in the context, a passage whose strokes
  * come too fast for that ceiling is left plain — the ornament is exactly the
@@ -166,7 +169,7 @@ function clampVelocity(velocity: number): number {
  *
  * @param notes The material to decorate.
  * @param opts Style, amount, seed, meter, and context.
- * @returns Copies of `notes`, in input order, with ornaments applied.
+ * @returns Copies of the sounding notes, in input order, with ornaments applied.
  * @example
  * ```ts
  * import { generateBassLine, majorKey, makeChord, ornament } from '@libraz/libcantus';
@@ -177,6 +180,9 @@ function clampVelocity(velocity: number): number {
  * });
  * ornament(line, { style: 'ghost', amount: 0.4, seed: 3 });
  * ```
+ * Notes with a zero or negative duration never sound and are dropped, so the
+ * result can be shorter than the input.
+ *
  * @category Composition
  */
 export function ornament(notes: readonly NoteEvent[], opts: OrnamentOptions = {}): NoteEvent[] {
@@ -191,6 +197,8 @@ export function ornament(notes: readonly NoteEvent[], opts: OrnamentOptions = {}
   const amount = ctx.ornament ?? DEFAULT_AMOUNT;
   const draw = ctx.part('ornament');
 
+  // Zero-length artefacts are routine in MIDI imports and never sound, so they
+  // are accepted and dropped here, exactly as humanize and the analysis layer do.
   const sounding = dropSilentNotes(notes);
   const ordered = [...sounding].sort((a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch);
   const previousOf = new Map<NoteEvent, NoteEvent | undefined>();
@@ -200,11 +208,15 @@ export function ornament(notes: readonly NoteEvent[], opts: OrnamentOptions = {}
       previousOf.set(note, index === 0 ? undefined : ordered[index - 1]);
     }
   }
+  const nextOf = nextOnsets(ordered);
   const gaps = strokeGaps(ordered);
 
   return sounding.map((note) => {
     const decorated: NoteEvent = { ...note };
-    if (note.articulation !== undefined || !eligible(style, note, previousOf.get(note), ts)) {
+    if (
+      note.articulation !== undefined ||
+      !eligible(style, note, previousOf.get(note), nextOf.get(note), ts)
+    ) {
       return decorated;
     }
     // The ceiling only ever rejects: an ornament this fast is a candidate the
@@ -222,6 +234,28 @@ export function ornament(notes: readonly NoteEvent[], opts: OrnamentOptions = {}
     }
     return decorated;
   });
+}
+
+/**
+ * The first note of the next onset after each note.
+ *
+ * The next onset rather than the next note: the notes of a chord share a
+ * position and say nothing about where the line is heading.
+ */
+function nextOnsets(ordered: readonly NoteEvent[]): Map<NoteEvent, NoteEvent | undefined> {
+  const nextOf = new Map<NoteEvent, NoteEvent | undefined>();
+  let later: NoteEvent | undefined;
+  for (let index = ordered.length - 1; index >= 0; index -= 1) {
+    const note = ordered[index];
+    if (!note) continue;
+    if (later !== undefined && later.startBeat === note.startBeat) {
+      nextOf.set(note, nextOf.get(later));
+    } else {
+      nextOf.set(note, later);
+    }
+    later = note;
+  }
+  return nextOf;
 }
 
 /**

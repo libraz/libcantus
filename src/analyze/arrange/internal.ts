@@ -4,7 +4,11 @@
  * small geometric primitives both the track-role and tension passes rely on.
  */
 
+import { InvalidInputError } from '../../core/errors/index.js';
 import type { NoteEvent } from '../../core/types.js';
+import type { NoteEventAssertOptions } from '../../core/validation/index.js';
+import { assertNoteEvents, assertOneOf } from '../../core/validation/index.js';
+import { PROFILE_WEIGHTS, type SafetyProfile } from '../../theory/safety/index.js';
 import type { IdentifiedVoiceNote } from '../voice/index.js';
 import type { ArrangementTrack, TrackRole } from './tracks.js';
 
@@ -63,6 +67,100 @@ export function covers(note: PreparedNote, beat: number): boolean {
 /** Whether a track's role means it carries no harmonic content. */
 export function isPercussion(role: TrackRole | undefined): boolean {
   return role === 'drums';
+}
+
+/** The safety profile an arrangement is judged under when the caller names none. */
+const DEFAULT_PROFILE: SafetyProfile = 'pop';
+
+/** The profiles that exist, read off the table rather than listed again here. */
+const SAFETY_PROFILES = Object.keys(PROFILE_WEIGHTS) as SafetyProfile[];
+
+/**
+ * The safety profile an arrangement is judged under, checked against the
+ * profiles that exist.
+ *
+ * A name outside the table is an input error rather than a quiet fall back to
+ * `pop`, which would read as a verdict about the music instead of as the
+ * misspelling it is. Both entry points resolve it here so they cannot disagree
+ * about which names are taken.
+ *
+ * @param profile The caller's profile, if any.
+ * @returns The profile to judge under.
+ * @throws If the profile names no known profile.
+ */
+export function arrangementProfile(profile: SafetyProfile | undefined): SafetyProfile {
+  return assertOneOf(profile ?? DEFAULT_PROFILE, SAFETY_PROFILES, 'arrangement profile');
+}
+
+/**
+ * Validate the note array of every track, naming the track that is wrong.
+ *
+ * A missing or non-array `notes` is rejected here rather than becoming a raw
+ * `TypeError` further down, where the message no longer says which track. Every
+ * entry point that takes arrangement tracks checks them this way, so the same
+ * malformed input is refused with the same message whichever one is called.
+ *
+ * @param tracks The tracks as the caller passed them.
+ * @param options The note-event assertion options this entry point works under.
+ * @returns How many notes the tracks hold in total.
+ * @throws If a track's `notes` is not an array, or holds a malformed event.
+ */
+export function assertTrackNotes(
+  tracks: readonly ArrangementTrack[],
+  options: NoteEventAssertOptions,
+): number {
+  let noteCount = 0;
+  for (let index = 0; index < tracks.length; index += 1) {
+    const notes = tracks[index]?.notes;
+    if (!Array.isArray(notes)) {
+      throw new InvalidInputError(
+        `tracks[${index}].notes must be an array; received ${typeof notes}`,
+      );
+    }
+    assertNoteEvents(notes, `tracks[${index}].notes`, options);
+    noteCount += notes.length;
+  }
+  return noteCount;
+}
+
+/**
+ * The tracks the harmony is inferred from, as a set of indices checked against
+ * the tracks that exist.
+ *
+ * An index naming no track cannot be honoured, and matching nothing quietly
+ * turns a stale index — the ordinary result of deleting a track — into an
+ * analysis with no harmony at all, reported as though the arrangement were at
+ * fault. The session's `trackIndex` is checked the same way.
+ *
+ * @param harmonyTracks The caller's indices, if any.
+ * @param trackCount How many tracks were passed in.
+ * @param name What the indices belong to, for the error message.
+ * @returns The indices as a set, or undefined when the caller named none.
+ * @throws If an index is not finite or names no track.
+ */
+export function harmonyTrackSet(
+  harmonyTracks: readonly number[] | undefined,
+  trackCount: number,
+  name = 'harmonyTracks',
+): ReadonlySet<number> | undefined {
+  if (harmonyTracks === undefined) {
+    return undefined;
+  }
+  const only = new Set<number>();
+  for (let index = 0; index < harmonyTracks.length; index += 1) {
+    const value = harmonyTracks[index];
+    if (value === undefined || !Number.isFinite(value)) {
+      throw new InvalidInputError(`${name}[${index}] must be a track index; received ${value}`);
+    }
+    const track = Math.trunc(value);
+    if (track < 0 || track >= trackCount) {
+      throw new InvalidInputError(
+        `${name}[${index}] ${track} is outside the arrangement's ${trackCount} tracks`,
+      );
+    }
+    only.add(track);
+  }
+  return only;
 }
 
 /**

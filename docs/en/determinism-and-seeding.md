@@ -135,6 +135,17 @@ To reopen a generated part as itself, record:
 
 The generated note events do not have to be stored, but storing them is the safer choice for a user's work: it survives a version this build no longer produces, and it survives the user editing the result by hand.
 
+The context itself is not one of those records. `resolveContext` returns a live object — its `instrument` and `part` are functions — so serializing it loses exactly the parts a generator calls. Store the fields that were passed in, and resolve the context again on load:
+
+```ts
+import { resolveContext } from '@libraz/libcantus';
+
+const saved = { seed: 7, algorithmVersion: 1, complexity: 0.4 };
+const context = resolveContext(saved);
+context.seed; // 7
+resolveContext(saved).seed === context.seed; // true
+```
+
 ## What is not covered
 
 The promise covers what the generators return. Analysis results, error messages, and output taken under a different algorithm version sit outside it. Analysis is deterministic in practice — the same notes give the same reading — but it is not versioned, so an improvement to key detection may change a label between releases.

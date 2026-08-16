@@ -254,9 +254,13 @@ const PIECE_END_STRENGTH = 0.5;
  * so without a cost per cut it would cut wherever cutting was not actively
  * wrong. Set just above the best length fit alone, so that a boundary needs
  * some evidence of its own: metre may confirm a phrase ending, but it may not
- * declare one.
+ * declare one. A boundary worth exactly this much is break-even, and a
+ * break-even boundary is not taken — see {@link choosePhrasePath}.
+ *
+ * Not part of the public surface; exported so the search's break-even point can
+ * be stated exactly rather than approximated.
  */
-const PHRASE_CUT_COST = 1.3;
+export const PHRASE_CUT_COST = 1.3;
 
 /** Share of a phrase's confidence carried by its closing boundary. */
 const CLOSING_SHARE = 0.65;
@@ -330,6 +334,75 @@ function lengthFit(length: number, expected: number): number {
     return 0;
   }
   return Math.max(-1, 1 - Math.abs(length - expected) / expected);
+}
+
+/**
+ * Choose which of the candidate stops become phrase boundaries.
+ *
+ * A reading is worth the evidence at every boundary it takes, plus how well
+ * each phrase's length matches what a phrase is expected to run, less a cost
+ * per cut. The best reading is found by dynamic programming over the stops,
+ * since a boundary's worth depends on where the previous one fell.
+ *
+ * Predecessors are considered in time order, and only a strictly better reading
+ * displaces the one already found. Two readings that score the same therefore
+ * settle on the earlier predecessor — the longer phrase, with one boundary
+ * fewer — because a search may not invent a boundary that the evidence does not
+ * prefer to having none. The rule is a property of the comparison, not of the
+ * order the loop happens to run in.
+ *
+ * Not part of the public surface: it takes the stops and strengths some other
+ * pass already derived, so exposing it would invite callers to pair the two by
+ * hand.
+ *
+ * @param beats Beat of each stop, ascending; index 0 is the span's start and
+ *   the last is its end.
+ * @param strengths Boundary evidence at each stop, in the same order.
+ * @param minPhraseBeats Shortest phrase the search may report.
+ * @param expected Length a phrase is expected to run, in beats.
+ * @returns The chosen stop indices after the start, in time order.
+ */
+export function choosePhrasePath(
+  beats: readonly number[],
+  strengths: readonly number[],
+  minPhraseBeats: number,
+  expected: number,
+): number[] {
+  const value = new Array<number>(beats.length).fill(Number.NEGATIVE_INFINITY);
+  const cameFrom = new Array<number>(beats.length).fill(-1);
+  value[0] = 0;
+  for (let j = 1; j < beats.length; j += 1) {
+    const endBeat = beats[j] ?? 0;
+    for (let i = 0; i < j; i += 1) {
+      if (!Number.isFinite(value[i] ?? Number.NEGATIVE_INFINITY)) {
+        continue;
+      }
+      const length = endBeat - (beats[i] ?? 0);
+      if (length < minPhraseBeats - EPS) {
+        continue;
+      }
+      const gain =
+        (value[i] ?? 0) + (strengths[j] ?? 0) + lengthFit(length, expected) - PHRASE_CUT_COST;
+      if (gain > (value[j] ?? Number.NEGATIVE_INFINITY)) {
+        value[j] = gain;
+        cameFrom[j] = i;
+      }
+    }
+  }
+
+  const last = beats.length - 1;
+  const path: number[] = [];
+  if (last > 0 && Number.isFinite(value[last] ?? Number.NEGATIVE_INFINITY)) {
+    for (let i = last; i > 0; i = cameFrom[i] ?? 0) {
+      path.push(i);
+    }
+    path.reverse();
+  } else if (last > 0) {
+    // Nothing reached the end — the span is shorter than one phrase — so the
+    // whole of it is the phrase.
+    path.push(last);
+  }
+  return path;
 }
 
 /** The beat at which the chord arriving at `atBeat` gives way to the next. */
@@ -599,51 +672,18 @@ export function phrasesFromTimeline(
   assertGenerationBudget(stops.length * stops.length, 'form phrase boundary pairs', opts.budget);
 
   const readings = stops.map(readBoundary);
-  const value = new Array<number>(stops.length).fill(Number.NEGATIVE_INFINITY);
-  const cameFrom = new Array<number>(stops.length).fill(-1);
-  value[0] = 0;
-  for (let j = 1; j < stops.length; j += 1) {
-    const endBeat = stops[j]?.beat ?? 0;
-    for (let i = j - 1; i >= 0; i -= 1) {
-      if (!Number.isFinite(value[i] ?? Number.NEGATIVE_INFINITY)) {
-        continue;
-      }
-      const length = endBeat - (stops[i]?.beat ?? 0);
-      if (length < minPhraseBeats - EPS) {
-        continue;
-      }
-      const gain =
-        (value[i] ?? 0) +
-        (readings[j]?.strength ?? 0) +
-        lengthFit(length, expected) -
-        PHRASE_CUT_COST;
-      // Ties keep the longer phrase: the search may not invent a boundary that
-      // the evidence does not prefer to having none.
-      if (gain > (value[j] ?? Number.NEGATIVE_INFINITY)) {
-        value[j] = gain;
-        cameFrom[j] = i;
-      }
-    }
-  }
-
-  const last = stops.length - 1;
-  const path: number[] = [];
-  if (last > 0 && Number.isFinite(value[last] ?? Number.NEGATIVE_INFINITY)) {
-    for (let i = last; i > 0; i = cameFrom[i] ?? 0) {
-      path.push(i);
-    }
-    path.reverse();
-  } else if (last > 0) {
-    // Nothing reached the end — the span is shorter than one phrase — so the
-    // whole of it is the phrase.
-    path.push(last);
-  }
+  const path = choosePhrasePath(
+    stops.map((stop) => stop.beat),
+    readings.map((reading) => reading.strength),
+    minPhraseBeats,
+    expected,
+  );
 
   const downbeatKeys = new Set(grouping.downbeats.map((downbeat) => Math.round(downbeat / EPS)));
   const phrases: Phrase[] = [];
   let from = 0;
   for (let n = 0; n < path.length; n += 1) {
-    const to = path[n] ?? last;
+    const to = path[n] ?? stops.length - 1;
     const startBeat = stops[from]?.beat ?? spanStart;
     const stop = stops[to];
     const endBeat = stop?.beat ?? spanEnd;

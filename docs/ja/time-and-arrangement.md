@@ -32,10 +32,20 @@ isCompound(sixEight); // true
 beatsPerBar(sixEight); // 3
 pulsesPerBar(sixEight); // 2
 
+const compoundNine = { numerator: 9, denominator: 8, grouping: [3, 3, 3] };
+const aksakNine = { numerator: 9, denominator: 8, grouping: [2, 2, 2, 3] };
+
+pulsesPerBar(compoundNine); // 3
+pulsesPerBar(aksakNine); // 9
+
 tuplet(1, 3); // [0.3333333333333333, 0.3333333333333333, 0.3333333333333333]
 ```
 
-複合拍子は8分音符を付点のパルスにまとめるため、6/8 はパルス2つ、4分音符換算で3拍になります。加算拍子は `grouping` を持ちます。7/8 は `[2, 2, 3]`、9/8 はパルスとしての `[3, 3, 3]` と単位としての `[2, 2, 2, 3]` のどちらでも表せます。後者はアクサクの拍子の書き方です。
+複合拍子は8分音符を付点のパルスにまとめるため、6/8 はパルス2つ、4分音符換算で3拍になります。`grouping` は小節を felt beat（体感上の拍）に分けます。7/8 なら `[2, 2, 3]`、5/8 なら `[3, 2]` です。各要素はメインパルスの個数を数えますが、複合分子で両者が食い違う場合は分母単位の個数を数えます。
+
+複合分子では、グルーピングの形がどちらの読みかを決めます。すべての要素が 3 のグルーピングは複合拍子の分割そのものを綴ったものなので、9/8 の `[3, 3, 3]` は付点4分音符 3 パルスという通常の読みになります。これは `[1, 1, 1]` やグルーピング無指定とまったく同じです。要素に 3 以外を含み、総和が分子と等しいグルーピングは単位を数えているとみなされ、加算的に読まれます。9/8 の `[2, 2, 2, 3]` は8分音符 9 パルスをアクサク拍子の書き方でまとめたものです。
+
+`metricWeight` は各グループの頭にアクセントを置くので、7/8 の `[2, 2, 3]` は 7 つの等しい拍ではなく 3 拍として感じられます。すべてのグループが同じ長さのグルーピングは、その拍子がすでに持っている分割を述べているだけなので、アクセントは何も増えません。`formatTimeSignature(ts, { grouping: true })` は加算形 `'2+2+3/8'` を書き出し、`parseTimeSignature` がそれを読み戻します。パルス数で数えたグルーピングには加算形の綴りが無いため、平文の `'9/8'` にフォールバックします。これは同じ小節を表します。
 
 `tuplet` は範囲を等分します。これは連符の配置側で、記譜側 — 描画エンジンが印字する `{ actual, normal }` の比 — は `beatsToDuration` から得られます。
 
@@ -55,7 +65,7 @@ beatsToTiedDurations(5); // [{ base: 'whole', dots: 0 }, { base: 'quarter', dots
 
 ## アレンジの解析
 
-アレンジは、役割とノートイベントを持つトラックの集合です。`analyzeArrangement` は、推定されたタイムライン、調区間、トラックごとの解析、テンション、音符と現在の和声の衝突を返します。
+アレンジは、役割とノートイベントを持つトラックの集合です。`analyzeArrangement` が返すのは、推定された `timeline`、それを読む基準となった `keys` と `prevailingKey`、`cadences`、トラックごとの解析、そして音符と現在の和声の衝突である `conflicts` です。
 
 ```ts
 import { analyzeArrangement } from '@libraz/libcantus';
@@ -79,7 +89,29 @@ report.tracks.length; // 2
 report.timeline.segments.length >= 1; // true
 ```
 
-トラックの `role` は、そのトラックがどう関与するかを示します。harmony トラックはコード推定に寄与し、bass トラックは転回形を決めるベースを供給し、melody トラックは和声に寄与せず和声に対して解析されます。ホストが役割を把握していない場合は、`roleOf` がトラック自身の素材から推定します。
+トラックの `role` は、レポートへそのまま引き継がれるラベルであって、解析を切り替えるスイッチではありません。推定内容を変えるのは `drums` だけです。そのピッチは和声を表さず楽器を選ぶものなので、打楽器トラックはコード推定・調推定からも、声部進行の比較からも除外されます。`melody`・`harmony`・`bass`・`other` はまったく同じように扱われ、和声は音程を持つ全トラックをまとめたものから推定されます。役割が付いていない場合や、あるトラックが和声を重ねている場合でも、この方法なら破綻しません。ラベルの無いトラックは推測せず `other` として報告されます。
+
+コードをどのトラックから取るかを指定するのが `harmonyTracks` です。和声を担うトラックのインデックスを渡すと、残りの音程トラックは和声に寄与せず、その和声に対して解析されます。
+
+```ts
+import { type ArrangementTrack, analyzeArrangement } from '@libraz/libcantus';
+
+const tracks: ArrangementTrack[] = [
+  { role: 'melody', notes: [{ pitch: 70, startBeat: 0, durationBeat: 4 }] },
+  {
+    role: 'harmony',
+    notes: [
+      { pitch: 60, startBeat: 0, durationBeat: 4 },
+      { pitch: 64, startBeat: 0, durationBeat: 4 },
+      { pitch: 67, startBeat: 0, durationBeat: 4 },
+    ],
+  },
+];
+
+// Pooled, the melody's Bb reads as the seventh of the chord under it.
+analyzeArrangement(tracks).timeline.segments[0]?.chord.quality; // 'dom7'
+analyzeArrangement(tracks, { harmonyTracks: [1] }).timeline.segments[0]?.chord.quality; // 'maj'
+```
 
 `conflicts` は、下で鳴っている和声と食い違う音符を報告します。アレンジの警告パネルが表示するのはこの情報です。`tensionCurve` と `tensionCurveFrom` は、レポートを時間軸上の曲線にまとめます。
 

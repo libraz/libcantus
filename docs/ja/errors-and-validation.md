@@ -38,18 +38,27 @@ voiceOrCode('C', { min: 72, max: 60 }); // 'INVALID_INPUT'
 テキスト入力欄は1打鍵ごとに解析され、その大半は有効な記号の途中にあります。`try*` 系のパーサはそれを値として返します。
 
 ```ts
-import { tryParseChordSymbol, tryParseInterval, tryParseNote } from '@libraz/libcantus';
+import {
+  tryParseChordSymbol,
+  tryParseInterval,
+  tryParseKeyName,
+  tryParseNote,
+  tryParseTimeSignature,
+} from '@libraz/libcantus';
 
 tryParseNote('Bb3').ok; // true
 tryParseNote('C#b').ok; // false
 tryParseInterval('P5').ok; // true
 tryParseChordSymbol('Cmaj7').ok; // true
+tryParseKeyName('gis moll').ok; // true
+tryParseTimeSignature('7/8').ok; // true
+tryParseTimeSignature('7/').ok; // false
 
 const typed = tryParseChordSymbol('C(');
 const label = typed.ok ? typed.value.quality : typed.error.message;
 ```
 
-`ParseResult<T>` は `{ ok: true; value: T }` または `{ ok: false; error: LibcantusError }` です。エラーを `null` に潰さず結果に載せるのは、入力欄が「入力された文字列の何が不正なのか」を表示する必要があるためです。クラス API では `Chord.tryParse` が同じ役割を持ちます。
+`ParseResult<T>` は `{ ok: true; value: T }` または `{ ok: false; error: LibcantusError }` です。エラーを `null` に潰さず結果に載せるのは、入力欄が「入力された文字列の何が不正なのか」を表示する必要があるためです。テキストを読むパーサはいずれもこの対を持ちます。音名、音程、コードネーム、調名、拍子記号のすべてです。クラス API も、テキストを読むクラスごとに同じ対を持ちます。`Note.of`、`Interval.parse`、`Key.parse`、`Chord.parse` に対して `Note.tryParse`、`Interval.tryParse`、`Key.tryParse`、`Chord.tryParse` です。
 
 例外を投げるパーサは、いずれも投げないパーサの上に実装されています。`parseNote` と `tryParseNote` が妥当性の判定でずれることはありません。
 

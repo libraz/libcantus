@@ -15,7 +15,7 @@ import {
   foldIntoRange,
   type StringedProfile,
 } from '../../core/instrument/index.js';
-import { isStrongBeat, type TimeSignature } from '../../core/meter/index.js';
+import { beatsPerBar, isStrongBeat, type TimeSignature } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
@@ -124,6 +124,16 @@ function note(
 const BAR: number = 4 * BEAT_STEPS;
 
 /**
+ * The meter every built-in figure is written in.
+ *
+ * It is declared rather than left out because an absent condition means "any",
+ * and these are not any: their accents fall where a four-beat bar puts them, so
+ * a waltz or a jig would be handed a figure written against a bar it does not
+ * have.
+ */
+const FOUR_FOUR: TimeSignature = { numerator: 4, denominator: 4 };
+
+/**
  * The built-in bass licks, in declaration order.
  *
  * @category Composition
@@ -134,6 +144,7 @@ export const BASS_LICKS: readonly BassLick[] = Object.freeze([
     genre: 'motown',
     difficulty: 3,
     articulations: [],
+    ts: FOUR_FOUR,
     fitsOver: ['maj', 'maj7', '6', 'dom7'],
     tempoRange: [88, 136],
     material: {
@@ -157,6 +168,7 @@ export const BASS_LICKS: readonly BassLick[] = Object.freeze([
     genre: 'soul',
     difficulty: 2,
     articulations: [],
+    ts: FOUR_FOUR,
     tempoRange: [72, 120],
     material: {
       lengthSteps: BAR,
@@ -172,6 +184,7 @@ export const BASS_LICKS: readonly BassLick[] = Object.freeze([
     genre: 'funk',
     difficulty: 4,
     articulations: ['mute', 'slide'],
+    ts: FOUR_FOUR,
     tempoRange: [84, 124],
     material: {
       lengthSteps: BAR,
@@ -196,6 +209,7 @@ export const BASS_LICKS: readonly BassLick[] = Object.freeze([
     genre: 'blues',
     difficulty: 2,
     articulations: [],
+    ts: FOUR_FOUR,
     fitsOver: ['maj', 'dom7'],
     tempoRange: [76, 168],
     material: {
@@ -221,6 +235,7 @@ export const BASS_LICKS: readonly BassLick[] = Object.freeze([
     genre: 'jazz',
     difficulty: 3,
     articulations: [],
+    ts: FOUR_FOUR,
     tempoRange: [100, 240],
     material: {
       lengthSteps: BAR,
@@ -236,6 +251,7 @@ export const BASS_LICKS: readonly BassLick[] = Object.freeze([
     genre: 'bossa',
     difficulty: 2,
     articulations: [],
+    ts: FOUR_FOUR,
     tempoRange: [104, 168],
     material: {
       lengthSteps: BAR,
@@ -251,6 +267,7 @@ export const BASS_LICKS: readonly BassLick[] = Object.freeze([
     genre: 'gospel',
     difficulty: 4,
     articulations: ['slide'],
+    ts: FOUR_FOUR,
     tempoRange: [60, 108],
     material: {
       lengthSteps: BAR,
@@ -275,6 +292,7 @@ export const BASS_LICKS: readonly BassLick[] = Object.freeze([
     genre: 'country',
     difficulty: 1,
     articulations: [],
+    ts: FOUR_FOUR,
     tempoRange: [80, 180],
     material: {
       lengthSteps: BAR,
@@ -290,6 +308,7 @@ export const BASS_LICKS: readonly BassLick[] = Object.freeze([
     genre: 'reggae',
     difficulty: 3,
     articulations: ['mute'],
+    ts: FOUR_FOUR,
     tempoRange: [64, 104],
     material: {
       lengthSteps: BAR,
@@ -312,14 +331,18 @@ export const BASS_LICKS: readonly BassLick[] = Object.freeze([
 const MAJOR_DEGREE_SEMITONES = [0, 2, 4, 5, 7, 9, 11] as const;
 
 /**
- * The pitch class a chord degree names.
+ * Semitones above the chord's root that a degree names.
  *
  * The chord answers for the degrees it actually contains, so a figure written
  * on the third comes out minor over a minor chord without the dictionary having
  * to hold two versions of it. Every other degree is taken from the key, which
  * is what keeps a passing tone inside the music rather than inside a template.
+ *
+ * The result is a signed offset, not a pitch class: degree 8 is the octave, and
+ * reducing it modulo twelve would spell it as the root the figure just played,
+ * turning every octave figure into a repeated note.
  */
-function degreePc(degree: number, alter: number, chord: Chord, key: KeyScale): number {
+function degreeSemitone(degree: number, alter: number, chord: Chord, key: KeyScale): number {
   const octaves = Math.floor((degree - 1) / 7);
   const within = ((degree - 1) % 7) + 1;
   const fromChord = chordDegreeSemitone(within, chord);
@@ -328,7 +351,10 @@ function degreePc(degree: number, alter: number, chord: Chord, key: KeyScale): n
     fromChord ??
     // A degree the chord does not name is a passing tone, so the key decides it.
     nearestScaleTone(chord.rootPc + template, key) - chord.rootPc;
-  return pitchClass(chord.rootPc + semitone + 12 * octaves + alter);
+  // A degree names a position inside one octave; the octaves it spans are what
+  // `octaves` carries. An extended chord states its ninth as fourteen semitones
+  // and the key's answer may land on the octave itself, so both are folded here.
+  return pitchClass(semitone) + 12 * octaves + alter;
 }
 
 /** The semitone a chord gives one of its own degrees, if it has that degree. */
@@ -410,9 +436,17 @@ export type PlaceLicksOptions = {
    * `complexity.difficulty` is the ceiling figures are rejected against.
    */
   ctx?: GenerationContextInput;
+  /**
+   * Maximum number of segments {@link placeLicks} may lay figures over. One
+   * figure is placed per segment, so this is the guard against an unbounded
+   * caller rather than a limit on any search.
+   *
+   * @defaultValue 1000000
+   */
+  budget?: number;
 };
 
-const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
+const DEFAULT_TS: TimeSignature = FOUR_FOUR;
 const DEFAULT_OCTAVE = 2;
 const DEFAULT_BPM = 120;
 
@@ -455,7 +489,7 @@ export function placeLicks(
   key: KeyScale,
   opts: PlaceLicksOptions,
 ): NoteEvent[] {
-  assertGenerationBudget(timeline.length, 'lick segments');
+  assertGenerationBudget(timeline.length, 'lick segments', opts.budget);
   const genre = assertOneOf(opts.genre, GENRES, 'lick genre');
   const ts = opts.ts ?? DEFAULT_TS;
   assertTimeSignature(ts, 'lick time signature');
@@ -499,9 +533,17 @@ export function placeLicks(
     BASS_LICKS,
     vocabularyOfKind(resolved.vocabulary, isLickMaterial),
   );
+  // Naming an instrument is the request that the line be playable on it, so a
+  // figure calling for a technique it cannot produce — a slide on an instrument
+  // with no slide — is not offered rather than written and misread.
+  const playable = instrument === undefined ? {} : { articulations: instrument.articulations };
+  const barBeats = beatsPerBar(ts);
 
   const raw: { startBeat: number; pitch: number; velocity: number; note?: LickNote }[] = [];
+  /** The last pitch that sounded, which decides where a connecting tone leads. */
   let anchor = low;
+  /** Where the last root sat, which is what keeps the line in its register. */
+  let rootAnchor = low;
 
   for (let index = 0; index < segments.length; index += 1) {
     const segment = segments[index];
@@ -509,52 +551,99 @@ export function placeLicks(
       continue;
     }
     const rootPc = bassPcOf(segment.chord);
-    const spanBeats = segment.endBeat - segment.startBeat;
-    const takesLick = draw.prob(density, 'lick', index);
-    const entry = takesLick
-      ? pickVocabulary(
-          dictionary,
-          { genre, bpm, ts, difficulty, quality: segment.chord.quality },
-          draw,
-          'lickChoice',
-          index,
-        )
-      : undefined;
+    const onsets: number[] = [];
+    let lastTilePlayed = false;
+    let firstOnset = segment.startBeat;
 
-    const notes = entry
-      ? fitToSegment(entry.material, spanBeats, resolved, draw, index, bpm, difficulty)
-      : undefined;
+    // A figure is a bar long and a chord is not: a ballad or a modal vamp holds
+    // one chord for four of them. The figure is laid across the whole segment,
+    // one tile per bar of it, and each tile draws its own figure at its own
+    // address — so the bar after the first is played rather than held, and a
+    // chord elsewhere in the piece changing does not move any of them.
+    for (let tile = 0; ; tile += 1) {
+      const tileStart = segment.startBeat + tile * barBeats;
+      const remaining = segment.endBeat - tileStart;
+      if (remaining <= EPS) {
+        break;
+      }
+      // The figure this tile would play is decided before the density dial is
+      // consulted, so where its root sounds does not move as the dial travels:
+      // a genre whose figures land after the downbeat keeps its root there
+      // whether or not this turn of the dial takes the whole figure.
+      const entry = pickVocabulary(
+        dictionary,
+        { genre, bpm, ts, difficulty, quality: segment.chord.quality, ...playable },
+        draw,
+        'lickChoice',
+        index,
+        tile,
+      );
+      const takesLick = entry !== undefined && draw.prob(density, 'lick', index, tile);
+      const notes = takesLick
+        ? fitToSegment(
+            entry.material,
+            remaining,
+            density,
+            resolved,
+            draw,
+            [index, tile],
+            bpm,
+            difficulty,
+          )
+        : undefined;
+      lastTilePlayed = notes !== undefined;
 
-    if (!notes || notes.length === 0) {
-      anchor = placePc(rootPc, anchor, low);
-      raw.push({ startBeat: segment.startBeat, pitch: anchor, velocity: STRONG_VELOCITY });
-      continue;
-    }
+      const rootStep = entry === undefined ? 0 : anchorStepOf(entry.material, remaining);
+      const rootAt = tileStart + rootStep * STEP_BEATS;
+      if (tile === 0) {
+        firstOnset = rootAt;
+      }
+      onsets.push(rootAt);
+      // Roots are placed against the root before them rather than against the
+      // last note that sounded: a figure that ends on its octave would
+      // otherwise pull the next root up with it, and a four-bar vamp would
+      // climb out of the register the caller asked for by its second bar.
+      rootAnchor = placePc(rootPc, rootAnchor, low);
+      anchor = rootAnchor;
+      // Where the figure states its own note on this position, that note is the
+      // one that sounds: the two share an onset, and the zero-length root is
+      // dropped when durations are measured.
+      raw.push({ startBeat: rootAt, pitch: rootAnchor, velocity: STRONG_VELOCITY });
 
-    for (const lickNote of notes) {
-      const pc = degreePc(lickNote.degree, lickNote.alter ?? 0, segment.chord, key);
-      const at = segment.startBeat + lickNote.step * STEP_BEATS;
-      anchor = placePc(pc, anchor, low);
-      raw.push({
-        startBeat: at,
-        pitch: anchor,
-        velocity: Math.round(
-          (isStrongBeat(at, ts) ? STRONG_VELOCITY : WEAK_VELOCITY) * lickNote.velocity,
-        ),
-        note: lickNote,
-      });
+      if (notes) {
+        const figureRoot = placePc(pitchClass(segment.chord.rootPc), rootAnchor, low);
+        for (const lickNote of notes) {
+          const at = tileStart + lickNote.step * STEP_BEATS;
+          // Placed against the figure's own root rather than folded one note at
+          // a time into the register band, which is what an octave figure
+          // needs: its octave has to stay an octave.
+          const offset = degreeSemitone(lickNote.degree, lickNote.alter ?? 0, segment.chord, key);
+          anchor = figureRoot + offset;
+          onsets.push(at);
+          raw.push({
+            startBeat: at,
+            pitch: anchor,
+            velocity: Math.round(
+              (isStrongBeat(at, ts) ? STRONG_VELOCITY : WEAK_VELOCITY) * lickNote.velocity,
+            ),
+            note: lickNote,
+          });
+        }
+      }
     }
 
     // The connecting tone between one figure and the next is the walking line's
     // approach note, reused: the figures are the vocabulary, and leading into
-    // the next chord is grammar that belongs to neither of them.
+    // the next chord is grammar that belongs to neither of them. The beat before
+    // a chord change therefore always sounds — the figure's own note where it
+    // has one there, this one where it does not — so a busier setting never
+    // empties a beat a quieter one filled.
     const next = segments[index + 1];
-    const last = raw[raw.length - 1];
-    if (next && last) {
-      const nextRoot = placePc(bassPcOf(next.chord), anchor, low);
-      const gap = next.startBeat - last.startBeat;
+    if (next && lastTilePlayed) {
       const approachAt = next.startBeat - STEP_BEATS * BEAT_STEPS;
-      if (gap > 1 + EPS && approachAt > last.startBeat + EPS) {
+      const alreadySounds = onsets.some((onset) => Math.abs(onset - approachAt) < EPS);
+      if (approachAt > firstOnset + EPS && !alreadySounds) {
+        const nextRoot = placePc(bassPcOf(next.chord), rootAnchor, low);
         const midi = approachNote(
           nextRoot,
           anchor,
@@ -601,6 +690,30 @@ export function placeLicks(
 }
 
 /**
+ * The step a figure begins on, which is where the segment sounds its root.
+ *
+ * Reading it from the material rather than from the deformed figure is what
+ * keeps the position fixed as the density dial travels: thinning can take the
+ * figure's first note away, and the root would otherwise jump to the downbeat.
+ *
+ * @param material The figure the segment would play.
+ * @param spanBeats Length of the segment.
+ * @returns The step, or 0 when the figure starts past the end of the segment.
+ */
+function anchorStepOf(material: LickMaterial, spanBeats: number): number {
+  let first: number | undefined;
+  for (const note of material.notes) {
+    if (first === undefined || note.step < first) {
+      first = note.step;
+    }
+  }
+  if (first === undefined || first < 0 || first * STEP_BEATS >= spanBeats - EPS) {
+    return 0;
+  }
+  return first;
+}
+
+/**
  * Deform a figure to the segment it is being played over, and reject it if the
  * result is beyond the ceiling.
  *
@@ -611,23 +724,28 @@ export function placeLicks(
 function fitToSegment(
   material: LickMaterial,
   spanBeats: number,
+  density: number,
   resolved: ReturnType<typeof resolveContextWith>,
   draw: ReturnType<ReturnType<typeof resolveContextWith>['part']>,
-  index: number,
+  path: readonly (string | number)[],
   bpm: number,
   difficulty: number | undefined,
 ): LickNote[] | undefined {
   const deformed = deform(
     material.notes,
     {
-      ...(resolved.rhythmic === undefined ? {} : { rhythmic: resolved.rhythmic }),
+      // The one density the whole generator reads, defaults included: passing
+      // the documented default explicitly and leaving it out have to be the
+      // same request, and they were not while the figure was deformed by the
+      // raw dial and chosen by the resolved one.
+      rhythmic: density,
       ...(resolved.ornament === undefined ? {} : { ornament: resolved.ornament }),
       isOrnament: (event) => (event as LickNote).articulation === 'mute',
       spanSteps: material.lengthSteps,
     },
     draw,
     'lickShape',
-    index,
+    ...path,
   );
   // A figure longer than the chord it is played over is cut at the chord
   // change: the harmony is the thing the figure exists to serve.

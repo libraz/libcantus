@@ -175,6 +175,7 @@ export {
   deform,
   double,
   doubleTime,
+  gridMetricWeight,
   halfTime,
   ornamentBy,
   STEP_BEATS,

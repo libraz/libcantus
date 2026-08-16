@@ -7,10 +7,10 @@
  */
 
 import type { Articulation } from '../../core/instrument/index.js';
-import type { Draw } from '../context/index.js';
+import { type Draw, sustainsStrokes } from '../context/index.js';
 import type { HitList } from './hit.js';
 import type { DrumStyle, SectionEnergy, SectionType } from './internal.js';
-import { EIGHTH, GM, SIXTEENTH } from './internal.js';
+import { BACKBEAT_LIFT, EIGHTH, FILL_ACCENT_LIFT, GM, SIXTEENTH } from './internal.js';
 
 /** The thirteen fill archetypes for section transitions, in declaration order. */
 export const FILL_TYPES = Object.freeze([
@@ -35,9 +35,11 @@ export type FillType = (typeof FILL_TYPES)[number];
 /**
  * How loud one stroke of a fill is.
  *
- * A fill's dynamics are written against the beat's own velocity rather than in
- * absolute terms, so the same archetype sounds right in a verse and a chorus:
- * `fill` is the body of the fill, `accent` the stroke that lands.
+ * A fill's dynamics are written against the fill's own base velocity rather
+ * than in absolute terms, so the same archetype sounds right in a verse and a
+ * chorus: `fill` is the body of the fill, `accent` the stroke that lands. One
+ * base for the whole gesture, not one per beat — a crescendo that restarts its
+ * arithmetic at every beat line falls back in the middle of itself.
  */
 export type FillVelocity = {
   base: 'fill' | 'accent';
@@ -144,8 +146,11 @@ function archetype(
  * particular recording.
  */
 export const FILL_ARCHETYPES: Readonly<Record<FillType, FillArchetype>> = Object.freeze({
+  // One crescendo of seven strokes across the two beats, not two of four and
+  // three: the roll is a single gesture and its second half continues where its
+  // first half left off.
   snareRoll: archetype(snareCrescendo(4, 0.6), [
-    ...snareCrescendo(3, 0.7),
+    ...snareCrescendo(3, 1.0),
     at(GM.SD, 3 * S, S, accent),
   ]),
   tomDescend: archetype(
@@ -388,6 +393,11 @@ function fillTableFor(
  * @param extra Ids a caller's dictionary contributes for this transition. They
  *   are offered after the built-in table, so the built-in choices keep the draws
  *   they had and a caller adds to the vocabulary rather than displacing it.
+ * @param accepts Which archetypes may be drawn at all. A fill beyond the
+ *   difficulty ceiling is taken out of the table and the draw runs over what
+ *   remains, rather than being simplified into a fill nobody wrote.
+ * @returns The id drawn, or undefined when the table has nothing this
+ *   transition accepts.
  */
 export function selectFillType(
   from: SectionType,
@@ -397,10 +407,83 @@ export function selectFillType(
   draw: Draw,
   bar: number,
   extra: readonly string[] = [],
-): string {
+  accepts: (id: string) => boolean = () => true,
+): string | undefined {
   const table = fillTableFor(from, to, style, nextEnergy);
-  const candidates = extra.length === 0 ? table : [...table, ...extra];
-  return candidates[draw.range(0, candidates.length - 1, 'fill', bar)] ?? table[0] ?? 'snareRoll';
+  // An id a built-in already carries is a replacement, not an addition: the
+  // material is resolved through the caller's map wherever the table names it,
+  // so appending it as well would give that one fill two ways of being drawn
+  // and a weight no other entry has.
+  const added = extra.filter((id) => FILL_ARCHETYPES[id as FillType] === undefined);
+  const offered = added.length === 0 ? table : [...table, ...added];
+  const candidates = offered.filter(accepts);
+  if (candidates.length === 0) {
+    return undefined;
+  }
+  return candidates[draw.range(0, candidates.length - 1, 'fill', bar)] ?? candidates[0];
+}
+
+/**
+ * The strokes a fill plays on one beat of the fill bar.
+ *
+ * @param shape The archetype.
+ * @param beat Beat index within the bar.
+ * @returns The strokes, empty where the archetype leaves the beat to the groove.
+ */
+function strokesAtBeat(shape: FillArchetype, beat: number): readonly FillStroke[] {
+  const lastBeat = shape.atBeat.length - 1;
+  const index = beat > lastBeat ? (shape.boundToBar ? -1 : lastBeat) : beat;
+  return shape.atBeat[index] ?? [];
+}
+
+/**
+ * Whether a fill is inside the difficulty ceiling at this tempo.
+ *
+ * The fill is measured as it will actually be played — from the beat it starts
+ * on to the end of the bar — and voice by voice, since what stops a player is
+ * one limb repeating faster than it can rather than the bar's total count. The
+ * phrase end is the most exposed bar there is, so a ceiling that governs the
+ * groove and not the fill governs nothing a listener would notice.
+ *
+ * @param shape The archetype.
+ * @param fromBeat Beat the fill starts on.
+ * @param barBeats Beats in the bar.
+ * @param bpm Tempo, or undefined when the caller gave none.
+ * @param difficulty The ceiling, or undefined for no ceiling.
+ * @returns True when the fill is playable at the ceiling, and whenever either
+ *   the ceiling or the tempo is unknown.
+ */
+export function fillWithinCeiling(
+  shape: FillArchetype,
+  fromBeat: number,
+  barBeats: number,
+  bpm: number | undefined,
+  difficulty: number | undefined,
+): boolean {
+  if (difficulty === undefined || bpm === undefined) {
+    return true;
+  }
+  const byVoice = new Map<number, number[]>();
+  for (let beat = fromBeat; beat < barBeats; beat += 1) {
+    for (const stroke of strokesAtBeat(shape, beat)) {
+      const positions = byVoice.get(stroke.voice);
+      if (positions) {
+        positions.push(beat + stroke.offset);
+      } else {
+        byVoice.set(stroke.voice, [beat + stroke.offset]);
+      }
+    }
+  }
+  for (const positions of byVoice.values()) {
+    positions.sort((a, b) => a - b);
+    for (let i = 1; i < positions.length; i += 1) {
+      const gap = (positions[i] ?? 0) - (positions[i - 1] ?? 0);
+      if (gap > 0 && !sustainsStrokes(gap, bpm, difficulty)) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 /**
@@ -424,14 +507,13 @@ export function generateFill(
   if (!shape) {
     return;
   }
-  const lastBeat = shape.atBeat.length - 1;
-  const index = beat > lastBeat ? (shape.boundToBar ? -1 : lastBeat) : beat;
-  const strokes = shape.atBeat[index];
-  if (!strokes) {
-    return;
-  }
+  const strokes = strokesAtBeat(shape, beat);
   const fillVel = velocity * 0.9;
-  const accentVel = velocity * 0.95;
+  // The stroke a fill lands on is the loudest thing in the bar. Reading it as a
+  // fraction of the beat velocity put it below the strokes leading into it and
+  // some twenty units under the backbeat next to it, which is a phrase end
+  // heard as a hole.
+  const accentVel = velocity + BACKBEAT_LIFT + FILL_ACCENT_LIFT;
   for (const stroke of strokes) {
     const base = stroke.velocity.base === 'accent' ? accentVel : fillVel;
     const scaled = stroke.velocity.scale === undefined ? base : base * stroke.velocity.scale;

@@ -22,8 +22,8 @@ import {
   spelledInterval,
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import type { Chord, ChordQuality } from '../chord/index.js';
-import { chordPitchClasses, chordToneRole } from '../chord/index.js';
+import type { Chord } from '../chord/index.js';
+import { chordPitchClasses } from '../chord/index.js';
 import {
   createsHiddenParallelPerfect,
   createsParallelPerfect,
@@ -37,7 +37,8 @@ import { spelledKeyOf } from '../scale/index.js';
 import { spellPitch } from '../spelling/index.js';
 import type { VoiceRange } from '../voicing/index.js';
 import { SATB_RANGES } from '../voicing/index.js';
-import { DEFAULT_MAX_SPACING } from '../voicing/internal.js';
+import { resolveMaxSpacing, resolveRanges } from '../voicing/satb.js';
+import { isFunctioningLeadingTone, leadingTonePcOf, seventhPcOf } from '../voicing/tendency.js';
 import { intervalWord, violation } from './internal.js';
 
 /**
@@ -49,7 +50,9 @@ import { intervalWord, violation } from './internal.js';
  * - `hiddenPerfect`: the outer voices reach a perfect fifth or octave by similar
  *   motion with a leap in the upper voice.
  * - `crossRelation`: one letter carries two different accidentals in two
- *   different voices across a chord change.
+ *   different voices across a chord change, exposed — neither note led into by
+ *   step, at least one of them in an outer voice, and neither chord one of the
+ *   chromatic harmonies that are written with the contradiction.
  * - `voiceCrossing`, `overlap`, `spacing`, `range`: the texture rules.
  * - `unresolvedLeadingTone`, `unresolvedSeventh`: a tendency tone that does not
  *   go where it must.
@@ -70,6 +73,10 @@ import { intervalWord, violation } from './internal.js';
  *   voice leaping down.
  * - `missingCadence`: the exercise does not open or close on the formula its
  *   species requires.
+ * - `melodicShape`: the counterpoint is a poor line — it has no single climax,
+ *   leaps too often or too far one way, leaves a wide leap unanswered, outlines
+ *   a tritone, or repeats a note where the species keeps moving. The rationale
+ *   says which.
  *
  * @category Voicing & Counterpoint
  */
@@ -90,7 +97,8 @@ export type PartWritingViolationKind =
   | 'unresolvedSuspension'
   | 'illegalLeap'
   | 'battuta'
-  | 'missingCadence';
+  | 'missingCadence'
+  | 'melodicShape';
 
 /**
  * One broken rule, located in the progression and in the texture.
@@ -141,12 +149,14 @@ export type PartWritingOptions = {
    * Per-voice ranges, ascending (index 0 = lowest), against which the `range`
    * rule is judged. Defaults to {@link SATB_RANGES} for a four-voice exercise;
    * for any other voice count there is no conventional compass to assume, so
-   * the rule is skipped unless ranges are given.
+   * the rule is skipped unless ranges are given. Given ranges must cover every
+   * voice of the widest chord, and each must be finite with `min` no greater
+   * than `max`.
    */
   ranges?: VoiceRange[];
   /**
    * Maximum spacing in semitones between adjacent upper voices. The bass-tenor
-   * pair is exempt, as convention has it.
+   * pair is exempt, as convention has it. Must be finite and non-negative.
    *
    * @defaultValue 12
    */
@@ -169,40 +179,6 @@ function midiOf(note: Note, index: number, voice: number): number {
 /** Whether a melodic interval descends by a diatonic step. */
 function isDescendingStep(interval: SpelledInterval): boolean {
   return interval.number === 2 && (interval.semitones === -1 || interval.semitones === -2);
-}
-
-/** The qualities a leading-tone chord takes: the diminished triad and sevenths. */
-const LEADING_TONE_QUALITIES: ReadonlySet<ChordQuality> = new Set(['dim', 'dim7', 'm7b5']);
-
-/**
- * Whether the key's leading tone is functioning as one in a chord.
- *
- * The tendency is the dominant's, not the pitch class's: the leading tone must
- * rise where it is the third of a chord built on the dominant degree, or the
- * root of a leading-tone chord, which are the two places it carries dominant
- * function. The same pitch class is an ordinary chord tone elsewhere — the
- * fifth of iii, say — and is free to move as the line asks.
- */
-function isFunctioningLeadingTone(chord: Chord, leadingTonePc: number, key: KeyScale): boolean {
-  const role = chordToneRole(leadingTonePc, chord);
-  if (role === 'third') {
-    return pitchClassOf(chord.rootPc) === pitchClassOf(key.rootPc + 7);
-  }
-  if (role === 'root') {
-    return LEADING_TONE_QUALITIES.has(chord.quality);
-  }
-  return false;
-}
-
-/** The chord's own seventh as a pitch class, or undefined when it has none. */
-function seventhPcOf(chord: Chord): number | undefined {
-  for (const interval of chord.intervals) {
-    const pc = pitchClassOf(chord.rootPc + interval);
-    if (chordToneRole(pc, chord) === 'seventh') {
-      return pc;
-    }
-  }
-  return undefined;
 }
 
 /** One chord of the exercise, and everything the rules read off it. */
@@ -268,11 +244,18 @@ function verticalViolations(
   return found;
 }
 
-/** Two consecutive chords of the exercise, and the key they sound in. */
+/**
+ * Two consecutive chords of the exercise, the key they sound in, and the chords
+ * on either side of the pair. The neighbours are what tells a chromatic tone
+ * that was led into by step from one that was leapt at, and an applied dominant
+ * from the diatonic triad that sounds the same.
+ */
 type Transition = {
   from: Moment;
   to: Moment;
   key: KeyScale;
+  before?: Moment;
+  after?: Moment;
 };
 
 /** The rules judged between two voices moving together: parallels and overlap. */
@@ -348,14 +331,121 @@ function pairViolations(transition: Transition): PartWritingViolation[] {
   return found;
 }
 
+/** Whether a pitch class belongs to the key. */
+function inKey(pc: number, key: KeyScale): boolean {
+  return ((key.modeMask12 >> pitchClassOf(pc - key.rootPc)) & 1) === 1;
+}
+
+/**
+ * Whether a chord has the dominant's sonority: a major triad, or any chord
+ * sounding a major third and a minor seventh above its root.
+ */
+function isDominantSonority(chord: Chord): boolean {
+  const has = (semitones: number): boolean =>
+    chord.intervals.some((interval) => pitchClassOf(interval) === semitones);
+  return chord.quality === 'maj' || (has(4) && has(10));
+}
+
+/**
+ * Whether a chord is an applied dominant: the dominant's sonority, taken down a
+ * fifth onto a degree of the key other than the tonic.
+ *
+ * The resolution is part of the reading rather than a consequence of it. The
+ * same major triad on the third degree of a major key is V/vi where vi follows
+ * and a plain III where nothing does, and only the first of the two licenses
+ * the chromatic tone it introduces.
+ */
+function isAppliedDominant(chord: Chord, next: Chord | undefined, key: KeyScale): boolean {
+  if (next === undefined || !isDominantSonority(chord)) {
+    return false;
+  }
+  const target = pitchClassOf(chord.rootPc + 5);
+  return (
+    target !== pitchClassOf(key.rootPc) &&
+    inKey(target, key) &&
+    pitchClassOf(next.rootPc) === target
+  );
+}
+
+/** Whether a chord is the Neapolitan: a major triad on the lowered second degree. */
+function isNeapolitan(chord: Chord, key: KeyScale): boolean {
+  return chord.quality === 'maj' && pitchClassOf(chord.rootPc - key.rootPc) === 1;
+}
+
+/**
+ * Whether a voicing sounds an augmented sixth above the lowered submediant.
+ *
+ * That interval is what the Italian, French and German chords are all named
+ * for, and it is the only thing separating them from the bVI7 they sound like,
+ * so it is read off the written letters rather than the pitch classes.
+ */
+function soundsAugmentedSixth(moment: Moment, key: KeyScale): boolean {
+  const bass = moment.notes[0];
+  if (bass === undefined || noteToPitchClass(bass) !== pitchClassOf(key.rootPc + 8)) {
+    return false;
+  }
+  return moment.notes.some((note, voice) => {
+    if (voice === 0) {
+      return false;
+    }
+    const interval = spelledInterval(bass, note);
+    return ((interval.number - 1) % 7) + 1 === 6 && pitchClassOf(interval.semitones) === 10;
+  });
+}
+
+/**
+ * Whether a chord is one of the chromatic harmonies whose own definition
+ * contains the contradiction: an applied dominant, the Neapolitan, or an
+ * augmented sixth. Approaching or leaving one of these is where the textbooks
+ * license the cross relation, since the chord cannot be written without it.
+ */
+function isChromaticHarmony(moment: Moment, next: Chord | undefined, key: KeyScale): boolean {
+  return (
+    isAppliedDominant(moment.chord, next, key) ||
+    isNeapolitan(moment.chord, key) ||
+    soundsAugmentedSixth(moment, key)
+  );
+}
+
+/** Whether a voice reaches its note at `moment` by a diatonic step. */
+function approachedByStep(before: Moment | undefined, moment: Moment, voice: number): boolean {
+  const earlier = before?.notes[voice];
+  const later = moment.notes[voice];
+  if (earlier === undefined || later === undefined) {
+    return false;
+  }
+  return spelledInterval(earlier, later).number === 2;
+}
+
+/** Whether a voice is the bass or the top voice of its chord. */
+function isOuterVoice(voice: number, moment: Moment): boolean {
+  return voice === 0 || voice === moment.notes.length - 1;
+}
+
 /**
  * Cross relations: the same letter carrying different accidentals in two
  * different voices across the chord change. Within one voice the same motion is
  * an ordinary chromatic inflection, so a voice is never compared with itself.
+ *
+ * What the rule forbids is a semitone exposed across the texture, and three
+ * things take that exposure away, each of which is reason enough on its own:
+ *
+ * - either of the two notes is led into by step, which is how a chromatic tone
+ *   is introduced rather than sprung;
+ * - both notes lie in inner voices, where the classical norm is markedly
+ *   milder than it is between the outer ones;
+ * - the chord being left or reached is an applied dominant, the Neapolitan, or
+ *   an augmented sixth, whose definition contains the altered degree.
+ *
+ * Each pair of voices is reported once. The two voices are walked in both
+ * directions, so the same clash is met twice and the second reading is dropped.
  */
 function crossRelationViolations(transition: Transition): PartWritingViolation[] {
   const found: PartWritingViolation[] = [];
-  const { from, to } = transition;
+  const { from, to, key, before, after } = transition;
+  const chromatic =
+    isChromaticHarmony(from, to.chord, key) || isChromaticHarmony(to, after?.chord, key);
+  const reported = new Set<string>();
   for (let first = 0; first < from.notes.length; first += 1) {
     for (let second = 0; second < to.notes.length; second += 1) {
       if (first === second) {
@@ -366,12 +456,23 @@ function crossRelationViolations(transition: Transition): PartWritingViolation[]
       if (earlier === undefined || later === undefined) {
         continue;
       }
+      const letter = diatonicLetterOf(earlier.letter);
+      if (letter !== diatonicLetterOf(later.letter) || earlier.alter === later.alter) {
+        continue;
+      }
       if (
-        diatonicLetterOf(earlier.letter) !== diatonicLetterOf(later.letter) ||
-        earlier.alter === later.alter
+        chromatic ||
+        approachedByStep(before, from, first) ||
+        approachedByStep(from, to, second) ||
+        (!isOuterVoice(first, from) && !isOuterVoice(second, to))
       ) {
         continue;
       }
+      const pair = `${letter}:${Math.min(first, second)}:${Math.max(first, second)}`;
+      if (reported.has(pair)) {
+        continue;
+      }
+      reported.add(pair);
       found.push(
         violation(
           'crossRelation',
@@ -403,7 +504,7 @@ function melodicViolations(transition: Transition): PartWritingViolation[] {
   const { from, to, key } = transition;
   const seventhPc = seventhPcOf(from.chord);
   const nextPcs = new Set(chordPitchClasses(to.chord));
-  const leadingTonePc = pitchClassOf(key.rootPc - 1);
+  const leadingTonePc = leadingTonePcOf(key);
   const tonicPc = pitchClassOf(key.rootPc);
   const voices = Math.min(from.notes.length, to.notes.length);
   for (let voice = 0; voice < voices; voice += 1) {
@@ -445,7 +546,7 @@ function melodicViolations(transition: Transition): PartWritingViolation[] {
     }
     if (
       earlierPc === leadingTonePc &&
-      isFunctioningLeadingTone(from.chord, leadingTonePc, key) &&
+      isFunctioningLeadingTone(from.chord, key) &&
       nextPcs.has(tonicPc) &&
       !nextPcs.has(earlierPc) &&
       !isLeadingToneResolution(earlierPitch, laterPitch, key)
@@ -510,10 +611,14 @@ export function spellVoicing(
  * @param voicings One voicing per chord, ascending, in spelled notes.
  * @param chords The chords those voicings realize, in the same order.
  * @param key The key the exercise is written in; it names the leading tone.
- * @param opts Ranges and the upper-voice spacing limit.
+ * @param opts Ranges and the upper-voice spacing limit. Both are validated
+ *   before any rule runs: an empty result has to mean that nothing was broken,
+ *   never that a rule could not be evaluated.
  * @returns Every violation found, in musical order; an empty array for a clean
  *   exercise.
- * @throws If the two arrays differ in length, or a note carries no octave.
+ * @throws If the two arrays differ in length, a note carries no octave, the
+ *   spacing limit is not a non-negative finite number, or the ranges are empty,
+ *   malformed, or too few for the voices being checked.
  * @example
  * ```ts
  * import { checkPartWriting, majorKey, makeChord, spellVoicing } from '@libraz/libcantus';
@@ -522,8 +627,9 @@ export function spellVoicing(
  * const voicings = [[48, 55, 64, 72], [50, 57, 65, 69]].map((pitches, i) =>
  *   spellVoicing(pitches, chords[i] ?? chords[0], key),
  * );
- * checkPartWriting(voicings, chords, key);
- * // [{ kind: 'parallelFifth', voices: [0, 1], fromIndex: 0, toIndex: 1, rationale: '...' }]
+ * const violations = checkPartWriting(voicings, chords, key);
+ * violations.map((violation) => violation.kind); // ['parallelFifth']
+ * violations[0]?.voices; // [0, 1]
  * ```
  * @category Voicing & Counterpoint
  */
@@ -538,13 +644,26 @@ export function checkPartWriting(
       `checkPartWriting needs one chord per voicing; received ${voicings.length} voicings and ${chords.length} chords`,
     );
   }
-  const maxSpacing = opts?.maxSpacing ?? DEFAULT_MAX_SPACING;
-  const voiceCount = voicings[0]?.length ?? 0;
-  // Four voices are the SATB exercise these ranges were written for; any other
-  // count has no conventional compass, so an unasked-for range check would
-  // invent one.
-  const ranges: readonly Readonly<VoiceRange>[] | undefined =
-    opts?.ranges ?? (voiceCount === 4 ? SATB_RANGES : undefined);
+  // The limits are resolved through the same validators the voicing search
+  // uses, and before any rule runs: a NaN limit would silently switch the
+  // spacing rule off, and ranges too short for the texture would leave the top
+  // voices unjudged, both of which report as a clean exercise.
+  const maxSpacing = resolveMaxSpacing(opts);
+  const voiceCount = voicings.reduce((widest, voicing) => Math.max(widest, voicing.length), 0);
+  let ranges: readonly Readonly<VoiceRange>[] | undefined;
+  if (opts?.ranges === undefined) {
+    // Four voices are the SATB exercise these ranges were written for; any other
+    // count has no conventional compass, so an unasked-for range check would
+    // invent one.
+    ranges = voiceCount === 4 ? SATB_RANGES : undefined;
+  } else {
+    ranges = resolveRanges(opts);
+    if (ranges.length < voiceCount) {
+      throw new InvalidInputError(
+        `checkPartWriting needs one range per voice; received ${ranges.length} ranges for ${voiceCount} voices`,
+      );
+    }
+  }
 
   const moments: Moment[] = [];
   for (let index = 0; index < voicings.length; index += 1) {
@@ -569,7 +688,13 @@ export function checkPartWriting(
       continue;
     }
     if (previous !== undefined) {
-      const transition: Transition = { from: previous, to: moment, key };
+      const transition: Transition = {
+        from: previous,
+        to: moment,
+        key,
+        before: position > 1 ? moments[position - 2] : undefined,
+        after: moments[position + 1],
+      };
       violations.push(...pairViolations(transition));
       violations.push(...crossRelationViolations(transition));
       violations.push(...melodicViolations(transition));

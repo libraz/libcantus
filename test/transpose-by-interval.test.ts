@@ -85,6 +85,35 @@ describe('Progression.transposeTo', () => {
     expect(moved.roman()).toEqual(['I', 'V7']);
   });
 
+  it('lands in the target mode instead of keeping its own', () => {
+    const progression = new Progression([Chord.parse('C'), Chord.parse('G7')], Key.major('C'));
+    const moved = progression.transposeTo(Key.minor('A'));
+    expect(moved.key?.equals(Key.minor('A'))).toBe(true);
+    expect(moved.key?.toString()).toBe('A minor');
+    expect(moved.toString()).toBe('A E7');
+    // The members are analyzed in the target key, not in a transposed C major.
+    expect(moved.chords[0]?.key?.equals(Key.minor('A'))).toBe(true);
+  });
+
+  it('carries the target key for every mode it is given', () => {
+    const progression = new Progression([Key.major('C').chord(1)], Key.major('C'));
+    for (const target of [
+      Key.major('Eb'),
+      Key.minor('A'),
+      Key.minor('C'),
+      Key.named('harmonicMinor', 'F#'),
+      Key.named('dorian', 'D'),
+    ]) {
+      expect(progression.transposeTo(target).key?.equals(target)).toBe(true);
+    }
+  });
+
+  it('spells the chords in the target key rather than in an enharmonic one', () => {
+    const progression = new Progression([Chord.of(0, 'maj'), Chord.of(7, 'dom7')], Key.major('C'));
+    expect(progression.transposeTo(Key.major('Gb')).toString()).toBe('Gb Db7');
+    expect(progression.transposeTo(Key.major('F#')).toString()).toBe('F# C#7');
+  });
+
   it('throws without a key context', () => {
     const progression = new Progression([Chord.parse('C'), Chord.parse('G7')]);
     expect(() => progression.transposeTo(Key.major('Eb'))).toThrow(/no key context/);

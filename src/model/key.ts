@@ -1,7 +1,7 @@
 import type { DetectKeyOptions, KeyMatch, KeyVariant } from '../analyze/detect/index.js';
 import { detectKey, detectKeyBest } from '../analyze/detect/index.js';
 import { isMinorKey, romanToChord } from '../analyze/functional/index.js';
-import { InvalidInputError } from '../core/errors/index.js';
+import { InvalidInputError, type ParseResult, unwrapParse } from '../core/errors/index.js';
 import type {
   IntervalLike,
   Note as NoteData,
@@ -10,10 +10,10 @@ import type {
 } from '../core/pitch/index.js';
 import {
   formatKeyName,
-  parseKeyName,
   spelledInterval,
   toSpelledInterval,
   transposeByInterval,
+  tryParseKeyName,
 } from '../core/pitch/index.js';
 import type { KeyScale } from '../core/types.js';
 import { assertFiniteNumber, assertInteger } from '../core/validation/index.js';
@@ -27,6 +27,7 @@ import {
   dominantKeyOf,
   enharmonicKeyOf,
   isScaleTone,
+  isSignatureKey,
   type KeyMode,
   type KeyRelation,
   keyFromFifths,
@@ -41,6 +42,7 @@ import {
   type SpelledKey,
   scaleByName,
   scaleTonesInDegreeOrder,
+  spelledKeyOf,
   subdominantKeyOf,
 } from '../theory/scale/index.js';
 import { spellScale } from '../theory/spelling/index.js';
@@ -49,13 +51,26 @@ import { toWrittenPitch } from '../theory/transposition/index.js';
 import { Chord } from './chord.js';
 import { Interval } from './interval.js';
 import { Note } from './note.js';
-import { mod12, spellPitchClassBare } from './shared.js';
+import { mod12 } from './shared.js';
 
 /** A detected key paired with the score and scale form that produced it. */
 export type DetectedKeyMatch = Omit<KeyMatch, 'key'> & { key: Key };
 
+/**
+ * The plain form of a {@link Key}: the key/scale, the spelled tonic that
+ * anchors its letter names, and the detected scale form when it has one.
+ *
+ * The variant travels with the data because a detected harmonic or melodic
+ * minor is not recoverable from the scale mask and tonic alone, and a key that
+ * loses it prints as a plain minor after a round trip through a project file.
+ */
+export type KeyData = { scale: KeyScale; tonic: NoteData; variant?: KeyVariant };
+
 /** Widest signature a key is actually written with, in fifths. */
 const MAX_CONVENTIONAL_FIFTHS = 7;
+
+/** An alteration of two sharps or two flats: the spelling a tonic should avoid. */
+const DOUBLE_ACCIDENTAL = 2;
 
 /** How many degrees a scale needs before thirds can be stacked on it. */
 const HEPTATONIC_DEGREES = 7;
@@ -74,25 +89,54 @@ function bareInterval(from: Note, to: Note): SpelledInterval {
   );
 }
 
-/** Total accidentals a spelled tonic produces across a key's whole scale. */
-function accidentalLoad(tonic: NoteData, scale: KeyScale): number {
-  return spellScale(tonic, scale).reduce((sum, note) => sum + Math.abs(note.alter), 0);
+/**
+ * The tonic spelling a key arriving as a bare pitch class is written with.
+ *
+ * Routed through {@link spelledKeyOf}, the one place that answers this, so the
+ * key a caller prints and the key the theory layer spells — a detection
+ * rationale, a spelled line, a key region — never name the tonic differently.
+ */
+function spelledTonicFor(scale: KeyScale): Note {
+  return new Note(spelledKeyOf(scale).tonic);
 }
 
 /**
- * Choose the tonic spelling (sharp- or flat-side) that spells `scale` with the
- * fewest accidentals, so a numeric root never yields a double-flat/double-sharp
- * scale (e.g. pitch class 6 minor spells as F# minor, not Gb minor with Bbb).
+ * An immutable key/scale: a `KeyScale` (root pitch class plus mode mask) paired
+ * with a spelled tonic that anchors letter-name spelling. Acts as the factory
+ * for key-aware chords.
+ *
+ * @category Class API
+ * @example
+ * ```ts
+ * import { Key } from '@libraz/libcantus';
+ * Key.major('C').chord(5).symbol(); // 'G' (the diatonic triad on scale degree 5)
+ * ```
  */
-function bestTonicForScale(rootPc: number, scale: KeyScale): Note {
-  const sharp = spellPitchClassBare(rootPc, 'sharp');
-  const flat = spellPitchClassBare(rootPc, 'flat');
-  if (sharp.letter === flat.letter && sharp.alter === flat.alter) {
-    return new Note(sharp);
+/**
+ * Whether a value is the class API's {@link Note} rather than the plain note
+ * data the pitch functions return.
+ *
+ * Read structurally rather than with `instanceof`: the package ships an ESM and
+ * a CommonJS build, so a consumer reaching the two through different conditions
+ * holds two `Note` classes, and an identity test would reject its own note.
+ */
+function isNoteInstance(value: unknown): value is Note {
+  if (value === null || typeof value !== 'object') {
+    return false;
   }
-  return accidentalLoad(flat, scale) <= accidentalLoad(sharp, scale)
-    ? new Note(flat)
-    : new Note(sharp);
+  const candidate = value as { pitchClass?: unknown; data?: unknown };
+  return typeof candidate.pitchClass === 'number' && typeof candidate.data === 'object';
+}
+
+/** Name what arrived where the class API's {@link Note} was expected. */
+function describeTonic(value: unknown): string {
+  if (value === null || typeof value !== 'object') {
+    return String(value);
+  }
+  const candidate = value as Partial<NoteData>;
+  return typeof candidate.letter === 'number' && typeof candidate.alter === 'number'
+    ? 'plain note data'
+    : 'an object that is not a note';
 }
 
 /**
@@ -125,6 +169,15 @@ export class Key {
     if ((scale.modeMask12 & 1) === 0) {
       throw new InvalidInputError('scale.modeMask12 must include the tonic (bit 0)');
     }
+    // Named before the pitch class is read: a plain note from the pitch
+    // functions has no `pitchClass`, so the comparison below would report the
+    // mismatch of an `undefined` tonic instead of the type that arrived.
+    if (!isNoteInstance(tonic)) {
+      throw new InvalidInputError(
+        `tonic must be the class API's Note; received ${describeTonic(tonic)}; ` +
+          'wrap plain note data with Note.fromData, or omit the tonic to have one chosen',
+      );
+    }
     const rootPc = mod12(scale.rootPc);
     if (tonic.pitchClass !== rootPc) {
       throw new InvalidInputError(
@@ -139,11 +192,9 @@ export class Key {
 
   /** Preserve detection metadata while replacing its plain key with this API's Key. */
   static #fromMatch(match: KeyMatch): DetectedKeyMatch {
-    const key = new Key(
-      match.key,
-      bestTonicForScale(mod12(match.key.rootPc), match.key),
-      match.variant,
-    );
+    // The same spelling the detector's own rationale is written with, so a match
+    // never names its tonic one way in `toString()` and another in `rationale`.
+    const key = new Key(match.key, spelledTonicFor(match.key), match.variant);
     return { ...match, key };
   }
 
@@ -162,8 +213,8 @@ export class Key {
    * A major key.
    *
    * @param root Tonic as a note name (e.g. `'Eb'`) or a pitch class; a numeric
-   *   root is spelled with whichever accidental side yields the fewest
-   *   accidentals across the scale.
+   *   root is spelled the way {@link spelledKeyOf} spells it — the side the
+   *   scale reads best from, which for a major key is the shorter signature.
    * @returns The major key.
    */
   static major(root: string | number): Key {
@@ -172,15 +223,15 @@ export class Key {
       return new Key(majorKey(tonic.pitchClass), tonic);
     }
     const scale = majorKey(root);
-    return new Key(scale, bestTonicForScale(root, scale));
+    return new Key(scale, spelledTonicFor(scale));
   }
 
   /**
    * A natural-minor key.
    *
    * @param root Tonic as a note name or a pitch class; a numeric root is
-   *   spelled with whichever accidental side yields the fewest accidentals
-   *   across the scale.
+   *   spelled the way {@link spelledKeyOf} spells it, so pitch class 8 is G#
+   *   minor and not Ab minor.
    * @returns The minor key.
    */
   static minor(root: string | number): Key {
@@ -189,7 +240,7 @@ export class Key {
       return new Key(minorKey(tonic.pitchClass), tonic);
     }
     const scale = minorKey(root);
-    return new Key(scale, bestTonicForScale(root, scale));
+    return new Key(scale, spelledTonicFor(scale));
   }
 
   /**
@@ -197,8 +248,8 @@ export class Key {
    *
    * @param name The scale name, a key of the scale module's named-scale table.
    * @param root Tonic as a note name or a pitch class; a numeric root is
-   *   spelled with whichever accidental side yields the fewest accidentals
-   *   across the scale, exactly as {@link Key.major} does.
+   *   spelled the way {@link spelledKeyOf} spells it, exactly as
+   *   {@link Key.major} does — pitch class 1 altered is C#, not Db.
    * @returns The key.
    * @throws If the name is not a known scale.
    */
@@ -208,7 +259,7 @@ export class Key {
       return new Key(scaleByName(name, tonic.pitchClass), tonic);
     }
     const scale = scaleByName(name, mod12(root));
-    return new Key(scale, bestTonicForScale(mod12(root), scale));
+    return new Key(scale, spelledTonicFor(scale));
   }
 
   /**
@@ -239,8 +290,33 @@ export class Key {
    * ```
    */
   static parse(text: string, opts?: NoteNameOptions): Key {
-    const { tonic, mode } = parseKeyName(text, opts);
-    return Key.#modeOn(mode, new Note(tonic));
+    return unwrapParse(Key.tryParse(text, opts));
+  }
+
+  /**
+   * Parse a key name, reporting failure instead of throwing it.
+   *
+   * The same reading as {@link Key.parse}, for the callers where text that does
+   * not name a key yet is the normal state of the input rather than a fault: a
+   * key-signature field can say what is wrong with what has been typed so far
+   * without a `try` around every keystroke.
+   *
+   * @param text The key name.
+   * @param opts `system` reads the name in that notation system instead of
+   *   detecting it.
+   * @returns The key, or the error explaining why the text is not one.
+   * @example
+   * ```ts
+   * import { Key } from '@libraz/libcantus';
+   * const result = Key.tryParse('gis moll');
+   * result.ok ? result.value.toString() : result.error.message; // 'G# minor'
+   * ```
+   */
+  static tryParse(text: string, opts?: NoteNameOptions): ParseResult<Key> {
+    const parsed = tryParseKeyName(text, opts);
+    return parsed.ok
+      ? { ok: true, value: Key.#modeOn(parsed.value.mode, new Note(parsed.value.tonic)) }
+      : parsed;
   }
 
   /**
@@ -272,9 +348,9 @@ export class Key {
    * given.
    *
    * The synthesized tonic is chosen the same way as for a numeric root
-   * elsewhere: whichever accidental side spells the scale with the fewest
-   * accidentals. This is what keeps `Key.of(detectKey(...).scale)` from handing
-   * every downstream chord a double-sharp spelling.
+   * elsewhere, by {@link spelledKeyOf}: the side the scale reads best from.
+   * This is what keeps `Key.of(detectKey(...).scale)` from handing every
+   * downstream chord a double-sharp spelling.
    *
    * @param scale The key/scale to wrap.
    * @param tonic Optional spelled tonic; must spell the scale's root pitch class.
@@ -282,17 +358,27 @@ export class Key {
    * @throws If the given tonic is not the scale's root pitch class.
    */
   static of(scale: KeyScale, tonic?: Note): Key {
-    return new Key(scale, tonic ?? bestTonicForScale(mod12(scale.rootPc), scale));
+    return new Key(scale, tonic ?? spelledTonicFor(scale));
   }
 
   /**
    * Rebuild a key from its {@link Key.toJSON} output.
    *
-   * @param data The serialized key and tonic.
+   * @param data The serialized key, tonic, and scale form.
    * @returns The key.
    */
-  static fromJSON(data: { scale: KeyScale; tonic: NoteData }): Key {
-    return new Key(data.scale, new Note(data.tonic));
+  static fromJSON(data: KeyData): Key {
+    return new Key(data.scale, new Note(data.tonic), data.variant);
+  }
+
+  /**
+   * Wrap plain key data, matching the `fromData` factory on the other classes.
+   *
+   * @param data The plain key, as {@link Key.data} hands it out.
+   * @returns The key.
+   */
+  static fromData(data: KeyData): Key {
+    return Key.fromJSON(data);
   }
 
   /**
@@ -389,6 +475,11 @@ export class Key {
     return keySignatureFifths(this.#tonic.data, this.#scale);
   }
 
+  /** A copy of the underlying plain key data. */
+  get data(): KeyData {
+    return this.toJSON();
+  }
+
   /** The detected scale form, when this key came from key detection. */
   get variant(): KeyVariant | undefined {
     return this.#variant;
@@ -438,7 +529,10 @@ export class Key {
   }
 
   /**
-   * The dominant key: one sharp further round the circle of fifths, same mode.
+   * The dominant key: the key a fifth above, in the mode this key's third names.
+   *
+   * The fifth is measured from the tonic, so a key that is not a plain major or
+   * minor answers with the same move: the dominant of D dorian is A minor.
    *
    * @returns The key a fifth above.
    * @throws If the resulting signature falls outside [-12, 12] fifths.
@@ -453,7 +547,9 @@ export class Key {
   }
 
   /**
-   * The subdominant key: one flat further round the circle of fifths, same mode.
+   * The subdominant key: the key a fifth below, in the mode this key's third
+   * names, and the exact inverse of {@link Key.dominantKey} on the tonic
+   * spelling.
    *
    * @returns The key a fifth below.
    * @throws If the resulting signature falls outside [-12, 12] fifths.
@@ -490,9 +586,12 @@ export class Key {
   /**
    * The six closely related keys, each tagged with its relation.
    *
-   * These are the keys a piece modulates to without a change of signature worth
-   * more than one accidental: the relative and parallel keys, the dominant and
-   * subdominant, and the relatives of those two.
+   * These are the keys the German and Japanese teaching tradition counts as a
+   * key's near relations: the relative and parallel keys, the dominant and the
+   * subdominant, and the relatives of those two. Five of them are written
+   * within one accidental of this key's signature — the relative shares it
+   * exactly and the other four stand one away; the parallel key stands three
+   * away and belongs to the set for the tonic it shares instead.
    *
    * @returns The related keys in relation order.
    * @throws If a neighbouring signature falls outside [-12, 12] fifths.
@@ -516,8 +615,10 @@ export class Key {
    * How another key stands to this one.
    *
    * Only the identity test looks at the tonic spelling; every other relation
-   * compares tonic pitch class and mode mask, so C# minor and Db minor both
-   * read as the relative of E major.
+   * compares tonic pitch class and mode, so C# minor and Db minor both read as
+   * the relative of E major. Both keys are read through the mode their third
+   * names, so a detected A harmonic minor stands to C major exactly as A minor
+   * does, and the answer reads the same from either side.
    *
    * @param other The key the relation is measured to.
    * @returns The relation, or null when `other` is none of this key's related
@@ -697,12 +798,13 @@ export class Key {
    *
    * The mode mask is unchanged, so the scale keeps its shape; only the tonic
    * moves. The tonic's letter follows the semitone count, and the result is
-   * then respelled to its enharmonic key whenever that letter would need a
-   * signature of more than seven sharps or flats: Db major up a semitone reads
-   * as D major rather than as Ebb major and its ten flats. A key that is
-   * already written — anything within ±7 — is left exactly as it is, so C major
-   * up six semitones stays F# major, and a key whose enharmonic is unwritable
-   * too keeps the letter-transposed spelling.
+   * then respelled to its enharmonic key whenever the key would not be written
+   * that way: Db major up a semitone reads as D major rather than as Ebb major
+   * and its ten flats. A key written with a signature is judged by that
+   * signature — anything within ±7 is left exactly as it is, so C major up six
+   * semitones stays F# major — and a scale that only borrows one is judged by
+   * whether its spelling needs a double accidental. A key whose enharmonic is
+   * unwritable too keeps the letter-transposed spelling.
    *
    * Use {@link Key.transposeBy} to transpose by a named interval instead, which
    * spells the tonic exactly as that interval demands.
@@ -721,14 +823,36 @@ export class Key {
     const rootPc = mod12(this.#scale.rootPc + Math.round(semitones));
     const scale = { rootPc, modeMask12: this.#scale.modeMask12 };
     const moved = new Key(scale, this.#tonic.transpose(semitones), this.#variant);
-    if (Math.abs(moved.fifths) <= MAX_CONVENTIONAL_FIFTHS) {
+    if (moved.#isWritten()) {
       return moved;
     }
     // The enharmonic key supplies the tonic spelling only: the scale keeps this
     // key's own mask, so a harmonic minor or a pentatonic is respelled rather
-    // than flattened into a plain major or minor key.
+    // than flattened into a plain major or minor key. A respelling that does not
+    // sound the same root is no respelling at all, so the moved key stands —
+    // transposing is total, and no spelling question may turn it into a throw.
     const other = enharmonicKeyOf(moved.tonic.data, moved.scale);
-    return other === null ? moved : new Key(scale, new Note(other.tonic), this.#variant);
+    const respelled = other === null ? null : new Note(other.tonic);
+    return respelled === null || respelled.pitchClass !== rootPc
+      ? moved
+      : new Key(scale, respelled, this.#variant);
+  }
+
+  /**
+   * Whether this key is spelled the way keys are actually written, which is
+   * what decides whether {@link Key.transpose} leaves a spelling alone.
+   *
+   * A key with a signature of its own is written wherever that signature is,
+   * up to seven sharps or flats. A scale that only borrows the signature of its
+   * parallel major or minor is written wherever it reads: the borrowed count
+   * says nothing — the octatonic scale on Db borrows eight flats and is spelled
+   * Db all the same — so what counts there is that no note needs a double
+   * accidental.
+   */
+  #isWritten(): boolean {
+    return isSignatureKey(this.#scale)
+      ? Math.abs(this.fifths) <= MAX_CONVENTIONAL_FIFTHS
+      : this.notes().every((note) => Math.abs(note.alter) < DOUBLE_ACCIDENTAL);
   }
 
   /**
@@ -789,12 +913,20 @@ export class Key {
   }
 
   /**
-   * The spelled scale as letter-name strings.
+   * The spelled scale as note-name strings.
    *
+   * @param opts `system` writes the names in that notation system instead of
+   *   English, matching {@link Key.toString}.
    * @returns One name per scale degree.
+   * @example
+   * ```ts
+   * import { Key } from '@libraz/libcantus';
+   * Key.major('C').noteNames(); // ['C', 'D', 'E', 'F', 'G', 'A', 'B']
+   * Key.minor('G#').noteNames({ system: 'german' })[0]; // 'gis'
+   * ```
    */
-  noteNames(): string[] {
-    return this.notes().map((note) => note.name);
+  noteNames(opts?: NoteNameOptions): string[] {
+    return this.notes().map((note) => note.format(opts));
   }
 
   /**
@@ -874,13 +1006,19 @@ export class Key {
    *
    * Private class fields do not serialize, so an explicit `toJSON` keeps
    * `JSON.stringify(key)` from collapsing to `{}`. The result pairs the
-   * `KeyScale` with the spelled tonic, enough to reconstruct the key via
-   * {@link Key.of}.
+   * `KeyScale` with the spelled tonic and, for a detected harmonic or melodic
+   * minor, the scale form — everything {@link Key.fromJSON} needs to rebuild a
+   * key that reads and prints as this one.
    *
-   * @returns The key/scale and its spelled tonic.
+   * @returns The key/scale, its spelled tonic, and its scale form when it has
+   *   one.
    */
-  toJSON(): { scale: KeyScale; tonic: NoteData } {
-    return { scale: this.scale, tonic: this.#tonic.data };
+  toJSON(): KeyData {
+    // The variant is omitted rather than written as undefined, so a key that
+    // never came from detection serializes to the same object it always did.
+    return this.#variant === undefined
+      ? { scale: this.scale, tonic: this.#tonic.data }
+      : { scale: this.scale, tonic: this.#tonic.data, variant: this.#variant };
   }
 
   /**

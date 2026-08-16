@@ -9,7 +9,11 @@
 - **ピッチは MIDI ノート番号です。** 中央ハは60です。[音律と周波数](tuning-and-frequency.md)を使わない限り、周波数は現れません。
 - **時間は4分音符を単位とする拍です。** `startBeat` と `durationBeat` は浮動小数の拍数で、ティックでも秒でもありません。拍0が最初の強拍で、アウフタクトは負の拍から始まります。
 
-このライブラリが返す値はすべて JSON 互換のプレーンデータです。関数 API にクラスインスタンスは現れず、隠れたプロトタイプもありません。解析結果はそのままプロジェクトファイルに直列化でき、復元処理なしで読み戻せます。クラス API は同じデータを包み、`.data` で公開します。
+解析と生成の結果は JSON 互換のプレーンデータです。関数 API にクラスインスタンスは現れず、隠れたプロトタイプもありません。結果はそのままプロジェクトファイルに直列化でき、復元処理なしで読み戻せます。クラス API は同じデータを包み、`.data` で公開します。
+
+データではなく検索関数であるフィールドが1つだけあります。コードタイムラインは `segments` と、それを引く `at` の組で、関数は `JSON.stringify` を通り抜けられません。解析結果の報告フィールドは `timeline.segments` を含めてそのまま往復し、`at` は保存した segments から `chordTimelineFromChords` で作り直せます。作り直したものは、元のタイムラインとすべての拍で同じ和音を返します。
+
+例外はハンドルで、これらは結果ではありません。`createNoteEventIndex`、`createArrangementSession`、`createRng`、`createPositionalRng`、`resolveContext` が返すのはライブオブジェクトです。メソッドや関数のフィールドは `JSON.stringify` を通り抜けられません。保存するのは、それらを組み立てた入力のほうです。ノートイベント、シード、解決後の `algorithmVersion` を保存し、読み込み時に作り直してください。[決定性とシード](determinism-and-seeding.md)を参照してください。
 
 ## ティックと秒
 
@@ -38,6 +42,8 @@ secondsToBeats(6, tempo); // 8
 
 `TempoMap` は区分定数で、変化をまたいで積分されます。テンポ変化をまたぐ音は、どちらか一方の値で計算した長さではなく、正しい長さになります。
 
+マップの最初のイベントが時間の原点です。`beatsToSeconds` はそこで 0 を返します。ピックアップはその前に鳴るため、拍・秒・tick のいずれも負になり、冒頭のテンポでそのまま計算されます。`beatsToSeconds(-1, tempo)` は `-0.5`、`beatsToTicks(-1, 480)` は `-480` です。変換のために全体をずらす必要はありません。
+
 ## MIDI ファイルの取り込み
 
 ホストが既に持つ MIDI パーサを使う場合の一般的な流れです。
@@ -45,7 +51,7 @@ secondsToBeats(6, tempo); // 8
 1. 各イベントのティック位置と長さを `ticksToBeats` で拍に変換します。
 2. 長さ0のイベントを残すか捨てるかを明示的に決めます。`dropSilentNotes` は解析側の方針を適用し、`assertNoteEvents` に `allowNonPositiveDuration` を渡すとその判断の前に検査できます。
 3. ファイルの拍子イベントから拍子マップを、テンポイベントからテンポマップを組み立てます。
-4. 和声に寄与するトラックを1つの配列にまとめて `chordTimelineFromNotes` に渡し、それ以外は `ArrangementTrack` として個別に保ち `analyzeArrangement` に渡します。
+4. 和声に寄与するトラックを1つの配列にまとめて `chordTimelineFromNotes` に渡し、それ以外は `ArrangementTrack` として個別に保ち `analyzeArrangement` に渡します。ノートを読む入り口はいずれも `readonly NoteEvent[]` を受け取るため、`ArrangementTrack.notes` はコピーせずそのまま渡せます。
 
 ```ts
 import { assertNoteEvents, dropSilentNotes, ticksToBeats } from '@libraz/libcantus';

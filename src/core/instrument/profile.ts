@@ -88,7 +88,7 @@ export type InstrumentProfile = StringedProfile | PercussionProfile;
  * @category Core
  */
 export type StringFingering = {
-  /** Index into {@link StringedProfile.tuning}. */
+  /** Index into the `tuning` of a {@link StringedProfile}. */
   string: number;
   /** Fret number; 0 is the open string. */
   fret: number;
@@ -111,12 +111,32 @@ function assertProfile(profile: InstrumentProfile): void {
 }
 
 /**
+ * The limbs a kit can actually strike a voice with.
+ *
+ * A `reach` entry names the limbs that are placed to hit a voice; `limbs` names
+ * the limbs the player has. A voice reachable only by a limb the player has not
+ * got is not on the instrument, so the two are read together everywhere rather
+ * than the reach alone.
+ *
+ * @param profile The kit.
+ * @param pitch MIDI pitch, or `undefined` for a note that is not there.
+ * @returns The available limbs in preference order; empty when none can strike.
+ * @category Core
+ */
+export function reachOf(profile: PercussionProfile, pitch: number | undefined): readonly Limb[] {
+  if (pitch === undefined) {
+    return [];
+  }
+  return (profile.reach[pitch] ?? []).filter((limb) => profile.limbs.includes(limb));
+}
+
+/**
  * The lowest and highest pitch an instrument sounds.
  *
  * For a string instrument this is derived from the tuning and the fret count,
- * never stored; for a kit it is the extent of the voices within reach. The
- * range is not necessarily gapless — use {@link canSound} to ask about one
- * pitch.
+ * never stored; for a kit it is the extent of the voices the player's limbs
+ * reach. The range is not necessarily gapless — use {@link canSound} to ask
+ * about one pitch.
  *
  * @param profile The instrument.
  * @returns The extreme sounding pitches, inclusive.
@@ -143,6 +163,12 @@ export function instrumentRange(profile: InstrumentProfile): { low: number; high
   let high = Number.NEGATIVE_INFINITY;
   for (const key of Object.keys(profile.reach)) {
     const pitch = Number(key);
+    // A voice only an absent limb reaches is not on this kit, so it does not
+    // stretch the range either — otherwise the range would promise a pitch
+    // {@link canSound} denies.
+    if (reachOf(profile, pitch).length === 0) {
+      continue;
+    }
     low = Math.min(low, pitch);
     high = Math.max(high, pitch);
   }
@@ -157,7 +183,8 @@ export function instrumentRange(profile: InstrumentProfile): { low: number; high
  *
  * @param profile The instrument.
  * @param pitch MIDI pitch.
- * @returns True when some string and fret, or some limb, produces it.
+ * @returns True when some string and fret, or some limb the player has,
+ *   produces it.
  * @category Core
  */
 export function canSound(profile: InstrumentProfile, pitch: number): boolean {
@@ -165,7 +192,7 @@ export function canSound(profile: InstrumentProfile, pitch: number): boolean {
   if (profile.kind === 'stringed') {
     return profile.tuning.some((open) => pitch >= open && pitch - open <= profile.frets);
   }
-  return (profile.reach[pitch]?.length ?? 0) > 0;
+  return reachOf(profile, pitch).length > 0;
 }
 
 /**

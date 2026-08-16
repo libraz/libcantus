@@ -98,7 +98,9 @@ Both functions take the same options. The ones that matter most in practice:
 
 - `ts` or `meters` — the meter, so bar lines and metric accents are read correctly. Give one when the piece is not in 4/4.
 - `expectedKeyBeats` — how long a key is expected to hold, which sets how eagerly the search proposes a new region. It defaults to four bars.
-- `minKeyBeats` — the shortest region the search will emit, one bar by default. Raise it when brief tonicizations are being reported as modulations.
+- `minKeyBeats` — the shortest region the search will emit, one bar by default. Raise it when brief tonicizations are being reported as modulations. `keyTimelineFromNotes` sizes its slots by it; `detectModulations` takes its slots from the chords and folds a shorter region into the neighbouring key that reads its chords best. Either way a shorter region survives only where the analyzed span itself ends.
+
+One option is not shared in practice: `profile` names a pitch-class profile, and `detectModulations` scores each chord by the part it plays in a key rather than by weighing pitch classes, so passing it there changes nothing.
 
 `prevailingKeyOf` collapses a set of regions to the single key that holds for most of the span, which is what a global label in a UI should show.
 

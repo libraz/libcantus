@@ -52,13 +52,21 @@ export function groupingSumOf(ts: TimeSignature): number | undefined {
  * A compound numerator normally groups into pulses of three — 9/8 is three
  * dotted-quarter pulses — but the same signature is also how additive metres
  * are written, where 9/8 means 2+2+2+3 quavers. A grouping that sums to the
- * numerator selects that additive reading.
+ * numerator is written in units and selects that additive reading, with one
+ * exception: groups of nothing but threes spell the compound division itself
+ * (9/8 as [3, 3, 3], 6/8 as [3, 3]), so they keep the compound reading rather
+ * than flattening the bar into equal quaver pulses.
  */
 export function isAdditiveReading(ts: TimeSignature): boolean {
+  const grouping = ts.grouping;
   const sum = groupingSumOf(ts);
-  return (
-    sum !== undefined && isCompoundNumerator(ts.numerator) && sum === ts.numerator && sum !== 0
-  );
+  if (grouping === undefined || sum === undefined || sum === 0) {
+    return false;
+  }
+  if (!isCompoundNumerator(ts.numerator) || sum !== ts.numerator) {
+    return false;
+  }
+  return !grouping.every((entry) => entry === 3);
 }
 
 /** Number of main pulses per bar under the signature's effective reading. */
@@ -72,6 +80,30 @@ export function pulseCountOf(ts: TimeSignature): number {
 /** Length of one main pulse in quarter-note beats, under the same reading. */
 export function pulseBeatsOf(ts: TimeSignature): number {
   return (ts.numerator * unitBeatsOf(ts)) / pulseCountOf(ts);
+}
+
+/**
+ * The signature's grouping measured in main pulses, or undefined when it has
+ * none.
+ *
+ * A grouping is written either in main pulses (9/8 as [1, 1, 1], 7/8 as
+ * [2, 2, 3]) or in denominator units (9/8 as [3, 3, 3] or [2, 2, 2, 3]), and
+ * the two coincide wherever a pulse is one unit. Group heads are found by
+ * counting pulses, so the unit spelling of a compound bar is divided down to
+ * the pulses it describes.
+ */
+export function pulseGroupingOf(ts: TimeSignature): number[] | undefined {
+  const grouping = ts.grouping;
+  if (grouping === undefined) {
+    return undefined;
+  }
+  const pulses = pulseCountOf(ts);
+  if (groupingSumOf(ts) === pulses) {
+    return grouping;
+  }
+  // The only accepted grouping that does not count pulses is the all-threes
+  // spelling of a compound bar, whose groups are three units to the pulse.
+  return grouping.map((entry) => entry / 3);
 }
 
 /** Length of a bar in quarter-note beats. */
@@ -129,6 +161,24 @@ export function barStartOf(map: MeterMap, beat: number): number {
   }
   const barLen = barBeatsOf(entry.ts);
   return entry.startBeat + Math.floor((beat - entry.startBeat) / barLen + EPS) * barLen;
+}
+
+/**
+ * Length in quarter-note beats of the bar containing `beat`.
+ *
+ * A meter change starts a new bar, so the bar it interrupts is shorter than its
+ * own signature says: this is that bar's real length, which is what a position
+ * display has to count felt beats against.
+ */
+export function barLengthOf(map: MeterMap, beat: number): number {
+  const index = entryIndexOf(map, beat);
+  const entry = map[index];
+  if (entry === undefined) {
+    return 0;
+  }
+  const full = barBeatsOf(entry.ts);
+  const next = map[index + 1]?.startBeat;
+  return next === undefined ? full : Math.min(full, next - barStartOf(map, beat));
 }
 
 /**

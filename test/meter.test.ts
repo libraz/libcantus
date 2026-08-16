@@ -13,6 +13,7 @@ import {
   pulseBeats,
   pulsesPerBar,
   type TimeSignature,
+  tryParseTimeSignature,
   tuplet,
 } from '../src/core/meter/index.js';
 
@@ -26,6 +27,26 @@ describe('time signatures', () => {
   it('round-trips additive groupings', () => {
     const aksak = { numerator: 7, denominator: 8, grouping: [2, 2, 3] };
     expect(parseTimeSignature(formatTimeSignature(aksak, { grouping: true }))).toEqual(aksak);
+  });
+
+  it('reports failure instead of throwing it, on the same texts', () => {
+    const texts = ['4/4', '2+2+3/8', ' 6 / 8 ', '4-4', '', '0/4', '4/0', '5/8x', '1+1+1/8'];
+    for (const text of texts) {
+      const tried = tryParseTimeSignature(text);
+      if (tried.ok) {
+        expect(parseTimeSignature(text), text).toEqual(tried.value);
+        continue;
+      }
+      // The throwing sibling fails on exactly the same text, with the error the
+      // result carried rather than one of its own.
+      expect(() => parseTimeSignature(text), text).toThrow(tried.error.message);
+      expect(tried.error.code, text).toBe('INVALID_INPUT');
+    }
+    // Text is not the only way in: a non-string reaches the same failure rather
+    // than a TypeError from inside the reader.
+    const wrongType = tryParseTimeSignature(4 as unknown as string);
+    expect(wrongType.ok).toBe(false);
+    expect(wrongType.ok ? '' : wrongType.error.message).toContain('must be a string');
   });
 
   it('classifies compound meters', () => {
@@ -159,6 +180,203 @@ describe('additive meter grouping', () => {
     const ts: TimeSignature = { numerator: 7, denominator: 8, grouping: [2, 2, 2] };
     // pulse index 0 short-circuits, but any later pulse validates the grouping.
     expect(() => metricWeight(0.5, ts)).toThrow();
+  });
+});
+
+describe('the reading a grouping selects', () => {
+  /** 9/8 written as its three dotted pulses, in units and in pulses. */
+  const NINE_COMPOUND: TimeSignature[] = [
+    { numerator: 9, denominator: 8, grouping: [3, 3, 3] },
+    { numerator: 9, denominator: 8, grouping: [1, 1, 1] },
+  ];
+
+  it('reads groups of threes on a compound numerator as the compound division', () => {
+    for (const ts of NINE_COMPOUND) {
+      const spelling = JSON.stringify(ts.grouping);
+      expect(pulsesPerBar(ts), spelling).toBe(3);
+      expect(pulseBeats(ts), spelling).toBe(1.5);
+      expect(isCompound(ts), spelling).toBe(true);
+      expect(barPositionToPulse({ bar: 0, beat: 1.5 }, ts), spelling).toBe(2);
+      expect(formatBarPosition(1.5, ts), spelling).toBe('1.2');
+    }
+    const six: TimeSignature = { numerator: 6, denominator: 8, grouping: [3, 3] };
+    expect(pulsesPerBar(six)).toBe(2);
+    expect(pulseBeats(six)).toBe(1.5);
+    expect(isCompound(six)).toBe(true);
+  });
+
+  it('reads any other grouping summing to the numerator as additive units', () => {
+    const aksak: TimeSignature = { numerator: 9, denominator: 8, grouping: [2, 2, 2, 3] };
+    expect(pulsesPerBar(aksak)).toBe(9);
+    expect(pulseBeats(aksak)).toBe(0.5);
+    expect(isCompound(aksak)).toBe(false);
+    // Group heads at quaver pulses 0, 2, 4 and 6 — beats 0, 1, 2 and 3.
+    expect([0, 1, 2, 3].map((beat) => metricWeight(beat, aksak))).toEqual([3, 2, 2, 2]);
+    expect(metricWeight(0.5, aksak)).toBe(1);
+  });
+
+  it('reports one reading from every exit that depends on it', () => {
+    const cases: TimeSignature[] = [
+      { numerator: 4, denominator: 4 },
+      { numerator: 3, denominator: 4 },
+      { numerator: 6, denominator: 8 },
+      ...NINE_COMPOUND,
+      { numerator: 9, denominator: 8 },
+      { numerator: 9, denominator: 8, grouping: [2, 2, 2, 3] },
+      { numerator: 12, denominator: 8, grouping: [2, 2] },
+      { numerator: 7, denominator: 8, grouping: [2, 2, 3] },
+      { numerator: 5, denominator: 8, grouping: [3, 2] },
+      { numerator: 6, denominator: 4, grouping: [3, 3] },
+    ];
+    for (const ts of cases) {
+      const name = `${formatTimeSignature(ts)} ${JSON.stringify(ts.grouping)}`;
+      const pulses = pulsesPerBar(ts);
+      const pulse = pulseBeats(ts);
+      // The bar is exactly its pulses, and a pulse is a felt beat everywhere.
+      expect(pulses * pulse, name).toBeCloseTo(beatsPerBar(ts), 9);
+      expect(isCompound(ts), name).toBe(pulses === ts.numerator / 3);
+      for (let index = 0; index < pulses; index += 1) {
+        const beat = index * pulse;
+        expect(barPositionToPulse({ bar: 0, beat }, ts), `${name} @${beat}`).toBeCloseTo(
+          index + 1,
+          9,
+        );
+        expect(formatBarPosition(beat, ts), `${name} @${beat}`).toBe(`1.${index + 1}`);
+        expect(metricWeight(beat, ts), `${name} @${beat}`).toBeGreaterThan(0);
+      }
+      // Half a pulse in is a subdivision under every reading.
+      expect(metricWeight(pulse / 2, ts), name).toBe(0);
+    }
+  });
+});
+
+describe('a grouping of equal groups', () => {
+  /** Each grouped signature and the plain one it has to agree with. */
+  const cases: { grouped: TimeSignature; plain: TimeSignature }[] = [
+    {
+      grouped: { numerator: 9, denominator: 8, grouping: [1, 1, 1] },
+      plain: { numerator: 9, denominator: 8 },
+    },
+    {
+      grouped: { numerator: 9, denominator: 8, grouping: [3, 3, 3] },
+      plain: { numerator: 9, denominator: 8 },
+    },
+    {
+      grouped: { numerator: 12, denominator: 8, grouping: [1, 1, 1, 1] },
+      plain: { numerator: 12, denominator: 8 },
+    },
+    {
+      grouped: { numerator: 4, denominator: 4, grouping: [1, 1, 1, 1] },
+      plain: { numerator: 4, denominator: 4 },
+    },
+    {
+      grouped: { numerator: 6, denominator: 8, grouping: [3, 3] },
+      plain: { numerator: 6, denominator: 8 },
+    },
+    {
+      grouped: parseTimeSignature('1+1+1/8'),
+      plain: parseTimeSignature('3/8'),
+    },
+  ];
+
+  it('weighs the bar exactly as the ungrouped signature does', () => {
+    for (const { grouped, plain } of cases) {
+      const name = `${formatTimeSignature(grouped)} ${JSON.stringify(grouped.grouping)}`;
+      for (let beat = 0; beat < beatsPerBar(plain); beat += 0.25) {
+        expect(metricWeight(beat, grouped), `${name} @${beat}`).toBe(metricWeight(beat, plain));
+      }
+    }
+  });
+
+  it('leaves 9/8 one downbeat and two ordinary pulses', () => {
+    const ts: TimeSignature = { numerator: 9, denominator: 8, grouping: [1, 1, 1] };
+    expect([0, 1.5, 3].map((beat) => metricWeight(beat, ts))).toEqual([3, 1, 1]);
+    expect([1.5, 3].map((beat) => isStrongBeat(beat, ts))).toEqual([false, false]);
+  });
+});
+
+describe('the time-signature round trip', () => {
+  /**
+   * Every way of writing `total` as an ordered sum of at most `maxParts`
+   * positive integers. The cap keeps the sweep finite; a bar of more than four
+   * felt-beat groups is past anything a signature is written for.
+   */
+  function compositions(total: number, maxParts = 4): number[][] {
+    if (total === 0) {
+      return [[]];
+    }
+    if (maxParts === 0) {
+      return [];
+    }
+    const out: number[][] = [];
+    for (let head = 1; head <= total; head += 1) {
+      for (const rest of compositions(total - head, maxParts - 1)) {
+        out.push([head, ...rest]);
+      }
+    }
+    return out;
+  }
+
+  /** The signatures `assertTimeSignature` accepts, within the sweep's bounds. */
+  function domain(): TimeSignature[] {
+    const out: TimeSignature[] = [];
+    for (const denominator of [2, 4, 8]) {
+      for (let numerator = 1; numerator <= 12; numerator += 1) {
+        out.push({ numerator, denominator });
+        // Both sums the validator accepts: the pulse count and the numerator,
+        // which coincide outside compound meters.
+        const pulses = numerator % 3 === 0 && numerator > 3 ? numerator / 3 : numerator;
+        const sums = pulses === numerator ? [numerator] : [pulses, numerator];
+        for (const sum of sums) {
+          for (const grouping of compositions(sum)) {
+            out.push({ numerator, denominator, grouping });
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  it('never renders a signature that reads back as another bar', () => {
+    for (const ts of domain()) {
+      const name = `${ts.numerator}/${ts.denominator} ${JSON.stringify(ts.grouping)}`;
+      for (const opts of [{}, { grouping: true }]) {
+        const text = formatTimeSignature(ts, opts);
+        const back = parseTimeSignature(text);
+        // The non-throwing sibling reads what the throwing one reads.
+        const tried = tryParseTimeSignature(text);
+        expect(tried.ok && tried.value, `${name} -> ${text}`).toEqual(back);
+        expect(back.numerator, `${name} -> ${text}`).toBe(ts.numerator);
+        expect(back.denominator, `${name} -> ${text}`).toBe(ts.denominator);
+        expect(beatsPerBar(back), `${name} -> ${text}`).toBe(beatsPerBar(ts));
+        if (text.includes('+')) {
+          // An additive rendering also has to bring the felt beats back: its
+          // terms are read as denominator units summing to the numerator.
+          const terms = text.split('/')[0]?.split('+').map(Number) ?? [];
+          expect(
+            terms.reduce((sum, term) => sum + term, 0),
+            `${name} -> ${text}`,
+          ).toBe(ts.numerator);
+          expect(pulsesPerBar(back), `${name} -> ${text}`).toBe(pulsesPerBar(ts));
+          expect(pulseBeats(back), `${name} -> ${text}`).toBe(pulseBeats(ts));
+          expect(isCompound(back), `${name} -> ${text}`).toBe(isCompound(ts));
+        }
+      }
+    }
+  });
+
+  it('keeps the felt beats of every signature it renders additively', () => {
+    for (const ts of domain()) {
+      const text = formatTimeSignature(ts, { grouping: true });
+      if (!text.includes('+')) {
+        continue;
+      }
+      const back = parseTimeSignature(text);
+      const name = `${ts.numerator}/${ts.denominator} ${JSON.stringify(ts.grouping)} -> ${text}`;
+      for (let beat = 0; beat < beatsPerBar(ts); beat += pulseBeats(ts) / 2) {
+        expect(metricWeight(beat, back), `${name} @${beat}`).toBe(metricWeight(beat, ts));
+      }
+    }
   });
 });
 

@@ -38,18 +38,27 @@ Re-throw anything the guard rejects. A `TypeError` raised by a bug inside the li
 A text field is parsed on every keystroke, and most keystrokes land halfway through a valid symbol. The `try*` parsers report that as a value:
 
 ```ts
-import { tryParseChordSymbol, tryParseInterval, tryParseNote } from '@libraz/libcantus';
+import {
+  tryParseChordSymbol,
+  tryParseInterval,
+  tryParseKeyName,
+  tryParseNote,
+  tryParseTimeSignature,
+} from '@libraz/libcantus';
 
 tryParseNote('Bb3').ok; // true
 tryParseNote('C#b').ok; // false
 tryParseInterval('P5').ok; // true
 tryParseChordSymbol('Cmaj7').ok; // true
+tryParseKeyName('gis moll').ok; // true
+tryParseTimeSignature('7/8').ok; // true
+tryParseTimeSignature('7/').ok; // false
 
 const typed = tryParseChordSymbol('C(');
 const label = typed.ok ? typed.value.quality : typed.error.message;
 ```
 
-`ParseResult<T>` is `{ ok: true; value: T }` or `{ ok: false; error: LibcantusError }`. The error travels in the result rather than collapsing to `null`, because an input field has to say what is wrong with what was typed. `Chord.tryParse` is the class-API equivalent.
+`ParseResult<T>` is `{ ok: true; value: T }` or `{ ok: false; error: LibcantusError }`. The error travels in the result rather than collapsing to `null`, because an input field has to say what is wrong with what was typed. Every text parser has one: notes, intervals, chord symbols, key names, and time signatures. The class API mirrors the pair on the class that reads the text: `Note.tryParse`, `Interval.tryParse`, `Key.tryParse`, and `Chord.tryParse` beside `Note.of`, `Interval.parse`, `Key.parse`, and `Chord.parse`.
 
 Each throwing parser is written on top of its non-throwing sibling, so `parseNote` and `tryParseNote` cannot disagree about what is valid.
 

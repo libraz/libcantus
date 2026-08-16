@@ -17,12 +17,12 @@
  * required so the judgment cannot be skipped while curating.
  */
 
-import type { Articulation } from '../../core/instrument/index.js';
+import { ARTICULATIONS, type Articulation } from '../../core/instrument/index.js';
 import type { TimeSignature } from '../../core/meter/index.js';
-import { assertRange } from '../../core/validation/index.js';
-import type { ChordQuality } from '../../theory/chord/index.js';
+import { assertOneOf, assertRange, assertTimeSignature } from '../../core/validation/index.js';
+import { type ChordQuality, chordQualities } from '../../theory/chord/index.js';
 import type { Draw } from '../context/draw.js';
-import type { PublicSection } from '../drums/internal.js';
+import { PUBLIC_SECTIONS, type PublicSection } from '../drums/internal.js';
 
 /**
  * Every genre the built-in dictionaries name, in declaration order.
@@ -114,7 +114,13 @@ export type Vocabulary<T> = {
   genre: Genre;
   /** The figure itself. */
   material: T;
-  /** How the figure is played, over and above the material's own strokes. */
+  /**
+   * How the figure is played, over and above the material's own strokes.
+   *
+   * These are requirements, not decoration: where a query names the techniques
+   * the instrument can produce, an entry asking for one the instrument does not
+   * have is not offered. A kit with no flam is never handed flam material.
+   */
   articulations: Articulation[];
   /** Chord qualities the figure works over; absent means any chord. */
   fitsOver?: ChordQuality[];
@@ -149,6 +155,12 @@ export type VocabularyQuery = {
   difficulty?: number;
   /** The chord in force, matched against each entry's `fitsOver`. */
   quality?: ChordQuality;
+  /**
+   * The techniques the instrument this part is written for can produce, from
+   * its profile. An entry asking for one that is not here is not offered;
+   * absent asks nothing, which is the programmed case.
+   */
+  articulations?: readonly Articulation[];
 };
 
 /** Whether two time signatures name the same bar. */
@@ -183,6 +195,12 @@ export function fitsQuery<T>(entry: Vocabulary<T>, query: VocabularyQuery): bool
   }
   if (query.quality !== undefined && entry.fitsOver && !entry.fitsOver.includes(query.quality)) {
     return false;
+  }
+  if (query.articulations !== undefined) {
+    const available = query.articulations;
+    if (entry.articulations.some((articulation) => !available.includes(articulation))) {
+      return false;
+    }
   }
   // The ceiling is the one condition the entry does not state itself: it is the
   // caller's limit, and it only ever takes candidates away.
@@ -319,6 +337,25 @@ export function assertVocabulary<T>(
   entry: Vocabulary<T>,
   label = 'vocabulary entry',
 ): Vocabulary<T> {
+  // The names are checked against the tables that define them rather than
+  // against a list written out again here: a genre or an articulation added to
+  // the library is admitted by this check on the same commit, and a typo from a
+  // JavaScript caller or a config file is a stated error instead of an entry
+  // that silently matches nothing.
+  assertOneOf(entry.genre, GENRES, `${label} genre`);
+  assertOneOf(entry.provenance?.basis, PROVENANCE_BASES, `${label} provenance basis`);
+  entry.articulations.forEach((articulation, index) => {
+    assertOneOf(articulation, ARTICULATIONS, `${label} articulations[${index}]`);
+  });
+  entry.sections?.forEach((section, index) => {
+    assertOneOf(section, PUBLIC_SECTIONS, `${label} sections[${index}]`);
+  });
+  entry.fitsOver?.forEach((quality, index) => {
+    assertOneOf(quality, chordQualities(), `${label} fitsOver[${index}]`);
+  });
+  if (entry.ts !== undefined) {
+    assertTimeSignature(entry.ts, `${label} ts`);
+  }
   assertRange(entry.difficulty, 1, 5, `${label} difficulty`);
   if (entry.tempoRange) {
     const [low, high] = entry.tempoRange;

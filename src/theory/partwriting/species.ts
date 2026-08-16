@@ -72,6 +72,9 @@ const EPS = 1e-9;
 /** Notes of counterpoint per cantus-firmus note, by species. */
 const SPECIES_RATIO: Readonly<Record<Species, number>> = { 1: 1, 2: 2, 3: 4, 4: 2, 5: 0 };
 
+/** The species there are, read from the ratio table rather than listed twice. */
+const SPECIES_NUMBERS: readonly number[] = Object.keys(SPECIES_RATIO).map(Number);
+
 /** The smallest note value the fifth species may write, in cantus-firmus notes. */
 const MIN_FLORID_VALUE = 0.125;
 
@@ -154,6 +157,112 @@ function isPassedThrough(entries: readonly Entry[], position: number): boolean {
   return passing || neighbour;
 }
 
+/** Whether a melodic interval leaps a third, the only leap the figures write. */
+function isThird(interval: SpelledInterval): boolean {
+  return interval.number === 3;
+}
+
+/** The four notes of a figure, starting at one position, if the line has them. */
+function figureAt(
+  entries: readonly Entry[],
+  start: number,
+): [Entry, Entry, Entry, Entry] | undefined {
+  const first = entries[start];
+  const second = entries[start + 1];
+  const third = entries[start + 2];
+  const fourth = entries[start + 3];
+  if (first === undefined || second === undefined || third === undefined || fourth === undefined) {
+    return undefined;
+  }
+  return [first, second, third, fourth];
+}
+
+/**
+ * Whether four notes spell the *nota cambiata*: a consonance, a dissonance
+ * stepped down onto, a leap of a third down onto a consonance, and a step back
+ * up.
+ *
+ * Fux grants the figure by name. The dissonance is quitted by leap, which every
+ * other licence forbids, and the ear hears the note leapt to as the resolution
+ * the step would have reached.
+ */
+function isCambiata(entries: readonly Entry[], start: number): boolean {
+  const figure = figureAt(entries, start);
+  if (figure === undefined) {
+    return false;
+  }
+  const [first, second, third, fourth] = figure;
+  if (
+    first.consonance === ConsonanceClass.Dissonance ||
+    third.consonance === ConsonanceClass.Dissonance
+  ) {
+    return false;
+  }
+  const approach = spelledInterval(first.note, second.note);
+  const leap = spelledInterval(second.note, third.note);
+  const answer = spelledInterval(third.note, fourth.note);
+  return (
+    isStep(approach) &&
+    direction(approach) < 0 &&
+    isThird(leap) &&
+    direction(leap) < 0 &&
+    isStep(answer) &&
+    direction(answer) > 0
+  );
+}
+
+/**
+ * Whether four notes spell the double neighbour: a step to one side of a note,
+ * a leap of a third across to the other side, and a step back to the note the
+ * figure left.
+ *
+ * Both notes in the middle decorate the same consonance, so either of them may
+ * be the dissonance even though the figure moves between them by leap.
+ */
+function isDoubleNeighbour(entries: readonly Entry[], start: number): boolean {
+  const figure = figureAt(entries, start);
+  if (figure === undefined) {
+    return false;
+  }
+  const [first, second, third, fourth] = figure;
+  if (first.consonance === ConsonanceClass.Dissonance || !sameNote(first.note, fourth.note)) {
+    return false;
+  }
+  const away = spelledInterval(first.note, second.note);
+  const across = spelledInterval(second.note, third.note);
+  const back = spelledInterval(third.note, fourth.note);
+  return (
+    isStep(away) &&
+    isThird(across) &&
+    isStep(back) &&
+    direction(away) !== 0 &&
+    direction(across) === -direction(away)
+  );
+}
+
+/**
+ * Whether a dissonance stands inside one of the figures that quit a dissonance
+ * by leap: the *nota cambiata* or the double neighbour.
+ *
+ * Both belong to the quarter-note line, so they are read in the third and fifth
+ * species only. The second species moves a note against each half of the
+ * measure and writes neither.
+ */
+function isFiguredDissonance(
+  entries: readonly Entry[],
+  position: number,
+  species: Species,
+): boolean {
+  if (species !== 3 && species !== 5) {
+    return false;
+  }
+  return (
+    isCambiata(entries, position - 1) ||
+    isDoubleNeighbour(entries, position - 1) ||
+    isDoubleNeighbour(entries, position - 2)
+  );
+}
+
 /** Where a species allows a dissonance to fall. */
 type DissonanceLicence = 'none' | 'passing' | 'suspension';
 
@@ -203,7 +312,10 @@ function verticalViolations(
     return found;
   }
   const licence = licenceFor(species, entry.downbeat);
-  if (licence === 'passing' && isPassedThrough(entries, position)) {
+  if (
+    licence === 'passing' &&
+    (isPassedThrough(entries, position) || isFiguredDissonance(entries, position, species))
+  ) {
     return found;
   }
   if (licence === 'suspension') {
@@ -299,6 +411,265 @@ function melodicViolations(from: Entry, to: Entry): PartWritingViolation[] {
   return [];
 }
 
+/** How many leaps in a row may carry the line the same way. */
+const MAX_LEAPS_IN_ONE_DIRECTION = 2;
+
+/** How far leaps in one direction may carry the line in total, in semitones. */
+const MAX_LEAP_CHAIN_SPAN = 12;
+
+/** The smallest leap that must be answered by a step the other way. */
+const LEAP_NEEDING_ANSWER = 6;
+
+/** The tritone, in semitones, whichever way it is spelled. */
+const TRITONE_SEMITONES = 6;
+
+/** One melodic move of the counterpoint, as the shape rules read it. */
+type Move = {
+  /** The note moved from. */
+  from: Entry;
+  /** The note moved to. */
+  to: Entry;
+  /** The interval between them. */
+  interval: SpelledInterval;
+};
+
+/** Whether a melodic interval leaps rather than steps or repeats the note. */
+function isLeap(interval: SpelledInterval): boolean {
+  return interval.number > 2;
+}
+
+/** Every move of the counterpoint, in order. */
+function melodicMoves(entries: readonly Entry[]): Move[] {
+  const moves: Move[] = [];
+  for (let position = 1; position < entries.length; position += 1) {
+    const from = entries[position - 1];
+    const to = entries[position];
+    if (from === undefined || to === undefined) {
+      continue;
+    }
+    moves.push({ from, to, interval: spelledInterval(from.note, to.note) });
+  }
+  return moves;
+}
+
+/**
+ * The one high point: the line reaches its highest note once and does not
+ * return to it.
+ *
+ * A note repeated in place is one arrival, and the closing note is left out of
+ * the comparison — where the counterpoint ends is fixed by the cadence rather
+ * than by the shape of the line, so a line that climbs to its final is not
+ * charged with reaching its peak twice.
+ */
+function climaxViolations(entries: readonly Entry[]): PartWritingViolation[] {
+  const body = entries.slice(0, -1);
+  const peak = body.reduce(
+    (high, entry) => Math.max(high, noteToMidi(entry.note)),
+    Number.NEGATIVE_INFINITY,
+  );
+  const arrivals = body.filter((entry, position) => {
+    const previous = body[position - 1];
+    return (
+      noteToMidi(entry.note) === peak &&
+      (previous === undefined || noteToMidi(previous.note) !== peak)
+    );
+  });
+  const first = arrivals[0];
+  const second = arrivals[1];
+  if (first === undefined || second === undefined) {
+    return [];
+  }
+  return [
+    violation(
+      'melodicShape',
+      [1],
+      first.index,
+      second.index,
+      'The line reaches its highest note more than once, so it has no one climax',
+    ),
+  ];
+}
+
+/**
+ * Leaps taken one after another the same way: two at most, spanning an octave
+ * at most, so that a chain of leaps still outlines a chord the ear can follow.
+ */
+function leapChainViolations(moves: readonly Move[]): PartWritingViolation[] {
+  const found: PartWritingViolation[] = [];
+  let run: Move[] = [];
+  const close = (): void => {
+    const first = run[0];
+    const last = run[run.length - 1];
+    const span = run.reduce((total, move) => total + Math.abs(move.interval.semitones), 0);
+    if (first !== undefined && last !== undefined) {
+      if (run.length > MAX_LEAPS_IN_ONE_DIRECTION) {
+        found.push(
+          violation(
+            'melodicShape',
+            [1],
+            first.from.index,
+            last.to.index,
+            `The counterpoint leaps ${run.length} times in a row in the same direction`,
+          ),
+        );
+      } else if (run.length > 1 && span > MAX_LEAP_CHAIN_SPAN) {
+        found.push(
+          violation(
+            'melodicShape',
+            [1],
+            first.from.index,
+            last.to.index,
+            'Two leaps in the same direction carry the line further than an octave',
+          ),
+        );
+      }
+    }
+    run = [];
+  };
+  for (const move of moves) {
+    if (!isLeap(move.interval)) {
+      close();
+      continue;
+    }
+    const previous = run[run.length - 1];
+    if (previous !== undefined && direction(previous.interval) !== direction(move.interval)) {
+      close();
+    }
+    run.push(move);
+  }
+  close();
+  return found;
+}
+
+/**
+ * A wide leap is answered by a step the other way, which fills the gap it tore
+ * open. Thirds, fourths and fifths are free to carry on: the wider the leap,
+ * the stronger the style asks for the turn, and it asks outright from the sixth
+ * upward.
+ */
+function leapAnswerViolations(moves: readonly Move[]): PartWritingViolation[] {
+  const found: PartWritingViolation[] = [];
+  for (let position = 0; position < moves.length; position += 1) {
+    const leap = moves[position];
+    const answer = moves[position + 1];
+    if (leap === undefined || answer === undefined || leap.interval.number < LEAP_NEEDING_ANSWER) {
+      continue;
+    }
+    if (isStep(answer.interval) && direction(answer.interval) === -direction(leap.interval)) {
+      continue;
+    }
+    const word = intervalWord(leap.interval.number);
+    found.push(
+      violation(
+        'melodicShape',
+        [1],
+        leap.from.index,
+        answer.to.index,
+        `The leap of ${word === 'octave' ? 'an' : 'a'} ${word} is not answered by a step the other way`,
+      ),
+    );
+  }
+  return found;
+}
+
+/**
+ * The tritone the line may not leap is also the tritone it may not draw: a run
+ * of notes moving one way, however it is filled in, may not turn around on the
+ * interval between its own extremes.
+ *
+ * A repeated note does not end the run, and a run of a single interval is left
+ * to the leap rule, which already forbids it.
+ */
+function tritoneOutlineViolations(entries: readonly Entry[]): PartWritingViolation[] {
+  const found: PartWritingViolation[] = [];
+  let run: Move[] = [];
+  const close = (): void => {
+    const first = run[0];
+    const last = run[run.length - 1];
+    if (first !== undefined && last !== undefined && run.length > 1) {
+      const outline = spelledInterval(first.from.note, last.to.note);
+      if (Math.abs(outline.semitones) === TRITONE_SEMITONES) {
+        found.push(
+          violation(
+            'melodicShape',
+            [1],
+            first.from.index,
+            last.to.index,
+            'The line turns around on a tritone, outlining the interval it may not leap',
+          ),
+        );
+      }
+    }
+    run = [];
+  };
+  for (const move of melodicMoves(entries)) {
+    if (direction(move.interval) === 0) {
+      continue;
+    }
+    const previous = run[run.length - 1];
+    if (previous !== undefined && direction(previous.interval) !== direction(move.interval)) {
+      close();
+    }
+    run.push(move);
+  }
+  close();
+  return found;
+}
+
+/**
+ * The moving species do not repeat a note: the second and third species are
+ * written to keep the line going, and the repetition that carries a fourth or
+ * fifth species phrase is a tie rather than a second attack.
+ *
+ * The closing measure is exempt. An exercise that writes its final measure in
+ * the species' own note values rather than as the single whole note convention
+ * asks for is holding the final, not attacking it again.
+ */
+function repeatedNoteViolations(
+  moves: readonly Move[],
+  closingMeasure: number,
+): PartWritingViolation[] {
+  return moves
+    .filter(
+      (move) => sameNote(move.from.note, move.to.note) && move.from.againstIndex < closingMeasure,
+    )
+    .map((move) =>
+      violation(
+        'melodicShape',
+        [1],
+        move.from.index,
+        move.to.index,
+        'The counterpoint repeats a note where this species keeps the line moving',
+      ),
+    );
+}
+
+/**
+ * The rules judged on the shape of the counterpoint rather than on any one of
+ * its intervals: the single climax, the chain of leaps and the step that
+ * answers a wide one, the tritone outlined between turning points, and the
+ * repeated note the moving species do not write.
+ *
+ * These belong to the species exercise, whose whole subject is the line. The
+ * four-part exercise is judged chord by chord and lets a voice leap where the
+ * harmony asks, so {@link checkPartWriting} does not apply them.
+ */
+function melodicShapeViolations(
+  entries: readonly Entry[],
+  species: Species,
+): PartWritingViolation[] {
+  const moves = melodicMoves(entries);
+  const closingMeasure = entries[entries.length - 1]?.againstIndex ?? 0;
+  const found = [
+    ...climaxViolations(entries),
+    ...leapChainViolations(moves),
+    ...leapAnswerViolations(moves),
+    ...tritoneOutlineViolations(entries),
+    ...(species === 2 || species === 3 ? repeatedNoteViolations(moves, closingMeasure) : []),
+  ];
+  return found.sort((left, right) => left.fromIndex - right.fromIndex);
+}
+
 /** The rules judged between two voices moving together. */
 function motionViolations(
   from: Entry,
@@ -350,6 +721,26 @@ function motionViolations(
 }
 
 /**
+ * The last counterpoint note sounding against an earlier cantus-firmus note
+ * than the given one.
+ *
+ * The closing formula is a motion from one measure into the next, so it is read
+ * by measure rather than by position in the array. A closing measure written in
+ * the species' own note values holds more than one counterpoint note, and the
+ * note before the last one then lies inside the final measure, which would
+ * judge the cadence against itself.
+ */
+function lastEntryBefore(entries: readonly Entry[], againstIndex: number): Entry | undefined {
+  for (let position = entries.length - 1; position >= 0; position -= 1) {
+    const entry = entries[position];
+    if (entry !== undefined && entry.againstIndex < againstIndex) {
+      return entry;
+    }
+  }
+  return undefined;
+}
+
+/**
  * The opening and closing formulas.
  *
  * An exercise begins on a perfect consonance and ends on the octave or unison,
@@ -365,7 +756,6 @@ function cadenceViolations(
   const found: PartWritingViolation[] = [];
   const first = entries[0];
   const last = entries[entries.length - 1];
-  const penultimate = entries[entries.length - 2];
   if (first === undefined || last === undefined) {
     return found;
   }
@@ -404,10 +794,12 @@ function cadenceViolations(
     );
     return found;
   }
+  const penultimate = lastEntryBefore(entries, last.againstIndex);
   if (penultimate === undefined) {
     return found;
   }
-  const approach = spelledInterval(penultimate.note, last.note);
+  const arrival = entries.find((entry) => entry.againstIndex === last.againstIndex) ?? last;
+  const approach = spelledInterval(penultimate.note, arrival.note);
   const expected = counterpointAbove ? { quality: 'M', number: 6 } : { quality: 'm', number: 3 };
   if (
     penultimate.interval.quality !== expected.quality ||
@@ -419,7 +811,7 @@ function cadenceViolations(
         'missingCadence',
         [0, 1],
         penultimate.index,
-        last.index,
+        arrival.index,
         counterpointAbove
           ? 'The close is not the major sixth stepping out to the octave'
           : 'The close is not the minor third stepping in to the unison',
@@ -552,10 +944,12 @@ function motionPairs(entries: readonly Entry[]): [number, number][] {
  * Judged are the vertical intervals under each species' dissonance licence
  * (none in the first, a passing dissonance on the weak half in the second and
  * third, a prepared suspension on the downbeat in the fourth, both in the
- * fifth), parallel and hidden perfects and the *battuta* between the voices,
- * augmented and otherwise forbidden leaps along the counterpoint, and the
- * opening and closing formulas. Violations name the cantus firmus as voice 0
- * and the counterpoint as voice 1, and index into the counterpoint.
+ * fifth; the third and fifth species also write the *nota cambiata* and the
+ * double neighbour, which quit a dissonance by leap), parallel and hidden
+ * perfects and the *battuta* between the voices, augmented and otherwise
+ * forbidden leaps along the counterpoint, the shape of the counterpoint as a
+ * line, and the opening and closing formulas. Violations name the cantus firmus
+ * as voice 0 and the counterpoint as voice 1, and index into the counterpoint.
  *
  * @param cantusFirmus The given voice, one spelled note per measure.
  * @param counterpoint The written voice, in spelled notes.
@@ -564,8 +958,8 @@ function motionPairs(entries: readonly Entry[]): [number, number][] {
  * @param opts Note lengths, and which side the counterpoint is written on.
  * @returns Every violation found, in the order the exercise commits them; an
  *   empty array for a clean exercise.
- * @throws If either voice is empty, a note carries no octave, or the fifth
- *   species is given without durations.
+ * @throws If the species is not one of the five, either voice is empty, a note
+ *   carries no octave, or the fifth species is given without durations.
  * @example
  * ```ts
  * import { checkSpecies, majorKey, parseNote } from '@libraz/libcantus';
@@ -582,6 +976,11 @@ export function checkSpecies(
   mode: KeyScale,
   opts?: SpeciesOptions,
 ): PartWritingViolation[] {
+  if (!SPECIES_NUMBERS.includes(species)) {
+    throw new InvalidInputError(
+      `species must be one of ${SPECIES_NUMBERS.join(', ')}; received ${JSON.stringify(species)}`,
+    );
+  }
   if (cantusFirmus.length === 0 || counterpoint.length === 0) {
     throw new InvalidInputError('checkSpecies needs both a cantus firmus and a counterpoint');
   }
@@ -602,6 +1001,7 @@ export function checkSpecies(
       violations.push(...melodicViolations(previous, current));
     }
   }
+  violations.push(...melodicShapeViolations(entries, species));
   for (const [from, to] of motionPairs(entries)) {
     const previous = entries[from];
     const current = entries[to];

@@ -59,11 +59,32 @@ function noteId(note: NoteEvent): string {
 type EditedSpan = { startBeat: number; endBeat: number };
 
 /**
+ * Whether two note arrays hold the same notes in the same positions.
+ *
+ * A re-ordering changes no beat of the music, but `originalIndex` reports a
+ * note's position in the caller's array, so the annotations still have to be
+ * remade against the new order.
+ */
+function sameOrder(before: readonly NoteEvent[], after: readonly NoteEvent[]): boolean {
+  if (before.length !== after.length) {
+    return false;
+  }
+  for (let index = 0; index < before.length; index += 1) {
+    const previous = before[index];
+    const current = after[index];
+    if (previous === undefined || current === undefined || noteId(previous) !== noteId(current)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
  * The beats covered by the notes that `before` and `after` disagree on.
  *
  * Notes are compared as values and by multiplicity, so re-ordering a track's
- * array — which no analysis here is sensitive to — counts as no edit at all,
- * while adding a second copy of a note counts as one.
+ * array — which no beat of the harmony is sensitive to — covers no beats at
+ * all, while adding a second copy of a note covers the one it sounds on.
  */
 function editedSpan(before: readonly NoteEvent[], after: readonly NoteEvent[]): EditedSpan | null {
   const counts = new Map<string, { count: number; startBeat: number; endBeat: number }>();
@@ -126,6 +147,7 @@ function sessionOf(
       assertGenerationBudget(edits.length, 'arrangement edits', opts.budget);
       const next = [...tracks];
       let edited: EditedSpan | null = null;
+      let reordered = false;
       for (let index = 0; index < edits.length; index += 1) {
         const edit = edits[index];
         if (edit === undefined) {
@@ -147,16 +169,22 @@ function sessionOf(
           budget: opts.budget,
         });
         edited = unionSpan(edited, editedSpan(target.notes, edit.notes));
+        reordered = reordered || !sameOrder(target.notes, edit.notes);
         next[edit.trackIndex] = { ...target, notes: edit.notes };
       }
       // Nothing the analysis reads actually changed, so the analysis has not.
-      if (edited === null) {
+      if (edited === null && !reordered) {
         return sessionOf(next, opts, analysis, evidence);
       }
+      // A pure re-ordering moves no note, so every slot of the harmony is clean
+      // and the whole timeline is carried over; what it does move is the array
+      // position each annotation reports, so the annotation pass is re-run.
       const dirty: DirtySlots | undefined =
         evidence === undefined
           ? undefined
-          : dirtySlotsFor(evidence, edited.startBeat, edited.endBeat);
+          : edited === null
+            ? { from: 0, to: 0 }
+            : dirtySlotsFor(evidence, edited.startBeat, edited.endBeat);
       const run = analyzeArrangementWith(next, opts, evidence, dirty);
       return sessionOf(next, opts, run.analysis, run.evidence);
     },

@@ -15,7 +15,7 @@
  * framing, however dominant its sonority. Everything else keeps its place unless
  * its root traces one of two figures against the chords around it, the same two
  * figures {@link analyzeVoice} matches at the note level: a step through
- * (passing) and a step away and back (auxiliary). Defaulting to structural, and
+ * (passing) and a step away and back (neighbor). Defaulting to structural, and
  * demoting only on evidence, is what keeps a reduction from quietly deleting
  * harmony it merely failed to recognize.
  *
@@ -30,7 +30,9 @@
 
 import { pitchClassOf as mod12 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
+import { assertOneOf } from '../../core/validation/index.js';
 import type { Chord, ChordSegment } from '../../theory/chord/index.js';
+import { isCadentialSixFour } from '../functional/cadence.js';
 import type { CadenceResult } from '../functional/index.js';
 import { detectCadence } from '../functional/index.js';
 import type { ChordTimeline } from '../timeline/index.js';
@@ -48,24 +50,29 @@ const ADJACENCY_EPS = 1e-9;
 /**
  * The place a chord holds in a progression.
  *
- * `'structural'` is the frame; `'passing'` and `'auxiliary'` are the two
- * embellishing figures, named as {@link TheoryLabel} names them for a note.
+ * `'structural'` is the frame; `'passing'` and `'neighbor'` are the two
+ * embellishing figures, spelled exactly as {@link TheoryLabel} spells them for
+ * a note, so one legend covers both levels of analysis.
  *
  * @category Arrangement & Analysis
  */
-export type ReductionLevel = 'structural' | 'passing' | 'auxiliary';
+export type ReductionLevel = 'structural' | 'passing' | 'neighbor';
 
 /**
- * A chord with the place it holds and a short rationale.
+ * A chord with the place it holds, the beats it holds it for, and a short
+ * rationale.
  *
- * One entry per timeline segment, in the same order, so a caller can read the
- * two in step — which is how a reharmonizer holds the structural chords fixed
- * and rewrites the rest.
+ * One entry per timeline segment, in the same order. The entry carries the
+ * segment's own beat range, so the chords that survive a filter still say when
+ * they sound: holding the structural chords fixed is what a reharmonizer needs,
+ * and it cannot hold a chord at a place the filter threw away.
  *
  * @category Arrangement & Analysis
  */
 export type ReducedChord = {
   chord: Chord;
+  startBeat: number;
+  endBeat: number;
   level: ReductionLevel;
   rationale: string;
 };
@@ -103,6 +110,7 @@ const TONIC_ARRIVING: ReadonlySet<string> = new Set(['authentic', 'plagal', 'mod
 type ReductionReason =
   | { kind: 'tonic' }
   | { kind: 'dominant' }
+  | { kind: 'cadentialSixFour' }
   | { kind: 'cadenceArrival'; cadence: NonNullable<CadenceResult['type']> }
   | { kind: 'cadenceAgent'; cadence: NonNullable<CadenceResult['type']> }
   | { kind: 'salient' }
@@ -110,7 +118,7 @@ type ReductionReason =
   | { kind: 'last' }
   | { kind: 'unfigured' }
   | { kind: 'passing' }
-  | { kind: 'auxiliary' };
+  | { kind: 'neighbor' };
 
 /** Signed semitone distance between two pitch classes, in [-6, 5]. */
 function signedStep(fromPc: number, toPc: number): number {
@@ -173,6 +181,14 @@ function functionalReason(
   keyAt: (beat: number) => KeyScale,
 ): ReductionReason | null {
   const key = keyAt(segment.startBeat);
+  // Asked before the tonic, because the cadential six-four is a tonic triad and
+  // would otherwise be kept as one: it stands on the bass of the dominant that
+  // follows and is that dominant, not the tonic framing the progression. A
+  // six-four the bass leaves — the passing `IV-I64-IV` — answers false here and
+  // is read as the inverted tonic it is.
+  if (after !== undefined && isCadentialSixFour(segment.chord, after.chord, key)) {
+    return { kind: 'cadentialSixFour' };
+  }
   if (isTonicChord(segment.chord, key)) {
     return { kind: 'tonic' };
   }
@@ -213,7 +229,7 @@ function figureReason(
   if (incoming > 0 === outgoing > 0) {
     return { kind: 'passing' };
   }
-  return mod12(before.chord.rootPc) === mod12(after.chord.rootPc) ? { kind: 'auxiliary' } : null;
+  return mod12(before.chord.rootPc) === mod12(after.chord.rootPc) ? { kind: 'neighbor' } : null;
 }
 
 /** The rationale for a reduction level, in the phrasing a note label uses. */
@@ -223,6 +239,8 @@ function describe(reason: ReductionReason): string {
       return 'Structural: the tonic of the key, which the progression is heard against';
     case 'dominant':
       return 'Structural: the dominant of the key, the chord its tonic is approached from';
+    case 'cadentialSixFour':
+      return 'Structural: a tonic six-four on the bass of the dominant that follows, which prolongs that dominant rather than framing the tonic';
     case 'cadenceArrival':
       return `Structural: the arrival of a ${reason.cadence} cadence`;
     case 'cadenceAgent':
@@ -237,17 +255,42 @@ function describe(reason: ReductionReason): string {
       return 'Structural: its root neither steps through to the next chord nor returns to the last, so it embellishes nothing';
     case 'passing':
       return 'Passing: its root steps in from the previous chord and on to the next in the same direction';
-    case 'auxiliary':
-      return 'Auxiliary: its root steps away from the surrounding harmony and returns to it';
+    case 'neighbor':
+      return 'Neighbor: its root steps away from the surrounding harmony and returns to it';
   }
 }
+
+/** What a reading is given to decide whether a chord holds the frame. */
+type FrameContext = {
+  segment: ChordSegment;
+  before: ChordSegment | undefined;
+  after: ChordSegment | undefined;
+  keyAt: (beat: number) => KeyScale;
+  salienceFloor: number;
+};
+
+/**
+ * What keeps a chord in the frame, one entry per reading of what a frame is.
+ *
+ * {@link ReductionBasis} describes the two readings; the entrance check reads
+ * their names out of this table, so a reading cannot be added without becoming
+ * accepted input in the same edit.
+ */
+const BASIS_READINGS: Record<ReductionBasis, (context: FrameContext) => ReductionReason | null> = {
+  function: ({ segment, before, after, keyAt }) => functionalReason(segment, before, after, keyAt),
+  duration: ({ segment, salienceFloor }) =>
+    segment.endBeat - segment.startBeat >= salienceFloor ? { kind: 'salient' } : null,
+};
+
+/** Every reading's name, read from the table so the two cannot drift apart. */
+const REDUCTION_BASES = Object.keys(BASIS_READINGS) as ReductionBasis[];
 
 /** The level a reason places a chord at. */
 function levelOf(reason: ReductionReason): ReductionLevel {
   if (reason.kind === 'passing') {
     return 'passing';
   }
-  return reason.kind === 'auxiliary' ? 'auxiliary' : 'structural';
+  return reason.kind === 'neighbor' ? 'neighbor' : 'structural';
 }
 
 /**
@@ -257,11 +300,13 @@ function levelOf(reason: ReductionReason): ReductionLevel {
  * in step. Filtering the result to `'structural'` is the skeleton view — the
  * `I - IV - V - I` under a progression that spells far more chords than that —
  * and holding those chords fixed is what a reharmonizer needs in order to
- * rewrite the surface without moving the harmony.
+ * rewrite the surface without moving the harmony. Each entry carries its own
+ * `startBeat` and `endBeat`, so a filtered chord still knows where it sounds
+ * once the segments it was read against are gone.
  *
  * A chord is structural unless one of two figures demotes it: its root stepping
  * in from the previous chord and on to the next in the same direction (passing),
- * or stepping away from a harmony that returns (auxiliary). Chords carrying the
+ * or stepping away from a harmony that returns (neighbor). Chords carrying the
  * frame are never demoted, and what carries the frame is the module's stated
  * theoretical position — see {@link ReductionBasis} for the reading this takes
  * by default and the one it can be switched to.
@@ -275,6 +320,8 @@ function levelOf(reason: ReductionReason): ReductionLevel {
  * @param opts Which reading decides the frame; see
  *   {@link ReduceProgressionOptions}.
  * @returns One labelled chord per segment, in time order.
+ * @throws If `opts.basis` is not one of the readings {@link ReductionBasis}
+ *   names.
  * @example
  * ```ts
  * import { chordTimelineFromChords, majorKey, reduceProgression } from '@libraz/libcantus';
@@ -299,7 +346,8 @@ export function reduceProgression(
   // A KeyScale is a plain object, so a callable value can only be the per-beat
   // form; normalising here keeps the reading below segment-oriented.
   const keyAt: (beat: number) => KeyScale = typeof key === 'function' ? key : () => key;
-  const basis = opts.basis ?? 'function';
+  const basis = assertOneOf(opts.basis ?? 'function', REDUCTION_BASES, 'reduction basis');
+  const reading = BASIS_READINGS[basis];
   const segments = timeline.segments;
   const salienceFloor =
     basis === 'duration'
@@ -317,14 +365,7 @@ export function reduceProgression(
     const before = previous !== undefined && touches(previous, segment) ? previous : undefined;
     const after = following !== undefined && touches(segment, following) ? following : undefined;
 
-    let reason: ReductionReason | null = null;
-    if (basis === 'duration') {
-      if (segment.endBeat - segment.startBeat >= salienceFloor) {
-        reason = { kind: 'salient' };
-      }
-    } else {
-      reason = functionalReason(segment, before, after, keyAt);
-    }
+    let reason = reading({ segment, before, after, keyAt, salienceFloor });
     if (reason === null && index === 0) {
       reason = { kind: 'first' };
     }
@@ -333,7 +374,13 @@ export function reduceProgression(
     }
     reason ??= figureReason(segment, before, after) ?? { kind: 'unfigured' };
 
-    result.push({ chord: segment.chord, level: levelOf(reason), rationale: describe(reason) });
+    result.push({
+      chord: segment.chord,
+      startBeat: segment.startBeat,
+      endBeat: segment.endBeat,
+      level: levelOf(reason),
+      rationale: describe(reason),
+    });
   }
 
   return result;

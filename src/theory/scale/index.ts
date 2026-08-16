@@ -1,9 +1,13 @@
+export type { ScaleLadderPosition } from './degrees.js';
 export {
   diatonicPitchClasses,
   isScaleTone,
   nearestScaleTone,
   pitchToScaleDegree,
+  scaleLadderPitch,
+  scaleLadderPosition,
   scaleTonesInDegreeOrder,
+  shiftByScaleDegrees,
 } from './degrees.js';
 export { majorKey, minorKey, scaleByName } from './key.js';
 export type { ScaleAliasName, ScaleName, ScaleNameInput, WorldScaleName } from './masks.js';
@@ -56,6 +60,6 @@ export {
   subdominantKeyOf,
 } from './relations.js';
 export type { KeyMode } from './signature.js';
-export { keyFromFifths, keySignatureFifths } from './signature.js';
+export { isSignatureKey, keyFromFifths, keySignatureFifths } from './signature.js';
 export type { ScaleSystem } from './system.js';
 export { SCALE_SYSTEMS, scaleSystemOf, supportsFunctionalHarmony } from './system.js';

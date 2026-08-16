@@ -6,22 +6,27 @@
  */
 
 import type { MeterMap } from '../../core/meter/index.js';
-import { isStrongBeat, meterAt, resolveMeters } from '../../core/meter/index.js';
+import { isStrongBeat, resolveMeters } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { NoteEventAssertOptions } from '../../core/validation/index.js';
-import {
-  assertGenerationBudget,
-  assertNoteEvents,
-  assertRange,
-} from '../../core/validation/index.js';
+import { assertGenerationBudget, assertRange } from '../../core/validation/index.js';
 import { chordPitchClasses } from '../../theory/chord/index.js';
 import { evaluateSafety, NoteSafety, type SafetyProfile } from '../../theory/safety/index.js';
 import { majorKey } from '../../theory/scale/index.js';
 import { functionOf } from '../functional/index.js';
 import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
 import { type ChordTimeline, chordTimelineFromNotes } from '../timeline/index.js';
-import { EPS, isPercussion, type PreparedTrack, poolNotes, prepareTracks } from './internal.js';
+import {
+  arrangementProfile,
+  assertTrackNotes,
+  EPS,
+  harmonyTrackSet,
+  isPercussion,
+  type PreparedTrack,
+  poolNotes,
+  prepareTracks,
+} from './internal.js';
 import type { ArrangementAnalysis, ArrangementOptions, ArrangementTrack } from './tracks.js';
 
 /**
@@ -96,15 +101,15 @@ export function tensionCurve(
     noteOptions.minStartBeat = -opts.pickupBeats;
   }
   assertGenerationBudget(tracks.length, 'arrangement tracks', budget);
-  for (let index = 0; index < tracks.length; index += 1) {
-    assertNoteEvents(tracks[index]?.notes ?? [], `tracks[${index}].notes`, noteOptions);
-  }
-  const profile: SafetyProfile = opts.profile ?? 'pop';
+  const noteCount = assertTrackNotes(tracks, noteOptions);
+  // The pooled total is what the sampling and the inferred timeline size their
+  // work by, so it is checked here, under this layer's own name.
+  assertGenerationBudget(noteCount, 'arrangement notes', budget);
+  const profile = arrangementProfile(opts.profile);
   const step = opts.step ?? 1;
   assertRange(step, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'tension sampling step');
 
-  const harmonyTracks =
-    opts.harmonyTracks === undefined ? undefined : new Set(opts.harmonyTracks.map(Math.trunc));
+  const harmonyTracks = harmonyTrackSet(opts.harmonyTracks, tracks.length);
   const pooled = poolNotes(tracks, harmonyTracks);
   const all = poolNotes(tracks);
   const totalBeats = all.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
@@ -122,7 +127,7 @@ export function tensionCurve(
       : (opts.keys ??
         (opts.key !== undefined
           ? [{ startBeat: 0, endBeat: totalBeats, key: opts.key, confidence: 1 }]
-          : keyTimelineFromNotes(pooled, { ts: meterAt(0, meters), totalBeats, budget })));
+          : keyTimelineFromNotes(pooled, { meters, totalBeats, budget })));
   const { timeline, keys, prevailingKey } =
     opts.timeline === undefined || suppliedKeys === undefined
       ? chordTimelineFromNotes(pooled, {

@@ -13,6 +13,11 @@ import type { VoiceSnapshot } from '../../theory/safety/index.js';
  * A suspension figure, named by the interval above the bass and the interval it
  * resolves to.
  *
+ * A figure is reported only when the suspended note forms the interval the
+ * figure names. A dissonance that resolves by step from anywhere else — a
+ * retardation rising a semitone from the seventh to the octave, say — is left
+ * unfigured rather than named after an interval it does not form.
+ *
  * @category Arrangement & Analysis
  */
 export type SuspensionFigure = 'sus4-3' | 'sus6-5' | 'sus7-6' | 'sus9-8' | 'sus2-3';
@@ -29,6 +34,14 @@ export type TheoryLabel =
   | { kind: 'passing' }
   | { kind: 'neighbor' }
   | { kind: 'suspension'; type: SuspensionFigure; resolveTo: number }
+  /**
+   * A note leant on: reached by leap and given up by step the other way, with
+   * `resolveTo` naming the pitch it gives way to. The word is the one
+   * {@link MelodyToneRole} uses for the same figure, so a melody read through
+   * this layer and through the harmonizer comes back under one vocabulary
+   * rather than under two names for one note.
+   */
+  | { kind: 'appoggiatura'; resolveTo: number }
   | { kind: 'anticipation' }
   | { kind: 'escape' }
   | { kind: 'needsResolution'; resolveTo: number }
@@ -132,18 +145,33 @@ function intervalAboveBass(pitch: number, others: VoiceSnapshot[], chord: Chord)
 }
 
 /**
- * Map an interval class above the root to its extended-tension scale degree:
- * a flat/natural ninth (1 or 2) to 9, an eleventh (5 or 6) to 11, and a
- * thirteenth (8 or 9) to 13.
+ * The extension each interval class above the root forms: a flat, natural or
+ * raised ninth (1, 2 or 3) to 9, an eleventh (5 or 6) to 11, and a flat or
+ * natural thirteenth (8 or 9) to 13.
+ *
+ * The interval classes left out are the ones a chord states as its own root,
+ * third, fifth and seventh, which {@link chordToneRole} names instead.
  */
-function tensionDegree(ic: number): 9 | 11 | 13 {
-  if (ic === 1 || ic === 2) {
-    return 9;
-  }
-  if (ic === 5 || ic === 6) {
-    return 11;
-  }
-  return 13;
+const TENSION_DEGREE_BY_INTERVAL: Readonly<Record<number, 9 | 11 | 13>> = {
+  1: 9,
+  2: 9,
+  3: 9,
+  5: 11,
+  6: 11,
+  8: 13,
+  9: 13,
+};
+
+/**
+ * The extension an interval class above the root names, or undefined when it
+ * names none.
+ *
+ * Answering undefined rather than a default is what keeps a raised ninth — the
+ * interval class three semitones above the root — from being reported as the
+ * thirteenth that a catch-all would name it.
+ */
+function tensionDegree(ic: number): 9 | 11 | 13 | undefined {
+  return TENSION_DEGREE_BY_INTERVAL[ic];
 }
 
 function isStep(a: number, b: number): boolean {
@@ -151,13 +179,19 @@ function isStep(a: number, b: number): boolean {
   return d === 1 || d === 2;
 }
 
+/** Narrowest interval heard as a leap: anything wider than a step. */
+const LEAP_SEMITONES = 3;
+
 /**
  * Classify a suspension figure from the interval class above the sounding bass
  * (`ic`) and the resolution direction (`delta`, positive when resolving upward).
  */
 function suspensionType(ic: number, delta: number): SuspensionFigure | null {
   if (delta > 0) {
-    return 'sus2-3';
+    // Resolving upward is the 2-3 only from a second above the bass. A seventh
+    // above it rising to the octave is a retardation, and the figure 2-3 would
+    // name it after an interval it does not form.
+    return ic === 1 || ic === 2 ? 'sus2-3' : null;
   }
   if (ic === 2) {
     return 'sus9-8';
@@ -177,10 +211,32 @@ function suspensionType(ic: number, delta: number): SuspensionFigure | null {
   return null;
 }
 
-function stepResolution(pitch: number, chord: Chord): number | undefined {
-  for (let delta = 1; delta <= 2; delta += 1) {
+/** Widest interval, in semitones, a resolution by step may cover. */
+const STEP_RESOLUTION = 2;
+
+/**
+ * How far the fallback search for a resolution target reaches, in semitones.
+ * A chord sounds its root, so a member is always found inside an octave.
+ */
+const NEAREST_CHORD_TONE_REACH = 12;
+
+/**
+ * The nearest chord member to a pitch, searched outward from it and downward
+ * first at equal distance, within `maxDistance` semitones.
+ *
+ * A dissonance resolves by step wherever a chord tone lies a step away, which
+ * is what a `maxDistance` of {@link STEP_RESOLUTION} asks for. The wider search
+ * names the closest chord tone there is, so a dissonance with no stepwise exit
+ * — a minor third or a major seventh over a bare triad — still reports where it
+ * wants to go instead of going unlabelled.
+ */
+function nearestChordTone(pitch: number, chord: Chord, maxDistance: number): number | undefined {
+  for (let delta = 1; delta <= maxDistance; delta += 1) {
     if (isChordMember(pitch - delta, chord)) {
       return pitch - delta;
+    }
+    if (isChordMember(pitch + delta, chord)) {
+      return pitch + delta;
     }
   }
   return undefined;
@@ -192,8 +248,12 @@ function stepResolution(pitch: number, chord: Chord): number | undefined {
  * Each note is classified against the chord sounding at its beat. Chord tones
  * get a role label; non-chord tones are matched, in order, as suspensions
  * (prepared by an identical consonant pitch and resolving by step), passing
- * tones, neighbors, anticipations, and escape tones, then fall back to tension,
- * avoid, or an unresolved-dissonance label. Leading-tone resolutions are noted
+ * tones, neighbors, anticipations, appoggiaturas (approached by leap and
+ * resolving by step the other way), and escape tones, then fall back to
+ * tension, avoid, or an unresolved-dissonance label. The figures are named as
+ * {@link classifyMelodyTones} names them, so a caller reading a melody through
+ * both layers gets one vocabulary; that classifier weighs the metre as well,
+ * which this one is not given, so it is the stricter of the two. Leading-tone resolutions are noted
  * additionally, judged against the key in force at the beat the resolution
  * lands on, so a modulation is heard from its new tonic.
  *
@@ -270,13 +330,15 @@ export function analyzeVoice(
 
     if (chord && member) {
       const role = chordToneRole(note.pitch, chord);
+      const degree =
+        role === null ? tensionDegree(intervalAboveRoot(note.pitch, chord)) : undefined;
       if (role) {
         labels.push({ kind: 'chordTone', role });
-      } else {
-        const ic = intervalAboveRoot(note.pitch, chord);
-        labels.push({ kind: 'tension', degree: tensionDegree(ic) });
+        handled = true;
+      } else if (degree !== undefined) {
+        labels.push({ kind: 'tension', degree });
+        handled = true;
       }
-      handled = true;
     }
 
     if (!handled && chord && prev && next) {
@@ -338,11 +400,27 @@ export function analyzeVoice(
       }
     }
 
+    // The appoggiatura and the escape tone are each other's mirror: one leans in
+    // by leap and gives way by step, the other steps out of the harmony and
+    // leaves by leap. Both turn back on themselves, which is what separates them
+    // from a passing tone travelling the same way throughout.
+    if (!handled && chord && prev && next && !member) {
+      const prevMember = isChordMember(prev.pitch, chordAtBeat(prev.startBeat));
+      const nextMember = isChordMember(next.pitch, chordAtBeat(next.startBeat));
+      const leapFromPrev = Math.abs(note.pitch - prev.pitch) >= LEAP_SEMITONES;
+      const stepToNext = isStep(next.pitch, note.pitch);
+      const opposite = note.pitch - prev.pitch > 0 !== next.pitch - note.pitch > 0;
+      if (prevMember && nextMember && leapFromPrev && stepToNext && opposite) {
+        labels.push({ kind: 'appoggiatura', resolveTo: next.pitch });
+        handled = true;
+      }
+    }
+
     if (!handled && chord && prev && next && !member) {
       const prevMember = isChordMember(prev.pitch, chordAtBeat(prev.startBeat));
       const nextMember = isChordMember(next.pitch, chordAtBeat(next.startBeat));
       const stepFromPrev = isStep(note.pitch, prev.pitch);
-      const leapToNext = Math.abs(next.pitch - note.pitch) >= 3;
+      const leapToNext = Math.abs(next.pitch - note.pitch) >= LEAP_SEMITONES;
       const opposite = note.pitch - prev.pitch > 0 !== next.pitch - note.pitch > 0;
       if (prevMember && nextMember && stepFromPrev && leapToNext && opposite) {
         labels.push({ kind: 'escape' });
@@ -352,23 +430,27 @@ export function analyzeVoice(
 
     if (!handled && chord && !member) {
       const ic = intervalAboveRoot(note.pitch, chord);
+      const degree = tensionDegree(ic);
       const isTension = ic === 2 || ic === 5 || ic === 9;
       const avoid =
         (ic === 5 && chord.intervals.includes(4) && !chord.intervals.includes(5)) ||
         (ic === 11 && chord.intervals.includes(4) && chord.intervals.includes(10));
       if (avoid) {
         labels.push({ kind: 'avoid' });
-        const resolveTo = stepResolution(note.pitch, chord);
+        const resolveTo = nearestChordTone(note.pitch, chord, STEP_RESOLUTION);
         if (resolveTo !== undefined) {
           labels.push({ kind: 'needsResolution', resolveTo });
         }
-      } else if (isTension) {
-        labels.push({ kind: 'tension', degree: tensionDegree(ic) });
+      } else if (isTension && degree !== undefined) {
+        labels.push({ kind: 'tension', degree });
       } else {
-        const resolveTo = stepResolution(note.pitch, chord);
-        if (resolveTo !== undefined) {
-          labels.push({ kind: 'needsResolution', resolveTo });
-        }
+        // Every note sounding against a chord is classified, so this branch
+        // labels the dissonance whether or not it has a stepwise exit: an empty
+        // label list would be indistinguishable from a consonance.
+        const resolveTo = nearestChordTone(note.pitch, chord, NEAREST_CHORD_TONE_REACH);
+        labels.push(
+          resolveTo === undefined ? { kind: 'avoid' } : { kind: 'needsResolution', resolveTo },
+        );
       }
     }
 
@@ -416,6 +498,8 @@ function describe(labels: TheoryLabel[]): string {
       return 'Neighbor tone';
     case 'suspension':
       return `Suspension (${primary.type})`;
+    case 'appoggiatura':
+      return 'Appoggiatura leaning on the harmony, resolving by step';
     case 'anticipation':
       return 'Anticipation of the next chord';
     case 'escape':

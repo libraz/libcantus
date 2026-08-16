@@ -327,6 +327,14 @@ export type ScaleName = keyof typeof NAMED_SCALES;
  *   name is what carries the tradition, so pass the name, not the mask,
  *   wherever the tradition matters ({@link scaleSystemOf} reads both).
  *
+ * The second limit is the general case: an entry is the pitch material a
+ * tradition names, never the modal system built on it. A maqam is assembled
+ * from ajnas that are transposed and exchanged as a phrase moves, and Koizumi's
+ * tetrachord theory describes the Japanese scales by the nuclear tones framing
+ * each tetrachord, so `miyakoBushi` and `minyo` differ by tetrachord type — a
+ * difference their pitch classes record without explaining. Reach for these
+ * entries when a pitch set is what is wanted.
+ *
  * @category Scales
  */
 export const WORLD_SCALES = Object.freeze({

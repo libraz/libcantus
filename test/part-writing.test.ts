@@ -7,6 +7,7 @@ import type { PartWritingViolation } from '../src/theory/partwriting/index.js';
 import { checkPartWriting, spellVoicing } from '../src/theory/partwriting/index.js';
 import { majorKey, minorKey, scaleByName } from '../src/theory/scale/index.js';
 import { noteNames } from '../src/theory/spelling/index.js';
+import type { VoiceRange } from '../src/theory/voicing/index.js';
 
 const C_MAJOR = majorKey(0);
 const A_HARMONIC_MINOR = scaleByName('harmonicMinor', 9);
@@ -140,6 +141,26 @@ describe('cross relation', () => {
     expect(crossRelations[0]?.rationale).toBe('F is contradicted by F# in another voice');
   });
 
+  it('reports one clash per pair of voices, not one per direction', () => {
+    // G7 doubling its seventh against a D major doubling its third: the two
+    // voices are walked in both directions, so the same F/F# clash is met twice.
+    const doubled = [makeChord(7, 'dom7'), makeChord(2, 'maj')];
+    const voicings = spellExercise(
+      [
+        [43, 53, 59, 65],
+        [50, 54, 62, 66],
+      ],
+      doubled,
+    );
+    expect(noteNames(voicings[0] ?? [])).toEqual(['G2', 'F3', 'B3', 'F4']);
+    expect(noteNames(voicings[1] ?? [])).toEqual(['D3', 'F#3', 'D4', 'F#4']);
+    expect(
+      summarize(
+        checkPartWriting(voicings, doubled, C_MAJOR).filter((v) => v.kind === 'crossRelation'),
+      ),
+    ).toEqual([{ kind: 'crossRelation', voices: [1, 3], fromIndex: 0, toIndex: 1 }]);
+  });
+
   it('does not flag the same motion inside a single voice', () => {
     // The soprano itself moves F5 to F#5: an ordinary chromatic inflection.
     const voicings = spellExercise(
@@ -154,6 +175,137 @@ describe('cross relation', () => {
     // The augmented unison is that same inflection, so it is not a forbidden
     // melodic interval either.
     expect(violations.filter((v) => v.kind === 'augmentedMelodicInterval')).toEqual([]);
+  });
+});
+
+describe('cross relations the style admits', () => {
+  /** Just the cross relations of an exercise, summarized. */
+  function crossRelations(pitches: number[][], chords: Chord[], key = C_MAJOR) {
+    return summarize(
+      checkPartWriting(spellExercise(pitches, chords, key), chords, key).filter(
+        (v) => v.kind === 'crossRelation',
+      ),
+    );
+  }
+
+  it('admits the chromatic tone an applied dominant brings with it', () => {
+    // C: I - V7/vi - vi, written as a chorale would write it. The soprano's G
+    // is contradicted by the tenor's G#, which is what tonicizing vi sounds
+    // like; the seventh falls and the leading tone of vi rises.
+    const chords = [makeChord(0, 'maj'), makeChord(4, 'dom7'), makeChord(9, 'min')];
+    const voicings = spellExercise(
+      [
+        [48, 52, 60, 67],
+        [52, 56, 59, 62],
+        [45, 57, 57, 60],
+      ],
+      chords,
+    );
+    expect(noteNames(voicings[0] ?? [])).toEqual(['C3', 'E3', 'C4', 'G4']);
+    expect(noteNames(voicings[1] ?? [])).toEqual(['E3', 'G#3', 'B3', 'D4']);
+    expect(noteNames(voicings[2] ?? [])).toEqual(['A2', 'A3', 'A3', 'C4']);
+    expect(checkPartWriting(voicings, chords, C_MAJOR)).toEqual([]);
+  });
+
+  it('still flags the same two letters where nothing is tonicized', () => {
+    // The same G against G#, this time as a bare III with both voices leaping
+    // into it and the soprano exposed. Nothing follows to be tonicized, so the
+    // chord is a chromatic mediant rather than an applied dominant.
+    const chords = [makeChord(0, 'maj'), makeChord(4, 'maj')];
+    const voicings = spellExercise(
+      [
+        [48, 52, 60, 67],
+        [52, 56, 59, 64],
+      ],
+      chords,
+    );
+    expect(noteNames(voicings[0] ?? [])).toEqual(['C3', 'E3', 'C4', 'G4']);
+    expect(noteNames(voicings[1] ?? [])).toEqual(['E3', 'G#3', 'B3', 'E4']);
+    expect(summarize(checkPartWriting(voicings, chords, C_MAJOR))).toEqual([
+      { kind: 'crossRelation', voices: [3, 1], fromIndex: 0, toIndex: 1 },
+    ]);
+  });
+
+  it('admits a chromatic tone that is led into by step', () => {
+    // G7 to V/V: the soprano walks G4 down to F#4, so the tenor's F is
+    // contradicted by a tone the line introduced rather than sprang.
+    const chords = [makeChord(7, 'dom7'), makeChord(2, 'maj')];
+    expect(
+      crossRelations(
+        [
+          [43, 53, 62, 67],
+          [50, 57, 62, 66],
+        ],
+        chords,
+      ),
+    ).toEqual([]);
+    // The same two chords with the soprano leaping into the F# instead.
+    expect(
+      crossRelations(
+        [
+          [43, 53, 62, 71],
+          [50, 57, 62, 66],
+        ],
+        chords,
+      ),
+    ).toEqual([{ kind: 'crossRelation', voices: [1, 3], fromIndex: 0, toIndex: 1 }]);
+  });
+
+  it('admits a cross relation buried in the inner voices', () => {
+    // The same clash between tenor and alto, where the classical norm is far
+    // milder than it is between the outer voices.
+    const chords = [makeChord(7, 'dom7'), makeChord(2, 'maj')];
+    expect(
+      crossRelations(
+        [
+          [43, 53, 62, 71],
+          [50, 57, 66, 69],
+        ],
+        chords,
+      ),
+    ).toEqual([]);
+  });
+
+  it('admits the Neapolitan contradicting the second degree', () => {
+    // C minor: iio to N6. The flat second is what the chord is, so the tenor's
+    // D natural and the soprano's Db are not the writer's mistake.
+    const key = minorKey(0);
+    const chords = [makeChord(2, 'dim'), makeChord(1, 'maj', 5)];
+    const voicings = spellExercise(
+      [
+        [53, 62, 65, 68],
+        [53, 65, 68, 73],
+      ],
+      chords,
+      key,
+    );
+    expect(noteNames(voicings[1] ?? [])).toEqual(['F3', 'F4', 'Ab4', 'Db5']);
+    expect(
+      checkPartWriting(voicings, chords, key).filter((v) => v.kind === 'crossRelation'),
+    ).toEqual([]);
+  });
+
+  it('admits the augmented sixth, and reads it off the written letters', () => {
+    // IV to a German sixth: the bass Ab contradicts the tenor's A natural, and
+    // the F# contradicts the bass's own F, both of which the chord is built of.
+    const chords = [makeChord(5, 'maj'), makeChord(8, 'dom7')];
+    const subdominant = spellVoicing([53, 57, 60, 65], chords[0] ?? makeChord(5, 'maj'), C_MAJOR);
+    const german = ['Ab3', 'C4', 'Eb4', 'F#4'].map((name) => parseNote(name));
+    expect(
+      checkPartWriting([subdominant, german], chords, C_MAJOR).filter(
+        (v) => v.kind === 'crossRelation',
+      ),
+    ).toEqual([]);
+    // The same pitches spelled as a bVI7 sound no augmented sixth, and the
+    // contradiction is then an ordinary one.
+    const flatSixSeventh = ['Ab3', 'C4', 'Eb4', 'Gb4'].map((name) => parseNote(name));
+    expect(
+      summarize(
+        checkPartWriting([subdominant, flatSixSeventh], chords, C_MAJOR).filter(
+          (v) => v.kind === 'crossRelation',
+        ),
+      ),
+    ).toEqual([{ kind: 'crossRelation', voices: [1, 0], fromIndex: 0, toIndex: 1 }]);
   });
 });
 
@@ -422,5 +574,65 @@ describe('input validation', () => {
   it('rejects a note without an octave', () => {
     const chords = [makeChord(0, 'maj')];
     expect(() => checkPartWriting([[parseNote('C')]], chords, C_MAJOR)).toThrow(InvalidInputError);
+  });
+
+  it('rejects a spacing limit that would switch the rule off or invert it', () => {
+    // An octave apart in the upper voices and the bass out of its range: the
+    // exercise has something for both rules to find, so a limit that is quietly
+    // accepted shows up as a rule that stopped reporting.
+    const chords = [makeChord(0, 'maj')];
+    const voicings = spellExercise([[36, 60, 64, 79]], chords);
+    expect(checkPartWriting(voicings, chords, C_MAJOR).map((v) => v.kind)).toEqual([
+      'spacing',
+      'range',
+    ]);
+    for (const maxSpacing of [Number.NaN, Number.POSITIVE_INFINITY, -5]) {
+      expect(() => checkPartWriting(voicings, chords, C_MAJOR, { maxSpacing })).toThrow(
+        InvalidInputError,
+      );
+    }
+  });
+
+  it('rejects ranges that are empty, malformed, or too few for the voices', () => {
+    const chords = [makeChord(0, 'maj')];
+    const voicings = spellExercise([[48, 60, 64, 67]], chords);
+    const cases: VoiceRange[][] = [
+      [],
+      [{ min: Number.NaN, max: Number.NaN }],
+      [
+        { min: 40, max: 60 },
+        { min: 48, max: 67 },
+        { min: 55, max: 74 },
+        { min: 79, max: 60 },
+      ],
+      [
+        { min: 40, max: 60 },
+        { min: 48, max: 67 },
+        { min: 55, max: 74 },
+      ],
+    ];
+    for (const ranges of cases) {
+      expect(() => checkPartWriting(voicings, chords, C_MAJOR, { ranges })).toThrow(
+        InvalidInputError,
+      );
+    }
+  });
+
+  it('keeps deriving the four-voice defaults', () => {
+    const chords = [makeChord(0, 'maj')];
+    // Twelve semitones between the upper voices is the accepted limit, and the
+    // bass is judged against the SATB compass without being asked.
+    expect(checkPartWriting(spellExercise([[48, 55, 67, 79]], chords), chords, C_MAJOR)).toEqual(
+      [],
+    );
+    expect(
+      checkPartWriting(spellExercise([[38, 55, 67, 79]], chords), chords, C_MAJOR).map(
+        (v) => v.kind,
+      ),
+    ).toEqual(['range']);
+    // Three voices have no conventional compass, so the range rule stays out of
+    // it until ranges are given.
+    const trio = [makeChord(0, 'maj')];
+    expect(checkPartWriting(spellExercise([[24, 55, 67]], trio), trio, C_MAJOR)).toEqual([]);
   });
 });

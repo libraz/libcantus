@@ -28,9 +28,17 @@ const LETTER_SEMITONES = [0, 2, 4, 5, 7, 9, 11] as const;
  */
 const MAX_ALTER = 6;
 
-/** Validate the fields of a spelled note once, at a public entry point. */
+/**
+ * Validate the fields of a spelled note once, at a public entry point.
+ *
+ * The letter is required in its own range rather than reduced on the way in:
+ * a caller who built a note by letter arithmetic (`base.letter + 2`) would
+ * otherwise hold a value that prints like a library-made note but compares
+ * unequal to it, so the unreduced letter is refused where it is written rather
+ * than where it later fails to match.
+ */
 function assertNote(note: Note, name: string): Note {
-  assertInteger(note.letter, `${name}.letter`, -1000, 1000);
+  assertInteger(note.letter, `${name}.letter`, 0, 6);
   assertInteger(note.alter, `${name}.alter`, -MAX_ALTER, MAX_ALTER);
   if (note.octave !== undefined) {
     assertInteger(note.octave, `${name}.octave`, -100, 100);
@@ -81,7 +89,13 @@ export type SpelledInterval = {
   quality: IntervalQualityLabel;
   /** Signed semitone distance from the first note to the second. */
   semitones: number;
-  /** True when the diatonic letter movement is descending despite a zero span. */
+  /**
+   * True when the diatonic letters move down, and absent otherwise — an
+   * ascending interval leaves the key out rather than carrying `false`, so
+   * every producer of this type returns the same object for the same interval.
+   * The flag is not redundant with the sign of the span: a descending unison
+   * spans zero semitones, and a letter can rise while the pitch falls.
+   */
   descending?: boolean;
 };
 
@@ -211,8 +225,10 @@ export function tryParseNote(text: string, opts?: NoteNameOptions): ParseResult<
 /**
  * Render a {@link Note} as a note name, in any supported notation system.
  *
- * The inverse of {@link parseNote} in every system, including double
- * accidentals and octaves.
+ * The inverse of {@link parseNote} when both are given the same `system`,
+ * including double accidentals and octaves. Without one, {@link parseNote}
+ * detects the system and reads a bare `B` as the English B natural, so a German
+ * B flat written as `'b'` does not survive a round trip that names no system.
  *
  * @param note The note to format.
  * @param opts `system` writes the name in that notation system instead of
@@ -253,7 +269,9 @@ export function formatNote(note: Note, opts?: NoteNameOptions): string {
  *   detecting it.
  * @returns The spelled tonic and the mode.
  * @throws If the text is not a key name in the given (or detected) system, if
- *   it mixes two systems, or if the tonic carries an octave.
+ *   it mixes two systems, or if the tonic carries an octave. Use
+ *   {@link tryParseKeyName} where failure is ordinary, such as a key field read
+ *   on every keystroke.
  * @example
  * ```ts
  * import { formatNote, parseKeyName } from '@libraz/libcantus';
@@ -264,12 +282,39 @@ export function formatNote(note: Note, opts?: NoteNameOptions): string {
  * @category Scales
  */
 export function parseKeyName(text: string, opts?: NoteNameOptions): KeyName {
-  if (typeof text !== 'string') {
-    throw new InvalidInputError(`key name must be a string; received ${typeof text}`);
+  return unwrapParse(tryParseKeyName(text, opts));
+}
+
+/**
+ * Parse a key name, reporting failure instead of throwing it.
+ *
+ * The same reading as {@link parseKeyName} — that function is this one with its
+ * error thrown — for the callers where a name that does not parse yet is the
+ * normal state of the input rather than a fault.
+ *
+ * @param text The key name.
+ * @param opts `system` reads the name in that notation system instead of
+ *   detecting it.
+ * @returns The key, or the error explaining why the text is not one.
+ * @example
+ * ```ts
+ * import { tryParseKeyName } from '@libraz/libcantus';
+ * const result = tryParseKeyName('gis moll');
+ * result.ok ? result.value.mode : result.error.message; // 'minor'
+ * ```
+ * @category Scales
+ */
+export function tryParseKeyName(text: string, opts?: NoteNameOptions): ParseResult<KeyName> {
+  try {
+    if (typeof text !== 'string') {
+      throw new InvalidInputError(`key name must be a string; received ${typeof text}`);
+    }
+    const key = readKeyName(text, opts);
+    assertNote(key.tonic, `key ${text}`);
+    return { ok: true, value: key };
+  } catch (error) {
+    return parseFailure(error);
   }
-  const key = readKeyName(text, opts);
-  assertNote(key.tonic, `key ${text}`);
-  return key;
 }
 
 /**
@@ -341,36 +386,43 @@ export function noteToMidi(note: Note): number {
   return (note.octave + 1) * 12 + natural + note.alter;
 }
 
-/** Preferred spelling when naming a black key from a bare MIDI number. */
-const SHARP_SPELLING: readonly [number, number][] = [
-  [0, 0],
-  [0, 1],
-  [1, 0],
-  [1, 1],
-  [2, 0],
-  [3, 0],
-  [3, 1],
-  [4, 0],
-  [4, 1],
-  [5, 0],
-  [5, 1],
-  [6, 0],
-];
+/**
+ * Letter and alteration of each pitch class, by the side a black key is named
+ * from when a bare MIDI number carries no spelling of its own.
+ */
+const SPELLINGS = {
+  sharp: [
+    [0, 0],
+    [0, 1],
+    [1, 0],
+    [1, 1],
+    [2, 0],
+    [3, 0],
+    [3, 1],
+    [4, 0],
+    [4, 1],
+    [5, 0],
+    [5, 1],
+    [6, 0],
+  ],
+  flat: [
+    [0, 0],
+    [1, -1],
+    [1, 0],
+    [2, -1],
+    [2, 0],
+    [3, 0],
+    [4, -1],
+    [4, 0],
+    [5, -1],
+    [5, 0],
+    [6, -1],
+    [6, 0],
+  ],
+} as const satisfies Record<'sharp' | 'flat', readonly (readonly [number, number])[]>;
 
-const FLAT_SPELLING: readonly [number, number][] = [
-  [0, 0],
-  [1, -1],
-  [1, 0],
-  [2, -1],
-  [2, 0],
-  [3, 0],
-  [4, -1],
-  [4, 0],
-  [5, -1],
-  [5, 0],
-  [6, -1],
-  [6, 0],
-];
+/** The spellings a caller may ask for, read off the table rather than repeated. */
+const SPELLING_NAMES = Object.keys(SPELLINGS) as (keyof typeof SPELLINGS)[];
 
 /**
  * Name a MIDI number as a {@link Note}, choosing sharp or flat spelling.
@@ -382,6 +434,8 @@ const FLAT_SPELLING: readonly [number, number][] = [
  * @param midi The MIDI number.
  * @param spelling Whether to prefer sharps or flats for black keys.
  * @returns The spelled note, with octave.
+ * @throws If `spelling` is neither `'sharp'` nor `'flat'`; a name the table does
+ *   not carry would otherwise be spelled as one of them without saying which.
  * @example
  * ```ts
  * import { midiToNote, formatNote } from '@libraz/libcantus';
@@ -392,11 +446,11 @@ const FLAT_SPELLING: readonly [number, number][] = [
  */
 export function midiToNote(midi: number, spelling: 'sharp' | 'flat' = 'sharp'): Note {
   assertFiniteNumber(midi, 'midi');
+  const side = assertOneOf(spelling, SPELLING_NAMES, 'midi spelling');
   const rounded = Math.round(midi);
   const pc = mod12(rounded);
   const octave = Math.floor(rounded / 12) - 1;
-  const table = spelling === 'sharp' ? SHARP_SPELLING : FLAT_SPELLING;
-  const entry = table[pc] ?? [0, 0];
+  const entry = SPELLINGS[side][pc] ?? [0, 0];
   return { letter: entry[0], alter: entry[1], octave };
 }
 
@@ -507,6 +561,15 @@ function qualityFromSpan(numberValue: number, semitones: number): IntervalQualit
 }
 
 /**
+ * Widest diatonic interval number the library measures.
+ *
+ * It is the widest {@link spelledInterval} can produce over the MIDI range:
+ * C-1 to G9 climbs 74 letters, which is a 75th. Rejecting anything narrower
+ * would make a value one public function returns impossible to hand to another.
+ */
+const MAX_INTERVAL_NUMBER = 75;
+
+/**
  * The semitone span of the interval named by a diatonic number and a quality.
  *
  * The inverse of the quality derivation in {@link spelledInterval}: it turns a
@@ -516,7 +579,8 @@ function qualityFromSpan(numberValue: number, semitones: number): IntervalQualit
  * @param numberValue Diatonic size: 1 = unison, 2 = second, ... 8 = octave.
  * @param quality Quality label: `'P'`, `'M'`, `'m'`, or repeated `'A'`/`'d'`.
  * @returns The unsigned semitone span.
- * @throws If the quality cannot apply to the number, such as a major fifth.
+ * @throws If the quality cannot apply to the number, such as a major fifth or a
+ *   diminished unison.
  * @example
  * ```ts
  * import { intervalSemitones } from '@libraz/libcantus';
@@ -525,7 +589,7 @@ function qualityFromSpan(numberValue: number, semitones: number): IntervalQualit
  * @category Pitch & Intervals
  */
 export function intervalSemitones(numberValue: number, quality: IntervalQualityLabel): number {
-  assertInteger(numberValue, 'interval number', 1, 64);
+  assertInteger(numberValue, 'interval number', 1, MAX_INTERVAL_NUMBER);
   const octaves = Math.floor((numberValue - 1) / 7);
   const simple = numberValue - 7 * octaves;
   const reference = (SIMPLE_REFERENCE[simple] ?? 0) + 12 * octaves;
@@ -533,7 +597,7 @@ export function intervalSemitones(numberValue: number, quality: IntervalQualityL
   if (quality === 'P' || quality === 'M') {
     if (perfect !== (quality === 'P')) {
       throw new InvalidInputError(
-        `a ${numberValue === 1 ? 'unison' : `${numberValue}th`} cannot be ${quality === 'P' ? 'perfect' : 'major'}`,
+        `an interval of ${numberValue} cannot be ${quality === 'P' ? 'perfect' : 'major'}`,
       );
     }
     return reference;
@@ -550,6 +614,16 @@ export function intervalSemitones(numberValue: number, quality: IntervalQualityL
     return reference + quality.length;
   }
   if (/^d+$/.test(quality)) {
+    if (numberValue === 1) {
+      // The letters do not move in a unison, so narrowing one takes it past
+      // zero and back up the other side: `spelledInterval` reads C down to Cb
+      // as a descending augmented unison, and no measurement in the library
+      // produces a diminished one. Accepting the name would return a span
+      // indistinguishable from the augmented unison's.
+      throw new InvalidInputError(
+        `a unison cannot be diminished; a unison narrowed by a semitone descends, so name it '-${'A'.repeat(quality.length)}1'`,
+      );
+    }
     return Math.abs(reference - quality.length - (perfect ? 0 : 1));
   }
   throw new InvalidInputError(`unknown interval quality ${JSON.stringify(quality)}`);
@@ -642,6 +716,28 @@ export type IntervalLike =
       toJSON(): SpelledInterval;
     };
 
+/**
+ * Whether an interval's letters move down.
+ *
+ * Data that carries the flag decides it there. Without one the span's sign
+ * answers it, except where the quality says otherwise: an interval can climb a
+ * letter while losing a semitone — C# up to Dbb is a doubly diminished second —
+ * and reading such a span as a descent would spell the result on the wrong
+ * letter. The exception is taken only when the ascending reading names the very
+ * quality the interval carries, so plain data such as `{ P5, -7 }` still reads
+ * as the descending fifth it is.
+ */
+function isDescendingInterval(interval: SpelledInterval): boolean {
+  if (interval.descending !== undefined) {
+    return interval.descending;
+  }
+  const span = Math.round(interval.semitones);
+  if (span < 0 && qualityFromSpan(interval.number, span) === interval.quality) {
+    return false;
+  }
+  return span < 0;
+}
+
 /** Validate plain interval data and return it in the canonical shape. */
 function normalizedInterval(data: SpelledInterval): SpelledInterval {
   assertInteger(data.number, 'interval.number', 1);
@@ -658,8 +754,8 @@ function normalizedInterval(data: SpelledInterval): SpelledInterval {
     semitones: data.semitones,
   };
   // An ascending interval leaves the flag out entirely, so a parsed name, this
-  // function, and the model layer's `toJSON` all produce the same object.
-  if (data.descending ?? data.semitones < 0) {
+  // function, and `spelledInterval` all produce the same object.
+  if (isDescendingInterval(data)) {
     normalized.descending = true;
   }
   return normalized;
@@ -727,8 +823,7 @@ export function transposeByInterval(note: Note, interval: SpelledInterval): Note
   // impossible to apply back to its source note.
   assertInteger(interval.number, 'interval.number', 1);
   assertFiniteNumber(interval.semitones, 'interval.semitones');
-  const descending = interval.descending ?? interval.semitones < 0;
-  const letterSteps = (interval.number - 1) * (descending ? -1 : 1);
+  const letterSteps = (interval.number - 1) * (isDescendingInterval(interval) ? -1 : 1);
   const absoluteLetter = mod7(note.letter) + letterSteps;
   const letter = mod7(absoluteLetter);
   const natural = LETTER_SEMITONES[letter] ?? 0;
@@ -811,7 +906,16 @@ export function spelledInterval(a: Note, b: Note): SpelledInterval {
   // alteration alone — C down to Cb is a descending augmented unison.
   const directedSpan =
     letterSteps === 0 ? Math.abs(semitones) : letterSteps > 0 ? semitones : -semitones;
-  const quality = qualityFromSpan(number, directedSpan);
-  const descending = letterSteps < 0 || (letterSteps === 0 && semitones < 0);
-  return { number, quality, semitones, descending };
+  const interval: SpelledInterval = {
+    number,
+    quality: qualityFromSpan(number, directedSpan),
+    semitones,
+  };
+  // An ascending interval leaves the flag out entirely, so a parsed name,
+  // `normalizedInterval`, and this function all produce the same object for the
+  // same interval.
+  if (letterSteps < 0 || (letterSteps === 0 && semitones < 0)) {
+    interval.descending = true;
+  }
+  return interval;
 }

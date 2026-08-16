@@ -9,6 +9,7 @@ import {
   noteToPitchClass,
   parseKeyName,
   parseNote,
+  tryParseKeyName,
 } from '../src/core/pitch/index.js';
 import { Key } from '../src/model/index.js';
 
@@ -229,6 +230,21 @@ describe('note name round-trips', () => {
     expect(parseNote('Fx3')).toEqual({ letter: 3, alter: 2, octave: 3 });
     expect(() => parseNote('C#b4')).toThrow(/Invalid note/);
   });
+
+  it('holds only while both sides name the same system', () => {
+    // The condition `formatNote` documents: with no system the reading is
+    // detected, and a bare B is the English B natural, so the German B flat is
+    // the one note a system-less round trip does not return.
+    const german = { system: 'german' } as const;
+    const bFlat = parseNote('B', german);
+    expect(formatNote(bFlat, german)).toBe('b');
+    expect(parseNote(formatNote(bFlat, german), german)).toEqual(bFlat);
+    expect(parseNote(formatNote(bFlat, german))).not.toEqual(bFlat);
+    expect(parseNote(formatNote(bFlat, german))).toEqual({ letter: 6, alter: 0 });
+    // Naming no system on the writing side instead is exact: the note is
+    // written as the English Bb, which reads back as itself.
+    expect(parseNote(formatNote(bFlat))).toEqual(bFlat);
+  });
 });
 
 describe('key names', () => {
@@ -329,6 +345,30 @@ describe('key names', () => {
     expect(() => formatKeyName({ tonic: parseNote('C'), mode: 'lydian' as never })).toThrow(
       /key.mode must be one of/,
     );
+  });
+
+  it('reports a name it cannot read instead of throwing it', () => {
+    const parsed = tryParseKeyName('gis moll');
+    expect(parsed.ok && parsed.value).toEqual({ tonic: { letter: 4, alter: 1 }, mode: 'minor' });
+    expect(tryParseKeyName('B dur').ok && tryParseKeyName('B dur').value.tonic).toEqual({
+      letter: 6,
+      alter: -1,
+    });
+    // Every way the throwing sibling fails is a reported failure here, carrying
+    // the same message, so a caller can offer it to the user as it stands.
+    for (const [text, message] of [
+      ['Q major', /Invalid key name/],
+      ['C4 major', /carries no octave/],
+      [60 as never, /must be a string/],
+    ] as const) {
+      const result = tryParseKeyName(text);
+      expect(result.ok, String(text)).toBe(false);
+      expect(!result.ok && result.error.message, String(text)).toMatch(message);
+      expect(!result.ok && isLibcantusError(result.error), String(text)).toBe(true);
+      expect(() => parseKeyName(text)).toThrow(message);
+    }
+    const wrongSystem = tryParseKeyName('C moll', { system: 'english' });
+    expect(wrongSystem.ok).toBe(false);
   });
 
   it('names a detected scale form in English only', () => {

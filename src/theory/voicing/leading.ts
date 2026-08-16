@@ -50,7 +50,8 @@ export function voiceLeadingCost(from: number[], to: number[]): number {
  * @param opts Voicing options; when omitted, ranges follow `current`'s span.
  * @returns The chosen voicing, ascending with one MIDI pitch per voice.
  * @throws If `current` is empty or holds a non-finite pitch while the ranges
- *   are derived from it, or if no voicing fits the ranges.
+ *   are derived from it, if it asks for more voices than the search will take,
+ *   or if no voicing fits the ranges.
  * @category Voicing & Counterpoint
  */
 export function nextVoicing(current: number[], chord: Chord, opts?: VoicingOptions): number[] {
@@ -66,12 +67,17 @@ export function nextVoicing(current: number[], chord: Chord, opts?: VoicingOptio
       assertFiniteNumber(current[index] ?? Number.NaN, `current[${index}]`);
     }
   }
+  // Both branches end in the same resolver, so the voice-count budget and the
+  // range checks apply wherever the ranges came from: a texture read off
+  // `current` is no smaller a search than the same one written out as `ranges`.
   const ranges = derived
-    ? current.map((pitch) => {
-        // Window one octave around each current pitch, clamped so extreme-low
-        // or extreme-high input can never yield MIDI outside [0, 127].
-        const centre = Math.min(127, Math.max(0, pitch));
-        return { min: Math.max(0, centre - 12), max: Math.min(127, centre + 12) };
+    ? resolveRanges({
+        ranges: current.map((pitch) => {
+          // Window one octave around each current pitch, clamped so extreme-low
+          // or extreme-high input can never yield MIDI outside [0, 127].
+          const centre = Math.min(127, Math.max(0, pitch));
+          return { min: Math.max(0, centre - 12), max: Math.min(127, centre + 12) };
+        }),
       })
     : resolveRanges(opts);
   for (let index = 0; index < current.length; index += 1) {

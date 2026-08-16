@@ -31,9 +31,22 @@ import type { KeyProfileName, KeyProfilePair } from '../detect/index.js';
 import { profileScore, resolveKeyProfile } from '../detect/profiles.js';
 import type { PivotChord } from '../functional/index.js';
 import { pivotChords } from '../functional/index.js';
-import { windowWeights } from '../histogram.js';
+import { gridOriginOf } from '../grid.js';
+import type { WindowWeights } from '../histogram.js';
+import { bucketNotesBySlot, windowWeights } from '../histogram.js';
 
 const EPS = 1e-9;
+
+/** How many pitch classes a histogram is indexed by. */
+const PITCH_CLASSES = 12;
+
+/** The histogram a slot outside the grid contributes: nothing at all. */
+const EMPTY_WEIGHTS: WindowWeights = {
+  weights: new Array<number>(PITCH_CLASSES).fill(0),
+  totalWeight: 0,
+  maxWeight: 0,
+  lowestPitch: Number.POSITIVE_INFINITY,
+};
 
 /** The largest value {@link metricWeight} returns (a downbeat). */
 const MAX_METRIC_WEIGHT = 3;
@@ -54,6 +67,11 @@ export type KeyRegion = {
    * How well the region's music fits the key, in [0, 1]: the correlation
    * between the span's pitch-class distribution and the key's profile, with
    * negative correlations reported as 0.
+   *
+   * One statistic whichever entry point built the region, so a threshold or a
+   * comparison means the same thing across them. Where the region came from
+   * chords rather than notes, the distribution is each chord's tones weighted
+   * by how long the chord holds.
    */
   confidence: number;
   /**
@@ -61,6 +79,10 @@ export type KeyRegion = {
    * the dominant, `'relative'` for a move to the relative minor, and so on.
    * Absent on the first region, and absent when the two keys stand in none of
    * the named relations.
+   *
+   * Never `'same'`: a region is the maximal span of one key, so consecutive
+   * regions never share one and a region carrying this field is a place the
+   * piece moved.
    */
   modulation?: KeyRelation;
   /**
@@ -120,8 +142,15 @@ export type KeyTimelineOptions = {
    */
   totalBeats?: number;
   /**
-   * Key profile used to score candidates; defaults to `'krumhansl'`. Same
-   * meaning as the option of the same name on the key detectors.
+   * Key profile the regions are scored against; defaults to `'krumhansl'`.
+   * Same meaning as the option of the same name on the key detectors.
+   *
+   * Every entry point reports `confidence` as the correlation between a
+   * region's pitch-class distribution and this profile, so the option is what
+   * that number is measured against. Which keys {@link detectModulations}
+   * reports is settled by how each chord reads in a key rather than by a
+   * pitch-class profile, so there the profile scores the answer without
+   * choosing it.
    *
    * @defaultValue `'krumhansl'`
    */
@@ -284,29 +313,131 @@ function chooseKeys(slots: readonly KeySlot[], changeCost: number, meter: MeterL
   return path;
 }
 
-/** Group a per-slot key choice into regions, without relations or pivots. */
-function regionsFromPath(
-  slots: readonly KeySlot[],
-  path: readonly number[],
-): { startBeat: number; endBeat: number; candidate: number }[] {
-  const regions: { startBeat: number; endBeat: number; candidate: number }[] = [];
+/** A run of slots the search gave one key, before relations and pivots. */
+type SlotRegion = {
+  startBeat: number;
+  endBeat: number;
+  candidate: number;
+  /** First slot of the run. */
+  from: number;
+  /** One past its last slot. */
+  toExclusive: number;
+};
+
+/**
+ * Group a per-slot key choice into regions, without relations or pivots.
+ *
+ * A region is the maximal span over which one key is in force, so two
+ * consecutive runs of the same key are one region whether or not anything
+ * sounded between them: silence changes no key, and a region ending at a rest
+ * would report the key returning to itself as a modulation. The earlier region
+ * therefore reaches the later one rather than stopping at the last slot that
+ * sounded — the same reading that lets the last region run to the end of the
+ * analyzed span.
+ */
+function regionsFromPath(slots: readonly KeySlot[], path: readonly number[]): SlotRegion[] {
+  const regions: SlotRegion[] = [];
   for (let i = 0; i < slots.length; i += 1) {
     const last = regions[regions.length - 1];
     const slot = slots[i];
     if (slot === undefined) {
       continue;
     }
-    if (
-      last !== undefined &&
-      last.candidate === path[i] &&
-      Math.abs(last.endBeat - slot.startBeat) < EPS
-    ) {
+    if (last !== undefined && last.candidate === path[i]) {
       last.endBeat = slot.endBeat;
+      last.toExclusive = i + 1;
       continue;
     }
-    regions.push({ startBeat: slot.startBeat, endBeat: slot.endBeat, candidate: path[i] ?? 0 });
+    regions.push({
+      startBeat: slot.startBeat,
+      endBeat: slot.endBeat,
+      candidate: path[i] ?? 0,
+      from: i,
+      toExclusive: i + 1,
+    });
   }
   return regions;
+}
+
+/**
+ * Fold every region shorter than `minBeats` into the neighbour that explains it
+ * best, and return the amended per-slot choice.
+ *
+ * The note path gets this for nothing: its slots are `minKeyBeats` long, so no
+ * region it groups can come out shorter than one. The chord path takes its
+ * slots from the chords instead, and a chord is as short as the harmony is —
+ * without this a single passing chord is reported as a key area of its own,
+ * which is exactly what raising `minKeyBeats` is asked to stop.
+ *
+ * A region with no neighbour adjoining it is left alone: nothing can absorb a
+ * run that stands across a gap in the chords, and shortening the reported span
+ * would claim a key holds where no chord sounded.
+ */
+function enforceMinimumRegion(
+  slots: readonly KeySlot[],
+  path: readonly number[],
+  minBeats: number,
+): number[] {
+  const chosen = [...path];
+  // Every pass merges two regions into one, so the region count strictly falls
+  // and the loop ends.
+  for (;;) {
+    const regions = regionsFromPath(slots, chosen);
+    let shortest: SlotRegion | undefined;
+    let before: SlotRegion | undefined;
+    let after: SlotRegion | undefined;
+    for (let i = 0; i < regions.length; i += 1) {
+      const region = regions[i];
+      if (region === undefined || region.endBeat - region.startBeat >= minBeats - EPS) {
+        continue;
+      }
+      const previous = regions[i - 1];
+      const next = regions[i + 1];
+      const left =
+        previous !== undefined && Math.abs(previous.endBeat - region.startBeat) < EPS
+          ? previous
+          : undefined;
+      const right =
+        next !== undefined && Math.abs(next.startBeat - region.endBeat) < EPS ? next : undefined;
+      if (left === undefined && right === undefined) {
+        continue;
+      }
+      if (
+        shortest !== undefined &&
+        region.endBeat - region.startBeat >= shortest.endBeat - shortest.startBeat
+      ) {
+        continue;
+      }
+      shortest = region;
+      before = left;
+      after = right;
+    }
+    if (shortest === undefined) {
+      return chosen;
+    }
+    const merging = shortest;
+    // The shorter region joins the neighbouring key that reads its chords best,
+    // so a tonicization is absorbed by the key it decorates rather than by
+    // whichever side happens to come first.
+    const scoreOver = (candidate: number): number => {
+      let total = 0;
+      for (let i = merging.from; i < merging.toExclusive; i += 1) {
+        total += slots[i]?.scores[candidate] ?? 0;
+      }
+      return total;
+    };
+    const left = before?.candidate;
+    const right = after?.candidate;
+    const winner =
+      left === undefined
+        ? (right ?? merging.candidate)
+        : right === undefined || scoreOver(left) >= scoreOver(right)
+          ? left
+          : right;
+    for (let i = merging.from; i < merging.toExclusive; i += 1) {
+      chosen[i] = winner;
+    }
+  }
 }
 
 /**
@@ -315,6 +446,10 @@ function regionsFromPath(
  * The relation is asked of the conventionally spelled keys, not of raw pitch
  * classes, because that is the only way `'enharmonic'` can be told from
  * `'same'` — and telling them apart is the whole point of naming the relation.
+ *
+ * A key standing in the `'same'` relation to the one before it is no
+ * modulation, so it is not written: a region boundary marks a change of key,
+ * and a caller filtering on `modulation` is asking where the piece moved.
  */
 function withRelations(regions: KeyRegion[]): KeyRegion[] {
   for (let i = 1; i < regions.length; i += 1) {
@@ -324,7 +459,7 @@ function withRelations(regions: KeyRegion[]): KeyRegion[] {
       continue;
     }
     const relation = keyRelationBetween(spelledKeyOf(previous.key), spelledKeyOf(current.key));
-    if (relation !== null) {
+    if (relation !== null && relation !== 'same') {
       current.modulation = relation;
     }
   }
@@ -367,7 +502,7 @@ function withRelations(regions: KeyRegion[]): KeyRegion[] {
  * @category Arrangement & Analysis
  */
 export function keyTimelineFromNotes(
-  notes: NoteEvent[],
+  notes: readonly NoteEvent[],
   opts: KeyTimelineOptions = {},
 ): KeyRegion[] {
   const meters = resolveMeters(opts, 'key timeline meters');
@@ -384,12 +519,11 @@ export function keyTimelineFromNotes(
   assertRange(totalBeats, 0, Number.MAX_SAFE_INTEGER, 'key timeline totalBeats');
 
   const slotBeats = Math.min(minKeyBeats, expectedKeyBeats);
-  // A pickup sounds before beat 0, so the grid has to start there too — but a
-  // whole number of slots before it, or every slot boundary after the pickup
-  // would sit off the bar lines by the length of the upbeat. Dropping those
-  // notes instead would throw away the very bar that establishes the key.
   const firstOnset = sounding.reduce((first, n) => Math.min(first, n.startBeat), 0);
-  const origin = Math.min(0, Math.floor(firstOnset / slotBeats + EPS) * slotBeats);
+  // The key slots are longer than the chord slots, so the two grids start on
+  // different beats — but the music starts on one beat, and that is the beat
+  // both report, so a chord timeline and its keys cover the same span.
+  const { origin, startBeat: musicStart } = gridOriginOf(firstOnset, slotBeats);
   const slotCount = Math.max(0, Math.ceil((totalBeats - origin) / slotBeats - EPS));
   assertGenerationBudget(slotCount, 'key timeline slots', budget);
   if (slotCount === 0 || sounding.length === 0) {
@@ -397,6 +531,27 @@ export function keyTimelineFromNotes(
   }
 
   const profile = resolveKeyProfile(opts.profile);
+  // Each note is sorted into its slots once. Weighing every slot against the
+  // whole note list instead would cost the note count times the slot count,
+  // and the slot count grows with the piece.
+  const slotNotes = bucketNotesBySlot(sounding, { origin, slotBeats }, slotCount, {
+    name: 'key timeline note-to-slot memberships',
+    budget,
+  });
+  // A slot's own histogram, which is also what its neighbours hear of it: the
+  // window a slot looks back or forward over is exactly the adjacent slot.
+  const slotWeights: WindowWeights[] = [];
+  for (let i = 0; i < slotCount; i += 1) {
+    const startBeat = origin + i * slotBeats;
+    slotWeights.push(
+      windowWeights(
+        slotNotes[i] ?? [],
+        startBeat,
+        Math.min(startBeat + slotBeats, totalBeats),
+        meters,
+      ),
+    );
+  }
   const slots: KeySlot[] = [];
   let weightSum = 0;
   let soundingSlots = 0;
@@ -408,19 +563,9 @@ export function keyTimelineFromNotes(
     // heard too. They are heard more quietly than the bar itself, which is what
     // keeps the boundary where the music actually turns instead of smearing it
     // across the bars either side.
-    const own = windowWeights(sounding, startBeat, endBeat, meters);
-    const before = windowWeights(
-      sounding,
-      Math.max(origin, startBeat - slotBeats),
-      startBeat,
-      meters,
-    );
-    const after = windowWeights(
-      sounding,
-      endBeat,
-      Math.min(totalBeats, endBeat + slotBeats),
-      meters,
-    );
+    const own = slotWeights[i] ?? EMPTY_WEIGHTS;
+    const before = slotWeights[i - 1] ?? EMPTY_WEIGHTS;
+    const after = slotWeights[i + 1] ?? EMPTY_WEIGHTS;
     const weights = own.weights.map(
       (weight, pc) =>
         weight +
@@ -456,14 +601,35 @@ export function keyTimelineFromNotes(
   const regions = grouped.map((region) => {
     const candidate = KEY_CANDIDATES[region.candidate];
     const key = candidate?.key ?? majorKey(0);
-    const { weights } = windowWeights(sounding, region.startBeat, region.endBeat, meters);
+    // Only the first region can start before the music: the slot holding the
+    // pickup begins a whole slot before beat 0, and nothing sounds in the part
+    // of it that precedes the upbeat.
+    const startBeat = Math.max(region.startBeat, musicStart);
+    // The histogram over a region is the histogram over its slots: a note's
+    // weight is its overlap with the window, so the parts add up. Nothing
+    // sounds before the first onset, so clipping the reported start to it
+    // removes no weight.
+    // The histogram over a region is the histogram over its slots: a note's
+    // weight is its overlap with the window, so the parts add up. Nothing
+    // sounds before the first onset, so clipping the reported start to it
+    // removes no weight.
+    const weights = new Array<number>(PITCH_CLASSES).fill(0);
+    for (let i = region.from; i < region.toExclusive; i += 1) {
+      const slot = slotWeights[i];
+      if (slot === undefined) {
+        continue;
+      }
+      for (let pc = 0; pc < PITCH_CLASSES; pc += 1) {
+        weights[pc] = (weights[pc] ?? 0) + (slot.weights[pc] ?? 0);
+      }
+    }
     const correlation = profileScore(
       weights,
       candidate?.minor ? profile.minor : profile.major,
       candidate?.rootPc ?? 0,
     );
     return {
-      startBeat: region.startBeat,
+      startBeat,
       endBeat: region.endBeat,
       key,
       confidence: Math.max(0, correlation),
@@ -534,10 +700,17 @@ function chordFitsKey(chord: Chord, candidate: { key: KeyScale; rootPc: number }
  * changes, the chord sounding into the boundary is reported as the pivot if it
  * reads in both keys.
  *
+ * The chords supply the slots, so `minKeyBeats` cannot size them as it does in
+ * the note path; a region shorter than it is folded into the neighbouring key
+ * that reads its chords best instead, which is the same guarantee — a shorter
+ * region is reported only where the analyzed span itself ends, or across a gap
+ * in the chords that no neighbour adjoins. `profile` scores each region's
+ * confidence, as it does in the note path, but takes no part in choosing which
+ * keys are reported: that is settled by how the chords read.
+ *
  * @param chords The chord segments to analyze, in time order; pass a chord
  *   timeline's `segments`.
- * @param opts Analysis options; see {@link KeyTimelineOptions}. `minKeyBeats`
- *   is not used — the chords themselves supply the slots.
+ * @param opts Analysis options; see {@link KeyTimelineOptions}.
  * @returns The key regions in time order; empty when no chords were given.
  * @example
  * ```ts
@@ -560,10 +733,20 @@ export function detectModulations(
   const bar = beatsPerBarAt(0, meters);
   const expectedKeyBeats = opts.expectedKeyBeats ?? bar * 4;
   assertRange(expectedKeyBeats, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'expectedKeyBeats');
+  const minKeyBeats = opts.minKeyBeats ?? bar;
+  assertRange(minKeyBeats, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'minKeyBeats');
   assertGenerationBudget(chords.length, 'modulation chord segments', opts.budget);
-  const ordered = [...chords]
+  const sorted = [...chords]
     .filter((segment) => segment.endBeat > segment.startBeat)
     .sort((a, b) => a.startBeat - b.startBeat);
+  const lastChordEnd = sorted.reduce((end, segment) => Math.max(end, segment.endBeat), 0);
+  const totalBeats = opts.totalBeats ?? lastChordEnd;
+  assertRange(totalBeats, 0, Number.MAX_SAFE_INTEGER, 'modulation totalBeats');
+  // The analyzed span ends where the caller says it does, so a chord held past
+  // the end of the piece argues for its key only over the part that sounds.
+  const ordered = sorted
+    .map((segment) => ({ ...segment, endBeat: Math.min(segment.endBeat, totalBeats) }))
+    .filter((segment) => segment.endBeat > segment.startBeat);
   if (ordered.length === 0) {
     return [];
   }
@@ -610,32 +793,100 @@ export function detectModulations(
   // area's worth of evidence is just `expectedKeyBeats` and no mean is needed.
   const changeCost = CHORD_MODULATION_COST * expectedKeyBeats;
   const path = chooseKeys(slots, changeCost, meters);
-  const grouped = regionsFromPath(slots, path);
+  // A shortest region longer than a key is expected to hold is a contradiction,
+  // and the prior is the one to keep — the note path clamps it the same way.
+  const grouped = regionsFromPath(
+    slots,
+    enforceMinimumRegion(slots, path, Math.min(minKeyBeats, expectedKeyBeats)),
+  );
 
+  const profile = resolveKeyProfile(opts.profile);
   const regions: KeyRegion[] = grouped.map((region) => {
     const candidate = KEY_CANDIDATES[region.candidate];
     const key = candidate?.key ?? majorKey(0);
-    const covered = ordered.filter(
-      (segment) =>
-        segment.startBeat < region.endBeat - EPS && segment.endBeat > region.startBeat + EPS,
-    );
-    let fitSum = 0;
-    let lengthSum = 0;
-    for (const segment of covered) {
-      const length = segment.endBeat - segment.startBeat;
-      fitSum +=
-        Math.min(1, chordFitsKey(segment.chord, { key, rootPc: candidate?.rootPc ?? 0 })) * length;
-      lengthSum += length;
+    // The confidence is the statistic the note path reports, not the chord fit
+    // the search ran on: a chord fit says which key won, and a correlation says
+    // how much of the region the winner explains. Reporting the search's own
+    // score here pegged every diatonic passage at 1. A chord sounds all of its
+    // tones for all of its length, so the distribution is its pitch classes
+    // weighted by how much of the region it holds.
+    const weights = new Array<number>(PITCH_CLASSES).fill(0);
+    for (const segment of ordered) {
+      const overlap =
+        Math.min(segment.endBeat, region.endBeat) - Math.max(segment.startBeat, region.startBeat);
+      if (overlap <= EPS) {
+        continue;
+      }
+      for (const pc of chordPitchClasses(segment.chord)) {
+        weights[pc] = (weights[pc] ?? 0) + overlap;
+      }
     }
+    const correlation = profileScore(
+      weights,
+      candidate?.minor ? profile.minor : profile.major,
+      candidate?.rootPc ?? 0,
+    );
     return {
       startBeat: region.startBeat,
       endBeat: region.endBeat,
       key,
-      confidence: lengthSum > 0 ? Math.min(1, Math.max(0, fitSum / lengthSum)) : 0,
+      confidence: Math.max(0, correlation),
     };
   });
+  // The analyzed span runs to `totalBeats`, so the last key holds to the end of
+  // it rather than to the last chord: silence changes no key, and the note path
+  // covers its own silent tail the same way.
+  const last = regions[regions.length - 1];
+  if (last !== undefined && totalBeats > last.endBeat) {
+    last.endBeat = totalBeats;
+  }
 
   return attachPivots(withRelations(regions), ordered);
+}
+
+/** Semitones above the root a third may sit at: minor, then major. */
+const THIRD_SEMITONES = [3, 4];
+
+/** Semitones above the root a fifth may sit at: diminished, perfect, augmented. */
+const FIFTH_SEMITONES = [6, 7, 8];
+
+/**
+ * The triad a chord is heard as, or null when it is heard as none.
+ *
+ * A pivot is a triad, and a chart writes that triad with whatever the players
+ * put over it: the `Am7` sounding into a boundary is the A minor triad the
+ * modulation turns on, and so is the `Am` and the `Am9`. Only the tones inside
+ * the octave are read, so an extension never stands in for a chord member, and
+ * the slash bass is not read at all, so an inversion is the same triad. A chord
+ * whose third or fifth is replaced rather than played — a suspension, a power
+ * chord — is heard as no triad and pivots on nothing.
+ *
+ * @param chord The chord that sounded.
+ * @returns Its root, third and fifth as pitch classes, ascending, or null.
+ */
+function triadCore(chord: Chord): number[] | null {
+  const root = pitchClass(chord.rootPc);
+  let third: number | undefined;
+  let fifth: number | undefined;
+  for (const interval of chord.intervals) {
+    if (interval < 0 || interval >= 12) {
+      continue;
+    }
+    if (third === undefined && THIRD_SEMITONES.includes(interval)) {
+      third = interval;
+    } else if (fifth === undefined && FIFTH_SEMITONES.includes(interval)) {
+      fifth = interval;
+    }
+  }
+  if (third === undefined || fifth === undefined) {
+    return null;
+  }
+  return [root, pitchClass(root + third), pitchClass(root + fifth)].sort((a, b) => a - b);
+}
+
+/** Whether two ascending pitch-class lists name the same tones. */
+function sameTones(a: readonly number[], b: readonly number[]): boolean {
+  return a.length === b.length && a.every((pc, index) => pc === b[index]);
 }
 
 /**
@@ -644,6 +895,11 @@ export function detectModulations(
  * The pivot is the last chord to sound before the boundary, reported only when
  * it is diatonic to both keys — which is exactly what makes it a pivot rather
  * than simply the chord that happened to be playing.
+ *
+ * The chord is matched by the triad it is heard as rather than by its quality
+ * name, so a seventh, an added tone or an inversion over the boundary chord
+ * names the same pivot the bare triad does. That is what the candidate list
+ * means by offering triads alone: see {@link pivotChords}.
  *
  * Not part of the public surface: it takes regions that some other pass already
  * decided, so exposing it would invite callers to pair regions and chords that
@@ -669,11 +925,13 @@ export function attachPivots(regions: KeyRegion[], chords: readonly ChordSegment
     if (last === undefined) {
       continue;
     }
-    const held = last;
+    const core = triadCore(last.chord);
+    if (core === null) {
+      continue;
+    }
+    const root = pitchClass(last.chord.rootPc);
     const pivot = pivotChords(previous.key, current.key).find(
-      (entry) =>
-        entry.chord.rootPc === pitchClass(held.chord.rootPc) &&
-        entry.chord.quality === held.chord.quality,
+      (entry) => entry.chord.rootPc === root && sameTones(chordPitchClasses(entry.chord), core),
     );
     if (pivot !== undefined) {
       current.pivot = pivot;

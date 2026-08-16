@@ -1,18 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import type { KeyRegion } from '../src/analyze/keys/index.js';
 import {
+  attachPivots,
   detectModulations,
   keyTimelineFromNotes,
   prevailingKeyOf,
 } from '../src/analyze/keys/index.js';
-import { chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
+import { analyzeTimeline, chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
 import { InvalidInputError } from '../src/core/errors/index.js';
 import type { MeterMap } from '../src/core/meter/index.js';
 import { parseTimeSignature } from '../src/core/meter/index.js';
 import { formatNote } from '../src/core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../src/core/types.js';
-import type { ChordQuality, ChordSegment } from '../src/theory/chord/index.js';
-import { makeChord } from '../src/theory/chord/index.js';
+import type { Chord, ChordQuality, ChordSegment } from '../src/theory/chord/index.js';
+import { chordQualities, makeChord } from '../src/theory/chord/index.js';
 import {
   MAJOR_MASK,
   majorKey,
@@ -94,6 +95,27 @@ const ALL_C_CHORDS: readonly ChordSegment[] = [
   seg(28, 0, 'maj'),
 ];
 
+/**
+ * Thirteen bars of C major with three bars of Db7 Gb Db7 in the middle: a
+ * three-bar tonicization far enough round the circle of fifths that the search
+ * reports it as a key area of its own unless told how short a key area may be.
+ */
+const TONICIZATION_CHORDS: readonly ChordSegment[] = [
+  seg(0, 0, 'maj'), // C
+  seg(4, 5, 'maj'), // F
+  seg(8, 7, 'dom7'), // G7
+  seg(12, 0, 'maj'), // C
+  seg(16, 1, 'dom7'), // Db7
+  seg(20, 6, 'maj'), // Gb
+  seg(24, 1, 'dom7'), // Db7
+  seg(28, 5, 'maj'), // F
+  seg(32, 7, 'dom7'), // G7
+  seg(36, 0, 'maj'), // C
+  seg(40, 5, 'maj'), // F
+  seg(44, 7, 'dom7'), // G7
+  seg(48, 0, 'maj'), // C
+];
+
 /** Name a key the way it is read aloud, e.g. `'A minor'`. */
 function keyName(key: KeyScale | null): string {
   if (key === null) {
@@ -115,9 +137,9 @@ function keyNames(regions: readonly KeyRegion[]): string[] {
 
 /**
  * The part of a region the two entry points must agree on: where it runs and
- * what key it is in. Confidence is scored differently on each path — one
- * correlates pitch-class weight, the other counts chord membership — so it is
- * left out of the comparison.
+ * what key it is in. Both score confidence the same way, but they weigh
+ * different evidence for it — one the notes, the other the chords named over
+ * them — so it is left out of the comparison.
  */
 function shapeOf(regions: readonly KeyRegion[]): unknown[] {
   return regions.map((region) => ({
@@ -396,10 +418,12 @@ describe('keyTimelineFromNotes and the meter', () => {
     const pickup: NoteEvent = { pitch: 65, startBeat: -1, durationBeat: 1 };
     const withPickup = keyTimelineFromNotes([pickup, ...body]);
     const withoutPickup = keyTimelineFromNotes(body);
-    // The grid runs back a whole bar to reach the upbeat, so the regions cover
-    // it rather than starting at the first downbeat and leaving it outside.
-    expect(withPickup[0]?.startBeat).toBe(-4);
-    expectWellFormed(withPickup, { contiguous: true, span: [-4, 8] });
+    // The grid runs back a whole bar to reach the upbeat, but the region is
+    // reported from the upbeat itself: the three beats before it hold no music,
+    // so naming them as part of a key area would invent a bar the piece has not
+    // got. The pickup is still inside the span rather than left outside it.
+    expect(withPickup[0]?.startBeat).toBe(-1);
+    expectWellFormed(withPickup, { contiguous: true, span: [-1, 8] });
     // One upbeat note against eight in the body, and it changes the answer —
     // which it can only do if the pickup was analyzed at all.
     expect(keyNames(withPickup)).toEqual(['C major']);
@@ -506,6 +530,59 @@ describe('detectModulations', () => {
     expect(() => detectModulations(C_TO_G_CHORDS, { expectedKeyBeats: -4 })).toThrow(
       InvalidInputError,
     );
+    expect(() => detectModulations(C_TO_G_CHORDS, { minKeyBeats: 0 })).toThrow(InvalidInputError);
+    expect(() => detectModulations(C_TO_G_CHORDS, { totalBeats: -1 })).toThrow(InvalidInputError);
+  });
+
+  it('reports no region shorter than minKeyBeats', () => {
+    // C major with three bars of Db7 Gb Db7 dropped into the middle: far enough
+    // round the circle of fifths, and cadential enough, to be worth reporting as
+    // its own key area — but only three bars of one.
+    const regions = detectModulations(TONICIZATION_CHORDS);
+    expect(keyNames(regions)).toEqual(['C major', 'Gb major', 'C major']);
+    expect(regions[1] && regions[1].endBeat - regions[1].startBeat).toBe(12);
+    expectWellFormed(regions, { contiguous: true, span: [0, 52] });
+
+    // Four bars is the shortest key area the caller will accept, so the three
+    // bars are heard as a tonicization inside C rather than as a key of their
+    // own. Nothing else about the input changed.
+    const merged = detectModulations(TONICIZATION_CHORDS, { minKeyBeats: 16 });
+    expect(keyNames(merged)).toEqual(['C major']);
+    expectWellFormed(merged, { contiguous: true, span: [0, 52] });
+    for (const region of merged) {
+      expect(region.endBeat - region.startBeat).toBeGreaterThanOrEqual(16);
+    }
+  });
+
+  it('ends the span where totalBeats says, not where the chords stop', () => {
+    // Half the phrase: the chords past the end are outside the analyzed span, so
+    // no region reaches them.
+    const clipped = detectModulations(ALL_C_CHORDS, { totalBeats: 18 });
+    expect(keyNames(clipped)).toEqual(['C major']);
+    expectWellFormed(clipped, { contiguous: true, span: [0, 18] });
+
+    // Past the last chord: silence changes no key, so the last region holds to
+    // the end of the span the caller named.
+    const held = detectModulations(ALL_C_CHORDS, { totalBeats: 64 });
+    expect(keyNames(held)).toEqual(['C major']);
+    expectWellFormed(held, { contiguous: true, span: [0, 64] });
+
+    // A span ending before the first chord leaves nothing to read.
+    expect(detectModulations(ALL_C_CHORDS, { totalBeats: 0 })).toEqual([]);
+  });
+
+  it('reads the same keys whatever key profile is named', () => {
+    // The chord path settles which key holds by the part each chord plays in
+    // it, never by weighing pitch classes, so the profile cannot move a region
+    // or rename a key. It does score the confidence — that is the one statistic
+    // every entry point reports — so only the regions themselves are pinned.
+    const base = detectModulations(C_TO_G_CHORDS);
+    expect(detectModulations(C_TO_G_CHORDS, { profile: 'krumhansl' })).toEqual(base);
+    const temperley = detectModulations(C_TO_G_CHORDS, { profile: 'temperley' });
+    expect(keyNames(temperley)).toEqual(keyNames(base));
+    expect(temperley.map((region) => [region.startBeat, region.endBeat])).toEqual(
+      base.map((region) => [region.startBeat, region.endBeat]),
+    );
   });
 });
 
@@ -546,5 +623,260 @@ describe('prevailingKeyOf', () => {
   it('answers for the regions the analyzers actually return', () => {
     const regions = keyTimelineFromNotes([...cPhrase(0), ...cPhrase(16)]);
     expect(keyName(prevailingKeyOf(regions))).toBe('C major');
+  });
+});
+
+describe('detectModulations names the pivot from the triad the chord is heard as', () => {
+  /** The C-to-G fixture with the chord running into the boundary replaced. */
+  function withBoundaryChord(chord: Chord): ChordSegment[] {
+    return C_TO_G_CHORDS.map((segment, i) =>
+      i === 5 ? { startBeat: 20, endBeat: 24, chord } : segment,
+    );
+  }
+
+  /**
+   * The C major triad written every way a chart writes one over it. Only tones
+   * both keys already contain: a chord bringing in a pitch foreign to the key
+   * being left is evidence about where the boundary falls, and moves it.
+   */
+  const OVER_A_MAJOR_TRIAD: ChordQuality[] = [
+    'maj',
+    'maj7',
+    'dom7',
+    '6',
+    'maj9',
+    '6/9',
+    'maj13',
+    'add9',
+    '7#9',
+  ];
+
+  for (const quality of OVER_A_MAJOR_TRIAD) {
+    it(`pivots on the triad under a C${quality}`, () => {
+      // The candidates are triads by contract, and the chord that turns a
+      // modulation is heard as one whatever is played over it: a seventh, a
+      // sixth or a tension does not narrow the ground the two keys share.
+      const regions = detectModulations(withBoundaryChord(makeChord(0, quality)));
+      expect(keyNames(regions)).toEqual(['C major', 'G major']);
+      expect(regions[1]?.startBeat).toBe(24);
+      const pivot = regions[1]?.pivot;
+      expect(pivot?.chord.rootPc).toBe(0);
+      expect(pivot?.chord.quality).toBe('maj');
+      expect(pivot?.romanFrom).toBe('I');
+      expect(pivot?.romanTo).toBe('IV');
+    });
+  }
+
+  for (const bassPc of [4, 7]) {
+    it(`pivots on the triad under an inversion with bass ${bassPc}`, () => {
+      // A pivot is a sonority, not a voicing: the same triad in first or second
+      // inversion turns the same modulation.
+      const regions = detectModulations(withBoundaryChord(makeChord(0, 'maj', bassPc)));
+      expect(regions[1]?.pivot?.romanFrom).toBe('I');
+      expect(regions[1]?.pivot?.romanTo).toBe('IV');
+    });
+  }
+
+  for (const quality of ['sus4', 'sus2', '5'] as const) {
+    it(`names no pivot when the boundary chord is a C${quality}`, () => {
+      // The third is replaced rather than played, so there is no triad to hear
+      // the chord as and nothing for the two keys to have in common.
+      const regions = detectModulations(withBoundaryChord(makeChord(0, quality)));
+      expect(regions[1]).not.toHaveProperty('pivot');
+    });
+  }
+
+  it('attaches a pivot to exactly the chords sounding the candidate triad', () => {
+    // The boundary is fixed and every quality in the vocabulary is tried over
+    // the same root, so the rule is read off the whole vocabulary rather than
+    // from a handful of examples: the pivot is attached when the chord sounds
+    // the candidate's own third and fifth, and never otherwise.
+    for (const quality of chordQualities()) {
+      const chord = makeChord(0, quality);
+      const regions = attachPivots(
+        [
+          { startBeat: 0, endBeat: 24, key: majorKey(0), confidence: 1 },
+          { startBeat: 24, endBeat: 32, key: majorKey(7), confidence: 1 },
+        ],
+        [{ startBeat: 20, endBeat: 24, chord }],
+      );
+      // C major is I of C and IV of G; the candidate is its triad, so the chord
+      // matches exactly when it sounds a major third and a perfect fifth.
+      const soundsTheTriad = chord.intervals.includes(4) && chord.intervals.includes(7);
+      expect(regions[1]?.pivot !== undefined, quality).toBe(soundsTheTriad);
+    }
+  });
+});
+
+describe('KeyRegion.confidence is one statistic across the entry points', () => {
+  it('reports the same confidence for the same music read either way', () => {
+    // The chord path used to average how well each chord belonged to the key,
+    // which pegs a diatonic phrase at exactly 1 and cannot be compared with the
+    // correlation the note path reports. Both now correlate the span's
+    // pitch-class distribution against the profile, and a correlation is
+    // scale-free, so the two paths agree on the same four bars.
+    // Bar-long block triads, so the chords name exactly what the notes sound
+    // and the two paths are weighing the same distribution.
+    const notes = [
+      ...bar(0, 60, [64, 67]), // C  C E G
+      ...bar(4, 53, [57, 60]), // F  F A C
+      ...bar(8, 55, [59, 62, 65]), // G7 G B D F
+      ...bar(12, 60, [64, 67]), // C  C E G
+    ];
+    const { timeline } = chordTimelineFromNotes(notes, { key: majorKey(0) });
+    const fromChords = detectModulations(timeline.segments);
+    const fromNotes = keyTimelineFromNotes(notes);
+    expect(fromChords).toHaveLength(1);
+    expect(fromNotes).toHaveLength(1);
+    expect(fromChords[0]?.confidence).toBeCloseTo(fromNotes[0]?.confidence ?? 0, 6);
+    // A real correlation, not the ceiling the chord-membership average sat on.
+    expect(fromChords[0]?.confidence).toBeLessThan(1);
+    expect(fromChords[0]?.confidence).toBeGreaterThan(0.8);
+  });
+
+  it('scores a diatonic phrase below a ceiling on the chord path', () => {
+    // Eight bars that never leave C major. Every chord belongs to the key, so
+    // the old average was 1 for all of them; a correlation still reports how
+    // much of the key's profile the music actually traced.
+    const regions = detectModulations(ALL_C_CHORDS);
+    expect(regions).toHaveLength(1);
+    expect(regions[0]?.confidence).toBeLessThan(1);
+    expect(regions[0]?.confidence).toBeGreaterThan(0);
+  });
+
+  it('measures the confidence against the profile that was named', () => {
+    // The profile is what the correlation is taken against, so naming another
+    // one moves the number even though it cannot move a region.
+    const krumhansl = detectModulations(C_TO_G_CHORDS, { profile: 'krumhansl' });
+    const temperley = detectModulations(C_TO_G_CHORDS, { profile: 'temperley' });
+    expect(temperley.map((region) => region.confidence)).not.toEqual(
+      krumhansl.map((region) => region.confidence),
+    );
+  });
+});
+
+describe('a rest is not a modulation', () => {
+  /** C major, a bar of silence, C major again; the span runs to beat 28. */
+  const GAPPED = [
+    ...bar(0, 36, [60, 64, 67]),
+    ...bar(4, 36, [60, 64, 67]),
+    ...bar(8, 36, [60, 64, 67]),
+    ...bar(16, 36, [60, 64, 67]),
+    ...bar(20, 36, [60, 64, 67]),
+    ...bar(24, 36, [60, 64, 67]),
+  ];
+
+  it('holds one region across a rest, and reports the same span as the note path', () => {
+    // The chord path takes its slots from the chords, and a rest yields no
+    // chord segment, so the two runs of C used to be reported as two regions
+    // with the second carrying `modulation: 'same'` — a modulation from a key
+    // to itself. A region is the maximal span of one key, so this is one.
+    const { timeline } = chordTimelineFromNotes(GAPPED, { key: majorKey(0), totalBeats: 28 });
+    expect(timeline.segments.map((segment) => [segment.startBeat, segment.endBeat])).toEqual([
+      [0, 12],
+      [16, 28],
+    ]);
+    const fromChords = detectModulations(timeline.segments, { totalBeats: 28 });
+    expect(fromChords).toHaveLength(1);
+    expect(keyNames(fromChords)).toEqual(['C major']);
+    expectWellFormed(fromChords, { contiguous: true, span: [0, 28] });
+    expect(fromChords.filter((region) => region.modulation !== undefined)).toEqual([]);
+    expect(shapeOf(fromChords)).toEqual(shapeOf(keyTimelineFromNotes(GAPPED, { totalBeats: 28 })));
+  });
+
+  it('never reports a region as a modulation to the key it already was in', () => {
+    // `'same'` is the relation a key stands in to itself, and consecutive
+    // regions never share a key, so it can never be the reason for a boundary.
+    const inputs: KeyRegion[][] = [
+      detectModulations(C_TO_G_CHORDS),
+      detectModulations(ALL_C_CHORDS),
+      detectModulations(TONICIZATION_CHORDS),
+      keyTimelineFromNotes([...cPhrase(0), ...gPhrase(16)]),
+      keyTimelineFromNotes([...cPhrase(0), ...aMinorPhrase(16)]),
+    ];
+    for (const regions of inputs) {
+      expect(regions.map((region) => region.modulation)).not.toContain('same');
+      // Two consecutive regions in one key would be the same thing said twice.
+      regions.forEach((region, i) => {
+        const previous = regions[i - 1];
+        if (previous !== undefined) {
+          expect(keyName(region.key)).not.toBe(keyName(previous.key));
+        }
+      });
+    }
+  });
+});
+
+describe('the note path reads each note once per slot it sounds in', () => {
+  /** A piece of `bars` bars: a block triad plus four eighths over it. */
+  function piece(bars: number): NoteEvent[] {
+    const notes: NoteEvent[] = [];
+    const degrees = [0, 5, 7, 2];
+    for (let index = 0; index < bars; index += 1) {
+      const root = 48 + (degrees[index % degrees.length] ?? 0);
+      for (const pitch of [root, root + 4, root + 7]) {
+        notes.push({ pitch, startBeat: index * 4, durationBeat: 4 });
+      }
+      for (let eighth = 0; eighth < 4; eighth += 1) {
+        notes.push({
+          pitch: root + 12 + ((index + eighth) % 8),
+          startBeat: index * 4 + eighth,
+          durationBeat: 1,
+        });
+      }
+    }
+    return notes;
+  }
+
+  /**
+   * How many times the analysis looks at a note, counted rather than timed:
+   * the work is what the fix is about, and a clock also measures the machine.
+   */
+  function readsOf(bars: number): number {
+    let reads = 0;
+    const notes = piece(bars).map(({ startBeat, ...rest }) =>
+      Object.defineProperty({ ...rest } as NoteEvent, 'startBeat', {
+        enumerable: true,
+        get: () => {
+          reads += 1;
+          return startBeat;
+        },
+      }),
+    );
+    keyTimelineFromNotes(notes, { budget: 1e9 });
+    return reads;
+  }
+
+  it('grows with the length of the piece rather than with its square', () => {
+    // Every slot used to be weighed against the whole note list, so the total
+    // work was the note count times the slot count and both grow with the
+    // piece. Twice the music may cost twice the reads; it may not cost four
+    // times them.
+    const small = readsOf(100);
+    const large = readsOf(200);
+    expect(large).toBeLessThan(small * 3);
+  });
+
+  it('reports the same regions it did when every slot rescanned every note', () => {
+    // Grouping the notes changes which notes each slot is weighed against from
+    // "all of them" to "the ones overlapping it", and a note contributes only
+    // where it overlaps, so the histogram is the same one.
+    expect(shapeOf(keyTimelineFromNotes([...cPhrase(0), ...gPhrase(16)]))).toEqual([
+      { startBeat: 0, endBeat: 16, key: 'C major', modulation: undefined },
+      { startBeat: 16, endBeat: 32, key: 'G major', modulation: 'dominant' },
+    ]);
+  });
+});
+
+describe('the timeline entry points take the note arrays the library hands out', () => {
+  it('accepts a readonly array without a copy or a cast', () => {
+    // `ArrangementTrack.notes` and `TrackEdit.notes` are readonly, and none of
+    // these entry points modifies what it is given, so a caller must be able to
+    // pass one straight on. This is a compile-time claim as much as a runtime
+    // one: the assignment below is what would fail.
+    const notes: readonly NoteEvent[] = Object.freeze(cPhrase(0));
+    expect(keyTimelineFromNotes(notes)).toHaveLength(1);
+    expect(chordTimelineFromNotes(notes).timeline.segments.length).toBeGreaterThan(0);
+    expect(analyzeTimeline(notes).result.timeline.segments.length).toBeGreaterThan(0);
   });
 });

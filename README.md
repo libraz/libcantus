@@ -39,7 +39,7 @@ Chord boundaries are searched for rather than assumed, and so is the key, so a p
 
 What each layer covers:
 
-- **[Pitch and notation](docs/en/pitch-and-notation.md)** — spelled notes and intervals, MIDI conversion, note names read and written in English, German, Japanese, Italian or fixed-do, and line spelling solved as one path instead of note by note. Every parser has a non-throwing sibling (`tryParseNote`, `tryParseChordSymbol`, `Chord.tryParse`), so a text field needs no `try`/`catch` per keystroke.
+- **[Pitch and notation](docs/en/pitch-and-notation.md)** — spelled notes and intervals, MIDI conversion, note names read and written in English, German, Japanese, Italian or fixed-do, and line spelling solved as one path instead of note by note. Every text parser has a non-throwing sibling (`tryParseNote`, `tryParseInterval`, `tryParseChordSymbol`, `tryParseKeyName`, `tryParseTimeSignature`, and `tryParse` on `Note`, `Interval`, `Key` and `Chord`), so a text field needs no `try`/`catch` per keystroke.
 - **[Harmony](docs/en/harmony.md)** — chords as structured values, scales including modes, pentatonics and the `WORLD_SCALES` set, Roman numerals and function, voicing, figured bass, and the part-writing and species-counterpoint checkers that report a violation with the voice it happened in and the reason.
 - **[Analysis](docs/en/analysis.md)** — chord and key detection over note events, timelines and cadences, prolongational reduction, phrases, sections, hypermeter, motifs, and arrangement reports.
 - **[Generation](docs/en/generation.md)** — progressions, motifs, rhythms, drums, bass and counter-melody, all drawing on one `GenerationContext`: a project seed, three additive complexity dials (rhythmic, harmonic, ornament), a separate difficulty ceiling, the tempo, and the instrument each part is written for. Same context, same output.
@@ -55,9 +55,10 @@ Seven worked guides start from the data an application already has: [DAW workflo
 
 - **No I/O, notation or audio.** No MIDI file reader or writer, no score rendering, no audio analysis, no playback. Bring your own parser and hand it note events. If that layer is what you need, [libsonare](https://github.com/libraz/libsonare) covers audio analysis, mastering, synthesis and SMF I/O; the two share no code and neither requires the other.
 - **No microtonal analysis.** Frequencies, cents, equal divisions of the octave and just-intonation ratios live in `core`, but everything above the pitch layer runs on twelve pitch classes. Music organised in smaller steps than a semitone is out of reach, which is also why the maqāmāt built on half-flat degrees are left out of `WORLD_SCALES` rather than rounded to a twelve-tone neighbour.
+- **No modal systems.** `WORLD_SCALES` records the pitch material a tradition names — a thāt, a maqām's set, a Japanese pentatonic — and not the system built on it: ascent and descent forms, the notes a phrase leans on, and the phrase grammar have no place in a mask.
 - **No assumption that the material is tonal.** Roman numerals and functional harmony presuppose the common practice, and `supportsFunctionalHarmony` says whether a named scale admits that reading at all — `'dorian'` does, `'miyakoBushi'` does not.
 - **No corpus.** Nothing is bundled to run statistics over.
-- **Known gaps in functional harmony.** A cadential six-four reads as an inverted tonic rather than as dominant function; a half cadence requires a major dominant, so an arrival on a modal minor `v` is not reported as one; a deceptive cadence covers the submediant only.
+- **Known gaps in functional harmony.** `functionOf` answers from a chord and a key alone, so a cadential six-four reads there as an inverted tonic; the dominant reading of it belongs to the layers that see time, and `detectCadence` gives it when the chord before the dominant is passed as `approach`.
 
 ## Requirements
 

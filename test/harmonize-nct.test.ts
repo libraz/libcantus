@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { TimeSignature } from '../src/core/meter/index.js';
 import type { NoteEvent } from '../src/core/types.js';
+import { humanize } from '../src/generate/groove/index.js';
 import { classifyMelodyTones, harmonizeMelody } from '../src/generate/harmonize/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
 
@@ -97,6 +98,42 @@ describe('classifyMelodyTones', () => {
     expect(() => classifyMelodyTones(quarters([60, 62]), { numerator: 0, denominator: 4 })).toThrow(
       RangeError,
     );
+  });
+
+  it('hears a played onset as the beat it is playing', () => {
+    // A note event carries the timing of a performance, so an onset sits a few
+    // milliseconds off the grid it was written on. The figures are the ones the
+    // notation forms, not ones a hair of jitter invented.
+    const written = quarters([60, 62, 64, 65, 67, 65, 64, 62]);
+    const played = written.map((note, i) => ({
+      ...note,
+      startBeat: note.startBeat + (i % 2 === 0 ? 0.02 : -0.02),
+    }));
+    expect(roles(played)).toEqual(roles(written));
+  });
+
+  it('classifies a humanized melody as it classifies the melody itself', () => {
+    const written = quarters([60, 62, 64, 65, 67, 65, 64, 62]);
+    for (let seed = 0; seed < 16; seed += 1) {
+      expect(roles(humanize(written, { timing: 0.02, seed }))).toEqual(roles(written));
+    }
+  });
+
+  it('harmonizes a humanized melody as it harmonizes the melody itself', () => {
+    // `harmonizeMelody` reads the same onsets, so a melody that has been through
+    // `humanize` gets the chords its written form gets, at the default options.
+    for (const pitches of [
+      [60, 62, 64, 65, 67, 65, 64, 62],
+      [60, 64, 67, 72, 67, 64, 60, 72],
+      [67, 69, 71, 72, 71, 69, 67, 60],
+    ]) {
+      const written = quarters(pitches);
+      const chords = harmonizeMelody({ melody: written }).chords;
+      for (let seed = 0; seed < 16; seed += 1) {
+        const played = humanize(written, { timing: 0.02, seed });
+        expect(harmonizeMelody({ melody: played }).chords).toEqual(chords);
+      }
+    }
   });
 
   it('keeps an ornament from buying itself a chord', () => {

@@ -22,6 +22,8 @@ melodicContour(arch).peakIndex; // 2
 
 The shapes are `arch`, `ascending`, `descending`, `wave`, and `static`. The first four are the same vocabulary the motif generator's `contour` option uses, so a shape read from an existing line can be requested from the generator directly. `static` is the shape a generator is never asked for and an analysis meets regularly: a line that does not move. A line that dips and returns reads as `wave`, since the shared vocabulary has no separate name for an inverted arch.
 
+A wave has to turn more than once to be heard as one, so the round trip through the generator is exact for `arch`, `ascending` and `descending` at any length, and for `wave` from three bars up. The one- and two-bar cells `generateMotif` writes for `wave` turn once and read back as `arch`.
+
 ## Finding motifs in a melody
 
 ```ts
@@ -99,7 +101,44 @@ inverted.notes.length; // cell.notes.length
 retrograde.notes.length; // cell.notes.length
 ```
 
-The transforms are `transposeDiatonic`, `transposeChromatic`, `invert`, `retrograde`, `augment`, `diminish`, and `sequence` — the same list `relateMotifs` reports, which is what lets a host round-trip between the two.
+The two directions use different names for the same devices, so the correspondence is spelled out rather than assumed:
+
+| `transformMotif` | `relateMotifs` |
+| --- | --- |
+| `transposeDiatonic` | `tonalTransposition` with a key, `transposition` without one |
+| `transposeChromatic` | `transposition` |
+| `invert` | `inversion` |
+| `retrograde` | `retrograde` |
+| `augment` | `augmentation` |
+| `diminish` | `diminution` |
+| `sequence` | none |
+
+`sequence` is the transform with no relation of its own: it appends a shifted copy, so the result carries twice the notes of the model and `relateMotifs`, which compares statements note for note, answers null. Relate the two halves of the result instead — they stand as a `transposition` or a `tonalTransposition` whose `sequence` flag is set.
+
+Two relations have no single transform behind them either: `repetition`, which is the cell restated unchanged, and `retrogradeInversion`, which is `retrograde` followed by `invert`.
+
+```ts
+import {
+  majorKey,
+  motifFromNotes,
+  motifToNoteEvents,
+  relateMotifs,
+  transformMotif,
+} from '@libraz/libcantus';
+
+const key = majorKey(0);
+const figure = {
+  notes: [60, 64, 62, 67].map((pitch, i) => ({ pitch, startBeat: i, durationBeat: 1 })),
+};
+const model = motifFromNotes(motifToNoteEvents(figure));
+const name = (t: 'invert' | 'retrograde' | 'transposeDiatonic') =>
+  relateMotifs(model, motifFromNotes(motifToNoteEvents(transformMotif(figure, t, 2, key))), key)
+    ?.kind;
+
+name('invert'); // 'inversion'
+name('retrograde'); // 'retrograde'
+name('transposeDiatonic'); // 'tonalTransposition'
+```
 
 `developMotif` applies transformations across a chord timeline, so the developed material follows the harmony rather than repeating over it:
 
@@ -120,7 +159,7 @@ const developed = developMotif(generateMotif({ key, bars: 1, seed: 3 }), timelin
 developed.notes.length >= 1; // true
 ```
 
-The cell is tiled back to back to fill the requested span, and each note is then pulled to the nearest chord tone of the segment sounding at its onset, so the developed line spells the underlying harmony. `developMotif` returns a `MotifCell` like the other motif operations; call `motifToNoteEvents` when placement is wanted.
+The cell is tiled back to back to fill the requested span. The notes carrying structural weight — the head of each tile and every bar line — are pulled to the nearest chord tone of the segment sounding at that onset, so the developed line spells the underlying harmony, while the notes between them stay in the key as passing and neighbour tones. Two pitches that differ in the cell still differ in the development, so the result reads as the motif under a new harmony rather than as the chord itself. `developMotif` returns a `MotifCell` like the other motif operations; call `motifToNoteEvents` when placement is wanted.
 
 ## Counter-melody and imitation
 
@@ -135,6 +174,8 @@ const answer = imitate(lead, { atBeat: 2, interval: 'P5', key: majorKey(0) });
 answer.length; // 3
 answer[0]?.startBeat; // 2
 ```
+
+A `'tonal'` answer counts scale degrees instead of semitones, and `invert` mirrors the subject about its first note before transposing. A pitch outside the key keeps its distance from the scale tone below it, mirrored along with everything else, so a chromatic passing note answers as one. Where the mirror puts such a note inside a diatonic semitone there is no room left for it and it lands on the scale tone there — a subject moving in chromatic steps throughout can answer with a pitch repeated, which is the point at which a real answer is the one to ask for. Notes that never sound are not copied, so the answer holds only sounding notes.
 
 `generateCounterMelody` writes a free second line against a melody and its harmony instead:
 
@@ -176,4 +217,4 @@ const line = [60, 62, 64, 65, 67, 65, 64, 62].map((pitch, i) => ({
 ornament(line, { style: 'ghost', amount: 0.6, seed: 4 }).length; // 8
 ```
 
-`ghost` softens weak-position notes, `accent` lifts strong-position ones, and `flam`, `drag`, and `slide` mark notes with the corresponding articulation. `amount` scales how many notes are affected; the choice is seeded, so the same options give the same result.
+`ghost` softens weak-position notes, `accent` lifts strong-position ones, `flam` marks the same strong positions `accent` takes, `drag` marks a weak-position note whose next onset falls on a strong one, and `slide` marks a note reached by a leap. `amount` scales how many notes are affected; the choice is seeded, so the same options give the same result. Notes that never sound are dropped, so the result can be shorter than the input.

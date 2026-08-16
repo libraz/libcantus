@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import {
   detectKey,
@@ -206,5 +210,69 @@ describe('modal key candidates', () => {
         expect(vector[replacing], candidate.scaleName).toBe(parent[replaced]);
       }
     }
+  });
+});
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+/** Every name a barrel publishes, counting both sides of a renaming re-export. */
+function publishedNames(file: string): Set<string> {
+  const source = ts.createSourceFile(
+    file,
+    readFileSync(file, 'utf8'),
+    ts.ScriptTarget.ES2022,
+    true,
+  );
+  const names = new Set<string>();
+  const exported = (node: ts.Node): boolean =>
+    ts.canHaveModifiers(node) &&
+    (ts.getModifiers(node) ?? []).some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
+  for (const statement of source.statements) {
+    if (ts.isExportDeclaration(statement) && statement.exportClause !== undefined) {
+      if (ts.isNamedExports(statement.exportClause)) {
+        for (const element of statement.exportClause.elements) {
+          names.add(element.name.text);
+          if (element.propertyName !== undefined) {
+            names.add(element.propertyName.text);
+          }
+        }
+      }
+      continue;
+    }
+    if (!exported(statement)) {
+      continue;
+    }
+    if (
+      (ts.isTypeAliasDeclaration(statement) ||
+        ts.isInterfaceDeclaration(statement) ||
+        ts.isFunctionDeclaration(statement) ||
+        ts.isClassDeclaration(statement) ||
+        ts.isEnumDeclaration(statement)) &&
+      statement.name !== undefined
+    ) {
+      names.add(statement.name.text);
+    }
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name)) {
+          names.add(declaration.name.text);
+        }
+      }
+    }
+  }
+  return names;
+}
+
+describe('the recognition module reaches the shipped surface', () => {
+  it('carries every name of its public block up to the analyze barrel', () => {
+    // A type listed in a module's export block reads as part of that module's
+    // surface; one the layer barrel never picks up is a name a consumer can see
+    // in the source and cannot import. The layer is where that is decided — the
+    // root barrel is the union of the layers, which `type-surface` checks.
+    const layer = publishedNames(path.join(ROOT, 'src/analyze/index.ts'));
+    const missing = [...publishedNames(path.join(ROOT, 'src/analyze/detect/index.ts'))]
+      .filter((name) => !layer.has(name))
+      .sort();
+    expect(missing).toEqual([]);
   });
 });

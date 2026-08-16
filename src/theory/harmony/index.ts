@@ -1,5 +1,5 @@
 import { pitchClassOf } from '../../core/pitch/index.js';
-import { type Chord, type ChordToneRole, chordToneRole } from '../chord/index.js';
+import { type Chord, type ChordToneRole, chordSpecOf, chordToneRole } from '../chord/index.js';
 
 /**
  * Harmonic role a pitch plays within a chord.
@@ -31,6 +31,32 @@ export type VoicedRole = {
 };
 
 /**
+ * The one interval class standing in for a chord's absent third, if any.
+ *
+ * Read from the chord's structure rather than from its sounding pitch classes:
+ * an eleventh chord's tensions fold onto 2 and 5 in pitch-class space, so a set
+ * of folded intervals cannot say which of them replaced the third — and both
+ * would answer, leaving one chord with two quality-defining tones. The
+ * suspension a `sus4` or `sus2` names is its fourth or its second; an eleventh
+ * chord's is the eleventh, the tone its omitted third gave way to.
+ */
+function suspendedIntervalOf(chord: Chord): number | undefined {
+  const sounds = (ic: number): boolean =>
+    chord.intervals.some((interval) => pitchClassOf(interval) === ic);
+  if (sounds(3) || sounds(4)) {
+    return undefined;
+  }
+  const spec = chordSpecOf(chord);
+  if (spec.base === 'sus4') {
+    return sounds(5) ? 5 : undefined;
+  }
+  if (spec.base === 'sus2') {
+    return sounds(2) ? 2 : undefined;
+  }
+  return spec.omissions.includes(3) && sounds(5) ? 5 : undefined;
+}
+
+/**
  * Classify a pitch's harmonic role and lock level within a chord.
  *
  * The role comes from the pitch's interval class above the chord root, read
@@ -39,12 +65,15 @@ export type VoicedRole = {
  * `'tension'` — including one that is simply foreign to the chord, which this
  * single-pitch query cannot tell from a colour tone. The root locks the chord
  * identity, the third locks its quality, and everything else is free voicing.
- * In a suspended chord (a chord whose intervals include a 4th (5) or 2nd (2)
- * but no third), the suspended tone takes the third's place as the
- * quality-defining tone and is locked to `quality`, since moving it changes the
- * chord. Detecting an octave doubling requires the surrounding voicing, which
- * this query does not carry, so `'doubling'` is part of the type — the shared
- * vocabulary of harmonic roles — but is never returned here.
+ * Where a chord has no third, the tone standing in its place — the fourth of a
+ * `sus4`, the second of a `sus2`, the eleventh of an eleventh chord — takes the
+ * third's slot and is locked to `quality`, since moving it changes the chord.
+ * At most one interval class of a chord is ever reported as its third, so a
+ * consumer reading `lock: 'quality'` as "this tone identifies the chord" gets
+ * one answer rather than two. Detecting an octave doubling requires the
+ * surrounding voicing, which this query does not carry, so `'doubling'` is part
+ * of the type — the shared vocabulary of harmonic roles — but is never returned
+ * here.
  *
  * @param pitch MIDI pitch or bare pitch class.
  * @param chord The chord providing the root reference.
@@ -60,10 +89,8 @@ export type VoicedRole = {
  */
 export function roleOf(pitch: number, chord: Chord, chordId = 0): VoicedRole {
   const interval = (pitchClassOf(pitch) - pitchClassOf(chord.rootPc) + 12) % 12;
-  const tones = new Set(chord.intervals.map(pitchClassOf));
-  const hasThird = tones.has(3) || tones.has(4);
-  const isSuspendedTone =
-    !hasThird && ((interval === 5 && tones.has(5)) || (interval === 2 && tones.has(2)));
+  const suspended = suspendedIntervalOf(chord);
+  const isSuspendedTone = suspended !== undefined && interval === suspended;
   const chordRole = chordToneRole(pitch, chord);
   let role: HarmonyRole;
   let lock: LockLevel;

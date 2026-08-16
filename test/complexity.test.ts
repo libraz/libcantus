@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { parseTimeSignature } from '../src/core/meter/index.js';
 import type { NoteEvent } from '../src/core/types.js';
-import { type BassSegment, generateBassLine } from '../src/generate/bass/index.js';
-import { type DrumsOptions, generateDrums } from '../src/generate/drums/index.js';
+import { type BassSegment, generateBassLine, placeLicks } from '../src/generate/bass/index.js';
+import { type DrumsOptions, generateDrums, placeDrumPattern } from '../src/generate/drums/index.js';
 import { generateMotif } from '../src/generate/motif/index.js';
 import { ornament } from '../src/generate/ornament/index.js';
 import { generateProgression } from '../src/generate/progression/index.js';
 import { generateRhythm } from '../src/generate/rhythm/index.js';
+import { GENRES, type Vocabulary } from '../src/generate/vocabulary/index.js';
 import { makeChord } from '../src/theory/chord/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
 
@@ -125,6 +126,120 @@ describe('raising a dial only adds material', () => {
         }),
       ),
     );
+  });
+
+  // The dictionaries state tempo ranges, so the tempo decides which figures are
+  // reachable at all; the whole cross product is swept rather than one corner of
+  // it, because a host puts this dial on a slider.
+  const BPMS = [72, 100, 130, 170];
+  const SEEDS = [1, 7, 4096];
+
+  /**
+   * Three figures for one genre, so the choice between them is a real draw.
+   *
+   * Most built-in genres carry a single figure, which makes "the dial did not
+   * change which figure was chosen" true for a reason the sweep cannot see. A
+   * genre with several candidates, each with its own onsets, is what makes the
+   * property observable: if the address a figure is drawn at moved with the
+   * dial, a bar would swap one figure for another and lose the onsets of the
+   * first.
+   */
+  const rivalLicks: Vocabulary<unknown>[] = [
+    { id: 'rivalA', steps: [0, 4, 8, 12], degrees: [1, 5, 1, 5] },
+    { id: 'rivalB', steps: [0, 6, 10], degrees: [1, 3, 5] },
+    { id: 'rivalC', steps: [0, 2, 9, 14], degrees: [1, 8, 5, 7] },
+  ].map(({ id, steps, degrees }) => ({
+    id,
+    genre: 'hiphop' as const,
+    difficulty: 1,
+    articulations: [],
+    ts: { numerator: 4, denominator: 4 },
+    material: {
+      lengthSteps: 16,
+      notes: steps.map((step, index) => ({
+        degree: degrees[index] ?? 1,
+        step,
+        velocity: 0.9,
+      })),
+    },
+    provenance: { basis: 'construction' as const, note: 'written for this test from its own grid' },
+  }));
+
+  it('holds for every drum figure the dictionary has, at every tempo and seed', () => {
+    for (const genre of GENRES) {
+      for (const bpm of BPMS) {
+        for (const seed of SEEDS) {
+          expectMonotone(`drum pattern ${genre} at ${bpm} on seed ${seed}`, (rhythmic) =>
+            onsetBeats(
+              placeDrumPattern({
+                bars: 2,
+                genre,
+                ctx: { seed, bpm, complexity: { rhythmic } },
+              }),
+            ),
+          );
+        }
+      }
+    }
+  });
+
+  it('holds for every lick the dictionary has, at every tempo and seed', () => {
+    for (const genre of GENRES) {
+      for (const bpm of BPMS) {
+        for (const seed of SEEDS) {
+          expectMonotone(`licks ${genre} at ${bpm} on seed ${seed}`, (rhythmic) =>
+            onsetBeats(
+              placeLicks(segments, cMajor, {
+                genre,
+                ctx: { seed, bpm, complexity: { rhythmic } },
+              }),
+            ),
+          );
+        }
+      }
+    }
+  });
+
+  it('holds for a chord held longer than the figures that fill it', () => {
+    // A chord lasting several bars is laid out bar by bar, each bar drawing its
+    // own figure. That is a second place the dial could move an onset rather
+    // than add one, so the sweep covers it as well as the bar-long case: the
+    // address a bar draws at has to be fixed by where it sits, not by how busy
+    // the dial happens to be.
+    const vamp = [
+      { startBeat: 0, endBeat: 16, chord: makeChord(0, 'maj7') },
+      { startBeat: 16, endBeat: 24, chord: makeChord(5, 'maj7') },
+    ];
+    for (const genre of GENRES) {
+      for (const bpm of BPMS) {
+        for (const seed of [1, 4096]) {
+          expectMonotone(`lick vamp ${genre} at ${bpm} on seed ${seed}`, (rhythmic) =>
+            onsetBeats(
+              placeLicks(vamp, cMajor, { genre, ctx: { seed, bpm, complexity: { rhythmic } } }),
+            ),
+          );
+        }
+      }
+    }
+  });
+
+  it('holds where several figures compete for the same bar', () => {
+    const vamp = [
+      { startBeat: 0, endBeat: 16, chord: makeChord(0, 'maj7') },
+      { startBeat: 16, endBeat: 20, chord: makeChord(7, 'dom7') },
+    ];
+    for (const bpm of BPMS) {
+      for (const seed of [1, 7, 4096, 20250816]) {
+        expectMonotone(`rival licks at ${bpm} on seed ${seed}`, (rhythmic) =>
+          onsetBeats(
+            placeLicks(vamp, cMajor, {
+              genre: 'hiphop',
+              ctx: { seed, bpm, complexity: { rhythmic }, vocabulary: rivalLicks },
+            }),
+          ),
+        );
+      }
+    }
   });
 
   it('holds for an ornament pass', () => {

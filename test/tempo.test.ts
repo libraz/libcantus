@@ -9,6 +9,7 @@ import {
   tempoAt,
   ticksToBeats,
 } from '../src/core/tempo/index.js';
+import { assertNoteEvent } from '../src/core/validation/index.js';
 
 const CONSTANT: TempoMap = [{ startBeat: 0, bpm: 120 }];
 const CHANGING: TempoMap = [
@@ -45,11 +46,14 @@ describe('beats to seconds', () => {
     expect(secondsToBeats(0, late)).toBe(4);
   });
 
-  it('rejects a beat before the map begins', () => {
+  it('reads a beat before the map begins at the opening tempo', () => {
+    // The map's first event is the time origin, so a beat before it has run a
+    // negative amount of time — which is what a pickup has done. The opening
+    // tempo governs it; the map names no other one.
     const late: TempoMap = [{ startBeat: 4, bpm: 120 }];
-    expect(() => beatsToSeconds(3, late)).toThrow(InvalidInputError);
-    expect(() => durationToSeconds(3, 1, late)).toThrow(InvalidInputError);
-    expect(() => tempoAt(3, late)).toThrow(InvalidInputError);
+    expect(beatsToSeconds(3, late)).toBe(-0.5);
+    expect(durationToSeconds(3, 1, late)).toBe(0.5);
+    expect(tempoAt(3, late)).toBe(120);
   });
 
   it('rejects a non-finite beat', () => {
@@ -83,9 +87,13 @@ describe('seconds to beats', () => {
     expect(secondsToBeats(7, CHANGING)).toBe(11);
   });
 
-  it('rejects negative seconds', () => {
-    expect(() => secondsToBeats(-1, CONSTANT)).toThrow(InvalidInputError);
+  it('walks back from the origin when the seconds are negative', () => {
+    // A DAW that reports a pickup's position in wall-clock time reports it
+    // before the origin, and the conversion has to come back with the beat.
+    expect(secondsToBeats(-1, CONSTANT)).toBe(-2);
+    expect(secondsToBeats(-0.5, CONSTANT)).toBe(-1);
     expect(() => secondsToBeats(Number.NaN, CONSTANT)).toThrow(InvalidInputError);
+    expect(() => secondsToBeats(Number.NEGATIVE_INFINITY, CONSTANT)).toThrow(InvalidInputError);
   });
 });
 
@@ -163,8 +171,18 @@ describe('tempo map validation', () => {
     expect(() => beatsToSeconds(0, [{ startBeat: 0, bpm: 1001 }])).toThrow(InvalidInputError);
   });
 
-  it('rejects a negative onset', () => {
-    expect(() => beatsToSeconds(0, [{ startBeat: -1, bpm: 120 }])).toThrow(InvalidInputError);
+  it('accepts a negative onset, because a tempo is marked on the pickup', () => {
+    // The module doc used to send a caller with a pickup here — "move the
+    // origin" — and this is the map that instruction produces.
+    const fromPickup: TempoMap = [{ startBeat: -1, bpm: 120 }];
+    expect(beatsToSeconds(-1, fromPickup)).toBe(0);
+    expect(beatsToSeconds(0, fromPickup)).toBe(0.5);
+    expect(() => beatsToSeconds(0, [{ startBeat: Number.NaN, bpm: 120 }])).toThrow(
+      InvalidInputError,
+    );
+    expect(() => beatsToSeconds(0, [{ startBeat: Number.NEGATIVE_INFINITY, bpm: 120 }])).toThrow(
+      InvalidInputError,
+    );
   });
 });
 
@@ -195,11 +213,80 @@ describe('ticks', () => {
   });
 
   it('rejects invalid ticks and resolutions', () => {
-    expect(() => beatsToTicks(-1, 480)).toThrow(InvalidInputError);
+    expect(() => beatsToTicks(Number.NaN, 480)).toThrow(InvalidInputError);
+    expect(() => beatsToTicks(Number.POSITIVE_INFINITY, 480)).toThrow(InvalidInputError);
     expect(() => beatsToTicks(1, 0)).toThrow(InvalidInputError);
     expect(() => beatsToTicks(1, 480.5)).toThrow(InvalidInputError);
-    expect(() => ticksToBeats(-1, 480)).toThrow(InvalidInputError);
     expect(() => ticksToBeats(1.5, 480)).toThrow(InvalidInputError);
+    expect(() => ticksToBeats(Number.NaN, 480)).toThrow(InvalidInputError);
     expect(() => ticksToBeats(480, -1)).toThrow(InvalidInputError);
+  });
+
+  it('carries a pickup across the MIDI boundary and back', () => {
+    // A tick count is a position, and a position before the first downbeat is
+    // negative. Rejecting it would leave a pickup no way through the export.
+    expect(beatsToTicks(-1, 480)).toBe(-480);
+    expect(ticksToBeats(-480, 480)).toBe(-1);
+    for (const ppq of [96, 480, 960]) {
+      for (const beat of [-4, -1, -0.5, -0.25, 0, 0.5, 7.75]) {
+        expect(ticksToBeats(beatsToTicks(beat, ppq), ppq)).toBe(beat);
+      }
+    }
+  });
+});
+
+describe('the tempo domain covers the onsets the library accepts', () => {
+  /** A tempo marked on the downbeat, with a one-beat pickup before it. */
+  const PICKUP_BEAT = -1;
+
+  it('never rejects an onset only for being negative', () => {
+    // `assertNoteEvent` accepts a pickup's onset, so the conversions a caller
+    // reaches for next have to accept it too — otherwise a piece the library
+    // reads cannot be exported or timed.
+    expect(() =>
+      assertNoteEvent({ pitch: 60, startBeat: PICKUP_BEAT, durationBeat: 1 }),
+    ).not.toThrow();
+    expect(() => beatsToSeconds(PICKUP_BEAT, CONSTANT)).not.toThrow();
+    expect(() => durationToSeconds(PICKUP_BEAT, 1, CONSTANT)).not.toThrow();
+    expect(() => tempoAt(PICKUP_BEAT, CONSTANT)).not.toThrow();
+    expect(() => beatsToTicks(PICKUP_BEAT, 480)).not.toThrow();
+    expect(beatsToSeconds(PICKUP_BEAT, CONSTANT)).toBeLessThan(0);
+    expect(beatsToTicks(PICKUP_BEAT, 480)).toBeLessThan(0);
+  });
+
+  it('integrates additively across the origin', () => {
+    for (const map of [CONSTANT, CHANGING]) {
+      for (const [start, length] of [
+        [-4, 2],
+        [-1, 1],
+        [-1, 6],
+        [-0.5, 0.25],
+        [-2, 12],
+      ] as const) {
+        expect(beatsToSeconds(start, map) + durationToSeconds(start, length, map)).toBeCloseTo(
+          beatsToSeconds(start + length, map),
+          9,
+        );
+      }
+      // The origin is where the clock reads zero, whichever side is asked.
+      expect(beatsToSeconds(map[0]?.startBeat ?? 0, map)).toBe(0);
+    }
+  });
+
+  it('round-trips a negative beat through seconds', () => {
+    for (const map of [CONSTANT, CHANGING]) {
+      for (const beat of [-8, -4, -1, -0.5, -0.125]) {
+        expect(secondsToBeats(beatsToSeconds(beat, map), map)).toBeCloseTo(beat, 9);
+      }
+    }
+  });
+
+  it('keeps elapsed time rising with the beat across the origin', () => {
+    let previous = Number.NEGATIVE_INFINITY;
+    for (const beat of [-8, -4, -1, -0.5, 0, 0.5, 4, 8, 12]) {
+      const seconds = beatsToSeconds(beat, CHANGING);
+      expect(seconds).toBeGreaterThan(previous);
+      previous = seconds;
+    }
   });
 });

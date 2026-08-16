@@ -9,7 +9,12 @@ import {
   secondaryDominantOf,
 } from '../src/analyze/functional/index.js';
 import type { KeyScale } from '../src/core/types.js';
-import { chordPitchClasses, chordQualities, makeChord } from '../src/theory/chord/index.js';
+import {
+  chordPitchClasses,
+  chordQualities,
+  diatonicTriad,
+  makeChord,
+} from '../src/theory/chord/index.js';
 import {
   majorKey,
   minorKey,
@@ -512,6 +517,19 @@ describe('Roman numerals in keys that are not heptatonic', () => {
   });
 });
 
+/** One key of every shape a numeral is measured against, as a function of tonic. */
+const KEY_SHAPES: ((tonic: number) => KeyScale)[] = [
+  (tonic) => majorKey(tonic),
+  (tonic) => minorKey(tonic),
+  (tonic) => scaleByName('harmonicMinor', tonic),
+  (tonic) => scaleByName('dorian', tonic),
+  (tonic) => scaleByName('lydian', tonic),
+  (tonic) => scaleByName('locrian', tonic),
+];
+
+/** The qualities an applied numeral can be built on: dominants and diminisheds. */
+const APPLIED_QUALITIES = ['maj', 'min', 'dom7', 'dim', 'dim7', 'm7b5'] as const;
+
 describe('applied Roman numerals', () => {
   it('names a secondary dominant as the applied chord it is', () => {
     expect(chordToRoman(makeChord(2, 'dom7'), cMajor, { applied: true })).toBe('V7/V');
@@ -519,7 +537,65 @@ describe('applied Roman numerals', () => {
     expect(chordToRoman(makeChord(4, 'maj'), cMajor, { applied: true })).toBe('V/vi');
     expect(chordToRoman(makeChord(0, 'dom7'), cMajor, { applied: true })).toBe('V7/IV');
     expect(chordToRoman(makeChord(6, 'dim7'), cMajor, { applied: true })).toBe('viio7/V');
-    expect(chordToRoman(secondaryDominant(7, cMajor), cMajor, { applied: true })).toBe('V7/vii');
+  });
+
+  it('names no degree a tonic that has no perfect fifth', () => {
+    // The seventh degree of a major key carries a diminished triad, which no
+    // chord tonicizes, so the dominant built over it is named against the home
+    // key instead of pointing at a target that cannot be one.
+    expect(chordToRoman(secondaryDominant(7, cMajor), cMajor, { applied: true })).toBe('#IV7');
+    expect(chordToRoman(makeChord(10, 'dim7'), cMajor, { applied: true })).toBe('bviio7');
+  });
+
+  it('points every applied numeral at a degree that can be a tonic, in every key', () => {
+    // The rule is about the target degree rather than about any one chord, so
+    // it is swept: every key shape on every tonic, against every root and the
+    // qualities that can be read as tonicizing. A degree with no perfect fifth
+    // has nothing to tonicize, and the tonic is not a target of its own key.
+    let applied = 0;
+    for (const shape of KEY_SHAPES) {
+      for (let tonic = 0; tonic < 12; tonic += 1) {
+        const key = shape(tonic);
+        for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+          for (const quality of APPLIED_QUALITIES) {
+            const roman = chordToRoman(makeChord(rootPc, quality), key, { applied: true });
+            const slash = roman.lastIndexOf('/');
+            if (slash < 0) {
+              continue;
+            }
+            applied += 1;
+            const where = `${roman} in ${key.rootPc}/${key.modeMask12}`;
+            const target = romanToChord(roman.slice(slash + 1), key);
+            expect(chordPitchClasses(target), where).toContain((target.rootPc + 7) % 12);
+            expect(target.rootPc, where).not.toBe(((key.rootPc % 12) + 12) % 12);
+          }
+        }
+      }
+    }
+    // The sweep is only worth its assertions if applied numerals are reached.
+    expect(applied).toBeGreaterThan(100);
+  });
+
+  it('names the dominant of an untonicizable degree against the home key instead', () => {
+    // The other direction of the same rule, read off the degree rather than the
+    // numeral: wherever a key's own triad on a degree is diminished or
+    // augmented, the dominant built over that degree carries no slash.
+    for (const shape of KEY_SHAPES) {
+      for (let tonic = 0; tonic < 12; tonic += 1) {
+        const key = shape(tonic);
+        for (let degree = 1; degree <= 7; degree += 1) {
+          const triad = diatonicTriad(degree, key);
+          if (triad.quality !== 'dim' && triad.quality !== 'aug' && degree !== 1) {
+            continue;
+          }
+          const roman = chordToRoman(secondaryDominant(degree, key), key, { applied: true });
+          expect(
+            roman,
+            `degree ${degree} (${triad.quality}) of ${key.rootPc}/${key.modeMask12}`,
+          ).not.toContain('/');
+        }
+      }
+    }
   });
 
   it('round-trips every secondary dominant the library builds', () => {
@@ -542,5 +618,34 @@ describe('applied Roman numerals', () => {
 
   it('is off by default', () => {
     expect(chordToRoman(makeChord(2, 'dom7'), cMajor)).toBe('II7');
+  });
+});
+
+describe('one reading of the chord predicates the unit shares', () => {
+  /** The same chord with its major third voiced a tenth above the root. */
+  const spreadThird = (chord: ReturnType<typeof makeChord>) => {
+    const wide = makeChord(chord.rootPc, chord.quality, chord.bassPc);
+    wide.intervals = chord.intervals.map((interval) => (interval === 4 ? 16 : interval));
+    return wide;
+  };
+
+  it('hears a third voiced as a tenth as a third, in the cadence reader and the function reader alike', () => {
+    // Both readers ask the same question — does this chord carry a major third
+    // — and a chord spread across two octaves has to answer it the same way. A
+    // reading that stopped reducing the interval would keep one of them right
+    // and quietly break the other.
+    const dominant = makeChord(7, 'maj');
+    const tonic = makeChord(0, 'maj');
+    expect(detectCadence(dominant, tonic, cMajor)?.type).toBe('authentic');
+    expect(detectCadence(spreadThird(dominant), tonic, cMajor)?.type).toBe('authentic');
+    // The question is decisive: without the major third the cadence is not one.
+    expect(detectCadence(makeChord(7, 'min'), tonic, cMajor)?.type).toBeNull();
+
+    const flatSeven = makeChord(10, 'maj');
+    const reading = analyzeChord(flatSeven, cMajor);
+    expect(analyzeChord(spreadThird(flatSeven), cMajor)).toEqual(reading);
+    // Decisive here too: the minor triad on the same degree is read by its
+    // degree rather than as the major chord on the flat side.
+    expect(analyzeChord(makeChord(10, 'min'), cMajor).rationale).not.toBe(reading.rationale);
   });
 });

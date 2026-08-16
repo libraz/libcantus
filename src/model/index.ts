@@ -22,10 +22,12 @@ export type {
 // importing only `@libraz/libcantus/model` cannot declare a variable, write a
 // wrapper, or emit declarations under `isolatedDeclarations`.
 export type {
+  AnalyzeChordOptions,
   BorrowedSource,
   CadenceResult,
   ChordAnalysis,
   ChordToRomanOptions,
+  DetectCadenceOptions,
   HarmonicFunction,
   RejectedCandidate,
 } from '../analyze/functional/index.js';
@@ -52,7 +54,13 @@ export type {
   ChordToneRole,
   PitchSpelling,
 } from '../theory/chord/index.js';
-export type { ChordScaleMatch, ScaleChoice } from '../theory/chordscale/index.js';
+export type {
+  AvailableTensionsOptions,
+  AvoidNotesOptions,
+  AvoidNoteUse,
+  ChordScaleMatch,
+  ScaleChoice,
+} from '../theory/chordscale/index.js';
 export type {
   KeyMode,
   KeyRelation,
@@ -74,6 +82,6 @@ export type {
 
 export { Chord } from './chord.js';
 export { Interval } from './interval.js';
-export { type DetectedKeyMatch, Key } from './key.js';
+export { type DetectedKeyMatch, Key, type KeyData } from './key.js';
 export { Note } from './note.js';
-export { Progression } from './progression.js';
+export { Progression, type ProgressionData } from './progression.js';

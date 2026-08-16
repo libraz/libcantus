@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   type ArrangementTrack,
   analyzeArrangement,
+  createArrangementSession,
   tensionCurve,
   tensionCurveFrom,
 } from '../src/analyze/arrange/index.js';
 import { chordTimelineFromChords } from '../src/analyze/timeline/index.js';
+import { BudgetExceededError, InvalidInputError } from '../src/core/errors/index.js';
+import { type MeterMap, parseTimeSignature } from '../src/core/meter/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import { evaluateSafety, NoteSafety, ReasonFlag } from '../src/theory/safety/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
@@ -415,6 +418,220 @@ describe('percussion tracks', () => {
   });
 });
 
+describe('track roles', () => {
+  /** A melody whose Bb reads as a seventh when it is pooled into the harmony. */
+  const melody: NoteEvent[] = [{ pitch: 70, startBeat: 0, durationBeat: 4 }];
+  const triad = blockChord([60, 64, 67], 0);
+
+  it('reads a role as a label, not as a switch over chord inference', () => {
+    // Marking a track `melody` does not keep it out of the pool the chords are
+    // inferred from; only `drums` changes what is inferred, so the same notes
+    // unlabelled have to give the same answer.
+    const labelled = analyzeArrangement([
+      { role: 'melody', notes: melody },
+      { role: 'harmony', notes: triad },
+    ]);
+    const unlabelled = analyzeArrangement([{ notes: melody }, { notes: triad }]);
+    expect(labelled.timeline.segments).toEqual(unlabelled.timeline.segments);
+    expect(labelled.timeline.segments[0]?.chord.quality).toBe('dom7');
+  });
+
+  it('infers the harmony from the tracks harmonyTracks names', () => {
+    // The mechanism a melody track's writer is after: name the harmony track,
+    // and the melody is analysed against it rather than heard as part of it.
+    const restricted = analyzeArrangement(
+      [
+        { role: 'melody', notes: melody },
+        { role: 'harmony', notes: triad },
+      ],
+      { harmonyTracks: [1] },
+    );
+    expect(restricted.timeline.segments[0]?.chord.quality).toBe('maj');
+    expect(restricted.tracks[0]?.notes).toHaveLength(1);
+  });
+
+  it('rejects a harmonyTracks index naming no track, at both entry points', () => {
+    // Matching nothing turns a stale index — what deleting a track leaves
+    // behind — into an analysis with no harmony at all, blamed on the music.
+    const tracks: ArrangementTrack[] = [{ role: 'harmony', notes: triad }];
+    expect(() => analyzeArrangement(tracks, { harmonyTracks: [5] })).toThrow(InvalidInputError);
+    expect(() => analyzeArrangement(tracks, { harmonyTracks: [5] })).toThrow(
+      /harmonyTracks\[0\] 5 is outside/,
+    );
+    expect(() => analyzeArrangement(tracks, { harmonyTracks: [-1] })).toThrow(InvalidInputError);
+    expect(() => tensionCurve(tracks, { harmonyTracks: [5] })).toThrow(InvalidInputError);
+    expect(() => createArrangementSession(tracks, { harmonyTracks: [5] })).toThrow(
+      InvalidInputError,
+    );
+    // An index that does name a track is still honoured.
+    expect(() => analyzeArrangement(tracks, { harmonyTracks: [0] })).not.toThrow();
+    expect(() => tensionCurve(tracks, { harmonyTracks: [0] })).not.toThrow();
+  });
+
+  it('names the track whose notes are missing, at every entry point', () => {
+    // Left to fall through, a missing array becomes `track.notes is not
+    // iterable` inside the pooling pass, where the message no longer says which
+    // track the caller has to fix.
+    const missing = [{ role: 'melody' }] as unknown as ArrangementTrack[];
+    const notAnArray = [{ role: 'melody', notes: 'nope' }] as unknown as ArrangementTrack[];
+    const entries: [string, (tracks: ArrangementTrack[]) => unknown][] = [
+      ['analyzeArrangement', (given) => analyzeArrangement(given)],
+      ['tensionCurve', (given) => tensionCurve(given)],
+      ['tensionCurveFrom', (given) => tensionCurveFrom(given, analyzeArrangement([]))],
+      ['createArrangementSession', (given) => createArrangementSession(given)],
+    ];
+    for (const [name, run] of entries) {
+      expect(() => run(missing), name).toThrow(InvalidInputError);
+      expect(() => run(missing), name).toThrow(/tracks\[0\]\.notes must be an array/);
+      expect(() => run(notAnArray), name).toThrow(/received string/);
+    }
+  });
+});
+
+describe('the safety profile an arrangement is judged under', () => {
+  it('rejects a profile name no profile answers to', () => {
+    // Falling back to `pop` reads as a verdict about the music rather than as
+    // the misspelling it is.
+    const tracks = baseArrangement();
+    expect(() => analyzeArrangement(tracks, { profile: 'strict ' as unknown as 'strict' })).toThrow(
+      InvalidInputError,
+    );
+    expect(() => analyzeArrangement(tracks, { profile: 'jazz' as unknown as 'pop' })).toThrow(
+      /arrangement profile must be one of/,
+    );
+  });
+
+  it('rejects it from the tension entry point too', () => {
+    // Both entry points read the same option through the same helper, so a name
+    // one of them takes cannot be a name the other quietly reinterprets.
+    const tracks = baseArrangement();
+    expect(() => tensionCurve(tracks, { profile: 'jazz' as unknown as 'pop' })).toThrow(
+      InvalidInputError,
+    );
+    expect(() => tensionCurve(tracks, { profile: 'jazz' as unknown as 'pop' })).toThrow(
+      /arrangement profile must be one of/,
+    );
+  });
+
+  it('still takes every profile that exists, and defaults to pop', () => {
+    const tracks = baseArrangement();
+    expect(analyzeArrangement(tracks, { profile: 'pop' }).conflicts).toEqual(
+      analyzeArrangement(tracks).conflicts,
+    );
+    expect(() => analyzeArrangement(tracks, { profile: 'strict' })).not.toThrow();
+    expect(tensionCurve(tracks, { profile: 'pop' })).toEqual(tensionCurve(tracks));
+    expect(() => tensionCurve(tracks, { profile: 'strict' })).not.toThrow();
+  });
+});
+
+describe('an analysis against a supplied timeline', () => {
+  /**
+   * Two 4/4 bars then two 3/4 bars — C, G, F, C — with the bar lines at 0, 4, 8
+   * and 11. Only a reading that follows the whole map puts them there.
+   */
+  const CHANGING: MeterMap = [
+    { startBeat: 0, ts: parseTimeSignature('4/4') },
+    { startBeat: 8, ts: parseTimeSignature('3/4') },
+  ];
+
+  function changingMeterPiece(): ArrangementTrack[] {
+    return [
+      {
+        role: 'harmony',
+        notes: [
+          ...blockChord([60, 64, 67], 0),
+          ...blockChord([67, 71, 74], 4),
+          ...blockChord([65, 69, 72], 8, 3),
+          ...blockChord([60, 64, 67], 11, 3),
+        ],
+      },
+    ];
+  }
+
+  /**
+   * A piece that leaves C major for G major on a C major triad — I in the key
+   * it leaves, IV in the key it arrives in, which is the pivot the report is
+   * expected to name.
+   */
+  function modulatingPiece(): ArrangementTrack[] {
+    const chords = [
+      [60, 64, 67], // C
+      [65, 69, 72], // F
+      [67, 71, 74, 77], // G7
+      [60, 64, 67], // C
+      [65, 69, 72], // F
+      [60, 64, 67], // C — the pivot
+      [67, 71, 74], // G
+      [62, 66, 69, 72], // D7
+      [67, 71, 74], // G
+      [62, 66, 69, 72], // D7
+      [67, 71, 74], // G
+      [67, 71, 74], // G
+    ];
+    return [
+      {
+        role: 'harmony',
+        notes: chords.flatMap((pitches, index) => blockChord(pitches, index * 4)),
+      },
+    ];
+  }
+
+  it('reads the key regions against the whole meter map, as the inferring path does', () => {
+    // The keys are derived from the notes either way, so the two paths have to
+    // agree; taking only the opening signature reads a 3/4 tail in 4/4.
+    const tracks = changingMeterPiece();
+    const inferred = analyzeArrangement(tracks, { meters: CHANGING });
+    const supplied = analyzeArrangement(tracks, {
+      meters: CHANGING,
+      timeline: inferred.timeline,
+    });
+    expect(supplied.keys).toEqual(inferred.keys);
+    expect(supplied.prevailingKey).toEqual(inferred.prevailingKey);
+  });
+
+  it('annotates the key regions it derives with their pivots, as the inferring path does', () => {
+    const tracks = modulatingPiece();
+    const inferred = analyzeArrangement(tracks);
+    const supplied = analyzeArrangement(tracks, { timeline: inferred.timeline });
+    expect(supplied.keys).toEqual(inferred.keys);
+    // The comparison is only worth making if the inferred path found a pivot.
+    expect(inferred.keys.length).toBeGreaterThan(1);
+    expect(inferred.keys.some((region) => region.pivot !== undefined)).toBe(true);
+    expect(supplied.keys.map((region) => region.pivot)).toEqual(
+      inferred.keys.map((region) => region.pivot),
+    );
+  });
+
+  it('leaves caller-supplied key regions exactly as they were given', () => {
+    const tracks = modulatingPiece();
+    const inferred = analyzeArrangement(tracks);
+    const given = [{ startBeat: 0, endBeat: 28, key: majorKey(0), confidence: 1 }];
+    const supplied = analyzeArrangement(tracks, { timeline: inferred.timeline, keys: given });
+    expect(supplied.keys).toEqual(given);
+  });
+});
+
+describe('the documented arrangement report', () => {
+  it('names the members the TSDoc example destructures', () => {
+    const analysis = analyzeArrangement([
+      {
+        role: 'melody',
+        notes: [
+          { pitch: 60, startBeat: 0, durationBeat: 2 },
+          { pitch: 67, startBeat: 2, durationBeat: 2 },
+        ],
+      },
+    ]);
+    const { prevailingKey, conflicts } = analysis;
+    expect(typeof prevailingKey.rootPc).toBe('number');
+    expect(Array.isArray(conflicts)).toBe(true);
+    expect(Array.isArray(analysis.keys)).toBe(true);
+    // `key` is the option name, not a member of the report: an example that
+    // destructures it binds undefined and reads as if the field existed.
+    expect(Object.keys(analysis)).not.toContain('key');
+  });
+});
+
 describe('analysis cost', () => {
   it('analyses a large arrangement without a quadratic blow-up', () => {
     // Not a timing assertion: the guard is that the whole analysis finishes
@@ -427,6 +644,47 @@ describe('analysis cost', () => {
     const analysis = analyzeArrangement([{ notes }]);
     expect(analysis.tracks[0]?.notes).toHaveLength(32_000);
   }, 20_000);
+
+  it('analyses a single voice longer than a call can spread', () => {
+    // 130,000 notes in one sub-voice: inside the budget the entry point checks,
+    // and past the number of arguments a spread of the annotations can pass.
+    // The harmony is supplied so the pass under test is the annotation one.
+    const notes: NoteEvent[] = [];
+    for (let i = 0; i < 130_000; i += 1) {
+      notes.push({ pitch: 60 + (i % 5), startBeat: i * 0.25, durationBeat: 0.25 });
+    }
+    const timeline = chordTimelineFromChords(
+      [{ rootPc: 0, quality: 'maj', startBeat: 0 }],
+      notes.length * 0.25,
+    );
+    const analysis = analyzeArrangement([{ notes }], { key: majorKey(0), timeline });
+    expect(analysis.tracks[0]?.notes).toHaveLength(130_000);
+  }, 30_000);
+
+  it('rejects an arrangement whose note-voice comparisons exceed the budget', () => {
+    // 1,200 notes struck together are 1,200 sub-voices, and every note is
+    // evaluated against all of them. Both counts the entry point checked before
+    // — one track, 1,200 notes — are far inside the budget; their product is
+    // not, and it is the product the analysis actually pays.
+    const notes: NoteEvent[] = Array.from({ length: 1_200 }, (_, index) => ({
+      pitch: 24 + (index % 96),
+      startBeat: 0,
+      durationBeat: 4,
+    }));
+    expect(() => analyzeArrangement([{ notes }])).toThrow(BudgetExceededError);
+    expect(() => analyzeArrangement([{ notes }])).toThrow(/note-voice comparisons/);
+  });
+
+  it('measures those comparisons against the budget the caller set', () => {
+    const notes: NoteEvent[] = Array.from({ length: 100 }, (_, index) => ({
+      pitch: 24 + index,
+      startBeat: 0,
+      durationBeat: 4,
+    }));
+    expect(() => analyzeArrangement([{ notes }], { budget: 5_000 })).toThrow(BudgetExceededError);
+    const analysis = analyzeArrangement([{ notes }], { budget: 100_000 });
+    expect(analysis.tracks[0]?.notes).toHaveLength(100);
+  });
 });
 
 describe('conflict traceability', () => {

@@ -77,6 +77,7 @@ export {
   pulseBeats,
   pulsesPerBar,
   resolveMeters,
+  tryParseTimeSignature,
   tuplet,
 } from './meter/index.js';
 export type {
@@ -107,6 +108,7 @@ export {
   transposeByInterval,
   transposeNote,
   tryParseInterval,
+  tryParseKeyName,
   tryParseNote,
 } from './pitch/index.js';
 export type { PositionalRng, Rng, SeedPath } from './random/index.js';

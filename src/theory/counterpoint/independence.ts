@@ -162,13 +162,14 @@ function motionBetween(
  * @param opts Attack flags and the treatment of the fourth.
  * @returns The motion breakdown, rhythmic complementarity, separation,
  *   crossings, and the longest perfect-consonance run.
- * @throws If the two lines differ in length, or a note carries no octave.
+ * @throws If the two lines differ in length, if an attack array is supplied at
+ *   another length than the lines, or if a note carries no octave.
  * @example
  * ```ts
  * import { parseNote, voiceIndependence } from '@libraz/libcantus';
  * const lead = ['C5', 'D5', 'E5'].map((n) => parseNote(n));
  * const counter = ['E4', 'F4', 'G4'].map((n) => parseNote(n));
- * voiceIndependence(lead, counter).motion.parallel; // 1 — a harmony line in tenths
+ * voiceIndependence(lead, counter).motion.parallel; // 1 — a harmony line in sixths
  * ```
  * @category Voicing & Counterpoint
  */
@@ -181,6 +182,19 @@ export function voiceIndependence(
     throw new InvalidInputError(
       `voiceIndependence needs the two lines aligned slot for slot; received ${lead.length} and ${counter.length}`,
     );
+  }
+  // The attack arrays are read slot by slot alongside the lines, so one of the
+  // wrong length is not a shorter reading of the same texture but a silently
+  // wrong one: every slot past its end would count as a sustain.
+  for (const [name, flags] of [
+    ['leadAttacks', opts?.leadAttacks],
+    ['counterAttacks', opts?.counterAttacks],
+  ] as const) {
+    if (flags !== undefined && flags.length !== lead.length) {
+      throw new InvalidInputError(
+        `voiceIndependence needs ${name} aligned slot for slot with the lines; received ${flags.length} and ${lead.length}`,
+      );
+    }
   }
   const slots: Slot[] = lead.map((leadNote, index) => {
     const counterNote = counter[index] ?? null;

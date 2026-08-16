@@ -11,7 +11,7 @@ import { transposeNote } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import { assertFiniteNumber, assertInteger } from '../../core/validation/index.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
-import { chordPitchClasses, makeChord } from '../../theory/chord/index.js';
+import { makeChord } from '../../theory/chord/index.js';
 import {
   isScaleTone,
   MAJOR_MASK,
@@ -20,7 +20,14 @@ import {
 } from '../../theory/scale/index.js';
 import { augmentedSixthKind } from './augmented-sixth.js';
 import { type BorrowedSource, borrowedSource } from './borrowed.js';
-import { degreeRootPc, isAppliedDominantSonority, isNeapolitan, mod12 } from './internal.js';
+import {
+  degreeRootPc,
+  hasMajorThird,
+  isAppliedDominantSonority,
+  isDiatonicChord,
+  isNeapolitan,
+  mod12,
+} from './internal.js';
 import { capitalize, type RejectedCandidate } from './rationale.js';
 import { type ChordToRomanOptions, chordToRoman, romanAlternatives } from './roman.js';
 
@@ -69,9 +76,11 @@ const MINOR_FUNCTION_BY_OFFSET: readonly HarmonicFunction[] = [
  * @category Functional Harmony
  */
 export function isMinorKey(key: KeyScale): boolean {
-  const hasMinorThird = (key.modeMask12 >> 3) & 1;
-  const hasMajorThird = (key.modeMask12 >> 4) & 1;
-  return Boolean(hasMinorThird) && !hasMajorThird;
+  // Named for the mask bits they read, so neither shadows the chord predicate
+  // of the same idea that the shared helpers export.
+  const minorThirdBit = (key.modeMask12 >> 3) & 1;
+  const majorThirdBit = (key.modeMask12 >> 4) & 1;
+  return Boolean(minorThirdBit) && !majorThirdBit;
 }
 
 /**
@@ -192,8 +201,8 @@ export type ChordAnalysis = {
    */
   rationale: string;
   /**
-   * The readings that were considered and rejected, empty unless
-   * {@link AnalyzeChordOptions.alternatives} asked for them.
+   * The readings that were considered and rejected, empty unless the
+   * `alternatives` option of {@link AnalyzeChordOptions} asked for them.
    */
   alternatives: RejectedCandidate[];
 };
@@ -302,7 +311,7 @@ function functionAlternatives(
  * @category Functional Harmony
  */
 export function isDiatonic(chord: Chord, key: KeyScale): boolean {
-  return chordPitchClasses(chord).every((pc) => isScaleTone(pc, key));
+  return isDiatonicChord(chord, key);
 }
 
 /**
@@ -311,8 +320,15 @@ export function isDiatonic(chord: Chord, key: KeyScale): boolean {
  * A key with a minor third (natural/harmonic/melodic minor, dorian, phrygian)
  * maps to the parallel major; any other key maps to the parallel natural minor.
  *
+ * This is the pitch-class form, taking and returning a `KeyScale`, which
+ * carries no spelling to keep: the parallel of a key named as C is a key whose
+ * root is pitch class 0, and whether that is written C or B# is a question this
+ * layer does not ask. Both name the same key.
+ *
  * @param key The key to mirror.
  * @returns The parallel major or natural-minor key on the same tonic.
+ * @see {@link parallelKeyOf} for the spelled form, which takes a tonic note and
+ *   returns a `SpelledKey` with the tonic spelling preserved.
  * @category Functional Harmony
  */
 export function parallelKey(key: KeyScale): KeyScale {
@@ -327,19 +343,14 @@ function isDiminishedQuality(quality: ChordQuality): boolean {
   return quality === 'dim' || quality === 'dim7' || quality === 'm7b5';
 }
 
-/** Whether the chord's interval template carries a major third above the root. */
-function hasMajorThird(chord: Chord): boolean {
-  return chord.intervals.some((interval) => mod12(interval) === 4);
-}
-
 /**
  * Analyze a chord in a key: harmonic function, borrowing, and Roman numeral.
  *
  * The function is quality-aware (see the predicates behind it), the source
  * follows {@link borrowedSource}, and the numeral comes from
- * {@link chordToRoman}. `borrowed` is true whenever a source is identified —
- * including the Neapolitan, which the stricter parallel-mode predicate
- * {@link isBorrowedChord} does not count.
+ * {@link chordToRoman}. `borrowed` is true whenever a source is identified,
+ * which includes the Neapolitan: it belongs to neither parallel mode, and both
+ * this and {@link isBorrowedChord} count it as a borrowing all the same.
  *
  * The `rationale` says which of those rules settled the function, so a reader
  * who disagrees can see what the reading rests on. `alternatives` is empty

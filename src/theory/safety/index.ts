@@ -2,9 +2,9 @@ import { InvalidInputError } from '../../core/errors/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import {
-  assertFiniteNumber,
   assertGenerationBudget,
-  assertInteger,
+  assertMidiPitch,
+  assertOneOf,
 } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
 import { intervalAboveRoot, isChordMember } from '../chord/index.js';
@@ -111,12 +111,21 @@ export const PROFILE_WEIGHTS: Readonly<Record<SafetyProfile, Readonly<ProfileWei
   });
 
 /**
+ * Every profile name, read from the weight table so an entrance check and the
+ * table it guards cannot drift apart.
+ */
+const SAFETY_PROFILES = Object.keys(PROFILE_WEIGHTS) as SafetyProfile[];
+
+/**
  * Resolve a profile to the weights that rank its candidates, with per-field
  * overrides applied on top.
  *
  * @param profile The profile whose table to start from.
  * @param overrides Fields to replace; anything absent keeps the profile's value.
  * @returns The complete weight table to score with.
+ * @throws If `profile` is not one of the profile names
+ *   ({@link InvalidInputError}). A misspelled profile scored under a default
+ *   table would rank candidates by a style the caller did not ask for.
  * @example
  * ```ts
  * import { profileWeights } from '@libraz/libcantus';
@@ -128,7 +137,7 @@ export function profileWeights(
   profile: SafetyProfile,
   overrides?: Partial<ProfileWeights>,
 ): ProfileWeights {
-  const base = PROFILE_WEIGHTS[profile] ?? PROFILE_WEIGHTS.pop;
+  const base = PROFILE_WEIGHTS[assertOneOf(profile, SAFETY_PROFILES, 'safety profile')];
   return { ...base, ...overrides };
 }
 
@@ -296,6 +305,8 @@ function stepResolution(pitch: number, chord: Chord): number | undefined {
  *
  * @param q The candidate and its harmonic/voice-leading context.
  * @returns The verdict, reason bitmask, and optional resolution guidance.
+ * @throws If the profile is not one of the profile names, or if any pitch in
+ *   the query is not a MIDI pitch in 0..127 ({@link InvalidInputError}).
  * @example
  * ```ts
  * import { evaluateSafety, makeChord, majorKey, NoteSafety } from '@libraz/libcantus';
@@ -313,7 +324,7 @@ function stepResolution(pitch: number, chord: Chord): number | undefined {
  */
 export function evaluateSafety(q: SafetyQuery, opts: EvaluateSafetyOptions = {}): SafetyResult {
   assertSafetyContext(q);
-  assertFiniteNumber(q.candidatePitch, 'candidatePitch');
+  assertMidiPitch(q.candidatePitch, 'candidatePitch');
   return evaluateInternal(q, opts.suggestions ?? true);
 }
 
@@ -333,21 +344,32 @@ export type EvaluateSafetyOptions = {
   suggestions?: boolean;
 };
 
-/** Validate all numeric context fields once at a public safety entry point. */
+/**
+ * Validate the profile and every pitch a public safety entry point reads.
+ *
+ * Each field named here is a MIDI pitch, and the suggestion search already
+ * refuses to leave 0..127, so the same bound is the entrance contract: a pitch
+ * outside it cannot be written to a note event, and a profile outside the union
+ * would be scored by whichever table a lookup happened to fall back on.
+ */
 function assertSafetyContext(q: Omit<SafetyQuery, 'candidatePitch'>): void {
-  if (q.prevPitch !== undefined) assertFiniteNumber(q.prevPitch, 'prevPitch');
-  if (q.vocalLow !== undefined) assertFiniteNumber(q.vocalLow, 'vocalLow');
-  if (q.vocalHigh !== undefined) assertFiniteNumber(q.vocalHigh, 'vocalHigh');
+  assertOneOf(q.profile, SAFETY_PROFILES, 'safety profile');
+  if (q.prevPitch !== undefined) assertMidiPitch(q.prevPitch, 'prevPitch');
+  if (q.vocalLow !== undefined) assertMidiPitch(q.vocalLow, 'vocalLow');
+  if (q.vocalHigh !== undefined) assertMidiPitch(q.vocalHigh, 'vocalHigh');
   if (q.vocalLow !== undefined && q.vocalHigh !== undefined && q.vocalLow > q.vocalHigh) {
     throw new InvalidInputError('vocalLow must not exceed vocalHigh');
+  }
+  if (!Array.isArray(q.otherVoices)) {
+    throw new InvalidInputError(`otherVoices must be an array; received ${typeof q.otherVoices}`);
   }
   assertGenerationBudget(q.otherVoices.length, 'other voices');
   for (let index = 0; index < q.otherVoices.length; index += 1) {
     const voice = q.otherVoices[index];
     if (!voice) continue;
-    assertFiniteNumber(voice.pitch, `otherVoices[${index}].pitch`);
+    assertMidiPitch(voice.pitch, `otherVoices[${index}].pitch`);
     if (voice.prevPitch !== undefined) {
-      assertFiniteNumber(voice.prevPitch, `otherVoices[${index}].prevPitch`);
+      assertMidiPitch(voice.prevPitch, `otherVoices[${index}].prevPitch`);
     }
   }
 }
@@ -622,7 +644,8 @@ function describe(reasons: number, q: SafetyQuery): string {
  * @param pitchLow Lowest MIDI pitch to consider (inclusive).
  * @param pitchHigh Highest MIDI pitch to consider (inclusive).
  * @returns Placeable pitches (non-dissonant), chord tones before others, each group descending.
- * @throws If either bound is non-finite/non-integral, reversed, or exceeds the generation budget.
+ * @throws If either bound is not a MIDI pitch in 0..127, reversed, or exceeds
+ *   the generation budget, or if the context names an unknown profile.
  * @example
  * ```ts
  * import { enumerateSafePitches, makeChord, majorKey } from '@libraz/libcantus';
@@ -643,8 +666,11 @@ export function enumerateSafePitches(
   assertSafetyContext(q);
   const chordTones: number[] = [];
   const others: number[] = [];
-  assertInteger(pitchLow, 'pitchLow');
-  assertInteger(pitchHigh, 'pitchHigh');
+  // The bounds are MIDI pitches, and so is everything enumerated between them:
+  // a pitch outside 0..127 cannot be written to a note event, so it is refused
+  // here rather than handed to an arranger that has nowhere to put it.
+  assertMidiPitch(pitchLow, 'pitchLow');
+  assertMidiPitch(pitchHigh, 'pitchHigh');
   if (pitchLow > pitchHigh) {
     throw new InvalidInputError(
       `pitchLow must not exceed pitchHigh; received ${pitchLow} > ${pitchHigh}`,

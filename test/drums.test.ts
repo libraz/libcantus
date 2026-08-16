@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseTimeSignature } from '../src/core/meter/index.js';
+import { FILL_ARCHETYPES, generateFill } from '../src/generate/drums/fills.js';
+import { HitList } from '../src/generate/drums/hit.js';
 import {
   type DrumsOptions,
   type GrooveStyle,
@@ -33,16 +35,25 @@ const base: DrumsOptions = {
 };
 
 describe('generateDrums basic groove', () => {
-  it.each(['6/8', '12/8', '5/4', '7/8'])('keeps every hit inside each requested %s bar', (text) => {
+  it.each(['6/8', '12/8', '5/4', '7/8'])('refuses to write a groove in %s', (text) => {
+    // Every shape this generator writes is written against a four-beat bar, so
+    // another meter came back with 4/4 accents inside a bar of the wrong length
+    // and nothing to tell the caller that had happened. A meter it cannot place
+    // is refused where it is asked for.
     const ts = parseTimeSignature(text);
-    const barBeats = (ts.numerator * 4) / ts.denominator;
+    expect(() =>
+      generateDrums({ ...base, bars: 3, ts, section: 'chorus', style: 'house' }),
+    ).toThrow(/4\/4/);
+  });
+
+  it('keeps every hit inside each bar of the meter it does write', () => {
     const bars = 3;
-    const hits = generateDrums({ ...base, bars, ts, section: 'chorus', style: 'house' });
+    const hits = generateDrums({ ...base, bars, section: 'chorus', style: 'house' });
     for (const hit of hits) {
-      const bar = Math.floor(hit.startBeat / barBeats);
+      const bar = Math.floor(hit.startBeat / 4);
       expect(bar).toBeGreaterThanOrEqual(0);
       expect(bar).toBeLessThan(bars);
-      expect(hit.startBeat).toBeLessThan((bar + 1) * barBeats);
+      expect(hit.startBeat).toBeLessThan((bar + 1) * 4);
     }
   });
 
@@ -143,9 +154,9 @@ describe('generateDrums richness', () => {
   });
 
   it('puts Euclidean kicks, shakers, and pre-chorus snare lifts on the shared shuffle grid', () => {
-    // Standard/shuffle applies 0.75 effective swing at the style's 0.5
-    // intensity, so every off-beat eighth is delayed by 0.0625 beats.
-    const swungAnd = quantizeSwing(0.5, 0.375, 'sixteenth');
+    // A shuffle asked for by name is the triplet itself, whatever the style's
+    // own character, so every off-beat eighth lands on the triplet position.
+    const swungAnd = quantizeSwing(0.5, 1, 'sixteenth');
     const hiHatPitches = new Set([CLOSED_HAT, OPEN_HAT]);
     const hasHiHatAt = (hits: ReturnType<typeof generateDrums>, tick: number) =>
       hits.some((hit) => hiHatPitches.has(hit.pitch) && hit.startBeat === tick);
@@ -159,7 +170,9 @@ describe('generateDrums richness', () => {
     const offBeatKicks = euclidean.filter((hit) => hit.pitch === KICK && hit.startBeat % 1 !== 0);
     expect(offBeatKicks.length).toBeGreaterThan(0);
     for (const kick of offBeatKicks) {
-      expect(kick.startBeat % 1).toBe(swungAnd);
+      // Compared as a quantity rather than bit for bit: the delay is added to
+      // the position itself now, so the last bit follows the bar it lands in.
+      expect(kick.startBeat % 1).toBeCloseTo(swungAnd, 12);
       expect(hasHiHatAt(euclidean, kick.startBeat)).toBe(true);
     }
 
@@ -321,6 +334,66 @@ describe('generateDrums phrase-end fills', () => {
   });
 });
 
+describe('a fill is a lift, not a dip', () => {
+  it('lands on a stroke louder than the backbeats around it', () => {
+    for (const style of ['standard', 'funk', 'breakbeat', 'halftime'] as const) {
+      for (const section of ['verse', 'chorus', 'bridge'] as const) {
+        const hits = generateDrums({
+          bars: 4,
+          bpm: 120,
+          style,
+          section,
+          nextSection: 'chorus',
+          density: 0.6,
+          fills: true,
+          seed: 2,
+        });
+        const backbeats = hits.filter(
+          (hit) =>
+            hit.startBeat < 12 &&
+            (hit.pitch === SNARE || hit.pitch === SIDESTICK) &&
+            Number.isInteger(hit.startBeat) &&
+            hit.startBeat % 2 === 1,
+        );
+        if (backbeats.length === 0) {
+          continue;
+        }
+        const loudestBackbeat = Math.max(...backbeats.map((hit) => hit.velocity));
+        const fillBar = hits.filter((hit) => hit.startBeat >= 12);
+        expect(fillBar.length, `${style}/${section}`).toBeGreaterThan(0);
+        expect(
+          Math.max(...fillBar.map((hit) => hit.velocity)),
+          `${style}/${section}: the fill never rises to the backbeat`,
+        ).toBeGreaterThanOrEqual(loudestBackbeat);
+      }
+    }
+  });
+
+  it('crescendos across the whole roll rather than restarting each beat', () => {
+    // The roll is written as a single seven-stroke gesture, so its velocities
+    // never fall back partway through — which is what a crescendo means and
+    // what the helper that builds it is called.
+    const track = new HitList();
+    for (const beat of [2, 3]) {
+      generateFill(track, beat, beat, FILL_ARCHETYPES.snareRoll, 80);
+    }
+    const strokes = track.hits
+      .filter((hit) => hit.pitch === SNARE)
+      .sort((a, b) => a.startBeat - b.startBeat);
+    expect(strokes.length).toBeGreaterThanOrEqual(7);
+    for (let i = 1; i < strokes.length; i += 1) {
+      expect(
+        strokes[i]?.velocity ?? 0,
+        `stroke ${i} falls back to ${strokes[i]?.velocity}`,
+      ).toBeGreaterThanOrEqual(strokes[i - 1]?.velocity ?? 0);
+    }
+    // And the stroke it lands on is the loudest of them.
+    expect(strokes[strokes.length - 1]?.velocity).toBe(
+      Math.max(...strokes.map((hit) => hit.velocity)),
+    );
+  });
+});
+
 describe('quantizeSwing sixteenth grid', () => {
   it('delays the "e" off-beat 16th under full swing', () => {
     expect(quantizeSwing(0.25, 1, 'sixteenth')).toBeGreaterThan(0.25);
@@ -331,14 +404,99 @@ describe('quantizeSwing sixteenth grid', () => {
   });
 
   it('places the shuffle "a" 16th near 0.8125 without over-swinging', () => {
-    // The default shuffle feel clamps effective swing to 0.75. The "a" 16th
-    // (0.75 beat) must land near 0.8125, not the previously doubly-swung
-    // 0.9375 that crowded the next downbeat (#23).
+    // At three quarters of the full triplet displacement the "a" 16th (0.75
+    // beat) lands near 0.8125, not a doubly-swung 0.9375 crowding the next
+    // downbeat.
     const swing = 0.75;
     expect(quantizeSwing(0.75, swing, 'sixteenth')).toBeCloseTo(0.8125, 10);
     // It is symmetric with the "e" 16th and never crosses the next downbeat.
     expect(quantizeSwing(0.25, swing, 'sixteenth')).toBeCloseTo(0.3125, 10);
     expect(quantizeSwing(0.75, 1, 'sixteenth')).toBeLessThan(1);
+  });
+
+  it('never moves an onset earlier than it was written', () => {
+    // Swing is a warp of the beat, so a position between two grid slots is
+    // delayed against itself. Snapping it to the nearest slot instead moved a
+    // Euclidean kick on a five-step bar backwards, which is the one thing a
+    // timing transform must never do.
+    for (const resolution of ['eighth', 'sixteenth'] as const) {
+      for (const swing of [0, 0.25, 0.375, 0.75, 1]) {
+        for (let tick = 0; tick <= 4; tick += 1 / 32) {
+          const swung = quantizeSwing(tick, swing, resolution);
+          expect(swung, `${resolution} @${tick} swing ${swing}`).toBeGreaterThanOrEqual(
+            tick - 1e-12,
+          );
+          // And never past the position of the next grid slot's own arrival.
+          expect(swung).toBeLessThan(tick + 0.25);
+        }
+      }
+    }
+  });
+
+  it('keeps a Euclidean kick evenly spread under every feel', () => {
+    // Five steps to the bar puts onsets between the sixteenths. The spacing is
+    // what the option sells, so it survives the feel rather than collapsing
+    // onto the swung eighth.
+    const spacings = (feel: DrumsOptions['feel']) => {
+      const kicks = generateDrums({
+        ...base,
+        section: 'chorus',
+        feel,
+        euclideanKick: { pulses: 3, steps: 5 },
+      })
+        .filter((hit) => hit.pitch === KICK)
+        .map((hit) => hit.startBeat)
+        .sort((a, b) => a - b);
+      return kicks.slice(1).map((beat, index) => beat - (kicks[index] ?? 0));
+    };
+    for (const feel of ['straight', 'swing', 'shuffle'] as const) {
+      const gaps = spacings(feel);
+      expect(gaps.length).toBeGreaterThan(0);
+      for (const gap of gaps) {
+        expect(gap, `feel ${feel}`).toBeGreaterThan(0.3);
+      }
+    }
+  });
+});
+
+describe('the groove feel is taken at its word', () => {
+  const offBeats = (over: Partial<DrumsOptions>) =>
+    generateDrums({ ...base, section: 'chorus', ...over })
+      .filter((hit) => hit.pitch === CLOSED_HAT || hit.pitch === OPEN_HAT)
+      // The "and" of each beat: the position a feel is read off. The "a" 16th
+      // has a swing of its own and lands later still.
+      .map((hit) => hit.startBeat % 1)
+      .filter((frac) => frac > 0.4 && frac < 0.72);
+
+  it('puts a shuffle off-beat on the triplet', () => {
+    const swung = offBeats({ feel: 'shuffle' });
+    expect(swung.length).toBeGreaterThan(0);
+    for (const frac of swung) {
+      expect(frac).toBeCloseTo(2 / 3, 6);
+    }
+  });
+
+  it('separates swing from shuffle measurably', () => {
+    const straight = offBeats({ feel: 'straight' });
+    const swing = offBeats({ feel: 'swing' });
+    const shuffle = offBeats({ feel: 'shuffle' });
+    expect(straight[0]).toBeCloseTo(0.5, 6);
+    expect(swing[0]).toBeGreaterThan(straight[0] ?? 0);
+    expect(shuffle[0]).toBeGreaterThan(swing[0] ?? 0);
+  });
+
+  it('honours a named feel in the styles whose own character is straight', () => {
+    // Trap sits on a straight grid by nature, which is the right default and
+    // the wrong answer to a caller who asked for a shuffle in so many words.
+    for (const style of ['trap', 'house', 'synthpop'] as const) {
+      const straight = offBeats({ style, feel: 'straight' });
+      const shuffled = offBeats({ style, feel: 'shuffle' });
+      expect(shuffled.length, style).toBeGreaterThan(0);
+      expect(shuffled, style).not.toEqual(straight);
+      for (const frac of shuffled) {
+        expect(frac, style).toBeCloseTo(2 / 3, 6);
+      }
+    }
   });
 });
 

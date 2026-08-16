@@ -9,7 +9,7 @@
  * one signature.
  */
 
-import { InvalidInputError } from '../errors/index.js';
+import { InvalidInputError, type ParseResult, parseFailure, unwrapParse } from '../errors/index.js';
 import {
   assertFiniteNumber,
   assertInteger,
@@ -21,14 +21,17 @@ import {
 import {
   barBeatsOf,
   barIndexOf,
+  barLengthOf,
   barStartOf,
   beatOfBarIndex,
   entryIndexOf,
+  groupingSumOf,
   isAdditiveReading,
   isCompoundNumerator,
   isMeterMap,
   pulseBeatsOf,
   pulseCountOf,
+  pulseGroupingOf,
 } from './internal.js';
 
 /**
@@ -40,21 +43,26 @@ export type TimeSignature = {
   numerator: number;
   denominator: number;
   /**
-   * Optional additive grouping of the bar's main pulses, as the felt-beat
-   * lengths in pulses — e.g. `[2, 2, 3]` for a 2+2+3 reading of 7/8, or
-   * `[3, 2]` for 5/8. The entries must be positive integers summing to the
-   * numerator.
+   * Optional grouping of the bar into felt beats, as positive integers. The
+   * entries are group lengths, written either in the meter's main pulses —
+   * `[2, 2, 3]` for a 2+2+3 reading of 7/8, `[3, 2]` for 5/8 — or, for a
+   * compound numerator, in denominator units. They must sum to
+   * {@link pulsesPerBar} in the first spelling and to the numerator in the
+   * second; a pulse is one unit outside compound meters, where the two
+   * spellings coincide.
    *
-   * A compound numerator accepts both readings. 9/8 groups its three dotted
-   * pulses as `[1, 1, 1]`, or reads additively as `[2, 2, 2, 3]` quavers; a
-   * grouping that sums to the numerator selects the additive reading, so
-   * aksak and other additive metres are expressible. {@link pulsesPerBar}
-   * and {@link isCompound} follow whichever reading the grouping selects.
+   * A compound numerator accepts both readings, and the shape of the grouping
+   * says which is meant. Groups of nothing but threes spell the compound
+   * division itself, so 9/8 as `[3, 3, 3]` (equivalently `[1, 1, 1]`) is the
+   * ordinary three dotted-quarter pulses; any other grouping summing to the
+   * numerator reads additively, so 9/8 as `[2, 2, 2, 3]` is nine quaver pulses
+   * grouped aksak-fashion. {@link pulsesPerBar}, {@link pulseBeats} and
+   * {@link isCompound} follow whichever reading the grouping selects.
    *
-   * When present, the head pulse of each group (other than the downbeat) is
-   * treated as a secondary strong pulse by
-   * {@link metricWeight}/{@link isStrongBeat}; when absent, all main pulses
-   * are weighted equally as flat, evenly divided pulses.
+   * The head pulse of each group other than the downbeat is a secondary strong
+   * pulse to {@link metricWeight}/{@link isStrongBeat}. A grouping whose groups
+   * are all the same length states no accent the meter does not already have,
+   * so it weighs exactly as an ungrouped bar does.
    */
   grouping?: number[];
 };
@@ -139,11 +147,13 @@ function isMultiple(value: number, unit: number): boolean {
 }
 
 /**
- * Parse a time signature such as `"4/4"` or `"6/8"`.
+ * Parse a time signature such as `"4/4"` or `"6/8"`, or the additive `"2+2+3/8"`.
  *
  * @param text The signature text.
  * @returns The parsed time signature.
- * @throws If the text is not `n/d` with positive integers.
+ * @throws If the text is not `n/d` with positive integers, or names a signature
+ *   the library rejects. Use {@link tryParseTimeSignature} where failure is
+ *   ordinary, such as a meter field read on every keystroke.
  * @example
  * ```ts
  * import { parseTimeSignature } from '@libraz/libcantus';
@@ -152,6 +162,39 @@ function isMultiple(value: number, unit: number): boolean {
  * @category Rhythm & Meter
  */
 export function parseTimeSignature(text: string): TimeSignature {
+  return unwrapParse(tryParseTimeSignature(text));
+}
+
+/**
+ * Parse a time signature, reporting failure instead of throwing it.
+ *
+ * The same reading as {@link parseTimeSignature} — that function is this one
+ * with its error thrown — for the callers where text that does not parse yet is
+ * the normal state of the input rather than a fault.
+ *
+ * @param text The signature text.
+ * @returns The signature, or the error explaining why the text is not one.
+ * @example
+ * ```ts
+ * import { tryParseTimeSignature } from '@libraz/libcantus';
+ * const result = tryParseTimeSignature('7/8');
+ * result.ok ? result.value.numerator : result.error.message;
+ * ```
+ * @category Rhythm & Meter
+ */
+export function tryParseTimeSignature(text: string): ParseResult<TimeSignature> {
+  try {
+    if (typeof text !== 'string') {
+      throw new InvalidInputError(`time signature must be a string; received ${typeof text}`);
+    }
+    return { ok: true, value: readTimeSignature(text) };
+  } catch (error) {
+    return parseFailure(error);
+  }
+}
+
+/** The reading both parsers share, throwing on anything it cannot read. */
+function readTimeSignature(text: string): TimeSignature {
   const match = /^\s*((?:\d+\s*\+\s*)*\d+)\s*\/\s*(\d+)\s*$/.exec(text);
   if (!match) {
     throw new InvalidInputError(`Invalid time signature: ${text}`);
@@ -177,6 +220,13 @@ export function parseTimeSignature(text: string): TimeSignature {
  * Render a time signature as `"n/d"`, or as `"a+b+c/d"` when it carries an
  * additive grouping and `grouping` is requested.
  *
+ * The additive form is what {@link parseTimeSignature} reads back, and it adds
+ * its terms to get the numerator — so only a grouping written in denominator
+ * units can be rendered that way. A grouping counted in main pulses (9/8 as
+ * `[1, 1, 1]`, 12/8 as `[2, 2]`) would come back as a different bar, so it
+ * falls back to the plain form, which those groupings cost nothing: they select
+ * the same reading the bare signature does.
+ *
  * The plain form drops the grouping, so a round trip through it reads 7/8 as
  * flat rather than as 2+2+3; ask for the additive form to keep it.
  *
@@ -194,7 +244,7 @@ export function parseTimeSignature(text: string): TimeSignature {
  */
 export function formatTimeSignature(ts: TimeSignature, opts: { grouping?: boolean } = {}): string {
   assertTimeSignature(ts);
-  if (opts.grouping === true && ts.grouping !== undefined) {
+  if (opts.grouping === true && ts.grouping !== undefined && groupingSumOf(ts) === ts.numerator) {
     return `${ts.grouping.join('+')}/${ts.denominator}`;
   }
   return `${ts.numerator}/${ts.denominator}`;
@@ -388,7 +438,7 @@ export function pulsesPerBar(ts: TimeSignature): number {
   return pulseCountOf(ts);
 }
 
-/** Whether `pulseIndex` is the head pulse of one of the additive groups. */
+/** Whether `pulseIndex` is the head pulse of one of the groups, counted in pulses. */
 function isGroupHead(grouping: number[], pulseIndex: number): boolean {
   let acc = 0;
   for (const g of grouping) {
@@ -398,6 +448,17 @@ function isGroupHead(grouping: number[], pulseIndex: number): boolean {
     acc += g;
   }
   return false;
+}
+
+/**
+ * Whether every group is the same length.
+ *
+ * Such a grouping divides the bar the way its own meter already divides it, so
+ * it names no accent structure: 9/8 as `[1, 1, 1]` is the plain compound bar,
+ * not three pulses of equal strength.
+ */
+function isUniformGrouping(grouping: number[]): boolean {
+  return grouping.every((entry) => entry === grouping[0]);
 }
 
 /**
@@ -480,6 +541,11 @@ function meterAtBarChecked(bar: number, meter: MeterLike): TimeSignature {
  * Render an absolute position as the `bar.beat` a DAW or a score shows:
  * 1-based bar, 1-based felt beat.
  *
+ * The felt beats counted are the ones the bar actually has. A meter change
+ * starts a new bar, so the bar it interrupts is short, and a position that
+ * rounds past the end of a short bar reads as the downbeat of the next one
+ * rather than as a beat the bar never reached.
+ *
  * @param beatInQuarters Absolute position in quarter-note beats.
  * @param meter A single signature, or the piece's meter map.
  * @param decimals Digits of the fractional beat to keep.
@@ -497,8 +563,13 @@ export function formatBarPosition(beatInQuarters: number, meter: MeterLike, deci
   const ts = meterAtChecked(beatInQuarters, meter);
   const pulse = barPositionToPulse(position, ts);
   const rounded = Number(pulse.toFixed(decimals));
-  if (rounded >= pulsesPerBar(ts) + 1) {
-    return `${position.bar + 2}.1`;
+  const barLength = isMeterMap(meter) ? barLengthOf(meter, beatInQuarters) : barBeatsOf(meter);
+  // A short bar has a whole final pulse only in the sense that the pulse it
+  // started is cut off, so the count rounds up: 2 beats of 4/4 hold felt beats
+  // 1 and 2, and anything past those belongs to the next bar.
+  const pulsesInBar = Math.ceil(barLength / pulseBeatsOf(ts) - EPS);
+  if (rounded >= pulsesInBar + 1) {
+    return `${barIndexChecked(barStartChecked(beatInQuarters, meter) + barLength, meter) + 1}.1`;
   }
   const wholePulse = Math.floor(rounded);
   const fraction = Number((rounded - wholePulse).toFixed(decimals));
@@ -536,7 +607,9 @@ export function barPositionToBeat(pos: BarPosition, meter: MeterLike): number {
  * set (e.g. `[2, 2, 3]` for 7/8), each group's head pulse other than the
  * downbeat is the secondary strong pulse instead; without a grouping every
  * non-downbeat main pulse of such a meter weighs 1 (flat, evenly divided
- * pulses).
+ * pulses). A grouping of equal-length groups (9/8 as `[1, 1, 1]`, 4/4 as
+ * `[1, 1, 1, 1]`) states the division the meter already has, so it weighs as
+ * an ungrouped bar rather than accenting every group head.
  *
  * Given a meter map, the weight follows the signature in force at that beat, so
  * beat 5 of a piece is a mid-bar accent in 4/4 and a plain main pulse in 3/4.
@@ -571,8 +644,8 @@ export function metricWeight(beatInQuarters: number, meter: MeterLike): number {
   if (pulseIndex === 0) {
     return 3;
   }
-  const grouping = ts.grouping;
-  if (grouping !== undefined) {
+  const grouping = pulseGroupingOf(ts);
+  if (grouping !== undefined && !isUniformGrouping(grouping)) {
     return isGroupHead(grouping, pulseIndex) ? 2 : 1;
   }
   if (pulses % 2 === 0 && pulseIndex === pulses / 2) {

@@ -12,6 +12,7 @@ import {
   meterAt,
   metricWeight,
   parseTimeSignature,
+  pulseBeats,
   resolveMeters,
 } from '../src/core/meter/index.js';
 import type { NoteEvent } from '../src/core/types.js';
@@ -78,6 +79,47 @@ describe('metric weight under a meter change', () => {
     const single: MeterMap = [{ startBeat: 0, ts: COMMON }];
     for (let beat = 0; beat < 12; beat += 0.5) {
       expect(metricWeight(beat, single)).toBe(metricWeight(beat, COMMON));
+    }
+  });
+});
+
+describe('positions in a bar cut short by a meter change', () => {
+  /** Two 4/4 bars, the second cut to two beats by a change on beat 6. */
+  const CUT: MeterMap = [
+    { startBeat: 0, ts: COMMON },
+    { startBeat: 6, ts: COMMON },
+  ];
+
+  it('rolls a position past the end of a short bar into the next bar', () => {
+    // Bar 2 is beats 4 and 5 only, so 5.999 rounds to the downbeat of bar 3 —
+    // it can never be that bar's third beat, which the bar never reaches.
+    expect(formatBarPosition(5.999, CUT)).toBe('3.1');
+    expect(formatBarPosition(5, CUT)).toBe('2.2');
+    expect(formatBarPosition(6, CUT)).toBe('3.1');
+  });
+
+  it('names only felt beats the bar containing them has', () => {
+    const meters: MeterMap = [
+      { startBeat: 0, ts: COMMON },
+      { startBeat: 6, ts: WALTZ },
+      { startBeat: 11, ts: parseTimeSignature('6/8') },
+      { startBeat: 15.5, ts: COMMON },
+    ];
+    /** The real length of a bar, which a change can cut short. */
+    const lengthOfBar = (bar: number) =>
+      barPositionToBeat({ bar: bar + 1, beat: 0 }, meters) -
+      barPositionToBeat({ bar, beat: 0 }, meters);
+    for (let beat = 0; beat < 20; beat += 0.125) {
+      const text = formatBarPosition(beat, meters);
+      const [barText, beatText] = text.split('.') as [string, string];
+      const bar = Number(barText) - 1;
+      const feltBeat = Number(beatText.split('+')[0]);
+      const pulse = pulseBeats(meterAt(barPositionToBeat({ bar, beat: 0 }, meters), meters));
+      // 1-based felt beats, counted against the pulses the bar really holds.
+      expect(feltBeat, `${beat} -> ${text}`).toBeGreaterThanOrEqual(1);
+      expect(feltBeat, `${beat} -> ${text}`).toBeLessThanOrEqual(
+        Math.ceil(lengthOfBar(bar) / pulse - 1e-9),
+      );
     }
   });
 });

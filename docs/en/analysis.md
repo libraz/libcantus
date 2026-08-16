@@ -82,9 +82,13 @@ detectCadence(g, c, key).strength; // null
 
 `strength` is null without a voicing that identifies the soprano. Supply one and an authentic cadence is graded as perfect or imperfect. A repeated V with no root motion is not reported as a cadence.
 
+Cadences are measured against the degrees the key actually has, not against fixed semitone distances: a mode resolves deceptively onto its own submediant, and where its dominant carries no leading tone — the `v` of aeolian or dorian — an arrival on that dominant is a half cadence too. A major key keeps its leading tone, so a borrowed minor `v` there is not one.
+
+A cadential six-four is the dominant, not an inverted tonic: its bass has already arrived and the notes above it resolve down onto the dominant's own. Pass the chord before the dominant as `approach` and the cadence is reported as the one event it is — the type and the beat stay with the dominant's resolution, and the rationale says the cadence began at the six-four. A six-four the bass leaves, as in `IV–I64–IV`, is an ordinary inverted tonic and reads as one.
+
 ## Reduction and form
 
-`reduceProgression` marks chords as `structural`, `passing`, or `auxiliary`, with a rationale:
+`reduceProgression` marks chords as `structural`, `passing`, or `neighbor` — the two embellishing figures spelled the way `analyzeVoice` spells them for a note, so one legend covers both levels — with a rationale, and with the beats each chord holds:
 
 ```ts
 import { chordTimelineFromChords, majorKey, reduceProgression } from '@libraz/libcantus';
@@ -114,7 +118,7 @@ reduceProgression(timeline, majorKey(0)).map((entry) => entry.level);
 
 ## Arrangement reports
 
-`analyzeArrangement` combines track roles, chord timelines, key regions, theory labels, tension, and conflicts between notes and the current harmony:
+`analyzeArrangement` combines chord timelines, key regions, theory labels, and conflicts between notes and the current harmony. The report carries `keys` and `prevailingKey`, the `timeline` with its `segmentConfidence`, the `cadences`, the per-track annotations in `tracks`, and the `conflicts` — tension is a separate reading, from `tensionCurve`:
 
 ```ts
 import { analyzeArrangement } from '@libraz/libcantus';
@@ -135,3 +139,5 @@ Array.isArray(report.conflicts); // true
 ```
 
 `tensionCurve` and `analyzeVoice` expose parts of that report when a complete arrangement result is unnecessary, and `toVoiceNotes` prepares a single track for voice-level analysis. `createArrangementSession` keeps an analysis open across edits; see [Performance](performance.md).
+
+The ornament figures `analyzeVoice` names — passing, neighbour, suspension, appoggiatura, anticipation, escape — are the words `classifyMelodyTones` uses for the same notes, so one melody read through the analysis and through the harmonizer comes back under one vocabulary; `analyzeVoice` reads the melodic shape alone, without the metre the other one also weighs, so it names a figure in fewer places rather than under a different name.

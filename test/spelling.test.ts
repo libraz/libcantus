@@ -423,7 +423,13 @@ describe('spelling stays on the key side across every path', () => {
     ).toEqual(['Eb', 'G', 'Bb']);
   });
 
-  it('never produces a double accidental for any named scale on any root', () => {
+  it('never produces a double accidental except where a signature calls for one', () => {
+    // A key written with a signature is spelled on the tonic that signature is
+    // written on, and the degrees it raises are accidentals over it: pitch
+    // class 8 is G# minor, five sharps, so its harmonic and melodic forms write
+    // F##. Every other scale is spelled on the tonic it reads best from, and
+    // there a double accidental means the tonic was chosen badly.
+    const signatureRaises = new Set(['harmonicMinor/8', 'melodicMinor/8']);
     const names = [
       'major',
       'naturalMinor',
@@ -445,11 +451,11 @@ describe('spelling stays on the key side across every path', () => {
     for (const name of names) {
       for (let rootPc = 0; rootPc < 12; rootPc += 1) {
         const key = Key.named(name, rootPc);
-        for (const spelled of key.noteNames()) {
-          expect(spelled, `${name}/${rootPc} -> ${key.noteNames().join(' ')}`).toMatch(
-            /^[A-G](#|b)?$/,
-          );
-        }
+        const names12 = key.noteNames();
+        const doubles = names12.filter((spelled) => !/^[A-G](#|b)?$/.test(spelled));
+        expect(doubles, `${name}/${rootPc} -> ${names12.join(' ')}`).toEqual(
+          signatureRaises.has(`${name}/${rootPc}`) ? ['F##'] : [],
+        );
       }
     }
   });
@@ -579,7 +585,10 @@ describe('non-heptatonic scales lean the way the scale does', () => {
   });
 
   it('keeps altered non-heptatonic scales on their conventional spellings', () => {
-    expect(Key.named('minorPentatonic', 8).noteNames()).toEqual(['Ab', 'B', 'Db', 'Eb', 'Gb']);
+    // A pentatonic has no signature to borrow, so pitch class 8 is spelled on
+    // the side that reads: G# gives a minor third the eye can see, while Ab
+    // would write that third as the augmented second Ab-B.
+    expect(Key.named('minorPentatonic', 8).noteNames()).toEqual(['G#', 'B', 'C#', 'D#', 'F#']);
     expect(Key.named('octatonicHalfWhole', 'Bb').noteNames()).toEqual([
       'Bb',
       'B',

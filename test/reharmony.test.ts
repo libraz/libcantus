@@ -1,4 +1,7 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import type { SubstitutionType } from '../src/generate/reharmony/index.js';
 import {
   modalInterchangePalette,
   negativeHarmonyMirror,
@@ -6,6 +9,7 @@ import {
 } from '../src/generate/reharmony/index.js';
 import { chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
 import { majorKey, minorKey, scaleByName } from '../src/theory/scale/index.js';
+import { formatChordSymbol } from '../src/theory/symbol/index.js';
 
 describe('substituteChord', () => {
   it('tritone-substitutes G7 in C major with Db7', () => {
@@ -106,6 +110,59 @@ describe('substitution kinds', () => {
   });
 });
 
+describe('the substitution vocabulary is one list', () => {
+  /** Every relationship the union declares; a fifth member fails to compile. */
+  const DECLARED: Record<SubstitutionType, true> = {
+    tritone: true,
+    relative: true,
+    borrowed: true,
+    chromaticMediant: true,
+  };
+
+  const produced = (): Set<string> => {
+    const found = new Set<string>();
+    const keys = [majorKey(0), minorKey(9), majorKey(6), scaleByName('dorian', 2)];
+    const chords = [
+      makeChord(0, 'maj'),
+      makeChord(7, 'dom7'),
+      makeChord(2, 'min7'),
+      makeChord(9, 'min'),
+      makeChord(11, 'dim'),
+      makeChord(5, 'maj7'),
+    ];
+    for (const key of keys) {
+      for (const chord of chords) {
+        for (const sub of substituteChord(chord, key)) {
+          found.add(sub.type);
+        }
+      }
+    }
+    return found;
+  };
+
+  it('produces every relationship it declares, and no other', () => {
+    expect([...produced()].sort()).toEqual(Object.keys(DECLARED).sort());
+  });
+
+  it('lists the same relationships in the source doc and both guides', () => {
+    const read = (file: string) => readFileSync(path.join(import.meta.dirname, '..', file), 'utf8');
+
+    // The bullets of the `substituteChord` TSDoc.
+    const documented = [...read('src/generate/reharmony/index.ts').matchAll(/^ \* - `(\w+)`:/gm)]
+      .map((match) => match[1] as string)
+      .sort();
+    expect(documented).toEqual(Object.keys(DECLARED).sort());
+
+    // The relationship table of each guide, whose first column is the type.
+    for (const guide of ['docs/en/reharmonization.md', 'docs/ja/reharmonization.md']) {
+      const rows = [...read(guide).matchAll(/^\| `(\w+)` \|/gm)]
+        .map((match) => match[1] as string)
+        .sort();
+      expect(rows, guide).toEqual(Object.keys(DECLARED).sort());
+    }
+  });
+});
+
 describe('modalInterchangePalette', () => {
   it('lists the borrowed chords of C major with their sources', () => {
     const palette = modalInterchangePalette(majorKey(0));
@@ -131,6 +188,20 @@ describe('modalInterchangePalette', () => {
     expect(palette.map((borrowed) => borrowed.chord.rootPc)).toContain(2);
     expect(palette.map((borrowed) => borrowed.roman)).not.toContain('V');
     expect(palette.map((borrowed) => borrowed.roman)).not.toContain('#viio');
+  });
+
+  it('holds every chord its doc names for a minor key, and no dominant', () => {
+    const symbols = modalInterchangePalette(minorKey(9)).map((borrowed) =>
+      formatChordSymbol(borrowed.chord),
+    );
+    // The chords the TSDoc names for A minor: borrowed from A major, plus the
+    // Neapolitan. Reading the doc and looking for them has to find them.
+    for (const named of ['A', 'D', 'F#m', 'Bb']) {
+      expect(symbols, named).toContain(named);
+    }
+    // The major dominant is an alteration inside the key, not a borrowing, so
+    // it is not in the palette however familiar it is in a minor key.
+    expect(symbols).not.toContain('E');
   });
 
   it('does not call the b2 chord a borrowing in a key that already has it', () => {

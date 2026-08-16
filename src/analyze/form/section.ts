@@ -22,7 +22,7 @@ import {
 import { windowWeights } from '../histogram.js';
 import { melodicSimilarity } from '../melody/index.js';
 import { hypermeter } from './hypermeter.js';
-import { clamp01, EPS, lastBarOf, weightSimilarity } from './internal.js';
+import { clamp01, EPS, firstSoundingBeat, lastBarOf, weightSimilarity } from './internal.js';
 
 /**
  * A span of music labelled by which earlier span it restates.
@@ -203,7 +203,12 @@ export function sectionsFromNotes(
     budget: opts.budget,
   });
   const sounding = notes.filter((note) => note.durationBeat > 0);
-  const firstOnset = sounding.reduce((first, n) => Math.min(first, n.startBeat), 0);
+  if (sounding.length === 0) {
+    // Nothing sounds, so there is no material to hear a form in. A section over
+    // an empty span would name a stretch of silence as a statement.
+    return [];
+  }
+  const firstOnset = firstSoundingBeat(sounding);
   const lastEnd = sounding.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
   const spanEnd = Math.max(firstOnset, opts.totalBeats ?? lastEnd);
   assertRange(spanEnd, 0, Number.MAX_SAFE_INTEGER, 'section totalBeats');
@@ -216,16 +221,18 @@ export function sectionsFromNotes(
 
   const firstBar = barIndexAt(firstOnset, meters);
   const lastBar = lastBarOf(meters, firstOnset, spanEnd);
-  // A pickup leads into the first full bar, so the units are counted from bar 0
-  // and the pickup is folded into the opening one.
-  const startBar = Math.min(0, firstBar);
-  const unitCount = Math.max(1, Math.ceil((lastBar - Math.max(0, startBar) + 1) / unitBars));
+  // The units are counted from the bar the music starts in, not from bar 0: an
+  // excerpt lifted from bar 9 has no bars 0 to 8 to divide. A pickup leads into
+  // the first full bar rather than starting a unit of its own, so it is folded
+  // into the opening one.
+  const startBar = Math.max(0, firstBar);
+  const unitCount = Math.max(1, Math.ceil((lastBar - startBar + 1) / unitBars));
   assertGenerationBudget(unitCount * unitCount, 'form section comparisons', opts.budget);
   assertGenerationBudget(unitCount * sounding.length, 'form section unit notes', opts.budget);
 
   const units: Unit[] = [];
   for (let index = 0; index < unitCount; index += 1) {
-    const barStart = index * unitBars;
+    const barStart = startBar + index * unitBars;
     const startBeat =
       index === 0 ? firstOnset : barPositionToBeat({ bar: barStart, beat: 0 }, meters);
     const endBeat =

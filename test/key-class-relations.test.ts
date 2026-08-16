@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { KeyMode } from '../src/index.js';
-import { Interval, InvalidInputError, Key, parseInterval } from '../src/index.js';
+import {
+  Interval,
+  InvalidInputError,
+  Key,
+  NAMED_SCALES,
+  parseInterval,
+  WORLD_SCALES,
+} from '../src/index.js';
+
+/** Every scale the library names, the world scales included. */
+const ALL_SCALE_NAMES = [...Object.keys(NAMED_SCALES), ...Object.keys(WORLD_SCALES)];
 
 /** The twelve major keys, each on the tonic spelling the pitch class is written with. */
 const MAJOR_KEYS: Key[] = Array.from({ length: 12 }, (_, pc) => Key.major(pc));
@@ -112,6 +122,29 @@ describe('Key.dominantKey and Key.subdominantKey', () => {
       expect(key.subdominantKey().fifths, `${key}`).toBe(key.fifths - 1);
     }
   });
+
+  it('moves a fifth from the tonic of a modal or altered key', () => {
+    // The signature of these keys is not their tonic's own, so a step taken
+    // along it would land somewhere other than a fifth away.
+    expect(Key.named('mixolydian', 'G').dominantKey().toString()).toBe('D major');
+    expect(Key.named('dorian', 'D').dominantKey().toString()).toBe('A minor');
+    expect(Key.named('dorian', 'D').subdominantKey().toString()).toBe('G minor');
+    expect(Key.named('harmonicMinor', 'A').dominantKey().toString()).toBe('E minor');
+    expect(Key.named('lydian', 'C#').dominantKey().toString()).toBe('G# major');
+  });
+
+  it('names a fifth in both directions for every scale on every root', () => {
+    for (const name of ALL_SCALE_NAMES) {
+      for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+        const key = Key.named(name, rootPc);
+        const where = `${name}/${rootPc}`;
+        expect(key.dominantKey().rootPc, where).toBe((rootPc + 7) % 12);
+        expect(key.subdominantKey().rootPc, where).toBe((rootPc + 5) % 12);
+        expect(key.intervalTo(key.dominantKey()).name, where).toBe('P5');
+        expect(key.intervalTo(key.subdominantKey()).name, where).toBe('P4');
+      }
+    }
+  });
 });
 
 describe('Key.enharmonic', () => {
@@ -179,6 +212,17 @@ describe('Key.relationTo', () => {
       expect(key.relationTo(key.relative()), `${key}`).toBe('relative');
       expect(key.relationTo(key.parallel()), `${key}`).toBe('parallel');
     }
+  });
+
+  it('reads a detected minor variant as the minor key it is a form of', () => {
+    // Key detection reports a minor cadence as harmonic minor, so a workflow
+    // that detects each section and asks how the sections stand to one another
+    // meets this form on both sides of the question.
+    const aHarmonic = Key.named('harmonicMinor', 'A');
+    expect(aHarmonic.relationTo(Key.major('C'))).toBe('relative');
+    expect(Key.major('C').relationTo(aHarmonic)).toBe('relative');
+    expect(Key.named('melodicMinor', 'A').relationTo(Key.major('C'))).toBe('relative');
+    expect(aHarmonic.relationTo(Key.minor('A'))).toBe('same');
   });
 });
 
@@ -370,6 +414,33 @@ describe('Key.transpose', () => {
           (((key.rootPc + semitones) % 12) + 12) % 12,
         );
         expect(Math.abs(moved.fifths), `${key} + ${semitones}`).toBeLessThanOrEqual(7);
+      }
+    }
+  });
+
+  it('answers for every scale on every root at every distance, without throwing', () => {
+    // Transposing is a total function: no spelling question a scale raises may
+    // turn it into an exception, and the tonic it comes back with always spells
+    // the root the scale moved to.
+    for (const name of ALL_SCALE_NAMES) {
+      for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+        const key = Key.named(name, rootPc);
+        for (let semitones = -12; semitones <= 12; semitones += 1) {
+          const where = `${name}/${rootPc} + ${semitones}`;
+          const moved = key.transpose(semitones);
+          expect(moved.rootPc, where).toBe((((rootPc + semitones) % 12) + 12) % 12);
+          expect(moved.tonic.pitchClass, where).toBe(moved.rootPc);
+          expect(moved.scale.modeMask12, where).toBe(key.scale.modeMask12);
+        }
+      }
+    }
+  });
+
+  it('is the identity for zero semitones on every scale, church modes included', () => {
+    for (const name of ALL_SCALE_NAMES) {
+      for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+        const key = Key.named(name, rootPc);
+        expect(key.transpose(0).tonic.name, `${name}/${rootPc}`).toBe(key.tonic.name);
       }
     }
   });

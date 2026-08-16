@@ -135,6 +135,17 @@ code; // 'INVALID_INPUT'
 
 生成されたノートイベント自体の保存は必須ではありませんが、保存しておくほうが安全です。このビルドが生成しなくなったバージョンでも内容が残り、ユーザーが手で編集した結果も保持されます。
 
+context 自体は保存対象ではありません。`resolveContext` が返すのはライブオブジェクトで、`instrument` と `part` は関数です。そのまま直列化するとジェネレータが呼び出す部分がまさに失われます。渡した値のほうを保存し、読み込み時に context を作り直してください。
+
+```ts
+import { resolveContext } from '@libraz/libcantus';
+
+const saved = { seed: 7, algorithmVersion: 1, complexity: 0.4 };
+const context = resolveContext(saved);
+context.seed; // 7
+resolveContext(saved).seed === context.seed; // true
+```
+
 ## 保証の範囲外
 
 この保証が覆うのはジェネレータの返り値だけです。解析結果、エラーメッセージ、別のアルゴリズムバージョンで得た出力はその範囲外になります。解析は実際には決定的で、同じ音符には同じ読みを返しますが、バージョン管理はされていません。調検出の改善によってリリース間でラベルが変わることがあります。

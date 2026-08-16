@@ -28,9 +28,12 @@ export type NoteEvent = {
   pitch: number;
   /**
    * Onset in quarter-note beats, absolute from the start of the timeline, and
-   * never negative: beat 0 is the start of the music, so a pickup bar is
-   * written as the first bar rather than as negative time. Shift the whole
-   * timeline if the downbeat needs to land later.
+   * unbounded below: beat 0 is the first downbeat, so a pickup sounds before it
+   * and is written at a negative onset, in the bar numbered -1. Shifting the
+   * whole timeline a bar later instead would move every strong beat with it,
+   * and the upbeat would then be analyzed as a downbeat. A caller that knows
+   * how long its pickup is narrows the bound with
+   * {@link NoteEventAssertOptions.minStartBeat}.
    */
   startBeat: number;
   /** Duration in quarter-note beats. */

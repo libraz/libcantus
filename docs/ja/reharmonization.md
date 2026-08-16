@@ -18,7 +18,7 @@ formatChordSymbol(subs.find((sub) => sub.type === 'tritone')?.chord ?? makeChord
 
 ハ長調における G7 の裏コードは C#7 ではなく Db7 と綴られます。この調の下方第2度であり、綴りがそれを示しています。
 
-5つの関係は次のとおりです。
+4つの関係は次のとおりです。
 
 | 種類 | 対象 | 内容 |
 | --- | --- | --- |
@@ -26,7 +26,8 @@ formatChordSymbol(subs.find((sub) => sub.type === 'tritone')?.chord ?? makeChord
 | `relative` | 三和音・七の和音 | 三和音の構成音を2つ共有するコードに差し替えます。 |
 | `borrowed` | 任意 | 同主調から同じ度数を借ります。 |
 | `chromaticMediant` | 任意 | 3度離れ、共通音1つと半音変化を伴います。 |
-| `secondaryDominant` | 任意 | 後続和音に対する副属和音。 |
+
+副属和音はこの一覧に入りません。どの属和音が当たるかは後続の和音が決めるもので、`substituteChord` が受け取るのは1つの和音と調だけだからです。対象が分かっている場面では `secondaryDominantOf` が指定した和音に対する副属和音を作ります。進行全体を選び直す場面では、`harmonizeMelody` が `reharmonize: 'secondaryDominant'` で語彙を広げます。
 
 ### メロディとの整合を保つ
 
@@ -134,6 +135,8 @@ result.transposeSemitones; // 0
 ```
 
 `result.chords` は和声リズムの格子上でのコード変化ごとに1つの `ChordSpan` を持ち、`result.melodyRoles` は各メロディ音が最終的に下に来たコードの中で果たす役割を返します。`result.key` はコードが書かれている調で、`transposeSemitones` はそこへ到達するためにメロディを移動した量です。ハーモナイザが扱える調になかったメロディは、誤った調のコードではなく、そこへ移すための移動量とともに返ります。
+
+メロディは終わるところで終止します。1フレーズずつ渡す呼び出し側にとってはこれが望ましい挙動です。1つのフレーズより長い旋律は各フレーズの区切りでも終止しますが、ハーモナイザ自身にはその位置が分かりません。すでにコードが付いている旋律であれば `phrasesFromTimeline` が区切りを見つけるので、フレーズごとに和声付けすれば各区切りにそれぞれの終止が付きます。
 
 `classifyMelodyTones` は非和声音の分類だけを単体で実行します。ハーモナイズを確定させずに経過音や刺繍音を色分けする UI 向けです。
 

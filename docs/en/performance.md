@@ -8,7 +8,8 @@ Everything in the library is synchronous and single-threaded. A call returns bef
 | --- | --- |
 | Pitch, interval, chord, and scale arithmetic | Constant time. Bit operations on a twelve-bit mask. |
 | `detectChord`, `detectKey` | Linear in the candidate set, which is fixed. |
-| `chordTimelineFromNotes` | Linear in notes × windows; the window count follows from the span and the harmonic rhythm. |
+| `chordTimelineFromNotes` | Linear in the number of note-to-window memberships: each note is read once per window it sounds in, and the window count follows from the span and the harmonic rhythm. |
+| `keyTimelineFromNotes`, `detectModulations` | The same, over slots of `minKeyBeats`, plus a fixed 24-candidate search per slot. |
 | `voiceChord` | Bounded by `maxCandidates`, 4000 by default. |
 | `voiceProgression` | Linear in the number of chords, because the per-chord search is bounded. |
 | `analyzeArrangement` | Dominated by the timeline pass over the flattened harmony tracks. |

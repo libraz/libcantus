@@ -39,7 +39,7 @@ Array.isArray(motifs); // true
 
 ## What each layer answers
 
-`reduction` marks every chord `structural`, `passing`, or `auxiliary` and records why. It is the layer that separates the harmony a listener hears as the skeleton from the chords that connect it.
+`reduction` marks every chord `structural`, `passing`, or `neighbor`, records why, and carries the beats each chord holds. It is the layer that separates the harmony a listener hears as the skeleton from the chords that connect it.
 
 `phrases` combines cadence, rests, repetition, and hypermetric position, and each phrase records which of those signals contributed. Showing the signals is what lets a user judge a boundary rather than accept it.
 

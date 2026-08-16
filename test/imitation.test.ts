@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { InvalidInputError } from '../src/core/errors/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import { imitate } from '../src/generate/countermelody/index.js';
 import { majorKey, minorKey } from '../src/theory/scale/index.js';
@@ -112,6 +113,55 @@ describe('inversion', () => {
     expect(answer.map((note) => note.pitch)).toEqual([60, 59, 57]);
   });
 
+  it('mirrors a chromatic note instead of folding it onto its neighbour', () => {
+    const answer = imitate(quarters([60, 61, 62]), {
+      atBeat: 3,
+      interval: 'P5',
+      key: C_MAJOR,
+      answer: 'tonal',
+      invert: true,
+    });
+    const pitches = answer.map((note) => note.pitch);
+    // The passing C# sits a semitone above the degree it decorates, so upside
+    // down it sits a semitone below the degree it is mirrored onto.
+    expect(pitches).toEqual([67, 66, 65]);
+    expect(new Set(pitches).size).toBe(pitches.length);
+  });
+
+  it('keeps a chromatic passing note distinct from the tones it passes between', () => {
+    const answer = imitate(quarters([62, 63, 64]), {
+      atBeat: 8,
+      interval: 'P5',
+      key: C_MAJOR,
+      answer: 'tonal',
+      invert: true,
+    });
+    // D E♭ E upside down: the passing tone stays between its neighbours instead
+    // of landing on one of them.
+    expect(answer.map((note) => note.pitch)).toEqual([69, 68, 67]);
+  });
+
+  it('runs a mirrored chromatic note into the scale tone where the key leaves no room', () => {
+    // F F# G upside down: B is a semitone under C, so the mirrored F# has
+    // nowhere to sit and the answer repeats B. The documented boundary of a
+    // tonal inversion — a real answer is the one to ask for here.
+    const answer = imitate(quarters([65, 66, 67]), {
+      atBeat: 8,
+      interval: 'P5',
+      key: C_MAJOR,
+      answer: 'tonal',
+      invert: true,
+    });
+    expect(answer.map((note) => note.pitch)).toEqual([72, 71, 71]);
+    const real = imitate(quarters([65, 66, 67]), {
+      atBeat: 8,
+      interval: 'P5',
+      key: C_MAJOR,
+      invert: true,
+    });
+    expect(new Set(real.map((note) => note.pitch)).size).toBe(3);
+  });
+
   it('combines inversion with the transposition', () => {
     const answer = imitate(quarters([60, 64]), {
       atBeat: 2,
@@ -152,8 +202,46 @@ describe('imitate options', () => {
     expect(answer[0]).not.toHaveProperty('velocity');
   });
 
-  it('rejects an entry before the start of the music', () => {
-    expect(() => imitate(lead, { atBeat: -1, interval: 'P5', key: C_MAJOR })).toThrow(RangeError);
+  it('enters in a pickup, where onsets are negative', () => {
+    const answer = imitate(quarters([60, 62]), { atBeat: -1, interval: 'P5', key: C_MAJOR });
+    expect(answer.map((note) => note.startBeat)).toEqual([-1, 0]);
+    expect(answer.map((note) => note.pitch)).toEqual([67, 69]);
+  });
+
+  it('rejects an entry that is not a number at all', () => {
+    expect(() => imitate(lead, { atBeat: Number.NaN, interval: 'P5', key: C_MAJOR })).toThrow(
+      RangeError,
+    );
+  });
+
+  it('does not copy notes that never sound', () => {
+    const withArtefact: NoteEvent[] = [
+      { pitch: 60, startBeat: 0, durationBeat: 1 },
+      { pitch: 62, startBeat: 1, durationBeat: 0 },
+      { pitch: 64, startBeat: 2, durationBeat: 1 },
+    ];
+    const answer = imitate(withArtefact, { atBeat: 4, interval: 'P5', key: C_MAJOR });
+    expect(answer.map((note) => note.pitch)).toEqual([67, 71]);
+    expect(answer.every((note) => note.durationBeat > 0)).toBe(true);
+  });
+
+  it('enters at the first sounding note when the span opens with an artefact', () => {
+    const withArtefact: NoteEvent[] = [
+      { pitch: 62, startBeat: 0, durationBeat: 0 },
+      { pitch: 60, startBeat: 1, durationBeat: 1 },
+    ];
+    const answer = imitate(withArtefact, { atBeat: 4, interval: 'P5', key: C_MAJOR });
+    expect(answer.map((note) => note.startBeat)).toEqual([4]);
+    expect(answer.map((note) => note.pitch)).toEqual([67]);
+  });
+
+  it('rejects an answer kind it does not know, span or no span', () => {
+    const bogus = { atBeat: 4, interval: 'P5' as const, key: C_MAJOR, answer: 'free' as never };
+    expect(() => imitate(lead, bogus)).toThrow(InvalidInputError);
+    expect(() => imitate(lead, bogus)).toThrow(/imitate answer must be one of real, tonal/);
+    // The option is checked before the empty-span exit, so a typo is not
+    // swallowed by a span that happens to hold no notes.
+    expect(() => imitate(lead, { ...bogus, from: 100 })).toThrow(InvalidInputError);
   });
 
   it('rejects a reversed span', () => {

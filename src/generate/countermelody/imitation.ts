@@ -10,9 +10,22 @@
 
 import { InvalidInputError } from '../../core/errors/index.js';
 import type { IntervalLike, SpelledInterval } from '../../core/pitch/index.js';
-import { pitchClassOf, toSpelledInterval } from '../../core/pitch/index.js';
+import { toSpelledInterval } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
-import { assertFiniteNumber, assertNoteEvents, assertRange } from '../../core/validation/index.js';
+import {
+  assertFiniteNumber,
+  assertNoteEvents,
+  assertOneOf,
+  dropSilentNotes,
+} from '../../core/validation/index.js';
+import {
+  scaleLadderPitch,
+  scaleLadderPosition,
+  shiftByScaleDegrees,
+} from '../../theory/scale/index.js';
+
+/** Every way an imitation can answer, in declaration order. */
+const IMITATION_ANSWERS = ['real', 'tonal'] as const;
 
 /**
  * How an imitation answers the voice it follows.
@@ -24,7 +37,7 @@ import { assertFiniteNumber, assertNoteEvents, assertRange } from '../../core/va
  *
  * @category Composition
  */
-export type ImitationAnswer = 'real' | 'tonal';
+export type ImitationAnswer = (typeof IMITATION_ANSWERS)[number];
 
 /**
  * Options controlling {@link imitate}.
@@ -32,7 +45,10 @@ export type ImitationAnswer = 'real' | 'tonal';
  * @category Composition
  */
 export type ImitationOptions = {
-  /** Beat at which the imitation enters; the copied material starts here. */
+  /**
+   * Beat at which the imitation enters; the copied material starts here.
+   * Negative like any other onset, for an answer that enters in a pickup.
+   */
   atBeat: number;
   /**
    * Interval to imitate at, spelled: `'P5'` for an answer a fifth above,
@@ -68,56 +84,6 @@ export type ImitationOptions = {
   velocityScale?: number;
 };
 
-/** Scale-degree offsets above the tonic, ascending within one octave. */
-function scaleOffsets(key: KeyScale): number[] {
-  const offsets: number[] = [];
-  for (let n = 0; n < 12; n += 1) {
-    if (((key.modeMask12 >> n) & 1) === 1) {
-      offsets.push(n);
-    }
-  }
-  return offsets;
-}
-
-/**
- * The ladder of scale tones a tonal answer counts along.
- *
- * A tonal answer moves by scale degrees, so every pitch has to be located on
- * that ladder and put back on it afterwards. A pitch outside the key keeps its
- * distance from the scale tone below it, which is what lets a chromatic passing
- * note survive the transposition as a chromatic passing note.
- */
-function scaleLadder(key: KeyScale): {
-  index: (pitch: number) => number;
-  offset: (pitch: number) => number;
-  pitch: (index: number) => number;
-} {
-  const offsets = scaleOffsets(key);
-  const size = offsets.length;
-  const anchor = pitchClassOf(key.rootPc);
-  const locate = (pitch: number): { index: number; offset: number } => {
-    const relative = pitch - anchor;
-    const octave = Math.floor(relative / 12);
-    const within = relative - octave * 12;
-    let degree = 0;
-    for (let n = 0; n < size; n += 1) {
-      if ((offsets[n] ?? 0) <= within) {
-        degree = n;
-      }
-    }
-    return { index: octave * size + degree, offset: within - (offsets[degree] ?? 0) };
-  };
-  return {
-    index: (pitch) => locate(pitch).index,
-    offset: (pitch) => locate(pitch).offset,
-    pitch: (index) => {
-      const octave = Math.floor(index / size);
-      const degree = index - octave * size;
-      return anchor + octave * 12 + (offsets[degree] ?? 0);
-    },
-  };
-}
-
 /** How many scale degrees a spelled interval spans, signed by its direction. */
 function degreesOf(interval: SpelledInterval): number {
   const descending = interval.descending ?? interval.semitones < 0;
@@ -141,13 +107,20 @@ function assertPlayable(pitch: number): number {
  * `interval`: literally for a real answer, by scale degree for a tonal one, and
  * upside down first when `invert` is set. Inversion mirrors about the first note
  * of the copied span, so the answer starts where the transposition puts that
- * note either way.
+ * note either way. In a tonal answer a pitch outside the key keeps its distance
+ * from the scale tone below it, and inversion mirrors that distance too — a
+ * chromatic passing note stays a chromatic passing note, on the other side.
+ * Where a mirrored chromatic note falls into a diatonic semitone the key leaves
+ * it no room, and it lands on the scale tone there, so a subject saturated with
+ * chromatic steps can answer with a pitch repeated.
  *
  * @param lead The voice being imitated, in ascending onset order.
  * @param opts Where the answer enters, at what interval, and in what key.
  * @returns The imitation as note events sorted by onset; `[]` when the chosen
- *   span holds no notes.
- * @throws If the span is reversed, or a transposed pitch leaves the MIDI range.
+ *   span holds no sounding notes. Notes with a zero or negative duration never
+ *   sound and are not copied, so the answer can be shorter than the span.
+ * @throws If the span is reversed, the answer is not a known kind, or a
+ *   transposed pitch leaves the MIDI range.
  * @example
  * ```ts
  * import { imitate, majorKey } from '@libraz/libcantus';
@@ -159,8 +132,9 @@ function assertPlayable(pitch: number): number {
  */
 export function imitate(lead: readonly NoteEvent[], opts: ImitationOptions): NoteEvent[] {
   assertNoteEvents(lead, 'imitate lead', { allowNonPositiveDuration: true });
-  // Beat 0 is the start of the music, so an entry can be late but never early.
-  assertRange(opts.atBeat, 0, Number.MAX_SAFE_INTEGER, 'atBeat');
+  // Onsets are unbounded below library-wide, because a pickup sounds before the
+  // downbeat and the downbeat is beat 0; an answer to a pickup enters there too.
+  assertFiniteNumber(opts.atBeat, 'atBeat');
   const interval = toSpelledInterval(opts.interval);
   const from = opts.from ?? Number.NEGATIVE_INFINITY;
   const to = opts.to ?? Number.POSITIVE_INFINITY;
@@ -175,8 +149,14 @@ export function imitate(lead: readonly NoteEvent[], opts: ImitationOptions): Not
   }
   const velocityScale = opts.velocityScale ?? 1;
   assertFiniteNumber(velocityScale, 'velocityScale');
+  // Checked before the empty-span exit, so a malformed option is rejected
+  // whether or not the chosen span happens to hold a note.
+  const tonal = assertOneOf(opts.answer ?? 'real', IMITATION_ANSWERS, 'imitate answer') === 'tonal';
 
-  const subject = lead
+  // Zero-length artefacts are routine in MIDI imports and never sound. Dropping
+  // them before the copy keeps the answer passable to any entry point in the
+  // library, which reject non-positive durations by default.
+  const subject = dropSilentNotes(lead)
     .filter((note) => note.startBeat >= from && note.startBeat < to)
     .sort((a, b) => a.startBeat - b.startBeat);
   const origin = subject[0]?.startBeat;
@@ -185,20 +165,35 @@ export function imitate(lead: readonly NoteEvent[], opts: ImitationOptions): Not
     return [];
   }
   const shift = opts.atBeat - origin;
-  const tonal = (opts.answer ?? 'real') === 'tonal';
   const invert = opts.invert ?? false;
-  const ladder = scaleLadder(opts.key);
   const degrees = degreesOf(interval);
 
   return subject.map((note) => {
     let pitch = note.pitch;
+    // A tonal answer counts along the key's ladder of scale tones, which is what
+    // carries a pitch between two of them through the transposition as the note
+    // it was: {@link shiftByScaleDegrees} keeps its distance above the scale
+    // tone below it.
+    let offset = 0;
     if (invert) {
-      pitch = tonal
-        ? ladder.pitch(2 * ladder.index(pivot) - ladder.index(pitch)) - ladder.offset(pitch)
-        : 2 * pivot - pitch;
+      if (tonal) {
+        // Mirroring reflects the rung, and the offset with it: a note a semitone
+        // above its scale tone lands a semitone below the one it is mirrored
+        // onto, which is what keeps two adjacent chromatic pitches from being
+        // flattened onto the same answer. The mirrored pitch is a scale tone, so
+        // the offset is added back after the degree arithmetic.
+        const here = scaleLadderPosition(pitch, opts.key);
+        pitch = scaleLadderPitch(
+          2 * scaleLadderPosition(pivot, opts.key).rung - here.rung,
+          opts.key,
+        );
+        offset = -here.offset;
+      } else {
+        pitch = 2 * pivot - pitch;
+      }
     }
     pitch = tonal
-      ? ladder.pitch(ladder.index(pitch) + degrees) + ladder.offset(pitch)
+      ? shiftByScaleDegrees(pitch, degrees, opts.key) + offset
       : pitch + Math.round(interval.semitones);
     const answer: NoteEvent = {
       pitch: assertPlayable(pitch),

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { InvalidInputError, isLibcantusError } from '../src/core/errors/index.js';
 import { isStrongBeat } from '../src/core/meter/index.js';
 import type { KeyScale, NoteEvent } from '../src/core/types.js';
 import type { CounterMelodyOptions } from '../src/generate/countermelody/index.js';
@@ -320,6 +321,19 @@ describe('generateCounterMelody', () => {
       expect(note.velocity ?? 0).toBeLessThan(100);
       expect(note.velocity ?? 0).toBeGreaterThan(0);
     }
+  });
+
+  it('reports a missing chord source as a coded input error', () => {
+    let caught: unknown;
+    try {
+      generateCounterMelody({ melody, key: cMajor } as CounterMelodyOptions);
+    } catch (error) {
+      caught = error;
+    }
+    // A caller who read the doc and passed neither source made an input
+    // mistake, not a library one, so the host can route it as such.
+    expect(caught).toBeInstanceOf(InvalidInputError);
+    expect(isLibcantusError(caught) && caught.code).toBe('INVALID_INPUT');
   });
 
   it('is deterministic for a given seed', () => {

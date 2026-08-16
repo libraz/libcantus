@@ -8,9 +8,9 @@ import {
   fitsQuery,
   GENRES,
   type GridEvent,
+  gridMetricWeight,
   halfTime,
   mergeVocabulary,
-  metricWeight,
   ornamentBy,
   PROVENANCE_BASES,
   pickVocabulary,
@@ -98,6 +98,40 @@ describe('vocabulary model', () => {
     expect(() => assertVocabulary(entry('bad', { tempoRange: [140, 90] }))).toThrow();
     expect(assertVocabulary(entry('good')).id).toBe('good');
   });
+
+  it('names the tables its string fields have to come from', () => {
+    // A dictionary is data, and data arrives from JavaScript callers and config
+    // files where a typo is not a compile error. A name no table contains would
+    // otherwise match nothing and simply never be chosen.
+    const bad = (over: Record<string, unknown>) =>
+      assertVocabulary({ ...entry('typo'), ...over } as Vocabulary<Material>);
+    expect(() => bad({ genre: 'gamelan' })).toThrow(/genre/);
+    expect(() => bad({ provenance: { basis: 'invented', note: 'from nowhere' } })).toThrow(
+      /provenance/,
+    );
+    expect(() => bad({ articulations: ['whammy'] })).toThrow(/articulations\[0\]/);
+    expect(() => bad({ sections: ['solo'] })).toThrow(/sections\[0\]/);
+    expect(() => bad({ fitsOver: ['maj13sus'] })).toThrow(/fitsOver\[0\]/);
+    expect(() => bad({ ts: { numerator: 0, denominator: 4 } })).toThrow(/ts/);
+    expect(assertVocabulary(entry('fine', { sections: ['chorus'], fitsOver: ['maj7'] })).id).toBe(
+      'fine',
+    );
+  });
+
+  it('does not offer a figure asking for a technique the instrument lacks', () => {
+    // The field is a requirement rather than a label: a kit with no flam is not
+    // handed flam material and told to work it out.
+    const flammed = entry('flammed', { articulations: ['flam'] });
+    const plain = entry('plain');
+    expect(fitsQuery(flammed, { articulations: ['ghost', 'accent'] })).toBe(false);
+    expect(fitsQuery(flammed, { articulations: ['ghost', 'flam'] })).toBe(true);
+    expect(fitsQuery(plain, { articulations: [] })).toBe(true);
+    // Absent asks nothing, which is the programmed case.
+    expect(fitsQuery(flammed, {})).toBe(true);
+    expect(
+      selectVocabulary([flammed, plain], { articulations: ['ghost'] }).map((e) => e.id),
+    ).toEqual(['plain']);
+  });
 });
 
 describe('caller dictionaries', () => {
@@ -128,6 +162,22 @@ describe('caller dictionaries', () => {
   });
 });
 
+describe('the vocabulary surface is reachable', () => {
+  it('publishes the grid ranking under a name of its own', async () => {
+    // The ranking is documented as part of the thin contract callers are meant
+    // to work with, so it has to be gettable — under a name that does not
+    // collide with the analysis layer's own metric weight, which answers a
+    // different question on a different scale.
+    const generate = await import('../src/generate/index.js');
+    const root = await import('../src/index.js');
+    const core = await import('../src/core/index.js');
+    expect(generate.gridMetricWeight).toBe(gridMetricWeight);
+    expect(root.gridMetricWeight).toBe(gridMetricWeight);
+    expect(root.metricWeight).toBe(core.metricWeight);
+    expect(root.gridMetricWeight).not.toBe(root.metricWeight);
+  });
+});
+
 describe('transformation rules', () => {
   const figure: GridEvent[] = [
     { step: 0, velocity: 1 },
@@ -138,11 +188,11 @@ describe('transformation rules', () => {
   ];
 
   it('ranks positions by how much of the metre they carry', () => {
-    expect(metricWeight(0)).toBe(4);
-    expect(metricWeight(8)).toBe(3);
-    expect(metricWeight(4)).toBe(2);
-    expect(metricWeight(2)).toBe(1);
-    expect(metricWeight(3)).toBe(0);
+    expect(gridMetricWeight(0)).toBe(4);
+    expect(gridMetricWeight(8)).toBe(3);
+    expect(gridMetricWeight(4)).toBe(2);
+    expect(gridMetricWeight(2)).toBe(1);
+    expect(gridMetricWeight(3)).toBe(0);
   });
 
   it('thins from the weakest position upward, and monotonically', () => {
@@ -190,14 +240,82 @@ describe('transformation rules', () => {
     expect(halfTime([{ step: 12, velocity: 1 }], BAR_STEPS)).toEqual([]);
   });
 
+  it('keeps every onset when doubling the rate, odd steps included', () => {
+    // The figure that names the funk genre has its kick on step 3 and its
+    // ghosts on 7, 9 and 15 — all odd. Halving those onto no grid position and
+    // dropping them returned a de-syncopated figure as though it were the same
+    // one played faster.
+    const odd: GridEvent[] = [
+      { step: 0, velocity: 1 },
+      { step: 3, velocity: 0.8 },
+      { step: 7, velocity: 0.4 },
+      { step: 9, velocity: 0.4 },
+      { step: 15, velocity: 0.4 },
+    ];
+    const compressed = doubleTime(odd, BAR_STEPS);
+    expect(compressed.length).toBeGreaterThanOrEqual(odd.length);
+    // Each onset lands on the grid position nearest its halved place, and every
+    // position the figure asks for is on the grid.
+    for (const event of odd) {
+      expect(compressed.map((e) => e.step)).toContain(Math.round(event.step / 2));
+    }
+    for (const event of compressed) {
+      expect(Number.isInteger(event.step)).toBe(true);
+    }
+  });
+
+  it('lets another voice sit where this one wants to anticipate', () => {
+    // Two hands are two players: a ghost snare on the step a hi-hat wants to
+    // anticipate into is not an obstacle, and blocking on it left the upper
+    // half of the dial doing nothing at all for several built-in genres.
+    const shared: GridEvent[] = [
+      { step: 3, velocity: 0.3, voice: 'snare' },
+      { step: 4, velocity: 1, voice: 'closedHiHat' },
+    ];
+    const pushed = syncopate(shared, 1, draw, 'bar', 0);
+    expect(pushed.some((e) => e.voice === 'closedHiHat' && e.step === 3)).toBe(true);
+    // The same voice still blocks itself: that would be one hand twice over.
+    const sameVoice: GridEvent[] = [
+      { step: 3, velocity: 0.3, voice: 'closedHiHat' },
+      { step: 4, velocity: 1, voice: 'closedHiHat' },
+    ];
+    expect(syncopate(sameVoice, 1, draw, 'bar', 0)).toHaveLength(sameVoice.length);
+  });
+
+  it('measures the ceiling within a stream rather than across the kit', () => {
+    // A kick and a hi-hat a sixteenth apart are two limbs, not one hand playing
+    // at sixteenth speed.
+    const twoVoices: GridEvent[] = [
+      { step: 0, velocity: 1, voice: 'kick' },
+      { step: 1, velocity: 1, voice: 'closedHiHat' },
+      { step: 4, velocity: 1, voice: 'kick' },
+      { step: 5, velocity: 1, voice: 'closedHiHat' },
+    ];
+    // A quarter apart within each voice, a sixteenth apart across them.
+    expect(withinCeiling(twoVoices, 160, 1)).toBe(true);
+    const oneLimb: GridEvent[] = twoVoices.map((event) => ({ ...event, limb: 'rightHand' }));
+    expect(withinCeiling(oneLimb, 160, 1)).toBe(false);
+  });
+
   it('anticipates beats when syncopating, and never the downbeat', () => {
     const heavy = syncopate(figure, 1, draw, 'bar', 0);
     expect(heavy.some((e) => e.step === 0)).toBe(true);
     expect(heavy.map((e) => e.step)).toEqual([...heavy.map((e) => e.step)].sort((a, b) => a - b));
-    // Every displaced note landed one step before a beat it could have sat on.
+    // Every added note sits one step before a beat the figure already had.
     for (const event of heavy) {
       expect(figure.some((f) => f.step === event.step || f.step === event.step + 1)).toBe(true);
     }
+    // The dial adds: the notes that were sounding are all still sounding, and
+    // the anticipation is softer than the note it leans into.
+    const steps = heavy.map((e) => e.step);
+    for (const written of figure) {
+      expect(steps).toContain(written.step);
+    }
+    const anticipation = heavy.find((e) => !figure.some((f) => f.step === e.step));
+    expect(anticipation).toBeDefined();
+    expect(anticipation?.velocity).toBeLessThan(
+      figure.find((f) => f.step === (anticipation?.step ?? 0) + 1)?.velocity ?? 0,
+    );
   });
 
   it('syncopates the same way for the same position', () => {
@@ -229,7 +347,12 @@ describe('transformation rules', () => {
   it('thins below the middle and syncopates above it', () => {
     expect(deform(figure, { rhythmic: 0 }, draw, 'bar', 0).map((e) => e.step)).toEqual([0]);
     const busy = deform(figure, { rhythmic: 1 }, draw, 'bar', 0);
-    expect(busy).toHaveLength(figure.length);
+    // Syncopating adds the anticipations to the figure rather than moving it,
+    // so the top of the dial is the written figure and more.
+    expect(busy.length).toBeGreaterThan(figure.length);
+    for (const written of figure) {
+      expect(busy.map((e) => e.step)).toContain(written.step);
+    }
   });
 
   it('rejects a figure faster than the ceiling sustains, at that tempo', () => {

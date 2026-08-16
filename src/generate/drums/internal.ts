@@ -16,7 +16,8 @@ export const GM = {
   SHAKER: 82,
 } as const;
 
-/** One beat and one sixteenth expressed as fractions of a beat. */
+/** One quarter, one eighth and one sixteenth expressed in quarter-note beats. */
+export const QUARTER = 1;
 export const EIGHTH = 0.5;
 export const SIXTEENTH = 0.25;
 
@@ -36,6 +37,14 @@ export const DRUM_FEELS = ['straight', 'swing', 'shuffle'] as const;
 
 /** Groove feel controlling off-beat swing. */
 export type Feel = (typeof DRUM_FEELS)[number];
+
+/**
+ * Groove feel (the swing/straight rhythmic character), under the name the
+ * public surface uses.
+ *
+ * @category Composition
+ */
+export type GrooveFeel = Feel;
 
 /** Reduced section set the engine reasons about. */
 export type SectionType = 'intro' | 'a' | 'b' | 'chorus' | 'bridge' | 'outro';
@@ -157,9 +166,9 @@ export function mapSection(section: PublicSection): SectionType {
 /**
  * How loudly the backing sits, as a factor on the section's density.
  *
- * The dial used to be bucketed into three levels, which made two thirds of a
- * slider's travel do nothing and the remaining third jump by half. Reading it
- * as the continuous quantity it always was is what lets it be a slider.
+ * The dial is read as the continuous quantity it is, which is what lets it be a
+ * slider: bucketing it into three levels would make two thirds of the travel do
+ * nothing and the remaining third jump by half.
  */
 export function backingScale(rhythmic: number): number {
   return BACKING_SCALE_FLOOR + (BACKING_SCALE_CEILING - BACKING_SCALE_FLOOR) * rhythmic;
@@ -180,13 +189,20 @@ export function leanedBy(probability: number, rhythmic: number): number {
   return Math.max(0, Math.min(1, probability * (0.5 + rhythmic)));
 }
 
-/** Swing amount (0..1) implied by a groove feel. */
+/**
+ * Swing amount (0..1) implied by a groove feel, as a share of the full triplet
+ * displacement.
+ *
+ * A shuffle is the triplet itself — that is what the word names — so it is the
+ * whole of it; a swing leans two thirds of the way, which is what separates the
+ * two as rhythmic characters rather than as two settings of the same one.
+ */
 export function feelSwingAmount(feel: Feel): number {
   if (feel === 'swing') {
-    return 0.33;
+    return 2 / 3;
   }
   if (feel === 'shuffle') {
-    return 0.5;
+    return 1;
   }
   return 0;
 }
@@ -296,6 +312,17 @@ export function calculateVelocity(section: SectionType, beat: number): number {
   const velocity = (base + beatAdj) * sectionVelocityMultiplier(section);
   return clampVel(velocity);
 }
+
+/**
+ * How far a backbeat sits above the velocity of the beat it lands on.
+ *
+ * The fill reads it too: the stroke a fill lands on has to arrive above the
+ * backbeats around it, or the phrase end is heard as a dip rather than a lift.
+ */
+export const BACKBEAT_LIFT = 16;
+
+/** How far the stroke a fill lands on sits above a backbeat. */
+export const FILL_ACCENT_LIFT = 4;
 
 /** Round and clamp a velocity into the valid MIDI range. */
 export function clampVel(velocity: number): number {

@@ -12,6 +12,7 @@ import {
   createsVoiceOverlap,
 } from '../counterpoint/index.js';
 import type { VoiceRange } from './satb.js';
+import { isFunctioningLeadingTone, leadingTonePcOf, seventhPcOf } from './tendency.js';
 
 /** Default maximum spacing between adjacent upper voices (one octave). */
 export const DEFAULT_MAX_SPACING = 12;
@@ -216,8 +217,9 @@ export type StructuralTables = {
 /**
  * Build the structural tables for one chord: heavily penalize missing chord
  * tones (mildly for the fifth, which carries no identity), mildly penalize
- * doubling anything other than the root or fifth, and — when a key is known —
- * heavily penalize doubling its leading tone.
+ * doubling anything other than the root or fifth, and — when a key is known and
+ * the chord is one where the leading tone functions as one — heavily penalize
+ * doubling that leading tone.
  *
  * The exempt fifth is the chord's own fifth, whatever its size: a diminished,
  * augmented, or absent fifth would leave the root as the only freely doubled
@@ -229,7 +231,8 @@ export function structuralTables(chord: Chord, key?: KeyScale): StructuralTables
     chordToneRole(pc, chord) === 'fifth' ? MISSING_FIFTH_PENALTY : MISSING_TONE_PENALTY,
   );
   const rootPc = pitchClass(chord.rootPc);
-  const leadingTonePc = key === undefined ? -1 : pitchClass(key.rootPc - 1);
+  const leadingTonePc =
+    key !== undefined && isFunctioningLeadingTone(chord, key) ? leadingTonePcOf(key) : -1;
   const doubling = new Float64Array(12);
   for (let pc = 0; pc < 12; pc += 1) {
     if (pc === leadingTonePc) {
@@ -285,17 +288,6 @@ export function structuralPenalty(
   return penalty;
 }
 
-/** The chord's own seventh as a pitch class, or -1 when it has none. */
-function seventhPcOf(chord: Chord): number {
-  for (const interval of chord.intervals) {
-    const pc = pitchClass(chord.rootPc + interval);
-    if (chordToneRole(pc, chord) === 'seventh') {
-      return pc;
-    }
-  }
-  return -1;
-}
-
 /**
  * The per-chord-pair tables {@link resolutionViolations} reads, worked out once
  * per chord rather than once per candidate.
@@ -303,7 +295,10 @@ function seventhPcOf(chord: Chord): number {
 export type ResolutionTables = {
   /** The leaving chord's seventh, or -1 when it has none. */
   seventhPc: number;
-  /** The key's leading tone, or -1 without a key. */
+  /**
+   * The key's leading tone, or -1 without a key and wherever the leaving chord
+   * is not one the leading tone functions in.
+   */
   leadingTonePc: number;
   /** The key's tonic, or -1 without a key. */
   tonicPc: number;
@@ -322,8 +317,9 @@ export function resolutionTables(
     nextHas[pc] = 1;
   }
   return {
-    seventhPc: seventhPcOf(prevChord),
-    leadingTonePc: key === undefined ? -1 : pitchClass(key.rootPc - 1),
+    seventhPc: seventhPcOf(prevChord) ?? -1,
+    leadingTonePc:
+      key !== undefined && isFunctioningLeadingTone(prevChord, key) ? leadingTonePcOf(key) : -1,
     tonicPc: key === undefined ? -1 : pitchClass(key.rootPc),
     nextHas,
   };
@@ -335,8 +331,9 @@ export function resolutionTables(
  *
  * A chordal seventh is a dissonance: unless the next chord holds it as a common
  * tone, the voice carrying it must fall by step. A leading tone must rise to
- * the tonic whenever the next chord contains one; without a key there is no
- * leading tone to speak of, so that half of the rule is skipped.
+ * the tonic whenever the next chord contains one, and only where it is
+ * functioning as a leading tone; without a key there is no leading tone to
+ * speak of, so that half of the rule is skipped.
  */
 export function resolutionViolations(
   tables: ResolutionTables,

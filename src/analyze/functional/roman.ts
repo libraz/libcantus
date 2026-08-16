@@ -11,12 +11,13 @@
 import { InvalidInputError } from '../../core/errors/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
-import { chordPitchClasses, makeChord } from '../../theory/chord/index.js';
-import { isScaleTone, majorKey, scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
+import { makeChord } from '../../theory/chord/index.js';
+import { majorKey, scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
 import { augmentedSixthFromSymbol, augmentedSixthSymbol } from './augmented-sixth.js';
 import {
   degreeRootPc,
   isAppliedDominantSonority,
+  isDiatonicChord,
   isNeapolitan,
   loweredDegrees,
   mod12,
@@ -400,6 +401,36 @@ function romanSpelling(
   return { degreeNumber, accidental };
 }
 
+/**
+ * The accidental a seventh-degree numeral is written with, which is the one
+ * place the spelling is not the literal one.
+ *
+ * A bare `viio`/`viio7` conventionally names the raised leading tone in a key
+ * whose seventh degree is lowered, so the raised root drops its sharp — and the
+ * lowered root, which that numeral therefore no longer names, has to take a
+ * flat. Both halves are needed: this is the exact inverse of the reading
+ * `parseSimpleRoman` applies, and without the second one the two roots collapse
+ * onto a single numeral.
+ */
+function seventhDegreeAccidental(
+  accidental: string,
+  degreeNumber: number,
+  quality: ChordQuality,
+  key: KeyScale,
+): string {
+  if (
+    degreeNumber !== 7 ||
+    (quality !== 'dim' && quality !== 'dim7') ||
+    !loweredDegrees(romanReference(key)).has(7)
+  ) {
+    return accidental;
+  }
+  if (accidental === '#') {
+    return '';
+  }
+  return accidental === '' ? 'b' : accidental;
+}
+
 /** Quality marker (without the seventh digit) used when a figure carries the 7. */
 function baseMarker(quality: ChordQuality): string {
   if (quality === 'dim' || quality === 'dim7') {
@@ -457,11 +488,6 @@ function numeralFor(degreeNumber: number, lower: boolean): string {
   return lower ? glyph.toLowerCase() : glyph;
 }
 
-/** Whether every pitch class of a chord belongs to the key's scale. */
-function isDiatonicChord(chord: Chord, key: KeyScale): boolean {
-  return chordPitchClasses(chord).every((pc) => isScaleTone(pc, key));
-}
-
 /** Diminished-family qualities, which tonicize from a semitone below. */
 const LEADING_TONE_QUALITIES: ReadonlySet<ChordQuality> = new Set(['dim', 'dim7', 'm7b5']);
 
@@ -478,8 +504,10 @@ function degreeTriad(tones: readonly number[], index: number): { third: number; 
  * The scale degree a chromatic chord tonicizes, or null when it tonicizes
  * nothing. A dominant sonority points a fifth below itself, a diminished one a
  * semitone above itself; the tonic is never a target (that chord is the key's own
- * dominant) and neither is a degree carrying a diminished triad, which has no
- * fifth to be tonicized.
+ * dominant) and neither is a degree whose triad has no perfect fifth — a
+ * tonicized degree has to be a major or minor triad to be a tonic at all, so
+ * the diminished seventh degree of a major key is no target and a chord over it
+ * is named against the home key instead (`F#7` in C major is `#IV7`).
  */
 function appliedTarget(
   chord: Chord,
@@ -497,6 +525,9 @@ function appliedTarget(
       continue;
     }
     const triad = degreeTriad(tones, index);
+    if (triad.fifth !== 7) {
+      continue;
+    }
     const expectedRoot = mod12(targetRoot + (dominant ? 7 : -1));
     if (expectedRoot === mod12(chord.rootPc)) {
       return { degreeNumber: index + 1, rootPc: targetRoot, lower: triad.third === 3 };
@@ -517,8 +548,11 @@ export type ChordToRomanOptions = {
    *
    * Off by default: naming the root is always a correct spelling, whereas
    * whether a chromatic dominant is genuinely applied is a reading only the
-   * caller can make. Turning it on makes {@link chordToRoman} the exact inverse
-   * of {@link romanToChord} for the chords {@link secondaryDominant} builds.
+   * caller can make. Turning it on names the chords {@link secondaryDominant}
+   * builds as the applied numerals they are, except where the target degree
+   * carries no perfect fifth: nothing tonicizes a diminished triad, so a chord
+   * over the seventh degree of a major key stays `#IV7` rather than becoming a
+   * numeral no harmony text writes.
    */
   applied?: boolean;
   /**
@@ -635,15 +669,10 @@ function renderRoman(
   const { lower, suffix } = romanStyle(chord.quality);
   const cased = numeralFor(degreeNumber, lower);
   // Render the conventional unaltered `viio`/`viio7` for the raised leading
-  // tone in a minor key. Keeping the parser and formatter aligned makes the
-  // common harmonic-minor progression a true round trip.
-  const accidental =
-    spelledAccidental === '#' &&
-    degreeNumber === 7 &&
-    loweredDegrees(romanReference(key)).has(7) &&
-    (chord.quality === 'dim' || chord.quality === 'dim7')
-      ? ''
-      : spelledAccidental;
+  // tone in a minor key, and `bviio`/`bviio7` for the subtonic below it.
+  // Keeping the parser and formatter aligned makes the common harmonic-minor
+  // progression a true round trip.
+  const accidental = seventhDegreeAccidental(spelledAccidental, degreeNumber, chord.quality, key);
 
   let inversion = 0;
   let bass: RomanBass = 'root';
@@ -718,6 +747,17 @@ function describeBass(bass: RomanBass, figure: string | undefined): string {
   }
 }
 
+/**
+ * The note a tonic six-four carries, which the numeral alone cannot give.
+ *
+ * `I64` is the right spelling for the chord, and the harmony it names is a
+ * question the chords around it answer: standing on the dominant's bass and
+ * resolving onto it, the same notes are a double appoggiatura over the dominant
+ * rather than a tonic of their own.
+ */
+const SIX_FOUR_NOTE =
+  '; on the dominant bass this chord is heard as a double appoggiatura over the dominant rather than as a tonic of its own, which only the chords around it settle';
+
 /** Build the rationale for a rendered numeral. */
 function describeRoman(roman: string, derivation: RomanDerivation): string {
   switch (derivation.kind) {
@@ -727,8 +767,12 @@ function describeRoman(roman: string, derivation: RomanDerivation): string {
       return `${roman}: an applied chord, named in the local key its target degree ${derivation.target} makes a tonic`;
     case 'neapolitan':
       return `${roman}: the first-inversion Neapolitan under its figured name, the chord bII6 also spells`;
-    case 'degree':
-      return `${roman}: ${describeDegree(derivation.degreeNumber, derivation.accidental)}, the case and suffix come from the ${derivation.quality} quality, ${describeBass(derivation.bass, derivation.figure)}`;
+    case 'degree': {
+      const text = `${roman}: ${describeDegree(derivation.degreeNumber, derivation.accidental)}, the case and suffix come from the ${derivation.quality} quality, ${describeBass(derivation.bass, derivation.figure)}`;
+      const tonicSixFour =
+        derivation.degreeNumber === 1 && derivation.accidental === '' && derivation.figure === '64';
+      return tonicSixFour ? `${text}${SIX_FOUR_NOTE}` : text;
+    }
   }
 }
 
@@ -782,8 +826,8 @@ export type RomanExplanation = {
   /** How the numeral was arrived at: the degree, the quality, and the bass. */
   rationale: string;
   /**
-   * The spellings the options turned down, empty unless
-   * {@link ExplainRomanOptions.alternatives} asked for them.
+   * The spellings the options turned down, empty unless the `alternatives`
+   * option of {@link ExplainRomanOptions} asked for them.
    */
   alternatives: RejectedCandidate[];
 };
@@ -827,9 +871,9 @@ export type ExplainRomanOptions = ChordToRomanOptions & {
  * ```ts
  * import { explainRoman, makeChord, majorKey } from '@libraz/libcantus';
  * explainRoman(makeChord(7, 'dom7'), majorKey(0)).rationale;
- * // 'V7: the root is the fifth degree of the key, ...'
- * explainRoman(makeChord(2, 'dom7'), majorKey(0), { alternatives: true }).alternatives;
- * // [{ label: 'V7/V', reason: '...' }]
+ * // 'V7: the root is the fifth degree of the key, the case and suffix come from the dom7 quality, and the chord stands on its own root'
+ * const applied = explainRoman(makeChord(2, 'dom7'), majorKey(0), { alternatives: true });
+ * applied.alternatives?.map((rejected) => rejected.label); // ['V7/V']
  * ```
  * @category Functional Harmony
  */

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteEvent } from '../src/core/types.js';
 import {
+  buildCandidates,
   type HarmonizeOptions,
   type HarmonizeResult,
   harmonizeMelody,
@@ -293,7 +294,9 @@ describe('harmonizeMelody', () => {
   });
 
   it('honours a harmonic rhythm finer than a quarter note', () => {
-    const melody = [60, 64, 67, 72].map((pitch, i) => ({
+    // A stepwise figure, so each slot asks for a chord of its own: an arpeggio
+    // would be one chord at every grid and could not show the grid was read.
+    const melody = [60, 62, 64, 65].map((pitch, i) => ({
       pitch,
       startBeat: i * 0.125,
       durationBeat: 0.125,
@@ -330,17 +333,40 @@ describe('harmonizeMelody', () => {
     }
   });
 
+  it('reads the default chord grid from the time signature', () => {
+    // Twelve beats of waltz: with a 4/4 grid the chords would change every two
+    // beats, which is across the barline in three, so the grid follows the metre.
+    const melody = quarters([60, 64, 67, 62, 65, 69, 60, 64, 67, 67, 71, 62]);
+    const waltz = harmonizeMelody({
+      melody,
+      key: cMajor,
+      ts: { numerator: 3, denominator: 4 },
+      placement: { transposeSearch: false, octaveSearch: false },
+    });
+    for (const chord of waltz.chords) {
+      expect(chord.startBeat % 3).toBe(0);
+    }
+    // In 4/4 the default is what it has always been: one chord per half bar.
+    const common = {
+      melody,
+      key: cMajor,
+      placement: { transposeSearch: false, octaveSearch: false },
+    };
+    expect(harmonizeMelody(common)).toEqual(harmonizeMelody({ ...common, harmonicRhythm: 2 }));
+  });
+
   it('weights metric accents by the given time signature', () => {
-    // A waltz whose bar-initial notes outline I and whose beat-3 notes outline
-    // V. Read against a 4/4 grid the strong beats fall in the wrong places, so
-    // the two readings must not agree.
+    // A waltz whose bars open on I and whose second bar leans on the notes each
+    // accent grid reads differently: the D falls on a downbeat in three, the A
+    // on one in four. Read against the wrong grid the accents fall in the wrong
+    // places, so the readings must not agree.
     const melody = [
       { pitch: 60, startBeat: 0, durationBeat: 1 },
       { pitch: 64, startBeat: 1, durationBeat: 1 },
-      { pitch: 71, startBeat: 2, durationBeat: 1 },
+      { pitch: 67, startBeat: 2, durationBeat: 1 },
       { pitch: 62, startBeat: 3, durationBeat: 1 },
-      { pitch: 67, startBeat: 4, durationBeat: 1 },
-      { pitch: 65, startBeat: 5, durationBeat: 1 },
+      { pitch: 69, startBeat: 4, durationBeat: 1 },
+      { pitch: 64, startBeat: 5, durationBeat: 1 },
     ];
     const common: Omit<HarmonizeOptions, 'ts'> = {
       melody,
@@ -386,18 +412,15 @@ describe('harmonizeMelody follows the harmony rather than the melody notes', () 
     expect(result.chords.at(-2)).toMatchObject({ rootPc: 7, degree: 5 });
   });
 
-  it('keeps the tonic in reach when the vocabulary opens up to secondary dominants', () => {
+  it('leaves a nursery tune where it was when the vocabulary opens up', () => {
+    // The tune has no accidental in it, so the chords that tonicize a degree
+    // explain nothing the key's own triads do not: widening the vocabulary adds
+    // what the melody asks for, and this melody asks for nothing.
     const result = harmonizeMelody({ ...common, reharmonize: 'secondaryDominant' });
-    expect(result.chords.map((c) => c.rootPc)).toEqual([0, 0, 5, 9, 2, 0, 7, 0]);
-    expect(result.chords.at(-1)?.rootPc).toBe(0);
+    expect(result.chords).toEqual(harmonizeMelody({ ...common, reharmonize: 'diatonic' }).chords);
+    expect(result.chords.map((c) => c.rootPc)).toEqual([0, 5, 0, 5, 0, 7, 0]);
     expect(result.chords.some((c) => c.degree === 1)).toBe(true);
-    // Every secondary dominant is followed by the degree it tonicizes.
-    for (const [index, chord] of result.chords.entries()) {
-      if (chord.secondaryDominant) {
-        const next = result.chords[index + 1];
-        expect(next?.rootPc).toBe((chord.rootPc + 5) % 12);
-      }
-    }
+    expect(result.chords.some((c) => c.secondaryDominant)).toBe(false);
   });
 
   it('reads the same vocabulary from the dial as from the name', () => {
@@ -416,19 +439,27 @@ describe('harmonizeMelody follows the harmony rather than the melody notes', () 
 
   it('opens the vocabulary a chord at a time rather than a family at a time', () => {
     // A dial barely off zero has opened the dominant's own dominant and nothing
-    // else, so whatever path wins can only tonicize the fifth degree.
+    // else, so a melody that spells another tonicization cannot have it yet.
+    const tonicizesTwo = quarters([62, 66, 69, 62, 74, 69, 65, 62]);
     const partial = harmonizeMelody({
-      ...common,
+      melody: tonicizesTwo,
+      key: cMajor,
+      harmonicRhythm: 2,
       ctx: { seed: 0, complexity: { harmonic: 0.125 } },
+      placement: { transposeSearch: false, octaveSearch: false },
     });
-    const tonicized = partial.chords.filter((chord) => chord.secondaryDominant);
-    expect(tonicized.every((chord) => chord.rootPc === 2)).toBe(true);
-    // The whole family is open half way up, which the same melody uses to
-    // tonicize more than the fifth degree alone.
-    const full = harmonizeMelody({ ...common, reharmonize: 'secondaryDominant' });
-    const roots = new Set(full.chords.filter((c) => c.secondaryDominant).map((c) => c.rootPc));
-    expect(roots.size).toBeGreaterThan(0);
-    expect([...roots].some((rootPc) => rootPc !== 2)).toBe(true);
+    for (const chord of partial.chords) {
+      expect(chord.secondaryDominant ? chord.rootPc : 2).toBe(2);
+    }
+    // The whole family is open half way up, and the vocabulary itself is what
+    // the dial moves — a melody only shows which part of it it needs.
+    const roots = (harmonic: number) =>
+      buildCandidates(cMajor, harmonic)
+        .filter((candidate) => candidate.secondaryDominant)
+        .map((candidate) => candidate.rootPc);
+    expect(roots(0)).toEqual([]);
+    expect(roots(0.125)).toEqual([2]);
+    expect(roots(0.5)).toEqual([9, 0, 2, 4]);
   });
 
   it('lets the context outrank the name and the seed it is sugar for', () => {
@@ -469,7 +500,7 @@ describe('harmonizeMelody follows the harmony rather than the melody notes', () 
     }
 
     // One slot per note gives the search every chance to change chord on the D,
-    // and it still comes out with fewer chords than notes.
+    // and it still leaves the tonic where it was.
     const perNote = harmonizeMelody({
       melody,
       key: cMajor,
@@ -478,11 +509,13 @@ describe('harmonizeMelody follows the harmony rather than the melody notes', () 
       placement: { transposeSearch: false, octaveSearch: false },
     });
     expect(perNote.chords.length).toBeLessThan(melody.length);
-    expect(perNote.chords.map((c) => c.rootPc)).toEqual([0, 7, 0]);
+    expect(perNote.chords.map((c) => c.rootPc)).toEqual([0]);
   });
 
   it('keeps a chain of secondary dominants resolving down a scale', () => {
-    const melody = quarters([72, 71, 69, 67, 65, 64, 62, 60]);
+    // A line that spells one applied dominant after another: each accidental is
+    // the third of the chord that tonicizes the degree the line lands on next.
+    const melody = quarters([72, 68, 69, 73, 74, 78, 79, 72]);
     const result = harmonizeMelody({
       melody,
       key: cMajor,
@@ -490,9 +523,8 @@ describe('harmonizeMelody follows the harmony rather than the melody notes', () 
       reharmonize: 'secondaryDominant',
       placement: { transposeSearch: false, octaveSearch: false },
     });
-    // C E7 Am A7 Dm D7 G C.
-    expect(result.chords.map((c) => c.rootPc)).toEqual([0, 4, 9, 9, 2, 2, 7, 0]);
-    expect(result.chords.filter((c) => c.secondaryDominant)).toHaveLength(3);
+    const applied = result.chords.filter((c) => c.secondaryDominant);
+    expect(applied.length).toBeGreaterThanOrEqual(2);
     for (const [index, chord] of result.chords.entries()) {
       if (chord.secondaryDominant) {
         // Each one steps down a fifth onto the chord it tonicizes.
@@ -500,6 +532,16 @@ describe('harmonizeMelody follows the harmony rather than the melody notes', () 
       }
     }
     expect(result.chords.at(-1)?.rootPc).toBe(0);
+    // The key's own triads alone cannot spell them, so none of it is there when
+    // the vocabulary is closed.
+    const diatonic = harmonizeMelody({
+      melody,
+      key: cMajor,
+      harmonicRhythm: 1,
+      reharmonize: 'diatonic',
+      placement: { transposeSearch: false, octaveSearch: false },
+    });
+    expect(diatonic.chords.some((c) => c.secondaryDominant)).toBe(false);
   });
 });
 

@@ -14,7 +14,7 @@ import {
 } from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
 import { chordPitchClasses } from '../../theory/chord/index.js';
-import { isScaleTone, nearestScaleTone } from '../../theory/scale/index.js';
+import { isScaleTone, shiftByScaleDegrees } from '../../theory/scale/index.js';
 import { type GenerationContextInput, resolveContextWith } from '../context/index.js';
 
 /**
@@ -88,9 +88,12 @@ export type MotifOptions = {
    * reproduces the requested contour exactly (no drift, tails return to tonic).
    *
    * Sugar for `ctx: { complexity: { ornament } }` — a nudge off the contour is
-   * decoration rather than rhythm; the context wins where both are given.
+   * decoration rather than rhythm; the context wins where both are given. Being
+   * the same dial, it takes the same values: one outside [0, 1] is rejected here
+   * exactly as it is there, rather than being folded to the nearest end.
    *
    * @defaultValue 0
+   * @throws If it is not a finite number in [0, 1].
    */
   jitter?: number;
   /**
@@ -124,36 +127,6 @@ function isDownbeat(startBeat: number, barBeats: number): boolean {
   return Math.abs(bar - Math.round(bar)) < EPS;
 }
 
-/** Nearest in-scale pitch strictly above `pitch`. */
-function upScaleTone(pitch: number, key: KeyScale): number {
-  for (let d = 1; d <= 12; d += 1) {
-    if (isScaleTone(pitch + d, key)) {
-      return pitch + d;
-    }
-  }
-  return pitch + 12;
-}
-
-/** Nearest in-scale pitch strictly below `pitch`. */
-function downScaleTone(pitch: number, key: KeyScale): number {
-  for (let d = 1; d <= 12; d += 1) {
-    if (isScaleTone(pitch - d, key)) {
-      return pitch - d;
-    }
-  }
-  return pitch - 12;
-}
-
-/** Shift a pitch by a number of diatonic scale degrees. */
-function stepDiatonic(pitch: number, degrees: number, key: KeyScale): number {
-  let p = nearestScaleTone(pitch, key);
-  const steps = Math.abs(Math.trunc(degrees));
-  for (let i = 0; i < steps; i += 1) {
-    p = degrees >= 0 ? upScaleTone(p, key) : downScaleTone(p, key);
-  }
-  return p;
-}
-
 /** Nearest chord tone to `pitch`, preferring the lower pitch on a tie. */
 function nearestChordTone(pitch: number, chord: Chord): number {
   const pcs = chordPitchClasses(chord);
@@ -163,6 +136,48 @@ function nearestChordTone(pitch: number, chord: Chord): number {
     }
     if (pcs.includes(pitchClass(pitch + d))) {
       return pitch + d;
+    }
+  }
+  return pitch;
+}
+
+/** Widest move, in semitones, a developed note is displaced by. */
+const MAX_DEVELOP_SHIFT = 12;
+
+/**
+ * Pick the pitch a developed note takes.
+ *
+ * The note moves to the nearest pitch its position allows — a chord tone where
+ * the position carries structural weight, any tone of the key elsewhere — and
+ * skips a pitch a different note of the same tile already took, so two pitches
+ * that differ in the cell still differ in the development. A tie is broken in
+ * the direction the melody was already moving, which keeps a step a step
+ * instead of folding it back onto the note before it.
+ *
+ * @param pitch The note's pitch in the cell.
+ * @param allows Whether a candidate pitch is one this position may take.
+ * @param direction Sign of the melodic motion into the note.
+ * @param taken Pitches already placed in this tile, by the cell pitch that took
+ *   them.
+ * @returns The developed pitch, or `pitch` when the position allows nothing
+ *   within reach.
+ */
+function developedPitch(
+  pitch: number,
+  allows: (candidate: number) => boolean,
+  direction: number,
+  taken: Map<number, number>,
+): number {
+  const ahead = direction >= 0 ? 1 : -1;
+  for (let d = 0; d <= MAX_DEVELOP_SHIFT; d += 1) {
+    for (const candidate of d === 0 ? [pitch] : [pitch + ahead * d, pitch - ahead * d]) {
+      if (candidate < 0 || candidate > 127 || !allows(candidate)) {
+        continue;
+      }
+      const owner = taken.get(candidate);
+      if (owner === undefined || owner === pitch) {
+        return candidate;
+      }
     }
   }
   return pitch;
@@ -253,11 +268,11 @@ export function generateMotif(opts: MotifOptions): MotifCell {
   const noteCount = Math.max(3, bars * 2);
   assertGenerationBudget(noteCount, 'motif notes');
   const beatsPerNote = totalBeats / noteCount;
-  const requestedJitter = assertFiniteNumber(opts.jitter ?? 0, 'motif jitter');
-  const ctx = resolveContextWith(opts.ctx, {
-    seed: opts.seed,
-    ornament: Math.min(1, Math.max(0, requestedJitter)),
-  });
+  // The dial is handed over as it was given: `jitter` is the sugar for the
+  // context's ornament dial, so it has to accept and reject exactly what the
+  // context does. Clamping here would make the sugar take a value its own
+  // desugared form refuses, which is a different option wearing the same name.
+  const ctx = resolveContextWith(opts.ctx, { seed: opts.seed, ornament: opts.jitter });
   const jitterProb = ctx.ornament ?? 0;
   const draw = ctx.part('motif');
   const tonic = pitchClass(opts.key.rootPc) + 60;
@@ -274,7 +289,7 @@ export function generateMotif(opts: MotifOptions): MotifCell {
     if (draw.prob(jitterProb, 'jitter', i)) {
       jitter = draw.prob(0.5, 'direction', i) ? 1 : -1;
     }
-    let pitch = stepDiatonic(tonic, (offsets[i] ?? 0) + jitter, opts.key);
+    let pitch = shiftByScaleDegrees(tonic, (offsets[i] ?? 0) + jitter, opts.key);
     const startBeat = i * beatsPerNote;
     if (opts.chord && isDownbeat(startBeat, barBeats)) {
       pitch = nearestChordTone(pitch, opts.chord);
@@ -401,8 +416,12 @@ function transformUnchecked(
         notes: notes.map((n) => ({
           ...n,
           // With a key, shift by scale degrees; without one, fall back to a
-          // chromatic shift of `degrees` semitones.
-          pitch: key ? stepDiatonic(n.pitch, degrees, key) : n.pitch + degrees,
+          // chromatic shift of `degrees` semitones. A pitch between two scale
+          // tones keeps its distance above the one below it, so the chromatic
+          // notes a motif is written with — a blues lick, a semitone neighbour —
+          // come through as themselves, and shifting by no degrees returns the
+          // cell it was given.
+          pitch: key ? shiftByScaleDegrees(n.pitch, degrees, key) : n.pitch + degrees,
         })),
       };
     }
@@ -455,13 +474,17 @@ function scaleTime(cell: MotifCell, factor: number): MotifCell {
 /**
  * Lay a motif across `bars` and snap it to a chord timeline.
  *
- * The cell is tiled back-to-back to fill the requested span; each note is then
- * pulled to the nearest chord tone of the segment sounding at its onset, so the
- * developed line spells the underlying harmony.
+ * The cell is tiled back-to-back to fill the requested span. Notes that carry
+ * structural weight — the head of each tile and every bar line — are pulled to
+ * the nearest chord tone of the segment sounding at that onset, so the
+ * developed line spells the underlying harmony. The notes between them are kept
+ * in the key as passing and neighbour tones, and two pitches that differ in the
+ * cell still differ in the development, so the development is still recognizably
+ * the motif rather than a chord arpeggiated over the cell's rhythm.
  *
  * @param cell The source motif.
  * @param timeline Chord segments to snap against.
- * @param key Key context (used to keep snapped pitches sensible).
+ * @param key Key context; the notes off the structural positions are kept in it.
  * @param bars Number of bars to fill.
  * @param ts Meter the bars are counted in; defaults to 4/4.
  * @returns The developed, harmony-aware cell.
@@ -472,6 +495,7 @@ function scaleTime(cell: MotifCell, factor: number): MotifCell {
  * const key = majorKey(0);
  * const timeline = chordTimelineFromChords([{ rootPc: 0, quality: 'maj', startBeat: 0 }], 8);
  * const developed = developMotif(generateMotif({ key, bars: 1 }), timeline, key, 2);
+ * developed.notes.map((n) => n.pitch); // [60, 62, 60, 60, 62, 60] — the C-D-C cell, twice
  * ```
  *
  * @category Composition
@@ -486,7 +510,8 @@ export function developMotif(
   assertPositiveInt(bars, 'development bars');
   assertNoteEvents(cell.notes, 'motif notes');
   const span = cellSpan(cell);
-  const totalBeats = bars * beatsPerBar(ts);
+  const barBeats = beatsPerBar(ts);
+  const totalBeats = bars * barBeats;
   const origin = cellOrigin(cell.notes);
   const out: MotifNote[] = [];
 
@@ -501,19 +526,28 @@ export function developMotif(
   assertGenerationBudget(tileCount * cell.notes.length, 'developed motif notes');
   for (let k = 0; k < tileCount; k += 1) {
     const offset = k * tileSpan;
+    // Placed pitch by cell pitch, so a tile cannot fold two of the cell's
+    // pitches onto one. It is per tile: each tile is the same cell again, and
+    // the same cell pitch under the same harmony wants the same answer.
+    const taken = new Map<number, number>();
+    let previous: number | undefined;
     for (const n of cell.notes) {
       const startBeat = offset + (n.startBeat - origin);
       if (startBeat >= totalBeats) {
         continue;
       }
       const chord = timeline.at(startBeat);
-      let pitch = n.pitch;
-      if (chord) {
-        const isMember = chordPitchClasses(chord).includes(pitchClass(pitch));
-        pitch = isMember ? pitch : nearestChordTone(pitch, chord);
-      } else {
-        pitch = nearestScaleTone(pitch, key);
-      }
+      // The head of the cell and the bar lines are where the ear reads the
+      // harmony; everything else is free to pass between them.
+      const structural = n.startBeat === origin || isDownbeat(startBeat, barBeats);
+      const chordTones = chord && structural ? chordPitchClasses(chord) : null;
+      const allows = chordTones
+        ? (candidate: number) => chordTones.includes(pitchClass(candidate))
+        : (candidate: number) => isScaleTone(candidate, key);
+      const direction = previous === undefined ? 0 : n.pitch - previous;
+      const pitch = developedPitch(n.pitch, allows, direction, taken);
+      taken.set(pitch, n.pitch);
+      previous = n.pitch;
       out.push({ pitch, startBeat, durationBeat: n.durationBeat });
     }
   }

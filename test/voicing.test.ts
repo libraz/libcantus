@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { BudgetExceededError } from '../src/core/errors/index.js';
 import type { Chord } from '../src/theory/chord/index.js';
 import { chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
 import { createsParallelOctave, createsParallelPerfect } from '../src/theory/counterpoint/index.js';
+import { checkPartWriting, spellVoicing } from '../src/theory/partwriting/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
 import {
   nextVoicing,
@@ -11,6 +13,7 @@ import {
   voiceLeadingCost,
   voiceProgression,
 } from '../src/theory/voicing/index.js';
+import { isFunctioningLeadingTone } from '../src/theory/voicing/tendency.js';
 
 /** Reduce a MIDI pitch to a pitch class. */
 function pc(pitch: number): number {
@@ -396,6 +399,19 @@ describe('nextVoicing', () => {
     expect(() => nextVoicing(current, chord, { maxSpacing: Number.NaN })).toThrow(/maxSpacing/);
     expect(() => nextVoicing(current, chord, { maxSpacing: -1 })).toThrow(/non-negative/);
   });
+
+  it('applies the voice-count budget to ranges read off the current voicing', () => {
+    // The interactive entry point: the voice count arrives inside `current`
+    // rather than in the options, and the search it asks for is the same size.
+    const chord = makeChord(0, 'maj');
+    const wide = Array.from({ length: 129 }, (_, index) => 40 + (index % 40));
+    const started = Date.now();
+    expect(() => nextVoicing(wide, chord)).toThrow(BudgetExceededError);
+    expect(Date.now() - started).toBeLessThan(1000);
+    // The same count written out as explicit ranges has always been rejected.
+    const ranges = wide.map((pitch) => ({ min: pitch - 12, max: pitch + 12 }));
+    expect(() => voiceChord(chord, { ranges })).toThrow(BudgetExceededError);
+  });
 });
 
 describe('tendency-tone resolution', () => {
@@ -570,4 +586,82 @@ describe('voiceProgression exact output', () => {
       expect(voiceChord(chords[0] ?? makeChord(0, 'maj'), opts)).toEqual(expected[0]);
     });
   }
+});
+
+describe('the leading tone the voicer and the checker share', () => {
+  const KEY = majorKey(0);
+  const TONIC = makeChord(0, 'maj');
+  /** C3 G3 C4 E4: it holds the tonic, drops the leading tone, and resolves nothing. */
+  const TONIC_VOICING = [48, 55, 60, 64];
+
+  // Each voicing sounds the key's leading tone in one voice, and every voice
+  // moves somewhere other than a semitone up.
+  const cases: { name: string; chord: Chord; voicing: number[] }[] = [
+    { name: 'V', chord: makeChord(7, 'maj'), voicing: [43, 59, 62, 67] },
+    { name: 'V7', chord: makeChord(7, 'dom7'), voicing: [43, 59, 62, 65] },
+    { name: 'viio6', chord: makeChord(11, 'dim'), voicing: [50, 62, 65, 71] },
+    { name: 'viim7b5', chord: makeChord(11, 'm7b5'), voicing: [50, 62, 65, 71] },
+    { name: 'iii', chord: makeChord(4, 'min'), voicing: [52, 59, 64, 67] },
+    { name: 'Imaj7', chord: makeChord(0, 'maj7'), voicing: [48, 55, 64, 71] },
+    {
+      name: 'a minor triad on the seventh degree',
+      chord: makeChord(11, 'min'),
+      voicing: [50, 62, 66, 71],
+    },
+  ];
+
+  for (const { name, chord, voicing } of cases) {
+    it(`treats ${name} the same way in the search and in the check`, () => {
+      const functioning = isFunctioningLeadingTone(chord, KEY);
+      const chords = [chord, TONIC];
+      const spelled = [voicing, TONIC_VOICING].map((pitches, index) =>
+        spellVoicing(pitches, chords[index] ?? TONIC, KEY),
+      );
+      const unresolved = checkPartWriting(spelled, chords, KEY).some(
+        (violation) => violation.kind === 'unresolvedLeadingTone',
+      );
+      expect(unresolved, `checker on ${name}`).toBe(functioning);
+      // The key only ever reaches the search through the same predicate, so a
+      // chord the checker leaves alone must voice identically with and without
+      // one.
+      if (!functioning) {
+        expect(voiceProgression(chords, { key: KEY }), `search on ${name}`).toEqual(
+          voiceProgression(chords),
+        );
+      }
+    });
+  }
+
+  it('does not report its own output as faulty', () => {
+    // Imaj7 sounds the key's leading tone as its own seventh. An ungated rule
+    // asks that voice to rise while the seventh rule asks it to fall, and the
+    // library then fails the voicing it just wrote.
+    const chords = [makeChord(0, 'maj7'), makeChord(5, 'maj')];
+    const voiced = voiceProgression(chords, { key: KEY });
+    expect(voiced).toEqual(voiceProgression(chords));
+    const spelled = voiced.map((pitches, index) =>
+      spellVoicing(pitches, chords[index] ?? TONIC, KEY),
+    );
+    expect(checkPartWriting(spelled, chords, KEY)).toEqual([]);
+  });
+
+  it('charges the seventh of Imaj7 once, as a seventh', () => {
+    const chords = [makeChord(0, 'maj7'), makeChord(5, 'maj')];
+    const spelled = [
+      [48, 55, 64, 71],
+      [53, 57, 60, 72],
+    ].map((pitches, index) => spellVoicing(pitches, chords[index] ?? TONIC, KEY));
+    expect(checkPartWriting(spelled, chords, KEY).map((violation) => violation.kind)).toEqual([
+      'unresolvedSeventh',
+    ]);
+  });
+
+  it('still resolves the dominant family', () => {
+    for (const chord of [makeChord(7, 'dom7'), makeChord(11, 'dim')]) {
+      const [prev, cur] = voiceProgression([chord, TONIC], { key: KEY });
+      const voice = (prev ?? []).findIndex((pitch) => pc(pitch) === 11);
+      expect(voice).toBeGreaterThanOrEqual(0);
+      expect((cur ?? [])[voice] ?? 0).toBe(((prev ?? [])[voice] ?? 0) + 1);
+    }
+  });
 });

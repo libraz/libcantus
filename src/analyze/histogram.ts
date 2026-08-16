@@ -11,8 +11,63 @@ import type { MeterLike } from '../core/meter/index.js';
 import { metricWeight } from '../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../core/pitch/index.js';
 import type { NoteEvent } from '../core/types.js';
+import { assertGenerationBudget } from '../core/validation/index.js';
 
 const EPS = 1e-9;
+
+/** An equal-slot grid: slot `i` covers `[origin + i * slotBeats, + slotBeats)`. */
+export type SlotGrid = {
+  /** First beat of slot 0. */
+  origin: number;
+  /** Length of one slot in beats. */
+  slotBeats: number;
+};
+
+/**
+ * Sort notes into the slots of an equal grid they overlap.
+ *
+ * A per-slot histogram asks one question once per slot, so the notes are
+ * grouped once rather than rescanned for every slot: scanning them per slot
+ * costs the note count times the slot count, and at a fixed note density the
+ * slot count grows with the piece, so the total grows with its square. Both the
+ * chord search and the key search cut a piece into slots, and they group their
+ * notes here so neither can drift back to rescanning.
+ *
+ * Notes are kept by identity, so a caller may deduplicate a note spanning
+ * several slots with a `Set`.
+ *
+ * @param notes The notes to group; the parts of one falling outside the grid
+ *   are dropped.
+ * @param grid The grid to group them on.
+ * @param slotCount How many slots the grid holds.
+ * @param opts `name` labels the budget error, `budget` bounds the total number
+ *   of note-to-slot memberships.
+ * @returns One array per slot, each holding the notes overlapping that slot in
+ *   input order.
+ * @throws If the memberships exceed `budget`.
+ */
+export function bucketNotesBySlot(
+  notes: readonly NoteEvent[],
+  grid: SlotGrid,
+  slotCount: number,
+  opts: { name: string; budget?: number },
+): NoteEvent[][] {
+  const buckets: NoteEvent[][] = Array.from({ length: slotCount }, () => []);
+  let memberships = 0;
+  for (const note of notes) {
+    const first = Math.max(0, Math.floor((note.startBeat - grid.origin) / grid.slotBeats));
+    const lastExclusive = Math.min(
+      slotCount,
+      Math.ceil((note.startBeat + note.durationBeat - grid.origin) / grid.slotBeats),
+    );
+    memberships += Math.max(0, lastExclusive - first);
+    assertGenerationBudget(memberships, opts.name, opts.budget);
+    for (let slot = first; slot < lastExclusive; slot += 1) {
+      buckets[slot]?.push(note);
+    }
+  }
+  return buckets;
+}
 
 /** A window's pitch-class weight histogram and the summaries drawn from it. */
 export type WindowWeights = {

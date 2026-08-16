@@ -15,7 +15,6 @@ import {
   metricWeight,
   type TimeSignature,
 } from '../../core/meter/index.js';
-import { createRng } from '../../core/random/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import {
   assertGenerationBudget,
@@ -25,6 +24,7 @@ import {
   assertTimeSignature,
   dropSilentNotes,
 } from '../../core/validation/index.js';
+import { type GenerationContextInput, resolveContextWith } from '../context/index.js';
 
 /**
  * Options controlling {@link humanize}.
@@ -63,15 +63,31 @@ export type HumanizeOptions = {
    */
   baseVelocity?: number;
   /**
-   * Seed for the deterministic PRNG.
+   * Seed for the deterministic PRNG. Sugar for `ctx: { seed }`.
    *
    * @defaultValue 0
    */
   seed?: number;
+  /**
+   * The generation context, so one project seed covers this call as well as the
+   * generators that wrote the notes.
+   */
+  ctx?: GenerationContextInput;
+  /**
+   * The name this call draws under. Humanizing two parts from one context with
+   * the same name gives notes at the same position and pitch the same jitter,
+   * which is what a doubled line does not want; naming each part keeps them
+   * independent.
+   *
+   * @defaultValue `'humanize'`
+   */
+  part?: string;
 };
 
 /** Default time signature for {@link humanize} when none is given. */
 const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
+/** The namespace {@link humanize} draws under when the caller names none. */
+const DEFAULT_PART = 'humanize';
 /**
  * Grid resolution assumed by {@link extractGrooveTemplate}. A sixteenth-note
  * grid is where the deviations a template records are audible.
@@ -92,13 +108,19 @@ const MAX_VELOCITY = 127;
  * average than events on weak ones.
  *
  * Each returned event is a copy; `startBeat` is jittered within
- * `[-timing, +timing]` beats and clamped to be non-negative, and `velocity`
- * is the event's own velocity (or `baseVelocity` if it has none) plus an
+ * `[-timing, +timing]` beats — not floored at 0, because a pickup sounds before
+ * the downbeat and flooring it there would play two upbeats as one — and
+ * `velocity` is the event's own velocity (or `baseVelocity` if it has none) plus an
  * accent term scaled by the event's metric weight plus a jitter within
  * `[-velocity, +velocity]`, clamped to `[1, 127]` and rounded. The metric
  * weight is computed from each event's original (pre-jitter) `startBeat`.
  * `pitch` and `durationBeat` pass through unchanged, and the output keeps the
  * input order.
+ *
+ * The jitter is drawn from the generation context, addressed by the event's own
+ * onset and pitch rather than by its position in the array: an event added or
+ * removed leaves every other event's jitter exactly where it was, and a part
+ * humanized under its own name is independent of the others sharing the seed.
  *
  * @param events The events to humanize.
  * @param opts Humanization options.
@@ -108,6 +130,7 @@ const MAX_VELOCITY = 127;
  * import { humanize } from '@libraz/libcantus';
  * const events = [{ pitch: 60, startBeat: 0, durationBeat: 1, velocity: 80 }];
  * humanize(events, { seed: 1, timing: 0.03 }); // copies with jittered timing and accented velocity
+ * humanize(events, { ctx: { seed: 42 }, part: 'lead' }); // under a project context
  * ```
  * Notes with a zero or negative duration never sound and are dropped, so the
  * result can be shorter than the input.
@@ -130,15 +153,27 @@ export function humanize(events: readonly NoteEvent[], opts: HumanizeOptions = {
   assertRange(velocityJitter, 0, 127, 'humanize velocity jitter');
   assertRange(accent, 0, 127, 'humanize accent');
   assertRange(baseVelocity, 0, 127, 'humanize base velocity');
-  const rng = createRng(opts.seed ?? 0);
+  const ctx = resolveContextWith(opts.ctx, { seed: opts.seed });
+  const draw = ctx.part(opts.part ?? DEFAULT_PART);
 
   return sounding.map((event) => {
-    const timingOffset = rng.float(-timing, timing);
-    const startBeat = Math.max(0, event.startBeat + timingOffset);
+    // Addressed by the event rather than by how many events came before it, so
+    // inserting a note leaves every other note's jitter where it was.
+    const timingOffset = draw.float(-timing, timing, 'timing', event.startBeat, event.pitch);
+    // Not clamped at 0: beat 0 is the first downbeat, so a pickup is written
+    // before it, and flooring the jitter there would push every upbeat onto the
+    // downbeat — two notes the input told apart, played as one.
+    const startBeat = event.startBeat + timingOffset;
 
     const weight = metricWeight(event.startBeat, ts);
     const accentBoost = (weight / MAX_METRIC_WEIGHT) * accent;
-    const velocityOffset = rng.float(-velocityJitter, velocityJitter);
+    const velocityOffset = draw.float(
+      -velocityJitter,
+      velocityJitter,
+      'velocity',
+      event.startBeat,
+      event.pitch,
+    );
     const rawVelocity = (event.velocity ?? baseVelocity) + accentBoost + velocityOffset;
     const velocity = Math.min(MAX_VELOCITY, Math.max(MIN_VELOCITY, Math.round(rawVelocity)));
 
@@ -354,7 +389,10 @@ export function applyGrooveTemplate(
       template.slotsPerBar,
     );
     const slot = template.slots[slotIndex];
-    const startBeat = Math.max(0, quantizedBeat + (slot?.timingOffset ?? 0));
+    // A slot that lays back or pushes ahead of the beat moves the note it
+    // lands on, downbeat included. Clamping at 0 would take the pushed feel off
+    // the first note only, and would flatten a pickup onto the downbeat.
+    const startBeat = quantizedBeat + (slot?.timingOffset ?? 0);
     const velocity =
       slot && slot.velocity !== null && slot.velocity !== undefined
         ? Math.round(slot.velocity)

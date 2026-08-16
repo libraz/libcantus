@@ -43,8 +43,8 @@ export type KeyProfileName = 'krumhansl' | 'temperley' | 'flat';
  * Source: Krumhansl, Carol L. *Cognitive Foundations of Musical Pitch*, Oxford
  * Psychology Series No. 17, Oxford University Press, 1990, p. 37 (the averaged
  * probe-tone ratings of Krumhansl & Kessler 1982); the key-finding algorithm
- * itself is Chapter 4. The same digits are published as the default weight set
- * of the Humdrum `keycor` tool and as `KrumhanslSchmuckler` in music21.
+ * itself is Chapter 4. These are the digits key-finding tools carry as the
+ * Krumhansl–Schmuckler weight set.
  *
  * Each entry is a mean rating on a 1..7 scale, so the tonic (6.35 major, 6.33
  * minor) and the dominant (5.19 major) dominate, and the raised submediant of
@@ -61,8 +61,8 @@ export const KRUMHANSL_KESSLER_PROFILE: KeyProfilePair = {
  * textbook corpus.
  *
  * Source: Temperley, David. *Music and Probability*, MIT Press, 2007, p. 85.
- * The same digits are published under `--temperley` in the Humdrum `keycor`
- * tool and as `TemperleyKostkaPayne` in music21.
+ * These are the digits key-finding tools carry as the Temperley–Kostka–Payne
+ * weight set.
  *
  * These are presence proportions rather than listener ratings, so chromatic
  * degrees fall much closer to zero than in {@link KRUMHANSL_KESSLER_PROFILE};
@@ -148,9 +148,11 @@ function assertProfileVector(vector: readonly number[], name: string): void {
  *   is not 12 entries long, or an entry is not a finite number.
  * @example
  * ```ts
- * import { resolveKeyProfile } from './profiles.js';
- * resolveKeyProfile('krumhansl').major[0]; // 6.35
- * resolveKeyProfile(undefined) === resolveKeyProfile('krumhansl'); // true
+ * import { detectKey } from '@libraz/libcantus';
+ * const pitches = [60, 62, 64, 65, 67, 69, 71, 60];
+ * // The named default, spelled out and left out, rank the same way.
+ * detectKey(pitches, { profile: 'krumhansl' })[0]?.score ===
+ *   detectKey(pitches)[0]?.score; // true
  * ```
  */
 export function resolveKeyProfile(
@@ -225,9 +227,11 @@ function normalizedDot(dist: readonly number[], vector: readonly number[], tonic
  * @returns A finite score in [-1, 1]; never NaN.
  * @example
  * ```ts
- * import { KRUMHANSL_KESSLER_PROFILE, profileScore } from './profiles.js';
- * const dist = [4, 0, 1, 0, 2, 1, 0, 3, 0, 1, 0, 1];
- * profileScore(dist, KRUMHANSL_KESSLER_PROFILE.major, 0); // ~0.87, C major
+ * import { detectKey } from '@libraz/libcantus';
+ * // Weight on the tonic, the fifth and the third, spread as a major key
+ * // expects it: the score is the correlation this returns.
+ * const best = detectKey([60, 60, 60, 60, 64, 64, 64, 67, 67, 65, 69, 62, 71])[0];
+ * best?.score !== undefined && best.score > 0.8; // true
  * ```
  */
 export function profileScore(

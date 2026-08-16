@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { generateBassLine } from '../src/generate/bass/index.js';
 import { BASS_LICKS, isLickMaterial, placeLicks } from '../src/generate/bass/licks.js';
-import { GENRES, type Vocabulary } from '../src/generate/vocabulary/index.js';
+import { GENRES, selectVocabulary, type Vocabulary } from '../src/generate/vocabulary/index.js';
 import { makeChord } from '../src/theory/chord/index.js';
 import { majorKey, minorKey } from '../src/theory/scale/index.js';
 
@@ -82,6 +82,73 @@ describe('placeLicks', () => {
     expect(pcs.has(7)).toBe(false);
   });
 
+  it('sounds the octave degree an octave above the root it answers', () => {
+    // The two figures whose whole character is the octave: the soul push and
+    // the funk sixteenth pop. Degree 8 is written as the octave above degree 1,
+    // so it has to sound as one — a bass line that answers the root with the
+    // root is not the figure the dictionary holds.
+    const cases = [
+      { genre: 'soul', bpm: 96, rootStep: 0, octaveStep: 6 },
+      { genre: 'funk', bpm: 100, rootStep: 0, octaveStep: 3 },
+    ] as const;
+    for (const { genre, bpm, rootStep, octaveStep } of cases) {
+      const notes = placeLicks([FIRST_SPAN], KEY, { genre, seed: 3, density: 1, bpm });
+      const at = (step: number) => notes.find((note) => Math.abs(note.startBeat - step / 4) < 1e-9);
+      const root = at(rootStep);
+      const octave = at(octaveStep);
+      expect(root, `${genre} root`).toBeDefined();
+      expect(octave, `${genre} octave`).toBeDefined();
+      expect(octave?.pitch).toBe((root?.pitch ?? 0) + 12);
+    }
+  });
+
+  it('sounds every octave degree an octave above the root of the same figure', () => {
+    // Degree 8 is written as the octave above degree 1, so wherever the
+    // dictionary uses it the two have to stand exactly twelve semitones apart —
+    // over any chord, in any key, in any register. Folding each note into one
+    // octave band spelled the octave as the root the figure had just played and
+    // turned the soul push and the funk pop into repeated notes.
+    const SIXTEENTH = 0.25;
+    const figures = BASS_LICKS.filter((lick) =>
+      lick.material.notes.some((note) => note.degree === 8),
+    );
+    expect(figures.length).toBeGreaterThan(0);
+
+    for (const lick of figures) {
+      const [slowest, fastest] = lick.tempoRange ?? [100, 100];
+      const bpm = Math.round((slowest + fastest) / 2);
+      const qualities = lick.fitsOver ?? ['maj7', 'min7'];
+      for (const quality of qualities) {
+        for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+          for (const key of [majorKey(0), minorKey(9)]) {
+            for (const octave of [1, 2, 3]) {
+              const notes = placeLicks(
+                [{ startBeat: 0, endBeat: 4, chord: makeChord(rootPc, quality) }],
+                key,
+                { genre: lick.genre, density: 1, difficulty: 5, seed: 2, bpm, octave },
+              );
+              const soundedAt = (step: number) =>
+                notes
+                  .filter((note) => Math.abs(note.startBeat - step * SIXTEENTH) < 1e-9)
+                  .map((note) => note.pitch);
+              const pitchesOf = (degree: number) =>
+                new Set(
+                  lick.material.notes
+                    .filter((note) => note.degree === degree)
+                    .flatMap((note) => soundedAt(note.step)),
+                );
+              const where = `${lick.id} ${quality}@${rootPc} key ${key.rootPc} octave ${octave}`;
+              const roots = [...pitchesOf(1)];
+              const octaves = [...pitchesOf(8)];
+              expect(roots, where).toHaveLength(1);
+              expect(octaves, where).toEqual([(roots[0] ?? 0) + 12]);
+            }
+          }
+        }
+      }
+    }
+  });
+
   it('honours the chord qualities a figure states it fits over', () => {
     // The walk-down states major-family chords only, so a bar of m7b5 cannot
     // take it; the line still sounds, on its root.
@@ -123,6 +190,50 @@ describe('placeLicks', () => {
     expect(busy.length).toBeGreaterThan(sparse.length);
   });
 
+  it('plays every bar of a chord that lasts longer than a figure', () => {
+    // A ballad or a modal vamp holds one chord for four bars. The figure is a
+    // bar long, so the rest of the segment was one held note before: the line
+    // stopped and the note it stopped on was written as a twelve-beat ornament.
+    const vamp = [{ startBeat: 0, endBeat: 16, chord: makeChord(0, 'maj7') }];
+    for (const genre of ['motown', 'soul', 'jazz', 'country'] as const) {
+      const notes = placeLicks(vamp, KEY, { genre, seed: 3, density: 1, bpm: 100 });
+      for (let bar = 0; bar < 4; bar += 1) {
+        const inBar = notes.filter(
+          (note) => note.startBeat >= bar * 4 && note.startBeat < (bar + 1) * 4,
+        );
+        expect(inBar.length, `${genre} bar ${bar}`).toBeGreaterThan(0);
+      }
+      // No note outlives the figure it belongs to, or the bar it was written in.
+      for (const note of notes) {
+        expect(note.durationBeat, `${genre} @${note.startBeat}`).toBeLessThanOrEqual(4);
+      }
+      // And the line stays in the register it was asked for rather than
+      // climbing an octave per bar as the figures answer themselves.
+      const pitches = notes.map((note) => note.pitch);
+      expect(Math.max(...pitches) - Math.min(...pitches)).toBeLessThanOrEqual(24);
+    }
+  });
+
+  it('says the same thing whether the documented default is written out or left out', () => {
+    for (const genre of ['motown', 'blues', 'gospel'] as const) {
+      const omitted = placeLicks(TIMELINE, KEY, { genre, seed: 4, bpm: 100 });
+      const explicit = placeLicks(TIMELINE, KEY, { genre, seed: 4, bpm: 100, density: 0.6 });
+      expect(explicit, genre).toEqual(omitted);
+    }
+  });
+
+  it('declares the meter its figures are written in', () => {
+    // "Absent means any" is only true of the data if an entry written for a
+    // four-beat bar says so; otherwise a waltz is handed a 4/4 figure.
+    for (const lick of BASS_LICKS) {
+      expect(lick.ts, lick.id).toEqual({ numerator: 4, denominator: 4 });
+    }
+    expect(selectVocabulary(BASS_LICKS, { ts: { numerator: 3, denominator: 4 } })).toEqual([]);
+    expect(selectVocabulary(BASS_LICKS, { ts: { numerator: 4, denominator: 4 } }).length).toBe(
+      BASS_LICKS.length,
+    );
+  });
+
   it('leads into the next chord by step where the figure leaves room', () => {
     const notes = placeLicks(TIMELINE, KEY, { genre: 'jazz', seed: 1, density: 0, bpm: 140 });
     // With no figures taken every segment is a root, so the connecting tones are
@@ -135,7 +246,10 @@ describe('placeLicks', () => {
       const notes = placeLicks(TIMELINE, KEY, { genre: 'gospel', seed: 6, bpm: 84, octave });
       for (const note of notes) {
         expect(note.pitch).toBeGreaterThanOrEqual(octave * 12 + 12 - 12);
-        expect(note.pitch).toBeLessThanOrEqual(octave * 12 + 12 + 12);
+        // Roots land in the octave band the caller asked for; a figure is then
+        // written upward from its root, so the band has to be wide enough for
+        // the range the figure was written in — up to its own octave.
+        expect(note.pitch).toBeLessThanOrEqual(octave * 12 + 12 + 24);
       }
     }
   });
@@ -210,10 +324,23 @@ describe('a caller-supplied lick dictionary', () => {
       bpm: 120,
       ctx: { seed: 1, bpm: 120, vocabulary: [replacement] },
     });
-    // Two notes, root and fifth: the caller's figure, not the four-note
-    // built-in it took the name of.
-    expect(notes).toHaveLength(2);
-    expect(notes.map((note) => note.pitch % 12)).toEqual([0, 7]);
+    // Root and fifth: the caller's figure, not the four-note built-in it took
+    // the name of. At a full dial the fifth is also anticipated, which is the
+    // same note a sixteenth earlier rather than a note the built-in supplied.
+    expect(notes.map((note) => note.pitch % 12)).toEqual([0, 7, 7]);
+    // Everything above the figure's own notes is the dial adding to it, so a
+    // quieter setting is a subset of this one rather than a different figure.
+    const quieter = placeLicks([FIRST_SPAN], KEY, {
+      genre: 'country',
+      density: 0.8,
+      seed: 1,
+      bpm: 120,
+      ctx: { seed: 1, bpm: 120, vocabulary: [replacement] },
+    });
+    const busier = new Set(notes.map((note) => note.startBeat));
+    for (const note of quieter) {
+      expect(busier.has(note.startBeat), `lost ${note.startBeat}`).toBe(true);
+    }
   });
 
   it('refuses an entry whose difficulty is off the scale', () => {

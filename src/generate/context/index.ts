@@ -214,6 +214,23 @@ export function resolveContext(input?: GenerationContextInput): ResolvedContext 
 }
 
 /**
+ * Fill a context's seed in from the generator's own option where the context
+ * named none.
+ *
+ * @param input The context or bare seed, if any.
+ * @param seed The generator's own seed option, if any.
+ * @returns The context to resolve, or undefined when neither named anything.
+ */
+function withSeed(
+  input: GenerationContextInput | undefined,
+  seed: number | undefined,
+): GenerationContextInput | undefined {
+  if (typeof input === 'number' || seed === undefined) return input;
+  if (input === undefined) return { seed };
+  return { ...input, seed: input.seed ?? seed };
+}
+
+/**
  * Merge a generator's own options into a context.
  *
  * Every generator kept a `seed` of its own, the drums a `bpm`, and the drums
@@ -230,9 +247,11 @@ export function resolveContextWith(
   input: GenerationContextInput | undefined,
   sugar: { seed?: number; bpm?: number; rhythmic?: number; ornament?: number },
 ): ResolvedContext {
-  const base = resolveContext(
-    input ?? (sugar.seed === undefined ? undefined : { seed: sugar.seed }),
-  );
+  // The seed resolves like every other field: what the context named, then the
+  // sugar, then the default. Reading it off the context only when no context was
+  // given at all would drop `seed` the moment the caller passed a `ctx` carrying
+  // nothing but a tempo.
+  const base = resolveContext(withSeed(input, sugar.seed));
   const bpm =
     base.bpm ??
     (sugar.bpm === undefined ? undefined : assertRange(sugar.bpm, Number.MIN_VALUE, 1000, 'bpm'));

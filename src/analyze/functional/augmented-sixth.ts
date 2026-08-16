@@ -277,6 +277,15 @@ export function augmentedSixthKind(chord: Chord, key: KeyScale): AugmentedSixthK
  * @param bassPc The pitch class sounding in the bass.
  * @param key The prevailing key.
  * @returns The augmented-sixth chord, or null.
+ * @see {@link augmentedSixthKind} to read a chord that already carries its
+ *   spelling.
+ * @example
+ * ```ts
+ * import { augmentedSixthFromPitchClasses, majorKey } from '@libraz/libcantus';
+ * // Ab C Eb Gb sounding over Ab in C: the German sixth, spelled with its F#.
+ * augmentedSixthFromPitchClasses([8, 0, 3, 6], 8, majorKey(0))?.quality; // 'dom7'
+ * ```
+ * @category Functional Harmony
  */
 export function augmentedSixthFromPitchClasses(
   pcs: readonly number[],

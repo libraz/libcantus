@@ -481,6 +481,14 @@ function structuralSpec(text: string): ChordSpec | undefined {
     draft.seventh = 'maj7';
   }
   while (at < core.length) {
+    // Between two figures a '/' separates them, as it already does inside
+    // brackets: the added sixth and ninth of a `6/9` are written that way, and
+    // so are the tensions a chart writes after one. A leading or trailing slash
+    // separates nothing, so it is left to fail as the stray character it is.
+    if (core[at] === '/' && at > 0 && at + 1 < core.length) {
+      at += 1;
+      continue;
+    }
     const next = applyFigure(draft, core, at);
     if (next === undefined || next === at) {
       return undefined;
@@ -638,9 +646,11 @@ function chordAfterRoot(root: Note, rest: string, system: NoteNameSystem): Chord
  *
  * The quality suffix is read structurally when no name covers it, so a chart's
  * bracketed tensions parse as readily as the names do: `Cmaj7(#11)`,
- * `C7(b9,#11)`, `C7(13)`, `Csus4(add9)`, `C-Δ9`. Such a chord carries the tones
- * it names and reports the nearest quality name (see {@link chordSpecQuality});
- * read {@link chordSpecOf} for its structure.
+ * `C7(b9,#11)`, `C7(13)`, `Csus4(add9)`, `C-Δ9`, `C6/9(#11)`. A `/` between two
+ * figures separates them as it does inside brackets, which is what the sixth
+ * and ninth of a `6/9` are. Such a chord carries the tones it names and reports
+ * the nearest quality name (see {@link chordSpecQuality}); read
+ * {@link chordSpecOf} for its structure.
  *
  * The parsed chord carries the root/bass spellings as enharmonic hints
  * (`rootSpelling`/`bassSpelling`) so {@link formatChordSymbol} can reproduce
@@ -815,15 +825,24 @@ const BASE_SUFFIX: Record<ChordBase, string> = {
   power: '5',
 };
 
-/** How each seventh is written after a base that is not itself major. */
-const SEVENTH_SUFFIX: Record<ChordSeventh, string> = { maj7: 'Maj7', min7: '7', dim7: 'dim7' };
+/** How each seventh is written where it opens a suffix of its own. */
+const SEVENTH_SUFFIX: Record<ChordSeventh, string> = { maj7: 'maj7', min7: '7', dim7: 'dim7' };
+
+/**
+ * The major seventh written after a base letter, which has taken the word's
+ * place: `mMaj7` and `augMaj7` capitalize where a bare `maj7` cannot, since the
+ * letter before it would otherwise read as the start of the word.
+ */
+const MAJOR_SEVENTH_AFTER_BASE = 'Maj7';
 
 /**
  * A core no quality name covers, written from its parts.
  *
  * A suspension carries its seventh in front of it the way a chart writes
  * `7sus4`, and a major base writes the seventh alone, since `maj` says nothing
- * a bare root does not.
+ * a bare root does not. Both of those put the seventh at the front of the
+ * suffix, where it is the lowercase word a chart writes — `maj7sus4`, not a
+ * capitalized form that reads as a base letter.
  */
 function builtCoreSuffix(spec: ChordSpec): string {
   const base = BASE_SUFFIX[spec.base];
@@ -835,9 +854,9 @@ function builtCoreSuffix(spec: ChordSpec): string {
     return `${seventh}${base}`;
   }
   if (spec.base === 'maj') {
-    return seventh === 'Maj7' ? 'maj7' : seventh;
+    return seventh;
   }
-  return `${base}${seventh}`;
+  return `${base}${spec.seventh === 'maj7' ? MAJOR_SEVENTH_AFTER_BASE : seventh}`;
 }
 
 /**
@@ -905,6 +924,9 @@ export type ChordSymbolOptions = NoteNameOptions & {
  * The inverse of {@link parseChordSymbol} in every notation system: each
  * quality maps to one canonical suffix spelling, the root and bass are written
  * in `system`, and a slash bass is appended only when it differs from the root.
+ * Every symbol written here reads back through {@link parseChordSymbol} as the
+ * same root, sounding bass and tones — whatever combination of tensions the
+ * chord carries, and whether or not a quality name covers it.
  * When the chord carries `rootSpelling`/`bassSpelling` hints (as chords from
  * {@link parseChordSymbol} do) and no explicit `flats` preference is given, the
  * hints are reused so flat symbols round-trip unchanged.

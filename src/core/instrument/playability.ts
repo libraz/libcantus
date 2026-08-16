@@ -5,6 +5,7 @@ import {
   fingeringsFor,
   type InstrumentProfile,
   type Limb,
+  reachOf,
   type StringFingering,
 } from './profile.js';
 
@@ -483,17 +484,6 @@ function placeOnKit(state: Analysis, profile: InstrumentProfile & { kind: 'percu
       checkPolyphony(state, profile, group);
     }
   }
-}
-
-/** The limbs a kit can strike a voice with, empty when it has no such voice. */
-function reachOf(
-  profile: InstrumentProfile & { kind: 'percussion' },
-  pitch: number | undefined,
-): readonly Limb[] {
-  if (pitch === undefined) {
-    return [];
-  }
-  return (profile.reach[pitch] ?? []).filter((limb) => profile.limbs.includes(limb));
 }
 
 /** Layer 3: one limb cannot strike twice that close together. */
