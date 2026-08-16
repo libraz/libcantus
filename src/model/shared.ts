@@ -1,9 +1,34 @@
+import { InvalidInputError } from '../core/errors/index.js';
 import type { TimeSignature } from '../core/meter/index.js';
 import { midiToNote, pitchClassOf as mod12, type Note as NoteData } from '../core/pitch/index.js';
 import type { NoteEvent } from '../core/types.js';
 import { assertTimeSignature } from '../core/validation/index.js';
 
 export { pitchClassOf as mod12 } from '../core/pitch/index.js';
+
+/**
+ * Refuse anything but a key where a method takes the key first.
+ *
+ * These methods read a key and then their options, so an options bag passed
+ * on its own is taken for the key. Nothing notices until a `scale` is read off
+ * it several calls later, and the error names a field of a key the caller
+ * never wrote — `modeMask12 must be finite; received undefined` for an object
+ * whose only property is `alternatives`. The shape is checked here instead,
+ * where the mistake is still the caller's own argument.
+ *
+ * A key is recognised by carrying a scale rather than by its type, the way
+ * every other boundary in the library reads one, so a `Key` built by a second
+ * copy of the module passes.
+ */
+export function assertKeyArgument(value: unknown, name: string): void {
+  if (value === undefined || (typeof value === 'object' && value !== null && 'scale' in value)) {
+    return;
+  }
+  const received = typeof value === 'object' && value !== null ? 'an object' : `a ${typeof value}`;
+  throw new InvalidInputError(
+    `${name} must be a Key; received ${received}. A method that also takes options takes them after the key, not in its place`,
+  );
+}
 
 /** Spell a bare pitch class as an octave-less note with a sharp/flat preference. */
 export function spellPitchClassBare(pc: number, spelling: 'sharp' | 'flat'): NoteData {

@@ -85,7 +85,7 @@ import {
 import type { Key } from './key.js';
 import { Note } from './note.js';
 import { Progression } from './progression.js';
-import { mod12 } from './shared.js';
+import { assertKeyArgument, mod12 } from './shared.js';
 
 /** Whether a spelling hint still names the pitch class it is attached to. */
 function hintMatches(hint: PitchSpelling | undefined, pc: number | undefined): boolean {
@@ -1156,6 +1156,7 @@ export class Chord {
 
   /** Resolve the key for an analysis method: explicit first, then carried. */
   #resolveKey(key?: Key): Key {
+    assertKeyArgument(key, 'chord key');
     const resolved = key ?? this.#key;
     if (resolved === undefined) {
       throw new InvalidInputError(

@@ -19,6 +19,7 @@ import type { Chord } from './chord.js';
 import { Chord as ChordClass } from './chord.js';
 import type { Key, KeyData } from './key.js';
 import { Key as KeyClass } from './key.js';
+import { assertKeyArgument } from './shared.js';
 import { Timeline } from './timeline.js';
 
 /**
@@ -670,6 +671,7 @@ export class Progression {
 
   /** Resolve the key for an analysis method: explicit first, then carried. */
   #resolveKey(key?: Key): Key {
+    assertKeyArgument(key, 'progression key');
     const resolved = key ?? this.#key;
     if (resolved === undefined) {
       throw new InvalidInputError(

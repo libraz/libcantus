@@ -1376,3 +1376,31 @@ describe('Progression and Key closure over the functional core', () => {
     expect(key.degreeOf(60)).toBe(1);
   });
 });
+
+describe('a key argument refuses the options that belong after it', () => {
+  // Every method here reads a key first and its options second, so an options
+  // bag passed on its own used to be taken for the key and surface several
+  // calls later as a complaint about a key field the caller never wrote.
+  const chord = Chord.parse('G7');
+  const progression = new Progression(
+    [Chord.parse('C'), Chord.parse('G7'), Chord.parse('C')],
+    Key.major('C'),
+  );
+
+  it.each([
+    ['Chord.roman', () => chord.roman({ applied: true } as unknown as Key)],
+    ['Chord.analyze', () => chord.analyze({ alternatives: true } as unknown as Key)],
+    ['Progression.roman', () => progression.roman({ applied: true } as unknown as Key)],
+    ['Progression.analyze', () => progression.analyze({ alternatives: true } as unknown as Key)],
+    ['Progression.cadences', () => progression.cadences({ alternatives: true } as unknown as Key)],
+  ])('%s names the mistake instead of failing inside the analysis', (_name, call) => {
+    expect(call).toThrow(InvalidInputError);
+    expect(call).toThrow(/must be a Key; received an object/);
+  });
+
+  it('still takes a key, the carried key, and a key with options', () => {
+    expect(chord.roman(Key.major('C'))).toBe('V7');
+    expect(progression.roman()).toEqual(['I', 'V7', 'I']);
+    expect(progression.cadences(Key.major('C'), { alternatives: true }).length).toBe(2);
+  });
+});
