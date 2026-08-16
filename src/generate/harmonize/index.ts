@@ -17,9 +17,11 @@ import type { HarmonyRole } from '../../theory/harmony/index.js';
 import { roleOf } from '../../theory/harmony/index.js';
 import {
   isScaleTone,
+  type KeyLike,
   majorKey,
   minorKey,
   scaleTonesInDegreeOrder,
+  toKeyScale,
 } from '../../theory/scale/index.js';
 import { type GenerationContextInput, resolveContext } from '../context/index.js';
 import type { ChordSpan } from '../progression/index.js';
@@ -76,11 +78,12 @@ export type HarmonizeOptions = {
   /**
    * The key to harmonize in, or `'infer'` to estimate it from the melody's
    * pitch-class weighting — which is what a caller who has only a melody
-   * wants, and so the default.
+   * wants, and so the default. A key name such as `'C major'` is read as that
+   * key; `'infer'` names no key and always asks for the estimate.
    *
    * @defaultValue `'infer'`
    */
-  key?: KeyScale | 'infer';
+  key?: KeyLike | 'infer';
   /**
    * Length of each chord slot in beats. Harmonization places chords on a fixed
    * grid of this length — unlike {@link chordTimelineFromNotes}, which searches
@@ -1031,7 +1034,9 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   const ts = opts.ts ?? DEFAULT_METER;
   assertTimeSignature(ts);
   const requestedKey = opts.key ?? 'infer';
-  const key = requestedKey === 'infer' ? inferKey(soundingMelody) : requestedKey;
+  // The key is read into its plain form once, here at the boundary; the search
+  // below is given the scale it resolved to.
+  const key = requestedKey === 'infer' ? inferKey(soundingMelody) : toKeyScale(requestedKey);
   const placement = opts.placement ?? DEFAULT_PLACEMENT;
   const ctx = resolveContext(opts.ctx);
   // `reharmonize` names three points on the dial the context sets continuously,

@@ -11,7 +11,7 @@
 import { InvalidInputError } from '../../core/errors/index.js';
 import type { IntervalLike, SpelledInterval } from '../../core/pitch/index.js';
 import { toSpelledInterval } from '../../core/pitch/index.js';
-import type { KeyScale, NoteEvent } from '../../core/types.js';
+import type { NoteEvent } from '../../core/types.js';
 import {
   assertFiniteNumber,
   assertNoteEvents,
@@ -19,9 +19,11 @@ import {
   dropSilentNotes,
 } from '../../core/validation/index.js';
 import {
+  type KeyLike,
   scaleLadderPitch,
   scaleLadderPosition,
   shiftByScaleDegrees,
+  toKeyScale,
 } from '../../theory/scale/index.js';
 
 /** Every way an imitation can answer, in declaration order. */
@@ -55,8 +57,11 @@ export type ImitationOptions = {
    * `'-P4'` for one a fourth below.
    */
   interval: IntervalLike;
-  /** The key the answer is measured in; what makes a tonal answer tonal. */
-  key: KeyScale;
+  /**
+   * The key the answer is measured in; what makes a tonal answer tonal. A key
+   * name such as `'C major'` is read as that key.
+   */
+  key: KeyLike;
   /**
    * Whether the answer transposes literally or by scale degree.
    *
@@ -136,6 +141,9 @@ export function imitate(lead: readonly NoteEvent[], opts: ImitationOptions): Not
   // downbeat and the downbeat is beat 0; an answer to a pickup enters there too.
   assertFiniteNumber(opts.atBeat, 'atBeat');
   const interval = toSpelledInterval(opts.interval);
+  // The key is read into its plain form once, here at the boundary; the degree
+  // arithmetic below is given the scale it resolved to.
+  const key = toKeyScale(opts.key);
   const from = opts.from ?? Number.NEGATIVE_INFINITY;
   const to = opts.to ?? Number.POSITIVE_INFINITY;
   if (opts.from !== undefined) {
@@ -182,18 +190,15 @@ export function imitate(lead: readonly NoteEvent[], opts: ImitationOptions): Not
         // onto, which is what keeps two adjacent chromatic pitches from being
         // flattened onto the same answer. The mirrored pitch is a scale tone, so
         // the offset is added back after the degree arithmetic.
-        const here = scaleLadderPosition(pitch, opts.key);
-        pitch = scaleLadderPitch(
-          2 * scaleLadderPosition(pivot, opts.key).rung - here.rung,
-          opts.key,
-        );
+        const here = scaleLadderPosition(pitch, key);
+        pitch = scaleLadderPitch(2 * scaleLadderPosition(pivot, key).rung - here.rung, key);
         offset = -here.offset;
       } else {
         pitch = 2 * pivot - pitch;
       }
     }
     pitch = tonal
-      ? shiftByScaleDegrees(pitch, degrees, opts.key) + offset
+      ? shiftByScaleDegrees(pitch, degrees, key) + offset
       : pitch + Math.round(interval.semitones);
     const answer: NoteEvent = {
       pitch: assertPlayable(pitch),

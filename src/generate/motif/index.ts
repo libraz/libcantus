@@ -14,7 +14,13 @@ import {
 } from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
 import { chordPitchClasses } from '../../theory/chord/index.js';
-import { isScaleTone, shiftByScaleDegrees } from '../../theory/scale/index.js';
+import {
+  isScaleTone,
+  type KeyLike,
+  shiftByScaleDegrees,
+  toKeyScale,
+} from '../../theory/scale/index.js';
+import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
 import { type GenerationContextInput, resolveContextWith } from '../context/index.js';
 
 /**
@@ -64,8 +70,13 @@ export type MotifContour = 'arch' | 'ascending' | 'descending' | 'wave';
  * @category Composition
  */
 export type MotifOptions = {
-  key: KeyScale;
-  chord?: Chord | null;
+  /** The key the line is written in; a key name such as `'C major'` is read as that key. */
+  key: KeyLike;
+  /**
+   * Chord the downbeats are pulled to, if any; it may be written as a chord
+   * symbol as well as given as chord data.
+   */
+  chord?: ChordLike | null;
   /** Length of the motif in bars of `ts`. */
   bars: number;
   /**
@@ -271,7 +282,11 @@ export function generateMotif(opts: MotifOptions): MotifCell {
   const ctx = resolveContextWith(opts.ctx, { ornament: opts.jitter });
   const jitterProb = ctx.ornament ?? 0;
   const draw = ctx.part('motif');
-  const tonic = pitchClass(opts.key.rootPc) + 60;
+  // Key and chord are read into their plain form once, here at the boundary;
+  // the loop below works on the plain forms alone.
+  const key = toKeyScale(opts.key);
+  const chord = opts.chord ? toChordData(opts.chord) : null;
+  const tonic = pitchClass(key.rootPc) + 60;
   const offsets = contourOffsets(contour, noteCount);
 
   const notes: MotifNote[] = [];
@@ -285,10 +300,10 @@ export function generateMotif(opts: MotifOptions): MotifCell {
     if (draw.prob(jitterProb, 'jitter', i)) {
       jitter = draw.prob(0.5, 'direction', i) ? 1 : -1;
     }
-    let pitch = shiftByScaleDegrees(tonic, (offsets[i] ?? 0) + jitter, opts.key);
+    let pitch = shiftByScaleDegrees(tonic, (offsets[i] ?? 0) + jitter, key);
     const startBeat = i * beatsPerNote;
-    if (opts.chord && isDownbeat(startBeat, barBeats)) {
-      pitch = nearestChordTone(pitch, opts.chord);
+    if (chord && isDownbeat(startBeat, barBeats)) {
+      pitch = nearestChordTone(pitch, chord);
     }
     notes.push({
       pitch: clampToMidi(pitch, 'generated motif pitch'),
@@ -334,8 +349,9 @@ export function motifToNoteEvents(cell: MotifCell): NoteEvent[] {
  * @param cell The cell to transform.
  * @param t The transformation.
  * @param amount Optional parameter (semitones, degrees, or time factor).
- * @param key Key context for the diatonic transforms; without it,
- *   `transposeDiatonic` and `sequence` shift chromatically by semitones.
+ * @param key Key context for the diatonic transforms, as a key name such as
+ *   `'C major'` or as a key/scale; without it, `transposeDiatonic` and
+ *   `sequence` shift chromatically by semitones.
  * @returns The transformed cell.
  * @throws If a transformed pitch would fall outside the MIDI range 0..127.
  *
@@ -349,6 +365,18 @@ export function motifToNoteEvents(cell: MotifCell): NoteEvent[] {
  * @category Composition
  */
 export function transformMotif(
+  cell: MotifCell,
+  t: MotifTransform,
+  amount?: number,
+  key?: KeyLike,
+): MotifCell {
+  // The key is read into its plain form once, here at the boundary; `sequence`
+  // re-enters through `transformCell` so it is never read a second time.
+  return transformCell(cell, t, amount, key === undefined ? undefined : toKeyScale(key));
+}
+
+/** The transform on an already-resolved key, checked. */
+function transformCell(
   cell: MotifCell,
   t: MotifTransform,
   amount?: number,
@@ -448,7 +476,7 @@ function transformUnchecked(
       const span = cellSpan(cell);
       // Delegates to transposeDiatonic: a diatonic shift when `key` is given,
       // otherwise a chromatic shift of `degrees` semitones.
-      const copy = transformMotif(cell, 'transposeDiatonic', degrees, key);
+      const copy = transformCell(cell, 'transposeDiatonic', degrees, key);
       const shifted = copy.notes.map((n) => ({ ...n, startBeat: n.startBeat + span }));
       return { notes: [...clone(cell).notes, ...shifted] };
     }
@@ -480,7 +508,8 @@ function scaleTime(cell: MotifCell, factor: number): MotifCell {
  *
  * @param cell The source motif.
  * @param timeline Chord segments to snap against.
- * @param key Key context; the notes off the structural positions are kept in it.
+ * @param key Key context, as a key name such as `'C major'` or as a key/scale;
+ *   the notes off the structural positions are kept in it.
  * @param bars Number of bars to fill.
  * @param ts Meter the bars are counted in; defaults to 4/4.
  * @returns The developed, harmony-aware cell.
@@ -499,12 +528,15 @@ function scaleTime(cell: MotifCell, factor: number): MotifCell {
 export function developMotif(
   cell: MotifCell,
   timeline: ChordTimeline,
-  key: KeyScale,
+  key: KeyLike,
   bars: number,
   ts: TimeSignature = DEFAULT_TS,
 ): MotifCell {
   assertPositiveInt(bars, 'development bars');
   assertNoteEvents(cell.notes, 'motif notes');
+  // The key is read into its plain form once, here at the boundary; the tiling
+  // below is given the scale it resolved to.
+  const scale = toKeyScale(key);
   const span = cellSpan(cell);
   const barBeats = beatsPerBar(ts);
   const totalBeats = bars * barBeats;
@@ -539,7 +571,7 @@ export function developMotif(
       const chordTones = chord && structural ? chordPitchClasses(chord) : null;
       const allows = chordTones
         ? (candidate: number) => chordTones.includes(pitchClass(candidate))
-        : (candidate: number) => isScaleTone(candidate, key);
+        : (candidate: number) => isScaleTone(candidate, scale);
       const direction = previous === undefined ? 0 : n.pitch - previous;
       const pitch = developedPitch(n.pitch, allows, direction, taken);
       taken.set(pitch, n.pitch);

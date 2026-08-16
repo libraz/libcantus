@@ -26,6 +26,8 @@ import {
   clampToMidi,
 } from '../../core/validation/index.js';
 import type { ChordSegment } from '../../theory/chord/index.js';
+import { type KeyLike, toKeyScale } from '../../theory/scale/index.js';
+import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
 import {
   type Draw,
   type GenerationContextInput,
@@ -89,10 +91,16 @@ export type BassStyle = (typeof BASS_STYLES)[number];
  * @category Composition
  */
 export type BassLineOptions = {
-  /** Chord placement to follow; need not be pre-sorted. */
-  segments: readonly BassSegment[];
-  /** Key/scale context, used for diatonic approach tones in `walking`. */
-  key: KeyScale;
+  /**
+   * Chord placement to follow; need not be pre-sorted. Each segment's chord may
+   * be written as a chord symbol as well as given as chord data.
+   */
+  segments: readonly (Omit<BassSegment, 'chord'> & { chord: ChordLike })[];
+  /**
+   * Key/scale context, used for diatonic approach tones in `walking`. A key
+   * name such as `'C major'` is read as that key.
+   */
+  key: KeyLike;
   /**
    * Time signature; used for metric accents.
    *
@@ -328,7 +336,11 @@ export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
       throw new InvalidInputError(`segments[${index}] must have a positive duration`);
     }
   }
-  const segments = [...opts.segments].sort((a, b) => a.startBeat - b.startBeat);
+  // The chords are read into their plain form once, here at the boundary; the
+  // builders below work on chord data alone.
+  const segments: BassSegment[] = opts.segments
+    .map((segment) => ({ ...segment, chord: toChordData(segment.chord) }))
+    .sort((a, b) => a.startBeat - b.startBeat);
   for (let index = 1; index < segments.length; index += 1) {
     const previous = segments[index - 1];
     const current = segments[index];
@@ -363,7 +375,7 @@ export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
   const ctx: BuildContext = {
     ts,
     low,
-    key: opts.key,
+    key: toKeyScale(opts.key),
     draw: resolved.part('bass'),
     notes: [],
     prevMidi: low,

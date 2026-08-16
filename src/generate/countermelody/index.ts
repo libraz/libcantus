@@ -24,6 +24,7 @@ import {
   NoteSafety,
   profileWeights,
 } from '../../theory/safety/index.js';
+import { type KeyLike, toKeyScale } from '../../theory/scale/index.js';
 import { type Draw, type GenerationContextInput, resolveContext } from '../context/index.js';
 
 /**
@@ -57,8 +58,11 @@ export type CounterMelodyOptions = {
    * when `timeline` is given, since a timeline lists its own boundaries.
    */
   chordChangeBeats?: number[];
-  /** Key/scale context for scale-tone decisions. */
-  key: KeyScale;
+  /**
+   * Key/scale context for scale-tone decisions. A key name such as `'C major'`
+   * is read as that key.
+   */
+  key: KeyLike;
   /**
    * Meter used for strong-beat decisions.
    *
@@ -483,6 +487,9 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
   const rhythm = assertOneOf(opts.rhythm ?? 'complement', ['complement', 'follow'], 'rhythm');
   const profile = assertOneOf(opts.profile ?? 'pop', ['strict', 'pop'], 'safety profile');
   const weights = profileWeights(profile, opts.weights);
+  // The key is read into its plain form once, here at the boundary; the search
+  // below is given the scale it resolved to.
+  const key = toKeyScale(opts.key);
   const draw = resolveContext(opts.ctx).part('countermelody');
   // The options are checked before the empty-melody exit, so a call with a
   // malformed option is rejected whether or not the melody happens to sound.
@@ -561,7 +568,7 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
         profile,
         prevPitch,
         chord,
-        key: opts.key,
+        key,
         otherVoices,
         strongBeat: isStrongBeat(beat, ts),
         vocalLow: low,
@@ -579,7 +586,7 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
         candidate,
         contexts,
         prevPitch,
-        opts.key,
+        key,
         profile,
         register,
         low,

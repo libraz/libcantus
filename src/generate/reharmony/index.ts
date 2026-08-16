@@ -36,8 +36,14 @@ import {
   makeChord,
   type PitchSpelling,
 } from '../../theory/chord/index.js';
-import { isScaleTone, scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
+import {
+  isScaleTone,
+  type KeyLike,
+  scaleTonesInDegreeOrder,
+  toKeyScale,
+} from '../../theory/scale/index.js';
 import { spellPitchClass, spellScale } from '../../theory/spelling/index.js';
+import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
 
 /**
  * The kind of substitution relationship a candidate realizes.
@@ -234,8 +240,8 @@ function tritoneSubstituteRoot(dominant: Chord, tonic: Note, key: KeyScale): Not
  * flattened supertonic of the chord it resolves to, and a borrowed chord takes
  * the spelling of the mode it is borrowed from.
  *
- * @param chord The chord to reharmonize.
- * @param key The prevailing key.
+ * @param chord The chord to reharmonize, as a chord symbol or as chord data.
+ * @param key The prevailing key, as a key name or as a key/scale.
  * @param opts Optional melody-preservation constraint.
  * @returns The deduplicated substitution candidates.
  * @example
@@ -248,45 +254,49 @@ function tritoneSubstituteRoot(dominant: Chord, tonic: Note, key: KeyScale): Not
  * @category Reharmonization
  */
 export function substituteChord(
-  chord: Chord,
-  key: KeyScale,
+  chord: ChordLike,
+  key: KeyLike,
   opts?: SubstituteOptions,
 ): Substitution[] {
+  // Chord and key are read into their plain form once, here at the boundary;
+  // everything below works on the plain forms alone.
+  const source = toChordData(chord);
+  const scale = toKeyScale(key);
   // The relative test counts common tones against the chord's triad, not its
   // full pitch-class set: an exact count of two would otherwise be decided by
   // how many tensions the input carries, so C proposes both Em and Am while
   // Cmaj7 proposes only Am — penalising the candidate that overlaps *more*.
-  const originalTriad = chordPitchClasses(makeChord(chord.rootPc, triadQualityOf(chord)));
+  const originalTriad = chordPitchClasses(makeChord(source.rootPc, triadQualityOf(source)));
   const candidates: { chord: Chord; type: SubstitutionType }[] = [];
-  const tonic = keyTonicOf(key);
+  const tonic = keyTonicOf(scale);
 
   // Tritone substitution: only for dominant-type chords.
-  if (isDominantType(chord)) {
-    const substitute = makeChord(mod12(chord.rootPc + 6), 'dom7');
+  if (isDominantType(source)) {
+    const substitute = makeChord(mod12(source.rootPc + 6), 'dom7');
     candidates.push({
-      chord: spelledOnRoot(substitute, tritoneSubstituteRoot(chord, tonic, key), tonic, key),
+      chord: spelledOnRoot(substitute, tritoneSubstituteRoot(source, tonic, scale), tonic, scale),
       type: 'tritone',
     });
   }
 
   // Relative: a diatonic triad a third away sharing two common tones.
-  for (const triad of diatonicTriadsOf(key)) {
-    const offset = mod12(triad.rootPc - chord.rootPc);
+  for (const triad of diatonicTriadsOf(scale)) {
+    const offset = mod12(triad.rootPc - source.rootPc);
     if (
       (THIRD_OFFSETS as readonly number[]).includes(offset) &&
       commonToneCount(originalTriad, chordPitchClasses(triad)) === 2
     ) {
-      candidates.push({ chord: spelledInKey(triad, tonic, key), type: 'relative' });
+      candidates.push({ chord: spelledInKey(triad, tonic, scale), type: 'relative' });
     }
   }
 
   // Borrowed: a parallel-mode triad sharing the original's harmonic function.
   // It is written the way the mode it comes from writes it, which is also how
   // the key names the borrowing: C major borrows Eb and Ab from C minor.
-  const targetFunction = functionOf(chord, key);
-  const parallel = parallelKey(key);
+  const targetFunction = functionOf(source, scale);
+  const parallel = parallelKey(scale);
   for (const triad of diatonicTriadsOf(parallel)) {
-    if (functionOf(triad, key) === targetFunction && !isDiatonic(triad, key)) {
+    if (functionOf(triad, scale) === targetFunction && !isDiatonic(triad, scale)) {
       candidates.push({ chord: spelledInKey(triad, tonic, parallel), type: 'borrowed' });
     }
   }
@@ -294,12 +304,12 @@ export function substituteChord(
   // Chromatic mediants: major/minor triads a third away sharing one common tone.
   for (const offset of THIRD_OFFSETS) {
     for (const quality of ['maj', 'min'] as const) {
-      const mediant = makeChord(mod12(chord.rootPc + offset), quality);
+      const mediant = makeChord(mod12(source.rootPc + offset), quality);
       if (
         commonToneCount(originalTriad, chordPitchClasses(mediant)) === 1 &&
-        !isDiatonic(mediant, key)
+        !isDiatonic(mediant, scale)
       ) {
-        candidates.push({ chord: spelledInKey(mediant, tonic, key), type: 'chromaticMediant' });
+        candidates.push({ chord: spelledInKey(mediant, tonic, scale), type: 'chromaticMediant' });
       }
     }
   }
@@ -308,7 +318,7 @@ export function substituteChord(
   const seen = new Set<string>();
   const results: Substitution[] = [];
   for (const candidate of candidates) {
-    if (sameChord(candidate.chord, chord)) {
+    if (sameChord(candidate.chord, source)) {
       continue;
     }
     const dedupeKey = `${mod12(candidate.chord.rootPc)}:${candidate.chord.quality}`;
@@ -325,8 +335,8 @@ export function substituteChord(
     results.push({
       chord: candidate.chord,
       type: candidate.type,
-      roman: chordToRoman(candidate.chord, key),
-      function: functionOf(candidate.chord, key),
+      roman: chordToRoman(candidate.chord, scale),
+      function: functionOf(candidate.chord, scale),
     });
   }
   return results;
@@ -359,7 +369,7 @@ export type BorrowedChord = {
  * them: raising the seventh degree is an alteration inside the key rather than a
  * chord taken from the parallel mode.
  *
- * @param key The prevailing key.
+ * @param key The prevailing key, as a key name or as a key/scale.
  * @returns The borrowed-chord palette.
  * @example
  * ```ts
@@ -370,7 +380,9 @@ export type BorrowedChord = {
  * ```
  * @category Reharmonization
  */
-export function modalInterchangePalette(key: KeyScale): BorrowedChord[] {
+export function modalInterchangePalette(key: KeyLike): BorrowedChord[] {
+  // The key is read into its plain form once, here at the boundary.
+  const scale = toKeyScale(key);
   const palette: BorrowedChord[] = [];
   const seen = new Set<string>();
   const add = (chord: Chord) => {
@@ -381,15 +393,15 @@ export function modalInterchangePalette(key: KeyScale): BorrowedChord[] {
     seen.add(dedupeKey);
     palette.push({
       chord,
-      roman: chordToRoman(chord, key),
-      source: borrowedSource(chord, key),
+      roman: chordToRoman(chord, scale),
+      source: borrowedSource(chord, scale),
     });
   };
 
-  const tonic = keyTonicOf(key);
-  const parallel = parallelKey(key);
+  const tonic = keyTonicOf(scale);
+  const parallel = parallelKey(scale);
   for (const triad of diatonicTriadsOf(parallel)) {
-    if (!isDiatonic(triad, key) && borrowedSource(triad, key) !== null) {
+    if (!isDiatonic(triad, scale) && borrowedSource(triad, scale) !== null) {
       add(spelledInKey(triad, tonic, parallel));
     }
   }
@@ -397,9 +409,9 @@ export function modalInterchangePalette(key: KeyScale): BorrowedChord[] {
   // is added explicitly — unless b2 is already diatonic (e.g. in a Phrygian key,
   // where it is a native chord rather than a borrowing). Being a bII, it is
   // written a minor second above the tonic: Db in C major, C in B major.
-  const neapolitan = makeChord(mod12(key.rootPc + 1), 'maj');
-  if (!isDiatonic(neapolitan, key)) {
-    add(spelledOnRoot(neapolitan, transposeNote(tonic, 1), tonic, key));
+  const neapolitan = makeChord(mod12(scale.rootPc + 1), 'maj');
+  if (!isDiatonic(neapolitan, scale)) {
+    add(spelledOnRoot(neapolitan, transposeNote(tonic, 1), tonic, scale));
   }
   return palette;
 }
@@ -417,8 +429,8 @@ export function modalInterchangePalette(key: KeyScale): BorrowedChord[] {
  * `bassSpelling` hints, so the reflection of a chord in a flat-side key keeps
  * flat names: in Eb major the mirror of Bb formats as `Abm`, not `G#m`.
  *
- * @param chord The chord to reflect.
- * @param key The prevailing key.
+ * @param chord The chord to reflect, as a chord symbol or as chord data.
+ * @param key The prevailing key, as a key name or as a key/scale.
  * @returns The negative-harmony counterpart of the chord.
  * @example
  * ```ts
@@ -428,12 +440,15 @@ export function modalInterchangePalette(key: KeyScale): BorrowedChord[] {
  * ```
  * @category Reharmonization
  */
-export function negativeHarmonyMirror(chord: Chord, key: KeyScale): Chord {
-  const tonicPc = mod12(key.rootPc);
-  const tonic = keyTonicOf(key);
+export function negativeHarmonyMirror(chord: ChordLike, key: KeyLike): Chord {
+  // Chord and key are read into their plain form once, here at the boundary.
+  const source = toChordData(chord);
+  const scale = toKeyScale(key);
+  const tonicPc = mod12(scale.rootPc);
+  const tonic = keyTonicOf(scale);
   const mirror = (p: number) => mod12(2 * tonicPc + 7 - p);
-  const pcs = chordPitchClasses(chord).map(mirror);
-  const bassPc = chord.bassPc !== undefined ? mirror(chord.bassPc) : undefined;
+  const pcs = chordPitchClasses(source).map(mirror);
+  const bassPc = source.bassPc !== undefined ? mirror(source.bassPc) : undefined;
   // Place the mirrored bass an octave below so it is recognized as the lowest
   // note and preserved through detection.
   const pitches = bassPc !== undefined ? [bassPc - 12, ...pcs] : pcs;
@@ -443,10 +458,10 @@ export function negativeHarmonyMirror(chord: Chord, key: KeyScale): Chord {
     // read the lowest pitch class as a slash bass and report a spurious
     // inversion. Restore the recognized chord to root position in that case.
     if (bassPc === undefined && detected.bassPc !== undefined) {
-      return spelledInKey(makeChord(detected.rootPc, detected.quality), tonic, key);
+      return spelledInKey(makeChord(detected.rootPc, detected.quality), tonic, scale);
     }
-    return spelledInKey(detected, tonic, key);
+    return spelledInKey(detected, tonic, scale);
   }
-  const quality: ChordQuality = chord.quality;
-  return spelledInKey(makeChord(mirror(chord.rootPc), quality, bassPc), tonic, key);
+  const quality: ChordQuality = source.quality;
+  return spelledInKey(makeChord(mirror(source.rootPc), quality, bassPc), tonic, scale);
 }

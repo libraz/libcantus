@@ -27,7 +27,8 @@ import {
   clampToMidi,
 } from '../../core/validation/index.js';
 import type { Chord, ChordSegment } from '../../theory/chord/index.js';
-import { nearestScaleTone } from '../../theory/scale/index.js';
+import { type KeyLike, nearestScaleTone, toKeyScale } from '../../theory/scale/index.js';
+import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
 import { assertDifficulty, type GenerationContextInput, resolveContext } from '../context/index.js';
 import {
   BEAT_STEPS,
@@ -456,8 +457,10 @@ const EPS = 1e-9;
  * gets its root, and the last note before a chord change leads into the next
  * root by step, the way a walking line does.
  *
- * @param timeline Chord segments to play over; they need not be pre-sorted.
- * @param key Key context, which answers for the degrees the chords do not.
+ * @param timeline Chord segments to play over; they need not be pre-sorted, and
+ *   each segment's chord may be written as a chord symbol.
+ * @param key Key context, which answers for the degrees the chords do not; a
+ *   key name such as `'C major'` is read as that key.
  * @param opts Genre, density, ceiling and seed.
  * @returns Bass notes sorted by onset, non-overlapping.
  * @throws If a segment has a non-positive duration, or the genre is not one
@@ -476,8 +479,8 @@ const EPS = 1e-9;
  * @category Composition
  */
 export function placeLicks(
-  timeline: readonly ChordSegment[],
-  key: KeyScale,
+  timeline: readonly (Omit<ChordSegment, 'chord'> & { chord: ChordLike })[],
+  key: KeyLike,
   opts: PlaceLicksOptions,
 ): NoteEvent[] {
   assertGenerationBudget(timeline.length, 'lick segments', opts.budget);
@@ -486,7 +489,12 @@ export function placeLicks(
   assertTimeSignature(ts, 'lick time signature');
   const octave = opts.octave ?? DEFAULT_OCTAVE;
   assertInteger(octave, 'lick octave', -1, 8);
-  const segments = [...timeline].sort((a, b) => a.startBeat - b.startBeat);
+  // Key and chords are read into their plain form once, here at the boundary;
+  // everything below works on the plain forms alone.
+  const scale = toKeyScale(key);
+  const segments: ChordSegment[] = timeline
+    .map((segment) => ({ ...segment, chord: toChordData(segment.chord) }))
+    .sort((a, b) => a.startBeat - b.startBeat);
   for (const segment of segments) {
     assertRange(segment.startBeat, 0, Number.MAX_SAFE_INTEGER, 'lick segment startBeat');
     if (segment.endBeat <= segment.startBeat) {
@@ -601,7 +609,7 @@ export function placeLicks(
           // Placed against the figure's own root rather than folded one note at
           // a time into the register band, which is what an octave figure
           // needs: its octave has to stay an octave.
-          const offset = degreeSemitone(lickNote.degree, lickNote.alter ?? 0, segment.chord, key);
+          const offset = degreeSemitone(lickNote.degree, lickNote.alter ?? 0, segment.chord, scale);
           anchor = figureRoot + offset;
           onsets.push(at);
           raw.push({
@@ -632,7 +640,7 @@ export function placeLicks(
           nextRoot,
           anchor,
           low,
-          key,
+          scale,
           draw.prob(0.5, 'lickApproach', index),
         );
         anchor = midi;

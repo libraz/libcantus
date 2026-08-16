@@ -8,7 +8,7 @@ import {
 } from '../../core/validation/index.js';
 import type { ChordQuality, ChordSpan } from '../../theory/chord/index.js';
 import { chordQualities, diatonicTriad } from '../../theory/chord/index.js';
-import { scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
+import { type KeyLike, scaleTonesInDegreeOrder, toKeyScale } from '../../theory/scale/index.js';
 import { type GenerationContextInput, resolveContext } from '../context/index.js';
 
 export type { ChordSpan } from '../../theory/chord/index.js';
@@ -94,7 +94,11 @@ export type ProgressionDegree = number;
  * @category Composition
  */
 export type ProgressionOptions = {
-  key: KeyScale;
+  /**
+   * The key the degrees are resolved against; a key name such as `'C major'` is
+   * read as that key.
+   */
+  key: KeyLike;
   /**
    * Which pool of built-in presets to choose from. Ignored when `preset` names
    * the progression outright.
@@ -480,6 +484,9 @@ export function pickProgressionPreset(style: ProgStyle, seed = 0): ProgressionPr
 export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
   assertPositiveInt(opts.bars, 'progression bars');
   assertGenerationBudget(opts.bars, 'progression chords');
+  // The key is read into its plain form once, here at the boundary; the degree
+  // resolution below is given the scale it resolved to.
+  const key = toKeyScale(opts.key);
   const ctx = resolveContext(opts.ctx);
   const seed = ctx.seed;
   let preset: ProgressionPreset | undefined;
@@ -519,7 +526,7 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
       : assertOneOf(opts.ext, ['auto', ...chordQualities()], 'progression extension');
   const cycle = resolveCycle(
     preset?.degrees ?? [0],
-    opts.key,
+    key,
     ext,
     preset?.functional === 'cadenceStrong',
   );
@@ -539,7 +546,7 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
 
   const harmonic = ctx.harmonic ?? DEFAULT_HARMONIC;
   if (harmonic > 0) {
-    const tonicPc = (((opts.key.rootPc % 12) + 12) % 12) as number;
+    const tonicPc = (((key.rootPc % 12) + 12) % 12) as number;
     const draw = ctx.part('progression');
     let tonicStatements = chords.filter((chord) => chord.rootPc === tonicPc).length;
     for (let i = 0; i < chords.length - 1; i += 1) {
