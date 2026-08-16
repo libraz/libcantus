@@ -252,6 +252,46 @@ the degree change looks silent at the call site.
   melody differently than before; a call that names none is scored exactly as it
   was.
 
+- **Input that used to be taken on trust is refused where it is given.** An
+  entry point that received something it could not use would fall back to a
+  default, propagate a `NaN`, or answer from a value nobody meant — and the
+  caller learned of it, if at all, several steps later as a wrong number. These
+  now raise one of the library's own errors, so the cause is named at the call
+  that caused it and a caller can tell "fix the input" from "loosen the
+  constraint" by `code` rather than by reading the message. Among them:
+  `parseTimeSignature` and `parseKeyName` given a non-string; `midiToNote` and
+  `transposeNote` given a spelling name with no table entry, which used to fall
+  back to sharps; `intervalSemitones` given a number outside 1..75 or a quality
+  that number cannot take; `parseInterval` given `'d1'`, since a unison cannot
+  be diminished; `formatNote`, `noteToMidi` and their neighbours given a letter
+  outside 0..6; the tempo conversions and `createNoteEventIndex` queries given
+  `NaN` or an infinity; the spelling functions given a tonic that does not
+  sound the key's root; `profileWeights` and the safety queries given an
+  unknown profile; `checkPartWriting`, `checkSpecies` and `voiceIndependence`
+  given lines of unequal length; and `analyzeArrangement` given a
+  `harmonyTracks` index naming no track. `voiceChord` and `analyzeArrangement`
+  raise `BudgetExceededError` before building a search that cannot finish,
+  where the work used to grow unchecked.
+
+  This is the class of change most likely to surface at runtime rather than at
+  the build: the call sites still typecheck, and what changes is that a
+  malformed value stops being absorbed.
+
+- **`TheoryLabel` gained a member, and some notes moved onto it.**
+  `analyzeVoice` reports `{ kind: 'appoggiatura'; resolveTo: number }` for a
+  note approached by leap that resolves by step in the other direction. Those
+  notes used to come back as `{ kind: 'needsResolution' }`, so a view filtering
+  on `needsResolution` no longer sees them; `needsResolution` itself stays and
+  is still returned for everything else. A `switch` over `kind` with an
+  exhaustiveness check no longer compiles until the new member is handled.
+
+- **`SubstitutionType` lost `'secondaryDominant'`.** `substituteChord` proposes
+  four kinds and no longer offers an applied dominant: which dominant applies
+  is a question about the target chord rather than about the chord in hand.
+  Build one with `secondaryDominantOf`, or let `harmonizeMelody` open its
+  vocabulary with `reharmonize: 'secondaryDominant'`, which is unrelated and
+  unchanged. Code matching on the removed member is now dead.
+
 - **One name per section, and it is the one a caller writes.** `Section`,
   `PublicSection` and `SectionType` were all published for what is two
   concepts. `SectionType` is the narrower set the pattern tables are keyed by —
