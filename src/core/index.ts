@@ -3,7 +3,7 @@
  * also available from the package root.
  */
 
-export type { Duration, NoteValue, SpelledDuration, Tuplet } from './duration/index.js';
+export type { DurationData, NoteValue, SpelledDuration, Tuplet } from './duration/index.js';
 export {
   beatsToDuration,
   beatsToTiedDurations,

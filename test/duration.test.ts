@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   beatsToDuration,
   beatsToTiedDurations,
-  type Duration,
+  type DurationData,
   durationToBeats,
   NOTE_VALUES,
   type NoteValue,
@@ -60,8 +60,8 @@ describe('duration to beats', () => {
     expect(() => durationToBeats({ base: 'quarter', tuplet: { actual: 3, normal: 2.5 } })).toThrow(
       InvalidInputError,
     );
-    expect(() => durationToBeats(null as unknown as Duration)).toThrow(InvalidInputError);
-    expect(() => durationToBeats(4 as unknown as Duration)).toThrow(InvalidInputError);
+    expect(() => durationToBeats(null as unknown as DurationData)).toThrow(InvalidInputError);
+    expect(() => durationToBeats(4 as unknown as DurationData)).toThrow(InvalidInputError);
     expect(() => durationToBeats('quarter', { beatUnit: 'minim' as NoteValue })).toThrow(
       InvalidInputError,
     );

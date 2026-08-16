@@ -69,7 +69,7 @@ export type Tuplet = {
  *
  * @category Rhythm & Meter
  */
-export type Duration = {
+export type DurationData = {
   base: NoteValue;
   /** Augmentation dots, 0 when absent; up to four are accepted. */
   dots?: number;
@@ -135,7 +135,7 @@ function quartersOfParts(base: NoteValue, dots: number, tuplet: Tuplet | undefin
 }
 
 /** Validate a duration, accepting the bare base value as shorthand. */
-function assertDuration(value: NoteValue | Duration, name: string): Duration {
+function assertDuration(value: NoteValue | DurationData, name: string): DurationData {
   if (typeof value === 'string') {
     return { base: assertOneOf(value, NOTE_VALUES, name), dots: 0 };
   }
@@ -156,12 +156,12 @@ function assertDuration(value: NoteValue | Duration, name: string): Duration {
 }
 
 /** Length of a validated duration in quarter notes. */
-function quartersOf(duration: Duration): number {
+function quartersOf(duration: DurationData): number {
   return quartersOfParts(duration.base, duration.dots ?? 0, duration.tuplet);
 }
 
 /** Length of the beat unit in quarter notes; a quarter note unless overridden. */
-function beatQuarters(options: { beatUnit?: NoteValue | Duration }): number {
+function beatQuarters(options: { beatUnit?: NoteValue | DurationData }): number {
   if (options.beatUnit === undefined) {
     return NOTE_VALUE_QUARTERS.quarter;
   }
@@ -219,8 +219,8 @@ function assertPositiveBeats(beats: number, name: string): number {
  * @category Rhythm & Meter
  */
 export function durationToBeats(
-  duration: NoteValue | Duration,
-  options: { beatUnit?: NoteValue | Duration } = {},
+  duration: NoteValue | DurationData,
+  options: { beatUnit?: NoteValue | DurationData } = {},
 ): number {
   const quarters = quartersOf(assertDuration(duration, 'duration'));
   return quarters / beatQuarters(options);
@@ -254,7 +254,7 @@ export function durationToBeats(
  */
 export function beatsToDuration(
   beats: number,
-  options: { beatUnit?: NoteValue | Duration } = {},
+  options: { beatUnit?: NoteValue | DurationData } = {},
 ): SpelledDuration {
   assertPositiveBeats(beats, 'beats');
   const spelled = spellQuarters(beats * beatQuarters(options));
@@ -290,7 +290,7 @@ export function beatsToDuration(
  */
 export function beatsToTiedDurations(
   beats: number,
-  options: { beatUnit?: NoteValue | Duration } = {},
+  options: { beatUnit?: NoteValue | DurationData } = {},
 ): SpelledDuration[] {
   assertPositiveBeats(beats, 'beats');
   const quarters = beats * beatQuarters(options);
