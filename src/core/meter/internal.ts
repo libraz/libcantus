@@ -16,6 +16,8 @@ import type { MeterMap, TimeSignature } from './index.js';
  *
  * What {@link MeterLike} resolves to, and the type every function below the
  * entry points works in — the text form is read once, at the boundary.
+ *
+ * @category Rhythm & Meter
  */
 export type MeterData = TimeSignature | MeterMap;
 

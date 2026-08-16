@@ -61,6 +61,7 @@ export {
 export type {
   BarPosition,
   MeterChange,
+  MeterData,
   MeterLike,
   MeterMap,
   TimeSignature,
@@ -83,6 +84,7 @@ export {
   pulseBeats,
   pulsesPerBar,
   resolveMeters,
+  toMeterData,
   tryParseTimeSignature,
   tuplet,
 } from './meter/index.js';

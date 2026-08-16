@@ -92,6 +92,8 @@ export type MeterChange = {
  */
 export type MeterMap = MeterChange[];
 
+export type { MeterData } from './internal.js';
+
 /**
  * Anything that names a meter: a signature text such as `'6/8'`, a plain
  * {@link TimeSignature}, a full {@link MeterMap}, or a value that serializes to

@@ -359,6 +359,7 @@ const EXPECTED_EXPORTS = [
   'ticksToBeats',
   'toChordData',
   'toKeyScale',
+  'toMeterData',
   'toNoteData',
   'toSoundingPitch',
   'toSpelledInterval',
