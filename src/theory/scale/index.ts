@@ -1,3 +1,5 @@
+export type { KeyLike } from './coerce.js';
+export { toKeyScale } from './coerce.js';
 export type { ScaleLadderPosition } from './degrees.js';
 export {
   diatonicPitchClasses,

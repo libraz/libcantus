@@ -799,6 +799,71 @@ export function toSpelledInterval(value: IntervalLike): SpelledInterval {
 }
 
 /**
+ * Anything that names a spelled note: a note name, plain note data, a MIDI
+ * number, or a value that serializes to note data such as the `Note` class.
+ *
+ * @category Pitch & Intervals
+ */
+export type NoteLike =
+  | string
+  | number
+  | Note
+  | {
+      /** The note data this value stands for. */
+      toJSON(): Note;
+    };
+
+/**
+ * Resolve any note-shaped value to plain {@link Note} data.
+ *
+ * The counterpart of {@link toSpelledInterval} for notes: an entry point takes
+ * whatever form the caller has — the name a text field holds, the MIDI number a
+ * device sends, the data the pitch module returns, or a `Note` instance — and
+ * gets one shape back. An instance is accepted through its `toJSON` method
+ * rather than by its type, because the core layer cannot import the model layer
+ * that defines the class.
+ *
+ * A number is read as MIDI and spelled with sharps, the same reading
+ * {@link midiToNote} takes by default. Where a key is known the caller spells
+ * it there instead — `spellPitch` reads the key — because no single default
+ * suits both a G# in E major and an Ab in Eb major.
+ *
+ * @param value A note name, a MIDI number, plain note data, or a value whose
+ *   `toJSON` returns note data.
+ * @returns The validated note data, carrying `octave` only when the value has
+ *   one.
+ * @throws If the value is not note-shaped, or its letter, alteration, or octave
+ *   fall outside the range a spelled note holds.
+ * @example
+ * ```ts
+ * import { toNoteData } from '@libraz/libcantus';
+ * toNoteData('Eb4'); // { letter: 2, alter: -1, octave: 4 }
+ * toNoteData(60); // { letter: 0, alter: 0, octave: 4 }
+ * ```
+ * @category Pitch & Intervals
+ */
+export function toNoteData(value: NoteLike): Note {
+  if (typeof value === 'string') {
+    return parseNote(value);
+  }
+  if (typeof value === 'number') {
+    return midiToNote(value);
+  }
+  if (typeof value === 'object' && value !== null) {
+    const data = 'toJSON' in value && typeof value.toJSON === 'function' ? value.toJSON() : value;
+    const note = assertNote(data as Note, 'note');
+    // A fresh object, so a caller's own note cannot become library state and
+    // the result carries `octave` only when the note has one.
+    return note.octave === undefined
+      ? { letter: note.letter, alter: note.alter }
+      : { letter: note.letter, alter: note.alter, octave: note.octave };
+  }
+  throw new InvalidInputError(
+    `note must be a name, a MIDI number, or spelled note data; received ${typeof value}`,
+  );
+}
+
+/**
  * Transpose a note by a spelled interval, keeping the spelling the interval
  * names.
  *

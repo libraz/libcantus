@@ -126,6 +126,7 @@ export {
   ReasonFlag,
 } from './safety/index.js';
 export type {
+  KeyLike,
   KeyMode,
   KeyRelation,
   ScaleAliasName,
@@ -190,6 +191,7 @@ export {
   subdominantKeyOf,
   supportsFunctionalHarmony,
   TODI_MASK,
+  toKeyScale,
   WHOLE_TONE_MASK,
   WORLD_SCALES,
 } from './scale/index.js';
@@ -203,10 +205,11 @@ export {
   spellPitchClasses,
   spellScale,
 } from './spelling/index.js';
-export type { ChordSymbolOptions } from './symbol/index.js';
+export type { ChordLike, ChordSymbolOptions } from './symbol/index.js';
 export {
   formatChordSymbol,
   parseChordSymbol,
+  toChordData,
   transposeChordSymbol,
   tryParseChordSymbol,
 } from './symbol/index.js';
