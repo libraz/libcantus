@@ -252,6 +252,24 @@ the degree change looks silent at the call site.
   melody differently than before; a call that names none is scored exactly as it
   was.
 
+- **One name per section, and it is the one a caller writes.** `Section`,
+  `PublicSection` and `SectionType` were all published for what is two
+  concepts. `SectionType` is the narrower set the pattern tables are keyed by —
+  it answers to `'a'` and `'b'` and refuses `'verse'` and `'prechorus'` — so a
+  caller who reached for the most obvious-looking name was held to a vocabulary
+  that is not the public one. It is now internal, `PublicSection` is renamed to
+  `Section`, and `Section` is the only name published. `KickSlot.sections`
+  moves to the public vocabulary with it: a slot restricted to the prechorus is
+  written `sections: ['prechorus']`, where it used to be `['b']`.
+
+- **`parallelKey` is no longer published.** It returned a `KeyScale`, which has
+  nowhere to put a spelling, so the parallel of D-flat major came back as a key
+  whose root is pitch class 1 with no way to tell D-flat minor from C-sharp
+  minor. Beside `parallelKeyOf`, which keeps the tonic, it was the shorter name
+  with the simpler signature and the silent loss. Use `parallelKeyOf(tonic,
+  key)`, which sits with `relativeKeyOf`, `dominantKeyOf` and
+  `subdominantKeyOf`, or `Key.parallel()`.
+
 - **Three types are renamed to free the bare name for the class that holds
   one.** `Tuning` becomes `TuningTable` — it is the table of steps a temperament
   is defined by, not the temperament itself; the melody module's `Motif` result
