@@ -363,7 +363,7 @@ export type BorrowedChord = {
  * import { modalInterchangePalette, majorKey, formatChordSymbol } from '@libraz/libcantus';
  * const palette = modalInterchangePalette(majorKey(0));
  * palette.map((borrowed) => formatChordSymbol(borrowed.chord));
- * // ['Cm', 'Ddim', 'Eb', 'Fm', 'Ab', 'Bb', 'Db'] — flat-side, not 'D#'/'G#'/'A#'
+ * // ['Cm', 'Ddim', 'Eb', 'Fm', 'Gm', 'Ab', 'Bb', 'Db'] — flat-side, not 'D#'/'G#'/'A#'
  * ```
  * @category Reharmonization
  */
