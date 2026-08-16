@@ -22,6 +22,12 @@ Terms as this library uses them. Where a musical term has more than one common m
 
 **GenerationContext** — The seed, dials, tempo, instruments, and vocabulary shared by every generator in one piece. A bare number is shorthand for `{ seed }`.
 
+**Score** — Note events together with the meter map, tempo map, and key they are read against. The library's entry point for music that already exists, and the subject the analysis questions are asked of.
+
+**Timeline** — Harmony that keeps its onsets: chord segments over a span of beats, with the key regions found under them. The timed counterpart of a progression, which holds the chord order and drops the chord rhythm.
+
+**Composer** — The settings one piece is generated under (key, meter, tempo, seed, dials, instruments, vocabulary), held once and handed to every part, so a generator call does not restate them.
+
 ## Pitch and interval
 
 **Spelled interval** — An interval with both a diatonic number and a chromatic span, so an augmented fourth and a diminished fifth stay distinct despite spanning the same six semitones.
