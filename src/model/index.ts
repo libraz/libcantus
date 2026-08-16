@@ -167,7 +167,6 @@ export type {
   ProgStyle,
   Provenance,
   ProvenanceBasis,
-  PublicSection,
   RhythmEvent,
   RhythmOptions,
   Section,

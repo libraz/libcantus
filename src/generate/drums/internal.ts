@@ -114,8 +114,18 @@ export const PUBLIC_SECTIONS = [
   'outro',
 ] as const;
 
-/** Public section identifiers. */
-export type PublicSection = (typeof PUBLIC_SECTIONS)[number];
+/**
+ * Public section identifiers for {@link generateDrums}.
+ *
+ * These are the names a caller writes. The generator maps them onto a
+ * narrower internal set the pattern tables are keyed by, which answers to
+ * `'a'` and `'b'` and refuses `'verse'` and `'prechorus'`. That set is not
+ * published: a caller who reached for it by name would be held to a
+ * vocabulary that is not this one.
+ *
+ * @category Composition
+ */
+export type Section = (typeof PUBLIC_SECTIONS)[number];
 
 /** Resolved internal parameters for a public groove style. */
 export type StyleMapping = {
@@ -146,7 +156,7 @@ export function mapStyle(style: GrooveStyle): StyleMapping {
 }
 
 /** Map a public section to the internal section type. */
-export function mapSection(section: PublicSection): SectionType {
+export function mapSection(section: Section): SectionType {
   switch (section) {
     case 'intro':
       return 'intro';

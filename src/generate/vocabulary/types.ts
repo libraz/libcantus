@@ -22,7 +22,7 @@ import type { TimeSignature } from '../../core/meter/index.js';
 import { assertOneOf, assertRange, assertTimeSignature } from '../../core/validation/index.js';
 import { type ChordQuality, chordQualities } from '../../theory/chord/index.js';
 import type { Draw } from '../context/draw.js';
-import { PUBLIC_SECTIONS, type PublicSection } from '../drums/internal.js';
+import { PUBLIC_SECTIONS, type Section } from '../drums/internal.js';
 
 /**
  * Every genre the built-in dictionaries name, in declaration order.
@@ -125,7 +125,7 @@ export type Vocabulary<T> = {
   /** Chord qualities the figure works over; absent means any chord. */
   fitsOver?: ChordQuality[];
   /** Sections the figure suits; absent means any section. */
-  sections?: PublicSection[];
+  sections?: Section[];
   /** Inclusive tempo band in BPM; absent means any tempo. */
   tempoRange?: [number, number];
   /** Time signature the figure is written in; absent means any. */
@@ -147,7 +147,7 @@ export type Vocabulary<T> = {
  */
 export type VocabularyQuery = {
   genre?: Genre;
-  section?: PublicSection;
+  section?: Section;
   /** Tempo in BPM, matched against each entry's band. */
   bpm?: number;
   ts?: TimeSignature;

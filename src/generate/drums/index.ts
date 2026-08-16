@@ -58,8 +58,8 @@ import {
   mapSection,
   mapStyle,
   PUBLIC_SECTIONS,
-  type PublicSection,
   percMoodCategory,
+  type Section,
   sectionDensityMultiplier,
   sectionEnergy,
 } from './internal.js';
@@ -86,14 +86,7 @@ export { DRUM_NOTES, drumVoiceOf } from './hit.js';
  *
  * @category Composition
  */
-export type {
-  DrumRole,
-  DrumStyle,
-  GrooveFeel,
-  GrooveStyle,
-  PublicSection,
-  SectionType,
-} from './internal.js';
+export type { DrumRole, DrumStyle, GrooveFeel, GrooveStyle, Section } from './internal.js';
 export type { KickFigure, KickPattern, KickSlot } from './kick.js';
 export { KICK_FIGURES, KICK_STEPS } from './kick.js';
 export { DRUM_KIT } from './kit.js';
@@ -104,13 +97,6 @@ export type {
   DrumVocabulary,
 } from './vocabulary.js';
 export { DRUM_PATTERNS, isDrumPattern, placeDrumPattern } from './vocabulary.js';
-
-/**
- * Public section identifiers for {@link generateDrums}.
- *
- * @category Composition
- */
-export type Section = PublicSection;
 
 /**
  * A Euclidean (Bjorklund) kick pattern for {@link generateDrums}.

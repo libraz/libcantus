@@ -96,9 +96,7 @@ export type {
   KickFigure,
   KickPattern,
   KickSlot,
-  PublicSection,
   Section,
-  SectionType,
 } from './drums/index.js';
 export {
   DRUM_KIT,

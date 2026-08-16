@@ -9,8 +9,13 @@
 
 import type { Draw } from '../context/index.js';
 import { BAR_STEPS, BEAT_STEPS } from '../vocabulary/transform.js';
-import type { DrumStyle, SectionType } from './internal.js';
-import { leanedBy } from './internal.js';
+import {
+  type DrumStyle,
+  leanedBy,
+  mapSection,
+  type Section,
+  type SectionType,
+} from './internal.js';
 
 /** Sixteenth steps in one bar of 4/4; the grid a kick pattern is written on. */
 export const KICK_STEPS = BAR_STEPS;
@@ -46,7 +51,7 @@ export type KickSlot = {
   /** Restrict the slot to bars of one parity, for a two-bar figure. */
   barParity?: 0 | 1;
   /** Sections the slot is added in; absent means every section. */
-  sections?: SectionType[];
+  sections?: Section[];
 };
 
 /** A style's kick figure: the slots it always plays, plus the ones it may. */
@@ -69,7 +74,7 @@ const OUTRO_FIGURE: KickFigure = [{ step: BEAT_1 }, { step: BEAT_3 }];
 const DEFAULT_FIGURE: KickFigure = [
   { step: BEAT_1 },
   { step: BEAT_3 },
-  { step: AND_2, probability: 0.5, slot: 'beat2and', sections: ['b'] },
+  { step: AND_2, probability: 0.5, slot: 'beat2and', sections: ['prechorus'] },
   { step: AND_2, probability: 0.55, slot: 'beat2and', sections: ['chorus'] },
   { step: AND_4, probability: 0.35, slot: 'beat4and', sections: ['chorus'] },
 ];
@@ -93,7 +98,7 @@ export const KICK_FIGURES: Readonly<Record<DrumStyle, KickFigure>> = Object.free
   upbeat: [
     { step: BEAT_1 },
     { step: BEAT_3 },
-    { step: AND_2, probability: 0.7, slot: 'beat2and', sections: ['b', 'chorus'] },
+    { step: AND_2, probability: 0.7, slot: 'beat2and', sections: ['prechorus', 'chorus'] },
     { step: AND_4, probability: 0.6, slot: 'beat4and', sections: ['chorus'] },
   ],
   rock: [
@@ -101,12 +106,12 @@ export const KICK_FIGURES: Readonly<Record<DrumStyle, KickFigure>> = Object.free
     { step: BEAT_3 },
     { step: AND_2, probability: 0.65, slot: 'beat2and', sections: ['chorus'] },
     { step: AND_4, probability: 0.4, slot: 'beat4and', sections: ['chorus'] },
-    { step: AND_2, probability: 0.3, slot: 'beat2and', sections: ['b'] },
+    { step: AND_2, probability: 0.3, slot: 'beat2and', sections: ['prechorus'] },
   ],
   synth: [
     { step: BEAT_1 },
     { step: BEAT_3 },
-    { step: AND_2, probability: 0.75, slot: 'beat2and', sections: ['b', 'chorus'] },
+    { step: AND_2, probability: 0.75, slot: 'beat2and', sections: ['prechorus', 'chorus'] },
     { step: AND_4, probability: 0.65, slot: 'beat4and', sections: ['chorus'] },
   ],
   trap: [
@@ -171,7 +176,7 @@ export function realiseKickFigure(
     if (slot.step < 0 || slot.step >= KICK_STEPS) {
       continue;
     }
-    if (slot.sections && !slot.sections.includes(section)) {
+    if (slot.sections && !slot.sections.some((name) => mapSection(name) === section)) {
       continue;
     }
     if (slot.barParity !== undefined && bar % 2 !== slot.barParity) {

@@ -37,7 +37,7 @@ import {
   feelSwingAmount,
   type GrooveFeel,
   PUBLIC_SECTIONS,
-  type PublicSection,
+  type Section,
 } from './internal.js';
 import { effectiveSwing, quantizeSwing } from './swing.js';
 
@@ -310,7 +310,7 @@ export type DrumPatternOptions = {
    */
   genre: Genre;
   /** Section the pattern plays in, matched against each entry's own sections. */
-  section?: PublicSection;
+  section?: Section;
   /** Time signature; defaults to 4/4. */
   ts?: TimeSignature;
   /**
