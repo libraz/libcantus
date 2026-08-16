@@ -13,3 +13,4 @@ backup/
 !.yarn/sdks
 !.yarn/versions
 .pnp.*
+test/generated/
