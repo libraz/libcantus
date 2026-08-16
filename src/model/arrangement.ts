@@ -25,6 +25,7 @@ import type { KeyLike } from '../theory/scale/index.js';
 import { toKeyScale } from '../theory/scale/index.js';
 import type { ScoreOptions } from './score.js';
 import { Score } from './score.js';
+import { copyNoteEvent, samePlain, spanEnd } from './shared.js';
 import { Timeline } from './timeline.js';
 
 /**
@@ -78,11 +79,6 @@ export type ArrangementData = {
   settings?: ArrangementSettings;
 };
 
-/** Zero with its sign dropped, so `-0` never reaches the plain data. */
-function withoutNegativeZero(value: number): number {
-  return value === 0 ? 0 : value;
-}
-
 /**
  * A deep copy of a plain value.
  *
@@ -105,59 +101,10 @@ function copyPlain<T>(value: T): T {
   return value;
 }
 
-/** Whether two plain values hold the same data, key order aside. */
-function samePlain(value: unknown, other: unknown): boolean {
-  if (Array.isArray(value) || Array.isArray(other)) {
-    return (
-      Array.isArray(value) &&
-      Array.isArray(other) &&
-      value.length === other.length &&
-      value.every((item, index) => samePlain(item, other[index]))
-    );
-  }
-  if (typeof value === 'object' && value !== null && typeof other === 'object' && other !== null) {
-    const mine = Object.entries(value);
-    const theirs = other as Record<string, unknown>;
-    return (
-      mine.length === Object.keys(theirs).length &&
-      mine.every(([key, item]) => key in theirs && samePlain(item, theirs[key]))
-    );
-  }
-  return value === other;
-}
-
-/** Where the last of a run of spans ends, and never before beat 0. */
-function spanEnd(...runs: readonly (readonly { endBeat: number }[])[]): number {
-  let end = 0;
-  for (const run of runs) {
-    for (const span of run) {
-      end = Math.max(end, span.endBeat);
-    }
-  }
-  return end;
-}
-
-/**
- * Defensive copy of one note event, carrying only the fields a note holds.
- *
- * A `-0` onset survives every arithmetic path that produced it but not
- * `JSON.stringify`, so it is dropped here rather than becoming a value that
- * compares unequal to its own serialization.
- */
+/** Defensive copy of one note event, checked as it is copied. */
 function copyNote(note: NoteEvent, name: string): NoteEvent {
   assertNoteEvent(note, name, { allowNonPositiveDuration: true });
-  const copy: NoteEvent = {
-    pitch: withoutNegativeZero(note.pitch),
-    startBeat: withoutNegativeZero(note.startBeat),
-    durationBeat: withoutNegativeZero(note.durationBeat),
-  };
-  if (note.velocity !== undefined) {
-    copy.velocity = withoutNegativeZero(note.velocity);
-  }
-  if (note.articulation !== undefined) {
-    copy.articulation = note.articulation;
-  }
-  return copy;
+  return copyNoteEvent(note);
 }
 
 /**

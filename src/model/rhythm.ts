@@ -1,6 +1,6 @@
 import { InvalidInputError } from '../core/errors/index.js';
 import type { TimeSignature } from '../core/meter/index.js';
-import { assertRange, assertTimeSignature } from '../core/validation/index.js';
+import { assertRange } from '../core/validation/index.js';
 import type {
   DeformOptions,
   GenerationContextInput,
@@ -23,6 +23,7 @@ import {
   withinCeiling,
 } from '../generate/index.js';
 import { Score } from './score.js';
+import { copyTimeSignature, withoutNegativeZero } from './shared.js';
 
 /** The plain form a {@link Rhythm} hands out and is rebuilt from. */
 export type RhythmData = {
@@ -65,11 +66,6 @@ const PART = 'rhythm';
 /** A grid onset that remembers the pattern onset it was built from. */
 type SourcedGridEvent = GridEvent & { source: RhythmEvent };
 
-/** Zero with its sign dropped, so `-0` never reaches the plain data. */
-function withoutNegativeZero(value: number): number {
-  return value === 0 ? 0 : value;
-}
-
 /** Defensive copy of one onset, checked as it is copied. */
 function copyEvent(event: RhythmEvent, name: string): RhythmEvent {
   return {
@@ -80,16 +76,6 @@ function copyEvent(event: RhythmEvent, name: string): RhythmEvent {
       assertRange(event.duration, 0, Number.MAX_SAFE_INTEGER, `${name}.duration`),
     ),
   };
-}
-
-/** Defensive copy of a time signature, validated on the way through. */
-function copySignature(ts: TimeSignature, name: string): TimeSignature {
-  assertTimeSignature(ts, name);
-  const copy: TimeSignature = { numerator: ts.numerator, denominator: ts.denominator };
-  if (ts.grouping !== undefined) {
-    copy.grouping = [...ts.grouping];
-  }
-  return copy;
 }
 
 /**
@@ -117,7 +103,7 @@ function copyEvents(events: readonly RhythmEvent[], name: string): RhythmEvent[]
 function copyRhythm(data: RhythmData): RhythmData {
   return {
     events: copyEvents(data.events, 'rhythm events'),
-    ts: copySignature(data.ts, 'rhythm ts'),
+    ts: copyTimeSignature(data.ts, 'rhythm ts'),
   };
 }
 
@@ -250,7 +236,7 @@ export class Rhythm {
 
   /** The meter the onsets are counted in. */
   get ts(): TimeSignature {
-    return copySignature(this.#data.ts, 'rhythm ts');
+    return copyTimeSignature(this.#data.ts, 'rhythm ts');
   }
 
   /** Where the pattern stops: the furthest point any onset sounds to. */
@@ -262,7 +248,7 @@ export class Rhythm {
   get data(): RhythmData {
     return {
       events: this.#data.events.map((event) => ({ ...event })),
-      ts: copySignature(this.#data.ts, 'rhythm ts'),
+      ts: copyTimeSignature(this.#data.ts, 'rhythm ts'),
     };
   }
 

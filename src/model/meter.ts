@@ -14,22 +14,7 @@ import {
   tryParseTimeSignature,
   tuplet,
 } from '../core/meter/index.js';
-import { assertTimeSignature } from '../core/validation/index.js';
-
-/**
- * A defensive copy of a plain time signature, checked the way every meter
- * function checks it.
- *
- * Data arriving from a project file, a plugin, or a hand-edited JSON enters
- * here, so it is held to the rules a parsed signature is held to: an unchecked
- * numerator of zero or of `NaN` would divide every bar this class measures.
- */
-function copyTimeSignature(ts: TimeSignature): TimeSignature {
-  assertTimeSignature(ts);
-  return ts.grouping === undefined
-    ? { numerator: ts.numerator, denominator: ts.denominator }
-    : { numerator: ts.numerator, denominator: ts.denominator, grouping: [...ts.grouping] };
-}
+import { copyTimeSignature } from './shared.js';
 
 /**
  * An immutable time signature: a numerator over a note-value denominator, with

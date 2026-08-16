@@ -23,6 +23,7 @@ import { majorKey, toKeyScale } from '../theory/scale/index.js';
 import { Instrument } from './instrument.js';
 import type { ScoreOptions } from './score.js';
 import { Score } from './score.js';
+import { samePlain } from './shared.js';
 import { Timeline } from './timeline.js';
 
 /** The settings a composer holds and hands to every generator it drives. */
@@ -190,28 +191,6 @@ function contextOf(options: ComposerOptions): GenerationContext {
     ctx.vocabulary = options.vocabulary.map((entry) => copyPlain(entry, 'composer vocabulary'));
   }
   return ctx;
-}
-
-/** Whether two plain values hold the same data, whatever order their keys are in. */
-function samePlain(mine: unknown, theirs: unknown): boolean {
-  if (Array.isArray(mine) || Array.isArray(theirs)) {
-    return (
-      Array.isArray(mine) &&
-      Array.isArray(theirs) &&
-      mine.length === theirs.length &&
-      mine.every((item, index) => samePlain(item, theirs[index]))
-    );
-  }
-  if (typeof mine === 'object' && mine !== null && typeof theirs === 'object' && theirs !== null) {
-    const keys = Object.keys(mine);
-    return (
-      keys.length === Object.keys(theirs).length &&
-      keys.every((key) =>
-        samePlain((mine as Record<string, unknown>)[key], (theirs as Record<string, unknown>)[key]),
-      )
-    );
-  }
-  return mine === theirs;
 }
 
 /**

@@ -34,6 +34,7 @@ import { applyGrooveTemplate, humanize, ornament } from '../generate/index.js';
 import { type KeyLike, toKeyScale } from '../theory/scale/index.js';
 import type { KeyData } from './key.js';
 import { Key } from './key.js';
+import { copyNoteEvent, withoutNegativeZero } from './shared.js';
 import { Timeline } from './timeline.js';
 
 /** The plain form a {@link Score} hands out and is rebuilt from. */
@@ -62,33 +63,6 @@ export type ScoreOptions = {
 /** The tempo a score is read at when the caller names none. */
 const DEFAULT_BPM = 120;
 
-/** Zero with its sign dropped, so `-0` never reaches the plain data. */
-function withoutNegativeZero(value: number): number {
-  return value === 0 ? 0 : value;
-}
-
-/**
- * Defensive copy of one note event, carrying only the fields a note holds.
- *
- * A `-0` onset survives every arithmetic path that produced it but not
- * `JSON.stringify`, so it is dropped here rather than becoming a value that
- * compares unequal to its own serialization.
- */
-function copyNote(note: NoteEvent): NoteEvent {
-  const copy: NoteEvent = {
-    pitch: withoutNegativeZero(note.pitch),
-    startBeat: withoutNegativeZero(note.startBeat),
-    durationBeat: withoutNegativeZero(note.durationBeat),
-  };
-  if (note.velocity !== undefined) {
-    copy.velocity = withoutNegativeZero(note.velocity);
-  }
-  if (note.articulation !== undefined) {
-    copy.articulation = note.articulation;
-  }
-  return copy;
-}
-
 /**
  * The notes checked and copied, in time order, ties broken by pitch.
  *
@@ -111,7 +85,7 @@ function orderNotes(notes: readonly NoteEvent[], name: string): NoteEvent[] {
       if (note === undefined) {
         throw new InvalidInputError(`${name}[${index}] must be a note event; received undefined`);
       }
-      return copyNote(
+      return copyNoteEvent(
         assertNoteEvent(note, `${name}[${index}]`, { allowNonPositiveDuration: true }),
       );
     })
@@ -316,7 +290,7 @@ export class Score {
 
   /** The sounding notes, in time order. */
   get notes(): readonly NoteEvent[] {
-    return this.#data.notes.map(copyNote);
+    return this.#data.notes.map(copyNoteEvent);
   }
 
   /**
@@ -365,13 +339,13 @@ export class Score {
   /** The notes this predicate keeps, with the same context. */
   filter(predicate: (note: NoteEvent, index: number) => boolean): Score {
     return this.#withNotes(
-      this.#data.notes.filter((note, index) => predicate(copyNote(note), index)),
+      this.#data.notes.filter((note, index) => predicate(copyNoteEvent(note), index)),
     );
   }
 
   /** The notes this function returns, with the same context. */
   map(fn: (note: NoteEvent, index: number) => NoteEvent): Score {
-    return this.#withNotes(this.#data.notes.map((note, index) => fn(copyNote(note), index)));
+    return this.#withNotes(this.#data.notes.map((note, index) => fn(copyNoteEvent(note), index)));
   }
 
   /** This score followed by another's notes. */
@@ -744,7 +718,7 @@ export class Score {
   /** A copy of the underlying plain data. */
   get data(): ScoreData {
     const copy: ScoreData = {
-      notes: this.#data.notes.map(copyNote),
+      notes: this.#data.notes.map(copyNoteEvent),
       meters: copyMeters(this.#data.meters),
       tempo: this.#data.tempo.map((event) => ({ startBeat: event.startBeat, bpm: event.bpm })),
     };

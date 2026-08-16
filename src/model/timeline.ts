@@ -23,6 +23,7 @@ import { Chord as ChordClass } from './chord.js';
 import type { Key } from './key.js';
 import { Key as KeyClass } from './key.js';
 import { Progression } from './progression.js';
+import { spanEnd } from './shared.js';
 
 /** The plain form a {@link Timeline} hands out and is rebuilt from. */
 export type TimelineData = {
@@ -120,17 +121,6 @@ function clipSpan<T extends { startBeat: number; endBeat: number }>(
   const startBeat = Math.max(span.startBeat, fromBeat);
   const endBeat = Math.min(span.endBeat, toBeat);
   return endBeat > startBeat ? { ...span, startBeat, endBeat } : null;
-}
-
-/** Where the last of a run of spans ends, and never before beat 0. */
-function spanEnd(...runs: readonly (readonly { endBeat: number }[])[]): number {
-  let end = 0;
-  for (const run of runs) {
-    for (const span of run) {
-      end = Math.max(end, span.endBeat);
-    }
-  }
-  return end;
 }
 
 /**

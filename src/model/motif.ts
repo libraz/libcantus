@@ -23,6 +23,7 @@ import { type KeyLike, toKeyScale } from '../theory/scale/index.js';
 import { type ChordLike, toChordData } from '../theory/symbol/index.js';
 import type { ScoreOptions } from './score.js';
 import { Score } from './score.js';
+import { withoutNegativeZero } from './shared.js';
 import type { Timeline } from './timeline.js';
 
 /**
@@ -68,11 +69,6 @@ export type MotifGenerateOptions = {
    */
   ctx?: GenerationContextInput;
 };
-
-/** Zero with its sign dropped, so `-0` never reaches the plain data. */
-function withoutNegativeZero(value: number): number {
-  return value === 0 ? 0 : value;
-}
 
 /** Defensive copy of one note, carrying only the fields a motif note holds. */
 function copyNote(note: MotifNote): MotifNote {
