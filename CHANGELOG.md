@@ -26,10 +26,18 @@ Generation gains articulation, instrument profiles that know which notes exist
 on a four-string bass, a genre vocabulary held as data instead of branches, and
 one continuous complexity dial in place of five differently-shaped knobs.
 
+Most visibly, the library stops being a bag of functions. Twelve classes join
+the five that existed, so a piece, its harmony over time, the settings it is
+generated under, an arrangement of it, and a vertical set of voices are each
+something you hold rather than a shape you pass from one function to the next —
+and every entry point that takes a note, a key, a chord, or a meter now accepts
+it as a name, as plain data, or as the class that holds one.
+
 See **Changed** first — the degree change, the removal of
-`ChordTimelineResult.key`, the replacement of `Cadence`, the meter map, and the
-re-addressed random number stream are all breaking, and the degree change looks
-silent at the call site.
+`ChordTimelineResult.key`, the replacement of `Cadence`, the meter map, the
+re-addressed random number stream, the reshaped `Note.of`, the generation
+options folded into the context, and three renamed types are all breaking, and
+the degree change looks silent at the call site.
 
 ### Changed
 
@@ -167,6 +175,85 @@ silent at the call site.
   neutral middle, `rhythmic` also syncopates the figures drawn from the genre
   vocabulary, which displaces onsets rather than adding them. `bpm` moves onto
   the context, so the bass generator can finally see it.
+
+- **A seed, a tempo and a complexity dial go on the generation context and
+  nowhere else.** Every generator also took a `seed`, most took a `bpm`, and the
+  drum generator took a `density` — each of them sugar for a field of `ctx`,
+  each with its own precedence rule against the context, and each silently
+  ignored when the other was set. All of them are gone; write
+  `ctx: { seed, bpm }` and `ctx: { complexity: { rhythmic } }`. The boolean
+  `reharmonize` on `generateProgression` stood for the middle of the harmonic
+  dial and is gone with them — write `ctx: { complexity: { harmonic: 0.5 } }`.
+  The strategy-valued `reharmonize` on the harmonizer stays, as do the tempo
+  fields on the context and the vocabulary; those name things rather than
+  duplicate them. `GenerationContext.seed` becomes optional, so a context naming
+  only a tempo stays writable now that the context is the only place a seed can
+  go.
+
+  A dropped option is not a type error when it sits in an object literal that
+  still matches — the extra property is discarded and the call runs on the
+  default. Check for `seed`, `bpm`, `density` and `reharmonize: true` at
+  generator call sites rather than trusting the build.
+
+- **`Note.parse` reads a note name; `Note.of` builds a note from its parts.**
+  `Note.of` accepted both a name and a set of parts, which made it the one
+  constructor in the family that did two jobs — `Chord`, `Key` and `Interval`
+  all read a name through `parse`. `Note.of` now takes a letter, an alteration
+  and an optional octave, and refuses a name carrying an accidental or an
+  octave with an error naming `Note.parse` as the way to read it. Replace
+  `Note.of('Eb4')` with `Note.parse('Eb4')`. `Chord.from`, a third spelling of
+  `Chord.fromData`, is dropped.
+
+- **A cadence is read against the harmony it stands on and the degrees its key
+  has.** A cadential six-four was read as a tonic in second inversion arriving
+  on its own dominant — two chords, the first of them given the wrong function.
+  `detectCadence` now takes the chord before `from` as `approach` and reports
+  the pair as one cadence that began there, `reduceProgression` keeps that
+  six-four in the frame, and a six-four resolving onto its own dominant is one
+  harmony moving inside itself rather than a cadence. Cadence types are judged
+  against the degrees the key itself has instead of fixed semitone distances, so
+  a mode evades onto its own submediant and an arrival on a dominant that
+  carries no leading tone rests as a half cadence — while a borrowed minor `v`
+  in a major key still does not.
+
+  `checkPartWriting` exempts the cross relations that chromatic harmony, a
+  stepwise approach or a pair of inner voices explains, reports each pair once,
+  and resolves spacing and ranges through the voicing validators, so a limit
+  that cannot be met fails instead of switching a rule off unnoticed.
+  `analyzeVoice` gains the appoggiatura and withholds a suspension figure whose
+  interval the note does not form, and `classifyMelodyTones` reads an onset
+  against the pulse, so a played phrase forms the figures the notated one does.
+  `checkSpecies` grades the shape of a line and lets the cambiata and the double
+  neighbour stand as the figures they are. The reduction level `auxiliary` is
+  renamed `neighbor`, the word `analyzeVoice` already uses for that figure, and
+  each chord of a reduction carries the beats it holds.
+
+  The same input can read differently than before: cadence types and rationales
+  in modal and six-four contexts, reduction levels, the ornament labels on a
+  melody, and part-writing violations that now carry an explanation.
+
+- **A named phrase end cuts the chord grid.** `harmonizeMelody` divided the grid
+  on the harmonic rhythm alone, so a phrase closing mid-bar was harmonized
+  across its own cadence. Every beat named in `phraseEnds` now ends a slot, and
+  the grid resumes on the harmonic rhythm's own boundaries after it. Each slot
+  carries its own length on `Segment.beats` and the transition and phrase-end
+  scores are weighed by it, so a slot cut short is worth what it lasts. A close
+  is required to change the harmony — a cadence being a chord change — wherever
+  the candidate vocabulary offers more than one harmony to move to, and the note
+  a phrase comes to rest on is kept as a structural tone, so a close on the
+  tonic between two supertonics is no longer read as a lower neighbour of the
+  next phrase's first note. A call passing `phraseEnds` can harmonize the same
+  melody differently than before; a call that names none is scored exactly as it
+  was.
+
+- **Three types are renamed to free the bare name for the class that holds
+  one.** `Tuning` becomes `TuningTable` — it is the table of steps a temperament
+  is defined by, not the temperament itself; the melody module's `Motif` result
+  becomes `MotifData`; and the written-duration `Duration` becomes
+  `DurationData`, matching `NoteData` and `ChordData`. The renames are
+  type-only: `edo`, `frequencyOf`, `nearestStep`, `MotifCell`, `MotifNote`,
+  `SpelledDuration`, `NoteValue`, `Tuplet` and every function keep their names
+  and behaviour, and a type-only rename fails the build rather than the run.
 
 ### Added
 
@@ -371,6 +458,73 @@ silent at the call site.
 - **Randomness primitives.** `deriveSeed` derives every part from one project
   seed; `createPositionalRng` answers by position rather than by call order; and
   `includeAt` makes a complexity dial monotone by construction.
+
+- **A class API over the whole library.** `Chord`, `Key`, `Note`, `Interval` and
+  `Progression` covered the things small enough to name; everything larger was a
+  shape threaded from one function to the next, so reading a transcription meant
+  hand-wiring a chain of calls and carrying the meter, the tempo and the key
+  alongside it by hand. Twelve classes join them:
+
+  - `Score` — note events with the meter map, tempo map and key they are read
+    against, so which chords, which phrases and where the sections fall are
+    methods on the music. Onsets stay absolute and unbounded below, so a pickup
+    survives slicing, shifting and quantizing instead of collapsing onto beat 0,
+    and tick-valued events are read and written directly, since that is the
+    shape a MIDI importer holds before anything else.
+  - `Timeline` — the timed counterpart of `Progression`: chord segments that
+    keep their onsets, with the key regions found under them and the reductions,
+    cadences and Roman numerals read off them.
+  - `Composer` — the key, meter, tempo, seed, dials, instruments and vocabulary
+    one piece is written under, held once and handed to every generator, so a
+    part is one call rather than a call plus a repeated context. Harmonizing a
+    melody hands back the melody beside its chords, because harmonizing may move
+    the melody into the chords' key and the chords alone would be half an answer.
+  - `Arrangement` — the tracks, the analysis of how they fit and the conflicts
+    between them; a track comes back as a `Score` and the harmony as a
+    `Timeline`, so an arrangement leads into the rest of the class API rather
+    than out of it. `update` stays incremental while the class stays immutable:
+    the edited session is handed to the new instance, so nothing is re-analyzed.
+  - `Voicing` — the pitches sounding together, low to high, with the voicing,
+    part-writing, counterpoint and safety functions as its methods. The order
+    the caller gave is kept, since an out-of-order voicing is voice crossing and
+    the check has to be able to report it.
+  - `Rhythm` and `Motif` — an onset pattern with its meter and a motivic cell,
+    with the deformations, transformations and similarity readings as methods
+    that return one, so material shaped to chain finally does. Both hand back a
+    `Score`.
+  - `Meter`, `Tempo`, `Duration`, `Instrument` and `Tuning` — over the meter,
+    tempo, written-duration, instrument-profile and temperament modules.
+
+  Every class is immutable and follows the conventions the existing five set:
+  `data` returns a fresh copy, `toJSON` equals it, `fromData` / `fromJSON` round
+  trip, and `equals` compares by value. Each method exposes every option its
+  delegate accepts, with the same optionality, so a method cannot quietly offer
+  less than the function under it. The functional API is unchanged and remains
+  the layer the classes are built on — neither is a wrapper you are expected to
+  unwrap.
+
+- **A note, key, chord, meter or instrument may be given in whatever form the
+  caller holds it.** `NoteLike`, `KeyLike`, `ChordLike`, `MeterLike` and
+  `InstrumentProfileLike` join the existing `IntervalLike`, each accepting a
+  name, the plain data, or a value whose `toJSON` returns it, so `'Eb4'`, `60`,
+  a `NoteData` and a `Note` are all a note, and `'4/4'`, a `TimeSignature` and a
+  `Meter` are all a meter. A class therefore crosses a layer boundary without
+  the layer below importing it. `toNoteData`, `toKeyScale`, `toChordData` and
+  `toMeterData` are the only places that read text, rather than a parse call
+  spread through every entry point that takes one; a number is read as a MIDI
+  pitch, spelled the way `midiToNote` spells one, and a name is whatever the
+  existing parser already accepts, with no shorthand of its own. Coercion
+  happens once at the public boundary, so a search loop does not re-read a name
+  per candidate.
+
+- **Further entry points.** `tryParseKeyName` and `tryParseTimeSignature` join
+  the non-throwing parsers; `augmentedSixthFromPitchClasses` reads an augmented
+  sixth from a pitch-class set and `gridMetricWeight` gives a sixteenth-grid
+  step its weight within the bar, which is what decides the events a vocabulary
+  figure sheds first when asked for something easier; `KeyData` and
+  `ProgressionData` name the
+  plain forms, each with a `fromData` beside `fromJSON`; and the chord-scale and
+  cadence option types are exported so a caller can name them.
 
 ### Fixed
 
