@@ -33,10 +33,15 @@ export type {
 } from '../analyze/functional/index.js';
 export type {
   AnalyzedNote,
+  ArrangementAnalysis,
+  ArrangementOptions,
+  ArrangementSession,
+  ArrangementTrack,
   CadenceHit,
   ChordSegmentation,
   ChordTimeline,
   ChordTimelineOptions,
+  Conflict,
   ContourDirection,
   ExtractMotifsOptions,
   FormSection,
@@ -59,7 +64,11 @@ export type {
   ReductionBasis,
   ReductionLevel,
   SuspensionFigure,
+  TensionPoint,
   TheoryLabel,
+  TrackAnalysis,
+  TrackEdit,
+  TrackRole,
 } from '../analyze/index.js';
 export type {
   DurationData,
@@ -204,6 +213,13 @@ export type {
   VoicingStyle,
 } from '../theory/voicing/index.js';
 
+export {
+  Arrangement,
+  type ArrangementData,
+  type ArrangementSettings,
+  type ArrangementSetup,
+  type ArrangementTensionOptions,
+} from './arrangement.js';
 export { Chord } from './chord.js';
 export { Composer, type ComposerOptions, type HarmonizedMelody } from './composer.js';
 export { Duration } from './duration.js';

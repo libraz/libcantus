@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ParseResult } from '../src/core/errors/index.js';
 import * as model from '../src/model/index.js';
 import {
+  Arrangement,
   Chord,
   Composer,
   Duration,
@@ -88,6 +89,22 @@ const CLASS_BY_NAME = new Map<string, unknown>(CLASSES);
 
 /** One instance per exported class, keyed by the name the barrel exports. */
 const SAMPLES: Record<string, { data: unknown; equals(other: never): boolean }> = {
+  Arrangement: Arrangement.of([
+    {
+      name: 'lead',
+      notes: [
+        { pitch: 72, startBeat: 0, durationBeat: 2 },
+        { pitch: 74, startBeat: 2, durationBeat: 2 },
+      ],
+    },
+    {
+      name: 'bass',
+      notes: [
+        { pitch: 36, startBeat: 0, durationBeat: 2 },
+        { pitch: 43, startBeat: 2, durationBeat: 2 },
+      ],
+    },
+  ]),
   Chord: Chord.parse('Cmaj7/E'),
   Composer: Composer.of({
     key: 'C major',

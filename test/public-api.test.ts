@@ -26,6 +26,7 @@ const EXPECTED_EXPORTS = [
   'BEAT_STEPS',
   'BLUES_MASK',
   'BORROWED_DEGREES',
+  'Arrangement',
   'BudgetExceededError',
   'CHROMATIC_MASK',
   'Chord',
