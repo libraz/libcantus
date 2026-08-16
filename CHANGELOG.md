@@ -534,6 +534,20 @@ the degree change looks silent at the call site.
 
 ### Fixed
 
+- A method that reads a key first and its options second says so when the
+  options arrive on their own. `chord.roman({ applied: true })` and
+  `progression.cadences({ alternatives: true })` took the bag for the key and
+  failed later against a key field the caller never wrote — `modeMask12 must be
+  finite; received undefined` for an object whose only property was
+  `alternatives`. The argument is checked where it is given, and the error says
+  a `Key` was expected and where the options go. `Chord.roman`,
+  `Chord.analyze`, `Progression.roman`, `Progression.analyze` and
+  `Progression.cadences` are the five affected.
+- `Voicing.independence` no longer forwards its own `key` option to the
+  counterpoint function underneath. `key` spells the two lines and means
+  nothing below; the delegate discards an unknown property, so this changed no
+  answer, but it would have become a real defect the moment that function took
+  a `key` of its own.
 - `Key.transpose` spells its result the way the key is written, as its
   documentation always claimed: `Key.major('Db').transpose(1)` is D major, not
   Ebb major. A result needing more than seven sharps or flats is respelled to
