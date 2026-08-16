@@ -166,6 +166,25 @@ export type {
   ScaleChoice,
 } from '../theory/chordscale/index.js';
 export type {
+  VoiceIndependenceOptions,
+  VoiceIndependenceReport,
+} from '../theory/counterpoint/index.js';
+export type {
+  PartWritingOptions,
+  PartWritingViolation,
+  PartWritingViolationKind,
+  Species,
+  SpeciesOptions,
+} from '../theory/partwriting/index.js';
+export type {
+  EvaluateSafetyOptions,
+  SafetyProfile,
+  SafetyQuery,
+  SafetyResult,
+  VoiceSnapshot,
+} from '../theory/safety/index.js';
+export { NoteSafety } from '../theory/safety/index.js';
+export type {
   KeyLike,
   KeyMode,
   KeyRelation,
@@ -173,7 +192,7 @@ export type {
   ScaleNameInput,
   SpelledKey,
 } from '../theory/scale/index.js';
-export type { ChordSymbolOptions } from '../theory/symbol/index.js';
+export type { ChordLike, ChordSymbolOptions } from '../theory/symbol/index.js';
 export type {
   TransposingInstrument,
   TransposingInstrumentName,
@@ -198,3 +217,9 @@ export { Score, type ScoreData, type ScoreOptions } from './score.js';
 export { Tempo, type TempoData } from './tempo.js';
 export { Timeline, type TimelineData, type TimelineRoman } from './timeline.js';
 export { Tuning } from './tuning.js';
+export {
+  Voicing,
+  type VoicingData,
+  type VoicingIndependenceOptions,
+  type VoicingSafetyQuery,
+} from './voicing.js';

@@ -98,6 +98,7 @@ const EXPECTED_EXPORTS = [
   'Tempo',
   'Timeline',
   'Tuning',
+  'Voicing',
   'WHOLE_TONE_MASK',
   'WORLD_SCALES',
   'analyzeArrangement',

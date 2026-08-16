@@ -18,6 +18,7 @@ import {
   Tempo,
   Timeline,
   Tuning,
+  Voicing,
 } from '../src/model/index.js';
 
 /**
@@ -113,6 +114,7 @@ const SAMPLES: Record<string, { data: unknown; equals(other: never): boolean }> 
     4,
   ),
   Tuning: Tuning.edo(19),
+  Voicing: Voicing.of([48, 55, 64, 72]),
   Interval: Interval.parse('-m3'),
   // A detected key, so the scale form a plain minor does not carry is exercised.
   Key: Key.detectBest([57, 59, 60, 62, 64, 65, 68]) ?? Key.minor('A'),
