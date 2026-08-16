@@ -72,7 +72,7 @@ describe('roleOf', () => {
     for (const quality of chordQualities()) {
       for (const rootPc of [0, 5, 11]) {
         const chord = makeChord(rootPc, quality);
-        const thirds = [...Array(12).keys()].filter(
+        const thirds = [...new Array(12).keys()].filter(
           (pitchClass) => roleOf(rootPc + pitchClass, chord).role === 'third',
         );
         expect(thirds.length, `${quality}/${rootPc}`).toBeLessThanOrEqual(1);
