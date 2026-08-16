@@ -58,7 +58,7 @@ const typed = tryParseChordSymbol('C(');
 const label = typed.ok ? typed.value.quality : typed.error.message;
 ```
 
-`ParseResult<T>` は `{ ok: true; value: T }` または `{ ok: false; error: LibcantusError }` です。エラーを `null` に潰さず結果に載せるのは、入力欄が「入力された文字列の何が不正なのか」を表示する必要があるためです。テキストを読むパーサはいずれもこの対を持ちます。音名、音程、コードネーム、調名、拍子記号のすべてです。クラス API も、テキストを読むクラスごとに同じ対を持ちます。`Note.parse`、`Interval.parse`、`Key.parse`、`Chord.parse` に対して `Note.tryParse`、`Interval.tryParse`、`Key.tryParse`、`Chord.tryParse` です。
+`ParseResult<T>` は `{ ok: true; value: T }` または `{ ok: false; error: LibcantusError }` です。エラーを `null` に潰さず結果に載せるのは、入力欄が「入力された文字列の何が不正なのか」を表示する必要があるためです。テキストを読むパーサはいずれもこの対を持ちます。音名、音程、コードネーム、調名、拍子記号のすべてです。クラス API も、テキストを読むクラスごとに同じ対を持ちます。`Note.parse`、`Interval.parse`、`Key.parse`、`Chord.parse`、`Meter.parse` に対して `Note.tryParse`、`Interval.tryParse`、`Key.tryParse`、`Chord.tryParse`、`Meter.tryParse` です。
 
 例外を投げるパーサは、いずれも投げないパーサの上に実装されています。`parseNote` と `tryParseNote` が妥当性の判定でずれることはありません。
 

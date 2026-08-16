@@ -2,7 +2,7 @@
 
 ## コードは構造を持つ値
 
-コード記号は `ChordSpec` として解析されます。基本の性質に加えて、7th、変化音、付加音、省略音、任意のベースを持ちます。固定のコード名一覧に縛られたモデルではありません。
+コード記号はコードのデータとして解析されます。ルートのピッチクラス、その上に積まれた音程、任意のベースです。そのデータを構造として読むのは別の段階で、`chordSpecOf` が `ChordSpec` を導きます。基本の性質に加えて、7th、変化音、付加音、省略音、任意のベースを持つ形です。固定のコード名一覧に縛られたモデルではありません。
 
 ```ts
 import { Chord, Key, chordSpecOf } from '@libraz/libcantus';
@@ -11,11 +11,14 @@ Key.major('C').roman('V7/V').symbol(); // 'D7'
 Chord.parse('F#m7b5').pitchClasses(); // [0, 4, 6, 9]
 
 const altered = Chord.parse('C7(b9,#11)');
+
+altered.spec.alterations;
+// [{ degree: 9, alter: -1 }, { degree: 11, alter: 1 }]
 chordSpecOf(altered.data).alterations;
 // [{ degree: 9, alter: -1 }, { degree: 11, alter: 1 }]
 ```
 
-`Chord` の値は転回、移調、整形、進行への変換ができます。純粋関数の `makeChord`、`chordFromSpec`、`chordPitchClasses`、`formatChordSymbol` は、クラスラッパーなしで同じデータモデルを公開します。
+1段で得たいときは `Chord.spec` を使います。`chordSpecOf` が受け取るのはプレーンなコードデータであり、`chord.data` を渡す必要があるのはそのためです。`Chord` の値は転回、移調、整形、進行への変換ができます。純粋関数の `makeChord`、`chordFromSpec`、`chordPitchClasses`、`formatChordSymbol` は、クラスラッパーなしで同じデータモデルを公開します。
 
 記号は往復しても保たれ（どの品質名にも当てはまらない和音を含みます）、転回は音程リストの並べ替えではなくベースのピッチクラスとして保持されます。
 

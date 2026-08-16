@@ -36,7 +36,7 @@ timeline.roman(key).map((entry) => entry.roman);
 
 ## 調の推定
 
-コード譜は調を書いていないことが多く、ピッチクラスをまとめて `Key.detectBest` に渡すのが、もっとも手軽な推定方法になります。上の例はその限界を示しています。`Dm7 G7 Cmaj7 A7(b9)` を重みなしで集計すると、結果は C ではなく G になります。14音のヒストグラムの中で、A7 の嬰ハが4小節分の根拠を上回るためです。
+コード譜は調を書いていないことが多く、ピッチクラスをまとめて `Key.detectBest` に渡すのが、もっとも手軽な推定方法になります。上の例はその限界を示しています。`Dm7 G7 Cmaj7 A7(b9)` を重みなしで集計すると、結果は C ではなく G になります。集計されるのは17音のヒストグラムで、どの音も1回ずつ数えられます。その中でもっとも頻度が高いピッチクラスが G だというだけの話です。G は4つのコードのうち3つで鳴り、他はどれも2つまでしか鳴りません。
 
 推定を良くする方法は2つあります。各コードが鳴る長さで重み付けし、2拍の経過的なコードが1小節保持されるコードより軽くなるようにすること。そして主音の候補を位置で重み付けし、コード譜の最終小節が3小節目より強く効くようにすることです。
 
@@ -59,11 +59,11 @@ timeline.segments.map((segment) => [segment.startBeat, segment.endBeat]);
 timeline.at(3)?.symbol(); // 'G7'
 ```
 
-タイムラインは調を自分で持ち歩くため、後段に調をもう一度伝える必要はありません。
+タイムラインは調を自分で持ち歩くため、タイムライン自身への問い合わせ — `roman`、`cadences`、`reduce` — に調をもう一度伝える必要はありません。例外はジェネレータです。ジェネレータは自分の `Composer` が持つ調で書き、タイムラインからはコードだけを取ります。
 
 ## コード譜を音にする
 
-`Voicing.forChord` はコンピング用のボイシングを直接組み立てます。音域探索がなく、スタイル名がそのまま響きを指します。もう1つの実現の仕方が `Progression.voice` で、こちらは声部の動きをなめらかに保った4声を返します。歌ったり複数のパートで演奏したりするコード譜にはこちらを使います。ベースは `Composer` が同じタイムラインの下に書き、調はタイムラインが持っているものがそのまま使われます。
+`Voicing.forChord` はコンピング用のボイシングを直接組み立てます。音域探索がなく、スタイル名がそのまま響きを指します。もう1つの実現の仕方が `Progression.voice` で、こちらはコード記号1つにつき4声の和音を1つ返し、隣り合う和音のあいだで声部の動きをなめらかに保ちます。歌ったり複数のパートで演奏したりするコード譜にはこちらを使います。ベースは `Composer` が同じタイムラインの下に書きますが、その調はタイムラインのものではなく、コンポーザ自身に与えられたものです。
 
 ```ts
 import { Chord, Composer, Key, Progression, Voicing } from '@libraz/libcantus';
@@ -77,8 +77,8 @@ const progression = new Progression(
 const comping = progression.chords.map((chord) => Voicing.forChord(chord, { style: 'drop2' }));
 comping[0]?.pitches; // [57, 62, 65, 72]
 
-const parts = progression.voice();
-parts[0]; // [50, 60, 65, 69]
+const voiced = progression.voice();
+voiced[0]; // [50, 60, 65, 69]
 
 const bass = Composer.of({ key, bpm: 96, seed: 3 }).bass(progression.timeline(4), {
   style: 'walking',

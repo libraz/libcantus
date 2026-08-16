@@ -21,7 +21,22 @@ Storing `[min, max]` instead would make a five-string bass, a drop tuning, and a
 
 A percussion profile is described by limbs rather than range: `reach` says which limbs can strike each voice, in preference order. A voice no limb can reach is not on the instrument, and two voices needing the same limb at the same instant cannot both sound.
 
-The built-in profiles are `BASS_4_STRING`, `BASS_5_STRING`, `GUITAR_STANDARD`, and `GUITAR_DROP_D`. Anything else is a plain object literal of the same shape.
+The built-in stringed profiles are `BASS_4_STRING`, `BASS_5_STRING`, `GUITAR_STANDARD`, and `GUITAR_DROP_D`; `DRUM_KIT` is the built-in percussion profile, a kit whose limbs and reach are already filled in. Anything else is a plain object literal of the same shape.
+
+## The Instrument class
+
+`Instrument` wraps a profile and answers the same questions with it already bound. The built-in profiles have factories of their own, and `Instrument.of` takes any profile — a built-in constant, `DRUM_KIT`, or a caller's own literal:
+
+```ts
+import { DRUM_KIT, Instrument } from '@libraz/libcantus';
+
+Instrument.guitar().range(); // { low: 40, high: 88 }
+Instrument.guitarDropD().canSound(38); // true
+Instrument.guitar().canSound(38); // false
+Instrument.of(DRUM_KIT).kind; // 'percussion'
+```
+
+`Instrument.bass4` and `Instrument.bass5` cover the two basses, and `Instrument.data` hands the plain profile back for storage or transport. The rest of this page shows both surfaces; the [generation guide](generation.md) and the use-case pages use the class form throughout.
 
 ## Fingerings and folding
 
@@ -35,6 +50,19 @@ foldIntoRange(20, GUITAR_STANDARD); // 44
 ```
 
 `fingeringsFor` returns every string/fret position that produces a pitch, which is what a tab renderer or a fingering picker needs. `foldIntoRange` moves a pitch by octaves until it lies inside the instrument, for an importer that must keep a part playable rather than report it as impossible.
+
+An instrument gives the same two answers without repeating the profile:
+
+```ts
+import { Instrument } from '@libraz/libcantus';
+
+const guitar = Instrument.guitar();
+
+guitar.fingerings(64)[0]; // { string: 0, fret: 24 }
+guitar.foldIntoRange(20); // 44
+```
+
+`fingerings` throws for a kit, which has no neck to place a pitch on; `foldIntoRange` applies to both families.
 
 ## The three layers of playability
 
@@ -53,6 +81,18 @@ const report = playability([{ pitch: 27, startBeat: 0, durationBeat: 1 }], BASS_
 
 report.issues[0]?.type; // 'noteOutOfRange'
 report.issues[0]?.layer; // 1
+report.difficulty >= 1; // true
+```
+
+The class form of the same check reads the passage against an instrument that already holds its profile:
+
+```ts
+import { Instrument } from '@libraz/libcantus';
+
+const bass = Instrument.bass4();
+const report = bass.playability([{ pitch: 27, startBeat: 0, durationBeat: 1 }]);
+
+report.issues[0]?.type; // 'noteOutOfRange'
 report.difficulty >= 1; // true
 ```
 
@@ -120,6 +160,17 @@ formatNote(toSoundingPitch(parseNote('C4'), '-P4')); // 'G3'
 Both conversions take spelled notes, because the interval decides the letter: a written D-sharp on a clarinet in A sounds B-sharp, and a semitone count alone would answer C natural and lose the letter the part is written on. A note carrying an octave moves register with it; an octave-less note stays octave-less.
 
 An interval string works in place of a name, so an instrument the table does not list — an alto flute at `-P4` — needs no addition to the library.
+
+Hold the instrument and you name nothing at all: `Instrument.soundingPitch` looks the transposition up by the profile's own name, and takes one explicitly for a profile the table does not carry, which is every profile a caller writes:
+
+```ts
+import { Instrument } from '@libraz/libcantus';
+
+Instrument.guitar().soundingPitch('C4').name; // 'C3'
+Instrument.guitar().soundingPitch('C4', '-P4').name; // 'G3'
+```
+
+A guitar part is printed an octave above concert pitch, so the guitar answers `C3` for a written `C4` without being told.
 
 Analysis works on sounding pitch. Convert on the way in from a part written for a transposing instrument, and convert back on the way out when producing that player's part; see [Interoperability](interoperability.md).
 

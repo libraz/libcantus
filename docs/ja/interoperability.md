@@ -11,11 +11,11 @@
 
 解析と生成の結果は JSON 互換のプレーンデータです。関数 API にクラスインスタンスは現れず、隠れたプロトタイプもありません。結果はそのままプロジェクトファイルに直列化でき、復元処理なしで読み戻せます。クラス API は同じデータを包み、`.data` で公開します。
 
-データではなく検索関数であるフィールドが1つだけあります。コードタイムラインは `segments` と、それを引く `at` の組で、関数は `JSON.stringify` を通り抜けられません。解析結果の報告フィールドは `timeline.segments` を含めてそのまま往復し、`at` は保存した segments から `chordTimelineFromChords` で作り直せます。作り直したものは、元のタイムラインとすべての拍で同じ和音を返します。
+データではなく検索関数であるフィールドが1つだけあります。コードタイムラインは `segments` と、それを引く `at` の組で、関数は `JSON.stringify` を通り抜けられません。解析結果の報告フィールドは `timeline.segments` を含めてそのまま往復し、`at` は保存したデータから `Timeline.fromJSON` がそのまま復元します。復元したものは、元のタイムラインとすべての拍で同じ和音を返します。関数 API のままで済ませる場合はもう一手間かかります。`chordTimelineFromChords` が受け取るのは `ChordSpan`、つまり根音・和音種別・開始拍の組であって、保存されている `ChordSegment` ではありません。保存した区間はいったん span に写してから渡してください。
 
 例外はハンドルで、これらは結果ではありません。`createNoteEventIndex`、`createArrangementSession`、`createRng`、`createPositionalRng`、`resolveContext` が返すのはライブオブジェクトです。メソッドや関数のフィールドは `JSON.stringify` を通り抜けられません。保存するのは、それらを組み立てた入力のほうです。ノートイベント、シード、解決後の `algorithmVersion` を保存し、読み込み時に作り直してください。[決定性とシード](determinism-and-seeding.md)を参照してください。
 
-## 音・調・和音の渡し方
+## 音・音程・調・和音・拍子の渡し方
 
 これらを受け取る公開エントリポイントは、手元にある形をそのまま受け取ります。入力欄が持っている文字列でも、ライブラリが返すプレーンデータでも、それを包むクラスでもかまいません。種類ごとに変換関数が1つあり、文字列を読むのはそこだけです。
 
@@ -25,6 +25,7 @@
 | 音程 | 音程名、`SpelledInterval`、`Interval` | `toSpelledInterval` |
 | 調 | 調名、`KeyScale`、`Key` | `toKeyScale` |
 | 和音 | コードネーム、`ChordData`、`Chord` | `toChordData` |
+| 拍子 | 拍子記号の文字列、`TimeSignature`、`MeterMap`、`Meter` | `toMeterData` |
 
 ```ts
 import { toChordData, toKeyScale, toNoteData } from '@libraz/libcantus';
@@ -34,6 +35,8 @@ toNoteData(60); // { letter: 0, alter: 0, octave: 4 }
 toKeyScale('A minor').rootPc; // 9
 toChordData('Cmaj7').intervals; // [0, 4, 7, 11]
 ```
+
+楽器も同じ受け取り方をします。楽器を必要とする入り口はいずれも `InstrumentProfileLike`、つまりプレーンなプロファイルか `Instrument` を受け取ります。ただしその変換関数は内部にあり公開していないので、呼び出し側で解決せずそのまま渡します。
 
 クラスは型ではなく `toJSON` を通して読まれます。これにより、下の層がクラスを import せずにインスタンスを受け取れます。同じ形を返す `toJSON` を持つ独自の値も、同じように受け取られます。
 

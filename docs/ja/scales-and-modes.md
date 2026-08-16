@@ -69,6 +69,22 @@ diatonicPitchClasses(c); // [0, 2, 4, 5, 7, 9, 11]
 
 `pitchToScaleDegree` はスケール内で度数を数えます。7音音階の第5音にも、5音音階の5番目の音にも 5 を返します。`nearestScaleTone` はスケールへのスナップ機能で使うもので、変更するのは音高であり綴りではありません。
 
+`Key` は、保持しているスケールに対して同じ4つの問いに答えます。
+
+```ts
+import { Key } from '@libraz/libcantus';
+
+const c = Key.major('C');
+
+c.contains(64); // true
+c.contains(61); // false
+c.nearestTone(61); // 60
+c.degreeOf(67); // 5
+c.pitchClasses(); // [0, 2, 4, 5, 7, 9, 11]
+```
+
+スケール外のピッチに対して `Key.degreeOf` が返すのは、関数版の `-1` ではなく `null` です。度数をそのまま UI に流し込んでも、主音と取り違える形にはなりません。
+
 ## 機能和声が成り立つスケール
 
 ローマ数字、終止、和声機能は、いずれも古典的な調性音楽の約束事です。導音を持たないスケールや3度堆積の和音を持たないスケールに適用すると、意味を持たないラベルが生成されます。
@@ -82,6 +98,19 @@ scaleSystemOf('wholeTone'); // 'non-functional'
 
 supportsFunctionalHarmony('major'); // true
 supportsFunctionalHarmony('miyakoBushi'); // false
+```
+
+`Key` は保持しているスケールについて答えるため、同じスケールを二度指定する必要はありません。
+
+```ts
+import { Key } from '@libraz/libcantus';
+
+Key.major('C').system(); // 'common-practice'
+Key.named('dorian', 'D').system(); // 'modal'
+Key.named('wholeTone', 'C').system(); // 'non-functional'
+
+Key.major('C').supportsFunctionalHarmony(); // true
+Key.named('miyakoBushi', 'C').supportsFunctionalHarmony(); // false
 ```
 
 `SCALE_SYSTEMS` は組み込みの全スケールを3つの体系に分類します。UI でローマ数字を提示する前に `supportsFunctionalHarmony` を確認してください。全音音階の箇所に対する正しい応答は、近似して選んだ数字ではなく「この解析は適用できない」ことです。
@@ -113,6 +142,22 @@ report[0]?.name; // 'mixolydian'
 report[0]?.avoid; // []
 report[0]?.passing; // [5]
 report[0]?.tensions; // [2, 9]
+```
+
+`Chord` も同じ4つの問いを持ちます。譜面から解析したコードは、すでにこの形になっています。
+
+```ts
+import { Chord } from '@libraz/libcantus';
+
+Chord.of('C', 'maj7').scales()[0]; // { name: 'ionian', rootPc: 0 }
+Chord.of('C', 'maj7').tensions('ionian'); // [2, 9]
+Chord.of('C', 'maj7').avoidNotes('ionian'); // [5]
+Chord.of('C', 'maj7').avoidNotes('ionian', { use: 'melodic' }); // []
+
+const entry = Chord.of('C', 'dom7').scaleReport(1)[0];
+entry?.name; // 'mixolydian'
+entry?.passing; // [5]
+entry?.tensions; // [2, 9]
 ```
 
 `chordScaleReport` は上の3つを1つにまとめたもので、適合順に並び、件数の上限も指定できます。各エントリはコードが鳴らしていないスケール音を3つに分けます。`avoid` はまったく弾けない音、`passing` は経過的には通れるが和音に重ねてはいけない音、`tensions` は色として自由に足せる音です。UI のパネルが必要とするのは通常この形です。
@@ -155,6 +200,18 @@ noteNames(spellScale(spelledKeyOf(majorKey(6)).tonic, majorKey(6)));
 
 const miyako = scaleByName('miyakoBushi', 0);
 noteNames(spellScale(spelledKeyOf(miyako).tonic, miyako)); // ['C', 'Db', 'F', 'G', 'Ab']
+```
+
+`Key` は綴られた主音をすでに持っているため、この連なりは1回の呼び出しで済みます。音名の文字列は `Key.noteNames`、音そのものは `Key.spell` です。
+
+```ts
+import { Key } from '@libraz/libcantus';
+
+Key.major('Gb').noteNames();
+// ['Gb', 'Ab', 'Bb', 'Cb', 'Db', 'Eb', 'F']
+
+Key.named('miyakoBushi', 'C').noteNames(); // ['C', 'Db', 'F', 'G', 'Ab']
+Key.major('Gb').spell()[0].name; // 'Gb'
 ```
 
 `spelledKeyOf` は臨時記号の少ない主音の綴りを選びます。長調のピッチクラス1は C# ではなく Db になります。両方の綴りが同じだけ遠い場合 — ピッチクラス6は嬰6つの F# と変6つの Gb — はフラット側を採ります。曲がもう一方の綴りで書かれている場合は、主音を明示的に渡してください。

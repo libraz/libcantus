@@ -18,6 +18,18 @@ formatChordSymbol(subs.find((sub) => sub.type === 'tritone')?.chord ?? makeChord
 
 The tritone substitute of G7 in C major is spelled Db7, not C#7 — it is the flat second degree of the key, and the spelling says so.
 
+`Chord.substitutions` is the same query from the class API, and `Progression.substitute` puts one of them in place:
+
+```ts
+import { Chord, Key, Progression } from '@libraz/libcantus';
+
+const subs = Chord.parse('G7').withKey(Key.major('C')).substitutions();
+subs.find((sub) => sub.type === 'tritone')?.chord.rootPc; // 1
+
+const progression = new Progression([Chord.parse('G7'), Chord.parse('C')], Key.major('C'));
+progression.substitute(0, 'tritone').toString(); // 'Db7 C'
+```
+
 The four relationships:
 
 | Type | Applies to | What it does |
@@ -27,7 +39,7 @@ The four relationships:
 | `borrowed` | Any chord | Takes the same degree from the parallel mode. |
 | `chromaticMediant` | Any chord | A third away, with one common tone and a chromatic shift. |
 
-An applied dominant is not one of them. Which dominant applies is decided by the chord that follows, and `substituteChord` is asked about one chord in a key. Where the target is known, `secondaryDominantOf` builds the applied dominant of a named chord; where the whole progression is being chosen, `harmonizeMelody` opens its vocabulary with `reharmonize: 'secondaryDominant'`.
+An applied dominant is not one of them. Which dominant applies is decided by the chord that follows, and `substituteChord` is asked about one chord in a key. Where the target is known, `secondaryDominantOf` — or `Chord.secondaryDominant` — builds the applied dominant of a named chord; where the whole progression is being chosen, `harmonizeMelody` opens its vocabulary with `reharmonize: 'secondaryDominant'`.
 
 ### Keeping the melody consonant
 
@@ -50,32 +62,36 @@ Without it the result is the full set of theoretically available substitutions; 
 Rather than asking chord by chord, take the whole set of chords available from the parallel mode:
 
 ```ts
-import { formatChordSymbol, majorKey, modalInterchangePalette } from '@libraz/libcantus';
+import { Chord, formatChordSymbol, Key, majorKey, modalInterchangePalette } from '@libraz/libcantus';
 
 modalInterchangePalette(majorKey(0)).map((borrowed) => formatChordSymbol(borrowed.chord));
 // ['Cm', 'Ddim', 'Eb', 'Fm', 'Gm', 'Ab', 'Bb', 'Db']
+
+Chord.parse('C').withKey(Key.major('C')).modalInterchange().length; // 8
 ```
 
-Each entry carries its numeral and its `source`, so a UI can group them by where they were borrowed from. The spellings stay on the flat side, as borrowed chords in a major key are written.
+Each entry carries its numeral and its `source`, so a UI can group them by where they were borrowed from. The spellings stay on the flat side, as borrowed chords in a major key are written. The palette belongs to the key rather than to any one chord, so `Chord.modalInterchange` returns the same list — it is reachable from a chord because that is where a caller looking for somewhere else to go already is.
 
 ## Negative harmony
 
 `negativeHarmonyMirror` reflects a chord across the axis of its key:
 
 ```ts
-import { majorKey, makeChord, negativeHarmonyMirror } from '@libraz/libcantus';
+import { Chord, Key, majorKey, makeChord, negativeHarmonyMirror } from '@libraz/libcantus';
 
 const mirrored = negativeHarmonyMirror(makeChord(7, 'maj'), majorKey(0));
 
 mirrored.rootPc; // 5
 mirrored.quality; // 'min'
+
+Chord.parse('G').negativeHarmony(Key.major('C')).symbol(); // 'Fm'
 ```
 
 G major reflected across C's axis becomes F minor. It is a transformation rather than a proposal: there is exactly one result, and whether that result suits the piece is a compositional decision.
 
 ## Reharmonizing a whole progression
 
-`generateProgression` takes a `reharmonize` flag, which is sugar for a middle setting of `complexity.harmonic`. Using the context directly says *how much* rather than *whether*:
+`generateProgression` reharmonizes through its context: `ctx.complexity.harmonic` sets how much of the progression is replaced by the secondary dominant of what follows, which says *how much* rather than *whether*:
 
 ```ts
 import { generateProgression, majorKey } from '@libraz/libcantus';
@@ -93,7 +109,7 @@ plain.length; // 8
 rich.length; // 8
 ```
 
-At `harmonic: 0` the preset is left alone. At 1, every chord the voice-leading rules allow is replaced by the secondary dominant of what follows. The length does not change, because reharmonization substitutes rather than inserts.
+At `harmonic: 0` — the default — the preset is left alone; 0.5 takes about half of what the voice-leading rules allow, and 1 takes every one of them. The length does not change, because reharmonization substitutes rather than inserts. `seed` fixes which chords are replaced, so the same seed always yields the same progression.
 
 `presetId` picks a specific built-in progression; `preset` supplies caller-provided degrees, with `BORROWED_DEGREES` naming the non-diatonic ones:
 
@@ -136,6 +152,28 @@ result.transposeSemitones; // 0
 
 `result.chords` holds one `ChordSpan` per chord change on the harmonic-rhythm grid, and `result.melodyRoles` gives each melody note's role in the chord that ended up under it. `result.key` is the key the chords are written in, and `transposeSemitones` is how far the melody was moved to get there — a melody that was not in a key the harmonizer could work in comes back with the offset that puts it there, rather than with chords in the wrong key.
 
+`Composer.harmonize` takes those last two steps for the caller: it applies the offset to the melody and places the chords on a timeline, so what comes back is a melody and a harmony that already agree.
+
+```ts
+import { Composer, Score } from '@libraz/libcantus';
+
+const composer = Composer.of({ key: 'C major' });
+const melody = Score.of([
+  { pitch: 60, startBeat: 0, durationBeat: 1 },
+  { pitch: 62, startBeat: 1, durationBeat: 1 },
+  { pitch: 64, startBeat: 2, durationBeat: 1 },
+  { pitch: 65, startBeat: 3, durationBeat: 1 },
+  { pitch: 67, startBeat: 4, durationBeat: 4 },
+]);
+
+const harmonized = composer.harmonize(melody);
+
+harmonized.chords.at(0)?.symbol(); // 'C'
+harmonized.chords.totalBeats; // 8
+harmonized.melody.notes.length; // 5
+harmonized.transposeSemitones; // 0
+```
+
 A melody is cadenced where it ends, which is what a caller who hands over one phrase at a time wants. A line longer than one phrase closes at each phrase end as well, and the harmonizer cannot see those closes for itself: `phraseEnds` names them, and `phrasesFromTimeline` finds them for a line that already carries chords. A named beat divides the chord grid, the harmony moves into the slot that closes there, and the note the phrase comes to rest on is read as a structural tone rather than as an ornament of the next phrase's first note — so one call harmonizes the whole line, instead of harmonizing each phrase and joining the results.
 
 ```ts
@@ -155,7 +193,7 @@ whole.chords.some((chord) => chord.startBeat === 6); // true
 runOn.chords.some((chord) => chord.startBeat === 6); // false
 ```
 
-`classifyMelodyTones` runs the non-chord-tone classification on its own, for a UI that shades passing and auxiliary tones without committing to a harmonization.
+`classifyMelodyTones` runs the non-chord-tone classification on its own, for a UI that shades passing and neighbor tones without committing to a harmonization.
 
 ## Presenting a reharmonization
 

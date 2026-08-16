@@ -44,16 +44,16 @@ const line = Score.of(
 
 // Accidentals are chosen for the line as a whole. That is a question about a
 // melody, and a melody is the one thing here with no class to hold it:
-const spelled = spellLine(line.notes, null, key.scale);
+const spelled = spellLine(line.notes, null, key);
 spelled.map((note) => Note.fromData(note).name); // ['Eb2', 'G1', 'Bb1', 'D2', 'F2', 'A2']
 
 Note.parse('C4').forInstrument('clarinetBb').name; // 'D4'
 key.forInstrument('clarinetBb').toString(); // 'D major'
 ```
 
-先頭の Eb2 だけが1オクターブ高いのは、それが折り返された音だからです。
+折り返しが触れたのは先頭の Eb2 だけです。元は1オクターブ低く、その楽器の最低弦より下に書かれていたため、`foldIntoRange` がちょうどそのオクターブ分だけ上げています。
 
-`Note.forInstrument` は奏者が読む音を返します。逆方向は `toSoundingPitch` で、すでに移調されたパートが入力される場合に使います。どちらも綴られた音を扱います。文字を決めるのは音程だからです。B♭管クラリネットでは実音の C は D と記譜されますが、半音数だけではその D を D と綴るべきか C ダブルシャープと綴るべきかを判断できません。`TRANSPOSING_INSTRUMENTS` は主要な楽器を名前で扱い、そこにない楽器は音程文字列で指定できます。
+`Note.forInstrument` は奏者が読む音を返します。逆方向は `Instrument.soundingPitch` で、すでに移調されたパートが入力される場合に使います。どちらも綴られた音を扱います。文字を決めるのは音程だからです。B♭管クラリネットでは実音の C は D と記譜されますが、半音数だけではその D を D と綴るべきか C ダブルシャープと綴るべきかを判断できません。`TRANSPOSING_INSTRUMENTS` は主要な楽器を名前で扱い、そこにない楽器は音程文字列で指定できます。
 
 `Key.forInstrument` は調号を同じ音程で移します。移調後のその調に対して線を綴ってください。そうしないと臨時記号が調号と食い違います。
 

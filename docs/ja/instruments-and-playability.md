@@ -21,7 +21,22 @@ canSound(GUITAR_STANDARD, 38); // false
 
 打楽器のプロファイルは音域ではなく手足で記述します。`reach` は各声部を叩ける手足を優先順に示します。どの手足も届かない声部は楽器上に存在せず、同じ手足を同時に必要とする2つの声部は同時に鳴りません。
 
-組み込みのプロファイルは `BASS_4_STRING`、`BASS_5_STRING`、`GUITAR_STANDARD`、`GUITAR_DROP_D` です。それ以外は同じ形のオブジェクトリテラルとして渡します。
+組み込みの弦楽器プロファイルは `BASS_4_STRING`、`BASS_5_STRING`、`GUITAR_STANDARD`、`GUITAR_DROP_D` です。打楽器の組み込みプロファイルは `DRUM_KIT` で、手足と `reach` を埋めたドラムキットが最初から用意されています。それ以外は同じ形のオブジェクトリテラルとして渡します。
+
+## Instrument クラス
+
+`Instrument` はプロファイルを包み、それを束縛した状態で同じ問いに答えます。組み込みのプロファイルには専用のファクトリがあり、`Instrument.of` は任意のプロファイル — 組み込みの定数、`DRUM_KIT`、呼び出し側が書いたリテラル — を受け取ります。
+
+```ts
+import { DRUM_KIT, Instrument } from '@libraz/libcantus';
+
+Instrument.guitar().range(); // { low: 40, high: 88 }
+Instrument.guitarDropD().canSound(38); // true
+Instrument.guitar().canSound(38); // false
+Instrument.of(DRUM_KIT).kind; // 'percussion'
+```
+
+2種類のベースには `Instrument.bass4` と `Instrument.bass5` があり、`Instrument.data` は保存や受け渡しのために素のプロファイルを返します。このページでは以降も両方の書き方を示します。[生成](generation.md)のガイドとユースケースのページはクラス形式で統一されています。
 
 ## 運指と音域への折り返し
 
@@ -35,6 +50,19 @@ foldIntoRange(20, GUITAR_STANDARD); // 44
 ```
 
 `fingeringsFor` はそのピッチを出せる弦とフレットの位置をすべて返します。タブ譜の描画や運指の選択で必要になる情報です。`foldIntoRange` はピッチをオクターブ単位で移動して楽器の範囲内に収めます。演奏不能として報告するのではなくパートを演奏可能に保ちたいインポート処理向けです。
+
+`Instrument` からは、プロファイルを繰り返し渡さずに同じ2つの答えが得られます。
+
+```ts
+import { Instrument } from '@libraz/libcantus';
+
+const guitar = Instrument.guitar();
+
+guitar.fingerings(64)[0]; // { string: 0, fret: 24 }
+guitar.foldIntoRange(20); // 44
+```
+
+`fingerings` はドラムキットに対しては例外を投げます。ピッチを置くネックがないためです。`foldIntoRange` はどちらの種類にも使えます。
 
 ## 演奏可能性の3つの層
 
@@ -53,6 +81,18 @@ const report = playability([{ pitch: 27, startBeat: 0, durationBeat: 1 }], BASS_
 
 report.issues[0]?.type; // 'noteOutOfRange'
 report.issues[0]?.layer; // 1
+report.difficulty >= 1; // true
+```
+
+クラス形式では、プロファイルを保持した楽器に対して同じ検査を行います。
+
+```ts
+import { Instrument } from '@libraz/libcantus';
+
+const bass = Instrument.bass4();
+const report = bass.playability([{ pitch: 27, startBeat: 0, durationBeat: 1 }]);
+
+report.issues[0]?.type; // 'noteOutOfRange'
 report.difficulty >= 1; // true
 ```
 
@@ -120,6 +160,17 @@ formatNote(toSoundingPitch(parseNote('C4'), '-P4')); // 'G3'
 どちらの変換も綴られた音を受け取ります。文字を決めるのは音程だからです。A管クラリネットで記譜された D# は B# として鳴りますが、半音数だけでは C ナチュラルと答えてしまい、パートが書かれている文字が失われます。オクターブを持つ音は音域ごと移動し、オクターブを持たない音はそのままです。
 
 名前の代わりに音程文字列も使えます。表に載っていない楽器 — `-P4` のアルトフルートなど — にライブラリ側の追加は不要です。
+
+楽器を保持していれば指定は要りません。`Instrument.soundingPitch` はプロファイル自身の名前で移調を引き当て、表に載っていないプロファイル — 呼び出し側が書いたものはすべてこれに当たります — の場合だけ移調を明示します。
+
+```ts
+import { Instrument } from '@libraz/libcantus';
+
+Instrument.guitar().soundingPitch('C4').name; // 'C3'
+Instrument.guitar().soundingPitch('C4', '-P4').name; // 'G3'
+```
+
+ギターのパートは実音より1オクターブ上に記譜されるため、記譜の `C4` に対してギターは何も指定しなくても `C3` を返します。
 
 解析は実音で動作します。移調楽器用に書かれたパートは入力時に変換し、その奏者のパートを出力する際に戻します。[相互運用](interoperability.md)を参照してください。
 

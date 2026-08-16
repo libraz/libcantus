@@ -70,7 +70,17 @@ detectKeyBest(histogram)?.mode; // 'minor'
 
 A `KeyMatch` carries the scale that scored best, the major or minor key it is closest to, which scale form it uses (`variant`), the exact name from `NAMED_SCALES`, and the score. `Key.detectMatches` reports all of it, with the key itself as a `Key`; a detected `Key` keeps the scale form it was matched under, which is why the one above names itself melodic rather than just minor. `modes: true` puts the church modes in the running; without it the candidates are the major and the three minor forms.
 
-`profile` chooses what the observed distribution is correlated against — `krumhansl` by default, `temperley` for corpus proportions, or `flat` for an unweighted comparison. `weights` says how much each pitch counts; `detectKeyFromNotes` supplies duration times velocity, which is how chord inference weighs its own histogram, and is the right entry point when the input is note events rather than a histogram. `Score.key()` goes further and answers with the key held longest across a whole piece.
+`profile` chooses what the observed distribution is correlated against — `krumhansl` by default, `temperley` for corpus proportions, or `flat` for an unweighted comparison. `weights` says how much each pitch counts; `detectKeyFromNotes` supplies duration times velocity, which is how chord inference weighs its own histogram, and is the right entry point when the input is note events rather than a histogram. `Score.detectKeys()` is the same ranking from the class side, over a whole score read as one key, so a caller can see what the winner beat and by how much:
+
+```ts
+import { Score } from '@libraz/libcantus';
+
+const score = Score.of([{ pitch: 60, startBeat: 0, durationBeat: 4 }]);
+
+score.detectKeys()[0]?.key.rootPc; // 0
+```
+
+`Score.key()` goes further and answers with the single key held longest across a whole piece.
 
 ## Timelines and cadences
 

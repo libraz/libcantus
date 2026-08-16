@@ -44,16 +44,16 @@ const line = Score.of(
 
 // Accidentals are chosen for the line as a whole. That is a question about a
 // melody, and a melody is the one thing here with no class to hold it:
-const spelled = spellLine(line.notes, null, key.scale);
+const spelled = spellLine(line.notes, null, key);
 spelled.map((note) => Note.fromData(note).name); // ['Eb2', 'G1', 'Bb1', 'D2', 'F2', 'A2']
 
 Note.parse('C4').forInstrument('clarinetBb').name; // 'D4'
 key.forInstrument('clarinetBb').toString(); // 'D major'
 ```
 
-Only the opening Eb2 sits an octave above its neighbours, because it is the note that was folded.
+The opening Eb2 is the only note the fold touched: it was written an octave lower, below the instrument's lowest string, and `foldIntoRange` lifted it by exactly that octave.
 
-`Note.forInstrument` produces what the player reads, and `toSoundingPitch` goes the other way, for a part that arrives already transposed. Both work on spelled notes, because the interval decides the letter. A concert C on a clarinet in B-flat is written D, and a semitone count alone cannot say whether that D should be spelled D or C-double-sharp. `TRANSPOSING_INSTRUMENTS` names the common instruments, and an interval string covers anything it does not list.
+`Note.forInstrument` produces what the player reads, and `Instrument.soundingPitch` goes the other way, for a part that arrives already transposed. Both work on spelled notes, because the interval decides the letter. A concert C on a clarinet in B-flat is written D, and a semitone count alone cannot say whether that D should be spelled D or C-double-sharp. `TRANSPOSING_INSTRUMENTS` names the common instruments, and an interval string covers anything it does not list.
 
 `Key.forInstrument` moves the signature by the same interval. Spell the line against that transposed key, or the accidentals will fight the signature.
 

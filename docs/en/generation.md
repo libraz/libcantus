@@ -146,7 +146,7 @@ Because they take material and return material, a host can store the source and 
 
 ## Context and reproducibility
 
-`GenerationContext` carries the project seed, tempo, instrument profiles, vocabulary, complexity, and difficulty. `complexity` has `rhythmic`, `harmonic`, and `ornament` controls in 0..1. `difficulty` is a ceiling from 1 to 5: it removes candidates instead of increasing intensity. `vocabulary` is the genre dictionary the whole piece draws from, described under [Genre vocabulary](rhythm-and-groove.md).
+`GenerationContext` carries the project `seed`, the `bpm`, the `instruments` the parts are written for, the `vocabulary`, the `complexity` dials, the `algorithmVersion` to generate under, and an `rng` for a caller that would rather supply the source than have one derived from the seed. `complexity` is where the dials live: `rhythmic`, `harmonic`, and `ornament` in 0..1, plus `difficulty`, a ceiling from 1 to 5 that removes candidates instead of increasing intensity. `vocabulary` is the genre dictionary the whole piece draws from, described under [Genre vocabulary](rhythm-and-groove.md).
 
 Every dial a generator answers to lives there. Pass the context as `ctx` at each call, or let a composer hold it: `composer.context` is that same plain context for a call the class does not cover, and the `with…` methods hand back a new composer rather than reconfiguring the one in hand.
 

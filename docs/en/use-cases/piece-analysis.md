@@ -1,6 +1,6 @@
 # Use case: reading a piece
 
-A `Score` is the notes together with the context they are read against, and every question below is one of its methods. Start with its timeline: it establishes the harmonic units that reduction, cadence, phrase, and form analysis all work from.
+A `Score` is the notes together with the context they are read against, and every question below is a single method call — on the score, or on the timeline the score hands back. Start with that timeline: it establishes the harmonic units that reduction, cadence, phrase, and form analysis all work from.
 
 ```ts
 import { Score } from '@libraz/libcantus';

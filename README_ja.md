@@ -7,7 +7,7 @@ MIDI ノートイベントを扱う、TypeScript 製の音楽理論ライブラ�
 [![codecov](https://codecov.io/gh/libraz/libcantus/branch/main/graph/badge.svg)](https://codecov.io/gh/libraz/libcantus)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libcantus/blob/main/LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-22.x-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![docs](https://img.shields.io/badge/docs-API%20reference-b5892e)](https://libraz.github.io/libcantus/)
 
 ## できること
@@ -35,11 +35,12 @@ Composer.of({ key: chords.key, bpm: 120, seed: 1 }).bass(chords, { style: 'walki
 
 各レイヤーが受け持つ範囲は次のとおりです。
 
-- **[音高と記譜](docs/ja/pitch-and-notation.md)** — 綴りを保った音名と音程、MIDI 変換、英語・ドイツ語・日本語・イタリア語・固定ドでの読み書き、そして 1 音ずつではなく声部全体を 1 本の経路として解く綴り付け。テキストのパーサーにはいずれも例外を投げない対 (`tryParseNote`、`tryParseInterval`、`tryParseChordSymbol`、`tryParseKeyName`、`tryParseTimeSignature`、および `Note`・`Interval`・`Key`・`Chord` の `tryParse`) があるので、入力欄の 1 打鍵ごとに `try`/`catch` を書く必要はありません。
+- **[音高と記譜](docs/ja/pitch-and-notation.md)** — 綴りを保った音名と音程、MIDI 変換、英語・ドイツ語・日本語・イタリア語・固定ドでの読み書き、そして 1 音ずつではなく声部全体を 1 本の経路として解く綴り付け。テキストのパーサーにはいずれも例外を投げない対 (`tryParseNote`、`tryParseInterval`、`tryParseChordSymbol`、`tryParseKeyName`、`tryParseTimeSignature`、および `Note`・`Interval`・`Key`・`Chord`・`Meter` の `tryParse`) があるので、入力欄の 1 打鍵ごとに `try`/`catch` を書く必要はありません。
 - **[和声](docs/ja/harmony.md)** — 構造を持つ値としてのコード、教会旋法やペンタトニックに加えて `WORLD_SCALES` を含むスケール、ローマ数字と和声機能、ヴォイシング、数字付き低音、そして違反した声部と理由まで返す声部書法・種目対位法のチェッカー。
 - **[解析](docs/ja/analysis.md)** — ノートイベントからのコード・キー検出、タイムラインとカデンツ、和声的な還元、フレーズ、セクション、ハイパーメーター、モチーフ、アレンジ全体のレポート。
 - **[生成](docs/ja/generation.md)** — プログレッション、モチーフ、リズム、ドラム、ベース、対旋律。いずれも 1 つの `GenerationContext` を参照します。プロジェクトのシード、加算的な 3 つの複雑さのダイヤル（リズム・和声・装飾）、それとは別枠の難易度の上限、テンポ、各パートの対象楽器がそこに入ります。同じコンテキストからは同じ結果が出ます。
 - **[時間とアレンジ](docs/ja/time-and-arrangement.md)** — 拍子、テンポ、小節と拍による位置、複数トラックをまたぐ解析。
+- **[クラス API](docs/ja/api-reference.md)** — 同じ理論を、ライブラリが扱う対象ごとの不変クラスとして提供します。`Score`、`Timeline`、`Composer` も含め、いずれも上記の関数の薄い外皮です。呼び出し側の都合で関数とクラスのどちらを使ってもよく、返る答えは同じです。
 
 答えには、そう読んだ理由が付きます。`analyzeChord`、`detectCadence`、`explainRoman` は `rationale` を必ず返し、`detectKey` は要求があれば付けます。いずれも、退けた解釈を `alternatives` として報告できます。渡された情報だけでは決まらない場合、それらしい答えを作らずに `null` を返します。カデンツが完全か不完全かはヴォイシングがなければ決まりません。ソプラノに何があるかはヴォイシングだけが答えられるからです。
 
@@ -68,7 +69,7 @@ yarn add @libraz/libcantus
 
 ## 最初の例
 
-理論の本体はツリーシェイク可能な純粋関数にあります。その上に、理論を語るときの言い方に近い不変のクラス API（`Note`、`Interval`、`Chord`、`Key`、`Progression`）が乗っています。
+理論の本体はツリーシェイク可能な純粋関数にあります。その上に、理論を語るときの言い方に近い不変のクラス API が乗っています。ライブラリが扱う対象ごとに1つのクラスがあり、単体の `Note`、`Interval`、`Chord` から、曲全体を受け持つ `Score`、`Timeline`、`Arrangement`、`Composer` までが揃います。
 
 ```ts
 import { Chord, Key } from '@libraz/libcantus';
@@ -105,7 +106,7 @@ import { Chord, Key, Note } from '@libraz/libcantus/model'; // クラス API
 
 横断的な話題: [決定性とシード](docs/ja/determinism-and-seeding.md)、[エラーと検証](docs/ja/errors-and-validation.md)、[パフォーマンス](docs/ja/performance.md)、[相互運用](docs/ja/interoperability.md)。
 
-リファレンス: [API リファレンス](docs/ja/api-reference.md)、[用語集](docs/ja/glossary.md)、[疑問と制限](docs/ja/faq.md)。
+リファレンス: [API リファレンス](docs/ja/api-reference.md)、[用語集](docs/ja/glossary.md)、[FAQ と制限](docs/ja/faq.md)。
 
 これらのガイドの `ts` の例はすべてテストスイートで実行され、末尾コメントに書いた期待値は実際の返り値と照合されます。生成される TypeDoc のリファレンスは `docs/api` に出力され、手書きガイドとは分かれています。
 

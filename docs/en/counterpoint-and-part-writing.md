@@ -30,6 +30,22 @@ Every violation names the rule, the voices involved, where the motion starts and
 
 Voice indices count from the bottom, matching `voiceChord` and `SATB_RANGES`. A rule about a pair names both ascending; a rule about a single line names one. A cross relation is the exception — it names the voice holding the earlier note first, whichever is higher.
 
+`Voicing.checkTo` grades one motion, from a voicing to the one that follows it. It spells both sides itself in the key it is given, and takes the chords and the key in whatever form the caller holds them, so a symbol and a key name are enough:
+
+```ts
+import { Voicing } from '@libraz/libcantus';
+
+const from = Voicing.of([48, 55, 64, 72]);
+const to = Voicing.of([50, 57, 65, 69]);
+
+const violations = from.checkTo(to, ['C', 'Dm'], 'C major');
+
+violations[0]?.kind; // 'parallelFifth'
+violations[0]?.voices; // [0, 1]
+```
+
+That is the interactive case — a voice has just been dragged, and the question is what the move broke. `checkPartWriting` is the whole-exercise case, and grades a chorale of any length in one call.
+
 ### The rules that are checked
 
 Inside one chord: `voiceCrossing`, `spacing`, `range`.
@@ -79,7 +95,7 @@ checkPartWriting(voicings, chords, key).map((violation) => violation.kind);
 // ['spacing', 'range']
 ```
 
-The `range` rule is judged against `SATB_RANGES` for a four-voice exercise. For any other voice count there is no conventional compass to assume, so the rule is skipped unless `ranges` is given. Supply explicit ranges when the exercise is not SATB. `maxSpacing` defaults to twelve semitones between adjacent upper voices; the bass–tenor pair is exempt, as convention has it.
+The `range` rule is judged against `SATB_RANGES` — `Voicing.satbRanges` is the same four ranges, copied — for a four-voice exercise. For any other voice count there is no conventional compass to assume, so the rule is skipped unless `ranges` is given. Supply explicit ranges when the exercise is not SATB. `maxSpacing` defaults to twelve semitones between adjacent upper voices; the bass–tenor pair is exempt, as convention has it.
 
 Both options are checked before any rule runs, by the same validators the voicing search uses. A `maxSpacing` that is not a finite non-negative number, and `ranges` that are empty, malformed, or fewer than the voices being graded, raise `InvalidInputError` instead of quietly switching a rule off. An empty result therefore means that nothing was broken, never that something could not be judged.
 
@@ -95,6 +111,18 @@ const counterpoint = ['C5', 'A4', 'G4', 'B4', 'C5'].map((name) => parseNote(name
 
 checkSpecies(cantus, counterpoint, 1, majorKey(0)); // []
 ```
+
+`Voicing.species` reads a voicing as the written counterpoint line and marks it against the given voice:
+
+```ts
+import { Voicing } from '@libraz/libcantus';
+
+const counterpoint = Voicing.of([72, 69, 67, 71, 72]);
+
+counterpoint.species(['C4', 'D4', 'E4', 'D4', 'C4'], 1, 'C major'); // []
+```
+
+The pitches are slots in time rather than voices in register — this and `Voicing.independence` are the only places a voicing is read as a line. Both lines are spelled by the mode before anything is judged, the cantus firmus included, so a cantus firmus given as MIDI pitches is written the way the counterpoint is. That matters: the rules that read letters — the augmented second, the diminished fourth — cannot be applied to two lines spelled by different rules, and a line the caller spelled by hand can be spelled by another.
 
 The cantus firmus is one note per measure. The counterpoint is aligned by position rather than by written rhythm: the first four species have a fixed number of notes per measure, so the note count alone says where each note falls. A closing measure written as a single whole note is accepted as the convention it is.
 
@@ -153,6 +181,17 @@ const lead = ['C5', 'D5', 'E5'].map((name) => parseNote(name));
 const counter = ['E4', 'F4', 'G4'].map((name) => parseNote(name));
 
 voiceIndependence(lead, counter).motion.parallel; // 1
+```
+
+`Voicing.independence` is the same measurement between two held lines, with `key` spelling both of them:
+
+```ts
+import { Voicing } from '@libraz/libcantus';
+
+const lead = Voicing.of([72, 74, 76]);
+const counter = Voicing.of([64, 65, 67]);
+
+lead.independence(counter, { key: 'C major' }).motion.parallel; // 1
 ```
 
 `motion` holds the share of moves in each category — contrary, oblique, similar, parallel — summing to 1. The harmony line above runs a sixth below the lead throughout and so comes out entirely parallel, which is not a violation of anything; it is a description of what was written. A slot where neither voice moves is not a move at all and is left out, so an accompaniment that mostly sits still can still report mostly contrary motion.

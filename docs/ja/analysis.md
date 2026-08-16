@@ -70,7 +70,17 @@ detectKeyBest(histogram)?.mode; // 'minor'
 
 `KeyMatch` は、もっとも高く評価されたスケール、それにもっとも近い長調または短調、使っているスケール形（`variant`）、`NAMED_SCALES` 上の正確な名前、そしてスコアを持ちます。`Key.detectMatches` はそのすべてを、調自体は `Key` として返します。検出された `Key` は一致したスケール形をそのまま保つので、上の例は単なる minor ではなく melodic minor と名乗ります。`modes: true` は教会旋法を候補に加えます。指定しない場合の候補は長調と3種類の短調です。
 
-`profile` は、観測された分布を何と相関させるかを選びます。既定は `krumhansl`、コーパスの比率を使う場合は `temperley`、重みなしの比較には `flat` を指定します。`weights` は各ピッチの重みです。`detectKeyFromNotes` は長さ × ベロシティを重みとして渡します。これはコード推定が自身のヒストグラムに使う重み付けと同じで、入力がヒストグラムではなくノートイベントの場合はこちらが適切な入り口になります。曲全体でもっとも長く保たれた調が欲しい場合は `Score.key()` が答えます。
+`profile` は、観測された分布を何と相関させるかを選びます。既定は `krumhansl`、コーパスの比率を使う場合は `temperley`、重みなしの比較には `flat` を指定します。`weights` は各ピッチの重みです。`detectKeyFromNotes` は長さ × ベロシティを重みとして渡します。これはコード推定が自身のヒストグラムに使う重み付けと同じで、入力がヒストグラムではなくノートイベントの場合はこちらが適切な入り口になります。`Score.detectKeys()` は同じ順位付けをクラス側から行うもので、スコア全体を1つの調として読んだ候補を返すため、どの調がどれだけの差で勝ったのかを見られます。
+
+```ts
+import { Score } from '@libraz/libcantus';
+
+const score = Score.of([{ pitch: 60, startBeat: 0, durationBeat: 4 }]);
+
+score.detectKeys()[0]?.key.rootPc; // 0
+```
+
+曲全体でもっとも長く保たれた1つの調が欲しい場合は `Score.key()` が答えます。
 
 ## タイムラインと終止
 

@@ -2,14 +2,14 @@
 
 `@libraz/libcantus` is a TypeScript music-theory engine for software that already has notes or chord symbols. It works with MIDI pitch numbers, spelled notes, chord specifications, keys, and timed note events. It does not read or write MIDI files, render notation, analyze audio, or play sound.
 
-The package has no runtime dependencies, every entry point is synchronous, and every value it produces is plain JSON-compatible data.
+The package has no runtime dependencies, every entry point is synchronous, and the functional API produces plain JSON-compatible data — no class instances. The class API wraps that same data and exposes it through `.data`.
 
 ## The mental model
 
-The library has two kinds of public operation:
+The library models two kinds of thing, and each one comes as an immutable class and as plain data:
 
-- Values such as `Note`, `Chord`, `Key`, and `Progression` have immutable class wrappers and plain-data forms.
-- Collections and timelines are handled by pure functions over arrays of `NoteEvent` values.
+- Single values, such as `Note`, `Interval`, `Chord`, `Key`, and `Progression`.
+- Collections and timelines: a `Score` of `NoteEvent` values, a `Timeline` of chord segments, an `Arrangement` of tracks. The classes hold the material together with its context; the pure functions underneath do the work and stay callable on their own.
 
 The two styles interoperate. A class exposes its plain value through `.data`, and functions that analyze or generate music return data that can be passed to another function or wrapped by a class.
 
@@ -38,9 +38,9 @@ The package root exports the complete public API. The same exports are grouped i
 | `@libraz/libcantus/theory` | scales, chords, spelling, harmony rules, and voicing |
 | `@libraz/libcantus/analyze` | chord/key detection, timelines, form, and arrangement analysis |
 | `@libraz/libcantus/generate` | progressions, motifs, rhythms, drums, bass, and counter-melody |
-| `@libraz/libcantus/model` | immutable `Note`, `Interval`, `Chord`, `Key`, and `Progression` classes |
+| `@libraz/libcantus/model` | the immutable class API: one class per thing the other layers work with, each a thin skin over their functions |
 
-The layers stack: `theory` builds on `core`, `analyze` on `theory`, and `generate` on all three. Importing from a subpath is a packaging choice, not a different API.
+The layers stack: `theory` builds on `core`, `analyze` on `theory`, `generate` on all three, and `model` on all four. Importing from a subpath is a packaging choice, not a different API.
 
 ## Three principles
 

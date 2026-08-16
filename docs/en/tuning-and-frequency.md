@@ -75,11 +75,54 @@ Math.round(justDeviationCents(4) * 100) / 100; // -13.69
 
 A positive deviation means the just interval is wider than the tempered one. The tempered fifth is about two cents narrower than the just fifth; the tempered major third is about fourteen cents wider than the just third, which is the difference audible as beating in a sustained chord.
 
+## The Tuning class
+
+`TuningTable` is the plain data — a reference step, a reference frequency, and a division count — and `Tuning` is the class over it. Every function above takes a table as its last argument; the class binds one and offers the same conversions as methods, so a host that works in a single temperament states it once.
+
+```ts
+import { Tuning } from '@libraz/libcantus';
+
+const tuning = Tuning.twelveTet();
+
+tuning.frequencyOf('A4'); // 440
+Math.round(tuning.frequencyOf('C4') * 100) / 100; // 261.63
+tuning.nearestStep(440); // 69
+Math.round(tuning.centsFromNearestStep(442)); // 8
+```
+
+`frequencyOf` takes a note the way the rest of the library does — a name, a MIDI number, plain note data, or a `Note` — so a display gets a frequency without a `noteToMidi` step of its own. `frequencyOfStep` is the same answer for a step index, which is what a temperament no twelve-tone name covers has to be asked in.
+
+A microtonal host binds its temperament once and asks everything of that object:
+
+```ts
+import { Tuning } from '@libraz/libcantus';
+
+const et19 = Tuning.edo(19);
+
+et19.divisions; // 19
+Math.round(et19.centsOfSteps(1) * 100) / 100; // 63.16
+Math.round(et19.frequencyOfStep(69 + 19)); // 880
+et19.toString(); // '19-EDO (step 69 = 440 Hz)'
+```
+
+The conversions no temperament decides stay static, and a tuning round-trips through the plain table `data` hands out:
+
+```ts
+import { Tuning } from '@libraz/libcantus';
+
+Math.round(Tuning.ratioToCents(3, 2)); // 702
+Math.round(Tuning.justDeviationCents(4) * 100) / 100; // -13.69
+Tuning.edo(12, 442).data; // { refStep: 69, refFreq: 442, divisions: 12 }
+Tuning.fromData(Tuning.edo(19).data).equals(Tuning.edo(19)); // true
+```
+
 ## Where this fits in an application
 
 - **Tuner and intonation display**: `stepOf` for the exact position, `centsFromNearestStep` for the needle, `midiToNote` for the label.
 - **Microtonal playback**: `frequencyOf` under a caller-built `TuningTable`, or `centsToRatio` to bend a twelve-tone pitch.
 - **Synthesis and analysis bridges**: `nearestStep` to quantize a detected frequency into a pitch the rest of the library can read.
 - **Documentation and teaching**: `justDeviationCents` to show why a tempered interval beats.
+
+Each of those is a method on a bound `Tuning` as well, which is what collapses the list for a host that stays in one temperament: `Tuning.edo(19)` once, and `stepOf`, `centsFromNearestStep` and `frequencyOf` on it from then on.
 
 Converting a frequency into a MIDI pitch with `nearestStep` and then analyzing it is fine and normal. Going the other way — feeding a non-12 step index into chord or key analysis — will produce an answer, but not a meaningful one.

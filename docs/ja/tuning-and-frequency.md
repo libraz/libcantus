@@ -75,11 +75,54 @@ Math.round(justDeviationCents(4) * 100) / 100; // -13.69
 
 値が正の場合、純正音程のほうが平均律より広いことを表します。平均律の5度は純正5度より約2セント狭く、平均律の長3度は純正長3度より約14セント広くなります。後者の差が、持続した和音でうなりとして聞こえます。
 
+## Tuning クラス
+
+`TuningTable` は基準ステップ・基準周波数・等分数から成る素のデータで、`Tuning` はそれを包むクラスです。ここまでの関数はいずれも最後の引数に音律のテーブルを取りますが、クラスは1つを束縛して同じ変換をメソッドとして提供します。単一の音律で動くホストは音律を一度指定するだけで済みます。
+
+```ts
+import { Tuning } from '@libraz/libcantus';
+
+const tuning = Tuning.twelveTet();
+
+tuning.frequencyOf('A4'); // 440
+Math.round(tuning.frequencyOf('C4') * 100) / 100; // 261.63
+tuning.nearestStep(440); // 69
+Math.round(tuning.centsFromNearestStep(442)); // 8
+```
+
+`frequencyOf` はライブラリの他の箇所と同じ形で音を受け取ります。音名、MIDI 番号、素のノートデータ、`Note` のいずれでも渡せるため、表示側で `noteToMidi` を挟む必要がありません。ステップ番号から同じ答えを得るのが `frequencyOfStep` で、12音の音名が付かない音律ではこちらを使います。
+
+微分音を扱うホストは、音律を一度束縛してすべてをそのオブジェクトに問い合わせます。
+
+```ts
+import { Tuning } from '@libraz/libcantus';
+
+const et19 = Tuning.edo(19);
+
+et19.divisions; // 19
+Math.round(et19.centsOfSteps(1) * 100) / 100; // 63.16
+Math.round(et19.frequencyOfStep(69 + 19)); // 880
+et19.toString(); // '19-EDO (step 69 = 440 Hz)'
+```
+
+音律に依存しない変換は静的メソッドのままです。また、`data` が返す素のテーブルを経由して往復できます。
+
+```ts
+import { Tuning } from '@libraz/libcantus';
+
+Math.round(Tuning.ratioToCents(3, 2)); // 702
+Math.round(Tuning.justDeviationCents(4) * 100) / 100; // -13.69
+Tuning.edo(12, 442).data; // { refStep: 69, refFreq: 442, divisions: 12 }
+Tuning.fromData(Tuning.edo(19).data).equals(Tuning.edo(19)); // true
+```
+
 ## アプリケーションでの用途
 
 - **チューナー・音程表示**: 正確な位置に `stepOf`、針の振れに `centsFromNearestStep`、ラベルに `midiToNote`。
 - **微分音の再生**: 呼び出し側が組んだ `TuningTable` に `frequencyOf`、または12音のピッチを曲げる場合は `centsToRatio`。
 - **合成・解析との橋渡し**: 検出した周波数を `nearestStep` で量子化し、ライブラリの他の部分が読めるピッチにします。
 - **資料・教材**: 平均律の音程がうなる理由を示すのに `justDeviationCents`。
+
+いずれも束縛済みの `Tuning` のメソッドとしても呼べます。1つの音律で動くホストではこの一覧がそのまま短くなり、`Tuning.edo(19)` を一度作ったあとは `stepOf`、`centsFromNearestStep`、`frequencyOf` をそのオブジェクトに対して呼ぶだけになります。
 
 周波数を `nearestStep` で MIDI ピッチに変換してから解析にかける流れは通常の用法です。逆に、12以外のステップ番号をコードや調の解析へ渡した場合、結果は返りますが意味を持ちません。

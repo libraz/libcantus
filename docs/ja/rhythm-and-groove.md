@@ -117,18 +117,21 @@ quantized[0]?.startBeat; // 0
 
 ## グルーヴテンプレート
 
-グルーヴテンプレートは、演奏から取り出した1小節分のタイミングとベロシティのずれの格子です。目的のノリを持つ演奏から `extractGrooveTemplate` で抽出し、それを持たない素材に適用します。
+グルーヴテンプレートは、演奏から取り出した1小節分のタイミングとベロシティのずれの格子です。目的のノリを持つ演奏から抽出し、それを持たない素材に適用します。`Score.grooveTemplate` はスコアが持っている拍子に対してノリを読み取り、`Score.groove` はそれを別のスコアに重ねます。
 
 ```ts
-import { extractGrooveTemplate, parseTimeSignature, Score } from '@libraz/libcantus';
+import { parseTimeSignature, Score } from '@libraz/libcantus';
 
 const ts = parseTimeSignature('4/4');
 
-const performed = [
-  { pitch: 36, startBeat: 0.02, durationBeat: 1, velocity: 100 },
-  { pitch: 38, startBeat: 1.06, durationBeat: 1, velocity: 70 },
-];
-const template = extractGrooveTemplate(performed, ts, 4);
+const performed = Score.of(
+  [
+    { pitch: 36, startBeat: 0.02, durationBeat: 1, velocity: 100 },
+    { pitch: 38, startBeat: 1.06, durationBeat: 1, velocity: 70 },
+  ],
+  { meters: ts },
+);
+const template = performed.grooveTemplate(4);
 
 template.subdivision; // 4
 template.slotsPerBar; // 16
@@ -144,7 +147,7 @@ const stiff = Score.of(
 stiff.groove(template).notes.length; // 2
 ```
 
-`applyGrooveTemplate` は、ノートイベントに対して同じ適用を行い、拍子を呼び出しごとに指定します。
+`extractGrooveTemplate` と `applyGrooveTemplate` は、ノートイベントに対して同じ2つの手順を行い、拍子を呼び出しごとに指定します。
 
 ```ts
 import { applyGrooveTemplate, extractGrooveTemplate, parseTimeSignature } from '@libraz/libcantus';
@@ -170,7 +173,7 @@ grooved.length; // 2
 
 各スロットは、そこに落ちたイベントの格子からの平均ずれと平均ベロシティを持ちます。ベロシティが `null` の場合、ベロシティを持つイベントがそこに落ちなかったことを意味し、ベロシティ0とは区別されます。この区別のためにフィールドは null 許容です。
 
-テンプレートは抽出時の拍子を記録し、適用時の拍子が一致することを要求します。4/4 のグルーヴを 3/4 に適用すると、1小節分の格子が異なる小節長に対応づけられ、何も報告されないままずれが蓄積するため、不一致は拒否されます。
+抽出されたテンプレートは抽出時の拍子を記録し、適用時の拍子が一致することを要求します。4/4 のグルーヴを 3/4 に適用すると、1小節分の格子が異なる小節長に対応づけられ、何も報告されないままずれが蓄積するため、この不一致は拒否されます。ただし `ts` フィールドは省略可能です。手で組み立てたテンプレートに拍子がなければ照合する対象自体がないため、呼び出しで指定された拍子のまま適用されます。
 
 ## ドラム
 

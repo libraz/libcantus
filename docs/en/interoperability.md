@@ -11,11 +11,11 @@ Two conventions carry everything:
 
 Analysis and generation results are plain JSON-compatible data — no class instances in the functional API, no hidden prototypes — so a result can be serialized into a project file and read back without a revival step. The class API wraps the same data and exposes it through `.data`.
 
-One field is a lookup rather than data, and it is the only one: a chord timeline is its `segments` plus an `at` that reads them, and a function does not survive `JSON.stringify`. Every reported field of an analysis — including `timeline.segments` — round-trips as it stands, and `chordTimelineFromChords` rebuilds `at` over the segments that were stored, giving the same chord at every beat as the timeline it came from.
+One field is a lookup rather than data, and it is the only one: a chord timeline is its `segments` plus an `at` that reads them, and a function does not survive `JSON.stringify`. Every reported field of an analysis — including `timeline.segments` — round-trips as it stands, and `Timeline.fromJSON` rebuilds `at` from the stored data directly, giving the same chord at every beat as the timeline it came from. Staying in the functional API costs one step more: `chordTimelineFromChords` builds a timeline from `ChordSpan` values — a root, a quality, and the beat the chord starts on — not from the `ChordSegment` values that were stored, so map each stored segment back to a span before handing it over.
 
 The handles are the exception, and they are not results: `createNoteEventIndex`, `createArrangementSession`, `createRng`, `createPositionalRng` and `resolveContext` return live objects whose methods and function fields do not survive `JSON.stringify`. Store the input they were built from — the note events, the seed, the resolved `algorithmVersion` — and build them again on load; see [Determinism and seeding](determinism-and-seeding.md).
 
-## Passing a note, a key, or a chord
+## Passing a note, an interval, a key, a chord, or a meter
 
 Every public entry point that takes one of these accepts it in whatever form you are holding: the text a field holds, the plain data the library returns, or the class that wraps it. There is one coercer per kind, and it is the only place text is read:
 
@@ -25,6 +25,7 @@ Every public entry point that takes one of these accepts it in whatever form you
 | Interval | a name, `SpelledInterval`, an `Interval` | `toSpelledInterval` |
 | Key | a key name, `KeyScale`, a `Key` | `toKeyScale` |
 | Chord | a chord symbol, `ChordData`, a `Chord` | `toChordData` |
+| Meter | a signature name, `TimeSignature`, `MeterMap`, a `Meter` | `toMeterData` |
 
 ```ts
 import { toChordData, toKeyScale, toNoteData } from '@libraz/libcantus';
@@ -34,6 +35,8 @@ toNoteData(60); // { letter: 0, alter: 0, octave: 4 }
 toKeyScale('A minor').rootPc; // 9
 toChordData('Cmaj7').intervals; // [0, 4, 7, 11]
 ```
+
+An instrument is taken the same way — every entry point that needs one takes an `InstrumentProfileLike`, a plain profile or an `Instrument` — but its coercer is internal, so a profile is handed over rather than resolved by the caller.
 
 A class is read through its `toJSON`, not by its type. That is what lets a layer accept an instance without importing the class that defines it, and it means any value of your own with a `toJSON` returning the right shape is accepted too.
 

@@ -8,8 +8,8 @@
 | --- | --- |
 | 音高・音程・コード・スケールの演算 | 定数時間。12ビットマスクのビット操作です。 |
 | `detectChord`、`detectKey` | 候補集合に比例。候補数は固定です。 |
-| `chordTimelineFromNotes` | 音符とウィンドウの帰属数に比例。各音符は自身が鳴るウィンドウでのみ読まれ、ウィンドウ数は範囲と和声リズムから決まります。 |
-| `keyTimelineFromNotes`、`detectModulations` | 同じ計算量を `minKeyBeats` のスロット単位で行い、加えてスロットごとに固定24候補の探索を行います。 |
+| `chordTimelineFromNotes` | 音符とスロットの帰属数に比例。各音符は自身が鳴るスロットでのみ読まれます。既定の `'dynamic'` 分割では、スロット長は `minChordBeats` から決まり、1スロットあたりコード辞書に対する境界探索の一定コストがかかります。ここでの `harmonicRhythm` はウィンドウ長ではなく事前分布です。`segmentation: 'grid'` にすると `harmonicRhythm` ごとに1ウィンドウとなり、探索は行われません。 |
+| `keyTimelineFromNotes`、`detectModulations` | 同じ計算量を `minKeyBeats` のスロット単位で行い、加えてスロットごとに一定量の探索を行います。候補は24で、順序付きの全ペアについて遷移を評価するため、1ステップあたり 24 x 24 です。 |
 | `voiceChord` | `maxCandidates`（既定4000）で上限が決まります。 |
 | `voiceProgression` | コード数に比例。1コードあたりの探索に上限があるためです。 |
 | `analyzeArrangement` | 和声トラックを平坦化したタイムライン処理が支配的です。 |
@@ -36,6 +36,19 @@ index.at(1.5)?.note.pitch; // 64
 index.attacksAt(4); // true
 index.attacksAt(3); // false
 index.onsetsBetween(0, 5); // [1, 4]
+```
+
+`Score.index()` はスコア自身の音符に対して同じインデックスを作ります。`Score` を持っているホストは、音符を取り出してから渡す必要がありません。
+
+```ts
+import { Score } from '@libraz/libcantus';
+
+const score = Score.of([
+  { pitch: 60, startBeat: 0, durationBeat: 2 },
+  { pitch: 64, startBeat: 1, durationBeat: 2 },
+]);
+
+score.index().at(1.5)?.note.pitch; // 64
 ```
 
 変化しない1組の音符に対して位置の問い合わせを多数行う場合に使います。再生位置の表示、ホバー時の情報表示、拍ごとの注釈付けなどです。問い合わせが1回だけなら、線形走査のほうが安く済みます。
@@ -82,6 +95,8 @@ session.analysis.timeline.segments.length >= 1; // true
 
 音符は値として、かつ多重度も含めて比較されます。トラックの配列を並べ替えただけでは編集として扱われず、同じ音符をもう1つ追加した場合は編集として扱われます。
 
+`Arrangement.update` は、この仕組みをクラス側から使うものです。`Arrangement` は最初に解析を求められた時点でセッションを開き、`update` はそのセッションで再解析して、結果を持つ新しい `Arrangement` を返します。ハンドル自体をホストが持ちたい場合は `createArrangementSession` を使います。クラス側の経路は[時間とアレンジ](time-and-arrangement.md)を参照してください。
+
 ## 仕事量を明示的に制限する
 
 上限のない要求を受け取り得る入り口は、予算を受け取ります。
@@ -95,9 +110,20 @@ session.analysis.timeline.segments.length >= 1; // true
 ## UI の応答性を保つ
 
 - 解析は編集の後ろでデバウンスし、1打鍵ごとに走らせません。
-- アレンジ解析にはセッションを、位置の反復的な問い合わせにはインデックスを使います。
+- アレンジ解析にはセッションを使います。`createArrangementSession` か、内部でセッションを持つ `Arrangement.update` です。位置の反復的な問い合わせには `createNoteEventIndex` か `Score.index` のインデックスを使います。
 - 入力を絞ります。`chordTimelineFromNotes` は曲全体より画面上の小節だけのほうが速く、既にコードが分かっているホストは推定し直さずに `chordTimelineFromChords` を呼びます。
-- 時間のかかる解析はワーカーへ移します。入出力はすべて JSON 互換のプレーンデータであるため、構造化クローンでワーカー境界を越えられ、復元処理は不要です。
+- 時間のかかる解析はワーカーへ移します。関数 API の入出力はすべて JSON 互換のプレーンデータであるため、構造化クローンでワーカー境界を越えられ、復元処理は不要です。
+
+クラスの値はそのままでは越えられません。状態はプライベートフィールドにあるため、インスタンスをクローンしても中身のない、もはや `Score` ですらないオブジェクトになります。代わりに `toJSON()` を送り、対応する `fromJSON` で組み立て直します。モデルのクラスはいずれも両方を持っています。
+
+```ts
+import { Score } from '@libraz/libcantus';
+
+const score = Score.of([{ pitch: 60, startBeat: 0, durationBeat: 4 }]);
+const posted = structuredClone(score.toJSON());
+
+Score.fromJSON(posted).notes[0]?.pitch; // 60
+```
 
 ## 計測
 

@@ -15,6 +15,7 @@ const harmony = score.timeline({ harmonicRhythm: 1 });
 harmony.roman().map((entry) => entry.roman); // ['I', 'IV', 'V7', 'I']
 harmony.key?.toString(); // 'C major'
 harmony.keys.length; // 1
+harmony.segmentConfidence; // [1, 1, 1, 1]
 harmony.cadences().map((hit) => [hit.atBeat, hit.cadence.type]);
 // [[8, 'half'], [12, 'authentic']]
 
@@ -29,21 +30,22 @@ bass.notes.length; // 16
 
 `harmony.segments` は各区間の開始拍、終了拍、推定されたコードを返します。`harmony.at(beat)` はその瞬間に鳴っているコードを答えます。ピアノロールのカーソルが行う問い合わせはこちらです。ローマ数字にも同じ区間が付いてくるため、ラベルは対応する小節の上に描けます。
 
-タイムラインは、それを読むのに使われた調の領域を自分で持ちます。`harmony.keys` はその一覧で、転調を確認したいユーザーに提示します。`harmony.key` はもっとも長く保たれた調で、ラベルを1つだけ出す場合や、調を1つだけ受け取るジェネレータに渡す場合はこちらを使います。ここで調を言い直している箇所はどこにもありません。タイムラインが調を知っており、そこから作られた `Composer` がそれを引き継ぎます。
+タイムラインは、それを読むのに使われた調の領域を自分で持ちます。`harmony.keys` はその一覧で、転調を確認したいユーザーに提示します。`harmony.key` はもっとも長く保たれた調で、ラベルを1つだけ出す場合はこちらを使います。ジェネレータに渡すのもこの値です。調を読み取る場所が解析なのであって、解析した調がひとりでに後段まで届くわけではありません。`Composer` は自分が持つ調で書き、渡されたタイムラインからはコードだけを取ります。そのため上の例では `harmony.key` を `Composer.of` に明示的に渡しています。
 
-タイムラインが持たない唯一の値が、各読みの信頼度です。これは音楽ではなく推定そのものについての値だからです。必要な場合は関数から取り出し、そして表示してください。コードの認識は保証ではなく根拠に基づく推定であり、音数が少ない素材や意図的に曖昧な素材では信頼度が低くなります。
+各読みの信頼度はコードといっしょに付いてきます。`harmony.segmentConfidence` はセグメントと同じ順に1区間1つの値を持ち、曖昧さのない三和音4つはいずれも 1 と読まれます。この値は表示してください。コードの認識は保証ではなく根拠に基づく推定であり、音数が少ない素材や意図的に曖昧な素材では値が下がります。
 
 ```ts
-import { chordTimelineFromNotes } from '@libraz/libcantus';
+import { Score } from '@libraz/libcantus';
 
-const notes = [[48, 60, 64, 67], [43, 59, 62, 65]].flatMap((pitches, bar) =>
+// Two bare tritones: nothing in them settles which root they belong to.
+const notes = [[60, 66], [63, 69]].flatMap((pitches, bar) =>
   pitches.map((pitch) => ({ pitch, startBeat: bar * 4, durationBeat: 4 })),
 );
 
-const { timeline, segmentConfidence } = chordTimelineFromNotes(notes, { harmonicRhythm: 1 });
+const timeline = Score.of(notes).timeline({ harmonicRhythm: 1 });
 
-segmentConfidence.length === timeline.segments.length; // true
-segmentConfidence; // [1, 1]
+timeline.segmentConfidence.length === timeline.length; // true
+timeline.segmentConfidence; // [0.425, 0.425]
 ```
 
 ## 入力を正しく与える

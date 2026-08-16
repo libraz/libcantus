@@ -26,7 +26,7 @@ dominant.analyze(key).roman; // 'V7'
 Chord.parse('C7(b9,#11)').pitchClasses(); // [0, 1, 4, 6, 7, 10]
 ```
 
-`Note`、`Interval`、`Chord`、`Key`、`Progression` は不変です。変形するメソッドは新しい値を返すため、元の調やコードはそのまま残ります。
+model レイヤーのクラスはすべて不変です。単体の `Note` はもちろん、曲全体を持つ `Score` や `Composer` も同じです。変形するメソッドは新しい値を返すため、元の調やコードはそのまま残ります。
 
 同じ値はプレーンデータとしても存在し、関数 API はそちらを受け取ります。
 
@@ -71,7 +71,7 @@ timeline.segments.map((segment) => chordToRoman(segment.chord, prevailingKey));
 // ['I', 'IV', 'V7', 'I']
 ```
 
-コードの境界はイベントから推定されます。曲が転調する場合、結果は複数の調区間を含みます。呼び出し側が冒頭の調をあらかじめ決める必要はありません。
+コードの境界はイベントから推定されます。曲が転調する場合、結果は複数の調区間を含むことがあります。呼び出し側が冒頭の調をあらかじめ決める必要はありません。
 
 区間は範囲とコードを持ちます。各読みの信頼度は `segmentConfidence` として並んで返り、区間の順に1つずつ対応します。
 
@@ -94,7 +94,19 @@ keys.length >= 1; // true
 
 ## それに対して何かを生成する
 
-生成は同じデータとシードを受け取ります。同じシードからは常に同じ音が得られます。
+`Composer` は1曲を書くときの設定、つまり調・テンポ・シードを保持し、各パートはそれを受け継ぎます。パートごとに同じ設定を書き直す必要はありません。プログレッションは `Timeline` として返るので、解析の節で読んだ値とそのまま同じものです。
+
+```ts
+import { Composer } from '@libraz/libcantus';
+
+const composer = Composer.of({ key: 'C major', bpm: 120, seed: 9 });
+const plan = composer.progression({ style: 'idol', bars: 4 });
+
+plan.totalBeats; // 16
+plan.roman().map((entry) => entry.roman); // ['vi', 'ii', 'V', 'I']
+```
+
+その下にあるジェネレータは、同じデータとシードを受け取ります。同じシードからは常に同じ音が得られます。
 
 ```ts
 import { generateProgression, majorKey } from '@libraz/libcantus';

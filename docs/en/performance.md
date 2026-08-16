@@ -8,8 +8,8 @@ Everything in the library is synchronous and single-threaded. A call returns bef
 | --- | --- |
 | Pitch, interval, chord, and scale arithmetic | Constant time. Bit operations on a twelve-bit mask. |
 | `detectChord`, `detectKey` | Linear in the candidate set, which is fixed. |
-| `chordTimelineFromNotes` | Linear in the number of note-to-window memberships: each note is read once per window it sounds in, and the window count follows from the span and the harmonic rhythm. |
-| `keyTimelineFromNotes`, `detectModulations` | The same, over slots of `minKeyBeats`, plus a fixed 24-candidate search per slot. |
+| `chordTimelineFromNotes` | Linear in the number of note-to-slot memberships: each note is read once per slot it sounds in. Under the default `'dynamic'` segmentation the slot length follows from `minChordBeats`, and each slot costs one constant step of the boundary search over the chord lexicon; `harmonicRhythm` is a prior there rather than a window length. `segmentation: 'grid'` collapses that to one window every `harmonicRhythm` beats with no search at all. |
+| `keyTimelineFromNotes`, `detectModulations` | The same, over slots of `minKeyBeats`, plus a constant search per slot: 24 candidates, and a transition weighed for every ordered pair of them, so 24 x 24 per step. |
 | `voiceChord` | Bounded by `maxCandidates`, 4000 by default. |
 | `voiceProgression` | Linear in the number of chords, because the per-chord search is bounded. |
 | `analyzeArrangement` | Dominated by the timeline pass over the flattened harmony tracks. |
@@ -36,6 +36,19 @@ index.at(1.5)?.note.pitch; // 64
 index.attacksAt(4); // true
 index.attacksAt(3); // false
 index.onsetsBetween(0, 5); // [1, 4]
+```
+
+`Score.index()` builds the same index over a score's own notes, so a host holding a `Score` does not have to unpack it first:
+
+```ts
+import { Score } from '@libraz/libcantus';
+
+const score = Score.of([
+  { pitch: 60, startBeat: 0, durationBeat: 2 },
+  { pitch: 64, startBeat: 1, durationBeat: 2 },
+]);
+
+score.index().at(1.5)?.note.pitch; // 64
 ```
 
 Use it when a host asks many positional questions about one unchanging set of notes — a playhead readout, a hover inspector, a per-beat annotation pass. For a single question, the linear scan is cheaper than building the index.
@@ -82,6 +95,8 @@ The result equals what `analyzeArrangement` would return over the edited tracks 
 
 Notes are compared as values and by multiplicity, so re-ordering a track's array counts as no edit at all, while adding a second copy of a note counts as one.
 
+`Arrangement.update` is the same machinery behind the class: an `Arrangement` opens a session the first time it is asked for an analysis, and `update` re-analyzes through it and hands back a new arrangement carrying the result. Reach for `createArrangementSession` when the host wants to hold the handle itself; see [Time and arrangement](time-and-arrangement.md) for the class route.
+
 ## Bounding the work explicitly
 
 Entry points that could be handed an unbounded request take a budget:
@@ -95,9 +110,20 @@ See [Errors and validation](errors-and-validation.md) for how those failures are
 ## Keeping a UI responsive
 
 - Debounce analysis behind the edit rather than running it per keystroke.
-- Use a session for arrangement analysis, and an index for repeated positional queries.
+- Use a session for arrangement analysis — `createArrangementSession`, or `Arrangement.update`, which holds one internally — and an index for repeated positional queries, from `createNoteEventIndex` or `Score.index`.
 - Narrow the input: `chordTimelineFromNotes` over the bars on screen answers faster than over the whole piece, and a host that already knows its chords should call `chordTimelineFromChords` instead of re-inferring them.
-- Move a long analysis to a worker. Every input and output is plain JSON-compatible data, so it crosses a worker boundary with a structured clone and no revival step.
+- Move a long analysis to a worker. Every input and output of the functional API is plain JSON-compatible data, so it crosses a worker boundary with a structured clone and no revival step.
+
+A class value does not cross that way: the state lives in private fields, and cloning the instance yields an empty object that is no longer a `Score`. Send `toJSON()` instead and rebuild with the matching `fromJSON` — every model class carries both:
+
+```ts
+import { Score } from '@libraz/libcantus';
+
+const score = Score.of([{ pitch: 60, startBeat: 0, durationBeat: 4 }]);
+const posted = structuredClone(score.toJSON());
+
+Score.fromJSON(posted).notes[0]?.pitch; // 60
+```
 
 ## Measuring
 

@@ -69,6 +69,22 @@ diatonicPitchClasses(c); // [0, 2, 4, 5, 7, 9, 11]
 
 `pitchToScaleDegree` counts degrees within the scale, so it answers 5 for the fifth degree of a heptatonic scale and also for the fifth tone of a pentatonic one. `nearestScaleTone` is what a snap-to-scale editor wants; it moves the pitch, not the spelling.
 
+`Key` asks the same four questions of the scale it holds:
+
+```ts
+import { Key } from '@libraz/libcantus';
+
+const c = Key.major('C');
+
+c.contains(64); // true
+c.contains(61); // false
+c.nearestTone(61); // 60
+c.degreeOf(67); // 5
+c.pitchClasses(); // [0, 2, 4, 5, 7, 9, 11]
+```
+
+`Key.degreeOf` answers `null` for a pitch outside the scale rather than the `-1` the function returns, so a degree read straight into a UI cannot be mistaken for the tonic.
+
 ## Which scales support functional harmony
 
 Roman numerals, cadences, and harmonic function are conventions of common-practice tonality. Applied to a scale with no leading tone or no tertian triads, they produce labels that carry no meaning.
@@ -82,6 +98,19 @@ scaleSystemOf('wholeTone'); // 'non-functional'
 
 supportsFunctionalHarmony('major'); // true
 supportsFunctionalHarmony('miyakoBushi'); // false
+```
+
+A `Key` answers for the scale it already holds, so nothing has to be named twice:
+
+```ts
+import { Key } from '@libraz/libcantus';
+
+Key.major('C').system(); // 'common-practice'
+Key.named('dorian', 'D').system(); // 'modal'
+Key.named('wholeTone', 'C').system(); // 'non-functional'
+
+Key.major('C').supportsFunctionalHarmony(); // true
+Key.named('miyakoBushi', 'C').supportsFunctionalHarmony(); // false
 ```
 
 `SCALE_SYSTEMS` sorts every built-in scale into one of three systems. Check `supportsFunctionalHarmony` before offering a Roman-numeral reading in a UI. For a whole-tone passage the correct response is that the analysis does not apply, rather than a numeral chosen by approximation.
@@ -113,6 +142,22 @@ report[0]?.name; // 'mixolydian'
 report[0]?.avoid; // []
 report[0]?.passing; // [5]
 report[0]?.tensions; // [2, 9]
+```
+
+`Chord` carries the same four questions, which is the form a chord already parsed from a chart is in:
+
+```ts
+import { Chord } from '@libraz/libcantus';
+
+Chord.of('C', 'maj7').scales()[0]; // { name: 'ionian', rootPc: 0 }
+Chord.of('C', 'maj7').tensions('ionian'); // [2, 9]
+Chord.of('C', 'maj7').avoidNotes('ionian'); // [5]
+Chord.of('C', 'maj7').avoidNotes('ionian', { use: 'melodic' }); // []
+
+const entry = Chord.of('C', 'dom7').scaleReport(1)[0];
+entry?.name; // 'mixolydian'
+entry?.passing; // [5]
+entry?.tensions; // [2, 9]
 ```
 
 `chordScaleReport` is the three calls combined, ordered best fit first, with an optional limit. Each entry splits the scale tones the chord does not state three ways: `avoid` may not be played at all, `passing` may be passed through melodically but not sounded against the chord, and `tensions` may be added freely as colour. It is the shape a UI panel usually wants.
@@ -155,6 +200,18 @@ noteNames(spellScale(spelledKeyOf(majorKey(6)).tonic, majorKey(6)));
 
 const miyako = scaleByName('miyakoBushi', 0);
 noteNames(spellScale(spelledKeyOf(miyako).tonic, miyako)); // ['C', 'Db', 'F', 'G', 'Ab']
+```
+
+A `Key` already knows its spelled tonic, so the whole chain is one call — `Key.noteNames` for the names, `Key.spell` for the notes themselves:
+
+```ts
+import { Key } from '@libraz/libcantus';
+
+Key.major('Gb').noteNames();
+// ['Gb', 'Ab', 'Bb', 'Cb', 'Db', 'Eb', 'F']
+
+Key.named('miyakoBushi', 'C').noteNames(); // ['C', 'Db', 'F', 'G', 'Ab']
+Key.major('Gb').spell()[0].name; // 'Gb'
 ```
 
 `spelledKeyOf` picks the tonic spelling with the fewest accidentals: pitch class 1 in major comes out as Db rather than C#. Where the two spellings are equally far out — pitch class 6 is F# at six sharps and Gb at six flats — the flat side is taken. Pass an explicit tonic when the piece is written the other way.

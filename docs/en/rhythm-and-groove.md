@@ -117,18 +117,21 @@ A score humanizes against its own meter, so `ts` is the option a bare array need
 
 ## Groove templates
 
-A groove template is a per-bar grid of timing and velocity deviations, captured from a performance. Extract it from playing that carries the intended feel with `extractGrooveTemplate`, then impose it on material that does not:
+A groove template is a per-bar grid of timing and velocity deviations, captured from a performance. Extract it from playing that carries the intended feel, then impose it on material that does not. `Score.grooveTemplate` reads the feel of a score against the meter the score already carries, and `Score.groove` lays it over another:
 
 ```ts
-import { extractGrooveTemplate, parseTimeSignature, Score } from '@libraz/libcantus';
+import { parseTimeSignature, Score } from '@libraz/libcantus';
 
 const ts = parseTimeSignature('4/4');
 
-const performed = [
-  { pitch: 36, startBeat: 0.02, durationBeat: 1, velocity: 100 },
-  { pitch: 38, startBeat: 1.06, durationBeat: 1, velocity: 70 },
-];
-const template = extractGrooveTemplate(performed, ts, 4);
+const performed = Score.of(
+  [
+    { pitch: 36, startBeat: 0.02, durationBeat: 1, velocity: 100 },
+    { pitch: 38, startBeat: 1.06, durationBeat: 1, velocity: 70 },
+  ],
+  { meters: ts },
+);
+const template = performed.grooveTemplate(4);
 
 template.subdivision; // 4
 template.slotsPerBar; // 16
@@ -144,7 +147,7 @@ const stiff = Score.of(
 stiff.groove(template).notes.length; // 2
 ```
 
-`applyGrooveTemplate` is the same imposition over note events, with the meter named at the call:
+`extractGrooveTemplate` and `applyGrooveTemplate` are the same two steps over note events, with the meter named at each call:
 
 ```ts
 import { applyGrooveTemplate, extractGrooveTemplate, parseTimeSignature } from '@libraz/libcantus';
@@ -170,7 +173,7 @@ grooved.length; // 2
 
 Each slot holds the average offset from the grid and the average velocity of the events that landed on it. A velocity of `null` means no event with a velocity landed there, which is not the same as a velocity of zero — that distinction is why the field is nullable.
 
-The template records the time signature it was extracted under, and the apply-time meter has to match. A 4/4 groove laid over 3/4 would align its per-bar grid against the wrong bar length and drift without reporting anything, so the mismatch is rejected.
+An extracted template records the time signature it was extracted under, and the apply-time meter then has to match it. A 4/4 groove laid over 3/4 would align its per-bar grid against the wrong bar length and drift without reporting anything, so that mismatch is rejected. The `ts` field is optional, though: a template built by hand without one carries nothing to check against and is applied under whatever meter the call names.
 
 ## Drums
 

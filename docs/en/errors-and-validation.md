@@ -58,7 +58,7 @@ const typed = tryParseChordSymbol('C(');
 const label = typed.ok ? typed.value.quality : typed.error.message;
 ```
 
-`ParseResult<T>` is `{ ok: true; value: T }` or `{ ok: false; error: LibcantusError }`. The error travels in the result rather than collapsing to `null`, because an input field has to say what is wrong with what was typed. Every text parser has one: notes, intervals, chord symbols, key names, and time signatures. The class API mirrors the pair on the class that reads the text: `Note.tryParse`, `Interval.tryParse`, `Key.tryParse`, and `Chord.tryParse` beside `Note.parse`, `Interval.parse`, `Key.parse`, and `Chord.parse`.
+`ParseResult<T>` is `{ ok: true; value: T }` or `{ ok: false; error: LibcantusError }`. The error travels in the result rather than collapsing to `null`, because an input field has to say what is wrong with what was typed. Every text parser has one: notes, intervals, chord symbols, key names, and time signatures. The class API mirrors the pair on the class that reads the text: `Note.tryParse`, `Interval.tryParse`, `Key.tryParse`, `Chord.tryParse`, and `Meter.tryParse` beside `Note.parse`, `Interval.parse`, `Key.parse`, `Chord.parse`, and `Meter.parse`.
 
 Each throwing parser is written on top of its non-throwing sibling, so `parseNote` and `tryParseNote` cannot disagree about what is valid.
 

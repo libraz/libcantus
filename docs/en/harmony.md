@@ -2,7 +2,7 @@
 
 ## Chords are structured values
 
-Chord symbols are parsed into a `ChordSpec`: a base quality plus sevenths, alterations, additions, omissions, and an optional bass. The model is not limited to a fixed list of chord names.
+A chord symbol is parsed into chord data: a root pitch class, the intervals above it, and an optional bass. The structural reading of that data is a separate step — `chordSpecOf` derives a `ChordSpec`, a base quality plus sevenths, alterations, additions, omissions, and an optional bass. The model is not limited to a fixed list of chord names.
 
 ```ts
 import { Chord, Key, chordSpecOf } from '@libraz/libcantus';
@@ -11,11 +11,14 @@ Key.major('C').roman('V7/V').symbol(); // 'D7'
 Chord.parse('F#m7b5').pitchClasses(); // [0, 4, 6, 9]
 
 const altered = Chord.parse('C7(b9,#11)');
+
+altered.spec.alterations;
+// [{ degree: 9, alter: -1 }, { degree: 11, alter: 1 }]
 chordSpecOf(altered.data).alterations;
 // [{ degree: 9, alter: -1 }, { degree: 11, alter: 1 }]
 ```
 
-`Chord` values can be inverted, transposed, formatted, and converted to a progression. The pure functions `makeChord`, `chordFromSpec`, `chordPitchClasses`, and `formatChordSymbol` expose the same data model without class wrappers.
+`Chord.spec` is the one-step form; `chordSpecOf` reads plain chord data, which is why it has to be handed `chord.data`. `Chord` values can be inverted, transposed, formatted, and converted to a progression. The pure functions `makeChord`, `chordFromSpec`, `chordPitchClasses`, and `formatChordSymbol` expose the same data model without class wrappers.
 
 A symbol survives a round trip — a chord no quality name covers included — and an inversion is carried as a bass pitch class rather than as a reordered interval list:
 

@@ -23,6 +23,7 @@ plan.roman().map((entry) => entry.roman);
 // ['IV', 'V', 'iii', 'vi', 'IV', 'V', 'iii', 'vi']
 
 bass.notes.length; // 27
+// Every kit voice is an event of its own, so the count pools the whole kit:
 drums.notes.length; // 281
 bass4.playability(bass.notes, 112).issues.length; // 0
 ```
@@ -64,16 +65,21 @@ const plan = composer.progression({ style: 'idol', bars: 8 });
 const melody = Score.of(
   [60, 62, 64, 65, 67, 65, 64, 62].map((pitch, index) => ({
     pitch,
-    startBeat: index,
-    durationBeat: 1,
+    startBeat: index * 4,
+    durationBeat: 2,
   })),
 );
 
-const counter = composer.counterMelody(melody, { timeline: plan.chordTimeline, register: 'below' });
+// The default 'complement' rhythm writes where the melody is not moving, so a
+// melody leaving the second half of each bar open gives it room to answer.
+const counter = composer.counterMelody(melody, {
+  timeline: plan.chordTimeline,
+  register: 'above',
+});
 const loosened = counter.humanize();
 
-counter.notes.length; // 2
-loosened.notes.length; // 2
+counter.notes.length; // 21
+loosened.notes.length; // 21
 melody.notes[0]?.startBeat; // 0
 ```
 
@@ -95,4 +101,4 @@ bass4.foldIntoRange(24); // 36
 
 `playability` is the fuller check, and its three layers separate "this note is not on the instrument" from "this is hard at this tempo" — see [Instruments and playability](../instruments-and-playability.md).
 
-Store the seed, the resolved `algorithmVersion`, and every option alongside the emitted notes; `composer.data` is the settings half of that record. Generation does not write a MIDI file, select a sound, or establish that a result is stylistically appropriate; those decisions belong to the host and its user.
+Store the seed and every option alongside the emitted notes; `composer.data` is the settings half of that record. The version the generators ran under is not one of a composer's settings and cannot be handed back to one — read it with `resolveContext(composer.context).algorithmVersion` and record it beside them, as the note that says which release produced the take. Generation does not write a MIDI file, select a sound, or establish that a result is stylistically appropriate; those decisions belong to the host and its user.

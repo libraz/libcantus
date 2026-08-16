@@ -146,7 +146,7 @@ ornament(notes, { style: 'ghost', amount: 0.6, ctx: { seed: 4 } }).length; // 8
 
 ## コンテキストと再現性
 
-`GenerationContext` は、プロジェクトのシード、テンポ、楽器プロファイル、vocabulary、complexity、difficulty を保持します。`complexity` は `rhythmic`、`harmonic`、`ornament` を 0..1 で持ちます。`difficulty` は1から5の上限で、強度を上げるのではなく候補を削ります。`vocabulary` は曲全体が引くジャンル辞書で、[リズムとグルーヴ](rhythm-and-groove.md)の「ジャンル語彙」で説明しています。
+`GenerationContext` が持つのは、プロジェクトの `seed`、`bpm`、パートを書く対象の `instruments`、`vocabulary`、ダイヤルをまとめた `complexity`、生成の契約を固定する `algorithmVersion`、そしてシードから導かれる乱数源ではなく自前の乱数源を渡したい場合の `rng` です。ダイヤルは `complexity` の側にあります。`rhythmic`、`harmonic`、`ornament` を 0..1 で持ち、加えて `difficulty` が1から5の上限で、強度を上げるのではなく候補を削ります。`vocabulary` は曲全体が引くジャンル辞書で、[リズムとグルーヴ](rhythm-and-groove.md)の「ジャンル語彙」で説明しています。
 
 ジェネレータが応答するダイヤルはすべてここにあります。呼び出しごとに `ctx` として渡すか、composer に持たせるかのどちらかです。`composer.context` はクラスが覆っていない呼び出しへ渡すための同じプレーンなコンテキストで、`with…` 系のメソッドは手元の composer を書き換えるのではなく新しい composer を返します。
 

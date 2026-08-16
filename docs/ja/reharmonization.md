@@ -16,7 +16,19 @@ formatChordSymbol(subs.find((sub) => sub.type === 'tritone')?.chord ?? makeChord
 // 'Db7'
 ```
 
-ハ長調における G7 の裏コードは C#7 ではなく Db7 と綴られます。この調の下方第2度であり、綴りがそれを示しています。
+ハ長調における G7 の裏コードは C#7 ではなく Db7 と綴られます。この調の ♭II（第2度を半音下げた度数）であり、綴りがそれを示しています。
+
+クラス API では `Chord.substitutions` が同じ問い合わせにあたり、`Progression.substitute` はそのうち1つを実際に差し替えます。
+
+```ts
+import { Chord, Key, Progression } from '@libraz/libcantus';
+
+const subs = Chord.parse('G7').withKey(Key.major('C')).substitutions();
+subs.find((sub) => sub.type === 'tritone')?.chord.rootPc; // 1
+
+const progression = new Progression([Chord.parse('G7'), Chord.parse('C')], Key.major('C'));
+progression.substitute(0, 'tritone').toString(); // 'Db7 C'
+```
 
 4つの関係は次のとおりです。
 
@@ -27,7 +39,7 @@ formatChordSymbol(subs.find((sub) => sub.type === 'tritone')?.chord ?? makeChord
 | `borrowed` | 任意 | 同主調から同じ度数を借ります。 |
 | `chromaticMediant` | 任意 | 3度離れ、共通音1つと半音変化を伴います。 |
 
-副属和音はこの一覧に入りません。どの属和音が当たるかは後続の和音が決めるもので、`substituteChord` が受け取るのは1つの和音と調だけだからです。対象が分かっている場面では `secondaryDominantOf` が指定した和音に対する副属和音を作ります。進行全体を選び直す場面では、`harmonizeMelody` が `reharmonize: 'secondaryDominant'` で語彙を広げます。
+副属和音はこの一覧に入りません。どの属和音が当たるかは後続の和音が決めるもので、`substituteChord` が受け取るのは1つの和音と調だけだからです。対象が分かっている場面では `secondaryDominantOf`（クラスでは `Chord.secondaryDominant`）が指定した和音に対する副属和音を作ります。進行全体を選び直す場面では、`harmonizeMelody` が `reharmonize: 'secondaryDominant'` で語彙を広げます。
 
 ### メロディとの整合を保つ
 
@@ -50,32 +62,36 @@ overE.every((sub) => sub.chord.intervals.length > 0); // true
 コードごとに問い合わせる代わりに、同主調から利用できるコードをまとめて取得できます。
 
 ```ts
-import { formatChordSymbol, majorKey, modalInterchangePalette } from '@libraz/libcantus';
+import { Chord, formatChordSymbol, Key, majorKey, modalInterchangePalette } from '@libraz/libcantus';
 
 modalInterchangePalette(majorKey(0)).map((borrowed) => formatChordSymbol(borrowed.chord));
 // ['Cm', 'Ddim', 'Eb', 'Fm', 'Gm', 'Ab', 'Bb', 'Db']
+
+Chord.parse('C').withKey(Key.major('C')).modalInterchange().length; // 8
 ```
 
-各項目はローマ数字と `source` を持つため、UI は借用元ごとにまとめて表示できます。綴りはフラット側に寄ります。長調における借用和音はそのように書かれるためです。
+各項目はローマ数字と `source` を持つため、UI は借用元ごとにまとめて表示できます。綴りはフラット側に寄ります。長調における借用和音はそのように書かれるためです。パレットは個々のコードではなく調に属するので、`Chord.modalInterchange` も同じ一覧を返します。コードから辿れるようにしてあるのは、次の行き先を探している呼び出し側がすでにコードのところにいるからです。
 
 ## ネガティブハーモニー
 
 `negativeHarmonyMirror` は、調の軸に対してコードを反転させます。
 
 ```ts
-import { majorKey, makeChord, negativeHarmonyMirror } from '@libraz/libcantus';
+import { Chord, Key, majorKey, makeChord, negativeHarmonyMirror } from '@libraz/libcantus';
 
 const mirrored = negativeHarmonyMirror(makeChord(7, 'maj'), majorKey(0));
 
 mirrored.rootPc; // 5
 mirrored.quality; // 'min'
+
+Chord.parse('G').negativeHarmony(Key.major('C')).symbol(); // 'Fm'
 ```
 
 C の軸で反転させた G メジャーは F マイナーになります。これは提案ではなく変換です。結果はちょうど1つで、それが曲に適するかどうかは作曲上の判断になります。
 
 ## 進行全体をリハーモナイズする
 
-`generateProgression` には `reharmonize` フラグがあり、`complexity.harmonic` の中間値の略記です。コンテキストを直接指定すると、実行するかどうかではなくどの程度実行するかを指定できます。
+`generateProgression` のリハーモナイズはコンテキストで指定します。`ctx.complexity.harmonic` は進行のどれだけを後続和音の副属和音に置き換えるかを決めるもので、実行するかどうかではなくどの程度実行するかを指定できます。
 
 ```ts
 import { generateProgression, majorKey } from '@libraz/libcantus';
@@ -93,7 +109,7 @@ plain.length; // 8
 rich.length; // 8
 ```
 
-`harmonic: 0` ではプリセットがそのまま使われます。1 では、声部進行の規則が許すすべてのコードが後続和音の副属和音に置き換わります。長さは変わりません。リハーモナイズは挿入ではなく置換であるためです。
+既定値の `harmonic: 0` ではプリセットがそのまま使われ、0.5 では声部進行の規則が許すもののおよそ半分、1 ではそのすべてが置き換わります。長さは変わりません。リハーモナイズは挿入ではなく置換であるためです。どのコードが置き換わるかは `seed` が固定するため、同じシードなら常に同じ進行になります。
 
 `presetId` は組み込みの特定の進行を指定し、`preset` は呼び出し側の度数列を渡します。全音階外の度数には `BORROWED_DEGREES` の名前を使います。
 
@@ -135,6 +151,28 @@ result.transposeSemitones; // 0
 ```
 
 `result.chords` は和声リズムの格子上でのコード変化ごとに1つの `ChordSpan` を持ち、`result.melodyRoles` は各メロディ音が最終的に下に来たコードの中で果たす役割を返します。`result.key` はコードが書かれている調で、`transposeSemitones` はそこへ到達するためにメロディを移動した量です。ハーモナイザが扱える調になかったメロディは、誤った調のコードではなく、そこへ移すための移動量とともに返ります。
+
+`Composer.harmonize` はこの最後の2手順を呼び出し側に代わって行います。移動量をメロディに適用し、コードをタイムラインの上に配置するため、返ってくるのは互いに整合したメロディと和声です。
+
+```ts
+import { Composer, Score } from '@libraz/libcantus';
+
+const composer = Composer.of({ key: 'C major' });
+const melody = Score.of([
+  { pitch: 60, startBeat: 0, durationBeat: 1 },
+  { pitch: 62, startBeat: 1, durationBeat: 1 },
+  { pitch: 64, startBeat: 2, durationBeat: 1 },
+  { pitch: 65, startBeat: 3, durationBeat: 1 },
+  { pitch: 67, startBeat: 4, durationBeat: 4 },
+]);
+
+const harmonized = composer.harmonize(melody);
+
+harmonized.chords.at(0)?.symbol(); // 'C'
+harmonized.chords.totalBeats; // 8
+harmonized.melody.notes.length; // 5
+harmonized.transposeSemitones; // 0
+```
 
 メロディは終わるところで終止します。1フレーズずつ渡す呼び出し側にとってはこれが望ましい挙動です。1つのフレーズより長い旋律は各フレーズの区切りでも終止しますが、ハーモナイザ自身にはその位置が分かりません。区切りを名指しするのが `phraseEnds` で、すでにコードが付いている旋律であれば `phrasesFromTimeline` がその位置を見つけます。名指しした拍はコードのグリッドを分割し、そこで閉じるスロットへ和声が動き、フレーズが落ち着く音は次のフレーズの頭に対する装飾音ではなく構造音として読まれます。したがって旋律全体を1回の呼び出しで和声付けでき、フレーズごとに和声付けして繋ぐ必要はありません。
 

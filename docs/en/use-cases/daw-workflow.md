@@ -15,6 +15,7 @@ const harmony = score.timeline({ harmonicRhythm: 1 });
 harmony.roman().map((entry) => entry.roman); // ['I', 'IV', 'V7', 'I']
 harmony.key?.toString(); // 'C major'
 harmony.keys.length; // 1
+harmony.segmentConfidence; // [1, 1, 1, 1]
 harmony.cadences().map((hit) => [hit.atBeat, hit.cadence.type]);
 // [[8, 'half'], [12, 'authentic']]
 
@@ -29,21 +30,22 @@ bass.notes.length; // 16
 
 `harmony.segments` gives the start beat, end beat, and inferred chord of each span, and `harmony.at(beat)` answers with the chord sounding at one moment — the query a piano-roll cursor makes. The numerals come back with the same spans attached, so a label can be drawn over the bar it belongs to.
 
-A timeline carries the key regions it was read against. `harmony.keys` is the list, for a user inspecting a modulation; `harmony.key` is the one held longest, which is the label to print when only one is wanted and the key to hand to a generator that takes a single one. Nothing here restates the key: the timeline knows it, and the `Composer` written from it keeps it.
+A timeline carries the key regions it was read against. `harmony.keys` is the list, for a user inspecting a modulation; `harmony.key` is the one held longest, which is the label to print when only one is wanted. It is also the key to hand a generator: the analysis is where the key is read from, not something that travels downstream on its own. A `Composer` writes in the key it holds and takes only the chords off the timeline it is given, so `harmony.key` goes into `Composer.of` above.
 
-The confidence of each reading is the one thing a timeline does not carry, since it describes the inference rather than the music. Ask the function for it, and show it — chord recognition is evidence-based rather than a guarantee, and sparse or deliberately ambiguous material produces low-confidence readings:
+The confidence of each reading travels with the chords. `harmony.segmentConfidence` holds one value per segment, in segment order, and four unambiguous triads all read at 1. Show it — chord recognition is evidence-based rather than a guarantee, and sparse or deliberately ambiguous material comes back lower:
 
 ```ts
-import { chordTimelineFromNotes } from '@libraz/libcantus';
+import { Score } from '@libraz/libcantus';
 
-const notes = [[48, 60, 64, 67], [43, 59, 62, 65]].flatMap((pitches, bar) =>
+// Two bare tritones: nothing in them settles which root they belong to.
+const notes = [[60, 66], [63, 69]].flatMap((pitches, bar) =>
   pitches.map((pitch) => ({ pitch, startBeat: bar * 4, durationBeat: 4 })),
 );
 
-const { timeline, segmentConfidence } = chordTimelineFromNotes(notes, { harmonicRhythm: 1 });
+const timeline = Score.of(notes).timeline({ harmonicRhythm: 1 });
 
-segmentConfidence.length === timeline.segments.length; // true
-segmentConfidence; // [1, 1]
+timeline.segmentConfidence.length === timeline.length; // true
+timeline.segmentConfidence; // [0.425, 0.425]
 ```
 
 ## Feeding the analysis correctly

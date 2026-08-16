@@ -26,7 +26,7 @@ dominant.analyze(key).roman; // 'V7'
 Chord.parse('C7(b9,#11)').pitchClasses(); // [0, 1, 4, 6, 7, 10]
 ```
 
-`Note`, `Interval`, `Chord`, `Key`, and `Progression` are immutable. Methods that transform one return a new value, so the original key or chord remains unchanged.
+Every class in the model layer is immutable, a whole `Score` or `Composer` as much as a single `Note`. Methods that transform one return a new value, so the original key or chord remains unchanged.
 
 The same values exist as plain data, which is what the functional API takes:
 
@@ -94,7 +94,19 @@ keys.length >= 1; // true
 
 ## Generate something against it
 
-Generation takes the same data and a seed. The same seed always gives the same notes:
+A `Composer` holds what one piece is written under — its key, tempo, and seed — so each part inherits those instead of restating them. A progression comes back as a `Timeline`, the same value the analysis section read:
+
+```ts
+import { Composer } from '@libraz/libcantus';
+
+const composer = Composer.of({ key: 'C major', bpm: 120, seed: 9 });
+const plan = composer.progression({ style: 'idol', bars: 4 });
+
+plan.totalBeats; // 16
+plan.roman().map((entry) => entry.roman); // ['vi', 'ii', 'V', 'I']
+```
+
+The generator underneath takes the same data and a seed. The same seed always gives the same notes:
 
 ```ts
 import { generateProgression, majorKey } from '@libraz/libcantus';

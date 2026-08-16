@@ -23,6 +23,7 @@ plan.roman().map((entry) => entry.roman);
 // ['IV', 'V', 'iii', 'vi', 'IV', 'V', 'iii', 'vi']
 
 bass.notes.length; // 27
+// Every kit voice is an event of its own, so the count pools the whole kit:
 drums.notes.length; // 281
 bass4.playability(bass.notes, 112).issues.length; // 0
 ```
@@ -64,16 +65,21 @@ const plan = composer.progression({ style: 'idol', bars: 8 });
 const melody = Score.of(
   [60, 62, 64, 65, 67, 65, 64, 62].map((pitch, index) => ({
     pitch,
-    startBeat: index,
-    durationBeat: 1,
+    startBeat: index * 4,
+    durationBeat: 2,
   })),
 );
 
-const counter = composer.counterMelody(melody, { timeline: plan.chordTimeline, register: 'below' });
+// The default 'complement' rhythm writes where the melody is not moving, so a
+// melody leaving the second half of each bar open gives it room to answer.
+const counter = composer.counterMelody(melody, {
+  timeline: plan.chordTimeline,
+  register: 'above',
+});
 const loosened = counter.humanize();
 
-counter.notes.length; // 2
-loosened.notes.length; // 2
+counter.notes.length; // 21
+loosened.notes.length; // 21
 melody.notes[0]?.startBeat; // 0
 ```
 
@@ -95,4 +101,4 @@ bass4.foldIntoRange(24); // 36
 
 より詳しい確認は `playability` です。その3つの層は「その音は楽器に存在しない」と「このテンポでは難しい」を分けます。[楽器と演奏可能性](../instruments-and-playability.md)を参照してください。
 
-出力されたノートとあわせて、シード、解決後の `algorithmVersion`、全オプションを保存します。設定の側の記録は `composer.data` がそのまま使えます。生成は MIDI ファイルを書かず、音色を選ばず、その結果がスタイル上適切であることも保証しません。それらの判断はホストとそのユーザーの領分です。
+出力されたノートとあわせて、シードと全オプションを保存します。設定の側の記録は `composer.data` がそのまま使えます。ジェネレータが実際に使ったバージョンはコンポーザの設定ではなく、コンポーザに渡し直すこともできません。`resolveContext(composer.context).algorithmVersion` で取り出し、どのリリースがそのテイクを生んだかを示す記録として、設定とあわせて保存してください。生成は MIDI ファイルを書かず、音色を選ばず、その結果がスタイル上適切であることも保証しません。それらの判断はホストとそのユーザーの領分です。

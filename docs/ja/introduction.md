@@ -2,14 +2,14 @@
 
 `@libraz/libcantus` は、すでにノートやコード記号を持っているソフトウェアのための TypeScript 音楽理論エンジンです。MIDI ピッチ、綴られた音名、コード仕様、調、時間付きノートイベントを扱います。MIDI ファイルの読み書き、記譜の描画、音声解析、再生は行いません。
 
-パッケージに実行時依存はなく、すべての入り口が同期的で、返る値はすべて JSON 互換のプレーンデータです。
+パッケージに実行時依存はなく、すべての入り口が同期的です。関数 API が返すのは JSON 互換のプレーンデータで、クラスインスタンスは現れません。クラス API は同じデータを包み、`.data` で公開します。
 
 ## モデル
 
-公開されている操作は2種類あります。
+ライブラリが扱う対象は2種類あり、どちらも不変のクラスとプレーンデータの両方の形を持ちます。
 
-- `Note`、`Chord`、`Key`、`Progression` などの値は、不変のクラスラッパーとプレーンデータの両方の形を持ちます。
-- コレクションとタイムラインは、`NoteEvent` の配列に対する純粋関数で扱います。
+- 単体の値。`Note`、`Interval`、`Chord`、`Key`、`Progression` などです。
+- コレクションとタイムライン。`NoteEvent` をまとめる `Score`、コード区間を並べる `Timeline`、トラックを束ねる `Arrangement` です。クラスは素材とその文脈をひとまとめに保ち、実際の処理はその下にある純粋関数が行います。関数はそのまま単体でも呼べます。
 
 両者は組み合わせて使えます。クラスは `.data` でプレーンな値を公開し、解析や生成の関数が返すデータは、そのまま別の関数に渡すことも、クラスで包むこともできます。
 
@@ -38,9 +38,9 @@ const note: NoteEvent = {
 | `@libraz/libcantus/theory` | スケール、コード、綴り、和声規則、ボイシング |
 | `@libraz/libcantus/analyze` | コード・調の検出、タイムライン、形式、アレンジ解析 |
 | `@libraz/libcantus/generate` | 進行、モチーフ、リズム、ドラム、ベース、対旋律 |
-| `@libraz/libcantus/model` | 不変の `Note`、`Interval`、`Chord`、`Key`、`Progression` クラス |
+| `@libraz/libcantus/model` | 不変のクラス API。他のレイヤーが扱う対象ごとに1つのクラスがあり、いずれもその関数の薄い外皮 |
 
-レイヤーは積み重なっています。`theory` は `core` の上に、`analyze` は `theory` の上に、`generate` はその3つの上に構築されています。サブパスからのインポートはパッケージングの選択であり、別の API ではありません。
+レイヤーは積み重なっています。`theory` は `core` の上に、`analyze` は `theory` の上に、`generate` はその3つの上に、`model` はその4つすべての上に構築されています。サブパスからのインポートはパッケージングの選択であり、別の API ではありません。
 
 ## 3つの原則
 
@@ -64,4 +64,4 @@ const note: NoteEvent = {
 - [ユースケース](use-cases/index.md) — アプリケーションが手元に持つデータから始まる一連の流れ。
 - 各領域のページ（おおよそ深さ順）: [音高と記譜](pitch-and-notation.md)、[スケールとモード](scales-and-modes.md)、[和声](harmony.md)、[調関係と転調](key-relations-and-modulation.md)、[ボイシング](voicing.md)、[対位法と和声課題](counterpoint-and-part-writing.md)、[時間とアレンジ](time-and-arrangement.md)、[解析](analysis.md)、[旋律とモチーフ](melody-and-motifs.md)、[リズムとグルーヴ](rhythm-and-groove.md)、[生成](generation.md)、[リハーモナイズ](reharmonization.md)、[楽器と演奏可能性](instruments-and-playability.md)、[音律と周波数](tuning-and-frequency.md)。
 - 横断的な話題: [決定性とシード](determinism-and-seeding.md)、[エラーと検証](errors-and-validation.md)、[パフォーマンス](performance.md)、[相互運用](interoperability.md)。
-- リファレンス: [API リファレンス](api-reference.md)、[用語集](glossary.md)、[疑問と制限](faq.md)。
+- リファレンス: [API リファレンス](api-reference.md)、[用語集](glossary.md)、[FAQ と制限](faq.md)。

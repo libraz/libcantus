@@ -7,7 +7,7 @@ Pure-TypeScript music theory for MIDI note events. Build and spell chords, inspe
 [![codecov](https://codecov.io/gh/libraz/libcantus/branch/main/graph/badge.svg)](https://codecov.io/gh/libraz/libcantus)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libcantus/blob/main/LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-22.x-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![docs](https://img.shields.io/badge/docs-API%20reference-b5892e)](https://libraz.github.io/libcantus/)
 
 ## What it does
@@ -35,11 +35,12 @@ Chord boundaries are searched for rather than assumed, and so is the key, so a p
 
 What each layer covers:
 
-- **[Pitch and notation](docs/en/pitch-and-notation.md)** — spelled notes and intervals, MIDI conversion, note names read and written in English, German, Japanese, Italian or fixed-do, and line spelling solved as one path instead of note by note. Every text parser has a non-throwing sibling (`tryParseNote`, `tryParseInterval`, `tryParseChordSymbol`, `tryParseKeyName`, `tryParseTimeSignature`, and `tryParse` on `Note`, `Interval`, `Key` and `Chord`), so a text field needs no `try`/`catch` per keystroke.
+- **[Pitch and notation](docs/en/pitch-and-notation.md)** — spelled notes and intervals, MIDI conversion, note names read and written in English, German, Japanese, Italian or fixed-do, and line spelling solved as one path instead of note by note. Every text parser has a non-throwing sibling (`tryParseNote`, `tryParseInterval`, `tryParseChordSymbol`, `tryParseKeyName`, `tryParseTimeSignature`, and `tryParse` on `Note`, `Interval`, `Key`, `Chord` and `Meter`), so a text field needs no `try`/`catch` per keystroke.
 - **[Harmony](docs/en/harmony.md)** — chords as structured values, scales including modes, pentatonics and the `WORLD_SCALES` set, Roman numerals and function, voicing, figured bass, and the part-writing and species-counterpoint checkers that report a violation with the voice it happened in and the reason.
 - **[Analysis](docs/en/analysis.md)** — chord and key detection over note events, timelines and cadences, prolongational reduction, phrases, sections, hypermeter, motifs, and arrangement reports.
 - **[Generation](docs/en/generation.md)** — progressions, motifs, rhythms, drums, bass and counter-melody, all drawing on one `GenerationContext`: a project seed, three additive complexity dials (rhythmic, harmonic, ornament), a separate difficulty ceiling, the tempo, and the instrument each part is written for. Same context, same output.
 - **[Time and arrangement](docs/en/time-and-arrangement.md)** — meter, tempo, positions in bars and beats, and analysis across several tracks at once.
+- **[Class API](docs/en/api-reference.md)** — the same theory as one immutable class per thing the library works with, `Score`, `Timeline` and `Composer` included, each a thin skin over the functions above. Reach for a function or a class as it suits the call site; the answers are the same.
 
 Answers say why they were reached. `analyzeChord`, `detectCadence` and `explainRoman` carry a `rationale`, `detectKey` attaches one on request, and each can report the readings it turned down as `alternatives`. Where the input cannot settle a question, the field comes back `null` rather than a plausible guess — grading a cadence perfect or imperfect needs a voicing, because only a voicing says what is in the soprano.
 
@@ -68,7 +69,7 @@ yarn add @libraz/libcantus
 
 ## Quick start
 
-The theory lives in tree-shakeable pure functions. On top of them sits an immutable class API — `Note`, `Interval`, `Chord`, `Key`, `Progression` — that reads the way theory is spoken:
+The theory lives in tree-shakeable pure functions. On top of them sits an immutable class API — one class per thing the library works with, from a single `Note`, `Interval` or `Chord` up to the `Score`, `Timeline`, `Arrangement` and `Composer` that carry a whole piece — that reads the way theory is spoken:
 
 ```ts
 import { Chord, Key } from '@libraz/libcantus';

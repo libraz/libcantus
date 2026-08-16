@@ -36,7 +36,7 @@ The parser accepts alterations, additions, omissions, and slash basses, so a cho
 
 ## Inferring the key
 
-A chart usually does not state its key, and `Key.detectBest` over the pooled pitch classes is the cheapest way to guess one. The example above shows the limit of that: an unweighted pool over `Dm7 G7 Cmaj7 A7(b9)` reports G rather than C, because the raised C-sharp of the A7 outweighs four bars of evidence in a fourteen-note histogram.
+A chart usually does not state its key, and `Key.detectBest` over the pooled pitch classes is the cheapest way to guess one. The example above shows the limit of that: an unweighted pool over `Dm7 G7 Cmaj7 A7(b9)` reports G rather than C. The pool is a seventeen-note histogram with every note counted once, and in it G is simply the most frequent pitch class — it sounds in three of the four chords, and nothing else sounds in more than two.
 
 Two things improve the guess. Weight the histogram by how long each chord sounds, so a two-beat passing chord counts less than a chord held for a bar. And weight the tonic candidates by where they fall — a chord chart's last bar says more about the key than its third.
 
@@ -59,11 +59,11 @@ timeline.segments.map((segment) => [segment.startBeat, segment.endBeat]);
 timeline.at(3)?.symbol(); // 'G7'
 ```
 
-A timeline carries its key, so nothing downstream has to be told the key a second time.
+A timeline carries its key, so the questions asked of the timeline itself — `roman`, `cadences`, `reduce` — do not have to be told it a second time. A generator is the exception: it writes in the key its own `Composer` holds, and takes only the chords off the timeline.
 
 ## Realizing the chart
 
-`Voicing.forChord` builds a comping voicing directly — no range search, and the style names the sound. `Progression.voice` is the other realization: four voices with smooth voice leading, for a chart that has to be sung or played in parts. A `Composer` writes a bass under the same timeline, in the key the timeline already carries:
+`Voicing.forChord` builds a comping voicing directly — no range search, and the style names the sound. `Progression.voice` is the other realization: one four-voice chord per symbol, with the leading smoothed from each to the next, for a chart that has to be sung or played in parts. A `Composer` writes a bass under the same timeline, in the key the composer itself was given:
 
 ```ts
 import { Chord, Composer, Key, Progression, Voicing } from '@libraz/libcantus';
@@ -77,8 +77,8 @@ const progression = new Progression(
 const comping = progression.chords.map((chord) => Voicing.forChord(chord, { style: 'drop2' }));
 comping[0]?.pitches; // [57, 62, 65, 72]
 
-const parts = progression.voice();
-parts[0]; // [50, 60, 65, 69]
+const voiced = progression.voice();
+voiced[0]; // [50, 60, 65, 69]
 
 const bass = Composer.of({ key, bpm: 96, seed: 3 }).bass(progression.timeline(4), {
   style: 'walking',

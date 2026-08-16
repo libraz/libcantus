@@ -30,6 +30,22 @@ violations[0]?.toIndex; // 1
 
 声部の番号は下から数え、`voiceChord` や `SATB_RANGES` と一致します。声部の組についての規則は両方を昇順で挙げ、単一の線についての規則は1つだけ挙げます。例外は対斜で、高さに関係なく先行音を持つ声部を先に挙げます。
 
+`Voicing.checkTo` は、あるボイシングから次のボイシングへの進行1つを採点します。両側の綴りは渡された調で内部的に決まり、コードも調も呼び出し側が持っている形のまま渡せるため、コード記号と調名だけで足ります。
+
+```ts
+import { Voicing } from '@libraz/libcantus';
+
+const from = Voicing.of([48, 55, 64, 72]);
+const to = Voicing.of([50, 57, 65, 69]);
+
+const violations = from.checkTo(to, ['C', 'Dm'], 'C major');
+
+violations[0]?.kind; // 'parallelFifth'
+violations[0]?.voices; // [0, 1]
+```
+
+こちらは対話的な用途です。声部を動かした直後に、その移動が何を破ったかを尋ねる形になります。課題全体を対象にする場合は `checkPartWriting` で、任意の長さのコラールを1回の呼び出しで採点します。
+
 ### 検査される規則
 
 和音の内部: `voiceCrossing`、`spacing`、`range`。
@@ -79,7 +95,7 @@ checkPartWriting(voicings, chords, key).map((violation) => violation.kind);
 // ['spacing', 'range']
 ```
 
-`range` の判定は、4声の課題では `SATB_RANGES` に対して行います。それ以外の声部数には前提にできる慣用的な音域がないため、`ranges` を渡さない限りこの規則は適用されません。四声体でない課題では音域を明示的に渡してください。`maxSpacing` は上3声の隣接間で既定12半音、バスとテノールの組は慣例どおり対象外です。
+`range` の判定は、4声の課題では `SATB_RANGES` に対して行います（`Voicing.satbRanges` はその複製を返す同じ4つの音域です）。それ以外の声部数には前提にできる慣用的な音域がないため、`ranges` を渡さない限りこの規則は適用されません。四声体でない課題では音域を明示的に渡してください。`maxSpacing` は上3声の隣接間で既定12半音、バスとテノールの組は慣例どおり対象外です。
 
 どちらのオプションも、規則を1つも実行しないうちに、ボイシング探索と同じ検証を通ります。有限かつ非負の数でない `maxSpacing`、および空・不正・採点する声部数に足りない `ranges` は、規則を黙って無効化するのではなく `InvalidInputError` を投げます。したがって結果が空であることは、規則が破られていないことだけを意味し、判定できなかったことを意味しません。
 
@@ -95,6 +111,18 @@ const counterpoint = ['C5', 'A4', 'G4', 'B4', 'C5'].map((name) => parseNote(name
 
 checkSpecies(cantus, counterpoint, 1, majorKey(0)); // []
 ```
+
+`Voicing.species` はボイシングを書かれた対位声部の線として読み、与えられた定旋律に対して採点します。
+
+```ts
+import { Voicing } from '@libraz/libcantus';
+
+const counterpoint = Voicing.of([72, 69, 67, 71, 72]);
+
+counterpoint.species(['C4', 'D4', 'E4', 'D4', 'C4'], 1, 'C major'); // []
+```
+
+ここでのピッチは音域上の声部ではなく時間上のスロットです。ボイシングが線として読まれるのは、このメソッドと `Voicing.independence` だけです。判定の前に両方の線が同じ旋法で綴られ、定旋律も例外ではありません。したがって定旋律を MIDI ピッチで渡しても、対位声部と同じ規則で綴られます。これは重要な性質です。文字を読む規則（増2度、減4度）は、異なる規則で綴られた2つの線には適用できず、呼び出し側が手で綴った線は別の規則で綴られている可能性があるからです。
 
 定旋律は1小節1音です。対位声部は書かれたリズムではなく位置で対応づけます。第1種から第4種は1小節あたりの音数が固定であるため、音数だけで各音の位置が決まります。終止小節が全音符1つで書かれている場合は、慣例として受け入れます。
 
@@ -153,6 +181,17 @@ const lead = ['C5', 'D5', 'E5'].map((name) => parseNote(name));
 const counter = ['E4', 'F4', 'G4'].map((name) => parseNote(name));
 
 voiceIndependence(lead, counter).motion.parallel; // 1
+```
+
+`Voicing.independence` は、保持している2つの線に対する同じ測定です。`key` を渡すと両方の線がその調で綴られます。
+
+```ts
+import { Voicing } from '@libraz/libcantus';
+
+const lead = Voicing.of([72, 74, 76]);
+const counter = Voicing.of([64, 65, 67]);
+
+lead.independence(counter, { key: 'C major' }).motion.parallel; // 1
 ```
 
 `motion` は反行・斜行・並行・平行それぞれの割合で、合計が1になります。上のハモリはリードの6度下を保っているため全体が平行になりますが、これは規則違反ではなく、書かれた内容の記述です。どちらの声部も動かない位置は動きとして数えないため、ほとんど止まっている伴奏でも反行が大半という結果になり得ます。
