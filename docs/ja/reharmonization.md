@@ -136,7 +136,24 @@ result.transposeSemitones; // 0
 
 `result.chords` は和声リズムの格子上でのコード変化ごとに1つの `ChordSpan` を持ち、`result.melodyRoles` は各メロディ音が最終的に下に来たコードの中で果たす役割を返します。`result.key` はコードが書かれている調で、`transposeSemitones` はそこへ到達するためにメロディを移動した量です。ハーモナイザが扱える調になかったメロディは、誤った調のコードではなく、そこへ移すための移動量とともに返ります。
 
-メロディは終わるところで終止します。1フレーズずつ渡す呼び出し側にとってはこれが望ましい挙動です。1つのフレーズより長い旋律は各フレーズの区切りでも終止しますが、ハーモナイザ自身にはその位置が分かりません。すでにコードが付いている旋律であれば `phrasesFromTimeline` が区切りを見つけるので、フレーズごとに和声付けすれば各区切りにそれぞれの終止が付きます。
+メロディは終わるところで終止します。1フレーズずつ渡す呼び出し側にとってはこれが望ましい挙動です。1つのフレーズより長い旋律は各フレーズの区切りでも終止しますが、ハーモナイザ自身にはその位置が分かりません。区切りを名指しするのが `phraseEnds` で、すでにコードが付いている旋律であれば `phrasesFromTimeline` がその位置を見つけます。名指しした拍はコードのグリッドを分割し、そこで閉じるスロットへ和声が動き、フレーズが落ち着く音は次のフレーズの頭に対する装飾音ではなく構造音として読まれます。したがって旋律全体を1回の呼び出しで和声付けでき、フレーズごとに和声付けして繋ぐ必要はありません。
+
+```ts
+import { harmonizeMelody } from '@libraz/libcantus';
+
+// Two four-bar phrases in C, each coming to rest on the tonic.
+const period = [60, 62, 64, 65, 67, 65, 64, 60, 64, 65, 67, 69, 71, 67, 62, 60].map(
+  (pitch, index) => ({ pitch, startBeat: index, durationBeat: 1 }),
+);
+
+const whole = harmonizeMelody({ melody: period, phraseEnds: [8] });
+const runOn = harmonizeMelody({ melody: period });
+
+// The chord under the first phrase's close, on the last slot before beat 8.
+whole.chords.some((chord) => chord.startBeat === 6); // true
+// Without the boundary the close is swallowed by the chord already sounding.
+runOn.chords.some((chord) => chord.startBeat === 6); // false
+```
 
 `classifyMelodyTones` は非和声音の分類だけを単体で実行します。ハーモナイズを確定させずに経過音や刺繍音を色分けする UI 向けです。
 

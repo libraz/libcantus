@@ -131,10 +131,24 @@ export type HarmonizeOptions = {
    */
   seed?: number;
   /**
-   * Beats at which the melody's phrases end, so a longer line cadences at each
-   * of them instead of only at its close.
+   * Beats at which the melody's phrases end, so a longer line closes at each of
+   * them instead of only at its end.
    *
-   * The melody always cadences where it ends, whatever this says; these are the
+   * Naming a beat asks for a close there, and three things follow from it. The
+   * beat divides the chord grid, so the slot the phrase closes in ends where the
+   * phrase does rather than running on into the next one. The harmony moves into
+   * that slot — the chord under a named close is never the chord that was
+   * already sounding, which is what makes the close audible as one. And the note
+   * the phrase comes to rest on is read as a structural tone rather than as an
+   * ornament of the next phrase's first note, so a phrase resting on the tonic
+   * is harmonized by the tonic.
+   *
+   * Which cadence that close forms is still the melody's to decide: a phrase
+   * coming to rest on the tonic over an approach that can carry the dominant
+   * cadences authentically, and one whose approach cannot is harmonized by what
+   * it sounds.
+   *
+   * The melody always closes where it ends, whatever this says; these are the
    * closes *inside* it. `phrasesFromTimeline` finds the phrases of a line
    * already labelled with chords, and its `endBeat` values are what this
    * expects, so a caller harmonizes a whole piece in one call rather than
@@ -143,7 +157,7 @@ export type HarmonizeOptions = {
    * A boundary landing exactly on a chord-slot boundary closes the slot before
    * it — the beat a phrase ends on is where the next phrase begins.
    *
-   * @defaultValue none — one cadence, at the close
+   * @defaultValue none — one close, at the end
    */
   phraseEnds?: readonly number[];
   /**
@@ -206,6 +220,13 @@ type CostNote = {
 type Segment = {
   startBeat: number;
   endBeat: number;
+  /**
+   * The segment's own length in beats. Every term of the cost table is a rate per
+   * beat, and a phrase end divides the grid where the caller named it, so a slot
+   * cut short is scored by what it is worth rather than by what the harmonic
+   * rhythm would have made it worth.
+   */
+  beats: number;
   /** Every sounding note overlapping the segment, by index in the sounding melody. */
   noteIndices: number[];
   /**
@@ -743,7 +764,6 @@ function phraseEndBonus(
   tonicPc: number,
   seg: Segment,
   melody: readonly MelodyNote[],
-  slotBeats: number,
 ): number {
   if (cur.rootPc !== tonicPc || seg.closingIndex === undefined) {
     return 0;
@@ -752,7 +772,7 @@ function phraseEndBonus(
   if (!closing || pitchClass(closing.pitch) !== tonicPc) {
     return 0;
   }
-  const weight = Math.max(seg.weight, slotBeats);
+  const weight = Math.max(seg.weight, seg.beats);
   return (
     (PHRASE_TONIC + (prev !== null && isDominantOf(prev, tonicPc) ? PHRASE_AUTHENTIC : 0)) * weight
   );
@@ -760,6 +780,83 @@ function phraseEndBonus(
 
 /** Tolerance for comparing a phrase boundary with a segment boundary, in beats. */
 const BEAT_EPS = 1e-9;
+
+/**
+ * The beats the chord grid may change on: the harmonic rhythm's own boundaries,
+ * plus every named phrase end that falls inside the melody.
+ *
+ * A named end lands on a boundary that is already there for most callers, and
+ * naming one that is not adds it rather than moving the grid, so the slots after
+ * a phrase end stay where the harmonic rhythm put them.
+ */
+function gridBounds(
+  segmentStart: number,
+  hr: number,
+  gridCount: number,
+  ends: readonly number[],
+): number[] {
+  const bounds: number[] = [];
+  for (let s = 0; s <= gridCount; s += 1) {
+    bounds.push(segmentStart + s * hr);
+  }
+  const last = segmentStart + gridCount * hr;
+  for (const end of ends) {
+    if (end > segmentStart + BEAT_EPS && end < last - BEAT_EPS) {
+      bounds.push(end);
+    }
+  }
+  bounds.sort((a, b) => a - b);
+  return bounds.filter(
+    (beat, index) => index === 0 || beat - (bounds[index - 1] ?? beat) > BEAT_EPS,
+  );
+}
+
+/**
+ * The note each named phrase closes on: the last one to begin before the beat
+ * the phrase ends at.
+ */
+function closingNoteIndices(
+  spans: readonly { startBeat: number; endBeat: number }[],
+  ends: readonly number[],
+): Set<number> {
+  const closing = new Set<number>();
+  for (const end of ends) {
+    let index = -1;
+    let start = Number.NEGATIVE_INFINITY;
+    for (const [i, span] of spans.entries()) {
+      if (span.startBeat < end - BEAT_EPS && span.startBeat >= start) {
+        start = span.startBeat;
+        index = i;
+      }
+    }
+    if (index >= 0) {
+      closing.add(index);
+    }
+  }
+  return closing;
+}
+
+/** The index of the segment a beat sounds in: the last boundary at or before it. */
+function segmentIndexAt(bounds: readonly number[], beat: number): number {
+  let low = 0;
+  let high = bounds.length - 2;
+  let found = 0;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if ((bounds[mid] ?? 0) <= beat) {
+      found = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return found;
+}
+
+/** Whether two candidates are the same harmony, which is what holding a chord means. */
+function sameHarmony(a: Candidate, b: Candidate): boolean {
+  return a.rootPc === b.rootPc && a.quality === b.quality;
+}
 
 /**
  * Segments that close and therefore have to cadence.
@@ -770,9 +867,17 @@ const BEAT_EPS = 1e-9;
  * each end falls in cadences too, so one call harmonizes the whole line instead
  * of the caller harmonizing each phrase and joining the results. Every cadence
  * term reads the boundaries from here.
+ *
+ * The named ends are returned apart from the melody's own close because they ask
+ * for more than it does: naming a beat asks for a cadence there, and a cadence
+ * is a chord change into the close.
  */
-function phraseEndSegments(segments: readonly Segment[], ends: readonly number[]): Set<number> {
+function phraseEndSegments(
+  segments: readonly Segment[],
+  ends: readonly number[],
+): { closing: Set<number>; named: Set<number> } {
   const closing = new Set(segments.length > 0 ? [segments.length - 1] : []);
+  const named = new Set<number>();
   for (const end of ends) {
     // The phrase closes in the segment its last beat sounds in, which is the
     // last segment beginning before that beat — a boundary landing exactly on a
@@ -785,9 +890,10 @@ function phraseEndSegments(segments: readonly Segment[], ends: readonly number[]
     }
     if (index >= 0) {
       closing.add(index);
+      named.add(index);
     }
   }
-  return closing;
+  return { closing, named };
 }
 
 /** Run one Viterbi harmonization pass over a fixed melody and key. */
@@ -797,8 +903,8 @@ function harmonizeOnce(
   candidates: Candidate[],
   segments: Segment[],
   jitter: number[],
-  slotBeats: number,
   phraseEnds: ReadonlySet<number>,
+  articulated: ReadonlySet<number>,
 ): { cost: number; path: number[] } {
   const tonicPc = pitchClass(key.rootPc);
   const n = candidates.length;
@@ -810,7 +916,7 @@ function harmonizeOnce(
   let dp = candidates.map(
     (c, ci) =>
       (seg0 ? emissionCost(seg0, c, melody, key) : 0) +
-      (seg0 && phraseEnds.has(0) ? phraseEndBonus(null, c, tonicPc, seg0, melody, slotBeats) : 0) +
+      (seg0 && phraseEnds.has(0) ? phraseEndBonus(null, c, tonicPc, seg0, melody) : 0) +
       (jitter[ci] ?? 0),
   );
   const back: number[][] = [];
@@ -821,19 +927,28 @@ function harmonizeOnce(
       continue;
     }
     const closes = phraseEnds.has(s);
+    // A beat the caller named as a phrase end is a cadence point, and a cadence
+    // is harmonic motion into the close: the chord under it is not the chord
+    // that was already sounding. The melody's own close is not held to this —
+    // naming a beat is what asks for it — so a call that names none is scored
+    // exactly as it was.
+    const articulates = articulated.has(s);
     const next: number[] = [];
     const ptr: number[] = [];
     for (let c = 0; c < n; c += 1) {
       let best = Number.POSITIVE_INFINITY;
       let bestPrev = 0;
       for (let p = 0; p < n; p += 1) {
+        if (articulates && sameHarmony(candAt(p), candAt(c))) {
+          continue;
+        }
         // The cadence bonus is part of the step into a phrase-final segment, not
         // an afterthought added to the finished path, so the approach chord is
         // chosen for the cadence it makes.
         const cost =
           (dp[p] ?? Number.POSITIVE_INFINITY) +
-          transitionCost(candAt(p), candAt(c), tonicPc) * slotBeats +
-          (closes ? phraseEndBonus(candAt(p), candAt(c), tonicPc, seg, melody, slotBeats) : 0);
+          transitionCost(candAt(p), candAt(c), tonicPc) * seg.beats +
+          (closes ? phraseEndBonus(candAt(p), candAt(c), tonicPc, seg, melody) : 0);
         if (cost < best) {
           best = cost;
           bestPrev = p;
@@ -966,25 +1081,42 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
     'harmonic rhythm',
   );
   const segmentStart = Math.floor(melodyStart / hr) * hr;
-  const segCount = Math.max(1, Math.ceil((melodyEnd - segmentStart) / hr));
+  const gridCount = Math.max(1, Math.ceil((melodyEnd - segmentStart) / hr));
+  assertGenerationBudget(gridCount, 'harmonic segments');
+  // The grid the search may change chords on: the harmonic rhythm, anchored at
+  // the melody's first slot boundary, divided again at every beat the caller
+  // named as a phrase end. A named end falling inside a slot cuts it, so the
+  // slot a phrase closes in ends where the phrase does instead of running on
+  // into the next one, and the grid then resumes on its own boundaries — which
+  // is what keeps the chord changes after the boundary on the barline.
+  const bounds = gridBounds(segmentStart, hr, gridCount, phraseEnds);
+  const segCount = bounds.length - 1;
   assertGenerationBudget(segCount, 'harmonic segments');
-  const segments: Segment[] = Array.from({ length: segCount }, (_, s) => ({
-    startBeat: segmentStart + s * hr,
-    endBeat: segmentStart + (s + 1) * hr,
-    noteIndices: [],
-    costNotes: [],
-    weight: 0,
-  }));
+  const segments: Segment[] = Array.from({ length: segCount }, (_, s) => {
+    const startBeat = bounds[s] ?? segmentStart;
+    const endBeat = bounds[s + 1] ?? startBeat + hr;
+    return {
+      startBeat,
+      endBeat,
+      beats: endBeat - startBeat,
+      noteIndices: [],
+      costNotes: [],
+      weight: 0,
+    };
+  });
   // Associate each note only with the windows it actually spans: each note is
   // visited once per window it covers, and no temporary note objects are
   // allocated.
   let memberships = 0;
   for (const [index, span] of spans.entries()) {
-    const first = Math.max(0, Math.floor((span.startBeat - segmentStart) / hr));
-    const lastExclusive = Math.min(
-      segCount,
-      Math.ceil((span.endBeat - segmentStart) / hr - Number.EPSILON),
-    );
+    const first = segmentIndexAt(bounds, span.startBeat);
+    let lastExclusive = first;
+    while (
+      lastExclusive < segCount &&
+      (bounds[lastExclusive] ?? 0) < span.endBeat - Number.EPSILON
+    ) {
+      lastExclusive += 1;
+    }
     memberships += Math.max(0, lastExclusive - first);
     assertGenerationBudget(memberships, 'note-to-segment memberships');
     for (let segment = first; segment < lastExclusive; segment += 1) {
@@ -997,8 +1129,18 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   // alike, so the figures are the same at every placement and are found once —
   // and so is the metric weight of each note in each slot it sounds in.
   const tones = classifyMelodyTones(soundingMelody, ts);
+  // The classifier reads a note against the notes on either side of it, and
+  // knows nothing of phrases: the melody's own last note is structural because
+  // nothing follows it, but the note closing a phrase inside the line has the
+  // next phrase's first note after it and is heard as an ornament of it — a
+  // close on the tonic between two supertonics reads as a lower neighbour. A
+  // phrase's last note is structural for the same reason the melody's last note
+  // is, so the closes the caller named are put back.
+  const phraseClosingNotes = closingNoteIndices(spans, phraseEnds);
   for (const segment of segments) {
-    const structural = segment.noteIndices.filter((idx) => tones[idx]?.ornamental !== true);
+    const structural = segment.noteIndices.filter(
+      (idx) => tones[idx]?.ornamental !== true || phraseClosingNotes.has(idx),
+    );
     const costIndices = structural.length > 0 ? structural : segment.noteIndices;
     let closingStart = Number.NEGATIVE_INFINITY;
     for (const index of costIndices) {
@@ -1023,7 +1165,16 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
     }
   }
 
-  const closingSegments = phraseEndSegments(segments, phraseEnds);
+  const { closing: closingSegments, named: namedEndSegments } = phraseEndSegments(
+    segments,
+    phraseEnds,
+  );
+  // A cadence needs two chords to be told apart, so the articulation rule can
+  // only be applied where the vocabulary offers a second harmony to move to.
+  const articulatedSegments =
+    new Set(candidates.map((c) => `${c.rootPc}:${c.quality}`)).size > 1
+      ? namedEndSegments
+      : new Set<number>();
 
   // Two independent axes: the semitone shift that puts the melody in the key it
   // is harmonized in, and the octave that puts it in a comfortable register.
@@ -1054,8 +1205,8 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
       candidates,
       segments,
       jitter,
-      hr,
       closingSegments,
+      articulatedSegments,
     );
     const total = cost + keyFitCost(shifted, key) + tessituraCost(shifted);
     if (total < bestCost) {
@@ -1084,10 +1235,7 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   );
 
   const melodyRoles = opts.melody.map((note, noteIndex) => {
-    const segIdx = Math.min(
-      segments.length - 1,
-      Math.max(0, Math.floor((note.startBeat - segmentStart) / hr)),
-    );
+    const segIdx = segmentIndexAt(bounds, note.startBeat);
     const cand = candAt(bestPath[segIdx] ?? 0);
     const chord: Chord = makeChord(cand.rootPc, cand.quality);
     return { noteIndex, role: roleOf(note.pitch + bestTs, chord).role };

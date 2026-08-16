@@ -136,7 +136,24 @@ result.transposeSemitones; // 0
 
 `result.chords` holds one `ChordSpan` per chord change on the harmonic-rhythm grid, and `result.melodyRoles` gives each melody note's role in the chord that ended up under it. `result.key` is the key the chords are written in, and `transposeSemitones` is how far the melody was moved to get there — a melody that was not in a key the harmonizer could work in comes back with the offset that puts it there, rather than with chords in the wrong key.
 
-A melody is cadenced where it ends, which is what a caller who hands over one phrase at a time wants. A line longer than one phrase closes at each phrase end as well, and the harmonizer cannot see those closes for itself: `phrasesFromTimeline` finds them for a line that already carries chords, and harmonizing phrase by phrase gives each close a cadence of its own.
+A melody is cadenced where it ends, which is what a caller who hands over one phrase at a time wants. A line longer than one phrase closes at each phrase end as well, and the harmonizer cannot see those closes for itself: `phraseEnds` names them, and `phrasesFromTimeline` finds them for a line that already carries chords. A named beat divides the chord grid, the harmony moves into the slot that closes there, and the note the phrase comes to rest on is read as a structural tone rather than as an ornament of the next phrase's first note — so one call harmonizes the whole line, instead of harmonizing each phrase and joining the results.
+
+```ts
+import { harmonizeMelody } from '@libraz/libcantus';
+
+// Two four-bar phrases in C, each coming to rest on the tonic.
+const period = [60, 62, 64, 65, 67, 65, 64, 60, 64, 65, 67, 69, 71, 67, 62, 60].map(
+  (pitch, index) => ({ pitch, startBeat: index, durationBeat: 1 }),
+);
+
+const whole = harmonizeMelody({ melody: period, phraseEnds: [8] });
+const runOn = harmonizeMelody({ melody: period });
+
+// The chord under the first phrase's close, on the last slot before beat 8.
+whole.chords.some((chord) => chord.startBeat === 6); // true
+// Without the boundary the close is swallowed by the chord already sounding.
+runOn.chords.some((chord) => chord.startBeat === 6); // false
+```
 
 `classifyMelodyTones` runs the non-chord-tone classification on its own, for a UI that shades passing and auxiliary tones without committing to a harmonization.
 

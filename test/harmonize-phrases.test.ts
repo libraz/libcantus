@@ -5,7 +5,7 @@ import { chordTimelineFromChords } from '../src/analyze/timeline/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import { harmonizeMelody } from '../src/generate/harmonize/index.js';
 import { makeChord } from '../src/theory/chord/index.js';
-import { majorKey } from '../src/theory/scale/index.js';
+import { majorKey, minorKey } from '../src/theory/scale/index.js';
 
 const cMajor = majorKey(0);
 
@@ -107,5 +107,152 @@ describe('harmonizing a line with more than one phrase in it', () => {
 
   it('rejects a phrase end that is not a number', () => {
     expect(() => harmonizeMelody({ melody, key: cMajor, phraseEnds: [Number.NaN] })).toThrowError();
+  });
+});
+
+/** Scale steps of the major and natural minor scales, as semitones above the tonic. */
+const MAJOR_STEPS = [0, 2, 4, 5, 7, 9, 11];
+const MINOR_STEPS = [0, 2, 3, 5, 7, 8, 11];
+
+/** One quarter note per scale degree, from `at`, in the scale a key is built on. */
+function degrees(steps: number[], tonic: number, at: number, path: number[]): NoteEvent[] {
+  return path.map((degree, index) => ({
+    pitch: 60 + tonic + 12 * Math.floor(degree / 7) + (steps[degree % 7] ?? 0),
+    startBeat: at + index,
+    durationBeat: 1,
+  }));
+}
+
+/**
+ * Eight antecedent/consequent pairs, in scale degrees, each antecedent coming to
+ * rest on the tonic and each reaching it by a different approach: from below,
+ * from above, by step, by leap, and over a line that never leaves the tonic
+ * triad. What the harmonization of the close may rest on therefore differs from
+ * shape to shape, which is what makes the sweep more than one melody tried
+ * twelve times.
+ */
+const PERIODS: [number[], number[]][] = [
+  [
+    [0, 1, 2, 3, 4, 3, 2, 0],
+    [2, 3, 4, 5, 6, 4, 1, 0],
+  ],
+  [
+    [4, 3, 2, 1, 2, 3, 1, 0],
+    [4, 5, 6, 7, 6, 4, 1, 0],
+  ],
+  [
+    [0, 2, 4, 2, 3, 2, 1, 0],
+    [1, 2, 3, 4, 5, 3, 1, 0],
+  ],
+  [
+    [7, 6, 5, 4, 5, 4, 3, 7],
+    [4, 3, 2, 3, 4, 2, 1, 0],
+  ],
+  [
+    [0, 0, 2, 2, 4, 4, 2, 0],
+    [4, 3, 5, 4, 2, 3, 1, 0],
+  ],
+  [
+    [2, 1, 0, 1, 2, 4, 3, 0],
+    [3, 4, 5, 4, 3, 2, 1, 0],
+  ],
+  [
+    [0, 4, 3, 2, 1, 2, 3, 0],
+    [5, 4, 3, 2, 4, 3, 1, 0],
+  ],
+  [
+    [4, 4, 5, 4, 3, 2, 1, 0],
+    [2, 3, 4, 5, 4, 2, 1, 0],
+  ],
+];
+
+/** Every key of the sweep, as a tonic pitch class and the scale it is built on. */
+const KEYS = Array.from({ length: 12 }, (_, tonic) => tonic).flatMap((tonic) => [
+  { tonic, steps: MAJOR_STEPS, key: majorKey(tonic), name: `major ${tonic}` },
+  { tonic, steps: MINOR_STEPS, key: minorKey(tonic), name: `minor ${tonic}` },
+]);
+
+describe('the close a named phrase end asks for', () => {
+  // In 4/4 the default harmonic rhythm is half a bar, so the slot that closes a
+  // phrase ending on beat 8 is the one running from beat 6 to it.
+  const CLOSE_SLOT = 6;
+  const PHRASE_END = 8;
+
+  it.each(KEYS)(
+    'puts a chord of its own under every phrase close, in $name',
+    ({ tonic, steps, key }) => {
+      for (const [antecedent, consequent] of PERIODS) {
+        const period = [
+          ...degrees(steps, tonic, 0, antecedent),
+          ...degrees(steps, tonic, PHRASE_END, consequent),
+        ];
+        const result = harmonizeMelody({ melody: period, key, phraseEnds: [PHRASE_END] });
+        const close = result.chords.find((chord) => chord.startBeat === CLOSE_SLOT);
+        // The harmony moves into the close: a chord span begins where the
+        // closing slot does, rather than the slot inheriting what was sounding.
+        expect(close, `${antecedent.join('')} in ${key.rootPc}`).toBeDefined();
+        // Every antecedent here comes to rest on the tonic, so the chord that
+        // closes it is the tonic — whatever the approach could otherwise argue
+        // for, and whatever the next phrase opens on.
+        expect(close?.rootPc).toBe(tonic);
+      }
+    },
+  );
+
+  it('is the naming that puts it there, not the notes', () => {
+    let moved = 0;
+    let total = 0;
+    for (const { tonic, steps, key } of KEYS) {
+      for (const [antecedent, consequent] of PERIODS) {
+        const period = [
+          ...degrees(steps, tonic, 0, antecedent),
+          ...degrees(steps, tonic, PHRASE_END, consequent),
+        ];
+        total += 1;
+        if (
+          !harmonizeMelody({ melody: period, key }).chords.some((c) => c.startBeat === CLOSE_SLOT)
+        )
+          moved += 1;
+      }
+    }
+    // The same melodies without the phrase end run through the close in most of
+    // the sweep; naming it is what makes every one of them close there.
+    expect(moved).toBeGreaterThan(total / 2);
+  });
+
+  it('reads the note a phrase rests on as structural, not as the next phrase ornament', () => {
+    // The tonic here sits between two supertonics, which is a lower neighbour to
+    // a classifier that cannot see the phrase boundary. Dropped from the closing
+    // slot, the close is harmonized by the note before it instead.
+    const period = [
+      ...degrees(MAJOR_STEPS, 0, 0, [0, 2, 4, 2, 3, 2, 1, 0]),
+      ...degrees(MAJOR_STEPS, 0, PHRASE_END, [1, 2, 3, 4, 5, 3, 1, 0]),
+    ];
+    const close = harmonizeMelody({ melody: period, key: cMajor, phraseEnds: [PHRASE_END] }).chords;
+    expect(close.find((chord) => chord.startBeat === CLOSE_SLOT)?.rootPc).toBe(0);
+  });
+
+  it('divides the chord grid where a phrase ends off it', () => {
+    // A phrase ending on beat 6 under a four-beat harmonic rhythm falls inside
+    // the slot running from 4 to 8. The named end cuts that slot, so the two
+    // beats the next phrase opens with are scored on their own instead of
+    // pulling the chord that has to close the phrase before them — and a chord
+    // can begin on beat 6, which on the undivided grid there is no boundary for.
+    const line = [
+      ...quarters([60, 64, 67, 64], 0),
+      ...quarters([60, 64], 4),
+      ...quarters([62, 65], 6),
+      ...quarters([65, 69, 65, 62], 8),
+    ];
+    const opts = {
+      melody: line,
+      key: cMajor,
+      ts: { numerator: 4, denominator: 4 },
+      harmonicRhythm: 4,
+    };
+    const cut = harmonizeMelody({ ...opts, phraseEnds: [6] });
+    const whole = harmonizeMelody({ ...opts, phraseEnds: [8] });
+    expect(cut.chords.some((chord) => chord.startBeat === 6)).toBe(true);
+    expect(whole.chords.some((chord) => chord.startBeat === 6)).toBe(false);
   });
 });
