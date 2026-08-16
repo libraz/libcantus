@@ -1,51 +1,93 @@
 # Use case: a DAW harmony assistant
 
-Use this flow after a DAW, piano roll, or MIDI parser has supplied timed notes. Flatten the tracks that contribute to harmony, infer a chord timeline, then generate material against it.
+Use this flow after a DAW, piano roll, or MIDI parser has supplied timed notes. Wrap the tracks that contribute to harmony as a `Score`, read the chord timeline off it, then write material against that timeline.
 
 ```ts
-import { chordTimelineFromNotes, chordToRoman, detectCadences, generateBassLine } from '@libraz/libcantus';
+import { Composer, Score } from '@libraz/libcantus';
 
 const notes = [[48, 60, 64, 67], [41, 60, 65, 69], [43, 59, 62, 65], [48, 60, 64, 67]].flatMap(
   (pitches, bar) => pitches.map((pitch) => ({ pitch, startBeat: bar * 4, durationBeat: 4 })),
 );
 
-const { timeline, prevailingKey, keys, segmentConfidence } = chordTimelineFromNotes(notes, {
-  harmonicRhythm: 1,
-});
+const score = Score.of(notes, { tempo: 100 });
+const harmony = score.timeline({ harmonicRhythm: 1 });
 
-const labels = timeline.segments.map((segment) => chordToRoman(segment.chord, prevailingKey));
-const cadences = detectCadences(timeline, prevailingKey);
-const bass = generateBassLine({
-  segments: timeline.segments,
-  key: prevailingKey,
+harmony.roman().map((entry) => entry.roman); // ['I', 'IV', 'V7', 'I']
+harmony.key?.toString(); // 'C major'
+harmony.keys.length; // 1
+harmony.cadences().map((hit) => [hit.atBeat, hit.cadence.type]);
+// [[8, 'half'], [12, 'authentic']]
+
+const bass = Composer.of({ key: harmony.key, bpm: 100, seed: 7 }).bass(harmony, {
   style: 'walking',
-  ctx: { seed: 7, bpm: 100 },
 });
 
-labels; // ['I', 'IV', 'V7', 'I']
-keys.length >= 1; // true
-segmentConfidence.length === timeline.segments.length; // true
-bass.length >= 1; // true
-cadences.length >= 0; // true
+bass.notes.length; // 16
 ```
 
 ## Reading the result
 
-`timeline.segments` gives the start beat, end beat, and inferred chord of each span. The confidence of each reading is in `segmentConfidence`, in segment order — show it, because chord recognition is evidence-based rather than a guarantee, and sparse or deliberately ambiguous material produces low-confidence readings.
+`harmony.segments` gives the start beat, end beat, and inferred chord of each span, and `harmony.at(beat)` answers with the chord sounding at one moment — the query a piano-roll cursor makes. The numerals come back with the same spans attached, so a label can be drawn over the bar it belongs to.
 
-`keys` records the local key readings. Present it when a user needs to inspect a modulation rather than a single global label; `prevailingKey` is the label to print when only one is wanted.
+A timeline carries the key regions it was read against. `harmony.keys` is the list, for a user inspecting a modulation; `harmony.key` is the one held longest, which is the label to print when only one is wanted and the key to hand to a generator that takes a single one. Nothing here restates the key: the timeline knows it, and the `Composer` written from it keeps it.
 
-`timeline.segments` is also the input shape `generateBassLine` expects, which is why the generated line follows the inferred harmony without any conversion step.
+The confidence of each reading is the one thing a timeline does not carry, since it describes the inference rather than the music. Ask the function for it, and show it — chord recognition is evidence-based rather than a guarantee, and sparse or deliberately ambiguous material produces low-confidence readings:
+
+```ts
+import { chordTimelineFromNotes } from '@libraz/libcantus';
+
+const notes = [[48, 60, 64, 67], [43, 59, 62, 65]].flatMap((pitches, bar) =>
+  pitches.map((pitch) => ({ pitch, startBeat: bar * 4, durationBeat: 4 })),
+);
+
+const { timeline, segmentConfidence } = chordTimelineFromNotes(notes, { harmonicRhythm: 1 });
+
+segmentConfidence.length === timeline.segments.length; // true
+segmentConfidence; // [1, 1]
+```
 
 ## Feeding the analysis correctly
 
-- Give a `MeterMap` when the song changes meter, and `pickupBeats` when notes begin before beat zero.
-- Feed only sounding notes. Zero and negative durations are ignored, and `dropSilentNotes` applies that policy explicitly after an import.
+- Give the score its `meters` when the song changes meter, and its `tempo` when seconds matter; both stay with the score and reach every analysis made from it. `pickupBeats` belongs to the timeline options, for notes that begin before beat zero.
+- Feed only sounding notes. Zero and negative durations are ignored, and `score.filter` drops them explicitly after an import.
 - Set `harmonicRhythm` to the chord rate the song actually uses. Too fine a value fragments a held chord; too coarse a value merges a real change.
-- Flatten only the tracks that carry harmony. A melody or a drum track fed into chord inference will move the result.
+- Pool only the tracks that carry harmony. A melody or a drum track fed into chord inference will move the result.
+
+## An editor that re-analyzes
+
+A host holding several tracks at once has `Arrangement` instead: one harmony inferred from every pitched track pooled, each track annotated against it, and the notes that clash with the chord beneath them collected as conflicts. `update` recomputes only the beats an edit could have reached, so a re-analysis on every keystroke costs what the edit touched rather than what the song contains:
+
+```ts
+import { Arrangement } from '@libraz/libcantus';
+
+const bar = (pitch: number, index: number) => ({ pitch, startBeat: index * 4, durationBeat: 4 });
+const keys = [[48, 60, 64, 67], [41, 60, 65, 69], [43, 59, 62, 65], [48, 60, 64, 67]].flatMap(
+  (pitches, index) => pitches.map((pitch) => bar(pitch, index)),
+);
+
+const arrangement = Arrangement.of(
+  [
+    { name: 'keys', role: 'pad', notes: keys },
+    { name: 'lead', role: 'melody', notes: [72, 72, 74, 72].map(bar) },
+  ],
+  { key: 'C major' },
+);
+
+arrangement.timeline().roman().map((entry) => entry.roman); // ['I', 'IV', 'V7', 'I']
+arrangement.conflicts.length; // 2
+
+const edited = arrangement.update([{ trackIndex: 1, notes: [72, 73, 74, 72].map(bar) }]);
+
+edited.tracks[1]?.notes[1]?.pitch; // 73
+arrangement.tracks[1]?.notes[1]?.pitch; // 72
+```
+
+An arrangement never changes, so the reading taken before an edit stays valid — keep it for undo, or to show what a change did.
 
 ## Presenting it
 
-Use the generated `bass` as a new track, not as a replacement for the user's notes. Preserve the original events and expose the inferred result for correction: a label the user can fix is more useful than one that looks authoritative and is wrong.
+Use the generated bass as a new track, not as a replacement for the user's notes. Preserve the original events and expose the inferred result for correction: a label the user can fix is more useful than one that looks authoritative and is wrong.
 
-For an editor that re-analyzes after every change, hold a `createArrangementSession` instead of calling `analyzeArrangement` repeatedly; see [Performance](../performance.md).
+Conflicts are a report, not a fault list. Every ordinary non-chord tone — a passing note, a neighbour, a prepared suspension — is dissonant against the chord under it by definition, and each conflict carries the labels that tell those apart from a note that is simply wrong.
+
+For the cost of holding an analysis open across edits, see [Performance](../performance.md).
