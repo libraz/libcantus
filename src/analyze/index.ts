@@ -106,7 +106,6 @@ export {
   isBorrowedChord,
   isDiatonic,
   isMinorKey,
-  parallelKey,
   pivotChords,
   romanToChord,
   secondaryDominant,

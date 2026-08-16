@@ -73,7 +73,7 @@ export function borrowedSourceOf(chord: Chord, key: KeyScale): BorrowedSource {
  * Whether a chord is borrowed from the parallel mode (modal interchange).
  *
  * True when the chord is not diatonic to `key` but is diatonic to its
- * {@link parallelKey} — e.g. iv, bVI, or bVII in a major key, or the Picardy
+ * {@link parallelKeyOf | parallel key} — e.g. iv, bVI, or bVII in a major key, or the Picardy
  * tonic and major IV in a minor key — and true for the Neapolitan, which is
  * counted as a borrowing of its own even though it belongs to neither parallel
  * mode. Two non-diatonic families are excluded: any other chord diatonic to

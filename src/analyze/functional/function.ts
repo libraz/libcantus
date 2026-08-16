@@ -321,16 +321,21 @@ export function isDiatonic(chord: ChordLike, key: KeyLike): boolean {
  * A key with a minor third (natural/harmonic/melodic minor, dorian, phrygian)
  * maps to the parallel major; any other key maps to the parallel natural minor.
  *
- * This is the pitch-class form, taking and returning a `KeyScale`, which
- * carries no spelling to keep: the parallel of a key named as C is a key whose
- * root is pitch class 0, and whether that is written C or B# is a question this
- * layer does not ask. Both name the same key.
+ * Internal to this layer, and not part of the public API. This is the
+ * pitch-class form, taking and returning a `KeyScale`, which has nowhere to
+ * put a spelling: the parallel of a key named as C is a key whose root is
+ * pitch class 0, and whether that is written C or B# is lost. That is fine for
+ * the callers here, which go straight on to compare pitch classes, and wrong
+ * for a caller who wanted a key to show. Published alongside `parallelKeyOf`
+ * it was a trap — the shorter name, the simpler signature, and the silent loss.
+ *
+ * `parallelKeyOf` is the public answer, and `Key.parallel()` the class one;
+ * both keep the tonic spelling, and both sit beside `relativeKeyOf`,
+ * `dominantKeyOf` and `subdominantKeyOf`, which take a tonic the same way.
  *
  * @param key The key to mirror, as a key name, a key/scale, or a `Key`.
  * @returns The parallel major or natural-minor key on the same tonic.
- * @see {@link parallelKeyOf} for the spelled form, which takes a tonic note and
- *   returns a `SpelledKey` with the tonic spelling preserved.
- * @category Functional Harmony
+ * @see {@link parallelKeyOf} for the spelled form.
  */
 export function parallelKey(key: KeyLike): KeyScale {
   return parallelScale(toKeyScale(key));

@@ -184,13 +184,12 @@ Chord.of('A', 'min').secondaryDominant().symbol(); // 'E7'
 もう1つの一般的な例が借用和音で、同主調から借りるだけで主音は移動しません。
 
 ```ts
-import { borrowedSource, Chord, isBorrowedChord, Key, majorKey, parallelKey } from '@libraz/libcantus';
+import { borrowedSource, Chord, isBorrowedChord, Key, majorKey } from '@libraz/libcantus';
 
 const key = majorKey(0);
 
 isBorrowedChord(Chord.of('F', 'min'), key); // true
 borrowedSource(Chord.of('F', 'min'), key); // 'parallelMinor'
-parallelKey(key).rootPc; // 0
 
 Chord.of('F', 'min').isBorrowed(Key.major('C')); // true
 Chord.of('F', 'min').borrowedSource(Key.major('C')); // 'parallelMinor'

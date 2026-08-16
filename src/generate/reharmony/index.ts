@@ -357,7 +357,7 @@ export type BorrowedChord = {
 /**
  * The modal-interchange palette of a key.
  *
- * Lists the diatonic triads of the {@link parallelKey} that are not diatonic to
+ * Lists the diatonic triads of the parallel key that are not diatonic to
  * `key` (the classic borrowed chords such as `iv`, `bVI`, and `bVII` in a major
  * key), plus the Neapolitan (a major triad on the flat second degree). Each
  * carries its Roman numeral and {@link borrowedSource} relative to `key`.

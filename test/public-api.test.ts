@@ -283,7 +283,6 @@ const EXPECTED_EXPORTS = [
   'onsetWeightCurve',
   'ornament',
   'ornamentBy',
-  'parallelKey',
   'parallelKeyOf',
   'parseChordSymbol',
   'parseInterval',
