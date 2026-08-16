@@ -1259,6 +1259,13 @@ describe('Voicing', () => {
     expect(lead.independence(counter, opts).longestPerfectRun).not.toBe(
       lead.independence(counter).longestPerfectRun,
     );
+    // `key` is the class's own option: it spells the two lines and means
+    // nothing below, so what reaches the delegate is the bag without it. The
+    // delegate discards an unknown property either way, which is exactly why
+    // this has to be pinned rather than left to be noticed.
+    expect(lead.independence(counter, opts)).toEqual(
+      voiceIndependence(spelled(lead.pitches), spelled(counter.pitches), { countFourths: true }),
+    );
   });
 
   it('judges a candidate pitch the way the safety module judges it', () => {

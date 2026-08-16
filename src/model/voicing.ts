@@ -450,8 +450,13 @@ export class Voicing {
    *   at another length than the lines.
    */
   independence(other: Voicing, opts?: VoicingIndependenceOptions): VoiceIndependenceReport {
-    const scale = opts?.key === undefined ? undefined : toKeyScale(opts.key);
-    return voiceIndependence(lineOf(this.#pitches, scale), lineOf(other.pitches, scale), opts);
+    // `key` is this class's own addition: it spells the two lines and has no
+    // meaning below. Forwarding the bag whole would hand a `KeyLike` to a
+    // delegate that today discards it and tomorrow may read a `key` of its
+    // own, so it is taken out here rather than relied on being ignored.
+    const { key, ...rest } = opts ?? {};
+    const scale = key === undefined ? undefined : toKeyScale(key);
+    return voiceIndependence(lineOf(this.#pitches, scale), lineOf(other.pitches, scale), rest);
   }
 
   /**
