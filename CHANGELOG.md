@@ -5,7 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2026-08-17
+
+The first stable release. From here the public API follows Semantic Versioning
+strictly: an export is not removed and a signature is not narrowed outside a
+major. Getting there meant making the breaking changes now rather than carrying
+them, so this release removes and reshapes more than any before it — read
+**Changed** in full before upgrading.
 
 The key stops being a single answer for a whole piece and becomes something the
 analysis follows over time; chord boundaries are searched for rather than
@@ -880,6 +886,7 @@ Initial public release.
 - Fluent immutable class API (`Note`, `Chord`, `Key`, ...) layered over the tree-shakeable functional core.
 - Dual ESM/CJS builds with bundled type declarations.
 
+[1.0.0]: https://github.com/libraz/libcantus/compare/v0.9.5...v1.0.0
 [0.9.5]: https://github.com/libraz/libcantus/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/libraz/libcantus/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/libraz/libcantus/compare/v0.9.2...v0.9.3
