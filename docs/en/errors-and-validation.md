@@ -62,6 +62,8 @@ const label = typed.ok ? typed.value.quality : typed.error.message;
 
 Each throwing parser is written on top of its non-throwing sibling, so `parseNote` and `tryParseNote` cannot disagree about what is valid.
 
+An entry point that takes a note, a key, or a chord accepts the text form as well as the data, and reads it through the same parsers (see [Interoperability](interoperability.md)). That means such a function can raise `InvalidInputError` for text that names nothing, where the plain-data form could only have failed on a value out of range. Where a name arrives from a user rather than from your own code, parse it first with the `try*` sibling and hand over the result, so the failure surfaces at the field it was typed into rather than several calls later.
+
 ## Validating what a host hands over
 
 TypeScript checks a string union at compile time only. A value that arrives from JSON, a project file, a plugin host, or a JavaScript caller reaches the engine unchecked, and is then read against a table that has no entry for it. The `assert*` helpers are exported so a host can apply the same checks at its own boundary:
