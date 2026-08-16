@@ -6,6 +6,7 @@ import type { ParseResult } from '../src/core/errors/index.js';
 import * as model from '../src/model/index.js';
 import {
   Chord,
+  Composer,
   Duration,
   Instrument,
   Interval,
@@ -87,6 +88,12 @@ const CLASS_BY_NAME = new Map<string, unknown>(CLASSES);
 /** One instance per exported class, keyed by the name the barrel exports. */
 const SAMPLES: Record<string, { data: unknown; equals(other: never): boolean }> = {
   Chord: Chord.parse('Cmaj7/E'),
+  Composer: Composer.of({
+    key: 'C major',
+    meters: { numerator: 4, denominator: 4 },
+    bpm: 120,
+    seed: 42,
+  }),
   // A dotted value in a tuplet, so every field of the written form is filled.
   Duration: Duration.of('quarter', 1, { actual: 3, normal: 2 }),
   Instrument: Instrument.guitar(),

@@ -29,6 +29,7 @@ const EXPECTED_EXPORTS = [
   'BudgetExceededError',
   'CHROMATIC_MASK',
   'Chord',
+  'Composer',
   'ConsonanceClass',
   'DEFAULT_GENERATION_BUDGET',
   'DORIAN_MASK',

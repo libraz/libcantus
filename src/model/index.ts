@@ -186,6 +186,7 @@ export type {
 } from '../theory/voicing/index.js';
 
 export { Chord } from './chord.js';
+export { Composer, type ComposerOptions, type HarmonizedMelody } from './composer.js';
 export { Duration } from './duration.js';
 export { Instrument } from './instrument.js';
 export { Interval } from './interval.js';
