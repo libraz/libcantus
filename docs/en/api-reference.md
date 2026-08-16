@@ -26,7 +26,7 @@ The public entry points are:
 - `theory`: scales, chord specifications, symbols, spelling, functional rules, counterpoint, figured bass, and voicing.
 - `analyze`: chord/key detection, harmonic analysis, timelines, reduction, melodic analysis, form, and arrangement reports.
 - `generate`: progressions, bass, counter-melody, drums, groove, harmonization, motifs, ornaments, rhythms, reharmonization, and vocabulary.
-- `model`: immutable wrappers for notes, intervals, chords, keys, and progressions.
+- `model`: the immutable class API. One class per thing the other layers work with, each a thin skin over their functions, so a caller can start in the class API and stay there.
 
 Each layer barrel also re-exports the types its own signatures name, so a consumer importing a single subpath can still spell every type in the API it uses.
 
