@@ -4,7 +4,19 @@ import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 import type { ParseResult } from '../src/core/errors/index.js';
 import * as model from '../src/model/index.js';
-import { Chord, Interval, Key, Note, Progression } from '../src/model/index.js';
+import {
+  Chord,
+  Duration,
+  Instrument,
+  Interval,
+  Key,
+  Meter,
+  Note,
+  Progression,
+  Tempo,
+  Timeline,
+  Tuning,
+} from '../src/model/index.js';
 
 /**
  * Contracts the model classes hold as a family rather than one at a time:
@@ -74,6 +86,17 @@ const CLASS_BY_NAME = new Map<string, unknown>(CLASSES);
 /** One instance per exported class, keyed by the name the barrel exports. */
 const SAMPLES: Record<string, { data: unknown; equals(other: never): boolean }> = {
   Chord: Chord.parse('Cmaj7/E'),
+  // A dotted value in a tuplet, so every field of the written form is filled.
+  Duration: Duration.of('quarter', 1, { actual: 3, normal: 2 }),
+  Instrument: Instrument.guitar(),
+  // Compound, so the pulse grouping is exercised rather than assumed.
+  Meter: Meter.parse('6/8'),
+  Tempo: Tempo.of(120),
+  Timeline: Timeline.fromProgression(
+    new Progression([Chord.parse('C'), Chord.parse('G7')], Key.major('C')),
+    4,
+  ),
+  Tuning: Tuning.edo(19),
   Interval: Interval.parse('-m3'),
   // A detected key, so the scale form a plain minor does not carry is exercised.
   Key: Key.detectBest([57, 59, 60, 62, 64, 65, 68]) ?? Key.minor('A'),
@@ -347,6 +370,9 @@ describe('non-throwing parser siblings', () => {
     'gis moll',
     'C major',
     '嬰ト短調',
+    '4/4',
+    '6/8',
+    '5/x',
   ];
 
   const throwing = textEntries.filter((entry) => !entry.method.startsWith('try'));

@@ -1,15 +1,28 @@
-import type { CadenceResult, DetectCadenceOptions } from '../analyze/functional/index.js';
+import type { ChordToRomanOptions } from '../analyze/functional/index.js';
+import { chordToRoman } from '../analyze/functional/index.js';
 import type { KeyRegion } from '../analyze/keys/index.js';
+import { keyLookup, prevailingKeyOf } from '../analyze/keys/index.js';
 import type { ReducedChord, ReduceProgressionOptions } from '../analyze/reduction/index.js';
-import type { ChordTimeline, ChordTimelineOptions } from '../analyze/timeline/index.js';
+import { reduceProgression } from '../analyze/reduction/index.js';
+import type { CadenceHit, ChordTimeline, ChordTimelineOptions } from '../analyze/timeline/index.js';
+import {
+  chordTimelineFromChords,
+  chordTimelineFromNotes,
+  detectCadences,
+} from '../analyze/timeline/index.js';
 import { InvalidInputError } from '../core/errors/index.js';
 import type { IntervalLike } from '../core/pitch/index.js';
-import type { NoteEvent } from '../core/types.js';
-import type { ChordSegment, ChordSpan } from '../theory/chord/index.js';
+import type { KeyScale, NoteEvent } from '../core/types.js';
+import { assertFiniteNumber, assertRange } from '../core/validation/index.js';
+import type { Chord as ChordData, ChordSegment, ChordSpan } from '../theory/chord/index.js';
+import { spanFromChord } from '../theory/chord/index.js';
 import type { KeyLike } from '../theory/scale/index.js';
+import { toKeyScale } from '../theory/scale/index.js';
 import type { Chord } from './chord.js';
+import { Chord as ChordClass } from './chord.js';
 import type { Key } from './key.js';
-import type { Progression } from './progression.js';
+import { Key as KeyClass } from './key.js';
+import { Progression } from './progression.js';
 
 /** The plain form a {@link Timeline} hands out and is rebuilt from. */
 export type TimelineData = {
@@ -19,14 +32,105 @@ export type TimelineData = {
 };
 
 /**
- * Placeholder body for a member whose implementation has not landed yet.
+ * One segment's Roman numeral, with the beats the chord holds it for.
  *
- * The arguments are taken and dropped so a signature stays exactly what it
- * will be once the body arrives, rather than being written around the stub.
+ * A numeral on its own says nothing about when it sounds, and a timed class
+ * that answered with a bare list would leave the caller re-deriving the onsets
+ * it already holds. The beat range is the segment's own, so a numeral list and
+ * a segment list read in step — the shape {@link ReducedChord} already uses.
  */
-function pending(member: string, ...args: unknown[]): never {
-  void args;
-  throw new InvalidInputError(`Timeline.${member} is not implemented yet`);
+export type TimelineRoman = {
+  startBeat: number;
+  endBeat: number;
+  roman: string;
+};
+
+/**
+ * The confidence a key region carries when the caller named the key.
+ *
+ * A stated key is not a measurement, and reporting anything less would make a
+ * caller's own answer look like a doubtful reading of the notes.
+ */
+const GIVEN_KEY_CONFIDENCE = 1;
+
+/** A validated, defensive copy of one chord segment. */
+function copySegment(segment: ChordSegment): ChordSegment {
+  return {
+    startBeat: assertFiniteNumber(segment.startBeat, 'timeline segment startBeat'),
+    endBeat: assertFiniteNumber(segment.endBeat, 'timeline segment endBeat'),
+    // The chord is checked by the same boundary every other chord crosses, so a
+    // root of 25 or an interval of NaN is refused or reduced here rather than
+    // surfacing wherever the number is finally used.
+    chord: new ChordClass(segment.chord).toJSON(),
+  };
+}
+
+/** A validated, defensive copy of one key region, pivot chord included. */
+function copyKeyRegion(region: KeyRegion): KeyRegion {
+  const copy: KeyRegion = {
+    startBeat: assertFiniteNumber(region.startBeat, 'key region startBeat'),
+    endBeat: assertFiniteNumber(region.endBeat, 'key region endBeat'),
+    key: toKeyScale(region.key),
+    confidence: assertFiniteNumber(region.confidence, 'key region confidence'),
+  };
+  if (region.modulation !== undefined) {
+    copy.modulation = region.modulation;
+  }
+  if (region.pivot !== undefined) {
+    copy.pivot = {
+      chord: new ChordClass(region.pivot.chord).toJSON(),
+      romanFrom: region.pivot.romanFrom,
+      romanTo: region.pivot.romanTo,
+    };
+  }
+  return copy;
+}
+
+/**
+ * The chord sounding at a beat, or null where nothing is.
+ *
+ * Segments are disjoint and in beat order, so the covering one is found by
+ * binary search rather than by scanning: this is what `at(beat)` and every
+ * analysis reading the timeline go through.
+ */
+function chordAtBeat(segments: readonly ChordSegment[], beat: number): ChordData | null {
+  assertFiniteNumber(beat, 'timeline query beat');
+  let low = 0;
+  let high = segments.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if ((segments[middle]?.startBeat ?? Number.POSITIVE_INFINITY) <= beat) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+  const candidate = segments[low - 1];
+  return candidate !== undefined && beat >= candidate.startBeat && beat < candidate.endBeat
+    ? candidate.chord
+    : null;
+}
+
+/** The part of a span lying inside `[fromBeat, toBeat)`, or null when none does. */
+function clipSpan<T extends { startBeat: number; endBeat: number }>(
+  span: T,
+  fromBeat: number,
+  toBeat: number,
+): T | null {
+  const startBeat = Math.max(span.startBeat, fromBeat);
+  const endBeat = Math.min(span.endBeat, toBeat);
+  return endBeat > startBeat ? { ...span, startBeat, endBeat } : null;
+}
+
+/** Where the last of a run of spans ends, and never before beat 0. */
+function spanEnd(...runs: readonly (readonly { endBeat: number }[])[]): number {
+  let end = 0;
+  for (const run of runs) {
+    for (const span of run) {
+      end = Math.max(end, span.endBeat);
+    }
+  }
+  return end;
 }
 
 /**
@@ -39,17 +143,38 @@ function pending(member: string, ...args: unknown[]): never {
  * could be held in a class; `Timeline` is where the rhythm lives.
  *
  * @category Class API
+ * @example
+ * ```ts
+ * import { Chord, Key, Progression, Timeline } from '@libraz/libcantus';
+ * const timeline = Timeline.fromProgression(
+ *   new Progression([Chord.parse('C'), Chord.parse('G7')], Key.major('C')),
+ *   4,
+ * );
+ * timeline.at(5)?.symbol(); // 'G7'
+ * timeline.roman().map((entry) => entry.roman); // ['I', 'V7']
+ * ```
  */
 export class Timeline {
-  readonly #data: TimelineData;
+  readonly #segments: readonly ChordSegment[];
+  readonly #totalBeats: number;
+  readonly #keys: readonly KeyRegion[];
 
   /**
    * Wrap plain timeline data.
    *
    * @param data The segments and the span they cover; copied, never retained.
+   * @throws If the span, a segment, or a key region carries a number it cannot
+   *   hold — a beat that is not finite, a mode mask that names no scale.
    */
   constructor(data: TimelineData) {
-    this.#data = data;
+    this.#segments = Object.freeze(data.segments.map(copySegment));
+    this.#totalBeats = assertRange(
+      data.totalBeats,
+      0,
+      Number.MAX_SAFE_INTEGER,
+      'timeline totalBeats',
+    );
+    this.#keys = Object.freeze((data.keys ?? []).map(copyKeyRegion));
   }
 
   /**
@@ -57,11 +182,27 @@ export class Timeline {
    *
    * @param spans The chords with their onsets, in any order.
    * @param totalBeats Where the last chord stops sounding.
-   * @param key The key the chords are read in, when it is already known.
+   * @param key The key the chords are read in, when it is already known. It
+   *   becomes the one key region under the whole span; without it the timeline
+   *   carries no key, and the members that need one say so.
    * @returns The timeline.
    */
   static fromChords(spans: readonly ChordSpan[], totalBeats: number, key?: KeyLike): Timeline {
-    return pending('fromChords', spans, totalBeats, key);
+    const timeline = chordTimelineFromChords(spans, totalBeats);
+    const data: TimelineData = { segments: timeline.segments, totalBeats };
+    if (key !== undefined) {
+      data.keys = [
+        {
+          // The region starts where the music does, as an inferred one does,
+          // so a chord placed in a pickup is covered by the key it sounds in.
+          startBeat: timeline.segments[0]?.startBeat ?? 0,
+          endBeat: totalBeats,
+          key: toKeyScale(key),
+          confidence: GIVEN_KEY_CONFIDENCE,
+        },
+      ];
+    }
+    return new Timeline(data);
   }
 
   /**
@@ -72,18 +213,34 @@ export class Timeline {
    * @returns The inferred timeline, carrying the key regions the analysis found.
    */
   static fromNotes(notes: readonly NoteEvent[], opts?: ChordTimelineOptions): Timeline {
-    return pending('fromNotes', notes, opts);
+    const { timeline, keys } = chordTimelineFromNotes(notes, opts);
+    // The analysis reports where the chords and the keys end rather than the
+    // span it ran over, so the span is read back off them unless it was given.
+    const totalBeats = opts?.totalBeats ?? spanEnd(timeline.segments, keys);
+    return new Timeline({ segments: timeline.segments, totalBeats, keys });
   }
 
   /**
    * Place a progression's chords on a regular grid.
    *
+   * The chords cross over as harmony alone: a spelling one of them carried is
+   * dropped, and a carried key becomes the plain key/scale of the one region
+   * under the span, without its spelled tonic or its detected scale form.
+   *
    * @param progression The chords, in order.
    * @param beatsEach How long each chord sounds.
    * @returns The timeline.
+   * @throws If `beatsEach` is not a positive finite number of beats.
    */
   static fromProgression(progression: Progression, beatsEach: number): Timeline {
-    return pending('fromProgression', progression, beatsEach);
+    assertRange(beatsEach, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'timeline beatsEach');
+    const chords = progression.chords;
+    const spans = chords.map((chord, index) => spanFromChord(chord.data, index * beatsEach));
+    const totalBeats = chords.length * beatsEach;
+    const key = progression.key;
+    return key === undefined
+      ? Timeline.fromChords(spans, totalBeats)
+      : Timeline.fromChords(spans, totalBeats, key);
   }
 
   /** Rebuild a timeline from the plain data {@link Timeline.data} hands out. */
@@ -96,88 +253,231 @@ export class Timeline {
     return new Timeline(data);
   }
 
-  /** The chord sounding at a beat, or null where nothing is. */
+  /**
+   * The chord sounding at a beat, or null where nothing is.
+   *
+   * A segment covers `[startBeat, endBeat)`, so the beat a chord gives way on
+   * answers with the chord arriving rather than the one leaving. The chord
+   * carries the key in force at that beat when the timeline knows one, so it
+   * can name its own numeral and function.
+   *
+   * @param beat The beat to read.
+   * @returns The chord, or null outside every segment.
+   * @throws If `beat` is not finite.
+   */
   at(beat: number): Chord | null {
-    return pending('at', beat);
+    const chord = chordAtBeat(this.#segments, beat);
+    if (chord === null) {
+      return null;
+    }
+    const key = this.#keyAt(beat);
+    return key === undefined ? new ChordClass(chord) : new ChordClass(chord, key);
   }
 
   /** The chord segments, in time order. */
   get segments(): readonly ChordSegment[] {
-    return pending('segments');
+    return this.#copySegments();
   }
 
   /** Where the last chord stops sounding. */
   get totalBeats(): number {
-    return pending('totalBeats');
+    return this.#totalBeats;
   }
 
   /** The key held longest across the span, when the analysis found one. */
   get key(): Key | undefined {
-    return pending('key');
+    const prevailing = prevailingKeyOf(this.#keys);
+    return prevailing === null ? undefined : KeyClass.of(prevailing);
   }
 
   /** Every key region under the span, in time order. */
   get keys(): readonly KeyRegion[] {
-    return pending('keys');
+    return this.#keys.map(copyKeyRegion);
   }
 
   /** How many segments the timeline holds. */
   get length(): number {
-    return pending('length');
+    return this.#segments.length;
   }
 
+  /** Iterate the segments in time order, so a timeline works with `for...of`. */
   [Symbol.iterator](): IterableIterator<ChordSegment> {
-    return pending('[Symbol.iterator]');
+    return this.#copySegments()[Symbol.iterator]();
   }
 
   /**
    * Drop the time axis, keeping the chord order.
    *
    * Explicit rather than implicit, because the onsets are information and
-   * losing them silently is how a chord rhythm disappears from a pipeline.
+   * losing them silently is how a chord rhythm disappears from a pipeline. A
+   * rest between two segments goes with them: the chords either side become
+   * neighbours in the progression.
+   *
+   * @returns The chords in order, carrying the prevailing key when there is one.
    */
   progression(): Progression {
-    return pending('progression');
+    const chords = this.#segments.map((segment) => new ChordClass(segment.chord));
+    const key = this.key;
+    return key === undefined ? new Progression(chords) : new Progression(chords, key);
   }
 
-  /** The structural chords behind the surface harmony. */
+  /**
+   * The structural chords behind the surface harmony.
+   *
+   * @param opts Which reading decides the frame; see
+   *   {@link ReduceProgressionOptions}.
+   * @returns One labelled chord per segment, in time order.
+   * @throws If the timeline carries no key region to read the chords against.
+   */
   reduce(opts?: ReduceProgressionOptions): ReducedChord[] {
-    return pending('reduce', opts);
+    return reduceProgression(this.chordTimeline, this.#keyContext(), opts);
   }
 
-  /** The cadences the harmony arrives at. */
-  cadences(opts?: DetectCadenceOptions): CadenceResult[] {
-    return pending('cadences', opts);
+  /**
+   * The cadences the harmony arrives at.
+   *
+   * Each hit carries the beat it arrives on as well as the cadence itself: a
+   * cadence without its onset says that the music cadenced but not where, which
+   * is the one thing a timed class is holding that a chord pair is not.
+   *
+   * @returns The cadences found, in time order.
+   * @throws If the timeline carries no key region to read the chords against.
+   */
+  cadences(): CadenceHit[] {
+    return detectCadences(this.chordTimeline, this.#keyContext());
   }
 
-  /** The chords as roman numerals in a key. */
-  roman(key?: KeyLike): string[] {
-    return pending('roman', key);
+  /**
+   * The chords as roman numerals in a key.
+   *
+   * @param key Key to read the chords in; falls back to the key in force at
+   *   each segment, so a timeline that modulates names every chord in the key
+   *   it actually sounds in.
+   * @param opts Applied-numeral rendering options; see
+   *   {@link ChordToRomanOptions}.
+   * @returns One numeral per segment, with the beats it holds for.
+   * @throws If no key is given and the timeline carries none.
+   */
+  roman(key?: KeyLike, opts?: ChordToRomanOptions): TimelineRoman[] {
+    const given = key === undefined ? undefined : toKeyScale(key);
+    const keyAt = given === undefined ? this.#keyContext() : () => given;
+    return this.#segments.map((segment) => ({
+      startBeat: segment.startBeat,
+      endBeat: segment.endBeat,
+      roman: chordToRoman(segment.chord, keyAt(segment.startBeat), opts),
+    }));
   }
 
-  /** The stretch of the timeline between two beats. */
+  /**
+   * The stretch of the timeline between two beats.
+   *
+   * Beats are kept as they are rather than rebased on the slice, so a sliced
+   * timeline still lines up with the score it was read from; `totalBeats`
+   * becomes where the slice ends. A segment or key region straddling an edge is
+   * clipped to it, and one reduced to nothing is dropped.
+   *
+   * @param fromBeat First beat of the stretch.
+   * @param toBeat End of the stretch, exclusive.
+   * @returns The clipped timeline.
+   * @throws If either beat is not finite, or `toBeat` precedes `fromBeat`.
+   */
   slice(fromBeat: number, toBeat: number): Timeline {
-    return pending('slice', fromBeat, toBeat);
+    assertFiniteNumber(fromBeat, 'timeline slice fromBeat');
+    assertFiniteNumber(toBeat, 'timeline slice toBeat');
+    if (toBeat < fromBeat) {
+      throw new InvalidInputError(
+        `timeline slice toBeat must not precede fromBeat; received [${fromBeat}, ${toBeat})`,
+      );
+    }
+    const clip = <T extends { startBeat: number; endBeat: number }>(spans: readonly T[]): T[] =>
+      spans
+        .map((span) => clipSpan(span, fromBeat, toBeat))
+        .filter((span): span is T => span !== null);
+    return new Timeline({
+      segments: clip(this.#segments),
+      totalBeats: Math.max(0, Math.min(toBeat, this.#totalBeats)),
+      keys: clip(this.#keys),
+    });
   }
 
-  /** The timeline moved by a number of semitones. */
+  /**
+   * The timeline moved by a number of semitones.
+   *
+   * The key regions move with the chords, so every segment keeps the degree and
+   * function it had in the key it sounded in.
+   *
+   * @param semitones The signed semitone offset.
+   * @returns The transposed timeline.
+   */
   transpose(semitones: number): Timeline {
-    return pending('transpose', semitones);
+    return this.#moved(
+      (chord) => chord.transpose(semitones),
+      (key) => key.transpose(semitones),
+    );
   }
 
-  /** The timeline moved by a spelled interval, keeping the spelling. */
+  /**
+   * The timeline moved by a spelled interval, keeping the spelling.
+   *
+   * Unlike {@link Timeline.transpose}, which picks letters from a semitone
+   * count, the interval's diatonic number decides them: a chord taken up an
+   * augmented fourth is spelled with sharps and one taken up a diminished fifth
+   * with flats.
+   *
+   * Only a chord carrying a spelling of its own is spelled that way. A key
+   * region holds a key/scale rather than a spelled key, so a chord that takes
+   * its letters from the key in force follows the spelling that scale reads
+   * best from, whichever interval moved it there.
+   *
+   * @param interval An interval name (e.g. `'A4'`, `'-m3'`), plain interval
+   *   data, or an {@link Interval}; a descending interval moves down.
+   * @returns The transposed timeline.
+   */
   transposeBy(interval: IntervalLike): Timeline {
-    return pending('transposeBy', interval);
+    return this.#moved(
+      (chord) => chord.transposeBy(interval),
+      (key) => key.transposeBy(interval),
+    );
   }
 
-  /** Whether another timeline holds the same chords over the same span. */
+  /**
+   * Whether another timeline holds the same chords over the same span.
+   *
+   * The key regions are not compared: they are an analysis lens over the
+   * chords, the way a {@link Progression}'s key context is over its own.
+   *
+   * @param other The timeline to compare.
+   * @returns True when the segments and the span both match.
+   */
   equals(other: Timeline): boolean {
-    return pending('equals', other);
+    const theirs = other.data;
+    if (theirs.totalBeats !== this.#totalBeats || theirs.segments.length !== this.length) {
+      return false;
+    }
+    return this.#segments.every((segment, index) => {
+      const mine = segment;
+      const yours = theirs.segments[index];
+      return (
+        yours !== undefined &&
+        mine.startBeat === yours.startBeat &&
+        mine.endBeat === yours.endBeat &&
+        new ChordClass(mine.chord).equals(new ChordClass(yours.chord))
+      );
+    });
   }
 
   /** A copy of the underlying plain data. */
   get data(): TimelineData {
-    return pending('data');
+    const data: TimelineData = {
+      segments: this.#copySegments(),
+      totalBeats: this.#totalBeats,
+    };
+    // Omitted rather than written as an empty list, so a timeline built without
+    // a key serializes to the segments and the span alone.
+    if (this.#keys.length > 0) {
+      data.keys = this.#keys.map(copyKeyRegion);
+    }
+    return data;
   }
 
   /** The plain form of the timeline, for `JSON.stringify`. */
@@ -187,6 +487,57 @@ export class Timeline {
 
   /** The `{ at, segments }` shape the analysis functions take. */
   get chordTimeline(): ChordTimeline {
-    return pending('chordTimeline');
+    const segments = this.#copySegments();
+    return { at: (beat) => chordAtBeat(segments, beat), segments };
+  }
+
+  /** A fresh copy of the segments, which is what every reader is handed. */
+  #copySegments(): ChordSegment[] {
+    return this.#segments.map(copySegment);
+  }
+
+  /** The key in force at a beat, or undefined when the timeline knows none. */
+  #keyAt(beat: number): Key | undefined {
+    const prevailing = prevailingKeyOf(this.#keys);
+    return prevailing === null ? undefined : KeyClass.of(keyLookup(this.#keys, prevailing)(beat));
+  }
+
+  /**
+   * The key every beat of the timeline is read against.
+   *
+   * A lookup rather than one key, so a timeline that modulates has each chord
+   * analyzed in the key it sounds in; beats outside every region fall back to
+   * the prevailing key.
+   */
+  #keyContext(): (beat: number) => KeyScale {
+    const prevailing = prevailingKeyOf(this.#keys);
+    if (prevailing === null) {
+      throw new InvalidInputError(
+        'timeline carries no key; build it from notes, or pass a key to Timeline.fromChords',
+      );
+    }
+    return keyLookup(this.#keys, prevailing);
+  }
+
+  /** Move every chord and every key region by the same step. */
+  #moved(moveChord: (chord: Chord) => Chord, moveKey: (key: Key) => Key): Timeline {
+    const segments = this.#segments.map((segment) => ({
+      startBeat: segment.startBeat,
+      endBeat: segment.endBeat,
+      chord: moveChord(new ChordClass(segment.chord)).toJSON(),
+    }));
+    const keys = this.#keys.map((region) => {
+      const moved: KeyRegion = { ...region, key: moveKey(KeyClass.of(region.key)).scale };
+      if (region.pivot !== undefined) {
+        // The numerals a pivot carries are degrees, so they survive the move;
+        // only the chord they name has to travel with the keys.
+        moved.pivot = {
+          ...region.pivot,
+          chord: moveChord(new ChordClass(region.pivot.chord)).toJSON(),
+        };
+      }
+      return moved;
+    });
+    return new Timeline({ segments, totalBeats: this.#totalBeats, keys });
   }
 }
