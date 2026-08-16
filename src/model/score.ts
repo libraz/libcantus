@@ -6,28 +6,47 @@ import type {
   Phrase,
   PhraseOptions,
 } from '../analyze/form/index.js';
+import { hypermeter, phrasesFromTimeline, sectionsFromNotes } from '../analyze/form/index.js';
 import type { KeyRegion, KeyTimelineOptions } from '../analyze/keys/index.js';
+import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../analyze/keys/index.js';
 import type { ExtractMotifsOptions, MelodicContour, MotifData } from '../analyze/melody/index.js';
-import type { ChordTimelineOptions } from '../analyze/timeline/index.js';
-import type { AnalyzedNote } from '../analyze/voice/index.js';
+import { extractMotifs, melodicContour } from '../analyze/melody/index.js';
+import type { ChordTimeline, ChordTimelineOptions } from '../analyze/timeline/index.js';
+import { chordTimelineFromNotes } from '../analyze/timeline/index.js';
+import type { AnalyzedNote, KeyContext } from '../analyze/voice/index.js';
+import { analyzeVoice } from '../analyze/voice/index.js';
 import { InvalidInputError } from '../core/errors/index.js';
 import type { NoteEventIndex, NoteEventIndexOptions } from '../core/event-index/index.js';
+import { createNoteEventIndex } from '../core/event-index/index.js';
 import type { PlayabilityReport } from '../core/instrument/playability.js';
+import { playability } from '../core/instrument/playability.js';
 import type { InstrumentProfile } from '../core/instrument/profile.js';
 import type { BarPosition, MeterLike, MeterMap, TimeSignature } from '../core/meter/index.js';
+import { beatToBarPosition, meterAt, resolveMeters } from '../core/meter/index.js';
 import type { IntervalLike } from '../core/pitch/index.js';
+import { toSpelledInterval } from '../core/pitch/index.js';
 import type { TempoMap } from '../core/tempo/index.js';
-import type { NoteEvent } from '../core/types.js';
+import { beatsToSeconds, beatsToTicks, tempoAt, ticksToBeats } from '../core/tempo/index.js';
+import type { KeyScale, NoteEvent } from '../core/types.js';
+import { assertFiniteNumber, assertNoteEvent, assertRange } from '../core/validation/index.js';
 import type { GrooveTemplate, HumanizeOptions, OrnamentOptions } from '../generate/index.js';
-import type { KeyLike } from '../theory/scale/index.js';
-import type { Key } from './key.js';
-import type { Timeline } from './timeline.js';
+import { applyGrooveTemplate, humanize, ornament } from '../generate/index.js';
+import { type KeyLike, toKeyScale } from '../theory/scale/index.js';
+import type { KeyData } from './key.js';
+import { Key } from './key.js';
+import { Timeline } from './timeline.js';
 
 /** The plain form a {@link Score} hands out and is rebuilt from. */
 export type ScoreData = {
   notes: NoteEvent[];
   meters: MeterMap;
   tempo: TempoMap;
+  /**
+   * The key the notes are read in, when one was given. Absent on a score whose
+   * key is left to be inferred, so the two states survive a round trip: a score
+   * that carries no key is not one that carries C major.
+   */
+  key?: KeyData;
 };
 
 /** How a score is built: the notes, plus the context they are read against. */
@@ -40,15 +59,148 @@ export type ScoreOptions = {
   key?: KeyLike;
 };
 
+/** The tempo a score is read at when the caller names none. */
+const DEFAULT_BPM = 120;
+
+/** Zero with its sign dropped, so `-0` never reaches the plain data. */
+function withoutNegativeZero(value: number): number {
+  return value === 0 ? 0 : value;
+}
+
 /**
- * Placeholder body for a member whose implementation has not landed yet.
+ * Defensive copy of one note event, carrying only the fields a note holds.
  *
- * The arguments are taken and dropped so a signature stays exactly what it
- * will be once the body arrives, rather than being written around the stub.
+ * A `-0` onset survives every arithmetic path that produced it but not
+ * `JSON.stringify`, so it is dropped here rather than becoming a value that
+ * compares unequal to its own serialization.
  */
-function pending(member: string, ...args: unknown[]): never {
-  void args;
-  throw new InvalidInputError(`Score.${member} is not implemented yet`);
+function copyNote(note: NoteEvent): NoteEvent {
+  const copy: NoteEvent = {
+    pitch: withoutNegativeZero(note.pitch),
+    startBeat: withoutNegativeZero(note.startBeat),
+    durationBeat: withoutNegativeZero(note.durationBeat),
+  };
+  if (note.velocity !== undefined) {
+    copy.velocity = withoutNegativeZero(note.velocity);
+  }
+  if (note.articulation !== undefined) {
+    copy.articulation = note.articulation;
+  }
+  return copy;
+}
+
+/**
+ * The notes checked and copied, in time order, ties broken by pitch.
+ *
+ * A score is asked about beats, not about array positions, so the order is
+ * settled once here: every method downstream — and every `equals` between two
+ * scores holding the same music — then reads the same sequence whatever order
+ * the notes arrived in.
+ *
+ * Each note is checked by the shared note-event guard as it is copied, since
+ * copying is already note by note. Zero-length notes are accepted, as they are
+ * everywhere on the analysis side: a MIDI import carries them, and the analyses
+ * drop them themselves.
+ */
+function orderNotes(notes: readonly NoteEvent[], name: string): NoteEvent[] {
+  if (!Array.isArray(notes)) {
+    throw new InvalidInputError(`${name} must be an array; received ${typeof notes}`);
+  }
+  return notes
+    .map((note, index) => {
+      if (note === undefined) {
+        throw new InvalidInputError(`${name}[${index}] must be a note event; received undefined`);
+      }
+      return copyNote(
+        assertNoteEvent(note, `${name}[${index}]`, { allowNonPositiveDuration: true }),
+      );
+    })
+    .sort(
+      (a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch || a.durationBeat - b.durationBeat,
+    );
+}
+
+/** Defensive copy of a meter map, with its signatures copied entry by entry. */
+function copyMeters(meters: MeterMap): MeterMap {
+  return meters.map((change) => {
+    const ts: TimeSignature = {
+      numerator: change.ts.numerator,
+      denominator: change.ts.denominator,
+    };
+    if (change.ts.grouping !== undefined) {
+      ts.grouping = [...change.ts.grouping];
+    }
+    return { startBeat: withoutNegativeZero(change.startBeat), ts };
+  });
+}
+
+/**
+ * Defensive copy of a tempo map, validated on the way through.
+ *
+ * The tempo module keeps its map validator private and runs it from every
+ * entry point, so the map is checked by reading the tempo at its own origin:
+ * a non-finite bpm, an unsorted entry or an empty map is refused here rather
+ * than at the first conversion a caller happens to ask for.
+ */
+function copyTempo(tempo: TempoMap): TempoMap {
+  tempoAt(0, tempo);
+  return tempo.map((event) => ({
+    startBeat: withoutNegativeZero(event.startBeat),
+    bpm: event.bpm,
+  }));
+}
+
+/**
+ * Defensive copy of plain score data, with every part validated.
+ *
+ * This is the boundary a project file, a MIDI import or a hand-edited JSON
+ * crosses, so the checks are the library's own: the note events, the meter map
+ * and the tempo map are each rejected here if they carry a number the analysis
+ * below could not hold.
+ */
+function copyScore(data: ScoreData): ScoreData {
+  const copy: ScoreData = {
+    notes: orderNotes(data.notes, 'score notes'),
+    // The map is validated by the same resolver every meter-aware entry point
+    // reads its options through, so a score accepts exactly what they accept.
+    meters: copyMeters(resolveMeters({ meters: data.meters }, 'score meters')),
+    tempo: copyTempo(data.tempo),
+  };
+  if (data.key !== undefined) {
+    copy.key = Key.fromJSON(data.key).toJSON();
+  }
+  return copy;
+}
+
+/** The meter map a {@link ScoreOptions.meters} value names. */
+function metersFrom(meters: MeterLike | undefined): MeterMap {
+  if (meters === undefined) {
+    return resolveMeters({}, 'score meters');
+  }
+  return Array.isArray(meters)
+    ? resolveMeters({ meters }, 'score meters')
+    : resolveMeters({ ts: meters }, 'score meters');
+}
+
+/** The tempo map a {@link ScoreOptions.tempo} value names. */
+function tempoFrom(tempo: TempoMap | number | undefined): TempoMap {
+  if (tempo === undefined) {
+    return [{ startBeat: 0, bpm: DEFAULT_BPM }];
+  }
+  return typeof tempo === 'number' ? [{ startBeat: 0, bpm: tempo }] : tempo;
+}
+
+/** The plain data a set of notes and a context describe. */
+function scoreData(notes: readonly NoteEvent[], opts: ScoreOptions | undefined): ScoreData {
+  const data: ScoreData = {
+    notes: [...notes],
+    meters: metersFrom(opts?.meters),
+    tempo: tempoFrom(opts?.tempo),
+  };
+  if (opts?.key !== undefined) {
+    data.key = Key.of(toKeyScale(opts.key)).toJSON();
+  }
+  return data;
 }
 
 /**
@@ -63,46 +215,93 @@ function pending(member: string, ...args: unknown[]): never {
  * the notes and their context together, so each question is one call and the
  * answers stay in the class API.
  *
+ * The notes are held in time order, and their onsets are unbounded below: beat
+ * 0 is the first downbeat, so a pickup sounds at a negative beat and is kept
+ * there rather than being shifted onto the grid.
+ *
  * @category Class API
+ * @example
+ * ```ts
+ * import { Score } from '@libraz/libcantus';
+ * const score = Score.of([
+ *   { pitch: 60, startBeat: 0, durationBeat: 2 },
+ *   { pitch: 64, startBeat: 0, durationBeat: 2 },
+ *   { pitch: 67, startBeat: 0, durationBeat: 2 },
+ * ]);
+ * score.totalBeats; // 2
+ * ```
  */
 export class Score {
   readonly #data: ScoreData;
+  readonly #key: Key | undefined;
 
   /**
    * Wrap plain score data.
    *
    * @param data The notes and their context; copied, never retained.
+   * @throws If a note, the meter map or the tempo map carries a value the
+   *   analysis cannot hold.
    */
   constructor(data: ScoreData) {
-    this.#data = data;
+    this.#data = copyScore(data);
+    this.#key = this.#data.key === undefined ? undefined : Key.fromJSON(this.#data.key);
   }
 
   /**
    * Build a score from note events.
    *
+   * A bare time signature becomes a one-entry meter map taking effect at beat
+   * 0, and a bare bpm a one-entry tempo map at beat 0; a score given neither is
+   * read in 4/4 at 120 bpm, which is what every meter-aware function in the
+   * library assumes when its caller names nothing.
+   *
    * @param notes The sounding notes, in any order.
    * @param opts The meter, tempo, and key to read them against.
    * @returns The score.
+   * @example
+   * ```ts
+   * import { Score } from '@libraz/libcantus';
+   * const score = Score.of([{ pitch: 60, startBeat: 0, durationBeat: 4 }], {
+   *   meters: { numerator: 3, denominator: 4 },
+   *   tempo: 90,
+   * });
+   * score.meterAt(0).numerator; // 3
+   * ```
    */
   static of(notes: readonly NoteEvent[], opts?: ScoreOptions): Score {
-    return pending('of', notes, opts);
+    return new Score(scoreData(notes, opts));
   }
 
   /** An empty score, for a track that has not been written yet. */
   static empty(opts?: ScoreOptions): Score {
-    return pending('empty', opts);
+    return new Score(scoreData([], opts));
   }
 
   /**
    * Read note events whose times are in ticks rather than beats.
    *
+   * Onsets and durations are converted; nothing else about the events changes.
+   * A negative tick count is a pickup and stays one, since beat 0 is the first
+   * downbeat at either resolution.
+   *
    * @param events The events, with tick-valued onsets and durations.
    * @param ppq Ticks per quarter note.
    * @param opts The meter, tempo, and key to read them against.
    * @returns The score, in beats.
+   * @example
+   * ```ts
+   * import { Score } from '@libraz/libcantus';
+   * const score = Score.fromTicks([{ pitch: 60, startBeat: 480, durationBeat: 960 }], 480);
+   * score.notes[0]?.durationBeat; // 2
+   * ```
    */
   static fromTicks(events: readonly NoteEvent[], ppq: number, opts?: ScoreOptions): Score {
-    return pending('fromTicks', events, ppq, opts);
+    const notes = events.map((event) => ({
+      ...event,
+      startBeat: ticksToBeats(event.startBeat, ppq),
+      durationBeat: ticksToBeats(event.durationBeat, ppq),
+    }));
+    return new Score(scoreData(notes, opts));
   }
 
   /** Rebuild a score from the plain data {@link Score.data} hands out. */
@@ -117,176 +316,527 @@ export class Score {
 
   /** The sounding notes, in time order. */
   get notes(): readonly NoteEvent[] {
-    return pending('notes');
+    return this.#data.notes.map(copyNote);
   }
 
-  /** Where the last note stops sounding. */
+  /**
+   * Where the last note stops sounding.
+   *
+   * Measured from beat 0 rather than from the first onset, so a score that
+   * opens with a pickup reports the beat its music ends on and not its length.
+   * An empty score ends at 0.
+   */
   get totalBeats(): number {
-    return pending('totalBeats');
+    return this.#data.notes.reduce(
+      (end, note) => Math.max(end, note.startBeat + note.durationBeat),
+      0,
+    );
   }
 
   /** The meter map the notes are read against. */
   get meters(): MeterMap {
-    return pending('meters');
+    return copyMeters(this.#data.meters);
   }
 
   /** The tempo map the notes are read against. */
   get tempo(): TempoMap {
-    return pending('tempo');
+    return this.#data.tempo.map((event) => ({ startBeat: event.startBeat, bpm: event.bpm }));
   }
 
-  /** The stretch of the score between two beats. */
+  /**
+   * The stretch of the score between two beats.
+   *
+   * A note is kept when its onset falls in `[fromBeat, toBeat)`; the notes keep
+   * their absolute onsets, so the slice stays in the score's own time and a
+   * slice taken across a meter or tempo change is still read against it.
+   *
+   * @param fromBeat First beat of the stretch, inclusive.
+   * @param toBeat End of the stretch, exclusive.
+   * @returns The score holding those notes.
+   */
   slice(fromBeat: number, toBeat: number): Score {
-    return pending('slice', fromBeat, toBeat);
+    assertFiniteNumber(fromBeat, 'slice fromBeat');
+    assertFiniteNumber(toBeat, 'slice toBeat');
+    return this.#withNotes(
+      this.#data.notes.filter((note) => note.startBeat >= fromBeat && note.startBeat < toBeat),
+    );
   }
 
   /** The notes this predicate keeps, with the same context. */
   filter(predicate: (note: NoteEvent, index: number) => boolean): Score {
-    return pending('filter', predicate);
+    return this.#withNotes(
+      this.#data.notes.filter((note, index) => predicate(copyNote(note), index)),
+    );
   }
 
   /** The notes this function returns, with the same context. */
   map(fn: (note: NoteEvent, index: number) => NoteEvent): Score {
-    return pending('map', fn);
+    return this.#withNotes(this.#data.notes.map((note, index) => fn(copyNote(note), index)));
   }
 
   /** This score followed by another's notes. */
   concat(other: Score | readonly NoteEvent[]): Score {
-    return pending('concat', other);
+    // Read through the public surface rather than by `instanceof`, so a score
+    // built by a second copy of the module concatenates like any other.
+    const added: readonly NoteEvent[] = Array.isArray(other)
+      ? (other as readonly NoteEvent[])
+      : (other as Score).notes;
+    return this.#withNotes([...this.#data.notes, ...added]);
   }
 
-  /** The score moved along the timeline. */
+  /**
+   * The score moved along the timeline.
+   *
+   * The meter and tempo maps stay where they are: they describe the bars and
+   * the pulse the music is played against, and moving the notes over them is
+   * how a phrase is heard a bar later. A negative shift moves music before the
+   * first downbeat, which is where a pickup lives.
+   *
+   * @param beats How far to move, in quarter-note beats; negative moves earlier.
+   * @returns The moved score.
+   */
   shift(beats: number): Score {
-    return pending('shift', beats);
+    assertFiniteNumber(beats, 'shift beats');
+    return this.#withNotes(
+      this.#data.notes.map((note) => ({ ...note, startBeat: note.startBeat + beats })),
+    );
   }
 
-  /** The score moved by a number of semitones. */
+  /**
+   * The score moved by a number of semitones.
+   *
+   * @param semitones The signed semitone offset.
+   * @returns The transposed score.
+   * @throws If a note would leave the MIDI range.
+   */
   transpose(semitones: number): Score {
-    return pending('transpose', semitones);
+    assertFiniteNumber(semitones, 'transpose semitones');
+    return this.#withNotes(
+      this.#data.notes.map((note) => ({ ...note, pitch: note.pitch + semitones })),
+    );
   }
 
-  /** The score moved by a spelled interval, keeping the spelling. */
+  /**
+   * The score moved by a spelled interval, keeping the spelling.
+   *
+   * Note events carry a MIDI pitch and no spelling of their own, so the
+   * interval contributes its size and its direction; a carried key is what
+   * keeps the spelling, and it moves with the notes.
+   *
+   * @param interval An interval name (e.g. `'A4'`, `'-m3'`), plain interval
+   *   data, or an {@link Interval}; a descending interval moves down.
+   * @returns The transposed score.
+   */
   transposeBy(interval: IntervalLike): Score {
-    return pending('transposeBy', interval);
+    return this.transpose(toSpelledInterval(interval).semitones);
   }
 
   /** The same notes read against a different meter. */
   withMeters(meters: MeterLike): Score {
-    return pending('withMeters', meters);
+    return new Score({ ...this.#data, meters: metersFrom(meters) });
   }
 
   /** The same notes read against a different tempo. */
   withTempo(tempo: TempoMap | number): Score {
-    return pending('withTempo', tempo);
+    return new Score({ ...this.#data, tempo: tempoFrom(tempo) });
   }
 
   /** The same notes read in a different key. */
   withKey(key: KeyLike): Score {
-    return pending('withKey', key);
+    return new Score({ ...this.#data, key: Key.of(toKeyScale(key)).toJSON() });
   }
 
-  /** The notes pulled onto a grid. */
+  /**
+   * The notes pulled onto a grid.
+   *
+   * Onsets and durations are both snapped to the nearest multiple of the grid,
+   * counted from beat 0 in both directions, so a pickup is quantized against
+   * the same grid the downbeat is. A duration that would round to nothing keeps
+   * one grid unit, since a note quantized out of existence is a note lost.
+   *
+   * @param grid The grid unit in quarter-note beats (0.25 for sixteenths).
+   * @returns The quantized score.
+   * @throws If the grid is not a positive length.
+   * @example
+   * ```ts
+   * import { Score } from '@libraz/libcantus';
+   * const score = Score.of([{ pitch: 60, startBeat: 0.98, durationBeat: 1.03 }]);
+   * score.quantize(0.5).notes[0]?.startBeat; // 1
+   * ```
+   */
   quantize(grid: number): Score {
-    return pending('quantize', grid);
+    assertRange(grid, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'quantize grid');
+    return this.#withNotes(
+      this.#data.notes.map((note) => ({
+        ...note,
+        startBeat: Math.round(note.startBeat / grid) * grid,
+        durationBeat: Math.max(1, Math.round(note.durationBeat / grid)) * grid,
+      })),
+    );
   }
 
-  /** The notes pushed off the grid the way a player would. */
+  /**
+   * The notes pushed off the grid the way a player would.
+   *
+   * The metric accents are read from the score's opening signature, since
+   * {@link HumanizeOptions} names one signature rather than a map; pass `ts`
+   * to read a later stretch of a score that changes meter.
+   *
+   * @param opts Jitter amounts, accent depth and the seed; see
+   *   {@link HumanizeOptions}.
+   * @returns The humanized score.
+   */
   humanize(opts?: HumanizeOptions): Score {
-    return pending('humanize', opts);
+    return this.#withNotes(humanize(this.#data.notes, { ts: this.meterAt(0), ...opts }));
   }
 
-  /** The notes with ornaments added. */
+  /**
+   * The notes with ornaments added.
+   *
+   * Strong positions are read from the score's opening signature, since
+   * {@link OrnamentOptions} names one signature rather than a map.
+   *
+   * @param opts The ornament style, how much is decorated, and the seed; see
+   *   {@link OrnamentOptions}.
+   * @returns The ornamented score.
+   */
   ornament(opts?: OrnamentOptions): Score {
-    return pending('ornament', opts);
+    return this.#withNotes(ornament(this.#data.notes, { ts: this.meterAt(0), ...opts }));
   }
 
-  /** The notes placed on a groove template's slots. */
+  /**
+   * The notes placed on a groove template's slots.
+   *
+   * The template's per-bar grid is laid out against the score's opening
+   * signature, which is the signature the template must have been extracted
+   * under; a template carrying a different one is refused rather than drifting.
+   *
+   * @param template The groove template, from `extractGrooveTemplate`.
+   * @returns The score with the template's feel imposed.
+   * @throws If the template was extracted under another meter.
+   */
   groove(template: GrooveTemplate): Score {
-    return pending('groove', template);
+    return this.#withNotes(applyGrooveTemplate(this.#data.notes, template, this.meterAt(0)));
   }
 
-  /** The harmony the notes spell out, in time. */
+  /**
+   * The harmony the notes spell out, in time.
+   *
+   * The score's meter map and its key, when it carries one, are read against
+   * unless the options name others.
+   *
+   * @param opts Analysis options; see {@link ChordTimelineOptions}.
+   * @returns The inferred timeline, carrying the key regions the analysis found.
+   */
   timeline(opts?: ChordTimelineOptions): Timeline {
-    return pending('timeline', opts);
+    const result = chordTimelineFromNotes(this.#data.notes, this.#analysisOptions(opts));
+    return Timeline.fromData({
+      segments: result.timeline.segments,
+      totalBeats: opts?.totalBeats ?? this.totalBeats,
+      keys: result.keys,
+    });
   }
 
-  /** The key held longest across the score, when one can be read. */
+  /**
+   * The key held longest across the score, when one can be read.
+   *
+   * A score carrying a key answers with it. Otherwise the key regions are
+   * searched for and the one holding for the most beats wins, so a piece that
+   * digresses is named by the key it keeps coming back to rather than by the
+   * key it opens on. A score with nothing sounding has no key at all.
+   *
+   * @returns The prevailing key, or undefined when nothing sounds.
+   */
   key(): Key | undefined {
-    return pending('key');
+    if (this.#key !== undefined) {
+      return this.#key;
+    }
+    const prevailing = prevailingKeyOf(this.#keyRegions());
+    return prevailing === null ? undefined : Key.of(prevailing);
   }
 
-  /** Every key region the score passes through, in time order. */
+  /**
+   * Every key region the score passes through, in time order.
+   *
+   * @param opts Analysis options; see {@link KeyTimelineOptions}.
+   * @returns The regions; empty when nothing sounds.
+   */
   keys(opts?: KeyTimelineOptions): KeyRegion[] {
-    return pending('keys', opts);
+    return keyTimelineFromNotes(this.#data.notes, { meters: this.#data.meters, ...opts });
   }
 
-  /** The phrases the notes fall into. */
+  /**
+   * The phrases the notes fall into.
+   *
+   * The cadences are read from the score's own harmony, so the chord timeline
+   * does not have to be built and passed in by hand.
+   *
+   * @param opts Analysis options; see {@link PhraseOptions}.
+   * @returns The phrases, in time order.
+   */
   phrases(opts?: PhraseOptions): Phrase[] {
-    return pending('phrases', opts);
+    return phrasesFromTimeline(this.#chordTimeline(), this.#data.notes, {
+      meters: this.#data.meters,
+      ...(this.#key === undefined ? {} : { key: this.#key.scale }),
+      ...opts,
+    });
   }
 
-  /** The sections the score divides into. */
+  /**
+   * The sections the score divides into.
+   *
+   * @param opts Analysis options; see {@link FormSectionOptions}.
+   * @returns The sections, in time order.
+   */
   sections(opts?: FormSectionOptions): FormSection[] {
-    return pending('sections', opts);
+    return sectionsFromNotes(this.#data.notes, { meters: this.#data.meters, ...opts });
   }
 
-  /** The bar-level pulse above the meter. */
+  /**
+   * The bar-level pulse above the meter.
+   *
+   * @param opts Analysis options; see {@link HypermeterOptions}.
+   * @returns The grouping, its downbeats, a confidence, and a rationale.
+   */
   hypermeter(opts?: HypermeterOptions): Hypermeter {
-    return pending('hypermeter', opts);
+    return hypermeter(this.#data.notes, this.#data.meters, opts);
   }
 
-  /** The motifs the melody repeats. */
+  /**
+   * The motifs the melody repeats.
+   *
+   * @param opts Cell-length bounds and the recurrence threshold; see
+   *   {@link ExtractMotifsOptions}.
+   * @returns The motifs found, longest first.
+   */
   motifs(opts?: ExtractMotifsOptions): MotifData[] {
-    return pending('motifs', opts);
+    return extractMotifs(this.#data.notes, opts);
   }
 
   /** The shape the melody traces. */
   contour(): MelodicContour {
-    return pending('contour');
+    return melodicContour(this.#data.notes);
   }
 
-  /** Each note's role in the harmony sounding under it. */
+  /**
+   * Each note's role in the harmony sounding under it.
+   *
+   * The chord under each note and the key it is read in both come from the
+   * score: the harmony from its own chord timeline, and the key from the
+   * argument, then the carried key, then the regions the analysis found. A
+   * score with no readable harmony — nothing sounding, or too little to name a
+   * chord — reads every note against C major and no chord at all, which labels
+   * the notes as the non-chord tones they are rather than failing.
+   *
+   * @param key The key to read the notes in; defaults to the score's own.
+   * @returns One annotation per note, in the score's own time order.
+   */
   voices(key?: KeyLike): AnalyzedNote[] {
-    return pending('voices', key);
+    const timeline = this.#chordTimeline();
+    return analyzeVoice(this.#data.notes, timeline.at, this.#keyContext(key));
   }
 
-  /** Whether an instrument can play the score, and what makes it hard. */
+  /**
+   * Whether an instrument can play the score, and what makes it hard.
+   *
+   * The tempo the third layer needs is the score's own, read at beat 0.
+   *
+   * @param instrument The instrument to play it on.
+   * @returns Difficulty, the issues found, and each note's placement.
+   */
   playability(instrument: InstrumentProfile): PlayabilityReport {
-    return pending('playability', instrument);
+    return playability(this.#data.notes, instrument, tempoAt(0, this.#data.tempo));
   }
 
-  /** An index for repeated lookups over the notes. */
+  /**
+   * An index for repeated lookups over the notes.
+   *
+   * @param opts How the events are read; see {@link NoteEventIndexOptions}.
+   * @returns The index.
+   */
   index(opts?: NoteEventIndexOptions): NoteEventIndex {
-    return pending('index', opts);
+    return createNoteEventIndex(this.#data.notes, {
+      allowNonPositiveDuration: true,
+      name: 'score notes',
+      ...opts,
+    });
   }
 
-  /** Where a beat falls in seconds, read through the tempo map. */
+  /**
+   * Where a beat falls in seconds, read through the tempo map.
+   *
+   * Every tempo segment the span crosses is integrated, so a beat after a
+   * tempo change is not the change's tempo applied to the whole span. A beat
+   * inside a pickup reports negative elapsed time, at the opening tempo.
+   *
+   * @param beat Position in quarter-note beats.
+   * @returns Elapsed seconds from the tempo map's origin.
+   */
   secondsAt(beat: number): number {
-    return pending('secondsAt', beat);
+    return beatsToSeconds(beat, this.#data.tempo);
   }
 
-  /** Where a beat falls in bars, read through the meter map. */
+  /**
+   * Where a beat falls in bars, read through the meter map.
+   *
+   * @param beat Position in quarter-note beats.
+   * @returns The 0-based bar and the quarter-note offset inside it; a pickup
+   *   reports bar -1.
+   */
   barAt(beat: number): BarPosition {
-    return pending('barAt', beat);
+    return beatToBarPosition(beat, this.#data.meters);
   }
 
-  /** The time signature sounding at a beat. */
+  /**
+   * The time signature sounding at a beat.
+   *
+   * @param beat Position in quarter-note beats.
+   * @returns The signature in force there.
+   */
   meterAt(beat: number): TimeSignature {
-    return pending('meterAt', beat);
+    return meterAt(beat, this.#data.meters);
   }
 
-  /** Whether another score holds the same notes in the same context. */
+  /**
+   * The score's beats as MIDI ticks, for a writer that counts in them.
+   *
+   * @param ppq Ticks per quarter note.
+   * @returns The notes with tick-valued onsets and durations, in time order.
+   */
+  toTicks(ppq: number): NoteEvent[] {
+    return this.#data.notes.map((note) => ({
+      ...note,
+      startBeat: beatsToTicks(note.startBeat, ppq),
+      durationBeat: beatsToTicks(note.durationBeat, ppq),
+    }));
+  }
+
+  /**
+   * Whether another score holds the same notes in the same context.
+   *
+   * The comparison is made through the other score's public data, so two
+   * scores built by different copies of the module still compare.
+   *
+   * @param other The score to compare.
+   * @returns True when the notes, the meter, the tempo and the read key match.
+   */
   equals(other: Score): boolean {
-    return pending('equals', other);
+    const theirs = other.data;
+    const mine = this.#data;
+    return (
+      mine.notes.length === theirs.notes.length &&
+      mine.notes.every((note, index) => sameNote(note, theirs.notes[index])) &&
+      mine.meters.length === theirs.meters.length &&
+      mine.meters.every((change, index) => sameMeter(change, theirs.meters[index])) &&
+      mine.tempo.length === theirs.tempo.length &&
+      mine.tempo.every((event, index) => {
+        const theirEvent = theirs.tempo[index];
+        return (
+          theirEvent !== undefined &&
+          event.startBeat === theirEvent.startBeat &&
+          event.bpm === theirEvent.bpm
+        );
+      }) &&
+      sameKey(mine.key, theirs.key)
+    );
   }
 
   /** A copy of the underlying plain data. */
   get data(): ScoreData {
-    return pending('data');
+    const copy: ScoreData = {
+      notes: this.#data.notes.map(copyNote),
+      meters: copyMeters(this.#data.meters),
+      tempo: this.#data.tempo.map((event) => ({ startBeat: event.startBeat, bpm: event.bpm })),
+    };
+    if (this.#key !== undefined) {
+      copy.key = this.#key.toJSON();
+    }
+    return copy;
   }
 
   /** The plain form of the score, for `JSON.stringify`. */
   toJSON(): ScoreData {
     return this.data;
   }
+
+  /** The same context carrying another set of notes. */
+  #withNotes(notes: readonly NoteEvent[]): Score {
+    return new Score({ ...this.#data, notes: [...notes] });
+  }
+
+  /**
+   * The chord timeline the score's own harmony describes.
+   *
+   * Private, because the options belong to the members that expose them: the
+   * analyses that read harmony read the score's, and a caller who wants
+   * another builds it through {@link Score.timeline}.
+   */
+  #chordTimeline(): ChordTimeline {
+    return chordTimelineFromNotes(this.#data.notes, this.#analysisOptions()).timeline;
+  }
+
+  /** The key regions under the score, read against its own meter. */
+  #keyRegions(): KeyRegion[] {
+    return keyTimelineFromNotes(this.#data.notes, { meters: this.#data.meters });
+  }
+
+  /** The score's context as chord-timeline options, with the caller's on top. */
+  #analysisOptions(opts?: ChordTimelineOptions): ChordTimelineOptions {
+    return {
+      meters: this.#data.meters,
+      ...(this.#key === undefined ? {} : { key: this.#key.scale }),
+      ...opts,
+    };
+  }
+
+  /**
+   * The key each note is read against: the argument, then the carried key,
+   * then the key in force at the beat, and C major where nothing sounds.
+   */
+  #keyContext(key: KeyLike | undefined): KeyContext {
+    if (key !== undefined) {
+      return toKeyScale(key);
+    }
+    if (this.#key !== undefined) {
+      return this.#key.scale;
+    }
+    const regions = this.#keyRegions();
+    const prevailing: KeyScale = prevailingKeyOf(regions) ?? Key.major('C').scale;
+    return keyLookup(regions, prevailing);
+  }
+}
+
+/** Whether two plain note events hold the same note. */
+function sameNote(note: NoteEvent, other: NoteEvent | undefined): boolean {
+  return (
+    other !== undefined &&
+    note.pitch === other.pitch &&
+    note.startBeat === other.startBeat &&
+    note.durationBeat === other.durationBeat &&
+    note.velocity === other.velocity &&
+    note.articulation === other.articulation
+  );
+}
+
+/** Whether two meter changes name the same signature at the same beat. */
+function sameMeter(change: MeterMap[number], other: MeterMap[number] | undefined): boolean {
+  if (other === undefined || change.startBeat !== other.startBeat) {
+    return false;
+  }
+  const grouping = change.ts.grouping ?? [];
+  const theirs = other.ts.grouping ?? [];
+  return (
+    change.ts.numerator === other.ts.numerator &&
+    change.ts.denominator === other.ts.denominator &&
+    grouping.length === theirs.length &&
+    grouping.every((entry, index) => entry === theirs[index])
+  );
+}
+
+/** Whether two scores were read in the same key, one having none included. */
+function sameKey(key: KeyData | undefined, other: KeyData | undefined): boolean {
+  if (key === undefined || other === undefined) {
+    return key === other;
+  }
+  return Key.fromJSON(key).equals(Key.fromJSON(other));
 }

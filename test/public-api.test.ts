@@ -87,6 +87,7 @@ const EXPECTED_EXPORTS = [
   'RYUKYU_MASK',
   'ReasonFlag',
   'SATB_RANGES',
+  'Score',
   'SCALE_ALIASES',
   'SCALE_SYSTEMS',
   'STEP_BEATS',

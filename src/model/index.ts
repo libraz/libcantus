@@ -32,16 +32,34 @@ export type {
   RejectedCandidate,
 } from '../analyze/functional/index.js';
 export type {
+  AnalyzedNote,
   CadenceHit,
   ChordSegmentation,
   ChordTimeline,
   ChordTimelineOptions,
+  ContourDirection,
+  ExtractMotifsOptions,
+  FormSection,
+  FormSectionOptions,
+  Hypermeter,
+  HypermeterOptions,
+  KeyContext,
   KeyRegion,
+  KeyTimelineOptions,
+  MelodicContour,
+  MelodicContourShape,
+  MotifData,
+  MotifOccurrence,
+  Phrase,
+  PhraseOptions,
+  PhraseSignal,
   PivotChord,
   ReducedChord,
   ReduceProgressionOptions,
   ReductionBasis,
   ReductionLevel,
+  SuspensionFigure,
+  TheoryLabel,
 } from '../analyze/index.js';
 export type {
   DurationData,
@@ -56,6 +74,12 @@ export type {
   NoSolutionError,
   ParseResult,
 } from '../core/errors/index.js';
+export type {
+  IndexedNoteEvent,
+  NoteEventIndex,
+  NoteEventIndexOptions,
+  OnsetTieBreak,
+} from '../core/event-index/index.js';
 export type {
   Articulation,
   InstrumentProfile,
@@ -73,6 +97,7 @@ export type {
 export type {
   BarPosition,
   MeterChange,
+  MeterLike,
   MeterMap,
   TimeSignature,
 } from '../core/meter/index.js';
@@ -85,8 +110,26 @@ export type {
   NoteNameSystem,
   SpelledInterval,
 } from '../core/pitch/index.js';
+export type { PositionalRng, SeedPath } from '../core/random/index.js';
+export type { TempoEvent, TempoMap } from '../core/tempo/index.js';
 export type { TuningTable } from '../core/tuning/index.js';
 export type { KeyScale, NoteEvent } from '../core/types.js';
+export type {
+  Complexity,
+  GenerationContext,
+  GenerationContextInput,
+  Genre,
+  GrooveSlot,
+  GrooveTemplate,
+  HumanizeOptions,
+  OrnamentOptions,
+  OrnamentStyle,
+  Provenance,
+  ProvenanceBasis,
+  PublicSection,
+  Section,
+  Vocabulary,
+} from '../generate/index.js';
 export type {
   Chord as ChordData,
   ChordQuality,
@@ -130,6 +173,7 @@ export { type DetectedKeyMatch, Key, type KeyData } from './key.js';
 export { Meter } from './meter.js';
 export { Note } from './note.js';
 export { Progression, type ProgressionData } from './progression.js';
+export { Score, type ScoreData, type ScoreOptions } from './score.js';
 export { Tempo, type TempoData } from './tempo.js';
 export { Timeline, type TimelineData, type TimelineRoman } from './timeline.js';
 export { Tuning } from './tuning.js';

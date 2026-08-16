@@ -13,6 +13,7 @@ import {
   Meter,
   Note,
   Progression,
+  Score,
   Tempo,
   Timeline,
   Tuning,
@@ -92,6 +93,14 @@ const SAMPLES: Record<string, { data: unknown; equals(other: never): boolean }> 
   // Compound, so the pulse grouping is exercised rather than assumed.
   Meter: Meter.parse('6/8'),
   Tempo: Tempo.of(120),
+  Score: Score.of(
+    [
+      { pitch: 60, startBeat: 0, durationBeat: 1 },
+      { pitch: 64, startBeat: 1, durationBeat: 1 },
+      { pitch: 67, startBeat: 2, durationBeat: 2 },
+    ],
+    { meters: { numerator: 4, denominator: 4 }, tempo: 120, key: 'C major' },
+  ),
   Timeline: Timeline.fromProgression(
     new Progression([Chord.parse('C'), Chord.parse('G7')], Key.major('C')),
     4,
