@@ -1,5 +1,6 @@
 import { pitchClassOf } from '../../core/pitch/index.js';
 import { type Chord, type ChordToneRole, chordSpecOf, chordToneRole } from '../chord/index.js';
+import { type ChordLike, toChordData } from '../symbol/index.js';
 
 /**
  * Harmonic role a pitch plays within a chord.
@@ -76,7 +77,8 @@ function suspendedIntervalOf(chord: Chord): number | undefined {
  * here.
  *
  * @param pitch MIDI pitch or bare pitch class.
- * @param chord The chord providing the root reference.
+ * @param chord The chord providing the root reference, as a chord symbol, chord
+ *   data, or a `Chord`.
  * @param chordId Identifier stored on the result (defaults to 0).
  * @returns The pitch's role, lock level, and owning chord id.
  * @example
@@ -87,11 +89,12 @@ function suspendedIntervalOf(chord: Chord): number | undefined {
  * ```
  * @category Functional Harmony
  */
-export function roleOf(pitch: number, chord: Chord, chordId = 0): VoicedRole {
-  const interval = (pitchClassOf(pitch) - pitchClassOf(chord.rootPc) + 12) % 12;
-  const suspended = suspendedIntervalOf(chord);
+export function roleOf(pitch: number, chord: ChordLike, chordId = 0): VoicedRole {
+  const data = toChordData(chord);
+  const interval = (pitchClassOf(pitch) - pitchClassOf(data.rootPc) + 12) % 12;
+  const suspended = suspendedIntervalOf(data);
   const isSuspendedTone = suspended !== undefined && interval === suspended;
-  const chordRole = chordToneRole(pitch, chord);
+  const chordRole = chordToneRole(pitch, data);
   let role: HarmonyRole;
   let lock: LockLevel;
   if (isSuspendedTone) {

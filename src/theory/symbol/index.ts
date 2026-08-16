@@ -1020,7 +1020,8 @@ export type ChordSymbolOptions = NoteNameOptions & {
  * tone the chord leaves out is not written: the symbol names the harmony, so a
  * fifth-less dominant is still `C7`.
  *
- * @param chord The chord to format.
+ * @param chord The chord to format, as a chord symbol, chord data, or a
+ *   `Chord`.
  * @param opts `system` writes the root and bass in that notation system instead
  *   of English; `flats` overrides the spelling hints, as
  *   {@link ChordSymbolOptions} describes.
@@ -1034,30 +1035,27 @@ export type ChordSymbolOptions = NoteNameOptions & {
  * ```
  * @category Chords
  */
-export function formatChordSymbol(chord: Chord, opts?: ChordSymbolOptions): string {
+export function formatChordSymbol(chord: ChordLike, opts?: ChordSymbolOptions): string {
   // A chord rebuilt from JSON or arrived at through arithmetic can carry a
   // non-finite root or a quality this module has no suffix for; formatting
   // those produces 'C' and 'Cundefined', which read as real symbols.
-  assertFiniteNumber(chord.rootPc, 'chord rootPc');
-  if (chord.bassPc !== undefined) {
-    assertFiniteNumber(chord.bassPc, 'chord bassPc');
-  }
-  if (!Object.hasOwn(CANONICAL_SUFFIX, chord.quality)) {
-    throw new InvalidInputError(`Unknown chord quality: ${String(chord.quality)}`);
+  const data = toChordData(chord);
+  if (!Object.hasOwn(CANONICAL_SUFFIX, data.quality)) {
+    throw new InvalidInputError(`Unknown chord quality: ${String(data.quality)}`);
   }
   const system = opts?.system ?? DEFAULT_SYSTEM;
-  const rootPc = pitchClass(chord.rootPc);
-  const rootHint = chord.rootSpelling;
+  const rootPc = pitchClass(data.rootPc);
+  const rootHint = data.rootSpelling;
   const rootName = pitchClassName(rootPc, rootHint, system, opts?.flats);
-  const suffix = specSuffix(chordSpecOf(chord));
+  const suffix = specSuffix(chordSpecOf(data));
   let symbol = `${rootName}${suffix}`;
-  if (chord.bassPc !== undefined && pitchClass(chord.bassPc) !== rootPc) {
+  if (data.bassPc !== undefined && pitchClass(data.bassPc) !== rootPc) {
     const inheritFlats =
       rootHint !== undefined && noteToPitchClass(rootHint) === rootPc
         ? rootHint.alter < 0
         : undefined;
-    const bassPc = pitchClass(chord.bassPc);
-    symbol += `/${pitchClassName(bassPc, chord.bassSpelling, system, opts?.flats, inheritFlats)}`;
+    const bassPc = pitchClass(data.bassPc);
+    symbol += `/${pitchClassName(bassPc, data.bassSpelling, system, opts?.flats, inheritFlats)}`;
   }
   return symbol;
 }

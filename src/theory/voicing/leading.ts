@@ -1,6 +1,6 @@
 import { InvalidInputError, NoSolutionError } from '../../core/errors/index.js';
 import { assertFiniteNumber } from '../../core/validation/index.js';
-import type { Chord } from '../chord/index.js';
+import { type ChordLike, toChordData } from '../symbol/index.js';
 import {
   enumerateVoicings,
   leadingCost,
@@ -13,7 +13,13 @@ import {
   violationCount,
 } from './internal.js';
 import type { VoicingOptions } from './satb.js';
-import { resolveMaxCandidates, resolveMaxSpacing, resolveRanges } from './satb.js';
+import {
+  resolveKey,
+  resolveMaxCandidates,
+  resolveMaxSpacing,
+  resolvePreviousChord,
+  resolveRanges,
+} from './satb.js';
 
 /**
  * Total voice-leading cost between two voicings: the sum of absolute semitone
@@ -46,7 +52,8 @@ export function voiceLeadingCost(from: number[], to: number[]): number {
  * scoring candidate is returned, ascending.
  *
  * @param current The current voicing to lead from, ascending (index 0 = lowest).
- * @param chord The next chord to voice.
+ * @param chord The next chord to voice, as a chord symbol, chord data, or a
+ *   `Chord`.
  * @param opts Voicing options; when omitted, ranges follow `current`'s span.
  * @returns The chosen voicing, ascending with one MIDI pitch per voice.
  * @throws If `current` is empty or holds a non-finite pitch while the ranges
@@ -54,7 +61,8 @@ export function voiceLeadingCost(from: number[], to: number[]): number {
  *   or if no voicing fits the ranges.
  * @category Voicing & Counterpoint
  */
-export function nextVoicing(current: number[], chord: Chord, opts?: VoicingOptions): number[] {
+export function nextVoicing(current: number[], chord: ChordLike, opts?: VoicingOptions): number[] {
+  const data = toChordData(chord);
   const derived = opts?.ranges === undefined && opts?.voices === undefined;
   if (derived) {
     // The ranges are read off `current`, so an empty voicing would describe a
@@ -101,11 +109,12 @@ export function nextVoicing(current: number[], chord: Chord, opts?: VoicingOptio
             return current[sourceIndex] ?? Number.NaN;
           });
   const maxSpacing = resolveMaxSpacing(opts);
-  const candidates = enumerateVoicings(chord, ranges, maxSpacing, resolveMaxCandidates(opts));
-  const previousChord = opts?.previousChord;
-  const structure = structuralTables(chord, opts?.key);
+  const candidates = enumerateVoicings(data, ranges, maxSpacing, resolveMaxCandidates(opts));
+  const key = resolveKey(opts);
+  const previousChord = resolvePreviousChord(opts);
+  const structure = structuralTables(data, key);
   const resolution =
-    previousChord === undefined ? undefined : resolutionTables(previousChord, chord, opts?.key);
+    previousChord === undefined ? undefined : resolutionTables(previousChord, data, key);
   const { pitches, voices } = candidates;
   let bestOffset = -1;
   let bestScore = Number.POSITIVE_INFINITY;

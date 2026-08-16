@@ -1,8 +1,9 @@
-import type { Note } from '../../core/pitch/index.js';
+import type { Note, NoteLike } from '../../core/pitch/index.js';
 import {
   diatonicLetterOf,
   pitchClassOf as mod12,
   naturalPitchClassOf,
+  toNoteData,
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import { assertInteger, assertOneOf } from '../../core/validation/index.js';
@@ -123,22 +124,26 @@ export function isSignatureKey(key: KeyScale): boolean {
  * The result is not clamped: a theoretical key such as Fb major reports -8.
  * Clamp to ±7 if the consuming format cannot express more.
  *
- * @param tonic The spelled tonic; its accidental is worth seven fifths.
- * @param key The key/scale.
+ * @param tonic The spelled tonic, as a note name, note data, or a `Note`; its
+ *   accidental is worth seven fifths.
+ * @param key The key/scale. This one stays a plain key/scale: it reads any
+ *   12-bit mask, including the tonic-less ones a key name cannot describe.
  * @returns The signed number of sharps (positive) or flats (negative).
  * @example
  * ```ts
  * import { keySignatureFifths, majorKey, minorKey, parseNote } from '@libraz/libcantus';
  * keySignatureFifths(parseNote('Bb'), majorKey(10)); // -2
- * keySignatureFifths(parseNote('A'), minorKey(9)); // 0
+ * keySignatureFifths('A', minorKey(9)); // 0
  * ```
  * @category Scales
  */
-export function keySignatureFifths(tonic: Note, key: KeyScale): number {
-  const letter = diatonicLetterOf(tonic.letter);
-  assertInteger(tonic.alter, 'tonic.alter');
-  assertInteger(key.modeMask12, 'key.modeMask12', 1, 0b111111111111);
-  return (LETTER_FIFTHS[letter] ?? 0) + FIFTHS_PER_ALTERATION * tonic.alter + modeOffset(key);
+export function keySignatureFifths(tonic: NoteLike, key: KeyScale): number {
+  const note = toNoteData(tonic);
+  const scale = key;
+  const letter = diatonicLetterOf(note.letter);
+  assertInteger(note.alter, 'tonic.alter');
+  assertInteger(scale.modeMask12, 'key.modeMask12', 1, 0b111111111111);
+  return (LETTER_FIFTHS[letter] ?? 0) + FIFTHS_PER_ALTERATION * note.alter + modeOffset(scale);
 }
 
 /**

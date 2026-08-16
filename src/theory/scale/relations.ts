@@ -21,11 +21,17 @@
  * spelling it was given.
  */
 
-import type { Note } from '../../core/pitch/index.js';
-import { diatonicLetterOf, noteToPitchClass, pitchClassOf } from '../../core/pitch/index.js';
+import type { Note, NoteLike } from '../../core/pitch/index.js';
+import {
+  diatonicLetterOf,
+  noteToPitchClass,
+  pitchClassOf,
+  toNoteData,
+} from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import { assertInteger } from '../../core/validation/index.js';
 import { spellScale } from '../spelling/index.js';
+import { type KeyLike, toKeyScale } from './coerce.js';
 import { majorKey, minorKey } from './key.js';
 import { CHROMATIC_MASK } from './masks.js';
 import type { KeyMode } from './signature.js';
@@ -215,6 +221,10 @@ function spellsBetter(a: TonicCost, b: TonicCost, signatureKey: boolean): boolea
  * Every 12-bit mask and every integer root is answered — a root outside [0, 11]
  * is reduced first, and a mask with no third at all counts as major.
  *
+ * The key is paired with the answer exactly as it was handed in, root and mask
+ * untouched, so this takes a plain key/scale rather than the wider forms the
+ * relations below accept: a coerced key could not be given back verbatim.
+ *
  * @param key The key/scale to spell.
  * @returns The conventional tonic spelling, paired with `key` verbatim.
  * @example
@@ -227,8 +237,9 @@ function spellsBetter(a: TonicCost, b: TonicCost, signatureKey: boolean): boolea
  * @category Scales
  */
 export function spelledKeyOf(key: KeyScale): SpelledKey {
-  const rootPc = pitchClassOf(key.rootPc);
-  const signatureKey = isSignatureKey(key);
+  const scale = key;
+  const rootPc = pitchClassOf(scale.rootPc);
+  const signatureKey = isSignatureKey(scale);
   // Every pitch class is named somewhere in the span, so the starting tonic here
   // only stands in until the scan makes its first match.
   let tonic: Note = keyFromFifths(0).tonic;
@@ -241,7 +252,7 @@ export function spelledKeyOf(key: KeyScale): SpelledKey {
     if (noteToPitchClass(candidate) !== rootPc) {
       continue;
     }
-    const cost = tonicCost(candidate, key);
+    const cost = tonicCost(candidate, scale);
     if (best === undefined || spellsBetter(cost, best, signatureKey)) {
       tonic = candidate;
       best = cost;
@@ -258,8 +269,10 @@ export function spelledKeyOf(key: KeyScale): SpelledKey {
  * tonic is read off the circle of fifths rather than transposed by semitones,
  * the relative of Db major is Bb minor and not its enharmonic A# minor.
  *
- * @param tonic The spelled tonic of the key.
- * @param key The key/scale; its mask decides which mode the relative is in.
+ * @param tonic The spelled tonic of the key, as a note name, note data, or a
+ *   `Note`.
+ * @param key The key/scale, as a key name, a key/scale, or a `Key`; its mask
+ *   decides which mode the relative is in.
  * @returns The relative key and the tonic spelling it is written with.
  * @throws If the tonic or the mask is malformed, or if the key's signature
  *   falls outside [-12, 12] fifths.
@@ -267,12 +280,13 @@ export function spelledKeyOf(key: KeyScale): SpelledKey {
  * ```ts
  * import { formatNote, majorKey, parseNote, relativeKeyOf } from '@libraz/libcantus';
  * formatNote(relativeKeyOf(parseNote('C'), majorKey(0)).tonic); // 'A'
- * formatNote(relativeKeyOf(parseNote('Db'), majorKey(1)).tonic); // 'Bb'
+ * formatNote(relativeKeyOf('Db', majorKey(1)).tonic); // 'Bb'
  * ```
  * @category Scales
  */
-export function relativeKeyOf(tonic: Note, key: KeyScale): SpelledKey {
-  return keyFromFifths(keySignatureFifths(tonic, key), oppositeMode(modeOf(key)));
+export function relativeKeyOf(tonic: NoteLike, key: KeyLike): SpelledKey {
+  const scale = toKeyScale(key);
+  return keyFromFifths(keySignatureFifths(tonic, scale), oppositeMode(modeOf(scale)));
 }
 
 /**
@@ -282,8 +296,10 @@ export function relativeKeyOf(tonic: Note, key: KeyScale): SpelledKey {
  * C minor, never B# minor — which is why this is the one relation here that
  * does not travel the circle of fifths.
  *
- * @param tonic The spelled tonic of the key; its letter and alteration are kept.
- * @param key The key/scale; its mask decides which mode the parallel is in.
+ * @param tonic The spelled tonic of the key, as a note name, note data, or a
+ *   `Note`; its letter and alteration are kept.
+ * @param key The key/scale, as a key name, a key/scale, or a `Key`; its mask
+ *   decides which mode the parallel is in.
  * @returns The parallel key on the same tonic.
  * @throws If the tonic or the mask is malformed.
  * @example
@@ -294,13 +310,14 @@ export function relativeKeyOf(tonic: Note, key: KeyScale): SpelledKey {
  * ```
  * @category Scales
  */
-export function parallelKeyOf(tonic: Note, key: KeyScale): SpelledKey {
-  const mode = oppositeMode(modeOf(key));
+export function parallelKeyOf(tonic: NoteLike, key: KeyLike): SpelledKey {
+  const note = toNoteData(tonic);
+  const mode = oppositeMode(modeOf(toKeyScale(key)));
   // The spelled tonic decides the root, so the returned key and its tonic agree
   // even when the caller's `rootPc` was left on the other mode's root.
-  const rootPc = noteToPitchClass(tonic);
+  const rootPc = noteToPitchClass(note);
   return {
-    tonic: { letter: diatonicLetterOf(tonic.letter), alter: tonic.alter },
+    tonic: { letter: diatonicLetterOf(note.letter), alter: note.alter },
     key: mode === 'minor' ? minorKey(rootPc) : majorKey(rootPc),
   };
 }
@@ -350,8 +367,10 @@ function isWrittenTonic(tonic: Note, key: KeyScale): boolean {
  * minor answers with the same move: the dominant of G mixolydian is D major and
  * the dominant of D dorian is A minor.
  *
- * @param tonic The spelled tonic of the key.
- * @param key The key/scale; its mask decides the mode of the result.
+ * @param tonic The spelled tonic of the key, as a note name, note data, or a
+ *   `Note`.
+ * @param key The key/scale, as a key name, a key/scale, or a `Key`; its mask
+ *   decides the mode of the result.
  * @returns The key a fifth above, in the mode this key's third names.
  * @throws If the tonic or the mask is malformed, or if the resulting signature
  *   falls outside [-12, 12] fifths — the dominant of a key already at +12.
@@ -362,17 +381,19 @@ function isWrittenTonic(tonic: Note, key: KeyScale): boolean {
  * ```
  * @category Scales
  */
-export function dominantKeyOf(tonic: Note, key: KeyScale): SpelledKey {
-  const mode = modeOf(key);
-  return keyFromFifths(tonicFifths(tonic, mode) + 1, mode);
+export function dominantKeyOf(tonic: NoteLike, key: KeyLike): SpelledKey {
+  const mode = modeOf(toKeyScale(key));
+  return keyFromFifths(tonicFifths(toNoteData(tonic), mode) + 1, mode);
 }
 
 /**
  * The subdominant key: the key a fifth below, in the mode this key's third
  * names, and the exact inverse of {@link dominantKeyOf} on the tonic spelling.
  *
- * @param tonic The spelled tonic of the key.
- * @param key The key/scale; its mask decides the mode of the result.
+ * @param tonic The spelled tonic of the key, as a note name, note data, or a
+ *   `Note`.
+ * @param key The key/scale, as a key name, a key/scale, or a `Key`; its mask
+ *   decides the mode of the result.
  * @returns The key a fifth below, in the mode this key's third names.
  * @throws If the tonic or the mask is malformed, or if the resulting signature
  *   falls outside [-12, 12] fifths — the subdominant of a key already at -12.
@@ -383,9 +404,9 @@ export function dominantKeyOf(tonic: Note, key: KeyScale): SpelledKey {
  * ```
  * @category Scales
  */
-export function subdominantKeyOf(tonic: Note, key: KeyScale): SpelledKey {
-  const mode = modeOf(key);
-  return keyFromFifths(tonicFifths(tonic, mode) - 1, mode);
+export function subdominantKeyOf(tonic: NoteLike, key: KeyLike): SpelledKey {
+  const mode = modeOf(toKeyScale(key));
+  return keyFromFifths(tonicFifths(toNoteData(tonic), mode) - 1, mode);
 }
 
 /**
@@ -409,9 +430,10 @@ export function subdominantKeyOf(tonic: Note, key: KeyScale): SpelledKey {
  * spelling of C# lydian is Db lydian, and its root pitch class is the one it
  * was handed.
  *
- * @param tonic The spelled tonic of the key.
- * @param key The key/scale; its mask decides the mode the tonic is read in, and
- *   is carried into the result.
+ * @param tonic The spelled tonic of the key, as a note name, note data, or a
+ *   `Note`.
+ * @param key The key/scale, as a key name, a key/scale, or a `Key`; its mask
+ *   decides the mode the tonic is read in, and is carried into the result.
  * @returns The other spelling of the key, or null when it is not written.
  * @throws If the tonic or the mask is malformed.
  * @example
@@ -419,28 +441,30 @@ export function subdominantKeyOf(tonic: Note, key: KeyScale): SpelledKey {
  * import { enharmonicKeyOf, formatNote, majorKey, parseNote } from '@libraz/libcantus';
  * const other = enharmonicKeyOf(parseNote('Db'), majorKey(1));
  * other === null ? 'none' : formatNote(other.tonic); // 'C#'
- * enharmonicKeyOf(parseNote('C'), majorKey(0)); // null
+ * enharmonicKeyOf('C', majorKey(0)); // null
  * ```
  * @category Scales
  */
-export function enharmonicKeyOf(tonic: Note, key: KeyScale): SpelledKey | null {
-  assertModeMask(key);
+export function enharmonicKeyOf(tonic: NoteLike, key: KeyLike): SpelledKey | null {
+  const note = toNoteData(tonic);
+  const scale = toKeyScale(key);
+  assertModeMask(scale);
   for (const position of [
-    tonicPosition(tonic) - ENHARMONIC_FIFTHS,
-    tonicPosition(tonic) + ENHARMONIC_FIFTHS,
+    tonicPosition(note) - ENHARMONIC_FIFTHS,
+    tonicPosition(note) + ENHARMONIC_FIFTHS,
   ]) {
     if (position < FLATTEST_TONIC_FIFTHS || position > SHARPEST_TONIC_FIFTHS) {
       continue;
     }
     const spelled = keyFromFifths(position).tonic;
-    if (!isWrittenTonic(spelled, key)) {
+    if (!isWrittenTonic(spelled, scale)) {
       continue;
     }
     return {
       tonic: spelled,
       // The mask is the caller's; only the root is re-read, so a tonic that did
       // not spell the mask's own root still comes back consistent.
-      key: { rootPc: noteToPitchClass(spelled), modeMask12: key.modeMask12 },
+      key: { rootPc: noteToPitchClass(spelled), modeMask12: scale.modeMask12 },
     };
   }
   return null;
@@ -486,8 +510,9 @@ const CLOSELY_RELATED: readonly {
  * not — C minor is three flats away from C major — and belongs to the set for
  * the tonic it shares rather than for the signature it carries.
  *
- * @param tonic The spelled tonic of the key.
- * @param key The key/scale.
+ * @param tonic The spelled tonic of the key, as a note name, note data, or a
+ *   `Note`.
+ * @param key The key/scale, as a key name, a key/scale, or a `Key`.
  * @returns The six related keys, in relation order, each with its tonic
  *   spelling and its `relation` tag.
  * @throws If the tonic or the mask is malformed, or if a neighbouring signature
@@ -501,10 +526,12 @@ const CLOSELY_RELATED: readonly {
  * @category Scales
  */
 export function relatedKeysOf(
-  tonic: Note,
-  key: KeyScale,
+  tonic: NoteLike,
+  key: KeyLike,
 ): (SpelledKey & { relation: KeyRelation })[] {
-  return CLOSELY_RELATED.map(({ relation, of }) => ({ ...of(tonic, key), relation }));
+  const note = toNoteData(tonic);
+  const scale = toKeyScale(key);
+  return CLOSELY_RELATED.map(({ relation, of }) => ({ ...of(note, scale), relation }));
 }
 
 /**

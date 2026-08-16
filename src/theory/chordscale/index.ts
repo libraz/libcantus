@@ -4,6 +4,7 @@ import type { Chord } from '../chord/index.js';
 import { chordPitchClasses } from '../chord/index.js';
 import type { ScaleNameInput } from '../scale/index.js';
 import { NAMED_SCALES, namedScaleMask, requireScaleMask } from '../scale/index.js';
+import { type ChordLike, toChordData } from '../symbol/index.js';
 
 /** Count the set bits (scale tones) in a 12-bit mode mask. */
 function popcount12(mask: number): number {
@@ -140,7 +141,8 @@ function isAlteredDominant(chord: Chord, scaleName: string): boolean {
  * whole list, or pick by name, when the idiomatic scale is what is wanted;
  * {@link scalesForChanges} makes that choice for a progression.
  *
- * @param chord The chord to fit scales over.
+ * @param chord The chord to fit scales over, as a chord symbol, chord data, or
+ *   a `Chord`.
  * @returns The matching scales rooted on the chord root, best fit first.
  *
  * @example
@@ -152,9 +154,10 @@ function isAlteredDominant(chord: Chord, scaleName: string): boolean {
  *
  * @category Scales
  */
-export function chordScales(chord: Chord): ChordScaleMatch[] {
-  const chordPcs = chordPitchClasses(chord);
-  const rootPc = pitchClass(chord.rootPc);
+export function chordScales(chord: ChordLike): ChordScaleMatch[] {
+  const data = toChordData(chord);
+  const chordPcs = chordPitchClasses(data);
+  const rootPc = pitchClass(data.rootPc);
   const ranked: { name: string; extra: number; size: number; avoid: number }[] = [];
   const seenMasks = new Set<number>();
   for (const name of Object.keys(NAMED_SCALES)) {
@@ -166,13 +169,13 @@ export function chordScales(chord: Chord): ChordScaleMatch[] {
       continue;
     }
     seenMasks.add(mask);
-    if (scaleMatchesChord(chordPcs, mask, rootPc) || isAlteredDominant(chord, name)) {
+    if (scaleMatchesChord(chordPcs, mask, rootPc) || isAlteredDominant(data, name)) {
       const size = popcount12(mask);
       ranked.push({
         name,
         extra: size - chordPcs.length,
         size,
-        avoid: avoidNotes(chord, name).length,
+        avoid: avoidNotes(data, name).length,
       });
     }
   }
@@ -186,8 +189,8 @@ export function chordScales(chord: Chord): ChordScaleMatch[] {
   }
   const preferHeptatonic = chordPcs.length <= 3;
   ranked.sort((a, b) => {
-    const idiomaticA = idiomaticRank(chord, a.name);
-    const idiomaticB = idiomaticRank(chord, b.name);
+    const idiomaticA = idiomaticRank(data, a.name);
+    const idiomaticB = idiomaticRank(data, b.name);
     if (idiomaticA !== idiomaticB) {
       return idiomaticA - idiomaticB;
     }
@@ -277,7 +280,8 @@ export type AvoidNotesOptions = {
  * `{ use: 'melodic' }` for the melodic reading: only the semitone above the
  * root survives it, so the result is always a subset of the harmonic one.
  *
- * @param chord The chord providing the chord tones.
+ * @param chord The chord providing the chord tones, as a chord symbol, chord
+ *   data, or a `Chord`.
  * @param scaleName A key of {@link NAMED_SCALES}.
  * @param opts Set `use: 'melodic'` to judge a line rather than a voicing.
  * @returns The avoid-note pitch classes, sorted ascending in [0, 11].
@@ -295,14 +299,15 @@ export type AvoidNotesOptions = {
  * @category Scales
  */
 export function avoidNotes(
-  chord: Chord,
+  chord: ChordLike,
   scaleName: ScaleNameInput,
   opts: AvoidNotesOptions = {},
 ): number[] {
   const mask = requireScaleMask(scaleName);
-  const rootPc = pitchClass(chord.rootPc);
-  const chordPcs = chordPitchClasses(chord);
-  const alteredDominant = isAlteredDominant(chord, scaleName);
+  const data = toChordData(chord);
+  const rootPc = pitchClass(data.rootPc);
+  const chordPcs = chordPitchClasses(data);
+  const alteredDominant = isAlteredDominant(data, scaleName);
   if (!scaleMatchesChord(chordPcs, mask, rootPc) && !alteredDominant) {
     return [];
   }
@@ -366,7 +371,11 @@ function resolvesToMinorTonic(
  * @category Scales
  */
 export type AvailableTensionsOptions = {
-  resolvesTo?: Chord;
+  /**
+   * The chord this one resolves to, as a chord symbol, chord data, or a
+   * `Chord`.
+   */
+  resolvesTo?: ChordLike;
 };
 
 /**
@@ -383,7 +392,8 @@ export type AvailableTensionsOptions = {
  * flat thirteenth, which read on their own would each be an avoid note. Only
  * scale tones are ever added, so the result stays within the scale.
  *
- * @param chord The chord providing the chord tones.
+ * @param chord The chord providing the chord tones, as a chord symbol, chord
+ *   data, or a `Chord`.
  * @param scaleName A key of {@link NAMED_SCALES}.
  * @param opts Set `resolvesTo` to the chord this one resolves to.
  * @returns The available-tension pitch classes, sorted ascending in [0, 11].
@@ -400,20 +410,25 @@ export type AvailableTensionsOptions = {
  * @category Scales
  */
 export function availableTensions(
-  chord: Chord,
+  chord: ChordLike,
   scaleName: ScaleNameInput,
   opts: AvailableTensionsOptions = {},
 ): number[] {
   const mask = requireScaleMask(scaleName);
-  const rootPc = pitchClass(chord.rootPc);
-  const chordPcs = chordPitchClasses(chord);
-  const alteredDominant = isAlteredDominant(chord, scaleName);
+  const data = toChordData(chord);
+  const rootPc = pitchClass(data.rootPc);
+  const chordPcs = chordPitchClasses(data);
+  const alteredDominant = isAlteredDominant(data, scaleName);
   if (!scaleMatchesChord(chordPcs, mask, rootPc) && !alteredDominant) {
     return [];
   }
   const chordSet = new Set(chordPcs);
-  const avoidSet = alteredDominant ? new Set<number>() : new Set(avoidNotes(chord, scaleName));
-  const functional = resolvesToMinorTonic(chord, chordPcs, opts.resolvesTo)
+  const avoidSet = alteredDominant ? new Set<number>() : new Set(avoidNotes(data, scaleName));
+  const functional = resolvesToMinorTonic(
+    data,
+    chordPcs,
+    opts.resolvesTo === undefined ? undefined : toChordData(opts.resolvesTo),
+  )
     ? new Set(MINOR_RESOLUTION_TENSIONS.map((semitones) => pitchClass(rootPc + semitones)))
     : undefined;
   const tensions: number[] = [];
@@ -457,27 +472,29 @@ export type ChordScaleReportEntry = {
  * playing advice, so the tones a line may pass through are reported apart from
  * the ones it may not touch; see {@link ChordScaleReportEntry}.
  *
- * @param chord The chord to analyze.
+ * @param chord The chord to analyze, as a chord symbol, chord data, or a
+ *   `Chord`.
  * @param limit Optional maximum number of scales to report; all by default.
  * @returns One entry per reported scale, best fit first.
  *
  * @category Scales
  */
-export function chordScaleReport(chord: Chord, limit?: number): ChordScaleReportEntry[] {
+export function chordScaleReport(chord: ChordLike, limit?: number): ChordScaleReportEntry[] {
   if (limit !== undefined) {
     assertPositiveInt(limit, 'chord-scale report limit');
   }
-  const matches = chordScales(chord);
+  const data = toChordData(chord);
+  const matches = chordScales(data);
   const chosen = limit === undefined ? matches : matches.slice(0, limit);
   return chosen.map((match) => {
-    const harmonic = avoidNotes(chord, match.name);
-    const melodic = new Set(avoidNotes(chord, match.name, { use: 'melodic' }));
+    const harmonic = avoidNotes(data, match.name);
+    const melodic = new Set(avoidNotes(data, match.name, { use: 'melodic' }));
     return {
       name: match.name,
       rootPc: match.rootPc,
       avoid: harmonic.filter((pc) => melodic.has(pc)),
       passing: harmonic.filter((pc) => !melodic.has(pc)),
-      tensions: availableTensions(chord, match.name),
+      tensions: availableTensions(data, match.name),
     };
   });
 }
@@ -539,12 +556,16 @@ function symmetricDifferenceSize(a: Set<number>, b: Set<number>): number {
  * so that ties break toward the tighter fit. The minimum-total-cost path is
  * returned, one {@link ScaleChoice} per input chord in the original order.
  *
+ * Each choice pairs its scale with the chord exactly as it was handed in, so
+ * this takes plain chord data rather than the wider forms the entry points
+ * above accept.
+ *
  * @param chords The chord sequence to choose scales for.
  * @returns One scale choice per chord, in input order.
  *
  * @category Scales
  */
-export function scalesForChanges(chords: Chord[]): ScaleChoice[] {
+export function scalesForChanges(chords: readonly Chord[]): ScaleChoice[] {
   assertGenerationBudget(chords.length, 'chord-scale changes');
   if (chords.length === 0) {
     return [];

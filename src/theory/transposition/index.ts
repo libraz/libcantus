@@ -18,8 +18,13 @@
  */
 
 import { InvalidInputError } from '../../core/errors/index.js';
-import type { IntervalLike, Note, SpelledInterval } from '../../core/pitch/index.js';
-import { parseInterval, toSpelledInterval, transposeByInterval } from '../../core/pitch/index.js';
+import type { IntervalLike, Note, NoteLike, SpelledInterval } from '../../core/pitch/index.js';
+import {
+  parseInterval,
+  toNoteData,
+  toSpelledInterval,
+  transposeByInterval,
+} from '../../core/pitch/index.js';
 
 /**
  * The interval from a written pitch to the pitch the instrument sounds, one
@@ -180,7 +185,8 @@ function reversedInterval(step: SpelledInterval): SpelledInterval {
  * octave-less note stays octave-less, so a pure octave transposer leaves it
  * alone.
  *
- * @param note The written note, as the player reads it.
+ * @param note The written note, as the player reads it: a note name, a MIDI
+ *   number, note data, or a `Note`.
  * @param instrument A built-in instrument name, or an interval naming a
  *   transposition the table does not carry.
  * @returns The sounding note, at concert pitch.
@@ -190,13 +196,13 @@ function reversedInterval(step: SpelledInterval): SpelledInterval {
  * ```ts
  * import { formatNote, parseNote, toSoundingPitch } from '@libraz/libcantus';
  * formatNote(toSoundingPitch(parseNote('C4'), 'clarinetA')); // 'A3'
- * formatNote(toSoundingPitch(parseNote('D#4'), 'clarinetA')); // 'B#3'
+ * formatNote(toSoundingPitch('D#4', 'clarinetA')); // 'B#3'
  * formatNote(toSoundingPitch(parseNote('C4'), 'piccolo')); // 'C5'
  * ```
  * @category Pitch & Intervals
  */
-export function toSoundingPitch(note: Note, instrument: TransposingInstrument): Note {
-  return transposeByInterval(note, instrumentTransposition(instrument));
+export function toSoundingPitch(note: NoteLike, instrument: TransposingInstrument): Note {
+  return transposeByInterval(toNoteData(note), instrumentTransposition(instrument));
 }
 
 /**
@@ -208,7 +214,8 @@ export function toSoundingPitch(note: Note, instrument: TransposingInstrument): 
  * written C4 for an alto saxophone but C5 for a baritone saxophone, which reads
  * the same key an octave lower.
  *
- * @param note The sounding note, at concert pitch.
+ * @param note The sounding note, at concert pitch: a note name, a MIDI number,
+ *   note data, or a `Note`.
  * @param instrument A built-in instrument name, or an interval naming a
  *   transposition the table does not carry.
  * @returns The written note, as the player reads it.
@@ -218,11 +225,14 @@ export function toSoundingPitch(note: Note, instrument: TransposingInstrument): 
  * ```ts
  * import { formatNote, parseNote, toWrittenPitch } from '@libraz/libcantus';
  * formatNote(toWrittenPitch(parseNote('A3'), 'clarinetA')); // 'C4'
- * formatNote(toWrittenPitch(parseNote('Eb3'), 'altoSax')); // 'C4'
+ * formatNote(toWrittenPitch('Eb3', 'altoSax')); // 'C4'
  * formatNote(toWrittenPitch(parseNote('Eb3'), 'baritoneSax')); // 'C5'
  * ```
  * @category Pitch & Intervals
  */
-export function toWrittenPitch(note: Note, instrument: TransposingInstrument): Note {
-  return transposeByInterval(note, reversedInterval(instrumentTransposition(instrument)));
+export function toWrittenPitch(note: NoteLike, instrument: TransposingInstrument): Note {
+  return transposeByInterval(
+    toNoteData(note),
+    reversedInterval(instrumentTransposition(instrument)),
+  );
 }

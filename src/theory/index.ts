@@ -17,6 +17,7 @@ export type {
   IntervalLike,
   IntervalQualityLabel,
   Note as NoteData,
+  NoteLike,
   NoteNameOptions,
   NoteNameSystem,
   SpelledInterval,

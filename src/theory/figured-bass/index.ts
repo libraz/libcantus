@@ -13,17 +13,19 @@
  */
 
 import { InvalidInputError, NoSolutionError } from '../../core/errors/index.js';
-import type { Note } from '../../core/pitch/index.js';
+import type { Note, NoteLike } from '../../core/pitch/index.js';
 import {
   diatonicLetterOf as mod7,
   pitchClassOf as mod12,
   noteToPitchClass,
+  toNoteData,
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { Chord, ChordQuality } from '../chord/index.js';
 import { chordQualities, makeChord } from '../chord/index.js';
-import { scaleTonesInDegreeOrder, spelledKeyOf } from '../scale/index.js';
+import { type KeyLike, scaleTonesInDegreeOrder, spelledKeyOf, toKeyScale } from '../scale/index.js';
 import { noteNames, spellChord, spellScale } from '../spelling/index.js';
+import { type ChordLike, toChordData } from '../symbol/index.js';
 
 /** Smallest interval a figure may name above the bass: a second. */
 const MIN_FIGURE_NUMBER = 2;
@@ -425,10 +427,12 @@ export type FiguredBassRealization = {
  * resolution is the reading that answers "which chord is this", and the record
  * of what was suspended is kept beside it rather than thrown away.
  *
- * @param bass The bass note, spelled; its octave, if any, is not used.
+ * @param bass The bass note, spelled: a note name, a MIDI number, note data, or
+ *   a `Note`; its octave, if any, is not used.
  * @param figures The figures written under the bass; empty for an unfigured
  *   note.
- * @param key The prevailing key, which supplies every unaltered interval.
+ * @param key The prevailing key, which supplies every unaltered interval, as a
+ *   key name, a key/scale, or a `Key`.
  * @returns The chord, its spelled notes, and any suspensions.
  * @throws If the figures are malformed or name no chord
  *   ({@link InvalidInputError}), if the key is not heptatonic
@@ -445,18 +449,20 @@ export type FiguredBassRealization = {
  * @category Functional Harmony
  */
 export function figuredBassRealization(
-  bass: Note,
+  bass: NoteLike,
   figures: string,
-  key: KeyScale,
+  key: KeyLike,
 ): FiguredBassRealization {
   if (typeof figures !== 'string') {
     throw new InvalidInputError(`figured bass must be a string; received ${typeof figures}`);
   }
-  const alters = keyLetterAlters(key);
+  const bassData = toNoteData(bass);
+  const scale = toKeyScale(key);
+  const alters = keyLetterAlters(scale);
   // Reading the pitch class validates the note's fields before its letter is
   // used for the interval arithmetic above it.
-  noteToPitchClass(bass);
-  const bassNote = bareNote(bass);
+  noteToPitchClass(bassData);
+  const bassNote = bareNote(bassData);
   const text = figures.trim();
   const { figures: written, motions } = parseFigures(text);
   const suspensions = motions.map((motion) => ({
@@ -492,6 +498,10 @@ export function figuredBassRealization(
  * @param figures The figures written under the bass; empty for an unfigured
  *   note.
  * @param key The prevailing key, which supplies every unaltered interval.
+ * @param bass The bass note, spelled: a note name, a MIDI number, note data, or
+ *   a `Note`.
+ * @param figures The figures written under the bass.
+ * @param key The prevailing key, as a key name, a key/scale, or a `Key`.
  * @returns The chord the figures name.
  * @throws If the figures are malformed or name no chord
  *   ({@link InvalidInputError}), if the key is not heptatonic
@@ -507,7 +517,7 @@ export function figuredBassRealization(
  * ```
  * @category Functional Harmony
  */
-export function realizeFiguredBass(bass: Note, figures: string, key: KeyScale): Chord {
+export function realizeFiguredBass(bass: NoteLike, figures: string, key: KeyLike): Chord {
   return figuredBassRealization(bass, figures, key).chord;
 }
 
@@ -527,10 +537,11 @@ export function realizeFiguredBass(bass: Note, figures: string, key: KeyScale): 
  * augmented sixth, whose tones do not stack in thirds over its bass — has no
  * figures rather than figures that fail to realize.
  *
- * @param chord The chord to figure; its `bassPc`, when present, is the bass the
- *   intervals are measured above.
+ * @param chord The chord to figure, as a chord symbol, chord data, or a
+ *   `Chord`; its `bassPc`, when present, is the bass the intervals are measured
+ *   above.
  * @param key The prevailing key, which decides which intervals need no
- *   accidental.
+ *   accidental, as a key name, a key/scale, or a `Key`.
  * @returns The figures, as {@link realizeFiguredBass} accepts them.
  * @throws If the key is not heptatonic ({@link InvalidInputError}), or if no
  *   figure names the chord — its bass is not one of its tones, its tones do not
@@ -545,10 +556,12 @@ export function realizeFiguredBass(bass: Note, figures: string, key: KeyScale): 
  * ```
  * @category Functional Harmony
  */
-export function figuredBassOf(chord: Chord, key: KeyScale): string {
-  const alters = keyLetterAlters(key);
-  const tones = spellChord(chord, spelledKeyOf(key).tonic, key);
-  const bassPc = mod12(chord.bassPc ?? chord.rootPc);
+export function figuredBassOf(chord: ChordLike, key: KeyLike): string {
+  const data = toChordData(chord);
+  const scale = toKeyScale(key);
+  const alters = keyLetterAlters(scale);
+  const tones = spellChord(data, spelledKeyOf(scale).tonic, scale);
+  const bassPc = mod12(data.bassPc ?? data.rootPc);
   const bass = tones.find((tone) => noteToPitchClass(tone) === bassPc);
   if (bass === undefined) {
     throw new NoSolutionError(
@@ -588,7 +601,7 @@ export function figuredBassOf(chord: Chord, key: KeyScale): string {
     .sort((a, b) => b - a)
     .map((number) => `${accidentals.get(number) ?? ''}${number}`)
     .join('');
-  assertRealizesAs(bass, figures, key, tones);
+  assertRealizesAs(bass, figures, scale, tones);
   return figures;
 }
 

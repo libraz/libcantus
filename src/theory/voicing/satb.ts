@@ -6,7 +6,8 @@ import {
   assertPositiveInt,
 } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
-import { formatChordSymbol } from '../symbol/index.js';
+import { type KeyLike, toKeyScale } from '../scale/index.js';
+import { type ChordLike, formatChordSymbol, toChordData } from '../symbol/index.js';
 import {
   createCandidateBuffer,
   DEFAULT_MAX_SPACING,
@@ -84,18 +85,18 @@ export type VoicingOptions = {
    */
   budget?: number;
   /**
-   * The prevailing key. Supplying it enables the rules that only make sense
-   * relative to a tonic: the leading tone is neither doubled nor left
-   * unresolved. Without it, voicings are chosen from chord structure and
-   * voice-leading distance alone.
+   * The prevailing key, as a key name, a key/scale, or a `Key`. Supplying it
+   * enables the rules that only make sense relative to a tonic: the leading
+   * tone is neither doubled nor left unresolved. Without it, voicings are
+   * chosen from chord structure and voice-leading distance alone.
    */
-  key?: KeyScale;
+  key?: KeyLike;
   /**
-   * The chord that produced the current voicing passed to {@link nextVoicing}.
-   * When supplied, chordal-seventh resolution is scored exactly as it is by
-   * {@link voiceProgression}.
+   * The chord that produced the current voicing passed to {@link nextVoicing},
+   * as a chord symbol, chord data, or a `Chord`. When supplied, chordal-seventh
+   * resolution is scored exactly as it is by {@link voiceProgression}.
    */
-  previousChord?: Chord;
+  previousChord?: ChordLike;
 };
 
 /** Overall pitch floor/ceiling used when deriving ranges for arbitrary voice counts. */
@@ -161,6 +162,19 @@ export function resolveMaxSpacing(opts?: VoicingOptions): number {
   return maxSpacing;
 }
 
+/**
+ * Resolve the prevailing key once per entry point, so the scoring tables below
+ * are handed a key/scale rather than re-reading whatever form the caller wrote.
+ */
+export function resolveKey(opts?: VoicingOptions): KeyScale | undefined {
+  return opts?.key === undefined ? undefined : toKeyScale(opts.key);
+}
+
+/** Resolve the chord a `nextVoicing` caller says the current voicing came from. */
+export function resolvePreviousChord(opts?: VoicingOptions): Chord | undefined {
+  return opts?.previousChord === undefined ? undefined : toChordData(opts.previousChord);
+}
+
 /** Resolve and validate the per-chord candidate-search cap. */
 export function resolveMaxCandidates(opts?: VoicingOptions): number | undefined {
   if (opts?.maxCandidates === undefined) return undefined;
@@ -188,11 +202,12 @@ export function resolveMaxCandidates(opts?: VoicingOptions): number | undefined 
  * ```
  * @category Voicing & Counterpoint
  */
-export function voiceChord(chord: Chord, opts?: VoicingOptions): number[] {
+export function voiceChord(chord: ChordLike, opts?: VoicingOptions): number[] {
+  const data = toChordData(chord);
   const ranges = resolveRanges(opts);
   const maxSpacing = resolveMaxSpacing(opts);
-  const candidates = enumerateVoicings(chord, ranges, maxSpacing, resolveMaxCandidates(opts));
-  const tables = structuralTables(chord, opts?.key);
+  const candidates = enumerateVoicings(data, ranges, maxSpacing, resolveMaxCandidates(opts));
+  const tables = structuralTables(data, resolveKey(opts));
   const { pitches, voices } = candidates;
   let bestOffset = -1;
   let bestScore = Number.POSITIVE_INFINITY;
@@ -289,8 +304,10 @@ function locate<T>(index: number, chord: Chord, work: () => T): T {
  *   cannot fit the requested ranges.
  * @category Voicing & Counterpoint
  */
-export function voiceProgression(chords: readonly Chord[], opts?: VoicingOptions): number[][] {
+export function voiceProgression(chords: readonly ChordLike[], opts?: VoicingOptions): number[][] {
   assertGenerationBudget(chords.length, 'voiced progression chords', opts?.budget);
+  const data = chords.map((chord) => toChordData(chord));
+  const key = resolveKey(opts);
   const ranges = resolveRanges(opts);
   const maxSpacing = resolveMaxSpacing(opts);
   const maxCandidates = resolveMaxCandidates(opts);
@@ -300,8 +317,8 @@ export function voiceProgression(chords: readonly Chord[], opts?: VoicingOptions
   const buffer = createCandidateBuffer();
   let prev: number[] | undefined;
   let prevChord: Chord | undefined;
-  for (let index = 0; index < chords.length; index += 1) {
-    const chord = chords[index];
+  for (let index = 0; index < data.length; index += 1) {
+    const chord = data[index];
     if (chord === undefined) {
       continue;
     }
@@ -315,9 +332,9 @@ export function voiceProgression(chords: readonly Chord[], opts?: VoicingOptions
       enumerateVoicings(chord, ranges, maxSpacing, maxCandidates, buffer),
     );
     const { pitches, voices } = candidates;
-    const structure = structuralTables(chord, opts?.key);
+    const structure = structuralTables(chord, key);
     const resolution =
-      prevChord === undefined ? undefined : resolutionTables(prevChord, chord, opts?.key);
+      prevChord === undefined ? undefined : resolutionTables(prevChord, chord, key);
     let bestOffset = -1;
     let bestScore = Number.POSITIVE_INFINITY;
     for (let candidate = 0; candidate < candidates.count; candidate += 1) {

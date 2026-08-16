@@ -12,16 +12,17 @@
  */
 
 import { InvalidInputError } from '../../core/errors/index.js';
-import type { Note } from '../../core/pitch/index.js';
+import type { Note, NoteLike } from '../../core/pitch/index.js';
 import {
   formatNote,
   diatonicLetterOf as mod7,
   pitchClassOf as mod12,
   naturalPitchClassOf as naturalPc,
+  toNoteData,
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import { type Chord, chordToneSpellings } from '../chord/index.js';
-import { isScaleTone, scaleTonesInDegreeOrder } from '../scale/index.js';
+import { isScaleTone, type KeyLike, scaleTonesInDegreeOrder, toKeyScale } from '../scale/index.js';
 
 /**
  * Conventional degree assignment for each chromatic offset above the tonic.
@@ -532,8 +533,9 @@ function refineByContext(
  * accidental, the key spelling stands.
  *
  * @param pc The pitch class to spell.
- * @param tonic The spelled tonic (its letter anchors the spelling).
- * @param key The key/scale.
+ * @param tonic The spelled tonic (its letter anchors the spelling), as a note
+ *   name, a MIDI number, note data, or a `Note`.
+ * @param key The key/scale, as a key name, a key/scale, or a `Key`.
  * @param context Optional surrounding evidence; an absent or empty context
  *   spells exactly as the key alone does.
  * @returns The spelled note (without octave).
@@ -544,7 +546,7 @@ function refineByContext(
  * const c = parseNote('C');
  * formatNote(spellPitchClass(6, c, majorKey(0))); // 'F#'
  * // The third of D7, the secondary dominant of G.
- * formatNote(spellPitchClass(6, c, majorKey(0), { chordRoot: 2 })); // 'F#'
+ * formatNote(spellPitchClass(6, 'C', 'C major', { chordRoot: 2 })); // 'F#'
  * // A chromatic passing tone falling from G to F.
  * formatNote(spellPitchClass(6, c, majorKey(0), { previous: 7, next: 5 })); // 'Gb'
  * ```
@@ -552,11 +554,23 @@ function refineByContext(
  */
 export function spellPitchClass(
   pc: number,
+  tonic: NoteLike,
+  key: KeyLike,
+  context?: SpellingContext,
+): Note {
+  const note = toNoteData(tonic);
+  const scale = toKeyScale(key);
+  assertTonicOf(note, scale, 'spellPitchClass');
+  return spelledPitchClass(pc, note, scale, context);
+}
+
+/** Spell a pitch class from an already-resolved tonic and key. */
+function spelledPitchClass(
+  pc: number,
   tonic: Note,
   key: KeyScale,
   context?: SpellingContext,
 ): Note {
-  assertTonicOf(tonic, key, 'spellPitchClass');
   const keySpelling = spellByKey(pc, tonic, key);
   return context === undefined
     ? keySpelling
@@ -572,8 +586,10 @@ export function spellPitchClass(
  * on the accidental side the scale leans towards, where it does not: the blues
  * scale has to name one letter twice however it is read.
  *
- * @param tonic The spelled tonic.
- * @param key The key/scale.
+ * @param tonic The spelled tonic, as a note name, a MIDI number, note data, or a
+ *   `Note`.
+ * @param key The key/scale. This one stays a plain key/scale: the key-spelling
+ *   search reads scales through it that no key name describes.
  * @returns Spelled notes, one per scale degree.
  * @throws If `tonic` does not sound the key's root pitch class.
  * @example
@@ -584,24 +600,29 @@ export function spellPitchClass(
  * ```
  * @category Pitch & Intervals
  */
-export function spellScale(tonic: Note, key: KeyScale): Note[] {
-  assertTonicOf(tonic, key, 'spellScale');
-  return scaleTonesInDegreeOrder(key).map((pc) => spellPitchClass(pc, tonic, key));
+export function spellScale(tonic: NoteLike, key: KeyScale): Note[] {
+  const note = toNoteData(tonic);
+  const scale = key;
+  assertTonicOf(note, scale, 'spellScale');
+  return scaleTonesInDegreeOrder(scale).map((pc) => spelledPitchClass(pc, note, scale));
 }
 
 /**
  * Spell an arbitrary list of pitch classes relative to a key.
  *
  * @param pcs The pitch classes.
- * @param tonic The spelled tonic.
- * @param key The key/scale.
+ * @param tonic The spelled tonic, as a note name, a MIDI number, note data, or a
+ *   `Note`.
+ * @param key The key/scale, as a key name, a key/scale, or a `Key`.
  * @returns Spelled notes, in input order.
  * @throws If `tonic` does not sound the key's root pitch class.
  * @category Pitch & Intervals
  */
-export function spellPitchClasses(pcs: number[], tonic: Note, key: KeyScale): Note[] {
-  assertTonicOf(tonic, key, 'spellPitchClasses');
-  return pcs.map((pc) => spellPitchClass(pc, tonic, key));
+export function spellPitchClasses(pcs: number[], tonic: NoteLike, key: KeyLike): Note[] {
+  const note = toNoteData(tonic);
+  const scale = toKeyScale(key);
+  assertTonicOf(note, scale, 'spellPitchClasses');
+  return pcs.map((pc) => spelledPitchClass(pc, note, scale));
 }
 
 /**
@@ -693,8 +714,17 @@ function hintedLetterOffsets(chord: Chord): number[] | undefined {
  * and otherwise the diatonic distance each interval implies in a stack of
  * thirds. Accidentals are always recomputed from the sounding pitch class, so
  * the tones name exactly the chord's own pitch classes either way.
+ *
+ * @param chord The chord whose tones are spelled.
+ * @param root The chosen root spelling, as a note name, a MIDI number, note
+ *   data, or a `Note`.
  */
-export function spellChordFromRoot(chord: Chord, root: Note): Note[] {
+export function spellChordFromRoot(chord: Chord, root: NoteLike): Note[] {
+  return chordTonesFromRoot(chord, toNoteData(root));
+}
+
+/** Spell chord tones from an already-resolved root spelling. */
+function chordTonesFromRoot(chord: Chord, root: Note): Note[] {
   if (mod12(naturalPc(root.letter) + root.alter) !== mod12(chord.rootPc)) {
     throw new InvalidInputError('chord root spelling must match chord.rootPc');
   }
@@ -721,8 +751,9 @@ export function spellChordFromRoot(chord: Chord, root: Note): Note[] {
  * would put there.
  *
  * @param chord The chord.
- * @param tonic The spelled tonic of the key.
- * @param key The key/scale.
+ * @param tonic The spelled tonic of the key, as a note name, a MIDI number,
+ *   note data, or a `Note`.
+ * @param key The key/scale, as a key name, a key/scale, or a `Key`.
  * @returns Spelled chord tones, root first.
  * @throws If `tonic` does not sound the key's root pitch class.
  * @example
@@ -734,9 +765,11 @@ export function spellChordFromRoot(chord: Chord, root: Note): Note[] {
  * ```
  * @category Pitch & Intervals
  */
-export function spellChord(chord: Chord, tonic: Note, key: KeyScale): Note[] {
-  assertTonicOf(tonic, key, 'spellChord');
-  return spellChordFromRoot(chord, chordRootSpelling(chord, tonic, key));
+export function spellChord(chord: Chord, tonic: NoteLike, key: KeyLike): Note[] {
+  const note = toNoteData(tonic);
+  const scale = toKeyScale(key);
+  assertTonicOf(note, scale, 'spellChord');
+  return chordTonesFromRoot(chord, chordRootSpelling(chord, note, scale));
 }
 
 /**
@@ -753,7 +786,7 @@ function chordRootSpelling(chord: Chord, tonic: Note, key: KeyScale): Note {
   if (hint !== undefined && mod12(naturalPc(hint.letter) + hint.alter) === mod12(chord.rootPc)) {
     return { letter: mod7(hint.letter), alter: hint.alter };
   }
-  return spellPitchClass(chord.rootPc, tonic, key);
+  return spelledPitchClass(chord.rootPc, tonic, key);
 }
 
 /**
@@ -768,8 +801,9 @@ function chordRootSpelling(chord: Chord, tonic: Note, key: KeyScale): Note {
  * B# is B#3, not B#4.
  *
  * @param pitch The MIDI pitch; rounded to the nearest integer.
- * @param tonic The spelled tonic of the key.
- * @param key The key/scale.
+ * @param tonic The spelled tonic of the key, as a note name, a MIDI number,
+ *   note data, or a `Note`.
+ * @param key The key/scale, as a key name, a key/scale, or a `Key`.
  * @param context Optional surrounding evidence, weighed exactly as
  *   {@link spellPitchClass} weighs it.
  * @returns The spelled note, carrying the octave that reproduces `pitch`.
@@ -783,13 +817,15 @@ function chordRootSpelling(chord: Chord, tonic: Note, key: KeyScale): Note {
  */
 export function spellPitch(
   pitch: number,
-  tonic: Note,
-  key: KeyScale,
+  tonic: NoteLike,
+  key: KeyLike,
   context?: SpellingContext,
 ): Note {
-  assertTonicOf(tonic, key, 'spellPitch');
+  const note = toNoteData(tonic);
+  const scale = toKeyScale(key);
+  assertTonicOf(note, scale, 'spellPitch');
   const rounded = Math.round(pitch);
-  const spelled = spellPitchClass(mod12(rounded), tonic, key, context);
+  const spelled = spelledPitchClass(mod12(rounded), note, scale, context);
   const octave = (rounded - naturalPc(spelled.letter) - spelled.alter) / 12 - 1;
   return { letter: spelled.letter, alter: spelled.alter, octave };
 }
@@ -797,12 +833,13 @@ export function spellPitch(
 /**
  * Convenience: render spelled notes as letter-name strings.
  *
- * @param notes The notes.
+ * @param notes The notes, each a note name, a MIDI number, note data, or a
+ *   `Note`.
  * @returns Their formatted names.
  * @category Pitch & Intervals
  */
-export function noteNames(notes: Note[]): string[] {
+export function noteNames(notes: readonly NoteLike[]): string[] {
   // Wrapped rather than passed by reference: `map` supplies an index that
   // `formatNote`'s options parameter would read as a naming system.
-  return notes.map((note) => formatNote(note));
+  return notes.map((note) => formatNote(toNoteData(note)));
 }
