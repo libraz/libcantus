@@ -3,62 +3,65 @@
 A part that a person will read has to satisfy two conditions the sounding pitches do not: it must be playable on the instrument, and it must be written at the pitch that player reads.
 
 ```ts
-import {
-  BASS_4_STRING,
-  canSound,
-  foldIntoRange,
-  formatNote,
-  majorKey,
-  midiToNote,
-  playability,
-  spellLine,
-  toWrittenPitch,
-} from '@libraz/libcantus';
+import { Instrument, Score } from '@libraz/libcantus';
 
-const sounding = [27, 31, 34, 38, 41, 45].map((pitch, i) => ({
-  pitch,
-  startBeat: i,
-  durationBeat: 1,
-}));
+const bass = Instrument.bass4();
+const part = Score.of(
+  [27, 31, 34, 38, 41, 45].map((pitch, i) => ({ pitch, startBeat: i, durationBeat: 1 })),
+  { tempo: 100 },
+);
 
-const before = playability(sounding, BASS_4_STRING, 100);
-before.issues[0]?.type; // 'noteOutOfRange'
+// The score reads itself against the instrument, at its own tempo:
+part.playability(bass.data).issues[0]?.type; // 'noteOutOfRange'
 
-const fitted = sounding.map((note) => ({ ...note, pitch: foldIntoRange(note.pitch, BASS_4_STRING) }));
+const fitted = part.map((note) => ({ ...note, pitch: bass.foldIntoRange(note.pitch) }));
 
-fitted.every((note) => canSound(BASS_4_STRING, note.pitch)); // true
-playability(fitted, BASS_4_STRING, 100).issues.length; // 0
-
-const spelled = spellLine(fitted, null, majorKey(0));
-formatNote(spelled[0] ?? midiToNote(0)); // 'Eb2'
-
-formatNote(toWrittenPitch(midiToNote(60), 'clarinetBb')); // 'D4'
+fitted.notes.every((note) => bass.canSound(note.pitch)); // true
+fitted.playability(bass.data).issues.length; // 0
+bass.range(); // { low: 28, high: 67 }
 ```
 
 ## Fitting the part to the instrument
 
-`playability` reports three layers of obstacle, and only the first is about existence: `noteOutOfRange` means the instrument does not have the note at all. `foldIntoRange` moves such a note by octaves until it fits, which is what a player would do with a bass line written below the low string.
+`playability` reports three layers of obstacle, and only the first is about existence: `noteOutOfRange` means the instrument does not have the note at all. `Instrument.foldIntoRange` moves such a note by octaves until it fits, which is what a player would do with a bass line written below the low string, and `Score.map` carries the whole part through that fold in one step while keeping its meter and tempo.
 
-The second layer — stretches, string conflicts, limb conflicts, polyphony — cannot be fixed by folding, because it is about how the notes sit together. The third layer, `tooFast`, depends on the tempo passed as the third argument. Omit the tempo to see only what the instrument itself decides.
+The second layer — stretches, string conflicts, limb conflicts, polyphony — cannot be fixed by folding, because it is about how the notes sit together. The third layer, `tooFast`, depends on the tempo, which a `Score` already holds; call `Instrument.playability(notes)` with no bpm instead to see only what the instrument itself decides.
 
-`difficulty` from 1 to 5 gives a single figure for a part-difficulty display; `placements` gives the string and fret, or the striking limb, for every note, which a tab or drum-notation renderer needs.
+`difficulty` from 1 to 5 gives a single figure for a part-difficulty display; `placements` gives the string and fret, or the striking limb, for every note, which a tab or drum-notation renderer needs. `Instrument.fingerings(pitch)` answers the same question for one note, which is what a fingering picker offers a user.
 
 ## Writing it at the right pitch
 
-Analysis and generation both work in sounding pitch. A part for a transposing instrument has to be converted on the way out:
+Analysis and generation both work in sounding pitch. A part for a transposing instrument has to be converted on the way out, and the key signature has to travel with it:
 
-- `toWrittenPitch(note, instrument)` produces what the player reads.
-- `toSoundingPitch(note, instrument)` goes the other way, for a part that arrives already transposed.
+```ts
+import { Instrument, Key, Note, Score, spellLine } from '@libraz/libcantus';
 
-Both take spelled notes, because the interval decides the letter. A concert C on a clarinet in B-flat is written D, and a semitone count alone cannot say whether that D should be spelled D or C-double-sharp. `TRANSPOSING_INSTRUMENTS` names the common instruments, and an interval string covers anything it does not list.
+const bass = Instrument.bass4();
+const key = Key.major('C');
+const line = Score.of(
+  [27, 31, 34, 38, 41, 45].map((pitch, i) => ({ pitch, startBeat: i, durationBeat: 1 })),
+).map((note) => ({ ...note, pitch: bass.foldIntoRange(note.pitch) }));
 
-The key signature moves with the part. Transpose the key by the same interval and spell the line against the transposed key, or the accidentals will fight the signature.
+// Accidentals are chosen for the line as a whole. That is a question about a
+// melody, and a melody is the one thing here with no class to hold it:
+const spelled = spellLine(line.notes, null, key.scale);
+spelled.map((note) => Note.fromData(note).name); // ['Eb2', 'G1', 'Bb1', 'D2', 'F2', 'A2']
+
+Note.parse('C4').forInstrument('clarinetBb').name; // 'D4'
+key.forInstrument('clarinetBb').toString(); // 'D major'
+```
+
+Only the opening Eb2 sits an octave above its neighbours, because it is the note that was folded.
+
+`Note.forInstrument` produces what the player reads, and `toSoundingPitch` goes the other way, for a part that arrives already transposed. Both work on spelled notes, because the interval decides the letter. A concert C on a clarinet in B-flat is written D, and a semitone count alone cannot say whether that D should be spelled D or C-double-sharp. `TRANSPOSING_INSTRUMENTS` names the common instruments, and an interval string covers anything it does not list.
+
+`Key.forInstrument` moves the signature by the same interval. Spell the line against that transposed key, or the accidentals will fight the signature.
 
 ## Spelling the line
 
-`spellLine` chooses accidentals for the whole voice at once, so a rising chromatic passage takes sharps and a falling one flats. Pass the chord timeline as its second argument to spell each note against the harmony sounding under it. See [Pitch and notation](../pitch-and-notation.md).
+`spellLine` chooses accidentals for the whole voice at once, so a rising chromatic passage takes sharps and a falling one flats. Pass a chord timeline as its second argument — `score.timeline().chordTimeline` is the shape it wants — to spell each note against the harmony sounding under it. See [Pitch and notation](../pitch-and-notation.md).
 
-For a full score, `beatsToDuration` and `beatsToTiedDurations` convert beat lengths into note values, dots, and tuplets; see [Time and arrangement](../time-and-arrangement.md).
+For a full score, `Duration.ofBeats` turns a beat length into a note value with its dots and tuplet, and `Duration.tieChain` splits a length no single value can write into tied ones; see [Time and arrangement](../time-and-arrangement.md).
 
 ## What the library leaves to the editor
 

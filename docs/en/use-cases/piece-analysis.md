@@ -1,15 +1,9 @@
 # Use case: reading a piece
 
-Start with a timeline. It establishes the harmonic units that reduction, cadence, phrase, and form analysis all work from.
+A `Score` is the notes together with the context they are read against, and every question below is one of its methods. Start with its timeline: it establishes the harmonic units that reduction, cadence, phrase, and form analysis all work from.
 
 ```ts
-import {
-  chordTimelineFromNotes,
-  extractMotifs,
-  phrasesFromTimeline,
-  reduceProgression,
-  sectionsFromNotes,
-} from '@libraz/libcantus';
+import { Score } from '@libraz/libcantus';
 
 const bars = [
   [48, 60, 64, 67],
@@ -21,37 +15,51 @@ const bars = [
   [43, 59, 62, 67],
   [48, 60, 64, 67],
 ];
-const notes = bars.flatMap((pitches, bar) =>
-  pitches.map((pitch) => ({ pitch, startBeat: bar * 4, durationBeat: 4 })),
+const score = Score.of(
+  bars.flatMap((pitches, bar) =>
+    pitches.map((pitch) => ({ pitch, startBeat: bar * 4, durationBeat: 4 })),
+  ),
 );
 
-const { timeline, prevailingKey } = chordTimelineFromNotes(notes);
-const reduction = reduceProgression(timeline, prevailingKey);
-const phrases = phrasesFromTimeline(timeline, notes);
-const sections = sectionsFromNotes(notes, { unitBars: 4 });
-const motifs = extractMotifs(notes.filter((note) => note.pitch >= 60));
+const timeline = score.timeline();
 
-reduction.length === timeline.segments.length; // true
+score.key()?.toString(); // 'C major'
+timeline.roman().map((entry) => entry.roman); // ['I', 'IV', 'V', 'I', 'IV', 'V', 'I']
+timeline.cadences().map((hit) => [hit.atBeat, hit.cadence.type]);
+// [[8, 'half'], [12, 'authentic'], [24, 'half'], [28, 'authentic']]
+
+const reduction = timeline.reduce();
+const phrases = score.phrases();
+const sections = score.sections({ unitBars: 4 });
+const motifs = score.filter((note) => note.pitch >= 60).motifs();
+
+reduction.length === timeline.length; // true
 phrases.length >= 1; // true
 sections.length >= 1; // true
-Array.isArray(motifs); // true
+motifs.length >= 1; // true
 ```
+
+Eight bars give seven numerals: the tonic held across bars 4 and 5 is one segment, because the timeline follows the harmony rather than the bar lines. The timeline also carries its own key regions, so `reduce` and `cadences` read every chord in the key it actually sounds in, and nothing has to be threaded from one call to the next.
 
 ## What each layer answers
 
-`reduction` marks every chord `structural`, `passing`, or `neighbor`, records why, and carries the beats each chord holds. It is the layer that separates the harmony a listener hears as the skeleton from the chords that connect it.
+`reduce` marks every chord `structural`, `passing`, or `neighbor`, records why, and carries the beats each chord holds. It is the layer that separates the harmony a listener hears as the skeleton from the chords that connect it.
 
-`phrases` combines cadence, rests, repetition, and hypermetric position, and each phrase records which of those signals contributed. Showing the signals is what lets a user judge a boundary rather than accept it.
+`cadences` reports each arrival with the beat it lands on, which is what a timed reading holds that a chord pair does not.
+
+`phrases` combines cadence, rests, repetition, and hypermetric position, and each phrase records which of those signals contributed. Showing the signals is what lets a user judge a boundary rather than accept it. The cadences come from the score's own harmony, so the chord timeline does not have to be built and passed in.
 
 `sections` identifies repeated units and labels them A, B, and so on. It does not claim that A is a verse — that is a decision about the song, not a property of the notes.
 
-`extractMotifs` answers a different question from all three: which short melodic patterns recur, and how. Feed it a melodic line rather than the full texture; `relateMotifs` then names the transformation between two statements.
+`motifs` answers a different question from all three: which short melodic patterns recur, and how. Read it off a melodic line rather than the full texture — `Score.filter` narrows the score to one while keeping its meter, tempo, and key. Wrapping two statements with `Motif.fromNotes` lets `relateTo` name the transformation between them.
+
+`hypermeter` and `contour` sit alongside them on the same score, for the bar-level pulse and the shape the melody traces.
 
 ## Getting the input right
 
-Provide the meter map when it is known. Bar positions and hypermeter both follow from it, and an analysis run in the wrong signature produces plausible-looking nonsense.
+Give the score its meter when it is known — `Score.of(notes, { meters })` — and every method reads against it. Bar positions and hypermeter both follow from the meter, and an analysis run in the wrong signature produces plausible-looking nonsense.
 
-For a piece that modulates, read `keys` from the timeline result rather than assuming `prevailingKey` holds throughout. See [Modulation report](modulation-report.md).
+For a piece that modulates, read `timeline.keys` rather than assuming the prevailing key holds throughout. `score.key()` is the one to print on a signature, not the one to analyze every bar against. See [Modulation report](modulation-report.md).
 
 ## Presenting it
 
