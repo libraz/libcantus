@@ -68,6 +68,19 @@ function upperBound(values: readonly IndexedNoteEvent[], beat: number): number {
 }
 
 /**
+ * How an index reads the events it is built from.
+ *
+ * @category Core
+ */
+export type NoteEventIndexOptions = {
+  allowNonPositiveDuration?: boolean;
+  tieBreak?: OnsetTieBreak;
+  budget?: number;
+  /** What the events are, for the validation error message. */
+  name?: string;
+};
+
+/**
  * Validate and stable-sort note events once, then expose logarithmic onset and
  * active-note lookups. Non-positive-duration notes may be retained for callers
  * that intentionally filter them later, but never count as sounding.
@@ -76,13 +89,7 @@ function upperBound(values: readonly IndexedNoteEvent[], beat: number): number {
  */
 export function createNoteEventIndex(
   events: readonly NoteEvent[],
-  options: {
-    allowNonPositiveDuration?: boolean;
-    tieBreak?: OnsetTieBreak;
-    budget?: number;
-    /** What the events are, for the validation error message. */
-    name?: string;
-  } = {},
+  options: NoteEventIndexOptions = {},
 ): NoteEventIndex {
   assertNoteEvents(events, options.name ?? 'note events', options);
   const tieBreak = options.tieBreak ?? 'highest';

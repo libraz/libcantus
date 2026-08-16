@@ -17,7 +17,12 @@ export {
   isLibcantusError,
   NoSolutionError,
 } from './errors/index.js';
-export type { IndexedNoteEvent, NoteEventIndex, OnsetTieBreak } from './event-index/index.js';
+export type {
+  IndexedNoteEvent,
+  NoteEventIndex,
+  NoteEventIndexOptions,
+  OnsetTieBreak,
+} from './event-index/index.js';
 export { createNoteEventIndex } from './event-index/index.js';
 export type {
   Articulation,
