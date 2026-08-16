@@ -10,6 +10,7 @@
   "sort": ["source-order"],
   "categorizeByGroup": false,
   "categoryOrder": [
+    "Class API",
     "Core",
     "Pitch & Intervals",
     "Scales",
@@ -21,7 +22,6 @@
     "Rhythm & Meter",
     "Composition",
     "Arrangement & Analysis",
-    "Class API",
     "Utilities",
     "*"
   ],
