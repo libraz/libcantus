@@ -15,6 +15,32 @@
 
 例外はハンドルで、これらは結果ではありません。`createNoteEventIndex`、`createArrangementSession`、`createRng`、`createPositionalRng`、`resolveContext` が返すのはライブオブジェクトです。メソッドや関数のフィールドは `JSON.stringify` を通り抜けられません。保存するのは、それらを組み立てた入力のほうです。ノートイベント、シード、解決後の `algorithmVersion` を保存し、読み込み時に作り直してください。[決定性とシード](determinism-and-seeding.md)を参照してください。
 
+## 音・調・和音の渡し方
+
+これらを受け取る公開エントリポイントは、手元にある形をそのまま受け取ります。入力欄が持っている文字列でも、ライブラリが返すプレーンデータでも、それを包むクラスでもかまいません。種類ごとに変換関数が1つあり、文字列を読むのはそこだけです。
+
+| 種類 | 受け取る形 | 変換関数 |
+| --- | --- | --- |
+| 音 | 音名、MIDI 番号、`NoteData`、`Note` | `toNoteData` |
+| 音程 | 音程名、`SpelledInterval`、`Interval` | `toSpelledInterval` |
+| 調 | 調名、`KeyScale`、`Key` | `toKeyScale` |
+| 和音 | コードネーム、`ChordData`、`Chord` | `toChordData` |
+
+```ts
+import { toChordData, toKeyScale, toNoteData } from '@libraz/libcantus';
+
+toNoteData('Eb4'); // { letter: 2, alter: -1, octave: 4 }
+toNoteData(60); // { letter: 0, alter: 0, octave: 4 }
+toKeyScale('A minor').rootPc; // 9
+toChordData('Cmaj7').intervals; // [0, 4, 7, 11]
+```
+
+クラスは型ではなく `toJSON` を通して読まれます。これにより、下の層がクラスを import せずにインスタンスを受け取れます。同じ形を返す `toJSON` を持つ独自の値も、同じように受け取られます。
+
+数値は MIDI として読み、シャープで綴ります。調が分かっている場面では `spellPitch` で自分で綴ってください。ホ長調の嬰ト音と変ホ長調の変イ音の両方に合う既定値は存在しません。
+
+変換関数が独自の記法を足すことはありません。調名は `parseKeyName` が読む形がそのまま、しかも同じ表記体系すべてで通り、コードネームは `parseChordSymbol` が読む形がそのままです。何も指していない文字列は `InvalidInputError` になります。文字列を受け取るエントリポイントは、プレーンデータの形では起こりえなかった失敗をしうる、ということです。
+
 ## ティックと秒
 
 MIDI ファイルは指定した PPQ のもとでティックにより時間を表します。入力時に変換し、出力時に戻します。

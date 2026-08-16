@@ -15,6 +15,32 @@ One field is a lookup rather than data, and it is the only one: a chord timeline
 
 The handles are the exception, and they are not results: `createNoteEventIndex`, `createArrangementSession`, `createRng`, `createPositionalRng` and `resolveContext` return live objects whose methods and function fields do not survive `JSON.stringify`. Store the input they were built from — the note events, the seed, the resolved `algorithmVersion` — and build them again on load; see [Determinism and seeding](determinism-and-seeding.md).
 
+## Passing a note, a key, or a chord
+
+Every public entry point that takes one of these accepts it in whatever form you are holding: the text a field holds, the plain data the library returns, or the class that wraps it. There is one coercer per kind, and it is the only place text is read:
+
+| Kind | Accepted | Coercer |
+| --- | --- | --- |
+| Note | a name, a MIDI number, `NoteData`, a `Note` | `toNoteData` |
+| Interval | a name, `SpelledInterval`, an `Interval` | `toSpelledInterval` |
+| Key | a key name, `KeyScale`, a `Key` | `toKeyScale` |
+| Chord | a chord symbol, `ChordData`, a `Chord` | `toChordData` |
+
+```ts
+import { toChordData, toKeyScale, toNoteData } from '@libraz/libcantus';
+
+toNoteData('Eb4'); // { letter: 2, alter: -1, octave: 4 }
+toNoteData(60); // { letter: 0, alter: 0, octave: 4 }
+toKeyScale('A minor').rootPc; // 9
+toChordData('Cmaj7').intervals; // [0, 4, 7, 11]
+```
+
+A class is read through its `toJSON`, not by its type. That is what lets a layer accept an instance without importing the class that defines it, and it means any value of your own with a `toJSON` returning the right shape is accepted too.
+
+A number is read as MIDI and spelled with sharps. Where the key is known, spell it yourself with `spellPitch` instead: no single default suits both a G sharp in E major and an A flat in E flat major.
+
+The coercers add no syntax of their own. A key name is whatever `parseKeyName` reads, in every notation system it already reads; a chord symbol is whatever `parseChordSymbol` reads. Text that names nothing raises `InvalidInputError`, so an entry point that takes a string can fail where the plain-data form could not.
+
 ## Ticks and seconds
 
 A MIDI file measures time in ticks at a stated PPQ. Convert on the way in and back on the way out:
