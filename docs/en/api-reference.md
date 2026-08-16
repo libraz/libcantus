@@ -28,6 +28,33 @@ The public entry points are:
 - `generate`: progressions, bass, counter-melody, drums, groove, harmonization, motifs, ornaments, rhythms, reharmonization, and vocabulary.
 - `model`: immutable wrappers for notes, intervals, chords, keys, and progressions.
 
+Each layer barrel also re-exports the types its own signatures name, so a consumer importing a single subpath can still spell every type in the API it uses.
+
+Both CommonJS and ESM builds are published, and TypeScript declarations accompany each.
+
+## Which page covers which area
+
+| Area | Page |
+| --- | --- |
+| Notes, intervals, spelling | [Pitch and notation](pitch-and-notation.md) |
+| Scales, modes, chord scales | [Scales and modes](scales-and-modes.md) |
+| Chords, Roman numerals, function | [Harmony](harmony.md) |
+| Key relations, modulation | [Key relations and modulation](key-relations-and-modulation.md) |
+| SATB and styled voicings | [Voicing](voicing.md) |
+| Part-writing and species checkers | [Counterpoint and part-writing](counterpoint-and-part-writing.md) |
+| Meter, tempo, arrangement | [Time and arrangement](time-and-arrangement.md) |
+| Detection, timelines, form | [Analysis](analysis.md) |
+| Motifs, contour, counter-melody | [Melody and motifs](melody-and-motifs.md) |
+| Rhythm, groove, drums | [Rhythm and groove](rhythm-and-groove.md) |
+| Progressions, parts, ornaments | [Generation](generation.md) |
+| Substitution and harmonization | [Reharmonization](reharmonization.md) |
+| Profiles, playability, transposition | [Instruments and playability](instruments-and-playability.md) |
+| Frequency, cents, EDO, just ratios | [Tuning and frequency](tuning-and-frequency.md) |
+| Seeds, dials, algorithm version | [Determinism and seeding](determinism-and-seeding.md) |
+| Error taxonomy, parsers, assertions | [Errors and validation](errors-and-validation.md) |
+| Indexing, sessions, budgets | [Performance](performance.md) |
+| MIDI, ticks, note-name systems | [Interoperability](interoperability.md) |
+
 ## Generated TypeDoc
 
 Run the repository script to generate the full API reference:
@@ -38,5 +65,8 @@ yarn docs
 
 TypeDoc writes its output to `docs/api`. That generated directory is separate from the bilingual hand-authored guides under `docs/en` and `docs/ja`; do not edit generated pages by hand.
 
-The source comments remain the reference for parameters, return values, categories, and examples. The generated reference is also published through the project’s API-reference documentation badge.
+The source comments remain the reference for parameters, return values, categories, and examples. The generated reference is also published through the project's API-reference documentation badge.
 
+## Verified examples
+
+Every `ts` code block in the English guides is extracted and executed by the test suite, and a trailing `// value` comment holding a literal is checked as an expected result. The Japanese pages carry the same blocks verbatim, which the same suite verifies. An example that appears here has run.
