@@ -9,6 +9,8 @@ import {
 } from '../analyze/functional/index.js';
 import { InvalidInputError } from '../core/errors/index.js';
 import type { IntervalLike } from '../core/pitch/index.js';
+import type { SubstituteOptions, SubstitutionType } from '../generate/reharmony/index.js';
+import { substituteChord } from '../generate/reharmony/index.js';
 import type { Chord as ChordData, ChordSpan } from '../theory/chord/index.js';
 import { chordFromSpan } from '../theory/chord/index.js';
 import { type ScaleChoice, scalesForChanges } from '../theory/chordscale/index.js';
@@ -17,6 +19,7 @@ import type { Chord } from './chord.js';
 import { Chord as ChordClass } from './chord.js';
 import type { Key, KeyData } from './key.js';
 import { Key as KeyClass } from './key.js';
+import { Timeline } from './timeline.js';
 
 /**
  * The plain form of a {@link Progression}: the chords as plain data, and the
@@ -186,6 +189,131 @@ export class Progression {
   }
 
   /**
+   * A new progression with every chord replaced by what `fn` returns for it.
+   *
+   * The result is a progression rather than an array, and it carries this
+   * progression's key context, so a transformation stays inside the class
+   * instead of dropping out of it and having to be rebuilt. This progression is
+   * untouched.
+   *
+   * The key reaches the returned chords the way the constructor attaches it, so
+   * a chord `fn` built without one is still spelled and analyzed in this key.
+   *
+   * @param fn Called with each chord and its 0-based index.
+   * @returns The mapped progression.
+   * @example
+   * ```ts
+   * import { Chord, Key, Progression } from '@libraz/libcantus';
+   * const progression = new Progression([Chord.parse('C'), Chord.parse('G')], Key.major('C'));
+   * const moved = progression.map((chord) => chord.transpose(2));
+   * moved.toString(); // 'D A'
+   * moved.key?.toString(); // 'C major'
+   * progression.toString(); // 'C G' — the original is unchanged
+   * ```
+   */
+  map(fn: (chord: Chord, index: number) => Chord): Progression {
+    return new Progression(
+      this.#chords.map((chord, index) => fn(chord, index)),
+      this.#key,
+    );
+  }
+
+  /**
+   * A new progression holding only the chords `pred` accepts, in order.
+   *
+   * The key context travels with them and this progression is untouched.
+   *
+   * @param pred Called with each chord and its 0-based index.
+   * @returns The filtered progression, empty when nothing is accepted.
+   * @example
+   * ```ts
+   * import { Chord, Key, Progression } from '@libraz/libcantus';
+   * const progression = new Progression(
+   *   [Chord.parse('C'), Chord.parse('Am'), Chord.parse('F'), Chord.parse('G')],
+   *   Key.major('C'),
+   * );
+   * progression.filter((chord) => chord.quality === 'maj').toString(); // 'C F G'
+   * ```
+   */
+  filter(pred: (chord: Chord, index: number) => boolean): Progression {
+    return new Progression(
+      this.#chords.filter((chord, index) => pred(chord, index)),
+      this.#key,
+    );
+  }
+
+  /**
+   * A stretch of this progression, as a progression carrying the same key.
+   *
+   * The bounds read as `Array.prototype.slice` reads them: `end` is exclusive,
+   * a negative index counts from the end, and an omitted bound runs to the edge.
+   *
+   * @param start First chord of the stretch; defaults to the beginning.
+   * @param end One past the last chord; defaults to the end.
+   * @returns The sliced progression.
+   * @example
+   * ```ts
+   * import { Chord, Key, Progression } from '@libraz/libcantus';
+   * const progression = new Progression(
+   *   [Chord.parse('C'), Chord.parse('Am'), Chord.parse('F')],
+   *   Key.major('C'),
+   * );
+   * progression.slice(1).toString(); // 'Am F'
+   * progression.slice(0, 2).toString(); // 'C Am'
+   * ```
+   */
+  slice(start?: number, end?: number): Progression {
+    return new Progression(this.#chords.slice(start, end), this.#key);
+  }
+
+  /**
+   * This progression followed by another run of chords.
+   *
+   * The result carries this progression's key context; a key the other
+   * progression carried is dropped, because two keys cannot both analyze one
+   * chord sequence. Re-key the result with {@link Progression.withKey} where the
+   * second run is the one to read it in.
+   *
+   * @param other The chords to append, as a progression or a plain array.
+   * @returns The joined progression.
+   * @example
+   * ```ts
+   * import { Key } from '@libraz/libcantus';
+   * const key = Key.major('C');
+   * key.progression('I', 'vi').concat(key.progression('IV', 'V')).roman();
+   * // ['I', 'vi', 'IV', 'V']
+   * ```
+   */
+  concat(other: Progression | readonly Chord[]): Progression {
+    // Read structurally rather than with `instanceof`: the package ships an ESM
+    // and a CommonJS build, so a consumer reaching the two through different
+    // conditions holds two `Progression` classes.
+    const chords: readonly Chord[] = 'chords' in other ? other.chords : other;
+    return new Progression([...this.#chords, ...chords], this.#key);
+  }
+
+  /**
+   * The position of the first chord equal to `chord`.
+   *
+   * Equality is {@link Chord.equals}, not reference identity, so a chord built
+   * separately is found as long as it names the same harmony.
+   *
+   * @param chord The chord to look for.
+   * @returns The 0-based position, or -1 when the progression holds no such
+   *   chord.
+   * @example
+   * ```ts
+   * import { Chord, Progression } from '@libraz/libcantus';
+   * const progression = new Progression([Chord.parse('C'), Chord.parse('G7')]);
+   * progression.indexOf(Chord.of('G', 'dom7')); // 1
+   * progression.indexOf(Chord.parse('F')); // -1
+   * ```
+   */
+  indexOf(chord: Chord): number {
+    return this.#chords.findIndex((mine) => mine.equals(chord));
+  }
+
+  /**
    * A copy of this progression carrying the given key context.
    *
    * @param key The key context to attach.
@@ -285,6 +413,131 @@ export class Progression {
    */
   scales(): ScaleChoice[] {
     return scalesForChanges(this.#chords.map((chord) => chord.data));
+  }
+
+  /**
+   * Classify the motion at every chord change, not only the closing one.
+   *
+   * One entry per adjacent pair, so entry `i` is the motion from chord `i` to
+   * chord `i + 1` and the list is one shorter than the progression. A pair that
+   * cadences not at all keeps its place with a null `type`, which is what lets a
+   * caller read a cadence back against the chord it arrives on — a progression
+   * has no beats to name it by.
+   *
+   * The chord before each pair is supplied from the progression itself, so a
+   * cadential six-four is recognized as one wherever it stands.
+   *
+   * @param key Key to analyze in; falls back to the carried context.
+   * @param opts `voicing` is the pitches sounding under the whole progression,
+   *   one voicing per chord as {@link Progression.voice} produces them, from
+   *   which each pair takes its own two — without it no authentic cadence can be
+   *   graded perfect or imperfect. `alternatives` collects the readings each
+   *   pair came close to, and `approach` is the chord sounding before the
+   *   progression began, which only the first pair has no predecessor of its
+   *   own for. See {@link DetectCadenceOptions}, whose fields these are.
+   * @returns One cadence per adjacent pair, in order.
+   * @throws If no key is given and none is carried.
+   * @example
+   * ```ts
+   * import { Chord, Key, Progression } from '@libraz/libcantus';
+   * const progression = new Progression(
+   *   [Chord.parse('C'), Chord.parse('F'), Chord.parse('G7'), Chord.parse('C')],
+   *   Key.major('C'),
+   * );
+   * progression.cadences().map((cadence) => cadence.type); // [null, 'half', 'authentic']
+   * ```
+   */
+  cadences(
+    key?: Key,
+    opts?: { voicing?: number[][]; alternatives?: boolean; approach?: Chord },
+  ): CadenceResult[] {
+    const resolved = this.#resolveKey(key);
+    const found: CadenceResult[] = [];
+    for (let index = 1; index < this.#chords.length; index += 1) {
+      const from = this.#chords[index - 1];
+      const to = this.#chords[index];
+      if (from === undefined || to === undefined) {
+        continue;
+      }
+      const approach = index >= 2 ? this.#chords[index - 2] : opts?.approach;
+      const pair = opts?.voicing;
+      found.push(
+        detectCadence(from.data, to.data, resolved.scale, {
+          ...(opts?.alternatives === undefined ? {} : { alternatives: opts.alternatives }),
+          ...(approach === undefined ? {} : { approach: approach.data }),
+          ...(pair === undefined
+            ? {}
+            : { voicing: [pair[index - 1] ?? [], pair[index] ?? []] as [number[], number[]] }),
+        }),
+      );
+    }
+    return found;
+  }
+
+  /**
+   * A copy of this progression with one chord replaced by a substitute.
+   *
+   * The substitutions are the ones {@link substituteChord} proposes for that
+   * chord in this progression's key, and the first of the named kind is taken.
+   * Each is spelled the way the key writes it, so the tritone substitute of G7
+   * in C major arrives as Db7 rather than C#7.
+   *
+   * @param index 0-based position of the chord to replace; a negative index
+   *   counts from the end, as {@link Progression.at} counts it.
+   * @param type Which substitution relationship to realize.
+   * @param opts `melodyPcs` keeps only substitutes that contain those pitch
+   *   classes, so a melody stays consonant against the new harmony; see
+   *   {@link SubstituteOptions}.
+   * @returns The progression with the substitute in place.
+   * @throws If the index names no chord, if the progression carries no key
+   *   context, or if that chord has no substitution of the named kind.
+   * @example
+   * ```ts
+   * import { Chord, Key, Progression } from '@libraz/libcantus';
+   * const progression = new Progression([Chord.parse('G7'), Chord.parse('C')], Key.major('C'));
+   * progression.substitute(0, 'tritone').toString(); // 'Db7 C'
+   * ```
+   */
+  substitute(index: number, type: SubstitutionType, opts?: SubstituteOptions): Progression {
+    const position = index < 0 ? this.#chords.length + index : index;
+    const target = this.#chords[position];
+    if (target === undefined) {
+      throw new InvalidInputError(
+        `progression has no chord at index ${index}; it holds ${this.#chords.length}`,
+      );
+    }
+    const key = this.#resolveKey();
+    const chosen = substituteChord(target.data, key.scale, opts).find(
+      (candidate) => candidate.type === type,
+    );
+    if (chosen === undefined) {
+      throw new InvalidInputError(
+        `no ${type} substitution for ${target.symbol()} in ${key.toString()}`,
+      );
+    }
+    const chords = [...this.#chords];
+    chords[position] = new ChordClass(chosen.chord);
+    return new Progression(chords, key);
+  }
+
+  /**
+   * Place the chords on a regular grid, giving each the same number of beats.
+   *
+   * The inverse of {@link Timeline.progression}, which drops the time axis
+   * again. A carried key becomes the one key region under the span.
+   *
+   * @param beatsEach How long each chord sounds.
+   * @returns The timeline.
+   * @throws If `beatsEach` is not a positive finite number of beats.
+   * @example
+   * ```ts
+   * import { Chord, Key, Progression } from '@libraz/libcantus';
+   * const progression = new Progression([Chord.parse('C'), Chord.parse('G7')], Key.major('C'));
+   * progression.timeline(4).at(5)?.symbol(); // 'G7'
+   * ```
+   */
+  timeline(beatsEach: number): Timeline {
+    return Timeline.fromProgression(this, beatsEach);
   }
 
   /**

@@ -35,9 +35,13 @@ import {
   keySignatureFifths,
   majorKey,
   minorKey,
+  NAMED_SCALES,
+  nearestScaleTone,
   parallelKeyOf,
+  pitchToScaleDegree,
   relatedKeysOf,
   relativeKeyOf,
+  type ScaleName,
   type ScaleNameInput,
   type SpelledKey,
   scaleByName,
@@ -51,6 +55,7 @@ import { toWrittenPitch } from '../theory/transposition/index.js';
 import { Chord } from './chord.js';
 import { Interval } from './interval.js';
 import { Note } from './note.js';
+import { Progression } from './progression.js';
 import { mod12 } from './shared.js';
 
 /** A detected key paired with the score and scale form that produced it. */
@@ -473,6 +478,31 @@ export class Key {
    */
   get fifths(): number {
     return keySignatureFifths(this.#tonic.data, this.#scale);
+  }
+
+  /**
+   * The built-in scale this key's mode mask is, or undefined when no built-in
+   * scale has that mask.
+   *
+   * Only the Western vocabulary of {@link NAMED_SCALES} answers. A mask cannot
+   * say which tradition names it — the major scale, maqam Ajam and thaat Bilaval
+   * are the same seven pitch classes — so the scales of {@link WORLD_SCALES} are
+   * reached by name rather than read back from one. Where two Western names
+   * share a mask the table's own first name answers, so a natural minor reports
+   * `'naturalMinor'` rather than `'aeolian'` and a major scale `'major'` rather
+   * than `'ionian'`.
+   *
+   * @example
+   * ```ts
+   * import { Key } from '@libraz/libcantus';
+   * Key.major('C').scaleName; // 'major'
+   * Key.minor('A').scaleName; // 'naturalMinor'
+   * Key.named('dorian', 'D').scaleName; // 'dorian'
+   * ```
+   */
+  get scaleName(): ScaleName | undefined {
+    const mask = this.#scale.modeMask12;
+    return (Object.keys(NAMED_SCALES) as ScaleName[]).find((name) => NAMED_SCALES[name] === mask);
   }
 
   /** A copy of the underlying plain key data. */
@@ -992,6 +1022,31 @@ export class Key {
   }
 
   /**
+   * Build a progression from Roman numerals in this key.
+   *
+   * Each numeral is read as {@link Key.roman} reads it, applied chords included,
+   * and the progression carries this key, so it can name its own numerals,
+   * functions and cadences without being handed a key again.
+   *
+   * @param romans The numerals, in order.
+   * @returns The progression, carrying this key.
+   * @throws If any numeral is not valid.
+   * @example
+   * ```ts
+   * import { Key } from '@libraz/libcantus';
+   * const progression = Key.major('C').progression('I', 'vi', 'IV', 'V');
+   * progression.toString(); // 'C Am F G'
+   * progression.functions(); // ['tonic', 'tonic', 'subdominant', 'dominant']
+   * ```
+   */
+  progression(...romans: string[]): Progression {
+    return new Progression(
+      romans.map((text) => this.roman(text)),
+      this,
+    );
+  }
+
+  /**
    * Whether a pitch belongs to the scale.
    *
    * @param x A MIDI pitch, bare pitch class, or note.
@@ -999,6 +1054,46 @@ export class Key {
    */
   contains(x: number | Note): boolean {
     return isScaleTone(typeof x === 'number' ? x : x.pitchClass, this.#scale);
+  }
+
+  /**
+   * The nearest MIDI pitch whose pitch class is in the scale.
+   *
+   * The search expands symmetrically outward from `pitch`, and a tie — an equal
+   * distance above and below — is settled downward. A pitch already in the scale
+   * answers itself.
+   *
+   * @param pitch The MIDI pitch to snap.
+   * @returns The nearest in-scale MIDI pitch.
+   * @example
+   * ```ts
+   * import { Key } from '@libraz/libcantus';
+   * Key.major('C').nearestTone(61); // 60
+   * Key.major('C').nearestTone(64); // 64
+   * ```
+   */
+  nearestTone(pitch: number): number {
+    return nearestScaleTone(pitch, this.#scale);
+  }
+
+  /**
+   * The scale degree a pitch sits on, counted from 1: the tonic is degree 1.
+   *
+   * A pitch outside the scale has no degree and answers null, so a caller
+   * reading a degree cannot mistake the absent answer for the tonic.
+   *
+   * @param pitch A MIDI pitch or a bare pitch class.
+   * @returns The 1-based degree, or null when the pitch is not a scale tone.
+   * @example
+   * ```ts
+   * import { Key } from '@libraz/libcantus';
+   * Key.major('C').degreeOf(64); // 3
+   * Key.major('C').degreeOf(61); // null
+   * ```
+   */
+  degreeOf(pitch: number): number | null {
+    const degree = pitchToScaleDegree(pitch, this.#scale);
+    return degree === -1 ? null : degree;
   }
 
   /**

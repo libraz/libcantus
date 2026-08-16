@@ -1,10 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import { detectKeyBest } from '../src/analyze/detect/index.js';
+import { detectCadence } from '../src/analyze/functional/index.js';
 import { InvalidInputError } from '../src/core/errors/index.js';
 import { parseNote } from '../src/core/pitch/index.js';
 import { generateProgression } from '../src/generate/progression/index.js';
-import { Chord, type ChordData, Interval, Key, Note, Progression } from '../src/model/index.js';
-import { majorKey } from '../src/theory/scale/index.js';
+import { substituteChord } from '../src/generate/reharmony/index.js';
+import {
+  Chord,
+  type ChordData,
+  Interval,
+  Key,
+  Note,
+  Progression,
+  Timeline,
+} from '../src/model/index.js';
+import {
+  majorKey,
+  NAMED_SCALES,
+  nearestScaleTone,
+  pitchToScaleDegree,
+} from '../src/theory/scale/index.js';
 import { transposeChordSymbol } from '../src/theory/symbol/index.js';
 import { voiceProgression } from '../src/theory/voicing/index.js';
 
@@ -977,5 +992,203 @@ describe('Chord symbols, styled voicings, and negative harmony', () => {
     expect(Chord.parse('Ab/C').symbol()).toBe('Ab/C');
     // An explicit preference still overrides the hint.
     expect(Chord.parse('Bbmaj7').symbol({ flats: false })).toBe('A#maj7');
+  });
+});
+
+describe('Progression and Key closure over the functional core', () => {
+  const key = Key.major('C');
+  const progression = new Progression(
+    [Chord.parse('C'), Chord.parse('Am'), Chord.parse('F'), Chord.parse('G7')],
+    key,
+  );
+
+  it('maps to a progression carrying the same key and leaves the original alone', () => {
+    const mapped = progression.map((chord) => chord.transpose(2));
+    expect(mapped).toBeInstanceOf(Progression);
+    expect(mapped.key?.equals(key)).toBe(true);
+    expect(mapped.chords.map((chord) => chord.symbol())).toEqual(
+      progression.chords.map((chord) => chord.transpose(2).symbol()),
+    );
+    expect(progression.toString()).toBe('C Am F G7');
+    expect(progression.length).toBe(4);
+  });
+
+  it('filters to a progression carrying the same key and leaves the original alone', () => {
+    const majors = progression.filter((chord) => chord.quality === 'maj');
+    expect(majors).toBeInstanceOf(Progression);
+    expect(majors.key?.equals(key)).toBe(true);
+    expect(majors.chords.map((chord) => chord.symbol())).toEqual(
+      progression.chords.filter((chord) => chord.quality === 'maj').map((chord) => chord.symbol()),
+    );
+    expect(majors.length).toBe(2);
+    expect(progression.length).toBe(4);
+  });
+
+  it('hands map and filter the index alongside the chord', () => {
+    const seen: number[] = [];
+    progression.map((chord, index) => {
+      seen.push(index);
+      return chord;
+    });
+    expect(seen).toEqual([0, 1, 2, 3]);
+    expect(progression.filter((_chord, index) => index % 2 === 0).toString()).toBe('C F');
+  });
+
+  it('slices to a progression carrying the same key and leaves the original alone', () => {
+    const middle = progression.slice(1, 3);
+    expect(middle).toBeInstanceOf(Progression);
+    expect(middle.key?.equals(key)).toBe(true);
+    expect(middle.chords.map((chord) => chord.symbol())).toEqual(
+      progression.chords.slice(1, 3).map((chord) => chord.symbol()),
+    );
+    expect(progression.slice(-2).toString()).toBe('F G7');
+    expect(progression.slice().toString()).toBe(progression.toString());
+    expect(progression.length).toBe(4);
+  });
+
+  it('concatenates a progression and a bare chord array alike', () => {
+    const tail = [Chord.parse('C')];
+    const joined = progression.concat(tail);
+    expect(joined).toBeInstanceOf(Progression);
+    expect(joined.key?.equals(key)).toBe(true);
+    expect(joined.toString()).toBe('C Am F G7 C');
+    // The two argument forms describe the same run of chords, so they answer alike.
+    expect(progression.concat(new Progression(tail)).equals(joined)).toBe(true);
+    // A key the other progression carried is not the one the result is read in.
+    expect(progression.concat(new Progression(tail, Key.major('F'))).key?.equals(key)).toBe(true);
+    expect(progression.length).toBe(4);
+  });
+
+  it('finds a chord built separately but equal, rather than one by identity', () => {
+    // Neither chord below is any of the progression's own objects.
+    expect(progression.indexOf(Chord.of('A', 'min'))).toBe(1);
+    expect(progression.indexOf(Chord.of('G', 'dom7'))).toBe(3);
+    expect(progression.indexOf(Chord.parse('Eb'))).toBe(-1);
+    const mine = progression.chords[1];
+    expect(mine === undefined ? -1 : progression.indexOf(mine)).toBe(1);
+  });
+
+  it('classifies every chord change the way detectCadence does', () => {
+    const chords = progression.chords;
+    const expected = chords.slice(1).map((to, index) => {
+      const from = chords[index];
+      const approach = chords[index - 1];
+      return detectCadence(
+        from?.data as ChordData,
+        to.data,
+        key.scale,
+        approach === undefined ? {} : { approach: approach.data },
+      );
+    });
+    expect(progression.cadences()).toEqual(expected);
+    expect(progression.cadences().length).toBe(progression.length - 1);
+    expect(progression.cadences().map((cadence) => cadence.type)).toEqual([null, null, 'half']);
+    // Nothing changes in a single chord, so there is no pair to classify.
+    expect(new Progression([Chord.parse('C')], key).cadences()).toEqual([]);
+    expect(() => new Progression([Chord.parse('C'), Chord.parse('G')]).cadences()).toThrow(
+      InvalidInputError,
+    );
+  });
+
+  it('reaches every option detectCadence accepts, pair by pair', () => {
+    const voiced = progression.voice();
+    const chords = progression.chords;
+    const found = progression.cadences(undefined, { voicing: voiced, alternatives: true });
+    expect(found[2]).toEqual(
+      detectCadence(chords[2]?.data as ChordData, chords[3]?.data as ChordData, key.scale, {
+        alternatives: true,
+        approach: chords[1]?.data,
+        voicing: [voiced[2] ?? [], voiced[3] ?? []],
+      }),
+    );
+    // The first pair has no predecessor of its own, so `approach` supplies one.
+    const before = Chord.parse('G');
+    expect(progression.cadences(undefined, { approach: before })[0]).toEqual(
+      detectCadence(chords[0]?.data as ChordData, chords[1]?.data as ChordData, key.scale, {
+        approach: before.data,
+      }),
+    );
+  });
+
+  it('substitutes the chord substituteChord proposes for that relationship', () => {
+    const dominant = new Progression([Chord.parse('G7'), Chord.parse('C')], key);
+    const expected = substituteChord(Chord.parse('G7').data, key.scale).find(
+      (candidate) => candidate.type === 'tritone',
+    );
+    const substituted = dominant.substitute(0, 'tritone');
+    expect(substituted.at(0)?.toJSON()).toEqual(expected?.chord);
+    expect(substituted.toString()).toBe('Db7 C');
+    expect(substituted.key?.equals(key)).toBe(true);
+    expect(dominant.toString()).toBe('G7 C');
+    // A negative index counts from the end, exactly as `at` counts it.
+    expect(dominant.substitute(-2, 'tritone').equals(substituted)).toBe(true);
+  });
+
+  it('keeps only the substitutes a melody stays consonant against', () => {
+    const dominant = new Progression([Chord.parse('G7')], key);
+    // Db7 sounds no G, so a melody resting on one rules the substitute out —
+    // in the function first, and so in the class that reads it.
+    const kept = substituteChord(Chord.parse('G7').data, key.scale, { melodyPcs: [7] });
+    expect(kept.some((candidate) => candidate.type === 'tritone')).toBe(false);
+    expect(() => dominant.substitute(0, 'tritone', { melodyPcs: [7] })).toThrow(InvalidInputError);
+    expect(dominant.substitute(0, 'tritone').toString()).toBe('Db7');
+  });
+
+  it('reports an index, a key, or a relationship it cannot substitute', () => {
+    expect(() => progression.substitute(9, 'tritone')).toThrow(InvalidInputError);
+    // A plain triad is no dominant, so it has no tritone substitute.
+    expect(() => progression.substitute(0, 'tritone')).toThrow(InvalidInputError);
+    expect(() => new Progression([Chord.parse('G7')]).substitute(0, 'tritone')).toThrow(
+      InvalidInputError,
+    );
+  });
+
+  it('places the chords on a grid the way Timeline.fromProgression does', () => {
+    expect(progression.timeline(4).data).toEqual(Timeline.fromProgression(progression, 4).data);
+    expect(progression.timeline(4).totalBeats).toBe(16);
+    expect(progression.timeline(4).at(5)?.symbol()).toBe('Am');
+    // The round trip keeps the chord order the grid was built from.
+    expect(progression.timeline(2).progression().toString()).toBe(progression.toString());
+  });
+
+  it('builds a progression from numerals, chord for chord as key.roman does', () => {
+    const numerals = ['I', 'vi', 'IV', 'V'];
+    const built = key.progression(...numerals);
+    expect(built).toBeInstanceOf(Progression);
+    expect(built.chords.map((chord) => chord.toJSON())).toEqual(
+      numerals.map((numeral) => key.roman(numeral).toJSON()),
+    );
+    expect(built.key?.equals(key)).toBe(true);
+    expect(built.roman()).toEqual(numerals);
+    expect(built.toString()).toBe('C Am F G');
+    expect(key.progression().length).toBe(0);
+    expect(() => key.progression('I', 'nope')).toThrow(InvalidInputError);
+  });
+
+  it('names the scale by the mask the built-in table holds', () => {
+    for (const [name, mask] of Object.entries(NAMED_SCALES)) {
+      const canonical = Object.entries(NAMED_SCALES).find(([, other]) => other === mask)?.[0];
+      expect(Key.named(name, 'C').scaleName, name).toBe(canonical);
+    }
+    expect(Key.major('C').scaleName).toBe('major');
+    expect(Key.minor('A').scaleName).toBe('naturalMinor');
+    // A mask no built-in scale has answers with nothing rather than a near miss.
+    expect(Key.of({ rootPc: 0, modeMask12: 0b000010010001 }, Note.parse('C')).scaleName).toBe(
+      undefined,
+    );
+  });
+
+  it('snaps a pitch and names its degree exactly as the scale functions do', () => {
+    for (const scaleKey of [key, Key.minor('A'), Key.named('majorPentatonic', 'Eb')]) {
+      for (let pitch = 48; pitch <= 72; pitch += 1) {
+        expect(scaleKey.nearestTone(pitch)).toBe(nearestScaleTone(pitch, scaleKey.scale));
+        const degree = pitchToScaleDegree(pitch, scaleKey.scale);
+        expect(scaleKey.degreeOf(pitch)).toBe(degree === -1 ? null : degree);
+      }
+    }
+    // The absent degree is null in the class API, so it cannot read as the tonic.
+    expect(pitchToScaleDegree(61, key.scale)).toBe(-1);
+    expect(key.degreeOf(61)).toBeNull();
+    expect(key.degreeOf(60)).toBe(1);
   });
 });
