@@ -15,23 +15,19 @@ MIDI ノートイベントを扱う、TypeScript 製の音楽理論ライブラ�
 すでにノートやコード記号を持っているソフトウェア（DAW のプロジェクト、MIDI パーサー、練習支援ツールなど）と、その音が和声的に何を意味するかとの間を埋めます。ノートイベントを渡せば和声が求まり、その和声を渡せばそれに沿ったパートが書けます。
 
 ```ts
-import {
-  chordTimelineFromNotes, chordToRoman, detectCadence, generateBassLine,
-} from '@libraz/libcantus';
+import { Composer, Score } from '@libraz/libcantus';
 
 // DAW から渡ってくる形の、4 小節のブロックコード:
 const harmony = [[48, 60, 64, 67], [41, 60, 65, 69], [43, 59, 62, 65], [48, 60, 64, 67]].flatMap(
   (pitches, bar) => pitches.map((pitch) => ({ pitch, startBeat: bar * 4, durationBeat: 4 })),
 );
 
-const { timeline, prevailingKey } = chordTimelineFromNotes(harmony);
-timeline.segments.map((s) => chordToRoman(s.chord, prevailingKey)); // ['I', 'IV', 'V7', 'I']
-
-const [, , penultimate, final] = timeline.segments;
-detectCadence(penultimate.chord, final.chord, prevailingKey).type; // 'authentic'
+const chords = Score.of(harmony).timeline();
+chords.roman().map((entry) => entry.roman); // ['I', 'IV', 'V7', 'I']
+chords.cadences().at(-1)?.cadence.type; // 'authentic'
 
 // 求まった和声の上に、ウォーキングベースを書く:
-generateBassLine({ segments: timeline.segments, key: prevailingKey, style: 'walking', ctx: { seed: 1 } });
+Composer.of({ key: chords.key, bpm: 120, seed: 1 }).bass(chords, { style: 'walking' }).notes;
 // 16 音: [{ pitch: 36, startBeat: 0, durationBeat: 1, velocity: 100 }, ...]
 ```
 
@@ -85,7 +81,7 @@ dominant.analyze(key).roman; // 'V7'
 Chord.parse('C7(b9,#11)').pitchClasses(); // [0, 1, 4, 6, 7, 10]
 ```
 
-どちらの形を持つかは 1 つの規則で決まります。音楽的な値（音、コード、キー、プログレッション）は両方の形を持ち、相互に行き来できます。クラスは `.data` でプレーンな値を公開し、関数が返したデータからクラスを作れます。コレクションやタイムラインに対する操作（パート生成、アレンジ全体の解析、キーの順位付け）はノートイベントの配列を受け取る関数だけで、[できること](#できること)の例がその側です。
+本体は関数で、クラスはいずれもその薄い外皮です。クラスは `.data` でプレーンな値を公開し、関数が返したデータからクラスを作れます。どちらかが閉じた世界になることはなく、返す答えも同じです。クラスが足すのは、値とその文脈をひとまとめに保持することです。呼び出しを連ねるときに同じ事実を書き直さずに済みます。`Score` は音符と拍子・テンポ・調をまとめて持ち、`Composer` は 1 曲を書くときの調・テンポ・シードを持ちます。
 
 ## インポートパス
 

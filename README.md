@@ -15,23 +15,19 @@ Pure-TypeScript music theory for MIDI note events. Build and spell chords, inspe
 It sits between software that already holds notes or chord symbols — a DAW project, a MIDI parser, a practice tool — and what those notes mean harmonically. Give it note events and it recovers the harmony; give it that harmony back and it writes parts against it:
 
 ```ts
-import {
-  chordTimelineFromNotes, chordToRoman, detectCadence, generateBassLine,
-} from '@libraz/libcantus';
+import { Composer, Score } from '@libraz/libcantus';
 
 // Four bars of block chords, as a DAW would hand them over:
 const harmony = [[48, 60, 64, 67], [41, 60, 65, 69], [43, 59, 62, 65], [48, 60, 64, 67]].flatMap(
   (pitches, bar) => pitches.map((pitch) => ({ pitch, startBeat: bar * 4, durationBeat: 4 })),
 );
 
-const { timeline, prevailingKey } = chordTimelineFromNotes(harmony);
-timeline.segments.map((s) => chordToRoman(s.chord, prevailingKey)); // ['I', 'IV', 'V7', 'I']
-
-const [, , penultimate, final] = timeline.segments;
-detectCadence(penultimate.chord, final.chord, prevailingKey).type; // 'authentic'
+const chords = Score.of(harmony).timeline();
+chords.roman().map((entry) => entry.roman); // ['I', 'IV', 'V7', 'I']
+chords.cadences().at(-1)?.cadence.type; // 'authentic'
 
 // A walking bass over the harmony that was just recovered:
-generateBassLine({ segments: timeline.segments, key: prevailingKey, style: 'walking', ctx: { seed: 1 } });
+Composer.of({ key: chords.key, bpm: 120, seed: 1 }).bass(chords, { style: 'walking' }).notes;
 // 16 notes: [{ pitch: 36, startBeat: 0, durationBeat: 1, velocity: 100 }, ...]
 ```
 
@@ -85,7 +81,7 @@ dominant.analyze(key).roman; // 'V7'
 Chord.parse('C7(b9,#11)').pitchClasses(); // [0, 1, 4, 6, 7, 10]
 ```
 
-Which form a thing has follows one rule. Musical **values** — notes, chords, keys, progressions — have both, and interoperate freely: every class wraps a plain object it exposes as `.data`, and the functions return data a class can be built from. Operations over **collections and timelines** — part generation, whole-arrangement analysis, key ranking — take arrays of note events and are functions only. The example above under [What it does](#what-it-does) is that second kind.
+The functions are the library; every class is a thin skin over them. A class wraps a plain object it exposes as `.data`, and the functions return data a class can be built from, so neither side is a walled garden and the two give the same answers. What a class adds is holding a value together with its context, so a chain of calls does not restate the same facts: a `Score` carries its notes with their meter, tempo, and key, and a `Composer` carries the key, tempo, and seed one piece is written under.
 
 ## Import paths
 
