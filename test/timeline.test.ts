@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { detectChordBest } from '../src/analyze/detect/index.js';
 import {
   chordTimelineFromChords,
   chordTimelineFromNotes,
@@ -127,6 +128,82 @@ describe('chordTimelineFromNotes', () => {
 
   it('throws on a non-positive harmonic rhythm', () => {
     expect(() => chordTimelineFromNotes(cfgcNotes(), { harmonicRhythm: 0 })).toThrow();
+  });
+
+  it('names a voicing without its fifth by the seventh it plays', () => {
+    // C E Bb: a dominant seventh voiced as a shell. The Bb is chromatic in C
+    // major, and the reading that drops it — a plain C triad — is the diatonic
+    // one, so the key must not be allowed to buy that trade: it would discard
+    // the tritone the chord exists for and assert a G nobody sounded.
+    for (const key of [undefined, majorKey(0)]) {
+      const result = chordTimelineFromNotes(blockChord([60, 64, 70], 0), key && { key });
+      expect(result.timeline.segments).toHaveLength(1);
+      expect(result.timeline.segments[0]?.chord).toMatchObject({ rootPc: 0, quality: 'dom7' });
+    }
+  });
+
+  it('reads a fifth-omitted voicing as the chord detection reads the same pitches', () => {
+    // The segment inference and `detectChordBest` are two paths to one answer,
+    // so a pitch set that names a chord on its own names the same chord here.
+    const voicings = [
+      [60, 64, 70], // C7
+      [60, 64, 70, 74], // C9
+      [60, 64, 70, 74, 81], // C13
+      [60, 64, 70, 75], // C7#9
+      [60, 63, 70], // Cm7
+      [60, 64, 71], // Cmaj7
+      [60, 63, 71], // CmMaj7
+      [60, 64, 67, 70], // C7, fifth included
+    ];
+    for (const pitches of voicings) {
+      const segment = chordTimelineFromNotes(blockChord(pitches, 0)).timeline.segments[0];
+      const expected = detectChordBest(pitches);
+      expect(segment?.chord.rootPc).toBe(expected?.rootPc);
+      expect(segment?.chord.quality).toBe(expected?.quality);
+    }
+  });
+
+  it('names a fifth-omitted dominant on every root', () => {
+    for (let root = 0; root < 12; root += 1) {
+      const segment = chordTimelineFromNotes(blockChord([60 + root, 64 + root, 70 + root], 0))
+        .timeline.segments[0];
+      expect(segment?.chord).toMatchObject({ rootPc: root, quality: 'dom7' });
+    }
+  });
+
+  it('keeps a chromatic seventh the key does not contain', () => {
+    // The seventh is what the key argues against, so pinning the key to the one
+    // that excludes it is the case the reading has to survive.
+    const segment = chordTimelineFromNotes(blockChord([60, 64, 67, 70], 0), {
+      key: majorKey(0),
+    }).timeline.segments[0];
+    expect(segment?.chord).toMatchObject({ rootPc: 0, quality: 'dom7' });
+  });
+
+  it('roots a shell voicing on its bass rather than on its loudest tone', () => {
+    // C E Bb with the seventh carrying the weight. The loud Bb pulls the
+    // inferred key onto Bb major, where a Bb chord is the diatonic reading and
+    // the loudest pitch class looks like the root — but the root is the note
+    // underneath, and it stays the root down to the point where the noise
+    // threshold stops admitting it as a sounding tone at all.
+    for (const velocity of [90, 60, 30]) {
+      const segment = chordTimelineFromNotes([
+        { pitch: 60, startBeat: 0, durationBeat: 4, velocity },
+        { pitch: 64, startBeat: 0, durationBeat: 4, velocity },
+        { pitch: 70, startBeat: 0, durationBeat: 4, velocity: 127 },
+      ]).timeline.segments[0];
+      expect(segment?.chord).toMatchObject({ rootPc: 0, quality: 'dom7' });
+    }
+  });
+
+  it('still reads a chord voiced in inversion against its own bass', () => {
+    // The bass speaks for the root, but it does not overrule a pitch class that
+    // carries the window: F A C over an A bass is F major in first inversion,
+    // not a chord rooted on the A underneath it.
+    const segment = chordTimelineFromNotes(blockChord([57, 60, 65], 0), {
+      key: majorKey(0),
+    }).timeline.segments[0];
+    expect(segment?.chord).toMatchObject({ rootPc: 5, quality: 'maj', bassPc: 9 });
   });
 
   it('ignores zero- and negative-length notes at ingest', () => {

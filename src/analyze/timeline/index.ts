@@ -131,8 +131,44 @@ const DIATONIC_BONUS = 0.5;
 /** Score bonus for an exact match (no extra and no missing tones). */
 const EXACT_BONUS = 0.5;
 
-/** Score penalty per extra or missing tone in a match. */
-const MISMATCH_PENALTY = 0.3;
+/**
+ * Score penalty per sounding pitch class a match leaves unexplained.
+ *
+ * Larger than {@link DIATONIC_BONUS} deliberately: key membership may separate
+ * two readings that account for the same notes, but it may not buy the
+ * discarding of a note that sounded. Were the two the same size, a dominant
+ * voiced without its fifth would read as the triad the key happens to contain —
+ * C E Bb in C major as `C`, which drops the tritone the chord exists for and
+ * asserts a G nobody played.
+ */
+const EXTRA_TONE_PENALTY = 0.6;
+
+/**
+ * Score penalty per chord tone the voicing omits.
+ *
+ * {@link detectChord} admits one absent tone and only the perfect fifth, so this
+ * is the cost of a shell voicing rather than of a misreading — small, because
+ * dropping the fifth is ordinary practice, and non-zero, so a complete voicing
+ * still outranks an incomplete reading of the same notes.
+ */
+const OMITTED_TONE_PENALTY = 0.15;
+
+/**
+ * Standing a match's root earns from being the sounding bass, on the 0..1 scale
+ * a root's share of the window's weight is measured on.
+ *
+ * The bass is the strongest single indicator of a root there is, so a candidate
+ * it puts in root position is not judged on how loudly that root happens to be
+ * sounding: a shell voicing whose seventh is the loudest thing in the window
+ * still has its root underneath it, and reading it from the loudest pitch class
+ * instead re-roots the chord onto a tone that is merely prominent.
+ *
+ * Short of 1 because the bass is evidence rather than proof — a pitch class that
+ * actually carries the window's weight still outranks a bass that does not,
+ * which is what keeps a chord voiced in inversion from being re-rooted onto its
+ * own bass note.
+ */
+const BASS_ROOT_STANDING = 0.95;
 
 /**
  * How {@link chordTimelineFromNotes} decides where one chord ends and the next
@@ -268,9 +304,16 @@ type WindowChord = {
 };
 
 /**
- * Score a chord match against a window's pitch-class weights: a heavily
- * weighted root, in-key tones, and exactness all raise the score; extra or
- * missing tones lower it.
+ * Score a chord match against a window's pitch-class weights: a root that
+ * carries weight or stands in the bass, in-key tones, and exactness all raise
+ * the score; a sounding pitch class the chord does not name and a chord tone the
+ * voicing omits both lower it.
+ *
+ * The two costs are not the same size. What sounded is the evidence, so leaving
+ * a pitch class out of the reading costs more than the key can make up, while
+ * the absent perfect fifth {@link detectChord} allows costs little — that is
+ * what keeps a shell voicing named by the chord it plays rather than by the
+ * triad its key prefers.
  */
 function scoreMatch(
   match: ChordMatch,
@@ -279,15 +322,21 @@ function scoreMatch(
   key: KeyScale,
 ): number {
   const rootWeight = maxWeight > 0 ? (weights[match.rootPc] ?? 0) / maxWeight : 0;
+  // `inversion === 0` is exactly "the sounding bass is this candidate's root".
+  // It is null when the window offered no usable bass, so a bass that was
+  // filtered out as noise lifts nothing.
+  const rootStanding =
+    match.inversion === 0 ? Math.max(rootWeight, BASS_ROOT_STANDING) : rootWeight;
   const tones = chordPitchClasses(makeChord(match.rootPc, match.quality));
-  let score = rootWeight;
+  let score = rootStanding;
   if (tones.every((pc) => isScaleTone(pc, key))) {
     score += DIATONIC_BONUS;
   }
   if (match.exact) {
     score += EXACT_BONUS;
   }
-  score -= MISMATCH_PENALTY * (match.extraPcs.length + match.missingPcs.length);
+  score -= EXTRA_TONE_PENALTY * match.extraPcs.length;
+  score -= OMITTED_TONE_PENALTY * match.missingPcs.length;
   return score;
 }
 
@@ -315,8 +364,9 @@ function chordConfidence(
  *
  * Builds a pitch-class weight histogram (overlap duration x velocity x
  * metric-accent bonus for onsets inside the window), keeps the significantly
- * weighted pitch classes, and picks the best {@link detectChord} match by
- * root weight, key membership, and exactness.
+ * weighted pitch classes, and picks the best {@link detectChord} match by the
+ * standing of its root — the weight it carries, or the bass it stands in — plus
+ * key membership, exactness, and how much of the window it accounts for.
  */
 function analyzeWindow(
   notes: readonly NoteEvent[],
