@@ -5,6 +5,42 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **A chord voiced without its fifth keeps the seventh it plays.** The segment
+  inference behind `chordTimelineFromNotes` weighed a candidate's key membership
+  as heavily as the sounding pitch classes it failed to account for, so wherever
+  the fifth was absent and the seventh chromatic in the key in force, the
+  reading that discarded the seventh and asserted an unplayed fifth won: `C E Bb`
+  came back as `C`, `C E Bb D` as an added-ninth chord, `C E Bb Eb` as a minor
+  seventh, and `C Eb B` as a bare minor triad. Leaving a sounding pitch class
+  unexplained now costs more than key membership can make up, while the absent
+  perfect fifth `detectChord` already admits costs little, so a shell voicing is
+  named by the chord it plays — `C7`, `C9`, `C13`, `C7#9`, `CmMaj7` — which is
+  what `detectChordBest` returned for those pitches all along.
+
+  Segments whose voicing omits the fifth therefore report a different chord than
+  before, and everything layered on the timeline — `detectCadences`,
+  `analyzeVoice` through the chord it is handed per beat, and
+  `analyzeArrangement` — inherits the corrected reading. `detectChord` and
+  `detectChordBest` never had the defect and are unchanged.
+
+- **A chord's root is read from the bass, not from its loudest tone.** The same
+  segment inference measured a candidate's root by nothing but the share of the
+  window's weight that root carried, so a voicing whose upper tone was struck
+  hardest was re-rooted onto it: `C E Bb` with the seventh loud and the root and
+  third quiet came back as a B-flat chord over a C bass, discarding the E and
+  asserting an F. A candidate the sounding bass puts in root position now has
+  nearly full root standing however the velocities fell — nearly, rather than
+  fully, so a pitch class that genuinely carries the window still outranks the
+  bass and a chord voiced in inversion is not re-rooted onto its own bass note.
+
+  Windows whose loudest pitch class is not the bass may therefore be named
+  differently, root-position and shell voicings most of all. A window whose bass
+  was filtered out as noise offers no bass to read and is unaffected.
+
 ## [1.0.0] - 2026-08-17
 
 The first stable release. From here the public API follows Semantic Versioning
@@ -42,8 +78,13 @@ it as a name, as plain data, or as the class that holds one.
 See **Changed** first — the degree change, the removal of
 `ChordTimelineResult.key`, the replacement of `Cadence`, the meter map, the
 re-addressed random number stream, the reshaped `Note.of`, the generation
-options folded into the context, and three renamed types are all breaking, and
-the degree change looks silent at the call site.
+options folded into the context, and three renamed types are all breaking.
+
+Four of the changes are silent at the call site: the scale degrees, the
+equal-length `TimeSignature.grouping`, the harmonizer's default
+`harmonicRhythm`, and the `avoid`/`passing` split on `chordScaleReport`. Each
+kept its name and its type, so nothing fails to compile and nothing throws —
+what changes is the answer.
 
 ### Changed
 
@@ -143,6 +184,27 @@ the degree change looks silent at the call site.
   `MeterLike` and derives its position from the bar in force rather than from a
   single global modulo, so a 4/4 → 3/4 change puts the accents where the score
   puts them.
+
+- **An equal-length `TimeSignature.grouping` states no accent of its own.** A
+  grouping is how an irregular division is declared — `[2, 2, 3]` on 7/8 — and
+  each group head other than the downbeat is a secondary strong pulse. Groups
+  that are all the same length declare the division the meter already has, and
+  promoting every one of those heads erased the difference between a group head
+  and a real secondary strong pulse: 9/8 as `[1, 1, 1]` accented all three
+  dotted-quarter pulses alike, where the bar's midpoint is not a pulse at all and
+  the meter has no secondary strong pulse to give. `metricWeight` and
+  `isStrongBeat` now weigh such a bar exactly as an ungrouped one, so
+  `9/8 [1,1,1]`, `9/8 [3,3,3]`, `6/8 [3,3]`, `12/8 [1,1,1,1]`, `4/4 [1,1,1,1]`
+  and `3/4 [1,1,1]` all report different weights — `6/8 [3,3]` in `metricWeight`
+  alone, its strong beats being where they already were. Unequal groupings are
+  unaffected, and so are equal ones whose second group head is already the bar
+  midpoint — `6/8 [1,1]` and `4/4 [2,2]` weighed as ungrouped bars either way.
+
+  The field kept its name, its type and its position, so an equal-length
+  grouping still compiles and still returns plausible numbers; what changes is
+  that a caller placing accents, weighting a histogram or driving humanization
+  from metric weight gets flatter output across every bar that declared its
+  division. No equal-length grouping reproduces the old per-group accents.
 
 - **A pickup may sound before the downbeat.** `NoteEvent.startBeat` was
   required to be non-negative, and the documented workaround — shift the whole
@@ -251,6 +313,35 @@ the degree change looks silent at the call site.
   next phrase's first note. A call passing `phraseEnds` can harmonize the same
   melody differently than before; a call that names none is scored exactly as it
   was.
+
+- **`harmonizeMelody` reads its default `harmonicRhythm` from the meter.** The
+  default was a flat 2 beats whatever `ts` said. That is half a bar of 4/4 and an
+  arbitrary length in anything else — in 3/4 it cut across the bar line, and in
+  2/4 it covered a whole bar where 4/4 got half of one. The default is now half a
+  bar where the half falls on a pulse and the whole bar where it does not: 2 in
+  4/4, 1 in 2/4, 1.5 in 6/8, 3 in 12/8, and the full bar in 3/4 (3) and 5/4 (5).
+  A 4/4 caller sees no change, which is also what makes this easy to miss; a 3/4
+  caller on the default now gets slots half again as long, and a 2/4 caller twice
+  as many, from the same melody.
+
+  `HarmonizeResult.chords` also emits one span per chord change rather than one
+  per grid slot, so a chord held across several slots is one span and
+  `chords.length` is no longer the slot count.
+
+- **`ChordScaleReportEntry.avoid` narrowed to the melodic reading, and the rest
+  moved to `passing`.** One list answered two questions at once — which scale
+  tones must not be *sounded* against the chord, and which a line may not even
+  pass through — so the perfect fourth over `Cmaj7`, which a line passes through
+  freely, was reported exactly like the flat ninth over a phrygian `Cmin`, which
+  it cannot. `chordScaleReport` now returns `avoid` for the melodic reading alone
+  and a new `passing` for the remainder; `avoid` concatenated with `passing` is
+  the old value. `avoidNotes` gains `opts.use`, `'harmonic'` (the previous
+  behaviour, and still the default) or `'melodic'`, which is the same split seen
+  from the other side.
+
+  `avoid` kept its name and its type, so a view rendering it alone still compiles
+  and silently stops listing the tones that moved — over `Cmaj7` and `C7` that is
+  the perfect fourth, and over `Cmin` the minor sixth.
 
 - **Input that used to be taken on trust is refused where it is given.** An
   entry point that received something it could not use would fall back to a
