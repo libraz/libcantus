@@ -7,7 +7,295 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`toInstrumentProfile` and `toStringedProfile` are published.** The widening
+  coercers of every other kind — `toNoteData`, `toKeyScale`, `toChordData`,
+  `toMeterData`, `toVoiceNotes` — were already exported, and the instrument pair
+  was not, so a caller holding an `Instrument`, a stored profile or a built-in
+  such as `BASS_4_STRING` could hand it to an entry point but could not perform
+  that same widening themselves. Both now come from the package root and from
+  the `core` subpath: an instrument-shaped value can be resolved to a plain
+  profile, or narrowed to the stringed family with the neck-or-nothing refusal a
+  bass line needs, at a caller's own boundary rather than only inside the
+  library.
+
+- **`chordToRoman` names an augmented sixth applied to a degree.** `Ger6/V`,
+  `Fr6/V` and `It6/V` parsed into the German, French and Italian sixths of the
+  dominant, but reading one of those chords back gave `V7/VI` or `bIII7`, the
+  numerals its pitch classes take against the home key. Under `applied` the
+  render direction now tries the degrees the key can tonicize as local keys —
+  the same local key the numeral is parsed in — so an augmented sixth of any
+  tonicizable degree comes back as the numeral that built it, and an analysis
+  can say which degree a chromatic predominant is aimed at instead of naming a
+  dominant seventh a fifth away from it. The reading is taken only from a chord
+  carrying its own tone spellings, since the French sixth is the one kind a bare
+  stack of thirds spells by accident; a caller holding pitch classes alone gets
+  those letters from `augmentedSixthFromPitchClasses`.
+
 ### Fixed
+
+- **A reharmonization is spelled in the key it was handed.**
+  `modalInterchangePalette`, `substituteChord` and `negativeHarmonyMirror` —
+  along with `Chord.modalInterchange`, `Chord.substitutions` and
+  `Chord.negativeHarmony`, which passed them a bare scale even while holding a
+  resolved key — re-derived a tonic from pitch classes, so
+  `modalInterchangePalette('Ab minor')` returned `G# A#m B#m C# E#m A`, a
+  substitution proposed for `Eb7` in that key came back as `F##dim`, and the
+  mirror of an Eb major triad there was `C#m`. All six read the key through one
+  resolver now, and the second derivation of a written tonic is gone.
+  `HarmonizeResult.key` is a `ResolvedKey` for the same reason: it was a
+  key/scale, so
+  `harmonizeMelody({ melody, key: 'Ab minor' }).key` respelled as G# minor in the
+  caller's next step, and under `key: 'infer'` — where it is the only account of
+  which key was chosen — it could not say how that key is written.
+
+- **A chromatic chord named as a whole symbol is built from the key's own
+  tonic.** `romanToChord('Ger6', 'Ab minor')` returned `E G# B C##` while
+  `augmentedSixthChord('german', 'Ab minor')` and
+  `Key.parse('Ab minor').augmentedSixth('german')` already returned
+  `Fb Ab Cb D`, so a harmony exercise built from numerals received a double-sharp
+  augmented sixth in a key of seven flats. `Fr6`, `It6` and `N6` were spelled the
+  same way, and `chordToRoman` read the correctly spelled German sixth back as
+  `VI7`. Both directions now carry the whole key. The local key an applied
+  numeral is read in is spelled from the prevailing key too, so `Ger6/V` in
+  Ab minor is built on `Eb` rather than on the `D#` its bare pitch class reads as.
+
+- **`resolveKey` refuses a key that contradicts itself.** A tonic naming a pitch
+  class its scale is not rooted on passed straight through, so
+  `augmentedSixthChord` returned a chord whose tone spellings read `Db F Ab B`
+  while `formatChordSymbol` drew it as `G#7` — one chord answering to two names,
+  with nothing to tell a caller. A `variant` its own mask does not hold passed
+  through as well. `Key.of` had always thrown for both; the resolver now throws
+  the same `InvalidInputError` in the same words, and every entry point built on
+  it inherits the refusal.
+
+- **An additive grouping is felt on the head of each group.** 6/8 written
+  `[2, 2, 2]`, or 12/8 written `[4, 4, 4]`, counts units rather than the meter's
+  own pulses, but `metricWeight`, `isStrongBeat` and `Meter.weightAt` accented
+  the midpoint of the bar — the pulse the compound reading has, and the head of
+  no group in this one — and left every group head unaccented. A grouping of
+  equal-length groups still states nothing extra where it restates the division
+  the signature already has.
+
+- **Beat 0 is the downbeat whatever beat a meter map opens at.** A map written
+  `[{ startBeat: -1, ts: '4/4' }]` — the ordinary way to state the signature a
+  pickup is written in — laid its bar lines from -1, so `barStartBeat(0, map)`
+  answered -1, `metricWeight(0, map)` answered 1 rather than 3, and
+  `formatBarPosition(0, map)` printed `'1.2'`. `barIndexAt`, `beatToBarPosition`
+  and `Score.barAt` moved with them. The opening signature now counts its bars
+  from beat 0 exactly as the bare signature does, at every offset it may be
+  written at; every later change still begins a bar where it takes effect.
+  `barPositionToPulse` also checks the bar it is given whichever form the meter
+  came in, so `{ bar: NaN }` and `{ bar: 1.5 }` throw `InvalidInputError` under a
+  single signature and not only under a map.
+
+- **A meter map is answered from the map as it now reads.** A caller keeps its
+  own array, and writing a signature into it left the bar arithmetic derived from
+  the old one: after `map[1].ts.numerator = 3`, `meterAt` reported 3/4 while the
+  bar lines, the bar numbers and the metric accents still came from 4/4. Writing
+  `numerator = 0` short-circuited validation entirely, and `metricWeight` quietly
+  returned 0. Every entry is now compared by value, grouping included, before an
+  answer is given: the map above places its bars at 8, 11, 14, and the invalid
+  one makes `assertMeterMap`, `meterAt` and `metricWeight` throw
+  `InvalidInputError` again. A map emptied or holed mid-read no longer falls back
+  to 4/4 either. `generateDrums` and `Composer.drums` read the whole map for the
+  same reason: one that opens in 4/4 and changes to 3/4 at beat 8 is refused for
+  the change rather than accepted for the opening, as a bare `'3/4'` already was.
+
+- **The metric grid steps onto every meter change it crosses.**
+  `metricGridUnit` divided the pulses of each region but not the beats the
+  regions start at, so two 4/4 spans with the second beginning at 4.25 returned a
+  step of one quarter that lands on none of the second span's pulses; it now
+  returns 0.25. An onset written a hair off a beat is read as unmeasured instead
+  of dividing the grid down to that hair, so a change at 4.000001 keeps the step
+  of one. The segments `analyzeTimeline` cuts sit on this grid and can move with
+  it.
+
+- **An excerpt is read from where it sounds, in every analysis that reads one.**
+  `phrasesFromTimeline`, `sectionsFromNotes` and `hypermeter` each derived the
+  first bar of the span themselves, so an export whose first note lands a
+  thousandth of a beat early was a pickup to one of them and a downbeat to
+  another, and a host drawing all three together got bars that did not line up.
+  All three take that beat from one derivation now, and a passage lifted from
+  bar 9 is read at the same confidence and in the same phase as the same music
+  read from the top. On the arrangement side, `analyzeArrangement` given both a
+  chord timeline and a `key` pinned that key's region to beat 0 and ended the key
+  search at the chart's last chord, so the excerpt held a key across eight bars
+  of silence it never had and every note past the chart was read in the opening
+  key; `tensionCurve` took its first sample at the slot boundary before the music
+  rather than where the music starts.
+
+- **A cadence belongs to the phrase it arrived in.** The tonic a period's
+  antecedent cadences to is normally still sounding when the consequent opens,
+  and the arrival was read only where that held chord stops: the seam between the
+  two carried no cadence at all, the antecedent was reported with none, and the
+  cadence was handed to the phrase that follows it — which is where
+  `structuralCadences` then ranked it. A held arrival now closes its phrase at
+  the bar line as well, and a reported `cadence.atBeat` always lies inside
+  `[startBeat, endBeat)`. `phrasesFromTimeline` over notes that never sound
+  returns `[]`, the answer `sectionsFromNotes` gives for the same input, rather
+  than one phrase of zero length and a measured-looking confidence. A phrase's bar
+  count is taken bar line by bar line, so six beats inside a 3/4 stretch is two
+  bars and not one and a half. `opts.hypermeter` is held to what its own type
+  states: a confidence outside [0, 1] or a fractional `groupBars` throws
+  `InvalidInputError` naming the field.
+
+- **The cadences settle the hypermetric phase.** Cadence fit was measured over
+  the cadences given rather than over the hyperbar ends a reading predicts, and
+  that cannot tell a two-bar reading from a four-bar one — a cadence every four
+  bars sits at a group end under both, while half the two-bar groups end in
+  nothing. Harmonic contrast could therefore outvote the cadences, and a group
+  head restating the tonic its group closed on scored negative contrast that was
+  subtracted from the cadence term, so a plain I-IV-V-I one chord per bar put the
+  hypermetric downbeat on the dominant. Fit is now the share of predicted group
+  ends a cadence closes; where cadences are given they decide the phase and the
+  harmony chooses among the phases they allow; an elided arrival counts only
+  where there is a next group to arrive into. A pickup bar heads no group, so it
+  no longer counts toward the length a span needs to hold two of them.
+
+- **One tolerance answers whether a note follows another.** The arrangement layer
+  compared beats at 1e-9 while `analyzeVoice` allowed the few hundredths of a
+  beat a played or humanized part leaves, so on one track the labels saw a
+  predecessor the conflicts did not: parallel fifths, voice crossings and leaps
+  across a legato boundary went unreported, and a single legato line was split
+  into several sub-voices that were then reported as clashing with themselves.
+  Both questions — the same instant, and one note after another — are asked in
+  one place now, each with the tolerance it takes, so `conflicts` reports more on
+  a humanized part and agrees with `analyzeVoice` about the same track. Notes
+  struck together are assigned to lanes as a slice rather than paired off by
+  position, so a C-E-G thinning to E-G no longer hands the E the C's lane and
+  invents the leap that follows from it.
+
+- **An option naming a harmony is honoured, or refused.** `tensionCurveFrom`
+  passed `key`, `keys` and `harmonyTracks` through and then overwrote them with
+  the analysis it was handed, so naming any of them changed nothing and said
+  nothing; the curve is now taken under the harmony the caller named, keeping
+  only what that naming leaves standing. `analyzeArrangement` and
+  `createArrangementSession` refuse a `minSeverity` outside the severity scale,
+  which used to narrow the report to nothing and read exactly like a clean
+  arrangement, and which the class API already refused. An index in
+  `harmonyTracks` naming a percussion track is refused as well: those pitches
+  state no harmony, so the analysis came back blaming the music for clashing with
+  a harmony nothing had stated. An unknown `track.role` — `'percussion'`, the
+  word a MIDI import writes — was read as `'other'` and pooled into the key and
+  chord inference; it now throws `InvalidInputError`, at the analysis entry point
+  and at `Arrangement.of` alike. `Arrangement.of(tracks, { ts })` given a `Meter`
+  stored `{}` and could not be read back, and `analyzePolyphony`, which the class
+  API is a skin over, is now exported from the package root and from `./analyze`.
+
+- **An instrument is read before the passage is.** A percussion profile no limb
+  can reach was accepted and answered `Infinity` from `range()`, and a stringed
+  profile with no strings was accepted whenever the passage happened to hold no
+  note that exposed it; both are refused now, empty passage or not. An
+  `articulation` outside `ARTICULATIONS` was carried down to the report and came
+  back as `articulationUnavailable` — the musical claim that the instrument
+  cannot play a technique that does not exist — and is an `InvalidInputError`
+  from `Score.of`, `Score.fromJSON` and `playability` instead; a known technique
+  the instrument lacks still reads as a playability issue, which is a fact about
+  the instrument. Simultaneity is measured as the distance between two onsets
+  rather than by the grid cell each rounds into, so two strokes a ten-thousandth
+  of a beat apart are one attack wherever a fixed grid would have cut between
+  them and `limbConflict` is reported across what used to be a bucket edge. A
+  note of no length strikes nothing, so it counts toward neither the limbs at
+  work nor the voices at once.
+
+- **`foldIntoRange` answers with the nearest octave.** The search ran upward
+  first and took the first octave it found, so over a gapped range it changed the
+  voice rather than the register: `foldIntoRange(58, DRUM_KIT)` returned the
+  shaker two octaves up where the open hi-hat sits an octave below, and now
+  returns 46. Equal distances take the upper octave. `'guitar (drop D)'` also
+  resolves to the guitar's own transposition — retuning a string does not move
+  the interval between the part and the pitch it sounds — so
+  `Instrument.guitarDropD().soundingPitch('C4')` returns C3 instead of throwing.
+
+- **A tuning argument is checked for its shape before its fields.** Passing
+  `null` where a tuning belongs surfaced as the library's own `TypeError` rather
+  than as an `InvalidInputError` about the caller's input, in every function and
+  method that takes one. `centsToRatio` returned `Infinity` or `0` for an offset
+  spanning no ratio a number holds, and throws now; the offsets a pitch bend uses
+  are unaffected. `JUST_RATIOS` is typed by the semitone classes it actually
+  lists, so indexing it outside 0..12 is a compile error; the runtime table is
+  unchanged.
+
+- **Where a meter or a tuning used to be supplied by default, it is asked for.**
+  `Rhythm.of(events)` recorded 4/4 when no meter was named, and a pattern in 6/8
+  then answered every metric question — which beats are strong, where the bars
+  fall, how dense it is — on the wrong pulse, with nothing downstream able to
+  tell that reading from an intended one; the meter is now required, as
+  `Rhythm.generate` and `generateRhythm` already required it. `Tuning.of`,
+  `Tuning.fromData` and `Tuning.fromJSON` completed a table that had lost
+  `refFreq` or `refStep` with A=440 and step 69, silently retuning a Baroque
+  pitch standard that did not survive storage; a missing field is now an
+  `InvalidInputError` naming it. Both are refusals where the library used to
+  answer — as are several of the entries above, which is the shape of this patch:
+  input that used to produce a plausible wrong answer now throws.
+
+- **A tempo is one the conversions survive, and a score is read at all of its
+  tempos.** A bpm small enough to make `beatsToSeconds` overflow to `Infinity`
+  passed validation, and the message quoting the lower bound quoted a value that
+  could not be read; the bound is 0.1 bpm, one beat every ten minutes.
+  `Score.toTicks` returned `-0` for a position rounding onto the downbeat from
+  below, which is the same tick as `0` but keys differently under `Object.is`.
+  `Score.playability` read a single tempo at beat 0, so a passage under an
+  accelerando was judged at the tempo the piece opened in; it now reads the whole
+  tempo map, and the beats its issues name are still the score's own.
+
+- **A tied chain never rises in length.** `beatsToTiedDurations` and
+  `Duration.tieChain` wrote a dot wherever a value was followed by its own half,
+  including where that made the dotted value outlast the value tied before it: 10
+  beats came back as a whole note tied to a dotted whole. It is `[whole, whole,
+  half]` now, and 11.5 beats `[whole, whole, double-dotted half]`. The tolerance
+  `beatsToDuration` matches within is documented as what it is — 1e-6 quarter
+  notes whatever `beatUnit` names, so a whole-note beat narrows it in proportion.
+
+- **A note index hands out what it read.** The wrappers in `NoteEventIndex.notes`
+  were unfrozen, and `endBeat` is what the active-note search is built from, so a
+  host writing to one left the index answering from a span nothing else knew
+  about; writing throws now. Two notes of the same pitch name no voice apart, so
+  `'highest'` and `'lowest'` settle a unison on the same note — the lower
+  `originalIndex` — rather than on whichever end of the array the scan reached
+  last.
+
+- **`generateProgression` draws its preset inside the context it was given.**
+  The preset was chosen from a context rebuilt out of the bare seed, so a caller
+  supplying its own `rng` to reroll got the same loop every time, and a caller
+  pinning an `algorithmVersion` got the build default's preset under its own
+  substitutions. The choice now comes from the resolved context like every other
+  draw of the call, which means output moves for the same seed wherever a source
+  was supplied or a version pinned. With the build's default version and no
+  supplied source, nothing moved. `pickProgressionPreset` takes that same context
+  as its second argument, and still takes a bare seed.
+
+- **A saved composer records the settings its parts were written under.**
+  `Composer.data` and `toJSON` carried a seed and an `algorithmVersion` only when
+  the caller had named them, so a project file reopened under whatever the build
+  it was opened on defaults to — a different piece under the same name, with
+  nothing in the file to say so. Both are resolved and written out now.
+  `Composer.equals` compared the settings held on one side against the data
+  handed out by the other, so it answered "different" for a composer holding a
+  source and "same" for two drawing from different ones; both sides are projected
+  alike, and a source is compared by identity, being a handle on a stream rather
+  than a setting.
+
+- **The documentation states what the code does.** `Meter.format` and
+  `formatTimeSignature` throw for a pulse-counted grouping whose groups differ —
+  12/8 as `[1, 1, 2]` — which the TSDoc and the guides described as a fall back to
+  the plain form; the behaviour is unchanged and now carries a `@throws`.
+  `formatBarPosition` and `Meter.formatPosition` print two forms, and only one
+  was documented: `'3.2'` on a felt beat, `'3.2+0.5'` between them, which most
+  onsets of an ordinary piece fall on. `PhraseOptions.meters` said the default
+  phrase length follows the meter in force at each beat, where it is taken once
+  from the meter the span opens in. The performance guide states
+  `createNoteEventIndex`'s lookups as `O(log n + k)`, k being the size of the
+  simultaneous cluster an answer is settled from. `Tuning.of` and `Tuning.edo`
+  document the conditions they actually check, including that a negative or
+  fractional reference step is accepted — a tuner reading lands on one. And every
+  `@example` in the published types imports through the package name and imports
+  what it uses: two called `spelledKeyOf` without importing it, and three reached
+  into the source tree by relative path. The `phrasesFromTimeline` and
+  `structuralCadences` examples run over input that actually cadences, and their
+  closing comments name the values they return.
 
 - **A key keeps the tonic it was written with.** Ten public entry points reduced
   a key to its pitch classes on the way in and spelled a tonic back out of them,
