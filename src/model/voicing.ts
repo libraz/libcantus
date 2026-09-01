@@ -1,7 +1,6 @@
 import { InvalidInputError } from '../core/errors/index.js';
 import type { Note as NoteData, NoteLike } from '../core/pitch/index.js';
 import { toNoteData } from '../core/pitch/index.js';
-import type { KeyScale } from '../core/types.js';
 import { assertInteger, assertMidiPitch } from '../core/validation/index.js';
 import {
   type VoiceIndependenceOptions,
