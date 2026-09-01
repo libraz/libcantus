@@ -2,11 +2,20 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseTimeSignature } from '../src/core/meter/index.js';
+import type { NoteEvent } from '../src/core/types.js';
 import { type BassSegment, generateBassLine } from '../src/generate/bass/index.js';
+import { generateCounterMelody } from '../src/generate/countermelody/index.js';
 import { type DrumsOptions, generateDrums } from '../src/generate/drums/index.js';
+import {
+  applyGrooveTemplate,
+  extractGrooveTemplate,
+  humanize,
+} from '../src/generate/groove/index.js';
 import { generateMotif } from '../src/generate/motif/index.js';
+import { ornament } from '../src/generate/ornament/index.js';
 import { generateProgression } from '../src/generate/progression/index.js';
 import { generateRhythm } from '../src/generate/rhythm/index.js';
+import type { Chord } from '../src/theory/chord/index.js';
 import { makeChord } from '../src/theory/chord/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
 import { ROOT } from './support/source-files.js';
@@ -51,6 +60,48 @@ const drums: DrumsOptions = {
   section: 'chorus',
 };
 
+/** One chord per bar: C, Am, F, G, against which the counter line is written. */
+const counterProgression: Chord[] = [
+  makeChord(0, 'maj'),
+  makeChord(9, 'min'),
+  makeChord(5, 'maj'),
+  makeChord(7, 'maj'),
+];
+const counterChordAt = (beat: number): Chord | null =>
+  counterProgression[Math.floor(beat / 4) % counterProgression.length] ?? null;
+
+/** Quarter-note lead line, chord tones on the strong beats. */
+const counterMelody: NoteEvent[] = [72, 71, 67, 64, 69, 67, 64, 60].map((pitch, i) => ({
+  pitch,
+  startBeat: i,
+  durationBeat: 1,
+  velocity: 100,
+}));
+
+/** Eighth notes spanning strong and weak positions, with every step a real move. */
+const ornamentSource: NoteEvent[] = [60, 62, 64, 62, 60, 65, 64, 60].map((pitch, i) => ({
+  pitch,
+  startBeat: i * 0.5,
+  durationBeat: 0.5,
+  velocity: 90,
+}));
+
+/** A loosely played performance, quantization deviations included, to learn a groove from. */
+const grooveSource: NoteEvent[] = [
+  { pitch: 36, startBeat: 0.02, durationBeat: 0.5, velocity: 100 },
+  { pitch: 42, startBeat: 0.48, durationBeat: 0.5, velocity: 70 },
+  { pitch: 38, startBeat: 1.05, durationBeat: 0.5, velocity: 95 },
+  { pitch: 42, startBeat: 1.52, durationBeat: 0.5, velocity: 68 },
+];
+
+/** Stiff, quantized events the groove template is imposed on before humanizing. */
+const grooveTarget: NoteEvent[] = [
+  { pitch: 36, startBeat: 0, durationBeat: 0.5, velocity: 100 },
+  { pitch: 42, startBeat: 0.5, durationBeat: 0.5, velocity: 70 },
+  { pitch: 38, startBeat: 1, durationBeat: 0.5, velocity: 95 },
+  { pitch: 42, startBeat: 1.5, durationBeat: 0.5, velocity: 70 },
+];
+
 /**
  * One recorded generation per seeded entry point.
  *
@@ -75,6 +126,48 @@ const CASES: Readonly<Record<string, () => unknown>> = {
   'progression/rock@11': () =>
     generateProgression({ key: cMajor, style: 'rock', bars: 4, ctx: { seed: 11 } }),
   'motif@5': () => generateMotif({ key: cMajor, bars: 2, ctx: { seed: 5 } }),
+  // `rhythm: 'complement'` is the seed-consuming onset strategy (`'follow'`
+  // mirrors the melody and, per the generator's own doc, leaves the seed
+  // nothing to decide); the default `'pop'` profile favors a run of parallel
+  // thirds or sixths and the default `register: 'below'` writes under the melody.
+  'countermelody/complement-pop@9': () =>
+    generateCounterMelody({
+      melody: counterMelody,
+      chordAt: counterChordAt,
+      key: cMajor,
+      rhythm: 'complement',
+      profile: 'pop',
+      ctx: { seed: 9 },
+    }),
+  // `profile: 'strict'` swaps in the weights that favor contrary motion over a
+  // parallel run, and `register: 'above'` takes the branch that writes over the
+  // melody instead of under it — both distinct from the case above.
+  'countermelody/complement-strict-above@3': () =>
+    generateCounterMelody({
+      melody: counterMelody,
+      chordAt: counterChordAt,
+      key: cMajor,
+      rhythm: 'complement',
+      profile: 'strict',
+      register: 'above',
+      ctx: { seed: 3 },
+    }),
+  // `'ghost'` is eligible on weak positions and scales velocity down.
+  'ornament/ghost@6': () =>
+    ornament(ornamentSource, { style: 'ghost', amount: 0.6, ctx: { seed: 6 } }),
+  // `'slide'` is eligible wherever the line actually moves (any position, strong
+  // or weak) and leaves velocity untouched — a different eligibility predicate
+  // and a different velocity branch than `'ghost'`.
+  'ornament/slide@6': () =>
+    ornament(ornamentSource, { style: 'slide', amount: 0.6, ctx: { seed: 6 } }),
+  // `extractGrooveTemplate` and `applyGrooveTemplate` are pure functions of their
+  // input, with nothing seeded; `humanize` is the seed-consuming step, so the
+  // case runs the whole pipeline and pins what the seed decides at the end of it.
+  'groove/humanize@2': () => {
+    const template = extractGrooveTemplate(grooveSource, ts, 4);
+    const grooved = applyGrooveTemplate(grooveTarget, template, ts);
+    return humanize(grooved, { ts, ctx: { seed: 2 } });
+  },
 };
 
 /** The recorded outputs, in a form a diff reads. */
