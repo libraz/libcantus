@@ -163,7 +163,7 @@ JSON.stringify(composer.drums({ bars: 2, style: 'standard', section: 'verse' }))
 // true
 ```
 
-A numeric context such as `1` is shorthand for `{ seed: 1 }`. Random choices are derived by position, and `algorithmVersion` pins the generation contract. See [Determinism and seeding](determinism-and-seeding.md) for what a project file has to store to reopen a generated part as itself.
+A numeric context such as `1` is shorthand for `{ seed: 1 }`. Random choices are derived by position, and `algorithmVersion` records which reading of the parameters a take was made under. See [Determinism and seeding](determinism-and-seeding.md) for what a project file has to store to reopen a generated part as itself.
 
 ## Instrument constraints
 

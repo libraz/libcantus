@@ -126,7 +126,7 @@ Terms as this library uses them. Where a musical term has more than one common m
 
 **Difficulty** — A ceiling from 1 to 5 on how hard the result may be to play. It removes candidates rather than increasing intensity, and governs the timing layer alone.
 
-**Algorithm version** — The number that carries the reproducibility promise, separate from the package version. For a fixed version, the same inputs give the same output from any build that accepts it.
+**Algorithm version** — The number that says which reading of a project's parameters a take was written against, separate from the package version. It is drawn into every seed, so two versions never draw the same stream; it does not freeze a reading against correction.
 
 **Vocabulary** — Caller-supplied figures a generator may draw on, over and above the built-in ones.
 

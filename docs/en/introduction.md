@@ -48,7 +48,7 @@ The layers stack: `theory` builds on `core`, `analyze` on `theory`, `generate` o
 
 **Inspection never rewrites.** `checkPartWriting` reports what an exercise did wrong and returns the exercise unchanged. `playability` says whether a passage can be played and edits nothing. Rewriting is what the generators do, and they return new material rather than modifying their input.
 
-**Generation is reproducible.** A seed and a pinned algorithm version give the same notes from any build that accepts that version. Random draws are addressed by position rather than by call order, so changing one parameter does not redraw everything after it.
+**Generation is reproducible.** The same seed, algorithm version and parameters give the same notes from the same build, and a project records all three. Random draws are addressed by position rather than by call order, so changing one parameter does not redraw everything after it.
 
 ## What the engine assumes
 

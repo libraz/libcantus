@@ -136,7 +136,7 @@ A part written for a transposing instrument is not at concert pitch. Convert wit
 ## Storing analysis and generation in a project file
 
 - **Analysis results** are derived data. Recompute them rather than storing them, unless the recomputation is too slow for the host's needs, in which case store them as a cache keyed by the notes they came from.
-- **Generated parts** are not derived data in the same sense: reproducing them needs the seed, the resolved `algorithmVersion`, and every generator option. Store those, and preferably the emitted notes as well. See [Determinism and seeding](determinism-and-seeding.md).
+- **Generated parts** are not derived data in the same sense: reproducing them needs the seed, the resolved `algorithmVersion`, every generator option, and the package version that produced them. Store those, and preferably the emitted notes as well. See [Determinism and seeding](determinism-and-seeding.md).
 - **User edits always win.** A host that regenerates over a user's edit has lost the user's work; keep the generated part and the edited part as separate objects.
 
 ## What the library does not decide

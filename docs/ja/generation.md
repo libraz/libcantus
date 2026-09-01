@@ -163,7 +163,7 @@ JSON.stringify(composer.drums({ bars: 2, style: 'standard', section: 'verse' }))
 // true
 ```
 
-`1` のような数値コンテキストは `{ seed: 1 }` の略記です。乱数の選択は位置から導かれ、`algorithmVersion` が生成の契約を固定します。生成したパートをそのまま開き直すためにプロジェクトファイルへ保存する項目は、[決定性とシード](determinism-and-seeding.md)を参照してください。
+`1` のような数値コンテキストは `{ seed: 1 }` の略記です。乱数の選択は位置から導かれ、`algorithmVersion` は、そのテイクがパラメータのどの読みで作られたかを記録します。生成したパートをそのまま開き直すためにプロジェクトファイルへ保存する項目は、[決定性とシード](determinism-and-seeding.md)を参照してください。
 
 ## 楽器による制約
 

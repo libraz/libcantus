@@ -21,6 +21,8 @@ Storing `[min, max]` instead would make a five-string bass, a drop tuning, and a
 
 A percussion profile is described by limbs rather than range: `reach` says which limbs can strike each voice, in preference order. A voice no limb can reach is not on the instrument, and two voices needing the same limb at the same instant cannot both sound.
 
+`overdub` names the voices played on a pass of their own. A tambourine or a shaker riding a groove whose backbeat already commits both hands is a second pass, not a third arm, so an overdubbed voice takes no limb from the kit and none from another overdub — it still keeps its `reach` entry, because it is held in a hand on its own pass.
+
 The built-in stringed profiles are `BASS_4_STRING`, `BASS_5_STRING`, `GUITAR_STANDARD`, and `GUITAR_DROP_D`; `DRUM_KIT` is the built-in percussion profile, a kit whose limbs and reach are already filled in. Anything else is a plain object literal of the same shape.
 
 ## The Instrument class

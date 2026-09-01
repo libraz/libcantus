@@ -99,7 +99,7 @@ Naming a `bpm` matters when a ceiling is in play: without a tempo there is nothi
 
 ## Pinning the algorithm version
 
-Package versions cannot carry a reproducibility promise. A bug fix inside a generator is a patch release and still moves every note. `ALGORITHM_VERSION` is the separate number that does carry it:
+A package version cannot say which reading of a project's parameters a take was made under. A bug fix inside a generator is a patch release and still moves every note. `ALGORITHM_VERSION` is the separate number that says it:
 
 ```ts
 import { ALGORITHM_VERSION, MIN_ALGORITHM_VERSION, resolveAlgorithmVersion } from '@libraz/libcantus';
@@ -108,7 +108,9 @@ resolveAlgorithmVersion(undefined) === ALGORITHM_VERSION; // true
 resolveAlgorithmVersion(MIN_ALGORITHM_VERSION); // 1
 ```
 
-For a fixed algorithm version, the same seed and the same documented parameters produce the same generated output from any build that accepts that version. Changing what a generator returns for a version it already accepts is a defect; new behaviour raises the constant instead, and the older version keeps producing what it produced.
+For a fixed algorithm version, the same seed and the same documented parameters produce the same generated output from a given build. The number says which reading of those parameters a project was written against.
+
+What it does not do is freeze that reading against correction. The generators hold one implementation rather than one per version, so pinning an older number selects a different draw of the current implementation and does not restore what that number produced before. A fix to output that was musically wrong therefore moves the notes of a version already in use; it ships as a patch and is stated in the changelog. Raising the constant marks a deliberate change of approach rather than a correction, and reproducing a piece exactly means recording the package version alongside the seed and the algorithm version.
 
 The version takes part in every seed derivation, so two versions never share a draw. A version this build does not produce is rejected rather than rendered as another one, since an older build cannot reproduce a project saved by a newer one.
 
@@ -130,6 +132,7 @@ To reopen a generated part as itself, record:
 
 - the seed,
 - the resolved `algorithmVersion`,
+- the package version the take was made under,
 - every option passed to the generator, including `complexity` and `bpm`,
 - any vocabulary the caller supplied.
 

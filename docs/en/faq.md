@@ -40,7 +40,7 @@ In practice yes: the same notes give the same reading. It is not versioned, thou
 ## Generation
 
 **Why did the same seed give different notes after upgrading?**
-It should not, for a pinned `algorithmVersion`. If it did without one, the default version was raised; pin the version recorded with the project. If it did with one, that is a defect worth reporting.
+It should not, for a pinned `algorithmVersion` under the package version the project was made with. If it was not pinned, the default version was raised; pin the version recorded with the project. If it was pinned and the package version changed, a generator was corrected: the algorithm version says which reading a project was written against, not which build produced it, so a fix to musically wrong output moves the notes of a version already in use. The changelog states those. If nothing about the build changed and the notes did, that is a defect worth reporting.
 
 **Why did raising `complexity.rhythmic` move notes I wanted to keep?**
 It should not. Draws are addressed by position, so raising a dial only adds events. If notes moved, something else changed too — the seed, the tempo, the bar count, or an option that shifts the grid.

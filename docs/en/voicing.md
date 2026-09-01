@@ -97,8 +97,8 @@ Pass `previousChord` alongside `key` when the chord being left had a seventh: ch
 | Style | What it does |
 | --- | --- |
 | `close` | Chord tones stacked from the bass, no gaps. |
-| `drop2` | The second voice from the top dropped an octave. |
-| `drop3` | The third voice from the top dropped an octave. |
+| `drop2` | The second voice from the top dropped an octave, which puts that voice in the bass. Takes at least three voices. |
+| `drop3` | The third voice from the top dropped an octave. Takes at least four voices. |
 | `shell` | Root, third, and seventh — the guide tones. A sixth chord keeps its sixth in place of the seventh, and a triad, having neither, keeps its fifth. |
 | `rootless` | Root omitted, keeping third, fifth, seventh, and tensions. |
 
@@ -123,7 +123,12 @@ Voicing.forChord('D', { style: 'shell' }).pitches; // [62, 66, 69]
 Voicing.forChord('Dm7', { style: 'drop2', rootless: true }).pitches; // [57, 65, 72]
 Voicing.forChord('Dm7', { topNote: 5 }).pitches; // [69, 72, 74, 77]
 Voicing.forChord('Dm7', { topNote: 6 }).pitches; // [69, 72, 74, 77]
+Voicing.forChord('C/E', { style: 'drop2' }).pitches; // [52, 60, 67]
 ```
+
+A drop lowers one voice under the rest, so that voice is the voicing's bass — which is what tells the drop-2 voicings of one chord apart. A slash bass therefore names the voice to drop: `C/E` as a drop-2 is the drop-2 whose bass is E, not a first-inversion stack with E pushed below the fifth already dropped there, which would leave a hole wider than an octave in the middle of it. A bass the chord does not contain is no voice of the stack, so it keeps the bottom and the drop happens above it.
+
+A chord with fewer voices than its drop asks for is voiced in close position. The third voice from the top of a triad is its bottom one, and lowering that opens nothing: it leaves the two voices above it more than an octave up. A slash bass the chord does not contain is not counted among the voices either, since it sounds under the stack rather than in it.
 
 `octave` sets where the stack starts, in scientific pitch notation — octave 4 puts the bass near middle C.
 
