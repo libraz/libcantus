@@ -34,7 +34,7 @@ import { spellScale } from '../spelling/index.js';
 import { type KeyLike, toKeyScale } from './coerce.js';
 import type { ResolvedKey } from './identity.js';
 import { majorKey, minorKey } from './key.js';
-import { CHROMATIC_MASK, variantOfMask } from './masks.js';
+import { CHROMATIC_MASK, isMinorMask, variantOfMask } from './masks.js';
 import type { KeyMode } from './signature.js';
 import { isSignatureKey, keyFromFifths, keySignatureFifths } from './signature.js';
 
@@ -62,11 +62,6 @@ const MINOR_TONIC_FIFTHS = 3;
 const FLATTEST_TONIC_FIFTHS = -MAX_CONVENTIONAL_FIFTHS;
 const SHARPEST_TONIC_FIFTHS = MAX_CONVENTIONAL_FIFTHS + MINOR_TONIC_FIFTHS;
 
-/** Whether a mode mask has a minor third and no major third — it leans flat. */
-function isMinorMode(modeMask12: number): boolean {
-  return ((modeMask12 >> 3) & 1) === 1 && ((modeMask12 >> 4) & 1) === 0;
-}
-
 /** Validate a key's mode mask, naming it the way the caller sees it. */
 function assertModeMask(key: KeyScale, name = 'key'): number {
   return assertInteger(key.modeMask12, `${name}.modeMask12`, 1, CHROMATIC_MASK);
@@ -79,7 +74,7 @@ function assertModeMask(key: KeyScale, name = 'key'): number {
  * signature never disagree about a key's mode.
  */
 function modeOf(key: KeyScale): KeyMode {
-  return isMinorMode(assertModeMask(key)) ? 'minor' : 'major';
+  return isMinorMask(assertModeMask(key)) ? 'minor' : 'major';
 }
 
 /** The other of the two modes a signature is read in. */
@@ -99,7 +94,7 @@ function oppositeMode(mode: KeyMode): KeyMode {
 function soundsLike(a: KeyScale, b: KeyScale): boolean {
   return (
     pitchClassOf(a.rootPc) === pitchClassOf(b.rootPc) &&
-    isMinorMode(a.modeMask12) === isMinorMode(b.modeMask12)
+    isMinorMask(a.modeMask12) === isMinorMask(b.modeMask12)
   );
 }
 
@@ -262,7 +257,8 @@ export function spelledKeyOf(key: KeyScale): ResolvedKey {
 }
 
 /**
- * The relative key: the same key signature read in the other mode.
+ * The relative key: for a plain major or minor key, the same key signature read
+ * in the other mode.
  *
  * C major and A minor share a signature, and so are each other's relative; the
  * relation is its own inverse for a plain major or minor key. Because the new
@@ -272,7 +268,9 @@ export function spelledKeyOf(key: KeyScale): ResolvedKey {
  * A key that is not a plain major or minor is read through the mode its third
  * names and stepped from where its tonic stands on the circle, the origin every
  * relation here shares: the relative of D dorian is F major, the relative of the
- * D minor its third names.
+ * D minor its third names. The shared-signature reading does not carry over to
+ * those — D dorian is written with no accidentals and F major with one — and the
+ * modes have no relative of their own for it to be measured against.
  *
  * @param tonic The spelled tonic of the key, as a note name, note data, or a
  *   `Note`.
@@ -517,11 +515,18 @@ const CLOSELY_RELATED: readonly {
  * These are the keys the German and Japanese teaching tradition counts as a
  * key's near relations: the relative and parallel keys, the dominant and the
  * subdominant, and the relatives of those two. For C major they are A minor,
- * C minor, G major, F major, E minor and D minor, in that order. Five of them
- * are written within one accidental of the key's own signature — the relative
- * shares it exactly and the other four stand one away; the parallel key does
- * not — C minor is three flats away from C major — and belongs to the set for
- * the tonic it shares rather than for the signature it carries.
+ * C minor, G major, F major, E minor and D minor, in that order. For a plain
+ * major or minor key five of them are written within one accidental of the key's
+ * own signature — the relative shares it exactly and the other four stand one
+ * away; the parallel key does not — C minor is three flats away from C major —
+ * and belongs to the set for the tonic it shares rather than for the signature
+ * it carries.
+ *
+ * A key that is not a plain major or minor is read through the mode its third
+ * names, so its relations are walked from where its tonic stands on the circle
+ * rather than from its own signature, and the accidental counts above do not
+ * describe them: the relative of D dorian is F major, one flat against dorian's
+ * none.
  *
  * @param tonic The spelled tonic of the key, as a note name, note data, or a
  *   `Note`.

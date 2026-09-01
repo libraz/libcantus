@@ -4,6 +4,7 @@ import { isLibcantusError } from '../src/core/errors/index.js';
 import type { Note } from '../src/core/pitch/index.js';
 import { noteToPitchClass, parseNote, pitchClassOf } from '../src/core/pitch/index.js';
 import type { KeyScale } from '../src/core/types.js';
+import { Key } from '../src/model/key.js';
 import type { Chord } from '../src/theory/chord/index.js';
 import { chordPitchClasses, chordQualities, makeChord } from '../src/theory/chord/index.js';
 import {
@@ -125,27 +126,39 @@ describe('accidentals in figures', () => {
     expect(realizedNames('E', '#', aMinor)).toEqual(['E', 'G#', 'B']);
   });
 
-  it('spells the raised third from the key, not from the nearest sharp', () => {
-    // The third above G in C minor is a Bb, so raising it gives a B natural.
-    expect(realizedNames('G', '#', cMinor)).toEqual(['G', 'B', 'D']);
-    expect(realizeFiguredBass(parseNote('G'), '#', cMinor)).toMatchObject({
+  it('names the note the accidental writes, not a move from the key', () => {
+    // The third above G in C minor is a Bb, and the leading tone that replaces
+    // it is a B natural — the sign the score prints there is the natural.
+    expect(realizedNames('G', 'n', cMinor)).toEqual(['G', 'B', 'D']);
+    expect(realizeFiguredBass(parseNote('G'), 'n', cMinor)).toMatchObject({
       rootPc: 7,
       quality: 'maj',
       bassPc: 7,
     });
-    // And a flat lowers whatever the key gives: the third above Db in Ab major
-    // is an F, so it goes to Fb rather than to an enharmonic E.
+    // A sharp on that same figure names the sharp note, which over this bass is
+    // a B sharp and not the leading tone.
+    expect(realizedNames('G', '#', cMinor)).toEqual(['G', 'B#', 'D']);
+    // A flat names the flat note: the third above Db in Ab major is an F, and
+    // `b3` writes the Fb rather than an enharmonic E.
     expect(realizedNames('Db', 'b', majorKey(8))).toEqual(['Db', 'Fb', 'Ab']);
   });
 
-  it('reaches a double accidental when the key already spells a sharp', () => {
-    // G# minor: the third above D# is an F#, so the raised third is an F##.
-    expect(realizedNames('D#', '#', minorKey(8))).toEqual(['D#', 'F##', 'A#']);
-    expect(realizeFiguredBass(parseNote('D#'), '#', minorKey(8))).toMatchObject({
+  it('writes a double accidental with the double sign a score prints', () => {
+    // G# minor: the third above D# is an F#, and the raised third is an F##.
+    expect(realizedNames('D#', '##', minorKey(8))).toEqual(['D#', 'F##', 'A#']);
+    expect(realizeFiguredBass(parseNote('D#'), '##', minorKey(8))).toMatchObject({
       rootPc: 3,
       quality: 'maj',
       bassPc: 3,
     });
+  });
+
+  it('raises what the key gives on the crossed figure, whatever sign that lands on', () => {
+    // The one sign that moves rather than names, so it writes each key's
+    // leading tone without the caller knowing which accidental that takes.
+    expect(realizedNames('G', '+', cMinor)).toEqual(['G', 'B', 'D']);
+    expect(realizedNames('E', '+', aMinor)).toEqual(['E', 'G#', 'B']);
+    expect(realizedNames('D#', '+', minorKey(8))).toEqual(['D#', 'F##', 'A#']);
   });
 
   it('alters the interval an accidental is written on', () => {
@@ -156,7 +169,8 @@ describe('accidentals in figures', () => {
       bassPc: 0,
     });
     expect(realizedNames('C', '#42')).toEqual(['C', 'D', 'F#', 'A']);
-    // `+` is the typed form of the slashed figure and raises it the same way.
+    // The crossed figure raises what the key gives, which in a key that writes
+    // the letter plain is the same note the sharp names.
     expect(realizeFiguredBass(parseNote('C'), '+42', cMajor)).toEqual(
       realizeFiguredBass(parseNote('C'), '#42', cMajor),
     );
@@ -173,7 +187,7 @@ describe('accidentals in figures', () => {
   });
 
   it('records the spelling of the root and the bass on the chord', () => {
-    const chord = realizeFiguredBass(parseNote('D#'), '#', minorKey(8));
+    const chord = realizeFiguredBass(parseNote('D#'), '##', minorKey(8));
     expect(chord.rootSpelling).toEqual({ letter: 1, alter: 1 });
     expect(chord.bassSpelling).toEqual({ letter: 1, alter: 1 });
     expect(noteNames(spellChord(chord, parseNote('G#'), minorKey(8)))).toEqual(['D#', 'F##', 'A#']);
@@ -263,8 +277,25 @@ describe('figuredBassOf writes the figures back', () => {
   });
 
   it('writes an accidental for every interval the key does not give', () => {
-    expect(figuredBassOf(realizeFiguredBass(parseNote('G'), '#', cMinor), cMinor)).toBe('#3');
+    // The leading tone of C minor is a B natural under a signature carrying B
+    // flat, which is the sign the score prints in front of it.
+    expect(figuredBassOf(realizeFiguredBass(parseNote('G'), 'n', cMinor), cMinor)).toBe('n3');
     expect(figuredBassOf(realizeFiguredBass(parseNote('C'), '#42', cMajor), cMajor)).toBe('#42');
+  });
+
+  it('writes the natural sign wherever the signature alters the letter', () => {
+    // The dominant of every minor key whose signature flattens its seventh
+    // degree: the raised third is a natural, never a sharp.
+    for (const name of ['C minor', 'F minor', 'Bb minor', 'Eb minor', 'Ab minor', 'Db minor']) {
+      const key = Key.parse(name);
+      const dominant = key.chord(5, 'maj');
+      expect(figuredBassOf(dominant.data, key), name).toBe('n3');
+      const read = realizeFiguredBass(key.degree(5).data, 'n3', key);
+      expect(read.rootPc, name).toBe(dominant.data.rootPc);
+      expect(read.quality, name).toBe('maj');
+    }
+    // A sharp is still a sharp where the signature leaves the letter alone.
+    expect(figuredBassOf(realizeFiguredBass(parseNote('E'), '#', aMinor), aMinor)).toBe('#3');
   });
 
   it('round-trips every figure it emits', () => {
@@ -276,8 +307,10 @@ describe('figuredBassOf writes the figures back', () => {
       ['B', '65', cMajor, '65'],
       ['D', '43', cMajor, '43'],
       ['F', '2', cMajor, '42'],
-      ['G', '#', cMinor, '#3'],
+      ['G', 'n', cMinor, 'n3'],
+      ['G', '+', cMinor, 'n3'],
       ['E', '#', aMinor, '#3'],
+      ['D#', '##', minorKey(8), '##3'],
       ['C', '#42', cMajor, '#42'],
     ];
     for (const [bass, figures, key, expected] of cases) {

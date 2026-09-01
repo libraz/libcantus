@@ -10,7 +10,13 @@ import { assertInteger, assertOneOf } from '../../core/validation/index.js';
 import { type KeyLike, toKeyScale } from './coerce.js';
 import type { ResolvedKey } from './identity.js';
 import { majorKey, minorKey } from './key.js';
-import { HARMONIC_MINOR_MASK, MAJOR_MASK, MELODIC_MINOR_MASK, variantOfMask } from './masks.js';
+import {
+  HARMONIC_MINOR_MASK,
+  isMinorMask,
+  MAJOR_MASK,
+  MELODIC_MINOR_MASK,
+  variantOfMask,
+} from './masks.js';
 
 /**
  * Which of the two modes a key signature is read in.
@@ -66,11 +72,6 @@ const DIATONIC_MODE_OFFSETS = new Map<number, number>([
   [rotateMask(MAJOR_MASK, 11), -5], // locrian
 ]);
 
-/** Whether a mode mask has a minor third and no major third — it leans flat. */
-function hasMinorThird(modeMask12: number): boolean {
-  return ((modeMask12 >> 3) & 1) === 1 && ((modeMask12 >> 4) & 1) === 0;
-}
-
 /**
  * How many fifths a key's signature sits from the major key on the same tonic.
  *
@@ -84,7 +85,7 @@ function modeOffset(key: KeyScale): number {
   if (diatonic !== undefined) {
     return diatonic;
   }
-  return hasMinorThird(key.modeMask12) ? MINOR_MODE_OFFSET : 0;
+  return isMinorMask(key.modeMask12) ? MINOR_MODE_OFFSET : 0;
 }
 
 /**

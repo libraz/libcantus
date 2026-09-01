@@ -143,6 +143,13 @@ const NOT_A_CLASS_METHOD: Readonly<Record<string, string>> = {
   sustainsShift: 'reads a difficulty ceiling against a tempo',
   sustainsStrokes: 'reads a difficulty ceiling against a tempo',
 
+  // Spelling a tonic out of bare pitch classes. The class API reaches the same
+  // answer by wrapping the scale — `Key.of(scale).tonic` — and does so through
+  // the key resolver, which is where the choice is made once for the whole
+  // library. A class calling this directly would be a second place that decides
+  // how a key is written.
+  spelledKeyOf: 'the class API spells a bare scale by wrapping it in a Key',
+
   // Undecided. Each is a capability with a plausible receiver and no method,
   // and settling it means deciding whether the class API should grow or the
   // equivalence the docs claim should be narrowed. Listed so the promise is

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeArrangement } from '../src/analyze/arrange/index.js';
+import { augmentedSixthChord } from '../src/analyze/functional/index.js';
+import { spellLine } from '../src/analyze/spelling/index.js';
 import { chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
 import { formatNote } from '../src/core/pitch/index.js';
 import type { NoteEvent } from '../src/core/types.js';
@@ -7,7 +9,17 @@ import { Key } from '../src/model/key.js';
 import { Score } from '../src/model/score.js';
 import { Timeline } from '../src/model/timeline.js';
 import { spanFromChord } from '../src/theory/chord/index.js';
-import { majorKey, NAMED_SCALES, type ScaleName, spelledKeyOf } from '../src/theory/scale/index.js';
+import { figuredBassRealization, realizeFiguredBass } from '../src/theory/figured-bass/index.js';
+import {
+  majorKey,
+  NAMED_SCALES,
+  SCALE_ALIASES,
+  type ScaleAliasName,
+  type ScaleName,
+  spelledKeyOf,
+  WORLD_SCALES,
+  type WorldScaleName,
+} from '../src/theory/scale/index.js';
 
 /**
  * The identity of a key — its spelled tonic and the scale form it was read
@@ -15,7 +27,20 @@ import { majorKey, NAMED_SCALES, type ScaleName, spelledKeyOf } from '../src/the
  * the score and the timeline that carry one, and the analyses taken from them.
  */
 
-const SCALE_NAMES = Object.keys(NAMED_SCALES) as ScaleName[];
+/**
+ * Every name the public API accepts as a built-in scale, derived from the
+ * registries themselves.
+ *
+ * A name reachable through `Key.named` is a key that can be written down, so the
+ * round trip below has to cover all of them: listing a subset is how a whole
+ * register of scales came to print a word naming another scale without anything
+ * failing.
+ */
+const SCALE_NAMES: readonly (ScaleName | WorldScaleName | ScaleAliasName)[] = [
+  ...(Object.keys(NAMED_SCALES) as ScaleName[]),
+  ...(Object.keys(WORLD_SCALES) as WorldScaleName[]),
+  ...(Object.keys(SCALE_ALIASES) as ScaleAliasName[]),
+];
 
 const PITCH_CLASSES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 
@@ -52,12 +77,29 @@ function detectedHarmonicMinor(): Key {
 
 describe('a key names the scale it holds', () => {
   it('prints a scale word every built-in scale reads back', () => {
+    expect(SCALE_NAMES.length).toBeGreaterThan(Object.keys(NAMED_SCALES).length);
     for (const name of SCALE_NAMES) {
       for (const root of PITCH_CLASSES) {
         const key = Key.named(name, root);
-        expect(Key.parse(key.toString()).equals(key), key.toString()).toBe(true);
+        const text = key.toString();
+        const read = Key.parse(text);
+        // `equals` compares the sound; the tonic spelling and the scale form are
+        // the other two thirds of a key's identity and are asserted beside it.
+        expect(read.equals(key), text).toBe(true);
+        expect(read.tonic.name, text).toBe(key.tonic.name);
+        expect(read.variant, text).toBe(key.variant);
       }
     }
+  });
+
+  it('prints the scale a key outside the Western vocabulary actually holds', () => {
+    expect(Key.named('miyakoBushi', 'D').toString()).toBe('D miyako bushi');
+    expect(Key.named('todi', 'C').toString()).not.toBe('C minor');
+    expect(Key.named('ryukyu', 'C').toString()).toBe('C ryukyu');
+    // A mask a Western name already covers keeps that name, so nothing that
+    // printed a mode word before prints a tradition's name now.
+    expect(Key.named('minyo', 'C').toString()).toBe('C minor pentatonic');
+    expect(Key.named('ajam', 'C').toString()).toBe('C major');
   });
 
   it('prints the same word for the same scale however the key was built', () => {
@@ -77,6 +119,28 @@ describe('a key names the scale it holds', () => {
     for (const match of Key.detectMatches([57, 59, 60, 62, 64, 65, 68], { modes: true })) {
       expect(Key.parse(match.key.toString()).equals(match.key), match.key.toString()).toBe(true);
     }
+  });
+
+  it('hands its own spelled tonic to every reading taken in it', () => {
+    const key = Key.parse('Ab minor');
+    const scale = key.notes().map((note) => note.name);
+    // The three readings a key anchors: the figures over a bass, a spelled
+    // line, and a chromatic chord built on a degree of the key.
+    const realized = figuredBassRealization(key.tonic.data, '', key);
+    expect(realized.notes.map((note) => formatNote(note))).toEqual([scale[0], scale[2], scale[4]]);
+    expect(realizeFiguredBass(key.degree(5).data, '', key).rootPc).toBe(key.degree(5).pitchClass);
+    // A flat-side key writes its accidentals as flats throughout, so nothing in
+    // the line comes back on the sharp side of the circle.
+    for (const note of spellLine(
+      [60, 61, 63, 65, 68].map((pitch, index) => ({ pitch, startBeat: index, durationBeat: 1 })),
+      null,
+      key,
+    )) {
+      expect(note.alter, formatNote(note)).toBeLessThanOrEqual(0);
+    }
+    expect(
+      augmentedSixthChord('german', key).toneSpellings?.map((tone) => formatNote(tone)),
+    ).toEqual(['Fb', 'Ab', 'Cb', 'D']);
   });
 
   it('leaves the other notation systems the mode word they have', () => {

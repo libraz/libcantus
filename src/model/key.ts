@@ -66,6 +66,10 @@ import {
   tryResolveKeyName,
   variantOfMask,
 } from '../theory/scale/index.js';
+// Reached past the barrel deliberately: the reverse lookup from a mask to the
+// word a key prints is how this class writes itself down, not a question the
+// published scale vocabulary answers for a caller.
+import { scaleNameOfMask } from '../theory/scale/name.js';
 import { spellPitchClasses, spellScale } from '../theory/spelling/index.js';
 import type { TransposingInstrument } from '../theory/transposition/index.js';
 import { toWrittenPitch } from '../theory/transposition/index.js';
@@ -112,10 +116,14 @@ export type KeyData = ResolvedKey;
  *
  * Read from the mask alone, so the word a key prints is a function of the scale
  * it holds rather than of how it was built: a harmonic minor names itself one
- * whether it was detected or asked for by name. A mask no built-in scale names
- * has no word of its own and falls back to the mode its third makes it.
+ * whether it was detected or asked for by name. Every register a scale can be
+ * built from answers, so a key on a scale outside the Western vocabulary names
+ * that scale — a ryūkyū key prints as one instead of claiming the two degrees a
+ * major key would add to it. A mask no built-in scale names at all has no word
+ * of its own and falls back to the mode its third makes it.
  */
-function scaleWord(name: ScaleName | undefined, isMinor: boolean): string {
+function scaleWord(mask: number, isMinor: boolean): string {
+  const name = scaleNameOfMask(mask);
   if (name === undefined) {
     return isMinor ? 'minor' : 'major';
   }
@@ -672,11 +680,17 @@ export class Key {
   }
 
   /**
-   * The relative key: the same key signature read in the other mode.
+   * The relative key: for a plain major or minor key, the same key signature
+   * read in the other mode.
    *
    * Because the new tonic is read off the circle of fifths rather than
    * transposed by semitones, the relative of Db major is Bb minor and not its
    * enharmonic A# minor.
+   *
+   * A key that is not a plain major or minor is read through the mode its third
+   * names and stepped from where its tonic stands on the circle: the relative of
+   * D dorian is F major. The shared signature does not carry over to those —
+   * D dorian is written with no accidentals and F major with one.
    *
    * @returns The relative key, always a plain major or minor key.
    * @throws If this key's signature falls outside [-12, 12] fifths.
@@ -765,10 +779,16 @@ export class Key {
    *
    * These are the keys the German and Japanese teaching tradition counts as a
    * key's near relations: the relative and parallel keys, the dominant and the
-   * subdominant, and the relatives of those two. Five of them are written
-   * within one accidental of this key's signature — the relative shares it
-   * exactly and the other four stand one away; the parallel key stands three
-   * away and belongs to the set for the tonic it shares instead.
+   * subdominant, and the relatives of those two. For a plain major or minor key
+   * five of them are written within one accidental of this key's signature — the
+   * relative shares it exactly and the other four stand one away; the parallel
+   * key stands three away and belongs to the set for the tonic it shares
+   * instead.
+   *
+   * A key that is not a plain major or minor is read through the mode its third
+   * names, so its relations are walked from where its tonic stands on the circle
+   * rather than from its own signature, and those accidental counts do not
+   * describe them.
    *
    * @returns The related keys in relation order.
    * @throws If a neighbouring signature falls outside [-12, 12] fifths.
@@ -878,6 +898,11 @@ export class Key {
    * of C major gives F major. A scale with no diatonic triads — anything that
    * is not heptatonic — falls back to this key's own mode.
    *
+   * The tonic is derived rather than given, so the result is respelled to its
+   * enharmonic key whenever the letter arithmetic lands past the signatures keys
+   * are written with: the fourth degree of a C blues scale reads as F# minor,
+   * not as the Gb minor and its nine flats.
+   *
    * @param n The 1-based scale degree, as {@link Key.degree} counts them.
    * @param mode The mode of the resulting key; inferred when omitted.
    * @returns The key on that degree.
@@ -932,10 +957,17 @@ export class Key {
     return Key.#modeOn(resolved, tonic);
   }
 
-  /** A plain major or minor key on a spelled tonic. */
+  /**
+   * A plain major or minor key on a spelled tonic.
+   *
+   * The tonic is one this class derived — a scale degree of another key — so the
+   * result is held to the signatures keys are written with: the fourth degree of
+   * a C blues scale is written as an F# minor rather than as the Gb minor its
+   * letter arithmetic gives, which would be nine flats.
+   */
   static #modeOn(mode: KeyMode, tonic: Note): Key {
     const rootPc = tonic.pitchClass;
-    return new Key(mode === 'minor' ? minorKey(rootPc) : majorKey(rootPc), tonic);
+    return new Key(mode === 'minor' ? minorKey(rootPc) : majorKey(rootPc), tonic).#asWritten();
   }
 
   /**
@@ -1028,25 +1060,41 @@ export class Key {
     assertFiniteNumber(semitones, 'semitones');
     const rootPc = mod12(this.#scale.rootPc + Math.round(semitones));
     const scale = { rootPc, modeMask12: this.#scale.modeMask12 };
-    const moved = new Key(scale, this.#tonic.transpose(semitones), this.#variant);
-    if (moved.#isWritten()) {
-      return moved;
+    return new Key(scale, this.#tonic.transpose(semitones), this.#variant).#asWritten();
+  }
+
+  /**
+   * This key respelled to the enharmonic key it would actually be written as,
+   * or itself when it is already written that way.
+   *
+   * What every method that derives a tonic of its own ends on. A derived tonic
+   * can land past the signatures music is written with — nine flats, a scale
+   * needing double accidentals — and a key nobody would hand a player is not an
+   * answer to "which key is this". A key the caller spelled is never put through
+   * this: only a tonic the library chose is the library's to choose again.
+   *
+   * The enharmonic key supplies the tonic spelling only: the scale keeps this
+   * key's own mask, so a harmonic minor or a pentatonic is respelled rather than
+   * flattened into a plain major or minor key. A respelling that does not sound
+   * the same root is no respelling at all, so the key stands — deriving a key is
+   * total, and no spelling question may turn it into a throw.
+   */
+  #asWritten(): Key {
+    if (this.#isWritten()) {
+      return this;
     }
-    // The enharmonic key supplies the tonic spelling only: the scale keeps this
-    // key's own mask, so a harmonic minor or a pentatonic is respelled rather
-    // than flattened into a plain major or minor key. A respelling that does not
-    // sound the same root is no respelling at all, so the moved key stands —
-    // transposing is total, and no spelling question may turn it into a throw.
-    const other = enharmonicKeyOf(moved.tonic.data, moved.scale);
+    const other = enharmonicKeyOf(this.#tonic.data, this.#scale);
     const respelled = other === null ? null : new Note(other.tonic);
-    return respelled === null || respelled.pitchClass !== rootPc
-      ? moved
-      : new Key(scale, respelled, this.#variant);
+    return respelled === null || respelled.pitchClass !== mod12(this.#scale.rootPc)
+      ? this
+      : new Key(this.#scale, respelled, this.#variant);
   }
 
   /**
    * Whether this key is spelled the way keys are actually written, which is
-   * what decides whether {@link Key.transpose} leaves a spelling alone.
+   * what decides whether a key this class derived a tonic for keeps that
+   * spelling — {@link Key.transpose}, {@link Key.keyOnDegree} and
+   * {@link Key.forInstrument} all end on it.
    *
    * A key with a signature of its own is written wherever that signature is,
    * up to seven sharps or flats. A scale that only borrows the signature of its
@@ -1070,7 +1118,11 @@ export class Key {
    * lower than it reads — has its part written a major second higher, and a
    * concert C major becomes D major. The tonic is spelled by the interval, so
    * a concert E flat major reads as F major on that instrument rather than as
-   * E sharp major, and the mode mask is untouched.
+   * E sharp major, and the mode mask is untouched. What the interval spells is
+   * then respelled to its enharmonic key whenever it would not be written that
+   * way, since a part is what a player is actually handed: a concert F# major
+   * on a B flat clarinet reads as A flat major rather than as a G# major with an
+   * F double sharp in its signature.
    *
    * The opposite reading, a written key back to the key it sounds in, is
    * {@link Key.transposeBy} applied to {@link instrumentTransposition} — the
@@ -1085,6 +1137,7 @@ export class Key {
    * import { Key, instrumentTransposition } from '@libraz/libcantus';
    * Key.major('C').forInstrument('clarinetBb').toString(); // 'D major'
    * Key.major('C').forInstrument('hornF').toString(); // 'G major'
+   * Key.major('F#').forInstrument('clarinetBb').toString(); // 'Ab major'
    * // And back: what a part written in C major on a clarinet in A sounds as.
    * Key.major('C').transposeBy(instrumentTransposition('clarinetA')).toString(); // 'A major'
    * ```
@@ -1093,11 +1146,15 @@ export class Key {
     // Routed through the same conversion the notes use, so a key and the notes
     // of its part can never disagree about the direction or the spelling.
     const tonic = new Note(toWrittenPitch(this.#tonic.data, instrument));
+    // The part is what a player reads, so the key is held to the signatures
+    // parts are written with: a concert F# major on a B flat clarinet is handed
+    // over as A flat major and not as the G# major with its F## that the strict
+    // interval spelling gives.
     return new Key(
       { rootPc: tonic.pitchClass, modeMask12: this.#scale.modeMask12 },
       tonic,
       this.#variant,
-    );
+    ).#asWritten();
   }
 
   /**
@@ -1248,7 +1305,10 @@ export class Key {
    * ```
    */
   augmentedSixth(kind: AugmentedSixthKind): Chord {
-    return new Chord(augmentedSixthChord(kind, this.#scale), this);
+    // The whole key, not its pitch classes: the chord is spelled from the tonic
+    // this key is written on, so an Ab minor takes the Fb Ab Cb D it is written
+    // with rather than the double sharps a G# minor would need.
+    return new Chord(augmentedSixthChord(kind, keyIdentity(this)), this);
   }
 
   /**
@@ -1378,7 +1438,7 @@ export class Key {
         opts,
       );
     }
-    return `${this.#tonic.name} ${scaleWord(this.scaleName, this.isMinor)}`;
+    return `${this.#tonic.name} ${scaleWord(this.#scale.modeMask12, this.isMinor)}`;
   }
 }
 

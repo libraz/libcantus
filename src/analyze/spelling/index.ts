@@ -25,7 +25,7 @@ import {
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import { assertGenerationBudget, assertNoteEvents } from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
-import { isScaleTone, type KeyLike, spelledKeyOf, toKeyScale } from '../../theory/scale/index.js';
+import { isScaleTone, type KeyLike, resolveKey } from '../../theory/scale/index.js';
 import { assertTonicOf, spellChord, spellPitchClass } from '../../theory/spelling/index.js';
 import type { ChordTimeline } from '../timeline/index.js';
 
@@ -133,7 +133,7 @@ export type SpellLineOptions = {
    * Tonic spelling to anchor the key, for a caller that already knows how the
    * piece is written. It must sound the key's own root pitch class; anything
    * else is rejected rather than spelled. Defaults to the conventional
-   * spelling `spelledKeyOf` gives the key. Accepted as a note name, a MIDI
+   * spelling the key itself is written with. Accepted as a note name, a MIDI
    * number, note data, or a `Note`.
    */
   tonic?: NoteLike;
@@ -374,7 +374,11 @@ export function spellLine(
   key: KeyLike,
   opts: SpellLineOptions = {},
 ): Note[] {
-  const scale = toKeyScale(key);
+  // Read whole rather than reduced: a line in Ab minor is written on flats, and
+  // a key handed in spelled that way would otherwise have its spelling derived
+  // back from the pitch classes and come out in G# minor.
+  const resolved = resolveKey(key);
+  const scale = resolved.scale;
   const given = opts.tonic === undefined ? undefined : toNoteData(opts.tonic);
   assertNoteEvents(notes, 'line notes', {
     allowNonPositiveDuration: true,
@@ -393,7 +397,7 @@ export function spellLine(
   if (notes.length === 0) {
     return [];
   }
-  const tonic = given ?? spelledKeyOf(scale).tonic;
+  const tonic = given ?? resolved.tonic;
   const states = notes.map((note) =>
     stateFor(note.pitch, timeline?.at(note.startBeat) ?? null, tonic, scale),
   );

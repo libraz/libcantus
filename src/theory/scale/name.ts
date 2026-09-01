@@ -3,7 +3,15 @@ import type { Note, NoteNameOptions } from '../../core/pitch/index.js';
 import { noteToPitchClass, tryParseKeyName, tryParseNote } from '../../core/pitch/index.js';
 import { majorKey, minorKey, scaleByName } from './key.js';
 import type { ResolvedKey } from './kinds.js';
-import { NAMED_SCALES, type ScaleName, variantOfMask } from './masks.js';
+import {
+  NAMED_SCALES,
+  SCALE_ALIASES,
+  type ScaleAliasName,
+  type ScaleName,
+  variantOfMask,
+  WORLD_SCALES,
+  type WorldScaleName,
+} from './masks.js';
 
 /**
  * Reading a key from the name it is written under.
@@ -21,10 +29,53 @@ function scaleWordKey(text: string): string {
   return text.replace(/[^a-z0-9]/gi, '').toLowerCase();
 }
 
-/** The built-in scale each scale word names, indexed the way names compare. */
-const SCALE_BY_WORD: ReadonlyMap<string, ScaleName> = new Map(
-  (Object.keys(NAMED_SCALES) as ScaleName[]).map((name) => [scaleWordKey(name), name]),
+/** Every name a built-in scale answers to, canonical names before aliases. */
+const BUILT_IN_SCALE_NAMES: readonly (ScaleName | WorldScaleName | ScaleAliasName)[] = [
+  ...(Object.keys(NAMED_SCALES) as ScaleName[]),
+  ...(Object.keys(WORLD_SCALES) as WorldScaleName[]),
+  ...(Object.keys(SCALE_ALIASES) as ScaleAliasName[]),
+];
+
+/**
+ * The built-in scale each scale word names, indexed the way names compare.
+ *
+ * Every register a scale can be built from is here, because a name
+ * {@link scaleByName} accepts is a name a key can be written under, and a word
+ * this map does not hold is a key that cannot be read back from its own text.
+ */
+const SCALE_BY_WORD: ReadonlyMap<string, ScaleName | WorldScaleName | ScaleAliasName> = new Map(
+  BUILT_IN_SCALE_NAMES.map((name) => [scaleWordKey(name), name]),
 );
+
+/**
+ * The scale word a mask is written with, or undefined when no built-in scale
+ * has that mask.
+ *
+ * The inverse of {@link SCALE_BY_WORD}, and the reason a key on a scale outside
+ * the Western vocabulary prints as itself: the miyako-bushi scale names the five
+ * pitch classes it actually holds rather than the major key its tonic sits in.
+ *
+ * The first name declared with the mask answers, so a mask several traditions
+ * name reads under the Western name where there is one — the min'yō scale prints
+ * as the minor pentatonic it shares its pitch classes with — and the register
+ * order is what settles it rather than a table of exceptions.
+ *
+ * @param mask The 12-bit mode mask.
+ * @returns The scale name, or undefined for a mask no built-in scale has.
+ */
+export function scaleNameOfMask(mask: number): ScaleName | WorldScaleName | undefined {
+  for (const name of Object.keys(NAMED_SCALES) as ScaleName[]) {
+    if (NAMED_SCALES[name] === mask) {
+      return name;
+    }
+  }
+  for (const name of Object.keys(WORLD_SCALES) as WorldScaleName[]) {
+    if (WORLD_SCALES[name] === mask) {
+      return name;
+    }
+  }
+  return undefined;
+}
 
 /** The tonic without its register: a key has none, whatever the name carried. */
 function bareTonic(note: Note): Note {

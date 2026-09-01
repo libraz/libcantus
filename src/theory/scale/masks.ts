@@ -522,6 +522,25 @@ const VARIANT_MASKS: Readonly<Record<Exclude<KeyVariant, 'modal'>, number>> = {
 };
 
 /**
+ * Whether a mode mask is a minor one: it has a minor third and no major third.
+ *
+ * The third is what the question rests on, so every scale that lowers it — the
+ * natural, harmonic and melodic minors, dorian, phrygian, locrian — answers
+ * true, and a scale carrying both thirds answers false because the major one
+ * is the one the ear takes. Written here, below the layers that ask it: the key
+ * signature, the key relations, harmonic function and the generators all branch
+ * on it, and an answer that differed between two of them would put a chord in a
+ * key whose own signature disagreed about its mode.
+ *
+ * @param modeMask12 The twelve-bit mode mask to read.
+ * @returns True when the mask leans minor.
+ * @category Scales
+ */
+export function isMinorMask(modeMask12: number): boolean {
+  return ((modeMask12 >> 3) & 1) === 1 && ((modeMask12 >> 4) & 1) === 0;
+}
+
+/**
  * The form a mask stands in, when it stands in one.
  *
  * A bare scale still names its form — a major mask is a major key whoever built
