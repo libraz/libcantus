@@ -17,9 +17,8 @@ function inScale(pitch: number, scale: KeyScale): boolean {
  * Test whether a pitch belongs to the scale.
  *
  * @param pitch MIDI pitch or bare pitch class.
- * @param key The key/scale to test against. This predicate reads the mask as
- *   given rather than taking a key name: the spelling search runs it over
- *   masks that name no key, which resolving a name would refuse.
+ * @param key The key/scale to test against, as a key name, a key/scale, or a
+ *   `Key`.
  * @returns True if the pitch class is a member of the scale.
  *
  * @example
@@ -32,8 +31,8 @@ function inScale(pitch: number, scale: KeyScale): boolean {
  *
  * @category Scales
  */
-export function isScaleTone(pitch: number, key: KeyScale): boolean {
-  return inScale(pitch, key);
+export function isScaleTone(pitch: number, key: KeyLike): boolean {
+  return inScale(pitch, toKeyScale(key));
 }
 
 /**
@@ -103,10 +102,16 @@ export type ScaleLadderPosition = {
  * same arithmetic through the transforms that use it.
  *
  * @param pitch MIDI pitch.
- * @param key The key/scale to count along.
+ * @param key The key/scale to count along, as a key name, a key/scale, or a
+ *   `Key`.
  * @returns The rung the pitch sits on and its semitone offset above it.
  */
-export function scaleLadderPosition(pitch: number, key: KeyScale): ScaleLadderPosition {
+export function scaleLadderPosition(pitch: number, key: KeyLike): ScaleLadderPosition {
+  return ladderPosition(pitch, toKeyScale(key));
+}
+
+/** {@link scaleLadderPosition} over an already-resolved scale. */
+function ladderPosition(pitch: number, key: KeyScale): ScaleLadderPosition {
   const offsets = scaleOffsets(key);
   const size = offsets.length;
   if (size === 0) {
@@ -133,10 +138,16 @@ export function scaleLadderPosition(pitch: number, key: KeyScale): ScaleLadderPo
  * Layer-internal, like {@link scaleLadderPosition}.
  *
  * @param rung Scale tones counted from the tonic, negative below it.
- * @param key The key/scale to count along.
+ * @param key The key/scale to count along, as a key name, a key/scale, or a
+ *   `Key`.
  * @returns The MIDI pitch of that scale tone.
  */
-export function scaleLadderPitch(rung: number, key: KeyScale): number {
+export function scaleLadderPitch(rung: number, key: KeyLike): number {
+  return ladderPitch(rung, toKeyScale(key));
+}
+
+/** {@link scaleLadderPitch} over an already-resolved scale. */
+function ladderPitch(rung: number, key: KeyScale): number {
   const offsets = scaleOffsets(key);
   const size = offsets.length;
   if (size === 0) {
@@ -161,16 +172,18 @@ export function scaleLadderPitch(rung: number, key: KeyScale): number {
  *
  * @param pitch MIDI pitch to shift.
  * @param degrees Scale degrees to move by; negative moves down.
- * @param key The key/scale to count along.
+ * @param key The key/scale to count along, as a key name, a key/scale, or a
+ *   `Key`.
  * @returns The shifted pitch.
  */
-export function shiftByScaleDegrees(pitch: number, degrees: number, key: KeyScale): number {
+export function shiftByScaleDegrees(pitch: number, degrees: number, key: KeyLike): number {
+  const scale = toKeyScale(key);
   const steps = Math.trunc(degrees);
   if (steps === 0) {
     return pitch;
   }
-  const { rung, offset } = scaleLadderPosition(pitch, key);
-  return scaleLadderPitch(rung + steps, key) + offset;
+  const { rung, offset } = ladderPosition(pitch, scale);
+  return ladderPitch(rung + steps, scale) + offset;
 }
 
 /**
@@ -205,16 +218,13 @@ export function pitchToScaleDegree(pitch: number, key: KeyLike): number {
 /**
  * List the pitch classes of a key's scale.
  *
- * @param key The key/scale to enumerate. The two enumerators here take a plain
- *   key/scale rather than a key name: they read the mask as given, including
- *   the tonic-less masks the spelling search works through, which no key name
- *   describes.
+ * @param key The key/scale to enumerate, as a key name, a key/scale, or a `Key`.
  * @returns The member pitch classes, sorted ascending in [0, 11].
  *
  * @category Scales
  */
-export function diatonicPitchClasses(key: KeyScale): number[] {
-  const scale = key;
+export function diatonicPitchClasses(key: KeyLike): number[] {
+  const scale = toKeyScale(key);
   const root = pitchClass(scale.rootPc);
   const pcs: number[] = [];
   for (let n = 0; n < 12; n += 1) {
@@ -231,14 +241,13 @@ export function diatonicPitchClasses(key: KeyScale): number[] {
  * The first entry is the root (degree 1); degrees follow the mask bits in
  * offset order rather than sorted pitch-class order.
  *
- * @param key The key/scale to enumerate, read as given for the reason
- *   {@link diatonicPitchClasses} gives.
+ * @param key The key/scale to enumerate, as a key name, a key/scale, or a `Key`.
  * @returns The member pitch classes ordered by scale degree.
  *
  * @category Scales
  */
-export function scaleTonesInDegreeOrder(key: KeyScale): number[] {
-  const scale = key;
+export function scaleTonesInDegreeOrder(key: KeyLike): number[] {
+  const scale = toKeyScale(key);
   const root = pitchClass(scale.rootPc);
   const pcs: number[] = [];
   for (let n = 0; n < 12; n += 1) {

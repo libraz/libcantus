@@ -5,6 +5,7 @@ import { parseTimeSignature } from '../src/core/meter/index.js';
 import {
   ALGORITHM_VERSION,
   createPositionalRng,
+  createRng,
   MIN_ALGORITHM_VERSION,
 } from '../src/core/random/index.js';
 import type { NoteEvent } from '../src/core/types.js';
@@ -467,5 +468,55 @@ describe('a caller-supplied positional source', () => {
     const value = resolveContext({ seed: 1, rng }).part('x').range(0, 5, 'p');
     expect(value).toBeGreaterThanOrEqual(0);
     expect(value).toBeLessThanOrEqual(5);
+  });
+});
+
+describe('a generator dial merged into a context', () => {
+  it('checks the generator dial even where the context also names it', () => {
+    // Whether the context happens to carry the same dial is not something the
+    // caller of the generator can see, so an out-of-range value is rejected
+    // the same way either time.
+    expect(() => generateMotif({ key: cMajor, bars: 2, jitter: 999 })).toThrow(InvalidInputError);
+    expect(() =>
+      generateMotif({
+        key: cMajor,
+        bars: 2,
+        jitter: 999,
+        ctx: { complexity: { ornament: 0.3 } },
+      }),
+    ).toThrow(InvalidInputError);
+  });
+
+  it('still lets the context win where both are in range', () => {
+    expect(
+      generateMotif({ key: cMajor, bars: 2, jitter: 0.9, ctx: { complexity: { ornament: 0.1 } } }),
+    ).toEqual(generateMotif({ key: cMajor, bars: 2, ctx: { complexity: { ornament: 0.1 } } }));
+  });
+
+  it('draws a range only over a span it can represent exactly', () => {
+    // `Rng.range` rejects a pair whose difference is not an exact safe integer;
+    // the positional sampler promises the same inclusive range, so it rejects
+    // the same pair rather than sampling at reduced precision.
+    const draw = resolveContext({ seed: 1 }).part('x');
+    expect(() => draw.range(-Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, 'p')).toThrow(
+      InvalidInputError,
+    );
+    expect(() => createRng(1).range(-Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)).toThrow(
+      InvalidInputError,
+    );
+    expect(draw.range(0, 5, 'p')).toBeGreaterThanOrEqual(0);
+  });
+
+  it('draws a float only over a span that stays finite', () => {
+    // Same pairing for the continuous sampler: a span that overflows to Infinity
+    // scales the draw out of the half-open range both samplers promise.
+    const draw = resolveContext({ seed: 1 }).part('x');
+    expect(() => draw.float(-Number.MAX_VALUE, Number.MAX_VALUE, 'p')).toThrow(InvalidInputError);
+    expect(() => createRng(1).float(-Number.MAX_VALUE, Number.MAX_VALUE)).toThrow(
+      InvalidInputError,
+    );
+    const value = draw.float(0, 1, 'p');
+    expect(value).toBeGreaterThanOrEqual(0);
+    expect(value).toBeLessThan(1);
   });
 });

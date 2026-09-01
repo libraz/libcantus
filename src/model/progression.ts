@@ -14,11 +14,12 @@ import { substituteChord } from '../generate/reharmony/index.js';
 import type { Chord as ChordData, ChordSpan } from '../theory/chord/index.js';
 import { chordFromSpan } from '../theory/chord/index.js';
 import { type ScaleChoice, scalesForChanges } from '../theory/chordscale/index.js';
+import type { KeyLike } from '../theory/scale/index.js';
 import { type VoicingOptions, voiceProgression } from '../theory/voicing/index.js';
 import type { Chord } from './chord.js';
 import { Chord as ChordClass } from './chord.js';
 import type { Key, KeyData } from './key.js';
-import { Key as KeyClass } from './key.js';
+import { Key as KeyClass, toKey } from './key.js';
 import {
   assertDataArray,
   assertDataObject,
@@ -54,11 +55,14 @@ export class Progression {
    * Wrap a chord sequence.
    *
    * @param chords The chords in order; the array is copied.
-   * @param key Optional key context for analysis methods.
+   * @param key Optional key context for analysis methods, in whatever form the
+   *   caller holds it: a key name, a plain key/scale, or a {@link Key}.
    */
-  constructor(chords: readonly Chord[], key?: Key) {
-    this.#chords = Object.freeze(Progression.#attachKey(chords, key));
-    this.#key = key;
+  constructor(chords: readonly Chord[], key?: KeyLike) {
+    assertKeyArgument(key, 'progression key');
+    const resolved = key === undefined ? undefined : toKey(key);
+    this.#chords = Object.freeze(Progression.#attachKey(chords, resolved));
+    this.#key = resolved;
   }
 
   /**
@@ -93,7 +97,7 @@ export class Progression {
    * // ['I', 'V7']
    * ```
    */
-  static of(chords: readonly Chord[], key?: Key): Progression {
+  static of(chords: readonly Chord[], key?: KeyLike): Progression {
     return new Progression(chords, key);
   }
 
@@ -116,7 +120,7 @@ export class Progression {
    * Progression.fromSpans(spans, key).roman();
    * ```
    */
-  static fromSpans(spans: readonly ChordSpan[], key?: Key): Progression {
+  static fromSpans(spans: readonly ChordSpan[], key?: KeyLike): Progression {
     const chords = assertDataObjects<ChordSpan>(spans, 'progression spans').map((span) =>
       ChordClass.fromData(chordFromSpan(span)),
     );
@@ -349,10 +353,11 @@ export class Progression {
   /**
    * A copy of this progression carrying the given key context.
    *
-   * @param key The key context to attach.
+   * @param key The key context to attach; a key name, a plain key/scale, or a
+   *   {@link Key}.
    * @returns The new progression.
    */
-  withKey(key: Key): Progression {
+  withKey(key: KeyLike): Progression {
     return new Progression(this.#chords, key);
   }
 
@@ -374,12 +379,13 @@ export class Progression {
   /**
    * The Roman numeral of each chord in a key.
    *
-   * @param key Key to analyze in; falls back to the carried context.
+   * @param key Key to analyze in, as a key name, a plain key/scale, or a
+   *   {@link Key}; falls back to the carried context.
    * @param opts Applied-numeral rendering options.
    * @returns One numeral per chord.
    * @throws If no key is given and none is carried.
    */
-  roman(key?: Key, opts?: ChordToRomanOptions): string[] {
+  roman(key?: KeyLike, opts?: ChordToRomanOptions): string[] {
     const resolved = this.#resolveKey(key);
     return this.#chords.map((chord) => chord.roman(resolved, opts));
   }
@@ -387,11 +393,12 @@ export class Progression {
   /**
    * The harmonic function of each chord in a key.
    *
-   * @param key Key to analyze in; falls back to the carried context.
+   * @param key Key to analyze in, as a key name, a plain key/scale, or a
+   *   {@link Key}; falls back to the carried context.
    * @returns One function per chord.
    * @throws If no key is given and none is carried.
    */
-  functions(key?: Key): HarmonicFunction[] {
+  functions(key?: KeyLike): HarmonicFunction[] {
     const resolved = this.#resolveKey(key);
     return this.#chords.map((chord) => chord.function(resolved));
   }
@@ -408,7 +415,8 @@ export class Progression {
    * a perfect authentic cadence from an imperfect one without knowing the
    * soprano.
    *
-   * @param key Key to analyze in; falls back to the carried context.
+   * @param key Key to analyze in, as a key name, a plain key/scale, or a
+   *   {@link Key}; falls back to the carried context.
    * @param opts Applied-numeral rendering options, `alternatives` for the
    *   readings both analyses turned down, and `voicing` for the cadence's
    *   voice-leading detail; see {@link AnalyzeChordOptions} and
@@ -425,7 +433,7 @@ export class Progression {
    * ```
    */
   analyze(
-    key?: Key,
+    key?: KeyLike,
     opts?: AnalyzeChordOptions & DetectCadenceOptions,
   ): { chords: ChordAnalysis[]; cadence: CadenceResult | null } {
     const resolved = this.#resolveKey(key);
@@ -460,7 +468,8 @@ export class Progression {
    * The chord before each pair is supplied from the progression itself, so a
    * cadential six-four is recognized as one wherever it stands.
    *
-   * @param key Key to analyze in; falls back to the carried context.
+   * @param key Key to analyze in, as a key name, a plain key/scale, or a
+   *   {@link Key}; falls back to the carried context.
    * @param opts `voicing` is the pitches sounding under the whole progression,
    *   one voicing per chord as {@link Progression.voice} produces them, from
    *   which each pair takes its own two — without it no authentic cadence can be
@@ -481,7 +490,7 @@ export class Progression {
    * ```
    */
   cadences(
-    key?: Key,
+    key?: KeyLike,
     opts?: { voicing?: number[][]; alternatives?: boolean; approach?: Chord },
   ): CadenceResult[] {
     const resolved = this.#resolveKey(key);
@@ -633,7 +642,8 @@ export class Progression {
    * a target in another mode — a relative, parallel, or modal key — is the key
    * the progression is then analyzed in.
    *
-   * @param target The key the transposed progression should be in.
+   * @param target The key the transposed progression should be in, as a key
+   *   name, a plain key/scale, or a {@link Key}.
    * @returns The transposed progression, carrying `target` as its key.
    * @throws If the progression carries no key context to measure from.
    * @example
@@ -643,16 +653,18 @@ export class Progression {
    * progression.transposeTo(Key.major('Eb')).toString(); // 'Eb Bb7'
    * ```
    */
-  transposeTo(target: Key): Progression {
+  transposeTo(target: KeyLike): Progression {
     const from = this.#key;
     if (from === undefined) {
       throw new InvalidInputError(
         'progression has no key context; attach one with withKey() before transposing to another key',
       );
     }
-    const interval = from.intervalTo(target);
+    assertKeyArgument(target, 'progression key');
+    const resolved = toKey(target);
+    const interval = from.intervalTo(resolved);
     const chords = this.#chords.map((chord) => chord.transposeBy(interval));
-    return new Progression(chords, target);
+    return new Progression(chords, resolved);
   }
 
   /**
@@ -680,10 +692,15 @@ export class Progression {
     };
   }
 
-  /** Resolve the key for an analysis method: explicit first, then carried. */
-  #resolveKey(key?: Key): Key {
+  /**
+   * Resolve the key for an analysis method: explicit first, then carried.
+   *
+   * Every method that takes a key comes through here, so the shape check and
+   * the fallback to the carried context are the same wherever a key is read.
+   */
+  #resolveKey(key?: KeyLike): Key {
     assertKeyArgument(key, 'progression key');
-    const resolved = key ?? this.#key;
+    const resolved = key === undefined ? this.#key : toKey(key);
     if (resolved === undefined) {
       throw new InvalidInputError(
         'progression has no key context; pass a Key or attach one with withKey()',

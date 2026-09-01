@@ -448,3 +448,124 @@ describe('chord symbol round trip: the shapes a name does not cover', () => {
     expect(tryParseChordSymbol('C6/9(#11)/E').ok).toBe(true);
   });
 });
+
+describe('parse -> format -> parse idempotence', () => {
+  /**
+   * A fixed corpus spanning the suffix grammar: bases, markers, extensions,
+   * bracketed and bare figures, slash basses, and the fifth spellings that
+   * decide which chord a symbol names.
+   */
+  const CORPUS: readonly string[] = [
+    'C',
+    'Cm',
+    'C-',
+    'C5',
+    'Csus2',
+    'Csus4',
+    'Cdim',
+    'Caug',
+    'C+',
+    'Co7',
+    'C°7',
+    'Cdim7',
+    'Cm7b5',
+    'Cm7-5',
+    'C7b5',
+    'C7#5',
+    'C7alt',
+    'Calt',
+    'Cmaj',
+    'CM7',
+    'CΔ',
+    'CΔ9',
+    'Cmaj7#11',
+    'CmMaj9',
+    'C6',
+    'C6/9',
+    'C69',
+    'C7',
+    'C9',
+    'C11',
+    'C13',
+    'C7b9',
+    'C7#9',
+    'C7(b9,#11)',
+    'C13b9',
+    'C7sus4',
+    'C9sus4',
+    'Cadd9',
+    'Cadd2',
+    'Cm7omit5',
+    'Cno3',
+    'C/E',
+    'Cm7/Bb',
+    'F/G',
+    'Cdim5',
+    'Cdim(5)',
+    'Caug5',
+    'C-5',
+    'C-9',
+    'Cm(-5)',
+    'Cm7b5(5)',
+    'C7b5(5)',
+  ];
+
+  it('reads a formatted chord back as the chord it formatted', () => {
+    const failures: string[] = [];
+    for (const symbol of CORPUS) {
+      const first = tryParseChordSymbol(symbol);
+      if (!first.ok) {
+        // A symbol the grammar cannot explain is a stated failure, which is one
+        // of the two answers the parser is allowed to give.
+        continue;
+      }
+      const formatted = formatChordSymbol(first.value);
+      const second = tryParseChordSymbol(formatted);
+      if (!second.ok) {
+        failures.push(`${symbol} formatted as ${formatted}, which does not parse`);
+        continue;
+      }
+      if (formatChordSymbol(second.value) !== formatted) {
+        failures.push(
+          `${symbol} formatted as ${formatted}, then as ${formatChordSymbol(second.value)}`,
+        );
+      }
+      // A symbol writing an omission is the standing exception: formatting
+      // does not write one, so the tone the text left out is back in the chord
+      // that comes of reading the formatted name.
+      if (/omit|no\d/.test(symbol)) {
+        continue;
+      }
+      const before = chordPitchClasses(first.value).join(',');
+      const after = chordPitchClasses(second.value).join(',');
+      if (before !== after) {
+        failures.push(`${symbol}: [${before}] became [${after}] through ${formatted}`);
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  it('never answers a symbol with a fifth the symbol does not spell', () => {
+    // Every corpus entry naming its fifth, whichever way it names it.
+    const fifths: readonly (readonly [string, number])[] = [
+      ['Cdim', 6],
+      ['Cdim7', 6],
+      ['Cm7b5', 6],
+      ['C7b5', 6],
+      ['Caug', 8],
+      ['C+', 8],
+      ['C7#5', 8],
+      ['C7alt', 8],
+    ];
+    for (const [symbol, fifth] of fifths) {
+      const parsed = tryParseChordSymbol(symbol);
+      expect(parsed.ok).toBe(true);
+      if (parsed.ok) {
+        expect(chordPitchClasses(parsed.value)).toContain(fifth);
+      }
+    }
+    for (const symbol of ['Cdim5', 'Cdim(5)', 'Caug5', 'C-5', 'Cm7b5(5)', 'C7b5(5)']) {
+      expect(tryParseChordSymbol(symbol).ok).toBe(false);
+    }
+  });
+});

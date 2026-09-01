@@ -236,10 +236,14 @@ export function resolveContextWith(
   sugar: { ornament?: number },
 ): ResolvedContext {
   const base = resolveContext(input);
-  const ornament =
-    base.ornament ??
-    (sugar.ornament === undefined
+  // The generator's own dial is validated whether or not it ends up being used:
+  // whether the context also names the dial is not something the caller of the
+  // generator can see, so an out-of-range value must be rejected the same way
+  // either time. Only leaving it out skips the check.
+  const supplied =
+    sugar.ornament === undefined
       ? undefined
-      : assertRange(sugar.ornament, 0, 1, 'complexity ornament'));
+      : assertRange(sugar.ornament, 0, 1, 'complexity ornament');
+  const ornament = base.ornament ?? supplied;
   return { ...base, ornament };
 }

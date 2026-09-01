@@ -23,7 +23,7 @@ import { Chord as ChordClass } from './chord.js';
 import type { Key } from './key.js';
 import { Key as KeyClass } from './key.js';
 import { Progression } from './progression.js';
-import { assertDataArray, assertDataObject, spanEnd } from './shared.js';
+import { assertDataArray, assertDataObject, assertKeyArgument, spanEnd } from './shared.js';
 
 /** The plain form a {@link Timeline} hands out and is rebuilt from. */
 export type TimelineData = {
@@ -419,6 +419,7 @@ export class Timeline {
    * @throws If no key is given and the timeline carries none.
    */
   roman(key?: KeyLike, opts?: ChordToRomanOptions): TimelineRoman[] {
+    assertKeyArgument(key, 'timeline key');
     const given = key === undefined ? undefined : toKeyScale(key);
     const keyAt = given === undefined ? this.#keyContext() : () => given;
     return this.#segments.map((segment) => ({

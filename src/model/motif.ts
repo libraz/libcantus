@@ -1,7 +1,7 @@
 import type { MotifRelation } from '../analyze/melody/index.js';
 import { melodicSimilarity, motifFromNotes, relateMotifs } from '../analyze/melody/index.js';
 import type { ChordTimeline } from '../analyze/timeline/index.js';
-import type { TimeSignature } from '../core/meter/index.js';
+import type { MeterLike } from '../core/meter/index.js';
 import type { NoteEvent } from '../core/types.js';
 import { assertNoteEvent } from '../core/validation/index.js';
 import type {
@@ -41,11 +41,12 @@ export type MotifGenerateOptions = {
   /** Length of the motif in bars of `ts`. */
   bars: number;
   /**
-   * Meter the bars are counted in, which sets the bar length.
+   * Meter the bars are counted in, which sets the bar length, in any form
+   * that names one.
    *
    * @defaultValue 4/4
    */
-  ts?: TimeSignature;
+  ts?: MeterLike;
   /**
    * Melodic contour shape the line follows.
    *
@@ -252,16 +253,12 @@ export class Motif {
    *   plain chord timeline the analysis layer hands out.
    * @param key The key the passing notes are kept in.
    * @param bars How many bars to fill.
-   * @param ts Meter the bars are counted in; 4/4 when none is named.
+   * @param ts Meter the bars are counted in, in any form that names one; 4/4
+   *   when none is named.
    * @returns The developed motif.
    * @throws If the bar count is not a positive integer.
    */
-  develop(
-    timeline: Timeline | ChordTimeline,
-    key: KeyLike,
-    bars: number,
-    ts?: TimeSignature,
-  ): Motif {
+  develop(timeline: Timeline | ChordTimeline, key: KeyLike, bars: number, ts?: MeterLike): Motif {
     // Read through the public surface rather than by `instanceof`, so a
     // timeline built by a second copy of the module develops like any other.
     const chords = 'chordTimeline' in timeline ? timeline.chordTimeline : timeline;

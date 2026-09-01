@@ -69,6 +69,12 @@ export function drawsFrom(rng: PositionalRng, ...prefix: SeedPath): Draw {
           `range lower bound must not exceed upper bound; received ${lo} > ${hi}`,
         );
       }
+      // The span is what the draw is scaled by, so a pair whose difference is
+      // not itself an exact safe integer would be sampled at reduced precision
+      // and could land outside [lo, hi]. `Rng.range` rejects such a pair; the
+      // two samplers promise the same inclusive range and so reject the same
+      // arguments.
+      assertInteger(hi - lo, 'range span', 0);
       return lo + Math.floor(at(...path) * (hi - lo + 1));
     },
     float: (lo, hi, ...path) => {
@@ -79,6 +85,10 @@ export function drawsFrom(rng: PositionalRng, ...prefix: SeedPath): Draw {
           `float lower bound must not exceed upper bound; received ${lo} > ${hi}`,
         );
       }
+      // The span scales the draw, so a pair whose difference is not finite
+      // would sample outside [lo, hi). `Rng.float` rejects such a pair, and the
+      // two samplers promise the same range.
+      assertFiniteNumber(hi - lo, 'float span');
       return lo + at(...path) * (hi - lo);
     },
   };

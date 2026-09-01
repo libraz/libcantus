@@ -10,7 +10,7 @@
  * carry.
  */
 
-import type { MeterMap, TimeSignature } from '../../core/meter/index.js';
+import type { MeterLike } from '../../core/meter/index.js';
 import { barIndexAt, barPositionToBeat, resolveMeters } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import {
@@ -70,14 +70,14 @@ export type FormSectionOptions = {
    *
    * @defaultValue `4/4`
    */
-  ts?: TimeSignature;
+  ts?: MeterLike;
   /**
    * The meter as it changes over the span, so a piece that changes metre is cut
    * at its own bar lines.
    *
    * @defaultValue 4/4 throughout
    */
-  meters?: MeterMap;
+  meters?: MeterLike;
   /**
    * Length of the unit spans are compared in, in bars; defaults to one hyperbar.
    *

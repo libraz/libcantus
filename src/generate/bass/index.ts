@@ -18,7 +18,13 @@ import {
   type StringedProfile,
   toStringedProfile,
 } from '../../core/instrument/index.js';
-import { isStrongBeat, type TimeSignature } from '../../core/meter/index.js';
+import {
+  isStrongBeat,
+  type MeterLike,
+  meterAt,
+  type TimeSignature,
+  toMeterData,
+} from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
@@ -26,7 +32,6 @@ import {
   assertInteger,
   assertOneOf,
   assertRange,
-  assertTimeSignature,
   clampToMidi,
 } from '../../core/validation/index.js';
 import type { ChordSegment } from '../../theory/chord/index.js';
@@ -110,7 +115,7 @@ export type BassLineOptions = {
    *
    * @defaultValue `{ numerator: 4, denominator: 4 }`
    */
-  ts?: TimeSignature;
+  ts?: MeterLike;
   /**
    * Bass-line idiom.
    *
@@ -358,8 +363,7 @@ export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
     return [];
   }
 
-  const ts = opts.ts ?? DEFAULT_TS;
-  assertTimeSignature(ts);
+  const ts = meterAt(0, toMeterData(opts.ts ?? DEFAULT_TS, 'ts'));
   const style = assertOneOf(opts.style ?? DEFAULT_STYLE, BASS_STYLES, 'bass style');
   const octave = opts.octave ?? DEFAULT_OCTAVE;
   // The generated bass band spans `low..low + 12`, so octave 8 is the highest

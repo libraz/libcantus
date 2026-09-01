@@ -18,7 +18,12 @@
  */
 
 import { ARTICULATIONS, type Articulation } from '../../core/instrument/index.js';
-import type { TimeSignature } from '../../core/meter/index.js';
+import {
+  type MeterLike,
+  meterAt,
+  type TimeSignature,
+  toMeterData,
+} from '../../core/meter/index.js';
 import { assertOneOf, assertRange, assertTimeSignature } from '../../core/validation/index.js';
 import { type ChordQuality, chordQualities } from '../../theory/chord/index.js';
 import type { Draw } from '../context/draw.js';
@@ -150,7 +155,8 @@ export type VocabularyQuery = {
   section?: Section;
   /** Tempo in BPM, matched against each entry's band. */
   bpm?: number;
-  ts?: TimeSignature;
+  /** The meter in force, matched against each entry's own signature. */
+  ts?: MeterLike;
   /** The difficulty ceiling: entries above it are rejected. */
   difficulty?: number;
   /** The chord in force, matched against each entry's `fitsOver`. */
@@ -190,7 +196,11 @@ export function fitsQuery<T>(entry: Vocabulary<T>, query: VocabularyQuery): bool
       return false;
     }
   }
-  if (query.ts !== undefined && entry.ts && !sameTs(entry.ts, query.ts)) {
+  if (
+    query.ts !== undefined &&
+    entry.ts &&
+    !sameTs(entry.ts, meterAt(0, toMeterData(query.ts, 'ts')))
+  ) {
     return false;
   }
   if (query.quality !== undefined && entry.fitsOver && !entry.fitsOver.includes(query.quality)) {

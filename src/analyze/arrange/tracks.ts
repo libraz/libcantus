@@ -5,7 +5,7 @@
  * conflicts.
  */
 
-import type { MeterMap, TimeSignature } from '../../core/meter/index.js';
+import type { MeterLike, MeterMap } from '../../core/meter/index.js';
 import { isStrongBeat, resolveMeters } from '../../core/meter/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import type { NoteEventAssertOptions } from '../../core/validation/index.js';
@@ -247,14 +247,14 @@ export type ArrangementOptions = {
    *
    * @defaultValue `4/4`
    */
-  ts?: TimeSignature;
+  ts?: MeterLike;
   /**
    * The meter as it changes over the arrangement. Bar lines, downbeats and
    * metric weight all follow the signature in force at the beat in question.
    *
    * @defaultValue 4/4 throughout
    */
-  meters?: MeterMap;
+  meters?: MeterLike;
   /**
    * Length of the pickup in beats, when the piece starts with one.
    *

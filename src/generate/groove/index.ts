@@ -12,8 +12,11 @@ import { InvalidInputError } from '../../core/errors/index.js';
 import {
   beatsPerBar,
   formatTimeSignature,
+  type MeterLike,
+  meterAt,
   metricWeight,
   type TimeSignature,
+  toMeterData,
 } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import {
@@ -21,7 +24,6 @@ import {
   assertNoteEvents,
   assertPositiveInt,
   assertRange,
-  assertTimeSignature,
   dropSilentNotes,
 } from '../../core/validation/index.js';
 import { type GenerationContextInput, resolveContext } from '../context/index.js';
@@ -33,11 +35,11 @@ import { type GenerationContextInput, resolveContext } from '../context/index.js
  */
 export type HumanizeOptions = {
   /**
-   * Time signature used to derive metric accents.
+   * Time signature used to derive metric accents, in any form that names one.
    *
    * @defaultValue 4/4
    */
-  ts?: TimeSignature;
+  ts?: MeterLike;
   /**
    * Maximum timing jitter in quarter-note beats, applied as ±this value.
    *
@@ -135,8 +137,9 @@ const MAX_VELOCITY = 127;
  * @category Rhythm & Meter
  */
 export function humanize(events: readonly NoteEvent[], opts: HumanizeOptions = {}): NoteEvent[] {
-  const ts = opts.ts ?? DEFAULT_TS;
-  assertTimeSignature(ts);
+  // The meter is read once, here, and every position below is weighed against
+  // the signature it names — the one the piece opens in, given a whole map.
+  const ts = meterAt(0, toMeterData(opts.ts ?? DEFAULT_TS, 'ts'));
   // Zero-length artefacts are routine in MIDI imports and never sound, so they
   // are accepted and dropped here, exactly as the analysis layer does — the two
   // sides of a pipeline must not disagree about the same array.
@@ -270,13 +273,13 @@ function quantizeToGrid(
  */
 export function extractGrooveTemplate(
   events: readonly NoteEvent[],
-  ts: TimeSignature,
+  ts: MeterLike,
   subdivision = DEFAULT_GROOVE_SUBDIVISION,
 ): GrooveTemplate {
-  assertTimeSignature(ts);
+  const meter = meterAt(0, toMeterData(ts, 'ts'));
   assertNoteEvents(events, 'groove source events', { allowNonPositiveDuration: true });
   assertPositiveInt(subdivision, 'groove subdivision');
-  const barBeats = beatsPerBar(ts);
+  const barBeats = beatsPerBar(meter);
   const slotsPerBar = Math.ceil(barBeats * subdivision);
   assertPositiveInt(slotsPerBar, 'groove template slots');
   assertGenerationBudget(slotsPerBar, 'groove template slots');
@@ -316,7 +319,7 @@ export function extractGrooveTemplate(
     });
   }
 
-  return { subdivision, slotsPerBar, slots, ts };
+  return { subdivision, slotsPerBar, slots, ts: meter };
 }
 
 /**
@@ -358,9 +361,9 @@ export function extractGrooveTemplate(
 export function applyGrooveTemplate(
   events: readonly NoteEvent[],
   template: GrooveTemplate,
-  ts: TimeSignature,
+  ts: MeterLike,
 ): NoteEvent[] {
-  assertTimeSignature(ts);
+  const meter = meterAt(0, toMeterData(ts, 'ts'));
   assertNoteEvents(events, 'groove target events', { allowNonPositiveDuration: true });
   assertPositiveInt(template.subdivision, 'template subdivision');
   assertPositiveInt(template.slotsPerBar, 'template slotsPerBar');
@@ -370,14 +373,14 @@ export function applyGrooveTemplate(
   }
   if (
     template.ts &&
-    (template.ts.numerator !== ts.numerator || template.ts.denominator !== ts.denominator)
+    (template.ts.numerator !== meter.numerator || template.ts.denominator !== meter.denominator)
   ) {
     throw new InvalidInputError(
       `Groove template meter ${formatTimeSignature(template.ts)} does not match ` +
-        `apply-time meter ${formatTimeSignature(ts)}`,
+        `apply-time meter ${formatTimeSignature(meter)}`,
     );
   }
-  const barBeats = beatsPerBar(ts);
+  const barBeats = beatsPerBar(meter);
   return dropSilentNotes(events).map((event) => {
     const { quantizedBeat, slotIndex } = quantizeToGrid(
       event.startBeat,

@@ -1,5 +1,5 @@
 import { sortedNoteEvents } from '../../core/event-index/index.js';
-import type { MeterMap, TimeSignature } from '../../core/meter/index.js';
+import type { MeterLike, MeterMap } from '../../core/meter/index.js';
 import { beatsPerBarAt, metricWeight, resolveMeters } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
@@ -201,7 +201,7 @@ export type ChordTimelineOptions = {
    *
    * @defaultValue `4/4`
    */
-  ts?: TimeSignature;
+  ts?: MeterLike;
   /**
    * The meter as it changes over the span. Bar lines, downbeats and metric
    * weight all follow the signature in force at the beat in question, so a
@@ -209,7 +209,7 @@ export type ChordTimelineOptions = {
    *
    * @defaultValue 4/4 throughout
    */
-  meters?: MeterMap;
+  meters?: MeterLike;
   /**
    * Length of the pickup in beats, when the piece starts with one.
    *

@@ -588,10 +588,11 @@ function spelledPitchClass(
  *
  * @param tonic The spelled tonic, as a note name, a MIDI number, note data, or a
  *   `Note`.
- * @param key The key/scale. This one stays a plain key/scale: the key-spelling
- *   search reads scales through it that no key name describes.
+ * @param key The key/scale, as a key name, a key/scale, or a `Key` — the same
+ *   forms its sibling spellers take.
  * @returns Spelled notes, one per scale degree.
- * @throws If `tonic` does not sound the key's root pitch class.
+ * @throws If `key` names no key, or if `tonic` does not sound the key's root
+ *   pitch class.
  * @example
  * ```ts
  * import { spellScale, noteNames, parseNote, majorKey } from '@libraz/libcantus';
@@ -600,9 +601,9 @@ function spelledPitchClass(
  * ```
  * @category Pitch & Intervals
  */
-export function spellScale(tonic: NoteLike, key: KeyScale): Note[] {
+export function spellScale(tonic: NoteLike, key: KeyLike): Note[] {
   const note = toNoteData(tonic);
-  const scale = key;
+  const scale = toKeyScale(key);
   assertTonicOf(note, scale, 'spellScale');
   return scaleTonesInDegreeOrder(scale).map((pc) => spelledPitchClass(pc, note, scale));
 }

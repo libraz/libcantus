@@ -29,16 +29,21 @@ import {
   diatonicPitchClasses,
   dominantKeyOf,
   enharmonicKeyOf,
+  HARMONIC_MINOR_MASK,
   isScaleTone,
   isSignatureKey,
+  type KeyLike,
   type KeyMode,
   type KeyRelation,
   keyFromFifths,
   keyRelationBetween,
   keySignatureFifths,
+  MAJOR_MASK,
+  MELODIC_MINOR_MASK,
   majorKey,
   minorKey,
   NAMED_SCALES,
+  NATURAL_MINOR_MASK,
   nearestScaleTone,
   parallelKeyOf,
   pitchToScaleDegree,
@@ -54,6 +59,7 @@ import {
   spelledKeyOf,
   subdominantKeyOf,
   supportsFunctionalHarmony,
+  toKeyScale,
 } from '../theory/scale/index.js';
 import { spellPitchClasses, spellScale } from '../theory/spelling/index.js';
 import type { TransposingInstrument } from '../theory/transposition/index.js';
@@ -76,6 +82,48 @@ export type DetectedKeyMatch = Omit<KeyMatch, 'key'> & { key: Key };
  * loses it prints as a plain minor after a round trip through a project file.
  */
 export type KeyData = { scale: KeyScale; tonic: NoteData; variant?: KeyVariant };
+
+/**
+ * The scale mask each named variant stands for.
+ *
+ * The variant is the only field of a key that is not recoverable from its mask,
+ * so it is the only one that can contradict it. Holding the correspondence in
+ * one table is what lets every construction path check it the same way, and
+ * keeps `'modal'` defined as the absence of these four rather than as a second
+ * list that would have to be kept in step.
+ */
+const VARIANT_MASKS: Readonly<Record<Exclude<KeyVariant, 'modal'>, number>> = {
+  major: MAJOR_MASK,
+  natural: NATURAL_MINOR_MASK,
+  harmonic: HARMONIC_MINOR_MASK,
+  melodic: MELODIC_MINOR_MASK,
+};
+
+/** Every value a key's `variant` field may hold. */
+const KEY_VARIANTS: readonly KeyVariant[] = [
+  ...(Object.keys(VARIANT_MASKS) as Exclude<KeyVariant, 'modal'>[]),
+  'modal',
+];
+
+/**
+ * Refuse a scale form the key's own mask does not hold.
+ *
+ * A key whose `variant` says `'harmonic'` over a major mask prints as a
+ * harmonic minor while comparing equal to plain C major, so a project file that
+ * carried the two apart is refused where the mismatch is still an argument.
+ */
+function assertVariantMatchesScale(variant: KeyVariant, modeMask12: number): void {
+  assertOneOf(variant, KEY_VARIANTS, 'variant');
+  const named = VARIANT_MASKS[variant as Exclude<KeyVariant, 'modal'>];
+  const matches =
+    named === undefined ? !Object.values(VARIANT_MASKS).includes(modeMask12) : named === modeMask12;
+  if (!matches) {
+    throw new InvalidInputError(
+      `variant ${variant} does not match the scale mask ${modeMask12}; ` +
+        'pass the scale that variant names, or omit the variant',
+    );
+  }
+}
 
 /** Widest signature a key is actually written with, in fifths. */
 const MAX_CONVENTIONAL_FIFTHS = 7;
@@ -196,6 +244,9 @@ export class Key {
         `tonic ${tonic.name} does not match the scale root pitch class ${rootPc}; ` +
           'pass a tonic that spells the scale root, or omit it to have one chosen',
       );
+    }
+    if (variant !== undefined) {
+      assertVariantMatchesScale(variant, scale.modeMask12);
     }
     this.#scale = { rootPc, modeMask12: scale.modeMask12 };
     this.#tonic = tonic;
@@ -1259,4 +1310,43 @@ export class Key {
     }
     return `${this.#tonic.name} ${this.isMinor ? 'minor' : 'major'}`;
   }
+}
+
+/**
+ * Resolve any key-shaped value to a {@link Key}.
+ *
+ * The class API's counterpart to {@link toKeyScale}, and the one place its
+ * methods turn a key argument into a key: a name, a plain key/scale and a `Key`
+ * all reach the same analysis, spelled the same way, however the caller was
+ * holding the key. A name keeps the tonic it was written with, so `'Gb major'`
+ * is not handed back as F# major; a bare key/scale is given the tonic
+ * {@link spelledKeyOf} chooses for it, which is what lets a method that needs a
+ * spelled tonic — `Chord.spell` — derive one instead of demanding it.
+ *
+ * An instance is read through `toJSON`, never by its type, so a `Key` built by
+ * a second copy of the module resolves as its own.
+ *
+ * @param value A key name, a plain key/scale, or a value whose `toJSON` returns
+ *   key data.
+ * @returns The key.
+ * @throws If the value names no key.
+ */
+export function toKey(value: KeyLike): Key {
+  if (typeof value === 'string') {
+    return Key.parse(value);
+  }
+  if (typeof value === 'object' && value !== null) {
+    const data: unknown =
+      'toJSON' in value && typeof value.toJSON === 'function' ? value.toJSON() : value;
+    if (typeof data === 'object' && data !== null) {
+      const record = data as Partial<KeyData>;
+      if (record.scale === undefined) {
+        return Key.of(toKeyScale(data as KeyScale));
+      }
+      return record.tonic === undefined
+        ? Key.of(toKeyScale(record.scale))
+        : Key.fromJSON(record as KeyData);
+    }
+  }
+  throw new InvalidInputError(`key must be a key name or a key/scale; received ${typeof value}`);
 }

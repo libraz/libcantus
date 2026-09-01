@@ -15,7 +15,7 @@ export type {
   PercussionProfile,
   StringedProfile,
 } from '../core/instrument/index.js';
-export type { TimeSignature } from '../core/meter/index.js';
+export type { MeterChange, MeterLike, MeterMap, TimeSignature } from '../core/meter/index.js';
 export type {
   IntervalLike,
   IntervalQualityLabel,

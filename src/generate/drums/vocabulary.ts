@@ -9,13 +9,18 @@
  */
 
 import { type Articulation, canSound, type Limb } from '../../core/instrument/index.js';
-import { beatsPerBar, type TimeSignature } from '../../core/meter/index.js';
+import {
+  beatsPerBar,
+  type MeterLike,
+  meterAt,
+  type TimeSignature,
+  toMeterData,
+} from '../../core/meter/index.js';
 import {
   assertGenerationBudget,
   assertOneOf,
   assertPositiveInt,
   assertRange,
-  assertTimeSignature,
 } from '../../core/validation/index.js';
 import { type GenerationContextInput, resolveContext } from '../context/index.js';
 import { deepFreeze } from '../vocabulary/freeze.js';
@@ -312,8 +317,8 @@ export type DrumPatternOptions = {
   genre: Genre;
   /** Section the pattern plays in, matched against each entry's own sections. */
   section?: Section;
-  /** Time signature; defaults to 4/4. */
-  ts?: TimeSignature;
+  /** Time signature, in any form that names one; defaults to 4/4. */
+  ts?: MeterLike;
   /**
    * The generation context. `bpm` is the tempo, `complexity.rhythmic` thins the
    * figure below its middle setting and syncopates it above,
@@ -396,8 +401,7 @@ export function placeDrumPattern(opts: DrumPatternOptions): DrumHit[] {
     opts.section === undefined
       ? undefined
       : assertOneOf(opts.section, PUBLIC_SECTIONS, 'drum pattern section');
-  const ts = opts.ts ?? FOUR_FOUR;
-  assertTimeSignature(ts, 'drum pattern time signature');
+  const ts = meterAt(0, toMeterData(opts.ts ?? FOUR_FOUR, 'ts'));
   if (opts.velocity !== undefined) {
     assertRange(opts.velocity, 1, 127, 'drum pattern velocity');
   }

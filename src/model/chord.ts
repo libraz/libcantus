@@ -32,7 +32,6 @@ import {
   transposeByInterval,
   transposeNote,
 } from '../core/pitch/index.js';
-import type { KeyScale } from '../core/types.js';
 import { assertFiniteNumber } from '../core/validation/index.js';
 import {
   type BorrowedChord,
@@ -82,7 +81,7 @@ import {
   voiceChord,
   voiceChordStyled,
 } from '../theory/voicing/index.js';
-import type { Key } from './key.js';
+import { type Key, toKey } from './key.js';
 import { Note } from './note.js';
 import { Progression } from './progression.js';
 import { assertDataArray, assertDataObject, assertKeyArgument, mod12 } from './shared.js';
@@ -243,11 +242,13 @@ export class Chord {
    * Wrap a plain chord object.
    *
    * @param data The chord; it is copied, never retained or mutated.
-   * @param key Optional key context for analysis methods.
+   * @param key Optional key context for analysis methods, in whatever form the
+   *   caller holds it: a key name, a plain key/scale, or a {@link Key}.
    */
-  constructor(data: ChordData, key?: Key) {
+  constructor(data: ChordData, key?: KeyLike) {
     this.#given = copyChord(data);
-    this.#key = key;
+    assertKeyArgument(key, 'chord key');
+    this.#key = key === undefined ? undefined : toKey(key);
   }
 
   /**
@@ -526,10 +527,11 @@ export class Chord {
    * during a modulation does not keep the old key's letters and the order of
    * `withKey` calls does not affect the result.
    *
-   * @param key The key context to attach.
+   * @param key The key context to attach; a key name, a plain key/scale, or a
+   *   {@link Key}.
    * @returns The new chord.
    */
-  withKey(key: Key): Chord {
+  withKey(key: KeyLike): Chord {
     return new Chord(this.#given, key);
   }
 
@@ -598,12 +600,13 @@ export class Chord {
   /**
    * The chord's Roman numeral in a key.
    *
-   * @param key Key to analyze in; falls back to the carried context.
+   * @param key Key to analyze in, as a key name, a plain key/scale, or a
+   *   {@link Key}; falls back to the carried context.
    * @param opts Applied-numeral rendering options.
    * @returns The Roman numeral string.
    * @throws If no key is given and none is carried.
    */
-  roman(key?: Key, opts?: ChordToRomanOptions): string {
+  roman(key?: KeyLike, opts?: ChordToRomanOptions): string {
     return chordToRoman(this.#data, this.#resolveKey(key).scale, opts);
   }
 
@@ -633,17 +636,18 @@ export class Chord {
    * ```
    */
   explain(key?: KeyLike, opts?: ExplainRomanOptions): RomanExplanation {
-    return explainRoman(this.#data, this.#resolveScale(key), opts);
+    return explainRoman(this.#data, this.#resolveKey(key).scale, opts);
   }
 
   /**
    * The chord's harmonic function (tonic / subdominant / dominant) in a key.
    *
-   * @param key Key to analyze in; falls back to the carried context.
+   * @param key Key to analyze in, as a key name, a plain key/scale, or a
+   *   {@link Key}; falls back to the carried context.
    * @returns The harmonic function.
    * @throws If no key is given and none is carried.
    */
-  function(key?: Key): HarmonicFunction {
+  function(key?: KeyLike): HarmonicFunction {
     return functionOf(this.#data, this.#resolveKey(key).scale);
   }
 
@@ -651,7 +655,8 @@ export class Chord {
    * Full functional analysis: function, borrowing, Roman numeral, and the
    * rationale behind them.
    *
-   * @param key Key to analyze in; falls back to the carried context.
+   * @param key Key to analyze in, as a key name, a plain key/scale, or a
+   *   {@link Key}; falls back to the carried context.
    * @param opts Applied-numeral rendering options, plus `alternatives` to
    *   collect the readings this analysis turned down; see
    *   {@link AnalyzeChordOptions}.
@@ -663,29 +668,31 @@ export class Chord {
    * Chord.parse('D7').analyze(Key.major('C'), { alternatives: true }).alternatives.length;
    * ```
    */
-  analyze(key?: Key, opts?: AnalyzeChordOptions): ChordAnalysis {
+  analyze(key?: KeyLike, opts?: AnalyzeChordOptions): ChordAnalysis {
     return analyzeChord(this.#data, this.#resolveKey(key).scale, opts);
   }
 
   /**
    * Whether the chord is borrowed from the parallel mode (modal interchange).
    *
-   * @param key Key to analyze in; falls back to the carried context.
+   * @param key Key to analyze in, as a key name, a plain key/scale, or a
+   *   {@link Key}; falls back to the carried context.
    * @returns True if the chord is borrowed.
    * @throws If no key is given and none is carried.
    */
-  isBorrowed(key?: Key): boolean {
+  isBorrowed(key?: KeyLike): boolean {
     return isBorrowedChord(this.#data, this.#resolveKey(key).scale);
   }
 
   /**
    * The origin of a non-diatonic chord (parallel mode or Neapolitan), or null.
    *
-   * @param key Key to analyze in; falls back to the carried context.
+   * @param key Key to analyze in, as a key name, a plain key/scale, or a
+   *   {@link Key}; falls back to the carried context.
    * @returns The borrowing source, or null.
    * @throws If no key is given and none is carried.
    */
-  borrowedSource(key?: Key): BorrowedSource {
+  borrowedSource(key?: KeyLike): BorrowedSource {
     return borrowedSource(this.#data, this.#resolveKey(key).scale);
   }
 
@@ -712,7 +719,7 @@ export class Chord {
    * ```
    */
   figuredBass(key?: KeyLike): string {
-    return figuredBassOf(this.#data, this.#resolveScale(key));
+    return figuredBassOf(this.#data, this.#resolveKey(key).scale);
   }
 
   /**
@@ -740,7 +747,7 @@ export class Chord {
    * ```
    */
   substitutions(key?: KeyLike, opts?: SubstituteOptions): Substitution[] {
-    return substituteChord(this.#data, this.#resolveScale(key), opts);
+    return substituteChord(this.#data, this.#resolveKey(key).scale, opts);
   }
 
   /**
@@ -766,7 +773,7 @@ export class Chord {
    * ```
    */
   modalInterchange(key?: KeyLike): BorrowedChord[] {
-    return modalInterchangePalette(this.#resolveScale(key));
+    return modalInterchangePalette(this.#resolveKey(key).scale);
   }
 
   /**
@@ -815,16 +822,16 @@ export class Chord {
    * The negative-harmony mirror of the chord about the key's tonic–dominant
    * axis (major becomes minor and vice versa).
    *
-   * @param key Key providing the reflection axis; falls back to the carried
-   *   context.
+   * @param key Key providing the reflection axis, as a key name, a plain
+   *   key/scale, or a {@link Key}; falls back to the carried context.
    * @returns The mirrored chord, keeping any key context.
    * @throws If no key is given and none is carried.
    */
-  negativeHarmony(key?: Key): Chord {
+  negativeHarmony(key?: KeyLike): Chord {
     const resolved = this.#resolveKey(key);
     // Retain the key that anchored the reflection (explicit first, then carried)
     // so a later no-arg analysis method still has a key context.
-    return new Chord(negativeHarmonyMirror(this.#data, resolved.scale), key ?? this.#key);
+    return new Chord(negativeHarmonyMirror(this.#data, resolved.scale), resolved);
   }
 
   /**
@@ -955,6 +962,10 @@ export class Chord {
    * The named scales that fit over this chord, best fit first, rooted on the
    * chord root.
    *
+   * Only the scales of {@link NAMED_SCALES} are ranked: chord-scale theory is a
+   * Western practice, so the scales of {@link WORLD_SCALES} are left out rather
+   * than offered as answers over a chord.
+   *
    * @returns The matching scales.
    */
   scales(): ChordScaleMatch[] {
@@ -988,12 +999,16 @@ export class Chord {
    * The available tensions (usable non-chord, non-avoid scale tones) of a
    * scale over this chord.
    *
-   * @param scaleName A named scale, rooted on the chord root.
+   * @param scaleName A scale of {@link NAMED_SCALES}, or one of its aliases,
+   *   rooted on the chord root. The scales of {@link WORLD_SCALES} are refused
+   *   here as they are by {@link Chord.scales}: chord-scale theory is a Western
+   *   practice, and a scale from another tradition offered over a chord would
+   *   read as an answer while being a category error.
    * @param opts Set `resolvesTo` to the plain chord this one resolves to, so a
    *   dominant resolving down a fifth onto a minor tonic takes the tensions
    *   that resolution makes available; see {@link AvailableTensionsOptions}.
    * @returns Tension pitch classes, ascending in [0, 11].
-   * @throws If `scaleName` is not a built-in scale.
+   * @throws If `scaleName` is not one of the named scales or their aliases.
    * @example
    * ```ts
    * import { Chord } from '@libraz/libcantus';
@@ -1010,12 +1025,16 @@ export class Chord {
    * The avoid notes (scale tones a semitone above a chord tone) of a scale
    * over this chord.
    *
-   * @param scaleName A named scale, rooted on the chord root.
+   * @param scaleName A scale of {@link NAMED_SCALES}, or one of its aliases,
+   *   rooted on the chord root. The scales of {@link WORLD_SCALES} are refused
+   *   here as they are by {@link Chord.scales}: chord-scale theory is a Western
+   *   practice, and a scale from another tradition offered over a chord would
+   *   read as an answer while being a category error.
    * @param opts Set `use: 'melodic'` to judge a line rather than a voicing, so
    *   a tone a line may pass through is not counted; see
    *   {@link AvoidNotesOptions}.
    * @returns Avoid-note pitch classes, ascending in [0, 11].
-   * @throws If `scaleName` is not a built-in scale.
+   * @throws If `scaleName` is not one of the named scales or their aliases.
    * @example
    * ```ts
    * import { Chord } from '@libraz/libcantus';
@@ -1039,15 +1058,18 @@ export class Chord {
    * are the notes the chord sounds — the same set {@link Chord.pitchClasses}
    * reports.
    *
-   * @param key Key providing the spelled tonic; falls back to the carried
-   *   context, then to the chord's own root spelling.
+   * @param key Key providing the spelled tonic, as a key name, a plain
+   *   key/scale, or a {@link Key} — the tonic its letters are spelled from is
+   *   derived from the key rather than asked of the caller. Falls back to the
+   *   carried context, then to the chord's own root spelling.
    * @returns Spelled octave-less notes in the chord's own (tertian) order,
    *   with any foreign slash bass last.
    * @throws If no key is given, none is carried, and the chord has no root
    *   spelling of its own.
    */
-  spell(key?: Key): Note[] {
-    const resolved = key ?? this.#key;
+  spell(key?: KeyLike): Note[] {
+    assertKeyArgument(key, 'chord key');
+    const resolved = key === undefined ? this.#key : toKey(key);
     // An explicit key must select the spelling view before any derived hints
     // are read; only caller-provided hints in #given are independent of it.
     const data = this.#dataWithKey(resolved);
@@ -1148,17 +1170,14 @@ export class Chord {
   }
 
   /**
-   * Resolve the key/scale for a method that takes any key-shaped value:
-   * explicit first, then carried, by the same rule {@link Chord.roman} follows.
+   * Resolve the key for an analysis method: explicit first, then carried.
+   *
+   * Every method that takes a key comes through here, so the shape check and
+   * the fallback to the carried context are the same wherever a key is read.
    */
-  #resolveScale(key?: KeyLike): KeyScale {
-    return key === undefined ? this.#resolveKey().scale : toKeyScale(key);
-  }
-
-  /** Resolve the key for an analysis method: explicit first, then carried. */
-  #resolveKey(key?: Key): Key {
+  #resolveKey(key?: KeyLike): Key {
     assertKeyArgument(key, 'chord key');
-    const resolved = key ?? this.#key;
+    const resolved = key === undefined ? this.#key : toKey(key);
     if (resolved === undefined) {
       throw new InvalidInputError(
         'chord has no key context; pass a Key or attach one with withKey()',

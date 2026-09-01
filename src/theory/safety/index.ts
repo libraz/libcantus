@@ -2,6 +2,7 @@ import { InvalidInputError } from '../../core/errors/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import {
+  assertFiniteNumber,
   assertGenerationBudget,
   assertMidiPitch,
   assertOneOf,
@@ -122,10 +123,13 @@ const SAFETY_PROFILES = Object.keys(PROFILE_WEIGHTS) as SafetyProfile[];
  *
  * @param profile The profile whose table to start from.
  * @param overrides Fields to replace; anything absent keeps the profile's value.
+ *   A field written as an explicit `undefined` is absent, not a replacement.
  * @returns The complete weight table to score with.
- * @throws If `profile` is not one of the profile names
- *   ({@link InvalidInputError}). A misspelled profile scored under a default
- *   table would rank candidates by a style the caller did not ask for.
+ * @throws If `profile` is not one of the profile names, or an override is not a
+ *   finite number ({@link InvalidInputError}). A misspelled profile scored under
+ *   a default table would rank candidates by a style the caller did not ask for,
+ *   and a single non-finite weight poisons every candidate's score, which turns
+ *   the ranking into the order the candidates happened to be enumerated in.
  * @example
  * ```ts
  * import { profileWeights } from '@libraz/libcantus';
@@ -138,7 +142,17 @@ export function profileWeights(
   overrides?: Partial<ProfileWeights>,
 ): ProfileWeights {
   const base = PROFILE_WEIGHTS[assertOneOf(profile, SAFETY_PROFILES, 'safety profile')];
-  return { ...base, ...overrides };
+  if (overrides === undefined) {
+    return { ...base };
+  }
+  const weights: ProfileWeights = { ...base };
+  for (const [field, value] of Object.entries(overrides)) {
+    if (value === undefined) {
+      continue;
+    }
+    weights[field as keyof ProfileWeights] = assertFiniteNumber(value, `weight ${field}`);
+  }
+  return weights;
 }
 
 /**

@@ -420,6 +420,27 @@ describe('profile weights', () => {
     expect(weights.contraryMotion).toBe(PROFILE_WEIGHTS.pop.contraryMotion);
   });
 
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    'refuses %p as a weight rather than scoring every candidate with it',
+    (value) => {
+      // One non-finite weight makes every candidate's score NaN, which leaves the
+      // ranking in whatever order the candidates were enumerated in — plausible
+      // output that nothing ranked.
+      for (const field of Object.keys(PROFILE_WEIGHTS.pop)) {
+        expect(() => profileWeights('pop', { [field]: value })).toThrow(InvalidInputError);
+      }
+      expect(() => profileWeights('pop', { contraryMotion: value })).toThrow(/weight/);
+    },
+  );
+
+  it('reads a field written as an explicit undefined as absent', () => {
+    // Spreading the overrides would have written the undefined over the profile's
+    // own value, which is the same poisoned score by a quieter route.
+    const weights = profileWeights('pop', { contraryMotion: undefined });
+    expect(weights.contraryMotion).toBe(PROFILE_WEIGHTS.pop.contraryMotion);
+    expect(Object.values(weights).every((value) => Number.isFinite(value))).toBe(true);
+  });
+
   it('ranks a counter melody differently under each profile', () => {
     const melody = [72, 74, 76, 77, 76, 74, 72, 71].map((pitch, index) => ({
       pitch,

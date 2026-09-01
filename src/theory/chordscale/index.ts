@@ -1,10 +1,41 @@
+import { InvalidInputError } from '../../core/errors/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import { assertGenerationBudget, assertPositiveInt } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
 import { chordPitchClasses } from '../chord/index.js';
 import type { ScaleNameInput } from '../scale/index.js';
-import { NAMED_SCALES, namedScaleMask, requireScaleMask } from '../scale/index.js';
+import {
+  NAMED_SCALES,
+  namedScaleMask,
+  requireScaleMask,
+  resolveScaleName,
+} from '../scale/index.js';
 import { type ChordLike, toChordData } from '../symbol/index.js';
+
+/**
+ * The mask of a scale a chord-scale question may be asked about.
+ *
+ * Chord-scale theory is a Western practice, so the register of world scales is
+ * not a vocabulary these functions answer from: a raga offered as the scale
+ * over an altered dominant would read as an answer while being a category
+ * error. {@link chordScales} proposes {@link NAMED_SCALES} and nothing else,
+ * and the questions asked about one chosen scale accept exactly what it can
+ * propose — an alias of a Western scale included, a world scale not.
+ *
+ * @param name The scale name or alias.
+ * @param label What the name is, for the error message.
+ * @returns The 12-bit mask.
+ * @throws If the name is not a built-in scale, or names a world scale.
+ */
+function requireChordScaleMask(name: ScaleNameInput, label = 'scale'): number {
+  const canonical = resolveScaleName(name);
+  if (canonical !== undefined && !Object.hasOwn(NAMED_SCALES, canonical)) {
+    throw new InvalidInputError(
+      `${label} must name a scale chord-scale theory ranks; ${String(name)} is a world scale`,
+    );
+  }
+  return requireScaleMask(name, label);
+}
 
 /** Count the set bits (scale tones) in a 12-bit mode mask. */
 function popcount12(mask: number): number {
@@ -282,7 +313,9 @@ export type AvoidNotesOptions = {
  *
  * @param chord The chord providing the chord tones, as a chord symbol, chord
  *   data, or a `Chord`.
- * @param scaleName A key of {@link NAMED_SCALES}.
+ * @param scaleName A key of {@link NAMED_SCALES}, or an alias of one. A world
+ *   scale is not one: chord-scale theory is a Western practice, so a raga named
+ *   here is rejected rather than answered with a number.
  * @param opts Set `use: 'melodic'` to judge a line rather than a voicing.
  * @returns The avoid-note pitch classes, sorted ascending in [0, 11].
  * @throws If `scaleName` is not a built-in scale. An empty result already
@@ -303,7 +336,7 @@ export function avoidNotes(
   scaleName: ScaleNameInput,
   opts: AvoidNotesOptions = {},
 ): number[] {
-  const mask = requireScaleMask(scaleName);
+  const mask = requireChordScaleMask(scaleName);
   const data = toChordData(chord);
   const rootPc = pitchClass(data.rootPc);
   const chordPcs = chordPitchClasses(data);
@@ -394,7 +427,8 @@ export type AvailableTensionsOptions = {
  *
  * @param chord The chord providing the chord tones, as a chord symbol, chord
  *   data, or a `Chord`.
- * @param scaleName A key of {@link NAMED_SCALES}.
+ * @param scaleName A key of {@link NAMED_SCALES}, or an alias of one; a world
+ *   scale is outside chord-scale theory, as in {@link avoidNotes}.
  * @param opts Set `resolvesTo` to the chord this one resolves to.
  * @returns The available-tension pitch classes, sorted ascending in [0, 11].
  * @throws If `scaleName` is not a built-in scale, as {@link avoidNotes} does.
@@ -414,7 +448,7 @@ export function availableTensions(
   scaleName: ScaleNameInput,
   opts: AvailableTensionsOptions = {},
 ): number[] {
-  const mask = requireScaleMask(scaleName);
+  const mask = requireChordScaleMask(scaleName);
   const data = toChordData(chord);
   const rootPc = pitchClass(data.rootPc);
   const chordPcs = chordPitchClasses(data);

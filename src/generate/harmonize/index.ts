@@ -1,12 +1,19 @@
 import { isDiatonic, parallelKey } from '../../analyze/functional/index.js';
-import type { TimeSignature } from '../../core/meter/index.js';
-import { beatsPerBar, isStrongBeat, pulseBeats } from '../../core/meter/index.js';
+import type { MeterLike, TimeSignature } from '../../core/meter/index.js';
+import {
+  beatsPerBar,
+  isStrongBeat,
+  meterAt,
+  pulseBeats,
+  toMeterData,
+} from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
   assertFiniteNumber,
   assertGenerationBudget,
   assertNoteEvents,
+  assertOneOf,
   assertRange,
   assertTimeSignature,
   soundingNotesOnly,
@@ -105,7 +112,7 @@ export type HarmonizeOptions = {
    *
    * @defaultValue `4/4`
    */
-  ts?: TimeSignature;
+  ts?: MeterLike;
   /**
    * How far beyond the key's own triads the chord vocabulary reaches:
    * `'diatonic'` uses only them, `'secondaryDominant'` adds the dominants that
@@ -487,6 +494,9 @@ const SECONDARY_DOMINANT_ENTRY_ORDER = [5, 6, 2, 4];
  * the other rather than at once.
  */
 const SECONDARY_DOMINANT_BAND = 0.5;
+
+/** Every named reharmonization strength, in dial order. */
+const REHARMONIZE_STRENGTHS = ['diatonic', 'secondaryDominant', 'borrowed'] as const;
 
 /** Where each named reharmonization strength sits on the harmonic dial. */
 const REHARMONIZE_DIAL: Record<NonNullable<HarmonizeOptions['reharmonize']>, number> = {
@@ -1031,7 +1041,7 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
     assertFiniteNumber(end, 'harmonize phrase end');
   }
   const soundingMelody = soundingNotesOnly(opts.melody);
-  const ts = opts.ts ?? DEFAULT_METER;
+  const ts = meterAt(0, toMeterData(opts.ts ?? DEFAULT_METER, 'ts'));
   assertTimeSignature(ts);
   const requestedKey = opts.key ?? 'infer';
   // The key is read into its plain form once, here at the boundary; the search
@@ -1041,8 +1051,16 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   const ctx = resolveContext(opts.ctx);
   // `reharmonize` names three points on the dial the context sets continuously,
   // so a caller who says `'secondaryDominant'` gets exactly the vocabulary that
-  // name has always meant.
-  const harmonic = ctx.harmonic ?? REHARMONIZE_DIAL[opts.reharmonize ?? 'diatonic'];
+  // name has always meant. The name is checked whether or not the context also
+  // sets the dial: a value from a config file that reached the table unchecked
+  // would read as `undefined`, and the NaN dial position that follows opens the
+  // secondary-dominant family in full while suppressing the borrowed one.
+  const reharmonize = assertOneOf(
+    opts.reharmonize ?? 'diatonic',
+    REHARMONIZE_STRENGTHS,
+    'reharmonize',
+  );
+  const harmonic = ctx.harmonic ?? REHARMONIZE_DIAL[reharmonize];
   // Nothing to harmonize: inventing a tonic bar here would silently insert a
   // ghost chord into a chart built by harmonizing sections and concatenating
   // them. The sibling generators return an empty result for empty input too.

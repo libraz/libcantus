@@ -1,4 +1,5 @@
-import type { TimeSignature } from '../core/meter/index.js';
+import type { MeterLike, TimeSignature } from '../core/meter/index.js';
+import { meterAt, toMeterData } from '../core/meter/index.js';
 import { assertRange } from '../core/validation/index.js';
 import type {
   DeformOptions,
@@ -185,36 +186,42 @@ export class Rhythm {
   /**
    * Generate a pattern over a meter.
    *
-   * @param ts The time signature the bars are counted in.
+   * @param ts The time signature the bars are counted in, in any form that
+   *   names one; a meter map is read as the signature it opens in.
    * @param opts Length, grid resolution and the context; see
    *   {@link RhythmOptions}. The context's `complexity.rhythmic` is the onset
    *   density, and its `seed` fixes which grid slots are taken.
    * @returns The generated pattern.
    * @example
    * ```ts
-   * import { parseTimeSignature } from '@libraz/libcantus';
    * import { Rhythm } from '@libraz/libcantus';
-   * const rhythm = Rhythm.generate(parseTimeSignature('4/4'), {
+   * const rhythm = Rhythm.generate('4/4', {
    *   bars: 2,
    *   ctx: { seed: 7, complexity: { rhythmic: 0.6 } },
    * });
    * rhythm.totalBeats; // 8
    * ```
    */
-  static generate(ts: TimeSignature, opts?: RhythmOptions): Rhythm {
-    return new Rhythm({ events: generateRhythm(ts, opts), ts });
+  static generate(ts: MeterLike, opts?: RhythmOptions): Rhythm {
+    // Read once, here: the pattern and the meter it is counted in are stored
+    // together, so both sides read the signature the caller named.
+    const meter = meterAt(0, toMeterData(ts, 'ts'));
+    return new Rhythm({ events: generateRhythm(meter, opts), ts: meter });
   }
 
   /**
    * Build a pattern from onsets that already exist.
    *
    * @param events The onsets, in any order.
-   * @param ts The meter they are counted in; 4/4 when none is named, as every
-   *   meter-aware function in the library assumes.
+   * @param ts The meter they are counted in, in any form that names one; 4/4
+   *   when none is named, as every meter-aware function in the library assumes.
    * @returns The pattern.
    */
-  static of(events: readonly RhythmEvent[], ts: TimeSignature = DEFAULT_TS): Rhythm {
-    return new Rhythm({ events: [...assertDataArray<RhythmEvent>(events, 'rhythm events')], ts });
+  static of(events: readonly RhythmEvent[], ts: MeterLike = DEFAULT_TS): Rhythm {
+    return new Rhythm({
+      events: [...assertDataArray<RhythmEvent>(events, 'rhythm events')],
+      ts: meterAt(0, toMeterData(ts, 'ts')),
+    });
   }
 
   /** Rebuild a pattern from the plain data {@link Rhythm.data} hands out. */

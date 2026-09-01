@@ -1,7 +1,7 @@
-import type { TimeSignature } from '../../core/meter/index.js';
-import { metricWeight, pulseBeats } from '../../core/meter/index.js';
+import type { MeterLike, TimeSignature } from '../../core/meter/index.js';
+import { meterAt, metricWeight, pulseBeats, toMeterData } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
-import { assertNoteEvents, assertTimeSignature } from '../../core/validation/index.js';
+import { assertNoteEvents } from '../../core/validation/index.js';
 
 /**
  * What a melody note contributes to the harmony: either a structural tone the
@@ -107,13 +107,13 @@ function sameDirection(prev: number, note: number, next: number): boolean {
  */
 export function classifyMelodyTones(
   melody: readonly NoteEvent[],
-  ts: TimeSignature,
+  ts: MeterLike,
 ): ClassifiedMelodyTone[] {
+  const meter = meterAt(0, toMeterData(ts, 'ts'));
   assertNoteEvents(melody, 'melody notes', { allowNonPositiveDuration: true });
-  assertTimeSignature(ts);
-  const pulse = pulseBeats(ts);
+  const pulse = pulseBeats(meter);
   return melody.map((_, index) => {
-    const role = roleOfNote(melody, index, ts, pulse);
+    const role = roleOfNote(melody, index, meter, pulse);
     return { noteIndex: index, role, ornamental: role !== 'structural' };
   });
 }

@@ -51,6 +51,7 @@ import {
   assertDataArray,
   assertDataObject,
   assertDataObjects,
+  assertKeyArgument,
   copyNoteEvent,
   withoutNegativeZero,
 } from './shared.js';
@@ -711,7 +712,8 @@ export class Score {
    * chord — reads every note against C major and no chord at all, which labels
    * the notes as the non-chord tones they are rather than failing.
    *
-   * @param key The key to read the notes in; defaults to the score's own.
+   * @param key The key to read the notes in, as a key name, a plain key/scale,
+   *   or a {@link Key}; defaults to the score's own.
    * @returns One annotation per note, in the score's own time order.
    */
   voices(key?: KeyLike): AnalyzedNote[] {
@@ -905,6 +907,7 @@ export class Score {
    * then the key in force at the beat, and C major where nothing sounds.
    */
   #keyContext(key: KeyLike | undefined): KeyContext {
+    assertKeyArgument(key, 'score key');
     if (key !== undefined) {
       return toKeyScale(key);
     }

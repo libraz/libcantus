@@ -2,16 +2,18 @@ import type { ChordTimeline } from '../../analyze/timeline/index.js';
 import { InvalidInputError } from '../../core/errors/index.js';
 import type { NoteEventIndex } from '../../core/event-index/index.js';
 import { createNoteEventIndex } from '../../core/event-index/index.js';
-import type { TimeSignature } from '../../core/meter/index.js';
-import { isStrongBeat } from '../../core/meter/index.js';
+import type { MeterLike, TimeSignature } from '../../core/meter/index.js';
+import { isStrongBeat, meterAt, toMeterData } from '../../core/meter/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
+  assertFiniteNumber,
   assertGenerationBudget,
   assertNoteEvents,
   assertOneOf,
   assertRange,
   assertTimeSignature,
   clampToMidi,
+  describeRejected,
   soundingNotesOnly,
 } from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
@@ -64,11 +66,11 @@ export type CounterMelodyOptions = {
    */
   key: KeyLike;
   /**
-   * Meter used for strong-beat decisions.
+   * Meter used for strong-beat decisions, in any form that names one.
    *
    * @defaultValue 4/4
    */
-  ts?: TimeSignature;
+  ts?: MeterLike;
   /**
    * Which side of the melody the counter line occupies.
    *
@@ -95,7 +97,8 @@ export type CounterMelodyOptions = {
   /**
    * Per-field overrides of the profile's ranking weights, for a preference the
    * two stock profiles do not express — a line that should leap more freely, or
-   * one that should hold a pedal wherever it can.
+   * one that should hold a pedal wherever it can. Every field named must be a
+   * finite number.
    */
   weights?: Partial<ProfileWeights>;
   /** Lowest MIDI pitch the counter line may use (default derived from `register`). */
@@ -250,6 +253,33 @@ function keepsImperfectInterval(before: number, now: number): boolean {
     return false;
   }
   return before <= 4 === now <= 4;
+}
+
+/**
+ * Validate the caller's ranking-weight overrides before anything is scored.
+ *
+ * Every field of the table is summed into a candidate's score, so a single
+ * non-finite override makes every candidate score NaN alike: no comparison ever
+ * holds, the search keeps whichever candidate it enumerated first, and the line
+ * comes back plausible but unranked with nothing in the output to say so.
+ *
+ * @param overrides The per-field overrides, if the caller named any.
+ * @throws If the overrides are not an object, or any field is not a finite
+ *   number — including a field written as an explicit `undefined`, which would
+ *   otherwise overwrite the profile's own value.
+ */
+function assertWeightOverrides(overrides: Partial<ProfileWeights> | undefined): void {
+  if (overrides === undefined) {
+    return;
+  }
+  if (typeof overrides !== 'object' || overrides === null) {
+    throw new InvalidInputError(
+      `countermelody weights must be an object of weight overrides; received ${describeRejected(overrides)}`,
+    );
+  }
+  for (const [field, value] of Object.entries(overrides)) {
+    assertFiniteNumber(value as number, `countermelody weights.${field}`);
+  }
 }
 
 /**
@@ -449,6 +479,9 @@ function heldPitchSafety(
  *
  * @param opts The lead line, chord context callback, key, and generation knobs.
  * @returns The counter line as note events sorted by onset; `[]` for an empty melody.
+ * @throws If an option names a value outside its range — including a weight
+ *   override that is not a finite number, which is rejected before any
+ *   candidate is scored rather than absorbed into the ranking.
  * @example
  * ```ts
  * import { generateCounterMelody, majorKey, parseChordSymbol } from '@libraz/libcantus';
@@ -482,10 +515,11 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
   const melody = createNoteEventIndex(soundingNotesOnly(opts.melody), {
     tieBreak: register === 'below' ? 'highest' : 'lowest',
   });
-  const ts = opts.ts ?? DEFAULT_TS;
+  const ts = meterAt(0, toMeterData(opts.ts ?? DEFAULT_TS, 'ts'));
   assertTimeSignature(ts);
   const rhythm = assertOneOf(opts.rhythm ?? 'complement', ['complement', 'follow'], 'rhythm');
   const profile = assertOneOf(opts.profile ?? 'pop', ['strict', 'pop'], 'safety profile');
+  assertWeightOverrides(opts.weights);
   const weights = profileWeights(profile, opts.weights);
   // The key is read into its plain form once, here at the boundary; the search
   // below is given the scale it resolved to.

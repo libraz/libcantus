@@ -15,7 +15,7 @@
  * than useless to a caller deciding whether to trust it.
  */
 
-import type { MeterMap, TimeSignature } from '../../core/meter/index.js';
+import type { MeterLike, MeterMap } from '../../core/meter/index.js';
 import { barPositionToBeat, beatsPerBarAt, resolveMeters } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import {
@@ -103,7 +103,7 @@ export type PhraseOptions = {
    *
    * @defaultValue `4/4`
    */
-  ts?: TimeSignature;
+  ts?: MeterLike;
   /**
    * The meter as it changes over the span. Bar lines, hypermetric downbeats and
    * the default phrase length all follow the signature in force at the beat in
@@ -111,7 +111,7 @@ export type PhraseOptions = {
    *
    * @defaultValue 4/4 throughout
    */
-  meters?: MeterMap;
+  meters?: MeterLike;
   /**
    * Key context for cadence detection: one key for the whole span, or the key
    * in force at a given beat. Omit it to have the key searched for over time,

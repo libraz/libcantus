@@ -11,7 +11,13 @@
  * library-wide convention.
  */
 
-import { beatsPerBar, metricWeight, type TimeSignature } from '../../core/meter/index.js';
+import {
+  beatsPerBar,
+  type MeterLike,
+  meterAt,
+  metricWeight,
+  toMeterData,
+} from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import {
   assertFiniteNumber,
@@ -142,19 +148,21 @@ export function onsetWeightCurve(weight: number): number {
  * seed. Each event's duration extends to the next onset, and the last event
  * extends to the end of the span.
  *
- * @param ts The time signature.
+ * @param ts The time signature, in any form that names one.
  * @param opts Generation options.
  * @returns Onset events sorted by position, non-overlapping, covering the span.
  * @example
  * ```ts
- * import { parseTimeSignature, generateRhythm } from '@libraz/libcantus';
- * const ts = parseTimeSignature('4/4');
- * generateRhythm(ts, { ctx: { seed: 42, complexity: { rhythmic: 0.6 } } });
+ * import { generateRhythm } from '@libraz/libcantus';
+ * generateRhythm('4/4', { ctx: { seed: 42, complexity: { rhythmic: 0.6 } } });
  * // onset events over one bar
  * ```
  * @category Rhythm & Meter
  */
-export function generateRhythm(ts: TimeSignature, opts: RhythmOptions = {}): RhythmEvent[] {
+export function generateRhythm(ts: MeterLike, opts: RhythmOptions = {}): RhythmEvent[] {
+  // The meter is read once, here: the grid below is one repeated bar, so a
+  // caller who names a whole map gets the signature the map opens in.
+  const meter = meterAt(0, toMeterData(ts, 'ts'));
   const bars = opts.bars ?? DEFAULT_BARS;
   const subdivision = opts.subdivision ?? DEFAULT_SUBDIVISION;
   const ctx = resolveContext(opts.ctx);
@@ -163,7 +171,7 @@ export function generateRhythm(ts: TimeSignature, opts: RhythmOptions = {}): Rhy
   assertPositiveInt(bars, 'rhythm bars');
   assertPositiveInt(subdivision, 'rhythm subdivision');
 
-  const barBeats = beatsPerBar(ts);
+  const barBeats = beatsPerBar(meter);
   const spanBeats = barBeats * bars;
   const step = 1 / subdivision;
   const slotsPerBar = Math.ceil(barBeats * subdivision);
@@ -185,7 +193,7 @@ export function generateRhythm(ts: TimeSignature, opts: RhythmOptions = {}): Rhy
         positions.push(position);
         continue;
       }
-      const weight = metricWeight(position, ts);
+      const weight = metricWeight(position, meter);
       const probability = onsetWeightCurve(weight) * density;
       if (draw.prob(probability, 'onset', bar, slot)) {
         positions.push(position);
@@ -206,16 +214,19 @@ export function generateRhythm(ts: TimeSignature, opts: RhythmOptions = {}): Rhy
  * Onset density of a generated pattern: the mean number of onsets per bar.
  *
  * @param events Events from {@link generateRhythm}.
- * @param ts The time signature.
+ * @param ts The time signature, in any form that names one.
  * @returns The onset count divided by the number of bars the events span.
  * @category Rhythm & Meter
  */
-export function rhythmDensity(events: RhythmEvent[], ts: TimeSignature): number {
+export function rhythmDensity(events: RhythmEvent[], ts: MeterLike): number {
+  // Read before the empty case, so a malformed meter is rejected whichever way
+  // the call leaves rather than only when there is something to count.
+  const barBeats = beatsPerBar(ts);
   if (events.length === 0) {
     return 0;
   }
   const last = events[events.length - 1];
   const spanBeats = (last?.position ?? 0) + (last?.duration ?? 0);
-  const bars = spanBeats / beatsPerBar(ts);
+  const bars = spanBeats / barBeats;
   return bars > 0 ? events.length / bars : 0;
 }

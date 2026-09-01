@@ -16,7 +16,14 @@ import {
   type StringedProfile,
   toStringedProfile,
 } from '../../core/instrument/index.js';
-import { beatsPerBar, isStrongBeat, type TimeSignature } from '../../core/meter/index.js';
+import {
+  beatsPerBar,
+  isStrongBeat,
+  type MeterLike,
+  meterAt,
+  type TimeSignature,
+  toMeterData,
+} from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
@@ -24,7 +31,6 @@ import {
   assertInteger,
   assertOneOf,
   assertRange,
-  assertTimeSignature,
   clampToMidi,
 } from '../../core/validation/index.js';
 import type { Chord, ChordSegment } from '../../theory/chord/index.js';
@@ -406,8 +412,8 @@ export type PlaceLicksOptions = {
    * `ctx: { complexity: { difficulty } }`; the context wins over both.
    */
   difficulty?: number;
-  /** Time signature; defaults to 4/4. */
-  ts?: TimeSignature;
+  /** Time signature, in any form that names one; defaults to 4/4. */
+  ts?: MeterLike;
   /**
    * Target register as a base MIDI octave; roots land around `octave*12+12`.
    *
@@ -487,8 +493,7 @@ export function placeLicks(
 ): NoteEvent[] {
   assertGenerationBudget(timeline.length, 'lick segments', opts.budget);
   const genre = assertOneOf(opts.genre, GENRES, 'lick genre');
-  const ts = opts.ts ?? DEFAULT_TS;
-  assertTimeSignature(ts, 'lick time signature');
+  const ts = meterAt(0, toMeterData(opts.ts ?? DEFAULT_TS, 'ts'));
   const octave = opts.octave ?? DEFAULT_OCTAVE;
   assertInteger(octave, 'lick octave', -1, 8);
   // Key and chords are read into their plain form once, here at the boundary;

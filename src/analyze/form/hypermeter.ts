@@ -254,7 +254,9 @@ export function hypermeter(
   meter?: MeterLike,
   opts: HypermeterOptions = {},
 ): Hypermeter {
-  const meters = meter ?? resolveMeters({});
+  // Read once, here: every bar question below is asked of the resolved map
+  // rather than of whichever form the caller happened to hold.
+  const meters = resolveMeters({ meters: meter }, 'meter');
   assertNoteEvents(notes, 'hypermeter notes', {
     allowNonPositiveDuration: true,
     budget: opts.budget,

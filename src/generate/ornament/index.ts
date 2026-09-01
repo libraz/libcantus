@@ -13,7 +13,13 @@
  */
 
 import type { Articulation } from '../../core/instrument/index.js';
-import { isStrongBeat, type TimeSignature } from '../../core/meter/index.js';
+import {
+  isStrongBeat,
+  type MeterLike,
+  meterAt,
+  type TimeSignature,
+  toMeterData,
+} from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import {
   assertNoteEvents,
@@ -69,11 +75,12 @@ export type OrnamentOptions = {
    */
   amount?: number;
   /**
-   * Time signature, used to tell strong positions from weak ones.
+   * Time signature, in any form that names one, used to tell strong positions
+   * from weak ones.
    *
    * @defaultValue 4/4
    */
-  ts?: TimeSignature;
+  ts?: MeterLike;
   /**
    * The generation context. Its `complexity.ornament` sets the amount, its
    * `complexity.difficulty` — with a tempo — keeps ornaments off passages too
@@ -183,7 +190,7 @@ function clampVelocity(velocity: number): number {
 export function ornament(notes: readonly NoteEvent[], opts: OrnamentOptions = {}): NoteEvent[] {
   assertNoteEvents(notes, 'ornament notes', { allowNonPositiveDuration: true });
   const style = assertOneOf(opts.style ?? DEFAULT_STYLE, ORNAMENT_STYLES, 'ornament style');
-  const ts = opts.ts ?? DEFAULT_TS;
+  const ts = meterAt(0, toMeterData(opts.ts ?? DEFAULT_TS, 'ts'));
   assertTimeSignature(ts);
   if (opts.amount !== undefined) {
     assertRange(opts.amount, 0, 1, 'ornament amount');

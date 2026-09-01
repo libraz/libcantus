@@ -8,7 +8,7 @@
  * turned on.
  */
 
-import type { MeterLike, MeterMap, TimeSignature } from '../../core/meter/index.js';
+import type { MeterLike } from '../../core/meter/index.js';
 import { beatsPerBarAt, metricWeight, resolveMeters } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
@@ -109,7 +109,7 @@ export type KeyTimelineOptions = {
    *
    * @defaultValue `4/4`
    */
-  ts?: TimeSignature;
+  ts?: MeterLike;
   /**
    * The meter as it changes over the span. Bar lines, downbeats and the metric
    * accents the search discounts a modulation by all follow the signature in
@@ -118,7 +118,7 @@ export type KeyTimelineOptions = {
    *
    * @defaultValue 4/4 throughout
    */
-  meters?: MeterMap;
+  meters?: MeterLike;
   /**
    * Expected length of one key area in beats; defaults to four bars of the
    * opening meter.

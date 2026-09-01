@@ -40,7 +40,7 @@ import {
   voiceLeadingCost,
 } from '../theory/voicing/index.js';
 import { Note } from './note.js';
-import { assertDataArray } from './shared.js';
+import { assertDataArray, assertKeyArgument } from './shared.js';
 
 /**
  * The plain form of a {@link Voicing}: the sounding MIDI pitches, ascending.
@@ -306,6 +306,7 @@ export class Voicing {
    * ```
    */
   spell(key: KeyLike, chord?: ChordLike): Note[] {
+    assertKeyArgument(key, 'voicing key');
     return this.#spelled(toKeyScale(key), chord).map((note) => new Note(note));
   }
 
@@ -380,6 +381,7 @@ export class Voicing {
     key: KeyLike,
     opts?: PartWritingOptions,
   ): PartWritingViolation[] {
+    assertKeyArgument(key, 'voicing key');
     const scale = toKeyScale(key);
     const from = toChordData(chords[0]);
     const to = toChordData(chords[1]);
@@ -422,6 +424,7 @@ export class Voicing {
     mode: KeyLike,
     opts?: SpeciesOptions,
   ): PartWritingViolation[] {
+    assertKeyArgument(mode, 'voicing mode');
     const scale = toKeyScale(mode);
     // Both lines are spelled by the same reading, so a cantus firmus given as
     // pitches is written the way this one is: the rules that read letters

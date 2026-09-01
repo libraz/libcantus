@@ -1,12 +1,11 @@
 import { InvalidInputError } from '../../core/errors/index.js';
 import { canSound, type InstrumentProfile } from '../../core/instrument/index.js';
-import { beatsPerBar, type TimeSignature } from '../../core/meter/index.js';
+import { beatsPerBar, type MeterLike, meterAt, toMeterData } from '../../core/meter/index.js';
 import {
   assertGenerationBudget,
   assertInteger,
   assertOneOf,
   assertPositiveInt,
-  assertTimeSignature,
 } from '../../core/validation/index.js';
 import { type GenerationContextInput, resolveContext, sustainsStrokes } from '../context/index.js';
 import { selectVocabulary, vocabularyOfKind } from '../vocabulary/index.js';
@@ -144,7 +143,7 @@ export type DrumsOptions = {
    *
    * @defaultValue `{ numerator: 4, denominator: 4 }`
    */
-  ts?: TimeSignature;
+  ts?: MeterLike;
   /**
    * Replace the final bar with a fill.
    *
@@ -291,8 +290,7 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
     opts.feel === undefined ? mapping.feel : assertOneOf(opts.feel, DRUM_FEELS, 'drum feel');
   const role: DrumRole =
     opts.role === undefined ? 'full' : assertOneOf(opts.role, DRUM_ROLES, 'drum role');
-  const ts = opts.ts ?? { numerator: 4, denominator: 4 };
-  assertTimeSignature(ts, 'drum time signature');
+  const ts = meterAt(0, toMeterData(opts.ts ?? { numerator: 4, denominator: 4 }, 'ts'));
   // The groove is written against a four-beat bar throughout. Accepting another
   // meter placed 4/4 accents inside a bar of a different length and reported
   // nothing, which is the one outcome a caller cannot detect.

@@ -80,18 +80,31 @@ export function assertDataObjects<T>(value: unknown, name: string): readonly T[]
  * whose only property is `alternatives`. The shape is checked here instead,
  * where the mistake is still the caller's own argument.
  *
- * A key is recognised by carrying a scale rather than by its type, the way
- * every other boundary in the library reads one, so a `Key` built by a second
- * copy of the module passes.
+ * Every form a key argument accepts passes: a key name, a plain key/scale, and
+ * a value carrying key data. The last two are recognised by their fields rather
+ * than by their type, the way every other boundary in the library reads a key,
+ * so a `Key` built by a second copy of the module passes. What is left is an
+ * object that names no key at all, which is the options bag this guards
+ * against; resolving the value is the caller's next step and reports anything
+ * that is key-shaped without being a key.
  */
 export function assertKeyArgument(value: unknown, name: string): void {
-  if (value === undefined || (typeof value === 'object' && value !== null && 'scale' in value)) {
+  if (value === undefined || typeof value === 'string' || isKeyShaped(value)) {
     return;
   }
-  const received = typeof value === 'object' && value !== null ? 'an object' : `a ${typeof value}`;
+  const received =
+    value === null ? 'null' : typeof value === 'object' ? 'an object' : `a ${typeof value}`;
   throw new InvalidInputError(
     `${name} must be a Key; received ${received}. A method that also takes options takes them after the key, not in its place`,
   );
+}
+
+/** Whether a value carries the fields any of the key forms is read through. */
+function isKeyShaped(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  return 'scale' in value || 'toJSON' in value || ('rootPc' in value && 'modeMask12' in value);
 }
 
 /** Spell a bare pitch class as an octave-less note with a sharp/flat preference. */

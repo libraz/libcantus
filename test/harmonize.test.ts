@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { InvalidInputError } from '../src/core/errors/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import {
   buildCandidates,
@@ -624,3 +625,48 @@ describe('harmonizeMelody placement', () => {
     expect(result.key).toEqual(gMajor);
   });
 });
+
+describe('reharmonize validation', () => {
+  const melody = quarters([72, 71, 69, 67]);
+
+  it('rejects a strength that names no dial position', () => {
+    // Read against the dial table unchecked, an unknown name is `undefined`,
+    // and the NaN dial position that follows opens every secondary dominant
+    // while suppressing the borrowed chords — with no diagnostic either way.
+    expect(() =>
+      harmonizeMelody({
+        melody,
+        key: cMajor,
+        reharmonize: 'chromatic' as HarmonizeOptions['reharmonize'],
+      }),
+    ).toThrow(InvalidInputError);
+  });
+
+  it('rejects it even where the context supplies the dial', () => {
+    expect(() =>
+      harmonizeMelody({
+        melody,
+        key: cMajor,
+        reharmonize: 'chromatic' as HarmonizeOptions['reharmonize'],
+        ctx: { complexity: { harmonic: 0.5 } },
+      }),
+    ).toThrow(InvalidInputError);
+  });
+
+  it('maps every named strength to a dial position the vocabulary grows with', () => {
+    const sizes = (['diatonic', 'secondaryDominant', 'borrowed'] as const).map((reharmonize) => {
+      const result = harmonizeMelody({ melody, key: cMajor, reharmonize });
+      expect(result.chords.length).toBeGreaterThan(0);
+      return buildCandidates(cMajor, REHARMONIZE_POSITION[reharmonize]).length;
+    });
+    expect(sizes[0]).toBeLessThan(sizes[1] ?? 0);
+    expect(sizes[1]).toBeLessThan(sizes[2] ?? 0);
+  });
+});
+
+/** The dial position each named strength stands for, as the generator reads it. */
+const REHARMONIZE_POSITION = {
+  diatonic: 0,
+  secondaryDominant: 0.5,
+  borrowed: 1,
+} as const;

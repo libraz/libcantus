@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { InvalidInputError } from '../src/core/errors/index.js';
 import { chordPitchClasses, chordQualities, makeChord } from '../src/theory/chord/index.js';
 import {
   formatChordSymbol,
   parseChordSymbol,
   transposeChordSymbol,
+  tryParseChordSymbol,
 } from '../src/theory/symbol/index.js';
 
 describe('parseChordSymbol', () => {
@@ -264,4 +266,67 @@ describe('symbol round-trip', () => {
       expect(parseChordSymbol(formatted)).toEqual(chord);
     });
   }
+});
+
+describe('the fifth a symbol spells', () => {
+  /** Suffixes that name a fifth twice, or name one with no accidental at all. */
+  const contradictoryFifths = [
+    'Cdim5',
+    'Cdim(5)',
+    'Caug5',
+    'C-5',
+    'Cm5',
+    'Cm7b5(5)',
+    'C7b5(5)',
+    'C7#5#5',
+    'Cdimb5',
+    'Caug#5',
+  ];
+
+  for (const symbol of contradictoryFifths) {
+    it(`rejects ${symbol} instead of returning a perfect fifth`, () => {
+      // A bare degree token carries no accidental, so reading it as a request
+      // would state a perfect fifth over a chord whose fifth the text has
+      // already altered — returning a chord the symbol does not spell.
+      expect(() => parseChordSymbol(symbol)).toThrow(InvalidInputError);
+      expect(tryParseChordSymbol(symbol).ok).toBe(false);
+    });
+  }
+
+  it('still reads every fifth a symbol does spell', () => {
+    const spelled: readonly (readonly [string, number])[] = [
+      ['Cdim', 6],
+      ['Cm7b5', 6],
+      ['C7b5', 6],
+      ['Caug', 8],
+      ['C7#5', 8],
+      ['Csus4b5', 6],
+      ['C5', 7],
+      ['C', 7],
+    ];
+    for (const [symbol, fifth] of spelled) {
+      expect(chordPitchClasses(parseChordSymbol(symbol))).toContain(fifth);
+    }
+  });
+
+  it('gives a parsed chord the fifth its text names', () => {
+    // The whole point of the rule: whatever a symbol is read as, the fifth it
+    // writes is the fifth the chord has.
+    const corpus: readonly (readonly [string, number])[] = [
+      ['Cdim7', 6],
+      ['Cm7b5', 6],
+      ['C9b5', 6],
+      ['C7#5b9', 8],
+      ['Caug7', 8],
+      ['CmMaj7', 7],
+      ['C7sus4', 7],
+      ['C13#11', 7],
+    ];
+    for (const [symbol, fifth] of corpus) {
+      const chord = parseChordSymbol(symbol);
+      expect(chordPitchClasses(chord)).toContain(fifth);
+      // The reading survives being written back out and read again.
+      expect(chordPitchClasses(parseChordSymbol(formatChordSymbol(chord)))).toContain(fifth);
+    }
+  });
 });

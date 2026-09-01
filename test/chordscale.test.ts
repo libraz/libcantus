@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { InvalidInputError } from '../src/core/errors/index.js';
 import {
   type Chord,
   chordFromSpec,
@@ -14,7 +15,7 @@ import {
   scaleMatchesChord,
   scalesForChanges,
 } from '../src/theory/chordscale/index.js';
-import { NAMED_SCALES, scaleByName } from '../src/theory/scale/index.js';
+import { NAMED_SCALES, scaleByName, WORLD_SCALES } from '../src/theory/scale/index.js';
 import { parseChordSymbol } from '../src/theory/symbol/index.js';
 
 /**
@@ -504,5 +505,34 @@ describe('scalesForChanges', () => {
       expect(choice.chord).toBe(chords[i]);
       expect(choice.scale.rootPc).toBe(chords[i]?.rootPc);
     });
+  });
+});
+
+describe('chord-scale acceptance domain', () => {
+  it('rejects a world scale, which chord-scale theory does not rank', () => {
+    // A raga offered as the scale over a chord would read as an answer while
+    // being a category error, so the two per-scale questions accept exactly
+    // what `chordScales` is able to propose.
+    for (const name of Object.keys(WORLD_SCALES)) {
+      expect(() => avoidNotes(makeChord(0, 'min7'), name)).toThrow(InvalidInputError);
+      expect(() => availableTensions(makeChord(0, 'min7'), name)).toThrow(InvalidInputError);
+    }
+  });
+
+  it('rejects an alias of a world scale too', () => {
+    expect(() => avoidNotes(makeChord(0, 'min7'), 'okinawan')).toThrow(InvalidInputError);
+    expect(() => availableTensions(makeChord(0, 'min7'), 'hicaz')).toThrow(InvalidInputError);
+  });
+
+  it('accepts every scale chordScales can propose', () => {
+    const chord = makeChord(0, 'min7');
+    for (const name of Object.keys(NAMED_SCALES)) {
+      expect(() => avoidNotes(chord, name)).not.toThrow();
+      expect(() => availableTensions(chord, name)).not.toThrow();
+    }
+    for (const match of chordScales(chord)) {
+      expect(() => avoidNotes(chord, match.name)).not.toThrow();
+      expect(() => availableTensions(chord, match.name)).not.toThrow();
+    }
   });
 });

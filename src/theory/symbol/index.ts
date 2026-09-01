@@ -397,8 +397,28 @@ function applyFigure(draft: SpecDraft, text: string, at: number): number | undef
   if (degree === undefined) {
     return undefined;
   }
+  // A symbol writes its fifth once. Read bare, a `5` would carry no accidental
+  // of its own and so would state a perfect fifth over a chord whose fifth the
+  // text has already altered — `dim`, `aug`, or a `b5`/`#5` figure before it —
+  // silently returning a chord with a fifth the symbol does not spell. It is
+  // the suffix that is wrong, not the fifth, so the whole symbol fails rather
+  // than one reading of it being chosen.
+  if (degree.value === 5 && (accidental === undefined || writesFifth(draft))) {
+    return undefined;
+  }
   draft.alterations.set(degree.value, accidental?.value ?? 0);
   return degree.next;
+}
+
+/**
+ * Whether the draft's fifth has already been written by the symbol.
+ *
+ * `dim` and `aug` name a fifth as part of the base and a `b5`/`#5` figure names
+ * one outright, so a further fifth figure over either is a second, contradictory
+ * spelling of the same tone rather than an addition to the chord.
+ */
+function writesFifth(draft: SpecDraft): boolean {
+  return draft.base === 'dim' || draft.base === 'aug' || draft.alterations.has(5);
 }
 
 /** The longest degree number in `table` that `text` carries at `at`. */

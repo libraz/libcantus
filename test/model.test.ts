@@ -524,7 +524,7 @@ describe('Key', () => {
 
   it('rejects an invalid mode mask instead of constructing a tonic-less key', () => {
     expect(() => Key.of({ rootPc: 0, modeMask12: 0 })).toThrow(/modeMask12/);
-    expect(() => Key.of({ rootPc: 0, modeMask12: 0b10 })).toThrow(/include the tonic/);
+    expect(() => Key.of({ rootPc: 0, modeMask12: 0b10 })).toThrow(/must include its root/);
   });
 
   it('names the type of a tonic that is not the note this API takes', () => {

@@ -349,3 +349,46 @@ describe('generateCounterMelody', () => {
     }
   });
 });
+
+describe('ranking weight overrides', () => {
+  const nonFinite = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
+
+  for (const value of nonFinite) {
+    it(`rejects a weight of ${value} instead of ranking with it`, () => {
+      // A non-finite weight makes every candidate score NaN alike, so no
+      // comparison holds and the search keeps whichever candidate it reached
+      // first: a plausible line that was never ranked, with nothing to say so.
+      expect(() => generate({ weights: { contraryMotion: value } })).toThrow(InvalidInputError);
+    });
+  }
+
+  it('rejects a weight written as an explicit undefined', () => {
+    expect(() => generate({ weights: { chordTone: undefined as unknown as number } })).toThrow(
+      InvalidInputError,
+    );
+  });
+
+  it('rejects it before any candidate is scored, whatever the melody is', () => {
+    // The empty melody returns early and a small register bounds the search, so
+    // neither path may be the one that decides whether the option is checked.
+    expect(() =>
+      generateCounterMelody({
+        melody: [],
+        chordAt,
+        key: cMajor,
+        weights: { stepwise: Number.NaN },
+      }),
+    ).toThrow(InvalidInputError);
+    expect(() =>
+      generate({ weights: { stepwise: Number.NaN }, pitchLow: 55, pitchHigh: 56 }),
+    ).toThrow(InvalidInputError);
+  });
+
+  it('still applies a finite override', () => {
+    const pedal = generate({ weights: { registerDrift: 0 } });
+    expect(pedal.length).toBeGreaterThan(0);
+    for (const note of pedal) {
+      expect(Number.isFinite(note.pitch)).toBe(true);
+    }
+  });
+});

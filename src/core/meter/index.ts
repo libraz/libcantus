@@ -17,6 +17,7 @@ import {
   assertPositiveInt,
   assertRange,
   assertTimeSignature,
+  describeRejected,
 } from '../validation/index.js';
 import type { MeterData } from './internal.js';
 import {
@@ -26,7 +27,6 @@ import {
   barStartOf,
   beatOfBarIndex,
   copyMeterData,
-  copyMeterMap,
   copyTimeSignature,
   entryIndexOf,
   groupingSumOf,
@@ -158,18 +158,48 @@ export function toMeterData(value: MeterLike, name = 'meter'): MeterData {
  */
 function readMeterData(value: MeterLike, name = 'meter'): MeterData {
   if (typeof value === 'string') {
-    return parseTimeSignature(value);
+    const parsed = tryParseTimeSignature(value);
+    if (parsed.ok) {
+      return parsed.value;
+    }
+    // The reading is the parser's, but the failure is reported against the
+    // argument the caller filled: a caller holding several meters has to hear
+    // which one it was, and `time signature` names none of them.
+    throw new InvalidInputError(`${name} must name a time signature; ${parsed.error.message}`);
   }
   if (typeof value === 'object' && value !== null) {
     const data =
       !Array.isArray(value) && 'toJSON' in value && typeof value.toJSON === 'function'
         ? value.toJSON()
         : (value as MeterData);
-    return isMeterMap(data) ? assertMeterMap(data, name) : assertTimeSignature(data, name);
+    if (isMeterMap(data)) {
+      return assertMeterMap(data, name);
+    }
+    // A value that carries no numerator names no meter at all, so it is refused
+    // as the argument it is rather than as a signature missing a field: an
+    // options object handed to the wrong parameter is not a malformed
+    // numerator, and saying so sends the caller looking for the wrong fault.
+    if (typeof data === 'object' && data !== null && 'numerator' in data) {
+      return assertTimeSignature(data, name);
+    }
   }
   throw new InvalidInputError(
-    `${name} must be a time signature, a meter map, or a signature name; received ${typeof value}`,
+    `${name} must be a time signature, a meter map, or a signature name; received ${describeRejected(value)}`,
   );
+}
+
+/**
+ * The single signature a meter-shaped value names.
+ *
+ * A meter map is a run of changes and so names no one bar. The functions that
+ * answer about a single signature take no beat to ask about, so they all read
+ * the same one — the signature the piece opens in, which is the signature in
+ * force at beat 0 — rather than each falling over a different field of the
+ * array.
+ */
+function readSignature(value: MeterLike, name: string): TimeSignature {
+  const resolved = readMeterData(value, name);
+  return isMeterMap(resolved) ? meterAtChecked(0, resolved) : resolved;
 }
 
 /**
@@ -277,9 +307,15 @@ function readTimeSignature(text: string): TimeSignature {
     throw new InvalidInputError(`Invalid time signature: ${text}`);
   }
   // The same signature every consumer validates, validated here too: parsing
-  // a signature the rest of the library rejects only moves the failure.
-  const grouping = groupTokens.length > 1 ? groupTokens : undefined;
-  return assertTimeSignature({ numerator, denominator, grouping }, `time signature ${text}`);
+  // a signature the rest of the library rejects only moves the failure. A
+  // signature without a grouping omits the field rather than holding an
+  // undefined one, so equality by own keys reads a parsed signature and one
+  // written by hand as the same bar.
+  const ts: TimeSignature =
+    groupTokens.length > 1
+      ? { numerator, denominator, grouping: groupTokens }
+      : { numerator, denominator };
+  return assertTimeSignature(ts, `time signature ${text}`);
 }
 
 /**
@@ -296,7 +332,8 @@ function readTimeSignature(text: string): TimeSignature {
  * The plain form drops the grouping, so a round trip through it reads 7/8 as
  * flat rather than as 2+2+3; ask for the additive form to keep it.
  *
- * @param ts The time signature.
+ * @param ts The time signature, in any form that names one; a meter map is
+ *   rendered as the signature it opens in.
  * @param opts Set `grouping: true` to render an additive grouping.
  * @returns The formatted signature.
  * @example
@@ -308,12 +345,17 @@ function readTimeSignature(text: string): TimeSignature {
  * ```
  * @category Rhythm & Meter
  */
-export function formatTimeSignature(ts: TimeSignature, opts: { grouping?: boolean } = {}): string {
-  assertTimeSignature(ts);
-  if (opts.grouping === true && ts.grouping !== undefined && groupingSumOf(ts) === ts.numerator) {
-    return `${ts.grouping.join('+')}/${ts.denominator}`;
+export function formatTimeSignature(ts: MeterLike, opts: { grouping?: boolean } = {}): string {
+  const signature = readSignature(ts, 'ts');
+  const grouping = signature.grouping;
+  if (
+    opts.grouping === true &&
+    grouping !== undefined &&
+    groupingSumOf(signature) === signature.numerator
+  ) {
+    return `${grouping.join('+')}/${signature.denominator}`;
   }
-  return `${ts.numerator}/${ts.denominator}`;
+  return `${signature.numerator}/${signature.denominator}`;
 }
 
 /**
@@ -324,25 +366,32 @@ export function formatTimeSignature(ts: TimeSignature, opts: { grouping?: boolea
  * is a signature whose {@link TimeSignature.grouping} selects the additive
  * reading (9/8 as 2+2+2+3).
  *
- * @param ts The time signature.
+ * @param ts The time signature, in any form that names one; a meter map is read
+ *   as the signature it opens in.
  * @returns True for compound meters.
  * @category Rhythm & Meter
  */
-export function isCompound(ts: TimeSignature): boolean {
-  assertTimeSignature(ts);
-  return isCompoundNumerator(ts.numerator) && !isAdditiveReading(ts);
+export function isCompound(ts: MeterLike): boolean {
+  const signature = readSignature(ts, 'ts');
+  return isCompoundNumerator(signature.numerator) && !isAdditiveReading(signature);
 }
 
 /**
  * Length of a bar in quarter-note beats.
  *
- * @param ts The time signature.
+ * @param ts The time signature, in any form that names one; a meter map has no
+ *   single bar length, so it is read as the signature it opens in. Ask
+ *   {@link beatsPerBarAt} for the bar a given beat falls in.
  * @returns The bar length in quarter notes.
+ * @example
+ * ```ts
+ * import { beatsPerBar } from '@libraz/libcantus';
+ * beatsPerBar('6/8'); // 3
+ * ```
  * @category Rhythm & Meter
  */
-export function beatsPerBar(ts: TimeSignature): number {
-  assertTimeSignature(ts);
-  return barBeatsOf(ts);
+export function beatsPerBar(ts: MeterLike): number {
+  return barBeatsOf(readSignature(ts, 'ts'));
 }
 
 /**
@@ -468,7 +517,7 @@ export function beatsPerBarAt(beatInQuarters: number, meter: MeterLike): number 
  * @category Rhythm & Meter
  */
 export function resolveMeters(
-  opts: { ts?: TimeSignature; meters?: MeterMap },
+  opts: { ts?: MeterLike; meters?: MeterLike },
   name = 'meters',
 ): MeterMap {
   if (opts.ts !== undefined && opts.meters !== undefined) {
@@ -476,12 +525,15 @@ export function resolveMeters(
       `${name} and ts name the same thing; give one or the other, not both`,
     );
   }
-  if (opts.meters !== undefined) {
-    return copyMeterMap(assertMeterMap(opts.meters, name));
+  const given = opts.meters ?? opts.ts;
+  if (given === undefined) {
+    return [{ startBeat: 0, ts: copyTimeSignature(DEFAULT_TS) }];
   }
-  const ts = opts.ts ?? DEFAULT_TS;
-  assertTimeSignature(ts);
-  return [{ startBeat: 0, ts: copyTimeSignature(ts) }];
+  // Either field takes any meter-shaped value, so either may name the map: what
+  // separates them is which name an error is reported under, not which shape is
+  // accepted where.
+  const resolved = toMeterData(given, opts.meters !== undefined ? name : 'ts');
+  return isMeterMap(resolved) ? resolved : [{ startBeat: 0, ts: resolved }];
 }
 
 /**
@@ -494,13 +546,13 @@ export function resolveMeters(
  * {@link TimeSignature.grouping}; {@link metricWeight} then accents each
  * group's head pulse.
  *
- * @param ts The time signature.
+ * @param ts The time signature, in any form that names one; a meter map is read
+ *   as the signature it opens in.
  * @returns The pulse count per bar.
  * @category Rhythm & Meter
  */
-export function pulsesPerBar(ts: TimeSignature): number {
-  assertTimeSignature(ts);
-  return pulseCountOf(ts);
+export function pulsesPerBar(ts: MeterLike): number {
+  return pulseCountOf(readSignature(ts, 'ts'));
 }
 
 /** Whether `pulseIndex` is the head pulse of one of the groups, counted in pulses. */
@@ -560,18 +612,18 @@ function barPositionChecked(beatInQuarters: number, meter: MeterData): BarPositi
  * denominator unit in an additive metre. Position displays, click tracks, and
  * score export are all written against this length.
  *
- * @param ts The time signature.
+ * @param ts The time signature, in any form that names one; a meter map is read
+ *   as the signature it opens in.
  * @returns The pulse length in quarter-note beats.
  * @example
  * ```ts
- * import { parseTimeSignature, pulseBeats } from '@libraz/libcantus';
- * pulseBeats(parseTimeSignature('6/8')); // 1.5
+ * import { pulseBeats } from '@libraz/libcantus';
+ * pulseBeats('6/8'); // 1.5
  * ```
  * @category Rhythm & Meter
  */
-export function pulseBeats(ts: TimeSignature): number {
-  assertTimeSignature(ts);
-  return pulseBeatsOf(ts);
+export function pulseBeats(ts: MeterLike): number {
+  return pulseBeatsOf(readSignature(ts, 'ts'));
 }
 
 /**

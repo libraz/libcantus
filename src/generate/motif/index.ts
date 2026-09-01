@@ -1,7 +1,7 @@
 import type { ChordTimeline } from '../../analyze/timeline/index.js';
 import { InvalidInputError } from '../../core/errors/index.js';
-import type { TimeSignature } from '../../core/meter/index.js';
-import { beatsPerBar } from '../../core/meter/index.js';
+import type { MeterLike, TimeSignature } from '../../core/meter/index.js';
+import { beatsPerBar, meterAt, toMeterData } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
@@ -85,7 +85,7 @@ export type MotifOptions = {
    *
    * @defaultValue 4/4
    */
-  ts?: TimeSignature;
+  ts?: MeterLike;
   /**
    * Melodic contour shape the line follows.
    *
@@ -270,7 +270,9 @@ function contourOffsets(contour: MotifContour, count: number): number[] {
 export function generateMotif(opts: MotifOptions): MotifCell {
   const contour = opts.contour ?? 'arch';
   const bars = assertPositiveInt(opts.bars, 'motif bars');
-  const barBeats = beatsPerBar(opts.ts ?? DEFAULT_TS);
+  // The meter is read once, here: a motif is one repeated bar grid, so a
+  // caller who names a whole map gets the signature the map opens in.
+  const barBeats = beatsPerBar(meterAt(0, toMeterData(opts.ts ?? DEFAULT_TS, 'ts')));
   const totalBeats = bars * barBeats;
   const noteCount = Math.max(3, bars * 2);
   assertGenerationBudget(noteCount, 'motif notes');
@@ -530,15 +532,16 @@ export function developMotif(
   timeline: ChordTimeline,
   key: KeyLike,
   bars: number,
-  ts: TimeSignature = DEFAULT_TS,
+  ts: MeterLike = DEFAULT_TS,
 ): MotifCell {
+  const meter = meterAt(0, toMeterData(ts, 'ts'));
   assertPositiveInt(bars, 'development bars');
   assertNoteEvents(cell.notes, 'motif notes');
   // The key is read into its plain form once, here at the boundary; the tiling
   // below is given the scale it resolved to.
   const scale = toKeyScale(key);
   const span = cellSpan(cell);
-  const barBeats = beatsPerBar(ts);
+  const barBeats = beatsPerBar(meter);
   const totalBeats = bars * barBeats;
   const origin = cellOrigin(cell.notes);
   const out: MotifNote[] = [];
