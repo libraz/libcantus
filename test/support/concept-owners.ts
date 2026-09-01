@@ -74,16 +74,10 @@ export const CONCEPT_OWNERS: readonly ConceptOwner[] = [
     // tonic reads as a dominant under the second and not under the first.
     concept: 'what an applied dominant may target',
     owner: 'src/analyze/functional/tonicization.ts',
-    reserved: [
-      'appliedTarget',
-      'isAppliedDominant',
-      'isAppliedDominantSonority',
-      'tonicizableDegrees',
-    ],
-    allowed: [
-      'src/analyze/functional/internal.ts:isAppliedDominantSonority',
-      'src/theory/partwriting/index.ts:isAppliedDominant',
-    ],
+    // `isAppliedDominantSonority` is deliberately outside this: it asks what a
+    // chord sounds like, not what it is doing, and the two are separable — a
+    // dominant sonority on a degree nothing follows is not an applied dominant.
+    reserved: ['appliedTarget', 'isAppliedDominant', 'tonicizableDegrees'],
   },
   {
     // A chord's sixth is five letters above its root; a table of semitone
@@ -91,20 +85,19 @@ export const CONCEPT_OWNERS: readonly ConceptOwner[] = [
     // sixth is then marked as an unresolved seventh.
     concept: 'the letter a chord tone is spelled on',
     owner: 'src/theory/chord/index.ts',
-    reserved: ['chordToneSpelling', 'chordToneSpellings', 'CHORD_TONE_LETTER_STEPS'],
-    allowed: [
-      'src/theory/spelling/index.ts:CHORD_TONE_LETTER_STEPS',
-      'src/theory/spelling/index.ts:chordToneSpelling',
-    ],
+    // The degree table in the spelling module is the fallback for a chord that
+    // names no spelling of its own, and is reached only after this owner has
+    // been asked; it is not a second answer to the same question.
+    reserved: ['chordToneSpellings'],
   },
   {
-    // The meter module weighs a beat against the signature it is in; the
-    // vocabulary weighs a grid step against a fixed 4/4. Neighbouring
-    // generators therefore disagree about which beat is strong.
+    // Two readings of this is how neighbouring generators came to disagree
+    // about which beat is strong. The vocabulary's grid weight is a rank
+    // derived from this one rather than a second answer, so it is not listed:
+    // it asks the owner and then shifts the scale it reports on.
     concept: 'which beat of the bar is strong',
     owner: 'src/core/meter/index.ts',
-    reserved: ['metricWeight', 'gridMetricWeight', 'isStrongBeat'],
-    allowed: ['src/generate/vocabulary/transform.ts:gridMetricWeight'],
+    reserved: ['metricWeight', 'isStrongBeat'],
   },
   {
     // A compound signature is felt in dotted pulses. A reader that divides by

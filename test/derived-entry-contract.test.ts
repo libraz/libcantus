@@ -92,7 +92,11 @@ const NARROW_CARRIER_ALLOWED: readonly string[] = [];
  *
  * A default meter is a fail-open written in the type: a caller that forgets the
  * meter gets 4/4 rather than an error, and nothing downstream can tell the two
- * apart.
+ * apart. These three defend the default on the grounds that the built-in
+ * figures really are written on a 4/4 grid, which is true and still leaves a
+ * caller working in 7/8 no way to hear that they forgot. Removing it makes the
+ * meter a required argument, which is a change to a published signature and so
+ * is held for the next major rather than taken quietly here.
  */
 const CONCEPT_DEFAULT_ALLOWED: readonly string[] = [
   'src/generate/motif/index.ts:developMotif(ts)',

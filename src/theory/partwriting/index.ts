@@ -352,15 +352,19 @@ function isDominantSonority(chord: Chord): boolean {
 }
 
 /**
- * Whether a chord is an applied dominant: the dominant's sonority, taken down a
- * fifth onto a degree of the key other than the tonic.
+ * Whether a chord resolves as an applied dominant: the dominant's sonority,
+ * taken down a fifth onto a degree of the key other than the tonic, with the
+ * chord it names actually following.
  *
- * The resolution is part of the reading rather than a consequence of it. The
+ * Named for the resolution because the resolution is what it asks about, and
+ * because the analysis layer answers a different question under a similar name:
+ * there a chord is an applied dominant by what it is, here only by what comes
+ * next. The
  * same major triad on the third degree of a major key is V/vi where vi follows
  * and a plain III where nothing does, and only the first of the two licenses
  * the chromatic tone it introduces.
  */
-function isAppliedDominant(chord: Chord, next: Chord | undefined, key: KeyScale): boolean {
+function resolvesAsAppliedDominant(chord: Chord, next: Chord | undefined, key: KeyScale): boolean {
   if (next === undefined || !isDominantSonority(chord)) {
     return false;
   }
@@ -406,7 +410,7 @@ function soundsAugmentedSixth(moment: Moment, key: KeyScale): boolean {
  */
 function isChromaticHarmony(moment: Moment, next: Chord | undefined, key: KeyScale): boolean {
   return (
-    isAppliedDominant(moment.chord, next, key) ||
+    resolvesAsAppliedDominant(moment.chord, next, key) ||
     isNeapolitan(moment.chord, key) ||
     soundsAugmentedSixth(moment, key)
   );

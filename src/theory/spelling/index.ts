@@ -596,8 +596,14 @@ function chordToneLetterStep(
   return CHORD_TONE_LETTER_STEPS[mod12(pc - rootPc)];
 }
 
-/** Spell `pc` as a chord tone, on the letter its degree above the root implies. */
-function chordToneSpelling(
+/**
+ * Spell `pc` as a chord tone, on the letter its degree above the root implies.
+ *
+ * Distinct from `chordToneSpellings`, which validates the spellings a chord
+ * carries: this writes one pitch, reading those spellings when the chord has
+ * them and falling back to the degree table when it does not.
+ */
+function spellChordTone(
   pc: number,
   context: SpellingContext,
   tonic: Note,
@@ -663,7 +669,7 @@ function refineByContext(
   const { previous, next } = context;
   const candidates = [
     // The sounding chord names the pitch by the degree it writes it as.
-    chordToneSpelling(pc, context, tonic, key),
+    spellChordTone(pc, context, tonic, key),
     // A semitone below what follows: the pitch is its leading tone, a letter down.
     neighbourSpelling(next, 1, -1, pc, tonic, key),
     // A semitone above what preceded: the pitch is that note inflected upward,
