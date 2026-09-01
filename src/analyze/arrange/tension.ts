@@ -10,10 +10,11 @@ import { isStrongBeat, resolveMeters } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { NoteEventAssertOptions } from '../../core/validation/index.js';
-import { assertGenerationBudget, assertRange } from '../../core/validation/index.js';
+import { assertGenerationBudget, assertInteger, assertRange } from '../../core/validation/index.js';
 import { chordPitchClasses } from '../../theory/chord/index.js';
 import { evaluateSafety, NoteSafety, type SafetyProfile } from '../../theory/safety/index.js';
 import { majorKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
+import { BEAT_EPS } from '../adjacency.js';
 import { functionOf } from '../functional/index.js';
 import { gridForNotes } from '../grid.js';
 import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
@@ -21,7 +22,6 @@ import { type ChordTimeline, chordTimelineFromNotes } from '../timeline/index.js
 import {
   arrangementProfile,
   assertTrackNotes,
-  EPS,
   harmonyTrackSet,
   isPercussion,
   type PreparedTrack,
@@ -109,14 +109,26 @@ export function tensionCurve(
   const profile = arrangementProfile(opts.profile);
   const step = opts.step ?? 1;
   assertRange(step, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'tension sampling step');
+  // Read by no sampling this call makes, and checked all the same: the option is
+  // one of the arrangement options this entry point accepts, and a value the
+  // sibling entry point refuses cannot be one this one silently takes.
+  if (opts.minSeverity !== undefined) {
+    assertInteger(
+      opts.minSeverity,
+      'arrangement minSeverity',
+      NoteSafety.Safe,
+      NoteSafety.Dissonant,
+    );
+  }
 
-  const harmonyTracks = harmonyTrackSet(opts.harmonyTracks, tracks.length);
+  const harmonyTracks = harmonyTrackSet(opts.harmonyTracks, tracks);
   const pooled = poolNotes(tracks, harmonyTracks);
   const all = poolNotes(tracks);
   const totalBeats = all.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
-  // The curve starts where the music starts, a whole number of steps from beat
-  // 0: a pickup sounds before beat 0 and an excerpt lifted from bar 9 begins
-  // there, and neither is sampled across silence it never had.
+  // The grid the samples sit on is a whole number of steps from beat 0, and the
+  // music itself starts at `musicStart`: a pickup sounds before beat 0 and an
+  // excerpt lifted from bar 9 begins there, and neither is sampled across
+  // silence it never had.
   const { origin: sampleStart, startBeat: musicStart } = gridForNotes(all, step);
   // A caller-supplied timeline still needs key regions to be read against: the
   // ones the caller gave, the single key they named, or the ones the notes
@@ -159,7 +171,7 @@ export function tensionCurve(
 
   const prepared = prepareTracks(tracks);
   const points: TensionPoint[] = [];
-  const sampleCount = Math.max(0, Math.ceil((totalBeats - sampleStart) / step - EPS));
+  const sampleCount = Math.max(0, Math.ceil((totalBeats - sampleStart) / step - BEAT_EPS));
   assertGenerationBudget(sampleCount, 'tension samples', budget);
   // The per-sample cost is one lookup per sub-voice, so it is their product —
   // not either dimension alone — that has to stay inside the budget.
@@ -170,7 +182,11 @@ export function tensionCurve(
     budget,
   );
   for (let i = 0; i < sampleCount; i += 1) {
-    const beat = sampleStart + i * step;
+    // The first sample is taken where the music starts rather than at the slot
+    // boundary before it, so a curve carries no phantom lead-in over silence the
+    // piece never had; every later sample stays a whole number of steps from
+    // beat 0, which is what keeps them on the bar lines.
+    const beat = i === 0 ? Math.max(sampleStart, musicStart) : sampleStart + i * step;
     points.push({
       beat,
       // The pitch classes alone: tension is scored from what sounds against
@@ -188,6 +204,11 @@ export function tensionCurve(
  * `analyzeArrangement` followed by `tensionCurve` runs chord and key inference
  * twice over the same notes. This takes the analysis it already produced, so
  * the curve and the annotations describe the same harmony by construction.
+ *
+ * The analysis is the harmony to fall back on rather than one laid over the
+ * caller: `key`, `keys` and `harmonyTracks` each name a harmony the analysis
+ * does not hold, so naming one is asking for a different reading, and the curve
+ * is taken under it. Nothing else about the analysis is re-derived.
  *
  * @param tracks The same tracks that were analysed.
  * @param analysis The result of {@link analyzeArrangement} for those tracks.
@@ -207,11 +228,27 @@ export function tensionCurveFrom(
   analysis: ArrangementAnalysis,
   opts: ArrangementOptions & { step?: number } = {},
 ): TensionPoint[] {
-  return tensionCurve(tracks, {
-    ...opts,
-    timeline: analysis.timeline,
-    keys: analysis.keys,
-  });
+  return tensionCurve(tracks, { ...carriedHarmony(analysis, opts), ...opts });
+}
+
+/**
+ * How much of an analysis's harmony a set of options leaves in place.
+ *
+ * Restricting the harmony to a few tracks changes which notes state it, so
+ * nothing of the analysis survives; naming a key or its regions changes only
+ * what the chords are heard against, so the chords themselves are kept.
+ */
+function carriedHarmony(
+  analysis: ArrangementAnalysis,
+  opts: ArrangementOptions,
+): ArrangementOptions {
+  if (opts.harmonyTracks !== undefined) {
+    return {};
+  }
+  if (opts.key !== undefined || opts.keys !== undefined) {
+    return { timeline: analysis.timeline };
+  }
+  return { timeline: analysis.timeline, keys: analysis.keys };
 }
 
 /**

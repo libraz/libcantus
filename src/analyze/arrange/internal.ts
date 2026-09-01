@@ -9,11 +9,9 @@ import type { NoteEvent } from '../../core/types.js';
 import type { NoteEventAssertOptions } from '../../core/validation/index.js';
 import { assertNoteEvents, assertOneOf } from '../../core/validation/index.js';
 import { PROFILE_WEIGHTS, type SafetyProfile } from '../../theory/safety/index.js';
+import { adjacent, BEAT_EPS, hasEnded, sameInstant } from '../adjacency.js';
 import type { IdentifiedVoiceNote } from '../voice/index.js';
 import type { ArrangementTrack, TrackRole } from './tracks.js';
-
-/** Float tolerance for beat boundary comparisons. */
-export const EPS = 1e-9;
 
 /**
  * Largest interval, in semitones, a sub-voice will span between consecutive
@@ -61,12 +59,46 @@ export type PreparedTrack = {
 
 /** Whether a sounding span `[start, end)` covers a beat. */
 export function covers(note: PreparedNote, beat: number): boolean {
-  return beat >= note.startBeat - EPS && beat < note.endBeat - EPS;
+  return beat >= note.startBeat - BEAT_EPS && beat < note.endBeat - BEAT_EPS;
 }
 
 /** Whether a track's role means it carries no harmonic content. */
 export function isPercussion(role: TrackRole | undefined): boolean {
   return role === 'drums';
+}
+
+/**
+ * The roles that exist, written once as a table the compiler checks against
+ * {@link TrackRole}: a role added to the union without a column here fails to
+ * compile rather than becoming a name the check below quietly rejects.
+ */
+const TRACK_ROLE_TABLE: Readonly<Record<TrackRole, true>> = {
+  melody: true,
+  harmony: true,
+  bass: true,
+  drums: true,
+  other: true,
+};
+
+/** The roles that exist, read off the table rather than listed again here. */
+const TRACK_ROLES = Object.keys(TRACK_ROLE_TABLE) as TrackRole[];
+
+/**
+ * The role a track plays, checked against the roles that exist.
+ *
+ * A name outside the table is an input error rather than a quiet fall back to
+ * `'other'`: a drum track labelled `'percussion'` — the word a MIDI import
+ * naturally writes — would be read as pitched material and pooled into the key
+ * and the chords, and the role would be reported back as a value
+ * {@link TrackRole} says cannot occur.
+ *
+ * @param role The track's role, if any.
+ * @param name What the track is called in an error message.
+ * @returns The role, or `'other'` when the track carries none.
+ * @throws If the role names no known role.
+ */
+export function trackRoleOf(role: TrackRole | undefined, name: string): TrackRole {
+  return role === undefined ? 'other' : assertOneOf(role, TRACK_ROLES, name);
 }
 
 /** The safety profile an arrangement is judged under when the caller names none. */
@@ -130,17 +162,21 @@ export function assertTrackNotes(
  * An index naming no track cannot be honoured, and matching nothing quietly
  * turns a stale index — the ordinary result of deleting a track — into an
  * analysis with no harmony at all, reported as though the arrangement were at
- * fault. The session's `trackIndex` is checked the same way.
+ * fault. A percussion track is refused for the same reason: {@link poolNotes}
+ * drops it, so naming one is naming no harmony, and the analysis that comes back
+ * blames the music for clashing with a harmony nothing states. The session's
+ * `trackIndex` is checked the same way.
  *
  * @param harmonyTracks The caller's indices, if any.
- * @param trackCount How many tracks were passed in.
+ * @param tracks The tracks the indices are read against.
  * @param name What the indices belong to, for the error message.
  * @returns The indices as a set, or undefined when the caller named none.
- * @throws If an index is not finite or names no track.
+ * @throws If an index is not finite, names no track, or names a track whose
+ *   notes carry no harmony.
  */
 export function harmonyTrackSet(
   harmonyTracks: readonly number[] | undefined,
-  trackCount: number,
+  tracks: readonly ArrangementTrack[],
   name = 'harmonyTracks',
 ): ReadonlySet<number> | undefined {
   if (harmonyTracks === undefined) {
@@ -153,9 +189,14 @@ export function harmonyTrackSet(
       throw new InvalidInputError(`${name}[${index}] must be a track index; received ${value}`);
     }
     const track = Math.trunc(value);
-    if (track < 0 || track >= trackCount) {
+    if (track < 0 || track >= tracks.length) {
       throw new InvalidInputError(
-        `${name}[${index}] ${track} is outside the arrangement's ${trackCount} tracks`,
+        `${name}[${index}] ${track} is outside the arrangement's ${tracks.length} tracks`,
+      );
+    }
+    if (isPercussion(tracks[track]?.role)) {
+      throw new InvalidInputError(
+        `${name}[${index}] ${track} names a percussion track, whose pitches state no harmony`,
       );
     }
     only.add(track);
@@ -203,7 +244,7 @@ export function poolNotes(tracks: ArrangementTrack[], only?: ReadonlySet<number>
  */
 function splitIntoSubVoices(ordered: IdentifiedVoiceNote[]): IdentifiedVoiceNote[][] {
   const lanes: IdentifiedVoiceNote[][] = [];
-  const attachNearest = (note: IdentifiedVoiceNote, excluded = new Set<number>()): boolean => {
+  const attachNearest = (note: IdentifiedVoiceNote, excluded = new Set<number>()): number => {
     let best = -1;
     let bestDistance = Number.POSITIVE_INFINITY;
     let bestEnd = Number.NEGATIVE_INFINITY;
@@ -216,7 +257,7 @@ function splitIntoSubVoices(ordered: IdentifiedVoiceNote[]): IdentifiedVoiceNote
         continue;
       }
       const end = last.startBeat + last.durationBeat;
-      if (end > note.startBeat + EPS) {
+      if (!hasEnded(end, note.startBeat)) {
         continue; // still sounding, so the lane is not free
       }
       const distance = Math.abs(last.pitch - note.pitch);
@@ -231,49 +272,55 @@ function splitIntoSubVoices(ordered: IdentifiedVoiceNote[]): IdentifiedVoiceNote
     }
     if (best >= 0) {
       lanes[best]?.push(note);
-      return true;
     }
-    return false;
+    return best;
   };
 
   for (let start = 0; start < ordered.length; ) {
     const onset = ordered[start]?.startBeat ?? 0;
     let end = start + 1;
-    while (end < ordered.length && Math.abs((ordered[end]?.startBeat ?? 0) - onset) <= EPS) {
+    while (end < ordered.length && sameInstant(ordered[end]?.startBeat ?? 0, onset)) {
       end += 1;
     }
     const block = ordered.slice(start, end);
     // Notes struck together form a vertical slice, not a sequence of greedy
-    // nearest-neighbour decisions. Pair their low-to-high order with the
-    // already-free lanes' low-to-high order so parallel block chords cannot
-    // swap lanes and manufacture a crossing on the following beat.
+    // nearest-neighbour decisions, so their lanes are chosen as a whole.
     if (block.length > 1) {
       const freeLanes = lanes
         .map((lane, index) => ({ index, last: lane[lane.length - 1] }))
         .filter(
           (entry): entry is { index: number; last: IdentifiedVoiceNote } =>
             entry.last !== undefined &&
-            entry.last.startBeat + entry.last.durationBeat <= onset + EPS,
+            hasEnded(entry.last.startBeat + entry.last.durationBeat, onset),
         )
         .sort((a, b) => a.last.pitch - b.last.pitch);
-      const paired = new Set<number>();
+      const assignment = pairWithFreeLanes(block, freeLanes);
+      // Every lane the slice takes is settled before a note is placed: a note
+      // left for {@link attachNearest} must not be handed a lane the slice
+      // already spoke for, and neither may two of them share one.
+      const taken = new Set<number>(
+        assignment.filter((lane): lane is number => lane !== undefined),
+      );
       for (let index = 0; index < block.length; index += 1) {
         const note = block[index];
-        const lane = freeLanes[index];
-        if (
-          note !== undefined &&
-          lane !== undefined &&
-          Math.abs(lane.last.pitch - note.pitch) <= MAX_LANE_LEAP
-        ) {
-          lanes[lane.index]?.push(note);
-          paired.add(lane.index);
-        } else if (note !== undefined && !attachNearest(note, paired)) {
+        if (note === undefined) {
+          continue;
+        }
+        const lane = assignment[index];
+        if (lane !== undefined) {
+          lanes[lane]?.push(note);
+          continue;
+        }
+        const attached = attachNearest(note, taken);
+        if (attached < 0) {
           lanes.push([note]);
+        } else {
+          taken.add(attached);
         }
       }
     } else {
       const note = block[0];
-      if (note !== undefined && !attachNearest(note)) {
+      if (note !== undefined && attachNearest(note) < 0) {
         lanes.push([note]);
       }
     }
@@ -282,13 +329,90 @@ function splitIntoSubVoices(ordered: IdentifiedVoiceNote[]): IdentifiedVoiceNote
   return lanes;
 }
 
+/**
+ * Choose a free lane for each note of one simultaneous block.
+ *
+ * The whole slice is assigned at once, by the rule {@link splitIntoSubVoices}
+ * follows note by note: each note joins the free lane whose last pitch is
+ * nearest its own, with the block's low-to-high order preserved so no two
+ * assignments cross. Pairing by position instead — the lowest note to the lowest
+ * free lane — hands a thinned chord's notes to lanes they never sounded on: a
+ * C-E-G that becomes E-G gives the E the C's lane and invents the leap that
+ * follows from it.
+ *
+ * A connection wider than {@link MAX_LANE_LEAP} is not a melodic one, so leaving
+ * a note for a lane of its own costs exactly that: it is taken whenever no
+ * remaining lane is closer than the widest connection a lane admits.
+ *
+ * @param block The notes struck together, low to high.
+ * @param freeLanes The lanes free at that onset, by their last pitch, low to high.
+ * @returns One entry per block note: the lane it joins, or undefined when it
+ *   joins none of them.
+ */
+function pairWithFreeLanes(
+  block: readonly IdentifiedVoiceNote[],
+  freeLanes: readonly { index: number; last: IdentifiedVoiceNote }[],
+): (number | undefined)[] {
+  const noteCount = block.length;
+  const laneCount = freeLanes.length;
+  const assignment = new Array<number | undefined>(noteCount).fill(undefined);
+  if (laneCount === 0) {
+    return assignment;
+  }
+  // Cost of the cheapest order-preserving assignment of the first i notes over
+  // the first j lanes, and the step it ends with: 0 leaves lane j-1 unused, 1
+  // pairs note i-1 with it, 2 leaves note i-1 without a lane.
+  const width = laneCount + 1;
+  const cost = new Float64Array((noteCount + 1) * width);
+  const step = new Uint8Array((noteCount + 1) * width);
+  for (let i = 1; i <= noteCount; i += 1) {
+    cost[i * width] = i * MAX_LANE_LEAP;
+    step[i * width] = 2;
+  }
+  for (let i = 1; i <= noteCount; i += 1) {
+    for (let j = 1; j <= laneCount; j += 1) {
+      let best = cost[i * width + j - 1] ?? 0;
+      let choice = 0;
+      const unpaired = (cost[(i - 1) * width + j] ?? 0) + MAX_LANE_LEAP;
+      if (unpaired < best) {
+        best = unpaired;
+        choice = 2;
+      }
+      const note = block[i - 1];
+      const lane = freeLanes[j - 1];
+      if (note !== undefined && lane !== undefined) {
+        const distance = Math.abs(lane.last.pitch - note.pitch);
+        const paired = (cost[(i - 1) * width + j - 1] ?? 0) + distance;
+        if (distance <= MAX_LANE_LEAP && paired < best) {
+          best = paired;
+          choice = 1;
+        }
+      }
+      cost[i * width + j] = best;
+      step[i * width + j] = choice;
+    }
+  }
+  for (let i = noteCount, j = laneCount; i > 0; ) {
+    if (j === 0 || step[i * width + j] === 2) {
+      i -= 1;
+    } else if (step[i * width + j] === 1) {
+      assignment[i - 1] = freeLanes[j - 1]?.index;
+      i -= 1;
+      j -= 1;
+    } else {
+      j -= 1;
+    }
+  }
+  return assignment;
+}
+
 /** Index of the last span starting at or before a beat, or -1. */
 function lastStartingAtOrBefore(sounding: PreparedNote[], beat: number): number {
   let low = 0;
   let high = sounding.length;
   while (low < high) {
     const middle = Math.floor((low + high) / 2);
-    if ((sounding[middle]?.startBeat ?? Number.POSITIVE_INFINITY) <= beat + EPS) {
+    if ((sounding[middle]?.startBeat ?? Number.POSITIVE_INFINITY) <= beat + BEAT_EPS) {
       low = middle + 1;
     } else {
       high = middle;
@@ -320,7 +444,7 @@ export function prepareTracks(tracks: ArrangementTrack[]): PreparedTrack[] {
       const sounding: PreparedNote[] = voice.map((note, i) => {
         const prev = i > 0 ? voice[i - 1] : undefined;
         const prevEnd = prev === undefined ? undefined : prev.startBeat + prev.durationBeat;
-        const contiguous = prevEnd !== undefined && Math.abs(prevEnd - note.startBeat) <= EPS;
+        const contiguous = prevEnd !== undefined && adjacent(prevEnd, note.startBeat);
         return {
           pitch: note.pitch,
           prevPitch: contiguous ? prev?.pitch : undefined,
@@ -339,7 +463,7 @@ export function prepareTracks(tracks: ArrangementTrack[]): PreparedTrack[] {
     });
     return {
       name: track.name ?? `track ${index + 1}`,
-      role: track.role ?? 'other',
+      role: trackRoleOf(track.role, `tracks[${index}].role`),
       trackIndex: index,
       voices,
     };

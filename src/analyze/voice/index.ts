@@ -10,6 +10,7 @@ import {
 import type { VoiceSnapshot } from '../../theory/safety/index.js';
 import type { KeyLike } from '../../theory/scale/index.js';
 import { toKeyScale } from '../../theory/scale/index.js';
+import { adjacent } from '../adjacency.js';
 
 /**
  * A suspension figure, named by the interval above the bass and the interval it
@@ -138,9 +139,6 @@ export function keyScaleAt(key: KeyContext): (beat: number) => KeyScale {
 export function toVoiceNotes(events: readonly NoteEvent[]): IdentifiedVoiceNote[] {
   return events.map((event, index) => ({ ...event, id: index, originalIndex: index }));
 }
-
-/** Maximum gap/overlap treated as adjacent after MIDI humanization. */
-const HUMANIZE_ADJACENCY = 0.05;
 
 /**
  * Interval class of a pitch above the actual sounding bass.
@@ -343,14 +341,9 @@ export function analyzeVoice(
         ? Number.NEGATIVE_INFINITY
         : prevNote.startBeat + prevNote.durationBeat;
     const noteEnd = note.startBeat + note.durationBeat;
-    const prev =
-      prevNote !== undefined && Math.abs(prevEnd - note.startBeat) <= HUMANIZE_ADJACENCY
-        ? prevNote
-        : undefined;
+    const prev = prevNote !== undefined && adjacent(prevEnd, note.startBeat) ? prevNote : undefined;
     const next =
-      nextNote !== undefined && Math.abs(noteEnd - nextNote.startBeat) <= HUMANIZE_ADJACENCY
-        ? nextNote
-        : undefined;
+      nextNote !== undefined && adjacent(noteEnd, nextNote.startBeat) ? nextNote : undefined;
     const chord = chordAtBeat(note.startBeat);
     const labels: TheoryLabel[] = [];
     const member = isChordMember(note.pitch, chord);

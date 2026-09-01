@@ -41,6 +41,7 @@ export type {
 } from './arrange/index.js';
 export {
   analyzeArrangement,
+  analyzePolyphony,
   createArrangementSession,
   tensionCurve,
   tensionCurveFrom,

@@ -11,6 +11,7 @@ import {
   analyzeArrangement,
   createArrangementSession,
   tensionCurveFrom,
+  trackRoleOf,
 } from '../analyze/arrange/index.js';
 import type { KeyRegion } from '../analyze/keys/index.js';
 import type { ChordTimeline } from '../analyze/timeline/index.js';
@@ -116,7 +117,15 @@ function copyNotes(notes: readonly NoteEvent[], name: string): NoteEvent[] {
   );
 }
 
-/** Defensive copy of one track, its notes checked as they are copied. */
+/**
+ * Defensive copy of one track, its notes and its role checked as they are
+ * copied.
+ *
+ * The role is checked here as well as on the analysis side, since this is the
+ * boundary a project file crosses: a role outside the table would be stored,
+ * handed back by {@link Arrangement.tracks} as a {@link TrackRole}, and read as
+ * pitched material by the harmony inference.
+ */
 function copyTrack(track: ArrangementTrack, index: number): ArrangementTrack {
   assertDataObject(track, `tracks[${index}]`);
   const copy: ArrangementTrack = { notes: copyNotes(track.notes, `tracks[${index}].notes`) };
@@ -124,7 +133,7 @@ function copyTrack(track: ArrangementTrack, index: number): ArrangementTrack {
     copy.name = track.name;
   }
   if (track.role !== undefined) {
-    copy.role = track.role;
+    copy.role = trackRoleOf(track.role, `tracks[${index}].role`);
   }
   return copy;
 }
@@ -179,7 +188,11 @@ function copySettings(
   // accept and naming both `ts` and `meters` is the error it always was.
   const meters = resolveMeters({ ts: settings.ts, meters: settings.meters }, 'arrangement meters');
   if (settings.ts !== undefined) {
-    copy.ts = copyPlain(settings.ts, 'arrangement ts');
+    // Resolved before it is copied, as `meters` is below: a value that stands
+    // for a meter rather than being one — a `Meter` instance — carries the
+    // signature behind a method, so copying it as it arrived stores `{}` and
+    // the stored arrangement can no longer be read back.
+    copy.ts = copyPlain(toMeterData(settings.ts, 'arrangement ts'), 'arrangement ts');
   }
   if (settings.meters !== undefined) {
     copy.meters = copyPlain(meters, 'arrangement meters');
@@ -503,6 +516,10 @@ export class Arrangement {
    * The harmony is the one the arrangement already found, so the curve and the
    * annotations describe the same chords rather than two readings of the same
    * notes.
+   *
+   * Naming a key, its regions, or the tracks the harmony is read from asks for
+   * a harmony this arrangement did not find, so the curve is read under the one
+   * named rather than over the one it holds.
    *
    * @param opts The sampling step, and any setting to lay over the
    *   arrangement's own; a meter named here replaces the arrangement's, since

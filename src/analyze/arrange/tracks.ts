@@ -6,10 +6,10 @@
  */
 
 import type { MeterLike, MeterMap } from '../../core/meter/index.js';
-import { isStrongBeat, resolveMeters } from '../../core/meter/index.js';
+import { beatsPerBarAt, isStrongBeat, resolveMeters } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import type { NoteEventAssertOptions } from '../../core/validation/index.js';
-import { assertGenerationBudget, assertRange } from '../../core/validation/index.js';
+import { assertGenerationBudget, assertInteger, assertRange } from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
 import {
   evaluateSafety,
@@ -19,6 +19,8 @@ import {
 } from '../../theory/safety/index.js';
 import type { KeyLike } from '../../theory/scale/index.js';
 import { majorKey, type ResolvedKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
+import { BEAT_EPS, sameInstant } from '../adjacency.js';
+import { gridForNotes } from '../grid.js';
 import {
   attachPivots,
   type KeyRegion,
@@ -45,7 +47,6 @@ import {
 import {
   arrangementProfile,
   assertTrackNotes,
-  EPS,
   harmonyTrackSet,
   isPercussion,
   type PreparedTrack,
@@ -148,9 +149,9 @@ function withGivenKeys(
  * The timeline was not inferred from these notes, so it carries no measured
  * confidence — reporting 1 would turn every confidence gate into an
  * unconditional pass. The key regions still come from the notes, because the
- * caller supplied chords, not an answer about the key; they are read against the
- * whole meter map and annotated with their pivots, exactly as the inferring path
- * reads and annotates its own.
+ * caller supplied chords, not an answer about the key; they are read over the
+ * span the notes occupy, against the whole meter map, and annotated with their
+ * pivots, exactly as the inferring path reads and annotates its own.
  */
 function callerTimeline(
   timeline: ChordTimeline,
@@ -165,7 +166,21 @@ function callerTimeline(
   prevailingKey: ResolvedKey;
   segmentConfidence: number[];
 } {
-  const totalBeats = timeline.segments.reduce((end, segment) => Math.max(end, segment.endBeat), 0);
+  // The span is the one the notes sound over, not the one the chords cover: a
+  // chart of the opening bars is a partial answer about the harmony and no
+  // answer at all about where the piece ends, so stopping the key search at its
+  // last chord would read every note after it against the opening key.
+  const chartEnd = timeline.segments.reduce((end, segment) => Math.max(end, segment.endBeat), 0);
+  const soundingEnd = pooled.reduce(
+    (end, note) => Math.max(end, note.startBeat + note.durationBeat),
+    0,
+  );
+  const totalBeats = Math.max(chartEnd, soundingEnd);
+  // ...and it begins where the music begins, read from the one derivation of an
+  // analysed span's origin that the inferring path and the tension curve read
+  // too: an excerpt lifted from bar 9 holds no key over the eight bars of
+  // silence a hardcoded 0 would report it as covering.
+  const { startBeat: musicStart } = gridForNotes(pooled, beatsPerBarAt(0, meters));
   // Caller-supplied regions are the caller's answer and are passed through as
   // they are; the ones derived here are annotated like any other, since the
   // chords a pivot is read from are in hand either way.
@@ -173,7 +188,7 @@ function callerTimeline(
     given ??
     attachPivots(
       key !== undefined
-        ? [{ startBeat: 0, endBeat: totalBeats, key: resolveKey(key), confidence: 1 }]
+        ? [{ startBeat: musicStart, endBeat: totalBeats, key: resolveKey(key), confidence: 1 }]
         : keyTimelineFromNotes(pooled, { meters, totalBeats, budget }),
       timeline.segments,
     );
@@ -331,7 +346,7 @@ function soundingVoicesAt(prepared: PreparedTrack[], beat: number): SoundingVoic
       // Motion reasons compare one real transition shared by both voices.
       // A voice attacking exactly here contributes its adjacent predecessor;
       // a sustained voice contributes the same pitch (oblique motion).
-      const previous = Math.abs(note.startBeat - beat) <= EPS ? note.prevPitch : note.pitch;
+      const previous = sameInstant(note.startBeat, beat) ? note.prevPitch : note.pitch;
       if (previous !== undefined) {
         snap.prevPitch = previous;
       }
@@ -429,7 +444,7 @@ function firstSegmentAfter(timeline: ChordTimeline, beat: number): number {
   let high = timeline.segments.length;
   while (low < high) {
     const middle = Math.floor((low + high) / 2);
-    if ((timeline.segments[middle]?.startBeat ?? Number.POSITIVE_INFINITY) <= beat + EPS) {
+    if ((timeline.segments[middle]?.startBeat ?? Number.POSITIVE_INFINITY) <= beat + BEAT_EPS) {
       low = middle + 1;
     } else {
       high = middle;
@@ -452,7 +467,7 @@ function evaluationBeats(note: VoiceNote, timeline: ChordTimeline): number[] {
   const beats = [note.startBeat];
   for (let i = firstSegmentAfter(timeline, note.startBeat); i < timeline.segments.length; i += 1) {
     const start = timeline.segments[i]?.startBeat;
-    if (start === undefined || start >= noteEnd - EPS) {
+    if (start === undefined || start >= noteEnd - BEAT_EPS) {
       break;
     }
     beats.push(start);
@@ -557,8 +572,19 @@ export function analyzeArrangementWith(
   // its work by, so it is checked here, under this layer's own name.
   assertGenerationBudget(noteCount, 'arrangement notes', budget);
   const profile = arrangementProfile(opts.profile);
-  const minSeverity = opts.minSeverity ?? NoteSafety.Warning;
-  const harmonyTracks = harmonyTrackSet(opts.harmonyTracks, tracks.length);
+  // A severity outside the scale narrows the report to nothing, which reads
+  // exactly like a clean arrangement; the class API refuses it, so the function
+  // it delegates to has to refuse the same values.
+  const minSeverity =
+    opts.minSeverity === undefined
+      ? NoteSafety.Warning
+      : assertInteger(
+          opts.minSeverity,
+          'arrangement minSeverity',
+          NoteSafety.Safe,
+          NoteSafety.Dissonant,
+        );
+  const harmonyTracks = harmonyTrackSet(opts.harmonyTracks, tracks);
   const prepared = prepareTracks(tracks);
   // Every note is evaluated against the other sub-voices sounding beneath it, so
   // the work is the product of the two — not either dimension alone, which is
@@ -638,7 +664,7 @@ export function analyzeArrangementWith(
           continue;
         }
         for (const beat of evaluationBeats(note, timeline)) {
-          const atOnset = Math.abs(beat - note.startBeat) <= EPS;
+          const atOnset = sameInstant(beat, note.startBeat);
           const safetyQuery = {
             profile,
             candidatePitch: note.pitch,
