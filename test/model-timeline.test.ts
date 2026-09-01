@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { chordToRoman } from '../src/analyze/functional/index.js';
-import { prevailingKeyOf, spelledKeyScale } from '../src/analyze/keys/index.js';
+import { prevailingKeyOf } from '../src/analyze/keys/index.js';
 import { reduceProgression } from '../src/analyze/reduction/index.js';
 import {
   chordTimelineFromChords,
@@ -16,7 +16,7 @@ import { Progression } from '../src/model/progression.js';
 import { Timeline, type TimelineData } from '../src/model/timeline.js';
 import type { ChordSpan } from '../src/theory/chord/index.js';
 import { makeChord, transposeChord } from '../src/theory/chord/index.js';
-import { majorKey } from '../src/theory/scale/index.js';
+import { majorKey, resolveKey } from '../src/theory/scale/index.js';
 
 /**
  * The timed harmony class: the contracts every model class holds, the three
@@ -137,7 +137,7 @@ describe('construction', () => {
       {
         startBeat: 0,
         endBeat: TOTAL_BEATS,
-        key: { ...majorKey(0), tonic: { letter: 0, alter: 0 }, variant: 'major' },
+        key: { scale: majorKey(0), tonic: { letter: 0, alter: 0 }, variant: 'major' },
         confidence: 1,
       },
     ]);
@@ -359,11 +359,11 @@ describe('analysis equivalence', () => {
       ],
       totalBeats: 12,
       keys: [
-        { startBeat: 0, endBeat: 6, key: spelledKeyScale(majorKey(0)), confidence: 1 },
+        { startBeat: 0, endBeat: 6, key: resolveKey(majorKey(0)), confidence: 1 },
         {
           startBeat: 6,
           endBeat: 12,
-          key: spelledKeyScale(majorKey(7)),
+          key: resolveKey(majorKey(7)),
           confidence: 1,
           modulation: 'dominant',
         },
@@ -409,7 +409,7 @@ describe('transforming', () => {
       {
         startBeat: 6,
         endBeat: 14,
-        key: { ...majorKey(0), tonic: { letter: 0, alter: 0 }, variant: 'major' },
+        key: { scale: majorKey(0), tonic: { letter: 0, alter: 0 }, variant: 'major' },
         confidence: 1,
       },
     ]);

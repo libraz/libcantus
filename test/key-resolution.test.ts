@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { SpelledKeyScale } from '../src/analyze/keys/index.js';
 import { formatNote } from '../src/core/pitch/index.js';
 import { Key } from '../src/model/key.js';
 import {
@@ -57,18 +56,14 @@ describe('resolving a key keeps what the key knows', () => {
   });
 
   it('reads a spelling written beside a scale rather than inside it', () => {
-    // A key region lays its key out flat, so the spelling sits next to the
-    // pitch classes instead of around them. The resolver reads it there; this
-    // states the shape it reads, which the type used to deny while the
-    // implementation relied on it.
-    const region: SpelledKeyScale = {
-      ...minorKey(8),
-      tonic: { letter: 5, alter: -1 },
-      variant: 'natural',
-    };
+    // Data may carry a key flat, with the spelling next to the pitch classes
+    // rather than around them: a record a caller keeps, a file written before
+    // the nested form. The accepted shapes say the resolver reads it there, so
+    // this is that shape read.
+    const flat = { ...minorKey(8), tonic: { letter: 5, alter: -1 }, variant: 'natural' as const };
 
-    expect(formatNote(resolveKey(region).tonic)).toBe('Ab');
-    expect(resolveKey(region).variant).toBe('natural');
+    expect(formatNote(resolveKey(flat).tonic)).toBe('Ab');
+    expect(resolveKey(flat).variant).toBe('natural');
     // Not vacuous: the same pitch classes with nothing written beside them.
     expect(formatNote(resolveKey(minorKey(8)).tonic)).toBe('G#');
   });

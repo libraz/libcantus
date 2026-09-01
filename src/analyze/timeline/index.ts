@@ -17,7 +17,14 @@ import {
 } from '../../core/validation/index.js';
 import type { Chord, ChordQuality, ChordSpan } from '../../theory/chord/index.js';
 import { chordFromSpan, chordPitchClasses, makeChord } from '../../theory/chord/index.js';
-import { isScaleTone, majorKey } from '../../theory/scale/index.js';
+import type { KeyLike } from '../../theory/scale/index.js';
+import {
+  isScaleTone,
+  majorKey,
+  type ResolvedKey,
+  resolveKey,
+  scaleOf,
+} from '../../theory/scale/index.js';
 import type { ChordMatch } from '../detect/index.js';
 import { detectChord } from '../detect/index.js';
 import { augmentedSixthFromPitchClasses } from '../functional/augmented-sixth.js';
@@ -27,15 +34,9 @@ import { gridOriginOf } from '../grid.js';
 import type { SlotGrid, WindowWeights } from '../histogram.js';
 import { bucketNotesBySlot, windowWeights } from '../histogram.js';
 import type { KeyRegion } from '../keys/index.js';
-import {
-  attachPivots,
-  keyLookup,
-  keyTimelineFromNotes,
-  prevailingKeyOf,
-  type SpelledKeyScale,
-  spelledKeyScale,
-} from '../keys/index.js';
+import { attachPivots, keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
 import type { KeyContext } from '../voice/index.js';
+import { keyScaleAt } from '../voice/index.js';
 
 export type { ChordSegment } from '../../theory/chord/index.js';
 
@@ -211,8 +212,12 @@ export type ChordTimelineOptions = {
    * Key context held across the whole span. Omit it to have the key searched
    * for over time with {@link keyTimelineFromNotes}, which is what lets a piece
    * that modulates be analysed against the key actually in force.
+   *
+   * Taken in whatever form the caller holds a key, and kept whole: the region
+   * built from it carries the spelling and the scale form it was named with, so
+   * an Ab minor stated here is an Ab minor in the result.
    */
-  key?: KeyScale;
+  key?: KeyLike;
   /**
    * A single time signature held across the whole span, as sugar for a
    * one-element `meters`; defaults to 4/4. Giving both is an input error.
@@ -313,7 +318,7 @@ export type ChordTimelineResult = {
    * The key held longest across {@link ChordTimelineResult.keys} — the one to
    * print on a key signature or hand to a generator that takes a single key.
    */
-  prevailingKey: SpelledKeyScale;
+  prevailingKey: ResolvedKey;
   /** One confidence value in [0, 1] per segment, in segment order. */
   segmentConfidence: number[];
 };
@@ -1304,13 +1309,18 @@ export function analyzeTimeline(
           {
             startBeat: musicStart,
             endBeat: totalBeats,
-            key: spelledKeyScale(opts.key),
+            key: resolveKey(opts.key),
             confidence: 1,
           },
         ]
       : keyTimelineFromNotes(sounding, { meters, totalBeats, budget });
-  const prevailingKey = prevailingKeyOf(keys) ?? spelledKeyScale(majorKey(0));
+  const prevailingKey = prevailingKeyOf(keys) ?? resolveKey(majorKey(0));
   const keyAt = keyLookup(keys, prevailingKey);
+  // The pitch classes of the key in force. A window's chord is chosen by how
+  // its notes score against those, and the cache is keyed on them; the
+  // spelling the key carries reaches the caller through the regions, which
+  // hold it whole.
+  const scaleAt = (beat: number) => scaleOf(keyAt(beat));
 
   const segments: ChordSegment[] = [];
   const segmentConfidence: number[] = [];
@@ -1400,7 +1410,7 @@ export function analyzeTimeline(
     // reported to where it ends.
     const start = Math.max(span.startBeat, musicStart);
     const end = Math.min(span.endBeat, totalBeats);
-    const spanKey = keyAt(start);
+    const spanKey = scaleAt(start);
     const id = windowId(start, end, spanKey);
     // A span whose slots are all clean holds exactly the notes it held before,
     // so its chord and confidence are the same numbers over the same input.
@@ -1530,7 +1540,7 @@ export type CadenceHit = {
 export function detectCadences(timeline: ChordTimeline, key: KeyContext): CadenceHit[] {
   // A cadence belongs to the key it arrives in, so a modulating piece is asked
   // for the key at the arrival beat rather than for one key for the whole span.
-  const keyAt = typeof key === 'function' ? key : () => key;
+  const keyAt = keyScaleAt(key);
   const hits: CadenceHit[] = [];
   for (let i = 1; i < timeline.segments.length; i += 1) {
     const prev = timeline.segments[i - 1];

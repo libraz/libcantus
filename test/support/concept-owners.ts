@@ -150,14 +150,6 @@ export const CONCEPT_OWNERS: readonly ConceptOwner[] = [
     concept: 'the whole identity of a key',
     owner: 'src/theory/scale/kinds.ts',
     reserved: ['ResolvedKey', 'SpelledKey', 'KeyIdentity', 'SpelledKeyScale'],
-    allowed: [
-      // The same three facts laid out flat, because a region's key is asked
-      // positional questions — its root, its mask — wherever a plain scale
-      // would be. It resolves without losing any of the three and the accepted
-      // shapes say so, which leaves one layout too many rather than a fact
-      // that falls off.
-      'src/analyze/keys/index.ts:SpelledKeyScale',
-    ],
   },
   {
     // A key name carries a spelled tonic and a scale form. A second reader that

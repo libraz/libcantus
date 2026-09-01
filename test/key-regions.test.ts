@@ -5,7 +5,6 @@ import {
   detectModulations,
   keyTimelineFromNotes,
   prevailingKeyOf,
-  spelledKeyScale,
 } from '../src/analyze/keys/index.js';
 import { analyzeTimeline, chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
 import { InvalidInputError } from '../src/core/errors/index.js';
@@ -15,12 +14,13 @@ import { formatNote } from '../src/core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../src/core/types.js';
 import type { Chord, ChordQuality, ChordSegment } from '../src/theory/chord/index.js';
 import { chordQualities, makeChord } from '../src/theory/chord/index.js';
+import type { ResolvedKey } from '../src/theory/scale/index.js';
 import {
   MAJOR_MASK,
   majorKey,
   minorKey,
   NATURAL_MINOR_MASK,
-  spelledKeyOf,
+  resolveKey,
 } from '../src/theory/scale/index.js';
 
 /** One bar of 4/4: a bass note under an upper voicing, all sounding together. */
@@ -117,18 +117,24 @@ const TONICIZATION_CHORDS: readonly ChordSegment[] = [
   seg(48, 0, 'maj'), // C
 ];
 
-/** Name a key the way it is read aloud, e.g. `'A minor'`. */
-function keyName(key: KeyScale | null): string {
+/**
+ * Name a key the way it is read aloud, e.g. `'A minor'`.
+ *
+ * The tonic is the one the key carries, not one derived back from its pitch
+ * classes: a region states its own spelling, and reading it any other way here
+ * would let a region report an Ab while this test called it a G#.
+ */
+function keyName(key: ResolvedKey | null): string {
   if (key === null) {
     return 'none';
   }
   const mode =
-    key.modeMask12 === NATURAL_MINOR_MASK
+    key.scale.modeMask12 === NATURAL_MINOR_MASK
       ? 'minor'
-      : key.modeMask12 === MAJOR_MASK
+      : key.scale.modeMask12 === MAJOR_MASK
         ? 'major'
-        : `mask ${key.modeMask12}`;
-  return `${formatNote(spelledKeyOf(key).tonic)} ${mode}`;
+        : `mask ${key.scale.modeMask12}`;
+  return `${formatNote(key.tonic)} ${mode}`;
 }
 
 /** Every region's key, in time order. */
@@ -170,8 +176,8 @@ function expectWellFormed(
     expect(Number.isFinite(region.confidence), at).toBe(true);
     expect(region.confidence, at).toBeGreaterThanOrEqual(0);
     expect(region.confidence, at).toBeLessThanOrEqual(1);
-    expect(Number.isInteger(region.key.rootPc), at).toBe(true);
-    expect(Number.isInteger(region.key.modeMask12), at).toBe(true);
+    expect(Number.isInteger(region.key.scale.rootPc), at).toBe(true);
+    expect(Number.isInteger(region.key.scale.modeMask12), at).toBe(true);
     const previous = regions[i - 1];
     if (previous !== undefined) {
       expect(region.startBeat, at).toBeGreaterThanOrEqual(previous.endBeat);
@@ -590,7 +596,7 @@ describe('detectModulations', () => {
 describe('prevailingKeyOf', () => {
   /** A region of the given span and key; confidence is irrelevant to the sum. */
   function region(startBeat: number, endBeat: number, key: KeyScale): KeyRegion {
-    return { startBeat, endBeat, key: spelledKeyScale(key), confidence: 1 };
+    return { startBeat, endBeat, key: resolveKey(key), confidence: 1 };
   }
 
   it('has no answer when there are no regions', () => {
@@ -696,8 +702,8 @@ describe('detectModulations names the pivot from the triad the chord is heard as
       const chord = makeChord(0, quality);
       const regions = attachPivots(
         [
-          { startBeat: 0, endBeat: 24, key: spelledKeyScale(majorKey(0)), confidence: 1 },
-          { startBeat: 24, endBeat: 32, key: spelledKeyScale(majorKey(7)), confidence: 1 },
+          { startBeat: 0, endBeat: 24, key: resolveKey(majorKey(0)), confidence: 1 },
+          { startBeat: 24, endBeat: 32, key: resolveKey(majorKey(7)), confidence: 1 },
         ],
         [{ startBeat: 20, endBeat: 24, chord }],
       );
@@ -908,8 +914,8 @@ describe('a region owns the key it reports', () => {
     expect(regions[0]?.key).not.toBe(regions[1]?.key);
     const reading = readingOf(regions);
     for (const region of regions) {
-      region.key.rootPc = 11;
-      region.key.modeMask12 = NATURAL_MINOR_MASK;
+      region.key.scale.rootPc = 11;
+      region.key.scale.modeMask12 = NATURAL_MINOR_MASK;
     }
     // Neither the other regions of the same run nor a second call moved.
     expect(readingOf(keyTimelineFromNotes(notes))).toEqual(reading);
@@ -921,8 +927,8 @@ describe('a region owns the key it reports', () => {
     expect(regions[0]?.key).not.toBe(regions[1]?.key);
     const reading = readingOf(regions);
     for (const region of regions) {
-      region.key.rootPc = 11;
-      region.key.modeMask12 = NATURAL_MINOR_MASK;
+      region.key.scale.rootPc = 11;
+      region.key.scale.modeMask12 = NATURAL_MINOR_MASK;
     }
     expect(readingOf(detectModulations(C_TO_G_CHORDS))).toEqual(reading);
   });
@@ -932,8 +938,8 @@ describe('a region owns the key it reports', () => {
     const first = analyzeTimeline(notes).result;
     const chords = first.timeline.segments.map((segment) => segment.chord.rootPc);
     for (const region of first.keys) {
-      region.key.rootPc = 11;
-      region.key.modeMask12 = NATURAL_MINOR_MASK;
+      region.key.scale.rootPc = 11;
+      region.key.scale.modeMask12 = NATURAL_MINOR_MASK;
     }
     const second = analyzeTimeline(notes).result;
     expect(keyNames(second.keys)).toEqual(['C major', 'G major']);

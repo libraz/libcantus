@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { analyzeArrangement } from '../src/analyze/arrange/index.js';
+import { chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
+import { formatNote } from '../src/core/pitch/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import { Key } from '../src/model/key.js';
 import { Score } from '../src/model/score.js';
@@ -188,5 +191,44 @@ describe('a timeline carries the key it was given', () => {
     const regions = Timeline.fromChords(spans, 8).modulations();
     expect(regions.length).toBeGreaterThan(0);
     expect(regions[0]?.endBeat).toBe(8);
+  });
+});
+
+describe('an analysis hands the key back in one piece', () => {
+  /** A bar of an Ab minor triad, so the notes name pitch classes and no letters. */
+  const AB_MINOR: NoteEvent[] = [
+    { pitch: 56, startBeat: 0, durationBeat: 4 },
+    { pitch: 59, startBeat: 0, durationBeat: 4 },
+    { pitch: 63, startBeat: 0, durationBeat: 4 },
+  ];
+
+  it('carries a stated key through the chord timeline whole', () => {
+    const stated = chordTimelineFromNotes(AB_MINOR, { key: Key.minor('Ab') });
+
+    expect(formatNote(stated.prevailingKey.tonic)).toBe('Ab');
+    expect(stated.prevailingKey.variant).toBe('natural');
+    expect(stated.keys.map((region) => formatNote(region.key.tonic))).toEqual(['Ab']);
+    // Not vacuous: the same notes with no key stated read from the other side
+    // of the circle, which is what the whole carrier exists to keep apart.
+    const inferred = chordTimelineFromNotes(AB_MINOR);
+    expect(formatNote(inferred.prevailingKey.tonic)).not.toBe('Ab');
+  });
+
+  it('carries a stated key through the arrangement whole', () => {
+    const analysis = analyzeArrangement([{ role: 'melody', notes: AB_MINOR }], {
+      key: 'Ab minor',
+    });
+
+    expect(formatNote(analysis.prevailingKey.tonic)).toBe('Ab');
+    expect(analysis.keys.map((region) => formatNote(region.key.tonic))).toEqual(['Ab']);
+  });
+
+  it('reads a region key back as the key it states', () => {
+    // The class API's side of the same guarantee: wrapping a region's key is
+    // not a place the spelling is chosen again.
+    const [region] = chordTimelineFromNotes(AB_MINOR, { key: Key.minor('Ab') }).keys;
+
+    expect(region).toBeDefined();
+    expect(region && Key.of(region.key).toString()).toBe('Ab minor');
   });
 });

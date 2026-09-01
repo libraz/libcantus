@@ -10,7 +10,6 @@
 
 import type { MeterLike } from '../../core/meter/index.js';
 import { beatsPerBarAt, metricWeight, resolveMeters } from '../../core/meter/index.js';
-import type { Note } from '../../core/pitch/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
@@ -20,16 +19,15 @@ import {
 } from '../../core/validation/index.js';
 import type { Chord, ChordSegment } from '../../theory/chord/index.js';
 import { chordPitchClasses } from '../../theory/chord/index.js';
-import type { KeyRelation } from '../../theory/scale/index.js';
+import type { KeyRelation, ResolvedKey } from '../../theory/scale/index.js';
 import {
   isScaleTone,
   keyRelationBetween,
   majorKey,
   minorKey,
   resolveKey,
-  spelledKeyOf,
 } from '../../theory/scale/index.js';
-import type { KeyProfileName, KeyProfilePair, KeyVariant } from '../detect/index.js';
+import type { KeyProfileName, KeyProfilePair } from '../detect/index.js';
 import { profileScore, resolveKeyProfile } from '../detect/profiles.js';
 import type { PivotChord } from '../functional/index.js';
 import { pivotChords } from '../functional/index.js';
@@ -54,48 +52,6 @@ const EMPTY_WEIGHTS: WindowWeights = {
 const MAX_METRIC_WEIGHT = 3;
 
 /**
- * A region's key: which pitch classes are in force, how the tonic is written,
- * and the scale form the key stands in.
- *
- * A key/scale alone says nothing about how it is written, so a key travelling
- * through a layer that holds plain scales comes back out as whichever spelling
- * that scale reads best from — an Ab minor handed in returns as G# minor, and a
- * harmonic minor as a plain one. Both fields are therefore always here: a
- * caller who named the key hands its spelling down, and an inferred key is
- * spelled and formed the way {@link resolveKey} reads a bare scale, which is
- * the same reading every other layer would have made of it. There is no third
- * state for a reader to guess at.
- *
- * Laid out flat rather than around a nested scale because a region's key is
- * asked positional questions — its root, its mask — wherever a plain scale
- * would be.
- *
- * @category Arrangement & Analysis
- */
-export type SpelledKeyScale = KeyScale & {
-  /** The spelled tonic the key is written with. */
-  tonic: Note;
-  /** The scale form the key stands in. */
-  variant: KeyVariant;
-};
-
-/**
- * A region key from a bare scale.
- *
- * The spelling and the form are read the way {@link resolveKey} reads them, so
- * a key the analysis inferred names its tonic the same way a key the caller
- * stated would have, and a reader downstream meets one kind of region key.
- *
- * @param scale The pitch classes the region is in.
- * @returns The same key, spelled and formed.
- * @category Arrangement & Analysis
- */
-export function spelledKeyScale(scale: KeyScale): SpelledKeyScale {
-  const resolved = resolveKey(scale);
-  return { ...resolved.scale, tonic: resolved.tonic, variant: resolved.variant };
-}
-
-/**
  * A span of the piece over which one key is in force.
  *
  * @category Arrangement & Analysis
@@ -110,11 +66,15 @@ export type KeyRegion = {
    * back a key of the region's own, so writing to one changes neither the other
    * regions of the same run nor what a later call reports.
    *
-   * A region built from a key the caller stated carries that key's spelling and
-   * scale form as well, so the key printed on a signature is the one that was
-   * handed in; a region the analysis found carries the scale alone.
+   * Whole, whichever way the region was built. A caller who named the key hands
+   * its spelling and scale form down, and a key the analysis found is spelled
+   * and formed the way {@link resolveKey} reads a bare scale — the reading every
+   * other layer would have made of it. There is no third state to guess at: a
+   * key/scale alone says nothing about how it is written, so a region carrying
+   * one would report whichever spelling those pitch classes read best from, and
+   * an Ab minor handed in would come back out a G# minor.
    */
-  key: SpelledKeyScale;
+  key: ResolvedKey;
   /**
    * How well the region's music fits the key, in [0, 1]: the correlation
    * between the span's pitch-class distribution and the key's profile, with
@@ -510,7 +470,12 @@ function withRelations(regions: KeyRegion[]): KeyRegion[] {
     if (previous === undefined || current === undefined) {
       continue;
     }
-    const relation = keyRelationBetween(spelledKeyOf(previous.key), spelledKeyOf(current.key));
+    // The regions' own keys, not a spelling derived back from their pitch
+    // classes: the relation between two keys is read off their tonics, so
+    // re-spelling them here would decide it from the side of the circle the
+    // pitch classes read best from rather than from the side they are written
+    // on.
+    const relation = keyRelationBetween(previous.key, current.key);
     if (relation !== null && relation !== 'same') {
       current.modulation = relation;
     }
@@ -657,7 +622,7 @@ export function keyTimelineFromNotes(
     // own key would let a caller writing to `region.key` rewrite what every
     // later search scores against — and let two regions of one piece share the
     // key that one of them edits.
-    const key = spelledKeyScale(candidate?.key ?? majorKey(0));
+    const key = resolveKey(candidate?.key ?? majorKey(0));
     // Only the first region can start before the music: the slot holding the
     // pickup begins a whole slot before beat 0, and nothing sounds in the part
     // of it that precedes the upbeat.
@@ -688,7 +653,7 @@ export function keyTimelineFromNotes(
     return {
       startBeat,
       endBeat: region.endBeat,
-      key: spelledKeyScale(key),
+      key: resolveKey(key),
       confidence: Math.max(0, correlation),
     };
   });
@@ -862,7 +827,7 @@ export function detectModulations(
     const candidate = KEY_CANDIDATES[region.candidate];
     // Owned by the region, for the reason the note path spells out: the
     // candidate table outlives the call, and a region's key is writable.
-    const key = spelledKeyScale(candidate?.key ?? majorKey(0));
+    const key = resolveKey(candidate?.key ?? majorKey(0));
     // The confidence is the statistic the note path reports, not the chord fit
     // the search ran on: a chord fit says which key won, and a correlation says
     // how much of the region the winner explains. Reporting the search's own
@@ -1017,8 +982,8 @@ export function attachPivots(regions: KeyRegion[], chords: readonly ChordSegment
  */
 export function keyLookup(
   regions: readonly KeyRegion[],
-  fallback: SpelledKeyScale,
-): (beat: number) => SpelledKeyScale {
+  fallback: ResolvedKey,
+): (beat: number) => ResolvedKey {
   return (beat) => {
     let low = 0;
     let high = regions.length;
@@ -1052,12 +1017,12 @@ export function keyLookup(
  * ```
  * @category Arrangement & Analysis
  */
-export function prevailingKeyOf(regions: readonly KeyRegion[]): SpelledKeyScale | null {
+export function prevailingKeyOf(regions: readonly KeyRegion[]): ResolvedKey | null {
   // Held time is summed per key, not per region: a key returned to after a
   // digression prevails over one stated once at length.
-  const totals = new Map<string, { key: SpelledKeyScale; length: number }>();
+  const totals = new Map<string, { key: ResolvedKey; length: number }>();
   for (const region of regions) {
-    const id = `${pitchClass(region.key.rootPc)}:${region.key.modeMask12}`;
+    const id = `${pitchClass(region.key.scale.rootPc)}:${region.key.scale.modeMask12}`;
     const entry = totals.get(id);
     const length = Math.max(0, region.endBeat - region.startBeat);
     if (entry === undefined) {
@@ -1066,7 +1031,7 @@ export function prevailingKeyOf(regions: readonly KeyRegion[]): SpelledKeyScale 
       entry.length += length;
     }
   }
-  let best: SpelledKeyScale | null = null;
+  let best: ResolvedKey | null = null;
   let bestLength = -1;
   for (const entry of totals.values()) {
     // Ties keep the earlier key, which is the one the piece established first.

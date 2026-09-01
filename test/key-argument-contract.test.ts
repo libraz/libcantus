@@ -99,6 +99,7 @@ const INVOCATIONS: Readonly<Record<string, Invocation>> = {
   'Chord.negativeHarmony': (key) => Chord.parse('G7').negativeHarmony(key).symbol(),
   'Chord.spell': (key) => Chord.of(2, 'min7').spell(key),
   'Composer.withKey': (key) => new Composer({ seed: 7 }).withKey(key).toJSON(),
+  'Key.static of': (key) => Key.of(key).toString(),
   'Key.pivotsTo': (key) => Key.major('C').pivotsTo(key),
   'Motif.transform': (key) => MOTIF.transform('transposeDiatonic', 1, key),
   'Motif.develop': (key) => MOTIF.develop(HARMONY, key, 2, '4/4'),

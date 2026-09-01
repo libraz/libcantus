@@ -8,6 +8,8 @@ import {
   isLeadingToneResolution,
 } from '../../theory/counterpoint/index.js';
 import type { VoiceSnapshot } from '../../theory/safety/index.js';
+import type { KeyLike } from '../../theory/scale/index.js';
+import { toKeyScale } from '../../theory/scale/index.js';
 
 /**
  * A suspension figure, named by the interval above the bass and the interval it
@@ -105,7 +107,23 @@ export type IdentifiedVoiceNote = VoiceNote & { id: number };
  * ```
  * @category Arrangement & Analysis
  */
-export type KeyContext = KeyScale | ((beat: number) => KeyScale);
+export type KeyContext = KeyLike | ((beat: number) => KeyScale);
+
+/**
+ * The scale in force at a beat, whichever form the context was given in.
+ *
+ * One key is read once, here, so an entry point may take a key in any form a
+ * caller holds one without the reading being repeated per note. The per-beat
+ * form is handed back as it stands: it is called once per note, and resolving
+ * inside that loop would put a key parse under every note of the piece.
+ */
+export function keyScaleAt(key: KeyContext): (beat: number) => KeyScale {
+  if (typeof key === 'function') {
+    return key;
+  }
+  const scale = toKeyScale(key);
+  return () => scale;
+}
 
 /**
  * Give plain note events the ids {@link analyzeVoice} reports back.
@@ -297,9 +315,7 @@ export function analyzeVoice(
   otherVoicesAtBeat: (beat: number) => VoiceSnapshot[] = () => [],
 ): AnalyzedNote[] {
   assertNoteEvents(voice, 'voice notes', { allowNonPositiveDuration: true });
-  // A KeyScale is a plain object, so a callable value can only be the per-beat
-  // form; normalising here keeps the classification below beat-oriented.
-  const keyAt: (beat: number) => KeyScale = typeof key === 'function' ? key : () => key;
+  const keyAt = keyScaleAt(key);
   const result: AnalyzedNote[] = [];
 
   for (let i = 0; i < voice.length; i += 1) {

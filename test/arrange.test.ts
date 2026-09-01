@@ -6,13 +6,12 @@ import {
   tensionCurve,
   tensionCurveFrom,
 } from '../src/analyze/arrange/index.js';
-import { spelledKeyScale } from '../src/analyze/keys/index.js';
 import { chordTimelineFromChords } from '../src/analyze/timeline/index.js';
 import { BudgetExceededError, InvalidInputError } from '../src/core/errors/index.js';
 import { type MeterMap, parseTimeSignature } from '../src/core/meter/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import { evaluateSafety, NoteSafety, ReasonFlag } from '../src/theory/safety/index.js';
-import { majorKey } from '../src/theory/scale/index.js';
+import { majorKey, resolveKey } from '../src/theory/scale/index.js';
 
 /** Build a block chord: every pitch sounding for the same span. */
 function blockChord(pitches: number[], startBeat: number, durationBeat = 4): NoteEvent[] {
@@ -69,7 +68,7 @@ function baseArrangement(): ArrangementTrack[] {
 describe('analyzeArrangement', () => {
   it('infers C major and the right chord per bar', () => {
     const analysis = analyzeArrangement(baseArrangement(), { key: majorKey(0) });
-    expect(analysis.prevailingKey.rootPc).toBe(0);
+    expect(analysis.prevailingKey.scale.rootPc).toBe(0);
     const roots = analysis.timeline.segments.map((seg) => seg.chord.rootPc);
     expect(roots).toEqual([0, 5, 7, 0]);
     expect(analysis.timeline.at(0)?.rootPc).toBe(0);
@@ -606,7 +605,7 @@ describe('an analysis against a supplied timeline', () => {
   it('leaves caller-supplied key regions exactly as they were given', () => {
     const tracks = modulatingPiece();
     const inferred = analyzeArrangement(tracks);
-    const given = [{ startBeat: 0, endBeat: 28, key: spelledKeyScale(majorKey(0)), confidence: 1 }];
+    const given = [{ startBeat: 0, endBeat: 28, key: resolveKey(majorKey(0)), confidence: 1 }];
     const supplied = analyzeArrangement(tracks, { timeline: inferred.timeline, keys: given });
     expect(supplied.keys).toEqual(given);
   });
@@ -624,7 +623,7 @@ describe('the documented arrangement report', () => {
       },
     ]);
     const { prevailingKey, conflicts } = analysis;
-    expect(typeof prevailingKey.rootPc).toBe('number');
+    expect(typeof prevailingKey.scale.rootPc).toBe('number');
     expect(Array.isArray(conflicts)).toBe(true);
     expect(Array.isArray(analysis.keys)).toBe(true);
     // `key` is the option name, not a member of the report: an example that

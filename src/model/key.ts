@@ -7,8 +7,6 @@ import {
   pivotChords,
   romanToChord,
 } from '../analyze/functional/index.js';
-import type { SpelledKeyScale } from '../analyze/keys/index.js';
-import { spelledKeyScale } from '../analyze/keys/index.js';
 import { InvalidInputError, type ParseResult, unwrapParse } from '../core/errors/index.js';
 import type {
   IntervalLike,
@@ -94,7 +92,7 @@ export type DetectedKeyMatch = Omit<KeyMatch, 'key'> & { key: Key };
 export function detectedKeyMatch(match: KeyMatch): DetectedKeyMatch {
   // The same spelling the detector's own rationale is written with, so a match
   // never names its tonic one way in `toString()` and another in `rationale`.
-  const key: SpelledKeyScale = { ...spelledKeyScale(match.key), variant: match.variant };
+  const key: ResolvedKey = { ...resolveKey(match.key), variant: match.variant };
   return { ...match, key: toKey(key) };
 }
 
@@ -430,16 +428,20 @@ export class Key {
    * This is what keeps `Key.of(detectKey(...).scale)` from handing every
    * downstream chord a double-sharp spelling.
    *
-   * @param scale The key/scale to wrap.
-   * @param tonic Optional spelled tonic; must spell the scale's root pitch class.
+   * A value that already carries a spelling keeps it — a key region's key, the
+   * data a key serializes to — so wrapping one is not where an Ab minor becomes
+   * a G# minor. Only a bare key/scale has a tonic chosen for it, because only a
+   * bare key/scale is missing one.
+   *
+   * @param key The key to wrap, in any form a key is held in.
+   * @param tonic Optional spelled tonic, overriding any the value carries; must
+   *   spell the scale's root pitch class.
    * @returns The key.
    * @throws If the given tonic is not the scale's root pitch class.
    */
-  static of(scale: KeyScale, tonic?: Note): Key {
-    // Checked before the tonic is synthesized: reading a root off a value that
-    // is not a key would fail inside the spelling functions instead of here.
-    assertDataObject(scale, 'scale');
-    return new Key(scale, tonic ?? spelledTonicFor(scale));
+  static of(key: KeyLike, tonic?: Note): Key {
+    const resolved = resolveKey(key);
+    return new Key(resolved.scale, tonic ?? new Note(resolved.tonic), resolved.variant);
   }
 
   /**
@@ -1407,7 +1409,7 @@ export function toKey(value: KeyLike): Key {
     const data: unknown =
       'toJSON' in value && typeof value.toJSON === 'function' ? value.toJSON() : value;
     if (typeof data === 'object' && data !== null) {
-      const record = data as Partial<KeyData> & Partial<SpelledKeyScale>;
+      const record = data as Partial<KeyData> & Partial<KeyScale>;
       if (record.scale === undefined) {
         // A flat key/scale may still carry the spelling and the scale form it
         // was named with — that is how a key region hands its key on — so the
@@ -1438,11 +1440,6 @@ export function toKey(value: KeyLike): Key {
  * @param key The key to write down.
  * @returns The key/scale, its spelled tonic, and its scale form when it has one.
  */
-export function keyIdentity(key: Key): SpelledKeyScale {
-  const identity: SpelledKeyScale = {
-    ...key.scale,
-    tonic: key.tonic.data,
-    variant: key.variant,
-  };
-  return identity;
+export function keyIdentity(key: Key): ResolvedKey {
+  return { scale: key.scale, tonic: key.tonic.data, variant: key.variant };
 }

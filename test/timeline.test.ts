@@ -8,7 +8,7 @@ import {
 import type { NoteEvent } from '../src/core/types.js';
 import type { ChordSpan } from '../src/theory/chord/index.js';
 import { makeChord, spanFromChord } from '../src/theory/chord/index.js';
-import { MAJOR_MASK, majorKey, minorKey } from '../src/theory/scale/index.js';
+import { MAJOR_MASK, majorKey, minorKey, scaleOf } from '../src/theory/scale/index.js';
 
 /** Build a block chord: every pitch sounding for the same span. */
 function blockChord(pitches: number[], startBeat: number, durationBeat = 4): NoteEvent[] {
@@ -88,15 +88,15 @@ describe('chordTimelineFromNotes', () => {
 
   it('infers the key when omitted', () => {
     const result = chordTimelineFromNotes(cfgcNotes());
-    expect(result.prevailingKey.rootPc).toBe(0);
-    expect(result.prevailingKey.modeMask12).toBe(MAJOR_MASK);
+    expect(result.prevailingKey.scale.rootPc).toBe(0);
+    expect(result.prevailingKey.scale.modeMask12).toBe(MAJOR_MASK);
   });
 
   it('respects an explicitly given key', () => {
     const aMinor = minorKey(9);
     const result = chordTimelineFromNotes(cfgcNotes(), { key: aMinor });
-    expect(result.prevailingKey.rootPc).toBe(9);
-    expect(result.prevailingKey.modeMask12).toBe(aMinor.modeMask12);
+    expect(result.prevailingKey.scale.rootPc).toBe(9);
+    expect(result.prevailingKey.scale.modeMask12).toBe(aMinor.modeMask12);
     // The diatonic block chords are still recovered under the relative minor.
     expect(result.timeline.segments.map((seg) => seg.chord.rootPc)).toEqual([0, 5, 7, 0]);
   });
@@ -254,8 +254,8 @@ describe('chordTimelineFromNotes', () => {
     const clean = chordTimelineFromNotes(blockChord([60, 64, 67], 0));
     const noisy = chordTimelineFromNotes([...blockChord([60, 64, 67], 0), ...ghosts]);
     expect(noisy.prevailingKey).toEqual(clean.prevailingKey);
-    expect(noisy.prevailingKey.rootPc).toBe(0);
-    expect(noisy.prevailingKey.modeMask12).toBe(MAJOR_MASK);
+    expect(noisy.prevailingKey.scale.rootPc).toBe(0);
+    expect(noisy.prevailingKey.scale.modeMask12).toBe(MAJOR_MASK);
     expect(noisy.timeline.segments).toEqual(clean.timeline.segments);
     expect(noisy.segmentConfidence).toEqual(clean.segmentConfidence);
   });
@@ -291,10 +291,9 @@ describe('detectCadences', () => {
       'timeline',
     ]);
     const { timeline, prevailingKey } = result;
-    expect(detectCadences(timeline, prevailingKey).map((hit) => hit.cadence.type)).toEqual([
-      'half',
-      'authentic',
-    ]);
+    expect(detectCadences(timeline, scaleOf(prevailingKey)).map((hit) => hit.cadence.type)).toEqual(
+      ['half', 'authentic'],
+    );
   });
 
   it('reads a cadential six-four as the start of one cadence, not a cadence of its own', () => {

@@ -24,6 +24,7 @@ import {
 import { Key, keyIdentity } from '../src/model/key.js';
 import { Score, type ScoreData } from '../src/model/score.js';
 import { Timeline } from '../src/model/timeline.js';
+import { scaleOf } from '../src/theory/scale/index.js';
 
 /**
  * `Score` is a skin over the timed analysis functions, so most of what is
@@ -365,7 +366,9 @@ describe('Score analysis', () => {
     const timeline = chordTimelineFromNotes(notes, { meters: tune().meters }).timeline;
     const regions = keyTimelineFromNotes(notes, { meters: tune().meters });
     const keyAt = keyLookup(regions, prevailingKeyOf(regions) ?? keyIdentity(Key.major('C')));
-    const cadenceBeats = detectCadences(timeline, keyAt).map((hit) => hit.atBeat);
+    const cadenceBeats = detectCadences(timeline, (beat) => scaleOf(keyAt(beat))).map(
+      (hit) => hit.atBeat,
+    );
     expect(cadenceBeats.length).toBeGreaterThan(0);
     expect(tune().hypermeter()).toEqual(hypermeter(notes, tune().meters, { cadenceBeats }));
     expect(tune().hypermeter({ cadenceBeats: [8] })).toEqual(
@@ -408,10 +411,8 @@ describe('Score analysis', () => {
     // since the score answers about its own array and says nothing about having
     // taken it apart to read it.
     expect(score.voices()).toEqual(
-      analyzeVoice(
-        notes,
-        timeline.at,
-        keyLookup(regions, prevailing ?? keyIdentity(Key.major('C'))),
+      analyzeVoice(notes, timeline.at, (beat) =>
+        scaleOf(keyLookup(regions, prevailing ?? keyIdentity(Key.major('C')))(beat)),
       ),
     );
     // A key given at the call reaches the analysis as one key for every beat.

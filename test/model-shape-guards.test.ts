@@ -108,7 +108,7 @@ const FACTORY_CASES: readonly FactoryCase[] = [
       fromData: (data: never) => Key.fromData(data),
       fromJSON: (data: never) => Key.fromJSON(data),
     },
-    malformed: [{ scale: null }, { scale: { rootPc: 0, modeMask12: 0b101010110101 } }],
+    malformed: [{ scale: null }, { scale: { rootPc: 0, modeMask12: 0 } }],
   },
   {
     name: 'Meter',

@@ -1,6 +1,6 @@
 import type { ChordToRomanOptions } from '../analyze/functional/index.js';
 import { chordToRoman } from '../analyze/functional/index.js';
-import type { KeyRegion, KeyTimelineOptions, SpelledKeyScale } from '../analyze/keys/index.js';
+import type { KeyRegion, KeyTimelineOptions } from '../analyze/keys/index.js';
 import { detectModulations, keyLookup, prevailingKeyOf } from '../analyze/keys/index.js';
 import type { ReducedChord, ReduceProgressionOptions } from '../analyze/reduction/index.js';
 import { reduceProgression } from '../analyze/reduction/index.js';
@@ -17,7 +17,7 @@ import { assertFiniteNumber, assertRange } from '../core/validation/index.js';
 import type { Chord as ChordData, ChordSegment, ChordSpan } from '../theory/chord/index.js';
 import { spanFromChord } from '../theory/chord/index.js';
 import type { KeyLike } from '../theory/scale/index.js';
-import { toKeyScale } from '../theory/scale/index.js';
+import { scaleOf, toKeyScale } from '../theory/scale/index.js';
 import type { Chord } from './chord.js';
 import { Chord as ChordClass } from './chord.js';
 import type { Key } from './key.js';
@@ -58,19 +58,6 @@ export type TimelineRoman = {
   roman: string;
 };
 
-/**
- * A region's key restated from a {@link Key}, carrying exactly the identity the
- * region already had.
- *
- * A key the caller stated travels with its spelled tonic and its scale form, so
- * a timeline built in Ab minor still reads Ab minor when it is asked; a key the
- * analysis inferred has neither, and writing a spelling into it would invent
- * one the reading never made.
- */
-function regionKeyLike(_source: SpelledKeyScale, key: Key): SpelledKeyScale {
-  return keyIdentity(key);
-}
-
 /** A validated, defensive copy of one chord segment. */
 function copySegment(segment: ChordSegment): ChordSegment {
   assertDataObject(segment, 'timeline segment');
@@ -92,7 +79,7 @@ function copyKeyRegion(region: KeyRegion): KeyRegion {
     endBeat: assertFiniteNumber(region.endBeat, 'key region endBeat'),
     // Read through the key itself, so a tonic that does not spell the region's
     // own root is refused here rather than spelling later notes wrongly.
-    key: regionKeyLike(region.key, toKey(region.key)),
+    key: keyIdentity(toKey(region.key)),
     confidence: assertFiniteNumber(region.confidence, 'key region confidence'),
   };
   if (region.modulation !== undefined) {
@@ -645,7 +632,10 @@ export class Timeline {
         'timeline carries no key; build it from notes, or pass a key to Timeline.fromChords',
       );
     }
-    return keyLookup(this.#keys, prevailing);
+    // The pitch classes alone: a numeral and a cadence are read from which
+    // notes are in the key, not from how the key is written.
+    const keyAt = keyLookup(this.#keys, prevailing);
+    return (beat) => scaleOf(keyAt(beat));
   }
 
   /** Move every chord and every key region by the same step. */
@@ -658,7 +648,7 @@ export class Timeline {
     const keys = this.#keys.map((region) => {
       const moved: KeyRegion = {
         ...region,
-        key: regionKeyLike(region.key, moveKey(toKey(region.key))),
+        key: keyIdentity(moveKey(toKey(region.key))),
       };
       if (region.pivot !== undefined) {
         // The numerals a pivot carries are degrees, so they survive the move;

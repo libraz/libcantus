@@ -46,6 +46,7 @@ import {
   ornament,
 } from '../generate/index.js';
 import type { KeyLike } from '../theory/scale/index.js';
+import { scaleOf } from '../theory/scale/index.js';
 import type { DetectedKeyMatch, KeyData } from './key.js';
 import { detectedKeyMatch, Key, keyIdentity, toKey } from './key.js';
 import {
@@ -1021,6 +1022,9 @@ export class Score {
    */
   #keyContext(key: KeyLike | undefined): KeyContext {
     assertKeyArgument(key, 'score key');
+    // One key travels whole; a key that changes over the piece is read per beat
+    // and reduced to its pitch classes, since a lookup runs once per note and
+    // no reading built on it asks how the key is written.
     if (key !== undefined) {
       return keyIdentity(toKey(key));
     }
@@ -1029,7 +1033,8 @@ export class Score {
     }
     const regions = this.#keyRegions();
     const prevailing = prevailingKeyOf(regions) ?? keyIdentity(Key.major('C'));
-    return keyLookup(regions, prevailing);
+    const keyAt = keyLookup(regions, prevailing);
+    return (beat) => scaleOf(keyAt(beat));
   }
 }
 

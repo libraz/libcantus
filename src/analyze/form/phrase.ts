@@ -23,14 +23,9 @@ import {
   assertNoteEvents,
   assertRange,
 } from '../../core/validation/index.js';
-import { majorKey } from '../../theory/scale/index.js';
+import { majorKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
 import type { CadenceResult } from '../functional/index.js';
-import {
-  keyLookup,
-  keyTimelineFromNotes,
-  prevailingKeyOf,
-  spelledKeyScale,
-} from '../keys/index.js';
+import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
 import { melodicSimilarity } from '../melody/index.js';
 import type { CadenceHit, ChordTimeline } from '../timeline/index.js';
 import { detectCadences } from '../timeline/index.js';
@@ -420,8 +415,8 @@ function arrivalEnd(timeline: ChordTimeline, atBeat: number): number {
   return atBeat;
 }
 
-/** Resolve the key context cadence detection is to be read against. */
-function resolveKey(
+/** The key context cadence detection is to be read against. */
+function keyContextFor(
   opts: PhraseOptions,
   notes: NoteEvent[],
   meters: MeterMap,
@@ -435,7 +430,10 @@ function resolveKey(
     totalBeats,
     budget: opts.budget,
   });
-  return keyLookup(regions, prevailingKeyOf(regions) ?? spelledKeyScale(majorKey(0)));
+  // The pitch classes alone: a phrase boundary is argued from cadences and
+  // scale membership, neither of which reads how the key is written.
+  const keyAt = keyLookup(regions, prevailingKeyOf(regions) ?? resolveKey(majorKey(0)));
+  return (beat) => scaleOf(keyAt(beat));
 }
 
 /** Boundaries argued for by silence in the melody. */
@@ -623,7 +621,7 @@ export function phrasesFromTimeline(
   const minPhraseBeats = opts.minPhraseBeats ?? barBeats;
   assertRange(minPhraseBeats, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'phrase minPhraseBeats');
 
-  const key = resolveKey(opts, sounding, meters, spanEnd);
+  const key = keyContextFor(opts, sounding, meters, spanEnd);
   const cadences = detectCadences(timeline, key);
   const grouping =
     opts.hypermeter ??

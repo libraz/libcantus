@@ -100,7 +100,6 @@ const NOT_A_CLASS_METHOD: Readonly<Record<string, string>> = {
   transposeChordSymbol: 'shortcut over parse, transpose, and print',
   isDiatonic: 'shortcut over chord.pitchClasses.every(pc => key.contains(pc))',
   noteNames: 'shortcut over mapping Note.format across an array',
-  scaleOf: 'the pitch classes Key.scale hands out, named for the layers below the class',
   barIndexAt: 'the bar number of Score.barAt',
   barStartBeat: 'a beat less the in-bar offset Score.barAt reports for it',
   beatsPerBarAt: 'Meter.beatsPerBar asked at the signature Score.meterAt finds',

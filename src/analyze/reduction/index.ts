@@ -37,6 +37,7 @@ import type { CadenceResult } from '../functional/index.js';
 import { detectCadence } from '../functional/index.js';
 import type { ChordTimeline } from '../timeline/index.js';
 import type { KeyContext } from '../voice/index.js';
+import { keyScaleAt } from '../voice/index.js';
 
 /**
  * Tolerance for treating two segments as touching in time.
@@ -373,9 +374,7 @@ export function reduceProgression(
   key: KeyContext,
   opts: ReduceProgressionOptions = {},
 ): ReducedChord[] {
-  // A KeyScale is a plain object, so a callable value can only be the per-beat
-  // form; normalising here keeps the reading below segment-oriented.
-  const keyAt: (beat: number) => KeyScale = typeof key === 'function' ? key : () => key;
+  const keyAt = keyScaleAt(key);
   const basis = assertOneOf(opts.basis ?? 'function', REDUCTION_BASES, 'reduction basis');
   const reading = BASIS_READINGS[basis];
   const segments = timeline.segments;

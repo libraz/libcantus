@@ -7,7 +7,7 @@
 
 import type { MeterLike, MeterMap } from '../../core/meter/index.js';
 import { isStrongBeat, resolveMeters } from '../../core/meter/index.js';
-import type { KeyScale, NoteEvent } from '../../core/types.js';
+import type { NoteEvent } from '../../core/types.js';
 import type { NoteEventAssertOptions } from '../../core/validation/index.js';
 import { assertGenerationBudget, assertRange } from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
@@ -17,15 +17,14 @@ import {
   type SafetyProfile,
   type VoiceSnapshot,
 } from '../../theory/safety/index.js';
-import { majorKey } from '../../theory/scale/index.js';
+import type { KeyLike } from '../../theory/scale/index.js';
+import { majorKey, type ResolvedKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
 import {
   attachPivots,
   type KeyRegion,
   keyLookup,
   keyTimelineFromNotes,
   prevailingKeyOf,
-  type SpelledKeyScale,
-  spelledKeyScale,
 } from '../keys/index.js';
 import {
   analyzeTimeline,
@@ -155,7 +154,7 @@ function withGivenKeys(
  */
 function callerTimeline(
   timeline: ChordTimeline,
-  key: KeyScale | undefined,
+  key: KeyLike | undefined,
   given: KeyRegion[] | undefined,
   pooled: NoteEvent[],
   meters: MeterMap,
@@ -163,7 +162,7 @@ function callerTimeline(
 ): {
   timeline: ChordTimeline;
   keys: KeyRegion[];
-  prevailingKey: SpelledKeyScale;
+  prevailingKey: ResolvedKey;
   segmentConfidence: number[];
 } {
   const totalBeats = timeline.segments.reduce((end, segment) => Math.max(end, segment.endBeat), 0);
@@ -174,14 +173,14 @@ function callerTimeline(
     given ??
     attachPivots(
       key !== undefined
-        ? [{ startBeat: 0, endBeat: totalBeats, key: spelledKeyScale(key), confidence: 1 }]
+        ? [{ startBeat: 0, endBeat: totalBeats, key: resolveKey(key), confidence: 1 }]
         : keyTimelineFromNotes(pooled, { meters, totalBeats, budget }),
       timeline.segments,
     );
   return {
     timeline,
     keys,
-    prevailingKey: prevailingKeyOf(keys) ?? spelledKeyScale(majorKey(0)),
+    prevailingKey: prevailingKeyOf(keys) ?? resolveKey(majorKey(0)),
     segmentConfidence: timeline.segments.map(() => 0),
   };
 }
@@ -199,8 +198,11 @@ export type ArrangementAnalysis = {
    * started in for every bar after it leaves.
    */
   keys: KeyRegion[];
-  /** The key held longest across {@link ArrangementAnalysis.keys}. */
-  prevailingKey: KeyScale;
+  /**
+   * The key held longest across {@link ArrangementAnalysis.keys}, whole: the
+   * pitch classes with the spelling and the scale form the regions carry.
+   */
+  prevailingKey: ResolvedKey;
   timeline: ChordTimeline;
   segmentConfidence: number[];
   cadences: CadenceHit[];
@@ -219,8 +221,11 @@ export type ArrangementOptions = {
    * A single key held across the whole arrangement. Omit it, and `keys` with
    * it, to have the key searched for over time so a modulating piece is read
    * against the key actually in force.
+   *
+   * Taken in whatever form the caller holds a key, and kept whole: the region
+   * built from it carries the spelling and the scale form it was named with.
    */
-  key?: KeyScale;
+  key?: KeyLike;
   /**
    * Key regions to judge against, when a previous pass already worked them out.
    * Takes precedence over `key`; supplying both is answering the same question
@@ -499,7 +504,7 @@ function evaluationBeats(note: VoiceNote, timeline: ChordTimeline): number[] {
  *   { pitch: 67, startBeat: 2, durationBeat: 2 },
  * ];
  * const { prevailingKey, conflicts } = analyzeArrangement([{ role: 'melody', notes: melody }]);
- * prevailingKey.rootPc; // the key held longest across the analysis
+ * prevailingKey.scale.rootPc; // the key held longest across the analysis
  * conflicts; // notes clashing with the inferred harmony, worst severity first
  * ```
  * @category Arrangement & Analysis
@@ -586,9 +591,13 @@ export function analyzeArrangementWith(
   }
   const { timeline, keys, prevailingKey, segmentConfidence } = inferred;
   const keyAt = keyLookup(keys, prevailingKey);
+  // The pitch classes of the key in force, for the readings below that ask
+  // which notes are in the key rather than how it is written. Named here so the
+  // spelling is dropped once, where it can be seen, instead of at each call.
+  const scaleAt = (beat: number) => scaleOf(keyAt(beat));
   // A cadence is heard in the key it arrives in, which after a modulation is
   // not the key the piece opened in.
-  const cadences = detectCadences(timeline, keyAt);
+  const cadences = detectCadences(timeline, scaleAt);
   const soundingCache = new Map<number, SoundingVoice[]>();
 
   const trackAnalyses: TrackAnalysis[] = [];
@@ -611,7 +620,7 @@ export function analyzeArrangementWith(
       if (!subVoice) {
         continue;
       }
-      const analyzed = analyzeVoice(subVoice.voice, timeline.at, keyAt, (beat) =>
+      const analyzed = analyzeVoice(subVoice.voice, timeline.at, scaleAt, (beat) =>
         otherVoicesSounding(prepared, t, v, beat, soundingCache),
       );
       // Appended one at a time: a spread of a long sub-voice passes every note
@@ -635,7 +644,7 @@ export function analyzeArrangementWith(
             candidatePitch: note.pitch,
             prevPitch: atOnset ? preparedNote.prevPitch : note.pitch,
             chord: timeline.at(beat),
-            key: keyAt(beat),
+            key: scaleAt(beat),
             otherVoices: otherVoicesSounding(prepared, t, v, beat, soundingCache),
             strongBeat: isStrongBeat(beat, meters),
           };

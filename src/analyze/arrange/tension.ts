@@ -13,14 +13,9 @@ import type { NoteEventAssertOptions } from '../../core/validation/index.js';
 import { assertGenerationBudget, assertRange } from '../../core/validation/index.js';
 import { chordPitchClasses } from '../../theory/chord/index.js';
 import { evaluateSafety, NoteSafety, type SafetyProfile } from '../../theory/safety/index.js';
-import { majorKey } from '../../theory/scale/index.js';
+import { majorKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
 import { functionOf } from '../functional/index.js';
-import {
-  keyLookup,
-  keyTimelineFromNotes,
-  prevailingKeyOf,
-  spelledKeyScale,
-} from '../keys/index.js';
+import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
 import { type ChordTimeline, chordTimelineFromNotes } from '../timeline/index.js';
 import {
   arrangementProfile,
@@ -135,7 +130,7 @@ export function tensionCurve(
               {
                 startBeat: 0,
                 endBeat: totalBeats,
-                key: spelledKeyScale(opts.key),
+                key: resolveKey(opts.key),
                 confidence: 1,
               },
             ]
@@ -152,7 +147,7 @@ export function tensionCurve(
       : {
           timeline: opts.timeline,
           keys: suppliedKeys,
-          prevailingKey: prevailingKeyOf(suppliedKeys) ?? spelledKeyScale(majorKey(0)),
+          prevailingKey: prevailingKeyOf(suppliedKeys) ?? resolveKey(majorKey(0)),
         };
   // Harmonic tension is judged against the key in force at the sample, not
   // against one key for the piece: a chord is only tense relative to a tonic.
@@ -175,7 +170,9 @@ export function tensionCurve(
     const beat = sampleStart + i * step;
     points.push({
       beat,
-      tension: sampleTension(prepared, timeline, keyAt(beat), meters, profile, beat),
+      // The pitch classes alone: tension is scored from what sounds against
+      // the tonic, and no reading below here asks how the key is written.
+      tension: sampleTension(prepared, timeline, scaleOf(keyAt(beat)), meters, profile, beat),
     });
   }
   return points;

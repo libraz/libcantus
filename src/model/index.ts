@@ -69,7 +69,6 @@ export type {
   ReduceProgressionOptions,
   ReductionBasis,
   ReductionLevel,
-  SpelledKeyScale,
   StructuralCadence,
   SuspensionFigure,
   TensionPoint,
