@@ -6,14 +6,22 @@ import { majorKey, minorKey } from './key.js';
 import { CHROMATIC_MASK } from './masks.js';
 
 /**
- * Anything that names a key: a key name, a plain {@link KeyScale}, or a value
- * that serializes to one such as the `Key` class.
+ * Anything that names a key: a key name, a plain {@link KeyScale}, the plain
+ * data a key serializes to, or a value that serializes to one such as the `Key`
+ * class.
+ *
+ * The plain-data form is here because a project file holds a key that way, and
+ * reading one back has to be the same call as passing the class it came from.
  *
  * @category Scales
  */
 export type KeyLike =
   | string
   | KeyScale
+  | {
+      /** The scale this key data denotes; the spelling beside it is read above. */
+      scale: KeyScale;
+    }
   | {
       /** The key data this value stands for, carrying the scale it denotes. */
       toJSON(): { scale: KeyScale };
@@ -70,8 +78,15 @@ export function toKeyScale(value: KeyLike): KeyScale {
     return name.mode === 'major' ? majorKey(rootPc) : minorKey(rootPc);
   }
   if (typeof value === 'object' && value !== null) {
+    // A key reaches here in three shapes: the class, the plain data it
+    // serializes to, and the bare scale. The first two carry the spelled tonic
+    // that layers above this one read; here only the scale is wanted.
     const data =
-      'toJSON' in value && typeof value.toJSON === 'function' ? value.toJSON().scale : value;
+      'toJSON' in value && typeof value.toJSON === 'function'
+        ? value.toJSON().scale
+        : 'scale' in value
+          ? value.scale
+          : value;
     if (typeof data === 'object' && data !== null) {
       return normalizedKeyScale(data as KeyScale);
     }

@@ -15,6 +15,36 @@ import { assertGenerationBudget } from '../core/validation/index.js';
 
 const EPS = 1e-9;
 
+/** Loudest a MIDI velocity goes, which is what a velocity is read against. */
+const MAX_VELOCITY = 127;
+
+/** How much a metric accent may add to a note's weight, as a divisor of it. */
+const ACCENT_DIVISOR = 3;
+
+/**
+ * How much one note counts towards a pitch-class histogram.
+ *
+ * The one definition of prominence the chord route and the key route both
+ * weigh their notes by, so the two never read the same music as emphasising
+ * different pitch classes. A note counts for the beats it sounds, scaled by how
+ * hard it is struck and, where a meter is in hand, by the accent of the beat it
+ * starts on. A note carrying no velocity is counted at full weight: an import
+ * that records velocity for one part and not another would otherwise have the
+ * silent part outweigh the played one.
+ *
+ * @param note The note to weigh.
+ * @param beats How many beats of it are being counted: its whole duration, or
+ *   its overlap with the window being weighed.
+ * @param meter The meter supplying the metric accent; omit it where the note is
+ *   counted without one, which weighs every onset alike.
+ * @returns The weight, in the same units for either caller.
+ */
+export function noteWeight(note: NoteEvent, beats: number, meter?: MeterLike): number {
+  const velocityFactor = note.velocity !== undefined ? note.velocity / MAX_VELOCITY : 1;
+  const accent = meter === undefined ? 1 : 1 + metricWeight(note.startBeat, meter) / ACCENT_DIVISOR;
+  return beats * velocityFactor * accent;
+}
+
 /** An equal-slot grid: slot `i` covers `[origin + i * slotBeats, + slotBeats)`. */
 export type SlotGrid = {
   /** First beat of slot 0. */
@@ -116,11 +146,11 @@ export function windowWeights(
     if (overlap <= EPS) {
       continue;
     }
-    const velocityFactor = note.velocity !== undefined ? note.velocity / 127 : 1;
     const onsetInWindow = note.startBeat >= windowStart - EPS && note.startBeat < windowEnd - EPS;
-    const accent = onsetInWindow ? 1 + metricWeight(note.startBeat, meter) / 3 : 1;
     const pc = pitchClass(note.pitch);
-    weights[pc] = (weights[pc] ?? 0) + overlap * velocityFactor * accent;
+    // The accent is asked for only where the onset falls in the window: a note
+    // held across the boundary is already counted for its part of it.
+    weights[pc] = (weights[pc] ?? 0) + noteWeight(note, overlap, onsetInWindow ? meter : undefined);
     if (note.pitch < lowestPitch) {
       lowestPitch = note.pitch;
     }

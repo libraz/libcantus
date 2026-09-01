@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { InvalidInputError } from '../src/core/errors/index.js';
 import { GUITAR_STANDARD } from '../src/core/instrument/index.js';
 import { isStrongBeat } from '../src/core/meter/index.js';
+import { createPositionalRng } from '../src/core/random/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import { generateBassLine } from '../src/generate/bass/index.js';
 import type { GenerationContext } from '../src/generate/context/index.js';
@@ -452,5 +453,35 @@ describe('the bar a progression is laid out on', () => {
       ],
     });
     expect(() => changing.progression({ style: 'dance', bars: 4 })).toThrow(InvalidInputError);
+  });
+});
+
+describe('the reproduction recipe', () => {
+  it('generates under the algorithm version it was given', () => {
+    const settings = { key: KEY, seed: 7, algorithmVersion: 1 } as const;
+    const written = Composer.of(settings).progression({ style: 'dance', bars: 4 });
+    const byHand = generateProgression({
+      style: 'dance',
+      bars: 4,
+      key: KEY,
+      ts: TS,
+      ctx: { seed: 7, algorithmVersion: 1 },
+    });
+    expect(written.equals(Timeline.fromChords(byHand, 16, KEY))).toBe(true);
+    expect(Composer.of(settings).context.algorithmVersion).toBe(1);
+    // The recipe survives the round trip a project file makes.
+    expect(Composer.fromJSON(Composer.of(settings).toJSON()).data.algorithmVersion).toBe(1);
+  });
+
+  it('draws from a source it was handed, keeping it out of the plain data', () => {
+    const rng = createPositionalRng(11);
+    const written = Composer.of({ key: KEY, rng }).progression({ style: 'dance', bars: 4 });
+    const byHand = generateProgression({ style: 'dance', bars: 4, key: KEY, ts: TS, ctx: { rng } });
+    expect(written.equals(Timeline.fromChords(byHand, 16, KEY))).toBe(true);
+    expect(Composer.of({ key: KEY, rng }).context.rng).toBe(rng);
+    // A live source is not settings: it is held by reference and left out of
+    // the data a caller may serialize.
+    expect(Composer.of({ key: KEY, rng }).data.rng).toBeUndefined();
+    expect(Composer.of({ key: KEY, rng }).withSeed(3).context.rng).toBe(rng);
   });
 });

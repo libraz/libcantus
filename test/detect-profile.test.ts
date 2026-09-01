@@ -290,7 +290,10 @@ describe('detectKey profile option', () => {
     const viaNotes = detectKeyFromNotes(notes, { profile: 'flat' });
     const viaPitches = detectKey(
       notes.map((note) => note.pitch),
-      { profile: 'flat', weights: notes.map(() => 100) },
+      // The note route weighs each note the way chord inference weighs its own
+      // histogram: duration times velocity, at full weight where a note carries
+      // no velocity of its own.
+      { profile: 'flat', weights: notes.map(() => 1) },
     );
     expect(viaNotes).toEqual(viaPitches);
     expect(viaNotes[0]?.score).not.toBe(detectKeyFromNotes(notes)[0]?.score);

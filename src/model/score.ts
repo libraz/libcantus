@@ -1,4 +1,4 @@
-import type { DetectKeyOptions, KeyMatch } from '../analyze/detect/index.js';
+import type { DetectKeyOptions } from '../analyze/detect/index.js';
 import { detectKeyFromNotes } from '../analyze/detect/index.js';
 import type {
   FormSection,
@@ -44,15 +44,16 @@ import {
   humanize,
   ornament,
 } from '../generate/index.js';
-import { type KeyLike, toKeyScale } from '../theory/scale/index.js';
-import type { KeyData } from './key.js';
-import { Key } from './key.js';
+import type { KeyLike } from '../theory/scale/index.js';
+import type { DetectedKeyMatch, KeyData } from './key.js';
+import { detectedKeyMatch, Key, keyIdentity, toKey } from './key.js';
 import {
   assertDataArray,
   assertDataObject,
   assertDataObjects,
   assertKeyArgument,
   copyNoteEvent,
+  STATED_KEY_CONFIDENCE,
   withoutNegativeZero,
 } from './shared.js';
 import { Timeline } from './timeline.js';
@@ -180,6 +181,33 @@ function tempoFrom(tempo: TempoMap | number | undefined): TempoMap {
   return typeof tempo === 'number' ? [{ startBeat: 0, bpm: tempo }] : tempo;
 }
 
+/**
+ * The one region a stated key describes: that key, in force from where the
+ * music starts to where the analyzed span ends.
+ *
+ * The same region the chord analysis builds for a key it was given, so a score
+ * that carries a key answers with one key wherever it is asked — from
+ * {@link Score.key}, from {@link Score.keys}, and from the timeline it hands
+ * out. A score with nothing sounding has no region at all, since there is no
+ * music for the key to be in force over.
+ */
+function statedKeyRegions(key: Key, notes: readonly NoteEvent[], totalBeats: number): KeyRegion[] {
+  const first = notes[0];
+  if (first === undefined || totalBeats <= first.startBeat) {
+    return [];
+  }
+  return [
+    {
+      // The region starts where the music does, as an inferred one does, so a
+      // pickup is covered by the key it sounds in.
+      startBeat: first.startBeat,
+      endBeat: totalBeats,
+      key: keyIdentity(key),
+      confidence: STATED_KEY_CONFIDENCE,
+    },
+  ];
+}
+
 /** The plain data a set of notes and a context describe. */
 function scoreData(notes: readonly NoteEvent[], opts: ScoreOptions | undefined): ScoreData {
   const data: ScoreData = {
@@ -188,7 +216,10 @@ function scoreData(notes: readonly NoteEvent[], opts: ScoreOptions | undefined):
     tempo: tempoFrom(opts?.tempo),
   };
   if (opts?.key !== undefined) {
-    data.key = Key.of(toKeyScale(opts.key)).toJSON();
+    // Read through the resolver that keeps a spelled tonic and a scale form
+    // where the caller had them: a score told its key in Ab minor is not a
+    // score in G# minor, and every note it spells afterwards follows.
+    data.key = toKey(opts.key).toJSON();
   }
   return data;
 }
@@ -224,6 +255,10 @@ function scoreData(notes: readonly NoteEvent[], opts: ScoreOptions | undefined):
 export class Score {
   readonly #data: ScoreData;
   readonly #key: Key | undefined;
+  /** The chord reading, made on the first member that needs it. */
+  #chords: ChordTimeline | undefined;
+  /** The key regions, made on the first member that needs them. */
+  #regions: KeyRegion[] | undefined;
 
   /**
    * Wrap plain score data.
@@ -395,14 +430,20 @@ export class Score {
   /**
    * The score moved by a number of semitones.
    *
+   * A carried key moves with the notes, so the score that comes back is read in
+   * the key it now sounds in and every analysis taken from it — its timeline,
+   * its numerals, its phrases — is taken against that key rather than against
+   * the one it was written in.
+   *
    * @param semitones The signed semitone offset.
    * @returns The transposed score.
    * @throws If a note would leave the MIDI range.
    */
   transpose(semitones: number): Score {
     assertFiniteNumber(semitones, 'transpose semitones');
-    return this.#withNotes(
+    return this.#moved(
       this.#data.notes.map((note) => ({ ...note, pitch: note.pitch + semitones })),
+      (key) => key.transpose(semitones),
     );
   }
 
@@ -411,14 +452,23 @@ export class Score {
    *
    * Note events carry a MIDI pitch and no spelling of their own, so the
    * interval contributes its size and its direction; a carried key is what
-   * keeps the spelling, and it moves with the notes.
+   * keeps the spelling, and it moves with the notes — by the interval itself,
+   * so an augmented fourth and a diminished fifth land on differently spelled
+   * keys.
    *
    * @param interval An interval name (e.g. `'A4'`, `'-m3'`), plain interval
    *   data, or an {@link Interval}; a descending interval moves down.
    * @returns The transposed score.
    */
   transposeBy(interval: IntervalLike): Score {
-    return this.transpose(toSpelledInterval(interval).semitones);
+    const step = toSpelledInterval(interval);
+    return this.#moved(
+      this.#data.notes.map((note) => ({ ...note, pitch: note.pitch + step.semitones })),
+      // Moved by the interval rather than by its semitone count, so a key taken
+      // up an augmented fourth and one taken up a diminished fifth are spelled
+      // the way each interval demands.
+      (key) => key.transposeBy(step),
+    );
   }
 
   /** The same notes read against a different meter. */
@@ -433,7 +483,7 @@ export class Score {
 
   /** The same notes read in a different key. */
   withKey(key: KeyLike): Score {
-    return new Score({ ...this.#data, key: Key.of(toKeyScale(key)).toJSON() });
+    return new Score({ ...this.#data, key: toKey(key).toJSON() });
   }
 
   /**
@@ -569,16 +619,26 @@ export class Score {
       return this.#key;
     }
     const prevailing = prevailingKeyOf(this.#keyRegions());
-    return prevailing === null ? undefined : Key.of(prevailing);
+    return prevailing === null ? undefined : toKey(prevailing);
   }
 
   /**
    * Every key region the score passes through, in time order.
    *
+   * A score that was told its key answers with that key across the whole of it,
+   * as {@link Score.key} and {@link Score.timeline} do: the caller has already
+   * answered the question, and searching for a modulation away from a stated
+   * key would make the option read as a hint where it was given as an
+   * instruction. Only `totalBeats` is read from the options there, since the
+   * rest tune a search that is not run.
+   *
    * @param opts Analysis options; see {@link KeyTimelineOptions}.
    * @returns The regions; empty when nothing sounds.
    */
   keys(opts?: KeyTimelineOptions): KeyRegion[] {
+    if (this.#key !== undefined) {
+      return statedKeyRegions(this.#key, this.#data.notes, opts?.totalBeats ?? this.totalBeats);
+    }
     return keyTimelineFromNotes(this.#data.notes, { meters: this.#data.meters, ...opts });
   }
 
@@ -605,8 +665,8 @@ export class Score {
    * score.detectKeys()[0]?.key.rootPc; // 0
    * ```
    */
-  detectKeys(opts?: Omit<DetectKeyOptions, 'weights'>): KeyMatch[] {
-    return detectKeyFromNotes(this.#data.notes, opts);
+  detectKeys(opts?: Omit<DetectKeyOptions, 'weights'>): DetectedKeyMatch[] {
+    return detectKeyFromNotes(this.#data.notes, opts).map(detectedKeyMatch);
   }
 
   /**
@@ -621,7 +681,7 @@ export class Score {
   phrases(opts?: PhraseOptions): Phrase[] {
     return phrasesFromTimeline(this.#chordTimeline(), this.#data.notes, {
       meters: this.#data.meters,
-      ...(this.#key === undefined ? {} : { key: this.#key.scale }),
+      ...(this.#key === undefined ? {} : { key: keyIdentity(this.#key) }),
       ...opts,
     });
   }
@@ -878,26 +938,58 @@ export class Score {
   }
 
   /**
-   * The chord timeline the score's own harmony describes.
+   * The same context carrying another set of notes, with a carried key moved
+   * the same way the notes were.
+   *
+   * Every path that moves the pitches goes through here, so a score cannot come
+   * back sounding in one key and analysed in another.
+   */
+  #moved(notes: readonly NoteEvent[], moveKey: (key: Key) => Key): Score {
+    const data: ScoreData = { ...this.#data, notes: [...notes] };
+    if (this.#key !== undefined) {
+      data.key = moveKey(this.#key).toJSON();
+    }
+    return new Score(data);
+  }
+
+  /**
+   * The chord timeline the score's own harmony describes, read once.
    *
    * Private, because the options belong to the members that expose them: the
    * analyses that read harmony read the score's, and a caller who wants
-   * another builds it through {@link Score.timeline}.
+   * another builds it through {@link Score.timeline}. The reading is kept
+   * because a score is immutable and this takes no options: chord inference is
+   * the most expensive thing the class does, and the natural order — timeline,
+   * phrases, cadences, voices — would otherwise ask for it once per member.
    */
   #chordTimeline(): ChordTimeline {
-    return chordTimelineFromNotes(this.#data.notes, this.#analysisOptions()).timeline;
+    const timeline =
+      this.#chords ?? chordTimelineFromNotes(this.#data.notes, this.#analysisOptions()).timeline;
+    this.#chords = timeline;
+    return timeline;
   }
 
-  /** The key regions under the score, read against its own meter. */
+  /**
+   * The key regions under the score: the key it was told it is in across the
+   * whole of it, or the ones read from the notes against its own meter.
+   *
+   * Kept on first reading for the same reason the chord timeline is.
+   */
   #keyRegions(): KeyRegion[] {
-    return keyTimelineFromNotes(this.#data.notes, { meters: this.#data.meters });
+    const regions =
+      this.#regions ??
+      (this.#key === undefined
+        ? keyTimelineFromNotes(this.#data.notes, { meters: this.#data.meters })
+        : statedKeyRegions(this.#key, this.#data.notes, this.totalBeats));
+    this.#regions = regions;
+    return regions;
   }
 
   /** The score's context as chord-timeline options, with the caller's on top. */
   #analysisOptions(opts?: ChordTimelineOptions): ChordTimelineOptions {
     return {
       meters: this.#data.meters,
-      ...(this.#key === undefined ? {} : { key: this.#key.scale }),
+      ...(this.#key === undefined ? {} : { key: keyIdentity(this.#key) }),
       ...opts,
     };
   }
@@ -909,10 +1001,10 @@ export class Score {
   #keyContext(key: KeyLike | undefined): KeyContext {
     assertKeyArgument(key, 'score key');
     if (key !== undefined) {
-      return toKeyScale(key);
+      return keyIdentity(toKey(key));
     }
     if (this.#key !== undefined) {
-      return this.#key.scale;
+      return keyIdentity(this.#key);
     }
     const regions = this.#keyRegions();
     const prevailing: KeyScale = prevailingKeyOf(regions) ?? Key.major('C').scale;

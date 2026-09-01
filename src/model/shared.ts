@@ -6,6 +6,16 @@ import { assertFiniteNumber, assertTimeSignature } from '../core/validation/inde
 
 export { pitchClassOf as mod12 } from '../core/pitch/index.js';
 
+/**
+ * The confidence a key region carries when the caller stated the key.
+ *
+ * A stated key is not a measurement, and reporting anything less would make a
+ * caller's own answer look like a doubtful reading of the notes. Shared by
+ * every class that turns a stated key into a region, so the score and the
+ * timeline it hands over do not report the same key with two confidences.
+ */
+export const STATED_KEY_CONFIDENCE = 1;
+
 /** How a value that failed a shape check is named in the error explaining it. */
 function describeShape(value: unknown): string {
   if (value === null) {

@@ -17,47 +17,133 @@ const NOT_A_CLASS_METHOD: Readonly<Record<string, string>> = {
   // Validators. A class validates its own arguments on the way in, so these
   // exist for the caller's own boundary rather than for a method to call.
   assertFiniteSemitones: 'validator for a caller boundary',
+  assertDegree: 'validator for a caller boundary',
+  assertGenerationBudget: 'validator for a caller boundary',
+  assertMeterMap: 'validator for a caller boundary',
+  assertNoteEvents: 'validator for a caller boundary',
+  assertVocabulary: 'validator for a caller boundary',
+  clampToMidi: 'repairs a raw number at a caller boundary',
+  dropSilentNotes: 'repairs an imported event array before it is material',
+  soundingNotesOnly: 'the other name of dropSilentNotes',
 
   // Type guards over untyped material. They narrow before a value is a value
   // object at all, which is upstream of every class.
   isDrumPattern: 'type guard over untyped material',
   isLickMaterial: 'type guard over untyped material',
+  isFillArchetype: 'type guard over untyped material',
+  isLibcantusError: 'type guard over a caught error',
 
   // Predicates on a bare semitone count. The class-side reading is spelled,
   // so `Interval` answers through `classifySpelledInterval` instead.
   classifyInterval: 'predicate on an unspelled semitone count',
   isPerfectInterval: 'predicate on an unspelled semitone count',
 
-  // Finer-grained siblings of a predicate a class does reach. `Voicing` asks
-  // `createsParallelPerfect`; these split the same answer by interval.
-  createsParallelOctave: 'finer-grained sibling of createsParallelPerfect',
-  createsParallelUnison: 'finer-grained sibling of createsParallelPerfect',
+  // Counterpoint predicates. Each judges one pair of voices at one moment,
+  // which is a question about two pitches rather than about a value object;
+  // `Voicing.checkTo` is the bundled check a voicing answers, and the class
+  // says so in its own doc comment.
+  createsParallelOctave: 'judges one pair of voices at one moment',
+  createsParallelUnison: 'judges one pair of voices at one moment',
+  createsParallelPerfect: 'judges one pair of voices at one moment',
+  createsHiddenParallelPerfect: 'judges one pair of voices at one moment',
+  createsVerticalDissonance: 'judges one pair of voices at one moment',
+  createsVoiceCrossing: 'judges one pair of voices at one moment',
+  createsVoiceOverlap: 'judges one pair of voices at one moment',
+  createsBattuta: 'judges one pair of voices at one moment',
+  exceedsSpacing: 'judges one pair of voices at one moment',
+  isAugmentedMelodicInterval: 'judges one step of one line',
+  isForbiddenMelodicLeap: 'judges one step of one line',
+  isLeadingToneResolution: 'judges one step of one line',
+  classifySpelledInterval: 'graded form of the answer Interval.isConsonant gives',
 
-  // The seedable generator itself. A class reaches the namespaced form through
-  // its generation context; this is the primitive underneath it.
+  // Seed plumbing. A class takes a seed and derives what it needs inside its
+  // generation context, so these are the primitives underneath that.
   createRng: 'primitive under the namespaced generator',
+  createPositionalRng: 'primitive under the namespaced generator',
+  deriveSeed: 'derives a child seed inside a generation context',
+  includeAt: 'draws against a positional generator',
+  resolveAlgorithmVersion: 'resolves a pinned version for a generation context',
 
   // Catalogue readers. They answer about the library's own tables rather than
   // about a value, so there is no receiver for them to hang off.
   progressions: 'reads the built-in catalogue',
   progressionsByStyle: 'reads the built-in catalogue',
+  pickProgressionPreset: 'reads the built-in catalogue',
   pickVocabulary: 'reads the built-in catalogue',
   mergeVocabulary: 'combines catalogue entries',
   drumVoiceOf: 'reads the drum-kit table',
+  chordQualities: 'lists the quality names the library knows',
+  instrumentTransposition: 'reads the transposing-instrument table',
+  namedScaleMask: 'reads the scale-name table',
+  requireScaleMask: 'reads the scale-name table',
+  resolveScaleName: 'reads the scale-name table',
+  profileWeights: 'resolves a named options profile to its weights',
+
+  // Dictionary operations. They shape the caller's own vocabulary list before
+  // a generator is handed it, alongside the catalogue readers above.
+  selectVocabulary: "queries the caller's dictionary",
+  vocabularyOfKind: "narrows the caller's dictionary",
+  fitsQuery: 'tests one dictionary entry against a query',
 
   // Text classification that runs before a name is parsed at all.
   detectNoteNameSystem: 'classifies text before it names a note',
 
-  // A shortcut over a path the class API already spells out as
-  // `Chord.parse(text).transpose(n).symbol()`.
-  transposeChordSymbol: 'shortcut over parse, transpose, and print',
+  // Free-function parsers. The class face of each is the static factory named
+  // here, which reads the same text and hands back the value object.
+  parseNote: 'the class face is Note.parse',
+  parseKeyName: 'the class face is Key.parse',
+  parseChordSymbol: 'the class face is Chord.parse',
+  parseInterval: 'the class face is Interval.parse',
 
-  // Grid-event transforms shared by the generators. They operate on the event
-  // arrays a generator passes between its own stages, not on a value object.
+  // Shortcuts over a path the class API already spells out.
+  transposeChordSymbol: 'shortcut over parse, transpose, and print',
+  isDiatonic: 'shortcut over chord.pitchClasses.every(pc => key.contains(pc))',
+  noteNames: 'shortcut over mapping Note.format across an array',
+  barIndexAt: 'the bar number of Score.barAt',
+  barStartBeat: 'a beat less the in-bar offset Score.barAt reports for it',
+  beatsPerBarAt: 'Meter.beatsPerBar asked at the signature Score.meterAt finds',
+  spellAugmentedSixth: 'the spelled table Key.augmentedSixth builds its chord from',
+
+  // Readings of plain data that a value object exposes under its own name.
+  chordSpecIntervals: 'reads a plain spec; Chord.intervals is the same reading',
+  chordSpecQuality: 'reads a plain spec; Chord.quality is the same reading',
+  scaleMatchesChord: 'containment test over a raw mode mask',
+  intervalAboveRoot: 'the interval class behind the name Chord.roleOf gives it',
+  roleOf: 'the voicing-side role and lock level, not the chord tone Chord.roleOf names',
+  augmentedSixthKind: 'names the kind of the augmented sixth Chord.analyze reads',
+  augmentedSixthFromPitchClasses: 'reads bare pitch classes, upstream of a Chord',
+  figuredBassRealization: 'the notes and suspensions around the chord Chord.fromFiguredBass builds',
+  compareMelodies: 'says why two lines scored what they did; Motif.similarityTo is the score',
+  tensionCurve: 'the plain-track form of Arrangement.tension',
+
+  // Arithmetic below the level a value object works at.
+  diatonicLetterOf: 'letter arithmetic upstream of a spelled note',
+  naturalPitchClassOf: 'letter arithmetic upstream of a spelled note',
+  maskFromOffsets: 'builds the plain mask a Key is made of',
+  scaleLadderPosition: 'keeps a chromatic offset apart from the rung Key.degreeOf names',
+  scaleLadderPitch: 'keeps a chromatic offset apart from the rung Key.degreeOf names',
+
+  // Generator stages. They run on the arrays a generator passes between its
+  // own steps, or on the context it writes under, not on a value object.
   double: 'transform between generator stages',
   imitate: 'transform between generator stages',
   placeDrumPattern: 'transform between generator stages',
   placeLicks: 'transform between generator stages',
+  classifyMelodyTones: 'harmonizer stage that runs before any chord exists',
+  gridMetricWeight: 'ranks a step of a generator grid',
+  onsetWeightCurve: 'maps a metric weight to a generator probability',
+  sustainsShift: 'reads a difficulty ceiling against a tempo',
+  sustainsStrokes: 'reads a difficulty ceiling against a tempo',
+
+  // Undecided. Each is a capability with a plausible receiver and no method,
+  // and settling it means deciding whether the class API should grow or the
+  // equivalence the docs claim should be narrowed. Listed so the promise is
+  // not quietly read as kept.
+  barPositionToBeat: 'undecided: Meter.barPositionAt spells the forward direction only',
+  barPositionToPulse: 'undecided: Meter.formatPosition prints what this numbers',
+  chordFromSpec: 'undecided: Chord.spec goes out, and no factory takes one back in',
+  secondaryDominant: 'undecided: Chord.secondaryDominant tonicizes a chord, not a degree of a key',
+  shiftByScaleDegrees: 'undecided: no receiver-side spelling of a diatonic shift',
 };
 
 /** The `src` files that define the class API, `index.ts` aside. */
@@ -71,18 +157,67 @@ function classSources(program: ts.Program): ts.SourceFile[] {
 }
 
 /**
- * Every name a class file reaches, following each one it finds into its own
- * declaration and on through that body. A one-level scan of the imports would
- * miss most of the surface, because a class reaches `parseNote` through the
- * coercer rather than by importing it.
+ * The bodies a declaration contributes: what it runs, not what it is named or
+ * annotated with. Reading the name back would let a method called `transpose`
+ * report the function `transpose` as reached without ever calling it.
+ */
+function bodiesOf(node: ts.Node): ts.Node[] {
+  if (ts.isClassDeclaration(node)) {
+    return node.members.flatMap(bodiesOf);
+  }
+  const bodies: ts.Node[] = [];
+  if (
+    ts.isFunctionDeclaration(node) ||
+    ts.isMethodDeclaration(node) ||
+    ts.isConstructorDeclaration(node) ||
+    ts.isGetAccessorDeclaration(node) ||
+    ts.isSetAccessorDeclaration(node) ||
+    ts.isFunctionExpression(node) ||
+    ts.isArrowFunction(node)
+  ) {
+    if (node.body !== undefined) {
+      bodies.push(node.body);
+    }
+    for (const parameter of node.parameters) {
+      if (parameter.initializer !== undefined) {
+        bodies.push(parameter.initializer);
+      }
+    }
+  } else if (ts.isVariableDeclaration(node) || ts.isPropertyDeclaration(node)) {
+    if (node.initializer !== undefined) {
+      bodies.push(node.initializer);
+    }
+  } else if (ts.isClassStaticBlockDeclaration(node)) {
+    bodies.push(node.body);
+  }
+  return bodies;
+}
+
+/**
+ * Every name the class API itself calls: what the body of a member declared in
+ * `src/model` writes down, plus what the helpers those bodies call write down
+ * in turn, for as long as the helper also lives in `src/model`.
+ *
+ * The walk stops at the edge of `src/model` on purpose. Following a name into
+ * its declaration anywhere in `src/` and carrying on through that body reports
+ * everything the library transitively calls, which is nearly the whole surface
+ * and says nothing about whether a class ever offered it.
  */
 function reachableFromClasses(program: ts.Program, checker: ts.TypeChecker): Set<string> {
+  const modelFiles = new Set(classSources(program).map((file) => file.fileName));
   const seen = new Set<ts.Symbol>();
   const names = new Set<string>();
-  const queue: ts.Node[] = classSources(program);
+  const queue: ts.Node[] = [];
+  for (const file of classSources(program)) {
+    for (const statement of file.statements) {
+      if (ts.isClassDeclaration(statement)) {
+        queue.push(...bodiesOf(statement));
+      }
+    }
+  }
 
   const visit = (node: ts.Node): void => {
-    if (ts.isIdentifier(node)) {
+    if (ts.isIdentifier(node) || ts.isPrivateIdentifier(node)) {
       const found = checker.getSymbolAtLocation(node);
       const symbol =
         found !== undefined && (found.flags & ts.SymbolFlags.Alias) !== 0
@@ -92,8 +227,8 @@ function reachableFromClasses(program: ts.Program, checker: ts.TypeChecker): Set
         seen.add(symbol);
         names.add(symbol.name);
         for (const declaration of symbol.getDeclarations() ?? []) {
-          if (declaration.getSourceFile().fileName.startsWith(SRC)) {
-            queue.push(declaration);
+          if (modelFiles.has(declaration.getSourceFile().fileName)) {
+            queue.push(...bodiesOf(declaration));
           }
         }
       }
@@ -110,63 +245,6 @@ function reachableFromClasses(program: ts.Program, checker: ts.TypeChecker): Set
   return names;
 }
 
-/**
- * Whether `name` is a public wrapper whose whole body delegates to work the
- * classes already reach.
- *
- * Widening an entry point to the text form leaves the narrow implementation
- * behind as a twin, and a class calls the twin because it holds resolved data
- * already. Reading only the symbol the class names would then report the entry
- * point as unreachable while the class takes exactly the same path with the
- * argument resolved one step earlier.
- */
-function delegatesToReached(
-  program: ts.Program,
-  checker: ts.TypeChecker,
-  reached: ReadonlySet<string>,
-  published: ReadonlySet<string>,
-  name: string,
-): boolean {
-  for (const file of program.getSourceFiles()) {
-    if (!file.fileName.startsWith(SRC)) {
-      continue;
-    }
-    for (const statement of file.statements) {
-      if (!ts.isFunctionDeclaration(statement) || statement.name?.text !== name) {
-        continue;
-      }
-      // Only what the wrapper hands back counts, and only when the delegate is
-      // private: a validator it calls first is reached by everything, and a
-      // public delegate means the wrapper is one entry point calling another
-      // rather than the resolved half of one.
-      const returned: string[] = [];
-      const walk = (node: ts.Node): void => {
-        if (
-          ts.isReturnStatement(node) &&
-          node.expression !== undefined &&
-          ts.isCallExpression(node.expression) &&
-          ts.isIdentifier(node.expression.expression)
-        ) {
-          const callee = node.expression.expression;
-          const found = checker.getSymbolAtLocation(callee);
-          const symbol =
-            found !== undefined && (found.flags & ts.SymbolFlags.Alias) !== 0
-              ? checker.getAliasedSymbol(found)
-              : found;
-          returned.push(symbol?.name ?? callee.text);
-        }
-        ts.forEachChild(node, walk);
-      };
-      ts.forEachChild(statement, walk);
-      return (
-        returned.length > 0 &&
-        returned.every((callee) => reached.has(callee) && !published.has(callee))
-      );
-    }
-  }
-  return false;
-}
-
 /** The public runtime exports that are plain functions rather than classes. */
 function publicFunctions(): string[] {
   return Object.entries(api as Record<string, unknown>)
@@ -181,9 +259,7 @@ describe('class coverage of the functional API', () => {
   const program = ts.createProgram(parsed.fileNames, { ...parsed.options, noEmit: true });
   const checker = program.getTypeChecker();
   const reachable = reachableFromClasses(program, checker);
-  const published = new Set(publicFunctions());
-  const reaches = (name: string): boolean =>
-    reachable.has(name) || delegatesToReached(program, checker, reachable, published, name);
+  const reaches = (name: string): boolean => reachable.has(name);
 
   it('reaches every public function that has a receiver to hang off', () => {
     // The class API promises that reaching for a class never costs capability.

@@ -96,6 +96,15 @@ describe('toKeyScale', () => {
     expect(toKeyScale(majorKey(5))).toEqual(majorKey(5));
   });
 
+  it('reads the plain form a key serializes to, not only the class itself', () => {
+    // A project file holds a key as this record, so reading one back has to be
+    // the same call as passing the class it was written from.
+    const key = Key.named('harmonicMinor', 'Ab');
+    const data = key.toJSON();
+    expect(toKeyScale(data)).toEqual(toKeyScale(key));
+    expect(toKeyScale(JSON.parse(JSON.stringify(key)))).toEqual(toKeyScale(key));
+  });
+
   it('reads a model class through its toJSON', () => {
     const key = Key.minor('F#');
     expect(toKeyScale(key)).toEqual(key.scale);

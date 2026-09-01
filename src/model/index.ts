@@ -23,6 +23,7 @@ export type {
 // wrapper, or emit declarations under `isolatedDeclarations`.
 export type {
   AnalyzeChordOptions,
+  AugmentedSixthKind,
   BorrowedSource,
   CadenceResult,
   ChordAnalysis,
@@ -68,6 +69,7 @@ export type {
   ReduceProgressionOptions,
   ReductionBasis,
   ReductionLevel,
+  SpelledKeyScale,
   StructuralCadence,
   SuspensionFigure,
   TensionPoint,

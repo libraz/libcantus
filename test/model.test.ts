@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { detectKeyBest } from '../src/analyze/detect/index.js';
-import { detectCadence } from '../src/analyze/functional/index.js';
+import { detectCadence, pivotChords } from '../src/analyze/functional/index.js';
 import { InvalidInputError } from '../src/core/errors/index.js';
 import { noteToMidi, parseNote, transposeByInterval } from '../src/core/pitch/index.js';
 import { edo, frequencyOf } from '../src/core/tuning/index.js';
@@ -591,6 +591,41 @@ describe('Key', () => {
     expect(five.rootPc).toBe(7);
     expect(five.quality).toBe('dom7');
     expect(five.function()).toBe('dominant');
+  });
+
+  it('lists the pivots into another key, reading each chord in both', () => {
+    const pivots = Key.major('C').pivotsTo('G major');
+    expect(pivots.map((pivot) => `${pivot.romanFrom}=${pivot.romanTo}`)).toEqual([
+      'I=IV',
+      'iii=vi',
+      'V=I',
+      'vi=ii',
+    ]);
+    expect(pivots.map((pivot) => pivot.chord.symbol())).toEqual(['C', 'Em', 'G', 'Am']);
+    expect(pivots.map((pivot) => [pivot.chord.rootPc, pivot.romanFrom, pivot.romanTo])).toEqual(
+      pivotChords(majorKey(0), majorKey(7)).map((pivot) => [
+        pivot.chord.rootPc,
+        pivot.romanFrom,
+        pivot.romanTo,
+      ]),
+    );
+  });
+
+  it('carries the key it pivots from into the chords it hands back', () => {
+    const [first] = Key.major('C').pivotsTo(Key.major('G'));
+    expect(first?.chord.key?.toString()).toBe('C major');
+    expect(first?.chord.roman()).toBe('I');
+  });
+
+  it('offers nothing to pivot on when the scale stacks no triads', () => {
+    expect(Key.named('wholeTone', 'C').pivotsTo('G major')).toEqual([]);
+  });
+
+  it('refuses a value that names no key', () => {
+    expect(() => Key.major('C').pivotsTo({ alternatives: true } as never)).toThrow(
+      /key must be a Key; received an object/,
+    );
+    expect(() => Key.major('C').pivotsTo('H sharp major')).toThrow(InvalidInputError);
   });
 });
 

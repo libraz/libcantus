@@ -24,6 +24,7 @@ import {
   spelledKeyOf,
 } from '../../theory/scale/index.js';
 import type { RejectedCandidate } from '../functional/rationale.js';
+import { noteWeight } from '../histogram.js';
 import type { ModalScaleName } from './modes.js';
 import { modalProfileVector, resolveModalCandidates } from './modes.js';
 import type { KeyProfileName, KeyProfilePair } from './profiles.js';
@@ -654,20 +655,27 @@ export function detectKey(pitches: readonly number[], opts: DetectKeyOptions = {
   return results;
 }
 
-/** Default MIDI velocity assumed when a note event does not carry one. */
-const DEFAULT_VELOCITY = 100;
-
 /**
  * Rank keys by how well they contain a set of note events, weighting each note
  * by how much of the music it actually occupies.
  *
  * {@link detectKey} counts every pitch once, which lets a run of fast ornamental
  * notes outvote the sustained harmony that establishes the key. This weighs
- * each note by duration times velocity, the same measure chord inference uses,
- * so the two agree on what the music emphasises. Notes that never sound (zero
- * or negative duration) are ignored. The weighted distribution is then ranked
- * exactly as {@link detectKey} ranks it, by correlation against a key profile,
- * so `score` is a finite correlation in [-1, 1].
+ * each note by the same measure chord inference weighs its own histogram by, so
+ * the two agree on what the music emphasises: duration times
+ * velocity, with a note that carries no velocity counted at full weight rather
+ * than at an assumed one. Notes that never sound (zero or negative duration)
+ * are ignored. The weighted distribution is then ranked exactly as
+ * {@link detectKey} ranks it, by correlation against a key profile, so `score`
+ * is a finite correlation in [-1, 1].
+ *
+ * The one term of that measure this cannot share is the metric accent, which
+ * chord inference adds to an onset by the beat it falls on: the notes arrive
+ * here without the meter they are counted in, and reading them against an
+ * assumed one would rank the same notes differently under a signature the
+ * caller never named. Ranking a whole piece is the coarser question, and the
+ * accents are what separate one window from the next rather than one key from
+ * another.
  *
  * @param notes The note events to weigh.
  * @param opts Which profile to rank with, whether the modes take part, and the
@@ -698,7 +706,7 @@ export function detectKeyFromNotes(
   return detectKey(
     sounding.map((note) => note.pitch),
     {
-      weights: sounding.map((note) => note.durationBeat * (note.velocity ?? DEFAULT_VELOCITY)),
+      weights: sounding.map((note) => noteWeight(note, note.durationBeat)),
       profile: opts.profile,
       modes: opts.modes,
       explain: opts.explain,

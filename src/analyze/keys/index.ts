@@ -10,6 +10,7 @@
 
 import type { MeterLike } from '../../core/meter/index.js';
 import { beatsPerBarAt, metricWeight, resolveMeters } from '../../core/meter/index.js';
+import type { Note } from '../../core/pitch/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
@@ -27,7 +28,7 @@ import {
   minorKey,
   spelledKeyOf,
 } from '../../theory/scale/index.js';
-import type { KeyProfileName, KeyProfilePair } from '../detect/index.js';
+import type { KeyProfileName, KeyProfilePair, KeyVariant } from '../detect/index.js';
 import { profileScore, resolveKeyProfile } from '../detect/profiles.js';
 import type { PivotChord } from '../functional/index.js';
 import { pivotChords } from '../functional/index.js';
@@ -52,6 +53,27 @@ const EMPTY_WEIGHTS: WindowWeights = {
 const MAX_METRIC_WEIGHT = 3;
 
 /**
+ * A key/scale that may also carry the spelled tonic and the scale form it was
+ * named with.
+ *
+ * A key/scale says which pitch classes are in force and nothing about how they
+ * are written, so a key travelling through a layer that holds plain scales
+ * comes back out as whichever spelling that scale reads best from — an Ab minor
+ * handed in returns as G# minor, and a harmonic minor as a plain one. The two
+ * fields are what a caller who already knew the key hands down beside it, and
+ * they are optional because an inferred key has neither: a search over pitch
+ * classes has nothing to say about spelling.
+ *
+ * @category Arrangement & Analysis
+ */
+export type SpelledKeyScale = KeyScale & {
+  /** The spelled tonic the key is written with, when the caller named one. */
+  tonic?: Note;
+  /** The scale form the key was read under, when it was read under one. */
+  variant?: KeyVariant;
+};
+
+/**
  * A span of the piece over which one key is in force.
  *
  * @category Arrangement & Analysis
@@ -65,8 +87,12 @@ export type KeyRegion = {
    * The key in force across the region, owned by it: every entry point hands
    * back a key of the region's own, so writing to one changes neither the other
    * regions of the same run nor what a later call reports.
+   *
+   * A region built from a key the caller stated carries that key's spelling and
+   * scale form as well, so the key printed on a signature is the one that was
+   * handed in; a region the analysis found carries the scale alone.
    */
-  key: KeyScale;
+  key: SpelledKeyScale;
   /**
    * How well the region's music fits the key, in [0, 1]: the correlation
    * between the span's pitch-class distribution and the key's profile, with
@@ -969,8 +995,8 @@ export function attachPivots(regions: KeyRegion[], chords: readonly ChordSegment
  */
 export function keyLookup(
   regions: readonly KeyRegion[],
-  fallback: KeyScale,
-): (beat: number) => KeyScale {
+  fallback: SpelledKeyScale,
+): (beat: number) => SpelledKeyScale {
   return (beat) => {
     let low = 0;
     let high = regions.length;
@@ -1004,10 +1030,10 @@ export function keyLookup(
  * ```
  * @category Arrangement & Analysis
  */
-export function prevailingKeyOf(regions: readonly KeyRegion[]): KeyScale | null {
+export function prevailingKeyOf(regions: readonly KeyRegion[]): SpelledKeyScale | null {
   // Held time is summed per key, not per region: a key returned to after a
   // digression prevails over one stated once at length.
-  const totals = new Map<string, { key: KeyScale; length: number }>();
+  const totals = new Map<string, { key: SpelledKeyScale; length: number }>();
   for (const region of regions) {
     const id = `${pitchClass(region.key.rootPc)}:${region.key.modeMask12}`;
     const entry = totals.get(id);
@@ -1018,7 +1044,7 @@ export function prevailingKeyOf(regions: readonly KeyRegion[]): KeyScale | null 
       entry.length += length;
     }
   }
-  let best: KeyScale | null = null;
+  let best: SpelledKeyScale | null = null;
   let bestLength = -1;
   for (const entry of totals.values()) {
     // Ties keep the earlier key, which is the one the piece established first.

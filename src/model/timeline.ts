@@ -1,7 +1,7 @@
 import type { ChordToRomanOptions } from '../analyze/functional/index.js';
 import { chordToRoman } from '../analyze/functional/index.js';
-import type { KeyRegion } from '../analyze/keys/index.js';
-import { keyLookup, prevailingKeyOf } from '../analyze/keys/index.js';
+import type { KeyRegion, KeyTimelineOptions, SpelledKeyScale } from '../analyze/keys/index.js';
+import { detectModulations, keyLookup, prevailingKeyOf } from '../analyze/keys/index.js';
 import type { ReducedChord, ReduceProgressionOptions } from '../analyze/reduction/index.js';
 import { reduceProgression } from '../analyze/reduction/index.js';
 import type { CadenceHit, ChordTimeline, ChordTimelineOptions } from '../analyze/timeline/index.js';
@@ -21,9 +21,15 @@ import { toKeyScale } from '../theory/scale/index.js';
 import type { Chord } from './chord.js';
 import { Chord as ChordClass } from './chord.js';
 import type { Key } from './key.js';
-import { Key as KeyClass } from './key.js';
+import { keyIdentity, toKey } from './key.js';
 import { Progression } from './progression.js';
-import { assertDataArray, assertDataObject, assertKeyArgument, spanEnd } from './shared.js';
+import {
+  assertDataArray,
+  assertDataObject,
+  assertKeyArgument,
+  STATED_KEY_CONFIDENCE,
+  spanEnd,
+} from './shared.js';
 
 /** The plain form a {@link Timeline} hands out and is rebuilt from. */
 export type TimelineData = {
@@ -53,12 +59,17 @@ export type TimelineRoman = {
 };
 
 /**
- * The confidence a key region carries when the caller named the key.
+ * A region's key restated from a {@link Key}, carrying exactly the identity the
+ * region already had.
  *
- * A stated key is not a measurement, and reporting anything less would make a
- * caller's own answer look like a doubtful reading of the notes.
+ * A key the caller stated travels with its spelled tonic and its scale form, so
+ * a timeline built in Ab minor still reads Ab minor when it is asked; a key the
+ * analysis inferred has neither, and writing a spelling into it would invent
+ * one the reading never made.
  */
-const GIVEN_KEY_CONFIDENCE = 1;
+function regionKeyLike(source: SpelledKeyScale, key: Key): SpelledKeyScale {
+  return source.tonic === undefined && source.variant === undefined ? key.scale : keyIdentity(key);
+}
 
 /** A validated, defensive copy of one chord segment. */
 function copySegment(segment: ChordSegment): ChordSegment {
@@ -79,7 +90,9 @@ function copyKeyRegion(region: KeyRegion): KeyRegion {
   const copy: KeyRegion = {
     startBeat: assertFiniteNumber(region.startBeat, 'key region startBeat'),
     endBeat: assertFiniteNumber(region.endBeat, 'key region endBeat'),
-    key: toKeyScale(region.key),
+    // Read through the key itself, so a tonic that does not spell the region's
+    // own root is refused here rather than spelling later notes wrongly.
+    key: regionKeyLike(region.key, toKey(region.key)),
     confidence: assertFiniteNumber(region.confidence, 'key region confidence'),
   };
   if (region.modulation !== undefined) {
@@ -232,8 +245,8 @@ export class Timeline {
           // so a chord placed in a pickup is covered by the key it sounds in.
           startBeat: timeline.segments[0]?.startBeat ?? 0,
           endBeat: totalBeats,
-          key: toKeyScale(key),
-          confidence: GIVEN_KEY_CONFIDENCE,
+          key: keyIdentity(toKey(key)),
+          confidence: STATED_KEY_CONFIDENCE,
         },
       ];
     }
@@ -322,10 +335,19 @@ export class Timeline {
   /** The key held longest across the span, when the analysis found one. */
   get key(): Key | undefined {
     const prevailing = prevailingKeyOf(this.#keys);
-    return prevailing === null ? undefined : KeyClass.of(prevailing);
+    return prevailing === null ? undefined : toKey(prevailing);
   }
 
-  /** Every key region under the span, in time order. */
+  /**
+   * Every key region under the span, in time order.
+   *
+   * These are the regions the timeline was built with: the ones
+   * {@link Timeline.fromNotes} read off the notes, or the single region a key
+   * given to {@link Timeline.fromChords} describes. A timeline holding chords
+   * alone carries none until it is asked to read them —
+   * {@link Timeline.modulations} is where the chords are searched for the keys
+   * they imply.
+   */
   get keys(): readonly KeyRegion[] {
     return this.#keys.map(copyKeyRegion);
   }
@@ -405,6 +427,39 @@ export class Timeline {
    */
   cadences(): CadenceHit[] {
     return detectCadences(this.chordTimeline, this.#keyContext());
+  }
+
+  /**
+   * The keys the chords themselves imply, in time order.
+   *
+   * The chord route to key regions, for a timeline that holds harmony without
+   * the notes it was played from — a lead sheet, or a progression laid out in
+   * time. A chord argues for a key far more strongly than its three or four
+   * pitch classes do, so a modulation is read off the chords rather than off a
+   * pitch-class profile, and the chord that reads in both keys is reported as
+   * the pivot the modulation turned on.
+   *
+   * The regions are searched for here rather than kept on the timeline:
+   * {@link Timeline.keys} answers with what the timeline was built with, which
+   * for placed chords is the key the caller stated or nothing at all.
+   *
+   * @param opts Analysis options; see {@link KeyTimelineOptions}.
+   * @returns The key regions the chords imply; empty when there are no chords.
+   * @example
+   * ```ts
+   * import { Chord, Key, Progression, Timeline } from '@libraz/libcantus';
+   * const progression = new Progression(
+   *   [Chord.parse('C'), Chord.parse('G7'), Chord.parse('C')],
+   *   Key.major('C'),
+   * );
+   * Timeline.fromProgression(progression, 4).modulations().length; // 1
+   * ```
+   */
+  modulations(opts?: KeyTimelineOptions): KeyRegion[] {
+    return detectModulations(this.#copySegments(), {
+      totalBeats: this.#totalBeats,
+      ...opts,
+    }).map(copyKeyRegion);
   }
 
   /**
@@ -573,7 +628,7 @@ export class Timeline {
   /** The key in force at a beat, or undefined when the timeline knows none. */
   #keyAt(beat: number): Key | undefined {
     const prevailing = prevailingKeyOf(this.#keys);
-    return prevailing === null ? undefined : KeyClass.of(keyLookup(this.#keys, prevailing)(beat));
+    return prevailing === null ? undefined : toKey(keyLookup(this.#keys, prevailing)(beat));
   }
 
   /**
@@ -601,7 +656,10 @@ export class Timeline {
       chord: moveChord(new ChordClass(segment.chord)).toJSON(),
     }));
     const keys = this.#keys.map((region) => {
-      const moved: KeyRegion = { ...region, key: moveKey(KeyClass.of(region.key)).scale };
+      const moved: KeyRegion = {
+        ...region,
+        key: regionKeyLike(region.key, moveKey(toKey(region.key))),
+      };
       if (region.pivot !== undefined) {
         // The numerals a pivot carries are degrees, so they survive the move;
         // only the chord they name has to travel with the keys.

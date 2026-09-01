@@ -112,7 +112,7 @@ export {
   secondaryDominantOf,
   spellAugmentedSixth,
 } from './functional/index.js';
-export type { KeyRegion, KeyTimelineOptions } from './keys/index.js';
+export type { KeyRegion, KeyTimelineOptions, SpelledKeyScale } from './keys/index.js';
 export { detectModulations, keyTimelineFromNotes, prevailingKeyOf } from './keys/index.js';
 export type {
   ContourDirection,

@@ -130,8 +130,16 @@ describe('construction', () => {
 
   it('carries a stated key as the one region under the span', () => {
     const timeline = placed();
+    // The stated key travels with the tonic it was spelled from, so the key the
+    // timeline reports is the key that was handed in rather than an enharmonic
+    // equal of it.
     expect(timeline.keys).toEqual([
-      { startBeat: 0, endBeat: TOTAL_BEATS, key: majorKey(0), confidence: 1 },
+      {
+        startBeat: 0,
+        endBeat: TOTAL_BEATS,
+        key: { ...majorKey(0), tonic: { letter: 0, alter: 0 } },
+        confidence: 1,
+      },
     ]);
     // Without one, the timeline says it has no key rather than inventing one.
     expect(Timeline.fromChords(SPANS, TOTAL_BEATS).keys).toEqual([]);
@@ -391,7 +399,14 @@ describe('transforming', () => {
       [12, 14],
     ]);
     expect(sliced.totalBeats).toBe(14);
-    expect(sliced.keys).toEqual([{ startBeat: 6, endBeat: 14, key: majorKey(0), confidence: 1 }]);
+    expect(sliced.keys).toEqual([
+      {
+        startBeat: 6,
+        endBeat: 14,
+        key: { ...majorKey(0), tonic: { letter: 0, alter: 0 } },
+        confidence: 1,
+      },
+    ]);
     expect(sliced.at(6)?.toJSON()).toEqual(placed().at(6)?.toJSON());
     expect(sliced.at(4)).toBeNull();
     expect(() => placed().slice(8, 4)).toThrow(InvalidInputError);
@@ -426,11 +441,10 @@ describe('transforming', () => {
     });
     expect(spelled.transposeBy('A4').at(0)?.symbol()).toBe('F#');
     expect(spelled.transposeBy('d5').at(0)?.symbol()).toBe('Gb');
-    // A key region holds a key/scale, so a chord spelled by the key in force
-    // takes the letters that scale reads best from either way.
-    expect(placed().transposeBy('A4').at(0)?.symbol()).toBe(
-      placed().transposeBy('d5').at(0)?.symbol(),
-    );
+    // A stated key travels with its spelling, so a chord that takes its letters
+    // from the key in force follows the interval too.
+    expect(placed().transposeBy('A4').at(0)?.symbol()).toBe('F#');
+    expect(placed().transposeBy('d5').at(0)?.symbol()).toBe('Gb');
   });
 });
 
@@ -456,14 +470,16 @@ describe('dropping the time axis', () => {
     expect(back.chords.map((chord) => chord.symbol())).toEqual(['A#', 'D#', 'F7']);
   });
 
-  it('loses the scale form of a detected key', () => {
+  it('keeps the scale form of a detected key', () => {
     const detected = Key.detectBest([57, 59, 60, 62, 64, 65, 68]) ?? Key.minor('A');
     expect(detected.variant).toBe('harmonic');
     const progression = new Progression([Chord.parse('Am'), Chord.parse('E7')], detected);
     const back = Timeline.fromProgression(progression, 4).progression();
-    // A key region holds a key/scale, not the reading it came from.
+    // A key the caller stated is carried as it was stated, scale form included,
+    // so the reading survives the round trip through the time axis.
     expect(back.key?.scale).toEqual(detected.scale);
-    expect(back.key?.variant).toBeUndefined();
+    expect(back.key?.variant).toBe('harmonic');
+    expect(back.key?.toString()).toBe('A harmonic minor');
   });
 
   it('makes neighbours of the chords a rest separated', () => {

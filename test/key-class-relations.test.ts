@@ -364,7 +364,9 @@ describe('Key.transposeBy', () => {
 
   it('keeps the scale shape, moving only the tonic', () => {
     const moved = Key.named('harmonicMinor', 'A').transposeBy('m3');
-    expect(moved.toString()).toBe('C minor');
+    // The scale it names is the scale it prints: moving a harmonic minor gives
+    // a harmonic minor, not the plain minor its mode word alone would say.
+    expect(moved.toString()).toBe('C harmonic minor');
     expect(moved.scale.modeMask12).toBe(Key.named('harmonicMinor', 'A').scale.modeMask12);
     expect(moved.noteNames()).toEqual(['C', 'D', 'Eb', 'F', 'G', 'Ab', 'B']);
   });

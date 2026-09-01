@@ -119,7 +119,12 @@ describe('Arrangement.analyze', () => {
 describe('Score.detectKeys', () => {
   it('answers what detectKeyFromNotes answers over the same notes', () => {
     const score = Score.of(CADENTIAL);
-    expect(score.detectKeys()).toEqual(detectKeyFromNotes(score.notes));
+    // The class member hands back the class's own Key, and the plain match the
+    // function reports is what is left once the key is read as data.
+    expect(score.detectKeys().map((match) => ({ ...match, key: match.key.scale }))).toEqual(
+      detectKeyFromNotes(score.notes),
+    );
+    expect(score.detectKeys()[0]?.key.toString()).toBe(`${score.detectKeys()[0]?.key.tonic} major`);
   });
 
   it('weights by duration times velocity rather than counting pitches', () => {
@@ -139,13 +144,13 @@ describe('Score.detectKeys', () => {
     const score = Score.of(CADENTIAL);
     expect(score.detectKeys()[0]?.rationale).toBeUndefined();
     expect(score.detectKeys({ explain: true })[0]?.rationale).toBeTypeOf('string');
-    expect(score.detectKeys({ explain: true })).toEqual(
-      detectKeyFromNotes(score.notes, { explain: true }),
-    );
+    expect(
+      score.detectKeys({ explain: true }).map((match) => ({ ...match, key: match.key.scale })),
+    ).toEqual(detectKeyFromNotes(score.notes, { explain: true }));
     expect(score.detectKeys({ modes: true }).length).toBeGreaterThan(score.detectKeys().length);
-    expect(score.detectKeys({ profile: 'flat' })).toEqual(
-      detectKeyFromNotes(score.notes, { profile: 'flat' }),
-    );
+    expect(
+      score.detectKeys({ profile: 'flat' }).map((match) => ({ ...match, key: match.key.scale })),
+    ).toEqual(detectKeyFromNotes(score.notes, { profile: 'flat' }));
   });
 
   it('refuses a profile that names no ranking', () => {

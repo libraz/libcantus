@@ -1,6 +1,13 @@
 import type { DetectKeyOptions, KeyMatch, KeyVariant } from '../analyze/detect/index.js';
 import { detectKey, detectKeyBest } from '../analyze/detect/index.js';
-import { isMinorKey, romanToChord } from '../analyze/functional/index.js';
+import type { AugmentedSixthKind } from '../analyze/functional/index.js';
+import {
+  augmentedSixthChord,
+  isMinorKey,
+  pivotChords,
+  romanToChord,
+} from '../analyze/functional/index.js';
+import type { SpelledKeyScale } from '../analyze/keys/index.js';
 import { InvalidInputError, type ParseResult, unwrapParse } from '../core/errors/index.js';
 import type {
   IntervalLike,
@@ -68,10 +75,28 @@ import { Chord } from './chord.js';
 import { Interval } from './interval.js';
 import { Note } from './note.js';
 import { Progression } from './progression.js';
-import { assertDataObject, mod12 } from './shared.js';
+import { assertDataObject, assertKeyArgument, mod12 } from './shared.js';
 
 /** A detected key paired with the score and scale form that produced it. */
 export type DetectedKeyMatch = Omit<KeyMatch, 'key'> & { key: Key };
+
+/**
+ * Restate a detection match with the class API's {@link Key} in its key field.
+ *
+ * The one place a match crosses into the class API, so every detecting member —
+ * on `Key` and on `Score` alike — hands back the same record with the same
+ * tonic spelling, and the plain match stays reachable through the key's own
+ * data.
+ *
+ * @param match The match as the detector reports it.
+ * @returns The same match, with its key wrapped.
+ */
+export function detectedKeyMatch(match: KeyMatch): DetectedKeyMatch {
+  // The same spelling the detector's own rationale is written with, so a match
+  // never names its tonic one way in `toString()` and another in `rationale`.
+  const key: SpelledKeyScale = { ...match.key, variant: match.variant };
+  return { ...match, key: toKey(key) };
+}
 
 /**
  * The plain form of a {@link Key}: the key/scale, the spelled tonic that
@@ -123,6 +148,61 @@ function assertVariantMatchesScale(variant: KeyVariant, modeMask12: number): voi
         'pass the scale that variant names, or omit the variant',
     );
   }
+}
+
+/**
+ * The word a key names its scale with: the mode word for a plain major or minor
+ * key, and the built-in scale's own name written as words for everything else.
+ *
+ * Read from the mask alone, so the word a key prints is a function of the scale
+ * it holds rather than of how it was built: a harmonic minor names itself one
+ * whether it was detected or asked for by name. A mask no built-in scale names
+ * has no word of its own and falls back to the mode its third makes it.
+ */
+function scaleWord(name: ScaleName | undefined, isMinor: boolean): string {
+  if (name === undefined) {
+    return isMinor ? 'minor' : 'major';
+  }
+  if (name === 'major') {
+    return 'major';
+  }
+  if (name === 'naturalMinor') {
+    return 'minor';
+  }
+  return name.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();
+}
+
+/** A scale word with its spacing and case dropped, so two spellings compare. */
+function scaleWordKey(text: string): string {
+  return text.replace(/[^a-z0-9]/gi, '').toLowerCase();
+}
+
+/** The built-in scale each scale word names, indexed the way names compare. */
+const SCALE_BY_WORD: ReadonlyMap<string, ScaleName> = new Map(
+  (Object.keys(NAMED_SCALES) as ScaleName[]).map((name) => [scaleWordKey(name), name]),
+);
+
+/**
+ * Read a key named by a tonic and a scale word — `'D harmonic minor'`,
+ * `'D dorian'` — or answer null when the text names no built-in scale.
+ *
+ * This is the inverse of what {@link Key.toString} writes, so a key that is
+ * neither a plain major nor a plain minor survives being written down and read
+ * back; a plain mode word is left to the key-name parser, which reads it in
+ * every notation system rather than in English alone.
+ */
+function tryParseScaleKey(text: string): Key | null {
+  const separator = text.trim().search(/\s/);
+  if (separator < 0) {
+    return null;
+  }
+  const trimmed = text.trim();
+  const name = SCALE_BY_WORD.get(scaleWordKey(trimmed.slice(separator)));
+  if (name === undefined) {
+    return null;
+  }
+  const tonic = Note.tryParse(trimmed.slice(0, separator));
+  return tonic.ok ? new Key(scaleByName(name, tonic.value.pitchClass), tonic.value) : null;
 }
 
 /** Widest signature a key is actually written with, in fifths. */
@@ -255,10 +335,7 @@ export class Key {
 
   /** Preserve detection metadata while replacing its plain key with this API's Key. */
   static #fromMatch(match: KeyMatch): DetectedKeyMatch {
-    // The same spelling the detector's own rationale is written with, so a match
-    // never names its tonic one way in `toString()` and another in `rationale`.
-    const key = new Key(match.key, spelledTonicFor(match.key), match.variant);
-    return { ...match, key };
+    return detectedKeyMatch(match);
   }
 
   /**
@@ -335,8 +412,12 @@ export class Key {
    * is G sharp major and `'gis'` G sharp minor; see {@link parseKeyName} for
    * how a name whose case and mode word disagree is read.
    *
-   * The result is always a plain major or minor key. Only the tonic's spelling
-   * survives from the name, so `'ges dur'` is G flat major, not F sharp major.
+   * An English name may also name a built-in scale instead of a mode —
+   * `'D harmonic minor'`, `'D dorian'`, `'C major pentatonic'` — which is what
+   * {@link Key.toString} writes for a key that is neither a plain major nor a
+   * plain minor, so a key survives being written down and read back. Only the
+   * tonic's spelling survives from the name, so `'ges dur'` is G flat major,
+   * not F sharp major.
    *
    * @param text The key name.
    * @param opts `system` reads the name in that notation system instead of
@@ -376,6 +457,15 @@ export class Key {
    * ```
    */
   static tryParse(text: string, opts?: NoteNameOptions): ParseResult<Key> {
+    if (typeof text === 'string' && (opts?.system === undefined || opts.system === 'english')) {
+      // Tried first, because a name ending in a mode word — `'D harmonic
+      // minor'` — would otherwise be read as the plain minor key that word
+      // names and lose the scale it was written with.
+      const named = tryParseScaleKey(text);
+      if (named !== null) {
+        return { ok: true, value: named };
+      }
+    }
     const parsed = tryParseKeyName(text, opts);
     return parsed.ok
       ? { ok: true, value: Key.#modeOn(parsed.value.mode, new Note(parsed.value.tonic)) }
@@ -802,6 +892,38 @@ export class Key {
   }
 
   /**
+   * The chords a modulation from this key into another can pivot on.
+   *
+   * A pivot belongs to both keys at once, so it is heard as a degree of this
+   * key and reinterpreted as a degree of the key being entered. The candidates
+   * are this key's diatonic triads, kept when every one of their pitch classes
+   * is also a scale tone of `other`; each is reported with its numeral in both
+   * keys. A key that stacks no diatonic triads offers nothing to pivot on and
+   * yields an empty list rather than an error.
+   *
+   * @param other The key being entered, as a key name, a plain key/scale, or a
+   *   {@link Key}.
+   * @returns The shared triads, ascending by their degree in this key, each
+   *   chord carrying this key as its context.
+   * @example
+   * ```ts
+   * import { Key } from '@libraz/libcantus';
+   * Key.major('C')
+   *   .pivotsTo('G major')
+   *   .map((pivot) => `${pivot.romanFrom}=${pivot.romanTo}`);
+   * // ['I=IV', 'iii=vi', 'V=I', 'vi=ii']
+   * ```
+   */
+  pivotsTo(other: KeyLike): { chord: Chord; romanFrom: string; romanTo: string }[] {
+    assertKeyArgument(other, 'key');
+    return pivotChords(this.#scale, other).map(({ chord, romanFrom, romanTo }) => ({
+      chord: new Chord(chord, this),
+      romanFrom,
+      romanTo,
+    }));
+  }
+
+  /**
    * A scale degree, counted from 1 the way musicians name degrees: `degree(1)`
    * is the tonic and `degree(5)` the dominant.
    *
@@ -1184,6 +1306,28 @@ export class Key {
   }
 
   /**
+   * The augmented sixth chord of a kind, built in this key.
+   *
+   * The three kinds share the augmented sixth between the lowered sixth degree
+   * and the raised fourth and differ in what fills it: the Italian doubles the
+   * tonic, the French adds the second degree, and the German the third. The
+   * chord is spelled as the interval demands rather than as its enharmonic
+   * dominant seventh, which is what keeps its outward resolution readable.
+   *
+   * @param kind Which augmented sixth to build.
+   * @returns The chord, with this key attached.
+   * @throws If the kind names none of the three.
+   * @example
+   * ```ts
+   * import { Key } from '@libraz/libcantus';
+   * Key.major('C').augmentedSixth('german').root; // 8 (the lowered sixth degree)
+   * ```
+   */
+  augmentedSixth(kind: AugmentedSixthKind): Chord {
+    return new Chord(augmentedSixthChord(kind, this.#scale), this);
+  }
+
+  /**
    * Build a progression from Roman numerals in this key.
    *
    * Each numeral is read as {@link Key.roman} reads it, applied chords included,
@@ -1279,13 +1423,20 @@ export class Key {
   }
 
   /**
-   * The key's tonic and mode, so a template literal or a log line reads as the
-   * key. Detected harmonic and melodic minor keys retain their scale form.
+   * The key's tonic and the scale it is read in, so a template literal or a log
+   * line reads as the key.
+   *
+   * The scale word is a function of the scale alone — its root pitch class and
+   * mode mask — rather than of how the key was built, so two keys holding the
+   * same scale print the same name: a harmonic minor names itself one whether
+   * it was detected or asked for by name, and a mode names its mode instead of
+   * the major or minor key its third would make it. What is printed is what
+   * {@link Key.parse} reads back.
    *
    * A `system` names the key the way that notation system writes it, including
-   * German's case convention. The scale form is an English-only qualifier —
-   * the other systems have no word for it — so a detected harmonic minor names
-   * its parallel plain minor there.
+   * German's case convention. The scale word is an English-only qualifier —
+   * the other systems have no word for it — so a harmonic minor names its
+   * parallel plain minor there.
    *
    * @param opts `system` writes the name in that notation system instead of
    *   English.
@@ -1294,8 +1445,8 @@ export class Key {
    * ```ts
    * import { Key } from '@libraz/libcantus';
    * Key.minor('G#').toString(); // 'G# minor'
+   * Key.named('dorian', 'D').toString(); // 'D dorian'
    * Key.minor('G#').toString({ system: 'german' }); // 'gis moll'
-   * Key.minor('G#').toString({ system: 'japanese' }); // '嬰ト短調'
    * ```
    */
   toString(opts?: NoteNameOptions): string {
@@ -1305,10 +1456,7 @@ export class Key {
         opts,
       );
     }
-    if (this.#variant === 'harmonic' || this.#variant === 'melodic') {
-      return `${this.#tonic.name} ${this.#variant} minor`;
-    }
-    return `${this.#tonic.name} ${this.isMinor ? 'minor' : 'major'}`;
+    return `${this.#tonic.name} ${scaleWord(this.scaleName, this.isMinor)}`;
   }
 }
 
@@ -1339,9 +1487,15 @@ export function toKey(value: KeyLike): Key {
     const data: unknown =
       'toJSON' in value && typeof value.toJSON === 'function' ? value.toJSON() : value;
     if (typeof data === 'object' && data !== null) {
-      const record = data as Partial<KeyData>;
+      const record = data as Partial<KeyData> & Partial<SpelledKeyScale>;
       if (record.scale === undefined) {
-        return Key.of(toKeyScale(data as KeyScale));
+        // A flat key/scale may still carry the spelling and the scale form it
+        // was named with — that is how a key region hands its key on — so the
+        // two are kept where they are there rather than being synthesized.
+        const scale = toKeyScale(data as KeyScale);
+        return record.tonic === undefined
+          ? new Key(scale, spelledTonicFor(scale), record.variant)
+          : new Key(scale, new Note(record.tonic), record.variant);
       }
       return record.tonic === undefined
         ? Key.of(toKeyScale(record.scale))
@@ -1349,4 +1503,26 @@ export function toKey(value: KeyLike): Key {
     }
   }
   throw new InvalidInputError(`key must be a key name or a key/scale; received ${typeof value}`);
+}
+
+/**
+ * The plain key/scale that carries a key's identity: its root and mode mask
+ * together with the spelled tonic and the scale form it was read under.
+ *
+ * The counterpart of {@link toKey} for a layer that holds keys as plain
+ * key/scales — a key region, a generator's key option — so a key handed down
+ * into one and read back out is the key that went in rather than an enharmonic
+ * equal of it: an Ab minor comes back Ab minor and not G# minor, and a detected
+ * harmonic minor comes back a harmonic minor.
+ *
+ * @param key The key to write down.
+ * @returns The key/scale, its spelled tonic, and its scale form when it has one.
+ */
+export function keyIdentity(key: Key): SpelledKeyScale {
+  const identity: SpelledKeyScale = { ...key.scale, tonic: key.tonic.data };
+  const variant = key.variant;
+  if (variant !== undefined) {
+    identity.variant = variant;
+  }
+  return identity;
 }

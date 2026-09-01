@@ -4,6 +4,7 @@ import type { InstrumentProfile, InstrumentProfileLike } from '../core/instrumen
 import { toStringedProfile } from '../core/instrument/profile.js';
 import type { MeterLike, MeterMap, TimeSignature } from '../core/meter/index.js';
 import { beatsPerBar, meterAt, resolveMeters, toMeterData } from '../core/meter/index.js';
+import type { PositionalRng } from '../core/random/index.js';
 import type { KeyScale } from '../core/types.js';
 import { assertFiniteNumber } from '../core/validation/index.js';
 import type { BassLineOptions, BassSegment } from '../generate/bass/index.js';
@@ -49,6 +50,24 @@ export type ComposerOptions = {
   instruments?: Record<string, InstrumentProfileLike>;
   /** Extra material the generators may draw from. */
   vocabulary?: readonly Vocabulary<unknown>[];
+  /**
+   * The algorithm version the parts are generated under; defaults to the
+   * version this build produces. Naming it is what closes a reproduction
+   * recipe: a seed alone reproduces a piece only for as long as the algorithms
+   * behind it stay where they were, and a project that recorded the version it
+   * was written under can ask for that version back.
+   */
+  algorithmVersion?: number;
+  /**
+   * Draw from this source instead of one derived from `seed`. Each part still
+   * addresses its own namespace, so parts do not collide.
+   *
+   * A live handle rather than settings, so it is held by reference and left out
+   * of the plain data {@link Composer.data} hands back: a source cannot be
+   * written to a project file, and copying one would hand back a second stream
+   * rather than the same one.
+   */
+  rng?: PositionalRng;
 };
 
 /**
@@ -189,6 +208,14 @@ function copyOptions(options: ComposerOptions): ComposerOptions {
       'composer vocabulary',
     ).map((entry, index) => copyPlain(entry, `composer vocabulary[${index}]`));
   }
+  if (options.algorithmVersion !== undefined) {
+    copy.algorithmVersion = options.algorithmVersion;
+  }
+  if (options.rng !== undefined) {
+    // Carried by reference: the source is a handle on a stream, and a copy of
+    // it would be a second stream drawing the same numbers twice.
+    copy.rng = options.rng;
+  }
   return copy;
 }
 
@@ -197,6 +224,12 @@ function contextOf(options: ComposerOptions): GenerationContext {
   const ctx: GenerationContext = {};
   if (options.seed !== undefined) {
     ctx.seed = options.seed;
+  }
+  if (options.algorithmVersion !== undefined) {
+    ctx.algorithmVersion = options.algorithmVersion;
+  }
+  if (options.rng !== undefined) {
+    ctx.rng = options.rng;
   }
   if (options.bpm !== undefined) {
     ctx.bpm = options.bpm;
@@ -503,9 +536,17 @@ export class Composer {
     return contextOf(this.#options);
   }
 
-  /** A copy of the settings this composer holds. */
+  /**
+   * A copy of the settings this composer holds: the seed, the resolved
+   * algorithm version and the rest of the recipe, so a piece can be written
+   * again from what a project file stored.
+   *
+   * The source a composer was handed is left out, being a live handle rather
+   * than plain data; a composer built with one keeps it across
+   * {@link Composer.with} and its siblings.
+   */
   get data(): ComposerOptions {
-    return copyOptions(this.#options);
+    return copyOptions({ ...this.#options, rng: undefined });
   }
 
   /** The plain form of the settings, for `JSON.stringify`. */
