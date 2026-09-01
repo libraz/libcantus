@@ -104,13 +104,18 @@ export type SpelledInterval = {
   /** Signed semitone distance from the first note to the second. */
   semitones: number;
   /**
-   * True when the diatonic letters move down, and absent otherwise — an
-   * ascending interval leaves the key out rather than carrying `false`, so
-   * every producer of this type returns the same object for the same interval.
-   * The flag is not redundant with the sign of the span: a descending unison
-   * spans zero semitones, and a letter can rise while the pitch falls.
+   * Whether the diatonic letters move down.
+   *
+   * Always present, so the direction of a written-down interval is not
+   * something a reader can lose: data rebuilt without the key would otherwise
+   * come back ascending with nothing to say it had changed. Every producer
+   * decides it, and the compiler asks each one to.
+   *
+   * Not redundant with the sign of the span: a descending unison spans zero
+   * semitones, and a letter can rise while the pitch falls — `dd2` climbs a
+   * letter and loses a semitone.
    */
-  descending?: boolean;
+  descending: boolean;
 };
 
 /**
@@ -674,7 +679,7 @@ const INTERVAL_NAME_PATTERN = /^(-?)(P|M|m|A+|d+)(\d+)$/;
  * @example
  * ```ts
  * import { parseInterval } from '@libraz/libcantus';
- * parseInterval('m3'); // { number: 3, quality: 'm', semitones: 3 }
+ * parseInterval('m3'); // { number: 3, quality: 'm', semitones: 3, descending: false }
  * parseInterval('-m3'); // { number: 3, quality: 'm', semitones: -3, descending: true }
  * ```
  * @category Pitch & Intervals
@@ -712,7 +717,10 @@ export function tryParseInterval(name: string): ParseResult<SpelledInterval> {
     }
     const span = intervalSemitones(numberValue, quality);
     if (match?.[1] !== '-') {
-      return { ok: true, value: { number: numberValue, quality, semitones: span } };
+      return {
+        ok: true,
+        value: { number: numberValue, quality, semitones: span, descending: false },
+      };
     }
     // Negating a zero span yields -0, which compares unequal to 0 under
     // Object.is and would leak into every equality check downstream.
@@ -734,11 +742,26 @@ export function tryParseInterval(name: string): ParseResult<SpelledInterval> {
  */
 export type IntervalLike =
   | string
-  | SpelledInterval
+  | IntervalData
   | {
       /** The interval data this value stands for. */
-      toJSON(): SpelledInterval;
+      toJSON(): IntervalData;
     };
+
+/**
+ * Interval data as a caller may write it, with the direction optional.
+ *
+ * Deliberately wider than {@link SpelledInterval}: a caller hands in what they
+ * have, including data written before the direction travelled with it, and
+ * {@link toSpelledInterval} decides what is missing. Narrowing the input to the
+ * resolved shape would refuse the very data the resolver exists to repair.
+ *
+ * @category Pitch & Intervals
+ */
+export type IntervalData = Omit<SpelledInterval, 'descending'> & {
+  /** Whether the letters move down; read from the span and quality when absent. */
+  descending?: boolean;
+};
 
 /**
  * Whether an interval's letters move down.
@@ -754,7 +777,7 @@ export type IntervalLike =
  * A unison is the exception: its letters do not move, so both readings name the
  * same quality and only the sign of the span separates them.
  */
-function isDescendingInterval(interval: SpelledInterval): boolean {
+function isDescendingInterval(interval: IntervalData): boolean {
   if (interval.descending !== undefined) {
     return interval.descending;
   }
@@ -766,7 +789,7 @@ function isDescendingInterval(interval: SpelledInterval): boolean {
 }
 
 /** Validate plain interval data and return it in the canonical shape. */
-function normalizedInterval(data: SpelledInterval): SpelledInterval {
+function normalizedInterval(data: IntervalData): SpelledInterval {
   assertInteger(data.number, 'interval.number', 1);
   assertFiniteNumber(data.semitones, 'interval.semitones');
   // A name covers exactly two spans, the ascending one and its negation, so the
@@ -778,17 +801,15 @@ function normalizedInterval(data: SpelledInterval): SpelledInterval {
       `${data.quality}${data.number} spans ${expected} semitones; received ${data.semitones}`,
     );
   }
-  const normalized: SpelledInterval = {
+  // Decided here rather than left out, so a parsed name, this function and
+  // `spelledInterval` all produce the same object and none of them hands on an
+  // interval whose direction the next reader has to guess.
+  return {
     number: data.number,
     quality: data.quality,
     semitones: data.semitones,
+    descending: isDescendingInterval(data),
   };
-  // An ascending interval leaves the flag out entirely, so a parsed name, this
-  // function, and `spelledInterval` all produce the same object.
-  if (isDescendingInterval(data)) {
-    normalized.descending = true;
-  }
-  return normalized;
 }
 
 /**
@@ -809,7 +830,7 @@ function normalizedInterval(data: SpelledInterval): SpelledInterval {
  * @example
  * ```ts
  * import { toSpelledInterval } from '@libraz/libcantus';
- * toSpelledInterval('P5'); // { number: 5, quality: 'P', semitones: 7 }
+ * toSpelledInterval('P5'); // { number: 5, quality: 'P', semitones: 7, descending: false }
  * toSpelledInterval({ number: 5, quality: 'P', semitones: -7 });
  * // { number: 5, quality: 'P', semitones: -7, descending: true }
  * ```
@@ -911,7 +932,7 @@ export function toNoteData(value: NoteLike): Note {
  * ```
  * @category Pitch & Intervals
  */
-export function transposeByInterval(note: Note, interval: SpelledInterval): Note {
+export function transposeByInterval(note: Note, interval: IntervalData): Note {
   assertNote(note, 'note');
   // `spelledInterval` accepts the full supported octave range, so accepting
   // only 64 here made a value produced by that sibling public function
@@ -949,7 +970,7 @@ function diatonicIndex(note: Note): number {
  * ```ts
  * import { spelledInterval, parseNote } from '@libraz/libcantus';
  * spelledInterval(parseNote('C4'), parseNote('G4'));
- * // { number: 5, quality: 'P', semitones: 7 }
+ * // { number: 5, quality: 'P', semitones: 7, descending: false }
  * ```
  * @category Pitch & Intervals
  */
@@ -1001,16 +1022,12 @@ export function spelledInterval(a: Note, b: Note): SpelledInterval {
   // alteration alone — C down to Cb is a descending augmented unison.
   const directedSpan =
     letterSteps === 0 ? Math.abs(semitones) : letterSteps > 0 ? semitones : -semitones;
-  const interval: SpelledInterval = {
+  // Decided here, so a parsed name, `normalizedInterval` and this function all
+  // produce the same object for the same interval.
+  return {
     number,
     quality: qualityFromSpan(number, directedSpan),
     semitones,
+    descending: letterSteps < 0 || (letterSteps === 0 && semitones < 0),
   };
-  // An ascending interval leaves the flag out entirely, so a parsed name,
-  // `normalizedInterval`, and this function all produce the same object for the
-  // same interval.
-  if (letterSteps < 0 || (letterSteps === 0 && semitones < 0)) {
-    interval.descending = true;
-  }
-  return interval;
 }

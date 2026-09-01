@@ -125,7 +125,8 @@ export type TransposingInstrument =
  * import { instrumentTransposition } from '@libraz/libcantus';
  * instrumentTransposition('clarinetA');
  * // { number: 3, quality: 'm', semitones: -3, descending: true }
- * instrumentTransposition('piccolo'); // { number: 8, quality: 'P', semitones: 12 }
+ * instrumentTransposition('piccolo');
+ * // { number: 8, quality: 'P', semitones: 12, descending: false }
  * ```
  * @category Pitch & Intervals
  */
@@ -157,21 +158,18 @@ export function instrumentTransposition(instrument: TransposingInstrument): Spel
  * The same interval taken the other way, which is what makes the two
  * conversions exact inverses.
  *
- * The `descending` flag is set rather than left to the sign, because a unison
+ * The direction is flipped rather than read back off the sign, because a unison
  * spans zero semitones in both directions and the sign alone cannot say which
  * way a custom `'-P1'` was meant to go.
  */
 function reversedInterval(step: SpelledInterval): SpelledInterval {
-  const reversed: SpelledInterval = {
+  return {
     number: step.number,
     quality: step.quality,
     // Negating a zero span yields -0, which compares unequal to 0 under Object.is.
     semitones: step.semitones === 0 ? 0 : -step.semitones,
+    descending: !step.descending,
   };
-  if (!(step.descending ?? step.semitones < 0)) {
-    reversed.descending = true;
-  }
-  return reversed;
 }
 
 /**

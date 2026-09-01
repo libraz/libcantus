@@ -121,6 +121,7 @@ export type {
   TimeSignature,
 } from '../core/meter/index.js';
 export type {
+  IntervalData,
   IntervalLike,
   IntervalQualityLabel,
   Note as NoteData,

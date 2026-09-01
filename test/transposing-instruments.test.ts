@@ -111,8 +111,14 @@ describe('instrumentTransposition', () => {
       number: 3,
       quality: 'm',
       semitones: 3,
+      descending: false,
     });
-    expect(instrumentTransposition('piccolo')).toEqual({ number: 8, quality: 'P', semitones: 12 });
+    expect(instrumentTransposition('piccolo')).toEqual({
+      number: 8,
+      quality: 'P',
+      semitones: 12,
+      descending: false,
+    });
     // The compound interval, not its simple reduction: the octave is the point.
     expect(instrumentTransposition('baritoneSax')).toEqual({
       number: 13,

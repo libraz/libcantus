@@ -14,6 +14,7 @@ export type {
 } from '../core/errors/index.js';
 export type { ConsonanceClass } from '../core/interval/index.js';
 export type {
+  IntervalData,
   IntervalLike,
   IntervalQualityLabel,
   Note as NoteData,

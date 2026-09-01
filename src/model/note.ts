@@ -74,7 +74,12 @@ function letterNumberOf(letter: number | string): number {
 const DOUBLE_ACCIDENTAL = 2;
 
 /** The zero-semitone second onto the next letter up, which respells a note. */
-const DIMINISHED_SECOND: SpelledInterval = { number: 2, quality: 'd', semitones: 0 };
+const DIMINISHED_SECOND: SpelledInterval = {
+  number: 2,
+  quality: 'd',
+  semitones: 0,
+  descending: false,
+};
 
 /** The same second taken downwards, onto the letter below. */
 const DESCENDING_DIMINISHED_SECOND: SpelledInterval = {

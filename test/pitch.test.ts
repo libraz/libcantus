@@ -317,7 +317,7 @@ const label = (note: Note) => formatNote(note);
 describe('the canonical shape of a spelled interval', () => {
   const pairs = samplePairs();
 
-  it('carries the descending key only when the interval descends', () => {
+  it('says which way every interval goes, ascending ones included', () => {
     for (const [a, b] of pairs) {
       const interval = spelledInterval(a, b);
       // The letters decide the direction; the span decides it only where the
@@ -326,9 +326,10 @@ describe('the canonical shape of a spelled interval', () => {
       const steps =
         a.octave === undefined ? (((b.letter - a.letter) % 7) + 7) % 7 : ladder(b) - ladder(a);
       const descends = steps < 0 || (steps === 0 && interval.semitones < 0);
-      expect(interval.descending, `${label(a)} -> ${label(b)}`).toBe(descends ? true : undefined);
+      expect(interval.descending, `${label(a)} -> ${label(b)}`).toBe(descends);
+      // One shape for every interval, so a reader never meets two of them.
       expect(Object.keys(interval).sort().join(','), `${label(a)} -> ${label(b)}`).toBe(
-        descends ? 'descending,number,quality,semitones' : 'number,quality,semitones',
+        'descending,number,quality,semitones',
       );
     }
   });
@@ -363,8 +364,8 @@ describe('the canonical shape of a spelled interval', () => {
       number: 5,
       quality: 'P',
       semitones: 7,
+      descending: false,
     });
-    expect('descending' in spelledInterval(parseNote('C4'), parseNote('G4'))).toBe(false);
   });
 });
 
@@ -427,7 +428,7 @@ describe('interval identities', () => {
     // measurement have to report the same signed span, or the name transposes
     // the wrong way.
     const measured = spelledInterval(parseNote('C#4'), parseNote('Dbb4'));
-    expect(measured).toEqual({ number: 2, quality: 'dd', semitones: -1 });
+    expect(measured).toEqual({ number: 2, quality: 'dd', semitones: -1, descending: false });
     expect(intervalSemitones(2, 'dd')).toBe(-1);
     expect(intervalSemitones(2, 'ddd')).toBe(-2);
     expect(parseInterval('dd2')).toEqual(measured);
@@ -445,9 +446,14 @@ describe('interval identities', () => {
   });
 
   it('accepts both spans a name covers and nothing else', () => {
-    expect(toSpelledInterval({ number: 2, quality: 'dd', semitones: -1 })).not.toHaveProperty(
-      'descending',
-    );
+    // The letters climb even though the pitch falls, so this ascends: the two
+    // facts are separate and the shape keeps both.
+    expect(toSpelledInterval({ number: 2, quality: 'dd', semitones: -1 })).toEqual({
+      number: 2,
+      quality: 'dd',
+      semitones: -1,
+      descending: false,
+    });
     expect(toSpelledInterval({ number: 2, quality: 'dd', semitones: 1 })).toEqual({
       number: 2,
       quality: 'dd',

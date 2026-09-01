@@ -14,7 +14,12 @@ import {
 
 describe('parseInterval with a descending prefix', () => {
   it('leaves an ascending name unchanged', () => {
-    expect(parseInterval('A4')).toEqual({ number: 4, quality: 'A', semitones: 6 });
+    expect(parseInterval('A4')).toEqual({
+      number: 4,
+      quality: 'A',
+      semitones: 6,
+      descending: false,
+    });
   });
 
   it('negates the span and flags the direction', () => {
@@ -65,7 +70,7 @@ describe('transposing downward by a named interval', () => {
 
 describe('toSpelledInterval', () => {
   it('accepts a name, plain data, and an Interval alike', () => {
-    const expected = { number: 4, quality: 'A', semitones: 6 };
+    const expected = { number: 4, quality: 'A', semitones: 6, descending: false };
     expect(toSpelledInterval('A4')).toEqual(expected);
     expect(toSpelledInterval(parseInterval('A4'))).toEqual(expected);
     expect(toSpelledInterval(Interval.parse('A4'))).toEqual(expected);
@@ -87,10 +92,16 @@ describe('toSpelledInterval', () => {
     });
   });
 
-  it('omits the flag for an ascending interval', () => {
-    expect(toSpelledInterval({ number: 5, quality: 'P', semitones: 7 })).not.toHaveProperty(
-      'descending',
-    );
+  it('decides the direction of an ascending interval rather than leaving it out', () => {
+    // Data written without the key is repaired rather than refused, and comes
+    // back saying which way it goes: a reader downstream never has to infer it
+    // a second time, and cannot infer it differently.
+    expect(toSpelledInterval({ number: 5, quality: 'P', semitones: 7 })).toEqual({
+      number: 5,
+      quality: 'P',
+      semitones: 7,
+      descending: false,
+    });
   });
 
   it('rejects components that do not describe the same interval', () => {

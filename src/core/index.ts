@@ -89,6 +89,7 @@ export {
   tuplet,
 } from './meter/index.js';
 export type {
+  IntervalData,
   IntervalLike,
   IntervalQualityLabel,
   KeyName,

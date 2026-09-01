@@ -17,6 +17,7 @@ export type {
 } from '../core/instrument/index.js';
 export type { MeterChange, MeterLike, MeterMap, TimeSignature } from '../core/meter/index.js';
 export type {
+  IntervalData,
   IntervalLike,
   IntervalQualityLabel,
   Note as NoteData,

@@ -328,10 +328,11 @@ describe('data arriving from outside is checked, not trusted', () => {
       Note.parse('Fb4').intervalTo(Note.parse('E4')),
     ]) {
       const json = interval.toJSON();
-      // `descending` appears only on an interval that descends: the pitch
-      // module's own shape, so measured, parsed and serialized data compare.
-      expect('descending' in json, interval.name).toBe(interval.isDescending);
-      expect(json.descending, interval.name).toBe(interval.isDescending ? true : undefined);
+      // One shape whichever way the interval goes, carrying the direction it
+      // goes in: the pitch module's own shape, so measured, parsed and
+      // serialized data compare.
+      expect('descending' in json, interval.name).toBe(true);
+      expect(json.descending, interval.name).toBe(interval.isDescending);
       expect(Interval.fromJSON(json).equals(interval), interval.name).toBe(true);
     }
   });

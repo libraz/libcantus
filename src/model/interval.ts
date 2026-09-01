@@ -1,6 +1,6 @@
 import { type ParseResult, unwrapParse } from '../core/errors/index.js';
 import { isConsonantInterval } from '../core/interval/index.js';
-import type { IntervalQualityLabel, SpelledInterval } from '../core/pitch/index.js';
+import type { IntervalData, IntervalQualityLabel, SpelledInterval } from '../core/pitch/index.js';
 import { intervalSemitones, toSpelledInterval, tryParseInterval } from '../core/pitch/index.js';
 import type { Note } from './note.js';
 
@@ -107,7 +107,7 @@ export class Interval {
    * @returns The wrapped interval.
    * @throws If the number, quality, and span do not describe the same interval.
    */
-  static fromData(data: SpelledInterval): Interval {
+  static fromData(data: IntervalData): Interval {
     // The direction is read off the canonical data rather than from the span's
     // sign: an interval can climb a letter while losing a semitone — C# up to
     // Dbb is a doubly diminished second — and only the pitch module's reading
@@ -129,7 +129,7 @@ export class Interval {
    * @returns The wrapped interval.
    * @throws If the number, quality, and span do not describe the same interval.
    */
-  static fromJSON(data: SpelledInterval): Interval {
+  static fromJSON(data: IntervalData): Interval {
     return Interval.fromData(data);
   }
 
@@ -308,7 +308,12 @@ export class Interval {
           semitones: this.#semitones,
           descending: true,
         }
-      : { number: this.#number, quality: this.#quality, semitones: this.#semitones };
+      : {
+          number: this.#number,
+          quality: this.#quality,
+          semitones: this.#semitones,
+          descending: false,
+        };
   }
 
   /**

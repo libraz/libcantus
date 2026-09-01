@@ -149,7 +149,8 @@ import { formatNote, instrumentTransposition, parseNote, toSoundingPitch, toWrit
 TRANSPOSING_INSTRUMENTS.clarinetBb; // '-M2'
 TRANSPOSING_INSTRUMENTS.piccolo; // 'P8'
 
-instrumentTransposition('piccolo'); // { number: 8, quality: 'P', semitones: 12 }
+instrumentTransposition('piccolo');
+// { number: 8, quality: 'P', semitones: 12, descending: false }
 
 formatNote(toSoundingPitch(parseNote('C4'), 'clarinetA')); // 'A3'
 formatNote(toSoundingPitch(parseNote('D#4'), 'clarinetA')); // 'B#3'

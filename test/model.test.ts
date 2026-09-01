@@ -128,6 +128,7 @@ describe('Note', () => {
       number: 5,
       quality: 'P',
       semitones: 7,
+      descending: false,
     });
     expect(Note.parse('C4').intervalTo(Note.parse('E4')).name).toBe('M3');
   });
@@ -461,11 +462,17 @@ describe('Interval', () => {
   });
 
   it('serializes to plain interval data instead of {}', () => {
-    expect(Interval.of(5, 'P', 7).toJSON()).toEqual({ number: 5, quality: 'P', semitones: 7 });
+    expect(Interval.of(5, 'P', 7).toJSON()).toEqual({
+      number: 5,
+      quality: 'P',
+      semitones: 7,
+      descending: false,
+    });
     expect(Interval.between(Note.parse('C4'), Note.parse('E4')).toJSON()).toEqual({
       number: 3,
       quality: 'M',
       semitones: 4,
+      descending: false,
     });
   });
 });
