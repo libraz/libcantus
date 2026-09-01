@@ -745,8 +745,8 @@ describe('Motif', () => {
       16,
       'C major',
     );
-    expect(motif.develop(timeline, 'C major', 2).data).toEqual(
-      developMotif(motif.data, timeline.chordTimeline, toKeyScale('C major'), 2),
+    expect(motif.develop(timeline, 'C major', 2, '4/4').data).toEqual(
+      developMotif(motif.data, timeline.chordTimeline, toKeyScale('C major'), 2, '4/4'),
     );
     expect(motif.develop(timeline, 'C major', 2, { numerator: 3, denominator: 4 }).data).toEqual(
       developMotif(motif.data, timeline.chordTimeline, toKeyScale('C major'), 2, {
@@ -756,7 +756,7 @@ describe('Motif', () => {
     );
     expect(
       motif.develop(timeline, 'C major', 2, { numerator: 3, denominator: 4 }).data,
-    ).not.toEqual(motif.develop(timeline, 'C major', 2).data);
+    ).not.toEqual(motif.develop(timeline, 'C major', 2, '4/4').data);
   });
 
   it('names its relation and its likeness the way the melody analyses do', () => {

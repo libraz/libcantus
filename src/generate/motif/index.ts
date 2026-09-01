@@ -544,7 +544,9 @@ function scaleTime(cell: MotifCell, factor: number): MotifCell {
  * @param key Key context, as a key name such as `'C major'` or as a key/scale;
  *   the notes off the structural positions are kept in it.
  * @param bars Number of bars to fill.
- * @param ts Meter the bars are counted in; defaults to 4/4.
+ * @param ts Meter the bars are counted in. Asked for rather than defaulted: a
+ *   development laid on the wrong bar length drifts off the part it plays
+ *   under, and a caller who leaves it out has no way to hear that.
  * @returns The developed, harmony-aware cell, its notes in time order.
  *
  * @example
@@ -552,7 +554,7 @@ function scaleTime(cell: MotifCell, factor: number): MotifCell {
  * import { chordTimelineFromChords, developMotif, generateMotif, majorKey } from '@libraz/libcantus';
  * const key = majorKey(0);
  * const timeline = chordTimelineFromChords([{ rootPc: 0, quality: 'maj', startBeat: 0 }], 8);
- * const developed = developMotif(generateMotif({ key, bars: 1 }), timeline, key, 2);
+ * const developed = developMotif(generateMotif({ key, bars: 1 }), timeline, key, 2, '4/4');
  * developed.notes.map((n) => n.pitch); // [60, 62, 60, 60, 62, 60] — the C-D-C cell, twice
  * ```
  *
@@ -563,7 +565,7 @@ export function developMotif(
   timeline: ChordTimeline,
   key: KeyLike,
   bars: number,
-  ts: MeterLike = DEFAULT_TS,
+  ts: MeterLike,
 ): MotifCell {
   const meter = meterAt(0, toMeterData(ts, 'ts'));
   assertPositiveInt(bars, 'development bars');

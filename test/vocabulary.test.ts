@@ -189,21 +189,21 @@ describe('transformation rules', () => {
   ];
 
   it('ranks positions by how much of the metre they carry', () => {
-    expect(gridMetricWeight(0)).toBe(4);
-    expect(gridMetricWeight(8)).toBe(3);
-    expect(gridMetricWeight(4)).toBe(2);
-    expect(gridMetricWeight(2)).toBe(1);
-    expect(gridMetricWeight(3)).toBe(0);
+    expect(gridMetricWeight(0, '4/4')).toBe(4);
+    expect(gridMetricWeight(8, '4/4')).toBe(3);
+    expect(gridMetricWeight(4, '4/4')).toBe(2);
+    expect(gridMetricWeight(2, '4/4')).toBe(1);
+    expect(gridMetricWeight(3, '4/4')).toBe(0);
   });
 
   it('thins from the weakest position upward, and monotonically', () => {
-    expect(thin(figure, 0)).toHaveLength(figure.length);
-    const light = thin(figure, 0.3).map((e) => e.step);
-    const lighter = thin(figure, 0.6).map((e) => e.step);
+    expect(thin(figure, 0, '4/4')).toHaveLength(figure.length);
+    const light = thin(figure, 0.3, '4/4').map((e) => e.step);
+    const lighter = thin(figure, 0.6, '4/4').map((e) => e.step);
     expect(light).not.toContain(3);
     // Thinning further can only take more away, never bring anything back.
     expect(lighter.every((step) => light.includes(step))).toBe(true);
-    expect(thin(figure, 1).map((e) => e.step)).toEqual([0]);
+    expect(thin(figure, 1, '4/4').map((e) => e.step)).toEqual([0]);
   });
 
   it('doubles into the gaps without moving what was there', () => {

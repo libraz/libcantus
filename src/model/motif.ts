@@ -256,12 +256,14 @@ export class Motif {
    *   plain chord timeline the analysis layer hands out.
    * @param key The key the passing notes are kept in.
    * @param bars How many bars to fill.
-   * @param ts Meter the bars are counted in, in any form that names one; 4/4
-   *   when none is named.
+   * @param ts Meter the bars are counted in, in any form that names one. A
+   *   motif carries no meter of its own — it is a run of notes — so there is
+   *   nothing to fall back on, and a development laid on the wrong bar length
+   *   drifts off the part it plays under.
    * @returns The developed motif.
    * @throws If the bar count is not a positive integer.
    */
-  develop(timeline: Timeline | ChordTimeline, key: KeyLike, bars: number, ts?: MeterLike): Motif {
+  develop(timeline: Timeline | ChordTimeline, key: KeyLike, bars: number, ts: MeterLike): Motif {
     // Read through the public surface rather than by `instanceof`, so a
     // timeline built by a second copy of the module develops like any other.
     const chords = 'chordTimeline' in timeline ? timeline.chordTimeline : timeline;

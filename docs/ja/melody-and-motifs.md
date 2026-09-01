@@ -236,6 +236,7 @@ const developed = Motif.generate({ key: 'C major', bars: 1, ctx: { seed: 3 } }).
   timeline,
   'C major',
   2,
+  '4/4',
 );
 
 developed.notes.length >= 1; // true
@@ -257,7 +258,13 @@ const timeline = chordTimelineFromChords(
   8,
 );
 
-const developed = developMotif(generateMotif({ key, bars: 1, ctx: { seed: 3 } }), timeline, key, 2);
+const developed = developMotif(
+  generateMotif({ key, bars: 1, ctx: { seed: 3 } }),
+  timeline,
+  key,
+  2,
+  '4/4',
+);
 
 developed.notes.length >= 1; // true
 ```

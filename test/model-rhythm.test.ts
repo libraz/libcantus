@@ -250,7 +250,7 @@ describe('Rhythm answers what the functions answer', () => {
     const rhythm = pattern();
     for (const amount of [0, 0.3, 0.6, 1]) {
       expect(rhythm.thin(amount).events, `thin ${amount}`).toEqual(
-        eventsOf(thin(gridOf(rhythm.events), amount), rhythm.totalBeats),
+        eventsOf(thin(gridOf(rhythm.events), amount, '4/4'), rhythm.totalBeats),
       );
     }
   });
@@ -369,7 +369,7 @@ describe('Rhythm chains', () => {
     const draw = resolveContext(9).part(PART);
     const chained = rhythm.thin(0.2).syncopate(0.5, 9).halfTime();
     const applied = eventsOf(
-      halfTime(syncopate(thin(gridOf(rhythm.events), 0.2), 0.5, draw), span / STEP_BEATS),
+      halfTime(syncopate(thin(gridOf(rhythm.events), 0.2, '4/4'), 0.5, draw), span / STEP_BEATS),
       span,
     );
     expect(chained.events).toEqual(applied);

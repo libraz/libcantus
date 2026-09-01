@@ -311,7 +311,7 @@ describe('motif meter', () => {
     const cell: MotifCell = { notes: [{ pitch: 60, startBeat: 0, durationBeat: 1 }] };
     const waltz = developMotif(cell, timeline, cMajor, 2, { numerator: 3, denominator: 4 });
     expect(waltz.notes).toHaveLength(6);
-    expect(developMotif(cell, timeline, cMajor, 2).notes).toHaveLength(8);
+    expect(developMotif(cell, timeline, cMajor, 2, '4/4').notes).toHaveLength(8);
   });
 });
 
@@ -332,7 +332,7 @@ describe('developMotif', () => {
         { pitch: 65, startBeat: 6, durationBeat: 2 }, // F over G (non-chord)
       ],
     };
-    const developed = developMotif(source, timeline, cMajor, 2);
+    const developed = developMotif(source, timeline, cMajor, 2, '4/4');
     for (const note of developed.notes) {
       const chord = timeline.at(note.startBeat);
       if (!chord) {
@@ -353,7 +353,7 @@ describe('developMotif', () => {
     // timeline must come back as C-D-C, not as one repeated chord tone.
     const timeline = chordTimelineFromChords([{ rootPc: 0, quality: 'maj', startBeat: 0 }], 8);
     const source = generateMotif({ key: cMajor, bars: 1 });
-    const developed = developMotif(source, timeline, cMajor, 2);
+    const developed = developMotif(source, timeline, cMajor, 2, '4/4');
 
     expect(developed.notes.map((n) => n.pitch)).toEqual([60, 62, 60, 60, 62, 60]);
     expect(new Set(source.notes.map((n) => n.pitch)).size).toBe(
@@ -377,7 +377,7 @@ describe('developMotif', () => {
         { pitch: 62, startBeat: 4, durationBeat: 4 },
       ],
     };
-    const developed = developMotif(source, timeline, cMajor, 2);
+    const developed = developMotif(source, timeline, cMajor, 2, '4/4');
     const pitches = developed.notes.map((n) => n.pitch);
     expect(new Set(pitches).size).toBe(2);
     for (const pitch of pitches) {
@@ -457,7 +457,7 @@ describe('developMotif', () => {
     'keeps distinct cell pitches distinct and spells the harmony: $name',
     ({ cell, key, chords, scalePcs }) => {
       const timeline = chordTimelineFromChords(chords, 8);
-      const developed = developMotif(cell, timeline, key, 2);
+      const developed = developMotif(cell, timeline, key, 2, '4/4');
       const span = spanOf(cell);
       const origin = Math.min(...cell.notes.map((n) => n.startBeat));
       // Placed pitch by cell pitch, per tile: the development repeats the cell,
@@ -496,7 +496,7 @@ describe('developMotif', () => {
     const timeline = chordTimelineFromChords([{ rootPc: 0, quality: 'maj', startBeat: 0 }], 4);
     const tiny: MotifCell = { notes: [{ pitch: 60, startBeat: 0, durationBeat: 1e-9 }] };
     const startedAt = Date.now();
-    const developed = developMotif(tiny, timeline, cMajor, 1);
+    const developed = developMotif(tiny, timeline, cMajor, 1, '4/4');
     expect(Date.now() - startedAt).toBeLessThan(1000);
     expect(developed.notes.length).toBeGreaterThan(0);
   });

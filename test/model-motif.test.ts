@@ -267,17 +267,19 @@ describe('Motif answers what the functions answer', () => {
     const cell = motif.data;
     const spans = [{ rootPc: 0, quality: 'maj' as const, startBeat: 0 }];
     const timeline = Timeline.fromChords(spans, 8);
-    expect(motif.develop(timeline, 'C major', 2).data).toEqual(
-      developMotif(cell, timeline.chordTimeline, C_MAJOR, 2),
+    expect(motif.develop(timeline, 'C major', 2, '4/4').data).toEqual(
+      developMotif(cell, timeline.chordTimeline, C_MAJOR, 2, '4/4'),
     );
     // The plain timeline the analysis layer hands out is taken as readily.
     const plain = chordTimelineFromChords(spans, 8);
-    expect(motif.develop(plain, C_MAJOR, 2).data).toEqual(developMotif(cell, plain, C_MAJOR, 2));
+    expect(motif.develop(plain, C_MAJOR, 2, '4/4').data).toEqual(
+      developMotif(cell, plain, C_MAJOR, 2, '4/4'),
+    );
     const waltz = parseTimeSignature('3/4');
     expect(motif.develop(plain, 'C major', 2, waltz).data).toEqual(
       developMotif(cell, plain, C_MAJOR, 2, waltz),
     );
-    expect(() => motif.develop(plain, 'C major', 0)).toThrow(RangeError);
+    expect(() => motif.develop(plain, 'C major', 0, '4/4')).toThrow(RangeError);
   });
 
   it('names a relation the way relateMotifs names it', () => {

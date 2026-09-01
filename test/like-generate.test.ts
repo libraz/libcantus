@@ -167,8 +167,8 @@ describe('motif takes a key name and a chord symbol', () => {
   it('developMotif snaps the same way from either form', () => {
     const cell = generateMotif({ key: KEY_DATA, bars: 1, ctx: CTX });
     const timeline = chordTimelineFromChords([{ rootPc: 0, quality: 'maj', startBeat: 0 }], 8);
-    expect(developMotif(cell, timeline, KEY_TEXT, 2)).toEqual(
-      developMotif(cell, timeline, KEY_DATA, 2),
+    expect(developMotif(cell, timeline, KEY_TEXT, 2, '4/4')).toEqual(
+      developMotif(cell, timeline, KEY_DATA, 2, '4/4'),
     );
   });
 });

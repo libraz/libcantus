@@ -103,13 +103,15 @@ function subdivisionBeats(ts: TimeSignature): number {
  * them fall where they belong, between the beats.
  *
  * @param step Sixteenth index from the start of the figure.
- * @param ts The meter the figure is counted in, in any form that names one; the
- *   4/4 bar every built-in figure is written on when none is named.
+ * @param ts The meter the figure is counted in, in any form that names one.
+ *   Asked for rather than defaulted: the built-in figures are written on a 4/4
+ *   grid, but a caller working in 7/8 who leaves it out has no way to hear that
+ *   the ranking they got was somebody else's bar.
  * @returns The weight, 0 to 4.
  *
  * @category Composition
  */
-export function gridMetricWeight(step: number, ts: MeterLike = FIGURE_TS): number {
+export function gridMetricWeight(step: number, ts: MeterLike): number {
   return stepWeight(step, meterAt(0, toMeterData(ts, 'ts')));
 }
 
@@ -141,9 +143,10 @@ function stepWeight(step: number, ts: TimeSignature): number {
  *
  * @param events The figure.
  * @param amount How much to thin, in [0, 1].
- * @param ts The meter the figure is counted in, in any form that names one;
- *   4/4 when none is named. The ranks are the meter's, so a full turn of the
- *   dial leaves the downbeats of the bar the figure is actually in.
+ * @param ts The meter the figure is counted in, in any form that names one.
+ *   The ranks are the meter's, so a full turn of the dial leaves the downbeats
+ *   of the bar the figure is actually in — which is why it is asked for rather
+ *   than assumed.
  * @returns The surviving events, in the order given.
  *
  * @category Composition
@@ -151,7 +154,7 @@ function stepWeight(step: number, ts: TimeSignature): number {
 export function thin<T extends GridEvent>(
   events: readonly T[],
   amount: number,
-  ts: MeterLike = FIGURE_TS,
+  ts: MeterLike,
 ): T[] {
   assertRange(amount, 0, 1, 'thin amount');
   const signature = meterAt(0, toMeterData(ts, 'ts'));
