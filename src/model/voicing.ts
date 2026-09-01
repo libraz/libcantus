@@ -139,6 +139,38 @@ function lineOf(pitches: readonly number[], key: KeyScale | undefined): NoteData
 }
 
 /**
+ * The key a chord argument carries, when it was given as a `Chord` holding one.
+ *
+ * Read by shape rather than by type, the way every other boundary here reads a
+ * key, so a `Chord` built by a second copy of the module is still understood.
+ * Plain chord data carries no key and yields nothing.
+ */
+function carriedKeyOf(chord: ChordLike): KeyLike | undefined {
+  if (typeof chord !== 'object' || chord === null) {
+    return undefined;
+  }
+  const key = (chord as { key?: unknown }).key;
+  return typeof key === 'object' && key !== null ? (key as KeyLike) : undefined;
+}
+
+/**
+ * The voicing options with the chord's own key filled in.
+ *
+ * A chord that carries a key passes it to the voicer, so the leading tone is
+ * neither doubled nor left unresolved and the letters the augmented-interval
+ * rule reads are known. An explicit `opts.key` wins, which is the order
+ * `Chord.voice` resolves them in — the two entry points would otherwise voice
+ * the same chord differently.
+ */
+function withCarriedKey(chord: ChordLike, opts?: VoicingOptions): VoicingOptions | undefined {
+  if (opts?.key !== undefined) {
+    return opts;
+  }
+  const key = carriedKeyOf(chord);
+  return key === undefined ? opts : { ...opts, key };
+}
+
+/**
  * An immutable voicing: the pitches one chord sounds at one moment, lowest
  * voice first (index 0 = the bass), the voice order {@link voiceChord} and
  * {@link SATB_RANGES} already use.
@@ -218,6 +250,10 @@ export class Voicing {
    * The bass takes the chord's slash bass when it has one, otherwise the root;
    * the result is compact, centred in its ranges, and free of voice crossing.
    *
+   * A chord that carries a key passes it to the voicer, so the leading tone is
+   * not doubled; an explicit `opts.key` overrides it. That is the order
+   * {@link Chord.voice} resolves them in, and the two answer alike.
+   *
    * @param chord A chord symbol, plain chord data, or a {@link Chord}.
    * @param opts Voicing options; defaults to four voices in {@link SATB_RANGES}.
    * @returns The voicing, ascending.
@@ -229,7 +265,7 @@ export class Voicing {
    * ```
    */
   static satb(chord: ChordLike, opts?: VoicingOptions): Voicing {
-    return new Voicing(voiceChord(toChordData(chord), opts));
+    return new Voicing(voiceChord(toChordData(chord), withCarriedKey(chord, opts)));
   }
 
   /**
@@ -317,7 +353,8 @@ export class Voicing {
    * `voices` nor `ranges` is given — within a one-octave window around each of
    * these pitches, so the answer keeps this voicing's voice count. Each is
    * scored by structural quality, motion from here, and a large penalty per
-   * counterpoint violation.
+   * counterpoint violation. A chord that carries a key passes it to the voicer
+   * unless `opts.key` names another one.
    *
    * @param chord A chord symbol, plain chord data, or a {@link Chord}.
    * @param opts Voicing options; when omitted, the ranges follow this voicing.
@@ -332,13 +369,13 @@ export class Voicing {
    * ```
    */
   next(chord: ChordLike, opts?: VoicingOptions): Voicing {
-    return new Voicing(nextVoicing(this.pitches, toChordData(chord), opts));
+    return new Voicing(nextVoicing(this.pitches, toChordData(chord), withCarriedKey(chord, opts)));
   }
 
   /**
    * The voice-leading cost from this voicing to another: the summed absolute
-   * semitone motion across voices, plus a penalty when the outer voices reach a
-   * perfect fifth or octave by similar motion.
+   * semitone motion across voices, and nothing besides. What the motion breaks
+   * is {@link Voicing.checkTo}'s question.
    *
    * @param other The voicing moved to.
    * @returns The cost, or `Infinity` when the two hold a different number of
@@ -512,13 +549,14 @@ export class Voicing {
    * times over.
    *
    * A negative `n` takes the highest voice down an octave as many times, and
-   * `invert(0)` is the voicing itself. Unlike {@link Chord.invert}, which
-   * rotates a chord's interval template, this moves real voices: inverting a
-   * four-voice texture four times leaves the same chord an octave higher. The
-   * result is ascending, since the voice that moved is no longer where it was.
+   * `invert(0)` is the voicing itself, voice order and all. Unlike
+   * {@link Chord.invert}, which rotates a chord's interval template, this moves
+   * real voices: inverting a four-voice texture four times leaves the same chord
+   * an octave higher. A voicing that actually inverts comes back ascending,
+   * since the voice that moved is no longer where it was.
    *
    * @param n How many voices to move, upward when positive.
-   * @returns The inverted voicing, ascending.
+   * @returns The inverted voicing, ascending; this voicing itself when `n` is 0.
    * @throws If `n` is not an integer in [-128, 128], or a voice would leave
    *   MIDI 0..127.
    * @example
@@ -529,6 +567,13 @@ export class Voicing {
    */
   invert(n: number): Voicing {
     assertInteger(n, 'voicing inversion', -128, 128);
+    // No voice moves, so nothing about the voicing changes — including the order
+    // its voices were written in. Falling through would sort them, and a voicing
+    // whose voices cross is a fault `checkTo` reports rather than one the class
+    // quietly repairs.
+    if (n === 0) {
+      return this;
+    }
     // Each move is made in turn rather than in one arithmetic step: the voice
     // that is lowest after a move is not always the next one up, so which voice
     // moves second depends on where the first one landed.

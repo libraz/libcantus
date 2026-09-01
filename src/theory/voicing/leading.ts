@@ -1,17 +1,7 @@
 import { InvalidInputError, NoSolutionError } from '../../core/errors/index.js';
 import { assertFiniteNumber } from '../../core/validation/index.js';
 import { type ChordLike, toChordData } from '../symbol/index.js';
-import {
-  enumerateVoicings,
-  leadingCost,
-  RESOLUTION_PENALTY,
-  resolutionTables,
-  resolutionViolations,
-  structuralPenalty,
-  structuralTables,
-  VIOLATION_PENALTY,
-  violationCount,
-} from './internal.js';
+import { enumerateVoicings, leadingCost, moveScore, moveScoring } from './internal.js';
 import type { VoicingOptions } from './satb.js';
 import {
   resolveKey,
@@ -23,15 +13,15 @@ import {
 
 /**
  * Total voice-leading cost between two voicings: the sum of absolute semitone
- * motion across voices, plus a moderate hidden-perfect penalty when the
- * outer-voice (bass–soprano) pair reaches a hidden/direct perfect fifth or
- * octave by similar motion. The arrays must be the same length; when they
- * differ the voicings are not comparable and the cost is `Infinity`.
+ * motion across voices, and nothing besides. The rules the search also weighs —
+ * parallels, hidden perfects, unresolved tendency tones — are judged and
+ * reported by {@link checkPartWriting}, so measuring distance stays a
+ * measurement. The arrays must be the same length; when they differ the
+ * voicings are not comparable and the cost is `Infinity`.
  *
  * @param from The previous voicing, one MIDI pitch per voice.
  * @param to The next voicing, one MIDI pitch per voice.
- * @returns The summed absolute motion (plus any hidden-perfect penalty), or
- *   `Infinity` when lengths differ.
+ * @returns The summed absolute motion, or `Infinity` when lengths differ.
  * @category Voicing & Counterpoint
  */
 export function voiceLeadingCost(from: number[], to: number[]): number {
@@ -111,23 +101,18 @@ export function nextVoicing(current: number[], chord: ChordLike, opts?: VoicingO
   const maxSpacing = resolveMaxSpacing(opts);
   const candidates = enumerateVoicings(data, ranges, maxSpacing, resolveMaxCandidates(opts));
   const key = resolveKey(opts);
-  const previousChord = resolvePreviousChord(opts);
-  const structure = structuralTables(data, key);
-  const resolution =
-    previousChord === undefined ? undefined : resolutionTables(previousChord, data, key);
+  // The chord the current voicing came from is optional, so the line it is
+  // leaving is spelled against that chord when the caller named one and by the
+  // key alone when it did not. Only one chord is being voiced, so there is
+  // nothing after it to look ahead to; the move is otherwise scored exactly as
+  // one step of a progression is.
+  const scoring = moveScoring(resolvePreviousChord(opts), data, key);
   const { pitches, voices } = candidates;
   let bestOffset = -1;
   let bestScore = Number.POSITIVE_INFINITY;
   for (let candidate = 0; candidate < candidates.count; candidate += 1) {
     const offset = candidate * voices;
-    const score =
-      structuralPenalty(structure, pitches, offset, voices) +
-      leadingCost(source, 0, pitches, offset, voices) +
-      VIOLATION_PENALTY * violationCount(source, 0, pitches, offset, voices) +
-      RESOLUTION_PENALTY *
-        (resolution === undefined
-          ? 0
-          : resolutionViolations(resolution, source, 0, pitches, offset, voices));
+    const score = moveScore(scoring, source, 0, pitches, offset, voices);
     if (score < bestScore) {
       bestScore = score;
       bestOffset = offset;

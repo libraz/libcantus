@@ -409,3 +409,95 @@ describe('checkSpecies input', () => {
     expect(kinds(found)).not.toContain('voiceCrossing');
   });
 });
+
+describe('the order violations come back in', () => {
+  /** Whether the violations run forward through the exercise. */
+  function inTimeOrder(violations: { fromIndex: number; toIndex: number }[]): boolean {
+    return violations.every((found, position) => {
+      const previous = violations[position - 1];
+      if (previous === undefined) {
+        return true;
+      }
+      return (
+        previous.fromIndex < found.fromIndex ||
+        (previous.fromIndex === found.fromIndex && previous.toIndex <= found.toIndex)
+      );
+    });
+  }
+
+  it('marks a faulty exercise from the top rather than rule by rule', () => {
+    // Parallel fifths in the first measure, then a seventh leapt at the fourth:
+    // read from the top, the fifths have to come first.
+    const cf = line('C4 D4 E4 D4 C4');
+    const cp = line('G4 A4 G4 F5 C5');
+    const found = checkSpecies(cf, cp, 1, C_MAJOR);
+    expect(found.length).toBeGreaterThan(1);
+    expect(inTimeOrder(found)).toBe(true);
+    expect(kinds(found)).toContain('parallelFifth');
+    expect(found[0]?.fromIndex).toBe(0);
+  });
+
+  it('marks every species in time order', () => {
+    const cf = line('C4 D4 E4 D4 C4');
+    const cases: { species: Species; cp: Note[] }[] = [
+      { species: 1, cp: line('C5 B4 C5 B4 C5') },
+      { species: 2, cp: line('G4 E4 F4 A4 G4 F4 A4 B4 C5') },
+      { species: 3, cp: line('G4 A4 B4 C5 D5 C5 B4 A4 G4 F4 E4 D4 C5 B4 A4 G4 C5') },
+    ];
+    for (const { species, cp } of cases) {
+      const found = checkSpecies(cf, cp, species, C_MAJOR);
+      expect(found.length, `species ${species}`).toBeGreaterThan(0);
+      expect(inTimeOrder(found), `species ${species}`).toBe(true);
+    }
+  });
+
+  it('returns the same order for the same exercise', () => {
+    const cf = line('C4 D4 E4 D4 C4');
+    const cp = line('G4 A4 G4 B4 C5');
+    expect(checkSpecies(cf, cp, 1, C_MAJOR)).toEqual(checkSpecies(cf, cp, 1, C_MAJOR));
+  });
+
+  it('reports a wrong rhythmic ratio on its own, at the start', () => {
+    const cf = line('C4 D4 E4 D4 C4');
+    const found = checkSpecies(cf, line('C5 B4 C5'), 1, C_MAJOR);
+    expect(kinds(found)).toEqual(['wrongRhythmicRatio']);
+    expect(inTimeOrder(found)).toBe(true);
+    expect(found[0]?.fromIndex).toBe(0);
+  });
+});
+
+describe('a suspension that resolves onto another dissonance', () => {
+  // The cantus firmus of the figure: the suspended Gb is a diminished twelfth
+  // over the C, and the F it steps down to is a perfect eleventh — both
+  // dissonances, which only a chromatic spelling makes possible.
+  const cf = line('C4 Eb4 C4 Bb3 Eb4');
+  const durations = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 1];
+  const C_MINOR = minorKey(0);
+
+  it('reports the fourth-species suspension at the suspension itself', () => {
+    const cp = line('C5 C5 Bb4 Gb5 Gb5 F5 Eb5 Eb5 Eb5');
+    const found = checkSpecies(cf, cp, 4, C_MINOR, { durations });
+    expect(
+      found.filter((v) => v.kind === 'unresolvedSuspension' && v.fromIndex === 4),
+    ).toHaveLength(1);
+  });
+
+  it('reports it in the fifth species, where the resolution passes for a passing note', () => {
+    // The resolution falls on a weak half and is stepped through, which is
+    // exactly the licence that used to leave the whole figure unreported.
+    const cp = line('C5 C5 Bb4 Gb5 Gb5 F5 Eb5 Eb5 Eb5');
+    const found = checkSpecies(cf, cp, 5, C_MINOR, { durations });
+    expect(
+      found.filter((v) => v.kind === 'unresolvedSuspension' && v.fromIndex === 4),
+    ).toHaveLength(1);
+  });
+
+  it('says nothing where the suspension lands on a consonance', () => {
+    // The plain fourth-to-third suspension: F prepared as a tenth over D, held
+    // as an eleventh over C, resolving down to the tenth.
+    const plain = line('C4 D4 C4 D4 C4');
+    const cp = line('C5 C5 F5 F5 F5 E5 E5 D5 C5');
+    const found = checkSpecies(plain, cp, 4, C_MAJOR, { durations });
+    expect(found.filter((v) => v.kind === 'unresolvedSuspension')).toEqual([]);
+  });
+});

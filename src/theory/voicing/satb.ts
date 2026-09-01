@@ -13,13 +13,13 @@ import {
   DEFAULT_MAX_SPACING,
   enumerateVoicings,
   leadingCost,
-  RESOLUTION_PENALTY,
-  resolutionTables,
-  resolutionViolations,
+  MAX_LOOKAHEAD_PAIRS,
+  type MoveScoring,
+  moveScore,
+  moveScoring,
   structuralPenalty,
-  structuralTables,
-  VIOLATION_PENALTY,
-  violationCount,
+  type VoicingCandidates,
+  violationWeight,
 } from './internal.js';
 
 /**
@@ -202,28 +202,46 @@ export function resolveMaxCandidates(opts?: VoicingOptions): number | undefined 
  * ```
  * @category Voicing & Counterpoint
  */
+/**
+ * How far a candidate sits from the middle of each voice's range, summed.
+ *
+ * A chord with nothing before it is placed by this alone once its structure is
+ * settled: preferring pitches near the middle of every range is what makes the
+ * default voicing centered and compact rather than pushed to one end of the
+ * compass.
+ */
+function centeringPenalty(
+  ranges: readonly VoiceRange[],
+  pitches: ArrayLike<number>,
+  offset: number,
+  voices: number,
+): number {
+  let penalty = 0;
+  for (let voice = 0; voice < voices; voice += 1) {
+    const pitch = pitches[offset + voice];
+    const range = ranges[voice];
+    if (pitch === undefined || range === undefined) {
+      continue;
+    }
+    penalty += Math.abs(pitch - (range.min + range.max) / 2);
+  }
+  return penalty;
+}
+
 export function voiceChord(chord: ChordLike, opts?: VoicingOptions): number[] {
   const data = toChordData(chord);
   const ranges = resolveRanges(opts);
   const maxSpacing = resolveMaxSpacing(opts);
   const candidates = enumerateVoicings(data, ranges, maxSpacing, resolveMaxCandidates(opts));
-  const tables = structuralTables(data, resolveKey(opts));
+  const { structure } = moveScoring(undefined, data, resolveKey(opts));
   const { pitches, voices } = candidates;
   let bestOffset = -1;
   let bestScore = Number.POSITIVE_INFINITY;
   for (let index = 0; index < candidates.count; index += 1) {
     const offset = index * voices;
-    let score = structuralPenalty(tables, pitches, offset, voices);
-    for (let i = 0; i < voices; i += 1) {
-      const pitch = pitches[offset + i];
-      const range = ranges[i];
-      if (pitch === undefined || range === undefined) {
-        continue;
-      }
-      // Prefer pitches near the middle of each voice's range for a centered,
-      // compact default voicing.
-      score += Math.abs(pitch - (range.min + range.max) / 2);
-    }
+    const score =
+      structuralPenalty(structure, pitches, offset, voices) +
+      centeringPenalty(ranges, pitches, offset, voices);
     if (score < bestScore) {
       bestScore = score;
       bestOffset = offset;
@@ -238,20 +256,29 @@ export function voiceChord(chord: ChordLike, opts?: VoicingOptions): number[] {
 }
 
 /**
- * Voice a chord progression with smooth voice leading. The first chord is
- * voiced with {@link voiceChord}; each subsequent chord picks, from a bounded
- * deterministic candidate set, the voicing minimizing the voice-leading cost
- * from the previous voicing plus a large penalty per counterpoint violation
- * (parallel perfects/octaves, voice crossing, voice overlap, and over-wide
- * upper-voice spacing).
+ * Voice a chord progression with smooth voice leading. Each chord picks, from a
+ * bounded deterministic candidate set, the voicing minimizing the voice-leading
+ * cost from the previous voicing plus a large penalty per counterpoint
+ * violation (parallel perfects/octaves, voice crossing, voice overlap, and
+ * over-wide upper-voice spacing).
+ *
+ * The choice also weighs the chord that follows. A voicing costs whatever the
+ * move onto the next chord will cost in broken rules, so a placement that is
+ * marginally smoother now but strands a voice on a leap it cannot write cleanly
+ * loses to the one that leaves the line somewhere the next chord can be reached
+ * from. The lookahead is one chord deep and reads only the violation weight of
+ * the connection, so a chord is otherwise voiced exactly as it would be on its
+ * own merits.
  *
  * Tendency tones are resolved rather than merely moved economically: the voice
  * holding a chordal seventh falls by step unless the next chord keeps that tone,
  * and — when `opts.key` is given — the leading tone rises to the tonic and is
  * never doubled, wherever it is functioning as a leading tone rather than
- * sounding as an ordinary tone of some other chord. Without a key the
- * leading-tone rules cannot apply, since nothing identifies which pitch class is
- * the leading tone.
+ * sounding as an ordinary tone of some other chord. A key also names the letters
+ * each voice is written with, which is what lets the search refuse the augmented
+ * second between the lowered sixth and the raised seventh that a minor-key line
+ * otherwise falls into. Without a key neither rule can apply, since nothing
+ * identifies which pitch class is the leading tone or how a tone is spelled.
  *
  * @param chords The chords to voice in order.
  * @param opts Voicing options; defaults to four voices in {@link SATB_RANGES}.
@@ -290,12 +317,55 @@ function locate<T>(index: number, chord: Chord, work: () => T): T {
   }
 }
 
+/** The chord after the one being voiced: its candidates, and how a move onto it scores. */
+type Lookahead = {
+  /** The next chord's candidate voicings. */
+  candidates: VoicingCandidates;
+  /** What a move from the chord being voiced onto that chord is scored against. */
+  scoring: MoveScoring;
+};
+
+/**
+ * The violation weight a candidate commits the next chord to: the weight of the
+ * connection the following step would write, arriving from this candidate.
+ *
+ * The following step chooses by the whole score, so the connection weighed here
+ * is the one it will actually pick rather than the cleanest one it could reach —
+ * a lookahead that reported an unreachable best would recommend placements the
+ * search then declines to use.
+ */
+function successorWeight(
+  next: Lookahead,
+  cur: ArrayLike<number>,
+  curOffset: number,
+  voices: number,
+): number {
+  const { candidates, scoring } = next;
+  const { pitches } = candidates;
+  let bestScore = Number.POSITIVE_INFINITY;
+  let bestWeight = 0;
+  for (let candidate = 0; candidate < candidates.count; candidate += 1) {
+    const offset = candidate * voices;
+    const weight = violationWeight(scoring, cur, curOffset, pitches, offset, voices);
+    const score =
+      weight +
+      structuralPenalty(scoring.structure, pitches, offset, voices) +
+      leadingCost(cur, curOffset, pitches, offset, voices);
+    if (score < bestScore) {
+      bestScore = score;
+      bestWeight = weight;
+    }
+  }
+  return bestWeight;
+}
+
 /**
  * Voice a chord progression with smooth, bounded SATB-style leading.
  *
  * Each chord is chosen from a deterministic candidate set, minimizing motion
- * while penalizing counterpoint violations. A supplied key additionally
- * resolves leading tones and chordal sevenths.
+ * while penalizing counterpoint violations, and weighing the violations the
+ * move onto the following chord would then be forced into. A supplied key
+ * additionally resolves leading tones and chordal sevenths.
  *
  * @param chords The chords to voice in order.
  * @param opts Voicing options; defaults to four voices in {@link SATB_RANGES}.
@@ -312,42 +382,54 @@ export function voiceProgression(chords: readonly ChordLike[], opts?: VoicingOpt
   const maxSpacing = resolveMaxSpacing(opts);
   const maxCandidates = resolveMaxCandidates(opts);
   const result: number[][] = [];
-  // One candidate buffer serves the whole progression: the search overwrites it
-  // per chord, so a lead sheet allocates it once rather than once per chord.
-  const buffer = createCandidateBuffer();
+  const first = data[0];
+  if (first === undefined) {
+    return result;
+  }
+  // Two candidate buffers serve the whole progression: the chord being voiced,
+  // and the one looked ahead to. Each step hands its lookahead buffer on as the
+  // next step's own, so every chord is enumerated once and a lead sheet
+  // allocates two buffers rather than two per chord.
+  let current = locate(0, first, () =>
+    enumerateVoicings(first, ranges, maxSpacing, maxCandidates, createCandidateBuffer()),
+  );
+  let spare = createCandidateBuffer();
+  // The scoring of a move onto the chord being voiced is the very context its
+  // predecessor built to look ahead with, so it is carried forward rather than
+  // rebuilt.
+  let scoring = moveScoring(undefined, first, key);
   let prev: number[] | undefined;
-  let prevChord: Chord | undefined;
-  for (let index = 0; index < data.length; index += 1) {
-    const chord = data[index];
-    if (chord === undefined) {
-      continue;
-    }
-    if (prev === undefined) {
-      prev = locate(index, chord, () => voiceChord(chord, opts));
-      prevChord = chord;
-      result.push(prev);
-      continue;
-    }
-    const candidates = locate(index, chord, () =>
-      enumerateVoicings(chord, ranges, maxSpacing, maxCandidates, buffer),
-    );
-    const { pitches, voices } = candidates;
-    const structure = structuralTables(chord, key);
-    const resolution =
-      prevChord === undefined ? undefined : resolutionTables(prevChord, chord, key);
+  for (const [index, chord] of data.entries()) {
+    const nextChord = data[index + 1];
+    const lookahead: Lookahead | undefined =
+      nextChord === undefined
+        ? undefined
+        : {
+            candidates: locate(index + 1, nextChord, () =>
+              enumerateVoicings(nextChord, ranges, maxSpacing, maxCandidates, spare),
+            ),
+            scoring: moveScoring(chord, nextChord, key),
+          };
+    const { pitches, voices, count } = current;
+    // A lookahead weighs every pair of candidates, so it is dropped wherever the
+    // pairs would outgrow the bounded per-chord search — for the whole chord, so
+    // no candidate is judged on terms the others were not.
+    const weighed =
+      lookahead !== undefined && count * lookahead.candidates.count <= MAX_LOOKAHEAD_PAIRS
+        ? lookahead
+        : undefined;
     let bestOffset = -1;
     let bestScore = Number.POSITIVE_INFINITY;
-    for (let candidate = 0; candidate < candidates.count; candidate += 1) {
+    for (let candidate = 0; candidate < count; candidate += 1) {
       const offset = candidate * voices;
-      const unresolved =
-        resolution === undefined
-          ? 0
-          : resolutionViolations(resolution, prev, 0, pitches, offset, voices);
-      const score =
-        structuralPenalty(structure, pitches, offset, voices) +
-        leadingCost(prev, 0, pitches, offset, voices) +
-        VIOLATION_PENALTY * violationCount(prev, 0, pitches, offset, voices) +
-        RESOLUTION_PENALTY * unresolved;
+      let score =
+        prev === undefined
+          ? structuralPenalty(scoring.structure, pitches, offset, voices) +
+            centeringPenalty(ranges, pitches, offset, voices)
+          : moveScore(scoring, prev, 0, pitches, offset, voices);
+      if (weighed !== undefined) {
+        score += successorWeight(weighed, pitches, offset, voices);
+      }
       if (score < bestScore) {
         bestScore = score;
         bestOffset = offset;
@@ -359,7 +441,11 @@ export function voiceProgression(chords: readonly ChordLike[], opts?: VoicingOpt
     const best = [...pitches.subarray(bestOffset, bestOffset + voices)];
     result.push(best);
     prev = best;
-    prevChord = chord;
+    if (lookahead !== undefined) {
+      spare = current;
+      current = lookahead.candidates;
+      scoring = lookahead.scoring;
+    }
   }
   return result;
 }

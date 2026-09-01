@@ -345,12 +345,66 @@ describe('tendency tones', () => {
   });
 
   it('flags a leading tone that does not rise to the tonic', () => {
-    // The alto's B falls to G instead of stepping up to C.
+    // The tenor's B falls a fourth to F#, which is neither the tonic nor a tone
+    // of the chord it lands in.
     const chords = [makeChord(7, 'maj'), makeChord(0, 'maj')];
     const voicings = spellExercise(
       [
         [55, 59, 62, 67],
+        [48, 52, 64, 67],
+      ],
+      chords,
+    );
+    const unresolved = checkPartWriting(voicings, chords, C_MAJOR).filter(
+      (v) => v.kind === 'unresolvedLeadingTone',
+    );
+    expect(summarize(unresolved)).toEqual([
+      { kind: 'unresolvedLeadingTone', voices: [1], fromIndex: 0, toIndex: 1 },
+    ]);
+  });
+
+  it('accepts an inner voice frustrating its leading tone onto the fifth', () => {
+    // V7 to a complete I: the tenor's B falls a third to G, the one way the
+    // tonic triad keeps its fifth. This is the second of the two textbook
+    // answers, not a fault.
+    const chords = [makeChord(7, 'dom7'), makeChord(0, 'maj')];
+    const voicings = spellExercise(
+      [
+        [55, 59, 65, 74],
+        [48, 55, 64, 72],
+      ],
+      chords,
+    );
+    expect(checkPartWriting(voicings, chords, C_MAJOR)).toEqual([]);
+  });
+
+  it('flags an outer voice that frustrates its leading tone', () => {
+    // The same third down onto the fifth, this time in the soprano, where the
+    // leading tone is exposed and must rise.
+    const chords = [makeChord(7, 'maj'), makeChord(0, 'maj')];
+    const voicings = spellExercise(
+      [
+        [43, 55, 62, 71],
         [48, 55, 64, 67],
+      ],
+      chords,
+    );
+    const unresolved = checkPartWriting(voicings, chords, C_MAJOR).filter(
+      (v) => v.kind === 'unresolvedLeadingTone',
+    );
+    expect(summarize(unresolved)).toEqual([
+      { kind: 'unresolvedLeadingTone', voices: [3], fromIndex: 0, toIndex: 1 },
+    ]);
+  });
+
+  it('flags an inner leading tone that falls by step rather than a third', () => {
+    // B down to A is not the frustrated resolution: it lands on no tone of the
+    // tonic triad at all.
+    const chords = [makeChord(7, 'maj'), makeChord(0, 'maj')];
+    const voicings = spellExercise(
+      [
+        [55, 59, 62, 67],
+        [48, 57, 64, 67],
       ],
       chords,
     );

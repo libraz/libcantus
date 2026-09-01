@@ -12,7 +12,15 @@ import {
   createsVoiceOverlap,
 } from '../counterpoint/index.js';
 import type { VoiceRange } from './satb.js';
-import { isFunctioningLeadingTone, leadingTonePcOf, seventhPcOf } from './tendency.js';
+import type { SpellingTable } from './tendency.js';
+import {
+  isFrustratedLeadingTone,
+  isFunctioningLeadingTone,
+  leadingTonePcOf,
+  movesByAugmentedInterval,
+  seventhPcOf,
+  spellingTable,
+} from './tendency.js';
 
 /** Default maximum spacing between adjacent upper voices (one octave). */
 export const DEFAULT_MAX_SPACING = 12;
@@ -51,6 +59,15 @@ export const RESOLUTION_PENALTY = 200;
 /** Hard cap on candidate voicings evaluated per chord, keeping the search bounded. */
 const DEFAULT_MAX_CANDIDATES = 4000;
 /**
+ * Hard cap on the candidate pairs one chord's lookahead may weigh. A lookahead
+ * reads every candidate of the chord against every candidate of the chord after
+ * it, so the pairs grow as the square of a per-chord search that is itself only
+ * bounded at a few thousand. Past this many the lookahead is dropped for that
+ * chord — for all of its candidates alike, so the choice is never biased by
+ * where the cap happened to fall.
+ */
+export const MAX_LOOKAHEAD_PAIRS = 1_000_000;
+/**
  * Hard cap on search-tree nodes visited per chord. The candidate cap alone only
  * counts completed voicings, so a search whose upper voices admit no chord tone
  * would expand the whole cartesian product without ever reaching a leaf.
@@ -58,12 +75,30 @@ const DEFAULT_MAX_CANDIDATES = 4000;
 const SEARCH_NODES_PER_CANDIDATE = 16;
 
 /**
- * Moderate penalty for a hidden/direct perfect fifth or octave reached on the
- * outer-voice (bass–soprano) pair. Unlike a true parallel perfect it is
- * discouraged rather than forbidden, so the weight sits alongside voice-leading
- * motion rather than the hard {@link VIOLATION_PENALTY}.
+ * Score penalty for a hidden/direct perfect fifth or octave reached on the
+ * outer-voice (bass–soprano) pair. The checker reports one as a broken rule, so
+ * the search cannot treat it as a nudge: the weight is heavy enough that the
+ * textbook escape — tripling the root and omitting the fifth, which costs
+ * {@link MISSING_FIFTH_PENALTY} — is the cheaper answer. It stays below
+ * {@link VIOLATION_PENALTY} because a hidden perfect is discouraged where a
+ * true parallel is forbidden, which is the order the rules are ranked in.
+ *
+ * It is scored beside the other penalties rather than inside
+ * {@link leadingCost}, whose published sibling `voiceLeadingCost` is defined as
+ * the summed semitone motion and nothing else.
  */
-const HIDDEN_PERFECT_PENALTY = 6;
+export const HIDDEN_PERFECT_PENALTY = 100;
+
+/**
+ * Score penalty per voice moving by an augmented interval. The augmented second
+ * between the lowered sixth and the raised seventh is what a minor-key search
+ * writes if nothing stops it, and the checker reports it as a broken rule
+ * rather than as rough writing — so it is weighted with the counterpoint
+ * violations, where no amount of smoother motion can buy it back, rather than
+ * alongside them. A chord whose every candidate writes one is still voiced: the
+ * penalty then falls on all of them alike and the rest of the scoring decides.
+ */
+export const AUGMENTED_MELODIC_PENALTY = VIOLATION_PENALTY;
 
 /**
  * Candidate voicings of one chord, held flat: voice `v` of candidate `i` sits at
@@ -304,6 +339,8 @@ export type ResolutionTables = {
   tonicPc: number;
   /** Whether the arriving chord contains each pitch class 0-11. */
   nextHas: Uint8Array;
+  /** The arriving chord itself, which names the fifth a leading tone may fall to. */
+  nextChord: Chord;
 };
 
 /** Build the resolution tables for one chord-to-chord move. */
@@ -322,6 +359,7 @@ export function resolutionTables(
       key !== undefined && isFunctioningLeadingTone(prevChord, key) ? leadingTonePcOf(key) : -1,
     tonicPc: key === undefined ? -1 : pitchClass(key.rootPc),
     nextHas,
+    nextChord,
   };
 }
 
@@ -333,7 +371,9 @@ export function resolutionTables(
  * tone, the voice carrying it must fall by step. A leading tone must rise to
  * the tonic whenever the next chord contains one, and only where it is
  * functioning as a leading tone; without a key there is no leading tone to
- * speak of, so that half of the rule is skipped.
+ * speak of, so that half of the rule is skipped. An inner voice may frustrate
+ * its leading tone instead, exactly as {@link checkPartWriting} allows, so the
+ * search is not scored against a resolution its own checker accepts.
  */
 export function resolutionViolations(
   tables: ResolutionTables,
@@ -343,7 +383,7 @@ export function resolutionViolations(
   curOffset: number,
   voices: number,
 ): number {
-  const { seventhPc, leadingTonePc, tonicPc, nextHas } = tables;
+  const { seventhPc, leadingTonePc, tonicPc, nextHas, nextChord } = tables;
   let count = 0;
   for (let voice = 0; voice < voices; voice += 1) {
     const from = prev[prevOffset + voice];
@@ -356,12 +396,14 @@ export function resolutionViolations(
     if (fromPc === seventhPc && nextHas[fromPc] === 0 && motion !== -1 && motion !== -2) {
       count += 1;
     }
+    const inner = voice > 0 && voice < voices - 1;
     if (
       fromPc === leadingTonePc &&
       tonicPc >= 0 &&
       nextHas[tonicPc] === 1 &&
       nextHas[fromPc] === 0 &&
-      motion !== 1
+      motion !== 1 &&
+      !(inner && isFrustratedLeadingTone(from, to, nextChord))
     ) {
       count += 1;
     }
@@ -371,9 +413,7 @@ export function resolutionViolations(
 
 /**
  * Total voice-leading cost from the voicing at `prevOffset` to the one at
- * `curOffset`: summed absolute semitone motion, plus
- * {@link HIDDEN_PERFECT_PENALTY} when the outer-voice pair reaches a
- * hidden/direct perfect fifth or octave by similar motion.
+ * `curOffset`: the summed absolute semitone motion, and nothing else.
  */
 export function leadingCost(
   prev: ArrayLike<number>,
@@ -391,24 +431,75 @@ export function leadingCost(
     }
     total += Math.abs(b - a);
   }
-  // Discourage hidden/direct perfects between the outermost voices, where they
-  // are most audible. True parallels are handled (and forbidden) elsewhere.
-  if (voices >= 2) {
-    const bassPrev = prev[prevOffset];
-    const bassCur = cur[curOffset];
-    const sopPrev = prev[prevOffset + voices - 1];
-    const sopCur = cur[curOffset + voices - 1];
-    if (
-      bassPrev !== undefined &&
-      bassCur !== undefined &&
-      sopPrev !== undefined &&
-      sopCur !== undefined &&
-      createsHiddenParallelPerfect(bassPrev, bassCur, sopPrev, sopCur)
-    ) {
-      total += HIDDEN_PERFECT_PENALTY;
+  return total;
+}
+
+/**
+ * Whether the outermost voices reach a hidden/direct perfect fifth or octave by
+ * similar motion, the pair {@link checkPartWriting} judges the rule on. Between
+ * inner voices the interval is covered by the others, and no rule reports it.
+ */
+export function createsOuterHiddenPerfect(
+  prev: ArrayLike<number>,
+  prevOffset: number,
+  cur: ArrayLike<number>,
+  curOffset: number,
+  voices: number,
+): boolean {
+  if (voices < 2) {
+    return false;
+  }
+  const bassPrev = prev[prevOffset];
+  const bassCur = cur[curOffset];
+  const sopPrev = prev[prevOffset + voices - 1];
+  const sopCur = cur[curOffset + voices - 1];
+  if (
+    bassPrev === undefined ||
+    bassCur === undefined ||
+    sopPrev === undefined ||
+    sopCur === undefined
+  ) {
+    return false;
+  }
+  return createsHiddenParallelPerfect(sopPrev, sopCur, bassPrev, bassCur);
+}
+
+/**
+ * The spelling of the chord left and of the chord reached, which is what lets
+ * the search read the letters its own output will be checked by.
+ */
+export type MelodicSpelling = {
+  /** How the chord being left is written. */
+  from: SpellingTable;
+  /** How the chord being reached is written. */
+  to: SpellingTable;
+};
+
+/**
+ * Count the voices that move by an augmented interval between two consecutive
+ * voicings, reading both through the spelling
+ * {@link spellVoicing} gives them.
+ */
+export function augmentedMelodicCount(
+  spelling: MelodicSpelling,
+  prev: ArrayLike<number>,
+  prevOffset: number,
+  cur: ArrayLike<number>,
+  curOffset: number,
+  voices: number,
+): number {
+  let count = 0;
+  for (let voice = 0; voice < voices; voice += 1) {
+    const from = prev[prevOffset + voice];
+    const to = cur[curOffset + voice];
+    if (from === undefined || to === undefined) {
+      continue;
+    }
+    if (movesByAugmentedInterval(spelling.from, from, spelling.to, to)) {
+      count += 1;
     }
   }
-  return total;
+  return count;
 }
 
 /**
@@ -455,4 +546,99 @@ export function violationCount(
     }
   }
   return count;
+}
+
+/**
+ * Everything a move onto one chord is scored against, worked out once per chord
+ * and then read for each of the candidates weighed against it.
+ */
+export type MoveScoring = {
+  /** The arriving chord's structural tables. */
+  structure: StructuralTables;
+  /** The tendency-tone tables, absent when no chord is being left. */
+  resolution: ResolutionTables | undefined;
+  /** How both chords are written, absent when no key names the letters. */
+  spelling: MelodicSpelling | undefined;
+};
+
+/**
+ * Build the scoring context of a move onto `chord`.
+ *
+ * The letters are only decidable against a key, so the augmented-interval rule
+ * joins the search wherever one was given — the same condition the leading-tone
+ * rules are under.
+ *
+ * @param prevChord The chord being left, or undefined when nothing precedes it.
+ * @param chord The chord being reached.
+ * @param key The prevailing key, or undefined when none was given.
+ */
+export function moveScoring(
+  prevChord: Chord | undefined,
+  chord: Chord,
+  key?: KeyScale,
+): MoveScoring {
+  return {
+    structure: structuralTables(chord, key),
+    resolution: prevChord === undefined ? undefined : resolutionTables(prevChord, chord, key),
+    spelling:
+      key === undefined
+        ? undefined
+        : { from: spellingTable(key, prevChord), to: spellingTable(key, chord) },
+  };
+}
+
+/**
+ * The rule-violation weight of one move: the counterpoint violations, the
+ * tendency tones left unresolved, the augmented intervals written, and a direct
+ * perfect reached by the outer voices.
+ *
+ * This is the part of a move's score that a shorter line cannot buy back, which
+ * is also what makes it the part worth looking a chord ahead for: a candidate
+ * that spares its successor a broken rule is worth reaching for, while one that
+ * merely spares it a few semitones of motion is not.
+ */
+export function violationWeight(
+  scoring: MoveScoring,
+  prev: ArrayLike<number>,
+  prevOffset: number,
+  cur: ArrayLike<number>,
+  curOffset: number,
+  voices: number,
+): number {
+  const { resolution, spelling } = scoring;
+  const unresolved =
+    resolution === undefined
+      ? 0
+      : resolutionViolations(resolution, prev, prevOffset, cur, curOffset, voices);
+  const augmented =
+    spelling === undefined
+      ? 0
+      : augmentedMelodicCount(spelling, prev, prevOffset, cur, curOffset, voices);
+  return (
+    VIOLATION_PENALTY * violationCount(prev, prevOffset, cur, curOffset, voices) +
+    RESOLUTION_PENALTY * unresolved +
+    AUGMENTED_MELODIC_PENALTY * augmented +
+    (createsOuterHiddenPerfect(prev, prevOffset, cur, curOffset, voices)
+      ? HIDDEN_PERFECT_PENALTY
+      : 0)
+  );
+}
+
+/**
+ * The whole score of one move: its rule-violation weight, the structural
+ * quality of the chord arrived on, and the distance the voices travelled.
+ */
+export function moveScore(
+  scoring: MoveScoring,
+  prev: ArrayLike<number>,
+  prevOffset: number,
+  cur: ArrayLike<number>,
+  curOffset: number,
+  voices: number,
+): number {
+  return (
+    structuralPenalty(scoring.structure, cur, curOffset, voices) +
+    leadingCost(prev, prevOffset, cur, curOffset, voices) +
+    violationWeight(scoring, prev, prevOffset, cur, curOffset, voices)
+  );
 }

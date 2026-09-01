@@ -92,16 +92,16 @@ describe('voiceLeadingCost', () => {
     expect(voiceLeadingCost([60, 64], [60, 64, 67])).toBe(Number.POSITIVE_INFINITY);
   });
 
-  it('charges more for a hidden perfect on the outer voices than a clean move of equal motion', () => {
-    // Both candidates move the two voices a combined 8 semitones.
-    // Clean: bass +4, soprano +4 landing on a major third (imperfect) — no penalty.
+  it('measures motion alone, charging nothing extra for a hidden perfect', () => {
+    // Both moves carry the two voices a combined 8 semitones.
+    // Clean: bass +4, soprano +4 landing on a major third (imperfect).
     const clean = voiceLeadingCost([60, 63], [64, 67]);
     // Hidden: bass +2, soprano +6 reaching a perfect fifth by similar motion
-    // with the soprano leaping — a direct fifth, discouraged.
+    // with the soprano leaping — a direct fifth, which the part-writing checker
+    // reports and the search weighs, but which is not a distance.
     const hidden = voiceLeadingCost([60, 63], [62, 69]);
     expect(clean).toBe(8);
-    expect(hidden).toBeGreaterThan(clean);
-    expect(hidden).toBe(14); // 8 motion + 6 hidden-perfect penalty
+    expect(hidden).toBe(8);
   });
 
   it('does not penalize a direct fifth reached with the top voice moving by step', () => {
@@ -211,6 +211,14 @@ describe('voiceProgression', () => {
 
   it('is deterministic', () => {
     expect(voiceProgression(progression)).toEqual(voiceProgression(progression));
+  });
+
+  it('voices a lone chord exactly as voiceChord does', () => {
+    // Nothing follows, so there is nothing to weigh the chord against beyond
+    // its own structure and register: the two entry points must agree.
+    for (const chord of progression) {
+      expect(voiceProgression([chord])).toEqual([voiceChord(chord)]);
+    }
   });
 
   it('follows bassPc across a progression', () => {
@@ -595,10 +603,13 @@ describe('the leading tone the voicer and the checker share', () => {
   const TONIC_VOICING = [48, 55, 60, 64];
 
   // Each voicing sounds the key's leading tone in one voice, and every voice
-  // moves somewhere other than a semitone up.
+  // moves somewhere other than a semitone up. Where the chord is one the leading
+  // tone functions in, that voice is an outer one: an inner voice is allowed the
+  // frustrated resolution, which would make the two rows disagree for a reason
+  // this case is not about.
   const cases: { name: string; chord: Chord; voicing: number[] }[] = [
-    { name: 'V', chord: makeChord(7, 'maj'), voicing: [43, 59, 62, 67] },
-    { name: 'V7', chord: makeChord(7, 'dom7'), voicing: [43, 59, 62, 65] },
+    { name: 'V', chord: makeChord(7, 'maj'), voicing: [43, 62, 67, 71] },
+    { name: 'V7', chord: makeChord(7, 'dom7'), voicing: [43, 62, 65, 71] },
     { name: 'viio6', chord: makeChord(11, 'dim'), voicing: [50, 62, 65, 71] },
     { name: 'viim7b5', chord: makeChord(11, 'm7b5'), voicing: [50, 62, 65, 71] },
     { name: 'iii', chord: makeChord(4, 'min'), voicing: [52, 59, 64, 67] },

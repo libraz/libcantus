@@ -38,7 +38,12 @@ import { spellPitch } from '../spelling/index.js';
 import type { VoiceRange } from '../voicing/index.js';
 import { SATB_RANGES } from '../voicing/index.js';
 import { resolveMaxSpacing, resolveRanges } from '../voicing/satb.js';
-import { isFunctioningLeadingTone, leadingTonePcOf, seventhPcOf } from '../voicing/tendency.js';
+import {
+  isFrustratedLeadingTone,
+  isFunctioningLeadingTone,
+  leadingTonePcOf,
+  seventhPcOf,
+} from '../voicing/tendency.js';
 import { intervalWord, violation } from './internal.js';
 
 /**
@@ -497,7 +502,15 @@ function crossRelationViolations(transition: Transition): PartWritingViolation[]
  * root of a leading-tone chord — and the next chord contains the tonic and has
  * dropped the leading tone itself. Elsewhere the same pitch class is an
  * ordinary chord tone, so `iii` moving to `IV` is not asked to resolve its
- * fifth. The rule is judged in every voice rather than the outer ones alone.
+ * fifth.
+ *
+ * The leading-tone rule is judged in every voice, but not by the same measure in
+ * all of them: an inner voice may frustrate its leading tone, falling a third
+ * onto the fifth of the arriving chord to complete a triad the rising resolution
+ * would leave without one. That is the other standard answer to a complete
+ * dominant seventh, so it is not reported. In the bass or the top voice the
+ * leading tone is exposed and is still required to rise; any other way of
+ * leaving it, in an inner voice or an outer one, is reported as before.
  */
 function melodicViolations(transition: Transition): PartWritingViolation[] {
   const found: PartWritingViolation[] = [];
@@ -544,12 +557,14 @@ function melodicViolations(transition: Transition): PartWritingViolation[] {
         ),
       );
     }
+    const inner = !isOuterVoice(voice, from) && !isOuterVoice(voice, to);
     if (
       earlierPc === leadingTonePc &&
       isFunctioningLeadingTone(from.chord, key) &&
       nextPcs.has(tonicPc) &&
       !nextPcs.has(earlierPc) &&
-      !isLeadingToneResolution(earlierPitch, laterPitch, key)
+      !isLeadingToneResolution(earlierPitch, laterPitch, key) &&
+      !(inner && isFrustratedLeadingTone(earlierPitch, laterPitch, to.chord))
     ) {
       found.push(
         violation(

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { midiToNote, type Note as NoteData, parseNote } from '../src/core/pitch/index.js';
+import { Chord } from '../src/model/chord.js';
+import { Key } from '../src/model/key.js';
 import { Voicing, type VoicingSafetyQuery } from '../src/model/voicing.js';
 import { voiceIndependence } from '../src/theory/counterpoint/index.js';
 import { checkPartWriting, checkSpecies, spellVoicing } from '../src/theory/partwriting/index.js';
@@ -477,5 +479,69 @@ describe('safety', () => {
       enumerateSafePitches({ ...plain, chord: null }, 60, 72),
     );
     expect(() => voicing.safePitches(query, 72, 60)).toThrow(RangeError);
+  });
+});
+
+describe('Voicing.invert', () => {
+  it('hands back the voicing itself at zero, crossed voices and all', () => {
+    // A voicing whose voices cross is a fault `checkTo` reports, not one the
+    // class repairs, so the identity inversion must not tidy it away.
+    const crossed = Voicing.of([60, 55, 67]);
+    expect(crossed.invert(0).pitches).toEqual([60, 55, 67]);
+    expect(crossed.invert(0).equals(crossed)).toBe(true);
+    const plain = Voicing.of([48, 55, 64, 72]);
+    expect(plain.invert(0).equals(plain)).toBe(true);
+  });
+
+  it('still moves and reorders voices for a real inversion', () => {
+    expect(Voicing.of([60, 64, 67]).invert(1).pitches).toEqual([64, 67, 72]);
+    expect(Voicing.of([60, 55, 67]).invert(1).pitches).toEqual([60, 67, 67]);
+    expect(Voicing.of([60, 64, 67]).invert(-1).pitches).toEqual([55, 60, 64]);
+  });
+
+  it('refuses an inversion count that is not an integer in range', () => {
+    expect(() => Voicing.of([60, 64, 67]).invert(0.5)).toThrow();
+    expect(() => Voicing.of([60, 64, 67]).invert(Number.NaN)).toThrow();
+  });
+});
+
+describe('the key a chord carries', () => {
+  const QUALITIES = ['maj', 'min', 'dom7', 'maj7', 'min7', 'dim', 'm7b5'] as const;
+
+  it('voices a chord exactly as Chord.voice does, root by root', () => {
+    const key = Key.major('C');
+    for (let root = 0; root < 12; root += 1) {
+      for (const quality of QUALITIES) {
+        const chord = Chord.of(root, quality).withKey(key);
+        expect(Voicing.satb(chord).pitches, `${root} ${quality}`).toEqual(chord.voice());
+        expect(Voicing.satb(chord, { voices: 3 }).pitches, `${root} ${quality} in three`).toEqual(
+          chord.voice({ voices: 3 }),
+        );
+      }
+    }
+  });
+
+  it('lets an explicit key win over the one the chord carries', () => {
+    const chord = Chord.of(11, 'dim').withKey(Key.major('C'));
+    const elsewhere = { key: Key.major('F') };
+    expect(Voicing.satb(chord, elsewhere).pitches).toEqual(chord.voice(elsewhere));
+    expect(Voicing.satb(chord, elsewhere).pitches).toEqual(
+      Voicing.satb(toChordData(chord), elsewhere).pitches,
+    );
+  });
+
+  it('reads the carried key when leading on from a voicing too', () => {
+    const key = Key.major('C');
+    const tonic = Voicing.satb(Chord.parse('C').withKey(key));
+    const carried = tonic.next(Chord.parse('Bdim').withKey(key));
+    expect(carried.pitches).toEqual(tonic.next('Bdim', { key }).pitches);
+    // Without a key nothing names the leading tone, so nothing stops the search
+    // doubling it, and the answer differs.
+    expect(carried.pitches).not.toEqual(tonic.next('Bdim').pitches);
+  });
+
+  it('leaves plain chord data alone, which carries no key at all', () => {
+    const data = toChordData('Bdim');
+    expect(Voicing.satb(data).pitches).toEqual(voiceChord(data));
   });
 });

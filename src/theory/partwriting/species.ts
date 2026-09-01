@@ -381,6 +381,22 @@ function suspensionViolations(entries: readonly Entry[], position: number): Part
       ),
     ];
   }
+  // The step down is only half of the resolution: what it falls onto has to be
+  // the consonance the ear was waiting for. A suspension resolving to another
+  // dissonance is reported here, on the suspension itself, rather than left to
+  // whatever the note it lands on is charged with — in the fifth species that
+  // note may be excused as a passing dissonance and nothing would be said at all.
+  if (next.consonance === ConsonanceClass.Dissonance) {
+    return [
+      violation(
+        'unresolvedSuspension',
+        [0, 1],
+        entry.index,
+        next.index,
+        `The suspension falls onto a ${next.interval.quality}${next.interval.number}, which is no resolution`,
+      ),
+    ];
+  }
   return [];
 }
 
@@ -669,6 +685,22 @@ function melodicShapeViolations(
     ...(species === 2 || species === 3 ? repeatedNoteViolations(moves, closingMeasure) : []),
   ];
   return found.sort((left, right) => left.fromIndex - right.fromIndex);
+}
+
+/**
+ * The violations in the order the exercise commits them: by the note the fault
+ * starts on, then by the note it ends on.
+ *
+ * The rules are accumulated rule by rule, since each reads the line its own way,
+ * but a marked exercise is read from the top — so they are put back into time
+ * order before they are handed out. The sort is stable, so two faults on the
+ * same note keep the order the rules found them in and the same exercise always
+ * marks the same way.
+ */
+function inTimeOrder(violations: readonly PartWritingViolation[]): PartWritingViolation[] {
+  return [...violations].sort(
+    (left, right) => left.fromIndex - right.fromIndex || left.toIndex - right.toIndex,
+  );
 }
 
 /** The rules judged between two voices moving together. */
@@ -987,7 +1019,9 @@ export function checkSpecies(
   }
   const resolved = resolveDurations(counterpoint, cantusFirmus.length, species, opts);
   if ('problem' in resolved) {
-    return [violation('wrongRhythmicRatio', [1], 0, counterpoint.length - 1, resolved.problem)];
+    return inTimeOrder([
+      violation('wrongRhythmicRatio', [1], 0, counterpoint.length - 1, resolved.problem),
+    ]);
   }
   const counterpointAbove =
     opts?.counterpointAbove ?? meanPitch(counterpoint) >= meanPitch(cantusFirmus);
@@ -1011,5 +1045,5 @@ export function checkSpecies(
     }
   }
   violations.push(...cadenceViolations(entries, mode, counterpointAbove));
-  return violations;
+  return inTimeOrder(violations);
 }
