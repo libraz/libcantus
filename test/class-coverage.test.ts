@@ -20,7 +20,7 @@ const NOT_A_CLASS_METHOD: Readonly<Record<string, string>> = {
   assertDegree: 'validator for a caller boundary',
   assertGenerationBudget: 'validator for a caller boundary',
   assertMeterMap: 'validator for a caller boundary',
-  assertNoteEvents: 'validator for a caller boundary',
+  assertNoteEvent: 'validator for a caller boundary',
   assertVocabulary: 'validator for a caller boundary',
   clampToMidi: 'repairs a raw number at a caller boundary',
   dropSilentNotes: 'repairs an imported event array before it is material',

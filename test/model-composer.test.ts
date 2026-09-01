@@ -16,7 +16,7 @@ import type { ComposerOptions } from '../src/model/composer.js';
 import { Composer } from '../src/model/composer.js';
 import { Score } from '../src/model/score.js';
 import { Timeline } from '../src/model/timeline.js';
-import { majorKey, minorKey } from '../src/theory/scale/index.js';
+import { majorKey, resolveKey } from '../src/theory/scale/index.js';
 
 /**
  * The settings holder: the contracts every model class holds, and — the point
@@ -155,11 +155,12 @@ describe('plain data', () => {
 
   it('normalizes a named key and a bare signature to what the generators read', () => {
     const held = composer();
-    // The key crosses over as the plain key/scale every generator takes, and
-    // the signature as the meter map the model layer reads.
-    expect(held.data.key).toEqual(KEY);
+    // The key crosses over as the whole key every generator takes — its pitch
+    // classes with the tonic and the form it was named with — and the signature
+    // as the meter map the model layer reads.
+    expect(held.data.key).toEqual(resolveKey(KEY));
     expect(held.data.meters).toEqual([{ startBeat: 0, ts: TS }]);
-    expect(Composer.of({ key: 'A minor' }).data.key).toEqual(minorKey(9));
+    expect(Composer.of({ key: 'A minor' }).data.key).toEqual(resolveKey('A minor'));
   });
 
   it('carries no key of its own until one is named', () => {
@@ -421,7 +422,7 @@ describe('immutability', () => {
   it('changes only what the patch names', () => {
     const held = composer();
     expect(held.withSeed(8).data).toEqual({ ...held.data, seed: 8 });
-    expect(held.withKey('A minor').data).toEqual({ ...held.data, key: minorKey(9) });
+    expect(held.withKey('A minor').data).toEqual({ ...held.data, key: resolveKey('A minor') });
     expect(held.withComplexity({ rhythmic: 1 }).data).toEqual({
       ...held.data,
       complexity: { rhythmic: 1 },

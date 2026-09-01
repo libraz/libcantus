@@ -1,11 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { analyzeArrangement } from '../src/analyze/arrange/index.js';
 import { phrasesFromTimeline } from '../src/analyze/form/phrase.js';
 import { sectionsFromNotes } from '../src/analyze/form/section.js';
+import { motifFromNotes } from '../src/analyze/melody/index.js';
 import { analyzeTimeline, chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
 import { BudgetExceededError } from '../src/core/errors/index.js';
 import type { NoteEvent } from '../src/core/types.js';
+import { DEFAULT_GENERATION_BUDGET } from '../src/core/validation/index.js';
+import { Arrangement, Motif, Score } from '../src/model/index.js';
 
 /**
  * What a call retains in typed-array memory, in bytes.
@@ -217,5 +221,58 @@ describe('the form budget bounds the melodic comparisons', () => {
     expect(sections.length).toBeGreaterThan(0);
     const { timeline } = chordTimelineFromNotes(notes);
     expect(phrasesFromTimeline(timeline, notes).length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * The class API is the same engine, so it is held to the same bound.
+ *
+ * A class that keeps a caller's array as what it is made of — the notes of a
+ * score, of a motif cell, of an arrangement track — has taken on exactly the
+ * allocation the function API caps. Refusing in one and not the other would
+ * make the choice between them a choice about how much memory a document can
+ * spend, which is not what picking a class is for.
+ */
+describe('the class construction paths hold the note-event budget the functions hold', () => {
+  /**
+   * One note past the budget, without the notes.
+   *
+   * The count is what the budget caps and it is read before the elements are,
+   * so a sparse array of that length measures the bound without allocating a
+   * million records to be rejected.
+   */
+  const overBudget = () => new Array(DEFAULT_GENERATION_BUDGET + 1) as NoteEvent[];
+
+  /** A track short enough that only a named budget can refuse it. */
+  const shortTrack: NoteEvent[] = [
+    { pitch: 60, startBeat: 0, durationBeat: 1 },
+    { pitch: 62, startBeat: 1, durationBeat: 1 },
+    { pitch: 64, startBeat: 2, durationBeat: 1 },
+  ];
+
+  it('refuses through a class where the function refuses', () => {
+    expect(() => analyzeArrangement([{ notes: overBudget() }])).toThrow(BudgetExceededError);
+    expect(() => Arrangement.of([{ notes: overBudget() }])).toThrow(BudgetExceededError);
+    expect(() => motifFromNotes(overBudget())).toThrow(BudgetExceededError);
+    expect(() => Motif.fromNotes(overBudget())).toThrow(BudgetExceededError);
+    expect(() => Score.of(overBudget())).toThrow(BudgetExceededError);
+  });
+
+  it('names the same cap in the refusal', () => {
+    const cap = new RegExp(`exceeds the generation budget ${DEFAULT_GENERATION_BUDGET}`);
+    expect(() => Score.of(overBudget())).toThrow(cap);
+    expect(() => Motif.fromNotes(overBudget())).toThrow(cap);
+    expect(() => Arrangement.of([{ notes: overBudget() }])).toThrow(cap);
+  });
+
+  it('takes the budget the settings name, as the analysis takes it', () => {
+    expect(() => analyzeArrangement([{ notes: shortTrack }], { budget: 2 })).toThrow(
+      BudgetExceededError,
+    );
+    expect(() => Arrangement.of([{ notes: shortTrack }], { budget: 2 })).toThrow(
+      BudgetExceededError,
+    );
+    // At the count the budget allows, both take the track on.
+    expect(Arrangement.of([{ notes: shortTrack }], { budget: 3 }).tracks[0]?.notes).toHaveLength(3);
   });
 });

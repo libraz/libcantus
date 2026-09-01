@@ -18,7 +18,7 @@ import { assertFiniteNumber, assertRange } from '../core/validation/index.js';
 import type { ChordSegment, ChordSpan } from '../theory/chord/index.js';
 import { spanFromChord } from '../theory/chord/index.js';
 import type { KeyLike } from '../theory/scale/index.js';
-import { scaleOf, toKeyScale } from '../theory/scale/index.js';
+import { resolveKey, scaleOf } from '../theory/scale/index.js';
 import type { Chord } from './chord.js';
 import { Chord as ChordClass } from './chord.js';
 import type { Key } from './key.js';
@@ -438,7 +438,10 @@ export class Timeline {
    */
   roman(key?: KeyLike, opts?: ChordToRomanOptions): TimelineRoman[] {
     assertKeyArgument(key, 'timeline key');
-    const given = key === undefined ? undefined : toKeyScale(key);
+    // The key a caller names travels whole: a numeral is written from the
+    // degrees the key spells, so an Ab minor read through its pitch classes
+    // alone would be numbered as the G# minor those read best as.
+    const given = key === undefined ? undefined : resolveKey(key);
     const keyAt = given === undefined ? this.#keyContext() : () => given;
     return this.#segments.map((segment) => ({
       startBeat: segment.startBeat,

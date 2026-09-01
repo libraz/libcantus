@@ -1283,7 +1283,10 @@ export class Key {
    * @throws If the numeral is not valid.
    */
   roman(text: string): Chord {
-    return new Chord(romanToChord(text, this.#scale), this);
+    // The key goes whole: a numeral naming a chromatic chord is spelled from
+    // the tonic, so a bII in Ab minor is built as Bbb rather than as the A its
+    // pitch classes read best as.
+    return new Chord(romanToChord(text, this), this);
   }
 
   /**

@@ -15,6 +15,7 @@ import { Arrangement, type ArrangementData } from '../src/model/arrangement.js';
 import { Key } from '../src/model/key.js';
 import { Score } from '../src/model/score.js';
 import { NoteSafety } from '../src/theory/safety/index.js';
+import { resolveKey } from '../src/theory/scale/index.js';
 
 /**
  * `Arrangement` is a skin over the arrangement-analysis functions and the
@@ -248,8 +249,11 @@ describe('Arrangement plain data', () => {
   it('leaves the settings out of an arrangement given none', () => {
     expect('settings' in Arrangement.of(TRACKS).data).toBe(false);
     expect('settings' in Arrangement.of(TRACKS, {}).data).toBe(false);
+    // The key is held whole, tonic and form included: an arrangement told its
+    // key in Ab minor is not one in G# minor, and the stored settings are what
+    // it is read back under.
     expect(Arrangement.of(TRACKS, { key: 'C major' }).data.settings?.key).toEqual(
-      Key.major('C').scale,
+      resolveKey('C major'),
     );
   });
 

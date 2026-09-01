@@ -71,7 +71,7 @@ import { ornament } from '../src/generate/ornament/index.js';
 import { generateProgression } from '../src/generate/progression/index.js';
 import { generateRhythm } from '../src/generate/rhythm/index.js';
 import * as api from '../src/index.js';
-import { Note } from '../src/model/index.js';
+import { Arrangement, Motif, Note, Score } from '../src/model/index.js';
 import { makeChord } from '../src/theory/chord/index.js';
 import { NoteSafety, ReasonFlag } from '../src/theory/safety/index.js';
 import { majorKey, scaleByName } from '../src/theory/scale/index.js';
@@ -207,6 +207,10 @@ describe('every note-event guard has a rejection path', () => {
     ['negative duration', { pitch: 60, startBeat: 0, durationBeat: -1 }],
     ['velocity above 127', { pitch: 60, startBeat: 0, durationBeat: 1, velocity: 128 }],
     ['negative velocity', { pitch: 60, startBeat: 0, durationBeat: 1, velocity: -1 }],
+    // A velocity is the MIDI byte the pitch beside it is, so it is held to the
+    // same whole domain: 63.7 is a rounding left undone, not a quiet note.
+    ['fractional velocity', { pitch: 60, startBeat: 0, durationBeat: 1, velocity: 63.7 }],
+    ['fractional pitch', { pitch: 60.5, startBeat: 0, durationBeat: 1 }],
   ])('rejects a note with a %s', (_label, event) => {
     expect(() => assertNoteEvent(event)).toThrow(RangeError);
     expect(() => assertNoteEvents([event])).toThrow(RangeError);
@@ -406,6 +410,9 @@ const NOTE_EVENT_VALIDATION_COVERAGE: Readonly<Record<string, readonly string[]>
   'src/generate/motif/index.ts:developMotif': ['developMotif'],
   'src/generate/motif/index.ts:transformUnchecked': ['transformMotif'],
   'src/generate/ornament/index.ts:ornament': ['ornament'],
+  // One reader for the three class paths that keep a caller's array as what a
+  // class is made of, so all three are measured by the entrances below.
+  'src/model/shared.ts:assertNoteEventArray': ['arrangementOf', 'motifOf', 'scoreOf'],
 };
 
 /**
@@ -425,6 +432,7 @@ function noteEventEntries(events: NoteEvent[]): Record<string, () => unknown> {
   const key = majorKey(0);
   return {
     analyzeArrangement: () => analyzeArrangement([{ notes: events }]),
+    arrangementOf: () => Arrangement.of([{ notes: events }]),
     analyzeVoice: () => analyzeVoice(events, () => chord, key),
     applyGrooveTemplate: () => applyGrooveTemplate(events, template, fourFour),
     arrangementSessionUpdate: () =>
@@ -443,9 +451,11 @@ function noteEventEntries(events: NoteEvent[]): Record<string, () => unknown> {
     imitate: () => imitate(events, { atBeat: 4, interval: 'P5', key }),
     keyTimelineFromNotes: () => keyTimelineFromNotes(events),
     motifFromNotes: () => motifFromNotes(events),
+    motifOf: () => Motif.fromNotes(events),
     ornament: () => ornament(events),
     phrasesFromTimeline: () => phrasesFromTimeline(timeline, events, { key }),
     playability: () => playability(events, GUITAR_STANDARD),
+    scoreOf: () => Score.of(events),
     sectionsFromNotes: () => sectionsFromNotes(events),
     spellLine: () => spellLine(events, null, key),
     tensionCurve: () => tensionCurve([{ notes: events }]),
@@ -484,7 +494,14 @@ describe('public NoteEvent validation entry points', () => {
 
   it('applies the documented zero-length policy at every public entrance', () => {
     const entries = noteEventEntries([{ pitch: 60, startBeat: 0, durationBeat: 0 }]);
-    const rejectsSilentNotes = new Set(['createNoteEventIndex', 'developMotif', 'transformMotif']);
+    const rejectsSilentNotes = new Set([
+      'createNoteEventIndex',
+      'developMotif',
+      // A cell is written material: a note that never sounds would be tiled and
+      // transformed as though it were one.
+      'motifOf',
+      'transformMotif',
+    ]);
     for (const [name, entry] of Object.entries(entries)) {
       if (rejectsSilentNotes.has(name)) {
         expect(entry, name).toThrow(RangeError);

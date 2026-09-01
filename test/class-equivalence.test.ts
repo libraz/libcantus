@@ -1300,3 +1300,240 @@ describe('Voicing', () => {
     expect(sounding.safePitches(query, 60, 72)).toEqual(enumerateSafePitches(context, 60, 72));
   });
 });
+
+/**
+ * The same equivalence measured where the key's spelling decides the answer.
+ *
+ * A key is three facts — its pitch classes, the tonic it is written on, the
+ * scale form it stands in — and only the first survives a reduction to a bare
+ * scale. Reduce an Ab minor and spell it back, and a G# minor comes up: the
+ * sound is the same and every letter is different. So a class method that
+ * narrowed its key before handing it on answered a question the caller never
+ * asked, and answered it identically for keys a musician writes differently.
+ *
+ * The cases below are the cross product of the keys that make the difference
+ * visible and the members that reach a function whose answer carries letters.
+ * Each holds the class result against the same function called with the whole
+ * key, which is what the class was handed.
+ */
+describe('a key travels whole from a class method to the function it delegates to', () => {
+  /**
+   * One key per side of the circle, and one standard key as the control.
+   *
+   * The control matters: it is the shape the older cases here had, and it
+   * passes whether or not the spelling survives, which is why it never caught
+   * any of this on its own.
+   */
+  const SPELLINGS = ['Ab minor', 'D# minor', 'C major'] as const;
+
+  /** The chords each case is measured on, built and spelled by the key. */
+  function chordsOf(key: Key): Chord[] {
+    return [key.chord(1), key.chord(4), key.roman('V7'), key.chord(1)];
+  }
+
+  /** One member, as the class answers it and as the function does. */
+  type Surface = {
+    /** The member, named as a failure should name it. */
+    name: string;
+    /** What the class answers, with the key delivered the way the member takes it. */
+    viaClass: (key: Key) => unknown;
+    /** What the same function answers, called with the whole key. */
+    viaFunction: (key: Key) => unknown;
+  };
+
+  const SURFACES: readonly Surface[] = [
+    {
+      name: 'Progression.voice',
+      viaClass: (key) => new Progression(chordsOf(key), key).voice(),
+      viaFunction: (key) =>
+        voiceProgression(
+          new Progression(chordsOf(key), key).chords.map((chord) => chord.data),
+          { key },
+        ),
+    },
+    {
+      name: 'Progression.roman',
+      viaClass: (key) => new Progression(chordsOf(key), key).roman(),
+      viaFunction: (key) =>
+        new Progression(chordsOf(key), key).chords.map((chord) => chordToRoman(chord.data, key)),
+    },
+    {
+      name: 'Progression.functions',
+      viaClass: (key) => new Progression(chordsOf(key), key).functions(),
+      viaFunction: (key) =>
+        new Progression(chordsOf(key), key).chords.map((chord) => functionOf(chord.data, key)),
+    },
+    {
+      name: 'Progression.analyze',
+      viaClass: (key) => new Progression(chordsOf(key), key).analyze(),
+      viaFunction: (key) => {
+        const chords = new Progression(chordsOf(key), key).chords.map((chord) => chord.data);
+        return {
+          chords: chords.map((chord) => analyzeChord(chord, key)),
+          cadence: detectCadence(at(chords, 2), at(chords, 3), key, { approach: at(chords, 1) }),
+        };
+      },
+    },
+    {
+      name: 'Progression.cadences',
+      viaClass: (key) => new Progression(chordsOf(key), key).cadences(),
+      viaFunction: (key) => {
+        const chords = new Progression(chordsOf(key), key).chords.map((chord) => chord.data);
+        return [
+          detectCadence(at(chords, 0), at(chords, 1), key, {}),
+          detectCadence(at(chords, 1), at(chords, 2), key, { approach: at(chords, 0) }),
+          detectCadence(at(chords, 2), at(chords, 3), key, { approach: at(chords, 1) }),
+        ];
+      },
+    },
+    {
+      name: 'Progression.substitute',
+      viaClass: (key) => new Progression(chordsOf(key), key).substitute(2, 'tritone').at(2)?.data,
+      viaFunction: (key) => {
+        const target = at(new Progression(chordsOf(key), key).chords, 2);
+        const chosen = substituteChord(target.data, key).find(
+          (candidate) => candidate.type === 'tritone',
+        );
+        return chosen === undefined ? undefined : Chord.fromData(chosen.chord).withKey(key).data;
+      },
+    },
+    {
+      name: 'Chord.figuredBass',
+      viaClass: (key) => key.chord(4).invert(1).figuredBass(),
+      viaFunction: (key) => figuredBassOf(key.chord(4).invert(1).data, key),
+    },
+    {
+      name: 'Chord.voice',
+      viaClass: (key) => key.roman('V7').voice(),
+      viaFunction: (key) => voiceChord(key.roman('V7').data, { key }),
+    },
+    {
+      name: 'Chord.roman',
+      viaClass: (key) => key.roman('V7').roman(),
+      viaFunction: (key) => chordToRoman(key.roman('V7').data, key),
+    },
+    {
+      name: 'Chord.analyze',
+      viaClass: (key) => key.roman('V7').analyze(),
+      viaFunction: (key) => analyzeChord(key.roman('V7').data, key),
+    },
+    {
+      name: 'Chord.substitutions',
+      viaClass: (key) => key.roman('V7').substitutions(),
+      viaFunction: (key) => substituteChord(key.roman('V7').data, key),
+    },
+  ];
+
+  const CASES = SURFACES.flatMap((surface) => SPELLINGS.map((spelling) => ({ surface, spelling })));
+
+  it.each(CASES)('answers as $surface.name does in $spelling', ({ surface, spelling }) => {
+    const key = Key.parse(spelling);
+    expect(surface.viaClass(key)).toEqual(surface.viaFunction(key));
+  });
+
+  it('spells the figures a key needs rather than the ones its pitch classes do', () => {
+    // The sixth and the third of an Ab minor subdominant are both in the key,
+    // so the figure needs no accidental; read from the pitch classes alone the
+    // same chord is written with two.
+    expect(Key.minor('Ab').roman('iv6').figuredBass()).toBe('6');
+  });
+
+  it('voices a flat-side progression as the voicer voices it', () => {
+    const key = Key.minor('Ab');
+    const progression = key.progression('i', 'V7/iv', 'iv', 'V7', 'i');
+    expect(progression.voice()).toEqual(
+      voiceProgression(
+        progression.chords.map((chord) => chord.data),
+        { key },
+      ),
+    );
+  });
+
+  it('substitutes through a progression as it does through a chord', () => {
+    const key = Key.minor('Ab');
+    const progression = key.progression('V7', 'i');
+    const target = at(progression.chords, 0);
+    const chosen = target.substitutions().find((candidate) => candidate.type === 'tritone');
+    expect(chosen).toBeDefined();
+    expect(progression.substitute(0, 'tritone').at(0)?.data).toEqual(
+      chosen === undefined ? undefined : Chord.fromData(chosen.chord).withKey(key).data,
+    );
+  });
+
+  it('writes the parts of a composer in the key it was named with', () => {
+    for (const spelling of SPELLINGS) {
+      const key = Key.parse(spelling);
+      const composer = Composer.of({ key: spelling, seed: 4 });
+      const chords = composer.progression({ style: 'dance', bars: 2 });
+      expect(chords.keys[0]?.key.tonic, spelling).toEqual(key.tonic.data);
+      expect(composer.bass(chords, { style: 'pop' }).key()?.tonic.data, spelling).toEqual(
+        key.tonic.data,
+      );
+    }
+  });
+
+  it('reads an arrangement in the key it was named with', () => {
+    for (const spelling of SPELLINGS) {
+      const key = Key.parse(spelling);
+      const arrangement = Arrangement.of(PARTS, { key: spelling });
+      expect(arrangement.track('lead')?.key()?.tonic.data, spelling).toEqual(key.tonic.data);
+      expect(arrangement.analyze().prevailingKey.tonic, spelling).toEqual(key.tonic.data);
+    }
+  });
+});
+
+/**
+ * The same claim across the ways a key is delivered and the forms it arrives in.
+ *
+ * A key reaches a method as the instance's own or as an argument, and in any of
+ * the four shapes the library accepts. Only one of those shapes carries no
+ * spelling: a bare scale has none to keep, so what it answers is the library's
+ * own reading of those pitch classes — asserted here rather than skipped, since
+ * "no spelling" and "some other key's spelling" are the two answers this whole
+ * area exists to keep apart.
+ */
+describe('a key is carried the same whichever way it is handed over', () => {
+  /** The four shapes a key argument arrives in, from one key. */
+  const FORMS = {
+    name: () => 'Ab minor',
+    instance: () => Key.parse('Ab minor'),
+    data: () => Key.parse('Ab minor').toJSON(),
+    scale: () => Key.parse('Ab minor').scale,
+  } as const;
+
+  const FORM_NAMES = Object.keys(FORMS) as (keyof typeof FORMS)[];
+
+  /** The first-inversion subdominant of an Ab minor, with no key of its own. */
+  const chord = () => Chord.parse('Dbm/Fb');
+
+  /** A dominant and its tonic in that key, with no key of their own. */
+  const chords = () => [Chord.parse('Eb7'), Chord.parse('Abm')];
+
+  it.each(FORM_NAMES)('figures a chord in a key carried as %s', (form) => {
+    const key = FORMS[form]();
+    const carried = chord().withKey(key);
+    expect(carried.figuredBass()).toBe(figuredBassOf(carried.data, key));
+    const given = chord();
+    expect(given.figuredBass(key)).toBe(figuredBassOf(given.data, key));
+  });
+
+  it.each(FORM_NAMES)('numbers a progression in a key carried as %s', (form) => {
+    const key = FORMS[form]();
+    const carried = new Progression(chords(), key);
+    expect(carried.roman()).toEqual(carried.chords.map((c) => chordToRoman(c.data, key)));
+    const given = new Progression(chords());
+    expect(given.roman(key)).toEqual(given.chords.map((c) => chordToRoman(c.data, key)));
+  });
+
+  it('answers the three spelled forms alike, and a bare scale as the library reads it', () => {
+    const spelled = [FORMS.name(), FORMS.instance(), FORMS.data()].map((key) =>
+      chord().withKey(key).figuredBass(),
+    );
+    expect(new Set(spelled).size).toBe(1);
+    // Nothing in a bare scale says Ab minor rather than G# minor, so the answer
+    // is the one the resolver's own spelling gives — the same one the function
+    // API gives for the same bare scale.
+    const bare = chord().withKey(FORMS.scale());
+    expect(bare.figuredBass()).toBe(figuredBassOf(bare.data, FORMS.scale()));
+  });
+});

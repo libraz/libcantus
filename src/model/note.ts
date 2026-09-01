@@ -16,7 +16,7 @@ import {
 } from '../core/pitch/index.js';
 import { frequencyOf, type TuningTable } from '../core/tuning/index.js';
 import { describeRejected } from '../core/validation/index.js';
-import { type KeyLike, pitchToScaleDegree, toKeyScale } from '../theory/scale/index.js';
+import { type KeyLike, pitchToScaleDegree } from '../theory/scale/index.js';
 import { type TransposingInstrument, toWrittenPitch } from '../theory/transposition/index.js';
 import { Interval } from './interval.js';
 import { assertDataObject } from './shared.js';
@@ -478,7 +478,7 @@ export class Note {
     // The scale function reports -1 for a pitch it does not contain; the class
     // API says "no answer" with null, as `Key.enharmonic` and `Chord.detectBest`
     // do, so a caller cannot read the miss as a degree.
-    const degree = pitchToScaleDegree(this.pitchClass, toKeyScale(key));
+    const degree = pitchToScaleDegree(this.pitchClass, key);
     return degree === -1 ? null : degree;
   }
 

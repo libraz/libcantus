@@ -116,7 +116,7 @@ export class Progression {
    * ```ts
    * import { generateProgression, Key, Progression } from '@libraz/libcantus';
    * const key = Key.major('C');
-   * const spans = generateProgression({ key: key.scale, style: 'dance', bars: 4 });
+   * const spans = generateProgression({ key, style: 'dance', bars: 4 });
    * Progression.fromSpans(spans, key).roman();
    * ```
    */
@@ -369,7 +369,11 @@ export class Progression {
    * @throws If any chord admits no voicing within the given ranges.
    */
   voice(opts?: VoicingOptions): number[][] {
-    const key = opts?.key ?? this.#key?.scale;
+    // The carried key travels whole, as it does through every other method
+    // here: the voicer spells the chords it scores, so a progression in Ab
+    // minor voiced through its pitch classes alone would be led by the sharps
+    // of a G# minor.
+    const key = opts?.key ?? this.#key;
     return voiceProgression(
       this.#chords.map((chord) => chord.data),
       key === undefined ? opts : { ...opts, key },
@@ -455,7 +459,7 @@ export class Progression {
     const approach = this.#chords[this.#chords.length - 3];
     const cadence =
       from !== undefined && to !== undefined
-        ? detectCadence(from.data, to.data, resolved.scale, {
+        ? detectCadence(from.data, to.data, resolved, {
             ...cadenceOpts,
             ...(approach === undefined ? {} : { approach: approach.data }),
             ...(voicing === undefined ? {} : { voicing: this.#closingVoicing(voicing) }),
@@ -541,7 +545,7 @@ export class Progression {
       const approach = index >= 2 ? this.#chords[index - 2] : opts?.approach;
       const pair = opts?.voicing;
       found.push(
-        detectCadence(from.data, to.data, resolved.scale, {
+        detectCadence(from.data, to.data, resolved, {
           ...(opts?.alternatives === undefined ? {} : { alternatives: opts.alternatives }),
           ...(approach === undefined ? {} : { approach: approach.data }),
           ...(pair === undefined
@@ -586,7 +590,7 @@ export class Progression {
       );
     }
     const key = this.#resolveKey();
-    const chosen = substituteChord(target.data, key.scale, opts).find(
+    const chosen = substituteChord(target.data, key, opts).find(
       (candidate) => candidate.type === type,
     );
     if (chosen === undefined) {

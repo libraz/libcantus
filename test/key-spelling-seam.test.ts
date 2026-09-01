@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { augmentedSixthChord, spellLine } from '../src/analyze/index.js';
 import { formatNote, parseNote } from '../src/core/pitch/index.js';
@@ -13,7 +14,7 @@ import { type ResolvedKey, resolveKey } from '../src/theory/scale/index.js';
 import { toChordData } from '../src/theory/symbol/index.js';
 import { TRANSPOSING_INSTRUMENTS } from '../src/theory/transposition/index.js';
 import { functionParams, type ParamInfo, sourceFiles } from './support/signatures.js';
-import { SRC } from './support/source-files.js';
+import { filesUnder, SRC } from './support/source-files.js';
 
 /**
  * A key crosses into the library carrying the tonic it is written on, and every
@@ -456,5 +457,159 @@ describe('an entry point spells its answer from the key it was handed', () => {
 
     expect(answers.size).toBeGreaterThan(40);
     expect(spelled.length).toBeGreaterThan(10);
+  });
+});
+
+/**
+ * The same convention read off the class layer, which the checks above cannot
+ * see.
+ *
+ * The scanners read declarations: what a signature says it takes. That measures
+ * the function API well and the class API not at all, because a class method
+ * does not declare the shape it passes on — it writes it in its body, one
+ * expression at a time, and `Key` satisfies `KeyLike` structurally, so
+ * `figuredBassOf(chord, key.scale)` type-checks exactly as well as
+ * `figuredBassOf(chord, key)` does. That is how the same defect grew in five
+ * classes at once: every method decided for itself, and nothing measured the
+ * decision.
+ *
+ * This reads the bodies. A key reduced to its pitch classes — by `.scale` or by
+ * the reducer named for it — is found wherever it stands in `src/model`, and
+ * each reduction that stays has to be named here with the reason it is not a
+ * defect. The list is asserted to be exact, so a reduction that is removed
+ * takes its entry with it and the next one written has nowhere to hide.
+ */
+describe('a key is not reduced on its way through the class layer', () => {
+  /** One place a key is reduced to its pitch classes. */
+  type Narrow = {
+    /** Path relative to the repository root. */
+    file: string;
+    /** The declaration it stands in, as `Class.member` or the function's name. */
+    where: string;
+    /** The expression itself, so a failure reads as the line it is on. */
+    text: string;
+    /** 1-based line. */
+    line: number;
+  };
+
+  /**
+   * The reductions that are deliberate, each with what makes it one.
+   *
+   * A reduction is legitimate where the value it feeds is declared as pitch
+   * classes, or where reducing is the thing being asked for. Everything else —
+   * a key on its way to a function that takes a whole key — is the defect, and
+   * an entry added here without one of those reasons is that defect wearing an
+   * allowance.
+   */
+  const KEPT: Readonly<Record<string, string>> = {
+    'src/model/key.ts Key.equals':
+      'reads the other key own scale to compare pitch classes, which is what this comparison is',
+    'src/model/key.ts Key.toJSON':
+      'writes the three facts down side by side, so the scale is one field of the key rather than the key',
+    'src/model/key.ts toKey':
+      'the class API own resolver: it reads a key into the class, and the tonic and the form it carries are read beside the scale rather than dropped',
+    'src/model/key.ts keyIdentity':
+      'writes a key down whole, with the scale as one of the three fields it carries',
+    'src/model/key.ts Key.#fromSpelled':
+      'reads a resolved key apart into the three fields the class holds; the tonic and the form travel beside the scale',
+    'src/model/key.ts Key.of':
+      'reads a resolved key apart into the three fields the class holds; the tonic and the form travel beside the scale',
+    'src/model/key.ts Key.fromJSON':
+      'reads stored key data apart into the three fields the class holds; the tonic and the form travel beside the scale',
+    'src/model/key.ts Key.tryParse':
+      'reads a parsed key apart into the three fields the class holds; the tonic and the form travel beside the scale',
+    'src/model/voicing.ts Voicing.#context':
+      'SafetyQuery.key is declared KeyScale: the safety rules read which pitches are in the key and never spell one',
+  };
+
+  /** The declaration a node stands in, as a failure should name it. */
+  function enclosing(node: ts.Node, source: ts.SourceFile): string {
+    for (let at: ts.Node | undefined = node; at !== undefined; at = at.parent) {
+      if (ts.isMethodDeclaration(at) || ts.isGetAccessor(at) || ts.isSetAccessor(at)) {
+        const owner = at.parent;
+        const name = at.name.getText(source);
+        return ts.isClassDeclaration(owner) && owner.name !== undefined
+          ? `${owner.name.text}.${name}`
+          : name;
+      }
+      if (ts.isConstructorDeclaration(at)) {
+        const owner = at.parent;
+        return ts.isClassDeclaration(owner) && owner.name !== undefined
+          ? `${owner.name.text}.constructor`
+          : 'constructor';
+      }
+      if (ts.isFunctionDeclaration(at) && at.name !== undefined) {
+        return at.name.text;
+      }
+      // Only a variable that *is* a function names a declaration; one that
+      // merely holds the reduction is named by the member it stands in.
+      if (
+        ts.isVariableDeclaration(at) &&
+        ts.isIdentifier(at.name) &&
+        at.initializer !== undefined &&
+        (ts.isArrowFunction(at.initializer) || ts.isFunctionExpression(at.initializer))
+      ) {
+        return at.name.text;
+      }
+    }
+    return '(top level)';
+  }
+
+  /** Every reduction of a key to its pitch classes in one file. */
+  function narrowsIn(file: string): Narrow[] {
+    const source = ts.createSourceFile(
+      file,
+      readFileSync(file, 'utf8'),
+      ts.ScriptTarget.ESNext,
+      /* setParentNodes */ true,
+      ts.ScriptKind.TS,
+    );
+    const rel = path.relative(path.dirname(SRC), file).split(path.sep).join('/');
+    const found: Narrow[] = [];
+    const visit = (node: ts.Node): void => {
+      const reduces =
+        (ts.isPropertyAccessExpression(node) && node.name.text === 'scale') ||
+        (ts.isCallExpression(node) &&
+          ts.isIdentifier(node.expression) &&
+          node.expression.text === 'toKeyScale');
+      if (reduces) {
+        found.push({
+          file: rel,
+          where: enclosing(node, source),
+          text: node.getText(source).replace(/\s+/g, ' '),
+          line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+        });
+      }
+      ts.forEachChild(node, visit);
+    };
+    ts.forEachChild(source, visit);
+    return found;
+  }
+
+  const narrows = filesUnder(path.join(SRC, 'model'), '.ts').flatMap(narrowsIn);
+
+  it('reduces a key only where the reduction is named and reasoned', () => {
+    const offenders = narrows
+      .filter((narrow) => KEPT[`${narrow.file} ${narrow.where}`] === undefined)
+      .map(
+        (narrow) => `${narrow.file}:${narrow.line} ${narrow.where} reduces a key: ${narrow.text}`,
+      )
+      .sort();
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('holds no allowance for a reduction that is no longer there', () => {
+    const live = new Set(narrows.map((narrow) => `${narrow.file} ${narrow.where}`));
+    const stale = Object.keys(KEPT).filter((entry) => !live.has(entry));
+
+    expect(stale).toEqual([]);
+  });
+
+  it('reads a subject the tree supplies rather than a list', () => {
+    // Without this the check above would pass by walking no class at all.
+    const files = filesUnder(path.join(SRC, 'model'), '.ts');
+    expect(files.length).toBeGreaterThan(10);
+    expect(files.some((file) => file.endsWith('progression.ts'))).toBe(true);
   });
 });

@@ -3,7 +3,6 @@ import { melodicSimilarity, motifFromNotes, relateMotifs } from '../analyze/melo
 import type { ChordTimeline } from '../analyze/timeline/index.js';
 import type { MeterLike } from '../core/meter/index.js';
 import type { NoteEvent } from '../core/types.js';
-import { assertNoteEvent } from '../core/validation/index.js';
 import type {
   GenerationContextInput,
   MotifCell,
@@ -18,11 +17,11 @@ import {
   motifToNoteEvents,
   transformMotif,
 } from '../generate/index.js';
-import { type KeyLike, toKeyScale } from '../theory/scale/index.js';
+import type { KeyLike } from '../theory/scale/index.js';
 import { type ChordLike, toChordData } from '../theory/symbol/index.js';
 import type { ScoreOptions } from './score.js';
 import { Score } from './score.js';
-import { assertDataObject, assertDataObjects, withoutNegativeZero } from './shared.js';
+import { assertDataObject, assertNoteEventArray, withoutNegativeZero } from './shared.js';
 import type { Timeline } from './timeline.js';
 
 /**
@@ -90,14 +89,14 @@ function copyNote(note: MotifNote): MotifNote {
  * The notes keep the order they arrive in; a transform is what puts a cell into
  * time order, so a caller reading back exactly what it handed in is reading its
  * own array.
+ *
+ * The cell is checked as a whole before it is copied, so a cell holding more
+ * notes than the transforms are budgeted to work on is refused here rather than
+ * at the first transform asked for.
  */
 function copyCell(cell: MotifCell): MotifCell {
   assertDataObject(cell, 'motif cell');
-  return {
-    notes: assertDataObjects<NoteEvent>(cell.notes, 'motif notes').map((note, index) =>
-      copyNote(assertNoteEvent(note, `motif notes[${index}]`)),
-    ),
-  };
+  return { notes: assertNoteEventArray(cell.notes, 'motif notes').map(copyNote) };
 }
 
 /** The chord data a {@link MotifGenerateOptions.chord} value names, if any. */
@@ -159,9 +158,7 @@ export class Motif {
    * ```
    */
   static generate(opts: MotifGenerateOptions): Motif {
-    return new Motif(
-      generateMotif({ ...opts, key: toKeyScale(opts.key), chord: chordFrom(opts.chord) }),
-    );
+    return new Motif(generateMotif({ ...opts, chord: chordFrom(opts.chord) }));
   }
 
   /**
@@ -240,9 +237,7 @@ export class Motif {
    * ```
    */
   transform(kind: MotifTransform, amount?: number, key?: KeyLike): Motif {
-    return new Motif(
-      transformMotif(this.#cell, kind, amount, key === undefined ? undefined : toKeyScale(key)),
-    );
+    return new Motif(transformMotif(this.#cell, kind, amount, key));
   }
 
   /**
@@ -267,7 +262,7 @@ export class Motif {
     // Read through the public surface rather than by `instanceof`, so a
     // timeline built by a second copy of the module develops like any other.
     const chords = 'chordTimeline' in timeline ? timeline.chordTimeline : timeline;
-    return new Motif(developMotif(this.#cell, chords, toKeyScale(key), bars, ts));
+    return new Motif(developMotif(this.#cell, chords, key, bars, ts));
   }
 
   /**
@@ -282,11 +277,7 @@ export class Motif {
    * @returns The relation, or null when the two stand in none.
    */
   relateTo(other: Motif, key?: KeyLike): MotifRelation | null {
-    return relateMotifs(
-      motifFromNotes(this.#cell.notes),
-      motifFromNotes(other.notes),
-      key === undefined ? undefined : toKeyScale(key),
-    );
+    return relateMotifs(motifFromNotes(this.#cell.notes), motifFromNotes(other.notes), key);
   }
 
   /**

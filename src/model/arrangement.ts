@@ -18,22 +18,18 @@ import type { ChordTimeline } from '../analyze/timeline/index.js';
 import type { MeterLike, MeterMap } from '../core/meter/index.js';
 import { resolveMeters, toMeterData } from '../core/meter/index.js';
 import type { NoteEvent } from '../core/types.js';
-import {
-  assertInteger,
-  assertNoteEvent,
-  assertPositiveInt,
-  assertRange,
-} from '../core/validation/index.js';
+import { assertInteger, assertPositiveInt, assertRange } from '../core/validation/index.js';
 import type { ChordSegment } from '../theory/chord/index.js';
 import { NoteSafety } from '../theory/safety/index.js';
 import type { KeyLike } from '../theory/scale/index.js';
-import { toKeyScale } from '../theory/scale/index.js';
+import { resolveKey } from '../theory/scale/index.js';
 import type { ScoreOptions } from './score.js';
 import { Score } from './score.js';
 import {
   assertDataArray,
   assertDataObject,
   assertDataObjects,
+  assertNoteEventArray,
   copyNoteEvent,
   copyPlain,
   samePlain,
@@ -98,22 +94,20 @@ export type ArrangementData = {
   settings?: ArrangementSettings;
 };
 
-/** Defensive copy of one note event, checked as it is copied. */
-function copyNote(note: NoteEvent, name: string): NoteEvent {
-  assertDataObject(note, name);
-  assertNoteEvent(note, name, { allowNonPositiveDuration: true });
-  return copyNoteEvent(note);
-}
-
 /**
  * A track's notes checked and copied, in the order they were given.
  *
  * Zero-length notes are accepted, as they are everywhere on the analysis side:
  * a MIDI import carries them, and the analysis drops them itself.
+ *
+ * The array is checked as a whole before it is copied, under the budget the
+ * settings name where they name one: a track the analysis would refuse for its
+ * size is refused as it is taken on, rather than being stored and refused at
+ * every reading afterwards.
  */
-function copyNotes(notes: readonly NoteEvent[], name: string): NoteEvent[] {
-  return assertDataObjects<NoteEvent>(notes, name).map((note, index) =>
-    copyNote(note, `${name}[${index}]`),
+function copyNotes(notes: readonly NoteEvent[], name: string, budget?: number): NoteEvent[] {
+  return assertNoteEventArray(notes, name, { allowNonPositiveDuration: true, budget }).map(
+    copyNoteEvent,
   );
 }
 
@@ -126,9 +120,11 @@ function copyNotes(notes: readonly NoteEvent[], name: string): NoteEvent[] {
  * handed back by {@link Arrangement.tracks} as a {@link TrackRole}, and read as
  * pitched material by the harmony inference.
  */
-function copyTrack(track: ArrangementTrack, index: number): ArrangementTrack {
+function copyTrack(track: ArrangementTrack, index: number, budget?: number): ArrangementTrack {
   assertDataObject(track, `tracks[${index}]`);
-  const copy: ArrangementTrack = { notes: copyNotes(track.notes, `tracks[${index}].notes`) };
+  const copy: ArrangementTrack = {
+    notes: copyNotes(track.notes, `tracks[${index}].notes`, budget),
+  };
   if (track.name !== undefined) {
     copy.name = track.name;
   }
@@ -198,7 +194,7 @@ function copySettings(
     copy.meters = copyPlain(meters, 'arrangement meters');
   }
   if (settings.key !== undefined) {
-    copy.key = toKeyScale(settings.key);
+    copy.key = resolveKey(settings.key);
   }
   if (settings.keys !== undefined) {
     copy.keys = copyKeyRegions(settings.keys);
@@ -250,8 +246,12 @@ function copySettings(
 /** Defensive copy of plain arrangement data, with every part validated. */
 function copyArrangement(data: ArrangementData): ArrangementData {
   assertDataObject(data, 'arrangement data');
+  // The budget is read before the tracks are copied so that the notes are held
+  // to the bound the settings name; a value that names no budget is refused by
+  // the same check, and again by `copySettings` under its own name.
+  const budget = data.settings?.budget;
   const tracks = assertDataArray<ArrangementTrack>(data.tracks, 'arrangement tracks').map(
-    copyTrack,
+    (track, index) => copyTrack(track, index, budget),
   );
   const settings = copySettings(data.settings, tracks.length);
   return settings === undefined ? { tracks } : { tracks, settings };
@@ -288,7 +288,7 @@ function settingsFrom(setup: ArrangementSetup | undefined): ArrangementSettings 
   const { key, meters, timeline, ...rest } = setup;
   const settings: ArrangementSettings = { ...rest };
   if (key !== undefined) {
-    settings.key = toKeyScale(key);
+    settings.key = resolveKey(key);
   }
   if (meters !== undefined) {
     settings.meters = metersFrom(meters);
@@ -313,7 +313,7 @@ function analysisOptionsOf(
   const { key, meters, ...rest } = setup;
   const opts: ArrangementOptions & { step?: number } = { ...rest };
   if (key !== undefined) {
-    opts.key = toKeyScale(key);
+    opts.key = resolveKey(key);
   }
   if (meters !== undefined) {
     opts.meters = metersFrom(meters);
@@ -501,7 +501,7 @@ export class Arrangement {
       }
       copied.push({
         trackIndex: edit.trackIndex,
-        notes: copyNotes(edit.notes, `edits[${index}].notes`),
+        notes: copyNotes(edit.notes, `edits[${index}].notes`, this.#data.settings?.budget),
       });
     }
     const session = this.#session().update(copied);

@@ -5,6 +5,7 @@ import { InvalidInputError } from '../src/core/errors/index.js';
 import { parseTimeSignature } from '../src/core/meter/index.js';
 import { createPositionalRng } from '../src/core/random/index.js';
 import { Composer } from '../src/model/composer.js';
+import { Score } from '../src/model/score.js';
 import { tsdocExamples } from './support/doc-examples.js';
 import { ROOT } from './support/source-files.js';
 
@@ -91,5 +92,73 @@ describe('the examples on the composer', () => {
     for (const specifier of specifiers) {
       expect(specifier, specifier).toMatch(/^@libraz\/libcantus(\/.+)?$/);
     }
+  });
+});
+
+describe('a pitched part needs a key', () => {
+  /** A melody long enough for the harmonizer to read a key off it. */
+  const MELODY = [
+    { pitch: 67, startBeat: 0, durationBeat: 2 },
+    { pitch: 65, startBeat: 2, durationBeat: 2 },
+    { pitch: 64, startBeat: 4, durationBeat: 2 },
+    { pitch: 62, startBeat: 6, durationBeat: 2 },
+    { pitch: 60, startBeat: 8, durationBeat: 4 },
+  ];
+
+  /** A composer holding everything but a key. */
+  const keyless = () => Composer.of({ bpm: 96, seed: 5 });
+
+  /** Two bars of harmony to write a bass line under. */
+  const harmony = () =>
+    Composer.of({ key: 'C major', seed: 5 }).progression({ style: 'dance', bars: 2 });
+
+  it('refuses a progression rather than writing one in a key nobody named', () => {
+    expect(() => keyless().progression({ style: 'dance', bars: 2 })).toThrow(InvalidInputError);
+    expect(() => keyless().progression({ style: 'dance', bars: 2 })).toThrow(/names none/);
+  });
+
+  it('refuses a bass line rather than writing one in a key nobody named', () => {
+    expect(() => keyless().bass(harmony(), { style: 'pop' })).toThrow(InvalidInputError);
+  });
+
+  it('refuses a counter line rather than writing one in a key nobody named', () => {
+    expect(() => keyless().counterMelody(Score.of(MELODY))).toThrow(InvalidInputError);
+  });
+
+  it('names the two ways out of the refusal', () => {
+    // A refusal that does not say what to do instead is a dead end: the two
+    // ways on are naming the key, and taking the one the harmonizer found.
+    let message = '';
+    try {
+      keyless().bass(harmony(), { style: 'pop' });
+    } catch (error) {
+      message = error instanceof Error ? error.message : '';
+    }
+    expect(message).toMatch(/give it one/);
+    expect(message).toMatch(/with\(\{ key \}\)/);
+  });
+
+  it('writes a drum part and harmonizes a melody without one', () => {
+    // Drums carry no key, and the harmonizer reads one off the melody, so
+    // neither has a missing key to refuse over.
+    expect(
+      keyless().drums({ bars: 2, style: 'funk', section: 'chorus' }).notes.length,
+    ).toBeGreaterThan(0);
+    expect(keyless().harmonize(Score.of(MELODY)).chords.segments.length).toBeGreaterThan(0);
+  });
+
+  it('writes the parts in the key the harmonization found once it is carried', () => {
+    const composer = keyless();
+    const harmonized = composer.harmonize(Score.of(MELODY));
+    const found = harmonized.chords.keys[0]?.key;
+    expect(found).toBeDefined();
+    const inKey = composer.with({ key: found });
+    // The parts written after the key is carried are written in that key, and
+    // in the same one the harmonization was: one piece, not two.
+    expect(inKey.bass(harmonized.chords, { style: 'pop' }).key()?.data).toEqual(found);
+    expect(
+      inKey.counterMelody(harmonized.melody, { timeline: harmonized.chords }).key()?.data,
+    ).toEqual(found);
+    expect(inKey.progression({ style: 'dance', bars: 2 }).keys[0]?.key).toEqual(found);
   });
 });

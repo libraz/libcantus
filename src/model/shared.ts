@@ -2,7 +2,12 @@ import { InvalidInputError } from '../core/errors/index.js';
 import type { TimeSignature } from '../core/meter/index.js';
 import { midiToNote, pitchClassOf as mod12, type Note as NoteData } from '../core/pitch/index.js';
 import type { NoteEvent } from '../core/types.js';
-import { assertFiniteNumber, assertTimeSignature } from '../core/validation/index.js';
+import type { NoteEventAssertOptions } from '../core/validation/index.js';
+import {
+  assertFiniteNumber,
+  assertNoteEvents,
+  assertTimeSignature,
+} from '../core/validation/index.js';
 
 export { pitchClassOf as mod12 } from '../core/pitch/index.js';
 
@@ -78,6 +83,38 @@ export function assertDataObjects<T>(value: unknown, name: string): readonly T[]
     assertDataObject(items[index], `${name}[${index}]`);
   }
   return items as readonly T[];
+}
+
+/**
+ * The value as an array of note events, checked as a whole before any one of
+ * them is read.
+ *
+ * A class built from a caller's notes keeps that array as what it is: the notes
+ * of a score, the notes of a motif cell, the notes of an arrangement track. So
+ * the array is held to the same bound the function API holds it to — the count
+ * is capped by the generation budget, and it is capped before the pass over the
+ * notes begins, since an array too large to hold is refused for its size rather
+ * than after every note in it has been read.
+ *
+ * One reader for all three, rather than a budget check written again beside
+ * each loop: the pairing of "cap the count" with "check each note" is what went
+ * missing on every class path at once when each of them combined the two for
+ * itself.
+ *
+ * @param notes The notes a class was handed.
+ * @param name What the array is called in an error message.
+ * @param options What counts as an acceptable note here, and the budget to cap
+ *   the count against; see {@link NoteEventAssertOptions}.
+ * @returns The notes, unchanged and uncopied.
+ * @throws If the value is not an array, if it holds more notes than the budget
+ *   allows, or if a note carries a value the library cannot hold.
+ */
+export function assertNoteEventArray(
+  notes: unknown,
+  name: string,
+  options?: NoteEventAssertOptions,
+): readonly NoteEvent[] {
+  return assertNoteEvents(assertDataArray<NoteEvent>(notes, name), name, options);
 }
 
 /**

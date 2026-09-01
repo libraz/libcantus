@@ -5,7 +5,6 @@ import { toStringedProfile } from '../core/instrument/profile.js';
 import type { MeterLike, MeterMap, TimeSignature } from '../core/meter/index.js';
 import { beatsPerBar, meterAt, resolveMeters, toMeterData } from '../core/meter/index.js';
 import type { PositionalRng } from '../core/random/index.js';
-import type { KeyScale } from '../core/types.js';
 import { assertFiniteNumber } from '../core/validation/index.js';
 import type { BassLineOptions, BassSegment } from '../generate/bass/index.js';
 import { generateBassLine } from '../generate/bass/index.js';
@@ -21,8 +20,8 @@ import type { ProgressionOptions } from '../generate/progression/index.js';
 import { generateProgression } from '../generate/progression/index.js';
 import type { Vocabulary } from '../generate/vocabulary/types.js';
 import type { ChordSpan } from '../theory/chord/index.js';
-import type { KeyLike } from '../theory/scale/index.js';
-import { majorKey, toKeyScale } from '../theory/scale/index.js';
+import type { KeyLike, ResolvedKey } from '../theory/scale/index.js';
+import { resolveKey } from '../theory/scale/index.js';
 import { Instrument } from './instrument.js';
 import type { ScoreOptions } from './score.js';
 import { Score } from './score.js';
@@ -122,9 +121,6 @@ export type HarmonizedMelody = {
   transposeSemitones: number;
 };
 
-/** The key a composer that names none writes in. */
-const DEFAULT_KEY: KeyScale = majorKey(0);
-
 /**
  * The plain chord timeline a harmony value stands for.
  *
@@ -177,9 +173,11 @@ function copyInstruments(
 /**
  * A deep copy of the settings in the canonical plain form.
  *
- * A key becomes the plain key/scale every generator takes, and a bare time
- * signature the meter map the whole model layer reads, so the settings a
- * composer hands out are the settings it hands on. The meter is materialized
+ * A key becomes the plain key every generator takes — whole, carrying the
+ * tonic it was named with, so a piece written in Ab minor is not handed on as
+ * one in G# minor — and a bare time signature becomes the meter map the whole
+ * model layer reads, so the settings a composer hands out are the settings it
+ * hands on. The meter is materialized
  * because a composer that names none is read in 4/4 exactly as one that names
  * it is; the key is not, because a composer with no key harmonizes by inferring
  * one, which is a different request from harmonizing in C major.
@@ -194,7 +192,7 @@ function copyOptions(options: ComposerOptions): ComposerOptions {
   assertDataObject(options, 'composer options');
   const copy: ComposerOptions = { meters: metersFrom(options.meters) };
   if (options.key !== undefined) {
-    copy.key = toKeyScale(options.key);
+    copy.key = resolveKey(options.key);
   }
   if (options.bpm !== undefined) {
     copy.bpm = options.bpm;
@@ -295,6 +293,14 @@ function harmonizedSpan(melodyEnd: number, chords: readonly ChordSpan[], barBeat
  * tempo, and the pitched ones in its key, so the scores it hands back line up
  * with each other without being re-contextualized one at a time.
  *
+ * A composer that names no key writes no pitched part: {@link Composer.bass},
+ * {@link Composer.progression} and {@link Composer.counterMelody} refuse rather
+ * than fall back on a key of the library's choosing, which would be a piece in
+ * a key nobody asked for with nothing to say so. {@link Composer.drums} carries
+ * no key and is written either way, and {@link Composer.harmonize} reads a key
+ * off the melody it is given; `with({ key })` carries that key over to the
+ * parts written after it.
+ *
  * Immutable like every other class here: `withSeed` and friends return a new
  * composer rather than reconfiguring this one, so a variation can be written
  * beside the original instead of replacing it.
@@ -311,7 +317,7 @@ function harmonizedSpan(melodyEnd: number, chords: readonly ChordSpan[], barBeat
 export class Composer {
   readonly #options: ComposerOptions;
   readonly #meters: MeterMap;
-  readonly #key: KeyScale | undefined;
+  readonly #key: ResolvedKey | undefined;
 
   /**
    * Wrap the settings a piece is generated under.
@@ -330,7 +336,7 @@ export class Composer {
     // at the first part written under them.
     this.#options = copyOptions(options);
     this.#meters = metersFrom(this.#options.meters);
-    this.#key = this.#options.key === undefined ? undefined : toKeyScale(this.#options.key);
+    this.#key = this.#options.key === undefined ? undefined : resolveKey(this.#options.key);
   }
 
   /**
@@ -385,12 +391,15 @@ export class Composer {
    * @param opts Everything the progression generator takes but the key, the
    *   meter and the context, which are the composer's.
    * @returns The chords over the beats they sound for.
+   * @throws If the composer names no key: the chords are degrees of one, and
+   *   there is no melody here to read a key from the way
+   *   {@link Composer.harmonize} does.
    * @throws If the composer's meter changes: one chord per bar has no single bar
    *   length to be laid out on, and the chords would leave the bar lines at the
    *   first change rather than follow them.
    */
   progression(opts: Omit<ProgressionOptions, 'key' | 'ctx' | 'ts'>): Timeline {
-    const key = this.#keyScale();
+    const key = this.#requireKey('progression');
     const ts = this.#unchangingMeter('progression');
     const chords = generateProgression({ ...opts, key, ts, ctx: this.context });
     return Timeline.fromChords(chords, opts.bars * beatsPerBar(ts), key);
@@ -425,6 +434,8 @@ export class Composer {
    * @param opts Everything the bass generator takes but the segments, the key,
    *   the meter and the context; see {@link BassLineSettings}.
    * @returns The line, as a score in the composer's key.
+   * @throws If the composer names no key: the line is written in one, and a
+   *   default key would put the part in a key the caller never asked for.
    * @throws If the instrument names a kit, which has no strings for a bass line
    *   to be placed on.
    * @example
@@ -441,7 +452,7 @@ export class Composer {
     const segments: readonly BassSegment[] = Array.isArray(source)
       ? (source as readonly BassSegment[])
       : (source as Timeline).segments;
-    const key = this.#keyScale();
+    const key = this.#requireKey('bass');
     const { instrument, ...rest } = opts ?? {};
     const notes = generateBassLine({
       ...rest,
@@ -471,9 +482,12 @@ export class Composer {
    * @param opts Everything the counter-melody generator takes but the melody,
    *   the key, the meter and the context; see {@link CounterMelodySettings}.
    * @returns The counter line, as a score in the composer's key.
+   * @throws If the composer names no key: the line is written in one, and the
+   *   melody it answers is not read for a key here — {@link Composer.harmonize}
+   *   is the member that does that.
    */
   counterMelody(melody: Score, opts?: CounterMelodySettings): Score {
-    const key = this.#keyScale();
+    const key = this.#requireKey('counterMelody');
     const { timeline, ...rest } = opts ?? {};
     const notes = generateCounterMelody({
       ...rest,
@@ -575,9 +589,25 @@ export class Composer {
     return this.data;
   }
 
-  /** The key the parts are written in; C major where the composer names none. */
-  #keyScale(): KeyScale {
-    return this.#key ?? DEFAULT_KEY;
+  /**
+   * The key a pitched part is written in.
+   *
+   * A composer that names none is refused rather than written in C major: a
+   * default key is an answer the caller never gave, and the part would come
+   * back sounding like a piece nobody asked for with nothing to say it had
+   * been substituted. {@link Composer.harmonize} is the one member that can
+   * answer without a key, because it has a melody to read one from; the key it
+   * found comes back with the harmonization, and `with({ key })` is how it is
+   * handed to the parts written next.
+   */
+  #requireKey(part: string): ResolvedKey {
+    if (this.#key === undefined) {
+      throw new InvalidInputError(
+        `composer ${part} needs a key for the part it writes; the composer names none — ` +
+          'give it one, or take the key harmonize reads off a melody and pass it on with with({ key })',
+      );
+    }
+    return this.#key;
   }
 
   /**

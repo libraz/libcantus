@@ -43,7 +43,7 @@ import {
   ticksToBeats,
 } from '../core/tempo/index.js';
 import type { NoteEvent } from '../core/types.js';
-import { assertFiniteNumber, assertNoteEvent, assertRange } from '../core/validation/index.js';
+import { assertFiniteNumber, assertRange } from '../core/validation/index.js';
 import type { GrooveTemplate, HumanizeOptions, OrnamentOptions } from '../generate/index.js';
 import {
   applyGrooveTemplate,
@@ -60,6 +60,7 @@ import {
   assertDataObject,
   assertDataObjects,
   assertKeyArgument,
+  assertNoteEventArray,
   copyNoteEvent,
   STATED_KEY_CONFIDENCE,
   withoutNegativeZero,
@@ -100,16 +101,14 @@ const DEFAULT_BPM = 120;
  * scores holding the same music — then reads the same sequence whatever order
  * the notes arrived in.
  *
- * Each note is checked by the shared note-event guard as it is copied, since
- * copying is already note by note. Zero-length notes are accepted, as they are
- * everywhere on the analysis side: a MIDI import carries them, and the analyses
- * drop them themselves.
+ * The array is checked by the shared note-event guard before it is copied, so
+ * the count a score keeps is bounded by the same budget the function API bounds
+ * it by. Zero-length notes are accepted, as they are everywhere on the analysis
+ * side: a MIDI import carries them, and the analyses drop them themselves.
  */
 function orderNotes(notes: readonly NoteEvent[], name: string): NoteEvent[] {
-  return assertDataObjects<NoteEvent>(notes, name)
-    .map((note, index) =>
-      copyNoteEvent(assertNoteEvent(note, `${name}[${index}]`, { allowNonPositiveDuration: true })),
-    )
+  return assertNoteEventArray(notes, name, { allowNonPositiveDuration: true })
+    .map((note) => copyNoteEvent(note))
     .sort(
       (a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch || a.durationBeat - b.durationBeat,
     );

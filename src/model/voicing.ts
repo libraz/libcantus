@@ -123,7 +123,7 @@ function copyPitches(pitches: readonly number[]): number[] {
  */
 function spellLine(line: readonly NoteLike[], key: ResolvedKey): NoteData[] {
   return line.map((value) =>
-    typeof value === 'number' ? spellPitch(value, key.tonic, key.scale) : toNoteData(value),
+    typeof value === 'number' ? spellPitch(value, key.tonic, key) : toNoteData(value),
   );
 }
 

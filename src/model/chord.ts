@@ -207,7 +207,7 @@ function deriveBassSpelling(chord: ChordData, key: Key | undefined): PitchSpelli
   if (key === undefined) {
     return undefined;
   }
-  const spelled = spellPitchClass(bassPc, key.tonic.data, key.scale);
+  const spelled = spellPitchClass(bassPc, key.tonic.data, key);
   return { letter: spelled.letter, alter: spelled.alter };
 }
 
@@ -257,7 +257,7 @@ export class Chord {
   #dataWithKey(key: Key | undefined): ChordData {
     const out = copyChord(this.#given);
     if (out.rootSpelling === undefined && key !== undefined) {
-      out.rootSpelling = spellPitchClass(out.rootPc, key.tonic.data, key.scale);
+      out.rootSpelling = spellPitchClass(out.rootPc, key.tonic.data, key);
     }
     if (out.bassSpelling === undefined) {
       const bass = deriveBassSpelling(out, key);
@@ -601,7 +601,7 @@ export class Chord {
    * @throws If no key is given and none is carried.
    */
   roman(key?: KeyLike, opts?: ChordToRomanOptions): string {
-    return chordToRoman(this.#data, this.#resolveKey(key).scale, opts);
+    return chordToRoman(this.#data, this.#resolveKey(key), opts);
   }
 
   /**
@@ -630,7 +630,7 @@ export class Chord {
    * ```
    */
   explain(key?: KeyLike, opts?: ExplainRomanOptions): RomanExplanation {
-    return explainRoman(this.#data, this.#resolveKey(key).scale, opts);
+    return explainRoman(this.#data, this.#resolveKey(key), opts);
   }
 
   /**
@@ -642,7 +642,7 @@ export class Chord {
    * @throws If no key is given and none is carried.
    */
   function(key?: KeyLike): HarmonicFunction {
-    return functionOf(this.#data, this.#resolveKey(key).scale);
+    return functionOf(this.#data, this.#resolveKey(key));
   }
 
   /**
@@ -663,7 +663,7 @@ export class Chord {
    * ```
    */
   analyze(key?: KeyLike, opts?: AnalyzeChordOptions): ChordAnalysis {
-    return analyzeChord(this.#data, this.#resolveKey(key).scale, opts);
+    return analyzeChord(this.#data, this.#resolveKey(key), opts);
   }
 
   /**
@@ -675,7 +675,7 @@ export class Chord {
    * @throws If no key is given and none is carried.
    */
   isBorrowed(key?: KeyLike): boolean {
-    return isBorrowedChord(this.#data, this.#resolveKey(key).scale);
+    return isBorrowedChord(this.#data, this.#resolveKey(key));
   }
 
   /**
@@ -687,7 +687,7 @@ export class Chord {
    * @throws If no key is given and none is carried.
    */
   borrowedSource(key?: KeyLike): BorrowedSource {
-    return borrowedSource(this.#data, this.#resolveKey(key).scale);
+    return borrowedSource(this.#data, this.#resolveKey(key));
   }
 
   /**
@@ -713,7 +713,7 @@ export class Chord {
    * ```
    */
   figuredBass(key?: KeyLike): string {
-    return figuredBassOf(this.#data, this.#resolveKey(key).scale);
+    return figuredBassOf(this.#data, this.#resolveKey(key));
   }
 
   /**
@@ -797,7 +797,10 @@ export class Chord {
    * @throws If no voicing fits the given ranges.
    */
   voice(opts?: VoicingOptions): number[] {
-    const key = opts?.key ?? this.#key?.scale;
+    // The carried key travels whole, as it does through the analysis methods:
+    // the voicer spells the chord it scores, and its pitch classes alone would
+    // have an Ab minor led by the sharps of a G# minor.
+    const key = opts?.key ?? this.#key;
     return voiceChord(this.#data, key === undefined ? opts : { ...opts, key });
   }
 
@@ -1083,7 +1086,7 @@ export class Chord {
       }
       tones = spellChordFromRoot(data, root);
     } else {
-      tones = spellChord(data, resolved.tonic.data, resolved.scale);
+      tones = spellChord(data, resolved.tonic.data, resolved);
     }
     const bassPc = data.bassPc;
     const bass = data.bassSpelling;
