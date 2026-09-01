@@ -12,7 +12,11 @@ import type { ChordQuality, ChordSpan } from '../../theory/chord/index.js';
 import { chordQualities, diatonicTriad, makeChord } from '../../theory/chord/index.js';
 import { type KeyLike, scaleTonesInDegreeOrder, toKeyScale } from '../../theory/scale/index.js';
 import { fifthPcOf } from '../../theory/tendency/index.js';
-import { type GenerationContextInput, resolveContext } from '../context/index.js';
+import {
+  type GenerationContextInput,
+  type ResolvedContext,
+  resolveContext,
+} from '../context/index.js';
 
 export type { ChordSpan } from '../../theory/chord/index.js';
 
@@ -411,8 +415,8 @@ function resolveCycle(
  * no way to name it.
  *
  * @param style The style pool to choose from.
- * @param seed The same seed the generator would be given.
- * @returns The preset that seed selects.
+ * @param ctx The same context the generator would be given, or the seed alone.
+ * @returns The preset that context selects.
  * @throws If no preset claims the style.
  * @example
  * ```ts
@@ -421,7 +425,25 @@ function resolveCycle(
  * ```
  * @category Composition
  */
-export function pickProgressionPreset(style: ProgStyle, seed = 0): ProgressionPreset {
+export function pickProgressionPreset(
+  style: ProgStyle,
+  ctx: GenerationContextInput = 0,
+): ProgressionPreset {
+  return presetFor(style, resolveContext(ctx));
+}
+
+/**
+ * The preset a style resolves to under a context that is already resolved.
+ *
+ * One top-level call resolves its context once and every draw of that call
+ * comes from it, the preset choice included. Re-deriving a context from the
+ * bare seed here took the choice from a source the caller never named — a
+ * caller supplying its own positional source to reroll got the same loop every
+ * time — and at whatever version the build defaults to, so a project
+ * pinned to one version would get another version's loop under its own
+ * substitutions.
+ */
+function presetFor(style: ProgStyle, ctx: ResolvedContext): ProgressionPreset {
   // A style no preset claims is a caller error, exactly as an unknown
   // presetId is: falling back to the whole pool would answer a typo with a
   // plausible but stylistically unrelated progression.
@@ -429,9 +451,7 @@ export function pickProgressionPreset(style: ProgStyle, seed = 0): ProgressionPr
   if (pool.length === 0) {
     throw new InvalidInputError(`Unknown progression style: ${style}`);
   }
-  const index = resolveContext(seed)
-    .part('progression')
-    .range(0, pool.length - 1, 'preset');
+  const index = ctx.part('progression').range(0, pool.length - 1, 'preset');
   return pool[index] ?? (PRESETS[0] as ProgressionPreset);
 }
 
@@ -512,7 +532,6 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
   // resolution below is given the scale it resolved to.
   const key = toKeyScale(opts.key);
   const ctx = resolveContext(opts.ctx);
-  const seed = ctx.seed;
   let preset: ProgressionPreset | undefined;
   if (opts.preset !== undefined) {
     if (opts.preset.degrees.length === 0) {
@@ -543,7 +562,7 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
       throw new InvalidInputError(`Unknown progression preset: ${opts.presetId}`);
     }
   }
-  preset ??= pickProgressionPreset(opts.style, seed);
+  preset ??= presetFor(opts.style, ctx);
   const ext =
     opts.ext === undefined
       ? 'auto'

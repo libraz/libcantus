@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { InvalidInputError } from '../src/core/errors/index.js';
 import { parseTimeSignature } from '../src/core/meter/index.js';
 import { FILL_ARCHETYPES, generateFill } from '../src/generate/drums/fills.js';
 import { HitList } from '../src/generate/drums/hit.js';
@@ -717,5 +718,31 @@ describe('generateDrums prechorus fills', () => {
     expect(lastBar(intoVerse)).not.toBe(lastBar(withoutFills));
     // Leading into a chorus the two-bar lift takes over instead.
     expect(lastBar(intoChorus)).not.toBe(lastBar(intoVerse));
+  });
+});
+
+describe('the meter a drum part is written against', () => {
+  const opts: DrumsOptions = { ...base, bars: 4, style: 'standard', section: 'verse' };
+
+  it('accepts a meter map that stays in 4/4', () => {
+    expect(
+      generateDrums({ ...opts, ts: [{ startBeat: 0, ts: parseTimeSignature('4/4') }] }).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('refuses a map that changes out of 4/4, rather than laying 4/4 bars over it', () => {
+    const ts = [
+      { startBeat: 0, ts: parseTimeSignature('4/4') },
+      { startBeat: 8, ts: parseTimeSignature('3/4') },
+    ];
+
+    // The bare signature was already refused; a map that opens on the same
+    // signature and changes later has the same bars this generator cannot place.
+    expect(() => generateDrums({ ...opts, ts })).toThrow(InvalidInputError);
+    expect(() => generateDrums({ ...opts, ts })).toThrow(/3\/4 at beat 8/);
+  });
+
+  it('refuses a bare signature the patterns are not written against', () => {
+    expect(() => generateDrums({ ...opts, ts: '3/4' })).toThrow(InvalidInputError);
   });
 });

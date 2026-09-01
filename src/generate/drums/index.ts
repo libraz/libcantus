@@ -1,6 +1,6 @@
 import { InvalidInputError } from '../../core/errors/index.js';
 import { canSound, type InstrumentProfile } from '../../core/instrument/index.js';
-import { beatsPerBar, type MeterLike, meterAt, toMeterData } from '../../core/meter/index.js';
+import { beatsPerBar, type MeterLike, meterAt, resolveMeters } from '../../core/meter/index.js';
 import {
   assertGenerationBudget,
   assertInteger,
@@ -138,8 +138,10 @@ export type DrumsOptions = {
    * hi-hat subdivisions, the open-hat and crash beats, the beat a fill starts on
    * — is written against a four-beat bar, so another meter would come back with
    * 4/4 accents in a bar of the wrong length and no sign that anything was
-   * wrong. A meter it cannot place is refused rather than mis-placed. Use
-   * {@link generateRhythm} or {@link placeDrumPattern} for other meters.
+   * wrong. A meter it cannot place is refused rather than mis-placed, and a
+   * meter map is read whole: one that opens in 4/4 and changes later is refused
+   * for the change, not accepted for the opening. Use {@link generateRhythm} or
+   * {@link placeDrumPattern} for other meters.
    *
    * @defaultValue `{ numerator: 4, denominator: 4 }`
    */
@@ -290,15 +292,24 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
     opts.feel === undefined ? mapping.feel : assertOneOf(opts.feel, DRUM_FEELS, 'drum feel');
   const role: DrumRole =
     opts.role === undefined ? 'full' : assertOneOf(opts.role, DRUM_ROLES, 'drum role');
-  const ts = meterAt(0, toMeterData(opts.ts ?? { numerator: 4, denominator: 4 }, 'ts'));
   // The groove is written against a four-beat bar throughout. Accepting another
   // meter placed 4/4 accents inside a bar of a different length and reported
   // nothing, which is the one outcome a caller cannot detect.
-  if (ts.numerator !== 4 || ts.denominator !== 4) {
-    throw new InvalidInputError(
-      `drum time signature must be 4/4; received ${ts.numerator}/${ts.denominator}`,
-    );
+  //
+  // The whole meter is read rather than the signature at beat 0: a map that
+  // opens in 4/4 and changes later has every bar after the change in a length
+  // these patterns cannot be laid out on, and reading only the opening bar let
+  // exactly that through while a bare '3/4' was refused.
+  const meters = resolveMeters({ ts: opts.ts }, 'ts');
+  for (const change of meters) {
+    if (change.ts.numerator !== 4 || change.ts.denominator !== 4) {
+      throw new InvalidInputError(
+        `drum time signature must be 4/4 throughout; received ` +
+          `${change.ts.numerator}/${change.ts.denominator} at beat ${change.startBeat}`,
+      );
+    }
   }
+  const ts = meterAt(0, meters);
   const barBeats = beatsPerBar(ts);
   // fxOnly leaves only fx/aux voices: the main kick, snare, ghost, and fill
   // voices are suppressed just as timekeeping hi-hats already are.

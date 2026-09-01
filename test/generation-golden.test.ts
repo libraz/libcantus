@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { parseTimeSignature } from '../src/core/meter/index.js';
-import { ALGORITHM_VERSION, deriveSeed, MIN_ALGORITHM_VERSION } from '../src/core/random/index.js';
+import {
+  ALGORITHM_VERSION,
+  createPositionalRng,
+  deriveSeed,
+  MIN_ALGORITHM_VERSION,
+  type PositionalRng,
+} from '../src/core/random/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import type { BassSegment } from '../src/generate/bass/index.js';
 import { generateBassLine, placeLicks } from '../src/generate/bass/index.js';
@@ -686,8 +692,15 @@ const GOLDEN: Record<number, Record<string, unknown>> = {
     harmonizeMelody: {
       transposeSemitones: 0,
       key: {
-        rootPc: 0,
-        modeMask12: 2741,
+        scale: {
+          rootPc: 0,
+          modeMask12: 2741,
+        },
+        tonic: {
+          letter: 0,
+          alter: 0,
+        },
+        variant: 'major',
       },
       chords: [
         {
@@ -846,22 +859,70 @@ describe('generated output is recorded per algorithm version', () => {
   }
 });
 
+/** The path segment a resolved context puts between a part and its version. */
+const VERSION_SEGMENT = 'v';
+
+/**
+ * The stream each part namespace addresses, at this build's algorithm version.
+ *
+ * These are the addresses the generators ask for, not addresses chosen to be
+ * recorded: a namespace here is one a generator passes to `part`, and the
+ * number beside it is what `deriveSeed` answers for the whole path — the
+ * version segment included, since the version takes part in every derivation.
+ * Renaming a namespace or dropping the version out of the path moves every note
+ * drawn under it, so the numbers are written down rather than recomputed from
+ * the mixing function they come from.
+ */
+const PART_SEEDS: Readonly<Record<string, number>> = {
+  bass: 2491515229,
+  countermelody: 1939644287,
+  drums: 2254961942,
+  harmony: 3704912108,
+  humanize: 2571699786,
+  motif: 4033656222,
+  ornament: 2003761208,
+  progression: 3390199568,
+  rhythm: 157289759,
+};
+
+/**
+ * The prefixes the generators addressed, gathered by standing a recording
+ * source in for the one a context would build.
+ *
+ * A supplied source is handed the part namespace, the version segment and the
+ * version as the prefix of every draw, so what a run of the generators asks for
+ * can be read off rather than assumed.
+ */
+function prefixesAsked(): Set<string> {
+  const asked = new Set<string>();
+  const inner = createPositionalRng(SEED);
+  const rng: PositionalRng = {
+    at: (...path) => {
+      asked.add(path.slice(0, 3).join('/'));
+      return inner.at(...path);
+    },
+  };
+  for (const { run } of CASES) {
+    run({ ...contextAt(ALGORITHM_VERSION), rng });
+  }
+  return asked;
+}
+
 describe('the seeds a generator draws under are recorded', () => {
-  it('keeps the part and section paths on their recorded seeds', () => {
-    // These are the stream addresses the generators ask for. Renaming a path
-    // moves every note drawn under it, so the numbers are recorded here rather
-    // than recomputed from the same mixing function they come from.
-    const paths: [readonly (string | number)[], number][] = [
-      [['drums'], 1945151523],
-      [['bass'], 4120415844],
-      [['chorus'], 1591854960],
-      [['drums', 0], 3935576705],
-      [['drums', 1], 4275500962],
-      [['bass', 3], 1913094],
-      [['chorus', 7], 779078705],
-    ];
-    for (const [path, expected] of paths) {
-      expect(deriveSeed(SEED, ...path), path.join('/')).toBe(expected);
+  it.each(Object.keys(PART_SEEDS))('addresses the %s stream at its recorded seed', (name) => {
+    expect(deriveSeed(SEED, name, VERSION_SEGMENT, ALGORITHM_VERSION)).toBe(PART_SEEDS[name]);
+  });
+
+  it('records every namespace the generators ask for, under the version', () => {
+    // A generator that starts drawing under a name nobody wrote down is the gap
+    // this closes: the namespaces are read back off a run rather than kept by
+    // hand, so a new one fails here until its address is recorded above.
+    const asked = [...prefixesAsked()].map((prefix) => prefix.split('/'));
+
+    expect(asked.length).toBeGreaterThan(0);
+    for (const [name = '', ...rest] of asked) {
+      expect(PART_SEEDS[name], name).toBeDefined();
+      expect(rest, name).toEqual([VERSION_SEGMENT, String(ALGORITHM_VERSION)]);
     }
   });
 });

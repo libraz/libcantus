@@ -183,6 +183,12 @@ function copyInstruments(
  * because a composer that names none is read in 4/4 exactly as one that names
  * it is; the key is not, because a composer with no key harmonizes by inferring
  * one, which is a different request from harmonizing in C major.
+ *
+ * The seed and the algorithm version are materialized for the same reason the
+ * meter is, and it is what makes these settings a reproduction recipe: a
+ * project file that recorded neither reopens under whatever the build it is
+ * opened on happens to default to, which is a different piece under the same
+ * name and nothing in the saved file to say so.
  */
 function copyOptions(options: ComposerOptions): ComposerOptions {
   assertDataObject(options, 'composer options');
@@ -196,6 +202,9 @@ function copyOptions(options: ComposerOptions): ComposerOptions {
   if (options.seed !== undefined) {
     copy.seed = options.seed;
   }
+  if (options.algorithmVersion !== undefined) {
+    copy.algorithmVersion = options.algorithmVersion;
+  }
   if (options.complexity !== undefined) {
     copy.complexity = copyComplexity(options.complexity);
   }
@@ -208,14 +217,18 @@ function copyOptions(options: ComposerOptions): ComposerOptions {
       'composer vocabulary',
     ).map((entry, index) => copyPlain(entry, `composer vocabulary[${index}]`));
   }
-  if (options.algorithmVersion !== undefined) {
-    copy.algorithmVersion = options.algorithmVersion;
-  }
   if (options.rng !== undefined) {
     // Carried by reference: the source is a handle on a stream, and a copy of
     // it would be a second stream drawing the same numbers twice.
     copy.rng = options.rng;
   }
+  // Resolved through the same resolver every generator reads the settings
+  // through, so the concrete seed and version written here are the ones the
+  // parts were actually drawn under rather than a second reading of the
+  // defaults.
+  const resolved = resolveContext(contextOf(copy));
+  copy.seed = resolved.seed;
+  copy.algorithmVersion = resolved.algorithmVersion;
   return copy;
 }
 
@@ -310,12 +323,12 @@ export class Composer {
    *   cannot hold.
    */
   constructor(options: ComposerOptions) {
-    this.#options = copyOptions(options);
     // The context half is checked by the resolver every generator reads it
-    // through, so a composer accepts exactly the seeds, tempos, dials and
-    // dictionaries they accept — at the point the settings are named rather
-    // than at the first part written under them.
-    resolveContext(contextOf(this.#options));
+    // through — inside `copyOptions`, which resolves the seed and the version
+    // it stores — so a composer accepts exactly the seeds, tempos, dials and
+    // dictionaries they accept, at the point the settings are named rather than
+    // at the first part written under them.
+    this.#options = copyOptions(options);
     this.#meters = metersFrom(this.#options.meters);
     this.#key = this.#options.key === undefined ? undefined : toKeyScale(this.#options.key);
   }
@@ -394,11 +407,13 @@ export class Composer {
    * @param opts Everything the drum generator takes but the meter and the
    *   context, which are the composer's.
    * @returns The hits, as a score.
-   * @throws If the composer's meter is not 4/4, which is the only meter the
-   *   drum patterns are written against.
+   * @throws If the composer's meter is not 4/4 throughout, which is the only
+   *   meter the drum patterns are written against: a piece that opens in 4/4
+   *   and changes later has bars the patterns cannot be laid out on, so the
+   *   request is refused rather than answered with 4/4 bars over the change.
    */
   drums(opts: Omit<DrumsOptions, 'ts' | 'ctx'>): Score {
-    const hits = generateDrums({ ...opts, ts: this.#openingMeter(), ctx: this.context });
+    const hits = generateDrums({ ...opts, ts: this.#unchangingMeter('drums'), ctx: this.context });
     return Score.of(hits, this.#scoreOptions());
   }
 
@@ -485,8 +500,7 @@ export class Composer {
    *   that melody and the one handed in.
    * @example
    * ```ts
-   * import { Composer } from '@libraz/libcantus';
-   * import { Score } from '../../src/model/score.js';
+   * import { Composer, Score } from '@libraz/libcantus';
    * const composer = Composer.of({ key: 'C major' });
    * const melody = Score.of([{ pitch: 60, startBeat: 0, durationBeat: 4 }]);
    * composer.harmonize(melody).transposeSemitones; // 0
@@ -522,13 +536,20 @@ export class Composer {
    * Whether another composer holds the same settings.
    *
    * The comparison is made through the other composer's public data, so two
-   * composers built by different copies of the module still compare.
+   * composers built by different copies of the module still compare. Both sides
+   * are projected the same way: comparing the settings held here against the
+   * data the other hands out answered "different" for a composer holding a
+   * source and "same" for two that draw from different ones.
+   *
+   * A source is compared by identity, being a handle on a stream rather than a
+   * setting: two composers drawing from different sources write different
+   * parts, and the numbers a source will hand out cannot be read from it.
    *
    * @param other The composer to compare.
    * @returns True when both would generate the same parts.
    */
   equals(other: Composer): boolean {
-    return samePlain(this.#options, other.data);
+    return samePlain(this.data, other.data) && this.context.rng === other.context.rng;
   }
 
   /** The resolved context, for handing back to the function API. */
@@ -588,7 +609,7 @@ export class Composer {
   }
 
   /** The context every score a composer hands back is read against. */
-  #scoreOptions(key?: KeyScale): ScoreOptions {
+  #scoreOptions(key?: KeyLike): ScoreOptions {
     const opts: ScoreOptions = { meters: this.#meters };
     if (this.#options.bpm !== undefined) {
       opts.tempo = this.#options.bpm;

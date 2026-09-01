@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { chordToRoman } from '../src/analyze/functional/index.js';
+import { createPositionalRng, type PositionalRng } from '../src/core/random/index.js';
 import type { KeyScale } from '../src/core/types.js';
 import {
   generateProgression,
+  pickProgressionPreset,
   progressions,
   progressionsByStyle,
 } from '../src/generate/progression/index.js';
@@ -333,5 +335,39 @@ describe('preset degeneracy across keys', () => {
       presetId: 'classic',
     });
     expect(chords.map((chord) => chord.rootPc)).toEqual([0, 5, 7, 0]);
+  });
+});
+
+describe('the context a progression is drawn under', () => {
+  const key = majorKey(0);
+
+  it('takes the preset from the source the caller supplied', () => {
+    const chords = (rng: PositionalRng) =>
+      generateProgression({ key, style: 'dance', bars: 4, ctx: { seed: 3, rng } }).map(
+        (chord) => `${chord.rootPc}${chord.quality}`,
+      );
+
+    // A caller that brings its own source is asking to reroll; drawing the loop
+    // from the bare seed instead handed back the same progression every time.
+    expect(chords(createPositionalRng(0))).not.toEqual(chords(createPositionalRng(1)));
+  });
+
+  it('names the preset it drew, under the same context', () => {
+    const ctx = { seed: 3, rng: createPositionalRng(0) };
+    const drawn = generateProgression({ key, style: 'dance', bars: 4, ctx });
+
+    expect(drawn).toEqual(
+      generateProgression({
+        key,
+        style: 'dance',
+        bars: 4,
+        ctx,
+        presetId: pickProgressionPreset('dance', ctx).id,
+      }),
+    );
+  });
+
+  it('still answers to a bare seed', () => {
+    expect(pickProgressionPreset('dance', 3).styles).toContain('dance');
   });
 });
