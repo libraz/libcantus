@@ -23,11 +23,22 @@ export type { KeyVariant };
  * the resolved shape would make the acceptance of every entry point shrink the
  * day the resolved shape gained a field.
  *
+ * A scale is accepted with the spelling and the form written beside it as well
+ * as without them, because a key region carries its key that way — asked
+ * positional questions wherever a plain scale would be. The resolver reads them
+ * when they are there, and this says so: a shape a resolver reads and a type
+ * denies is one refactoring away from being dropped silently.
+ *
  * @category Scales
  */
 export type KeyLike =
   | string
-  | KeyScale
+  | (KeyScale & {
+      /** The spelled tonic the key is written with, when it travels beside it. */
+      tonic?: Note;
+      /** The scale form the key stands in, when it travels beside it. */
+      variant?: KeyVariant;
+    })
   | {
       /** The scale this key data denotes. */
       scale: KeyScale;

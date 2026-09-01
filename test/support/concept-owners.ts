@@ -143,6 +143,23 @@ export const CONCEPT_OWNERS: readonly ConceptOwner[] = [
     reserved: ['chordScales', 'avoidNotes', 'availableTensions'],
   },
   {
+    // Three facts make a key, and every extra shape that carries them is a
+    // place one of them is dropped. The largest group the audits found was this
+    // one: a spelled tonic and a scale form falling off at each boundary they
+    // crossed, because only the topmost layer had a shape that held all three.
+    concept: 'the whole identity of a key',
+    owner: 'src/theory/scale/kinds.ts',
+    reserved: ['ResolvedKey', 'SpelledKey', 'KeyIdentity', 'SpelledKeyScale'],
+    allowed: [
+      // The same three facts laid out flat, because a region's key is asked
+      // positional questions — its root, its mask — wherever a plain scale
+      // would be. It resolves without losing any of the three and the accepted
+      // shapes say so, which leaves one layout too many rather than a fact
+      // that falls off.
+      'src/analyze/keys/index.ts:SpelledKeyScale',
+    ],
+  },
+  {
     // A key name carries a spelled tonic and a scale form. A second reader that
     // keeps neither turns `'Ab minor'` into the G# minor the pitch classes read
     // best as, and no caller can see where the flat went.
