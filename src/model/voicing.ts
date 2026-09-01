@@ -26,7 +26,7 @@ import {
   type SafetyResult,
   type VoiceSnapshot,
 } from '../theory/safety/index.js';
-import { type KeyLike, spelledKeyOf, toKeyScale } from '../theory/scale/index.js';
+import { type KeyLike, type ResolvedKey, resolveKey } from '../theory/scale/index.js';
 import { spellPitch } from '../theory/spelling/index.js';
 import { type ChordLike, toChordData } from '../theory/symbol/index.js';
 import {
@@ -122,10 +122,9 @@ function copyPitches(pitches: readonly number[]): number[] {
  * diminished fourth — cannot be applied to two lines spelled by different
  * rules.
  */
-function spellLine(line: readonly NoteLike[], key: KeyScale): NoteData[] {
-  const { tonic } = spelledKeyOf(key);
+function spellLine(line: readonly NoteLike[], key: ResolvedKey): NoteData[] {
   return line.map((value) =>
-    typeof value === 'number' ? spellPitch(value, tonic, key) : toNoteData(value),
+    typeof value === 'number' ? spellPitch(value, key.tonic, key.scale) : toNoteData(value),
   );
 }
 
@@ -134,7 +133,7 @@ function spellLine(line: readonly NoteLike[], key: KeyScale): NoteData[] {
  * sharp-spelled MIDI when none is — the reading {@link toNoteData} takes of a
  * bare number.
  */
-function lineOf(pitches: readonly number[], key: KeyScale | undefined): NoteData[] {
+function lineOf(pitches: readonly number[], key: ResolvedKey | undefined): NoteData[] {
   return key === undefined ? pitches.map((pitch) => toNoteData(pitch)) : spellLine(pitches, key);
 }
 
@@ -343,7 +342,7 @@ export class Voicing {
    */
   spell(key: KeyLike, chord?: ChordLike): Note[] {
     assertKeyArgument(key, 'voicing key');
-    return this.#spelled(toKeyScale(key), chord).map((note) => new Note(note));
+    return this.#spelled(resolveKey(key), chord).map((note) => new Note(note));
   }
 
   /**
@@ -419,14 +418,17 @@ export class Voicing {
     opts?: PartWritingOptions,
   ): PartWritingViolation[] {
     assertKeyArgument(key, 'voicing key');
-    const scale = toKeyScale(key);
+    // The key is passed on whole rather than reduced to its pitch classes: the
+    // exercise is graded on the letters it is written with, so an Ab minor is
+    // spelled on flats here and everywhere the checker reads it.
+    const resolved = resolveKey(key);
     const from = toChordData(chords[0]);
     const to = toChordData(chords[1]);
     const voicings: SpelledVoicing[] = [
-      spellVoicing(this.pitches, from, scale),
-      spellVoicing(other.pitches, to, scale),
+      spellVoicing(this.pitches, from, resolved),
+      spellVoicing(other.pitches, to, resolved),
     ];
-    return checkPartWriting(voicings, [from, to], scale, opts);
+    return checkPartWriting(voicings, [from, to], resolved, opts);
   }
 
   /**
@@ -462,15 +464,15 @@ export class Voicing {
     opts?: SpeciesOptions,
   ): PartWritingViolation[] {
     assertKeyArgument(mode, 'voicing mode');
-    const scale = toKeyScale(mode);
+    const resolved = resolveKey(mode);
     // Both lines are spelled by the same reading, so a cantus firmus given as
     // pitches is written the way this one is: the rules that read letters
     // cannot be applied to two lines spelled by different rules.
     return checkSpecies(
-      spellLine(cantusFirmus, scale),
-      spellLine(this.#pitches, scale),
+      spellLine(cantusFirmus, resolved),
+      spellLine(this.#pitches, resolved),
       species,
-      scale,
+      resolved,
       opts,
     );
   }
@@ -497,8 +499,12 @@ export class Voicing {
     // delegate that today discards it and tomorrow may read a `key` of its
     // own, so it is taken out here rather than relied on being ignored.
     const { key, ...rest } = opts ?? {};
-    const scale = key === undefined ? undefined : toKeyScale(key);
-    return voiceIndependence(lineOf(this.#pitches, scale), lineOf(other.pitches, scale), rest);
+    const resolved = key === undefined ? undefined : resolveKey(key);
+    return voiceIndependence(
+      lineOf(this.#pitches, resolved),
+      lineOf(other.pitches, resolved),
+      rest,
+    );
   }
 
   /**
@@ -632,7 +638,7 @@ export class Voicing {
   }
 
   /** Spell the voicing, by the key alone or against a chord as well. */
-  #spelled(key: KeyScale, chord: ChordLike | undefined): NoteData[] {
+  #spelled(key: ResolvedKey, chord: ChordLike | undefined): NoteData[] {
     return chord === undefined
       ? spellLine(this.#pitches, key)
       : spellVoicing(this.pitches, toChordData(chord), key);
@@ -648,7 +654,7 @@ export class Voicing {
     return {
       profile: query.profile,
       chord: query.chord === null ? null : toChordData(query.chord),
-      key: toKeyScale(query.key),
+      key: resolveKey(query.key).scale,
       otherVoices,
       strongBeat: query.strongBeat,
       prevPitch: query.prevPitch,

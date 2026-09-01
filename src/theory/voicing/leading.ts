@@ -4,7 +4,7 @@ import { type ChordLike, toChordData } from '../symbol/index.js';
 import { enumerateVoicings, leadingCost, moveScore, moveScoring } from './internal.js';
 import type { VoicingOptions } from './satb.js';
 import {
-  resolveKey,
+  resolvedKeyOf,
   resolveMaxCandidates,
   resolveMaxSpacing,
   resolvePreviousChord,
@@ -100,7 +100,7 @@ export function nextVoicing(current: number[], chord: ChordLike, opts?: VoicingO
           });
   const maxSpacing = resolveMaxSpacing(opts);
   const candidates = enumerateVoicings(data, ranges, maxSpacing, resolveMaxCandidates(opts));
-  const key = resolveKey(opts);
+  const key = resolvedKeyOf(opts);
   // The chord the current voicing came from is optional, so the line it is
   // leaving is spelled against that chord when the caller named one and by the
   // key alone when it did not. Only one chord is being voiced, so there is

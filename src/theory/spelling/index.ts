@@ -21,7 +21,12 @@ import {
   toNoteData,
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import { type Chord, chordToneLetterOffsets } from '../chord/index.js';
+import {
+  type Chord,
+  type ChordToneRole,
+  chordToneLetterOffsets,
+  chordToneRole,
+} from '../chord/index.js';
 import { isScaleTone, type KeyLike, scaleTonesInDegreeOrder, toKeyScale } from '../scale/index.js';
 
 /**
@@ -552,8 +557,13 @@ export type SpellingContext = {
  * fifth and the tensions all have two defensible spellings, so they are left to
  * the melodic rules and, failing those, to the key.
  *
- * The fallback for a chord that names no spelling of its own; a chord that does
- * is read by it instead, through {@link chordToneLetterStep}.
+ * A distance on its own cannot say which degree a chord writes a tone as, which
+ * is why the ambiguous distances are absent rather than guessed: nine semitones
+ * are the sixth of a sixth chord and the diminished seventh of a
+ * diminished-seventh chord, and the table sees the same number in both. So this
+ * is the last resort of {@link chordToneLetterStep} — reached for a caller
+ * holding nothing but a root pitch class, and for a tone the sounding chord
+ * gives no degree of its own.
  */
 const CHORD_TONE_LETTER_STEPS: Record<number, number> = {
   0: 0, // root
@@ -564,6 +574,22 @@ const CHORD_TONE_LETTER_STEPS: Record<number, number> = {
   11: 6, // major seventh
 };
 
+/**
+ * The letter distance above the root each chord-tone role is written at.
+ *
+ * The inverse of the reading {@link chordToneRole} performs: a tone the chord
+ * calls its seventh is written six letters above the root whether it spans ten
+ * semitones or nine, so a diminished seventh over C is a B double-flat and never
+ * the A its nine semitones would suggest on their own.
+ */
+const LETTER_STEP_BY_ROLE: Record<ChordToneRole, number> = {
+  root: 0,
+  third: 2,
+  fifth: 4,
+  sixth: 5,
+  seventh: 6,
+};
+
 /** Widest alteration a context-derived spelling may carry: a double accidental. */
 const MAX_CONTEXT_ALTER = 2;
 
@@ -571,12 +597,18 @@ const MAX_CONTEXT_ALTER = 2;
  * The letter distance above its root a sounding chord gives a pitch class, or
  * undefined when it gives none.
  *
- * The chord's own spelling is asked first and answers alone where it answers at
- * all, so the tone that is a sixth to the chord is a sixth here too: the German
- * sixth of C major writes F#, five letters above its Ab, and never the Gb the
- * ten semitones would otherwise imply. Only a chord that names no spelling of
- * its own falls back to {@link CHORD_TONE_LETTER_STEPS}, which is the sole
- * reader of that table.
+ * The chord is asked twice before any distance is. Its own spelling answers
+ * first and answers alone where it answers at all, so the tone that is a sixth
+ * to the chord is a sixth here too: the German sixth of C major writes F#, five
+ * letters above its Ab, and never the Gb the ten semitones would otherwise
+ * imply. A chord that names no spelling of its own is asked for the degree its
+ * structure gives the tone, which is the reading that separates the two chords
+ * that sound nine semitones above their root — the added sixth is a sixth and
+ * the diminished seventh a seventh, so a Cdim7 writes Bbb and a C6 writes A.
+ *
+ * Only a tone no chord names a degree for falls through to
+ * {@link CHORD_TONE_LETTER_STEPS}, which is where a caller holding a bare root
+ * pitch class starts and where a tension over a chord ends up.
  */
 function chordToneLetterStep(
   pc: number,
@@ -591,6 +623,10 @@ function chordToneLetterStep(
     const offset = offsets?.[index];
     if (offset !== undefined) {
       return offset;
+    }
+    const role = chordToneRole(pc, chord);
+    if (role !== null) {
+      return LETTER_STEP_BY_ROLE[role];
     }
   }
   return CHORD_TONE_LETTER_STEPS[mod12(pc - rootPc)];

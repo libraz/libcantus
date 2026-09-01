@@ -8,12 +8,12 @@
  */
 
 import type { Note } from '../../core/pitch/index.js';
-import { noteToMidi, pitchClassOf } from '../../core/pitch/index.js';
-import type { KeyScale } from '../../core/types.js';
+import { noteToMidi, pitchClassOf, spelledInterval } from '../../core/pitch/index.js';
 import type { Chord } from '../chord/index.js';
 import { isAugmentedMelodicInterval } from '../counterpoint/index.js';
-import { spelledKeyOf } from '../scale/index.js';
+import { type KeyLike, resolveKey } from '../scale/index.js';
 import { spellPitchClass } from '../spelling/index.js';
+import { isDescendingStep } from '../tendency/index.js';
 
 /**
  * How one chord's tones are written: one spelling per pitch class, and the MIDI
@@ -38,12 +38,15 @@ export type SpellingTable = {
  * another rule would write intervals its checker forbids — and both go through
  * {@link spellPitchClass} with the chord as context.
  *
- * @param key The prevailing key.
+ * @param keyLike The prevailing key, in any form a key is held in.
  * @param chord The chord sounding, or undefined to let the key alone decide.
  * @returns The table, indexed by pitch class.
  */
-export function spellingTable(key: KeyScale, chord?: Chord): SpellingTable {
-  const { tonic } = spelledKeyOf(key);
+export function spellingTable(keyLike: KeyLike, chord?: Chord): SpellingTable {
+  // Read whole rather than reduced: an exercise written in Ab minor is judged on
+  // the letters it is written with, and a key that arrived carrying its tonic
+  // would otherwise have that tonic derived back from the pitch classes.
+  const { tonic, scale: key } = resolveKey(keyLike);
   const notes: Note[] = [];
   const bases: number[] = [];
   for (let pc = 0; pc < 12; pc += 1) {
@@ -90,4 +93,32 @@ export function movesByAugmentedInterval(
     return false;
   }
   return isAugmentedMelodicInterval(earlier, later);
+}
+
+/**
+ * Whether a voice moving between two sounding pitches falls by a diatonic step,
+ * which is how a chordal seventh resolves.
+ *
+ * Read through the same spelling the checker applies to the result: two
+ * semitones down is a diminished third as often as a major second once the
+ * letters are settled, and only one of the two is a resolution.
+ *
+ * @param from The table of the chord left.
+ * @param fromPitch The pitch the voice sang.
+ * @param to The table of the chord arrived on.
+ * @param toPitch The pitch it moved to.
+ * @returns True when the written interval is a descending second.
+ */
+export function movesByDescendingStep(
+  from: SpellingTable,
+  fromPitch: number,
+  to: SpellingTable,
+  toPitch: number,
+): boolean {
+  const earlier = spelledAt(from, fromPitch);
+  const later = spelledAt(to, toPitch);
+  if (earlier === undefined || later === undefined) {
+    return false;
+  }
+  return isDescendingStep(spelledInterval(earlier, later));
 }

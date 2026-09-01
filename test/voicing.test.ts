@@ -254,6 +254,48 @@ describe('voiceChordStyled', () => {
     expect(drop3).toContain(thirdFromTop - 12);
   });
 
+  it('reaches a named bass through the drop rather than under the dropped voice', () => {
+    // C/E as a drop-2: the drop is what puts E in the bass, so the result is
+    // the drop-2 voicing whose bass is E — not a first-inversion stack with the
+    // bass pushed below the fifth already dropped there.
+    expect(voiceChordStyled(makeChord(0, 'maj', 4), { style: 'drop2' })).toEqual([52, 60, 67]);
+  });
+
+  it('keeps every adjacent interval inside an octave for a drop over a slash bass', () => {
+    const qualities = ['maj', 'min', 'dim', 'aug', 'dom7', 'maj7', 'min7', 'dim7'] as const;
+    for (const quality of qualities) {
+      const tones = chordPitchClasses(makeChord(0, quality));
+      // Every chord tone as the bass, plus a D that none of these chords hold.
+      const basses = [...tones, 2];
+      for (const bassPc of basses) {
+        for (const style of ['drop2', 'drop3'] as const) {
+          const label = `${quality}/${bassPc} ${style}`;
+          const voicing = voiceChordStyled(makeChord(0, quality, bassPc), { style });
+          expect(pc(voicing[0] ?? Number.NaN), label).toBe(bassPc);
+          for (let i = 1; i < voicing.length; i += 1) {
+            expect((voicing[i] ?? 0) - (voicing[i - 1] ?? 0), label).toBeLessThanOrEqual(12);
+          }
+        }
+      }
+    }
+  });
+
+  it('voices a chord with too few voices for its drop in close position', () => {
+    // The third voice from the top of a triad is its bottom one, and lowering
+    // that opens nothing: it leaves the two upper voices where they were, more
+    // than an octave above.
+    const triad = makeChord(0, 'maj');
+    expect(voiceChordStyled(triad, { style: 'drop3' })).toEqual(
+      voiceChordStyled(triad, { style: 'close' }),
+    );
+    // The added bass is not one of the stacked chord tones, so a triad over one
+    // is still too short for a drop-3.
+    const slash = makeChord(0, 'maj', 2);
+    expect(voiceChordStyled(slash, { style: 'drop3' })).toEqual(
+      voiceChordStyled(slash, { style: 'close' }),
+    );
+  });
+
   it('keeps root, third and seventh but omits the fifth in a maj7 shell', () => {
     const chord = makeChord(0, 'maj7');
     const shell = new Set(voiceChordStyled(chord, { style: 'shell' }).map(pc));

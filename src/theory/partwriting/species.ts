@@ -80,16 +80,27 @@ const SPECIES_NUMBERS: readonly number[] = Object.keys(SPECIES_RATIO).map(Number
 /** The smallest note value the fifth species may write, in cantus-firmus notes. */
 const MIN_FLORID_VALUE = 0.125;
 
-/** One counterpoint note, placed in time against the cantus firmus. */
+/**
+ * One counterpoint note against one cantus-firmus note. A note that is still
+ * sounding when the next cantus-firmus note is struck meets both of them, and
+ * so has one entry per measure it sounds in: the first struck, the rest held.
+ */
 type Entry = {
   /** The counterpoint note itself. */
   note: Note;
   /** Its index in the counterpoint array. */
   index: number;
-  /** Onset, in cantus-firmus notes from the start of the exercise. */
+  /** Where this stretch of it begins, in cantus-firmus notes from the start. */
   onset: number;
-  /** Length, in cantus-firmus notes. */
+  /** How long it goes on sounding from there, in cantus-firmus notes. */
   duration: number;
+  /**
+   * Whether the note is sounding on from an earlier attack rather than being
+   * struck here — a ligature carried across the bar line. What it forms against
+   * the new measure is judged as any other interval is; the melodic rules read
+   * the attacks alone, since nothing was sung twice.
+   */
+  held: boolean;
   /** The cantus-firmus note sounding under it. */
   against: Note;
   /** Index of that cantus-firmus note. */
@@ -141,8 +152,15 @@ function sameNote(a: Note, b: Note): boolean {
 /**
  * Whether a dissonance is passed through: approached and left by step in one
  * direction (a passing note) or by step and back (a neighbour note).
+ *
+ * The two are not licensed by the same species. A passing dissonance fills the
+ * step between two consonances and every moving species writes one; a neighbour
+ * turns back on the note it left, which belongs to the quarter-note line of the
+ * third and fifth species. The second species moves a note against each half of
+ * the measure and the only dissonance it may write is the passing one, so the
+ * neighbour is read there as the dissonance it is.
  */
-function isPassedThrough(entries: readonly Entry[], position: number): boolean {
+function isPassedThrough(entries: readonly Entry[], position: number, species: Species): boolean {
   const previous = entries[position - 1];
   const current = entries[position];
   const next = entries[position + 1];
@@ -154,9 +172,10 @@ function isPassedThrough(entries: readonly Entry[], position: number): boolean {
   if (!isStep(incoming) || !isStep(outgoing)) {
     return false;
   }
-  const passing = direction(incoming) === direction(outgoing);
-  const neighbour = sameNote(previous.note, next.note);
-  return passing || neighbour;
+  if (direction(incoming) === direction(outgoing)) {
+    return true;
+  }
+  return sameNote(previous.note, next.note) && (species === 3 || species === 5);
 }
 
 /** Whether a melodic interval leaps a third, the only leap the figures write. */
@@ -316,7 +335,7 @@ function verticalViolations(
   const licence = licenceFor(species, entry.downbeat);
   if (
     licence === 'passing' &&
-    (isPassedThrough(entries, position) || isFiguredDissonance(entries, position, species))
+    (isPassedThrough(entries, position, species) || isFiguredDissonance(entries, position, species))
   ) {
     return found;
   }
@@ -729,14 +748,17 @@ function motionViolations(
       ),
     );
   }
-  if (createsHiddenParallelPerfect(upperPrev, upperCur, lowerPrev, lowerCur)) {
+  // Two voices and nothing between them: the sixteenth-century rule forbids the
+  // arrival however the upper voice reached it, so the step exception the
+  // four-part chorale grants its outer voices is not applied here.
+  if (createsHiddenParallelPerfect(upperPrev, upperCur, lowerPrev, lowerCur, 'twoVoice')) {
     found.push(
       violation(
         'hiddenPerfect',
         [0, 1],
         from.index,
         to.index,
-        'The voices leap into a perfect interval by similar motion',
+        'The voices move into a perfect interval by similar motion',
       ),
     );
   }
@@ -900,7 +922,16 @@ function resolveDurations(
   return { durations: impliedDurations(counterpoint.length, measures, ratio) };
 }
 
-/** Place every counterpoint note against the cantus-firmus note it sounds with. */
+/**
+ * Place every counterpoint note against the cantus-firmus notes it sounds with.
+ *
+ * A note is measured against each cantus-firmus note struck while it is still
+ * sounding, not only the one it was struck over: the syncopation that defines
+ * the fourth and fifth species holds a note across the bar line, and the
+ * interval it forms in the measure it arrives in is the whole point of the
+ * figure. Leaving it unread would let a bare dissonance on a downbeat pass for
+ * a clean exercise.
+ */
 function buildEntries(
   cantusFirmus: readonly Note[],
   counterpoint: readonly Note[],
@@ -915,25 +946,36 @@ function buildEntries(
     if (note === undefined) {
       continue;
     }
-    const againstIndex = Math.min(Math.floor(onset + EPS), cantusFirmus.length - 1);
-    const against = cantusFirmus[againstIndex];
-    if (against === undefined) {
-      continue;
+    const struckOver = Math.min(Math.floor(onset + EPS), cantusFirmus.length - 1);
+    const lastOver = Math.min(
+      Math.max(Math.ceil(onset + duration - EPS) - 1, struckOver),
+      cantusFirmus.length - 1,
+    );
+    for (let againstIndex = struckOver; againstIndex <= lastOver; againstIndex += 1) {
+      const against = cantusFirmus[againstIndex];
+      if (against === undefined) {
+        continue;
+      }
+      const held = againstIndex > struckOver;
+      // A held stretch begins where the measure does; the first begins wherever
+      // the note was struck, which is what makes it a weak-beat note or not.
+      const begins = held ? againstIndex : onset;
+      const interval = counterpointAbove
+        ? spelledInterval(against, note)
+        : spelledInterval(note, against);
+      entries.push({
+        note,
+        index,
+        onset: begins,
+        duration: onset + duration - begins,
+        held,
+        against,
+        againstIndex,
+        downbeat: Math.abs(begins - Math.round(begins)) < EPS,
+        interval,
+        consonance: classifySpelledInterval(interval),
+      });
     }
-    const interval = counterpointAbove
-      ? spelledInterval(against, note)
-      : spelledInterval(note, against);
-    entries.push({
-      note,
-      index,
-      onset,
-      duration,
-      against,
-      againstIndex,
-      downbeat: Math.abs(onset - Math.round(onset)) < EPS,
-      interval,
-      consonance: classifySpelledInterval(interval),
-    });
     onset += duration;
   }
   return entries;
@@ -941,7 +983,8 @@ function buildEntries(
 
 /**
  * The pairs of counterpoint notes the motion rules are judged over: the
- * successive attacks that cross a bar line.
+ * successive attacks that cross a bar line. It is given the notes actually
+ * struck, since a note held on across the bar line is not a motion at all.
  *
  * Two counterpoint notes over one unmoving cantus-firmus note are oblique
  * motion, which no parallel rule can touch, so the pairs that can break a rule
@@ -978,8 +1021,12 @@ function motionPairs(entries: readonly Entry[]): [number, number][] {
  * Judged are the vertical intervals under each species' dissonance licence
  * (none in the first, a passing dissonance on the weak half in the second and
  * third, a prepared suspension on the downbeat in the fourth, both in the
- * fifth; the third and fifth species also write the *nota cambiata* and the
- * double neighbour, which quit a dissonance by leap), parallel and hidden
+ * fifth; the neighbour that turns back on its own note belongs to the
+ * quarter-note line of the third and fifth species, which also write the *nota
+ * cambiata* and the double neighbour, quitting a dissonance by leap). A note
+ * still sounding when the next cantus-firmus note is struck is judged against
+ * that note too, so a ligature carried across the bar line is read where it
+ * lands as well as where it began. Judged besides are parallel and hidden
  * perfects and the *battuta* between the voices, augmented and otherwise
  * forbidden leaps along the counterpoint, the shape of the counterpoint as a
  * line, and the opening and closing formulas. Violations name the cantus firmus
@@ -1028,24 +1075,32 @@ export function checkSpecies(
   const counterpointAbove =
     opts?.counterpointAbove ?? meanPitch(counterpoint) >= meanPitch(cantusFirmus);
   const entries = buildEntries(cantusFirmus, counterpoint, resolved.durations, counterpointAbove);
+  // Every interval the exercise sounds is judged, including the ones a held
+  // note forms in the measure it is carried into. The line itself is read from
+  // the attacks alone: a note going on sounding was not sung a second time, and
+  // the motion the voices make across a bar line is the one from the note
+  // struck before it to the note struck after.
+  const struck = entries.filter((entry) => !entry.held);
 
   const violations: PartWritingViolation[] = [];
   for (let position = 0; position < entries.length; position += 1) {
     violations.push(...verticalViolations(entries, position, species, counterpointAbove));
-    const previous = entries[position - 1];
-    const current = entries[position];
+  }
+  for (let position = 1; position < struck.length; position += 1) {
+    const previous = struck[position - 1];
+    const current = struck[position];
     if (previous !== undefined && current !== undefined) {
       violations.push(...melodicViolations(previous, current));
     }
   }
-  violations.push(...melodicShapeViolations(entries, species));
-  for (const [from, to] of motionPairs(entries)) {
-    const previous = entries[from];
-    const current = entries[to];
+  violations.push(...melodicShapeViolations(struck, species));
+  for (const [from, to] of motionPairs(struck)) {
+    const previous = struck[from];
+    const current = struck[to];
     if (previous !== undefined && current !== undefined) {
       violations.push(...motionViolations(previous, current, counterpointAbove));
     }
   }
-  violations.push(...cadenceViolations(entries, mode, counterpointAbove));
+  violations.push(...cadenceViolations(struck, mode, counterpointAbove));
   return inTimeOrder(violations);
 }

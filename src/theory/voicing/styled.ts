@@ -9,11 +9,20 @@ import { pitchClass } from './internal.js';
  *
  * - `close`: the plain close-position tertian stack.
  * - `drop2`: the second voice from the top dropped an octave (drop-2 voicing).
+ *   It takes at least three voices, since the voice it names has to have
+ *   another below it for the drop to open the stack at all.
  * - `drop3`: the third voice from the top dropped an octave (drop-3 voicing).
+ *   It takes at least four voices, for the same reason.
  * - `shell`: root plus guide tones (third and seventh) for seventh chords, or
  *   root/third/fifth for triads; the fifth and tensions are omitted.
  * - `rootless`: the root omitted, keeping third/fifth/seventh and tensions
  *   (a typical left-hand jazz voicing).
+ *
+ * A chord with too few voices for the drop it asks for is voiced in close
+ * position instead: a three-note `drop3` is the close stack, not a stack with
+ * its bottom voice pushed an octave down. A slash bass the chord does not
+ * contain sounds under the stack rather than in it, and is not one of the
+ * voices counted here.
  *
  * @category Voicing & Counterpoint
  */
@@ -50,6 +59,17 @@ export type StyledVoicingOptions = {
 
 /** Default base octave for a styled close-position stack. */
 const DEFAULT_STYLE_OCTAVE = 4;
+
+/**
+ * Which voice of the close stack, counted from the top, a style lowers an
+ * octave; 0 for a style that lowers none.
+ */
+function dropPositionFromTop(style: VoicingStyle): number {
+  if (style === 'drop2') {
+    return 2;
+  }
+  return style === 'drop3' ? 3 : 0;
+}
 
 /** Return the pitch classes of a list in order, without duplicates. */
 function dedupePcs(pcs: number[]): number[] {
@@ -95,6 +115,15 @@ function nearestPc(target: number, pcs: number[]): number {
  * {@link VoicingStyle} then transforms the stack, and the result is returned as
  * ascending MIDI pitches (index 0 = lowest).
  *
+ * A drop voicing lowers one voice below the rest, so that voice is its bass —
+ * which is what tells the drop-2 voicings of one chord apart. When the chord
+ * names a bass tone of its own, the close stack is therefore rotated so the
+ * style drops that tone, and the result is the drop voicing whose bass is the
+ * tone asked for; the named bass is not lowered under an already dropped voice
+ * afterwards, which would leave a hole wider than an octave in the middle. A
+ * bass the chord does not contain is no voice of the stack and cannot be the
+ * dropped one, so it keeps the bottom and the drop happens above it.
+ *
  * Every returned pitch is a valid MIDI number: an octave whose stack would run
  * off either end of the 0..127 range is rejected rather than voiced out of
  * range, matching {@link nextVoicing}, which clamps its derived ranges.
@@ -126,6 +155,7 @@ export function voiceChordStyled(chord: Chord, opts?: StyledVoicingOptions): num
   // Tertian chord tones in order, with the bass tone rotated to the bottom.
   let order = dedupePcs(chord.intervals.map((interval) => pitchClass(chord.rootPc + interval)));
   const bassIndex = order.indexOf(bassPc);
+  const bassIsChordTone = bassIndex >= 0;
   if (bassIndex > 0) {
     order = [...order.slice(bassIndex), ...order.slice(0, bassIndex)];
   } else if (bassIndex < 0) {
@@ -163,6 +193,26 @@ export function voiceChordStyled(chord: Chord, opts?: StyledVoicingOptions): num
     order = [...order.slice(targetIndex + 1), ...order.slice(0, targetIndex + 1)];
   }
 
+  // A drop puts the voice it lowers under the whole stack, so on a drop voicing
+  // the dropped voice is the bass. When the chord names a bass tone of its own,
+  // rotate the close stack so the named tone is the one the style drops: the
+  // requested bass then reaches the bottom through the drop itself, which is
+  // also what tells the four drop-2 voicings of a seventh chord apart. Lowering
+  // it afterwards instead, under a voice already dropped below it, would open a
+  // hole wider than an octave inside a voicing whose point is compactness.
+  // A rotation is a single choice, so this overrides any `topNote` rotation.
+  const dropFromTop = dropPositionFromTop(style);
+  const dropsToNamedBass =
+    dropFromTop > 0 && bassIsChordTone && chord.bassPc !== undefined && order.length > dropFromTop;
+  if (dropsToNamedBass) {
+    const bassAt = order.indexOf(bassPc);
+    if (bassAt >= 0) {
+      const shift =
+        (((bassAt - (order.length - dropFromTop)) % order.length) + order.length) % order.length;
+      order = [...order.slice(shift), ...order.slice(0, shift)];
+    }
+  }
+
   // Stack the ordered pitch classes upward in close position.
   const stack: number[] = [];
   let prev: number | undefined;
@@ -179,14 +229,21 @@ export function voiceChordStyled(chord: Chord, opts?: StyledVoicingOptions): num
     stack.push(prev);
   }
 
-  if (style === 'drop2' && stack.length >= 2) {
-    stack[stack.length - 2] = (stack[stack.length - 2] ?? 0) - 12;
-  } else if (style === 'drop3' && stack.length >= 3) {
-    stack[stack.length - 3] = (stack[stack.length - 3] ?? 0) - 12;
+  // The dropped voice needs another voice below it, or the drop only moves the
+  // bottom of the stack down an octave and leaves the rest where it was, which
+  // opens the stack nowhere. A chord that short is voiced in close position.
+  // A bass the chord does not contain is no part of the stacked chord tones —
+  // it sounds under them — so it is neither dropped nor counted as that voice.
+  const stackedFloor = bassIsChordTone ? 0 : 1;
+  if (dropFromTop > 0 && stack.length - dropFromTop > stackedFloor) {
+    const dropIndex = stack.length - dropFromTop;
+    stack[dropIndex] = (stack[dropIndex] ?? 0) - 12;
   }
 
   // An explicit slash bass is a structural requirement, including when it is
-  // not a chord member. Drop voicings and top-note rotation may have moved a
+  // not a chord member — and a bass that is no chord tone cannot be the voice a
+  // drop lowers, so it stays where the stack put it. Top-note rotation, or a
+  // stack wide enough that the dropped voice lands above the bass, may leave a
   // different tone below it, so lower the retained bass by octaves before the
   // final sort. This gives the bass priority over a conflicting top-note hint.
   if (chord.bassPc !== undefined) {

@@ -3,6 +3,8 @@ import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 export { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 
 import { NoSolutionError } from '../../core/errors/index.js';
+import type { Note } from '../../core/pitch/index.js';
+import { diatonicLetterOf } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { Chord } from '../chord/index.js';
 import { chordPitchClasses, chordToneRole } from '../chord/index.js';
@@ -11,6 +13,8 @@ import {
   createsParallelPerfect,
   createsVoiceOverlap,
 } from '../counterpoint/index.js';
+import { crossRelations } from '../partwriting/cross-relation.js';
+import type { ResolvedKey } from '../scale/index.js';
 import {
   isFrustratedLeadingTone,
   isFunctioningLeadingTone,
@@ -19,7 +23,12 @@ import {
 } from '../tendency/index.js';
 import type { VoiceRange } from './satb.js';
 import type { SpellingTable } from './tendency.js';
-import { movesByAugmentedInterval, spellingTable } from './tendency.js';
+import {
+  movesByAugmentedInterval,
+  movesByDescendingStep,
+  spelledAt,
+  spellingTable,
+} from './tendency.js';
 
 /** Default maximum spacing between adjacent upper voices (one octave). */
 export const DEFAULT_MAX_SPACING = 12;
@@ -87,6 +96,19 @@ const SEARCH_NODES_PER_CANDIDATE = 16;
  * the summed semitone motion and nothing else.
  */
 export const HIDDEN_PERFECT_PENALTY = 100;
+
+/**
+ * Score penalty per cross relation written between two consecutive voicings.
+ *
+ * The checker reports the exposed contradiction as a broken rule, so the search
+ * has to be able to see it: without a term of its own the rule was stated on
+ * one side only, and a placement that spells the clash away could never be
+ * preferred. Weighted with {@link HIDDEN_PERFECT_PENALTY}, the other rule about
+ * an interval being exposed rather than forbidden outright, so a cross relation
+ * is worth a little rougher voice leading but never a parallel or a missing
+ * chord tone — some of them cannot be voiced away at all.
+ */
+export const CROSS_RELATION_PENALTY = HIDDEN_PERFECT_PENALTY;
 
 /**
  * Score penalty per voice moving by an augmented interval. The augmented second
@@ -367,15 +389,23 @@ export function resolutionTables(
  * voicings of the same progression.
  *
  * A chordal seventh is a dissonance: unless the next chord holds it as a common
- * tone, the voice carrying it must fall by step. A leading tone must rise to
- * the tonic whenever the next chord contains one, and only where it is
- * functioning as a leading tone; without a key there is no leading tone to
- * speak of, so that half of the rule is skipped. An inner voice may frustrate
- * its leading tone instead, exactly as {@link checkPartWriting} allows, so the
- * search is not scored against a resolution its own checker accepts.
+ * tone, the voice carrying it must fall by step. That step is the written one,
+ * read through the same spelling {@link checkPartWriting} will mark the result
+ * by — a fall of two semitones that writes a diminished third resolves nothing,
+ * and a search counting semitones alone would accept what its own checker
+ * rejects. Where no key names the letters there is no spelling to read, and the
+ * sounding step is all either layer can go by.
+ *
+ * A leading tone must rise to the tonic whenever the next chord contains one,
+ * and only where it is functioning as a leading tone; without a key there is no
+ * leading tone to speak of, so that half of the rule is skipped. An inner voice
+ * may frustrate its leading tone instead, exactly as {@link checkPartWriting}
+ * allows, so the search is not scored against a resolution its own checker
+ * accepts.
  */
 export function resolutionViolations(
   tables: ResolutionTables,
+  spelling: MelodicSpelling | undefined,
   prev: ArrayLike<number>,
   prevOffset: number,
   cur: ArrayLike<number>,
@@ -392,7 +422,11 @@ export function resolutionViolations(
     }
     const fromPc = pitchClass(from);
     const motion = to - from;
-    if (fromPc === seventhPc && nextHas[fromPc] === 0 && motion !== -1 && motion !== -2) {
+    const resolved =
+      spelling === undefined
+        ? motion === -1 || motion === -2
+        : movesByDescendingStep(spelling.from, from, spelling.to, to);
+    if (fromPc === seventhPc && nextHas[fromPc] === 0 && !resolved) {
       count += 1;
     }
     const inner = voice > 0 && voice < voices - 1;
@@ -502,6 +536,109 @@ export function augmentedMelodicCount(
 }
 
 /**
+ * What the cross-relation rule reads besides the voicings themselves, worked
+ * out once per chord-to-chord move.
+ */
+export type CrossRelationTables = {
+  /** The chord being left. */
+  fromChord: Chord;
+  /** The chord being reached. */
+  toChord: Chord;
+  /**
+   * The chord after that one, where the caller knows it. It is what tells an
+   * applied dominant — which is written with the contradiction and licenses it —
+   * from the diatonic triad that sounds the same; a search that cannot see that
+   * far reads the pair as exposed rather than exempt.
+   */
+  afterChord: Chord | undefined;
+  /** The prevailing key. */
+  key: KeyScale;
+};
+
+/** Spell one candidate voicing, so the letters can be put to the written rules. */
+function spellRow(
+  table: SpellingTable,
+  pitches: ArrayLike<number>,
+  offset: number,
+  voices: number,
+): Note[] {
+  const notes: Note[] = [];
+  for (let voice = 0; voice < voices; voice += 1) {
+    const pitch = pitches[offset + voice];
+    const note = pitch === undefined ? undefined : spelledAt(table, pitch);
+    if (note !== undefined) {
+      notes.push(note);
+    }
+  }
+  return notes;
+}
+
+/**
+ * Whether any letter is written two ways across the move: the cheap half of the
+ * cross-relation rule, which the spelling tables answer without octaves and
+ * without allocating a note.
+ */
+function contradictsALetter(
+  spelling: MelodicSpelling,
+  prev: ArrayLike<number>,
+  prevOffset: number,
+  cur: ArrayLike<number>,
+  curOffset: number,
+  voices: number,
+): boolean {
+  for (let voice = 0; voice < voices; voice += 1) {
+    const from = prev[prevOffset + voice];
+    const earlier = from === undefined ? undefined : spelling.from.notes[pitchClass(from)];
+    if (earlier === undefined) {
+      continue;
+    }
+    for (let other = 0; other < voices; other += 1) {
+      if (other === voice) {
+        continue;
+      }
+      const to = cur[curOffset + other];
+      const later = to === undefined ? undefined : spelling.to.notes[pitchClass(to)];
+      if (
+        later !== undefined &&
+        earlier.alter !== later.alter &&
+        diatonicLetterOf(earlier.letter) === diatonicLetterOf(later.letter)
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Count the cross relations two consecutive voicings write, by the same rule
+ * {@link checkPartWriting} reports them under.
+ *
+ * The letters are scanned first and the full rule — which asks what chord is
+ * being written and how each note was reached — is put only to a move that
+ * actually contradicts one, since almost none do.
+ */
+export function crossRelationCount(
+  spelling: MelodicSpelling,
+  tables: CrossRelationTables,
+  prev: ArrayLike<number>,
+  prevOffset: number,
+  cur: ArrayLike<number>,
+  curOffset: number,
+  voices: number,
+): number {
+  if (!contradictsALetter(spelling, prev, prevOffset, cur, curOffset, voices)) {
+    return 0;
+  }
+  return crossRelations(
+    { notes: spellRow(spelling.from, prev, prevOffset, voices), chord: tables.fromChord },
+    { notes: spellRow(spelling.to, cur, curOffset, voices), chord: tables.toChord },
+    tables.key,
+    { after: tables.afterChord },
+  ).length;
+}
+
+/**
  * Count counterpoint violations between two consecutive voicings of equal
  * length: parallel perfects (fifths and octaves alike, since octaves are the
  * perfect-class-zero case of {@link createsParallelPerfect}) on every voice
@@ -558,38 +695,54 @@ export type MoveScoring = {
   resolution: ResolutionTables | undefined;
   /** How both chords are written, absent when no key names the letters. */
   spelling: MelodicSpelling | undefined;
+  /**
+   * What the cross-relation rule reads, absent when no chord is being left or
+   * no key names the letters the rule is about.
+   */
+  crossRelation: CrossRelationTables | undefined;
 };
 
 /**
  * Build the scoring context of a move onto `chord`.
  *
- * The letters are only decidable against a key, so the augmented-interval rule
- * joins the search wherever one was given — the same condition the leading-tone
- * rules are under.
+ * The letters are only decidable against a key, so the augmented-interval and
+ * cross-relation rules join the search wherever one was given — the same
+ * condition the leading-tone rules are under.
  *
  * @param prevChord The chord being left, or undefined when nothing precedes it.
  * @param chord The chord being reached.
  * @param key The prevailing key, or undefined when none was given.
+ * @param nextChord The chord after the one being reached, where the caller
+ *   knows it. It licenses the chromatic tone an applied dominant is written
+ *   with, and nothing else reads it.
  */
 export function moveScoring(
   prevChord: Chord | undefined,
   chord: Chord,
-  key?: KeyScale,
+  key?: ResolvedKey,
+  nextChord?: Chord,
 ): MoveScoring {
+  // The pitch-class tables want the scale alone and say so here; the spelling
+  // table is handed the key whole, since the letters it writes are the key's.
   return {
-    structure: structuralTables(chord, key),
-    resolution: prevChord === undefined ? undefined : resolutionTables(prevChord, chord, key),
+    structure: structuralTables(chord, key?.scale),
+    resolution:
+      prevChord === undefined ? undefined : resolutionTables(prevChord, chord, key?.scale),
     spelling:
       key === undefined
         ? undefined
         : { from: spellingTable(key, prevChord), to: spellingTable(key, chord) },
+    crossRelation:
+      prevChord === undefined || key === undefined
+        ? undefined
+        : { fromChord: prevChord, toChord: chord, afterChord: nextChord, key: key.scale },
   };
 }
 
 /**
  * The rule-violation weight of one move: the counterpoint violations, the
- * tendency tones left unresolved, the augmented intervals written, and a direct
- * perfect reached by the outer voices.
+ * tendency tones left unresolved, the augmented intervals written, the cross
+ * relations exposed, and a direct perfect reached by the outer voices.
  *
  * This is the part of a move's score that a shorter line cannot buy back, which
  * is also what makes it the part worth looking a chord ahead for: a candidate
@@ -604,19 +757,24 @@ export function violationWeight(
   curOffset: number,
   voices: number,
 ): number {
-  const { resolution, spelling } = scoring;
+  const { resolution, spelling, crossRelation } = scoring;
   const unresolved =
     resolution === undefined
       ? 0
-      : resolutionViolations(resolution, prev, prevOffset, cur, curOffset, voices);
+      : resolutionViolations(resolution, spelling, prev, prevOffset, cur, curOffset, voices);
   const augmented =
     spelling === undefined
       ? 0
       : augmentedMelodicCount(spelling, prev, prevOffset, cur, curOffset, voices);
+  const contradictions =
+    spelling === undefined || crossRelation === undefined
+      ? 0
+      : crossRelationCount(spelling, crossRelation, prev, prevOffset, cur, curOffset, voices);
   return (
     VIOLATION_PENALTY * violationCount(prev, prevOffset, cur, curOffset, voices) +
     RESOLUTION_PENALTY * unresolved +
     AUGMENTED_MELODIC_PENALTY * augmented +
+    CROSS_RELATION_PENALTY * contradictions +
     (createsOuterHiddenPerfect(prev, prevOffset, cur, curOffset, voices)
       ? HIDDEN_PERFECT_PENALTY
       : 0)

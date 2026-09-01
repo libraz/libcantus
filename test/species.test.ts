@@ -103,6 +103,16 @@ describe('first species', () => {
     expect(kinds(checkSpecies(cf, cp, 1, C_MAJOR))).toEqual(['wrongRhythmicRatio']);
   });
 
+  it('reports a fifth reached by similar motion though the upper voice steps', () => {
+    // A sixth opening to a fifth, both voices rising, the counterpoint moving
+    // C5 to D5 by step over a leap in the cantus firmus. Two voices and nothing
+    // between them: the step is no excuse for the direct fifth, whatever the
+    // four-part chorale allows its outer voices.
+    const cf = line('E4 G4');
+    const cp = line('C5 D5');
+    expect(kinds(checkSpecies(cf, cp, 1, C_MAJOR))).toContain('hiddenPerfect');
+  });
+
   it('names the cantus firmus as voice 0 and the counterpoint as voice 1', () => {
     const cf = line('C4 D4 E4 D4 C4');
     const cp = line('C5 B5 G4 B4 C5');
@@ -119,6 +129,18 @@ describe('second species', () => {
 
   it('passes an exercise of two notes against one', () => {
     expect(checkSpecies(cantus, counterpoint, 2, C_MAJOR)).toEqual([]);
+  });
+
+  it('flags a neighbour dissonance on the weak half, which this species does not write', () => {
+    const cf = line('C4 F4 E4 D4 C4');
+    const cp = line('C5 G4 A4 C5 B4 A4 B4 G4 C5');
+    // A4 over E4 is a perfect fourth stepped down onto from B4 and stepped back
+    // up to B4: a neighbour note, and the only dissonance the second species
+    // licenses is the one passed through in a single direction.
+    const found = checkSpecies(cf, cp, 2, C_MAJOR).filter(
+      (violation) => violation.kind === 'unpreparedDissonance',
+    );
+    expect(found.map((violation) => violation.fromIndex)).toContain(5);
   });
 
   it('accepts a dissonance passed through by step on the weak half', () => {
@@ -182,9 +204,10 @@ describe('third species', () => {
   });
 
   it('accepts a neighbour note as well as a passing one', () => {
-    const cp = line('G4 A4 B4 C5 D5 C5 B4 A4 G4 A4 B4 C5 F4 G4 A4 B4 C5');
-    // A4 over E4 in the third measure is a perfect fourth reached by step and
-    // left by step in the same direction.
+    const cp = line('G4 A4 B4 C5 D5 C5 B4 A4 B4 A4 B4 C5 F4 G4 A4 B4 C5');
+    // A4 over E4 in the third measure is a perfect fourth stepped down onto
+    // from B4 and stepped back up to B4: the neighbour the quarter-note line
+    // is allowed to decorate a consonance with.
     expect(checkSpecies(cantus, cp, 3, C_MAJOR)).toEqual([]);
   });
 
@@ -385,6 +408,32 @@ describe('fifth species', () => {
     expect(kinds(checkSpecies(cantus, counterpoint, 5, C_MAJOR, { durations: odd }))).toEqual([
       'wrongRhythmicRatio',
     ]);
+  });
+
+  describe('a note tied across the bar line', () => {
+    // The ligature that defines the species: E4 is struck on the weak half of
+    // the first measure and goes on sounding into the second, where the cantus
+    // firmus moves to D4 underneath it and the tie becomes a major second.
+    const cantusFirmus = line('C4 D4 C4');
+    const values = [0.5, 1, 0.5, 1];
+
+    it('is judged against the measure it is carried into', () => {
+      const cp = line('C5 E4 F4 C4');
+      // The second rises to F4 instead of falling, so the dissonance the tie
+      // sounds over D4 is left where it stands.
+      expect(kinds(checkSpecies(cantusFirmus, cp, 5, C_MAJOR, { durations: values }))).toContain(
+        'unresolvedSuspension',
+      );
+    });
+
+    it('passes where it is prepared by a consonance and falls by step', () => {
+      const cp = line('C5 E4 D4 C4');
+      const found = checkSpecies(cantusFirmus, cp, 5, C_MAJOR, { durations: values }).filter(
+        (violation) =>
+          violation.kind === 'unpreparedDissonance' || violation.kind === 'unresolvedSuspension',
+      );
+      expect(found).toEqual([]);
+    });
   });
 });
 

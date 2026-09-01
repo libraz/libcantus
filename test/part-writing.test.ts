@@ -292,6 +292,36 @@ describe('cross relations the style admits', () => {
     ).toEqual([]);
   });
 
+  it('grants the Neapolitan exemption only where the chord is chromatic', () => {
+    // The same two chords in two keys. E phrygian writes its second degree flat
+    // already, so the F major triad is the mode's own II and earns nothing: the
+    // bass C natural against the soprano C# is an exposed contradiction between
+    // the outer voices, sprung rather than led into.
+    const chords = [makeChord(5, 'maj'), makeChord(9, 'maj')];
+    const pitches = [
+      [48, 53, 57, 60],
+      [45, 52, 57, 61],
+    ];
+    const phrygian = scaleByName('phrygian', 4);
+    const inMode = spellExercise(pitches, chords, phrygian);
+    expect(noteNames(inMode[0] ?? [])).toEqual(['C3', 'F3', 'A3', 'C4']);
+    expect(noteNames(inMode[1] ?? [])).toEqual(['A2', 'E3', 'A3', 'C#4']);
+    expect(summarize(checkPartWriting(inMode, chords, phrygian))).toContainEqual({
+      kind: 'crossRelation',
+      voices: [0, 3],
+      fromIndex: 0,
+      toIndex: 1,
+    });
+    // E minor spells its second degree F#, so the same F major triad is the
+    // alteration the Neapolitan is, and the contradiction comes with it.
+    const eMinor = minorKey(4);
+    expect(
+      checkPartWriting(spellExercise(pitches, chords, eMinor), chords, eMinor).filter(
+        (v) => v.kind === 'crossRelation',
+      ),
+    ).toEqual([]);
+  });
+
   it('admits the augmented sixth, and reads it off the written letters', () => {
     // IV to a German sixth: the bass Ab contradicts the tenor's A natural, and
     // the F# contradicts the bass's own F, both of which the chord is built of.

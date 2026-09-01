@@ -7,25 +7,37 @@
  * with `voiceProgression`, spells the result with `spellVoicing`, and marks it
  * with `checkPartWriting`: what the generator hands out has to pass the exercise
  * the library would mark it against.
+ *
+ * The rules are walked from `PartWritingViolationKind` rather than from a list
+ * written out here, so a rule added to the checker has to be given a verdict
+ * before this file will compile, and cannot quietly go unswept.
  */
 
 import { describe, expect, it } from 'vitest';
 import type { KeyScale } from '../src/core/types.js';
 import type { Chord } from '../src/theory/chord/index.js';
-import type { PartWritingViolation } from '../src/theory/partwriting/index.js';
+import type {
+  PartWritingViolation,
+  PartWritingViolationKind,
+} from '../src/theory/partwriting/index.js';
 import { checkPartWriting, spellVoicing } from '../src/theory/partwriting/index.js';
-import { majorKey, minorKey } from '../src/theory/scale/index.js';
+import { majorKey, minorKey, resolveKey } from '../src/theory/scale/index.js';
 import { parseChordSymbol } from '../src/theory/symbol/index.js';
 import { SATB_RANGES, voiceProgression } from '../src/theory/voicing/index.js';
 import {
   augmentedMelodicCount,
+  CROSS_RELATION_PENALTY,
+  crossRelationCount,
   DEFAULT_MAX_SPACING,
   enumerateVoicings,
+  type MoveScoring,
+  moveScoring,
+  resolutionViolations,
   structuralPenalty,
   structuralTables,
   violationCount,
+  violationWeight,
 } from '../src/theory/voicing/internal.js';
-import { spellingTable } from '../src/theory/voicing/tendency.js';
 
 const C_MAJOR = majorKey(0);
 const C_MINOR = minorKey(0);
@@ -54,30 +66,112 @@ function describeAll(violations: readonly PartWritingViolation[]): string {
     .join(', ');
 }
 
-/** The violations of one of the given kinds, described for a failure message. */
-function only(marked: Marked, kinds: readonly PartWritingViolation['kind'][]): string {
-  return describeAll(marked.violations.filter((found) => kinds.includes(found.kind)));
-}
+/**
+ * What the sweep asks of each rule the checker can report.
+ *
+ * - `never`: the generator must not write one at all.
+ * - `unavoidable`: one may stand, but only where no other voicing of the same
+ *   chord would have spared it for the same price. Some contradictions cannot
+ *   be voiced away — the bass takes the chord's own bass pitch class, so a
+ *   lowered third meets the natural one wherever the voices are put — and the
+ *   invariant is that the search never writes one it could have escaped.
+ * - `species`: only `checkSpecies` raises it, since it describes a fault only a
+ *   species exercise can commit, so a four-part progression must show none.
+ */
+type Verdict = 'never' | 'unavoidable' | 'species';
+
+const WATCHED: Record<PartWritingViolationKind, Verdict> = {
+  parallelFifth: 'never',
+  parallelOctave: 'never',
+  hiddenPerfect: 'never',
+  crossRelation: 'unavoidable',
+  voiceCrossing: 'never',
+  overlap: 'never',
+  spacing: 'never',
+  range: 'never',
+  unresolvedLeadingTone: 'never',
+  unresolvedSeventh: 'never',
+  augmentedMelodicInterval: 'unavoidable',
+  wrongRhythmicRatio: 'species',
+  unpreparedDissonance: 'species',
+  unresolvedSuspension: 'species',
+  illegalLeap: 'species',
+  battuta: 'species',
+  missingCadence: 'species',
+  melodicShape: 'species',
+};
+
+/** Every rule under watch, read from the verdicts rather than listed again. */
+const WATCHED_KINDS = Object.keys(WATCHED) as PartWritingViolationKind[];
 
 /**
- * Whether another voicing of the chord would have avoided the augmented interval
- * the search wrote, without breaking a heavier rule in its place.
+ * How many times one candidate voicing of the arriving chord breaks a rule the
+ * search is supposed to weigh. Only the rules judged `unavoidable` need one:
+ * the rest are asserted away entirely, so there is nothing to compare against.
+ */
+const OFFENCES: Partial<
+  Record<
+    PartWritingViolationKind,
+    (
+      scoring: MoveScoring,
+      prev: readonly number[],
+      pitches: ArrayLike<number>,
+      offset: number,
+      voices: number,
+    ) => number
+  >
+> = {
+  augmentedMelodicInterval: (scoring, prev, pitches, offset, voices) =>
+    scoring.spelling === undefined
+      ? 0
+      : augmentedMelodicCount(scoring.spelling, prev, 0, pitches, offset, voices),
+  crossRelation: (scoring, prev, pitches, offset, voices) =>
+    scoring.spelling === undefined || scoring.crossRelation === undefined
+      ? 0
+      : crossRelationCount(
+          scoring.spelling,
+          scoring.crossRelation,
+          prev,
+          0,
+          pitches,
+          offset,
+          voices,
+        ),
+};
+
+/**
+ * Whether another voicing of the chord would have broken the rule fewer times
+ * than the one the search wrote, without breaking a heavier rule in its place.
  *
  * This is the invariant itself rather than a count: an augmented interval may
  * survive where every alternative commits a parallel perfect or drops a chord
  * tone — the bass takes the chord's own bass pitch class, so a move like Ab to B
  * spells an augmented second at every octave open to it — but never where a
- * clean candidate was available for the same price.
+ * cleaner candidate was available for the same price.
  */
-function couldHaveAvoidedIt(marked: Marked, step: number, key: KeyScale): boolean {
+function couldHaveAvoidedIt(
+  marked: Marked,
+  kind: PartWritingViolationKind,
+  step: number,
+  key: KeyScale,
+): boolean {
+  const offences = OFFENCES[kind];
+  if (offences === undefined) {
+    return true;
+  }
   const prev = marked.voiced[step - 1] as number[];
   const chosen = marked.voiced[step] as number[];
-  const prevChord = marked.chords[step - 1] as Chord;
   const chord = marked.chords[step] as Chord;
-  const spelling = { from: spellingTable(key, prevChord), to: spellingTable(key, chord) };
-  const structure = structuralTables(chord, key);
+  const scoring = moveScoring(
+    marked.chords[step - 1],
+    chord,
+    resolveKey(key),
+    marked.chords[step + 1],
+  );
   const voices = chosen.length;
+  const chosenOffences = offences(scoring, prev, chosen, 0, voices);
   const chosenViolations = violationCount(prev, 0, chosen, 0, voices);
+  const structure = structuralTables(chord, key);
   const chosenStructure = structuralPenalty(structure, chosen, 0, voices);
   const candidates = enumerateVoicings(
     chord,
@@ -87,7 +181,7 @@ function couldHaveAvoidedIt(marked: Marked, step: number, key: KeyScale): boolea
   const { pitches } = candidates;
   for (let candidate = 0; candidate < candidates.count; candidate += 1) {
     const offset = candidate * candidates.voices;
-    if (augmentedMelodicCount(spelling, prev, 0, pitches, offset, candidates.voices) > 0) {
+    if (offences(scoring, prev, pitches, offset, candidates.voices) >= chosenOffences) {
       continue;
     }
     if (violationCount(prev, 0, pitches, offset, candidates.voices) > chosenViolations) {
@@ -99,6 +193,16 @@ function couldHaveAvoidedIt(marked: Marked, step: number, key: KeyScale): boolea
     return true;
   }
   return false;
+}
+
+/** The violations of one rule the generator has no answer for, described. */
+function unanswered(marked: Marked, kind: PartWritingViolationKind, key: KeyScale): string {
+  const found = marked.violations.filter((violation) => violation.kind === kind);
+  return describeAll(
+    WATCHED[kind] === 'unavoidable'
+      ? found.filter((violation) => couldHaveAvoidedIt(marked, kind, violation.toIndex, key))
+      : found,
+  );
 }
 
 /** Common progressions in the minor, where the augmented second lies in wait. */
@@ -129,6 +233,18 @@ const MAJOR_PROGRESSIONS: readonly (readonly string[])[] = [
   ['C', 'F', 'Dm', 'G7', 'C'],
 ];
 
+/**
+ * Progressions borrowing from outside the key, where one letter is written two
+ * ways and the cross relation lies in wait.
+ */
+const CHROMATIC_PROGRESSIONS: readonly (readonly string[])[] = [
+  ['C', 'Eb', 'C'],
+  ['C', 'Ab', 'C'],
+  ['C', 'Fm', 'C'],
+  ['C', 'A7', 'Dm'],
+  ['C', 'Bb', 'C'],
+];
+
 /** Every progression of the sweep, with the key it is written in. */
 const SWEEP: readonly { symbols: readonly string[]; key: KeyScale; name: string }[] = [
   ...MINOR_PROGRESSIONS.map((symbols) => ({
@@ -136,7 +252,7 @@ const SWEEP: readonly { symbols: readonly string[]; key: KeyScale; name: string 
     key: C_MINOR,
     name: `${symbols.join('-')} in C minor`,
   })),
-  ...MAJOR_PROGRESSIONS.map((symbols) => ({
+  ...[...MAJOR_PROGRESSIONS, ...CHROMATIC_PROGRESSIONS].map((symbols) => ({
     symbols,
     key: C_MAJOR,
     name: `${symbols.join('-')} in C major`,
@@ -145,32 +261,45 @@ const SWEEP: readonly { symbols: readonly string[]; key: KeyScale; name: string 
 
 describe('the generator marked by its own checker', () => {
   for (const { symbols, key, name } of SWEEP) {
-    it(`writes no parallel or hidden perfect in ${name}`, () => {
-      expect(
-        only(roundTrip(symbols, key), ['parallelFifth', 'parallelOctave', 'hiddenPerfect']),
-      ).toBe('');
-    });
-
-    it(`writes no augmented interval another voicing would have avoided in ${name}`, () => {
+    it(`breaks no rule its own checker reports in ${name}`, () => {
       const marked = roundTrip(symbols, key);
-      const avoidable = marked.violations
-        .filter((found) => found.kind === 'augmentedMelodicInterval')
-        .filter((found) => couldHaveAvoidedIt(marked, found.toIndex, key));
-      expect(describeAll(avoidable)).toBe('');
-    });
-
-    it(`leaves no tendency tone unresolved in ${name}`, () => {
-      expect(only(roundTrip(symbols, key), ['unresolvedSeventh', 'unresolvedLeadingTone'])).toBe(
-        '',
-      );
-    });
-
-    it(`keeps its voices in order, in range and in hand in ${name}`, () => {
-      expect(only(roundTrip(symbols, key), ['voiceCrossing', 'overlap', 'range', 'spacing'])).toBe(
-        '',
-      );
+      for (const kind of WATCHED_KINDS) {
+        expect(unanswered(marked, kind, key), kind).toBe('');
+      }
+      for (const found of marked.violations) {
+        expect(WATCHED_KINDS, 'every rule reported is one the sweep watches').toContain(found.kind);
+      }
     });
   }
+
+  it('voices every chord of every progression it sweeps', () => {
+    // The sweep asserts absences, so what it asserts them about is checked to
+    // exist: a progression that came back short would report as clean.
+    expect(SWEEP.length).toBeGreaterThan(0);
+    for (const { symbols, key, name } of SWEEP) {
+      const marked = roundTrip(symbols, key);
+      expect(marked.voiced, name).toHaveLength(symbols.length);
+      for (const voicing of marked.voiced) {
+        expect(voicing, name).toHaveLength(4);
+      }
+    }
+  });
+
+  it('marks an exercise that does break a rule', () => {
+    // The absences above are only worth something if the checker they are read
+    // through says anything at all, so it is handed an exercise written to
+    // break a rule: the two voices move into consecutive fifths.
+    const chords = ['C', 'Dm'].map((symbol) => parseChordSymbol(symbol));
+    const spelled = [
+      [48, 55, 64, 72],
+      [50, 57, 65, 69],
+    ].map((pitches, index) => spellVoicing(pitches, chords[index] as Chord, C_MAJOR));
+    const marked = checkPartWriting(spelled, chords, C_MAJOR);
+    expect(marked.map((found) => found.kind)).toContain('parallelFifth');
+    for (const found of marked) {
+      expect(WATCHED_KINDS).toContain(found.kind);
+    }
+  });
 
   it('writes the same voicings every time it is asked', () => {
     for (const { symbols, key } of SWEEP) {
@@ -209,8 +338,9 @@ describe('the generator marked by its own checker', () => {
       ['Cm', 'Ab', 'Bdim', 'Cm'],
       ['Cm', 'Eb', 'Ab', 'G'],
     ]) {
+      const marked = roundTrip(symbols, C_MINOR);
       expect(
-        only(roundTrip(symbols, C_MINOR), ['augmentedMelodicInterval']),
+        describeAll(marked.violations.filter((found) => found.kind === 'augmentedMelodicInterval')),
         symbols.join('-'),
       ).toBe('');
     }
@@ -224,7 +354,60 @@ describe('the generator marked by its own checker', () => {
       ['C', 'Em', 'F', 'G'],
       ['C', 'E7', 'Am'],
     ]) {
-      expect(only(roundTrip(symbols, C_MAJOR), ['hiddenPerfect']), symbols.join('-')).toBe('');
+      const marked = roundTrip(symbols, C_MAJOR);
+      expect(
+        describeAll(marked.violations.filter((found) => found.kind === 'hiddenPerfect')),
+        symbols.join('-'),
+      ).toBe('');
     }
+  });
+});
+
+describe('the search and the checker read one rule apiece', () => {
+  it('counts a seventh falling a diminished third as unresolved, as the checker does', () => {
+    // Ab minor seventh onto a C major triad, written in Db major: the voice
+    // holding the seventh moves Gb3 down to E3. Two semitones by ear, but three
+    // letters on the page — a diminished third, which resolves nothing, and the
+    // arriving chord does not hold the Gb either.
+    const key = majorKey(1);
+    const chords = ['Abm7', 'C'].map((symbol) => parseChordSymbol(symbol));
+    const from = [44, 54, 59, 63];
+    const to = [48, 52, 60, 67];
+    const spelled = [from, to].map((pitches, index) =>
+      spellVoicing(pitches, chords[index] as Chord, key),
+    );
+    const reported = checkPartWriting(spelled, chords, key).filter(
+      (found) => found.kind === 'unresolvedSeventh',
+    );
+    const scoring = moveScoring(chords[0], chords[1] as Chord, resolveKey(key));
+    expect(
+      resolutionViolations(
+        scoring.resolution as NonNullable<MoveScoring['resolution']>,
+        scoring.spelling,
+        from,
+        0,
+        to,
+        0,
+        4,
+      ),
+    ).toBe(reported.length);
+    expect(reported).toHaveLength(1);
+  });
+
+  it('weighs a cross relation the checker would report', () => {
+    // C major onto the borrowed Eb major: the alto holds E natural and the bass
+    // strikes Eb, a contradiction the checker reports and the search therefore
+    // has to be able to see.
+    const chords = ['C', 'Eb'].map((symbol) => parseChordSymbol(symbol));
+    const from = [48, 60, 64, 67];
+    const to = [51, 58, 63, 67];
+    const spelled = [from, to].map((pitches, index) =>
+      spellVoicing(pitches, chords[index] as Chord, C_MAJOR),
+    );
+    expect(
+      checkPartWriting(spelled, chords, C_MAJOR).filter((found) => found.kind === 'crossRelation'),
+    ).toHaveLength(1);
+    const scoring = moveScoring(chords[0], chords[1] as Chord, resolveKey(C_MAJOR));
+    expect(violationWeight(scoring, from, 0, to, 0, 4)).toBe(CROSS_RELATION_PENALTY);
   });
 });

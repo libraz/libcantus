@@ -12,9 +12,8 @@
  */
 
 import { InvalidInputError } from '../../core/errors/index.js';
-import type { Note, SpelledInterval } from '../../core/pitch/index.js';
+import type { Note } from '../../core/pitch/index.js';
 import {
-  diatonicLetterOf,
   formatNote,
   noteToMidi,
   noteToPitchClass,
@@ -36,6 +35,7 @@ import {
 import { type KeyLike, resolveKey, toKeyScale } from '../scale/index.js';
 import { spellPitch } from '../spelling/index.js';
 import {
+  isDescendingStep,
   isFrustratedLeadingTone,
   isFunctioningLeadingTone,
   leadingTonePcOf,
@@ -44,6 +44,7 @@ import {
 import type { VoiceRange } from '../voicing/index.js';
 import { SATB_RANGES } from '../voicing/index.js';
 import { resolveMaxSpacing, resolveRanges } from '../voicing/satb.js';
+import { crossRelations, isOuterVoice } from './cross-relation.js';
 import { intervalWord, violation } from './internal.js';
 
 /**
@@ -53,7 +54,10 @@ import { intervalWord, violation } from './internal.js';
  *   kind between one pair of voices. A parallel unison is reported as a
  *   `parallelOctave`, since it is the same perfect class.
  * - `hiddenPerfect`: the outer voices reach a perfect fifth or octave by similar
- *   motion with a leap in the upper voice.
+ *   motion with a leap in the upper voice. The leap is what exposes it in a
+ *   four-part texture; in a two-voice species exercise nothing covers the
+ *   arrival, so similar motion into a perfect interval is reported however the
+ *   upper voice got there.
  * - `crossRelation`: one letter carries two different accidentals in two
  *   different voices across a chord change, exposed — neither note led into by
  *   step, at least one of them in an outer voice, and neither chord one of the
@@ -179,11 +183,6 @@ function midiOf(note: Note, index: number, voice: number): number {
     throw new InvalidInputError(`voicings[${index}][${voice}] must carry an octave`);
   }
   return noteToMidi(note);
-}
-
-/** Whether a melodic interval descends by a diatonic step. */
-function isDescendingStep(interval: SpelledInterval): boolean {
-  return interval.number === 2 && (interval.semitones === -1 || interval.semitones === -2);
 }
 
 /** One chord of the exercise, and everything the rules read off it. */
@@ -336,164 +335,25 @@ function pairViolations(transition: Transition): PartWritingViolation[] {
   return found;
 }
 
-/** Whether a pitch class belongs to the key. */
-function inKey(pc: number, key: KeyScale): boolean {
-  return ((key.modeMask12 >> pitchClassOf(pc - key.rootPc)) & 1) === 1;
-}
-
-/**
- * Whether a chord has the dominant's sonority: a major triad, or any chord
- * sounding a major third and a minor seventh above its root.
- */
-function isDominantSonority(chord: Chord): boolean {
-  const has = (semitones: number): boolean =>
-    chord.intervals.some((interval) => pitchClassOf(interval) === semitones);
-  return chord.quality === 'maj' || (has(4) && has(10));
-}
-
-/**
- * Whether a chord resolves as an applied dominant: the dominant's sonority,
- * taken down a fifth onto a degree of the key other than the tonic, with the
- * chord it names actually following.
- *
- * Named for the resolution because the resolution is what it asks about, and
- * because the analysis layer answers a different question under a similar name:
- * there a chord is an applied dominant by what it is, here only by what comes
- * next. The
- * same major triad on the third degree of a major key is V/vi where vi follows
- * and a plain III where nothing does, and only the first of the two licenses
- * the chromatic tone it introduces.
- */
-function resolvesAsAppliedDominant(chord: Chord, next: Chord | undefined, key: KeyScale): boolean {
-  if (next === undefined || !isDominantSonority(chord)) {
-    return false;
-  }
-  const target = pitchClassOf(chord.rootPc + 5);
-  return (
-    target !== pitchClassOf(key.rootPc) &&
-    inKey(target, key) &&
-    pitchClassOf(next.rootPc) === target
-  );
-}
-
-/** Whether a chord is the Neapolitan: a major triad on the lowered second degree. */
-function isNeapolitan(chord: Chord, key: KeyScale): boolean {
-  return chord.quality === 'maj' && pitchClassOf(chord.rootPc - key.rootPc) === 1;
-}
-
-/**
- * Whether a voicing sounds an augmented sixth above the lowered submediant.
- *
- * That interval is what the Italian, French and German chords are all named
- * for, and it is the only thing separating them from the bVI7 they sound like,
- * so it is read off the written letters rather than the pitch classes.
- */
-function soundsAugmentedSixth(moment: Moment, key: KeyScale): boolean {
-  const bass = moment.notes[0];
-  if (bass === undefined || noteToPitchClass(bass) !== pitchClassOf(key.rootPc + 8)) {
-    return false;
-  }
-  return moment.notes.some((note, voice) => {
-    if (voice === 0) {
-      return false;
-    }
-    const interval = spelledInterval(bass, note);
-    return ((interval.number - 1) % 7) + 1 === 6 && pitchClassOf(interval.semitones) === 10;
-  });
-}
-
-/**
- * Whether a chord is one of the chromatic harmonies whose own definition
- * contains the contradiction: an applied dominant, the Neapolitan, or an
- * augmented sixth. Approaching or leaving one of these is where the textbooks
- * license the cross relation, since the chord cannot be written without it.
- */
-function isChromaticHarmony(moment: Moment, next: Chord | undefined, key: KeyScale): boolean {
-  return (
-    resolvesAsAppliedDominant(moment.chord, next, key) ||
-    isNeapolitan(moment.chord, key) ||
-    soundsAugmentedSixth(moment, key)
-  );
-}
-
-/** Whether a voice reaches its note at `moment` by a diatonic step. */
-function approachedByStep(before: Moment | undefined, moment: Moment, voice: number): boolean {
-  const earlier = before?.notes[voice];
-  const later = moment.notes[voice];
-  if (earlier === undefined || later === undefined) {
-    return false;
-  }
-  return spelledInterval(earlier, later).number === 2;
-}
-
-/** Whether a voice is the bass or the top voice of its chord. */
-function isOuterVoice(voice: number, moment: Moment): boolean {
-  return voice === 0 || voice === moment.notes.length - 1;
-}
-
 /**
  * Cross relations: the same letter carrying different accidentals in two
- * different voices across the chord change. Within one voice the same motion is
- * an ordinary chromatic inflection, so a voice is never compared with itself.
+ * different voices across the chord change, reported as broken rules.
  *
- * What the rule forbids is a semitone exposed across the texture, and three
- * things take that exposure away, each of which is reason enough on its own:
- *
- * - either of the two notes is led into by step, which is how a chromatic tone
- *   is introduced rather than sprung;
- * - both notes lie in inner voices, where the classical norm is markedly
- *   milder than it is between the outer ones;
- * - the chord being left or reached is an applied dominant, the Neapolitan, or
- *   an augmented sixth, whose definition contains the altered degree.
- *
- * Each pair of voices is reported once. The two voices are walked in both
- * directions, so the same clash is met twice and the second reading is dropped.
+ * The rule itself lives beside the voicing search that has to obey it, so what
+ * is left here is naming the clash the search refused to write.
  */
 function crossRelationViolations(transition: Transition): PartWritingViolation[] {
-  const found: PartWritingViolation[] = [];
   const { from, to, key, before, after } = transition;
-  const chromatic =
-    isChromaticHarmony(from, to.chord, key) || isChromaticHarmony(to, after?.chord, key);
-  const reported = new Set<string>();
-  for (let first = 0; first < from.notes.length; first += 1) {
-    for (let second = 0; second < to.notes.length; second += 1) {
-      if (first === second) {
-        continue;
-      }
-      const earlier = from.notes[first];
-      const later = to.notes[second];
-      if (earlier === undefined || later === undefined) {
-        continue;
-      }
-      const letter = diatonicLetterOf(earlier.letter);
-      if (letter !== diatonicLetterOf(later.letter) || earlier.alter === later.alter) {
-        continue;
-      }
-      if (
-        chromatic ||
-        approachedByStep(before, from, first) ||
-        approachedByStep(from, to, second) ||
-        (!isOuterVoice(first, from) && !isOuterVoice(second, to))
-      ) {
-        continue;
-      }
-      const pair = `${letter}:${Math.min(first, second)}:${Math.max(first, second)}`;
-      if (reported.has(pair)) {
-        continue;
-      }
-      reported.add(pair);
-      found.push(
-        violation(
-          'crossRelation',
-          [first, second],
-          from.index,
-          to.index,
-          `${formatNote(bare(earlier))} is contradicted by ${formatNote(bare(later))} in another voice`,
-        ),
-      );
-    }
-  }
-  return found;
+  return crossRelations(from, to, key, { before: before?.notes, after: after?.chord }).map(
+    (clash) =>
+      violation(
+        'crossRelation',
+        [clash.earlierVoice, clash.laterVoice],
+        from.index,
+        to.index,
+        `${formatNote(bare(clash.earlier))} is contradicted by ${formatNote(bare(clash.later))} in another voice`,
+      ),
+  );
 }
 
 /**
@@ -561,7 +421,7 @@ function melodicViolations(transition: Transition): PartWritingViolation[] {
         ),
       );
     }
-    const inner = !isOuterVoice(voice, from) && !isOuterVoice(voice, to);
+    const inner = !isOuterVoice(voice, from.notes) && !isOuterVoice(voice, to.notes);
     if (
       earlierPc === leadingTonePc &&
       isFunctioningLeadingTone(from.chord, key) &&

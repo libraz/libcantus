@@ -288,10 +288,20 @@ export function createsParallelUnison(
  * Whether two voices reach a perfect interval by similar motion from an
  * imperfect one (a hidden/direct fifth or octave).
  *
- * The traditional step exception is applied: the approach is allowed when the
- * upper of the two voices moves by step, so only leaps into the perfect
- * interval are flagged.
+ * How strictly the approach is judged is the caller's to say, because the two
+ * textures do not agree about it:
  *
+ * - `fourPart` (the default) applies the step exception of the chorale — the
+ *   approach is allowed when the upper of the two voices moves by step, so only
+ *   leaps into the perfect interval are flagged. That exception is written for
+ *   the outer voices of a four-part texture, where the other two cover the
+ *   arrival.
+ * - `twoVoice` exempts no approach. With nothing between them, two voices
+ *   moving the same way into a perfect fifth or octave expose it however the
+ *   upper one got there, and strict sixteenth-century writing forbids it
+ *   outright.
+ *
+ * @param strictness Which reading to judge the approach by.
  * @category Voicing & Counterpoint
  */
 export function createsHiddenParallelPerfect(
@@ -299,18 +309,21 @@ export function createsHiddenParallelPerfect(
   aCur: Note,
   bPrev: Note,
   bCur: Note,
+  strictness?: 'fourPart' | 'twoVoice',
 ): boolean;
 export function createsHiddenParallelPerfect(
   aPrev: number,
   aCur: number,
   bPrev: number,
   bCur: number,
+  strictness?: 'fourPart' | 'twoVoice',
 ): boolean;
 export function createsHiddenParallelPerfect(
   aPrev: number | Note,
   aCur: number | Note,
   bPrev: number | Note,
   bCur: number | Note,
+  strictness: 'fourPart' | 'twoVoice' = 'fourPart',
 ): boolean {
   const a0 = pitchOf(aPrev);
   const a1 = pitchOf(aCur);
@@ -330,7 +343,7 @@ export function createsHiddenParallelPerfect(
     return false;
   }
   const upperMove = a1 >= b1 ? aMove : bMove;
-  if (Math.abs(upperMove) <= 2) {
+  if (strictness === 'fourPart' && Math.abs(upperMove) <= 2) {
     return false; // upper voice moves by step — direct interval is acceptable
   }
   return true;

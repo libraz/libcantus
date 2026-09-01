@@ -1,12 +1,11 @@
 import { InvalidInputError, NoSolutionError } from '../../core/errors/index.js';
-import type { KeyScale } from '../../core/types.js';
 import {
   assertFiniteNumber,
   assertGenerationBudget,
   assertPositiveInt,
 } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
-import { type KeyLike, toKeyScale } from '../scale/index.js';
+import { type KeyLike, type ResolvedKey, resolveKey } from '../scale/index.js';
 import { type ChordLike, formatChordSymbol, toChordData } from '../symbol/index.js';
 import {
   createCandidateBuffer,
@@ -164,10 +163,14 @@ export function resolveMaxSpacing(opts?: VoicingOptions): number {
 
 /**
  * Resolve the prevailing key once per entry point, so the scoring tables below
- * are handed a key/scale rather than re-reading whatever form the caller wrote.
+ * are handed one key rather than re-reading whatever form the caller wrote.
+ *
+ * The whole key, spelling and all: the search grades the letters it writes, and
+ * a key handed in as an Ab minor would otherwise be scored on the sharps a G#
+ * minor spells.
  */
-export function resolveKey(opts?: VoicingOptions): KeyScale | undefined {
-  return opts?.key === undefined ? undefined : toKeyScale(opts.key);
+export function resolvedKeyOf(opts?: VoicingOptions): ResolvedKey | undefined {
+  return opts?.key === undefined ? undefined : resolveKey(opts.key);
 }
 
 /** Resolve the chord a `nextVoicing` caller says the current voicing came from. */
@@ -233,7 +236,7 @@ export function voiceChord(chord: ChordLike, opts?: VoicingOptions): number[] {
   const ranges = resolveRanges(opts);
   const maxSpacing = resolveMaxSpacing(opts);
   const candidates = enumerateVoicings(data, ranges, maxSpacing, resolveMaxCandidates(opts));
-  const { structure } = moveScoring(undefined, data, resolveKey(opts));
+  const { structure } = moveScoring(undefined, data, resolvedKeyOf(opts));
   const { pitches, voices } = candidates;
   let bestOffset = -1;
   let bestScore = Number.POSITIVE_INFINITY;
@@ -377,7 +380,7 @@ function successorWeight(
 export function voiceProgression(chords: readonly ChordLike[], opts?: VoicingOptions): number[][] {
   assertGenerationBudget(chords.length, 'voiced progression chords', opts?.budget);
   const data = chords.map((chord) => toChordData(chord));
-  const key = resolveKey(opts);
+  const key = resolvedKeyOf(opts);
   const ranges = resolveRanges(opts);
   const maxSpacing = resolveMaxSpacing(opts);
   const maxCandidates = resolveMaxCandidates(opts);
@@ -408,7 +411,10 @@ export function voiceProgression(chords: readonly ChordLike[], opts?: VoicingOpt
             candidates: locate(index + 1, nextChord, () =>
               enumerateVoicings(nextChord, ranges, maxSpacing, maxCandidates, spare),
             ),
-            scoring: moveScoring(chord, nextChord, key),
+            // The chord after the one being reached goes in too: it is what
+            // says whether the chromatic tone the next chord introduces is the
+            // one an applied dominant is written with.
+            scoring: moveScoring(chord, nextChord, key, data[index + 2]),
           };
     const { pitches, voices, count } = current;
     // A lookahead weighs every pair of candidates, so it is dropped wherever the
