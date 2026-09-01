@@ -8,8 +8,10 @@ import {
   resolveKey,
   scaleByName,
   scaleOf,
+  toKeyScale,
+  tryResolveKeyName,
 } from '../src/theory/scale/index.js';
-import { MAJOR_MASK } from '../src/theory/scale/masks.js';
+import { MAJOR_MASK, NAMED_SCALES, type ScaleName } from '../src/theory/scale/masks.js';
 
 /**
  * A key is three facts, and this is the reading that keeps all three.
@@ -67,6 +69,26 @@ describe('resolving a key keeps what the key knows', () => {
     expect(resolveKey('A minor').variant).toBe('natural');
   });
 
+  it('keeps the tonic the name spells rather than choosing one again', () => {
+    // A name is the plainest way a caller says which side of the circle they
+    // mean, and the two names below denote the same pitch classes. A reading
+    // that dropped the letter would have to guess it back, and the guess reads
+    // both as the sharp side.
+    expect(formatNote(resolveKey('Ab minor').tonic)).toBe('Ab');
+    expect(formatNote(resolveKey('G# minor').tonic)).toBe('G#');
+    expect(formatNote(resolveKey('Cb major').tonic)).toBe('Cb');
+    expect(formatNote(resolveKey('D# major').tonic)).toBe('D#');
+    // The guess, for contrast: the same pitch classes with no letter to keep.
+    expect(formatNote(resolveKey(minorKey(8)).tonic)).toBe('G#');
+  });
+
+  it('reads a name that carries a scale word', () => {
+    expect(resolveKey('D dorian').scale).toEqual(scaleByName('dorian', 2));
+    expect(resolveKey('D dorian').variant).toBe('modal');
+    expect(resolveKey('D harmonic minor').variant).toBe('harmonic');
+    expect(formatNote(resolveKey('Eb melodic minor').tonic)).toBe('Eb');
+  });
+
   it('refuses a value that names no key', () => {
     expect(() => resolveKey(42 as never)).toThrow();
     expect(() => resolveKey({ rootPc: 0, modeMask12: 0 } as never)).toThrow();
@@ -82,6 +104,35 @@ describe('reducing a key says its own name', () => {
     // The two readings agree about the pitch classes; they differ only in what
     // else survives, which is the whole point of having both.
     expect(scaleOf(resolveKey(Key.minor('Ab')))).toEqual(minorKey(8));
+  });
+});
+
+describe('every entry point reads a key name from one vocabulary', () => {
+  /**
+   * A name for each built-in scale, written the way a key writes itself. Taken
+   * from the table rather than listed here, so a scale added tomorrow is
+   * carried into this check without anybody remembering to add it.
+   */
+  const NAMES = (Object.keys(NAMED_SCALES) as ScaleName[]).map(
+    (name) => `C ${name.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase()}`,
+  );
+
+  it.each(NAMES)('%s names the same key to all three readings', (text) => {
+    const resolved = resolveKey(text);
+    expect(toKeyScale(text)).toEqual(resolved.scale);
+    expect(resolveKey(Key.parse(text))).toEqual(resolved);
+  });
+
+  it('reads a plain mode word in the notation system it is written in', () => {
+    // The scale words are English; a mode word is not, and reducing the reading
+    // to one table would have silently dropped the other notations.
+    expect(resolveKey(Key.parse('gis moll'))).toEqual(resolveKey('G# minor'));
+    expect(resolveKey(Key.parse('B dur'))).toEqual(resolveKey('Bb major'));
+  });
+
+  it('reports text that names no key instead of throwing it', () => {
+    const failed = tryResolveKeyName('H lydianish');
+    expect(failed.ok).toBe(false);
   });
 });
 

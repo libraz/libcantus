@@ -381,6 +381,7 @@ const EXPECTED_EXPORTS = [
   'tryParseKeyName',
   'tryParseNote',
   'tryParseTimeSignature',
+  'tryResolveKeyName',
   'tuplet',
   'vocabularyOfKind',
   'voiceChord',

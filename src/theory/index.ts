@@ -203,6 +203,7 @@ export {
   supportsFunctionalHarmony,
   TODI_MASK,
   toKeyScale,
+  tryResolveKeyName,
   variantOfMask,
   WHOLE_TONE_MASK,
   WORLD_SCALES,

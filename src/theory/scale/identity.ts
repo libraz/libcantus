@@ -1,7 +1,9 @@
 import type { Note } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import { type KeyLike, type KeyVariant, toKeyScale } from './coerce.js';
+import { type KeyLike, toKeyScale } from './coerce.js';
+import type { KeyVariant, ResolvedKey } from './kinds.js';
 import { assertKeyVariant, variantOfMask } from './masks.js';
+import { resolveKeyName } from './name.js';
 import { spelledKeyOf } from './relations.js';
 
 /**
@@ -19,28 +21,8 @@ import { spelledKeyOf } from './relations.js';
  * happens, rather than what happens by default on the way past.
  */
 
-export type { KeyVariant };
+export type { KeyVariant, ResolvedKey };
 export { assertKeyVariant, variantOfMask };
-
-/**
- * The complete identity of a key: what it sounds, how it is written, and which
- * scale form it stands in.
- *
- * What {@link resolveKey} hands back, and the shape a key is passed on in. Every
- * field is present: a key that reaches here has been read, so there is nothing
- * left undecided about it, and a reader never has to ask whether a missing
- * field means `'modal'` or means nobody looked.
- *
- * @category Scales
- */
-export type ResolvedKey = {
-  /** The pitch classes the key is built from. */
-  readonly scale: KeyScale;
-  /** The spelled tonic every letter name derived from this key is anchored on. */
-  readonly tonic: Note;
-  /** The scale form the key stands in. */
-  readonly variant: KeyVariant;
-};
 
 /** Whether a value carries the fields a resolved key is read through. */
 function carriesIdentity(value: unknown): value is { tonic?: Note; variant?: KeyVariant } {
@@ -59,6 +41,9 @@ function carriesIdentity(value: unknown): value is { tonic?: Note; variant?: Key
  * spelled by {@link spelledKeyOf}, the same reading the rest of the library
  * uses, and its form is read from its mask. A key that carries a spelled tonic
  * keeps that one — the caller's spelling outranks any the library would pick.
+ * A name carries one too, and it is kept: `'Ab minor'` resolves to an A flat
+ * minor rather than being reduced to pitch classes and spelled back as the G#
+ * minor those read best as.
  *
  * @param value A key name, a plain key/scale, a resolved key, or a value whose
  *   `toJSON` returns one of those.
@@ -67,13 +52,16 @@ function carriesIdentity(value: unknown): value is { tonic?: Note; variant?: Key
  *   its own root.
  * @example
  * ```ts
- * import { resolveKey } from '@libraz/libcantus';
- * resolveKey('Ab minor').variant; // 'natural'
+ * import { formatNote, resolveKey } from '@libraz/libcantus';
+ * formatNote(resolveKey('Ab minor').tonic); // 'Ab'
  * resolveKey('C major').tonic.letter; // 0
  * ```
  * @category Scales
  */
 export function resolveKey(value: KeyLike): ResolvedKey {
+  if (typeof value === 'string') {
+    return resolveKeyName(value);
+  }
   const scale = toKeyScale(value);
   const carried =
     carriesIdentity(value) && 'toJSON' in value && typeof value.toJSON === 'function'

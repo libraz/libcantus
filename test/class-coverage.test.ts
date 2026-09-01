@@ -92,6 +92,7 @@ const NOT_A_CLASS_METHOD: Readonly<Record<string, string>> = {
   // here, which reads the same text and hands back the value object.
   parseNote: 'the class face is Note.parse',
   parseKeyName: 'the class face is Key.parse',
+  tryParseKeyName: 'the class face is Key.tryParse, which reads the scale words too',
   parseChordSymbol: 'the class face is Chord.parse',
   parseInterval: 'the class face is Interval.parse',
 

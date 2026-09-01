@@ -1,11 +1,11 @@
 import { InvalidInputError } from '../../core/errors/index.js';
 import type { Note } from '../../core/pitch/index.js';
-import { noteToPitchClass, parseKeyName, pitchClassOf } from '../../core/pitch/index.js';
+import { pitchClassOf } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import { assertInteger } from '../../core/validation/index.js';
-import { majorKey, minorKey } from './key.js';
 import type { KeyVariant } from './kinds.js';
 import { CHROMATIC_MASK } from './masks.js';
+import { resolveKeyName } from './name.js';
 
 export type { KeyVariant };
 
@@ -65,12 +65,12 @@ function normalizedKeyScale(scale: KeyScale): KeyScale {
  * instance is accepted through its `toJSON` method rather than by its type, so
  * the layers below the model can read a class without importing it.
  *
- * A name is read by {@link parseKeyName} and nothing else, so every entry point
- * that takes a key accepts exactly the names a key field already accepts, in
- * every notation system it already reads. The mode word decides the scale: a
- * major name gives the major scale, a minor name the natural minor. The
- * harmonic and melodic forms have no name of their own, so a caller who needs
- * one builds it with {@link scaleByName} and passes the scale.
+ * A name is read by the one reader {@link resolveKey} and `Key.parse` also use,
+ * so every entry point that takes a key accepts exactly the same names: a mode
+ * word in every notation system that reader knows, and a built-in scale's own
+ * word — `'D dorian'`, `'D harmonic minor'` — in English.
+ * The spelling the name carries is dropped here along with the scale form,
+ * which is what {@link resolveKey} is for.
  *
  * @param value A key name, a plain key/scale, or a value whose `toJSON`
  *   returns data carrying one.
@@ -87,9 +87,7 @@ function normalizedKeyScale(scale: KeyScale): KeyScale {
  */
 export function toKeyScale(value: KeyLike): KeyScale {
   if (typeof value === 'string') {
-    const name = parseKeyName(value);
-    const rootPc = noteToPitchClass(name.tonic);
-    return name.mode === 'major' ? majorKey(rootPc) : minorKey(rootPc);
+    return resolveKeyName(value).scale;
   }
   if (typeof value === 'object' && value !== null) {
     // A key reaches here in three shapes: the class, the plain data it

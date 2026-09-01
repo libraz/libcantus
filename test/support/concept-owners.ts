@@ -143,6 +143,17 @@ export const CONCEPT_OWNERS: readonly ConceptOwner[] = [
     reserved: ['chordScales', 'avoidNotes', 'availableTensions'],
   },
   {
+    // A key name carries a spelled tonic and a scale form. A second reader that
+    // keeps neither turns `'Ab minor'` into the G# minor the pitch classes read
+    // best as, and no caller can see where the flat went.
+    concept: 'the key a name denotes',
+    owner: 'src/theory/scale/name.ts',
+    reserved: ['tryResolveKeyName', 'resolveKeyName', 'tryNamedScaleKey', 'tryParseScaleKey'],
+    // The word-to-scale table is the reading, under another name: a sibling
+    // that reads it has written a second parser without declaring one.
+    private: ['SCALE_BY_WORD', 'scaleWordKey'],
+  },
+  {
     // An interval's direction is one fact. Read from the sign of its span in
     // one place and from a flag in another, the two disagree on the intervals
     // whose letters and pitches move opposite ways.

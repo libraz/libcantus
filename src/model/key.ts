@@ -23,7 +23,6 @@ import {
   toNoteData,
   toSpelledInterval,
   transposeByInterval,
-  tryParseKeyName,
 } from '../core/pitch/index.js';
 import type { KeyScale } from '../core/types.js';
 import { assertFiniteNumber, assertInteger, assertOneOf } from '../core/validation/index.js';
@@ -66,6 +65,7 @@ import {
   subdominantKeyOf,
   supportsFunctionalHarmony,
   toKeyScale,
+  tryResolveKeyName,
   variantOfMask,
 } from '../theory/scale/index.js';
 import { spellPitchClasses, spellScale } from '../theory/spelling/index.js';
@@ -128,39 +128,6 @@ function scaleWord(name: ScaleName | undefined, isMinor: boolean): string {
     return 'minor';
   }
   return name.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();
-}
-
-/** A scale word with its spacing and case dropped, so two spellings compare. */
-function scaleWordKey(text: string): string {
-  return text.replace(/[^a-z0-9]/gi, '').toLowerCase();
-}
-
-/** The built-in scale each scale word names, indexed the way names compare. */
-const SCALE_BY_WORD: ReadonlyMap<string, ScaleName> = new Map(
-  (Object.keys(NAMED_SCALES) as ScaleName[]).map((name) => [scaleWordKey(name), name]),
-);
-
-/**
- * Read a key named by a tonic and a scale word — `'D harmonic minor'`,
- * `'D dorian'` — or answer null when the text names no built-in scale.
- *
- * This is the inverse of what {@link Key.toString} writes, so a key that is
- * neither a plain major nor a plain minor survives being written down and read
- * back; a plain mode word is left to the key-name parser, which reads it in
- * every notation system rather than in English alone.
- */
-function tryParseScaleKey(text: string): Key | null {
-  const separator = text.trim().search(/\s/);
-  if (separator < 0) {
-    return null;
-  }
-  const trimmed = text.trim();
-  const name = SCALE_BY_WORD.get(scaleWordKey(trimmed.slice(separator)));
-  if (name === undefined) {
-    return null;
-  }
-  const tonic = Note.tryParse(trimmed.slice(0, separator));
-  return tonic.ok ? new Key(scaleByName(name, tonic.value.pitchClass), tonic.value) : null;
 }
 
 /** Widest signature a key is actually written with, in fifths. */
@@ -417,18 +384,16 @@ export class Key {
    * ```
    */
   static tryParse(text: string, opts?: NoteNameOptions): ParseResult<Key> {
-    if (typeof text === 'string' && (opts?.system === undefined || opts.system === 'english')) {
-      // Tried first, because a name ending in a mode word — `'D harmonic
-      // minor'` — would otherwise be read as the plain minor key that word
-      // names and lose the scale it was written with.
-      const named = tryParseScaleKey(text);
-      if (named !== null) {
-        return { ok: true, value: named };
-      }
-    }
-    const parsed = tryParseKeyName(text, opts);
+    // The whole reading lives in the theory layer, so a name handed to a
+    // function that takes a `KeyLike` and a name handed to this class are the
+    // same name: the scale words, the notation systems and the spelling the
+    // text carries are one vocabulary rather than two that drift.
+    const parsed = tryResolveKeyName(text, opts);
     return parsed.ok
-      ? { ok: true, value: Key.#modeOn(parsed.value.mode, new Note(parsed.value.tonic)) }
+      ? {
+          ok: true,
+          value: new Key(parsed.value.scale, new Note(parsed.value.tonic), parsed.value.variant),
+        }
       : parsed;
   }
 
