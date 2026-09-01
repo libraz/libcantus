@@ -11,6 +11,7 @@ import type { Chord, ChordToneRole } from '../../theory/chord/index.js';
 import { chordToneRole } from '../../theory/chord/index.js';
 import { isScaleTone, type KeyLike, toKeyScale } from '../../theory/scale/index.js';
 import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
+import { isLeadingToneChordOf } from '../../theory/tendency/index.js';
 import {
   degreeRootPc,
   hasMajorThird,
@@ -81,19 +82,9 @@ function restsOnDominant(to: Chord, key: KeyScale): boolean {
   return !leadingToneDominant && thirdBelongsToKey(to, key);
 }
 
-/** Whether a leading-tone chord is a diminished-family resolution chord. */
-function isLeadingToneDiminished(chord: Chord): boolean {
-  return chord.quality === 'dim' || chord.quality === 'dim7' || chord.quality === 'm7b5';
-}
-
 /** Whether a chord is the key's dominant, heard through its major third. */
 function isDominantOf(chord: Chord, key: KeyScale): boolean {
   return mod12(chord.rootPc - key.rootPc) === 7 && hasMajorThird(chord);
-}
-
-/** Whether a chord is a leading-tone chord standing in for the dominant. */
-function isLeadingToneOf(chord: Chord, key: KeyScale): boolean {
-  return mod12(chord.rootPc - key.rootPc) === 11 && isLeadingToneDiminished(chord);
 }
 
 /** Whether a chord is the key's tonic triad standing on its own fifth. */
@@ -299,7 +290,7 @@ function cadenceType(
     return null;
   }
   const dominant = isDominantOf(from, key);
-  if ((dominant || isLeadingToneOf(from, key)) && toOffset === 0) {
+  if ((dominant || isLeadingToneChordOf(from, key)) && toOffset === 0) {
     return 'authentic';
   }
   if (fromOffset === 5 && toOffset === 0) {
@@ -594,7 +585,7 @@ export function cadenceBetween(
   const soprano = toOuter.soprano === undefined ? null : chordToneRole(toOuter.soprano, to);
 
   const type = cadenceType(from, to, key, fromBassPc, toBassPc);
-  const leadingTone = isLeadingToneOf(from, key);
+  const leadingTone = isLeadingToneChordOf(from, key);
   const facts: CadenceFacts = {
     type,
     strength:

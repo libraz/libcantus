@@ -14,8 +14,9 @@
  */
 
 import type { KeyScale } from '../../core/types.js';
-import type { Chord, ChordQuality } from '../../theory/chord/index.js';
+import type { Chord } from '../../theory/chord/index.js';
 import { scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
+import { LEADING_TONE_QUALITIES } from '../../theory/tendency/index.js';
 import { borrowedSourceOf } from './borrowed.js';
 import { isAppliedDominantSonority, isDiatonicChord, mod12, romanReference } from './internal.js';
 
@@ -27,7 +28,7 @@ import { isAppliedDominantSonority, isDiatonicChord, mod12, romanReference } fro
  * fully diminished seventh and the half-diminished one stand on the same raised
  * leading tone and differ only in the colour of the sixth degree above it.
  */
-export const LEADING_TONE_QUALITIES: ReadonlySet<ChordQuality> = new Set(['dim', 'dim7', 'm7b5']);
+export { LEADING_TONE_QUALITIES };
 
 /** A degree a chord can tonicize, as both layers need to name it. */
 export type TonicizableDegree = {

@@ -12,9 +12,9 @@ import type { PartWritingViolation } from '../src/theory/partwriting/index.js';
 import { checkPartWriting, spellVoicing } from '../src/theory/partwriting/index.js';
 import { majorKey, minorKey, scaleByName, spelledKeyOf } from '../src/theory/scale/index.js';
 import { noteNames, spellChord } from '../src/theory/spelling/index.js';
+import { seventhPcOf } from '../src/theory/tendency/index.js';
 import type { VoiceRange } from '../src/theory/voicing/index.js';
 import { voiceProgression } from '../src/theory/voicing/index.js';
-import { seventhPcOf } from '../src/theory/voicing/tendency.js';
 
 const C_MAJOR = majorKey(0);
 const A_HARMONIC_MINOR = scaleByName('harmonicMinor', 9);

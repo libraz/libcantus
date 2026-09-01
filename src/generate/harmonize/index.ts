@@ -30,6 +30,7 @@ import {
   scaleTonesInDegreeOrder,
   toKeyScale,
 } from '../../theory/scale/index.js';
+import { leadingTonePcOf } from '../../theory/tendency/index.js';
 import { type GenerationContextInput, resolveContext } from '../context/index.js';
 import type { ChordSpan } from '../progression/index.js';
 import { classifyMelodyTones, snapToPulse } from './nct.js';
@@ -467,11 +468,6 @@ function isMinorKey(key: KeyScale): boolean {
   return ((key.modeMask12 >> 3) & 1) === 1 && ((key.modeMask12 >> 4) & 1) === 0;
 }
 
-/** The pitch class a semitone below the tonic, which a minor key cadences through. */
-function leadingTonePc(key: KeyScale): number {
-  return (pitchClass(key.rootPc) + 11) % 12;
-}
-
 /**
  * Whether a pitch belongs to the key, counting the raised seventh of a minor
  * key.
@@ -483,7 +479,7 @@ function leadingTonePc(key: KeyScale): number {
  * minor phrase closes with is not paid for twice.
  */
 function isKeyTone(pitch: number, key: KeyScale): boolean {
-  return isScaleTone(pitch, key) || (isMinorKey(key) && pitchClass(pitch) === leadingTonePc(key));
+  return isScaleTone(pitch, key) || (isMinorKey(key) && pitchClass(pitch) === leadingTonePcOf(key));
 }
 
 /**

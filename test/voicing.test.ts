@@ -5,6 +5,7 @@ import { chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
 import { createsParallelOctave, createsParallelPerfect } from '../src/theory/counterpoint/index.js';
 import { checkPartWriting, spellVoicing } from '../src/theory/partwriting/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
+import { isFunctioningLeadingTone } from '../src/theory/tendency/index.js';
 import {
   nextVoicing,
   SATB_RANGES,
@@ -13,7 +14,6 @@ import {
   voiceLeadingCost,
   voiceProgression,
 } from '../src/theory/voicing/index.js';
-import { isFunctioningLeadingTone } from '../src/theory/voicing/tendency.js';
 
 /** Reduce a MIDI pitch to a pitch class. */
 function pc(pitch: number): number {

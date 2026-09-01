@@ -49,7 +49,7 @@ export const CONCEPT_OWNERS: readonly ConceptOwner[] = [
     // by pitch class while the checker decides it by function and voice
     // position, so the voicer writes what the checker then rejects.
     concept: 'the leading tone and its obligation',
-    owner: 'src/theory/voicing/tendency.ts',
+    owner: 'src/theory/tendency/index.ts',
     reserved: [
       'leadingTonePc',
       'leadingTonePcOf',
@@ -61,10 +61,10 @@ export const CONCEPT_OWNERS: readonly ConceptOwner[] = [
       'LEADING_TONE_QUALITIES',
     ],
     allowed: [
-      'src/analyze/functional/cadence.ts:isLeadingToneDiminished',
-      'src/analyze/functional/cadence.ts:isLeadingToneOf',
-      'src/analyze/functional/tonicization.ts:LEADING_TONE_QUALITIES',
-      'src/generate/harmonize/index.ts:leadingTonePc',
+      // A different concept wearing a matching name: this asks how a line
+      // moves, not what the leading tone is. It reads the shared pitch class
+      // rather than restating it, and lives with the counterpoint rules that
+      // are its subject.
       'src/theory/counterpoint/index.ts:isLeadingToneResolution',
     ],
   },

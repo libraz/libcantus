@@ -11,16 +11,15 @@ import {
   createsParallelPerfect,
   createsVoiceOverlap,
 } from '../counterpoint/index.js';
-import type { VoiceRange } from './satb.js';
-import type { SpellingTable } from './tendency.js';
 import {
   isFrustratedLeadingTone,
   isFunctioningLeadingTone,
   leadingTonePcOf,
-  movesByAugmentedInterval,
   seventhPcOf,
-  spellingTable,
-} from './tendency.js';
+} from '../tendency/index.js';
+import type { VoiceRange } from './satb.js';
+import type { SpellingTable } from './tendency.js';
+import { movesByAugmentedInterval, spellingTable } from './tendency.js';
 
 /** Default maximum spacing between adjacent upper voices (one octave). */
 export const DEFAULT_MAX_SPACING = 12;

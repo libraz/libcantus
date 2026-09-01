@@ -35,15 +35,15 @@ import {
 } from '../counterpoint/index.js';
 import { type KeyLike, resolveKey, toKeyScale } from '../scale/index.js';
 import { spellPitch } from '../spelling/index.js';
-import type { VoiceRange } from '../voicing/index.js';
-import { SATB_RANGES } from '../voicing/index.js';
-import { resolveMaxSpacing, resolveRanges } from '../voicing/satb.js';
 import {
   isFrustratedLeadingTone,
   isFunctioningLeadingTone,
   leadingTonePcOf,
   seventhPcOf,
-} from '../voicing/tendency.js';
+} from '../tendency/index.js';
+import type { VoiceRange } from '../voicing/index.js';
+import { SATB_RANGES } from '../voicing/index.js';
+import { resolveMaxSpacing, resolveRanges } from '../voicing/satb.js';
 import { intervalWord, violation } from './internal.js';
 
 /**
