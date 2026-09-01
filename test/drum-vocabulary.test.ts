@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { InvalidInputError } from '../src/core/errors/index.js';
 import { resolveContext } from '../src/generate/context/index.js';
 import {
   FILL_ARCHETYPES,
@@ -467,5 +468,72 @@ describe('the built-in drum dictionaries are one object for the whole process', 
       first.material.strokes.push({ voice: 'kick', step: 1, velocity: 1 });
     }).toThrow(TypeError);
     expect(DRUM_PATTERNS[0]?.id).toBe(id);
+  });
+});
+
+describe('the meter a drum figure is written in', () => {
+  /** A one-bar figure written in 3/4, twelve sixteenths to the bar. */
+  const waltz: Vocabulary<unknown> = {
+    id: 'callerWaltz',
+    genre: 'rock',
+    difficulty: 1,
+    articulations: [],
+    ts: { numerator: 3, denominator: 4 },
+    material: {
+      steps: 12,
+      strokes: [
+        { voice: 'kick', step: 0, velocity: 1 },
+        { voice: 'snare', step: 4, velocity: 0.9 },
+        { voice: 'snare', step: 8, velocity: 0.9 },
+      ],
+    },
+    provenance: { basis: 'construction', note: 'written for this test from its own grid' },
+  };
+
+  it('refuses a meter no figure is written in rather than answering with silence', () => {
+    // The built-in dictionary is written in 4/4 throughout, so a three-beat bar
+    // has nothing to place. An empty track would read as "the dials rejected
+    // every candidate", which is a different answer.
+    expect(() => placeDrumPattern({ bars: 4, genre: 'bossa', ts: '3/4' })).toThrow(
+      /no figure is written in/,
+    );
+    expect(() => placeDrumPattern({ bars: 4, genre: 'bossa', ts: '6/8' })).toThrow(
+      InvalidInputError,
+    );
+  });
+
+  it("places a figure supplied in another meter on that meter's bars", () => {
+    const hits = placeDrumPattern({
+      bars: 2,
+      genre: 'rock',
+      ts: '3/4',
+      ctx: { seed: 1, bpm: 100, vocabulary: [waltz] },
+    });
+    // Three-beat bars: the second bar of the figure starts on beat 3, not 4.
+    expect(hits.map((hit) => hit.startBeat)).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+
+  it('thins a figure against the bar it is written in', () => {
+    // Below the neutral dial the figure is thinned by how much of the metre
+    // each position carries. In 3/4 the beat-2 stroke is a plain main pulse and
+    // goes; a 4/4 reading would rank it as the middle of the bar and keep it.
+    const hits = placeDrumPattern({
+      bars: 2,
+      genre: 'rock',
+      ts: '3/4',
+      ctx: { seed: 1, bpm: 100, vocabulary: [waltz], complexity: { rhythmic: 0.15 } },
+    });
+    expect(hits.map((hit) => hit.startBeat)).toEqual([0, 3]);
+  });
+
+  it('writes the 4/4 dictionary exactly as it did', () => {
+    // The meter a figure is ranked against is the one it is placed in, and the
+    // built-in figures are placed in the meter they are written in.
+    const hits = placeDrumPattern({ bars: 2, genre: 'bossa', ctx: { seed: 7, bpm: 130 } });
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits).toEqual(placeDrumPattern({ bars: 2, genre: 'bossa', ctx: { seed: 7, bpm: 130 } }));
+    for (const hit of hits) {
+      expect(hit.startBeat).toBeLessThan(8);
+    }
   });
 });

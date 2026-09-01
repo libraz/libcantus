@@ -592,6 +592,7 @@ export function placeLicks(
             [index, tile],
             bpm,
             difficulty,
+            ts,
           )
         : undefined;
       lastTilePlayed = notes !== undefined;
@@ -733,10 +734,15 @@ function fitToSegment(
   path: readonly (string | number)[],
   bpm: number,
   difficulty: number | undefined,
+  ts: TimeSignature,
 ): LickNote[] | undefined {
   const deformed = deform(
     material.notes,
     {
+      // The figure is thinned against the bar it is played in, not against a
+      // four-four ladder: a downbeat of the meter in force must outrank an
+      // offbeat of some other meter.
+      ts,
       // The one density the whole generator reads, defaults included: passing
       // the documented default explicitly and leaving it out have to be the
       // same request, and they were not while the figure was deformed by the

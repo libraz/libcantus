@@ -309,6 +309,15 @@ export function sectionsFromNotes(
     }
     const startBeat = units[index]?.startBeat ?? 0;
     const endBeat = units[end - 1]?.endBeat ?? spanEnd;
+    // Counted on the unit grid the sections were merged on, not from the raw
+    // start beat: a pickup was folded into the opening unit, so re-deriving the
+    // length from its beat would hand the first section a bar the grid does not
+    // hold and leave it off the multiple of `unitBars` a section is built from.
+    const sectionFirstBar = startBar + index * unitBars;
+    const sectionLastBar = Math.max(
+      sectionFirstBar,
+      Math.min(lastBar, startBar + end * unitBars - 1),
+    );
     const sectionIndex = sections.length;
     const first = firstByLabel.get(label);
     if (first === undefined) {
@@ -319,7 +328,7 @@ export function sectionsFromNotes(
       label,
       startBeat,
       endBeat,
-      bars: lastBarOf(meters, startBeat, endBeat) - barIndexAt(startBeat, meters) + 1,
+      bars: sectionLastBar - sectionFirstBar + 1,
       firstOccurrence: first ?? sectionIndex,
       similarity,
       rationale:

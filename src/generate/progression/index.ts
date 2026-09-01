@@ -1,4 +1,5 @@
 import { InvalidInputError } from '../../core/errors/index.js';
+import { beatsPerBar, type MeterLike } from '../../core/meter/index.js';
 import type { KeyScale } from '../../core/types.js';
 import {
   assertDegree,
@@ -12,6 +13,9 @@ import { type KeyLike, scaleTonesInDegreeOrder, toKeyScale } from '../../theory/
 import { type GenerationContextInput, resolveContext } from '../context/index.js';
 
 export type { ChordSpan } from '../../theory/chord/index.js';
+
+/** The meter a progression is laid out in when the caller names none. */
+const DEFAULT_TS = { numerator: 4, denominator: 4 };
 
 /**
  * Broad production style a progression preset suits.
@@ -105,6 +109,16 @@ export type ProgressionOptions = {
    */
   style: ProgStyle;
   bars: number;
+  /**
+   * The meter the bars are counted in, in any form that names one; a meter map
+   * is read as the signature it opens in. One chord is laid out per bar, so this
+   * is what the chords are spaced by — a chord every three beats in 3/4, every
+   * three in 6/8 — and a progression written against another bar length drifts
+   * off the bar lines of the part it is played under.
+   *
+   * @defaultValue `4/4`
+   */
+  ts?: MeterLike;
   /** Pick a specific built-in preset by id instead of choosing one by style. */
   presetId?: string;
   /**
@@ -452,7 +466,8 @@ export function pickProgressionPreset(style: ProgStyle, seed = 0): ProgressionPr
  * the presets matching `style`, seeded by the context's `seed`. An unknown
  * `presetId`, or a `style` no preset claims, is a caller error and throws rather
  * than silently falling back to a random preset. The preset's degrees cycle to
- * fill `bars`; each bar is four beats, so `startBeat` is `barIndex * 4`. Chord
+ * fill `bars`; a bar is one bar of `ts`, so `startBeat` is `barIndex` bars of
+ * it — four beats apart in 4/4, three in 3/4 and in 6/8 alike. Chord
  * roots come from the key's diatonic scale-degree mapping. When `ext` is
  * omitted or `'auto'`, each chord takes its diatonic triad quality; otherwise
  * `ext` is forced on every chord — except a reharmonized chord, which is a
@@ -530,13 +545,16 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
     ext,
     preset?.functional === 'cadenceStrong',
   );
+  // One chord per bar of the meter the caller counts in, so the chord changes
+  // fall on the bar lines every other part is written against.
+  const barBeats = beatsPerBar(opts.ts ?? DEFAULT_TS);
   const chords: ChordSpan[] = [];
   for (let bar = 0; bar < opts.bars; bar += 1) {
     const step = cycle[bar % cycle.length];
     const chord: ChordSpan = {
       rootPc: step?.rootPc ?? 0,
       quality: step?.quality ?? 'maj',
-      startBeat: bar * 4,
+      startBeat: bar * barBeats,
     };
     if (step?.degree !== undefined) {
       chord.degree = step.degree;

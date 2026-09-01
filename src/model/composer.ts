@@ -1,4 +1,5 @@
 import type { ChordTimeline } from '../analyze/timeline/index.js';
+import { InvalidInputError } from '../core/errors/index.js';
 import type { InstrumentProfile, InstrumentProfileLike } from '../core/instrument/profile.js';
 import { toStringedProfile } from '../core/instrument/profile.js';
 import type { MeterLike, MeterMap, TimeSignature } from '../core/meter/index.js';
@@ -101,15 +102,6 @@ export type HarmonizedMelody = {
   /** How far the melody was moved, in semitones. */
   transposeSemitones: number;
 };
-
-/**
- * Beats of one progression bar.
- *
- * {@link generateProgression} lays out one chord per four-beat bar whatever
- * meter the rest of the piece is in, so the span its chords cover is counted
- * against that bar and not against the composer's own.
- */
-const PROGRESSION_BAR_BEATS = 4;
 
 /** The key a composer that names none writes in. */
 const DEFAULT_KEY: KeyScale = majorKey(0);
@@ -338,18 +330,24 @@ export class Composer {
   /**
    * A chord progression, in time.
    *
-   * The chords are laid out one per four-beat bar, which is the grid
-   * {@link generateProgression} writes on whatever meter the composer holds, so
-   * the timeline spans `bars` of four beats and carries the composer's key.
+   * The chords are laid out one per bar of the composer's own meter, so a chord
+   * change falls on a bar line of the piece and the timeline spans `bars` of it:
+   * four beats each in 4/4, three in 3/4, and three in 6/8. Every other part is
+   * written against that grid, and harmony that is not on it drifts further from
+   * the bar line with every repeat.
    *
-   * @param opts Everything the progression generator takes but the key and the
-   *   context, which are the composer's.
+   * @param opts Everything the progression generator takes but the key, the
+   *   meter and the context, which are the composer's.
    * @returns The chords over the beats they sound for.
+   * @throws If the composer's meter changes: one chord per bar has no single bar
+   *   length to be laid out on, and the chords would leave the bar lines at the
+   *   first change rather than follow them.
    */
-  progression(opts: Omit<ProgressionOptions, 'key' | 'ctx'>): Timeline {
+  progression(opts: Omit<ProgressionOptions, 'key' | 'ctx' | 'ts'>): Timeline {
     const key = this.#keyScale();
-    const chords = generateProgression({ ...opts, key, ctx: this.context });
-    return Timeline.fromChords(chords, opts.bars * PROGRESSION_BAR_BEATS, key);
+    const ts = this.#unchangingMeter('progression');
+    const chords = generateProgression({ ...opts, key, ts, ctx: this.context });
+    return Timeline.fromChords(chords, opts.bars * beatsPerBar(ts), key);
   }
 
   /**
@@ -529,6 +527,23 @@ export class Composer {
    */
   #openingMeter(): TimeSignature {
     return meterAt(0, this.#meters);
+  }
+
+  /**
+   * The one signature a part laid out in bars is written against.
+   *
+   * A part that places material bar by bar has to know how long a bar is, and a
+   * piece that changes meter has no one answer: the request is refused rather
+   * than answered on the bar the piece opens in, which would put every bar after
+   * the change somewhere the piece has no bar line.
+   */
+  #unchangingMeter(part: string): TimeSignature {
+    if (this.#meters.length > 1) {
+      throw new InvalidInputError(
+        `composer ${part} needs one meter for the whole part; the composer changes meter`,
+      );
+    }
+    return this.#openingMeter();
   }
 
   /** The context every score a composer hands back is read against. */

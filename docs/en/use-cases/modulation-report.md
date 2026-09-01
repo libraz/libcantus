@@ -51,7 +51,7 @@ keys[1]?.fifths; // 1
 
 Each `KeyRegion` carries four things worth showing:
 
-- **The span** — `startBeat` and `endBeat`, which a UI converts to bar numbers with `Score.barAt`.
+- **The span** — `startBeat` and `endBeat`, which a UI converts to bar numbers with `Score.barAt`. `barAt` is 0-based, so add 1 before showing the number, or pass the beat to `formatBarPosition`, which is 1-based like a printed score. See [Time and arrangement](../time-and-arrangement.md) for the two origins.
 - **The key** — `Key.of(region.key)` spells the tonic the way a score would write it, which is what a reader expects rather than a pitch class, and `fifths` is the signature to print with it.
 - **The confidence** — the correlation between the region's pitch-class distribution and the key's profile, in 0..1. A region below the threshold your UI chooses should read as uncertain rather than not appear.
 - **The pivot**, where the chords support one — the last chord to end before the boundary, filled in by the analysis and only when that chord reads in both keys. A chord still sounding across the boundary is not a candidate.

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { InvalidInputError } from '../src/core/errors/index.js';
 import { GUITAR_STANDARD } from '../src/core/instrument/index.js';
+import { isStrongBeat } from '../src/core/meter/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import { generateBassLine } from '../src/generate/bass/index.js';
 import type { GenerationContext } from '../src/generate/context/index.js';
@@ -408,5 +410,47 @@ describe('immutability', () => {
     const held = composer();
     const opts = { bars: 4, style: 'standard', section: 'chorus', fills: true } as const;
     expect(held.withSeed(8).drums(opts).equals(held.drums(opts))).toBe(false);
+  });
+});
+
+describe('the bar a progression is laid out on', () => {
+  it("spaces the chords by the composer's own bar", () => {
+    const waltz = Composer.of({ key: KEY, seed: 7, meters: '3/4' });
+    const timeline = waltz.progression({ style: 'dance', bars: 4 });
+    expect(timeline.segments.map((segment) => segment.startBeat)).toEqual([0, 3, 6, 9]);
+    expect(timeline.totalBeats).toBe(12);
+    // The bass accents the same bar lines, which is what the two parts have to
+    // agree about: a chord change that never lands on one drifts off the bar.
+    for (const segment of timeline.segments) {
+      expect(isStrongBeat(segment.startBeat, '3/4'), `beat ${segment.startBeat}`).toBe(true);
+    }
+  });
+
+  it('spaces the chords by a compound bar in a compound meter', () => {
+    const jig = Composer.of({ key: KEY, seed: 7, meters: '6/8' });
+    const timeline = jig.progression({ style: 'dance', bars: 4 });
+    expect(timeline.segments.map((segment) => segment.startBeat)).toEqual([0, 3, 6, 9]);
+    expect(timeline.totalBeats).toBe(12);
+  });
+
+  it('lays out a four-beat bar where the composer counts in four', () => {
+    expect(composer().progression({ style: 'dance', bars: 4 }).totalBeats).toBe(16);
+    expect(composer().progression({ style: 'rock', bars: 3 }).totalBeats).toBe(12);
+    expect(
+      composer()
+        .progression({ style: 'dance', bars: 4 })
+        .segments.map((segment) => segment.startBeat),
+    ).toEqual([0, 4, 8, 12]);
+  });
+
+  it('refuses to lay out bars for a piece that changes meter', () => {
+    const changing = Composer.of({
+      key: KEY,
+      meters: [
+        { startBeat: 0, ts: { numerator: 4, denominator: 4 } },
+        { startBeat: 8, ts: { numerator: 3, denominator: 4 } },
+      ],
+    });
+    expect(() => changing.progression({ style: 'dance', bars: 4 })).toThrow(InvalidInputError);
   });
 });

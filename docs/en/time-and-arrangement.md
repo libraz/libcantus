@@ -50,6 +50,8 @@ Metric weight runs from 0 (off-pulse) to 3 (downbeat) and is what onset placemen
 
 `resolveMeters` accepts either a single signature or a map, which is how every entry point that takes both is written. `meterAt`, `barIndexAt`, `barStartBeat`, `beatsPerBarAt`, `beatToBarPosition`, and `barPositionToBeat` cover the conversions between absolute beats and bar positions; `Meter` exposes the single-signature ones as `weightAt`, `isStrongBeat`, `barPositionAt`, and `formatPosition`, and `Score` the map-aware ones as `meterAt` and `barAt`.
 
+Bar numbers come in two origins, and which one you get depends on whether you asked for a number or for a string. The numeric conversions are 0-based: `barIndexAt`, `beatToBarPosition`, `Meter.barPositionAt`, and `Score.barAt` all call the first full bar 0, which is what makes a pickup bar -1 and lets bar arithmetic run through it. The formatters are 1-based, the way a printed score is numbered: `formatBarPosition` and `Meter.formatPosition` render that same first bar as `1.1`, and the pickup as bar 0. So a UI that shows a number straight from `barAt` reads one lower than the position the library prints — add 1 to it, or format the beat with `formatBarPosition` instead of numbering it yourself.
+
 ## Compound, additive, and tuplet meters
 
 A `Meter` answers what the bar is made of:

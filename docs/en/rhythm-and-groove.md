@@ -4,7 +4,7 @@ Rhythm is handled as three separable steps: choose where the onsets go, turn tho
 
 ## Generating onsets
 
-A `Rhythm` is a pattern of onsets together with the meter they are counted in. It places them on a grid, weighting each slot by its metric strength, and reshapes a pattern without the meter having to travel beside it:
+A `Rhythm` is a pattern of onsets together with the meter they are counted in. It places them on a grid, weighting each slot by its metric strength, and reshapes a pattern without the meter having to travel beside it — thinning, syncopating and deforming all rank the onsets by the pattern's own meter, so a pattern in 3/4 keeps its three-beat downbeats and one in 6/8 its dotted-quarter pulses:
 
 ```ts
 import { parseTimeSignature, Rhythm } from '@libraz/libcantus';
@@ -212,7 +212,7 @@ pattern.every((hit) => hit.durationBeat > 0); // true
 
 Styles are `standard`, `funk`, `shuffle`, `bossa`, `trap`, `halftime`, `breakbeat`, `house`, and `synthpop`. Sections are `intro`, `verse`, `prechorus`, `chorus`, `bridge`, and `outro`, and they shape density and fills rather than naming a form.
 
-The groove is written against a four-beat bar throughout — the backbeat, the hi-hat subdivisions, the open-hat and crash beats, the beat a fill starts on — so 4/4 is the only meter accepted and another is refused rather than returned with 4/4 accents inside a bar of a different length. A composer whose meter is something else is refused for the same reason. `generateRhythm` and `placeDrumPattern` write in the meter they are given.
+The groove is written against a four-beat bar throughout — the backbeat, the hi-hat subdivisions, the open-hat and crash beats, the beat a fill starts on — so 4/4 is the only meter accepted and another is refused rather than returned with 4/4 accents inside a bar of a different length. A composer whose meter is something else is refused for the same reason. `generateRhythm` writes in the meter it is given. `placeDrumPattern` writes in the meter the figures it draws from are written in, and every figure in the built-in dictionary is written in 4/4: another meter is refused rather than answered with an empty track, unless the context supplies vocabulary written in it — in which case the figure is placed on that meter's bars and thinned against its accents.
 
 `fills: true` replaces the final bar with a fill. A pre-chorus leading into a chorus builds instead — the two-bar lift already marks the phrase end, so it takes precedence.
 

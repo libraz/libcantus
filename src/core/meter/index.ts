@@ -324,10 +324,12 @@ function readTimeSignature(text: string): TimeSignature {
  *
  * The additive form is what {@link parseTimeSignature} reads back, and it adds
  * its terms to get the numerator — so only a grouping written in denominator
- * units can be rendered that way. A grouping counted in main pulses (9/8 as
- * `[1, 1, 1]`, 12/8 as `[2, 2]`) would come back as a different bar, so it
- * falls back to the plain form, which those groupings cost nothing: they select
- * the same reading the bare signature does.
+ * units can be rendered that way. A grouping counted in main pulses whose groups
+ * are all the same length (9/8 as `[1, 1, 1]`, 12/8 as `[2, 2]`) states the
+ * division the bare signature already has, so it falls back to the plain form at
+ * no cost. One whose groups differ (12/8 as `[1, 1, 2]`) states an accent no
+ * signature text can carry, and asking for the additive form of it is refused
+ * rather than answered with a bar that weighs its pulses differently.
  *
  * The plain form drops the grouping, so a round trip through it reads 7/8 as
  * flat rather than as 2+2+3; ask for the additive form to keep it.
@@ -336,6 +338,9 @@ function readTimeSignature(text: string): TimeSignature {
  *   rendered as the signature it opens in.
  * @param opts Set `grouping: true` to render an additive grouping.
  * @returns The formatted signature.
+ * @throws If `grouping: true` is asked of a grouping that no signature text can
+ *   spell: one counted in main pulses, on a compound numerator, whose groups are
+ *   not all the same length.
  * @example
  * ```ts
  * import { formatTimeSignature } from '@libraz/libcantus';
@@ -348,12 +353,20 @@ function readTimeSignature(text: string): TimeSignature {
 export function formatTimeSignature(ts: MeterLike, opts: { grouping?: boolean } = {}): string {
   const signature = readSignature(ts, 'ts');
   const grouping = signature.grouping;
-  if (
-    opts.grouping === true &&
-    grouping !== undefined &&
-    groupingSumOf(signature) === signature.numerator
-  ) {
-    return `${grouping.join('+')}/${signature.denominator}`;
+  if (opts.grouping === true && grouping !== undefined) {
+    if (groupingSumOf(signature) === signature.numerator) {
+      return `${grouping.join('+')}/${signature.denominator}`;
+    }
+    // A grouping counted in pulses adds up to the numerator only where a pulse
+    // is one unit, so on a compound numerator it has no additive spelling. Where
+    // its groups differ it is the only thing saying which pulses are accented,
+    // and the plain form would hand back a bar whose weights are not this bar's.
+    const pulseGrouping = pulseGroupingOf(signature);
+    if (pulseGrouping !== undefined && !isUniformGrouping(pulseGrouping)) {
+      throw new InvalidInputError(
+        `ts carries a grouping no signature text can spell: ${grouping.join('+')} counted in the pulses of ${signature.numerator}/${signature.denominator}. Format it without the grouping to name the bar it is written in.`,
+      );
+    }
   }
   return `${signature.numerator}/${signature.denominator}`;
 }
@@ -741,7 +754,7 @@ export function barPositionToBeat(pos: BarPosition, meter: MeterLike): number {
  * an ungrouped bar rather than accenting every group head.
  *
  * Given a meter map, the weight follows the signature in force at that beat, so
- * beat 5 of a piece is a mid-bar accent in 4/4 and a plain main pulse in 3/4.
+ * beat 2 of a piece is a mid-bar accent in 4/4 and a plain main pulse in 3/4.
  * The downbeat is beat 0 however much pickup precedes it, so a note in the
  * pickup weighs as the upbeat it is rather than as a downbeat.
  *
@@ -781,6 +794,58 @@ export function metricWeight(beatInQuarters: number, meter: MeterLike): number {
     return 2;
   }
   return 1;
+}
+
+/**
+ * Length in quarter-note beats of the metric grid a meter states: the longest
+ * step that lands on every main pulse the meter has.
+ *
+ * One signature answers with its own {@link pulseBeats} — a quarter in 4/4, a
+ * dotted quarter in 6/8. A meter map answers with the longest step that is a
+ * whole division of every signature it names, so a grid built on it lands on the
+ * pulses of each of them rather than on the ones the piece opened in.
+ *
+ * This is the single derivation of the grid that everything metric is laid out
+ * against: a slot grid that steps over pulses never sees what happens on them,
+ * so the analysis reports a bar as one chord that no instrument ever played, and
+ * a generator ranks a bar's positions by a bar length it does not have.
+ * {@link metricWeight} says how strong a position is, and this says which
+ * positions there are; nothing else derives either.
+ *
+ * @param meter A single signature, or the piece's meter map.
+ * @returns The grid step in quarter-note beats — 1 in 4/4, 1.5 in 6/8.
+ */
+export function metricGridUnit(meter: MeterLike): number {
+  const resolved = readMeterData(meter);
+  if (!isMeterMap(resolved)) {
+    return pulseBeatsOf(resolved);
+  }
+  let unit = 0;
+  for (const change of resolved) {
+    unit = commonStep(unit, pulseBeatsOf(change.ts));
+  }
+  return unit > 0 ? unit : pulseBeatsOf(DEFAULT_TS);
+}
+
+/**
+ * The longest step both lengths are a whole number of, or `b` when `a` is zero.
+ *
+ * Euclid over beat lengths, which are the small rationals a signature makes them
+ * — halves, thirds and quarters of a beat — so the remainder reaches zero in a
+ * few turns. A pair that does not divide within them falls back to the shorter
+ * length, since a grid finer than either pulse buys nothing the pulses do not
+ * already give and a runaway one costs a slot per subdivision of the piece.
+ */
+function commonStep(a: number, b: number): number {
+  let longer = Math.max(a, b);
+  let shorter = Math.min(a, b);
+  for (let i = 0; i < 8 && shorter > EPS; i += 1) {
+    const remainder = longer - Math.floor(longer / shorter + EPS) * shorter;
+    longer = shorter;
+    shorter = remainder > EPS ? remainder : 0;
+  }
+  const smallest = a > 0 && b > 0 ? Math.min(a, b) : Math.max(a, b);
+  return longer > EPS && longer <= smallest + EPS ? longer : smallest;
 }
 
 /**

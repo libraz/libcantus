@@ -170,7 +170,7 @@ export {
   rhythmDensity,
   rhythmToNoteEvents,
 } from './rhythm/index.js';
-export type { DeformOptions, GridEvent } from './vocabulary/transform.js';
+export type { DeformOptions, GridEvent, SyncopateOptions } from './vocabulary/transform.js';
 export {
   BAR_STEPS,
   BEAT_STEPS,

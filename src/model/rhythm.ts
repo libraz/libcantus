@@ -269,20 +269,27 @@ export class Rhythm {
   /**
    * Drop the onsets carrying the least of the metre.
    *
+   * The metre is the pattern's own: the ranks are read from {@link Rhythm.ts},
+   * so a pattern in 6/8 keeps its dotted-quarter pulses and one in 3/4 keeps its
+   * three-beat downbeats rather than the beats a four-beat bar would have.
+   *
    * @param amount How much to thin, in [0, 1]; at 0 nothing goes, and a full
    *   turn leaves the downbeats alone.
    * @returns The thinned pattern.
    * @throws If the amount is outside [0, 1].
    */
   thin(amount: number): Rhythm {
-    return this.#withGrid(thin(toGrid(this.#data.events), amount));
+    return this.#withGrid(thin(toGrid(this.#data.events), amount, this.#data.ts));
   }
 
   /**
    * Anticipate beats, one sixteenth early.
    *
-   * The anticipations are added rather than displaced, so raising the amount
-   * only ever adds onsets and the ones already sounding stay where they are.
+   * The beats anticipated are the ones {@link Rhythm.ts} counts as main pulses
+   * or stronger, so a pattern is not syncopated against accents its own meter
+   * does not have. The anticipations are added rather than displaced, so raising
+   * the amount only ever adds onsets and the ones already sounding stay where
+   * they are.
    *
    * @param amount How much syncopation, in [0, 1].
    * @param ctx The context, or the seed alone; it fixes which beats are
@@ -292,7 +299,11 @@ export class Rhythm {
    */
   syncopate(amount: number, ctx?: GenerationContextInput): Rhythm {
     return this.#withGrid(
-      syncopate(toGrid(this.#data.events), amount, resolveContext(ctx).part(PART)),
+      syncopate(
+        toGrid(this.#data.events),
+        { amount, ts: this.#data.ts },
+        resolveContext(ctx).part(PART),
+      ),
     );
   }
 
@@ -370,6 +381,7 @@ export class Rhythm {
       ornament: resolved.ornament,
       rate: opts?.rate,
       spanSteps: this.#spanSteps(),
+      ts: this.#data.ts,
       // The transform hands the predicate the events it was given, which carry
       // the onset each was built from; the parameter is declared over the bare
       // grid event the rule reads, so the field is named back here.

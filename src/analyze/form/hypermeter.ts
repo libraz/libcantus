@@ -203,15 +203,23 @@ function cadenceFitOf(cadenceBars: readonly number[], groupBars: number, phase: 
   return clamp01(fit / cadenceBars.length);
 }
 
-/** The reading a span too short to hold two of any candidate grouping gets. */
+/**
+ * The reading a span too short to hold two of any candidate grouping gets.
+ *
+ * The pickup is dropped before the group is read, exactly as it is on the
+ * decided path: an upbeat leads into the first hyperbar rather than heading one,
+ * so it neither lengthens the group nor supplies its downbeat. A span in which
+ * only the pickup sounds has no hypermetric downbeat at all.
+ */
 function undecidedReading(slices: readonly BarSlice[]): Hypermeter {
-  const groupBars = Math.max(1, slices.length);
-  const first = slices[0];
+  const fullBars = slices.filter((slice) => slice.index >= 0);
+  const groupBars = Math.max(1, fullBars.length);
+  const first = fullBars[0];
   return {
     groupBars,
     downbeats: first === undefined ? [] : [first.startBeat],
     confidence: 0,
-    rationale: `Span of ${slices.length} bar(s) is too short to establish a grouping; read as one group`,
+    rationale: `Span of ${fullBars.length} bar(s) is too short to establish a grouping; read as one group`,
   };
 }
 

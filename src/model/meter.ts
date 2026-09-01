@@ -147,7 +147,7 @@ export class Meter {
     return beatsPerBar(this.#ts);
   }
 
-  /** Main pulses (felt beats) in a bar: 3 in 6/8, 4 in 4/4. */
+  /** Main pulses (felt beats) in a bar: 2 in 6/8, 4 in 4/4. */
   get pulsesPerBar(): number {
     return pulsesPerBar(this.#ts);
   }

@@ -50,6 +50,8 @@ formatBarPosition(-1, parseTimeSignature('4/4')); // '0.4'
 
 `resolveMeters` は単一の拍子とマップのどちらも受け取ります。両方を受け付ける入り口はすべてこの関数を使って書かれています。絶対拍と小節内位置の変換は、`meterAt`、`barIndexAt`、`barStartBeat`、`beatsPerBarAt`、`beatToBarPosition`、`barPositionToBeat` が扱います。単一の拍子で足りるものは `Meter` が `weightAt`、`isStrongBeat`、`barPositionAt`、`formatPosition` として、マップを見るものは `Score` が `meterAt` と `barAt` として公開しています。
 
+小節番号には起点が 2 通りあり、数値を求めたか文字列を求めたかで変わります。数値を返す変換は 0 起点です。`barIndexAt`、`beatToBarPosition`、`Meter.barPositionAt`、`Score.barAt` はいずれも最初の完全な小節を 0 と数えます。だからこそピックアップ小節が -1 になり、小節の算術がそこを通り抜けられます。整形する側は 1 起点で、印刷された楽譜の数え方に合わせています。`formatBarPosition` と `Meter.formatPosition` は同じ最初の小節を `1.1` と表示し、ピックアップを 0 小節目として表示します。したがって `barAt` の数値をそのまま表示する UI は、ライブラリが印字する位置より 1 小さい番号を見せることになります。表示する前に 1 を足すか、自前で番号を振らずに `formatBarPosition` に拍を渡してください。
+
 ## 複合拍子・加算拍子・連符
 
 小節が何でできているかは `Meter` が答えます。

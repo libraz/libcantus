@@ -8,9 +8,11 @@
  * particular recording, and each entry says which ground it qualifies under.
  */
 
+import { InvalidInputError } from '../../core/errors/index.js';
 import { type Articulation, canSound, type Limb } from '../../core/instrument/index.js';
 import {
   beatsPerBar,
+  formatTimeSignature,
   type MeterLike,
   meterAt,
   type TimeSignature,
@@ -33,6 +35,7 @@ import {
   mergeVocabulary,
   pickVocabulary,
   STEP_BEATS,
+  selectVocabulary,
   type Vocabulary,
   vocabularyOfKind,
   withinCeiling,
@@ -418,6 +421,16 @@ export function placeDrumPattern(opts: DrumPatternOptions): DrumHit[] {
     DRUM_PATTERNS,
     vocabularyOfKind(resolved.vocabulary, isDrumPattern),
   );
+  // A meter no figure is written in is refused rather than answered with an
+  // empty track: the built-in dictionary is written in 4/4 throughout, and a
+  // silent result there is indistinguishable from one where the genre, the
+  // section or the difficulty ceiling took every candidate away.
+  if (selectVocabulary(dictionary, { ts }).length === 0) {
+    throw new InvalidInputError(
+      `drum pattern ts names a meter no figure is written in: ${formatTimeSignature(ts)}. ` +
+        'The built-in figures are written in 4/4; supply vocabulary in another meter through the context.',
+    );
+  }
   const track = new HitList();
 
   for (let bar = 0; bar < opts.bars; bar += 1) {
@@ -449,6 +462,9 @@ export function placeDrumPattern(opts: DrumPatternOptions): DrumHit[] {
         isOrnament: (stroke) => (stroke as DrumStroke).articulation === 'ghost',
         rate: opts.rate ?? 'straight',
         spanSteps: entry.material.steps,
+        // The dials rank the figure's positions against the bar it is written
+        // in, which is the bar this call is placing it in.
+        ts,
       },
       draw,
       'pattern',

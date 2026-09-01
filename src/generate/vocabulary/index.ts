@@ -9,6 +9,7 @@
 export type {
   DeformOptions,
   GridEvent,
+  SyncopateOptions,
 } from './transform.js';
 export {
   BAR_STEPS,

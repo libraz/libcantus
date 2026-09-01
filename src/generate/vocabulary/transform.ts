@@ -12,6 +12,14 @@
  * so the rules are written once and used by both the bass and the drums.
  */
 
+import type { MeterLike, TimeSignature } from '../../core/meter/index.js';
+import {
+  isCompound,
+  meterAt,
+  metricWeight,
+  pulseBeats,
+  toMeterData,
+} from '../../core/meter/index.js';
 import { assertRange } from '../../core/validation/index.js';
 import { sustainsStrokes } from '../context/difficulty.js';
 import type { Draw } from '../context/draw.js';
@@ -64,36 +72,63 @@ function streamOf(event: GridEvent): string {
   return event.limb ?? event.voice ?? '';
 }
 
+/** The bar the figures are written on when the caller names no meter. */
+const FIGURE_TS: TimeSignature = { numerator: 4, denominator: 4 };
+
+/**
+ * The first subdivision of a pulse: half of it in a simple meter, a third in a
+ * compound one.
+ *
+ * The note value a player counts between the felt beats — quavers in 4/4 and in
+ * 6/8 alike — which is what separates a position the figure is written on from
+ * one that falls between the grid's own positions.
+ */
+function subdivisionBeats(ts: TimeSignature): number {
+  const pulse = pulseBeats(ts);
+  return isCompound(ts) ? pulse / 3 : pulse / 2;
+}
+
 /**
  * How strongly a position on the sixteenth grid is felt, from 4 (the downbeat)
  * to 0 (an off sixteenth).
  *
  * This is the ranking the thinning rule works down: the notes a player drops
  * first when asked for something easier are the ones carrying the least of the
- * metre. It is named for the grid it reads because the analysis layer has a
- * metric weight of its own, on another scale and against a time signature; the
- * two answer different questions and are deliberately not the same function.
+ * metre. The ranking is the meter's own — {@link metricWeight} says which
+ * positions are the downbeat, a secondary strong pulse, and a plain main pulse,
+ * and the two ranks below them are the pulse's first subdivision and everything
+ * off it. In 4/4 that is the downbeat, the half bar, the other quarters, the
+ * quavers and the semiquavers; in 6/8 it is the two dotted-quarter pulses, then
+ * the quavers, and the quarter-note positions a 4/4 reading would rank above
+ * them fall where they belong, between the beats.
  *
- * @param step Sixteenth index within the bar.
+ * @param step Sixteenth index from the start of the figure.
+ * @param ts The meter the figure is counted in, in any form that names one; the
+ *   4/4 bar every built-in figure is written on when none is named.
  * @returns The weight, 0 to 4.
  *
  * @category Composition
  */
-export function gridMetricWeight(step: number): number {
-  const inBar = ((step % BAR_STEPS) + BAR_STEPS) % BAR_STEPS;
-  if (inBar === 0) {
-    return 4;
+export function gridMetricWeight(step: number, ts: MeterLike = FIGURE_TS): number {
+  return stepWeight(step, meterAt(0, toMeterData(ts, 'ts')));
+}
+
+/**
+ * {@link gridMetricWeight} against a signature already read.
+ *
+ * A transform asks this once per onset, and re-reading the meter for each of
+ * them would charge a figure for validating the same bar as many times as it
+ * has notes.
+ */
+function stepWeight(step: number, ts: TimeSignature): number {
+  const beats = step * STEP_BEATS;
+  const weight = metricWeight(beats, ts);
+  if (weight > 0) {
+    return weight + 1;
   }
-  if (inBar % 8 === 0) {
-    return 3;
-  }
-  if (inBar % 4 === 0) {
-    return 2;
-  }
-  if (inBar % 2 === 0) {
-    return 1;
-  }
-  return 0;
+  const subdivision = subdivisionBeats(ts);
+  const divisions = beats / subdivision;
+  return Math.abs(divisions - Math.round(divisions)) < 1e-9 ? 1 : 0;
 }
 
 /**
@@ -106,15 +141,23 @@ export function gridMetricWeight(step: number): number {
  *
  * @param events The figure.
  * @param amount How much to thin, in [0, 1].
+ * @param ts The meter the figure is counted in, in any form that names one;
+ *   4/4 when none is named. The ranks are the meter's, so a full turn of the
+ *   dial leaves the downbeats of the bar the figure is actually in.
  * @returns The surviving events, in the order given.
  *
  * @category Composition
  */
-export function thin<T extends GridEvent>(events: readonly T[], amount: number): T[] {
+export function thin<T extends GridEvent>(
+  events: readonly T[],
+  amount: number,
+  ts: MeterLike = FIGURE_TS,
+): T[] {
   assertRange(amount, 0, 1, 'thin amount');
+  const signature = meterAt(0, toMeterData(ts, 'ts'));
   // Five ranks (0..4), so a full turn of the dial reaches the downbeat alone.
   const floor = Math.min(4, Math.floor(amount * 5));
-  return events.filter((event) => gridMetricWeight(event.step) >= floor);
+  return events.filter((event) => stepWeight(event.step, signature) >= floor);
 }
 
 /**
@@ -199,6 +242,21 @@ export function doubleTime<T extends GridEvent>(events: readonly T[], spanSteps 
 }
 
 /**
+ * How much a figure is syncopated, and the meter it is felt in.
+ *
+ * @category Composition
+ */
+export type SyncopateOptions = {
+  /** How much syncopation, in [0, 1]. */
+  amount: number;
+  /**
+   * The meter the figure is counted in, in any form that names one; 4/4 when
+   * none is named.
+   */
+  ts?: MeterLike;
+};
+
+/**
  * Anticipate beats, one sixteenth early.
  *
  * Anticipation is the direction syncopation runs in every genre this library
@@ -219,7 +277,10 @@ export function doubleTime<T extends GridEvent>(events: readonly T[], spanSteps 
  * than this one's.
  *
  * @param events The figure.
- * @param amount How much syncopation, in [0, 1].
+ * @param amount How much syncopation, in [0, 1], or the amount together with
+ *   the meter the figure is counted in. The path is variadic, so the meter is
+ *   named here rather than after it; naming none reads the figure in 4/4, as
+ *   every built-in figure is written.
  * @param draw The position-addressed sampler.
  * @param path Where the figure sits, so the same bar always syncopates alike.
  * @returns The figure with its anticipations, sorted by position.
@@ -228,11 +289,14 @@ export function doubleTime<T extends GridEvent>(events: readonly T[], spanSteps 
  */
 export function syncopate<T extends GridEvent>(
   events: readonly T[],
-  amount: number,
+  amount: number | SyncopateOptions,
   draw: Draw,
   ...path: readonly (string | number)[]
 ): T[] {
-  assertRange(amount, 0, 1, 'syncopate amount');
+  const dial = typeof amount === 'number' ? amount : amount.amount;
+  const named = typeof amount === 'number' ? undefined : amount.ts;
+  const signature = meterAt(0, toMeterData(named ?? FIGURE_TS, 'ts'));
+  assertRange(dial, 0, 1, 'syncopate amount');
   const occupied = new Set(events.map((event) => `${streamOf(event)}@${event.step}`));
   const out: T[] = [...events];
   for (const event of events) {
@@ -240,13 +304,13 @@ export function syncopate<T extends GridEvent>(
     // The downbeat takes none: its anticipation would fall in the bar before
     // the one the figure belongs to.
     if (
-      gridMetricWeight(event.step) < 2 ||
+      stepWeight(event.step, signature) < 2 ||
       anticipated < 1 ||
       occupied.has(`${streamOf(event)}@${anticipated}`)
     ) {
       continue;
     }
-    if (!draw.prob(amount, ...path, 'syncopate', event.step)) {
+    if (!draw.prob(dial, ...path, 'syncopate', event.step)) {
       continue;
     }
     out.push({ ...event, step: anticipated, velocity: event.velocity * ADDED_NOTE_VELOCITY });
@@ -309,6 +373,15 @@ export type DeformOptions = {
   rate?: 'straight' | 'half' | 'double';
   /** Length of the figure in sixteenths. */
   spanSteps?: number;
+  /**
+   * The meter the figure is counted in, in any form that names one; 4/4 when
+   * none is named, which is the bar every built-in figure is written on.
+   *
+   * The dials rank a figure's positions by how much of the metre each carries,
+   * so a figure written in another meter has to name it or it is thinned and
+   * syncopated against accents its own bar does not have.
+   */
+  ts?: MeterLike;
 };
 
 /** The rhythmic setting at which a figure is left as written. */
@@ -352,6 +425,7 @@ export function deform<T extends GridEvent>(
   ...path: readonly (string | number)[]
 ): T[] {
   const spanSteps = opts.spanSteps ?? BAR_STEPS;
+  const ts = opts.ts ?? FIGURE_TS;
   let out: T[] =
     opts.rate === 'half'
       ? halfTime(events, spanSteps)
@@ -363,10 +437,16 @@ export function deform<T extends GridEvent>(
     const rhythmic = assertRange(opts.rhythmic, 0, 1, 'complexity rhythmic');
     if (rhythmic < NEUTRAL_RHYTHMIC) {
       // Below the middle the request is for less, and less means the notes that
-      // carry the least of the metre.
-      out = thin(out, (NEUTRAL_RHYTHMIC - rhythmic) / NEUTRAL_RHYTHMIC);
+      // carry the least of the metre — of the figure's own metre, so the bar
+      // this figure is written in is the bar its positions are ranked against.
+      out = thin(out, (NEUTRAL_RHYTHMIC - rhythmic) / NEUTRAL_RHYTHMIC, ts);
     } else if (rhythmic > NEUTRAL_RHYTHMIC) {
-      out = syncopate(out, (rhythmic - NEUTRAL_RHYTHMIC) / NEUTRAL_RHYTHMIC, draw, ...path);
+      out = syncopate(
+        out,
+        { amount: (rhythmic - NEUTRAL_RHYTHMIC) / NEUTRAL_RHYTHMIC, ts },
+        draw,
+        ...path,
+      );
     }
   }
 

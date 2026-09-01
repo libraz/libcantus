@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { InvalidInputError } from '../src/core/errors/index.js';
 import {
   barPositionToBeat,
   barPositionToPulse,
@@ -337,10 +338,52 @@ describe('the time-signature round trip', () => {
     return out;
   }
 
+  /**
+   * Whether a signature's grouping has an additive spelling.
+   *
+   * A grouping counted in main pulses adds up to the numerator only where a
+   * pulse is one unit, so on a compound numerator it has none. Where its groups
+   * are all the same length it says nothing the bare signature does not already
+   * say and costs nothing to drop; where they differ it is the only thing naming
+   * the bar's accents, and the plain form would read back as another bar.
+   */
+  function spellsItsGrouping(ts: TimeSignature): boolean {
+    const grouping = ts.grouping;
+    if (grouping === undefined) {
+      return true;
+    }
+    if (grouping.reduce((sum, entry) => sum + entry, 0) === ts.numerator) {
+      return true;
+    }
+    return grouping.every((entry) => entry === grouping[0]);
+  }
+
+  it('refuses a grouping no signature text can spell', () => {
+    // 12/8 whose pulses are grouped 1+1+2 accents the third pulse; the plain
+    // form has no way to say so, and the additive form would read the bar as
+    // twelve quavers rather than four dotted quarters.
+    const uneven: TimeSignature = { numerator: 12, denominator: 8, grouping: [1, 1, 2] };
+    expect(metricWeight(3, uneven)).toBe(2);
+    expect(() => formatTimeSignature(uneven, { grouping: true })).toThrow(InvalidInputError);
+    // Without the grouping asked for, the plain name of the bar is what it is.
+    expect(formatTimeSignature(uneven)).toBe('12/8');
+    // A grouping of equal groups states the division the meter already has, so
+    // the plain form carries everything it said.
+    const even: TimeSignature = { numerator: 12, denominator: 8, grouping: [2, 2] };
+    expect(formatTimeSignature(even, { grouping: true })).toBe('12/8');
+    expect(metricWeight(3, parseTimeSignature('12/8'))).toBe(metricWeight(3, even));
+  });
+
   it('never renders a signature that reads back as another bar', () => {
     for (const ts of domain()) {
       const name = `${ts.numerator}/${ts.denominator} ${JSON.stringify(ts.grouping)}`;
       for (const opts of [{}, { grouping: true }]) {
+        if (opts.grouping === true && !spellsItsGrouping(ts)) {
+          // Refused rather than answered with a bar that weighs its pulses
+          // differently from the one it was given.
+          expect(() => formatTimeSignature(ts, opts), name).toThrow(InvalidInputError);
+          continue;
+        }
         const text = formatTimeSignature(ts, opts);
         const back = parseTimeSignature(text);
         // The non-throwing sibling reads what the throwing one reads.
@@ -367,6 +410,9 @@ describe('the time-signature round trip', () => {
 
   it('keeps the felt beats of every signature it renders additively', () => {
     for (const ts of domain()) {
+      if (!spellsItsGrouping(ts)) {
+        continue;
+      }
       const text = formatTimeSignature(ts, { grouping: true });
       if (!text.includes('+')) {
         continue;

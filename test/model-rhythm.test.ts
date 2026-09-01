@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { parseTimeSignature, type TimeSignature } from '../src/core/meter/index.js';
+import {
+  beatsPerBar,
+  metricWeight,
+  parseTimeSignature,
+  type TimeSignature,
+} from '../src/core/meter/index.js';
 import {
   deform,
   doubleTime,
@@ -410,5 +415,87 @@ describe('Rhythm chains', () => {
     ]);
     const positions = dense.doubleTime().events.map((event) => event.position);
     expect(new Set(positions).size).toBe(positions.length);
+  });
+});
+
+describe('the meter a pattern is counted in', () => {
+  /** The positions a pattern holds, in beats. */
+  const positionsOf = (rhythm: Rhythm): number[] => rhythm.events.map((event) => event.position);
+
+  /** A dense pattern in one meter, with an onset on every sixteenth. */
+  function everySixteenth(ts: string, bars: number): Rhythm {
+    const barBeats = beatsPerBar(ts);
+    const events: RhythmEvent[] = [];
+    for (let step = 0; step * STEP_BEATS < barBeats * bars; step += 1) {
+      events.push({ position: step * STEP_BEATS, duration: STEP_BEATS });
+    }
+    return Rhythm.of(events, ts);
+  }
+
+  it('keeps the downbeats of a three-beat bar when thinned to the last rank', () => {
+    // Four bars of 3/4: the downbeats are sixteenth steps 0, 12, 24 and 36, and
+    // a 4/4 reading of the same onsets would keep 0, 16 and 32 instead — the
+    // second bar's downbeat dropped and two in-bar positions kept.
+    const thinned = everySixteenth('3/4', 4).thin(0.8);
+    expect(positionsOf(thinned)).toEqual([0, 3, 6, 9]);
+    expect(thinned.ts).toEqual(parseTimeSignature('3/4'));
+  });
+
+  it('keeps the dotted-quarter pulses of a compound bar', () => {
+    // 6/8 is two pulses of a beat and a half, not three quarter-note beats.
+    const thinned = everySixteenth('6/8', 2).thin(0.4);
+    expect(positionsOf(thinned)).toEqual([0, 1.5, 3, 4.5]);
+  });
+
+  it('ranks an additive bar by the grouping it carries', () => {
+    // 2+2+3/8: the head of each group is the accent, so thinning to the rank
+    // above the plain pulses leaves the three group heads of each bar.
+    const thinned = everySixteenth('2+2+3/8', 2).thin(0.6);
+    expect(positionsOf(thinned)).toEqual([0, 1, 2, 3.5, 4.5, 5.5]);
+  });
+
+  it('anticipates only what its own meter calls a main pulse', () => {
+    const syncopated = everySixteenth('3/4', 2).syncopate(0.9, 5);
+    // Every onset is already sounding, so what is under test is that no
+    // position is anticipated that the meter does not accent: the pattern comes
+    // back with the onsets it had, in its own meter.
+    expect(positionsOf(syncopated)).toEqual(positionsOf(everySixteenth('3/4', 2)));
+
+    // On a pattern of pulses alone, the anticipations land a sixteenth before a
+    // pulse of the meter and nowhere else.
+    const pulses = Rhythm.of(
+      [0, 1, 2, 3, 4, 5].map((i) => ({ position: i, duration: 1 })),
+      '3/4',
+    );
+    const pushed = pulses.syncopate(1, 5);
+    for (const position of positionsOf(pushed)) {
+      const anticipates = position + STEP_BEATS;
+      expect(
+        position % 1 === 0 || metricWeight(anticipates, '3/4') >= 1,
+        `anticipation at ${position}`,
+      ).toBe(true);
+    }
+  });
+
+  it('moves the dials monotonically in every meter', () => {
+    for (const ts of ['4/4', '3/4', '6/8', '2+2+3/8']) {
+      const rhythm = everySixteenth(ts, 2);
+      let previous = new Set(positionsOf(rhythm));
+      for (const amount of [0.2, 0.4, 0.6, 0.8, 1]) {
+        const surviving = new Set(positionsOf(rhythm.thin(amount)));
+        for (const position of surviving) {
+          // Thinning further never brings an onset back.
+          expect(previous.has(position), `${ts} thin ${amount} at ${position}`).toBe(true);
+        }
+        previous = surviving;
+      }
+      const sparse = rhythm.thin(0.8);
+      let onsets = positionsOf(sparse).length;
+      for (const amount of [0.2, 0.5, 0.9, 1]) {
+        const count = positionsOf(sparse.syncopate(amount, 3)).length;
+        expect(count, `${ts} syncopate ${amount}`).toBeGreaterThanOrEqual(onsets);
+        onsets = count;
+      }
+    }
   });
 });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { TimeSignature } from '../src/core/meter/index.js';
 import { generateBassLine } from '../src/generate/bass/index.js';
 import { BASS_LICKS, isLickMaterial, placeLicks } from '../src/generate/bass/licks.js';
 import { GENRES, selectVocabulary, type Vocabulary } from '../src/generate/vocabulary/index.js';
@@ -381,5 +382,60 @@ describe('a caller-supplied lick dictionary', () => {
         ctx: { seed: 1, vocabulary: [{ ...ownLick, difficulty: 0 }] },
       }),
     ).toThrow();
+  });
+});
+
+describe('the meter a lick is shaped against', () => {
+  // A compound bar and a four-four bar accent different sixteenths, so a figure
+  // shaped against the wrong one pushes into a beat the piece does not feel. In
+  // 6/8 the second pulse is beat 1.5, and an anticipation belongs a sixteenth
+  // before it; a four-four reading of the same span accents beat 2 instead.
+  const sixEight: TimeSignature = { numerator: 6, denominator: 8, grouping: [3, 3] };
+  const fourFour: TimeSignature = { numerator: 4, denominator: 4 };
+
+  const runningEighths = (ts: TimeSignature): Vocabulary<unknown> => ({
+    id: 'countryAlternating',
+    genre: 'country',
+    difficulty: 1,
+    articulations: [],
+    ts,
+    material: {
+      lengthSteps: 12,
+      notes: [0, 2, 4, 6, 8, 10].map((step, index) => ({
+        degree: index % 2 === 0 ? 1 : 5,
+        step,
+        velocity: step === 0 ? 1 : 0.8,
+      })),
+    },
+    provenance: { basis: 'construction', note: 'written for this test from its own grid' },
+  });
+
+  const spans = [{ startBeat: 0, endBeat: 3, chord: makeChord(0, 'maj') }];
+
+  const shape = (ts: TimeSignature) =>
+    placeLicks(spans, KEY, {
+      genre: 'country',
+      ts,
+      ctx: {
+        seed: 5,
+        bpm: 100,
+        vocabulary: [runningEighths(ts)],
+        complexity: { rhythmic: 0.7 },
+      },
+    }).map((note) => note.startBeat);
+
+  it('pushes into a pulse of its own bar rather than a beat of another', () => {
+    expect(shape(sixEight)).toContain(1.25);
+    expect(shape(sixEight)).not.toContain(1.75);
+  });
+
+  it('writes a four-four figure exactly as it did', () => {
+    const inFour = placeLicks(TIMELINE, KEY, { genre: 'country', ctx: { seed: 7, bpm: 120 } });
+    const named = placeLicks(TIMELINE, KEY, {
+      genre: 'country',
+      ts: fourFour,
+      ctx: { seed: 7, bpm: 120 },
+    });
+    expect(named).toEqual(inFour);
   });
 });

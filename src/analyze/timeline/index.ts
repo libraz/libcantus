@@ -1,6 +1,11 @@
 import { sortedNoteEvents } from '../../core/event-index/index.js';
 import type { MeterLike, MeterMap } from '../../core/meter/index.js';
-import { beatsPerBarAt, metricWeight, resolveMeters } from '../../core/meter/index.js';
+import {
+  beatsPerBarAt,
+  metricGridUnit,
+  metricWeight,
+  resolveMeters,
+} from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import type { NoteEventAssertOptions } from '../../core/validation/index.js';
@@ -238,18 +243,21 @@ export type ChordTimelineOptions = {
    */
   harmonicRhythm?: number;
   /**
-   * Shortest chord the `'dynamic'` search may report, in beats; defaults to one
-   * beat. Lower it to catch changes on off-beats, at the cost of proportionally
-   * more work. Values above `harmonicRhythm` are clamped to it, and the option
-   * is ignored under `'grid'` segmentation.
+   * Resolution the `'dynamic'` search looks for changes at, in beats; defaults
+   * to one main pulse of the meter — a quarter in 4/4, a dotted quarter in 6/8.
+   * Lower it to catch changes on off-beats, at the cost of proportionally more
+   * work. Values above `harmonicRhythm` are clamped to it, and the option is
+   * ignored under `'grid'` segmentation.
    *
    * The search reads it as a resolution rather than as an exact slot length: it
-   * rounds down to a whole division of `harmonicRhythm`, so `0.6` against a
-   * four-beat chord is read in sevenths of it. That keeps the beats one
-   * expected chord gives way to the next on the grid whatever resolution is
-   * asked for, and with them every change a coarser setting found.
+   * rounds down to a whole division of the meter's pulse, so `0.6` in 4/4 is
+   * read in half-beats. That keeps every pulse of the meter, and the bar lines
+   * with them, on the grid whatever resolution is asked for, and with them every
+   * change a coarser setting found. A resolution coarser than one pulse is
+   * therefore read as one pulse rather than stepping over the beats a change is
+   * heard on.
    *
-   * @defaultValue `1`
+   * @defaultValue one main pulse of the meter
    */
   minChordBeats?: number;
   /**
@@ -705,29 +713,32 @@ function chooseBoundaries(
   return spans;
 }
 
-/** Shortest chord the dynamic search reports unless the caller asks for finer. */
-const DEFAULT_MIN_CHORD_BEATS = 1;
-
 /**
  * The slot length a requested resolution is read at: a whole division of the
- * expected chord length, never coarser than the caller asked for.
+ * meter's own grid, never coarser than the caller asked for.
  *
- * A change is discounted on strong beats, and the strongest of them are where
- * one expected chord gives way to the next. A grid that steps over those beats
- * never earns the discount, so the search reports no change anywhere and a run
- * of alternating harmony comes back as one segment naming a chord that never
- * sounded. Dividing the expected chord length keeps its own boundaries — and
- * the bar lines with them — on the grid at every resolution, which is what
- * makes the resolution a knob rather than a trap: every setting finds the
- * changes the coarser settings found.
+ * A change is discounted on strong beats, and the strongest of them are the main
+ * pulses of the meter. A grid that steps over those beats never earns the
+ * discount, so the search reports no change anywhere and a run of alternating
+ * harmony comes back as one segment naming a chord that never sounded — which is
+ * what a grid counted in quarters does to a compound meter, where the pulse is a
+ * dotted quarter and the quarters fall between the beats a player feels.
+ * Dividing the pulse keeps every pulse in the span, and the bar lines with them,
+ * on the grid at every resolution: that is what makes the resolution a knob
+ * rather than a trap, since every setting finds the changes the coarser settings
+ * found.
  *
- * @param harmonicRhythm Expected chord length in beats.
+ * @param gridUnit The meter's grid step in beats, from {@link metricGridUnit}.
  * @param minChordBeats Shortest chord the caller will accept, in beats.
- * @returns The slot length, which divides `harmonicRhythm` exactly.
+ * @param harmonicRhythm Expected chord length in beats; a resolution coarser
+ *   than one expected chord is read as that chord, since a search cannot report
+ *   a boundary it never looks for.
+ * @returns The slot length, which divides the meter's grid step exactly.
  */
-function slotBeatsWithin(harmonicRhythm: number, minChordBeats: number): number {
-  const divisions = Math.max(1, Math.ceil(harmonicRhythm / minChordBeats - EPS));
-  return harmonicRhythm / divisions;
+function slotBeatsWithin(gridUnit: number, minChordBeats: number, harmonicRhythm: number): number {
+  const resolution = Math.min(minChordBeats, harmonicRhythm);
+  const divisions = Math.max(1, Math.ceil(gridUnit / resolution - EPS));
+  return gridUnit / divisions;
 }
 
 /** One span per slot: the fixed grid, unchanged. */
@@ -841,7 +852,8 @@ function notesOfSpan(
  * Infer a chord timeline from raw multi-track notes.
  *
  * Chord boundaries are searched for rather than assumed: the span is examined
- * in `minChordBeats` slots, and the change points that best explain the notes
+ * in slots of one main pulse, subdivided as finely as `minChordBeats` asks for,
+ * and the change points that best explain the notes
  * are chosen, trading each slot's harmonic fit against a cost per chord change
  * that a strong beat discounts. A bar holding two chords therefore yields two
  * segments and a bar holding one yields one, without the caller having to know
@@ -1053,7 +1065,11 @@ export function analyzeTimeline(
   const harmonicRhythm = opts.harmonicRhythm ?? beatsPerBarAt(0, meters);
   assertRange(harmonicRhythm, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'harmonic rhythm');
   const segmentation = opts.segmentation ?? 'dynamic';
-  const minChordBeats = opts.minChordBeats ?? DEFAULT_MIN_CHORD_BEATS;
+  // One pulse by default, whatever the pulse of this meter is: a chord is not
+  // expected to change faster than the meter is felt, and a resolution written
+  // in quarters would step over the pulses of every compound meter.
+  const gridUnit = metricGridUnit(meters);
+  const minChordBeats = opts.minChordBeats ?? gridUnit;
   assertRange(minChordBeats, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'minChordBeats');
   const budget = opts.budget;
   const noteOptions: NoteEventAssertOptions = { allowNonPositiveDuration: true, budget };
@@ -1071,7 +1087,9 @@ export function analyzeTimeline(
   const totalBeats = opts.totalBeats ?? lastNoteEnd;
   assertRange(totalBeats, 0, Number.MAX_SAFE_INTEGER, 'timeline totalBeats');
   const slotBeats =
-    segmentation === 'grid' ? harmonicRhythm : slotBeatsWithin(harmonicRhythm, minChordBeats);
+    segmentation === 'grid'
+      ? harmonicRhythm
+      : slotBeatsWithin(gridUnit, minChordBeats, harmonicRhythm);
   const firstOnset = sounding.reduce((first, n) => Math.min(first, n.startBeat), 0);
   const { origin, startBeat: musicStart } = gridOriginOf(firstOnset, slotBeats);
   const grid: SlotGrid = { origin, slotBeats };
