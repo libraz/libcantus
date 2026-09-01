@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { InvalidInputError } from '../src/core/errors/index.js';
 import { formatNote, pitchClassOf as mod12, type Note } from '../src/core/pitch/index.js';
+import { Chord } from '../src/model/chord.js';
+import { Progression } from '../src/model/progression.js';
+import { Timeline } from '../src/model/timeline.js';
 import { chordPitchClasses, chordQualities, makeChord } from '../src/theory/chord/index.js';
+import { spellChordFromRoot } from '../src/theory/spelling/index.js';
 import {
   formatChordSymbol,
   parseChordSymbol,
@@ -137,6 +141,39 @@ describe('lead-sheet vocabulary', () => {
     expect(parseChordSymbol('Ah7')).toEqual(parseChordSymbol('Aø7'));
   });
 
+  it('reads the capitalized major-seventh marker wherever the lowercase one reads', () => {
+    expect(parseChordSymbol('CMaj7')).toEqual(parseChordSymbol('Cmaj7'));
+    expect(parseChordSymbol('CMaj7')).toEqual(parseChordSymbol('CM7'));
+    expect(parseChordSymbol('FMaj9')).toEqual(parseChordSymbol('Fmaj9'));
+    expect(parseChordSymbol('CMaj13')).toEqual(parseChordSymbol('Cmaj13'));
+    expect(parseChordSymbol('CMaj7#11')).toEqual(parseChordSymbol('Cmaj7#11'));
+    expect(parseChordSymbol('AbMaj7')).toEqual(parseChordSymbol('Abmaj7'));
+    // The bare marker is the triad, as the lowercase spelling of it is.
+    expect(parseChordSymbol('CMaj')).toEqual(parseChordSymbol('Cmaj'));
+  });
+
+  it('reads an omission written from the first character of the suffix', () => {
+    expect(parseChordSymbol('Comit3')).toEqual(parseChordSymbol('Cno3'));
+    expect(parseChordSymbol('Comit5')).toEqual(parseChordSymbol('Cno5'));
+    expect(parseChordSymbol('Comit1')).toEqual(parseChordSymbol('Cno1'));
+    expect(parseChordSymbol('Comit3')).toEqual(parseChordSymbol('C(omit3)'));
+    // The same character opens a diminished triad where nothing else claims it.
+    expect(parseChordSymbol('Co').quality).toBe('dim');
+    expect(parseChordSymbol('Co7').quality).toBe('dim7');
+    expect(parseChordSymbol('Co9').intervals).toEqual([0, 3, 6, 9, 14]);
+  });
+
+  it('carries tensions over the half-diminished glyphs as over the names', () => {
+    expect(parseChordSymbol('Cø9').intervals).toEqual([0, 3, 6, 10, 14]);
+    expect(parseChordSymbol('Ch9')).toEqual(parseChordSymbol('Cø9'));
+    expect(parseChordSymbol('Cø9').intervals).toEqual(parseChordSymbol('Cm7b5(9)').intervals);
+    expect(parseChordSymbol('Cø11').intervals).toEqual([0, 3, 6, 10, 14, 17]);
+    // The glyph is a minor seventh over a diminished triad, never a diminished
+    // seventh: an extension over it must not stack the seventh the triad implies.
+    expect(parseChordSymbol('Cø7(b9)').intervals).toEqual([0, 3, 6, 10, 13]);
+    expect(parseChordSymbol('Cøadd9').intervals).toEqual([0, 3, 6, 10, 14]);
+  });
+
   it('spells every quality with distinct letters', () => {
     for (const quality of ['7sus4', '7b5', '7alt', '13b9', 'maj13', 'min11'] as const) {
       const chord = makeChord(0, quality);
@@ -268,12 +305,21 @@ describe('transposeChordSymbol', () => {
     }
   });
 
+  it('moves the slash bass by the same step as the chord over it', () => {
+    // The printed bass is a note the transposed chord contains: B7 is B D# F#,
+    // so its third in the bass is D#, never the E flat that names the same key.
+    expect(transposeChordSymbol('Bb7/D', 1)).toBe('B7/D#');
+    expect(transposeChordSymbol('Ab/C', 1)).toBe('A/C#');
+    expect(transposeChordSymbol('D/F#', -1)).toBe('Db/F');
+    expect(transposeChordSymbol('Cmaj7/B', 6)).toBe('Gbmaj7/F');
+  });
+
   it('keeps a respelled root and its bass on one side of the staff', () => {
     // Where the fallback picks a name, it picks it for the whole symbol: a
     // sharp root over a flat bass is not a chart anyone writes.
     expect(transposeChordSymbol('Ab/Eb', 1)).toBe('A/E');
     expect(transposeChordSymbol('Db/Ab', 1)).toBe('D/A');
-    expect(transposeChordSymbol('Bb/F', 1)).toBe('B/Gb');
+    expect(transposeChordSymbol('Bb/F', 1)).toBe('B/F#');
     expect(transposeChordSymbol('C/Fb', 1)).toBe('Db/F');
     expect(transposeChordSymbol('C#/Fb', 1)).toBe('D/F');
   });
@@ -286,11 +332,59 @@ describe('transposeChordSymbol', () => {
     }
   });
 
-  it('takes the fallback onto the side the caller asks for', () => {
+  it('writes the whole symbol on the side the caller asks for', () => {
     expect(transposeChordSymbol('Bbmaj7', 1, { flats: true })).toBe('Bmaj7');
     expect(transposeChordSymbol('Bbmaj7', 2, { flats: false })).toBe('Cmaj7');
-    expect(transposeChordSymbol('Bb/F', 1, { flats: true })).toBe('B/Gb');
+    // The flat side of this chord is Cb major, whose fifth is Gb; asking for
+    // flats and being handed a sharp bass under the root is not one symbol.
+    expect(transposeChordSymbol('Bb/F', 1, { flats: true })).toBe('Cb/Gb');
     expect(transposeChordSymbol('Bb/F', 1, { flats: false })).toBe('B/F#');
+  });
+
+  it('never prints a bass the transposed chord does not contain', () => {
+    const roots = ['C', 'C#', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+    for (const suffix of ['maj7', 'm7', '7', '']) {
+      for (const root of roots) {
+        for (const bass of roots) {
+          if (root === bass) {
+            continue;
+          }
+          const text = `${root}${suffix}/${bass}`;
+          const source = parseChordSymbol(text);
+          const rootHint = source.rootSpelling;
+          const bassHint = source.bassSpelling;
+          if (rootHint === undefined || bassHint === undefined) {
+            continue;
+          }
+          // Only a slash bass the chord itself spells is a test of this: a bass
+          // outside the chord is outside it before the transposition too.
+          const spelled = spellChordFromRoot(source, rootHint).map((tone) =>
+            formatNote(tone as Note),
+          );
+          if (!spelled.includes(formatNote(bassHint as Note))) {
+            continue;
+          }
+          for (const flats of [undefined, true, false]) {
+            for (let semitones = -11; semitones <= 11; semitones += 1) {
+              const label = `${text} ${semitones} ${String(flats)}`;
+              const symbol = transposeChordSymbol(text, semitones, { flats });
+              const moved = parseChordSymbol(symbol);
+              const movedRoot = moved.rootSpelling;
+              const movedBass = moved.bassSpelling;
+              expect(movedRoot, label).toBeDefined();
+              expect(movedBass, label).toBeDefined();
+              if (movedRoot === undefined || movedBass === undefined) {
+                continue;
+              }
+              const tones = spellChordFromRoot(moved, movedRoot).map((tone) =>
+                formatNote(tone as Note),
+              );
+              expect(tones, `${label} => ${symbol}`).toContain(formatNote(movedBass as Note));
+            }
+          }
+        }
+      }
+    }
   });
 
   it('still reads every symbol it used to read', () => {
@@ -298,6 +392,24 @@ describe('transposeChordSymbol', () => {
       expect(() => transposeChordSymbol(text, 1)).not.toThrow();
     }
     expect(transposeChordSymbol('H7', 1, { system: 'german' })).toBe('C7');
+  });
+});
+
+describe('a transposed slash chord', () => {
+  it('names a bass the chord contains on every surface that transposes', () => {
+    expect(Chord.parse('Bb7/D').transpose(1).symbol()).toBe('B7/D#');
+    expect(Chord.parse('Ab/C').transpose(1).symbol()).toBe('A/C#');
+    expect(
+      new Progression([Chord.parse('Bb7/D'), Chord.parse('Ab/C')]).transpose(1).toString(),
+    ).toBe('B7/D# A/C#');
+    const timeline = Timeline.fromProgression(new Progression([Chord.parse('Bb7/D')]), 4);
+    expect(timeline.transpose(1).at(0)?.symbol()).toBe('B7/D#');
+  });
+
+  it('reads the same as the spelled-interval and inversion siblings', () => {
+    const source = Chord.parse('Bb7/D');
+    expect(source.transpose(1).symbol()).toBe(source.transposeBy('A1').symbol());
+    expect(Chord.parse('B7').invert(1).symbol()).toBe(source.transpose(1).symbol());
   });
 });
 

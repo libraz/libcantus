@@ -15,6 +15,7 @@ import {
   chordSpecIntervals,
   chordSpecQuality,
   QUALITY_INTERVALS,
+  QUALITY_ORDER,
 } from './spec.js';
 
 export type {
@@ -143,7 +144,27 @@ const MAX_CHORD_INTERVAL = 127;
  * @category Chords
  */
 export function chordQualities(): ChordQuality[] {
-  return Object.keys(QUALITY_INTERVALS) as ChordQuality[];
+  return [...QUALITY_ORDER];
+}
+
+/**
+ * Reject a quality the chord tables do not name.
+ *
+ * The single check every way of building a chord runs, so a quality that no
+ * table has a row for is refused where the chord is made rather than surfacing
+ * as an undefined lookup somewhere downstream.
+ *
+ * Not part of the package's public surface.
+ *
+ * @param quality The quality name to check.
+ * @returns The quality, unchanged.
+ * @throws If the quality is not a known name ({@link InvalidInputError}).
+ */
+export function assertChordQuality(quality: ChordQuality): ChordQuality {
+  if (!Object.hasOwn(QUALITY_INTERVALS, quality)) {
+    throw new InvalidInputError(`Unknown chord quality: ${String(quality)}`);
+  }
+  return quality;
 }
 
 /**
@@ -167,9 +188,7 @@ export function chordFromDegree(degree: number, ext: ChordQuality, key: KeyLike)
   // Degree 0 is rejected rather than wrapped onto the last degree: a caller
   // still counting from zero gets an error instead of a plausible chord.
   assertDegree(degree, 'chord degree');
-  if (!Object.hasOwn(QUALITY_INTERVALS, ext)) {
-    throw new InvalidInputError(`Unknown chord quality: ${String(ext)}`);
-  }
+  assertChordQuality(ext);
   const scale = toKeyScale(key);
   const tones = scaleTonesInDegreeOrder(scale);
   const length = tones.length;
@@ -203,9 +222,7 @@ export function makeChord(rootPc: number, quality: ChordQuality, bassPc?: number
   if (bassPc !== undefined) {
     assertFiniteNumber(bassPc, 'chord bassPc');
   }
-  if (!Object.hasOwn(QUALITY_INTERVALS, quality)) {
-    throw new InvalidInputError(`Unknown chord quality: ${String(quality)}`);
-  }
+  assertChordQuality(quality);
   const chord: Chord = {
     rootPc: pitchClass(rootPc),
     quality,
@@ -392,9 +409,7 @@ export function chordFromSpan(span: ChordSpan): Chord {
  */
 export function spanFromChord(chord: Chord, startBeat: number): ChordSpan {
   assertFiniteNumber(startBeat, 'chord span startBeat');
-  if (!Object.hasOwn(QUALITY_INTERVALS, chord.quality)) {
-    throw new InvalidInputError(`Unknown chord quality: ${String(chord.quality)}`);
-  }
+  assertChordQuality(chord.quality);
   const span: ChordSpan = { rootPc: chord.rootPc, quality: chord.quality, startBeat };
   if (chord.bassPc !== undefined) {
     span.bassPc = chord.bassPc;
@@ -617,7 +632,9 @@ export function chordToneRole(pitch: number, chord: Chord): ChordToneRole | null
   const interval = (pitchClass(pitch) - pitchClass(chord.rootPc) + 12) % 12;
   const tones = chordToneOffsets(chord);
   if (interval === 0) {
-    return 'root';
+    // A chord that leaves its root out does not sound one, so the pitch has no
+    // role in it: every other branch below asks the same of its own degree.
+    return tones.has(0) ? 'root' : null;
   }
   if (interval === 3 || interval === 4) {
     return tones.has(interval) && (interval !== 3 || !tones.has(4)) ? 'third' : null;

@@ -240,6 +240,7 @@ const BASE_TOKENS: readonly (readonly [string, ChordBase | 'major'])[] = [
   ['dim', 'dim'],
   ['aug', 'aug'],
   ['maj', 'major'],
+  ['Maj', 'major'],
   ['m', 'min'],
   ['-', 'min'],
   ['o', 'dim'],
@@ -249,6 +250,20 @@ const BASE_TOKENS: readonly (readonly [string, ChordBase | 'major'])[] = [
   ['Δ', 'major'],
   ['^', 'major'],
 ];
+
+/**
+ * The glyphs that name a base and the seventh over it in one character.
+ *
+ * The half-diminished glyph is a minor seventh over a diminished triad, not a
+ * diminished seventh, so it is read as the pair it stands for: reading it as a
+ * plain diminished base would let `Cø9` stack the diminished seventh the base
+ * implies and print a chord the glyph does not name.
+ */
+const COMPOUND_TOKENS: readonly (readonly [string, { base: ChordBase; seventh: ChordSeventh }])[] =
+  [
+    ['ø', { base: 'dim', seventh: 'min7' }],
+    ['h', { base: 'dim', seventh: 'min7' }],
+  ];
 
 /**
  * The markers that say a seventh is major.
@@ -288,12 +303,61 @@ const OMITTABLE: Record<string, number> = { '1': 1, '3': 3, '5': 5 };
 type SpecDraft = {
   base: ChordBase;
   seventh?: ChordSeventh;
-  alterations: Map<AlteredDegree, -1 | 0 | 1>;
+  /**
+   * The alterations read so far, keyed by degree *and* accidental so that the
+   * flat ninth and the raised ninth of an altered dominant are two tones rather
+   * than two readings of one.
+   */
+  alterations: Map<string, Alteration>;
   additions: Set<number>;
   omissions: Set<number>;
+  /**
+   * The seventh the opening glyph names over its base, where it names one. An
+   * extension number stacks up to this seventh instead of the one the base
+   * implies, so the minor seventh of a half-diminished chord survives `ø9`.
+   */
+  seventhOverBase?: ChordSeventh;
+  /** Degrees the extension number implied, which a written figure replaces. */
+  implied: Set<AlteredDegree>;
   /** Whether a `maj`/`M`/`Δ` marker has already claimed the seventh. */
   major: boolean;
 };
+
+/** The identity of one alteration: which degree, and with which accidental. */
+function alterationKey(degree: AlteredDegree, alter: -1 | 0 | 1): string {
+  return `${degree}:${alter}`;
+}
+
+/**
+ * Record an alteration the symbol writes out.
+ *
+ * A written figure states the degree outright, so it replaces the unaltered
+ * tone the extension number implied — `C11b9` flattens the ninth of the stack
+ * rather than sounding both — while two written figures against one degree both
+ * stand, since that is what a chart asking for them means.
+ */
+function writeAlteration(draft: SpecDraft, degree: AlteredDegree, alter: -1 | 0 | 1): void {
+  if (draft.implied.delete(degree)) {
+    draft.alterations.delete(alterationKey(degree, 0));
+  }
+  draft.alterations.set(alterationKey(degree, alter), { degree, alter });
+}
+
+/** Record an unaltered degree the extension number stacks up to. */
+function implyAlteration(draft: SpecDraft, degree: AlteredDegree): void {
+  draft.implied.add(degree);
+  draft.alterations.set(alterationKey(degree, 0), { degree, alter: 0 });
+}
+
+/** Whether the draft already carries an alteration of `degree`. */
+function altersDegree(draft: SpecDraft, degree: AlteredDegree): boolean {
+  for (const alteration of draft.alterations.values()) {
+    if (alteration.degree === degree) {
+      return true;
+    }
+  }
+  return false;
+}
 
 /** The longest token in `table` that `text` carries at `at`. */
 function matchToken<T>(
@@ -327,21 +391,37 @@ function matchNumber(text: string, at: number): { value: number; next: number } 
  * A number names the top of a stack of thirds, not a single tone: `13` is a
  * seventh with a ninth and a thirteenth over it. The eleventh is left out of a
  * thirteenth chord, which is how a chart voices one.
+ *
+ * The seventh stacked under the number is the major seventh a marker asks for,
+ * else the one the opening already named, else the one the base implies.
+ *
+ * The one place the eleventh's quarrel with the third is settled: over a
+ * dominant seventh the eleventh sits a semitone above a major third, so the
+ * third gives way to it, as a chart voices an eleventh chord. A minor third is
+ * a whole tone below the eleventh and does not clash, and a major seventh puts
+ * the chord in the family the dictionaries write out in full, so neither loses
+ * its third. The rule is the number's alone, so it does not turn on whichever
+ * further figures a symbol writes after it.
  */
 function stackTo(draft: SpecDraft, top: number): void {
   if (top === 6) {
     draft.additions.add(6);
     return;
   }
-  draft.seventh = draft.major ? 'maj7' : draft.base === 'dim' ? 'dim7' : 'min7';
+  draft.seventh = draft.major
+    ? 'maj7'
+    : (draft.seventhOverBase ?? (draft.base === 'dim' ? 'dim7' : 'min7'));
   if (top >= 9) {
-    draft.alterations.set(9, 0);
+    implyAlteration(draft, 9);
   }
   if (top === 11) {
-    draft.alterations.set(11, 0);
+    implyAlteration(draft, 11);
+    if (!draft.major && draft.base === 'maj') {
+      draft.omissions.add(3);
+    }
   }
   if (top === 13) {
-    draft.alterations.set(13, 0);
+    implyAlteration(draft, 13);
   }
 }
 
@@ -367,7 +447,7 @@ function applyFigure(draft: SpecDraft, text: string, at: number): number | undef
     // raised ninth over a dominant seventh.
     draft.base = 'aug';
     draft.seventh = 'min7';
-    draft.alterations.set(9, 1);
+    writeAlteration(draft, 9, 1);
     return at + 3;
   }
   if (text.startsWith('add', at)) {
@@ -408,7 +488,7 @@ function applyFigure(draft: SpecDraft, text: string, at: number): number | undef
   if (degree.value === 5 && (accidental === undefined || writesFifth(draft))) {
     return undefined;
   }
-  draft.alterations.set(degree.value, accidental?.value ?? 0);
+  writeAlteration(draft, degree.value, accidental?.value ?? 0);
   return degree.next;
 }
 
@@ -420,7 +500,7 @@ function applyFigure(draft: SpecDraft, text: string, at: number): number | undef
  * spelling of the same tone rather than an addition to the chord.
  */
 function writesFifth(draft: SpecDraft): boolean {
-  return draft.base === 'dim' || draft.base === 'aug' || draft.alterations.has(5);
+  return draft.base === 'dim' || draft.base === 'aug' || altersDegree(draft, 5);
 }
 
 /** The longest degree number in `table` that `text` carries at `at`. */
@@ -433,6 +513,53 @@ function matchNumberToken<T>(
   return matchToken(text, at, entries);
 }
 
+/** One way a suffix's opening characters can be read. */
+type Opening = {
+  /** How many characters of the core the opening spends. */
+  length: number;
+  /** The base it names, where it names one. */
+  base?: ChordBase;
+  /** The seventh it names over that base, as the half-diminished glyph does. */
+  seventh?: ChordSeventh;
+  /** Whether it is a major-seventh marker rather than a base. */
+  major?: boolean;
+  /** Whether that marker is a glyph, which names the seventh on its own. */
+  glyph?: boolean;
+};
+
+/**
+ * The ways a suffix can open, in the order they are worth trying.
+ *
+ * Longest first, as elsewhere in this grammar, but the shorter readings are
+ * kept rather than discarded: a character that opens a base can equally be the
+ * first character of a figure, and only reading the rest of the suffix says
+ * which it was. The `o` of `omit3` names a diminished triad in `Co9`, so the
+ * base reading is tried first and the bare figure is what is left when it
+ * leaves `mit3` unread.
+ */
+function openings(core: string): (Opening | undefined)[] {
+  const found: Opening[] = [];
+  for (const [token, value] of COMPOUND_TOKENS) {
+    if (core.startsWith(token)) {
+      found.push({ length: token.length, base: value.base, seventh: value.seventh });
+    }
+  }
+  for (const [token, value] of BASE_TOKENS) {
+    if (!core.startsWith(token)) {
+      continue;
+    }
+    found.push(
+      value === 'major'
+        ? { length: token.length, major: true, glyph: token === 'Δ' || token === '^' }
+        : { length: token.length, base: value },
+    );
+  }
+  found.sort((a, b) => b.length - a.length);
+  // Reading no base at all is the last resort, so a suffix that is figures from
+  // its first character is still read as the figures it is.
+  return [...found, undefined];
+}
+
 /**
  * Read a quality suffix as a chord, or undefined when it is not one.
  *
@@ -441,6 +568,9 @@ function matchNumberToken<T>(
  * tensions no quality name covers is read as readily as one that has a name.
  * Returning undefined rather than throwing is what lets the caller keep trying
  * shorter roots when a system writes its accidental as an affix.
+ *
+ * Where the opening is ambiguous every reading of it is tried, so the suffix is
+ * refused only when none of them accounts for all of its characters.
  */
 function structuralSpec(text: string): ChordSpec | undefined {
   let core = '';
@@ -469,24 +599,51 @@ function structuralSpec(text: string): ChordSpec | undefined {
   if (inside) {
     return undefined;
   }
+  for (const opening of openings(core)) {
+    const spec = readCore(core, groups, opening);
+    if (spec !== undefined) {
+      return spec;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Read a suffix's core and bracketed groups under one reading of its opening,
+ * or undefined when that reading leaves anything unread.
+ *
+ * @param core The suffix outside any brackets.
+ * @param groups The contents of the bracketed groups, in order.
+ * @param opening The reading of the opening characters, or undefined to read
+ *   the core as figures from its first character.
+ */
+function readCore(
+  core: string,
+  groups: readonly string[],
+  opening: Opening | undefined,
+): ChordSpec | undefined {
   const draft: SpecDraft = {
     base: 'maj',
     alterations: new Map(),
     additions: new Set(),
     omissions: new Set(),
+    implied: new Set(),
     major: false,
   };
   let at = 0;
-  const opening = matchToken(core, at, BASE_TOKENS);
   let markerGlyph = false;
   let markerAfterBase = false;
   if (opening !== undefined) {
-    at = opening.next;
-    if (opening.value === 'major') {
+    at = opening.length;
+    if (opening.major === true) {
       draft.major = true;
-      markerGlyph = core.startsWith('Δ') || core.startsWith('^');
-    } else {
-      draft.base = opening.value;
+      markerGlyph = opening.glyph === true;
+    } else if (opening.base !== undefined) {
+      draft.base = opening.base;
+      if (opening.seventh !== undefined) {
+        draft.seventh = opening.seventh;
+        draft.seventhOverBase = opening.seventh;
+      }
     }
   }
   if (!draft.major) {
@@ -537,7 +694,7 @@ function structuralSpec(text: string): ChordSpec | undefined {
     rootPc: 0,
     base: draft.base,
     ...(draft.seventh === undefined ? {} : { seventh: draft.seventh }),
-    alterations: [...draft.alterations].map(([degree, alter]) => ({ degree, alter })),
+    alterations: [...draft.alterations.values()],
     additions: [...draft.additions],
     omissions: [...draft.omissions],
   };
@@ -883,6 +1040,52 @@ function pitchClassName(
 }
 
 /**
+ * Whether a spelling is written on the side of the staff the caller asked for.
+ *
+ * A natural sits on both sides, so it never forces a respelling; with no
+ * preference given every spelling qualifies.
+ */
+function onAccidentalSide(spelling: PitchSpelling, flats: boolean | undefined): boolean {
+  return flats === undefined || spelling.alter === 0 || spelling.alter < 0 === flats;
+}
+
+/**
+ * Move a spelling by the step that carries `from` to `to`.
+ *
+ * This is the one step a whole symbol moves by, whether it is being transposed
+ * or respelled onto the other side of the staff: taking the bass and the tones
+ * through it is what keeps them inside the chord the root names.
+ */
+function bySameStep(
+  spelling: PitchSpelling,
+  from: PitchSpelling,
+  to: PitchSpelling,
+): PitchSpelling {
+  return bareSpelling(transposeByInterval(spelling, spelledInterval(from, to)));
+}
+
+/** A spelling hint, or undefined when it no longer names `pc`. */
+function hintFor(hint: PitchSpelling | undefined, pc: number): PitchSpelling | undefined {
+  return hint !== undefined && noteToPitchClass(hint) === pc ? hint : undefined;
+}
+
+/**
+ * The spelling a symbol writes its root in.
+ *
+ * A hint is kept when it still names the root and already sits on the side the
+ * caller asked for; otherwise the pitch class is named from that side's table.
+ */
+function rootSpellingFor(
+  pc: number,
+  hint: PitchSpelling | undefined,
+  flats: boolean | undefined,
+): PitchSpelling {
+  return hint !== undefined && onAccidentalSide(hint, flats)
+    ? hint
+    : bareSpelling(midiToNote(60 + pc, flats ? 'flat' : 'sharp'));
+}
+
+/**
  * The named chords a symbol can write as its core, with the spec each stands
  * for.
  *
@@ -1030,8 +1233,12 @@ function specSuffix(spec: ChordSpec): string {
  */
 export type ChordSymbolOptions = NoteNameOptions & {
   /**
-   * Prefer flat spellings over sharps for an altered root or bass; passing
-   * either `true` or `false` overrides any spelling hint the chord carries.
+   * Which side of the staff the whole symbol is written on: `true` writes it in
+   * flats, `false` in sharps. The root, the slash bass and the chord's tones are
+   * spelled together, so a symbol never pairs a flat root with a sharp bass, and
+   * a spelling hint already on the requested side is kept rather than renamed.
+   * Where that side cannot spell the chord at all, the spelling a chart writes
+   * wins over an unwritable one.
    */
   flats?: boolean;
 };
@@ -1061,8 +1268,8 @@ export type ChordSymbolOptions = NoteNameOptions & {
  * @param chord The chord to format, as a chord symbol, chord data, or a
  *   `Chord`.
  * @param opts `system` writes the root and bass in that notation system instead
- *   of English; `flats` overrides the spelling hints, as
- *   {@link ChordSymbolOptions} describes.
+ *   of English; `flats` chooses the side of the staff the whole symbol is
+ *   written on, as {@link ChordSymbolOptions} describes.
  * @returns The chord symbol text.
  * @example
  * ```ts
@@ -1082,18 +1289,23 @@ export function formatChordSymbol(chord: ChordLike, opts?: ChordSymbolOptions): 
     throw new InvalidInputError(`Unknown chord quality: ${String(data.quality)}`);
   }
   const system = opts?.system ?? DEFAULT_SYSTEM;
+  const flats = opts?.flats;
   const rootPc = pitchClass(data.rootPc);
-  const rootHint = data.rootSpelling;
-  const rootName = pitchClassName(rootPc, rootHint, system, opts?.flats);
+  const rootHint = hintFor(data.rootSpelling, rootPc);
+  const rootSpelling = rootSpellingFor(rootPc, rootHint, flats);
   const suffix = specSuffix(chordSpecOf(data));
-  let symbol = `${rootName}${suffix}`;
+  let symbol = `${symbolName(rootSpelling, system)}${suffix}`;
   if (data.bassPc !== undefined && pitchClass(data.bassPc) !== rootPc) {
-    const inheritFlats =
-      rootHint !== undefined && noteToPitchClass(rootHint) === rootPc
-        ? rootHint.alter < 0
-        : undefined;
     const bassPc = pitchClass(data.bassPc);
-    symbol += `/${pitchClassName(bassPc, data.bassSpelling, system, opts?.flats, inheritFlats)}`;
+    const bassHint = hintFor(data.bassSpelling, bassPc);
+    // Respelling the root respells the bass with it: the two are one symbol, so
+    // a preference that moves the root to the flat side takes the bass there
+    // too rather than leaving a sharp bass under a flat root.
+    const bassName =
+      rootHint !== undefined && bassHint !== undefined
+        ? symbolName(bySameStep(bassHint, rootHint, rootSpelling), system)
+        : pitchClassName(bassPc, bassHint, system, flats, rootSpelling.alter < 0);
+    symbol += `/${bassName}`;
   }
   return symbol;
 }
@@ -1141,16 +1353,22 @@ function isWrittenSpelling(spelling: PitchSpelling): boolean {
  * spelling falls back to the plain name of the pitch class, taken on the
  * accidental side already in force — an explicit preference first, then the
  * side the moved root reads on, then the root's own, then the bass's — so one
- * symbol never pairs a sharp root with a flat bass. The tones follow the root's
- * own step rather than the semitone count, so respelling the root respells the
- * chord with it and the letter distances between the tones survive.
+ * symbol never pairs a sharp root with a flat bass. The same fallback catches a
+ * root whose own letters would leave the bass unwritable, so `Cmaj7/B` up a
+ * tritone is `Gbmaj7/F` rather than an F# chord over a bass spelled E#. The
+ * bass and the tones then
+ * follow the root's own step rather than the semitone count, so respelling the
+ * root respells the chord with it and the letter distances inside the chord
+ * survive: `Bb7/D` up a semitone is `B7/D#`, the third of the chord it names,
+ * and never `B7/Eb`, a note B7 does not contain.
  *
  * A transposition by whole octaves returns every letter to itself and is left
  * alone: a chart that writes C flat keeps it.
  *
  * @param spellings The chord's spellings.
  * @param semitones The signed semitone offset.
- * @param flats Forces the fallback onto the flat or the sharp side.
+ * @param flats Writes the whole symbol on the flat or the sharp side: the root
+ *   is chosen so that the bass carried with it lands there too.
  * @returns The moved spellings, carrying only the ones that were given.
  */
 export function transposeChordSpellings(
@@ -1167,27 +1385,57 @@ export function transposeChordSpellings(
   );
   const preferFlats = flats ?? (side !== undefined && side.alter < 0);
   const octaveOnly = pitchClass(semitones) === 0;
+  const plainName = (spelling: PitchSpelling, asFlat: boolean): PitchSpelling =>
+    bareSpelling(midiToNote(60 + noteToPitchClass(spelling), asFlat ? 'flat' : 'sharp'));
   const writable = (spelling: PitchSpelling): PitchSpelling =>
-    octaveOnly || isWrittenSpelling(spelling)
-      ? spelling
-      : bareSpelling(midiToNote(60 + noteToPitchClass(spelling), preferFlats ? 'flat' : 'sharp'));
+    octaveOnly || isWrittenSpelling(spelling) ? spelling : plainName(spelling, preferFlats);
+  const root = spellings.rootSpelling;
+  const bass = spellings.bassSpelling;
+  // Whether a candidate root leaves a bass the chart can still write, on the
+  // side the caller asked for. A bass that already reads as an odd name is no
+  // test of the root, but one that reads plainly must stay that way, so a chord
+  // whose sharp root would need E# under it is written on the flat side.
+  const carriesBass = (candidate: PitchSpelling): boolean => {
+    if (root === undefined || bass === undefined || octaveOnly || !isWrittenSpelling(bass)) {
+      return true;
+    }
+    const carried = bySameStep(bass, root, candidate);
+    return isWrittenSpelling(carried) && onAccidentalSide(carried, flats);
+  };
   const moved: ChordSpellings = {};
   if (movedRoot !== undefined) {
-    moved.rootSpelling = writable(movedRoot);
+    // The root is chosen for the symbol as a whole: the letter it moves to
+    // first, then the plain name of its pitch class on the side in force, then
+    // the other side. A caller who named a side is offered one more reading
+    // before the symbol turns around — the letters' own spelling, odd as it may
+    // be — because `Cb/Gb` is the flat side of that chord and `B/Gb` is not a
+    // chord at all. Without a named side the written vocabulary wins.
+    const asked = flats !== undefined && !octaveOnly && !isWrittenSpelling(movedRoot);
+    const candidates = [
+      ...(octaveOnly || isWrittenSpelling(movedRoot) ? [movedRoot] : []),
+      plainName(movedRoot, preferFlats),
+      ...(asked ? [movedRoot] : []),
+      plainName(movedRoot, !preferFlats),
+    ];
+    moved.rootSpelling = candidates.find(carriesBass) ?? plainName(movedRoot, preferFlats);
   }
-  if (movedBass !== undefined) {
-    moved.bassSpelling = writable(movedBass);
+  // The one step the whole chord moves by: from the root as written to the root
+  // as it comes out, fallback included. Everything below it takes this same step
+  // instead of the semitone count, which is what keeps the bass and the tones
+  // inside the chord the root names.
+  const step =
+    root !== undefined && moved.rootSpelling !== undefined
+      ? spelledInterval(root, moved.rootSpelling)
+      : undefined;
+  const byStep = (spelling: PitchSpelling): PitchSpelling =>
+    bareSpelling(
+      step === undefined ? transposeNote(spelling, semitones) : transposeByInterval(spelling, step),
+    );
+  if (bass !== undefined) {
+    moved.bassSpelling = writable(byStep(bass));
   }
   if (spellings.toneSpellings !== undefined) {
-    const shift =
-      spellings.rootSpelling !== undefined && moved.rootSpelling !== undefined
-        ? spelledInterval(spellings.rootSpelling, moved.rootSpelling)
-        : undefined;
-    moved.toneSpellings = spellings.toneSpellings.map((hint) =>
-      bareSpelling(
-        shift === undefined ? transposeNote(hint, semitones) : transposeByInterval(hint, shift),
-      ),
-    );
+    moved.toneSpellings = spellings.toneSpellings.map(byStep);
   }
   return moved;
 }
@@ -1200,7 +1448,8 @@ export function transposeChordSpellings(
  *
  * The root and the bass are respelled where moving them by letter would leave
  * a name no chart writes, so raising a flat chart a semitone gives `Bmaj7`
- * rather than `Cbmaj7`. Pass `flats` to choose the side that fallback takes.
+ * rather than `Cbmaj7`. Pass `flats` to write the whole symbol on one side of
+ * the staff, root and bass together.
  *
  * @param text The chord symbol text.
  * @param semitones Signed semitone offset to apply to the root and bass.

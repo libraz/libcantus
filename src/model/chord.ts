@@ -41,6 +41,7 @@ import {
   substituteChord,
 } from '../generate/reharmony/index.js';
 import {
+  assertChordQuality,
   type Chord as ChordData,
   type ChordQuality,
   type ChordSpan,
@@ -67,7 +68,7 @@ import {
   chordScales,
 } from '../theory/chordscale/index.js';
 import { figuredBassOf, realizeFiguredBass } from '../theory/figured-bass/index.js';
-import { type KeyLike, type ScaleNameInput, toKeyScale } from '../theory/scale/index.js';
+import type { KeyLike, ScaleNameInput } from '../theory/scale/index.js';
 import { spellChord, spellChordFromRoot, spellPitchClass } from '../theory/spelling/index.js';
 import {
   type ChordSymbolOptions,
@@ -135,6 +136,14 @@ function transposeToneHintsByInterval(
  * that every getter reports verbatim and `equals` compares against a 1 it never
  * matches.
  *
+ * A quality no chord table names is refused here, with the same error the
+ * builders throw, rather than travelling on as a chord whose analysis methods
+ * fail on an undefined table row.
+ *
+ * A bass equal to the root is dropped: that chord is in root position, and
+ * keeping the redundant bass would make it compare unequal to the same chord
+ * built without one.
+ *
  * Enharmonic spelling hints (`rootSpelling`/`bassSpelling`, populated by
  * `parseChordSymbol`, and the per-tone `toneSpellings` an augmented sixth
  * carries) are carried through so a flat-named chord round-trips through the
@@ -144,8 +153,10 @@ function transposeToneHintsByInterval(
  */
 function copyChord(data: ChordData): ChordData {
   assertDataObject(data, 'chord data');
+  assertChordQuality(data.quality);
+  const rootPc = pitchClassOf(data.rootPc);
   const copy: ChordData = {
-    rootPc: pitchClassOf(data.rootPc),
+    rootPc,
     quality: data.quality,
     // Each offset is checked rather than copied blind: a chord holding a NaN
     // interval voices, spells and formats as a chord that looks real, and the
@@ -154,8 +165,9 @@ function copyChord(data: ChordData): ChordData {
       assertFiniteNumber(interval, `chord intervals[${index}]`),
     ),
   };
-  if (data.bassPc !== undefined) {
-    copy.bassPc = pitchClassOf(data.bassPc);
+  const bassPc = data.bassPc === undefined ? undefined : pitchClassOf(data.bassPc);
+  if (bassPc !== undefined && bassPc !== rootPc) {
+    copy.bassPc = bassPc;
   }
   const tones = chordToneSpellings(data);
   if (tones !== undefined) {
@@ -164,7 +176,9 @@ function copyChord(data: ChordData): ChordData {
   if (hintMatches(data.rootSpelling, data.rootPc) && data.rootSpelling !== undefined) {
     copy.rootSpelling = { letter: data.rootSpelling.letter, alter: data.rootSpelling.alter };
   }
-  if (hintMatches(data.bassSpelling, data.bassPc) && data.bassSpelling !== undefined) {
+  // The bass spelling is the slash bass's; with no slash bass left there is
+  // nothing for it to name.
+  if (hintMatches(data.bassSpelling, copy.bassPc) && data.bassSpelling !== undefined) {
     copy.bassSpelling = { letter: data.bassSpelling.letter, alter: data.bassSpelling.alter };
   }
   return copy;
@@ -332,11 +346,14 @@ export class Chord {
    * ```ts
    * import { Chord } from '@libraz/libcantus';
    * Chord.fromFiguredBass('B', '6', 'C major').symbol(); // 'G/B'
-   * Chord.fromFiguredBass('G', '#', 'C minor').symbol(); // 'G'
+   * Chord.fromFiguredBass('G', 'n', 'C minor').symbol(); // 'G'
    * ```
    */
   static fromFiguredBass(bass: NoteLike, figures: string, key: KeyLike): Chord {
-    return new Chord(realizeFiguredBass(toNoteData(bass), figures, toKeyScale(key)));
+    // The key travels whole: reducing it here would take the figures of an
+    // Ab minor exercise and read them against the G# minor its pitch classes
+    // spell back as.
+    return new Chord(realizeFiguredBass(toNoteData(bass), figures, key));
   }
 
   /**

@@ -296,6 +296,7 @@ export function detectChord(
   const toneCounts = new Map(
     qualities.map((quality) => [quality, chordPitchClasses(makeChord(0, quality)).length]),
   );
+  const qualityRank = new Map(qualities.map((quality, index) => [quality, index]));
   for (const rootPc of input) {
     for (const quality of qualities) {
       const chord = makeChord(rootPc, quality);
@@ -344,7 +345,22 @@ export function detectChord(
     }
     const aSize = toneCounts.get(a.quality) ?? 0;
     const bSize = toneCounts.get(b.quality) ?? 0;
-    return bSize - aSize;
+    if (aSize !== bSize) {
+      return bSize - aSize;
+    }
+    // Past size, two readings of the same pitches are told apart by the chord
+    // they name and by nothing else: leaving it to the sort's stability would
+    // hand the decision to the order the pitch classes were pushed in, which is
+    // their numeric order, so the same set of intervals would be named one
+    // chord here and another a fourth higher. The canonical quality order
+    // decides instead, and only a chord symmetrical under transposition — a
+    // diminished seventh, which has no one root — reaches the root below it.
+    const aRank = qualityRank.get(a.quality) ?? qualities.length;
+    const bRank = qualityRank.get(b.quality) ?? qualities.length;
+    if (aRank !== bRank) {
+      return aRank - bRank;
+    }
+    return a.rootPc - b.rootPc;
   });
   return matches;
 }

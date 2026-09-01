@@ -178,6 +178,9 @@ const DEGREE_SEMITONES: Record<number, number> = { 6: 9, 9: 14, 11: 17, 13: 21 }
 /** Semitones above the root of an unaltered fifth, the tone alterations move. */
 const PERFECT_FIFTH = 7;
 
+/** The identity every alteration of the fifth shares, since a chord has one. */
+const FIFTH_KEY = '5';
+
 /** Chord degrees a chord may omit: root, third, fifth. */
 const OMITTABLE_DEGREES = [1, 3, 5];
 
@@ -216,111 +219,150 @@ function parts(base: ChordBase, spec: SpecParts = {}): ChordSpec {
 }
 
 /**
- * The spec each quality name stands for.
+ * The spec each quality name stands for, in the order the names are declared.
  *
- * Declaration order is stable but carries no meaning: {@link chordQualities}
- * publishes it and chord detection uses it as a final tie-break, so it is part
- * of the observable behaviour and does not get reshuffled casually.
+ * A list, not an object: `5`, `6`, `11` and `13` are integer-like property
+ * names, which JavaScript hoists to the front of any object's key order, so an
+ * object literal could not hold the order this file writes. The order is stable
+ * but carries no meaning beyond that: {@link chordQualities} publishes it and
+ * chord detection uses it as a final tie-break, so it is part of the observable
+ * behaviour and does not get reshuffled casually.
  */
-const QUALITY_SPECS: Record<ChordQuality, ChordSpec> = {
-  maj: parts('maj'),
-  min: parts('min'),
-  dim: parts('dim'),
-  aug: parts('aug'),
-  majb5: parts('maj', { alt: [[5, -1]] }),
-  maj7: parts('maj', { seventh: 'maj7' }),
-  min7: parts('min', { seventh: 'min7' }),
-  dom7: parts('maj', { seventh: 'min7' }),
-  dim7: parts('dim', { seventh: 'dim7' }),
-  m7b5: parts('dim', { seventh: 'min7' }),
-  minMaj7: parts('min', { seventh: 'maj7' }),
-  minMaj9: parts('min', { seventh: 'maj7', alt: [[9, 0]] }),
-  minMaj11: parts('min', {
-    seventh: 'maj7',
-    alt: [
-      [9, 0],
-      [11, 0],
-    ],
-  }),
-  minMaj13: parts('min', {
-    seventh: 'maj7',
-    alt: [
-      [9, 0],
-      [13, 0],
-    ],
-  }),
-  aug7: parts('aug', { seventh: 'min7' }),
-  augMaj7: parts('aug', { seventh: 'maj7' }),
-  '6': parts('maj', { add: [6] }),
-  min6: parts('min', { add: [6] }),
-  '6/9': parts('maj', { add: [6, 9] }),
-  sus2: parts('sus2'),
-  sus4: parts('sus4'),
-  add9: parts('maj', { add: [9] }),
-  add11: parts('maj', { add: [11] }),
-  maj9: parts('maj', { seventh: 'maj7', alt: [[9, 0]] }),
-  min9: parts('min', { seventh: 'min7', alt: [[9, 0]] }),
-  dom9: parts('maj', { seventh: 'min7', alt: [[9, 0]] }),
-  '7b9': parts('maj', { seventh: 'min7', alt: [[9, -1]] }),
-  '7#9': parts('maj', { seventh: 'min7', alt: [[9, 1]] }),
-  '7#11': parts('maj', { seventh: 'min7', alt: [[11, 1]] }),
-  '7b13': parts('maj', { seventh: 'min7', alt: [[13, -1]] }),
+const QUALITY_SPECS: readonly (readonly [ChordQuality, ChordSpec])[] = [
+  ['maj', parts('maj')],
+  ['min', parts('min')],
+  ['dim', parts('dim')],
+  ['aug', parts('aug')],
+  ['majb5', parts('maj', { alt: [[5, -1]] })],
+  ['maj7', parts('maj', { seventh: 'maj7' })],
+  ['min7', parts('min', { seventh: 'min7' })],
+  ['dom7', parts('maj', { seventh: 'min7' })],
+  ['dim7', parts('dim', { seventh: 'dim7' })],
+  ['m7b5', parts('dim', { seventh: 'min7' })],
+  ['minMaj7', parts('min', { seventh: 'maj7' })],
+  ['minMaj9', parts('min', { seventh: 'maj7', alt: [[9, 0]] })],
+  [
+    'minMaj11',
+    parts('min', {
+      seventh: 'maj7',
+      alt: [
+        [9, 0],
+        [11, 0],
+      ],
+    }),
+  ],
+  [
+    'minMaj13',
+    parts('min', {
+      seventh: 'maj7',
+      alt: [
+        [9, 0],
+        [13, 0],
+      ],
+    }),
+  ],
+  ['aug7', parts('aug', { seventh: 'min7' })],
+  ['augMaj7', parts('aug', { seventh: 'maj7' })],
+  ['6', parts('maj', { add: [6] })],
+  ['min6', parts('min', { add: [6] })],
+  ['6/9', parts('maj', { add: [6, 9] })],
+  ['sus2', parts('sus2')],
+  ['sus4', parts('sus4')],
+  ['add9', parts('maj', { add: [9] })],
+  ['add11', parts('maj', { add: [11] })],
+  ['maj9', parts('maj', { seventh: 'maj7', alt: [[9, 0]] })],
+  ['min9', parts('min', { seventh: 'min7', alt: [[9, 0]] })],
+  ['dom9', parts('maj', { seventh: 'min7', alt: [[9, 0]] })],
+  ['7b9', parts('maj', { seventh: 'min7', alt: [[9, -1]] })],
+  ['7#9', parts('maj', { seventh: 'min7', alt: [[9, 1]] })],
+  ['7#11', parts('maj', { seventh: 'min7', alt: [[11, 1]] })],
+  ['7b13', parts('maj', { seventh: 'min7', alt: [[13, -1]] })],
   // The eleventh chord as a chart voices it: the third gives way to the
   // eleventh a semitone above it rather than sounding against it.
-  '11': parts('maj', {
-    seventh: 'min7',
-    alt: [
-      [9, 0],
-      [11, 0],
-    ],
-    omit: [3],
-  }),
-  '13': parts('maj', {
-    seventh: 'min7',
-    alt: [
-      [9, 0],
-      [13, 0],
-    ],
-  }),
-  '5': parts('power'),
-  '7sus4': parts('sus4', { seventh: 'min7' }),
-  '7b5': parts('maj', { seventh: 'min7', alt: [[5, -1]] }),
+  [
+    '11',
+    parts('maj', {
+      seventh: 'min7',
+      alt: [
+        [9, 0],
+        [11, 0],
+      ],
+      omit: [3],
+    }),
+  ],
+  [
+    '13',
+    parts('maj', {
+      seventh: 'min7',
+      alt: [
+        [9, 0],
+        [13, 0],
+      ],
+    }),
+  ],
+  ['5', parts('power')],
+  ['7sus4', parts('sus4', { seventh: 'min7' })],
+  ['7b5', parts('maj', { seventh: 'min7', alt: [[5, -1]] })],
   // The altered dominant as it is voiced from a lead sheet: a dominant seventh
   // with a raised fifth and a raised ninth. The full seven-note altered stack
   // has no seven-letter spelling, so it is not what this symbol denotes.
-  '7alt': parts('aug', { seventh: 'min7', alt: [[9, 1]] }),
-  '13b9': parts('maj', {
-    seventh: 'min7',
-    alt: [
-      [9, -1],
-      [13, 0],
-    ],
-  }),
-  maj13: parts('maj', {
-    seventh: 'maj7',
-    alt: [
-      [9, 0],
-      [13, 0],
-    ],
-  }),
-  'maj7#11': parts('maj', { seventh: 'maj7', alt: [[11, 1]] }),
-  min11: parts('min', {
-    seventh: 'min7',
-    alt: [
-      [9, 0],
-      [11, 0],
-    ],
-  }),
-  min13: parts('min', {
-    seventh: 'min7',
-    alt: [
-      [9, 0],
-      [13, 0],
-    ],
-  }),
-  minAdd9: parts('min', { add: [9] }),
-  'min6/9': parts('min', { add: [6, 9] }),
-};
+  ['7alt', parts('aug', { seventh: 'min7', alt: [[9, 1]] })],
+  [
+    '13b9',
+    parts('maj', {
+      seventh: 'min7',
+      alt: [
+        [9, -1],
+        [13, 0],
+      ],
+    }),
+  ],
+  [
+    'maj13',
+    parts('maj', {
+      seventh: 'maj7',
+      alt: [
+        [9, 0],
+        [13, 0],
+      ],
+    }),
+  ],
+  ['maj7#11', parts('maj', { seventh: 'maj7', alt: [[11, 1]] })],
+  [
+    'min11',
+    parts('min', {
+      seventh: 'min7',
+      alt: [
+        [9, 0],
+        [11, 0],
+      ],
+    }),
+  ],
+  [
+    'min13',
+    parts('min', {
+      seventh: 'min7',
+      alt: [
+        [9, 0],
+        [13, 0],
+      ],
+    }),
+  ],
+  ['minAdd9', parts('min', { add: [9] })],
+  ['min6/9', parts('min', { add: [6, 9] })],
+];
+
+/**
+ * The one canonical order of the quality names.
+ *
+ * Every enumeration of qualities — the published list, the nearest-name scan,
+ * the symbol formatter's core candidates, detection's final tie-break — reads
+ * this array, so none of them can drift onto a key order the engine chose.
+ */
+export const QUALITY_ORDER: readonly ChordQuality[] = QUALITY_SPECS.map(([quality]) => quality);
+
+/** The spec behind each quality name, for lookup by name. */
+const SPEC_BY_QUALITY: ReadonlyMap<ChordQuality, ChordSpec> = new Map(QUALITY_SPECS);
 
 /**
  * Reduce a spec to the one form that stands for its harmony.
@@ -339,13 +381,27 @@ const QUALITY_SPECS: Record<ChordQuality, ChordSpec> = {
  */
 export function normalizeChordSpec(spec: ChordSpec): ChordSpec {
   let base = spec.base;
-  const alterations = new Map<AlteredDegree, -1 | 0 | 1>();
+  // Keyed by degree *and* accidental: a flat ninth and a raised ninth are two
+  // tones a chart writes side by side, so they are two alterations and not two
+  // spellings of one. Only the fifth is single-valued, since a chord sounds one
+  // fifth; contradictory fifths settle on the lowest, which is the same answer
+  // whichever order they were written in.
+  const alterations = new Map<string, Alteration>();
   for (const alteration of spec.alterations ?? []) {
-    alterations.set(alteration.degree, alteration.alter);
+    const { degree, alter } = alteration;
+    if (degree === 5) {
+      const current = alterations.get(FIFTH_KEY);
+      if (current !== undefined && current.alter <= alter) {
+        continue;
+      }
+      alterations.set(FIFTH_KEY, { degree, alter });
+      continue;
+    }
+    alterations.set(`${degree}:${alter}`, { degree, alter });
   }
   const additions = new Set(spec.additions ?? []);
   const omissions = new Set(spec.omissions ?? []);
-  const fifth = alterations.get(5);
+  const fifth = alterations.get(FIFTH_KEY)?.alter;
   if (fifth !== undefined) {
     // The alteration is the statement about the fifth, so a base that already
     // alters it steps back to its plain form before the two are combined.
@@ -355,21 +411,21 @@ export function normalizeChordSpec(spec: ChordSpec): ChordSpec {
       base = 'min';
     }
     if (fifth === 0) {
-      alterations.delete(5);
+      alterations.delete(FIFTH_KEY);
     } else if (base === 'maj' && fifth === 1) {
       base = 'aug';
-      alterations.delete(5);
+      alterations.delete(FIFTH_KEY);
     } else if (base === 'min' && fifth === -1) {
       base = 'dim';
-      alterations.delete(5);
+      alterations.delete(FIFTH_KEY);
     }
   }
   if (spec.seventh === undefined) {
     // Without a seventh under it, an unaltered upper degree is an added tone
     // rather than a tension: C(9) is the chord Cadd9 names.
-    for (const [degree, alter] of [...alterations]) {
+    for (const [key, { degree, alter }] of [...alterations]) {
       if (degree !== 5 && alter === 0) {
-        alterations.delete(degree);
+        alterations.delete(key);
         additions.add(degree);
       }
     }
@@ -377,9 +433,7 @@ export function normalizeChordSpec(spec: ChordSpec): ChordSpec {
   const normalized: ChordSpec = {
     rootPc: spec.rootPc,
     base,
-    alterations: [...alterations]
-      .sort((a, b) => a[0] - b[0])
-      .map(([degree, alter]) => ({ degree, alter })),
+    alterations: [...alterations.values()].sort((a, b) => a.degree - b.degree || a.alter - b.alter),
     additions: [...additions].sort((a, b) => a - b),
     omissions: [...omissions].sort((a, b) => a - b),
   };
@@ -462,10 +516,7 @@ export function chordSpecIntervals(spec: ChordSpec): number[] {
 
 /** Semitone offsets from the root for each supported chord quality. */
 export const QUALITY_INTERVALS: Record<ChordQuality, number[]> = Object.fromEntries(
-  (Object.keys(QUALITY_SPECS) as ChordQuality[]).map((quality) => [
-    quality,
-    specIntervals(normalizeChordSpec(QUALITY_SPECS[quality])),
-  ]),
+  QUALITY_SPECS.map(([quality, spec]) => [quality, specIntervals(normalizeChordSpec(spec))]),
 ) as Record<ChordQuality, number[]>;
 
 /** A spec's identity as text, so two readings of one chord compare equal. */
@@ -482,10 +533,7 @@ function specKey(spec: ChordSpec): string {
 
 /** The quality naming each spec exactly, keyed by the spec's own identity. */
 const QUALITY_BY_KEY: ReadonlyMap<string, ChordQuality> = new Map(
-  (Object.keys(QUALITY_SPECS) as ChordQuality[]).map((quality) => [
-    specKey(QUALITY_SPECS[quality]),
-    quality,
-  ]),
+  QUALITY_SPECS.map(([quality, spec]) => [specKey(spec), quality]),
 );
 
 /**
@@ -504,10 +552,11 @@ export function chordSpecForQuality(
   rootPc: number,
   bassPc?: number,
 ): ChordSpec {
-  if (!Object.hasOwn(QUALITY_SPECS, quality)) {
+  const named = SPEC_BY_QUALITY.get(quality);
+  if (named === undefined) {
     throw new InvalidInputError(`Unknown chord quality: ${String(quality)}`);
   }
-  const spec = normalizeChordSpec(QUALITY_SPECS[quality]);
+  const spec = normalizeChordSpec(named);
   spec.rootPc = rootPc;
   if (bassPc !== undefined) {
     spec.bassPc = bassPc;
@@ -561,10 +610,14 @@ export function chordSpecQuality(spec: ChordSpec): ChordQuality {
   if (exact !== undefined) {
     return exact;
   }
-  const offsets = new Set(specIntervals(checked));
+  // An omitted degree is a tone the chord does not sound, not evidence against
+  // a name: a fifth-less dominant is still a dominant seventh, and a template
+  // that names the omitted tone must not lose to one that does not. Putting the
+  // omitted degrees back drops them from both sides of the comparison at once.
+  const offsets = new Set(specIntervals({ ...checked, omissions: [] }));
   let nearest: ChordQuality | undefined;
   let size = 0;
-  for (const quality of Object.keys(QUALITY_INTERVALS) as ChordQuality[]) {
+  for (const quality of QUALITY_ORDER) {
     const template = QUALITY_INTERVALS[quality];
     if (template.length > size && template.every((offset) => offsets.has(offset))) {
       nearest = quality;
