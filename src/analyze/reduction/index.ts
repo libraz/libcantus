@@ -32,9 +32,11 @@ import { pitchClassOf as mod12 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import { assertOneOf } from '../../core/validation/index.js';
 import type { Chord, ChordSegment } from '../../theory/chord/index.js';
+import { isDominantChordOf } from '../../theory/tendency/index.js';
 import { isCadentialSixFour } from '../functional/cadence.js';
 import type { CadenceResult } from '../functional/index.js';
 import { detectCadence } from '../functional/index.js';
+import { isAppliedDominant } from '../functional/tonicization.js';
 import type { ChordTimeline } from '../timeline/index.js';
 import type { KeyContext } from '../voice/index.js';
 import { keyScaleAt } from '../voice/index.js';
@@ -179,19 +181,16 @@ function salienceFloors(durations: readonly number[]): number[] {
   return floors;
 }
 
-/** Whether a chord stands on the key's tonic. */
-function isTonicChord(chord: Chord, key: KeyScale): boolean {
-  return mod12(chord.rootPc - key.rootPc) === 0;
-}
-
 /**
- * Whether a chord is the key's own dominant.
+ * Whether a chord stands on the key's tonic and is heard as the tonic.
  *
- * The major third is what makes it one: the minor v of a natural-minor key
- * carries no leading tone and frames nothing the tonic is approached from.
+ * The root alone does not settle it. `C7` in C major stands on the tonic and
+ * tonicizes the subdominant — the function layer already reads it as a dominant
+ * — and this module's position is that a chord tonicizing something other than
+ * the tonic is prolonging rather than framing, however it is spelled.
  */
-function isDominantChord(chord: Chord, key: KeyScale): boolean {
-  return mod12(chord.rootPc - key.rootPc) === 7 && chord.intervals.some((iv) => mod12(iv) === 4);
+function isTonicChord(chord: Chord, key: KeyScale): boolean {
+  return mod12(chord.rootPc - key.rootPc) === 0 && !isAppliedDominant(chord, key);
 }
 
 /**
@@ -222,7 +221,7 @@ function functionalReason(
   if (isTonicChord(segment.chord, key)) {
     return { kind: 'tonic' };
   }
-  if (isDominantChord(segment.chord, key)) {
+  if (isDominantChordOf(segment.chord, key)) {
     return { kind: 'dominant' };
   }
   if (before !== undefined) {

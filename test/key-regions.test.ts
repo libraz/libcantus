@@ -946,3 +946,40 @@ describe('a region owns the key it reports', () => {
     expect(second.timeline.segments.map((segment) => segment.chord.rootPc)).toEqual(chords);
   });
 });
+
+describe('a dominant seventh names its key whatever it is written as', () => {
+  /** C F C | X | D, where X is the applied dominant written five ways. */
+  const toD = (quality: ChordQuality): ChordSegment[] => [
+    seg(0, 0, 'maj'),
+    seg(4, 5, 'maj'),
+    seg(8, 0, 'maj'),
+    seg(12, 9, quality),
+    seg(16, 2, 'maj'),
+  ];
+
+  it('hears the modulation A13 turns as readily as the one A7 turns', () => {
+    // I IV I V7/V V, written the way a lead sheet writes it. The tritone inside
+    // the chord is what names the key it points at, so an extended dominant
+    // argues for that key exactly as the plain seventh does.
+    const plain = detectModulations(toD('dom7'));
+    expect(plain).toHaveLength(2);
+    for (const quality of ['13', 'dom9'] as const) {
+      const regions = detectModulations(toD(quality));
+      expect(keyNames(regions), quality).toEqual(keyNames(plain));
+      expect(
+        regions.map((region) => region.startBeat),
+        quality,
+      ).toEqual(plain.map((region) => region.startBeat));
+      expect(
+        regions.map((region) => region.pivot?.chord.rootPc),
+        quality,
+      ).toEqual(plain.map((region) => region.pivot?.chord.rootPc));
+    }
+  });
+
+  it('keeps the bare major triad on the fifth degree worth less than the seventh', () => {
+    // The credit is the tritone's, so a triad that has none earns the smaller
+    // share it always did and does not turn the modulation on its own.
+    expect(keyNames(detectModulations(toD('maj')))).toHaveLength(1);
+  });
+});

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { isCadentialSixFour } from '../src/analyze/functional/cadence.js';
 import { chordToRoman, detectCadence, explainRoman } from '../src/analyze/functional/index.js';
+import { chordTimelineFromChords, detectCadences } from '../src/analyze/timeline/index.js';
+import type { ChordSpan } from '../src/theory/chord/index.js';
 import { makeChord } from '../src/theory/chord/index.js';
 import { majorKey, minorKey } from '../src/theory/scale/index.js';
 
@@ -60,9 +62,13 @@ describe('a cadence reached through the cadential six-four', () => {
     expect(result.rationale).not.toContain('six-four');
   });
 
-  it('reads the six-four resolving onto its own dominant as no cadence at all', () => {
+  it('reads the six-four resolving onto its own dominant as a half cadence', () => {
+    // `I - I64 - V` is how the antecedent of a period closes, so the arrival on
+    // the dominant is the half cadence a phrase boundary is read from — the
+    // same reading `IV - V` gets, since the six-four is not the dominant itself.
     const result = detectCadence(sixFour(), makeChord(7, 'maj'), cMajor);
-    expect(result.type).toBeNull();
+    expect(result.type).toBe('half');
+    expect(result.type).toBe(detectCadence(makeChord(5, 'maj'), makeChord(7, 'maj'), cMajor).type);
     expect(result.rationale).toContain('six-four');
   });
 });
@@ -106,5 +112,54 @@ describe('a six-four that is passing or neighbouring keeps its old reading', () 
     });
     expect(result.type).toBe('deceptive');
     expect(result.rationale).not.toContain('six-four');
+  });
+});
+
+describe('a phrase closing on a six-four dominant is a cadence the timeline sees', () => {
+  /** Lay chords out one per bar of 4/4, in the order given. */
+  const bars = (spans: readonly Omit<ChordSpan, 'startBeat'>[]) =>
+    chordTimelineFromChords(
+      spans.map((span, index) => ({ ...span, startBeat: index * 4 })),
+      spans.length * 4,
+    );
+
+  it('reports the half cadence that ends I I64 V', () => {
+    // The antecedent of a classical period ends here. Without a cadence at the
+    // dominant there is no phrase boundary, and the whole period reads as one
+    // long phrase.
+    const hits = detectCadences(
+      bars([
+        { rootPc: 0, quality: 'maj' },
+        { rootPc: 0, quality: 'maj', bassPc: 7 },
+        { rootPc: 7, quality: 'maj' },
+      ]),
+      cMajor,
+    );
+    expect(hits).toHaveLength(1);
+    expect(hits[0]?.atBeat).toBe(8);
+    expect(hits[0]?.cadence.type).toBe('half');
+  });
+
+  it('reports I I64 V I as the one cadence it is', () => {
+    // The dominant goes on to resolve, so the six-four opened the cadence the
+    // resolution names rather than closing a phrase of its own.
+    const hits = detectCadences(
+      bars([
+        { rootPc: 0, quality: 'maj' },
+        { rootPc: 0, quality: 'maj', bassPc: 7 },
+        { rootPc: 7, quality: 'maj' },
+        { rootPc: 0, quality: 'maj' },
+      ]),
+      cMajor,
+    );
+    expect(hits).toHaveLength(1);
+    expect(hits[0]?.cadence.type).toBe('authentic');
+    expect(hits[0]?.cadence.rationale).toContain('cadential six-four');
+  });
+
+  it('reads I64 V as IV V does', () => {
+    const sixFourHalf = detectCadence(sixFour(), makeChord(7, 'maj'), cMajor);
+    const plainHalf = detectCadence(makeChord(5, 'maj'), makeChord(7, 'maj'), cMajor);
+    expect(sixFourHalf.type).toBe(plainHalf.type);
   });
 });

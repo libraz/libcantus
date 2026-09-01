@@ -15,7 +15,13 @@ import {
   toKeyScale,
 } from '../../theory/scale/index.js';
 import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
-import { isDiatonicChord, isMinorScale, isNeapolitan, mod12, parallelScale } from './internal.js';
+import {
+  isDiatonicChord,
+  isMinorScale,
+  isNeapolitanChordOf,
+  mod12,
+  parallelScale,
+} from './internal.js';
 
 /**
  * The origin of a recognized non-diatonic chord, or null when none applies.
@@ -48,7 +54,7 @@ function isBorrowed(chord: Chord, key: KeyScale): boolean {
   if (isDiatonicChord(chord, key)) {
     return false;
   }
-  if (isNeapolitan(chord, key)) {
+  if (isNeapolitanChordOf(chord, key)) {
     return true;
   }
   if (isMinorScaleAlteration(chord, key)) {
@@ -62,7 +68,7 @@ export function borrowedSourceOf(chord: Chord, key: KeyScale): BorrowedSource {
   if (isDiatonicChord(chord, key)) {
     return null;
   }
-  if (isNeapolitan(chord, key)) return 'neapolitan';
+  if (isNeapolitanChordOf(chord, key)) return 'neapolitan';
   if (isBorrowed(chord, key)) {
     return isMinorScale(key) ? 'parallelMajor' : 'parallelMinor';
   }

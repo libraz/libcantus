@@ -75,3 +75,13 @@ describe('Score.voices over polyphony', () => {
     expect(analyzed.map((note) => note.pitch)).toEqual(score.notes.map((note) => note.pitch));
   });
 });
+
+describe('Score.contour over polyphony', () => {
+  it('reads the top voice rather than a line drawn through the chords', () => {
+    // The soprano F4 - F4 - E4 is the line a listener follows; the notes
+    // struck under it are not steps of a melody.
+    const contour = Score.of(CHORALE).contour();
+    expect(contour.directions).toEqual(['same', 'down']);
+    expect(contour.range).toBe(1);
+  });
+});

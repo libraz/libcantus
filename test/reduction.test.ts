@@ -329,3 +329,60 @@ describe('reduceProgression', () => {
     }
   });
 });
+
+describe('the dominant of the frame is the one the key hears', () => {
+  it('keeps a suspended dominant in the frame', () => {
+    // G7sus4 is how gospel, pop and modal jazz write the dominant. The library
+    // reads it as one everywhere else, and a reharmonizer holding the frame
+    // fixed may not be told it is free to rewrite it.
+    const timeline = progression([
+      { rootPc: 5, quality: 'maj' },
+      { rootPc: 7, quality: '7sus4' },
+      { rootPc: 9, quality: 'min' },
+    ]);
+    const entries = reduceProgression(timeline, cMajor);
+    expect(entries[1]?.level).toBe('structural');
+    expect(entries[1]?.rationale).toContain('the dominant of the key');
+  });
+
+  it('still leaves the bare minor v of a natural minor key to the figures', () => {
+    // The exclusion the major third was guarding stands: a minor triad on the
+    // fifth degree carries no leading tone, and a third that is lowered is not
+    // a third that is suspended.
+    const timeline = progression([
+      { rootPc: 5, quality: 'maj' },
+      { rootPc: 7, quality: 'min' },
+      { rootPc: 9, quality: 'min' },
+    ]);
+    const entries = reduceProgression(timeline, cMajor);
+    expect(entries[1]?.rationale).not.toContain('the dominant of the key');
+  });
+});
+
+describe('a chord on the tonic that tonicizes something else is not the tonic', () => {
+  it('refuses to call V7/IV the tonic of the key', () => {
+    // C7 stands on the tonic and points at the subdominant, which the function
+    // layer already reads as dominant. A chord that tonicizes something other
+    // than the tonic is prolonging, not framing.
+    const timeline = progression([
+      { rootPc: 0, quality: 'maj' },
+      { rootPc: 0, quality: 'dom7' },
+      { rootPc: 5, quality: 'maj' },
+      { rootPc: 7, quality: 'dom7' },
+      { rootPc: 0, quality: 'maj' },
+    ]);
+    const entries = reduceProgression(timeline, cMajor);
+    expect(entries[1]?.rationale).not.toContain('the tonic of the key');
+    expect(entries[0]?.rationale).toContain('the tonic of the key');
+    expect(entries[4]?.rationale).toContain('the tonic of the key');
+  });
+
+  it('leaves the plain tonic and its seventh alone', () => {
+    const timeline = progression([
+      { rootPc: 0, quality: 'maj7' },
+      { rootPc: 5, quality: 'maj' },
+      { rootPc: 7, quality: 'dom7' },
+    ]);
+    expect(reduceProgression(timeline, cMajor)[0]?.rationale).toContain('the tonic of the key');
+  });
+});

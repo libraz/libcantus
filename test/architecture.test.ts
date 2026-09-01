@@ -103,13 +103,27 @@ describe('shared predicates in the functional-harmony unit', () => {
 
   it('routes the shared predicates through the internal module', () => {
     // The other half of the same rule: a module that uses a shared helper has
-    // to import it rather than reach for a copy of its own.
-    const shared = ['isDiatonicChord', 'hasMajorThird'];
-    const internal = functionBodies(readFileSync(path.join(FUNCTIONAL, 'internal.ts'), 'utf8'));
+    // to import it rather than reach for a copy of its own. `internal.ts` is
+    // where the siblings reach them, whether it writes a predicate itself or
+    // passes on one the theory layer owns.
+    const shared = [
+      'isDiatonicChord',
+      'hasMajorThird',
+      'isNeapolitanChordOf',
+      'hasDominantSonority',
+      'soundsDominantSeventh',
+    ];
+    const internalSource = readFileSync(path.join(FUNCTIONAL, 'internal.ts'), 'utf8');
+    const internal = functionBodies(internalSource);
     for (const name of shared) {
-      expect(internal.has(name), `internal.ts defines ${name}`).toBe(true);
+      expect(
+        internal.has(name) || new RegExp(`\\b${name}\\b`).test(internalSource),
+        `internal.ts provides ${name}`,
+      ).toBe(true);
     }
-    for (const file of ['function.ts', 'roman.ts', 'cadence.ts']) {
+    for (const file of readdirSync(FUNCTIONAL).filter(
+      (name) => name.endsWith('.ts') && name !== 'internal.ts',
+    )) {
       const source = readFileSync(path.join(FUNCTIONAL, file), 'utf8');
       const used = shared.filter((name) => new RegExp(`\\b${name}\\b`).test(source));
       for (const name of used) {
@@ -119,5 +133,96 @@ describe('shared predicates in the functional-harmony unit', () => {
         expect(source, file).toMatch(/from '\.\/internal\.js'/);
       }
     }
+  });
+});
+
+/**
+ * The predicates the analysis layer and the part-writing layer both ask, which
+ * neither may own: part-writing cannot import analysis, and analysis reads
+ * part-writing nowhere, so a copy in either drifts the moment the other is
+ * corrected.
+ */
+const TENDENCY = path.join(SRC, 'theory', 'tendency', 'index.ts');
+
+describe('chord-and-key predicates shared across layers', () => {
+  it('asks the sonority questions through the theory layer', () => {
+    const owned = [
+      'soundsDominantSeventh',
+      'hasDominantSonority',
+      'isDominantChordOf',
+      'isNeapolitanChordOf',
+      'isDiatonicChord',
+      'tonicizableDegrees',
+      'appliedDominantTarget',
+    ];
+    const tendency = functionBodies(readFileSync(TENDENCY, 'utf8'));
+    for (const name of owned) {
+      expect(tendency.has(name), `theory/tendency defines ${name}`).toBe(true);
+    }
+    // Nothing above it writes a second answer to the same question. A name may
+    // be re-exported, which is how the analysis layer's internal module hands
+    // these on, but no other module may declare a body for one.
+    const offenders: string[] = [];
+    for (const file of walk(SRC)) {
+      if (file === TENDENCY) {
+        continue;
+      }
+      const bodies = functionBodies(readFileSync(file, 'utf8'));
+      for (const name of owned) {
+        if (bodies.has(name)) {
+          offenders.push(`${path.relative(SRC, file)} defines ${name}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+/** The module that reads a key's mode straight off its mask. */
+const MASKS = path.join(SRC, 'theory', 'scale', 'masks.ts');
+
+/** The module that asks the same question of a whole key, for the layers above. */
+const MINOR_KEY_HOME = path.join(SRC, 'analyze', 'functional', 'function.ts');
+
+/**
+ * The bit test that answers "is this key minor": a minor third present and a
+ * major third absent, read off a twelve-bit mode mask. Matched as text rather
+ * than by name, since a copy written inline inside some other function carries
+ * no name to look for.
+ */
+const MINOR_MASK_TEST = />>\s*3\s*\)?\s*&\s*1[\s\S]{0,64}?>>\s*4\s*\)?\s*&\s*1/;
+
+describe('the minor-key question', () => {
+  it('is answered in one place, which every other module imports', () => {
+    // The check is worth nothing unless it still recognises the body it guards,
+    // so the owning module has to match both the name and the test itself.
+    const masks = readFileSync(MASKS, 'utf8');
+    expect(functionBodies(masks).has('isMinorMask'), 'theory/scale/masks.ts defines it').toBe(true);
+    expect(MINOR_MASK_TEST.test(masks), 'the mask test is written as this check reads it').toBe(
+      true,
+    );
+    expect(
+      functionBodies(readFileSync(MINOR_KEY_HOME, 'utf8')).has('isMinorKey'),
+      'analyze/functional/function.ts defines the key-level question',
+    ).toBe(true);
+
+    const offenders: string[] = [];
+    for (const file of walk(SRC)) {
+      const rel = path.relative(SRC, file);
+      const source = readFileSync(file, 'utf8');
+      const bodies = functionBodies(source);
+      if (file !== MASKS) {
+        if (MINOR_MASK_TEST.test(source)) {
+          offenders.push(`${rel} reads the mode mask itself`);
+        }
+        if (bodies.has('isMinorMask')) {
+          offenders.push(`${rel} defines isMinorMask`);
+        }
+      }
+      if (file !== MINOR_KEY_HOME && bodies.has('isMinorKey')) {
+        offenders.push(`${rel} defines isMinorKey`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });

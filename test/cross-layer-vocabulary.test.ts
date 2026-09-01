@@ -7,9 +7,11 @@
  * note-level reading and a chord-level reading that do not line up.
  */
 import { describe, expect, it } from 'vitest';
-import { hypermeter } from '../src/analyze/form/index.js';
+import { tensionCurve } from '../src/analyze/arrange/index.js';
+import { hypermeter, sectionsFromNotes } from '../src/analyze/form/index.js';
 import { parallelKey } from '../src/analyze/functional/index.js';
 import { gridOriginOf } from '../src/analyze/grid.js';
+import { keyTimelineFromNotes } from '../src/analyze/keys/index.js';
 import { reduceProgression } from '../src/analyze/reduction/index.js';
 import { chordTimelineFromChords } from '../src/analyze/timeline/index.js';
 import { analyzeVoice } from '../src/analyze/voice/index.js';
@@ -140,6 +142,38 @@ describe('what counts as a pickup is one question, answered in one place', () =>
     // The pickup bar is analysed, and never counted as a hypermetric downbeat.
     expect(withPickup.downbeats.every((beat) => beat >= 0)).toBe(true);
     expect(withPickup).not.toEqual(hypermeter(material(0)));
+  });
+});
+
+describe('an excerpt lifted from the middle of a piece starts where it sounds', () => {
+  // C - F - G7 - C, written from bar 9 rather than from bar 1. Nothing sounds
+  // before beat 32, so no layer may report a span that begins earlier.
+  const AT = 32;
+  const chordAt = (at: number, pitches: number[]) =>
+    pitches.map((pitch) => ({ pitch, startBeat: at, durationBeat: 4 }));
+  const excerpt = [
+    ...chordAt(AT, [60, 64, 67]),
+    ...chordAt(AT + 4, [65, 69, 72]),
+    ...chordAt(AT + 8, [67, 71, 74, 77]),
+    ...chordAt(AT + 12, [60, 64, 67]),
+  ];
+
+  it('gives the key regions the beat the music begins on', () => {
+    const regions = keyTimelineFromNotes(excerpt);
+    expect(regions.length).toBeGreaterThan(0);
+    expect(regions[0]?.startBeat).toBe(AT);
+  });
+
+  it('samples the tension curve from that same beat', () => {
+    const curve = tensionCurve([{ notes: excerpt }], { step: 4 });
+    expect(curve.length).toBeGreaterThan(0);
+    expect(curve[0]?.beat).toBe(AT);
+  });
+
+  it('agrees with the form analyses, which already answer that way', () => {
+    const sections = sectionsFromNotes(excerpt, { ts: fourFour });
+    expect(sections.length).toBeGreaterThan(0);
+    expect(sections[0]?.startBeat).toBe(AT);
   });
 });
 

@@ -181,6 +181,16 @@ const TENSION_DEGREE_BY_INTERVAL: Readonly<Record<number, 9 | 11 | 13>> = {
 };
 
 /**
+ * The interval classes forming an extension every chord takes: the natural
+ * ninth, eleventh and thirteenth.
+ *
+ * The rest of the table is the altered extensions, which are alterations of a
+ * seventh chord's upper structure and are heard as such only where the chord
+ * states a seventh.
+ */
+const NATURAL_TENSION_INTERVALS: ReadonlySet<number> = new Set([2, 5, 9]);
+
+/**
  * The extension an interval class above the root names, or undefined when it
  * names none.
  *
@@ -448,8 +458,16 @@ export function analyzeVoice(
 
     if (!handled && chord && !member) {
       const ic = intervalAboveRoot(note.pitch, chord);
+      // Which extension a note forms is a matter of its interval above the
+      // root, so an altered ninth is heard as one whether or not the chord
+      // symbol writes it: the same A flat must not read as a tension over G7b9
+      // and as a dissonance needing resolution over G7. An alteration is an
+      // alteration of a seventh chord's upper structure, though, so where the
+      // chord states no seventh a chromatic note is the dissonance it sounds
+      // like rather than a colour the harmony implies.
       const degree = tensionDegree(ic);
-      const isTension = ic === 2 || ic === 5 || ic === 9;
+      const colours =
+        NATURAL_TENSION_INTERVALS.has(ic) || chord.intervals.some((i) => i === 10 || i === 11);
       const avoid =
         (ic === 5 && chord.intervals.includes(4) && !chord.intervals.includes(5)) ||
         (ic === 11 && chord.intervals.includes(4) && chord.intervals.includes(10));
@@ -459,7 +477,7 @@ export function analyzeVoice(
         if (resolveTo !== undefined) {
           labels.push({ kind: 'needsResolution', resolveTo });
         }
-      } else if (isTension && degree !== undefined) {
+      } else if (degree !== undefined && colours) {
         labels.push({ kind: 'tension', degree });
       } else {
         // Every note sounding against a chord is classified, so this branch

@@ -743,6 +743,12 @@ export class Score {
    * A record is a cell, so `Motif.fromData(found)` reaches the
    * transformations without anything being rebuilt by hand.
    *
+   * A melody is one line, so a score holding several is read as its top voice:
+   * notes struck together are one event and the highest of them stands for it.
+   * A piano part read whole therefore answers for the voice a listener follows
+   * rather than for a line assembled from the insides of its chords. Split the
+   * score into lines first to have each of them answered for.
+   *
    * @param opts Cell-length bounds and the recurrence threshold; see
    *   {@link ExtractMotifsOptions}.
    * @returns The motifs found, longest first.
@@ -766,7 +772,15 @@ export class Score {
     return extractMotifs(this.#data.notes, opts);
   }
 
-  /** The shape the melody traces. */
+  /**
+   * The shape the melody traces.
+   *
+   * A contour is the shape of one line, so a score holding several is read as
+   * its top voice: notes struck together are one event and the highest of them
+   * stands for it, which keeps a chord from being measured as a climb through
+   * its own notes. Split the score into lines first to have each of them
+   * answered for; {@link Score.voices} is what reads the polyphony as polyphony.
+   */
   contour(): MelodicContour {
     return melodicContour(this.#data.notes);
   }

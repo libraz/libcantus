@@ -5,10 +5,20 @@ import {
   explainRoman,
   functionOf,
   type HarmonicFunction,
+  romanToChord,
 } from '../src/analyze/functional/index.js';
+import { appliedTarget } from '../src/analyze/functional/tonicization.js';
+import { parseNote } from '../src/core/pitch/index.js';
 import { substituteChord } from '../src/generate/reharmony/index.js';
 import { makeChord } from '../src/theory/chord/index.js';
-import { majorKey, minorKey, scaleByName } from '../src/theory/scale/index.js';
+import { crossRelations } from '../src/theory/partwriting/cross-relation.js';
+import {
+  majorKey,
+  minorKey,
+  NAMED_SCALES,
+  type ScaleName,
+  scaleByName,
+} from '../src/theory/scale/index.js';
 
 const cMajor = majorKey(0);
 const aMinor = minorKey(9);
@@ -87,6 +97,65 @@ describe('a chromatic chord only tonicizes a degree that can be a tonic', () => 
       roman: 'IV',
     });
     expect(borrowedFour.rationale).not.toContain('applied dominant');
+  });
+});
+
+describe('the part-writing licence and the analysis read one list of tonicizable degrees', () => {
+  /**
+   * Two voicings holding a cross relation whatever chords they are said to be:
+   * the alto's Eb is contradicted by the soprano's E natural, a contradiction
+   * sprung rather than led into and exposed in an outer voice. Neither voicing
+   * writes a sixth above its bass, so nothing here can read as an augmented
+   * sixth in any key, and the only exemption left to be had is the applied
+   * dominant's.
+   */
+  const CONTRADICTION = {
+    from: ['C3', 'Eb3', 'G4'].map((name) => parseNote(name)),
+    to: ['C3', 'F3', 'E4'].map((name) => parseNote(name)),
+  };
+
+  it('exempts the chromatic tone exactly where a degree can be tonicized', () => {
+    // The checker exempts a cross relation the applied dominant brings with it,
+    // and the analysis names the degree that dominant tonicizes. Both read one
+    // list, so a chord let through the rule is one an applied numeral can be
+    // written for, in every scale the library names.
+    const divergences: string[] = [];
+    const swept = new Set<ScaleName>();
+    let exempted = 0;
+    let reported = 0;
+    for (const name of Object.keys(NAMED_SCALES) as ScaleName[]) {
+      for (let tonic = 0; tonic < 12; tonic += 1) {
+        const key = scaleByName(name, tonic);
+        swept.add(name);
+        for (let degree = 0; degree < 12; degree += 1) {
+          const target = (tonic + degree) % 12;
+          const applied = makeChord((target + 7) % 12, 'dom7');
+          const licensed =
+            crossRelations(
+              { notes: CONTRADICTION.from, chord: makeChord(key.rootPc, 'min') },
+              { notes: CONTRADICTION.to, chord: applied },
+              key,
+              { after: makeChord(target, 'maj') },
+            ).length === 0;
+          const tonicized = appliedTarget(applied, key)?.rootPc === target;
+          if (licensed !== tonicized) {
+            divergences.push(`${name} on ${tonic}: the chord over pitch class ${target}`);
+          }
+          if (licensed) {
+            exempted += 1;
+          } else {
+            reported += 1;
+          }
+        }
+      }
+    }
+    // The sweep is the whole registry rather than a written list, and it saw
+    // the rule both grant the exemption and withhold it, so an empty divergence
+    // list means the two layers were actually put to the question.
+    expect(swept.size).toBe(Object.keys(NAMED_SCALES).length);
+    expect(exempted).toBeGreaterThan(0);
+    expect(reported).toBeGreaterThan(0);
+    expect(divergences).toEqual([]);
   });
 });
 
@@ -218,5 +287,90 @@ describe('the tonicization predicates in an unusual key', () => {
   it('lets a tritone substitute point at the tonic', () => {
     expect(functionOf(makeChord(1, 'dom7'), cMajor)).toBe('dominant');
     expect(functionOf(makeChord(1, 'dom7'), cMinor)).toBe('dominant');
+  });
+});
+
+describe("the tonic is no target, so a key's own dominant tonicizes nothing", () => {
+  it('reads the dominant seventh of a minor key as the degree it stands on', () => {
+    // E7 in A minor is V7. Calling it applied would say the key's own cadence
+    // tonicizes some other degree, which is the one thing V7 cannot do.
+    expect(analyzeChord(makeChord(4, 'dom7'), aMinor).rationale).toContain(
+      'takes the dominant function of its degree in the key',
+    );
+    expect(analyzeChord(makeChord(7, 'dom7'), cMinor).rationale).not.toContain('applied');
+    expect(functionOf(makeChord(4, 'dom7'), aMinor)).toBe('dominant');
+    expect(functionOf(makeChord(7, 'dom7'), cMinor)).toBe('dominant');
+  });
+
+  it('reads the altered dominants of a major key the same way', () => {
+    for (const quality of ['7b9', '7#9', '13b9', '7alt', 'dom9'] as const) {
+      const analysis = analyzeChord(makeChord(7, quality), cMajor);
+      expect(analysis.function, quality).toBe('dominant');
+      expect(analysis.rationale, quality).not.toContain('applied');
+    }
+  });
+
+  it('reads the leading-tone sevenths of both modes the same way', () => {
+    expect(analyzeChord(makeChord(11, 'dim7'), cMajor).rationale).not.toContain('applied');
+    expect(analyzeChord(makeChord(8, 'dim7'), aMinor).rationale).not.toContain('applied');
+    expect(functionOf(makeChord(11, 'dim7'), cMajor)).toBe('dominant');
+  });
+
+  it('keeps the tritone substitute a dominant, since it reaches the tonic by semitone', () => {
+    // The one sonority that may point at the tonic: Db7 falls a semitone onto
+    // it, and the flat second degree it stands on would otherwise read as a
+    // predominant.
+    expect(functionOf(makeChord(1, 'dom7'), cMajor)).toBe('dominant');
+    expect(analyzeChord(makeChord(1, 'dom7'), cMajor).rationale).toContain('applied');
+  });
+
+  it('still names a genuine applied dominant', () => {
+    expect(functionOf(makeChord(9, 'dom7'), cMajor)).toBe('dominant');
+    expect(analyzeChord(makeChord(9, 'dom7'), cMajor).rationale).toContain('applied');
+  });
+});
+
+describe('an applied numeral cases its target as the key writes that degree', () => {
+  it('names the dominant of the dominant of a minor key V7/V', () => {
+    // Textbooks write V/III, V/iv, V/V, V/VI and V/VII in a minor key: the
+    // fifth degree is written as a major V, since the key cadences through the
+    // raised seventh, so the numeral applied to it is upper case.
+    expect(chordToRoman(makeChord(11, 'dom7'), aMinor, { applied: true })).toBe('V7/V');
+    expect(chordToRoman(makeChord(3, 'dim7'), aMinor, { applied: true })).toBe('viio7/V');
+  });
+
+  it('leaves the degrees whose own triad is minor in lower case', () => {
+    expect(chordToRoman(makeChord(9, 'dom7'), aMinor, { applied: true })).toBe('V7/iv');
+    expect(chordToRoman(makeChord(9, 'dom7'), cMajor, { applied: true })).toBe('V7/ii');
+    expect(chordToRoman(makeChord(4, 'dom7'), cMajor, { applied: true })).toBe('V7/vi');
+  });
+
+  it('round-trips the numeral it prints', () => {
+    for (const numeral of ['V7/V', 'viio7/V', 'V7/iv']) {
+      const chord = romanToChord(numeral, aMinor);
+      expect(chordToRoman(chord, aMinor, { applied: true })).toBe(numeral);
+    }
+  });
+});
+
+describe('the readings an applied numeral declines', () => {
+  it('names the root against the home key where the target carries no perfect fifth', () => {
+    // Nothing tonicizes the diminished triad on the seventh degree of a major
+    // key, so F#7 stays #IV7.
+    expect(chordToRoman(makeChord(6, 'dom7'), cMajor, { applied: true })).toBe('#IV7');
+  });
+
+  it('names the root against the home key where the target is the tonic', () => {
+    expect(chordToRoman(makeChord(4, 'dom7'), aMinor, { applied: true })).toBe('V7');
+    expect(chordToRoman(makeChord(1, 'dom7'), cMajor, { applied: true })).toBe('bII7');
+  });
+
+  it('names the root against the home key where the chord is diatonic to it', () => {
+    // G7 is diatonic to A minor and to C mixolydian's parallel reading alike: a
+    // chord the key contains keeps the function of its degree.
+    expect(chordToRoman(makeChord(7, 'dom7'), aMinor, { applied: true })).toBe('VII7');
+    expect(
+      chordToRoman(makeChord(0, 'dom7'), scaleByName('mixolydian', 0), { applied: true }),
+    ).toBe('I7');
   });
 });

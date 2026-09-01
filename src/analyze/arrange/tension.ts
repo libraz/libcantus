@@ -15,6 +15,7 @@ import { chordPitchClasses } from '../../theory/chord/index.js';
 import { evaluateSafety, NoteSafety, type SafetyProfile } from '../../theory/safety/index.js';
 import { majorKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
 import { functionOf } from '../functional/index.js';
+import { gridForNotes } from '../grid.js';
 import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
 import { type ChordTimeline, chordTimelineFromNotes } from '../timeline/index.js';
 import {
@@ -113,11 +114,10 @@ export function tensionCurve(
   const pooled = poolNotes(tracks, harmonyTracks);
   const all = poolNotes(tracks);
   const totalBeats = all.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
-  // A pickup sounds before beat 0, so the curve starts there — a whole number
-  // of steps before it, so the samples still land on the beats they would have
-  // without one.
-  const firstOnset = all.reduce((first, n) => Math.min(first, n.startBeat), 0);
-  const sampleStart = Math.min(0, Math.floor(firstOnset / step + EPS) * step);
+  // The curve starts where the music starts, a whole number of steps from beat
+  // 0: a pickup sounds before beat 0 and an excerpt lifted from bar 9 begins
+  // there, and neither is sampled across silence it never had.
+  const { origin: sampleStart, startBeat: musicStart } = gridForNotes(all, step);
   // A caller-supplied timeline still needs key regions to be read against: the
   // ones the caller gave, the single key they named, or the ones the notes
   // themselves give, since supplying chords answers nothing about the key.
@@ -128,7 +128,10 @@ export function tensionCurve(
         (opts.key !== undefined
           ? [
               {
-                startBeat: 0,
+                // The one region a named key holds starts where the music does,
+                // as the searched regions and the timeline's own key window do:
+                // a key cannot be in force over beats nothing sounds in.
+                startBeat: musicStart,
                 endBeat: totalBeats,
                 key: resolveKey(opts.key),
                 confidence: 1,

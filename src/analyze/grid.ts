@@ -1,11 +1,16 @@
 /**
- * Where a slot grid starts when the music begins before the downbeat.
+ * Where a slot grid starts: the beat the music itself begins on.
  *
- * Chord inference and key inference slice the same piece into slots of
- * different lengths, so they have to agree about where the piece starts or the
- * two answers describe different spans. They read the origin from here for that
- * reason: the same input can only have one first beat.
+ * Chord inference, key inference and the tension curve slice the same piece
+ * into slots of different lengths, so they have to agree about where the piece
+ * starts or the three answers describe different spans. They read the origin
+ * from here for that reason: the same input can only have one first beat,
+ * whether it arrives before the downbeat as a pickup or well after it as an
+ * excerpt lifted from the middle of a piece.
  */
+
+import type { NoteEvent } from '../core/types.js';
+import { firstSoundingBeat } from './form/internal.js';
 
 const EPS = 1e-9;
 
@@ -27,13 +32,14 @@ export type GridOrigin = {
   /**
    * First beat of slot 0. Always a whole number of slots from beat 0, so the
    * grid's boundaries keep falling on the bar lines rather than being pushed
-   * off them by the length of the upbeat.
+   * off them by the length of the upbeat or by where the excerpt was cut.
    */
   origin: number;
   /**
-   * First beat that sounds. Never earlier than `origin` and never later than 0,
-   * so a pickup that is not a whole number of slots long is analyzed in a slot
-   * that begins before it without being reported as sounding there.
+   * First beat that sounds. Never earlier than `origin` and never a whole slot
+   * later than it, so a span whose first note falls inside a slot rather than
+   * on its boundary is analyzed in a slot that begins before it without being
+   * reported as sounding there.
    */
   startBeat: number;
 };
@@ -41,18 +47,37 @@ export type GridOrigin = {
 /**
  * Place the slot grid for a span whose earliest onset is `firstOnset`.
  *
- * @param firstOnset The earliest onset of a sounding note, or 0 when none is
- *   earlier than the downbeat.
+ * @param firstOnset The earliest onset of a sounding note.
  * @param slotBeats Length of one slot in beats.
  * @returns The grid origin and the beat the music starts on.
  */
 export function gridOriginOf(firstOnset: number, slotBeats: number): GridOrigin {
-  // A pickup sounds before beat 0, so the grid has to start there too — but a
-  // whole number of slots before it, or every slot boundary after the pickup
-  // would sit off the bar lines by the length of the upbeat. Dropping those
-  // notes instead would throw away the very bar that establishes the key.
-  if (firstOnset >= -PICKUP_JITTER) {
-    return { origin: 0, startBeat: 0 };
-  }
-  return { origin: Math.floor(firstOnset / slotBeats + EPS) * slotBeats, startBeat: firstOnset };
+  // A note a millibeat before the downbeat is playing it rather than
+  // anticipating it, and reading it as a pickup would hand the analysis a whole
+  // silent slot ahead of the music.
+  const startBeat = firstOnset < 0 && firstOnset > -PICKUP_JITTER ? 0 : firstOnset;
+  // The grid starts where the music does — but a whole number of slots from
+  // beat 0, or every slot boundary would sit off the bar lines by however far
+  // into a slot the first note falls. Dropping a pickup instead would throw
+  // away the very bar that establishes the key.
+  return { origin: Math.floor(startBeat / slotBeats + EPS) * slotBeats, startBeat };
+}
+
+/**
+ * Place the slot grid for the notes themselves.
+ *
+ * This is the one derivation of an analysed span's origin. Seeding a minimum
+ * with 0 instead — the shape each reader would otherwise write for itself —
+ * anchors every analysis to beat 0, so an excerpt lifted from bar 9 is reported
+ * as starting there and as holding eight bars of silence it never had. The form
+ * analyses already answer from {@link firstSoundingBeat}, and this is the same
+ * answer placed on a slot grid.
+ *
+ * @param notes The sounding notes of the span. Notes that never sound are the
+ *   caller's to drop; a span with none starts at beat 0.
+ * @param slotBeats Length of one slot in beats.
+ * @returns The grid origin and the beat the music starts on.
+ */
+export function gridForNotes(notes: readonly NoteEvent[], slotBeats: number): GridOrigin {
+  return gridOriginOf(firstSoundingBeat(notes), slotBeats);
 }

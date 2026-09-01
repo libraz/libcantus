@@ -21,9 +21,9 @@ import {
 import {
   type KeyLike,
   keySignatureFifths,
+  type ResolvedKey,
+  resolveKey,
   scaleTonesInDegreeOrder,
-  spelledKeyOf,
-  toKeyScale,
 } from '../../theory/scale/index.js';
 
 /** Tolerance for beat, ratio, and interval comparisons. */
@@ -292,6 +292,10 @@ export type MotifRelation = {
   /**
    * How much the second statement is stretched against the first: 2 for doubled
    * note values, 0.5 for halved, 1 for unchanged.
+   *
+   * Measured in the direction the relation names, so a retrograde that kept
+   * every note value reports 1 however uneven those values are: it is compared
+   * against the model played backwards, not against the model as written.
    */
   timeRatio: number;
   /** Why the pair was given that name. */
@@ -327,11 +331,15 @@ function phraseNotes(phrase: MelodicPhrase): readonly NoteEvent[] {
 }
 
 /**
- * The sounding notes of a melody in time order.
+ * The sounding notes of a melody in time order, one note per onset.
  *
- * The line is expected to be monophonic, as {@link analyzeVoice} expects one;
- * notes sharing an onset are read low to high so the ordering is at least
- * deterministic.
+ * The line is expected to be monophonic, as {@link analyzeVoice} expects one.
+ * Notes struck together are one event all the same, and the highest of them
+ * stands for it — the voice a listener follows through a chord. Keeping them
+ * all would let a chord read as a line: a triad and the note after it would
+ * measure three rising steps of melodic motion the music never made, and would
+ * be reported as an ascending line with every bit as much confidence as a real
+ * one.
  */
 function orderedNotes(
   notes: readonly NoteEvent[],
@@ -339,9 +347,21 @@ function orderedNotes(
   budget?: number,
 ): readonly NoteEvent[] {
   assertNoteEvents(notes, name, { allowNonPositiveDuration: true, budget });
-  return notes
+  const sounding = notes
     .filter((note) => note.durationBeat > 0)
     .sort((a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch);
+  const line: NoteEvent[] = [];
+  for (const note of sounding) {
+    const previous = line[line.length - 1];
+    // Sorted low to high within an onset, so the last note to arrive at one is
+    // its top voice.
+    if (previous !== undefined && Math.abs(note.startBeat - previous.startBeat) <= EPS) {
+      line[line.length - 1] = note;
+      continue;
+    }
+    line.push(note);
+  }
+  return line;
 }
 
 /** Semitones between consecutive notes. */
@@ -442,16 +462,15 @@ function onsetSpan(notes: readonly NoteEvent[]): number {
 }
 
 /** Whether a key writes its accidentals as flats. */
-function spellingOf(key?: KeyScale): 'sharp' | 'flat' {
+function spellingOf(key?: ResolvedKey): 'sharp' | 'flat' {
   if (key === undefined) {
     return 'sharp';
   }
-  const spelled = spelledKeyOf(key);
-  return keySignatureFifths(spelled.tonic, spelled.scale) < 0 ? 'flat' : 'sharp';
+  return keySignatureFifths(key.tonic, key.scale) < 0 ? 'flat' : 'sharp';
 }
 
 /** Name the distance between two pitches as a spelled interval. */
-function intervalBetween(from: number, to: number, key?: KeyScale): SpelledInterval {
+function intervalBetween(from: number, to: number, key?: ResolvedKey): SpelledInterval {
   const spelling = spellingOf(key);
   return spelledInterval(midiToNote(from, spelling), midiToNote(to, spelling));
 }
@@ -607,9 +626,11 @@ function motifFromGroup(group: WindowGroup, notes: readonly NoteEvent[]): MotifD
  * rather than every fragment of it.
  *
  * The melody is expected to be monophonic, as {@link analyzeVoice} expects a
- * voice to be; split polyphonic material into lines first. Onsets are expected to
- * be quantised, since two statements must agree on their rhythm to be recognised
- * as one motif.
+ * voice to be; split polyphonic material into lines first. Notes struck together
+ * are read as one event, the highest of them standing for it, so a chord is
+ * reduced to its top voice rather than read as a line of its own. Onsets are
+ * expected to be quantised, since two statements must agree on their rhythm to
+ * be recognised as one motif.
  *
  * @param notes The melody, in time order. Notes that never sound are dropped.
  * @param opts Cell-length bounds and the recurrence threshold; see
@@ -705,7 +726,13 @@ export function extractMotifs(
  * caller names one it already has — a subject, an answer, a phrase lifted out of
  * a score — so that it can be handed to {@link relateMotifs}.
  *
- * @param notes The cell, in time order. Notes that never sound are dropped.
+ * The cell is expected to be monophonic, as {@link analyzeVoice} expects a voice
+ * to be. Notes struck together are read as one event, the highest of them
+ * standing for it, so a chord is reduced to its top voice rather than read as a
+ * line of its own.
+ *
+ * @param notes The cell, in time order. Notes that never sound are dropped, and
+ *   notes sharing an onset are folded to their top voice.
  * @returns The motif, carrying exactly one occurrence.
  * @example
  * ```ts
@@ -732,24 +759,30 @@ export function motifFromNotes(notes: readonly NoteEvent[]): MotifData {
   );
 }
 
-/** The pitch relations one motif can stand in to another, before timing. */
-type PitchRelation = 'exact' | 'inversion' | 'retrograde' | 'retrogradeInversion' | null;
+/** The pitch shapes one motif can stand in to another, before timing. */
+type PitchShape = 'exact' | 'inversion' | 'retrograde' | 'retrogradeInversion';
 
 /**
- * Which pitch transformation carries `a`'s intervals onto `b`'s.
+ * Which pitch transformations carry `a`'s intervals onto `b`'s, simplest first.
  *
- * Checked simplest first, so a cell symmetrical enough to answer to more than
- * one name — the retrograde of an evenly rising line is also its inversion —
- * takes the plainest of them.
+ * A pair can answer to more than one name at once — the retrograde of a cell
+ * whose intervals read the same upside down is also its inversion — and the
+ * pitches cannot say which name is the pair's. Only the rhythm can: an
+ * inversion runs the same way round as its model and a retrograde runs
+ * backwards. So every shape that holds is reported and the caller, which
+ * already knows which way round the rhythm runs, picks among them; answering
+ * with the simplest alone would leave a cell like that unnamed whenever its
+ * rhythm rules the simplest name out.
  *
  * Only the readings that survive without a key are here. The tonal one is
  * decided by the caller of this, since it needs the scale, and a pattern that
  * is a tonal transposition and a retrograde inversion at once reaches here as
  * the second of those.
  */
-function pitchRelation(a: readonly number[], b: readonly number[]): PitchRelation {
+function pitchShapes(a: readonly number[], b: readonly number[]): PitchShape[] {
+  const shapes: PitchShape[] = [];
   if (sameNumbers(a, b)) {
-    return 'exact';
+    shapes.push('exact');
   }
   if (
     sameNumbers(
@@ -757,7 +790,7 @@ function pitchRelation(a: readonly number[], b: readonly number[]): PitchRelatio
       a.map((step) => -step),
     )
   ) {
-    return 'inversion';
+    shapes.push('inversion');
   }
   const reversed = [...a].reverse();
   if (
@@ -766,12 +799,32 @@ function pitchRelation(a: readonly number[], b: readonly number[]): PitchRelatio
       reversed.map((step) => -step),
     )
   ) {
-    return 'retrograde';
+    shapes.push('retrograde');
   }
   if (sameNumbers(b, reversed)) {
-    return 'retrogradeInversion';
+    shapes.push('retrogradeInversion');
   }
-  return null;
+  return shapes;
+}
+
+/** Total distance a run of gaps covers. */
+function totalGap(gaps: readonly number[]): number {
+  return gaps.reduce((sum, gap) => sum + gap, 0);
+}
+
+/**
+ * How far the answer's note values are stretched against the model's, measured
+ * in the direction the relation names.
+ *
+ * A retrograde is measured against the model played backwards, whose gaps are
+ * the distances between note ends. Measuring one forwards instead reports a
+ * stretch for an answer that kept every note value — a search for augmentations
+ * then picks up a plain retrograde of an uneven cell — because the two ways of
+ * measuring coincide only when every note is the same length.
+ */
+function stretchRatio(modelGaps: readonly number[], answerGaps: readonly number[]): number {
+  const span = totalGap(modelGaps);
+  return span > EPS ? totalGap(answerGaps) / span : 1;
 }
 
 /** Sentence naming a stretch, for the rationales that mention one. */
@@ -782,13 +835,16 @@ function stretchPhrase(ratio: number): string {
 /**
  * Name how two statements of a motif relate.
  *
- * The two are compared as shapes, not as pitches: the interval sequences decide
- * the pitch transformation and the onset gaps decide the timing, so a statement
- * a fourth higher in doubled note values is recognised for what it is. A pair
- * whose rhythms do not correspond — the same way round for a repetition or a
- * transposition, the model played backwards for a retrograde, note values and
- * all — is not a transformation of the motif but a different figure, and answers
- * null; {@link melodicSimilarity} is what scores those.
+ * The two are compared as shapes, not as pitches: the interval sequences say
+ * which transformations could name the pair and the onset gaps say which of
+ * them does, so a statement a fourth higher in doubled note values is
+ * recognised for what it is, and a cell that reads as both an inversion and a
+ * retrograde is named by the way its rhythm runs rather than by which name came
+ * to hand first. A pair whose rhythms correspond in neither direction — the same
+ * way round for a repetition or a transposition, the model played backwards for
+ * a retrograde, note values and all — is not a transformation of the motif but a
+ * different figure, and answers null; {@link melodicSimilarity} is what scores
+ * those.
  *
  * With a `key` in hand the search also asks whether the second statement is the
  * first moved by scale degrees rather than by semitones. That is the tonal
@@ -825,7 +881,9 @@ function stretchPhrase(ratio: number): string {
  * @category Arrangement & Analysis
  */
 export function relateMotifs(a: MotifData, b: MotifData, keyLike?: KeyLike): MotifRelation | null {
-  const key = keyLike === undefined ? undefined : toKeyScale(keyLike);
+  // Read whole, so the interval names a motif relation is reported under follow
+  // the key the caller named rather than the side its pitch classes read best as.
+  const key = keyLike === undefined ? undefined : resolveKey(keyLike);
   const model = a.notes;
   const answer = b.notes;
   if (model.length === 0 || model.length !== answer.length) {
@@ -837,23 +895,26 @@ export function relateMotifs(a: MotifData, b: MotifData, keyLike?: KeyLike): Mot
   const answerProfile = rhythmProfile(answerGaps);
   // The rhythm the model would have if it were played backwards, which is what
   // a retrograde has to match — note values kept, their order reversed.
-  const retroProfile = rhythmProfile(retrogradeGaps(model));
+  const retroGaps = retrogradeGaps(model);
+  const retroProfile = rhythmProfile(retroGaps);
   if (modelProfile === null || answerProfile === null) {
     return null;
   }
   const forward = sameNumbers(modelProfile, answerProfile);
   const backward = retroProfile !== null && sameNumbers(retroProfile, answerProfile);
-  const modelSpan = onsetSpan(model);
-  const timeRatio = modelSpan > EPS ? onsetSpan(answer) / modelSpan : 1;
   const semitones = (answer[0]?.pitch ?? 0) - (model[0]?.pitch ?? 0);
   const interval = intervalBetween(model[0]?.pitch ?? 0, answer[0]?.pitch ?? 0, key);
   const gap = (answer[0]?.startBeat ?? 0) - endBeatOf(model);
   const sequence = gap >= -SEQUENCE_GAP && gap <= SEQUENCE_GAP;
+  const timeRatio = stretchRatio(modelGaps, answerGaps);
   const stretched = Math.abs(timeRatio - 1) > EPS;
-  const relation = pitchRelation(intervalsOf(model), intervalsOf(answer));
+  const shapes = pitchShapes(intervalsOf(model), intervalsOf(answer));
   const base = { sequence, semitones, interval, timeRatio };
+  // A relation of the retrograde family is a stretch of the model played
+  // backwards, so that is what its own ratio is measured against.
+  const backwardBase = { ...base, timeRatio: stretchRatio(retroGaps, answerGaps) };
 
-  if (forward && relation === 'exact') {
+  if (forward && shapes.includes('exact')) {
     if (semitones === 0) {
       if (!stretched) {
         return {
@@ -882,8 +943,8 @@ export function relateMotifs(a: MotifData, b: MotifData, keyLike?: KeyLike): Mot
   }
 
   if (forward && key !== undefined) {
-    const modelLadder = ladderIndices(model, key);
-    const answerLadder = ladderIndices(answer, key);
+    const modelLadder = ladderIndices(model, key.scale);
+    const answerLadder = ladderIndices(answer, key.scale);
     if (modelLadder !== null && answerLadder !== null) {
       const degrees = (answerLadder[0] ?? 0) - (modelLadder[0] ?? 0);
       if (degrees !== 0 && sameNumbers(ladderSteps(modelLadder), ladderSteps(answerLadder))) {
@@ -902,7 +963,7 @@ export function relateMotifs(a: MotifData, b: MotifData, keyLike?: KeyLike): Mot
     }
   }
 
-  if (forward && relation === 'inversion') {
+  if (forward && shapes.includes('inversion')) {
     return {
       ...base,
       kind: 'inversion',
@@ -911,16 +972,16 @@ export function relateMotifs(a: MotifData, b: MotifData, keyLike?: KeyLike): Mot
         (stretched ? `, in ${stretchPhrase(timeRatio)}` : ''),
     };
   }
-  if (backward && relation === 'retrograde') {
+  if (backward && shapes.includes('retrograde')) {
     return {
-      ...base,
+      ...backwardBase,
       kind: 'retrograde',
       rationale: 'Retrograde: the cell read back to front, rhythm included',
     };
   }
-  if (backward && relation === 'retrogradeInversion') {
+  if (backward && shapes.includes('retrogradeInversion')) {
     return {
-      ...base,
+      ...backwardBase,
       kind: 'retrogradeInversion',
       rationale: 'Retrograde inversion: the cell read back to front and turned upside down',
     };
@@ -995,6 +1056,11 @@ function gapCost(x: number, y: number): number {
  * not. The rhythm carries the smaller share: a melody is recognised mostly by
  * its pitch shape, but a figure in a wholly different rhythm is a different
  * figure.
+ *
+ * Both lines are expected to be monophonic, as {@link analyzeVoice} expects a
+ * voice to be. Notes struck together are read as one event, the highest of them
+ * standing for it, so a chord is reduced to its top voice rather than read as a
+ * line of its own.
  *
  * @param a The first line: a motif, or plain note events.
  * @param b The second line.
@@ -1100,8 +1166,14 @@ function extremes(notes: readonly NoteEvent[]): { peak: number; trough: number }
  * Anything that keeps changing direction is a wave, and a line that does not move
  * is static.
  *
+ * The line is expected to be monophonic, as {@link analyzeVoice} expects a voice
+ * to be; split polyphonic material into lines first. Notes struck together are
+ * read as one event, the highest of them standing for it — a chord and the note
+ * after it trace one step, not a climb through the chord — so a piano part read
+ * whole answers for its top voice rather than for a line no one plays.
+ *
  * @param notes The line: a motif, or plain note events. Notes that never sound
- *   are dropped.
+ *   are dropped, and notes sharing an onset are folded to their top voice.
  * @returns The directions, the shape, the peak and trough, and a rationale. A
  *   line with no sounding notes is static with a range of 0, and its peak and
  *   trough are -1: there is no note for them to point at.

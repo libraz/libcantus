@@ -27,6 +27,20 @@ describe('analyzeVoice', () => {
     expect(suspension).toEqual({ kind: 'suspension', type: 'sus4-3', resolveTo: 64 });
   });
 
+  it('hears an altered ninth as a ninth, whatever the chord symbol writes', () => {
+    // A flat over G7 is that dominant's flat ninth. Written into the symbol it
+    // is a chord tone; left out of it the same sounding note is the same
+    // extension, and must not read as a dissonance needing resolution.
+    const g7: Chord = { rootPc: 7, quality: 'dom7', intervals: [0, 4, 7, 10] };
+    const g7b9: Chord = { rootPc: 7, quality: '7b9', intervals: [0, 4, 7, 10, 13] };
+    const voice: VoiceNote[] = [{ id: 1, pitch: 68, startBeat: 0, durationBeat: 1 }];
+    for (const chord of [g7, g7b9]) {
+      const [analyzed] = analyzeVoice(voice, () => chord, cMajor, noOtherVoices);
+      expect(analyzed?.labels).toContainEqual({ kind: 'tension', degree: 9 });
+      expect(analyzed?.labels.some((l) => l.kind === 'needsResolution')).toBe(false);
+    }
+  });
+
   it('classifies the suspension subtype from the sounding bass, not the root', () => {
     // A 7-6 suspension: E is held over D minor in first inversion (F in the
     // bass) and resolves down to D. Above the bass F the held E is a seventh

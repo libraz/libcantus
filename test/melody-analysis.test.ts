@@ -143,6 +143,44 @@ describe('named transformations of a motif', () => {
     expect(relateMotifs(backwards, model)?.kind).toBe('retrograde');
   });
 
+  it('names the retrograde of a cell whose pitches also read as an inversion', () => {
+    // Intervals +2, -4, +2 read the same upside down, so the cell backwards is
+    // its own inversion as well as its retrograde. Uneven note values leave
+    // only one of the two readings standing: the rhythm runs backwards.
+    const cell: MotifCell = {
+      notes: [
+        { pitch: 60, startBeat: 0, durationBeat: 1.5 },
+        { pitch: 62, startBeat: 1.5, durationBeat: 0.5 },
+        { pitch: 58, startBeat: 2, durationBeat: 1 },
+        { pitch: 60, startBeat: 3, durationBeat: 1 },
+      ],
+    };
+    const model = motifFromNotes(motifToNoteEvents(cell));
+    const backwards = motifFromNotes(motifToNoteEvents(transformMotif(cell, 'retrograde')));
+    const relation = relateMotifs(model, backwards);
+    expect(relation?.kind).toBe('retrograde');
+    // Every note value is kept, so nothing is stretched.
+    expect(relation?.timeRatio).toBe(1);
+  });
+
+  it('measures a retrograde against the model played backwards', () => {
+    // Note values 1, 1, 2 read back to front span a beat more than they do
+    // forwards. That is the cell's own doing, not a stretch of its values.
+    const model = motifFromNotes([
+      { pitch: 60, startBeat: 0, durationBeat: 1 },
+      { pitch: 62, startBeat: 1, durationBeat: 1 },
+      { pitch: 67, startBeat: 2, durationBeat: 2 },
+    ]);
+    const backwards = motifFromNotes([
+      { pitch: 67, startBeat: 8, durationBeat: 2 },
+      { pitch: 62, startBeat: 10, durationBeat: 1 },
+      { pitch: 60, startBeat: 11, durationBeat: 1 },
+    ]);
+    const relation = relateMotifs(model, backwards);
+    expect(relation?.kind).toBe('retrograde');
+    expect(relation?.timeRatio).toBe(1);
+  });
+
   it('names what the retrograde transform writes, for every cell it writes', () => {
     /** Steps of a cell, which is what a relation is read from. */
     const stepsOf = (source: MotifCell) =>
@@ -368,6 +406,20 @@ describe('melodicContour', () => {
 
   it('reads a motif as readily as raw notes', () => {
     expect(melodicContour(motifFromNotes(line(0, [60, 64, 67, 64, 60]))).shape).toBe('arch');
+  });
+
+  it('reads notes struck together as one event, not as a line of their own', () => {
+    const chordThenNote: NoteEvent[] = [
+      { pitch: 60, startBeat: 0, durationBeat: 1 },
+      { pitch: 64, startBeat: 0, durationBeat: 1 },
+      { pitch: 67, startBeat: 0, durationBeat: 1 },
+      { pitch: 72, startBeat: 1, durationBeat: 1 },
+    ];
+    const contour = melodicContour(chordThenNote);
+    // One step, from the top of the chord to the note after it — not three
+    // rising steps through the inside of a chord nothing arpeggiated.
+    expect(contour.directions).toEqual(['up']);
+    expect(contour.range).toBe(5);
   });
 
   it('points at no note when the line has none', () => {

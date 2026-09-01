@@ -23,7 +23,7 @@ import { augmentedSixthFromSymbol, augmentedSixthSymbol } from './augmented-sixt
 import {
   degreeRootPc,
   isDiatonicChord,
-  isNeapolitan,
+  isNeapolitanChordOf,
   loweredDegrees,
   mod12,
   romanReference,
@@ -511,10 +511,17 @@ export type ChordToRomanOptions = {
    * Off by default: naming the root is always a correct spelling, whereas
    * whether a chromatic dominant is genuinely applied is a reading only the
    * caller can make. Turning it on names the chords {@link secondaryDominant}
-   * builds as the applied numerals they are, except where the target degree
-   * carries no perfect fifth: nothing tonicizes a diminished triad, so a chord
-   * over the seventh degree of a major key stays `#IV7` rather than becoming a
-   * numeral no harmony text writes.
+   * builds as the applied numerals they are, except in three cases, where the
+   * numeral names the root against the home key as it does with this off:
+   *
+   * - The target degree carries no perfect fifth: nothing tonicizes a
+   *   diminished triad, so a chord over the seventh degree of a major key stays
+   *   `#IV7` rather than becoming a numeral no harmony text writes.
+   * - The target is the tonic, which its own dominant points at: `V7` is the
+   *   key's dominant and `V/I` is a numeral no harmony text writes either.
+   * - The chord is diatonic to the key, which keeps the function of its degree
+   *   rather than tonicizing another. `G7` is `VII7` in A minor and `I7` in C
+   *   mixolydian, not `V7/III` and `V7/IV`.
    */
   applied?: boolean;
   /**
@@ -659,7 +666,7 @@ export function renderRoman(
       bass = 'foreign';
     }
   }
-  if (opts.neapolitan === true && inversion === 1 && isNeapolitan(chord, key)) {
+  if (opts.neapolitan === true && inversion === 1 && isNeapolitanChordOf(chord, key)) {
     return { roman: NEAPOLITAN_SIXTH, derivation: { kind: 'neapolitan' } };
   }
   if (inversion > 0) {

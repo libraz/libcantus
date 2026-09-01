@@ -9,9 +9,9 @@
 import type { KeyScale } from '../../core/types.js';
 import type { Chord, ChordToneRole } from '../../theory/chord/index.js';
 import { chordToneRole } from '../../theory/chord/index.js';
-import { isScaleTone, type KeyLike, toKeyScale } from '../../theory/scale/index.js';
+import { isScaleTone, type KeyLike, scaleSystemOf, toKeyScale } from '../../theory/scale/index.js';
 import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
-import { isLeadingToneChordOf } from '../../theory/tendency/index.js';
+import { isDominantChordOf, isLeadingToneChordOf } from '../../theory/tendency/index.js';
 import {
   degreeRootPc,
   hasMajorThird,
@@ -23,6 +23,7 @@ import {
 import type { RejectedCandidate } from './rationale.js';
 
 /** The scale degrees the cadence rules are stated in. */
+const SUBDOMINANT_DEGREE = 4;
 const DOMINANT_DEGREE = 5;
 const SUBMEDIANT_DEGREE = 6;
 
@@ -66,25 +67,28 @@ function deceptiveTargets(key: KeyScale): number[] {
 /**
  * Whether an arrival on the dominant degree rests there as a half cadence.
  *
- * The dominant of a major or harmonic-minor key carries the leading tone, and
- * that major third is what the cadence is heard through, so a borrowed minor
- * `v` is not the chord the ear was left on. A mode whose own dominant has no
- * leading tone — aeolian, dorian, the modal writing this is routine in — has
- * only the dominant it does have, so there the arrival's own third serves,
- * provided the key contains it.
+ * The dominant of a key functional harmony was built on carries the leading
+ * tone, and that major third is what the cadence is heard through, so a
+ * borrowed minor `v` is not the chord the ear was left on. A mode is held
+ * together by something other than a dominant-to-tonic cadence and has only the
+ * dominant it does have, so there the arrival's own third serves, provided the
+ * key contains it.
+ *
+ * The relaxation follows the scale system rather than the mask alone. A natural
+ * minor key writes no raised seventh in its signature either, yet it cadences
+ * through one: reading the bare mask would let every minor `i - v` be reported
+ * as a half cadence and put a phrase boundary where the music has none.
  */
 function restsOnDominant(to: Chord, key: KeyScale): boolean {
   if (hasMajorThird(to)) {
     return true;
   }
+  if (scaleSystemOf(key) !== 'modal') {
+    return false;
+  }
   const dominantPc = mod12(key.rootPc + degreeOffset(DOMINANT_DEGREE, key));
   const leadingToneDominant = isScaleTone(mod12(dominantPc + 4), key);
   return !leadingToneDominant && thirdBelongsToKey(to, key);
-}
-
-/** Whether a chord is the key's dominant, heard through its major third. */
-function isDominantOf(chord: Chord, key: KeyScale): boolean {
-  return mod12(chord.rootPc - key.rootPc) === 7 && hasMajorThird(chord);
 }
 
 /** Whether a chord is the key's tonic triad standing on its own fifth. */
@@ -124,7 +128,7 @@ function isTonicSixFour(chord: Chord, key: KeyScale): boolean {
 export function isCadentialSixFour(chord: Chord, next: Chord, key: KeyScale): boolean {
   return (
     isTonicSixFour(chord, key) &&
-    isDominantOf(next, key) &&
+    isDominantChordOf(next, key) &&
     mod12(chord.bassPc ?? chord.rootPc) === mod12(next.bassPc ?? next.rootPc)
   );
 }
@@ -283,17 +287,14 @@ function cadenceType(
   const tonic = mod12(key.rootPc);
   const fromOffset = mod12(from.rootPc - tonic);
   const toOffset = mod12(to.rootPc - tonic);
-  // The cadential six-four resolving onto its own dominant is one harmony
-  // moving inside itself, so there is no root motion to cadence with — the same
-  // reason a repeated dominant is no cadence.
-  if (isCadentialSixFour(from, to, key)) {
-    return null;
-  }
-  const dominant = isDominantOf(from, key);
+  const dominant = isDominantChordOf(from, key);
   if ((dominant || isLeadingToneChordOf(from, key)) && toOffset === 0) {
     return 'authentic';
   }
-  if (fromOffset === 5 && toOffset === 0) {
+  // The subdominant is the chord on the key's own fourth degree, which lydian
+  // puts a tritone above the tonic. A fixed five semitones would miss that
+  // arrival and name a chord the key does not contain in its place.
+  if (fromOffset === degreeOffset(SUBDOMINANT_DEGREE, key) && toOffset === 0) {
     return 'plagal';
   }
   // bVII to I: the modal cadence of rock and pop, which has no leading tone at
@@ -383,9 +384,6 @@ function imperfectReason(facts: CadenceFacts): string {
 
 /** The rationale for a pair that forms no cadence at all. */
 function describeNonCadence(facts: CadenceFacts): string {
-  if (facts.withinSixFour) {
-    return 'No cadence: the tonic six-four stands on the dominant already, so its resolution is one harmony moving inside itself rather than a motion between two';
-  }
   if (facts.fromOffset === facts.toOffset) {
     return 'No cadence: the harmony repeats, so there is no root motion to cadence with';
   }
@@ -428,7 +426,9 @@ function describeCadence(facts: CadenceFacts): string {
         'Phrygian cadence: the bass falls a semitone from the lowered submediant onto the dominant, and the motion rests there';
       break;
     case 'half':
-      text = 'Half cadence: the motion comes to rest on the dominant';
+      text = facts.withinSixFour
+        ? 'Half cadence: the motion comes to rest on the dominant, which the tonic six-four standing on its bass was already sounding'
+        : 'Half cadence: the motion comes to rest on the dominant';
       break;
     case null:
       text = describeNonCadence(facts);
@@ -489,33 +489,41 @@ function cadenceAlternatives(facts: CadenceFacts): RejectedCandidate[] {
  * Classify the cadence formed by moving from one chord to the next.
  *
  * - authentic: V (dominant a fifth above the tonic) to I
- * - plagal: IV (a fourth above the tonic) to I
+ * - plagal: IV, the chord on the key's own fourth degree, to I
  * - modal: bVII to I, the cadence of rock and modal writing
  * - deceptive: V to the key's own submediant, plus the borrowed bVI of a major
  *   key
  * - phrygian: iv6 to V of a minor key, the half cadence whose bass falls a
  *   semitone from b6 to 5
- * - half: any other chord than the dominant itself to V
+ * - half: any other chord than the dominant itself to V, the cadential six-four
+ *   standing on the dominant's own bass included
  *
- * Both are read as scale degrees rather than as semitone distances, so a mode
- * cadences onto the submediant and the dominant it actually has: the deceptive
- * arrival of dorian is a major sixth above the tonic and that of phrygian a
- * minor sixth. A half cadence normally rests on the major third that carries
- * the leading tone, but where the key's own dominant has no leading tone —
- * aeolian and dorian, the modal `v` of pop writing — the arrival's own third
- * suffices as long as the key contains it. That relaxation never applies to a
- * key whose dominant does carry the leading tone, so a borrowed minor `v` in a
- * major key is no half cadence.
+ * These are read as scale degrees rather than as semitone distances, so a mode
+ * cadences from and onto the degrees it actually has: the deceptive arrival of
+ * dorian is a major sixth above the tonic and that of phrygian a minor sixth,
+ * and the subdominant a plagal cadence falls from is the tritone above the
+ * tonic in lydian. The two borrowed types are the exception, and are stated as
+ * the fixed offsets they name: `modal` is the flattened seventh whatever the
+ * key writes on that degree, and the Phrygian bass falls from the lowered
+ * submediant. A half cadence normally rests on the major third that carries
+ * the leading tone, but where the key's own dominant has no leading tone — the
+ * modal `v` of dorian, mixolydian and the pop writing built on them — the
+ * arrival's own third suffices as long as the key contains it. That relaxation
+ * belongs to the modes alone: a borrowed minor `v` in a major key is no half
+ * cadence, and neither is the `v` of a minor key, which cadences through the
+ * raised seventh it writes as an accidental rather than in its scale.
  *
  * A static V-to-V repeat with no root motion is not a cadence and yields a null
- * type, and so is the tonic six-four resolving onto the dominant it already
- * stands on: that pair is one harmony moving inside itself. Passing that
- * six-four as `approach` when the dominant is the `from` chord is what lets the
- * cadence be reported as the single event it is — the type and the beat are
- * still the dominant's resolution, while the `rationale` says the cadence began
- * at the six-four. A six-four the bass leaves instead (`IV-I64-IV`, or a
- * neighbouring one over the tonic) is an ordinary inverted tonic and is read as
- * one.
+ * type. The tonic six-four resolving onto the dominant it stands on is a half
+ * cadence, and the most ordinary one there is: `I - I64 - V` closes the
+ * antecedent of a period, and the six-four is a double appoggiatura over the
+ * dominant's own bass rather than a chord that keeps the motion going. Where
+ * that dominant goes on to resolve, the pair and the resolution are one event —
+ * passing the six-four as `approach` when the dominant is the `from` chord is
+ * what lets it be reported as one, with the type and the beat still the
+ * dominant's resolution while the `rationale` says the cadence began at the
+ * six-four. A six-four the bass leaves instead (`IV-I64-IV`, or a neighbouring
+ * one over the tonic) is an ordinary inverted tonic and is read as one.
  *
  * An authentic cadence is graded perfect or imperfect. Perfect takes the
  * dominant to the tonic with both chords in root position and the tonic in the

@@ -8,7 +8,7 @@ import {
   explainRoman,
 } from '../src/analyze/functional/index.js';
 import { makeChord } from '../src/theory/chord/index.js';
-import { majorKey, minorKey } from '../src/theory/scale/index.js';
+import { majorKey, minorKey, scaleByName } from '../src/theory/scale/index.js';
 
 const cMajor = majorKey(0);
 const aMinor = minorKey(9);
@@ -262,5 +262,26 @@ describe('detectKey rationale', () => {
       match.scaleName,
     ]);
     expect(explained).toEqual(plain);
+  });
+});
+
+describe('a chord the key contains is described as its own degree', () => {
+  it('does not call the diatonic VII of a mode a borrowed cadence chord', () => {
+    // F major is G mixolydian's own subtonic triad. Naming it borrowed would
+    // contradict the `borrowed` and `source` fields printed beside it.
+    const gMixolydian = scaleByName('mixolydian', 7);
+    const analysis = analyzeChord(makeChord(5, 'maj'), gMixolydian);
+    expect(analysis.function).toBe('subdominant');
+    expect(analysis.borrowed).toBe(false);
+    expect(analysis.source).toBeNull();
+    expect(analysis.rationale).toContain('takes the subdominant function of its degree in the key');
+    expect(analysis.rationale).not.toContain('borrowed');
+  });
+
+  it('still calls the borrowed bVII of a major key what it is', () => {
+    const analysis = analyzeChord(makeChord(10, 'maj'), cMajor);
+    expect(analysis.function).toBe('subdominant');
+    expect(analysis.borrowed).toBe(true);
+    expect(analysis.rationale).toContain('the borrowed cadence chord');
   });
 });

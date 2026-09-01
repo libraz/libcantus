@@ -211,3 +211,22 @@ describe('a mode whose second degree is already lowered', () => {
     }
   });
 });
+
+describe('a mode that lowers its own second sounds no Neapolitan', () => {
+  it("reads the major II of E phrygian as the mode's own degree", () => {
+    const ePhrygian = scaleByName('phrygian', 4);
+    const fMajor = makeChord(5, 'maj');
+    const analysis = analyzeChord(fMajor, ePhrygian);
+    expect(isDiatonic(fMajor, ePhrygian)).toBe(true);
+    expect(analysis.borrowed).toBe(false);
+    expect(analysis.source).toBeNull();
+    expect(analysis.rationale).not.toContain('Neapolitan');
+    expect(borrowedSource(fMajor, ePhrygian)).toBeNull();
+  });
+
+  it('still reads the Neapolitan of a key that does not have that degree', () => {
+    expect(borrowedSource(makeChord(1, 'maj'), cMajor)).toBe('neapolitan');
+    expect(analyzeChord(makeChord(10, 'maj'), aMinor).rationale).toContain('Neapolitan');
+    expect(borrowedSource(makeChord(10, 'maj'), aMinor)).toBe('neapolitan');
+  });
+});

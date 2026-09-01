@@ -11,23 +11,33 @@ import { pitchClassOf as mod12 } from '../../core/pitch/index.js';
 export { pitchClassOf as mod12 } from '../../core/pitch/index.js';
 
 import type { KeyScale } from '../../core/types.js';
-import type { Chord } from '../../theory/chord/index.js';
-import { chordPitchClasses } from '../../theory/chord/index.js';
 import {
-  isScaleTone,
   MAJOR_MASK,
-  majorKey,
   NATURAL_MINOR_MASK,
   scaleTonesInDegreeOrder,
 } from '../../theory/scale/index.js';
+// The mode-mask predicate is not part of the package surface: `isMinorKey` is
+// the public way to ask, and it is this same test one layer up.
+import { isMinorMask } from '../../theory/scale/masks.js';
+
+/**
+ * The chord-and-key predicates this layer shares with the part-writing and
+ * voicing layers, re-exported so a sibling here reaches them by the same import
+ * as everything else in the module.
+ */
+export {
+  hasDominantSonority,
+  hasMajorThird,
+  isDiatonicChord,
+  isNeapolitanChordOf,
+  soundsDominantSeventh,
+} from '../../theory/tendency/index.js';
+
+import { heptatonicFrameOf } from '../../theory/tendency/index.js';
 
 /** Whether a scale has a minor third and no major third (a minor key). */
 export function isMinorScale(key: KeyScale): boolean {
-  // Named for the mask bits they read, so neither shadows the chord predicate
-  // of the same idea that the shared helpers export.
-  const minorThirdBit = (key.modeMask12 >> 3) & 1;
-  const majorThirdBit = (key.modeMask12 >> 4) & 1;
-  return Boolean(minorThirdBit) && !majorThirdBit;
+  return isMinorMask(key.modeMask12);
 }
 
 /** The parallel key of a scale: same tonic, opposite mode. */
@@ -89,47 +99,10 @@ export function loweredDegrees(key: KeyScale): Set<number> {
  * have degrees no numeral can name. Such keys are read against their parallel
  * major instead — the same frame the chromatic fallback spelling already uses —
  * so `chordToRoman` and `romanToChord` stay mutual inverses for every key.
+ *
+ * It is the frame degrees are counted in generally, so the numerals and the
+ * degrees a chord may tonicize are measured against one and the same scale.
  */
 export function romanReference(key: KeyScale): KeyScale {
-  return scaleTonesInDegreeOrder(key).length === 7 ? key : majorKey(mod12(key.rootPc));
-}
-
-/** Whether every pitch class of a chord belongs to the key's scale. */
-export function isDiatonicChord(chord: Chord, key: KeyScale): boolean {
-  return chordPitchClasses(chord).every((pc) => isScaleTone(pc, key));
-}
-
-/**
- * Whether a chord's interval template carries a major third above its root.
- *
- * The interval is reduced first, so a third voiced as a tenth still counts: it
- * is the same chord tone, and a dominant spread across two octaves is heard
- * through the same leading tone as a close one.
- */
-export function hasMajorThird(chord: Chord): boolean {
-  return chord.intervals.some((interval) => mod12(interval) === 4);
-}
-
-/**
- * Whether a chord is the Neapolitan: a major triad on the flat second degree of
- * a key that does not have that degree already.
- *
- * The Neapolitan is an altered predominant, so it has to be an alteration. A
- * mode carrying a lowered second of its own — phrygian, locrian, and the
- * phrygian-dominant scales of flamenco and modal jazz — sounds that triad as a
- * native chord of the key, and calling it chromatic there would make the key's
- * own II a borrowing every time it appeared.
- */
-export function isNeapolitan(chord: Chord, key: KeyScale): boolean {
-  return (
-    mod12(chord.rootPc - key.rootPc) === 1 &&
-    chord.quality === 'maj' &&
-    !isDiatonicChord(chord, key)
-  );
-}
-
-/** Whether a chord has the sonority that can tonicize another scale degree. */
-export function isAppliedDominantSonority(chord: Chord): boolean {
-  const has = (semitones: number): boolean => chord.intervals.some((i) => mod12(i) === semitones);
-  return chord.quality === 'maj' || (has(4) && has(10));
+  return heptatonicFrameOf(key);
 }

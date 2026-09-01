@@ -27,11 +27,12 @@ import {
   minorKey,
   resolveKey,
 } from '../../theory/scale/index.js';
+import { soundsDominantSeventh } from '../../theory/tendency/index.js';
 import type { KeyProfileName, KeyProfilePair } from '../detect/index.js';
 import { profileScore, resolveKeyProfile } from '../detect/profiles.js';
 import type { PivotChord } from '../functional/index.js';
 import { pivotChords } from '../functional/index.js';
-import { gridOriginOf } from '../grid.js';
+import { gridForNotes } from '../grid.js';
 import type { WindowWeights } from '../histogram.js';
 import { bucketNotesBySlot, windowWeights } from '../histogram.js';
 
@@ -536,11 +537,10 @@ export function keyTimelineFromNotes(
   assertRange(totalBeats, 0, Number.MAX_SAFE_INTEGER, 'key timeline totalBeats');
 
   const slotBeats = Math.min(minKeyBeats, expectedKeyBeats);
-  const firstOnset = sounding.reduce((first, n) => Math.min(first, n.startBeat), 0);
   // The key slots are longer than the chord slots, so the two grids start on
   // different beats — but the music starts on one beat, and that is the beat
   // both report, so a chord timeline and its keys cover the same span.
-  const { origin, startBeat: musicStart } = gridOriginOf(firstOnset, slotBeats);
+  const { origin, startBeat: musicStart } = gridForNotes(sounding, slotBeats);
   const slotCount = Math.max(0, Math.ceil((totalBeats - origin) / slotBeats - EPS));
   assertGenerationBudget(slotCount, 'key timeline slots', budget);
   if (slotCount === 0 || sounding.length === 0) {
@@ -701,10 +701,17 @@ function chordFitsKey(chord: Chord, candidate: { key: KeyScale; rootPc: number }
   // than C, and a rule that only rewarded the D and the A would miss it.
   let score = CHORD_TONE_CREDIT * ((inKey - (tones.length - inKey)) / tones.length);
   // A dominant seventh names its key almost by itself, which is what makes a
-  // secondary dominant readable as a modulation rather than as a wrong note.
+  // secondary dominant readable as a modulation rather than as a wrong note. It
+  // is the tritone inside it that does so, not the name the chord is written
+  // under, so every extended and altered spelling of the sonority earns the same
+  // credit; a bare major triad a fifth up has no tritone and earns half of it.
   const rootDegree = pitchClass(chord.rootPc - candidate.rootPc);
-  if (rootDegree === 7 && (chord.quality === 'dom7' || chord.quality === 'maj')) {
-    score += DOMINANT_CREDIT * (chord.quality === 'dom7' ? 1 : 0.5);
+  if (rootDegree === 7) {
+    if (soundsDominantSeventh(chord)) {
+      score += DOMINANT_CREDIT;
+    } else if (chord.quality === 'maj') {
+      score += DOMINANT_CREDIT * 0.5;
+    }
   }
   if (rootDegree === 0) {
     score += TONIC_CREDIT;
@@ -797,9 +804,10 @@ export function detectModulations(
     // Only a dominant seventh earns this. A plain major triad a fifth above is
     // just as readily heard as the chord it moves to being the subdominant —
     // C to F says nothing about whether the key is C or F. What makes a cadence
-    // name its key is the tritone, and only the seventh has one.
+    // name its key is the tritone, so the sonority is what is asked for: `G13`
+    // and `G7b9` cadence exactly as `G7` does.
     const isDominantMotion =
-      pitchClass(approaching.rootPc - arriving.rootPc) === 7 && approaching.quality === 'dom7';
+      pitchClass(approaching.rootPc - arriving.rootPc) === 7 && soundsDominantSeventh(approaching);
     if (!isDominantMotion) {
       continue;
     }

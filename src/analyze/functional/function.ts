@@ -18,11 +18,11 @@ import { augmentedSixthKindOf } from './augmented-sixth.js';
 import { type BorrowedSource, borrowedSourceOf } from './borrowed.js';
 import {
   degreeRootPc,
+  hasDominantSonority,
   hasMajorThird,
-  isAppliedDominantSonority,
   isDiatonicChord,
   isMinorScale,
-  isNeapolitan,
+  isNeapolitanChordOf,
   mod12,
   parallelScale,
 } from './internal.js';
@@ -151,7 +151,7 @@ export function functionWithReason(
   key: KeyScale,
 ): { function: HarmonicFunction; reason: FunctionReason } {
   const offset = mod12(chord.rootPc - key.rootPc);
-  if (isNeapolitan(chord, key)) {
+  if (isNeapolitanChordOf(chord, key)) {
     return { function: 'subdominant', reason: 'neapolitan' };
   }
   if (augmentedSixthKindOf(chord, key) !== null) {
@@ -160,7 +160,16 @@ export function functionWithReason(
   if (isAppliedDominant(chord, key)) {
     return { function: 'dominant', reason: 'applied' };
   }
-  if (!isMinorScale(key) && hasMajorThird(chord) && (offset === 8 || offset === 10)) {
+  // A chord the key already contains is its own degree, however flat that degree
+  // lies: the major triad on the subtonic of mixolydian is the mode's own VII,
+  // and describing it as borrowed would contradict the source the analysis
+  // reports alongside it.
+  if (
+    !isMinorScale(key) &&
+    !isDiatonicChord(chord, key) &&
+    hasMajorThird(chord) &&
+    (offset === 8 || offset === 10)
+  ) {
     return { function: 'subdominant', reason: 'flatSideMajor' };
   }
   return { function: degreeFunction(chord, key), reason: 'degree' };
@@ -253,7 +262,7 @@ function functionAlternatives(
   const out: RejectedCandidate[] = [];
   if (reason === 'degree') {
     // The sonority could tonicize, and only its being in the key stopped it.
-    if (isAppliedDominantSonority(chord) && isDiatonicChord(chord, key)) {
+    if (hasDominantSonority(chord) && isDiatonicChord(chord, key)) {
       out.push({
         label: 'applied dominant',
         reason:

@@ -33,3 +33,5 @@ export { pivotChords } from './pivot.js';
 export type { RejectedCandidate } from './rationale.js';
 export type { ChordToRomanOptions, ExplainRomanOptions, RomanExplanation } from './roman.js';
 export { chordToRoman, explainRoman, romanToChord } from './roman.js';
+export type { TonicizableDegree } from './tonicization.js';
+export { tonicizableDegrees } from './tonicization.js';

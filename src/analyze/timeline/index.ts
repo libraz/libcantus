@@ -28,9 +28,10 @@ import {
 import type { ChordMatch } from '../detect/index.js';
 import { detectChord } from '../detect/index.js';
 import { augmentedSixthFromPitchClasses } from '../functional/augmented-sixth.js';
+import { isCadentialSixFour } from '../functional/cadence.js';
 import type { CadenceResult } from '../functional/index.js';
 import { detectCadence } from '../functional/index.js';
-import { gridOriginOf } from '../grid.js';
+import { gridForNotes } from '../grid.js';
 import type { SlotGrid, WindowWeights } from '../histogram.js';
 import { bucketNotesBySlot, windowWeights } from '../histogram.js';
 import type { KeyRegion } from '../keys/index.js';
@@ -766,9 +767,9 @@ type BoundarySpan = { startBeat: number; endBeat: number };
 /**
  * The grid the span is examined in is the shared {@link SlotGrid}: equal slots
  * of `slotBeats`, starting at `origin`. The origin is 0 for a piece that starts
- * on the downbeat and negative for one that starts with a pickup;
- * {@link gridOriginOf} places it, and the key search cuts its own slots on a
- * grid of the same shape.
+ * on the downbeat, negative for one that starts with a pickup, and the excerpt's
+ * own first slot for one lifted from later in a piece; {@link gridForNotes}
+ * places it, and the key search cuts its own slots on a grid of the same shape.
  */
 
 /** First beat of slot `index`. */
@@ -1292,8 +1293,7 @@ export function analyzeTimeline(
     segmentation === 'grid'
       ? harmonicRhythm
       : slotBeatsWithin(gridUnit, minChordBeats, harmonicRhythm);
-  const firstOnset = sounding.reduce((first, n) => Math.min(first, n.startBeat), 0);
-  const { origin, startBeat: musicStart } = gridOriginOf(firstOnset, slotBeats);
+  const { origin, startBeat: musicStart } = gridForNotes(sounding, slotBeats);
   const grid: SlotGrid = { origin, slotBeats };
   // A given key is taken as read across the whole span: the caller has already
   // answered the question, and second-guessing it would make the option mean
@@ -1558,12 +1558,28 @@ export function detectCadences(timeline: ChordTimeline, key: KeyContext): Cadenc
       before !== undefined && Math.abs(prev.startBeat - before.endBeat) <= EPS
         ? before.chord
         : undefined;
-    const cadence = detectCadence(prev.chord, cur.chord, keyAt(cur.startBeat), {
+    const key = keyAt(cur.startBeat);
+    const cadence = detectCadence(prev.chord, cur.chord, key, {
       ...(approach === undefined ? {} : { approach }),
     });
-    if (cadence.type !== null) {
-      hits.push({ atBeat: cur.startBeat, cadence, from: prev.chord, to: cur.chord });
+    if (cadence.type === null) {
+      continue;
     }
+    // A cadential six-four comes to rest on the dominant it stands on, which is
+    // the half cadence that closes an antecedent phrase. Where that dominant
+    // goes on to resolve, the six-four opened the cadence the resolution names,
+    // so the pair is reported once, at the arrival — the reading the approach
+    // chord already gives that resolution.
+    if (cadence.type === 'half' && isCadentialSixFour(prev.chord, cur.chord, key)) {
+      const next = timeline.segments[i + 1];
+      if (next !== undefined && Math.abs(next.startBeat - cur.endBeat) <= EPS) {
+        const onward = detectCadence(cur.chord, next.chord, keyAt(next.startBeat)).type;
+        if (onward === 'authentic' || onward === 'deceptive') {
+          continue;
+        }
+      }
+    }
+    hits.push({ atBeat: cur.startBeat, cadence, from: prev.chord, to: cur.chord });
   }
   return hits;
 }

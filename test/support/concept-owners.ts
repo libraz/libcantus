@@ -71,13 +71,22 @@ export const CONCEPT_OWNERS: readonly ConceptOwner[] = [
   {
     // One module asks whether a chord tonicizes a degree that can hold a
     // fifth; another asks only whether the root is in the scale. A Picardy
-    // tonic reads as a dominant under the second and not under the first.
-    concept: 'what an applied dominant may target',
+    // tonic reads as a dominant under the second and not under the first. The
+    // derivation needs nothing but the key, so it sits below both the analysis
+    // that names a target and the checker that licenses the chromatic tone.
+    concept: 'which degrees of a key can be made a local tonic',
+    owner: 'src/theory/tendency/index.ts',
+    reserved: ['TonicizableDegree', 'tonicizableDegrees', 'appliedDominantTarget'],
+  },
+  {
+    // Which sonorities point at such a degree, and which chord is therefore an
+    // applied dominant. `isAppliedDominantSonority` is deliberately outside
+    // this: it asks what a chord sounds like, not what it is doing, and the two
+    // are separable — a dominant sonority on a degree nothing follows is not an
+    // applied dominant.
+    concept: 'which chords tonicize a degree',
     owner: 'src/analyze/functional/tonicization.ts',
-    // `isAppliedDominantSonority` is deliberately outside this: it asks what a
-    // chord sounds like, not what it is doing, and the two are separable — a
-    // dominant sonority on a degree nothing follows is not an applied dominant.
-    reserved: ['appliedTarget', 'isAppliedDominant', 'tonicizableDegrees'],
+    reserved: ['appliedTarget', 'isAppliedDominant'],
   },
   {
     // A chord's sixth is five letters above its root; a table of semitone
