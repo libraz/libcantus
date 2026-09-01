@@ -1,6 +1,6 @@
 # @libraz/libcantus
 
-MIDI ノートイベントを扱う、TypeScript 製の音楽理論ライブラリです。コードの組み立てと綴り、和声とキーの解析、曲の形式の読み取り、パート生成を同じデータモデルで行えます。実行時依存はありません。
+MIDI ノートイベントのための、TypeScript 製の音楽理論ライブラリです。ノートから和声を読み取り、その読み取り結果に沿って新しいパートを書けます。実行時依存はありません。
 
 [![CI](https://img.shields.io/github/actions/workflow/status/libraz/libcantus/ci.yml?branch=main&label=CI)](https://github.com/libraz/libcantus/actions)
 [![npm](https://img.shields.io/npm/v/@libraz/libcantus)](https://www.npmjs.com/package/@libraz/libcantus)
@@ -10,9 +10,11 @@ MIDI ノートイベントを扱う、TypeScript 製の音楽理論ライブラ�
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![docs](https://img.shields.io/badge/docs-API%20reference-b5892e)](https://libraz.github.io/libcantus/)
 
-## できること
+![ノートイベントからパートへ、そして再びノートイベントへ](docs/images/pipeline-ja.svg)
 
-すでにノートやコード記号を持っているソフトウェア（DAW のプロジェクト、MIDI パーサー、練習支援ツールなど）と、その音が和声的に何を意味するかとの間を埋めます。ノートイベントを渡せば和声が求まり、その和声を渡せばそれに沿ったパートが書けます。
+このライブラリは、すでにノートやコード記号を持っているソフトウェア（DAW のプロジェクト、MIDI パーサー、練習支援ツールなど）と、その音が和声的に何を意味するかとの間を埋めます。ノートイベントを渡すと和声が求まり、ジェネレーターはいま読み取ったその和声に沿ってパートを書きます。
+
+## できること
 
 ```ts
 import { Composer, Score } from '@libraz/libcantus';
@@ -31,85 +33,45 @@ Composer.of({ key: chords.key, bpm: 120, seed: 1 }).bass(chords, { style: 'walki
 // 16 音: [{ pitch: 36, startBeat: 0, durationBeat: 1, velocity: 100 }, ...]
 ```
 
-コードの境界は決め打ちせずに探索し、キーも同様に探します。転調する曲を、冒頭のキーのまま読み続けることはありません。
+コードの境界は決め打ちせずに探索し、キーも同様に探します。転調する曲を、冒頭のキーのまま読み続けることはありません。答えには根拠が伴います。コード分析・終止・ローマ数字はいずれも `rationale` と、採らなかった読みを併せて返し、入力だけでは決まらない項目は、もっともらしい推測ではなく `null` を返します。
 
-各レイヤーが受け持つ範囲は次のとおりです。
+## ユースケース
 
-- **[音高と記譜](docs/ja/pitch-and-notation.md)** — 綴りを保った音名と音程、MIDI 変換、英語・ドイツ語・日本語・イタリア語・固定ドでの読み書き、そして 1 音ずつではなく声部全体を 1 本の経路として解く綴り付け。テキストのパーサーにはいずれも例外を投げない対 (`tryParseNote`、`tryParseInterval`、`tryParseChordSymbol`、`tryParseKeyName`、`tryParseTimeSignature`、および `Note`・`Interval`・`Key`・`Chord`・`Meter` の `tryParse`) があるので、入力欄の 1 打鍵ごとに `try`/`catch` を書く必要はありません。
-- **[和声](docs/ja/harmony.md)** — 構造を持つ値としてのコード、教会旋法やペンタトニックに加えて `WORLD_SCALES` を含むスケール、ローマ数字と和声機能、ヴォイシング、数字付き低音、そして違反した声部と理由まで返す声部書法・種目対位法のチェッカー。
-- **[解析](docs/ja/analysis.md)** — ノートイベントからのコード・キー検出、タイムラインと終止、和声的な還元、フレーズ、セクション、ハイパーメーター、モチーフ、アレンジ全体のレポート。
-- **[生成](docs/ja/generation.md)** — プログレッション、モチーフ、リズム、ドラム、ベース、対旋律。いずれも 1 つの `GenerationContext` を参照します。プロジェクトのシード、加算的な 3 つの複雑さのダイヤル（リズム・和声・装飾）、それとは別枠の難易度の上限、テンポ、各パートの対象楽器がそこに入ります。同じコンテキストからは同じ結果が出ます。
-- **[時間とアレンジ](docs/ja/time-and-arrangement.md)** — 拍子、テンポ、小節と拍による位置、複数トラックをまたぐ解析。
-- **[クラス API](docs/ja/api-reference.md)** — 同じ理論を、ライブラリが扱う対象ごとの不変クラスとして提供します。`Score`、`Timeline`、`Composer` も含め、いずれも上記の関数の薄い外皮です。呼び出し側の都合で関数とクラスのどちらを使ってもよく、返る答えは同じです。
-
-答えには、そう読んだ理由が付きます。`analyzeChord`、`detectCadence`、`explainRoman` は `rationale` を必ず返し、`detectKey` は要求があれば付けます。いずれも、退けた解釈を `alternatives` として報告できます。渡された情報だけでは決まらない場合、それらしい答えを作らずに `null` を返します。終止が完全か不完全かはヴォイシングがなければ決まりません。ソプラノに何があるかはヴォイシングだけが答えられるからです。
-
-答えを左右する場面では、綴りの情報を落としません。減 5 度と増 4 度はピッチクラス上の距離が同じでも同じ音程ではないので、声部書法と対位法のチェッカーは数値ではなく綴られた音を受け取ります。
-
-アプリケーションが手元に持っているデータから始まるガイドが 7 本あります。[DAW との連携](docs/ja/use-cases/daw-workflow.md)、[曲の解析](docs/ja/use-cases/piece-analysis.md)、[転調レポート](docs/ja/use-cases/modulation-report.md)、[和声課題のチェック](docs/ja/use-cases/harmony-exercise-checker.md)、[生成によるアレンジ](docs/ja/use-cases/generative-arrangement.md)、[コード譜の取り込み](docs/ja/use-cases/chord-chart-import.md)、[パートの準備](docs/ja/use-cases/part-preparation.md)です。
-
-## やらないこと
-
-- **入出力・記譜・音声を扱いません。** MIDI ファイルの読み書き、楽譜の描画、音声解析、再生はありません。パーサーは各自で用意し、ノートイベントとして渡してください。その層こそが必要なら、[libsonare](https://github.com/libraz/libsonare) が音声解析、マスタリング、合成、SMF 入出力を扱います。両者はコードを共有せず、どちらも相手を必要としません。
-- **微分音の解析はしません。** 周波数、セント、オクターブの等分割、純正律の比は `core` にありますが、音高より上の層はすべて 12 のピッチクラスで動きます。半音より細かい単位で組み立てられた音楽は範囲外です。半フラットの音度を持つマカームを 12 音の近い音で代用せず `WORLD_SCALES` から外しているのも、同じ理由です。
-- **旋法体系そのものは扱いません。** `WORLD_SCALES` が収録するのは、thāt やマカーム、日本の音階といった伝統が名を与えた音組織であって、その上に立つ体系ではありません。上行形と下行形、フレーズが寄りかかる音、旋律型の文法は、マスクには入りません。
-- **調性を前提にしません。** ローマ数字と機能和声は西洋の慣習を前提とします。その読み方が適用できるスケールかどうかは `supportsFunctionalHarmony` が答えます（`'dorian'` は真、`'miyakoBushi'` は偽）。
-- **コーパスは持ちません。** 統計を取るためのデータは同梱していません。
-- **機能和声には既知の穴があります。** `functionOf` は和音と調だけから答えるため、終止四六の和音はその層では主和音の転回として読まれます。属和音としての読みは時間軸を見る層のものであり、属和音の前の和音を `approach` として渡したときに `detectCadence` がそれを示します。
-
-## 要件
-
-Node.js >= 22。
+| ユースケース | 内容 | 実例のガイド |
+|---|---|---|
+| DAW のアシスタント | トラックから和声を読み取り、それに沿ってベースラインを書く。 | [DAW ワークフロー](docs/ja/use-cases/daw-workflow.md) |
+| 楽曲アナライザー | 1 つのスコアから調区間、終止形、和声的な還元、フレーズ、セクション、モチーフを得る。 | [楽曲の解析](docs/ja/use-cases/piece-analysis.md) |
+| 転調レポート | 転調を、軸和音・確信度・調同士の関係とともに提示する。 | [転調レポート](docs/ja/use-cases/modulation-report.md) |
+| 和声課題のチェッカー | 声部書法と種目対位法の違反を、違反した声部と破った規則つきで報告する。 | [和声課題のチェック](docs/ja/use-cases/harmony-exercise-checker.md) |
+| 自動生成アレンジ | シードを固定した 1 つのコンポーザーがコード進行・各パート・ドラムを書き、演奏可能性を確認する。 | [生成によるアレンジ](docs/ja/use-cases/generative-arrangement.md) |
+| コード譜の取り込み | 打ち込んだコード記号をタイムライン、ヴォイシング、ベースラインに変換する。 | [コード譜の取り込み](docs/ja/use-cases/chord-chart-import.md) |
+| パート譜の準備 | パートを楽器に合わせ、その奏者が読む音高で書き出す。 | [パート譜の準備](docs/ja/use-cases/part-preparation.md) |
 
 ## インストール
+
+Node.js 22 以降が必要です。
 
 ```sh
 yarn add @libraz/libcantus
 ```
 
-## 最初の例
-
-理論の本体はツリーシェイク可能な純粋関数にあります。その上に、理論を語るときの言い方に近い不変のクラス API が乗っています。ライブラリが扱う対象ごとに1つのクラスがあり、単体の `Note`、`Interval`、`Chord` から、曲全体を受け持つ `Score`、`Timeline`、`Arrangement`、`Composer` までが揃います。
-
-```ts
-import { Chord, Key } from '@libraz/libcantus';
-
-const key = Key.major('C');
-const dominant = key.chord(5, 'dom7');
-
-dominant.symbol(); // 'G7'
-dominant.analyze(key).roman; // 'V7'
-Chord.parse('C7(b9,#11)').pitchClasses(); // [0, 1, 4, 6, 7, 10]
-```
-
-本体は関数で、クラスはいずれもその薄い外皮です。クラスは `.data` でプレーンな値を公開し、関数が返したデータからクラスを作れます。どちらかが閉じた世界になることはなく、返す答えも同じです。クラスが足すのは、値とその文脈をひとまとめに保持することです。呼び出しを連ねるときに同じ事実を書き直さずに済みます。`Score` は音符と拍子・テンポ・調をまとめて持ち、`Composer` は 1 曲を書くときの調・テンポ・シードを持ちます。
-
-## インポートパス
-
-ルートからすべてを export しています。1 つのレイヤーだけを取り込みたい場合は、サブパスを使ってください。
-
-```ts
-import { parseNote, edo } from '@libraz/libcantus/core'; // 音高、拍子、テンポ、音律
-import { majorKey, makeChord } from '@libraz/libcantus/theory'; // スケール、コード、ヴォイシング、規則
-import { analyzeArrangement, detectKey } from '@libraz/libcantus/analyze';
-import { generateDrums, generateProgression } from '@libraz/libcantus/generate';
-import { Chord, Key, Note } from '@libraz/libcantus/model'; // クラス API
-```
-
-いずれのパスにも ESM と CommonJS の両方のビルドがあります。
+パッケージのルートから API 全体を公開しています。`@libraz/libcantus/core`、`/theory`、`/analyze`、`/generate`、`/model` は同じシンボル群に対する、より狭い読み込み境界です。いずれのパスも ESM と CommonJS の両方のビルドを同梱しています。
 
 ## ドキュメント
 
-最初に読むページ: [概要](docs/ja/introduction.md)、[使い始める](docs/ja/getting-started.md)、[ユースケース](docs/ja/use-cases/index.md)。
+音楽理論にはじめて触れる場合は、[入門ガイド](docs/ja/primer/index.md)から始めてください。この API が土台にしている考え方 — 音高と音程、音階と調、和音、和声、声部、リズムと拍子 — を、楽譜ではなく TypeScript を書く読者に向けて説明しています。
 
-各領域のガイド: [音高と記譜](docs/ja/pitch-and-notation.md)、[スケールとモード](docs/ja/scales-and-modes.md)、[和声](docs/ja/harmony.md)、[調関係と転調](docs/ja/key-relations-and-modulation.md)、[ボイシング](docs/ja/voicing.md)、[対位法と和声課題](docs/ja/counterpoint-and-part-writing.md)、[時間とアレンジ](docs/ja/time-and-arrangement.md)、[解析](docs/ja/analysis.md)、[旋律とモチーフ](docs/ja/melody-and-motifs.md)、[リズムとグルーヴ](docs/ja/rhythm-and-groove.md)、[生成](docs/ja/generation.md)、[リハーモナイズ](docs/ja/reharmonization.md)、[楽器と演奏可能性](docs/ja/instruments-and-playability.md)、[音律と周波数](docs/ja/tuning-and-frequency.md)。
+そうでなければ[はじめに](docs/ja/introduction.md)と[使いはじめる](docs/ja/getting-started.md)から読んでください。各分野のガイドとリファレンスはそこから辿れます。ガイド中の `ts` の例はすべてテストスイートで実行され、行末コメントに書かれた期待値は実際の戻り値と照合されます。
 
-横断的な話題: [決定性とシード](docs/ja/determinism-and-seeding.md)、[エラーと検証](docs/ja/errors-and-validation.md)、[パフォーマンス](docs/ja/performance.md)、[相互運用](docs/ja/interoperability.md)。
+## できないこと
 
-リファレンス: [API リファレンス](docs/ja/api-reference.md)、[用語集](docs/ja/glossary.md)、[FAQ と制限](docs/ja/faq.md)。
+- **入出力・記譜・音声は扱いません。** MIDI ファイルの読み書き、楽譜の描画、音声解析、再生はいずれも対象外です。パーサーは呼び出し側で用意し、ノートイベントを渡してください。その下の層が必要な場合、[libsonare](https://github.com/libraz/libsonare) が音声解析・マスタリング・合成・SMF の入出力を扱います。両者はコードを共有せず、どちらも他方を必要としません。
+- **微分音の解析は行いません。** 周波数、セント、オクターブの等分割、純正律の比は `core` にありますが、音高より上の層はすべて 12 のピッチクラスで動きます。
+- **旋法体系そのものは扱いません。** `WORLD_SCALES` が記録するのは、その伝統が名前を与えている音の素材 — ターット、マカームの音組織、日本の五音音階 — であって、その上に築かれた語法ではありません。
+- **コーパスは同梱しません。** 統計を取るためのデータは含みません。
 
-これらのガイドの `ts` の例はすべてテストスイートで実行され、末尾コメントに書いた期待値は実際の返り値と照合されます。生成される TypeDoc のリファレンスは `docs/api` に出力され、手書きガイドとは分かれています。
+残りは[疑問と制限](docs/ja/faq.md)にまとめています。機能和声の読みが適用できない場合や、エンジンが推測しないことについてもそこで扱います。
 
 ## ライセンス
 
-[@libraz/libcantus](https://github.com/libraz/libcantus) は [Apache License 2.0](LICENSE) で提供します。
+[@libraz/libcantus](https://github.com/libraz/libcantus) は [Apache License 2.0](LICENSE) で公開しています。

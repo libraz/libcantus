@@ -1,6 +1,6 @@
 # @libraz/libcantus
 
-Pure-TypeScript music theory for MIDI note events. Build and spell chords, inspect harmony, analyze keys and form, and generate parts from the same data model. The package has no runtime dependencies.
+Pure-TypeScript music theory for MIDI note events. Recover the harmony from notes, and write new parts against that same reading. No runtime dependencies.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/libraz/libcantus/ci.yml?branch=main&label=CI)](https://github.com/libraz/libcantus/actions)
 [![npm](https://img.shields.io/npm/v/@libraz/libcantus)](https://www.npmjs.com/package/@libraz/libcantus)
@@ -10,9 +10,11 @@ Pure-TypeScript music theory for MIDI note events. Build and spell chords, inspe
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![docs](https://img.shields.io/badge/docs-API%20reference-b5892e)](https://libraz.github.io/libcantus/)
 
-## What it does
+![From note events to parts, and back](docs/images/pipeline.svg)
 
-It sits between software that already holds notes or chord symbols — a DAW project, a MIDI parser, a practice tool — and what those notes mean harmonically. Give it note events and it recovers the harmony; give it that harmony back and it writes parts against it:
+The library sits between software that already holds notes or chord symbols — a DAW project, a MIDI parser, a practice tool — and what those notes mean harmonically. Note events go in, the harmony comes out, and the generators write against the harmony that was just read.
+
+## What it does
 
 ```ts
 import { Composer, Score } from '@libraz/libcantus';
@@ -31,84 +33,44 @@ Composer.of({ key: chords.key, bpm: 120, seed: 1 }).bass(chords, { style: 'walki
 // 16 notes: [{ pitch: 36, startBeat: 0, durationBeat: 1, velocity: 100 }, ...]
 ```
 
-Chord boundaries are searched for rather than assumed, and so is the key, so a piece that modulates is not read against the key it started in.
+Chord boundaries are searched for rather than assumed, and so is the key, so a piece that modulates is not read against the key it started in. Answers carry their evidence: a chord analysis, a cadence and a Roman numeral each come with a `rationale` and the readings they turned down, and where the input cannot settle a question the field comes back `null` rather than a plausible guess.
 
-What each layer covers:
+## Use cases
 
-- **[Pitch and notation](docs/en/pitch-and-notation.md)** — spelled notes and intervals, MIDI conversion, note names read and written in English, German, Japanese, Italian or fixed-do, and line spelling solved as one path instead of note by note. Every text parser has a non-throwing sibling (`tryParseNote`, `tryParseInterval`, `tryParseChordSymbol`, `tryParseKeyName`, `tryParseTimeSignature`, and `tryParse` on `Note`, `Interval`, `Key`, `Chord` and `Meter`), so a text field needs no `try`/`catch` per keystroke.
-- **[Harmony](docs/en/harmony.md)** — chords as structured values, scales including modes, pentatonics and the `WORLD_SCALES` set, Roman numerals and function, voicing, figured bass, and the part-writing and species-counterpoint checkers that report a violation with the voice it happened in and the reason.
-- **[Analysis](docs/en/analysis.md)** — chord and key detection over note events, timelines and cadences, harmonic reduction, phrases, sections, hypermeter, motifs, and arrangement reports.
-- **[Generation](docs/en/generation.md)** — progressions, motifs, rhythms, drums, bass and counter-melody, all drawing on one `GenerationContext`: a project seed, three additive complexity dials (rhythmic, harmonic, ornament), a separate difficulty ceiling, the tempo, and the instrument each part is written for. Same context, same output.
-- **[Time and arrangement](docs/en/time-and-arrangement.md)** — meter, tempo, positions in bars and beats, and analysis across several tracks at once.
-- **[Class API](docs/en/api-reference.md)** — the same theory as one immutable class per thing the library works with, `Score`, `Timeline` and `Composer` included, each a thin skin over the functions above. Reach for a function or a class as it suits the call site; the answers are the same.
-
-Answers say why they were reached. `analyzeChord`, `detectCadence` and `explainRoman` carry a `rationale`, `detectKey` attaches one on request, and each can report the readings it turned down as `alternatives`. Where the input cannot settle a question, the field comes back `null` rather than a plausible guess — grading a cadence perfect or imperfect needs a voicing, because only a voicing says what is in the soprano.
-
-Spelling is kept wherever it decides the answer. A diminished fifth and an augmented fourth are the same distance in pitch classes but not the same interval, so the counterpoint and part-writing checkers take spelled notes rather than numbers.
-
-Seven worked guides start from the data an application already has: [DAW workflow](docs/en/use-cases/daw-workflow.md), [piece analysis](docs/en/use-cases/piece-analysis.md), [modulation report](docs/en/use-cases/modulation-report.md), [harmony exercise checker](docs/en/use-cases/harmony-exercise-checker.md), [generative arrangement](docs/en/use-cases/generative-arrangement.md), [chord chart import](docs/en/use-cases/chord-chart-import.md), and [part preparation](docs/en/use-cases/part-preparation.md).
-
-## What it doesn't do
-
-- **No I/O, notation or audio.** No MIDI file reader or writer, no score rendering, no audio analysis, no playback. Bring your own parser and hand it note events. If that layer is what you need, [libsonare](https://github.com/libraz/libsonare) covers audio analysis, mastering, synthesis and SMF I/O; the two share no code and neither requires the other.
-- **No microtonal analysis.** Frequencies, cents, equal divisions of the octave and just-intonation ratios live in `core`, but everything above the pitch layer runs on twelve pitch classes. Music organised in smaller steps than a semitone is out of reach, which is also why the maqāmāt built on half-flat degrees are left out of `WORLD_SCALES` rather than rounded to a twelve-tone neighbour.
-- **No modal systems.** `WORLD_SCALES` records the pitch material a tradition names — a thāt, a maqām's set, a Japanese pentatonic — and not the system built on it: ascent and descent forms, the notes a phrase leans on, and the phrase grammar have no place in a mask.
-- **No assumption that the material is tonal.** Roman numerals and functional harmony presuppose the common practice, and `supportsFunctionalHarmony` says whether a named scale admits that reading at all — `'dorian'` does, `'miyakoBushi'` does not.
-- **No corpus.** Nothing is bundled to run statistics over.
-- **Known gaps in functional harmony.** `functionOf` answers from a chord and a key alone, so a cadential six-four reads there as an inverted tonic; the dominant reading of it belongs to the layers that see time, and `detectCadence` gives it when the chord before the dominant is passed as `approach`.
-
-## Requirements
-
-Node.js >= 22.
+| Use case | What it does | Worked guide |
+|---|---|---|
+| A DAW assistant | Infers the harmony from tracks, then writes a bass line against it. | [DAW workflow](docs/en/use-cases/daw-workflow.md) |
+| A piece analyzer | Key regions, cadences, harmonic reduction, phrases, sections and motifs from one score. | [Piece analysis](docs/en/use-cases/piece-analysis.md) |
+| A modulation report | Key changes with their pivot chords, confidences and relations. | [Modulation report](docs/en/use-cases/modulation-report.md) |
+| A harmony exercise checker | Part-writing and species-counterpoint violations, each with the voice it happened in and the rule it broke. | [Harmony exercise checker](docs/en/use-cases/harmony-exercise-checker.md) |
+| A generative arrangement | One seeded composer writing a progression, its parts and its drums, then a playability check. | [Generative arrangement](docs/en/use-cases/generative-arrangement.md) |
+| A chord chart importer | Typed chord symbols turned into a timeline, voicings and a bass line. | [Chord chart import](docs/en/use-cases/chord-chart-import.md) |
+| Part preparation | A part fitted to an instrument and written at the pitch its player reads. | [Part preparation](docs/en/use-cases/part-preparation.md) |
 
 ## Install
+
+Node.js 22 or later.
 
 ```sh
 yarn add @libraz/libcantus
 ```
 
-## Quick start
-
-The theory lives in tree-shakeable pure functions. On top of them sits an immutable class API — one class per thing the library works with, from a single `Note`, `Interval` or `Chord` up to the `Score`, `Timeline`, `Arrangement` and `Composer` that carry a whole piece — that reads the way theory is spoken:
-
-```ts
-import { Chord, Key } from '@libraz/libcantus';
-
-const key = Key.major('C');
-const dominant = key.chord(5, 'dom7');
-
-dominant.symbol(); // 'G7'
-dominant.analyze(key).roman; // 'V7'
-Chord.parse('C7(b9,#11)').pitchClasses(); // [0, 1, 4, 6, 7, 10]
-```
-
-The functions are the library; every class is a thin skin over them. A class wraps a plain object it exposes as `.data`, and the functions return data a class can be built from, so neither side is a walled garden and the two give the same answers. What a class adds is holding a value together with its context, so a chain of calls does not restate the same facts: a `Score` carries its notes with their meter, tempo, and key, and a `Composer` carries the key, tempo, and seed one piece is written under.
-
-## Import paths
-
-The package root exports everything. To pull in a single layer, import its subpath instead:
-
-```ts
-import { parseNote, edo } from '@libraz/libcantus/core'; // pitch, meter, tempo, tuning
-import { majorKey, makeChord } from '@libraz/libcantus/theory'; // scales, chords, voicing, rules
-import { analyzeArrangement, detectKey } from '@libraz/libcantus/analyze';
-import { generateDrums, generateProgression } from '@libraz/libcantus/generate';
-import { Chord, Key, Note } from '@libraz/libcantus/model'; // class API
-```
-
-Both ESM and CommonJS builds ship for every path.
+The package root exports the whole API. `@libraz/libcantus/core`, `/theory`, `/analyze`, `/generate` and `/model` are narrower import boundaries onto the same symbols, and every path ships an ESM and a CommonJS build.
 
 ## Documentation
 
-Start here: [Introduction](docs/en/introduction.md), [Getting started](docs/en/getting-started.md), [Use cases](docs/en/use-cases/index.md).
+New to music theory? [The primer](docs/en/primer/index.md) teaches the concepts this API is built on — pitch and intervals, scales and keys, chords, harmony, voices, rhythm and meter — for a reader who writes TypeScript rather than scores.
 
-Domain guides: [Pitch and notation](docs/en/pitch-and-notation.md), [Scales and modes](docs/en/scales-and-modes.md), [Harmony](docs/en/harmony.md), [Key relations and modulation](docs/en/key-relations-and-modulation.md), [Voicing](docs/en/voicing.md), [Counterpoint and part-writing](docs/en/counterpoint-and-part-writing.md), [Time and arrangement](docs/en/time-and-arrangement.md), [Analysis](docs/en/analysis.md), [Melody and motifs](docs/en/melody-and-motifs.md), [Rhythm and groove](docs/en/rhythm-and-groove.md), [Generation](docs/en/generation.md), [Reharmonization](docs/en/reharmonization.md), [Instruments and playability](docs/en/instruments-and-playability.md), [Tuning and frequency](docs/en/tuning-and-frequency.md).
+Otherwise start at [Introduction](docs/en/introduction.md) and [Getting started](docs/en/getting-started.md), which index the domain guides and the reference pages. Every `ts` example in the guides is executed by the test suite, and an expected value written as a trailing comment is checked against what the call returns.
 
-Cross-cutting: [Determinism and seeding](docs/en/determinism-and-seeding.md), [Errors and validation](docs/en/errors-and-validation.md), [Performance](docs/en/performance.md), [Interoperability](docs/en/interoperability.md).
+## What it doesn't do
 
-Reference: [API reference](docs/en/api-reference.md), [Glossary](docs/en/glossary.md), [Questions and limitations](docs/en/faq.md).
+- **No I/O, notation or audio.** No MIDI file reader or writer, no score rendering, no audio analysis, no playback. Bring your own parser and hand it note events. For the layer below, [libsonare](https://github.com/libraz/libsonare) covers audio analysis, mastering, synthesis and SMF I/O; the two share no code and neither requires the other.
+- **No microtonal analysis.** Frequencies, cents, equal divisions of the octave and just-intonation ratios live in `core`, but everything above the pitch layer runs on twelve pitch classes.
+- **No modal systems.** `WORLD_SCALES` records the pitch material a tradition names — a thāt, a maqām's set, a Japanese pentatonic — and not the grammar built on it.
+- **No corpus.** Nothing is bundled to run statistics over.
 
-Every `ts` example in these guides is executed by the test suite, and an expected value written as a trailing comment is checked against what the call returns. The generated TypeDoc reference is written to `docs/api` and is separate from the hand-authored guides.
+[Questions and limitations](docs/en/faq.md) covers the rest, including where a functional reading does not apply and what the engine will not guess.
 
 ## License
 
