@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ResolvedKey } from '../src/index.js';
 import {
+  ALGORITHM_VERSION,
   Arrangement,
   analyzeArrangement,
   analyzeChord,
@@ -403,8 +404,12 @@ describe('Composer', () => {
   const KEY = 'C major';
   const SEED = 11;
   const composer = Composer.of({ key: KEY, bpm: 96, seed: SEED });
-  /** The context the composer hands every generator, written out. */
-  const CTX = { seed: SEED, bpm: 96 };
+  /**
+   * The context the composer hands every generator, written out. The version is
+   * part of it: a composer concretises the algorithm version it resolved when
+   * its settings were named, so the parts it writes stay reproducible.
+   */
+  const CTX = { seed: SEED, bpm: 96, algorithmVersion: ALGORITHM_VERSION };
 
   it('hands the generators the context its settings describe', () => {
     expect(composer.context).toEqual(CTX);
@@ -489,7 +494,7 @@ describe('Composer', () => {
     });
     const harmonized = composer.harmonize(melody, opts);
     expect(harmonized.transposeSemitones).toBe(found.transposeSemitones);
-    expect(harmonized.chords.key?.scale).toEqual(found.key);
+    expect(harmonized.chords.key?.scale).toEqual(found.key.scale);
     // Over the span the class placed the chords on, the segments are the ones
     // the same chords describe.
     expect(harmonized.chords.segments).toEqual(

@@ -18,9 +18,16 @@ import { filesUnder, SRC } from './source-files.js';
 export type ParamInfo = {
   /** Path relative to the repository root, so a failure names a file a reader can open. */
   file: string;
-  /** The function the parameter belongs to. */
+  /** The function the parameter belongs to; a class member reads as `Class.member`. */
   fn: string;
-  /** Whether the declaration carries `export`. */
+  /**
+   * The exported name the declaration is reached under.
+   *
+   * For a free function it is the function itself; for a class member it is the
+   * class, which is the name a barrel exports and a caller imports.
+   */
+  entry: string;
+  /** Whether the declaration carries `export`; a class member inherits its class's. */
   exported: boolean;
   /** The parameter's own name. */
   param: string;
@@ -43,6 +50,22 @@ export type DeclInfo = {
   /** Whether the declaration carries `export`. */
   exported: boolean;
   /** 1-based line of the declaration. */
+  line: number;
+};
+
+/** One field of one declared record type, as its declaration writes it. */
+export type FieldInfo = {
+  /** Path relative to the repository root. */
+  file: string;
+  /** The type the field belongs to. */
+  record: string;
+  /** The field's own name. */
+  field: string;
+  /** The declared type, verbatim. */
+  type: string;
+  /** Whether the type declaration carries `export`. */
+  exported: boolean;
+  /** 1-based line of the field. */
   line: number;
 };
 
@@ -87,6 +110,15 @@ function isExported(node: ts.Node): boolean {
   );
 }
 
+/** Whether a class member is part of the class's public surface. */
+function isPublicMember(node: ts.ClassElement): boolean {
+  const hidden = ts.ModifierFlags.Private | ts.ModifierFlags.Protected;
+  return (
+    (ts.getCombinedModifierFlags(node) & hidden) === 0 &&
+    !ts.isPrivateIdentifier(node.name ?? ts.factory.createIdentifier(''))
+  );
+}
+
 /** The 1-based line a node starts on. */
 function lineOf(source: ts.SourceFile, node: ts.Node): number {
   return source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
@@ -127,8 +159,14 @@ export function unionMembers(file: string, name: string): string[] {
 }
 
 /**
- * Every parameter of every function declared at the top level of the given
- * files, including the signatures of an overload set.
+ * Every parameter of every callable declared at the top level of the given
+ * files — free functions, and the public members of classes — including the
+ * signatures of an overload set.
+ *
+ * Class members are read because the class API is a surface a caller reaches
+ * directly: a method is as much an entry point as the free function beside it,
+ * and a walk that stopped at function declarations measured none of the model
+ * layer while reporting a count that looked complete.
  *
  * Overloads are read one by one rather than through their implementation: the
  * implementation of an overloaded function is written to accept the union of
@@ -140,7 +178,12 @@ export function functionParams(files: readonly string[] = sourceFiles()): ParamI
   for (const file of files) {
     const source = parse(file);
     const rel = relativeTo(path.dirname(SRC), file);
-    const record = (name: string, node: ts.SignatureDeclarationBase, exported: boolean): void => {
+    const record = (
+      name: string,
+      entry: string,
+      node: ts.SignatureDeclarationBase,
+      exported: boolean,
+    ): void => {
       for (const param of node.parameters) {
         if (!ts.isIdentifier(param.name)) {
           continue;
@@ -148,6 +191,7 @@ export function functionParams(files: readonly string[] = sourceFiles()): ParamI
         found.push({
           file: rel,
           fn: name,
+          entry,
           exported,
           param: param.name.text,
           type: param.type === undefined ? '' : param.type.getText(source).replace(/\s+/g, ' '),
@@ -158,7 +202,25 @@ export function functionParams(files: readonly string[] = sourceFiles()): ParamI
     };
     for (const statement of source.statements) {
       if (ts.isFunctionDeclaration(statement) && statement.name !== undefined) {
-        record(statement.name.text, statement, isExported(statement));
+        const name = statement.name.text;
+        record(name, name, statement, isExported(statement));
+        continue;
+      }
+      if (ts.isClassDeclaration(statement) && statement.name !== undefined) {
+        const className = statement.name.text;
+        const exported = isExported(statement);
+        for (const member of statement.members) {
+          if (
+            (!ts.isMethodDeclaration(member) && !ts.isConstructorDeclaration(member)) ||
+            !isPublicMember(member)
+          ) {
+            continue;
+          }
+          const memberName = ts.isConstructorDeclaration(member)
+            ? 'constructor'
+            : member.name.getText(source);
+          record(`${className}.${memberName}`, className, member, exported);
+        }
         continue;
       }
       if (!ts.isVariableStatement(statement)) {
@@ -172,7 +234,60 @@ export function functionParams(files: readonly string[] = sourceFiles()): ParamI
           init !== undefined &&
           (ts.isArrowFunction(init) || ts.isFunctionExpression(init))
         ) {
-          record(decl.name.text, init, exported);
+          record(decl.name.text, decl.name.text, init, exported);
+        }
+      }
+    }
+  }
+  return found;
+}
+
+/**
+ * Every field of every record type declared at the top level of the given
+ * files: an interface, a type alias over a type literal, and the literal halves
+ * of an alias over an intersection.
+ *
+ * A record a caller fills in is an argument list under another name, so the
+ * contracts that hold for a parameter hold for its fields too, and reading only
+ * parameters leaves an options bag as the way around the rule.
+ */
+export function recordFields(files: readonly string[] = sourceFiles()): FieldInfo[] {
+  const found: FieldInfo[] = [];
+  for (const file of files) {
+    const source = parse(file);
+    const rel = relativeTo(path.dirname(SRC), file);
+    const record = (name: string, members: ts.NodeArray<ts.TypeElement>, exported: boolean) => {
+      for (const member of members) {
+        if (!ts.isPropertySignature(member) || member.type === undefined) {
+          continue;
+        }
+        found.push({
+          file: rel,
+          record: name,
+          field: member.name.getText(source),
+          type: member.type.getText(source).replace(/\s+/g, ' '),
+          exported,
+          line: lineOf(source, member),
+        });
+      }
+    };
+    for (const statement of source.statements) {
+      const exported = isExported(statement);
+      if (ts.isInterfaceDeclaration(statement)) {
+        record(statement.name.text, statement.members, exported);
+        continue;
+      }
+      if (!ts.isTypeAliasDeclaration(statement)) {
+        continue;
+      }
+      const name = statement.name.text;
+      if (ts.isTypeLiteralNode(statement.type)) {
+        record(name, statement.type.members, exported);
+      } else if (ts.isIntersectionTypeNode(statement.type)) {
+        for (const part of statement.type.types) {
+          if (ts.isTypeLiteralNode(part)) {
+            record(name, part.members, exported);
+          }
         }
       }
     }

@@ -50,7 +50,15 @@ function unfrozenPaths(root: unknown, name: string): string[] {
   return found;
 }
 
-/** The runtime values the barrel hands out, excluding functions and classes. */
+/**
+ * The runtime values the barrel hands out, excluding functions and classes.
+ *
+ * Excluding them is a known limit rather than a judgement: a table hanging off
+ * an exported class is a function to `typeof`, and so is a factory or a getter
+ * that hands one out, and none of the three is read here. No such table exists
+ * today; one added tomorrow is covered by nothing until this walk descends into
+ * the static members of an exported class.
+ */
 function exportedTables(): [string, unknown][] {
   return Object.entries(api as Record<string, unknown>)
     .filter(([, value]) => isWritableShape(value))

@@ -1,5 +1,3 @@
-import path from 'node:path';
-import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import {
   beatsPerBar,
@@ -21,6 +19,7 @@ import {
   rhythmDensity,
   tryParseTimeSignature,
 } from '../src/index.js';
+import { functionParams, recordFields } from './support/signatures.js';
 import { filesUnder, SRC } from './support/source-files.js';
 
 /** The parameter and option-field names by which the library names a meter. */
@@ -36,119 +35,47 @@ const METER_NAMES = new Set(['ts', 'meter', 'meters']);
  */
 const INPUT_RECORD = /(?:Options|Query|Settings|Input)$/;
 
-/** Whether a declaration carries the `export` modifier. */
-function isExported(node: ts.Node): boolean {
-  return (ts.getCombinedModifierFlags(node as ts.Declaration) & ts.ModifierFlags.Export) !== 0;
-}
-
-/** Whether a class member is part of the class's public surface. */
-function isPublicMember(node: ts.ClassElement): boolean {
-  const flags = ts.getCombinedModifierFlags(node);
-  const hidden = ts.ModifierFlags.Private | ts.ModifierFlags.Protected;
-  return (
-    (flags & hidden) === 0 && !ts.isPrivateIdentifier(node.name ?? ts.factory.createIdentifier(''))
-  );
-}
+/**
+ * The files a caller's own meter can reach.
+ *
+ * Internal modules are excluded by path rather than by name: they are the
+ * library's own reads, taken after the boundary has already resolved the
+ * caller's value, and are not a surface anyone passes a signature name to.
+ */
+const PUBLIC_SOURCES = filesUnder(SRC, '.ts').filter((file) => !file.endsWith('internal.ts'));
 
 /**
  * Whether a function is one of the guards or copiers that work in the resolved
  * plain shape by definition — a validator of a time signature cannot take the
  * text form it exists to reject.
  */
-function definesPlainShape(name: string | undefined): boolean {
-  return name !== undefined && (name.startsWith('assert') || name.startsWith('copy'));
+function definesPlainShape(name: string): boolean {
+  return name.startsWith('assert') || name.startsWith('copy');
 }
 
-/** A source location a failure message can be read as a file to open. */
-function where(node: ts.Node, file: ts.SourceFile, detail: string): string {
-  const { line } = file.getLineAndCharacterOfPosition(node.getStart(file));
-  return `${path.relative(SRC, file.fileName)}:${line + 1} ${detail}`;
-}
-
-/** Every meter-shaped declaration the public surface asks a caller to fill. */
+/**
+ * Every meter-shaped declaration the public surface asks a caller to fill.
+ *
+ * The walk is the shared one, so the parameters read here are the same set the
+ * entry-contract check reads — free functions and public class members alike —
+ * rather than a second walk that drifts from it.
+ */
 function meterDeclarations(): { site: string; declared: string }[] {
-  const found: { site: string; declared: string }[] = [];
-  // Internal modules are excluded by path rather than by name: they are the
-  // library's own reads, taken after the boundary has already resolved the
-  // caller's value, and are not a surface anyone passes a signature name to.
-  const files = filesUnder(SRC, '.ts').filter((file) => !file.endsWith('internal.ts'));
-
-  const collectParameters = (
-    parameters: readonly ts.ParameterDeclaration[],
-    name: string | undefined,
-    file: ts.SourceFile,
-  ): void => {
-    if (definesPlainShape(name)) {
-      return;
-    }
-    for (const parameter of parameters) {
-      const parameterName = parameter.name.getText(file);
-      if (!METER_NAMES.has(parameterName) || parameter.type === undefined) {
-        continue;
-      }
-      found.push({
-        site: where(parameter, file, `${name ?? '(anonymous)'}(${parameterName})`),
-        declared: parameter.type.getText(file),
-      });
-    }
-  };
-
-  for (const fileName of files) {
-    const file = ts.createSourceFile(
-      fileName,
-      // biome-ignore lint/style/noNonNullAssertion: the file list comes from the tree walk
-      ts.sys.readFile(fileName)!,
-      ts.ScriptTarget.ESNext,
-      true,
-    );
-    for (const statement of file.statements) {
-      if (!isExported(statement)) {
-        continue;
-      }
-      if (ts.isFunctionDeclaration(statement)) {
-        collectParameters(statement.parameters, statement.name?.getText(file), file);
-        continue;
-      }
-      if (ts.isClassDeclaration(statement)) {
-        const className = statement.name?.getText(file) ?? '(anonymous class)';
-        for (const member of statement.members) {
-          if (
-            (!ts.isMethodDeclaration(member) && !ts.isConstructorDeclaration(member)) ||
-            !isPublicMember(member)
-          ) {
-            continue;
-          }
-          const memberName = ts.isConstructorDeclaration(member)
-            ? 'constructor'
-            : member.name.getText(file);
-          collectParameters(member.parameters, `${className}.${memberName}`, file);
-        }
-        continue;
-      }
-      const members = ts.isInterfaceDeclaration(statement)
-        ? { name: statement.name.getText(file), list: statement.members }
-        : ts.isTypeAliasDeclaration(statement) && ts.isTypeLiteralNode(statement.type)
-          ? { name: statement.name.getText(file), list: statement.type.members }
-          : undefined;
-      if (members === undefined || !INPUT_RECORD.test(members.name)) {
-        continue;
-      }
-      for (const member of members.list) {
-        if (!ts.isPropertySignature(member) || member.type === undefined) {
-          continue;
-        }
-        const memberName = member.name.getText(file);
-        if (!METER_NAMES.has(memberName)) {
-          continue;
-        }
-        found.push({
-          site: where(member, file, `${members.name}.${memberName}`),
-          declared: member.type.getText(file),
-        });
-      }
-    }
-  }
-  return found;
+  const fromParameters = functionParams(PUBLIC_SOURCES)
+    .filter((param) => param.exported && param.type !== '')
+    .filter((param) => METER_NAMES.has(param.param) && !definesPlainShape(param.fn))
+    .map((param) => ({
+      site: `${param.file}:${param.line} ${param.fn}(${param.param})`,
+      declared: param.type,
+    }));
+  const fromFields = recordFields(PUBLIC_SOURCES)
+    .filter((field) => field.exported && INPUT_RECORD.test(field.record))
+    .filter((field) => METER_NAMES.has(field.field))
+    .map((field) => ({
+      site: `${field.file}:${field.line} ${field.record}.${field.field}`,
+      declared: field.type,
+    }));
+  return [...fromParameters, ...fromFields];
 }
 
 describe('meter argument contract', () => {

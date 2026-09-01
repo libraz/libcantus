@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BudgetExceededError, InvalidInputError } from '../src/core/errors/index.js';
 import { GUITAR_STANDARD } from '../src/core/instrument/index.js';
 import { isStrongBeat } from '../src/core/meter/index.js';
-import { createPositionalRng } from '../src/core/random/index.js';
+import { ALGORITHM_VERSION, createPositionalRng } from '../src/core/random/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import { generateBassLine } from '../src/generate/bass/index.js';
 import type { GenerationContext } from '../src/generate/context/index.js';
@@ -37,10 +37,16 @@ const OPTIONS: ComposerOptions = {
   instruments: { bass: GUITAR_STANDARD },
 };
 
-/** The same settings as the generators read them, for the comparisons. */
+/**
+ * The same settings as the generators read them, for the comparisons. The
+ * algorithm version is written out because a composer concretises the one it
+ * resolved when its settings were named, rather than leaving the parts to be
+ * redrawn under whatever version the next build defaults to.
+ */
 const CTX: GenerationContext = {
   seed: 7,
   bpm: 96,
+  algorithmVersion: ALGORITHM_VERSION,
   complexity: { rhythmic: 0.6, harmonic: 0.4, ornament: 0.3, difficulty: 3 },
   instruments: { bass: GUITAR_STANDARD },
 };
@@ -168,7 +174,9 @@ describe('plain data', () => {
   it('exposes the context the generators are handed', () => {
     expect(composer().context).toEqual(CTX);
     expect(composer().context).not.toBe(composer().context);
-    expect(Composer.of({}).context).toEqual({});
+    // A composer naming nothing still hands the generators the seed and the
+    // version its parts are drawn under, which is what makes them repeatable.
+    expect(Composer.of({}).context).toEqual({ seed: 0, algorithmVersion: ALGORITHM_VERSION });
   });
 });
 
@@ -332,7 +340,7 @@ describe('the parts a composer writes', () => {
     // of them rather than stopping on it.
     expect(harmonized.chords.length).toBe(result.chords.length);
     expect(harmonized.melody.notes).toEqual(melody.transpose(result.transposeSemitones).notes);
-    expect(harmonized.melody.data.key?.scale).toEqual(result.key);
+    expect(harmonized.melody.data.key?.scale).toEqual(result.key.scale);
   });
 
   it('hands the melody back in the key the chords are in', () => {
@@ -354,14 +362,14 @@ describe('the parts a composer writes', () => {
     expect(harmonized.melody.notes.map((note) => note.pitch)).toEqual(
       MELODY.map((note) => note.pitch + result.transposeSemitones),
     );
-    expect(harmonized.melody.data.key?.scale).toEqual(result.key);
-    expect(harmonized.chords.key?.scale).toEqual(result.key);
+    expect(harmonized.melody.data.key?.scale).toEqual(result.key.scale);
+    expect(harmonized.chords.key?.scale).toEqual(result.key.scale);
   });
 
   it('infers the key when the composer names none, and states it when it does', () => {
     const melody = Score.of(MELODY);
     const inferred = Composer.of({}).harmonize(melody);
-    expect(inferred.chords.key?.scale).toEqual(harmonizeMelody({ melody: MELODY }).key);
+    expect(inferred.chords.key?.scale).toEqual(harmonizeMelody({ melody: MELODY }).key.scale);
     expect(composer().harmonize(melody).chords.key?.scale).toEqual(KEY);
   });
 });

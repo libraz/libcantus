@@ -56,6 +56,13 @@ const drums: DrumsOptions = {
  *
  * A seed is only worth recording where the generator draws on it, so each case
  * names the seed it fixes; changing one is changing the case.
+ *
+ * Unlike its siblings, this map is written rather than derived, and it covers
+ * some of the seeded entry points rather than all of them. The rest are
+ * recorded per algorithm version by the generation-golden check, so nothing is
+ * unmeasured today — but that list is written too, and a generator added
+ * tomorrow lands in neither until the seeded entry points are read off the
+ * tree.
  */
 const CASES: Readonly<Record<string, () => unknown>> = {
   'bass/pop@42': () => generateBassLine({ segments, key: cMajor, style: 'pop', ctx: { seed: 42 } }),

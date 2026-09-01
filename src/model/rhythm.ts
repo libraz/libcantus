@@ -54,9 +54,6 @@ export type RhythmDeformOptions = {
   isOrnament?: (event: RhythmEvent) => boolean;
 };
 
-/** The meter a rhythm is read in when the caller names none. */
-const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
-
 /**
  * The loudness every onset enters the sixteenth grid at.
  *
@@ -212,12 +209,19 @@ export class Rhythm {
   /**
    * Build a pattern from onsets that already exist.
    *
+   * The meter is asked for rather than assumed. A pattern in 6/8 read as 4/4
+   * answers every metric question — which beats are strong, where the bars
+   * fall, how dense it is — on the wrong pulse, and nothing downstream can tell
+   * that reading from a meter the caller meant. Its two siblings,
+   * {@link Rhythm.generate} and `generateRhythm`, ask for it the same way.
+   *
    * @param events The onsets, in any order.
-   * @param ts The meter they are counted in, in any form that names one; 4/4
-   *   when none is named, as every meter-aware function in the library assumes.
+   * @param ts The meter they are counted in, in any form that names one.
    * @returns The pattern.
+   * @throws If the meter names no signature, or an onset carries a value a
+   *   pattern cannot hold.
    */
-  static of(events: readonly RhythmEvent[], ts: MeterLike = DEFAULT_TS): Rhythm {
+  static of(events: readonly RhythmEvent[], ts: MeterLike): Rhythm {
     return new Rhythm({
       events: [...assertDataArray<RhythmEvent>(events, 'rhythm events')],
       ts: meterAt(0, toMeterData(ts, 'ts')),

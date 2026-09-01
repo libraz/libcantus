@@ -161,6 +161,28 @@ const NOT_A_CLASS_METHOD: Readonly<Record<string, string>> = {
   shiftByScaleDegrees: 'undecided: no receiver-side spelling of a diatonic shift',
 };
 
+/**
+ * Functions the class API delegates to that the package does not publish, with
+ * the reason each one stays inside. A name that leaves this list and is still
+ * unpublished is a capability with only a class-shaped way in — the method is
+ * the sole implementation a caller can reach — rather than a new entry here.
+ */
+const NOT_PUBLISHED: Readonly<Record<string, string>> = {
+  // Plumbing under an entry point rather than an entry point. A class `parse`
+  // throws what its own `tryParse` reported, and that reading — the `tryParse`
+  // function beside it — is published.
+  unwrapParse: 'turns a parse result into a throw; the reading itself is published',
+
+  // A reading the published value already carries: this is the search a
+  // `ChordTimeline` answers `at(beat)` through, so a caller holding the plain
+  // timeline `chordTimelineFromNotes` hands back has it in hand already.
+  chordAtBeat: 'the search the ChordTimeline a caller already holds answers at() through',
+
+  // A fragment of a chord rather than a chord: it moves a spellings record,
+  // which is one step inside the published transposition of a chord symbol.
+  transposeChordSpellings: 'moves a spellings record, a step inside transposeChordSymbol',
+};
+
 /** The `src` files that define the class API, `index.ts` aside. */
 function classSources(program: ts.Program): ts.SourceFile[] {
   return program
@@ -260,6 +282,85 @@ function reachableFromClasses(program: ts.Program, checker: ts.TypeChecker): Set
   return names;
 }
 
+/** Every class the model layer declares. */
+function modelClasses(program: ts.Program): ts.ClassDeclaration[] {
+  return classSources(program).flatMap((file) =>
+    file.statements.filter((statement): statement is ts.ClassDeclaration =>
+      ts.isClassDeclaration(statement),
+    ),
+  );
+}
+
+/** The named methods and getters of a class, static and instance alike. */
+function membersOf(
+  declaration: ts.ClassDeclaration,
+): (ts.MethodDeclaration | ts.GetAccessorDeclaration)[] {
+  return declaration.members.filter(
+    (member): member is ts.MethodDeclaration | ts.GetAccessorDeclaration =>
+      (ts.isMethodDeclaration(member) || ts.isGetAccessorDeclaration(member)) &&
+      ts.isIdentifier(member.name),
+  );
+}
+
+/** Where a declaration lives, as `file:pos`, so a rename on the way out reads as the same thing. */
+function originOf(declaration: ts.Declaration): string {
+  return `${declaration.getSourceFile().fileName}:${declaration.pos}`;
+}
+
+/** Every declaration the root barrel makes importable, under whatever name. */
+function publishedOrigins(program: ts.Program, checker: ts.TypeChecker): Set<string> {
+  const entry = program.getSourceFile(path.join(SRC, 'index.ts'));
+  const symbol = entry === undefined ? undefined : checker.getSymbolAtLocation(entry);
+  const origins = new Set<string>();
+  for (const exported of symbol === undefined ? [] : checker.getExportsOfModule(symbol)) {
+    const target =
+      (exported.flags & ts.SymbolFlags.Alias) !== 0 ? checker.getAliasedSymbol(exported) : exported;
+    for (const declaration of target.getDeclarations() ?? []) {
+      origins.add(originOf(declaration));
+    }
+  }
+  return origins;
+}
+
+/**
+ * The functions a class member delegates to: the ones declared outside the
+ * model layer that its body calls by name.
+ *
+ * A call through a plain identifier is a delegation — `analyzePolyphony(...)`
+ * is the implementation `Score.voices` hands its caller. `this.notes()` and
+ * `Key.fromJSON(...)` are the model talking to itself and are left out, as is
+ * anything declared inside `src/model`, which is the class API's own scaffolding
+ * rather than a capability it is the face of.
+ */
+function delegatesOf(
+  member: ts.MethodDeclaration | ts.GetAccessorDeclaration,
+  checker: ts.TypeChecker,
+): ts.FunctionDeclaration[] {
+  const called = new Set<ts.FunctionDeclaration>();
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+      const found = checker.getSymbolAtLocation(node.expression);
+      const symbol =
+        found !== undefined && (found.flags & ts.SymbolFlags.Alias) !== 0
+          ? checker.getAliasedSymbol(found)
+          : found;
+      for (const declaration of symbol?.getDeclarations() ?? []) {
+        const file = declaration.getSourceFile().fileName;
+        if (
+          ts.isFunctionDeclaration(declaration) &&
+          file.startsWith(`${SRC}${path.sep}`) &&
+          !file.startsWith(`${MODEL}${path.sep}`)
+        ) {
+          called.add(declaration);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(member, visit);
+  return [...called];
+}
+
 /** The public runtime exports that are plain functions rather than classes. */
 function publicFunctions(): string[] {
   return Object.entries(api as Record<string, unknown>)
@@ -302,5 +403,58 @@ describe('class coverage of the functional API', () => {
       .filter((name) => !published.has(name))
       .sort();
     expect(absent).toEqual([]);
+  });
+
+  /** Each class member that hands its caller a function, with that function. */
+  const faces = modelClasses(program).flatMap((declaration) =>
+    membersOf(declaration).flatMap((member) =>
+      delegatesOf(member, checker).map((delegate) => ({
+        label: `${declaration.name?.text ?? '(anonymous)'}.${(member.name as ts.Identifier).text}`,
+        name: delegate.name?.text ?? '(anonymous)',
+        delegate,
+      })),
+    ),
+  );
+
+  it('finds the delegations to check', () => {
+    // Derived from the sources, so a walk that stopped matching would leave the
+    // two checks below passing over nothing at all.
+    expect(faces.length).toBeGreaterThan(20);
+  });
+
+  it('publishes every function a class method delegates to', () => {
+    // Reaching a function from a class is half of what the class API promises;
+    // the other half is that the function is there to reach. One a method
+    // delegates to but no barrel exports is implemented once and importable
+    // nowhere, so that method is the only way to the capability and the
+    // equivalence the two APIs are supposed to hold is not one a caller can
+    // check. Neither list above can see it: both read the exports as given and
+    // ask only which of them a class reaches, so a capability that never
+    // reached the barrel is absent from the question as well as from the answer.
+    // The root barrel is the union of the layer barrels, so a function it does
+    // not carry is off every subpath too.
+    const published = publishedOrigins(program, checker);
+    const unpublished = faces
+      .filter(
+        ({ name, delegate }) => !published.has(originOf(delegate)) && !(name in NOT_PUBLISHED),
+      )
+      .map(({ label, name }) => `${label} -> ${name}`)
+      .sort();
+    expect([...new Set(unpublished)]).toEqual([]);
+  });
+
+  it('lists nothing as unpublished that a class no longer reaches or the package now exports', () => {
+    // The same decay the function-only list has: an entry whose function has
+    // since been published, or that no class delegates to any more, describes
+    // nothing and is trusted anyway.
+    const published = publishedOrigins(program, checker);
+    const live = new Map(faces.map(({ name, delegate }) => [name, delegate]));
+    const stale = Object.keys(NOT_PUBLISHED)
+      .filter((name) => {
+        const delegate = live.get(name);
+        return delegate === undefined || published.has(originOf(delegate));
+      })
+      .sort();
+    expect(stale).toEqual([]);
   });
 });

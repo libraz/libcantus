@@ -16,6 +16,7 @@ import {
   Timeline,
   Voicing,
 } from '../src/index.js';
+import { recordFields } from './support/signatures.js';
 import { filesUnder, SRC } from './support/source-files.js';
 
 /**
@@ -25,7 +26,20 @@ import { filesUnder, SRC } from './support/source-files.js';
  * contract without anybody remembering to add it.
  */
 
-/** The three forms of one key the interoperability table names. */
+/**
+ * The three forms of one key the interoperability table names.
+ *
+ * All three name C major, and that is a known limit of what these forms can
+ * measure. The three agree on a tonic, so the defect class where the caller's
+ * spelling is dropped — `'Ab minor'` coming back as the G# minor its pitch
+ * classes read best as — is invisible here whatever a method does with it.
+ * Adding a remote key needs a second axis first: the forms that carry a
+ * spelling agree with each other and with the resolver, and differ from the
+ * bare scale, which is the correct behaviour rather than a violation. Until
+ * that axis exists, the spelling seam is guarded by name — the modules that
+ * call `spelledKeyOf` — and a module deriving a written tonic under another
+ * name is measured by neither.
+ */
 const KEY_FORMS: readonly KeyLike[] = ['C major', majorKey(0), Key.major('C')];
 
 /** The same three forms of another key, for a method that moves between keys. */
@@ -161,6 +175,73 @@ describe('every public method that takes a key takes it in any form', () => {
       expect(results[2]).toBe(results[0]);
     });
   }
+});
+
+/**
+ * Type names by which the library names a record of caller input.
+ *
+ * A key field on one of these is an entry point's argument written as a field,
+ * and the contract that holds for a key parameter holds for it: an options bag
+ * is otherwise the way around the rule. Result types are deliberately not read
+ * here — a key a result *reports* answers the opposite rule, which is that it
+ * carries the whole key it worked in rather than every form one arrives in.
+ */
+const INPUT_RECORD = /(?:Options|Query|Settings|Input)$/;
+
+/**
+ * The forms that admit every shape a caller holds a key in.
+ *
+ * `KeyContext` is `KeyLike` widened again, with a per-beat function for a
+ * passage that modulates, so a field declaring it asks for no reduction.
+ */
+const WIDE_KEY = /\bKeyLike\b|\bKeyContext\b/;
+
+/**
+ * Key fields on a caller's record that still ask for the narrow form.
+ *
+ * Each line is a place a caller holding a `Key` has to reduce it before the
+ * call. Short by design: a field added here without a reason is the rule being
+ * worked around rather than met.
+ */
+const NARROW_KEY_FIELD: readonly string[] = [
+  // The one question the safety evaluator asks of the key is whether a pitch is
+  // in the scale, and what it reports is a verdict, a set of reason flags and
+  // alternative pitches — no spelling reaches the answer, so none is lost by
+  // the reduction. The class API takes the wide form on the caller's behalf:
+  // `VoicingSafetyQuery.key` is declared `KeyLike` and resolved before this
+  // record is built.
+  'src/theory/safety/index.ts:SafetyQuery.key',
+];
+
+describe('a key a caller fills into a record', () => {
+  const fields = recordFields()
+    .filter((field) => field.exported && INPUT_RECORD.test(field.record))
+    .filter((field) => field.field === 'key');
+
+  it('reads a subject the tree supplies rather than a list', () => {
+    expect(fields.length).toBeGreaterThan(10);
+  });
+
+  it('declares it in the wide form', () => {
+    const narrow = fields
+      .filter((field) => !WIDE_KEY.test(field.type))
+      .filter((field) => !NARROW_KEY_FIELD.includes(`${field.file}:${field.record}.${field.field}`))
+      .map((field) => `${field.file}:${field.line} ${field.record}.${field.field}: ${field.type}`)
+      .sort();
+
+    expect(narrow).toEqual([]);
+  });
+
+  it('holds no allowance for a field that no longer offends', () => {
+    const offending = new Set(
+      fields
+        .filter((field) => !WIDE_KEY.test(field.type))
+        .map((field) => `${field.file}:${field.record}.${field.field}`),
+    );
+    const stale = NARROW_KEY_FIELD.filter((site) => !offending.has(site));
+
+    expect(stale).toEqual([]);
+  });
 });
 
 describe('a key argument that names no key', () => {

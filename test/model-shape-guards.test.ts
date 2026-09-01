@@ -146,7 +146,7 @@ const FACTORY_CASES: readonly FactoryCase[] = [
   {
     name: 'Rhythm',
     factories: {
-      of: (data: never) => Rhythm.of(data),
+      of: (data: never) => Rhythm.of(data, '4/4'),
       fromData: (data: never) => Rhythm.fromData(data),
       fromJSON: (data: never) => Rhythm.fromJSON(data),
     },
@@ -255,14 +255,17 @@ describe('plain-data copies terminate on pathological input', () => {
     expect(() => Composer.of({ vocabulary: [{ material }] as never })).toThrow(InvalidInputError);
   });
 
-  it('refuses a time signature carrying a self-referring extra property', () => {
+  it('stores the signature a time signature names, not the object it arrived on', () => {
+    // An arrangement resolves `ts` before it copies it, exactly as it resolves
+    // its sibling `meters`, so an extra property riding on the value — here one
+    // that refers back to the signature itself — never reaches the plain copy.
+    // What is stored is the signature, and a copy of it terminates.
     const ts: Record<string, unknown> = { numerator: 4, denominator: 4 };
     ts.self = ts;
-    expect(() =>
-      Arrangement.of([{ notes: [{ pitch: 60, startBeat: 0, durationBeat: 1 }] }], {
-        ts: ts as never,
-      }),
-    ).toThrow(InvalidInputError);
+    const held = Arrangement.of([{ notes: [{ pitch: 60, startBeat: 0, durationBeat: 1 }] }], {
+      ts: ts as never,
+    });
+    expect(held.data.settings?.ts).toEqual({ numerator: 4, denominator: 4 });
   });
 
   it('refuses data nested past the depth a document is copied to', () => {
@@ -278,25 +281,25 @@ describe('plain-data copies terminate on pathological input', () => {
     );
   });
 
-  it('rejects the same non-plain values on both sides that copy plain data', () => {
+  it('refuses a non-plain value where data is copied, and drops it where a meter is read', () => {
     const notPlain = { material: () => 0 };
     expect(() => Composer.of({ vocabulary: [notPlain] as never })).toThrow(InvalidInputError);
-    expect(() =>
+    expect(
       Arrangement.of([{ notes: [] }], {
         ts: { numerator: 4, denominator: 4, extra: () => 0 } as never,
-      }),
-    ).toThrow(InvalidInputError);
+      }).data.settings?.ts,
+    ).toEqual({ numerator: 4, denominator: 4 });
   });
 
-  it('rejects a non-finite number on both sides that copy plain data', () => {
+  it('refuses a non-finite number where data is copied, and drops it where a meter is read', () => {
     expect(() => Composer.of({ vocabulary: [{ weight: Number.NaN }] as never })).toThrow(
       InvalidInputError,
     );
-    expect(() =>
+    expect(
       Arrangement.of([{ notes: [] }], {
         ts: { numerator: 4, denominator: 4, extra: Number.NaN } as never,
-      }),
-    ).toThrow(InvalidInputError);
+      }).data.settings?.ts,
+    ).toEqual({ numerator: 4, denominator: 4 });
   });
 
   it('copies a record named twice beside itself rather than calling it cyclic', () => {

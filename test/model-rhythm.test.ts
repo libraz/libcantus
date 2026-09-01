@@ -197,22 +197,28 @@ describe('Rhythm plain data', () => {
   });
 
   it('refuses an onset no pattern can hold', () => {
-    expect(() => Rhythm.of([{ position: -1, duration: 1 }])).toThrow(RangeError);
-    expect(() => Rhythm.of([{ position: 0, duration: Number.NaN }])).toThrow(RangeError);
+    expect(() => Rhythm.of([{ position: -1, duration: 1 }], FOUR_FOUR)).toThrow(RangeError);
+    expect(() => Rhythm.of([{ position: 0, duration: Number.NaN }], FOUR_FOUR)).toThrow(RangeError);
     expect(() =>
       Rhythm.of([{ position: 0, duration: 1 }], { numerator: 0, denominator: 4 }),
     ).toThrow(RangeError);
   });
 
   it('holds the onsets in time order however they arrive', () => {
-    const forward = Rhythm.of([
-      { position: 0, duration: 1 },
-      { position: 1, duration: 1 },
-    ]);
-    const backward = Rhythm.of([
-      { position: 1, duration: 1 },
-      { position: 0, duration: 1 },
-    ]);
+    const forward = Rhythm.of(
+      [
+        { position: 0, duration: 1 },
+        { position: 1, duration: 1 },
+      ],
+      FOUR_FOUR,
+    );
+    const backward = Rhythm.of(
+      [
+        { position: 1, duration: 1 },
+        { position: 0, duration: 1 },
+      ],
+      FOUR_FOUR,
+    );
     expect(forward.equals(backward)).toBe(true);
     expect(backward.events.map((event) => event.position)).toEqual([0, 1]);
   });
@@ -243,7 +249,7 @@ describe('Rhythm answers what the functions answer', () => {
   it('reads its density the way rhythmDensity reads it', () => {
     const rhythm = pattern();
     expect(rhythm.density()).toBe(rhythmDensity(rhythm.events, FOUR_FOUR));
-    expect(Rhythm.of([]).density()).toBe(rhythmDensity([], FOUR_FOUR));
+    expect(Rhythm.of([], FOUR_FOUR).density()).toBe(rhythmDensity([], FOUR_FOUR));
   });
 
   it('thins what thin thins', () => {
@@ -408,11 +414,14 @@ describe('Rhythm chains', () => {
   it('reads one onset per position out of a transform', () => {
     // Compressing to half the length rounds two adjacent sixteenths onto one
     // step, and a rhythm has nothing to tell two onsets in one place apart.
-    const dense = Rhythm.of([
-      { position: 0, duration: 0.25 },
-      { position: 0.25, duration: 0.25 },
-      { position: 0.5, duration: 3.5 },
-    ]);
+    const dense = Rhythm.of(
+      [
+        { position: 0, duration: 0.25 },
+        { position: 0.25, duration: 0.25 },
+        { position: 0.5, duration: 3.5 },
+      ],
+      FOUR_FOUR,
+    );
     const positions = dense.doubleTime().events.map((event) => event.position);
     expect(new Set(positions).size).toBe(positions.length);
   });

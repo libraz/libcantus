@@ -37,7 +37,16 @@ function siteOf(param: ParamInfo): string {
  * entry point that read it.
  *
  * So reachability from the package root is what decides. A function a caller
- * can call is a function whose signature has to admit what a caller holds.
+ * can call is a function whose signature has to admit what a caller holds. A
+ * class counts as one name here: it is exported as a function, and its public
+ * members are reached through it.
+ *
+ * The match is by name alone, and that is a known limit of the scan. A
+ * module-local helper sharing a root export's name is enrolled as an entry it
+ * is not, and a barrel that renames a runtime export (`export { foo as bar }`)
+ * drops the entry from the check. Neither is live today — no runtime re-export
+ * is renamed — so the cost of resolving each name to its declaring module is
+ * not paid; a renamed runtime re-export is the change that makes it worth it.
  */
 const ENTRY_POINTS: ReadonlySet<string> = new Set(
   Object.entries(api as Record<string, unknown>)
@@ -76,6 +85,16 @@ const NARROW_BY_DESIGN: readonly string[] = [
   // a string ambiguous: 'dorian' names the scale and 'C major' names a key.
   'src/theory/scale/system.ts:scaleSystemOf(scale)',
   'src/theory/scale/system.ts:supportsFunctionalHarmony(scale)',
+  // The constructor is what turns a bare scale into a whole key, by pairing it
+  // with the spelled tonic given beside it. It runs before there is a key to
+  // take, and `Key.of` is the entry that takes one in any form.
+  'src/model/key.ts:Key.constructor(scale)',
+  // The other half of a round trip: these rebuild a meter from exactly what
+  // `Meter.data` and `Meter.toJSON` hand out, so their parameter is that output
+  // and nothing wider. `Meter.parse` and `Meter.of` are the entries for a meter
+  // a caller is holding in some other form.
+  'src/model/meter.ts:Meter.fromData(data)',
+  'src/model/meter.ts:Meter.fromJSON(data)',
 ];
 
 /**
@@ -109,7 +128,9 @@ function narrowCarrierIn(type: string): string | null {
 }
 
 describe('entry contracts are declared in the wide form', () => {
-  const params = functionParams().filter((param) => param.exported && ENTRY_POINTS.has(param.fn));
+  const params = functionParams().filter(
+    (param) => param.exported && ENTRY_POINTS.has(param.entry),
+  );
 
   it('asks for a concept, not for one of its carriers', () => {
     const violations = params
@@ -157,5 +178,14 @@ describe('entry contracts are declared in the wide form', () => {
     // The guard on the guard: were the walk to return nothing, both checks
     // above would pass while measuring nothing at all.
     expect(params.length).toBeGreaterThan(200);
+  });
+
+  it('reads the class API as well as the free functions', () => {
+    // The count above was already in the hundreds while the model layer was
+    // measured at zero, so it is no guard on the half of the surface the
+    // project calls its top-level API. A class member is named `Class.member`.
+    const members = params.filter((param) => param.fn.includes('.'));
+
+    expect(members.length).toBeGreaterThan(50);
   });
 });

@@ -161,6 +161,17 @@ export const CONCEPT_OWNERS: readonly ConceptOwner[] = [
     reserved: ['ResolvedKey', 'SpelledKey', 'KeyIdentity', 'SpelledKeyScale'],
   },
   {
+    // Which letter a key is written on, for a key that arrives as bare pitch
+    // classes. A second derivation — "fewest accidentals, flats on a tie" —
+    // answered G# minor with an Ab and then spelled the borrowed chords of an
+    // Ab minor with double sharps, while the owner's own running example said
+    // G#. The two disagreed on four keys, and a name that avoided the word
+    // made the copy invisible to a check that matches names.
+    concept: 'the letter a key is written on',
+    owner: 'src/theory/scale/relations.ts',
+    reserved: ['spelledKeyOf', 'isWrittenTonic'],
+  },
+  {
     // A key name carries a spelled tonic and a scale form. A second reader that
     // keeps neither turns `'Ab minor'` into the G# minor the pitch classes read
     // best as, and no caller can see where the flat went.
@@ -170,6 +181,37 @@ export const CONCEPT_OWNERS: readonly ConceptOwner[] = [
     // The word-to-scale table is the reading, under another name: a sibling
     // that reads it has written a second parser without declaring one.
     private: ['SCALE_BY_WORD', 'scaleWordKey'],
+  },
+  {
+    // What a dominant sounds like, as against what it is doing. Read once as a
+    // quality name and once as the tritone the sonority is heard through, a
+    // lead sheet's `G13` stops naming a dominant in one reader and keeps naming
+    // one in the other. The triad and the seventh are two questions of one
+    // concept: a bare major triad can tonicize by falling a fifth but resolves
+    // no tritone, so the callers that need the tritone ask the narrower of the
+    // two, and both come from here.
+    concept: 'the sonority a dominant is heard through',
+    owner: 'src/theory/tendency/index.ts',
+    reserved: ['soundsDominantSeventh', 'hasDominantSonority'],
+  },
+  {
+    // Whether a chord is the key's own dominant — a key-relative question, not
+    // a sonority. A second reading that asks only for the major third calls the
+    // suspended dominant of gospel and modal jazz something else, and a reading
+    // that asks only for the fifth degree makes the bare `v` of a natural-minor
+    // key a dominant it frames nothing with.
+    concept: "the chord that is a key's own dominant",
+    owner: 'src/theory/tendency/index.ts',
+    reserved: ['isDominantChordOf'],
+  },
+  {
+    // The Neapolitan is an altered predominant, so it has to be an alteration.
+    // A second reading that stops at "major triad on the flat second" makes the
+    // native II of phrygian and the phrygian-dominant scales a borrowing every
+    // time it appears, exempt from the chromatic rules its siblings answer to.
+    concept: 'the Neapolitan chord of a key',
+    owner: 'src/theory/tendency/index.ts',
+    reserved: ['isNeapolitanChordOf'],
   },
   {
     // An interval's direction is one fact. Read from the sign of its span in
