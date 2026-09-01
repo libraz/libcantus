@@ -684,12 +684,14 @@ describe('Key JSON identity', () => {
     }
   });
 
-  it('leaves the variant out of a key that has none', () => {
+  it('names the scale form of a key that was not built with one', () => {
+    // Read from the mask rather than left out: a major mask is a major key
+    // whoever built it, and an absent form is a state a reader has to guess at.
     expect(Key.major('Eb').toJSON()).toEqual({
       scale: Key.major('Eb').scale,
       tonic: { letter: 2, alter: -1 },
+      variant: 'major',
     });
-    expect('variant' in Key.major('Eb').toJSON()).toBe(false);
   });
 
   it('carries the scale form through a progression that holds the key', () => {

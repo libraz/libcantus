@@ -387,6 +387,7 @@ const EXPECTED_EXPORTS = [
   'voiceChordStyled',
   'voiceIndependence',
   'voiceLeadingCost',
+  'variantOfMask',
   'voiceProgression',
   'withinCeiling',
 ];

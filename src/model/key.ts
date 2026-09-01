@@ -51,6 +51,7 @@ import {
   nearestScaleTone,
   parallelKeyOf,
   pitchToScaleDegree,
+  type ResolvedKey,
   relatedKeysOf,
   relativeKeyOf,
   resolveKey,
@@ -65,6 +66,7 @@ import {
   subdominantKeyOf,
   supportsFunctionalHarmony,
   toKeyScale,
+  variantOfMask,
 } from '../theory/scale/index.js';
 import { spellPitchClasses, spellScale } from '../theory/spelling/index.js';
 import type { TransposingInstrument } from '../theory/transposition/index.js';
@@ -98,13 +100,13 @@ export function detectedKeyMatch(match: KeyMatch): DetectedKeyMatch {
 
 /**
  * The plain form of a {@link Key}: the key/scale, the spelled tonic that
- * anchors its letter names, and the detected scale form when it has one.
+ * anchors its letter names, and the scale form it stands in.
  *
- * The variant travels with the data because a detected harmonic or melodic
- * minor is not recoverable from the scale mask and tonic alone, and a key that
- * loses it prints as a plain minor after a round trip through a project file.
+ * The same shape the theory layer resolves a key to, so a key crossing between
+ * the two carries the same three facts under the same names, and a project file
+ * holds what every layer reads.
  */
-export type KeyData = { scale: KeyScale; tonic: NoteData; variant?: KeyVariant };
+export type KeyData = ResolvedKey;
 
 /**
  * The word a key names its scale with: the mode word for a plain major or minor
@@ -249,14 +251,16 @@ function describeTonic(value: unknown): string {
 export class Key {
   readonly #scale: KeyScale;
   readonly #tonic: Note;
-  readonly #variant: KeyVariant | undefined;
+  readonly #variant: KeyVariant;
 
   /**
    * Wrap a key/scale and its spelled tonic.
    *
    * @param scale The key/scale; its root is normalized to a pitch class.
    * @param tonic The spelled tonic anchoring letter-name spelling.
-   * @param variant Optional detected scale form retained for display.
+   * @param variant The scale form. Read from the mask when none is named: a
+   *   major mask is a major key whoever built it, and a key with no form at all
+   *   is a state a reader would have to guess about.
    */
   constructor(scale: KeyScale, tonic: Note, variant?: KeyVariant) {
     assertDataObject(scale, 'scale');
@@ -286,7 +290,7 @@ export class Key {
     }
     this.#scale = { rootPc, modeMask12: scale.modeMask12 };
     this.#tonic = tonic;
-    this.#variant = variant;
+    this.#variant = variant ?? variantOfMask(scale.modeMask12);
   }
 
   /** Preserve detection metadata while replacing its plain key with this API's Key. */
@@ -619,7 +623,7 @@ export class Key {
   }
 
   /** The detected scale form, when this key came from key detection. */
-  get variant(): KeyVariant | undefined {
+  get variant(): KeyVariant {
     return this.#variant;
   }
 
@@ -1373,9 +1377,7 @@ export class Key {
   toJSON(): KeyData {
     // The variant is omitted rather than written as undefined, so a key that
     // never came from detection serializes to the same object it always did.
-    return this.#variant === undefined
-      ? { scale: this.scale, tonic: this.#tonic.data }
-      : { scale: this.scale, tonic: this.#tonic.data, variant: this.#variant };
+    return { scale: this.scale, tonic: this.#tonic.data, variant: this.#variant };
   }
 
   /**

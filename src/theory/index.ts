@@ -204,6 +204,7 @@ export {
   supportsFunctionalHarmony,
   TODI_MASK,
   toKeyScale,
+  variantOfMask,
   WHOLE_TONE_MASK,
   WORLD_SCALES,
 } from './scale/index.js';

@@ -12,7 +12,7 @@ export {
   shiftByScaleDegrees,
 } from './degrees.js';
 export type { ResolvedKey } from './identity.js';
-export { assertKeyVariant, resolveKey, scaleOf } from './identity.js';
+export { assertKeyVariant, resolveKey, scaleOf, variantOfMask } from './identity.js';
 export { majorKey, minorKey, scaleByName } from './key.js';
 export type { ScaleAliasName, ScaleName, ScaleNameInput, WorldScaleName } from './masks.js';
 export {

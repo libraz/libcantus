@@ -137,7 +137,7 @@ describe('construction', () => {
       {
         startBeat: 0,
         endBeat: TOTAL_BEATS,
-        key: { ...majorKey(0), tonic: { letter: 0, alter: 0 } },
+        key: { ...majorKey(0), tonic: { letter: 0, alter: 0 }, variant: 'major' },
         confidence: 1,
       },
     ]);
@@ -403,7 +403,7 @@ describe('transforming', () => {
       {
         startBeat: 6,
         endBeat: 14,
-        key: { ...majorKey(0), tonic: { letter: 0, alter: 0 } },
+        key: { ...majorKey(0), tonic: { letter: 0, alter: 0 }, variant: 'major' },
         confidence: 1,
       },
     ]);

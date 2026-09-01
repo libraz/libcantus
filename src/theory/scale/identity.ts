@@ -63,7 +63,7 @@ const VARIANT_MASKS: Readonly<Record<Exclude<KeyVariant, 'modal'>, number>> = {
  * it — so the form is read from the mask rather than defaulted away. Only a
  * mask matching none of the four is modal.
  */
-function variantOfMask(modeMask12: number): KeyVariant {
+export function variantOfMask(modeMask12: number): KeyVariant {
   for (const [variant, mask] of Object.entries(VARIANT_MASKS)) {
     if (mask === modeMask12) {
       return variant as KeyVariant;
