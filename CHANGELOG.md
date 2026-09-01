@@ -467,6 +467,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the order an arranger reaches for them rather than in scale-degree order, and
   a slide is written into a note reached by a semitone.
 
+- **One voice-leading defect is reported once.** Two voices arriving at an
+  octave they were already sitting on, by contrary motion, were counted twice by
+  `checkSpecies` and `Voicing.species` — as a parallel octave, and again as a
+  battuta — so an exercise scored on how often a rule is broken read one mistake
+  as two. `createsBattuta` now leaves a perfect class that was already there to
+  `createsParallelPerfect`, the way the sibling `createsHiddenParallelPerfect`
+  already did. A battuta into an octave the voices had not been sitting on — a
+  fifth closing to an octave with the upper voice leaping down — is still
+  flagged.
+
+- **A velocity is a whole MIDI velocity, as the pitch beside it is.**
+  `assertNoteEvent` describes `pitch` and `velocity` in the same words, a MIDI
+  quantity in [0, 127], and checked only the pitch for being whole: a velocity
+  of 63.7, left behind by an average or a scaling with the rounding forgotten,
+  passed every entry point that validates a note event. `rhythmToNoteEvents`
+  asked for less still — it builds note events without going through that guard
+  at all, and took any finite pitch with any velocity in range, so it was the
+  one path by which a fractional pitch or velocity could reach a public note.
+  Both fields are whole MIDI values at both now.
+
+- **A key keeps its spelling through the class API.** A class method resolved
+  the key it was given or carried and then handed on its pitch classes alone, so
+  the layer below spelled a tonic back off the circle rather than reading the one
+  it was named with: `Key.minor('Ab').roman('iv6').figuredBass()` answered
+  `b6b3` where that key needs only `6`; a tritone substitution in Ab minor came
+  back `Bbb7` from `Chord.substitutions` and `A7` from `Progression.substitute`;
+  and a progression voiced in that key parted from `voiceProgression` at the
+  third chord. `Composer` and `Arrangement` reduced the key at construction, so
+  `Composer.of({ key: 'Ab minor' }).key()` answered `'G# minor'` and a saved
+  project came back written in a key other than the one it was stored in. Every
+  class method hands the key on whole now. Composer options and arrangement
+  settings therefore hold the resolved key rather than its scale: data written
+  before this reads unchanged, and data written now records the spelling.
+
+- **A composer that names no key refuses a pitched part.** `Composer.bass`,
+  `Composer.progression` and `Composer.counterMelody` fell back on C major when
+  the composer named none — silently, and regardless of the key `harmonize` had
+  just read off the melody — so the documented way of working, harmonize first
+  and write the other parts after, wrote those parts in a key nobody had asked
+  for. All three throw `InvalidInputError` now, as the composer already refused
+  a meter that changes under a part laid out in bars, and the message names both
+  ways on. `Composer.drums` carries no key and is written either way, and
+  `Composer.harmonize` still reads one off the melody it is given.
+
+- **A score, a motif cell and an arrangement track are bounded by the budget the
+  analyses are bounded by.** `Score.fromData`, the `Motif` constructor and the
+  track rebuild an arrangement does on import checked each note as they copied
+  it and never checked how many there were, so an array `analyzeArrangement`
+  refuses as over budget was accepted, copied and kept. All three read the array
+  through one guard now, which caps the count before the pass over the notes
+  begins.
+
 ### Changed
 
 - **What the algorithm version promises is stated accurately.** The
