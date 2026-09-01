@@ -7,6 +7,7 @@ import {
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import { assertInteger, assertOneOf } from '../../core/validation/index.js';
+import { type KeyLike, toKeyScale } from './coerce.js';
 import { majorKey, minorKey } from './key.js';
 import { HARMONIC_MINOR_MASK, MAJOR_MASK, MELODIC_MINOR_MASK } from './masks.js';
 
@@ -137,9 +138,9 @@ export function isSignatureKey(key: KeyScale): boolean {
  * ```
  * @category Scales
  */
-export function keySignatureFifths(tonic: NoteLike, key: KeyScale): number {
+export function keySignatureFifths(tonic: NoteLike, key: KeyLike): number {
   const note = toNoteData(tonic);
-  const scale = key;
+  const scale = toKeyScale(key);
   const letter = diatonicLetterOf(note.letter);
   assertInteger(note.alter, 'tonic.alter');
   assertInteger(scale.modeMask12, 'key.modeMask12', 1, 0b111111111111);

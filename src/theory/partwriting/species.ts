@@ -34,6 +34,7 @@ import {
   isForbiddenMelodicLeap,
 } from '../counterpoint/index.js';
 import { simpleIntervalNumber } from '../counterpoint/internal.js';
+import { type KeyLike, toKeyScale } from '../scale/index.js';
 import type { PartWritingViolation } from './index.js';
 import { intervalWord, violation } from './internal.js';
 
@@ -1006,9 +1007,10 @@ export function checkSpecies(
   cantusFirmus: readonly Note[],
   counterpoint: readonly Note[],
   species: Species,
-  mode: KeyScale,
+  modeLike: KeyLike,
   opts?: SpeciesOptions,
 ): PartWritingViolation[] {
+  const mode = toKeyScale(modeLike);
   if (!SPECIES_NUMBERS.includes(species)) {
     throw new InvalidInputError(
       `species must be one of ${SPECIES_NUMBERS.join(', ')}; received ${describeRejected(species)}`,

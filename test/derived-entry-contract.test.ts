@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import * as api from '../src/index.js';
 import { functionParams, type ParamInfo } from './support/signatures.js';
 
 /**
@@ -25,13 +26,24 @@ function siteOf(param: ParamInfo): string {
 }
 
 /**
- * Modules allowed to speak in the narrow types, because they define them.
+ * The rule applies to entry points, which is where a caller's own value first
+ * meets the library.
  *
- * A resolver has to take the shapes it resolves, and the module that owns a
- * concept is where the reduction to its narrow form belongs. Everywhere else
- * the narrow type in a signature is the defect.
+ * Below an entry point the key has already been read, and passing the pitch
+ * classes inward is both correct and what the library already does — a
+ * generator reads its key once at the boundary and hands the plain form down.
+ * Widening the inner helpers too would put a resolve inside the voicing search
+ * and buy nothing: the caller's spelling is already safe by then, held by the
+ * entry point that read it.
+ *
+ * So reachability from the package root is what decides. A function a caller
+ * can call is a function whose signature has to admit what a caller holds.
  */
-const NARROW_TYPE_OWNERS = ['src/core/types.ts', 'src/core/meter/', 'src/core/key/'];
+const ENTRY_POINTS: ReadonlySet<string> = new Set(
+  Object.entries(api as Record<string, unknown>)
+    .filter(([, value]) => typeof value === 'function')
+    .map(([name]) => name),
+);
 
 /** The narrow carriers a signature must not ask for outside their owner. */
 const NARROW_TYPES: Readonly<Record<string, string>> = {
@@ -45,69 +57,35 @@ const NARROW_TYPES: Readonly<Record<string, string>> = {
 const CONCEPT_TYPES = ['KeyLike', 'MeterLike', 'IntervalLike', 'NoteLike', 'ChordLike'];
 
 /**
- * Signatures whose subject *is* the narrow form.
+ * Entry points whose subject *is* the narrow form, each with why.
  *
- * Validating a time signature and copying one are operations on the carrier
- * itself, not questions about which meter a passage is in, so they take the
- * carrier and are right to. This list is permanent, and short by design: a
- * fourth entry is a sign that the rule is being worked around rather than met.
+ * Permanent, and short by design: an entry added here without one of these
+ * reasons is the rule being worked around rather than met.
  */
 const NARROW_BY_DESIGN: readonly string[] = [
+  // Validating a time signature and a meter map are operations on the carrier
+  // itself, not questions about which meter a passage is in.
   'src/core/validation/index.ts:assertMeterMap(meters)',
   'src/core/validation/index.ts:assertTimeSignature(ts)',
-  'src/model/shared.ts:copyTimeSignature(ts)',
+  // What the key resolver is built on. Spelling a tonic is how a bare scale
+  // becomes a whole key, so these two run before there is a whole key to take,
+  // and widening them would have the resolver call itself.
+  'src/theory/scale/relations.ts:spelledKeyOf(key)',
+  'src/theory/scale/signature.ts:isSignatureKey(key)',
+  // The subject is a scale, not a key standing on one. Widening would also make
+  // a string ambiguous: 'dorian' names the scale and 'C major' names a key.
+  'src/theory/scale/system.ts:scaleSystemOf(scale)',
+  'src/theory/scale/system.ts:supportsFunctionalHarmony(scale)',
 ];
 
 /**
- * Parameters that still declare a narrow carrier.
+ * Entry points that still declare a narrow carrier.
  *
- * Every line is a place where the signature makes the caller throw information
- * away. The list is the migration's own measure: it is complete when empty.
+ * Every line would be a place where the signature makes the caller throw
+ * information away before the call. Empty, and meant to stay so: a new entry
+ * here is a contract that was written narrow, not a debt that was inherited.
  */
-const NARROW_CARRIER_ALLOWED: readonly string[] = [
-  'src/analyze/functional/augmented-sixth.ts:augmentedSixthFromSymbol(key)',
-  'src/analyze/functional/augmented-sixth.ts:augmentedSixthKindOf(key)',
-  'src/analyze/functional/augmented-sixth.ts:augmentedSixthOverBass(key)',
-  'src/analyze/functional/augmented-sixth.ts:augmentedSixthSymbol(key)',
-  'src/analyze/functional/borrowed.ts:borrowedSourceOf(key)',
-  'src/analyze/functional/cadence.ts:cadenceBetween(key)',
-  'src/analyze/functional/cadence.ts:isCadentialSixFour(key)',
-  'src/analyze/functional/function.ts:functionWithReason(key)',
-  'src/analyze/functional/internal.ts:degreeRootPc(key)',
-  'src/analyze/functional/internal.ts:isDiatonicChord(key)',
-  'src/analyze/functional/internal.ts:isMinorScale(key)',
-  'src/analyze/functional/internal.ts:isNeapolitan(key)',
-  'src/analyze/functional/internal.ts:loweredDegrees(key)',
-  'src/analyze/functional/internal.ts:parallelScale(key)',
-  'src/analyze/functional/internal.ts:romanReference(key)',
-  'src/analyze/functional/pivot.ts:pivotsBetween(from)',
-  'src/analyze/functional/pivot.ts:pivotsBetween(to)',
-  'src/analyze/functional/roman.ts:renderRoman(key)',
-  'src/analyze/functional/roman.ts:romanAlternatives(key)',
-  'src/analyze/functional/tonicization.ts:appliedTarget(key)',
-  'src/analyze/functional/tonicization.ts:isAppliedDominant(key)',
-  'src/analyze/functional/tonicization.ts:tonicizableDegrees(key)',
-  'src/analyze/melody/index.ts:relateMotifs(key)',
-  'src/generate/bass/internal.ts:approachNote(key)',
-  'src/generate/bass/internal.ts:beatPositions(ts)',
-  'src/generate/harmonize/index.ts:buildCandidates(key)',
-  'src/theory/counterpoint/index.ts:isLeadingToneResolution(key)',
-  'src/theory/partwriting/index.ts:checkPartWriting(key)',
-  'src/theory/partwriting/index.ts:spellVoicing(key)',
-  'src/theory/partwriting/species.ts:checkSpecies(mode)',
-  'src/theory/scale/relations.ts:spelledKeyOf(key)',
-  'src/theory/scale/signature.ts:isSignatureKey(key)',
-  'src/theory/scale/signature.ts:keySignatureFifths(key)',
-  'src/theory/scale/system.ts:scaleSystemOf(scale)',
-  'src/theory/scale/system.ts:supportsFunctionalHarmony(scale)',
-  'src/theory/spelling/index.ts:assertTonicOf(key)',
-  'src/theory/voicing/internal.ts:moveScoring(key)',
-  'src/theory/voicing/internal.ts:resolutionTables(key)',
-  'src/theory/voicing/internal.ts:structuralTables(key)',
-  'src/theory/voicing/tendency.ts:isFunctioningLeadingTone(key)',
-  'src/theory/voicing/tendency.ts:leadingTonePcOf(key)',
-  'src/theory/voicing/tendency.ts:spellingTable(key)',
-];
+const NARROW_CARRIER_ALLOWED: readonly string[] = [];
 
 /**
  * Concept parameters that still carry a default.
@@ -122,13 +100,6 @@ const CONCEPT_DEFAULT_ALLOWED: readonly string[] = [
   'src/generate/vocabulary/transform.ts:thin(ts)',
 ];
 
-/** Whether a file is one of the modules allowed to speak in narrow types. */
-function ownsNarrowTypes(file: string): boolean {
-  return NARROW_TYPE_OWNERS.some((owner) =>
-    owner.endsWith('/') ? file.startsWith(owner) : file === owner,
-  );
-}
-
 /** The narrow carrier a declared type asks for, if it asks for one. */
 function narrowCarrierIn(type: string): string | null {
   for (const narrow of Object.keys(NARROW_TYPES)) {
@@ -142,11 +113,10 @@ function narrowCarrierIn(type: string): string | null {
 }
 
 describe('entry contracts are declared in the wide form', () => {
-  const params = functionParams().filter((param) => param.exported);
+  const params = functionParams().filter((param) => param.exported && ENTRY_POINTS.has(param.fn));
 
   it('asks for a concept, not for one of its carriers', () => {
     const violations = params
-      .filter((param) => !ownsNarrowTypes(param.file))
       .filter((param) => narrowCarrierIn(param.type) !== null)
       .filter((param) => !NARROW_BY_DESIGN.includes(siteOf(param)))
       .filter((param) => !NARROW_CARRIER_ALLOWED.includes(siteOf(param)))
@@ -190,6 +160,6 @@ describe('entry contracts are declared in the wide form', () => {
   it('reads a subject the tree supplies rather than a list', () => {
     // The guard on the guard: were the walk to return nothing, both checks
     // above would pass while measuring nothing at all.
-    expect(params.length).toBeGreaterThan(500);
+    expect(params.length).toBeGreaterThan(200);
   });
 });

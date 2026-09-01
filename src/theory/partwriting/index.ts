@@ -33,7 +33,7 @@ import {
   isAugmentedMelodicInterval,
   isLeadingToneResolution,
 } from '../counterpoint/index.js';
-import { spelledKeyOf } from '../scale/index.js';
+import { type KeyLike, resolveKey, toKeyScale } from '../scale/index.js';
 import { spellPitch } from '../spelling/index.js';
 import type { VoiceRange } from '../voicing/index.js';
 import { SATB_RANGES } from '../voicing/index.js';
@@ -607,10 +607,12 @@ function melodicViolations(transition: Transition): PartWritingViolation[] {
 export function spellVoicing(
   voicing: readonly number[],
   chord: Chord,
-  key: KeyScale,
+  key: KeyLike,
 ): SpelledVoicing {
-  const { tonic } = spelledKeyOf(key);
-  return voicing.map((pitch) => spellPitch(pitch, tonic, key, { chord }));
+  // Read whole rather than reduced: a voicing in Ab minor is written on flats,
+  // and a key handed in spelled that way was losing its spelling right here.
+  const { tonic, scale } = resolveKey(key);
+  return voicing.map((pitch) => spellPitch(pitch, tonic, scale, { chord }));
 }
 
 /**
@@ -654,9 +656,10 @@ export function spellVoicing(
 export function checkPartWriting(
   voicings: readonly SpelledVoicing[],
   chords: readonly Chord[],
-  key: KeyScale,
+  keyLike: KeyLike,
   opts?: PartWritingOptions,
 ): PartWritingViolation[] {
+  const key = toKeyScale(keyLike);
   if (voicings.length !== chords.length) {
     throw new InvalidInputError(
       `checkPartWriting needs one chord per voicing; received ${voicings.length} voicings and ${chords.length} chords`,

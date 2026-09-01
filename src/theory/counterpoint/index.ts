@@ -21,7 +21,7 @@
 import { ConsonanceClass, isConsonantInterval } from '../../core/interval/index.js';
 import type { Note, SpelledInterval } from '../../core/pitch/index.js';
 import { pitchClassOf as pitchClass, spelledInterval } from '../../core/pitch/index.js';
-import type { KeyScale } from '../../core/types.js';
+import { type KeyLike, toKeyScale } from '../scale/index.js';
 import { classifySpelledInterval, pitchOf, simpleIntervalNumber } from './internal.js';
 
 /**
@@ -435,16 +435,16 @@ export function exceedsSpacing(
  * @returns True when `prev` is the leading tone and `cur` is the tonic a step above.
  * @category Voicing & Counterpoint
  */
-export function isLeadingToneResolution(prev: Note, cur: Note, key: KeyScale): boolean;
-export function isLeadingToneResolution(prev: number, cur: number, key: KeyScale): boolean;
+export function isLeadingToneResolution(prev: Note, cur: Note, key: KeyLike): boolean;
+export function isLeadingToneResolution(prev: number, cur: number, key: KeyLike): boolean;
 export function isLeadingToneResolution(
   prev: number | Note,
   cur: number | Note,
-  key: KeyScale,
+  key: KeyLike,
 ): boolean {
   const prevPitch = pitchOf(prev);
   const curPitch = pitchOf(cur);
-  const tonic = pitchClass(key.rootPc);
+  const tonic = pitchClass(toKeyScale(key).rootPc);
   const leading = (tonic + 11) % 12;
   if (pitchClass(prevPitch) !== leading || pitchClass(curPitch) !== tonic) {
     return false;

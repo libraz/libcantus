@@ -19,9 +19,11 @@ import {
   assertNoteEvents,
 } from '../../core/validation/index.js';
 import {
+  type KeyLike,
   keySignatureFifths,
   scaleTonesInDegreeOrder,
   spelledKeyOf,
+  toKeyScale,
 } from '../../theory/scale/index.js';
 
 /** Tolerance for beat, ratio, and interval comparisons. */
@@ -812,7 +814,8 @@ function stretchPhrase(ratio: number): string {
  * ```
  * @category Arrangement & Analysis
  */
-export function relateMotifs(a: MotifData, b: MotifData, key?: KeyScale): MotifRelation | null {
+export function relateMotifs(a: MotifData, b: MotifData, keyLike?: KeyLike): MotifRelation | null {
+  const key = keyLike === undefined ? undefined : toKeyScale(keyLike);
   const model = a.notes;
   const answer = b.notes;
   if (model.length === 0 || model.length !== answer.length) {
