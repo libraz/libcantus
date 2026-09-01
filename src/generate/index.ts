@@ -19,6 +19,7 @@ export type { MeterChange, MeterLike, MeterMap, TimeSignature } from '../core/me
 export type {
   IntervalLike,
   IntervalQualityLabel,
+  Note as NoteData,
   SpelledInterval,
 } from '../core/pitch/index.js';
 export type { PositionalRng, SeedPath } from '../core/random/index.js';
@@ -38,7 +39,7 @@ export type { HarmonyRole } from '../theory/harmony/index.js';
 export type { ProfileWeights } from '../theory/safety/index.js';
 // The widened forms this layer's own signatures take: a generator accepts a key
 // or a chord written as text just as the layers below it do.
-export type { KeyLike } from '../theory/scale/index.js';
+export type { KeyLike, KeyVariant } from '../theory/scale/index.js';
 export type { ChordLike } from '../theory/symbol/index.js';
 export type {
   BassLick,

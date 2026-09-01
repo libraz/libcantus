@@ -1,9 +1,20 @@
 import { InvalidInputError } from '../../core/errors/index.js';
+import type { Note } from '../../core/pitch/index.js';
 import { noteToPitchClass, parseKeyName, pitchClassOf } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import { assertInteger } from '../../core/validation/index.js';
 import { majorKey, minorKey } from './key.js';
 import { CHROMATIC_MASK } from './masks.js';
+
+/**
+ * Which scale form a key stands in.
+ *
+ * Declared beside {@link KeyLike} because it is part of what a key-shaped value
+ * may carry; {@link ResolvedKey} is what hands it back decided.
+ *
+ * @category Scales
+ */
+export type KeyVariant = 'major' | 'natural' | 'harmonic' | 'melodic' | 'modal';
 
 /**
  * Anything that names a key: a key name, a plain {@link KeyScale}, the plain
@@ -13,18 +24,28 @@ import { CHROMATIC_MASK } from './masks.js';
  * The plain-data form is here because a project file holds a key that way, and
  * reading one back has to be the same call as passing the class it came from.
  *
+ * Deliberately wider than what a resolver hands back: a caller may hand in a
+ * bare scale, or data written before the spelling travelled with it, and the
+ * resolver fills in what is missing rather than refusing it. Narrowing this to
+ * the resolved shape would make the acceptance of every entry point shrink the
+ * day the resolved shape gained a field.
+ *
  * @category Scales
  */
 export type KeyLike =
   | string
   | KeyScale
   | {
-      /** The scale this key data denotes; the spelling beside it is read above. */
+      /** The scale this key data denotes. */
       scale: KeyScale;
+      /** The spelled tonic the key is written with, when the caller named one. */
+      tonic?: Note;
+      /** The scale form the key was read under, when it was read under one. */
+      variant?: KeyVariant;
     }
   | {
-      /** The key data this value stands for, carrying the scale it denotes. */
-      toJSON(): { scale: KeyScale };
+      /** The key data this value stands for, carrying everything it knows. */
+      toJSON(): { scale: KeyScale; tonic?: Note; variant?: KeyVariant };
     };
 
 /** Validate a plain key/scale and return it in the canonical shape. */

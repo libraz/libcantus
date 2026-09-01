@@ -33,10 +33,10 @@ import {
   diatonicTriad,
 } from '../theory/chord/index.js';
 import {
+  assertKeyVariant,
   diatonicPitchClasses,
   dominantKeyOf,
   enharmonicKeyOf,
-  HARMONIC_MINOR_MASK,
   isScaleTone,
   isSignatureKey,
   type KeyLike,
@@ -45,17 +45,15 @@ import {
   keyFromFifths,
   keyRelationBetween,
   keySignatureFifths,
-  MAJOR_MASK,
-  MELODIC_MINOR_MASK,
   majorKey,
   minorKey,
   NAMED_SCALES,
-  NATURAL_MINOR_MASK,
   nearestScaleTone,
   parallelKeyOf,
   pitchToScaleDegree,
   relatedKeysOf,
   relativeKeyOf,
+  resolveKey,
   type ScaleName,
   type ScaleNameInput,
   type ScaleSystem,
@@ -107,48 +105,6 @@ export function detectedKeyMatch(match: KeyMatch): DetectedKeyMatch {
  * loses it prints as a plain minor after a round trip through a project file.
  */
 export type KeyData = { scale: KeyScale; tonic: NoteData; variant?: KeyVariant };
-
-/**
- * The scale mask each named variant stands for.
- *
- * The variant is the only field of a key that is not recoverable from its mask,
- * so it is the only one that can contradict it. Holding the correspondence in
- * one table is what lets every construction path check it the same way, and
- * keeps `'modal'` defined as the absence of these four rather than as a second
- * list that would have to be kept in step.
- */
-const VARIANT_MASKS: Readonly<Record<Exclude<KeyVariant, 'modal'>, number>> = {
-  major: MAJOR_MASK,
-  natural: NATURAL_MINOR_MASK,
-  harmonic: HARMONIC_MINOR_MASK,
-  melodic: MELODIC_MINOR_MASK,
-};
-
-/** Every value a key's `variant` field may hold. */
-const KEY_VARIANTS: readonly KeyVariant[] = [
-  ...(Object.keys(VARIANT_MASKS) as Exclude<KeyVariant, 'modal'>[]),
-  'modal',
-];
-
-/**
- * Refuse a scale form the key's own mask does not hold.
- *
- * A key whose `variant` says `'harmonic'` over a major mask prints as a
- * harmonic minor while comparing equal to plain C major, so a project file that
- * carried the two apart is refused where the mismatch is still an argument.
- */
-function assertVariantMatchesScale(variant: KeyVariant, modeMask12: number): void {
-  assertOneOf(variant, KEY_VARIANTS, 'variant');
-  const named = VARIANT_MASKS[variant as Exclude<KeyVariant, 'modal'>];
-  const matches =
-    named === undefined ? !Object.values(VARIANT_MASKS).includes(modeMask12) : named === modeMask12;
-  if (!matches) {
-    throw new InvalidInputError(
-      `variant ${variant} does not match the scale mask ${modeMask12}; ` +
-        'pass the scale that variant names, or omit the variant',
-    );
-  }
-}
 
 /**
  * The word a key names its scale with: the mode word for a plain major or minor
@@ -236,7 +192,7 @@ function bareInterval(from: Note, to: Note): SpelledInterval {
  * rationale, a spelled line, a key region — never name the tonic differently.
  */
 function spelledTonicFor(scale: KeyScale): Note {
-  return new Note(spelledKeyOf(scale).tonic);
+  return new Note(resolveKey(scale).tonic);
 }
 
 /**
@@ -326,7 +282,7 @@ export class Key {
       );
     }
     if (variant !== undefined) {
-      assertVariantMatchesScale(variant, scale.modeMask12);
+      assertKeyVariant(variant, scale.modeMask12);
     }
     this.#scale = { rootPc, modeMask12: scale.modeMask12 };
     this.#tonic = tonic;
@@ -1320,7 +1276,7 @@ export class Key {
    * @example
    * ```ts
    * import { Key } from '@libraz/libcantus';
-   * Key.major('C').augmentedSixth('german').root; // 8 (the lowered sixth degree)
+   * Key.major('C').augmentedSixth('german').rootPc; // 8 (the lowered sixth degree)
    * ```
    */
   augmentedSixth(kind: AugmentedSixthKind): Chord {

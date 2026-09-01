@@ -1,4 +1,4 @@
-export type { KeyLike } from './coerce.js';
+export type { KeyLike, KeyVariant } from './coerce.js';
 export { toKeyScale } from './coerce.js';
 export type { ScaleLadderPosition } from './degrees.js';
 export {
@@ -11,6 +11,8 @@ export {
   scaleTonesInDegreeOrder,
   shiftByScaleDegrees,
 } from './degrees.js';
+export type { ResolvedKey } from './identity.js';
+export { assertKeyVariant, resolveKey, scaleOf } from './identity.js';
 export { majorKey, minorKey, scaleByName } from './key.js';
 export type { ScaleAliasName, ScaleName, ScaleNameInput, WorldScaleName } from './masks.js';
 export {

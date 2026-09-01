@@ -15,7 +15,7 @@ import {
 } from '../../core/validation/index.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { chordPitchClasses, chordQualities, makeChord } from '../../theory/chord/index.js';
-import type { ScaleName } from '../../theory/scale/index.js';
+import type { KeyVariant, ScaleName } from '../../theory/scale/index.js';
 import {
   HARMONIC_MINOR_MASK,
   MAJOR_MASK,
@@ -147,9 +147,12 @@ export type KeyMatch = {
 /**
  * Which form of a scale a {@link KeyMatch} settled on.
  *
+ * Defined with the rest of a key's identity, and re-exported here because a
+ * detection result is where most callers first meet it.
+ *
  * @category Recognition
  */
-export type KeyVariant = 'major' | 'natural' | 'harmonic' | 'melodic' | 'modal';
+export type { KeyVariant };
 
 /**
  * Input weighting for {@link detectKey}.
