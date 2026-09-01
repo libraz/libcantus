@@ -521,6 +521,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The guides open with a primer for a reader who has never studied music.**
+  `docs/en/primer/` and its Japanese mirror teach the ideas the rest of the
+  guides assume — pitch and intervals, scales and keys, chords, harmony, voices,
+  rhythm and meter — and name the API each idea decides, so a page can say
+  "spelled note" or "leading tone" and point at where the term is explained
+  rather than at nothing. Sixteen diagrams under `docs/images/`, in an English
+  and a Japanese cut, carry the parts that are shorter to draw than to describe:
+  the layers, the path from note events to parts, the note event itself, pitch
+  class against spelling, intervals, scale degrees and modes, chord
+  construction, numerals and function, cadences, voice leading, the metric grid,
+  timeline segmentation, key detection, key relations, the generation context,
+  and reharmonization. The README keeps the overview, the worked-guide index and
+  the boundaries of the library, and leaves the layer-by-layer detail to the
+  guides.
+
+- **Guide statements that described behaviour the library does not have are
+  corrected.** The ones that would have produced a wrong call: `resolveMeters`
+  takes the options object an entry point was given, not a signature, and reads
+  its `ts` or `meters` field, so passing a signature straight in silently
+  analyses in 4/4; a chord timeline's `at` is a function, so an analysis crosses
+  a worker boundary as `timeline.segments` rather than whole; `clampToMidi`
+  requires a whole number before it clamps; `Instrument.soundingPitch` resolves
+  only the two guitar profiles and raises for the basses and the kit; a tritone
+  substitute is spelled a semitone above the chord its dominant resolves to,
+  which is the key tonic only when the dominant is the key's own; the
+  harmonizer's transposition search is off unless `placement` asks for it; a
+  cadence is graded `imperfect` from the chords alone when a leading-tone chord
+  stands in for the dominant or either chord is inverted, and only the remaining
+  case waits on a voicing; and `hiddenPerfect` is judged on the outer voices in
+  a chorale and at two-voice strictness in a species exercise. Shipped
+  behaviour that no guide mentioned — `Timeline.modulations`, `analyzePolyphony`,
+  the public instrument coercers, `DetectKeyOptions.explain`, the composer's
+  recorded seed and algorithm version, and the whole-number rule on `pitch` and
+  `velocity` — is documented where it belongs.
+
 - **What the algorithm version promises is stated accurately.** The
   documentation said a version already accepted keeps returning what it
   returned. The generators hold one implementation rather than one per version —
