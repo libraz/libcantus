@@ -1,8 +1,17 @@
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { chordToRoman, romanToChord } from '../src/analyze/functional/index.js';
+import type { AugmentedSixthKind } from '../src/analyze/functional/index.js';
+import {
+  augmentedSixthChord,
+  chordToRoman,
+  romanToChord,
+  tonicizableDegrees,
+} from '../src/analyze/functional/index.js';
 import type { ChordQuality } from '../src/theory/chord/index.js';
 import { chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
-import { majorKey, minorKey, scaleByName } from '../src/theory/scale/index.js';
+import { majorKey, minorKey, scaleByName, toKeyScale } from '../src/theory/scale/index.js';
+import { unionMembers } from './support/signatures.js';
+import { SRC } from './support/source-files.js';
 
 /** The qualities a numeral spells losslessly in root position and inverted. */
 const QUALITIES: ChordQuality[] = ['maj', 'min', 'dim', 'aug', 'dom7', 'dim7', 'm7b5'];
@@ -20,6 +29,18 @@ const KEYS = [
   { name: 'C melodic minor', key: scaleByName('melodicMinor', 0) },
   { name: 'C major pentatonic', key: scaleByName('majorPentatonic', 0) },
 ];
+
+/**
+ * The augmented sixths as the declaration lists them, so a fourth kind is
+ * round-tripped here the day it is named rather than the day somebody
+ * remembers to add it to a list.
+ */
+function augmentedSixthKinds(): AugmentedSixthKind[] {
+  return unionMembers(
+    path.join(SRC, 'analyze/functional/augmented-sixth.ts'),
+    'AugmentedSixthKind',
+  ) as AugmentedSixthKind[];
+}
 
 describe('chordToRoman and romanToChord are mutual inverses', () => {
   it.each(KEYS)('round-trips every root, quality and inversion in $name', ({ key }) => {
@@ -43,6 +64,77 @@ describe('chordToRoman and romanToChord are mutual inverses', () => {
         }
       }
     }
+  });
+
+  /**
+   * The keys written on the far side of the circle from what their pitches read
+   * as, where a numeral rendered against the pitch classes alone would be
+   * measuring letters the key never writes.
+   */
+  const FAR_SIDE_KEYS = ['Ab minor', 'D# minor', 'Cb major', 'F# major'] as const;
+
+  it.each(FAR_SIDE_KEYS)('round-trips every augmented sixth in %s', (name) => {
+    const kinds = augmentedSixthKinds();
+    expect(kinds.length).toBeGreaterThan(0);
+    for (const kind of kinds) {
+      const chord = augmentedSixthChord(kind, name);
+      const roman = chordToRoman(chord, name);
+      expect(romanToChord(roman, name), `${kind} in ${name} renders ${roman}`).toEqual(chord);
+    }
+  });
+
+  it.each(FAR_SIDE_KEYS)('round-trips an applied numeral in %s', (name) => {
+    // The applied reading builds its local key from the degree it tonicizes,
+    // and that key is written on a letter the caller's key uses; the numeral
+    // has to come back the same whichever side of the circle the key is on.
+    for (const roman of ['V7/V', 'viio/V', 'V65/V']) {
+      const chord = romanToChord(roman, name);
+      expect(chordToRoman(chord, name, { applied: true }), `${roman} in ${name}`).toBe(roman);
+    }
+  });
+
+  it.each(FAR_SIDE_KEYS)('round-trips an applied augmented sixth in %s', (name) => {
+    const key = toKeyScale(name);
+    // The targets are the degrees the key itself says can be tonicized, so a
+    // degree that becomes one is covered without being written down here. The
+    // tonic is not among them: the augmented sixth over the home key is that
+    // key's own chord, which needs no slash.
+    const targets = tonicizableDegrees(key).filter((degree) => degree.degreeNumber !== 1);
+    expect(targets.length).toBeGreaterThan(0);
+    const kinds = augmentedSixthKinds();
+    expect(kinds.length).toBeGreaterThan(0);
+    for (const degree of targets) {
+      // The target is written under the numeral its own diatonic triad renders
+      // as, which is where the applied numeral takes its case from.
+      const target = chordToRoman(makeChord(degree.rootPc, degree.lower ? 'min' : 'maj'), name);
+      for (const kind of kinds) {
+        // The symbol likewise comes from the rendering of the chord itself.
+        const symbol = chordToRoman(augmentedSixthChord(kind, name), name);
+        const roman = `${symbol}/${target}`;
+        const chord = romanToChord(roman, name);
+        expect(chordToRoman(chord, name, { applied: true }), `${roman} in ${name}`).toBe(roman);
+        // Reading it is what `applied` asks for: without it the chord is named
+        // against the home key, as every other tonicizing chord is.
+        expect(chordToRoman(chord, name), `${roman} in ${name}`).not.toContain('/');
+      }
+    }
+  });
+
+  it('reads an applied augmented sixth only from a chord that spells one', () => {
+    const cMajor = majorKey(0);
+    // The French sixth is the one kind a stack of thirds spells correctly on its
+    // own, so a bare 7b5 chord with its lowered fifth in the bass sounds exactly
+    // like the French sixth of some degree without saying so in its letters. A
+    // chord bringing no letters keeps the simpler reading.
+    const bare = makeChord(9, '7b5');
+    bare.bassPc = 3;
+    expect(chordToRoman(bare, cMajor, { applied: true })).toBe('V7b5/ii');
+    // The same pitch classes over the same bass, carrying the letters that spell
+    // the augmented sixth, do read as one.
+    const spelled = romanToChord('Fr6/V', cMajor);
+    expect(spelled.rootPc).toBe(bare.rootPc);
+    expect(spelled.bassPc).toBe(bare.bassPc);
+    expect(chordToRoman(spelled, cMajor, { applied: true })).toBe('Fr6/V');
   });
 
   it.each(KEYS)('never renders two roots onto one numeral in $name', ({ key }) => {

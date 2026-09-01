@@ -11,13 +11,15 @@
 import { InvalidInputError } from '../../core/errors/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
-import { makeChord } from '../../theory/chord/index.js';
+import { chordToneSpellings, makeChord } from '../../theory/chord/index.js';
 import {
   type KeyLike,
   majorKey,
+  type ResolvedKey,
+  resolveKey,
   scaleTonesInDegreeOrder,
-  toKeyScale,
 } from '../../theory/scale/index.js';
+import { spellPitchClass } from '../../theory/spelling/index.js';
 import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
 import { augmentedSixthFromSymbol, augmentedSixthSymbol } from './augmented-sixth.js';
 import {
@@ -29,7 +31,12 @@ import {
   romanReference,
 } from './internal.js';
 import type { RejectedCandidate } from './rationale.js';
-import { appliedTarget, LEADING_TONE_QUALITIES } from './tonicization.js';
+import {
+  appliedTarget,
+  LEADING_TONE_QUALITIES,
+  type TonicizableDegree,
+  tonicizableDegrees,
+} from './tonicization.js';
 
 /** Roman numeral glyphs indexed by degree number - 1. */
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'] as const;
@@ -282,14 +289,75 @@ const NEAPOLITAN_SIXTH = 'N6';
  * sixth, and `N6` is a name for a chord that grammar already spells as `bII6`.
  * Both build the same chords their numeral counterparts would, so the two
  * notations stay interchangeable.
+ *
+ * The key is taken whole rather than as a scale, because an augmented sixth is
+ * spelled from the tonic the key is written on: the German sixth of Ab minor is
+ * Fb Ab Cb D, and reducing the key here would build the E G# B C## the same
+ * pitch classes read as once they have been respelled in G# minor.
  */
-function chromaticSymbolChord(text: string, key: KeyScale): Chord | null {
+function chromaticSymbolChord(text: string, key: ResolvedKey): Chord | null {
   if (text === NEAPOLITAN_SIXTH) {
     // Exactly the chord `bII6` builds: the major triad on b2, third in the bass.
-    const rootPc = mod12(key.rootPc + 1);
+    const rootPc = mod12(key.scale.rootPc + 1);
     return makeChord(rootPc, 'maj', mod12(rootPc + 4));
   }
   return augmentedSixthFromSymbol(text, key);
+}
+
+/**
+ * The local major key an applied numeral is read in.
+ *
+ * The degree being tonicized is spelled the way the prevailing key writes that
+ * pitch class, so the local key is written on a letter the caller's key would
+ * use: `Ger6/V` in Ab minor is built on Eb, not on the D# the bare pitch class
+ * would otherwise be named.
+ */
+function tonicizedKey(targetRoot: number, key: ResolvedKey): ResolvedKey {
+  return resolveKey({
+    scale: majorKey(targetRoot),
+    tonic: spellPitchClass(targetRoot, key.tonic, key.scale),
+  });
+}
+
+/**
+ * The degree an augmented sixth is applied to, or null when the chord is the
+ * augmented sixth of no degree at all.
+ *
+ * The reading is made by building the local key {@link tonicizedKey} builds for
+ * the parse direction and asking whether the chord is an augmented sixth there,
+ * so the two directions stay each other's inverse by sharing one derivation:
+ * whatever `Ger6/V` builds in a key is exactly what is recognized here.
+ *
+ * The tonic is skipped, for the reason it is no target for an applied dominant
+ * either — the augmented sixth of the home key is that key's own chord, which
+ * the unconditional reading has already named, and `Ger6/I` is a numeral no
+ * harmony text writes.
+ *
+ * Only a chord carrying its own tone spellings is read this way, which is the
+ * one place this reading is stricter than the home-key one. A chord that brings
+ * no letters is spelled by stacking thirds, and that stack writes the French
+ * sixth correctly by accident, since the French sixth is the one kind that is a
+ * genuine stack of thirds over its own root. Over the single lowered submediant
+ * of the prevailing key that inference is safe, but there are six candidate
+ * degrees here, and half of all `7b5` chords with the fifth in the bass stand on
+ * the lowered submediant of one of them — reading those as French sixths would
+ * take an altered dominant nobody spelled and call it an exotic chord. A caller
+ * holding pitch classes alone makes the reading it means with
+ * {@link augmentedSixthFromPitchClasses}, whose chord carries the letters.
+ */
+function augmentedSixthTarget(chord: Chord, key: ResolvedKey): TonicizableDegree | null {
+  if (chordToneSpellings(chord) === undefined) {
+    return null;
+  }
+  for (const degree of tonicizableDegrees(key.scale)) {
+    if (degree.degreeNumber === 1) {
+      continue;
+    }
+    if (augmentedSixthSymbol(chord, tonicizedKey(degree.rootPc, key)) !== null) {
+      return degree;
+    }
+  }
+  return null;
 }
 
 /** Build a chord from a parsed Roman numeral, attaching a bass for inversions. */
@@ -344,7 +412,11 @@ function chordFromParsed(parsed: {
  * @category Functional Harmony
  */
 export function romanToChord(text: string, key: KeyLike): Chord {
-  const scale = toKeyScale(key);
+  // The key is kept whole: the chromatic chords named as whole symbols are
+  // spelled from its tonic, and a key reduced here would spell them from
+  // whichever side of the circle its pitch classes read best as.
+  const resolved = resolveKey(key);
+  const scale = resolved.scale;
   // Accept the conventional slashes in figured bass (`V6/4`, `V6/5`) while
   // retaining `/` as the separator for applied dominants (`V7/V`).
   const trimmed = text.trim().replace(/(\d)\/(?=\d)/g, '$1');
@@ -353,13 +425,15 @@ export function romanToChord(text: string, key: KeyLike): Chord {
     const applied = trimmed.slice(0, slash);
     const target = trimmed.slice(slash + 1);
     const targetRoot = parseSimpleRoman(target, scale).rootPc;
-    const localKey = majorKey(targetRoot);
+    const localKey = tonicizedKey(targetRoot, resolved);
     return (
       chromaticSymbolChord(applied, localKey) ??
-      chordFromParsed(parseSimpleRoman(applied, localKey))
+      chordFromParsed(parseSimpleRoman(applied, localKey.scale))
     );
   }
-  return chromaticSymbolChord(trimmed, scale) ?? chordFromParsed(parseSimpleRoman(trimmed, scale));
+  return (
+    chromaticSymbolChord(trimmed, resolved) ?? chordFromParsed(parseSimpleRoman(trimmed, scale))
+  );
 }
 
 /** Case and suffix for rendering a chord quality as a Roman numeral. */
@@ -561,6 +635,11 @@ export type ChordToRomanOptions = {
  * A chord sounding one of the augmented sixths over an explicit bass on the
  * lowered submediant renders as `It6`, `Fr6` or `Ger6`, since no numeral names
  * those chords; see {@link augmentedSixthKind} for exactly when that applies.
+ * That reading is made against the key as written, because what separates an
+ * augmented sixth from the seventh chord it sounds like is its letters: the
+ * German sixth of Ab minor is named from the Fb Ab Cb D it is written with, not
+ * from the letters those pitch classes take once the key has been respelled as
+ * a G# minor.
  *
  * @param chord The chord to name, as a chord symbol, chord data, or a `Chord`.
  * @param key The prevailing key, as a key name, a key/scale, or a `Key`.
@@ -581,7 +660,7 @@ export function chordToRoman(
   key: KeyLike,
   opts: ChordToRomanOptions = {},
 ): string {
-  return renderRoman(toChordData(chord), toKeyScale(key), opts).roman;
+  return renderRoman(toChordData(chord), key, opts).roman;
 }
 
 /**
@@ -626,20 +705,39 @@ type RomanDerivation =
 /** Render a chord as a numeral, keeping the facts that decided it. */
 export function renderRoman(
   chord: Chord,
-  key: KeyScale,
+  keyLike: KeyLike,
   opts: ChordToRomanOptions,
 ): { roman: string; derivation: RomanDerivation } {
+  // The key is resolved once here and kept whole for the reading that needs its
+  // letters. Naming an augmented sixth is that reading: the chord is one only
+  // while its tones spell the sixth above the bass, which is a question about
+  // the key as written — the German sixth of Ab minor is Fb Ab Cb D, and a key
+  // reduced here would measure those letters against a G# minor and answer that
+  // the chord is an ordinary VI7.
+  const resolved = resolveKey(keyLike);
+  const key = resolved.scale;
   // The augmented sixths come first and unconditionally: their pitch classes
   // also spell a dominant seventh or an altered supertonic seventh, but only
   // this reading survives the bass they are standing on.
-  const augmented = augmentedSixthSymbol(chord, key);
+  const augmented = augmentedSixthSymbol(chord, resolved);
   if (augmented !== null) {
     return { roman: augmented, derivation: { kind: 'augmentedSixth' } };
   }
-  if (opts.applied === true && !isDiatonicChord(chord, key)) {
-    const target = appliedTarget(chord, key);
+  if (opts.applied === true) {
+    // The augmented sixth of a degree is asked for first, and is not held to the
+    // chromatic test the ordinary applied reading is. It has to be asked
+    // separately because nothing about where a dominant resolves finds it: the
+    // German sixth of the dominant stands a tritone from its target rather than
+    // a fifth above it, so the sonority test would hand back a different degree
+    // for the same chord. Ordering it first pulls no ordinary chord into the
+    // exotic reading, because a chord is an augmented sixth only while its own
+    // letters spell that sixth over its bass — the same pitch classes written
+    // with a minor seventh on top stay the bIII7 they are.
+    const target =
+      augmentedSixthTarget(chord, resolved) ??
+      (isDiatonicChord(chord, key) ? null : appliedTarget(chord, key));
     if (target !== null) {
-      const local = renderRoman(chord, majorKey(target.rootPc), {}).roman;
+      const local = renderRoman(chord, tonicizedKey(target.rootPc, resolved), {}).roman;
       const numeral = numeralFor(target.degreeNumber, target.lower);
       return {
         roman: `${local}/${numeral}`,
@@ -791,7 +889,7 @@ function describeRoman(roman: string, derivation: RomanDerivation): string {
  */
 export function romanAlternatives(
   chord: Chord,
-  key: KeyScale,
+  key: KeyLike,
   opts: ChordToRomanOptions,
 ): RejectedCandidate[] {
   const emitted = renderRoman(chord, key, opts).roman;
@@ -891,11 +989,10 @@ export function explainRoman(
   opts: ExplainRomanOptions = {},
 ): RomanExplanation {
   const data = toChordData(chord);
-  const scale = toKeyScale(key);
-  const { roman, derivation } = renderRoman(data, scale, opts);
+  const { roman, derivation } = renderRoman(data, key, opts);
   return {
     roman,
     rationale: describeRoman(roman, derivation),
-    alternatives: opts.alternatives === true ? romanAlternatives(data, scale, opts) : [],
+    alternatives: opts.alternatives === true ? romanAlternatives(data, key, opts) : [],
   };
 }
