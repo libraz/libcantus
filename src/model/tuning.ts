@@ -15,6 +15,7 @@ import {
   stepsOfCents,
   TWELVE_TET,
 } from '../core/tuning/index.js';
+import { assertFiniteNumber } from '../core/validation/index.js';
 import { assertDataObject } from './shared.js';
 
 /**
@@ -44,18 +45,20 @@ export class Tuning {
   /**
    * Wrap a plain tuning table.
    *
-   * The table is checked the way {@link Tuning.edo} checks its arguments, so a
-   * deserialized or hand-written one cannot enter carrying a division count or
-   * a reference frequency no frequency follows from.
+   * Every field is read off the table, so a deserialized or hand-written one
+   * cannot enter carrying a division count or a reference frequency no
+   * frequency follows from. None of the three has a default here, unlike
+   * {@link Tuning.edo}: a table that lost its reference frequency on the way
+   * through storage is refused rather than quietly retuned to A=440.
    *
    * @param table The plain tuning table.
    * @returns The wrapped tuning.
-   * @throws If the divisions are not a positive integer, or the reference step
-   *   or frequency is not a finite positive number.
+   * @throws If a field is missing, the divisions are not a positive integer,
+   *   the reference frequency is not a finite positive number, or the reference
+   *   step is not finite.
    * @example
    * ```ts
-   * import { TWELVE_TET } from '../../src/core/tuning/index.js';
-   * import { Tuning } from '@libraz/libcantus';
+   * import { TWELVE_TET, Tuning } from '@libraz/libcantus';
    * Tuning.of(TWELVE_TET).divisions; // 12
    * ```
    */
@@ -63,6 +66,12 @@ export class Tuning {
     // The tuning module's own constructor does the checking and returns a
     // fresh table, so a caller's object cannot become library state.
     const given = assertDataObject<TuningTable>(table, 'tuning table');
+    // The fields are checked before edo() is handed them: its reference
+    // frequency and step are optional positional arguments, so a missing one
+    // would take the library's default instead of naming the field it is.
+    assertFiniteNumber(given.divisions, 'tuning table.divisions');
+    assertFiniteNumber(given.refFreq, 'tuning table.refFreq');
+    assertFiniteNumber(given.refStep, 'tuning table.refStep');
     return new Tuning(edo(given.divisions, given.refFreq, given.refStep));
   }
 
@@ -74,8 +83,10 @@ export class Tuning {
    * @param refStep Step index of the reference; 69 by default, the MIDI number
    *   of A4.
    * @returns The tuning.
-   * @throws If the divisions are not a positive integer, or the reference step
-   *   or frequency is not a finite positive number.
+   * @throws If the divisions are not a positive integer, the reference
+   *   frequency is not a finite positive number, or the reference step is not
+   *   finite. A negative or fractional reference step is accepted: it is what a
+   *   tuner reading or a pitch-bend calibration lands on.
    * @example
    * ```ts
    * import { Tuning } from '@libraz/libcantus';
@@ -149,7 +160,8 @@ export class Tuning {
    *
    * @param cents The interval in cents.
    * @returns The frequency ratio.
-   * @throws If `cents` is not finite.
+   * @throws If `cents` is not finite, or the ratio it spans falls outside the
+   *   range a number holds.
    * @example
    * ```ts
    * import { Tuning } from '@libraz/libcantus';

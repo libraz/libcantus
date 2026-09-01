@@ -14,6 +14,7 @@ import {
   assertInteger,
   assertPositiveInt,
   assertRange,
+  describeRejected,
 } from '../validation/index.js';
 
 /**
@@ -39,6 +40,14 @@ export type TuningTable = {
 export const TWELVE_TET: TuningTable = Object.freeze({ refStep: 69, refFreq: 440, divisions: 12 });
 
 function assertTuning(tuning: TuningTable): TuningTable {
+  // The shape is checked before any field is read: a value from JSON or a
+  // plugin host may be null or a number, and reading a reference step off it
+  // would report the library's own TypeError instead of the caller's bad input.
+  if (typeof tuning !== 'object' || tuning === null) {
+    throw new InvalidInputError(
+      `tuning must be a tuning table; received ${describeRejected(tuning)}`,
+    );
+  }
   assertFiniteNumber(tuning.refStep, 'tuning.refStep');
   assertRange(tuning.refFreq, Number.MIN_VALUE, Number.MAX_VALUE, 'tuning.refFreq');
   assertPositiveInt(tuning.divisions, 'tuning.divisions');
@@ -179,7 +188,8 @@ export function stepsOfCents(cents: number, tuning: TuningTable = TWELVE_TET): n
  */
 export function centsToRatio(cents: number): number {
   assertFiniteNumber(cents, 'cents');
-  return 2 ** (cents / 1200);
+  const result = 2 ** (cents / 1200);
+  return assertRange(result, Number.MIN_VALUE, Number.MAX_VALUE, 'ratio result');
 }
 
 /**
@@ -225,12 +235,7 @@ export function ratioToCents(numerator: number, denominator: number): number {
   return 1200 * (Math.log2(numerator) - Math.log2(denominator));
 }
 
-/**
- * Five-limit just-intonation ratios for the twelve interval classes above a
- * unison, indexed by semitone class (0..12).
- *
- * @category Pitch & Intervals
- */
+/** One entry of {@link JUST_RATIOS}: a numerator and a denominator, frozen. */
 function justRatio(numerator: number, denominator: number): readonly [number, number] {
   return Object.freeze([numerator, denominator] as [number, number]);
 }
@@ -241,7 +246,9 @@ function justRatio(numerator: number, denominator: number): readonly [number, nu
  *
  * @category Pitch & Intervals
  */
-export const JUST_RATIOS: Readonly<Record<number, readonly [number, number]>> = Object.freeze({
+export const JUST_RATIOS: Readonly<
+  Record<0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12, readonly [number, number]>
+> = Object.freeze({
   0: justRatio(1, 1),
   1: justRatio(16, 15),
   2: justRatio(9, 8),
@@ -257,6 +264,11 @@ export const JUST_RATIOS: Readonly<Record<number, readonly [number, number]>> = 
   12: justRatio(2, 1),
 });
 
+/** Whether a semitone class is one of the classes {@link JUST_RATIOS} lists. */
+function isJustSemitoneClass(value: number): value is keyof typeof JUST_RATIOS {
+  return value in JUST_RATIOS;
+}
+
 /**
  * Cents by which a five-limit just interval departs from its 12-TET tempering
  * (positive means the just interval is wider).
@@ -268,9 +280,9 @@ export const JUST_RATIOS: Readonly<Record<number, readonly [number, number]>> = 
  */
 export function justDeviationCents(semitoneClass: number): number {
   assertInteger(semitoneClass, 'semitone class', 0, 12);
-  const ratio = JUST_RATIOS[semitoneClass];
-  if (!ratio) {
+  if (!isJustSemitoneClass(semitoneClass)) {
     throw new InvalidInputError(`semitone class has no just ratio: ${semitoneClass}`);
   }
+  const ratio = JUST_RATIOS[semitoneClass];
   return ratioToCents(ratio[0], ratio[1]) - semitoneClass * 100;
 }
