@@ -410,10 +410,12 @@ export class Progression {
    * progression has fewer than two chords.
    *
    * The options reach both analyses: `applied` and `alternatives` go to every
-   * chord, and `voicing` — the pitches of the last two chords, as
-   * {@link Progression.voice} produces them — to the cadence, which cannot tell
-   * a perfect authentic cadence from an imperfect one without knowing the
-   * soprano.
+   * chord, and `voicing` — the pitches sounding under the progression, one
+   * voicing per chord as {@link Progression.voice} produces them — to the
+   * cadence, which cannot tell a perfect authentic cadence from an imperfect
+   * one without knowing the soprano. It is the same shape
+   * {@link Progression.cadences} takes, and the closing pair is cut from it
+   * here; a two-element array is read as that pair itself.
    *
    * @param key Key to analyze in, as a key name, a plain key/scale, or a
    *   {@link Key}; falls back to the carried context.
@@ -427,17 +429,22 @@ export class Progression {
    * ```ts
    * import { Chord, Key, Progression } from '@libraz/libcantus';
    * const progression = new Progression([Chord.parse('G7'), Chord.parse('C')], Key.major('C'));
-   * const voiced = progression.voice();
-   * progression.analyze(undefined, { voicing: [voiced[0] ?? [], voiced[1] ?? []] }).cadence
-   *   ?.strength; // 'perfect'
+   * progression.analyze(undefined, { voicing: progression.voice() }).cadence?.strength;
+   * // 'perfect'
    * ```
    */
   analyze(
     key?: KeyLike,
-    opts?: AnalyzeChordOptions & DetectCadenceOptions,
+    // `voicing` is widened off the cadence options so that this entry and
+    // `cadences` name one type for one field: the pitches under the whole
+    // progression, which is what `voice()` hands back.
+    opts?: AnalyzeChordOptions & Omit<DetectCadenceOptions, 'voicing'> & { voicing?: number[][] },
   ): { chords: ChordAnalysis[]; cadence: CadenceResult | null } {
     const resolved = this.#resolveKey(key);
     const chords = this.#chords.map((chord) => chord.analyze(resolved, opts));
+    // The whole-progression voicing is cut to the closing pair below, so it is
+    // held apart from the options that reach the cadence unchanged.
+    const { voicing, ...cadenceOpts } = opts ?? {};
     const from = this.#chords[this.#chords.length - 2];
     const to = this.#chords[this.#chords.length - 1];
     // The chord before the closing pair is supplied from the progression
@@ -449,11 +456,32 @@ export class Progression {
     const cadence =
       from !== undefined && to !== undefined
         ? detectCadence(from.data, to.data, resolved.scale, {
-            ...opts,
+            ...cadenceOpts,
             ...(approach === undefined ? {} : { approach: approach.data }),
+            ...(voicing === undefined ? {} : { voicing: this.#closingVoicing(voicing) }),
           })
         : null;
     return { chords, cadence };
+  }
+
+  /**
+   * The two voicings of the closing pair, cut from the progression's own.
+   *
+   * `cadences` takes one voicing per chord and gives each pair its own two, so
+   * this entry takes that same array rather than a shape only it understands: a
+   * caller holding what `voice()` returned can hand it to either method. A
+   * two-element array is the closing pair already, which is what a progression
+   * of two chords produces either way.
+   */
+  #closingVoicing(voicing: number[][]): [number[], number[]] {
+    if (voicing.length === this.#chords.length || voicing.length === 2) {
+      return [voicing[voicing.length - 2] ?? [], voicing[voicing.length - 1] ?? []];
+    }
+    // Splitting the first two off a mismatched array would grade the cadence on
+    // the wrong chords and report nothing about it.
+    throw new InvalidInputError(
+      `voicing must hold one voicing per chord (${this.#chords.length}) or the closing pair; received ${voicing.length}`,
+    );
   }
 
   /**
