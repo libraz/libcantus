@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { InvalidInputError } from '../src/core/errors/index.js';
+import { formatNote, pitchClassOf as mod12, type Note } from '../src/core/pitch/index.js';
 import { chordPitchClasses, chordQualities, makeChord } from '../src/theory/chord/index.js';
 import {
   formatChordSymbol,
@@ -211,6 +212,92 @@ describe('transposeChordSymbol', () => {
 
   it('rejects a non-finite transposition before formatting', () => {
     expect(() => transposeChordSymbol('C7', Number.NaN)).toThrow(RangeError);
+  });
+
+  it('writes a root a chart writes rather than the letter-transposed one', () => {
+    // Raising a flat chart a semitone used to walk the letters into names no
+    // one writes: Cbmaj7, Fb7, Ebb, Bbb/Fb.
+    expect(transposeChordSymbol('Bbmaj7', 1)).toBe('Bmaj7');
+    expect(transposeChordSymbol('Eb7', 1)).toBe('E7');
+    expect(transposeChordSymbol('Db', 1)).toBe('D');
+    expect(transposeChordSymbol('Ab/Eb', 1)).toBe('A/E');
+    expect(transposeChordSymbol('C#', 11)).toBe('C');
+  });
+
+  it('keeps the written vocabulary across every root, bass and offset', () => {
+    const written = new Set([
+      'C',
+      'C#',
+      'Db',
+      'D',
+      'D#',
+      'Eb',
+      'E',
+      'F',
+      'F#',
+      'Gb',
+      'G',
+      'G#',
+      'Ab',
+      'A',
+      'A#',
+      'Bb',
+      'B',
+    ]);
+    const roots = ['C', 'C#', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+    for (const suffix of ['maj7', 'm7', '7']) {
+      for (const root of roots) {
+        for (const bass of roots) {
+          const text = root === bass ? `${root}${suffix}` : `${root}${suffix}/${bass}`;
+          const source = parseChordSymbol(text);
+          for (let semitones = -11; semitones <= 11; semitones += 1) {
+            const label = `${text} ${semitones}`;
+            const moved = parseChordSymbol(transposeChordSymbol(text, semitones));
+            const rootName = formatNote(moved.rootSpelling as Note);
+            expect(written.has(rootName), `${label} root ${rootName}`).toBe(true);
+            expect(moved.rootPc, label).toBe(mod12(source.rootPc + semitones));
+            if (moved.bassSpelling === undefined) {
+              continue;
+            }
+            const bassName = formatNote(moved.bassSpelling as Note);
+            expect(written.has(bassName), `${label} bass ${bassName}`).toBe(true);
+            expect(moved.bassPc, label).toBe(mod12((source.bassPc ?? source.rootPc) + semitones));
+          }
+        }
+      }
+    }
+  });
+
+  it('keeps a respelled root and its bass on one side of the staff', () => {
+    // Where the fallback picks a name, it picks it for the whole symbol: a
+    // sharp root over a flat bass is not a chart anyone writes.
+    expect(transposeChordSymbol('Ab/Eb', 1)).toBe('A/E');
+    expect(transposeChordSymbol('Db/Ab', 1)).toBe('D/A');
+    expect(transposeChordSymbol('Bb/F', 1)).toBe('B/Gb');
+    expect(transposeChordSymbol('C/Fb', 1)).toBe('Db/F');
+    expect(transposeChordSymbol('C#/Fb', 1)).toBe('D/F');
+  });
+
+  it('leaves a whole-octave transposition spelled as it was written', () => {
+    for (const text of ['Cbmaj7', 'Fb7', 'E#m7', 'B#', 'Ebb', 'Ab/Eb']) {
+      for (const semitones of [-24, -12, 0, 12, 24]) {
+        expect(transposeChordSymbol(text, semitones), `${text} ${semitones}`).toBe(text);
+      }
+    }
+  });
+
+  it('takes the fallback onto the side the caller asks for', () => {
+    expect(transposeChordSymbol('Bbmaj7', 1, { flats: true })).toBe('Bmaj7');
+    expect(transposeChordSymbol('Bbmaj7', 2, { flats: false })).toBe('Cmaj7');
+    expect(transposeChordSymbol('Bb/F', 1, { flats: true })).toBe('B/Gb');
+    expect(transposeChordSymbol('Bb/F', 1, { flats: false })).toBe('B/F#');
+  });
+
+  it('still reads every symbol it used to read', () => {
+    for (const text of ['Cbmaj7', 'Fb7', 'B#m', 'E#dim', 'Db/Fb', 'C/G']) {
+      expect(() => transposeChordSymbol(text, 1)).not.toThrow();
+    }
+    expect(transposeChordSymbol('H7', 1, { system: 'german' })).toBe('C7');
   });
 });
 

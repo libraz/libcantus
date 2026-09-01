@@ -41,7 +41,17 @@ export function isFunctioningLeadingTone(chord: Chord, key: KeyScale): boolean {
   return false;
 }
 
-/** The chord's own seventh as a pitch class, or undefined when it has none. */
+/**
+ * The chord's own seventh as a pitch class, or undefined when it has none.
+ *
+ * "Seventh" means the tone the chord itself writes as one, which is what
+ * {@link chordToneRole} answers: a chord carrying its own spelling is read by
+ * that spelling, so the augmented sixth of an Italian or German sixth — ten
+ * semitones above the root but five letters up — is a sixth resolving outward
+ * and owes nothing to the seventh's downward rule. The French sixth is rooted
+ * on the supertonic, where its ten semitones really are a chordal seventh, and
+ * keeps that obligation.
+ */
 export function seventhPcOf(chord: Chord): number | undefined {
   for (const interval of chord.intervals) {
     const pc = pitchClassOf(chord.rootPc + interval);

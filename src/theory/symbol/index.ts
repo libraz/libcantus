@@ -29,6 +29,8 @@ import {
   noteToPitchClass,
   parseNote,
   pitchClassOf as pitchClass,
+  spelledInterval,
+  transposeByInterval,
   transposeNote,
   tryParseNote,
 } from '../../core/pitch/index.js';
@@ -1093,10 +1095,108 @@ export function formatChordSymbol(chord: ChordLike, opts?: ChordSymbolOptions): 
 }
 
 /**
+ * The spellings a caller attaches to a chord, which transposition carries with
+ * it: the root, the slash bass, and one per chord tone.
+ */
+export type ChordSpellings = {
+  /** How the root is written. */
+  rootSpelling?: PitchSpelling;
+  /** How the slash bass is written. */
+  bassSpelling?: PitchSpelling;
+  /** How each chord tone is written. */
+  toneSpellings?: PitchSpelling[];
+};
+
+/** Drop the octave from a transposed note, leaving the spelling alone. */
+function bareSpelling(note: Note): PitchSpelling {
+  return { letter: note.letter, alter: note.alter };
+}
+
+/**
+ * Whether a spelling is one a chart writes for a root or a slash bass.
+ *
+ * The vocabulary is exactly what {@link pitchClassName} draws from with no hint
+ * to follow: a natural or a single accidental, and never the accidental that
+ * merely renames a natural letter — no C flat, F flat, B sharp or E sharp root,
+ * and no double accidental at all.
+ */
+function isWrittenSpelling(spelling: PitchSpelling): boolean {
+  const written = midiToNote(
+    60 + noteToPitchClass(spelling),
+    spelling.alter < 0 ? 'flat' : 'sharp',
+  );
+  return written.letter === spelling.letter && written.alter === spelling.alter;
+}
+
+/**
+ * Move a chord's spellings by a semitone count, keeping them writable.
+ *
+ * Moving a spelling by letter is what keeps B flat and A sharp apart, but
+ * carried far enough it lands on a root no chart writes: B flat up a semitone
+ * spells C flat, D flat up one spells E double flat. Where that happens the
+ * spelling falls back to the plain name of the pitch class, taken on the
+ * accidental side already in force — an explicit preference first, then the
+ * side the moved root reads on, then the root's own, then the bass's — so one
+ * symbol never pairs a sharp root with a flat bass. The tones follow the root's
+ * own step rather than the semitone count, so respelling the root respells the
+ * chord with it and the letter distances between the tones survive.
+ *
+ * A transposition by whole octaves returns every letter to itself and is left
+ * alone: a chart that writes C flat keeps it.
+ *
+ * @param spellings The chord's spellings.
+ * @param semitones The signed semitone offset.
+ * @param flats Forces the fallback onto the flat or the sharp side.
+ * @returns The moved spellings, carrying only the ones that were given.
+ */
+export function transposeChordSpellings(
+  spellings: ChordSpellings,
+  semitones: number,
+  flats?: boolean,
+): ChordSpellings {
+  const byLetter = (spelling: PitchSpelling | undefined): PitchSpelling | undefined =>
+    spelling === undefined ? undefined : bareSpelling(transposeNote(spelling, semitones));
+  const movedRoot = byLetter(spellings.rootSpelling);
+  const movedBass = byLetter(spellings.bassSpelling);
+  const side = [movedRoot, spellings.rootSpelling, movedBass, spellings.bassSpelling].find(
+    (spelling) => spelling !== undefined && spelling.alter !== 0,
+  );
+  const preferFlats = flats ?? (side !== undefined && side.alter < 0);
+  const octaveOnly = pitchClass(semitones) === 0;
+  const writable = (spelling: PitchSpelling): PitchSpelling =>
+    octaveOnly || isWrittenSpelling(spelling)
+      ? spelling
+      : bareSpelling(midiToNote(60 + noteToPitchClass(spelling), preferFlats ? 'flat' : 'sharp'));
+  const moved: ChordSpellings = {};
+  if (movedRoot !== undefined) {
+    moved.rootSpelling = writable(movedRoot);
+  }
+  if (movedBass !== undefined) {
+    moved.bassSpelling = writable(movedBass);
+  }
+  if (spellings.toneSpellings !== undefined) {
+    const shift =
+      spellings.rootSpelling !== undefined && moved.rootSpelling !== undefined
+        ? spelledInterval(spellings.rootSpelling, moved.rootSpelling)
+        : undefined;
+    moved.toneSpellings = spellings.toneSpellings.map((hint) =>
+      bareSpelling(
+        shift === undefined ? transposeNote(hint, semitones) : transposeByInterval(hint, shift),
+      ),
+    );
+  }
+  return moved;
+}
+
+/**
  * Transpose a chord symbol by a number of semitones.
  *
  * The symbol is read in the same system it is written back in, so a German
  * chart stays German across the transposition.
+ *
+ * The root and the bass are respelled where moving them by letter would leave
+ * a name no chart writes, so raising a flat chart a semitone gives `Bmaj7`
+ * rather than `Cbmaj7`. Pass `flats` to choose the side that fallback takes.
  *
  * @param text The chord symbol text.
  * @param semitones Signed semitone offset to apply to the root and bass.
@@ -1120,16 +1220,18 @@ export function transposeChordSymbol(
   assertFiniteSemitones(semitones);
   const chord = parseChordSymbol(text, opts);
   const transposed: Chord = { ...chord, rootPc: pitchClass(chord.rootPc + semitones) };
-  if (chord.rootSpelling !== undefined) {
-    const hint = transposeNote(chord.rootSpelling, semitones);
-    transposed.rootSpelling = { letter: hint.letter, alter: hint.alter };
-  }
   if (chord.bassPc !== undefined) {
     transposed.bassPc = pitchClass(chord.bassPc + semitones);
   }
-  if (chord.bassSpelling !== undefined) {
-    const hint = transposeNote(chord.bassSpelling, semitones);
-    transposed.bassSpelling = { letter: hint.letter, alter: hint.alter };
+  const spellings = transposeChordSpellings(chord, semitones, opts?.flats);
+  if (spellings.rootSpelling !== undefined) {
+    transposed.rootSpelling = spellings.rootSpelling;
+  }
+  if (spellings.bassSpelling !== undefined) {
+    transposed.bassSpelling = spellings.bassSpelling;
+  }
+  if (spellings.toneSpellings !== undefined) {
+    transposed.toneSpellings = spellings.toneSpellings;
   }
   return formatChordSymbol(transposed, opts);
 }

@@ -30,13 +30,22 @@ const ONE_LETTER_PER_TONE = [
 /**
  * Gapped scales that no reading can give a letter apiece: the blues scale
  * sounds the fifth and the flattened fifth against a fourth that fixes the
- * letter below them, and the octatonic and chromatic sets have more tones than
- * there are letters.
+ * letter below them, and the chromatic set has more tones than any number of
+ * doublings could hold.
  */
-const LETTER_BOUND = ['blues', 'octatonicHalfWhole', 'octatonicWholeHalf', 'chromatic'];
+const LETTER_BOUND = ['blues', 'chromatic'];
+
+/**
+ * The eight-note scales, which fit the seven letters with exactly one of them
+ * written twice.
+ */
+const DOUBLED_LETTER = ['octatonicHalfWhole', 'octatonicWholeHalf'];
+
+/** How many letter names a spelling has to share out. */
+const DIATONIC_LETTERS = 7;
 
 /** Every gapped scale the register carries. */
-const GAPPED_SCALES = [...ONE_LETTER_PER_TONE, ...LETTER_BOUND];
+const GAPPED_SCALES = [...ONE_LETTER_PER_TONE, ...LETTER_BOUND, ...DOUBLED_LETTER];
 
 /** Spell a named scale from the given root, one entry per scale tone. */
 function spell(name: string, root: string) {
@@ -121,11 +130,11 @@ describe('the gapped scale family', () => {
     }
   });
 
-  it.each(LETTER_BOUND)('spells %s tone by tone, plainly, when no letter is free', (name) => {
+  it.each(LETTER_BOUND)('spells %s plainly when no letter is free', (name) => {
     for (const rootPc of ALL_ROOTS) {
       const spelled = spell(name, ROOT_NAMES[rootPc] ?? 'C');
-      // The letters cannot all differ, so the reading falls back to the lighter
-      // accidental tone by tone — which is what keeps these scales readable.
+      // The letters cannot all differ, so one of them carries two tones — which
+      // is what keeps these scales readable at a single accidental apiece.
       expect(new Set(spelled.map((note) => note.letter)).size, `${name} on ${rootPc}`).toBeLessThan(
         spelled.length,
       );
@@ -135,9 +144,89 @@ describe('the gapped scale family', () => {
     }
   });
 
+  it.each(DOUBLED_LETTER)('gives %s all seven letters, one of them twice', (name) => {
+    for (const rootPc of ALL_ROOTS) {
+      const spelled = spell(name, ROOT_NAMES[rootPc] ?? 'C');
+      // Eight tones onto seven letters: every letter is used, and exactly one
+      // of them twice, so no tone is pushed onto a letter another already holds
+      // while a third goes unwritten.
+      expect(new Set(spelled.map((note) => note.letter)).size, `${name} on ${rootPc}`).toBe(
+        DIATONIC_LETTERS,
+      );
+      expect(spelled.length - DIATONIC_LETTERS, `${name} on ${rootPc}`).toBe(1);
+    }
+  });
+
+  it.each(DOUBLED_LETTER)('spells %s plainly at a natural root', (name) => {
+    for (const rootPc of NATURAL_ROOTS) {
+      for (const note of spell(name, ROOT_NAMES[rootPc] ?? 'C')) {
+        expect(Math.abs(note.alter), `${name} on ${rootPc}`).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('writes the seventh of a dominant-sounding octatonic scale as a seventh', () => {
+    // The doubling falls where the scale is chromatic — on the pair a ninth
+    // above the tonic — and never on the seventh, which would leave the tone
+    // ten semitones up reading as an augmented sixth over a dominant chord.
+    for (const rootPc of ALL_ROOTS) {
+      const root = ROOT_NAMES[rootPc] ?? 'C';
+      const spelled = spell('octatonicHalfWhole', root);
+      const tonic = parseNote(root);
+      const seventh = spelled.find((note) => noteToPitchClass(note) === (rootPc + 10) % 12);
+      expect(seventh, `root ${root}`).toBeDefined();
+      const letters = ((((seventh?.letter ?? 0) - tonic.letter) % 7) + 7) % 7;
+      expect(letters, `root ${root}`).toBe(6);
+    }
+  });
+
   it('keeps the conventional blues and octatonic spellings', () => {
     expect(names('blues', 'C')).toEqual(['C', 'Eb', 'F', 'Gb', 'G', 'Bb']);
-    expect(names('octatonicHalfWhole', 'Bb')).toEqual(['Bb', 'B', 'Db', 'D', 'E', 'F', 'G', 'Ab']);
+    expect(names('octatonicHalfWhole', 'Bb')).toEqual(['Bb', 'Cb', 'Db', 'D', 'E', 'F', 'G', 'Ab']);
+    expect(names('octatonicHalfWhole', 'C')).toEqual(['C', 'Db', 'Eb', 'E', 'F#', 'G', 'A', 'Bb']);
+    expect(names('octatonicWholeHalf', 'C')).toEqual(['C', 'D', 'Eb', 'F', 'Gb', 'Ab', 'A', 'B']);
+  });
+});
+
+describe('a gapped scale inside a diatonic mode keeps the mode letters', () => {
+  it.each([
+    ['Ab', ['Ab', 'Cb', 'Db', 'Eb', 'Gb']],
+    ['Db', ['Db', 'Fb', 'Gb', 'Ab', 'Cb']],
+    ['Gb', ['Gb', 'Bbb', 'Cb', 'Db', 'Fb']],
+    ['C', ['C', 'Eb', 'F', 'G', 'Bb']],
+    ['E', ['E', 'G', 'A', 'B', 'D']],
+  ] as const)('spells the minor pentatonic on %s by its degrees', (root, expected) => {
+    // A scale with no major third reads the tone three semitones above the
+    // tonic as its third, whatever that letter costs: the minor third of Ab is
+    // the Cb of Ab minor, never the B that would read as an augmented second.
+    expect(names('minorPentatonic', root)).toEqual([...expected]);
+  });
+
+  it('spells the flat-side seventh of a minor pentatonic as a seventh', () => {
+    expect(names('minorPentatonic', 'Gb')).toContain('Fb');
+    expect(names('minorPentatonic', 'Cb')).toContain('Bbb');
+  });
+
+  it('keeps the letters of the parent mode for every gapped scale inside one', () => {
+    for (const name of ONE_LETTER_PER_TONE) {
+      for (const rootPc of ALL_ROOTS) {
+        const root = ROOT_NAMES[rootPc] ?? 'C';
+        const tonic = parseNote(root);
+        for (const note of spell(name, root)) {
+          const letters = (((note.letter - tonic.letter) % 7) + 7) % 7;
+          const offset = (((noteToPitchClass(note) - rootPc) % 12) + 12) % 12;
+          // Every tone reads as a plain degree above the tonic: a major, minor
+          // or perfect interval, never an augmented or diminished one — the
+          // whole-tone scale excepted, which no mode holds.
+          const plain = [0, 2, 4, 5, 7, 9, 11][letters] ?? 0;
+          const deviation = ((((offset - plain) % 12) + 18) % 12) - 6;
+          const label = `${name} on ${root}: ${letters} letters, ${offset} semitones`;
+          if (name !== 'wholeTone') {
+            expect([0, -1], label).toContain(deviation);
+          }
+        }
+      }
+    }
   });
 });
 

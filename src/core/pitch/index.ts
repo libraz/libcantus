@@ -34,6 +34,15 @@ const LETTER_SEMITONES = [0, 2, 4, 5, 7, 9, 11] as const;
 const MAX_ALTER = 6;
 
 /**
+ * Widest octave a spelled note may carry, in either direction.
+ *
+ * Far beyond the MIDI range on purpose: a note is a spelling, not a playable
+ * pitch, so scores that hold their material an octave or two outside the
+ * sounding range stay expressible.
+ */
+const MAX_OCTAVE = 100;
+
+/**
  * Validate the fields of a spelled note once, at a public entry point.
  *
  * The letter is required in its own range rather than reduced on the way in:
@@ -46,7 +55,7 @@ function assertNote(note: Note, name: string): Note {
   assertInteger(note.letter, `${name}.letter`, 0, 6);
   assertInteger(note.alter, `${name}.alter`, -MAX_ALTER, MAX_ALTER);
   if (note.octave !== undefined) {
-    assertInteger(note.octave, `${name}.octave`, -100, 100);
+    assertInteger(note.octave, `${name}.octave`, -MAX_OCTAVE, MAX_OCTAVE);
   }
   return note;
 }
@@ -568,11 +577,13 @@ function qualityFromSpan(numberValue: number, semitones: number): IntervalQualit
 /**
  * Widest diatonic interval number the library measures.
  *
- * It is the widest {@link spelledInterval} can produce over the MIDI range:
- * C-1 to G9 climbs 74 letters, which is a 75th. Rejecting anything narrower
- * would make a value one public function returns impossible to hand to another.
+ * It is the widest {@link spelledInterval} can produce between two notes that
+ * pass their own field checks: C at the lowest octave up to B at the highest
+ * climbs seven letters per octave across both halves of the octave range, plus
+ * the six letters within the top octave. Rejecting anything narrower would make
+ * a value one public function returns impossible to hand to another.
  */
-const MAX_INTERVAL_NUMBER = 75;
+const MAX_INTERVAL_NUMBER = 7 * (2 * MAX_OCTAVE) + 6 + 1;
 
 /**
  * The semitone span of the interval named by a diatonic number and a quality.
@@ -583,7 +594,11 @@ const MAX_INTERVAL_NUMBER = 75;
  *
  * @param numberValue Diatonic size: 1 = unison, 2 = second, ... 8 = octave.
  * @param quality Quality label: `'P'`, `'M'`, `'m'`, or repeated `'A'`/`'d'`.
- * @returns The unsigned semitone span.
+ * @returns The signed semitone span the name covers when its letters ascend.
+ *   Nearly every name spans upward, but a second narrowed far enough crosses
+ *   zero while its letters still rise — C# up to Dbb is a doubly diminished
+ *   second spanning -1 — and the sign is what keeps that name reading as the
+ *   same interval a measurement of those two notes reports.
  * @throws If the quality cannot apply to the number, such as a major fifth or a
  *   diminished unison.
  * @example
@@ -629,7 +644,10 @@ export function intervalSemitones(numberValue: number, quality: IntervalQualityL
         `a unison cannot be diminished; a unison narrowed by a semitone descends, so name it '-${'A'.repeat(quality.length)}1'`,
       );
     }
-    return Math.abs(reference - quality.length - (perfect ? 0 : 1));
+    // The span keeps its sign: narrowing a second past zero leaves the letters
+    // ascending while the pitch falls, and taking the magnitude here would make
+    // the name transpose a semitone the wrong way.
+    return reference - quality.length - (perfect ? 0 : 1);
   }
   throw new InvalidInputError(`unknown interval quality ${describeRejected(quality)}`);
 }
@@ -647,8 +665,9 @@ const INTERVAL_NAME_PATTERN = /^(-?)(P|M|m|A+|d+)(\d+)$/;
  *
  * @param name The interval name: an optional `'-'`, a quality label, and a
  *   diatonic number. Surrounding whitespace is ignored.
- * @returns The spelled interval. An ascending name carries a non-negative span
- *   and no `descending` flag.
+ * @returns The spelled interval. An ascending name carries no `descending`
+ *   flag, and its span is the one {@link intervalSemitones} reports — negative
+ *   for the rare second narrowed past a zero span.
  * @throws If the name is not a quality label followed by a number, or the two
  *   cannot describe the same interval. Use {@link tryParseInterval} where
  *   failure is ordinary, such as an interval field read on every keystroke.
@@ -724,31 +743,37 @@ export type IntervalLike =
 /**
  * Whether an interval's letters move down.
  *
- * Data that carries the flag decides it there. Without one the span's sign
- * answers it, except where the quality says otherwise: an interval can climb a
- * letter while losing a semitone — C# up to Dbb is a doubly diminished second —
- * and reading such a span as a descent would spell the result on the wrong
- * letter. The exception is taken only when the ascending reading names the very
- * quality the interval carries, so plain data such as `{ P5, -7 }` still reads
- * as the descending fifth it is.
+ * Data that carries the flag decides it there. Without one the quality answers
+ * it: the span is compared against the quality the same number would carry with
+ * its letters ascending, so plain data such as `{ P5, -7 }` reads as the
+ * descending fifth it is, while `{ dd2, -1 }` reads as the ascending doubly
+ * diminished second it is — an interval can climb a letter while losing a
+ * semitone, and reading that span as a descent would spell the result on the
+ * wrong letter.
+ *
+ * A unison is the exception: its letters do not move, so both readings name the
+ * same quality and only the sign of the span separates them.
  */
 function isDescendingInterval(interval: SpelledInterval): boolean {
   if (interval.descending !== undefined) {
     return interval.descending;
   }
   const span = Math.round(interval.semitones);
-  if (span < 0 && qualityFromSpan(interval.number, span) === interval.quality) {
-    return false;
+  if (qualityFromSpan(interval.number, span) === interval.quality) {
+    return interval.number === 1 && span < 0;
   }
-  return span < 0;
+  return span !== 0;
 }
 
 /** Validate plain interval data and return it in the canonical shape. */
 function normalizedInterval(data: SpelledInterval): SpelledInterval {
   assertInteger(data.number, 'interval.number', 1);
   assertFiniteNumber(data.semitones, 'interval.semitones');
+  // A name covers exactly two spans, the ascending one and its negation, so the
+  // magnitudes are compared on both sides: the ascending span of a second
+  // narrowed past zero is itself negative.
   const expected = intervalSemitones(data.number, data.quality);
-  if (Math.abs(data.semitones) !== expected) {
+  if (Math.abs(data.semitones) !== Math.abs(expected)) {
     throw new InvalidInputError(
       `${data.quality}${data.number} spans ${expected} semitones; received ${data.semitones}`,
     );

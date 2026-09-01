@@ -1,13 +1,20 @@
 import { describe, expect, it } from 'vitest';
+import {
+  augmentedSixthChord,
+  augmentedSixthFromPitchClasses,
+  romanToChord,
+} from '../src/analyze/functional/index.js';
 import { InvalidInputError } from '../src/core/errors/index.js';
-import { parseNote } from '../src/core/pitch/index.js';
+import { formatNote, noteToPitchClass, parseNote } from '../src/core/pitch/index.js';
 import type { Chord } from '../src/theory/chord/index.js';
-import { makeChord } from '../src/theory/chord/index.js';
+import { chordToneRole, makeChord } from '../src/theory/chord/index.js';
 import type { PartWritingViolation } from '../src/theory/partwriting/index.js';
 import { checkPartWriting, spellVoicing } from '../src/theory/partwriting/index.js';
-import { majorKey, minorKey, scaleByName } from '../src/theory/scale/index.js';
-import { noteNames } from '../src/theory/spelling/index.js';
+import { majorKey, minorKey, scaleByName, spelledKeyOf } from '../src/theory/scale/index.js';
+import { noteNames, spellChord } from '../src/theory/spelling/index.js';
 import type { VoiceRange } from '../src/theory/voicing/index.js';
+import { voiceProgression } from '../src/theory/voicing/index.js';
+import { seventhPcOf } from '../src/theory/voicing/tendency.js';
 
 const C_MAJOR = majorKey(0);
 const A_HARMONIC_MINOR = scaleByName('harmonicMinor', 9);
@@ -634,5 +641,131 @@ describe('input validation', () => {
     // it until ranges are given.
     const trio = [makeChord(0, 'maj')];
     expect(checkPartWriting(spellExercise([[24, 55, 67]], trio), trio, C_MAJOR)).toEqual([]);
+  });
+});
+
+describe('augmented sixths in part writing', () => {
+  /** The three kinds, each built in C major with its own spelling. */
+  const KINDS = ['italian', 'french', 'german'] as const;
+
+  it.each(KINDS)('spells a voiced %s sixth as the chord speller does, in every key', (kind) => {
+    for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+      const key = majorKey(rootPc);
+      const { tonic } = spelledKeyOf(key);
+      const chord = augmentedSixthChord(kind, key);
+      const tones = spellChord(chord, tonic, key);
+      // One octave of the chord, so every tone is named through the voicing path.
+      const voiced = spellVoicing(
+        tones.map((tone) => 60 + noteToPitchClass(tone)),
+        chord,
+        key,
+      );
+      for (const tone of tones) {
+        const sounded = voiced.find((note) => noteToPitchClass(note) === noteToPitchClass(tone));
+        const label = `${kind} in ${rootPc}: ${formatNote(tone)}`;
+        expect(sounded, label).toBeDefined();
+        expect(
+          formatNote({ letter: sounded?.letter ?? 0, alter: sounded?.alter ?? 0 }),
+          label,
+        ).toBe(formatNote({ letter: tone.letter, alter: tone.alter }));
+      }
+    }
+  });
+
+  it('spells the German sixth of C major on its F#', () => {
+    const chord = augmentedSixthChord('german', C_MAJOR);
+    expect(noteNames(spellVoicing([44, 60, 63, 66], chord, C_MAJOR))).toEqual([
+      'Ab2',
+      'C4',
+      'Eb4',
+      'F#4',
+    ]);
+  });
+
+  it('reports nothing against a German sixth resolving outward', () => {
+    const chords = [augmentedSixthChord('german', C_MAJOR), makeChord(0, 'maj', 7)];
+    const voicings = spellExercise(
+      [
+        [44, 60, 63, 66],
+        [43, 60, 63, 67],
+      ],
+      chords,
+    );
+    expect(checkPartWriting(voicings, chords, C_MAJOR)).toEqual([]);
+  });
+
+  it.each(['italian', 'german'] as const)(
+    'asks no downward step of the augmented sixth of a %s sixth',
+    (kind) => {
+      // Both stand on their own bass, so the tone ten semitones above the root
+      // — Ab up to F# in C major — is the sixth the chord is named for.
+      const chord = augmentedSixthChord(kind, C_MAJOR);
+      expect(chordToneRole(6, chord)).toBe('sixth');
+      expect(seventhPcOf(chord)).toBeUndefined();
+    },
+  );
+
+  it('reads the augmented sixth of a French sixth as the third of its root', () => {
+    // The French sixth is measured from the supertonic, where the same sounding
+    // tone is a major third and owes the seventh's rule nothing either.
+    const chord = augmentedSixthChord('french', C_MAJOR);
+    expect(chordToneRole(6, chord)).toBe('third');
+  });
+
+  it('keeps the true seventh of a French sixth falling by step', () => {
+    // The French sixth is rooted on the supertonic, where the tone ten
+    // semitones above the root really is a chordal seventh.
+    const chord = augmentedSixthChord('french', C_MAJOR);
+    expect(seventhPcOf(chord)).toBe(0);
+    expect(chordToneRole(0, chord)).toBe('seventh');
+    // Ab2 C4 D4 F#4 to G2 C4 D4 G4: the C stays put instead of falling, and
+    // the rule reports it exactly as it does for any other chordal seventh.
+    const chords = [chord, makeChord(7, 'maj')];
+    const voicings = spellExercise(
+      [
+        [44, 60, 62, 66],
+        [43, 60, 62, 67],
+      ],
+      chords,
+    );
+    expect(
+      checkPartWriting(voicings, chords, C_MAJOR)
+        .filter((violation) => violation.kind === 'unresolvedSeventh')
+        .map((violation) => violation.voices),
+    ).toEqual([[1]]);
+  });
+
+  it.each(['augmentedSixthChord', 'romanToChord', 'fromPitchClasses'] as const)(
+    'reads a German sixth built through %s the same way',
+    (route) => {
+      const chord =
+        route === 'augmentedSixthChord'
+          ? augmentedSixthChord('german', C_MAJOR)
+          : route === 'romanToChord'
+            ? romanToChord('Ger6', C_MAJOR)
+            : augmentedSixthFromPitchClasses([8, 0, 3, 6], 8, C_MAJOR);
+      expect(chord).not.toBeNull();
+      expect(seventhPcOf(chord as Chord)).toBeUndefined();
+    },
+  );
+
+  it('resolves a German sixth outward when it voices a progression', () => {
+    const chords = [
+      augmentedSixthChord('german', C_MAJOR),
+      makeChord(0, 'maj', 7),
+      makeChord(7, 'maj'),
+    ];
+    const voiced = voiceProgression(chords, { key: C_MAJOR });
+    const [first = [], second = []] = voiced;
+    const sixth = first.findIndex((pitch) => pitch % 12 === 6);
+    expect(sixth).toBeGreaterThanOrEqual(0);
+    // The augmented sixth rises a semitone onto the dominant, and the bass
+    // falls onto it from the other side.
+    expect((second[sixth] ?? 0) - (first[sixth] ?? 0)).toBe(1);
+    expect((second[0] ?? 0) - (first[0] ?? 0)).toBe(-1);
+    const spelled = chords.map((chord, index) => spellVoicing(voiced[index] ?? [], chord, C_MAJOR));
+    expect(
+      checkPartWriting(spelled, chords, C_MAJOR).map((violation) => violation.kind),
+    ).not.toContain('unresolvedSeventh');
   });
 });

@@ -191,9 +191,16 @@ export class Interval {
     return this.#descending;
   }
 
-  /** A readable label composed of quality and number, e.g. `'P5'` or `'M3'`. */
+  /**
+   * A readable label composed of quality and number, e.g. `'P5'` or `'M3'`,
+   * prefixed with `'-'` when the interval descends.
+   *
+   * The name is written in the grammar {@link Interval.parse} reads, so an
+   * interval that has been logged, written to a column, or interpolated into a
+   * template comes back as the same interval — direction included.
+   */
   get name(): string {
-    return `${this.#quality}${this.#number}`;
+    return `${this.#descending ? '-' : ''}${this.#quality}${this.#number}`;
   }
 
   /** A copy of the underlying plain interval data. */
@@ -234,7 +241,7 @@ export class Interval {
    * @example
    * ```ts
    * import { Interval } from '@libraz/libcantus';
-   * Interval.parse('M3').negate().toString(); // 'M3', descending
+   * Interval.parse('M3').negate().toString(); // '-M3'
    * ```
    */
   negate(): Interval {
@@ -308,7 +315,8 @@ export class Interval {
    * The interval's name, so a template literal or a log line reads as the
    * interval.
    *
-   * @returns The name, e.g. `'M3'`.
+   * @returns The name, e.g. `'M3'` or `'-M3'` for the same third taken
+   *   downward.
    */
   toString(): string {
     return this.name;

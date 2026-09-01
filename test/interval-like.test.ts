@@ -4,6 +4,8 @@ import {
   Interval,
   type IntervalLike,
   InvalidInputError,
+  intervalSemitones,
+  Note,
   parseInterval,
   parseNote,
   toSpelledInterval,
@@ -116,7 +118,9 @@ describe('Interval direction', () => {
   it('flips the direction without changing number or quality', () => {
     const down = Interval.parse('A4').negate();
     expect(down.isDescending).toBe(true);
-    expect(down.name).toBe('A4');
+    // The name carries the direction, so the text form names the interval it is
+    // rather than its ascending twin.
+    expect(down.name).toBe('-A4');
     expect(down.semitones).toBe(-6);
   });
 
@@ -137,5 +141,93 @@ describe('Interval direction', () => {
   it('round-trips a descending interval through JSON', () => {
     const original = Interval.parse('-m3');
     expect(Interval.fromJSON(original.toJSON()).equals(original)).toBe(true);
+  });
+});
+
+/** Every interval name the grammar spells over a working range of numbers. */
+function everyIntervalName(): string[] {
+  const names: string[] = [];
+  for (let number = 1; number <= 15; number += 1) {
+    for (const quality of ['P', 'M', 'm', 'A', 'AA', 'd', 'dd', 'ddd']) {
+      for (const prefix of ['', '-']) {
+        names.push(`${prefix}${quality}${number}`);
+      }
+    }
+  }
+  return names;
+}
+
+describe('Interval text form', () => {
+  it('leaves an ascending name as quality and number alone', () => {
+    expect(Interval.parse('M3').name).toBe('M3');
+    expect(`${Interval.parse('P5')}`).toBe('P5');
+  });
+
+  it('names a descending interval with the prefix its parser reads', () => {
+    expect(Interval.parse('-m3').toString()).toBe('-m3');
+    expect(Interval.between(Note.parse('C4'), Note.parse('A3')).toString()).toBe('-m3');
+  });
+
+  it('round-trips every name reachable from the parser', () => {
+    let checked = 0;
+    for (const name of everyIntervalName()) {
+      const parsed = Interval.tryParse(name);
+      if (!parsed.ok) {
+        continue;
+      }
+      checked += 1;
+      const interval = parsed.value;
+      expect(Interval.parse(interval.toString()).equals(interval), name).toBe(true);
+      expect(toSpelledInterval(interval.toString()), name).toEqual(interval.toJSON());
+    }
+    expect(checked).toBeGreaterThan(140);
+  });
+
+  it('round-trips every interval measured between two notes', () => {
+    const notes = ['C4', 'Cb4', 'C#4', 'Dbb4', 'Eb3', 'F#5', 'B3', 'Bb2', 'A4', 'G##4'].map(
+      (name) => Note.parse(name),
+    );
+    for (const a of notes) {
+      for (const b of notes) {
+        const interval = Interval.between(a, b);
+        const label = `${a} -> ${b}`;
+        expect(Interval.parse(interval.toString()).equals(interval), label).toBe(true);
+      }
+    }
+  });
+
+  it('inverts to the span its own number and quality name', () => {
+    for (const name of everyIntervalName()) {
+      const parsed = Interval.tryParse(name);
+      if (!parsed.ok) {
+        continue;
+      }
+      let inverted: Interval;
+      try {
+        inverted = parsed.value.invert();
+      } catch {
+        // An augmented octave inverts to a diminished unison, which no
+        // measurement produces and the parser refuses by name.
+        continue;
+      }
+      expect(inverted.semitones, name).toBe(intervalSemitones(inverted.number, inverted.quality));
+    }
+  });
+
+  it('measures between notes at the edges of the octave range', () => {
+    const low = Note.of('C', 0, -1);
+    const high = Note.of('B', 0, 9);
+    const measured = Interval.between(low, high);
+    expect(measured.number).toBe(77);
+    expect(low.transposeBy(measured).equals(high)).toBe(true);
+  });
+
+  it('agrees with the direction its data and comparisons report', () => {
+    for (const name of ['-m3', '-P1', '-A4', 'dd2']) {
+      const interval = Interval.parse(name);
+      expect(interval.name.startsWith('-')).toBe(interval.isDescending);
+      expect(interval.toJSON().descending === true).toBe(interval.isDescending);
+      expect(interval.negate().name.startsWith('-')).toBe(!interval.isDescending);
+    }
   });
 });

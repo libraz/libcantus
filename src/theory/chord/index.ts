@@ -475,6 +475,60 @@ export function chordToneSpellings(chord: Chord): PitchSpelling[] | undefined {
 }
 
 /**
+ * The letter distance above the chord root each of a chord's own tone spellings
+ * implies, or undefined when the chord names none this function can trust.
+ *
+ * This is the one route by which a chord can name a tone a stack of thirds
+ * cannot: the augmented sixth over the lowered submediant is ten semitones like
+ * a minor seventh, but five letters above its root rather than six, and no
+ * {@link ChordQuality} can say so. Distances are read out of the hint rather
+ * than its letters, and they are measured from the hint's own root tone, so the
+ * tones follow whichever spelling of the root is in force: the German sixth
+ * spells Ab C Eb F# from an Ab root and G# B# D# E## from a G# one.
+ *
+ * Not part of the package's public surface: it is the single owner of "which
+ * degree does this chord write this tone as", so the speller, the tone-role
+ * reader and the part-writing rules cannot disagree about it.
+ */
+export function chordToneLetterOffsets(chord: Chord): number[] | undefined {
+  const hints = chordToneSpellings(chord);
+  const rootHint = hints?.[chord.intervals.findIndex((interval) => pitchClass(interval) === 0)];
+  if (hints === undefined || rootHint === undefined) {
+    return undefined;
+  }
+  return hints.map((hint) => diatonicLetterOf(hint.letter - rootHint.letter));
+}
+
+/**
+ * The role a letter distance above the root names, for the chords that carry
+ * their own spelling.
+ *
+ * Only the distances a basic role is defined for appear: a tone written two
+ * letters above the root is its third and one written five its sixth, whatever
+ * the semitones would say on their own.
+ */
+const ROLE_BY_LETTER_OFFSET: Record<number, ChordToneRole> = {
+  0: 'root',
+  2: 'third',
+  4: 'fifth',
+  5: 'sixth',
+  6: 'seventh',
+};
+
+/** The role a chord's own spelling gives a pitch class, when it names one. */
+function spelledToneRole(pitch: number, chord: Chord): ChordToneRole | null | undefined {
+  const offsets = chordToneLetterOffsets(chord);
+  if (offsets === undefined) {
+    return undefined;
+  }
+  const index = chord.intervals.findIndex(
+    (interval) => pitchClass(chord.rootPc + interval) === pitchClass(pitch),
+  );
+  const offset = offsets[index];
+  return offset === undefined ? undefined : (ROLE_BY_LETTER_OFFSET[offset] ?? null);
+}
+
+/**
  * Get the sorted, deduplicated pitch classes of a chord.
  *
  * A slash bass is one of them: `F/G` sounds a G, the voicers put it in the
@@ -540,10 +594,14 @@ function chordToneOffsets(chord: Chord): Set<number> {
 /**
  * Determine a pitch's harmonic role within a chord.
  *
- * The role is derived from the pitch's interval above the chord root, reduced
- * modulo 12. A major sixth (9) reads as a `sixth` for sixth chords but as a
- * `seventh` for a diminished-seventh chord; ninths and other tensions have no
- * basic role and return null.
+ * A chord carrying its own tone spellings is read by them, since the degree it
+ * writes a tone as is the degree that tone plays: the ten semitones above the
+ * root of a German sixth are written five letters up, so they are its sixth and
+ * not a seventh owing a step downward. Everywhere else the role is derived from
+ * the pitch's interval above the chord root, reduced modulo 12. A major sixth
+ * (9) reads as a `sixth` for sixth chords but as a `seventh` for a
+ * diminished-seventh chord; ninths and other tensions have no basic role and
+ * return null.
  *
  * @param pitch MIDI pitch or bare pitch class.
  * @param chord The chord providing the root reference.
@@ -552,6 +610,10 @@ function chordToneOffsets(chord: Chord): Set<number> {
  * @category Chords
  */
 export function chordToneRole(pitch: number, chord: Chord): ChordToneRole | null {
+  const spelled = spelledToneRole(pitch, chord);
+  if (spelled !== undefined) {
+    return spelled;
+  }
   const interval = (pitchClass(pitch) - pitchClass(chord.rootPc) + 12) % 12;
   const tones = chordToneOffsets(chord);
   if (interval === 0) {

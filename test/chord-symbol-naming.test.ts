@@ -312,3 +312,62 @@ describe('the class API threads the system through', () => {
     expect(Chord.parse('Es', german).secondaryDominant().symbol(german)).toBe('B7');
   });
 });
+
+describe('a transposed chord names a root a chart writes', () => {
+  it('respells rather than walking the letters off the vocabulary', () => {
+    expect(Chord.parse('Ab').transpose(1).symbol()).toBe('A');
+    expect(Chord.parse('Bbmaj7').transpose(1).symbol()).toBe('Bmaj7');
+    expect(Chord.parse('Ab/Eb').transpose(1).symbol()).toBe('A/E');
+    expect(Chord.parse('C#').transpose(11).symbol()).toBe('C');
+  });
+
+  it('sounds the transposed pitch classes it names', () => {
+    for (const text of ['Bbmaj7', 'Ab/Eb', 'Db', 'Eb7', 'C#m7']) {
+      const source = Chord.parse(text);
+      for (let semitones = -11; semitones <= 11; semitones += 1) {
+        const moved = Chord.parse(source.transpose(semitones).symbol());
+        const label = `${text} ${semitones}`;
+        expect(moved.rootPc, label).toBe((source.rootPc + semitones + 24) % 12);
+        expect([...moved.pitchClasses()].sort(), label).toEqual(
+          source
+            .pitchClasses()
+            .map((pc) => (pc + semitones + 24) % 12)
+            .sort(),
+        );
+      }
+    }
+  });
+
+  it('moves the tone spellings with the root it respelled', () => {
+    const chord = Chord.fromJSON({
+      ...Chord.parse('Bb').toJSON(),
+      toneSpellings: [
+        { letter: 6, alter: -1 },
+        { letter: 1, alter: 0 },
+        { letter: 3, alter: 0 },
+      ],
+    });
+    const moved = chord.transpose(1).toJSON();
+    // The root reads B, so the tones have to read B D# F# rather than staying
+    // on the letters a C flat root would have taken.
+    expect(moved.rootSpelling).toEqual({ letter: 6, alter: 0 });
+    expect(moved.toneSpellings).toEqual([
+      { letter: 6, alter: 0 },
+      { letter: 1, alter: 1 },
+      { letter: 3, alter: 1 },
+    ]);
+  });
+
+  it('leaves a whole-octave transposition spelled as it was', () => {
+    for (const semitones of [-12, 0, 12]) {
+      expect(Chord.parse('Cb').transpose(semitones).symbol(), `${semitones}`).toBe('Cb');
+    }
+  });
+
+  it('still spells by the interval when one is named', () => {
+    // The interval form picks letters from the diatonic number, so it keeps
+    // the distinction between an augmented fourth and a diminished fifth.
+    expect(Chord.parse('C').transposeBy('A4').symbol()).toBe('F#');
+    expect(Chord.parse('C').transposeBy('d5').symbol()).toBe('Gb');
+  });
+});

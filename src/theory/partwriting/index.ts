@@ -570,8 +570,11 @@ function melodicViolations(transition: Transition): PartWritingViolation[] {
  * {@link checkPartWriting}.
  *
  * Each pitch is named against the chord sounding under it and then the key, so a
- * chord tone takes the letter its interval above the root implies: the third of
- * a D major chord in C major spells F#, not Gb. The octave is kept, since the
+ * chord tone takes the letter the degree it plays in that chord implies: the
+ * third of a D major chord in C major spells F#, not Gb. The chord is passed
+ * whole rather than by its root, so a chord carrying its own spelling names its
+ * tones here exactly as {@link spellChord} names them — the German sixth keeps
+ * the F# that resolves outward to the dominant. The octave is kept, since the
  * rules measure real distances.
  *
  * @param voicing MIDI pitches, ascending (index 0 = lowest).
@@ -592,7 +595,7 @@ export function spellVoicing(
   key: KeyScale,
 ): SpelledVoicing {
   const { tonic } = spelledKeyOf(key);
-  return voicing.map((pitch) => spellPitch(pitch, tonic, key, { chordRoot: chord.rootPc }));
+  return voicing.map((pitch) => spellPitch(pitch, tonic, key, { chord }));
 }
 
 /**

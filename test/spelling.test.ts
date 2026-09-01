@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { formatNote, noteToMidi, parseNote } from '../src/core/pitch/index.js';
+import { formatNote, noteToMidi, noteToPitchClass, parseNote } from '../src/core/pitch/index.js';
 import type { KeyScale } from '../src/core/types.js';
 import { Chord, Key, Note } from '../src/model/index.js';
-import { chordQualities, makeChord } from '../src/theory/chord/index.js';
+import { chordFromSpec, chordQualities, makeChord } from '../src/theory/chord/index.js';
 import { isScaleTone, majorKey, minorKey, scaleByName } from '../src/theory/scale/index.js';
 import type { SpellingContext } from '../src/theory/spelling/index.js';
 import {
@@ -430,6 +430,11 @@ describe('spelling stays on the key side across every path', () => {
     // F##. Every other scale is spelled on the tonic it reads best from, and
     // there a double accidental means the tonic was chosen badly.
     const signatureRaises = new Set(['harmonicMinor/8', 'melodicMinor/8']);
+    // The eight-note scales spend all seven letters at every root, so a tonic
+    // that is itself written with an accidental leaves one tone no plain letter
+    // to take: C# half-whole octatonic reaches F## for the tone its F carries.
+    const eightNote = new Set(['octatonicHalfWhole', 'octatonicWholeHalf']);
+    const naturalRoots = new Set([0, 2, 4, 5, 7, 9, 11]);
     const names = [
       'major',
       'naturalMinor',
@@ -453,9 +458,12 @@ describe('spelling stays on the key side across every path', () => {
         const key = Key.named(name, rootPc);
         const names12 = key.noteNames();
         const doubles = names12.filter((spelled) => !/^[A-G](#|b)?$/.test(spelled));
-        expect(doubles, `${name}/${rootPc} -> ${names12.join(' ')}`).toEqual(
-          signatureRaises.has(`${name}/${rootPc}`) ? ['F##'] : [],
-        );
+        const label = `${name}/${rootPc} -> ${names12.join(' ')}`;
+        if (eightNote.has(name) && !naturalRoots.has(rootPc)) {
+          expect(doubles.length, label).toBeLessThanOrEqual(1);
+        } else {
+          expect(doubles, label).toEqual(signatureRaises.has(`${name}/${rootPc}`) ? ['F##'] : []);
+        }
       }
     }
   });
@@ -483,6 +491,66 @@ describe('spelling stays on the key side across every path', () => {
           (n) => n.letter,
         );
         expect(new Set(letters).size, `${quality}/${rootPc}`).toBe(letters.length);
+      }
+    }
+  });
+
+  it('spells an altered extension on the letter of the degree it alters', () => {
+    // The eleventh is a fourth-class letter and the thirteenth a sixth-class
+    // one, however the alteration moves the tone: a lowered eleventh sounds a
+    // major third above the root and is still written three letters up.
+    expect(noteNames(spellChord(Chord.parse('C7(b11)').data, parseNote('C'), majorKey(0)))).toEqual(
+      ['C', 'E', 'G', 'Bb', 'Fb'],
+    );
+    expect(noteNames(spellChord(Chord.parse('C7(#13)').data, parseNote('C'), majorKey(0)))).toEqual(
+      ['C', 'E', 'G', 'Bb', 'A#'],
+    );
+    expect(
+      noteNames(spellChord(Chord.parse('Cm7(b11)').data, parseNote('C'), majorKey(0))),
+    ).toEqual(['C', 'Eb', 'G', 'Bb', 'Fb']);
+    expect(
+      noteNames(spellChord(Chord.parse('CM7(#13)').data, parseNote('C'), majorKey(0))),
+    ).toEqual(['C', 'E', 'G', 'B', 'A#']);
+  });
+
+  it('gives two tones of different pitch classes two different letters', () => {
+    // Every altered extension over every root: a tone may share a letter with
+    // another only where the two sound the same pitch class.
+    const alterations = [
+      { degree: 9, alter: -1 },
+      { degree: 9, alter: 1 },
+      { degree: 11, alter: -1 },
+      { degree: 11, alter: 1 },
+      { degree: 13, alter: -1 },
+      { degree: 13, alter: 1 },
+    ] as const;
+    for (const base of ['maj', 'min'] as const) {
+      for (const seventh of ['min7', 'maj7'] as const) {
+        for (const alteration of alterations) {
+          for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+            const spec = {
+              rootPc,
+              base,
+              seventh,
+              alterations: [alteration],
+              additions: [],
+              omissions: [],
+            };
+            const chord = chordFromSpec(spec);
+            const spelled = spellChord(chord, parseNote('C'), majorKey(0));
+            const byLetter = new Map<number, number>();
+            for (const note of spelled) {
+              const pc = noteToPitchClass(note);
+              const seen = byLetter.get(note.letter);
+              const label = `${base}/${seventh}/${alteration.degree}${alteration.alter}/${rootPc}`;
+              expect(seen === undefined || seen === pc, label).toBe(true);
+              byLetter.set(note.letter, pc);
+            }
+            expect(spelled.map(noteToPitchClass), `${base}/${rootPc}`).toEqual(
+              chord.intervals.map((interval) => (((rootPc + interval) % 12) + 12) % 12),
+            );
+          }
+        }
       }
     }
   });
@@ -585,13 +653,17 @@ describe('non-heptatonic scales lean the way the scale does', () => {
   });
 
   it('keeps altered non-heptatonic scales on their conventional spellings', () => {
-    // A pentatonic has no signature to borrow, so pitch class 8 is spelled on
-    // the side that reads: G# gives a minor third the eye can see, while Ab
-    // would write that third as the augmented second Ab-B.
+    // A pentatonic borrows the letters of the modes its tones fit, so both
+    // readings of pitch class 8 spell a minor third; given only the pitch class
+    // the key takes the tonic that spells lightest, four sharps against the
+    // five flats Ab minor pentatonic (Ab Cb Db Eb Gb) would need.
     expect(Key.named('minorPentatonic', 8).noteNames()).toEqual(['G#', 'B', 'C#', 'D#', 'F#']);
+    expect(Key.named('minorPentatonic', 'Ab').noteNames()).toEqual(['Ab', 'Cb', 'Db', 'Eb', 'Gb']);
+    // Eight tones onto seven letters: the doubling falls on the ninth, so the
+    // seventh stays a seventh rather than reading as an augmented sixth.
     expect(Key.named('octatonicHalfWhole', 'Bb').noteNames()).toEqual([
       'Bb',
-      'B',
+      'Cb',
       'Db',
       'D',
       'E',

@@ -30,7 +30,6 @@ import {
   toNoteData,
   toSpelledInterval,
   transposeByInterval,
-  transposeNote,
 } from '../core/pitch/index.js';
 import { assertFiniteNumber } from '../core/validation/index.js';
 import {
@@ -73,6 +72,7 @@ import { spellChord, spellChordFromRoot, spellPitchClass } from '../theory/spell
 import {
   type ChordSymbolOptions,
   formatChordSymbol,
+  transposeChordSpellings,
   tryParseChordSymbol,
 } from '../theory/symbol/index.js';
 import {
@@ -91,24 +91,12 @@ function hintMatches(hint: PitchSpelling | undefined, pc: number | undefined): b
   return hint !== undefined && pc !== undefined && mod12(noteToPitchClass(hint)) === mod12(pc);
 }
 
-/** Move an explicit spelling hint without turning it into a derived key spelling. */
-function transposeHint(
-  hint: PitchSpelling | undefined,
-  semitones: number,
-): PitchSpelling | undefined {
-  if (hint === undefined) {
-    return undefined;
-  }
-  const moved = transposeNote(hint, semitones);
-  return { letter: moved.letter, alter: moved.alter };
-}
-
 /**
  * Move an explicit spelling hint by a spelled interval.
  *
  * The interval's diatonic number picks the letter, so a C chord taken up an
  * augmented fourth is spelled F# and up a diminished fifth Gb — the distinction
- * {@link transposeHint} cannot make from a semitone count alone.
+ * a semitone count alone cannot make.
  */
 function transposeHintByInterval(
   hint: PitchSpelling | undefined,
@@ -122,23 +110,12 @@ function transposeHintByInterval(
 }
 
 /**
- * Move a chord's per-tone spelling hints with the chord.
+ * Move a chord's per-tone spelling hints by a spelled interval.
  *
  * Every tone takes the same letter distance, so the distances between them
  * survive: the German sixth's augmented sixth is still five letters above its
  * root afterwards, whichever letters the two of them land on.
  */
-function transposeToneHints(
-  hints: PitchSpelling[] | undefined,
-  semitones: number,
-): PitchSpelling[] | undefined {
-  return hints?.map((hint) => {
-    const moved = transposeNote(hint, semitones);
-    return { letter: moved.letter, alter: moved.alter };
-  });
-}
-
-/** Move a chord's per-tone spelling hints by a spelled interval. */
 function transposeToneHintsByInterval(
   hints: PitchSpelling[] | undefined,
   interval: SpelledInterval,
@@ -904,9 +881,13 @@ export class Chord {
    */
   transpose(semitones: number): Chord {
     const moved = transposeChord(this.#given, semitones);
-    const rootSpelling = transposeHint(this.#given.rootSpelling, semitones);
-    const bassSpelling = transposeHint(this.#given.bassSpelling, semitones);
-    const toneSpellings = transposeToneHints(this.#given.toneSpellings, semitones);
+    // The spellings are respelled where moving them by letter would name a root
+    // no chart writes, the way the symbol module writes a transposed chart and
+    // the way a key keeps its own tonic writable.
+    const { rootSpelling, bassSpelling, toneSpellings } = transposeChordSpellings(
+      this.#given,
+      semitones,
+    );
     if (rootSpelling !== undefined) {
       moved.rootSpelling = rootSpelling;
     }

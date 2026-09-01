@@ -387,19 +387,13 @@ describe('interval identities', () => {
   });
 
   it('measures back every interval it can name', () => {
-    // `dd2` is left out: it is the one name in this grid whose interval is
-    // narrowed past a zero span, so its true span is -1 while
-    // `intervalSemitones` reports the magnitude 1 and applying it lands a
-    // semitone high. Carrying the sign through would have to reach every
-    // magnitude comparison built on that function.
-    const narrowedPastZero = new Set(['dd2']);
     const from = parseNote('C4');
     let names = 0;
     for (let number = 1; number <= 15; number += 1) {
-      for (const quality of ['P', 'M', 'm', 'A', 'AA', 'd', 'dd'] as const) {
+      for (const quality of ['P', 'M', 'm', 'A', 'AA', 'd', 'dd', 'ddd'] as const) {
         const name = `${quality}${number}`;
         const parsed = tryParse(name);
-        if (parsed === null || narrowedPastZero.has(name)) {
+        if (parsed === null) {
           continue;
         }
         names += 1;
@@ -426,6 +420,65 @@ describe('interval identities', () => {
     const down = spelledInterval(high, low);
     expect(down.descending).toBe(true);
     expect(transposeByInterval(high, down)).toEqual(low);
+  });
+
+  it('names a second narrowed past a zero span with the span it covers', () => {
+    // C# up to Dbb climbs a letter while losing a semitone. The name and the
+    // measurement have to report the same signed span, or the name transposes
+    // the wrong way.
+    const measured = spelledInterval(parseNote('C#4'), parseNote('Dbb4'));
+    expect(measured).toEqual({ number: 2, quality: 'dd', semitones: -1 });
+    expect(intervalSemitones(2, 'dd')).toBe(-1);
+    expect(intervalSemitones(2, 'ddd')).toBe(-2);
+    expect(parseInterval('dd2')).toEqual(measured);
+    expect(formatNote(transposeByInterval(parseNote('C4'), parseInterval('dd2')))).toBe('Dbbb4');
+  });
+
+  it('takes the descending reading of such a name in the other direction', () => {
+    expect(parseInterval('-dd2')).toEqual({
+      number: 2,
+      quality: 'dd',
+      semitones: 1,
+      descending: true,
+    });
+    expect(formatNote(transposeByInterval(parseNote('C4'), parseInterval('-dd2')))).toBe('B##3');
+  });
+
+  it('accepts both spans a name covers and nothing else', () => {
+    expect(toSpelledInterval({ number: 2, quality: 'dd', semitones: -1 })).not.toHaveProperty(
+      'descending',
+    );
+    expect(toSpelledInterval({ number: 2, quality: 'dd', semitones: 1 })).toEqual({
+      number: 2,
+      quality: 'dd',
+      semitones: 1,
+      descending: true,
+    });
+    expect(() => toSpelledInterval({ number: 2, quality: 'dd', semitones: 3 })).toThrow(
+      /dd2 spans/,
+    );
+  });
+});
+
+describe('intervals across the whole spelled range', () => {
+  /** Notes at the outer edges of the field bounds a spelled note is checked against. */
+  const extremes: Note[] = [
+    { letter: 0, alter: -6, octave: -100 },
+    { letter: 6, alter: 6, octave: 100 },
+    { letter: 0, alter: 0, octave: -1 },
+    { letter: 6, alter: 0, octave: 9 },
+    { letter: 3, alter: 1, octave: 0 },
+  ];
+
+  it('hands every measured interval back to the entry point that resolves one', () => {
+    for (const a of extremes) {
+      for (const b of extremes) {
+        const measured = spelledInterval(a, b);
+        const label = `${formatNote(a)} -> ${formatNote(b)}`;
+        expect(toSpelledInterval(measured), label).toEqual(measured);
+        expect(transposeByInterval(a, measured), label).toEqual(b);
+      }
+    }
   });
 });
 
@@ -466,10 +519,11 @@ describe('interval names the library refuses', () => {
   });
 
   it('accepts every number a measurement can produce and nothing wider', () => {
-    // A 75th is ten octaves and a fifth, which is the whole MIDI range.
-    expect(intervalSemitones(75, 'P')).toBe(127);
-    expect(() => intervalSemitones(76, 'P')).toThrow(/\[1, 75\]/);
-    expect(() => intervalSemitones(0, 'P')).toThrow(/\[1, 75\]/);
+    // The bound follows the octave range a note may carry, not the MIDI range:
+    // two notes at opposite ends of that range are 1407 letters apart.
+    expect(intervalSemitones(1407, 'M')).toBe(2411);
+    expect(() => intervalSemitones(1408, 'M')).toThrow(/\[1, 1407\]/);
+    expect(() => intervalSemitones(0, 'P')).toThrow(/\[1, 1407\]/);
   });
 });
 
