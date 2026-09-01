@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InvalidInputError } from '../src/core/errors/index.js';
+import { BudgetExceededError, InvalidInputError } from '../src/core/errors/index.js';
 import { GUITAR_STANDARD } from '../src/core/instrument/index.js';
 import { isStrongBeat } from '../src/core/meter/index.js';
 import { createPositionalRng } from '../src/core/random/index.js';
@@ -303,6 +303,20 @@ describe('the parts a composer writes', () => {
     expect(counter.notes).toEqual(Score.of(notes).notes);
     expect(counter.data.key?.scale).toEqual(KEY);
     expect(counter.tempo).toEqual([{ startBeat: 0, bpm: 96 }]);
+  });
+
+  it('passes a budget on to the harmonizer rather than capping it itself', () => {
+    // The composer forwards the options it does not set, so the cap on the work
+    // a harmonization may do is reachable from the class as well as the function.
+    const long = Array.from({ length: 64 }, (_, index) => ({
+      pitch: 60 + (index % 7),
+      startBeat: index,
+      durationBeat: 1,
+    }));
+    const held = Composer.of({ key: KEY });
+    const melody = Score.of(long);
+    expect(() => held.harmonize(melody, { budget: 1 })).toThrow(BudgetExceededError);
+    expect(() => held.harmonize(melody)).not.toThrow();
   });
 
   it('is the harmonization the function returns, melody and all', () => {

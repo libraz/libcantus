@@ -215,9 +215,10 @@ describe('the close a named phrase end asks for', () => {
           moved += 1;
       }
     }
-    // The same melodies without the phrase end run through the close in most of
-    // the sweep; naming it is what makes every one of them close there.
-    expect(moved).toBeGreaterThan(total / 2);
+    // Left unnamed, a large part of the sweep runs through the close on the
+    // chord already sounding; naming it is what makes every one of them close
+    // there.
+    expect(moved).toBeGreaterThan(total / 4);
   });
 
   it('reads the note a phrase rests on as structural, not as the next phrase ornament', () => {
@@ -254,5 +255,74 @@ describe('the close a named phrase end asks for', () => {
     const whole = harmonizeMelody({ ...opts, phraseEnds: [8] });
     expect(cut.chords.some((chord) => chord.startBeat === 6)).toBe(true);
     expect(whole.chords.some((chord) => chord.startBeat === 6)).toBe(false);
+  });
+});
+
+describe('a phrase end outside the melody names no close inside it', () => {
+  const period: NoteEvent[] = [
+    ...quarters([60, 62, 64, 65], 0),
+    ...quarters([67, 65, 64, 60], 4),
+    ...quarters([64, 65, 67, 69], 8),
+    ...quarters([71, 67, 62, 60], 12),
+  ];
+  const opts = { melody: period, key: cMajor, ts: { numerator: 4, denominator: 4 } } as const;
+
+  /**
+   * Lines whose harmony holds through their close, so a close forced on the
+   * last slot would be visible: an arpeggiated bar the tonic chord explains
+   * whole, and a period settling onto the tonic through its last two slots.
+   */
+  const LINES: { melody: NoteEvent[]; endBeat: number }[] = [
+    { melody: quarters([60, 64, 67, 72, 67, 64, 60, 72], 0), endBeat: 8 },
+    { melody: period, endBeat: 16 },
+  ];
+
+  it('harmonizes a line naming its own end exactly as one naming nothing', () => {
+    // A melody closes where it ends whether or not a caller says so, which is
+    // what makes passing the ends of every phrase — the last one included, as
+    // `phrasesFromTimeline` reports them — the same call as naming the closes
+    // inside the line.
+    for (const { melody: line, endBeat } of LINES) {
+      const plain = harmonizeMelody({ ...opts, melody: line });
+      expect(harmonizeMelody({ ...opts, melody: line, phraseEnds: [endBeat] })).toEqual(plain);
+    }
+  });
+
+  it('reads the ends of every phrase as the closes inside the line', () => {
+    const inner = harmonizeMelody({ ...opts, phraseEnds: [8] });
+    expect(harmonizeMelody({ ...opts, phraseEnds: [8, 16] })).toEqual(inner);
+  });
+
+  it('ignores a beat at or before the grid the melody starts on', () => {
+    for (const { melody: line } of LINES) {
+      const plain = harmonizeMelody({ ...opts, melody: line });
+      for (const end of [-8, 0]) {
+        expect(harmonizeMelody({ ...opts, melody: line, phraseEnds: [end] })).toEqual(plain);
+      }
+    }
+  });
+
+  it('ignores a beat beyond the melody', () => {
+    for (const { melody: line, endBeat } of LINES) {
+      const plain = harmonizeMelody({ ...opts, melody: line });
+      for (const end of [endBeat, endBeat + 4, 1000]) {
+        expect(harmonizeMelody({ ...opts, melody: line, phraseEnds: [end] })).toEqual(plain);
+      }
+    }
+  });
+
+  it('takes the ends of a whole line from the phrases found in it', () => {
+    // The documented route: harmonize once, read the phrases back, and hand
+    // their ends to a second call. The last phrase ends where the melody does,
+    // so the two calls agree wherever the closes inside the line do.
+    const first = harmonizeMelody(opts);
+    const timeline = chordTimelineFromChords(first.chords, 16);
+    const ends = phrasesFromTimeline(timeline, period, { key: cMajor }).map(
+      (phrase) => phrase.endBeat,
+    );
+    const inner = ends.filter((end) => end > 0 && end < 16);
+    expect(harmonizeMelody({ ...opts, phraseEnds: ends })).toEqual(
+      harmonizeMelody({ ...opts, phraseEnds: inner }),
+    );
   });
 });

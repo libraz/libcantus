@@ -5,6 +5,7 @@ import {
   developMotif,
   generateMotif,
   type MotifCell,
+  type MotifTransform,
   transformMotif,
 } from '../src/generate/motif/index.js';
 import { type Chord, chordPitchClasses } from '../src/theory/chord/index.js';
@@ -47,10 +48,11 @@ describe('transformMotif involutions', () => {
     const once = transformMotif(withRest, 'retrograde');
     // Span preserved: last offset still lands on beat 3.
     expect(Math.max(...once.notes.map((n) => n.startBeat + n.durationBeat))).toBe(3);
-    // Rest preserved: the pitches are mirrored, not packed together.
+    // Rest preserved: the pitches are mirrored, not packed together, and the
+    // notes are written in the order they now sound.
     expect(once.notes.map((n) => ({ ...n }))).toEqual([
-      { pitch: 60, startBeat: 2, durationBeat: 1 },
       { pitch: 64, startBeat: 0, durationBeat: 1 },
+      { pitch: 60, startBeat: 2, durationBeat: 1 },
     ]);
     expect(transformMotif(once, 'retrograde')).toEqual(withRest);
   });
@@ -65,7 +67,53 @@ describe('transformMotif involutions', () => {
     const augmented = transformMotif(unsorted, 'augment', 2);
     // Origin is the minimum onset (beat 0), so nothing is pushed to negative time.
     expect(Math.min(...augmented.notes.map((n) => n.startBeat))).toBe(0);
-    expect(augmented.notes.map((n) => n.startBeat)).toEqual([4, 0]);
+    // A transform hands back a line: the notes run in the order they sound,
+    // whichever order the cell was written in.
+    expect(augmented.notes.map((n) => n.startBeat)).toEqual([0, 4]);
+    expect(augmented.notes.map((n) => n.pitch)).toEqual([60, 64]);
+  });
+
+  it('hands back every transform in onset order', () => {
+    const unsorted: MotifCell = {
+      notes: [
+        { pitch: 67, startBeat: 2, durationBeat: 2 },
+        { pitch: 60, startBeat: 0, durationBeat: 1 },
+        { pitch: 64, startBeat: 1, durationBeat: 1 },
+      ],
+    };
+    const transforms: MotifTransform[] = [
+      'invert',
+      'retrograde',
+      'augment',
+      'diminish',
+      'transposeChromatic',
+      'transposeDiatonic',
+      'sequence',
+    ];
+    for (const transform of transforms) {
+      const onsets = transformMotif(unsorted, transform, 2, cMajor).notes.map((n) => n.startBeat);
+      expect(onsets, transform).toEqual([...onsets].sort((a, b) => a - b));
+    }
+  });
+
+  it('inverts about the note that sounds first, not the one written first', () => {
+    const unsorted: MotifCell = {
+      notes: [
+        { pitch: 67, startBeat: 2, durationBeat: 1 },
+        { pitch: 60, startBeat: 0, durationBeat: 1 },
+      ],
+    };
+    // Reflected about 60, the earliest note: 67 lands a fifth below it.
+    expect(transformMotif(unsorted, 'invert').notes.map((n) => n.pitch)).toEqual([60, 53]);
+  });
+
+  it('turns a retrograde upside down about the note the retrograde put first', () => {
+    // A retrograde inversion of C-E-G: read back to front to G-E-C, then
+    // reflected about the G it now starts on, which turns the falling thirds
+    // into rising ones — G-Bb-D.
+    const turned = transformMotif(transformMotif(cell, 'retrograde'), 'invert');
+    expect(turned.notes.map((n) => n.startBeat)).toEqual([0, 1, 2]);
+    expect(turned.notes.map((n) => n.pitch)).toEqual([67, 70, 74]);
   });
 
   it('augments then diminishes back to the original durations', () => {

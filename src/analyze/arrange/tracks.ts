@@ -10,6 +10,7 @@ import { isStrongBeat, resolveMeters } from '../../core/meter/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import type { NoteEventAssertOptions } from '../../core/validation/index.js';
 import { assertGenerationBudget, assertRange } from '../../core/validation/index.js';
+import type { Chord } from '../../theory/chord/index.js';
 import {
   evaluateSafety,
   NoteSafety,
@@ -36,6 +37,7 @@ import {
 import {
   type AnalyzedNote,
   analyzeVoice,
+  type KeyContext,
   type TheoryLabel,
   type VoiceNote,
 } from '../voice/index.js';
@@ -345,6 +347,73 @@ function otherVoicesSounding(
   return sounding
     .filter(({ track, voice }) => track !== excludeTrack || voice !== excludeVoice)
     .map(({ snapshot }) => snapshot);
+}
+
+/**
+ * Label every note of one polyphonic passage against the harmony under it and
+ * the voices around it.
+ *
+ * {@link analyzeVoice} reads a single line: it takes the note before and the note
+ * after each note as that note's melodic neighbours, and it is given no other
+ * voices, so over a flat array of everything that sounds it invents figures
+ * across parts — the alto between two soprano notes becomes a passing tone —
+ * and can never find a suspension, which is by definition a dissonance against
+ * something else sounding. So the passage is partitioned into monophonic
+ * sub-voices first and each is read with the others handed to it, which is what
+ * {@link analyzeArrangement} does with the tracks it is given.
+ *
+ * @param notes The passage, in any order; the ids are indices into this array.
+ * @param chordAtBeat Chord sounding at a given beat, or null.
+ * @param key The key, or the key in force at a given beat.
+ * @returns One annotation per note, in the order the notes were given, each
+ *   carrying its position in that array as its id.
+ */
+export function analyzePolyphony(
+  notes: readonly NoteEvent[],
+  chordAtBeat: (beat: number) => Chord | null,
+  key: KeyContext,
+): AnalyzedNote[] {
+  const prepared = prepareTracks([{ notes: [...notes] }]);
+  const track = prepared[0];
+  const soundingCache = new Map<number, SoundingVoice[]>();
+  const byIndex = new Map<number, AnalyzedNote>();
+  for (let v = 0; v < (track?.voices.length ?? 0); v += 1) {
+    const subVoice = track?.voices[v];
+    if (subVoice === undefined) {
+      continue;
+    }
+    const analyzed = analyzeVoice(subVoice.voice, chordAtBeat, key, (beat) =>
+      otherVoicesSounding(prepared, 0, v, beat, soundingCache),
+    );
+    for (const note of analyzed) {
+      if (note.originalIndex !== undefined) {
+        // The split's own bookkeeping stops here: the caller asked about its own
+        // array, so the answer carries that position as the id and nothing that
+        // says the notes were taken apart on the way.
+        const { originalIndex, ...annotation } = note;
+        byIndex.set(originalIndex, { ...annotation, noteId: originalIndex });
+      }
+    }
+  }
+  // A note of no length never sounds, so the split above drops it and no other
+  // voice can be dissonant against it; it is still one of the caller's notes,
+  // and reading it against the chord alone says what it is.
+  return notes.map((note, index) => {
+    const analyzed = byIndex.get(index);
+    if (analyzed !== undefined) {
+      return analyzed;
+    }
+    const [only] = analyzeVoice([{ ...note, id: index }], chordAtBeat, key);
+    return (
+      only ?? {
+        noteId: index,
+        pitch: note.pitch,
+        startBeat: note.startBeat,
+        durationBeat: note.durationBeat,
+        labels: [],
+      }
+    );
+  });
 }
 
 /** Index of the first segment starting strictly after a beat. */

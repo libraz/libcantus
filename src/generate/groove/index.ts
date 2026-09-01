@@ -177,12 +177,10 @@ export function humanize(events: readonly NoteEvent[], opts: HumanizeOptions = {
     const rawVelocity = (event.velocity ?? baseVelocity) + accentBoost + velocityOffset;
     const velocity = Math.min(MAX_VELOCITY, Math.max(MIN_VELOCITY, Math.round(rawVelocity)));
 
-    return {
-      pitch: event.pitch,
-      startBeat,
-      durationBeat: event.durationBeat,
-      velocity,
-    };
+    // The note is copied whole and only the fields this pass owns are written
+    // over it: an articulation, or anything else a caller has put on a note,
+    // belongs to the note rather than to the timing it is played with.
+    return { ...event, startBeat, velocity };
   });
 }
 
@@ -398,11 +396,9 @@ export function applyGrooveTemplate(
         ? Math.round(slot.velocity)
         : event.velocity;
 
-    return {
-      pitch: event.pitch,
-      startBeat,
-      durationBeat: event.durationBeat,
-      velocity,
-    };
+    // The note is copied whole and only the fields this pass owns are written
+    // over it: an articulation, or anything else a caller has put on a note,
+    // belongs to the note rather than to the timing it is played with.
+    return { ...event, startBeat, velocity };
   });
 }

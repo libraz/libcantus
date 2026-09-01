@@ -343,6 +343,12 @@ const MAJOR_DEGREE_SEMITONES = [0, 2, 4, 5, 7, 9, 11] as const;
  * to hold two versions of it. Every other degree is taken from the key, which
  * is what keeps a passing tone inside the music rather than inside a template.
  *
+ * An alteration is a displacement from the plain diatonic degree, so it is
+ * measured against the major-scale template rather than stacked on top of what
+ * the chord or the key already supplies: a flat seventh is the minor seventh
+ * over a dominant chord as much as over a major one, which is what keeps the
+ * boogie figure's sixth-to-flat-seventh motion from collapsing onto the sixth.
+ *
  * The result is a signed offset, not a pitch class: degree 8 is the octave, and
  * reducing it modulo twelve would spell it as the root the figure just played,
  * turning every octave figure into a repeated note.
@@ -350,12 +356,13 @@ const MAJOR_DEGREE_SEMITONES = [0, 2, 4, 5, 7, 9, 11] as const;
 function degreeSemitone(degree: number, alter: number, chord: Chord, key: KeyScale): number {
   const octaves = Math.floor((degree - 1) / 7);
   const within = ((degree - 1) % 7) + 1;
-  const fromChord = chordDegreeSemitone(within, chord);
   const template = MAJOR_DEGREE_SEMITONES[within - 1] ?? 0;
   const semitone =
-    fromChord ??
-    // A degree the chord does not name is a passing tone, so the key decides it.
-    nearestScaleTone(chord.rootPc + template, key) - chord.rootPc;
+    alter !== 0
+      ? template
+      : (chordDegreeSemitone(within, chord) ??
+        // A degree the chord does not name is a passing tone, so the key decides it.
+        nearestScaleTone(chord.rootPc + template, key) - chord.rootPc);
   // A degree names a position inside one octave; the octaves it spans are what
   // `octaves` carries. An extended chord states its ninth as fourteen semitones
   // and the key's answer may land on the octave itself, so both are folded here.
@@ -622,7 +629,15 @@ export function placeLicks(
           // a time into the register band, which is what an octave figure
           // needs: its octave has to stay an octave.
           const offset = degreeSemitone(lickNote.degree, lickNote.alter ?? 0, segment.chord, scale);
-          anchor = figureRoot + offset;
+          // The figure's plain root on the anchor onset is that onset's bass
+          // note, so over a slash chord it sounds the written bass: the two
+          // notes share the position and only one of them survives, and which
+          // one it is must not decide what the chord change sounds like. The
+          // rest of the figure stays measured from the chord's own root.
+          anchor =
+            Math.abs(at - rootAt) < EPS && lickNote.degree === 1 && (lickNote.alter ?? 0) === 0
+              ? rootAnchor
+              : figureRoot + offset;
           onsets.push(at);
           raw.push({
             startBeat: at,

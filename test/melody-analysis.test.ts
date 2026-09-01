@@ -98,15 +98,80 @@ describe('named transformations of a motif', () => {
       { pitch: 62, startBeat: 1, durationBeat: 2 },
       { pitch: 67, startBeat: 3, durationBeat: 1 },
     ];
-    const backwards: NoteEvent[] = [
-      { pitch: 67, startBeat: 4, durationBeat: 2 },
-      { pitch: 62, startBeat: 6, durationBeat: 1 },
-      { pitch: 60, startBeat: 7, durationBeat: 1 },
-    ];
+    // The cell played backwards: each note keeps its own value, so what the
+    // ear hears reversed is the run of note values, not the onset gaps.
+    const backwards = motifToNoteEvents(transformMotif({ notes: uneven }, 'retrograde'));
     const relation = relateMotifs(motifFromNotes(uneven), motifFromNotes(backwards));
     expect(relation?.kind).toBe('retrograde');
     // The same pitches the same way round would have been a repetition.
     expect(relateMotifs(motifFromNotes(uneven), motifFromNotes(uneven))?.kind).toBe('repetition');
+  });
+
+  it.each([
+    { label: 'a long note in the middle', values: [1, 2, 1] },
+    { label: 'long ends around short middles', values: [2, 1, 1, 2] },
+    { label: 'a palindrome of note values', values: [1, 2, 2, 1] },
+  ])('names the retrograde of a cell with $label', ({ values }) => {
+    // Pitches that fall then leap, so no cell here is its own retrograde.
+    const pitches = [60, 64, 62, 67];
+    let at = 0;
+    const cell: MotifCell = {
+      notes: values.map((durationBeat, index) => {
+        const note = { pitch: pitches[index] ?? 60, startBeat: at, durationBeat };
+        at += durationBeat;
+        return note;
+      }),
+    };
+    const model = motifFromNotes(motifToNoteEvents(cell));
+    const backwards = motifFromNotes(motifToNoteEvents(transformMotif(cell, 'retrograde')));
+    expect(relateMotifs(model, backwards)?.kind).toBe('retrograde');
+    // And back the other way: a retrograde is its own inverse.
+    expect(relateMotifs(backwards, model)?.kind).toBe('retrograde');
+  });
+
+  it('names what the retrograde transform writes, for every cell it writes', () => {
+    /** Steps of a cell, which is what a relation is read from. */
+    const stepsOf = (source: MotifCell) =>
+      source.notes.slice(1).map((note, index) => note.pitch - (source.notes[index]?.pitch ?? 0));
+    let checked = 0;
+    for (const contour of ['arch', 'ascending', 'descending', 'wave'] as const) {
+      for (const bars of [1, 2, 3]) {
+        for (const seed of [0, 1, 2, 3]) {
+          const cell = generateMotif({ key: cMajor, bars, contour, jitter: 0.5, ctx: { seed } });
+          const steps = stepsOf(cell);
+          const reversed = [...steps].reverse();
+          // A cell symmetrical enough to answer to more than one name takes the
+          // plainest of them, so those are named elsewhere: an evenly falling
+          // line read backwards is its own inversion as well as its retrograde.
+          const mirrored = reversed.map((step) => -step);
+          if (reversed.join() === steps.join() || mirrored.join() === steps.join()) {
+            continue;
+          }
+          const model = motifFromNotes(motifToNoteEvents(cell));
+          const backwards = transformMotif(cell, 'retrograde');
+          const relation = relateMotifs(model, motifFromNotes(motifToNoteEvents(backwards)));
+          expect(relation?.kind, `${contour} over ${bars} bars, seed ${seed}`).toBe('retrograde');
+          checked += 1;
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(20);
+  });
+
+  it('refuses a figure whose note values are not the model played backwards', () => {
+    const uneven: NoteEvent[] = [
+      { pitch: 60, startBeat: 0, durationBeat: 1 },
+      { pitch: 62, startBeat: 1, durationBeat: 2 },
+      { pitch: 67, startBeat: 3, durationBeat: 1 },
+    ];
+    // The pitches read back to front, but the long note has moved: this is a
+    // different figure, not the cell reversed.
+    const other: NoteEvent[] = [
+      { pitch: 67, startBeat: 4, durationBeat: 2 },
+      { pitch: 62, startBeat: 6, durationBeat: 1 },
+      { pitch: 60, startBeat: 7, durationBeat: 1 },
+    ];
+    expect(relateMotifs(motifFromNotes(uneven), motifFromNotes(other))).toBeNull();
   });
 
   it('names a retrograde inversion', () => {
@@ -289,6 +354,26 @@ describe('melodicContour', () => {
 
   it('reads a motif as readily as raw notes', () => {
     expect(melodicContour(motifFromNotes(line(0, [60, 64, 67, 64, 60]))).shape).toBe('arch');
+  });
+
+  it('points at no note when the line has none', () => {
+    for (const empty of [[], [{ pitch: 60, startBeat: 0, durationBeat: 0 }]]) {
+      const contour = melodicContour(empty);
+      expect(contour.shape).toBe('static');
+      expect(contour.range).toBe(0);
+      // Zero would name the first note of a line that has no first note.
+      expect(contour.peakIndex).toBe(-1);
+      expect(contour.troughIndex).toBe(-1);
+    }
+  });
+
+  it('points at a note that is there for every line that has one', () => {
+    const lines = [line(0, [60]), line(0, [60, 60, 60]), line(0, [60, 67, 62]), line(0, [72, 60])];
+    for (const notes of lines) {
+      const contour = melodicContour(notes);
+      expect(notes[contour.peakIndex]).toBeDefined();
+      expect(notes[contour.troughIndex]).toBeDefined();
+    }
   });
 });
 

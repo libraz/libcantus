@@ -104,6 +104,13 @@ const NOT_A_CLASS_METHOD: Readonly<Record<string, string>> = {
   beatsPerBarAt: 'Meter.beatsPerBar asked at the signature Score.meterAt finds',
   spellAugmentedSixth: 'the spelled table Key.augmentedSixth builds its chord from',
 
+  // The single-line reader under a class surface that reads more than one line.
+  // Score.voices() is the class face of the question, and it splits polyphony
+  // into sub-voices before reading each, exactly as analyzeVoice's own
+  // documentation says a caller with polyphonic material must; analyzeVoice is
+  // what that split feeds, one monophonic line at a time.
+  analyzeVoice: 'the single-line reader Score.voices splits its material for',
+
   // Readings of plain data that a value object exposes under its own name.
   chordSpecIntervals: 'reads a plain spec; Chord.intervals is the same reading',
   chordSpecQuality: 'reads a plain spec; Chord.quality is the same reading',

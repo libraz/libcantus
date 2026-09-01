@@ -71,6 +71,21 @@ export function bassPcOf(chord: Chord): number {
   return pitchClass(chord.bassPc ?? chord.rootPc);
 }
 
+/**
+ * The chord tones an arpeggiating line cycles through, starting from the bass.
+ *
+ * A slash bass says which note sounds under the chord, so it has to be the one
+ * the cycle begins on; the chord's own tones then follow in stacked-thirds
+ * order from where the bass sits among them. A bass the chord does not contain
+ * is prefixed rather than substituted, so no chord tone is lost.
+ */
+export function bassToneCycle(chord: Chord): number[] {
+  const bass = bassPcOf(chord);
+  const tones = chordTonePcs(chord);
+  const at = tones.indexOf(bass);
+  return at < 0 ? [bass, ...tones] : [...tones.slice(at), ...tones.slice(0, at)];
+}
+
 /** Main-pulse positions within `[start, end)`, aligned to the global bar grid. */
 export function beatPositions(start: number, end: number, ts: TimeSignature): number[] {
   const positions: number[] = [];
@@ -141,6 +156,12 @@ export function bandFloor(low: number, instrument: StringedProfile | undefined):
  * target on the band edge would otherwise put it a semitone outside — below
  * MIDI 0 at the lowest accepted octave.
  *
+ * Where the line already sits on that neighbour — the note it is coming from is
+ * a step from the target — the neighbour on the far side of the target is taken
+ * instead. The approach then comes from the other direction, which is the one
+ * thing that cannot happen on the beat whose whole job is to move: repeating
+ * the note just played would stop the line at the chord change.
+ *
  * @param target The note being led into.
  * @param from Where the line is coming from, which decides the direction.
  * @param low Floor of the register band.
@@ -156,6 +177,18 @@ export function approachNote(
   chromatic: boolean,
 ): number {
   const dir = from <= target ? -1 : 1;
+  const near = neighborOnSide(target, dir, low, key, chromatic);
+  return near === from ? neighborOnSide(target, -dir, low, key, chromatic) : near;
+}
+
+/** The neighbour of `target` on the side `dir` points to, folded into the band. */
+function neighborOnSide(
+  target: number,
+  dir: number,
+  low: number,
+  key: KeyScale,
+  chromatic: boolean,
+): number {
   const semitone = target + dir;
   if (chromatic) {
     return foldIntoBand(semitone, low);

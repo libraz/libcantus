@@ -172,6 +172,14 @@ export type HarmonizeOptions = {
    * @defaultValue `{ seed: 0 }`
    */
   ctx?: GenerationContextInput;
+  /**
+   * Upper bound on the work this call may do. The search is one pass per
+   * placement over every pair of candidate chords in every slot, so a long line
+   * harmonized with `placement.transposeSearch` on is what needs this raised.
+   *
+   * @defaultValue {@link DEFAULT_GENERATION_BUDGET}
+   */
+  budget?: number;
 };
 
 /**
@@ -308,8 +316,11 @@ const TESSITURA_WEIGHT = 0.001;
  *   non-chord tone on a weak beat                      +1
  *   note outside the key, on top of the above        +0.5
  * vocabulary per beat the slot's structural notes are worth
- *   degree, by tonal weight: I 0, V 0.1, IV 0.15,
- *   ii and vi 0.3, iii 0.45, vii 0.9
+ *   root above the tonic, by tonal weight: tonic 0,
+ *   dominant 0.1, subdominant 0.15, supertonic,
+ *   submediant and subtonic 0.3, mediant 0.45,
+ *   a remote root 0.9
+ *   diminished or augmented triad, wherever it sits    0.9
  *   secondary dominant                               +0.5
  *   borrowed chord                                   +0.5
  * transition per beat of the slot it enters
@@ -337,14 +348,57 @@ const NON_CHORD_TONE_STRONG = 4;
 const NON_CHORD_TONE_WEAK = 1;
 const NON_SCALE_TONE = 0.5;
 /**
- * What each degree costs to use, in degree order, standing for how much tonal
- * weight it carries: the tonic is free, the other primary triads are nearly so,
- * and the further a degree sits from them the more evidence the melody has to
- * supply. Without it every triad sharing a melody note is equally good and the
- * search wanders through the ones that chain by fifths. The same shape applies
- * in minor, where the slots are i, ii, III, iv, v, VI and VII.
+ * What a root costs to build a chord on, by the semitones it sits above the
+ * tonic: the tonic is free, the other primary triads are nearly so, and the
+ * further a root sits from them the more evidence the melody has to supply.
+ * Without it every triad sharing a melody note is equally good and the search
+ * wanders through the ones that chain by fifths.
+ *
+ * It is read by interval rather than by the ordinal a degree occupies in the
+ * scale, so a root carries the tonal weight of the function it actually has:
+ * the subdominant costs what a subdominant costs whether the key spells it IV
+ * or iv, and the subtonic a minor key closes plagally through is not charged
+ * what a major key's leading-tone triad is charged for standing seventh in the
+ * list. Roots no diatonic degree of a common mode reaches — the flat
+ * supertonic, the tritone, the raised leading tone — are remote, and cost what
+ * a chord the melody has to spell outright costs.
  */
-const DEGREE_BASE = [0, 0.3, 0.45, 0.15, 0.1, 0.3, 0.9];
+const ROOT_WEIGHT_BY_SEMITONE = [0, 0.9, 0.3, 0.45, 0.45, 0.15, 0.9, 0.1, 0.3, 0.3, 0.3, 0.9];
+
+/**
+ * What a triad costs for its own instability, wherever in the key it sits. A
+ * diminished or augmented triad in root position is unstable as a harmony, not
+ * because of the degree it happens to fall on, so the melody has to sound the
+ * note only that chord explains before the search will spend it — and the same
+ * triad costs the same in every key that holds it.
+ */
+const UNSTABLE_TRIAD = 0.9;
+
+/** The triad qualities {@link UNSTABLE_TRIAD} is charged for. */
+const UNSTABLE_QUALITIES: ReadonlySet<ChordQuality> = new Set<ChordQuality>([
+  'dim',
+  'aug',
+  'dim7',
+  'm7b5',
+  'aug7',
+]);
+
+/**
+ * What using one of the key's own chords costs, standing for how much tonal
+ * weight it carries.
+ *
+ * The price is a function of what the chord *is* in the key — where its root
+ * sits above the tonic, and what the chord itself is — and never of the ordinal
+ * position its degree occupies in the scale. A mode that spells its second
+ * degree as a diminished triad therefore pays for a diminished triad rather
+ * than inheriting what a minor supertonic costs, and one whose seventh degree
+ * is a major triad pays for a subtonic rather than for a leading-tone triad.
+ */
+function vocabularyBase(rootPc: number, quality: ChordQuality, tonicPc: number): number {
+  const above = (pitchClass(rootPc) - tonicPc + 12) % 12;
+  const root = ROOT_WEIGHT_BY_SEMITONE[above] ?? UNSTABLE_TRIAD;
+  return UNSTABLE_QUALITIES.has(quality) ? Math.max(root, UNSTABLE_TRIAD) : root;
+}
 /**
  * What a chord from outside the key's own triads costs — more than any of them,
  * and more than the flow reward reaching it and leaving it can repay. A chromatic
@@ -524,6 +578,7 @@ function admittedCount(fraction: number, size: number): number {
  * not part of the package surface.
  */
 export function buildCandidates(key: KeyScale, harmonic: number): Candidate[] {
+  const tonicPc = pitchClass(key.rootPc);
   const tones = scaleTonesInDegreeOrder(key);
   const candidates: Candidate[] = tones.map((rootPc, index) => {
     // Scale degrees are 1-based across the library, while the array index is
@@ -535,7 +590,7 @@ export function buildCandidates(key: KeyScale, harmonic: number): Candidate[] {
       quality,
       degree,
       secondaryDominant: false,
-      base: DEGREE_BASE[index] ?? 0.6,
+      base: vocabularyBase(rootPc, quality, tonicPc),
       pcs: chordPitchClasses(makeChord(rootPc, quality)),
     };
   });
@@ -549,13 +604,13 @@ export function buildCandidates(key: KeyScale, harmonic: number): Candidate[] {
   // on the melody. A major key already holds this chord as its diatonic V, and
   // the duplicate filter below drops the repeat.
   if (isMinorKey(key)) {
-    const rootPc = (pitchClass(key.rootPc) + 7) % 12;
+    const rootPc = (tonicPc + 7) % 12;
     candidates.push({
       rootPc,
       quality: 'maj',
       degree: 5,
       secondaryDominant: false,
-      base: DEGREE_BASE[4] ?? 0.6,
+      base: vocabularyBase(rootPc, 'maj', tonicPc),
       pcs: chordPitchClasses(makeChord(rootPc, 'maj')),
     });
   }
@@ -1035,7 +1090,10 @@ function harmonizeOnce(
  * @category Reharmonization
  */
 export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
-  assertNoteEvents(opts.melody, 'harmonize melody', { allowNonPositiveDuration: true });
+  assertNoteEvents(opts.melody, 'harmonize melody', {
+    allowNonPositiveDuration: true,
+    budget: opts.budget,
+  });
   const phraseEnds = opts.phraseEnds ?? [];
   for (const end of phraseEnds) {
     assertFiniteNumber(end, 'harmonize phrase end');
@@ -1100,16 +1158,26 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   );
   const segmentStart = Math.floor(melodyStart / hr) * hr;
   const gridCount = Math.max(1, Math.ceil((melodyEnd - segmentStart) / hr));
-  assertGenerationBudget(gridCount, 'harmonic segments');
+  assertGenerationBudget(gridCount, 'harmonic segments', opts.budget);
+  // Only a beat inside the melody names a close inside it. A beat at or beyond
+  // the melody's end names the close the melody already has, and one at or
+  // before the grid's first boundary names no slot at all, so neither may reach
+  // the grid, the cadence points, or the tones read as structural: passing the
+  // end of the last phrase along with the ends of the others — which is what
+  // `phrasesFromTimeline` returns — harmonizes the line exactly as naming the
+  // inner closes alone does.
+  const innerEnds = phraseEnds.filter(
+    (end) => end > segmentStart + BEAT_EPS && end < melodyEnd - BEAT_EPS,
+  );
   // The grid the search may change chords on: the harmonic rhythm, anchored at
   // the melody's first slot boundary, divided again at every beat the caller
   // named as a phrase end. A named end falling inside a slot cuts it, so the
   // slot a phrase closes in ends where the phrase does instead of running on
   // into the next one, and the grid then resumes on its own boundaries — which
   // is what keeps the chord changes after the boundary on the barline.
-  const bounds = gridBounds(segmentStart, hr, gridCount, phraseEnds);
+  const bounds = gridBounds(segmentStart, hr, gridCount, innerEnds);
   const segCount = bounds.length - 1;
-  assertGenerationBudget(segCount, 'harmonic segments');
+  assertGenerationBudget(segCount, 'harmonic segments', opts.budget);
   const segments: Segment[] = Array.from({ length: segCount }, (_, s) => {
     const startBeat = bounds[s] ?? segmentStart;
     const endBeat = bounds[s + 1] ?? startBeat + hr;
@@ -1136,7 +1204,7 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
       lastExclusive += 1;
     }
     memberships += Math.max(0, lastExclusive - first);
-    assertGenerationBudget(memberships, 'note-to-segment memberships');
+    assertGenerationBudget(memberships, 'note-to-segment memberships', opts.budget);
     for (let segment = first; segment < lastExclusive; segment += 1) {
       segments[segment]?.noteIndices.push(index);
     }
@@ -1154,7 +1222,7 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   // close on the tonic between two supertonics reads as a lower neighbour. A
   // phrase's last note is structural for the same reason the melody's last note
   // is, so the closes the caller named are put back.
-  const phraseClosingNotes = closingNoteIndices(spans, phraseEnds);
+  const phraseClosingNotes = closingNoteIndices(spans, innerEnds);
   for (const segment of segments) {
     const structural = segment.noteIndices.filter(
       (idx) => tones[idx]?.ornamental !== true || phraseClosingNotes.has(idx),
@@ -1185,7 +1253,7 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
 
   const { closing: closingSegments, named: namedEndSegments } = phraseEndSegments(
     segments,
-    phraseEnds,
+    innerEnds,
   );
   // A cadence needs two chords to be told apart, so the articulation rule can
   // only be applied where the vocabulary offers a second harmony to move to.
@@ -1207,9 +1275,15 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   }
   const octaveShifts: number[] = placement.octaveSearch ? [0, -12, 12] : [0];
   const transposes = semitoneShifts.flatMap((s) => octaveShifts.map((o) => s + o));
+  // The estimate is the search itself: one pass per placement visits every pair
+  // of candidates in every slot, and that product dominates everything else the
+  // call does. A caller harmonizing a whole piece with the placement search on
+  // raises `budget` to cover it, the way the sibling generators are given room
+  // for the work they were asked for.
   assertGenerationBudget(
     transposes.length * segCount * candidates.length * candidates.length,
     'harmonization placement search',
+    opts.budget,
   );
 
   let bestCost = Number.POSITIVE_INFINITY;
@@ -1252,8 +1326,13 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
     }),
   );
 
+  // A note's role is its role in the chord the search chose for the slot it was
+  // charged against, so the slot is read from the same snapped onset the cost
+  // model read: taking the raw onset would report a note that begins a few
+  // milliseconds before a boundary against the chord on the other side of it,
+  // which is the performance jitter the snap exists to absorb.
   const melodyRoles = opts.melody.map((note, noteIndex) => {
-    const segIdx = segmentIndexAt(bounds, note.startBeat);
+    const segIdx = segmentIndexAt(bounds, snapToPulse(note.startBeat, pulse));
     const cand = candAt(bestPath[segIdx] ?? 0);
     const chord: Chord = makeChord(cand.rootPc, cand.quality);
     return { noteIndex, role: roleOf(note.pitch + bestTs, chord).role };

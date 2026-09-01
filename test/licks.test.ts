@@ -158,6 +158,83 @@ describe('placeLicks', () => {
     }
   });
 
+  it('sounds the slash bass at the onset the figure begins on', () => {
+    // The written bass is what sounds under the chord, and the figure's own
+    // root note shares that onset with it. Whichever of the two survives, the
+    // onset is the bass: C/E in the default register is E2, the same note the
+    // styled generator writes there.
+    const slash = [{ startBeat: 0, endBeat: 4, chord: makeChord(0, 'maj', 4) }];
+    const notes = placeLicks(slash, KEY, {
+      genre: 'motown',
+      ctx: { seed: 0, bpm: 112, complexity: { rhythmic: 1 } },
+    });
+    expect(notes[0]?.startBeat).toBe(0);
+    expect(notes[0]?.pitch).toBe(40);
+    expect(notes[0]?.pitch).toBe(
+      generateBassLine({ segments: slash, key: KEY, style: 'root' })[0]?.pitch,
+    );
+    // The figure above that onset is still measured from the chord's own root,
+    // so its octave degree answers C rather than the whole figure being
+    // transposed onto the bass, which would sound it a third too high.
+    const octave = notes.find((note) => Math.abs(note.startBeat - 1) < 1e-9);
+    expect(octave?.pitch).toBe(48);
+  });
+
+  it('sounds a flattened degree below the plain one, whatever the chord supplies', () => {
+    // An alteration displaces the diatonic degree; it does not stack on top of
+    // a degree the chord already flattened. A flat seventh is ten semitones
+    // above the root over a dominant or minor chord as much as over a major
+    // one — otherwise the boogie's sixth-to-flat-seventh motion comes out as a
+    // repeated sixth.
+    const SIXTEENTH = 0.25;
+    const flattened = BASS_LICKS.filter((lick) =>
+      lick.material.notes.some((note) => note.degree === 7 && note.alter === -1),
+    );
+    expect(flattened.length).toBeGreaterThan(0);
+
+    for (const lick of flattened) {
+      const [slowest, fastest] = lick.tempoRange ?? [100, 100];
+      const bpm = Math.round((slowest + fastest) / 2);
+      const rootStep = Math.min(
+        ...lick.material.notes.filter((note) => note.degree === 1).map((note) => note.step),
+      );
+      const flatStep = (
+        lick.material.notes.find((note) => note.degree === 7 && note.alter === -1) ?? { step: 0 }
+      ).step;
+      for (const quality of lick.fitsOver ?? ['maj7', 'dom7', 'min7', 'min']) {
+        const notes = placeLicks(
+          [{ startBeat: 0, endBeat: 4, chord: makeChord(0, quality) }],
+          KEY,
+          {
+            genre: lick.genre,
+            difficulty: 5,
+            ctx: { seed: 0, bpm, complexity: { rhythmic: 1 } },
+          },
+        );
+        const at = (step: number) =>
+          notes.find((note) => Math.abs(note.startBeat - step * SIXTEENTH) < 1e-9);
+        const where = `${lick.id} over ${quality}`;
+        const root = at(rootStep);
+        const flat = at(flatStep);
+        expect(root, where).toBeDefined();
+        expect(flat, where).toBeDefined();
+        expect((flat?.pitch ?? 0) - (root?.pitch ?? 0), where).toBe(10);
+      }
+    }
+  });
+
+  it('walks the boogie figure through its flat seventh over a dominant chord', () => {
+    const notes = placeLicks([{ startBeat: 0, endBeat: 4, chord: makeChord(0, 'dom7') }], KEY, {
+      genre: 'blues',
+      ctx: { seed: 0, bpm: 120, complexity: { rhythmic: 1 } },
+    });
+    const sounded = [0, 2, 4, 6, 8, 10, 12].map(
+      (step) => notes.find((note) => Math.abs(note.startBeat - step * 0.25) < 1e-9)?.pitch,
+    );
+    // C G A Bb A G C, in the default register.
+    expect(sounded).toEqual([36, 43, 45, 46, 45, 43, 36]);
+  });
+
   it('honours the chord qualities a figure states it fits over', () => {
     // The walk-down states major-family chords only, so a bar of m7b5 cannot
     // take it; the line still sounds, on its root.

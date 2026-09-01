@@ -203,13 +203,7 @@ export function ornament(notes: readonly NoteEvent[], opts: OrnamentOptions = {}
   // are accepted and dropped here, exactly as humanize and the analysis layer do.
   const sounding = dropSilentNotes(notes);
   const ordered = [...sounding].sort((a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch);
-  const previousOf = new Map<NoteEvent, NoteEvent | undefined>();
-  for (let index = 0; index < ordered.length; index += 1) {
-    const note = ordered[index];
-    if (note) {
-      previousOf.set(note, index === 0 ? undefined : ordered[index - 1]);
-    }
-  }
+  const previousOf = previousOnsets(ordered);
   const nextOf = nextOnsets(ordered);
   const gaps = strokeGaps(ordered);
 
@@ -236,6 +230,28 @@ export function ornament(notes: readonly NoteEvent[], opts: OrnamentOptions = {}
     }
     return decorated;
   });
+}
+
+/**
+ * The last note of the previous onset before each note.
+ *
+ * The previous onset rather than the previous note, for the reason
+ * {@link nextOnsets} looks ahead by onset: the notes of a chord share a
+ * position, so the note beside one in a chord is not a step the line took and
+ * cannot be the leap a slide is played into.
+ */
+function previousOnsets(ordered: readonly NoteEvent[]): Map<NoteEvent, NoteEvent | undefined> {
+  const previousOf = new Map<NoteEvent, NoteEvent | undefined>();
+  let earlier: NoteEvent | undefined;
+  for (const note of ordered) {
+    if (earlier !== undefined && earlier.startBeat === note.startBeat) {
+      previousOf.set(note, previousOf.get(earlier));
+    } else {
+      previousOf.set(note, earlier);
+    }
+    earlier = note;
+  }
+  return previousOf;
 }
 
 /**

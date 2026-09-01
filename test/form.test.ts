@@ -151,6 +151,35 @@ describe('structuralCadences', () => {
     expect(ranked[0]?.phraseIndex).toBe(1);
   });
 
+  it('gives the last phrase the hypermetric bonus only where it lands on a hyperbar', () => {
+    // Two readings of the same eight bars, differing only in whether beat 32 is
+    // a hyperbar head. Ending the piece and closing a hyperbar are two separate
+    // things a cadence can do, so the phrase that only ends the piece must be
+    // graded below the one that does both.
+    const grouping = {
+      groupBars: 4,
+      downbeats: [0, 16],
+      confidence: 1,
+      rationale: 'four-bar groups',
+    };
+    const off = phrasesFromTimeline(timeline, melody, {
+      key: majorKey(0),
+      hypermeter: grouping,
+    });
+    const on = phrasesFromTimeline(timeline, melody, {
+      key: majorKey(0),
+      hypermeter: { ...grouping, downbeats: [0, 16, 32] },
+    });
+    const offLast = off[off.length - 1];
+    const onLast = on[on.length - 1];
+    expect(offLast?.endBeat).toBe(32);
+    expect(onLast?.endBeat).toBe(32);
+    expect(offLast?.structuralWeight ?? 1).toBeLessThan(onLast?.structuralWeight ?? 0);
+    // The unaligned close is graded, not saturated, so an aligned cadence
+    // elsewhere can still outrank it.
+    expect(offLast?.structuralWeight ?? 1).toBeLessThan(1);
+  });
+
   it('leaves out phrases no cadence closes', () => {
     const noCadence = chordTimelineFromChords([span(0, 'maj', 0), span(2, 'min', 8)], 16);
     const plain = phrasesFromTimeline(noCadence, quarters([60, 62, 64, 65], 0), {
@@ -277,6 +306,31 @@ describe('sectionsFromNotes', () => {
     expect(sections.length).toBeGreaterThanOrEqual(1);
     expect(sections[0]?.startBeat).toBe(0);
     expect(sections[sections.length - 1]?.endBeat).toBe(48);
+  });
+
+  it('names no section over a stretch of silence', () => {
+    // A figure, a long tacet, the same figure again: the pause is a break in the
+    // form, not a statement of its own, so it takes no letter and the return is
+    // heard as a restatement of the opening rather than as new material.
+    const figure = (bar: number): NoteEvent[] => quarters([60, 62, 64, 65], bar * 4);
+    const withSilence = [...figure(0), ...figure(8)];
+    const sections = sectionsFromNotes(withSilence, { unitBars: 1 });
+    expect(sections.map((section) => section.label)).toEqual(['A', 'A']);
+    expect(sections[1]?.firstOccurrence).toBe(0);
+    expect(sections[1]?.startBeat).toBe(32);
+    // The silence belongs to the section it follows rather than to nothing.
+    expect(sections[0]?.startBeat).toBe(0);
+    expect(sections[0]?.endBeat).toBe(32);
+  });
+
+  it('keeps the letters running in order across a silence', () => {
+    // A, silence, then new material: the pause consumes no letter, so what
+    // follows is B rather than C.
+    const figure = (bar: number): NoteEvent[] => quarters([60, 62, 64, 65], bar * 4);
+    const withSilence = [...figure(0), ...materialB(8)];
+    const sections = sectionsFromNotes(withSilence, { unitBars: 4 });
+    expect(sections.map((section) => section.label)).toEqual(['A', 'B']);
+    expect(sections[1]?.firstOccurrence).toBe(1);
   });
 
   it('names no section a chorus', () => {

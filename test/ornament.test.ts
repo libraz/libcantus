@@ -116,6 +116,32 @@ describe('ornament styles pick the positions they belong on', () => {
     expect(slid[2]?.articulation).toBe('slide');
   });
 
+  it('hears no leap inside a chord, so its inner voices take no slide', () => {
+    // One chord: nothing has moved yet, whatever the distance between the
+    // voices sounding it.
+    const chord: NoteEvent[] = [52, 56, 59].map((pitch) => ({
+      pitch,
+      startBeat: 0,
+      durationBeat: 2,
+      velocity: 90,
+    }));
+    const slid = ornament(chord, { style: 'slide', amount: 1, ctx: { seed: 7 } });
+    expect(slid.map((note) => note.articulation)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it('measures the leap into a chord from the onset before it', () => {
+    const voices: NoteEvent[] = [
+      { pitch: 71, startBeat: 0, durationBeat: 1, velocity: 90 },
+      // Two voices on the next onset: one leaps down an eleventh from the note
+      // before, the other steps a semitone up to it. The distance between the
+      // two of them is not a move the line made.
+      { pitch: 60, startBeat: 1, durationBeat: 1, velocity: 90 },
+      { pitch: 72, startBeat: 1, durationBeat: 1, velocity: 90 },
+    ];
+    const slid = ornament(voices, { style: 'slide', amount: 1, ctx: { seed: 7 } });
+    expect(slid.map((note) => note.articulation)).toEqual([undefined, 'slide', undefined]);
+  });
+
   it('drags only into a strong position, not onto every weak one', () => {
     const source = eighths();
     const dragged = ornament(source, { style: 'drag', amount: 1, ctx: { seed: 11 } });

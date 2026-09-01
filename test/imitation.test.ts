@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { InvalidInputError } from '../src/core/errors/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import { imitate } from '../src/generate/countermelody/index.js';
+import { ornament } from '../src/generate/ornament/index.js';
 import { majorKey, minorKey } from '../src/theory/scale/index.js';
 
 const C_MAJOR = majorKey(0);
@@ -195,6 +196,43 @@ describe('imitate options', () => {
       velocityScale: 0.8,
     });
     expect(answer[0]?.velocity).toBe(80);
+  });
+
+  it('answers with the articulation the subject was played with', () => {
+    const decorated = ornament(quarters([60, 64, 67, 72]), {
+      style: 'slide',
+      amount: 1,
+      ctx: { seed: 3 },
+    });
+    expect(decorated.some((note) => note.articulation === 'slide')).toBe(true);
+    const answer = imitate(decorated, { atBeat: 4, interval: 'P5', key: C_MAJOR });
+    // An ornament pass before an imitation is a pass over the same material:
+    // what it wrote reaches the answering voice too.
+    expect(answer.map((note) => note.articulation)).toEqual(
+      decorated.map((note) => note.articulation),
+    );
+  });
+
+  it('carries a copied note through inversion and a tonal answer alike', () => {
+    const played: NoteEvent[] = [
+      { pitch: 60, startBeat: 0, durationBeat: 1, articulation: 'accent', velocity: 100 },
+      { pitch: 64, startBeat: 1, durationBeat: 1, articulation: 'ghost' },
+    ];
+    for (const answer of ['real', 'tonal'] as const) {
+      for (const invert of [false, true]) {
+        const copy = imitate(played, {
+          atBeat: 2,
+          interval: 'P5',
+          key: C_MAJOR,
+          answer,
+          invert,
+        });
+        expect(
+          copy.map((note) => note.articulation),
+          `${answer}, invert ${invert}`,
+        ).toEqual(['accent', 'ghost']);
+      }
+    }
   });
 
   it('leaves a note without a velocity without one', () => {

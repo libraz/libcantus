@@ -46,8 +46,8 @@ import {
 import {
   bandFloor,
   bassPcOf,
+  bassToneCycle,
   beatPositions,
-  chordTonePcs,
   EPS,
   fifthPcOf,
   approachNote as neighborOf,
@@ -257,9 +257,9 @@ function reachableLeap(ctx: BuildContext, pos: number, semitones: number): boole
   return sustainsShift(semitones, available, ctx.bpm, ctx.difficulty);
 }
 
-/** Cycle root -> third -> fifth (-> seventh) across the segment's beats. */
+/** Cycle bass -> third -> fifth (-> seventh) across the segment's beats. */
 function buildArpeggio(ctx: BuildContext, seg: BassSegment): void {
-  const tones = chordTonePcs(seg.chord);
+  const tones = bassToneCycle(seg.chord);
   const positions = beatPositions(seg.startBeat, seg.endBeat, ctx.ts);
   positions.forEach((pos, i) => {
     const pc = tones[i % tones.length] ?? bassPcOf(seg.chord);
@@ -284,7 +284,7 @@ function buildWalking(
   next: BassSegment | undefined,
   index: number,
 ): void {
-  const tones = chordTonePcs(seg.chord);
+  const tones = bassToneCycle(seg.chord);
   const positions = beatPositions(seg.startBeat, seg.endBeat, ctx.ts);
   const count = positions.length;
   positions.forEach((pos, i) => {

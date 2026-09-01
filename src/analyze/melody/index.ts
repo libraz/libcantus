@@ -141,9 +141,9 @@ export type MelodicContour = {
   directions: ContourDirection[];
   /** What the directions add up to. */
   shape: MelodicContourShape;
-  /** Index of the highest note; ties keep the earliest. */
+  /** Index of the highest note; ties keep the earliest, and -1 for a line with no notes. */
   peakIndex: number;
-  /** Index of the lowest note; ties keep the earliest. */
+  /** Index of the lowest note; ties keep the earliest, and -1 for a line with no notes. */
   troughIndex: number;
   /** Semitone distance from the lowest note to the highest. */
   range: number;
@@ -356,6 +356,29 @@ function onsetGaps(notes: readonly NoteEvent[]): number[] {
   const out: number[] = [];
   for (let i = 1; i < notes.length; i += 1) {
     out.push((notes[i]?.startBeat ?? 0) - (notes[i - 1]?.startBeat ?? 0));
+  }
+  return out;
+}
+
+/**
+ * The onset gaps a line read back to front would have.
+ *
+ * Playing a cell backwards keeps each note as long as it was, so the gap that
+ * opens before a note in the retrograde is the gap that followed it in the
+ * model — the distance between the two notes' ends, not between their onsets.
+ * The two coincide only when every note is the same length, which is why the
+ * onset gaps reversed cannot stand in for this.
+ */
+function retrogradeGaps(notes: readonly NoteEvent[]): number[] {
+  const out: number[] = [];
+  for (let i = notes.length - 1; i >= 1; i -= 1) {
+    const later = notes[i];
+    const earlier = notes[i - 1];
+    out.push(
+      (later?.startBeat ?? 0) +
+        (later?.durationBeat ?? 0) -
+        ((earlier?.startBeat ?? 0) + (earlier?.durationBeat ?? 0)),
+    );
   }
   return out;
 }
@@ -756,9 +779,9 @@ function stretchPhrase(ratio: number): string {
  * the pitch transformation and the onset gaps decide the timing, so a statement
  * a fourth higher in doubled note values is recognised for what it is. A pair
  * whose rhythms do not correspond — the same way round for a repetition or a
- * transposition, back to front for a retrograde — is not a transformation of the
- * motif but a different figure, and answers null; {@link melodicSimilarity} is
- * what scores those.
+ * transposition, the model played backwards for a retrograde, note values and
+ * all — is not a transformation of the motif but a different figure, and answers
+ * null; {@link melodicSimilarity} is what scores those.
  *
  * With a `key` in hand the search also asks whether the second statement is the
  * first moved by scale degrees rather than by semitones. That is the tonal
@@ -799,12 +822,14 @@ export function relateMotifs(a: MotifData, b: MotifData, key?: KeyScale): MotifR
   const answerGaps = onsetGaps(answer);
   const modelProfile = rhythmProfile(modelGaps);
   const answerProfile = rhythmProfile(answerGaps);
-  const retroProfile = rhythmProfile([...answerGaps].reverse());
+  // The rhythm the model would have if it were played backwards, which is what
+  // a retrograde has to match — note values kept, their order reversed.
+  const retroProfile = rhythmProfile(retrogradeGaps(model));
   if (modelProfile === null || answerProfile === null) {
     return null;
   }
   const forward = sameNumbers(modelProfile, answerProfile);
-  const backward = retroProfile !== null && sameNumbers(modelProfile, retroProfile);
+  const backward = retroProfile !== null && sameNumbers(retroProfile, answerProfile);
   const modelSpan = onsetSpan(model);
   const timeRatio = modelSpan > EPS ? onsetSpan(answer) / modelSpan : 1;
   const semitones = (answer[0]?.pitch ?? 0) - (model[0]?.pitch ?? 0);
@@ -1029,8 +1054,16 @@ export function melodicSimilarity(a: MelodicPhrase, b: MelodicPhrase): number {
   return compareMelodies(a, b).similarity;
 }
 
-/** Where the highest and lowest notes of a line sit; ties keep the earliest. */
+/**
+ * Where the highest and lowest notes of a line sit; ties keep the earliest.
+ *
+ * A line with no notes has neither, and answers -1 for both rather than 0,
+ * which would name a note the caller cannot reach.
+ */
 function extremes(notes: readonly NoteEvent[]): { peak: number; trough: number } {
+  if (notes.length === 0) {
+    return { peak: -1, trough: -1 };
+  }
   let peak = 0;
   let trough = 0;
   for (let i = 1; i < notes.length; i += 1) {
@@ -1056,7 +1089,9 @@ function extremes(notes: readonly NoteEvent[]): { peak: number; trough: number }
  *
  * @param notes The line: a motif, or plain note events. Notes that never sound
  *   are dropped.
- * @returns The directions, the shape, the peak and trough, and a rationale.
+ * @returns The directions, the shape, the peak and trough, and a rationale. A
+ *   line with no sounding notes is static with a range of 0, and its peak and
+ *   trough are -1: there is no note for them to point at.
  * @example
  * ```ts
  * import { melodicContour } from '@libraz/libcantus';

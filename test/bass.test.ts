@@ -101,6 +101,30 @@ describe('generateBassLine', () => {
     expect((((notes[0]?.pitch ?? Number.NaN) % 12) + 12) % 12).toBe(4);
   });
 
+  it('sounds the slash bass at the segment onset in every style', () => {
+    // A slash bass is what sounds under the chord, so every style has to begin
+    // the segment on it: C/E in the default register is E2. The arpeggiating
+    // styles cycle the chord's own tones from behind that note rather than
+    // starting the cycle over on the written root.
+    const segments: BassSegment[] = [
+      { startBeat: 0, endBeat: 4, chord: makeChord(0, 'maj', 4) }, // C/E
+      { startBeat: 4, endBeat: 8, chord: makeChord(5, 'maj') },
+    ];
+    for (const style of ALL_STYLES) {
+      const notes = generateBassLine({ segments, key: cMajor, style, ctx: { seed: 4 } });
+      const onset = notes.find((note) => note.startBeat === 0);
+      expect(onset?.pitch, style).toBe(40);
+    }
+    // The rest of the arpeggio is still the chord's own tones, not a figure
+    // transposed onto the bass.
+    const arpeggio = generateBassLine({ segments, key: cMajor, style: 'arpeggio' });
+    for (const note of arpeggio.filter((n) => n.startBeat < 4)) {
+      expect(chordPitchClasses(segments[0]?.chord ?? makeChord(0, 'maj'))).toContain(
+        ((note.pitch % 12) + 12) % 12,
+      );
+    }
+  });
+
   it('yields exactly one note per segment for root style', () => {
     const segments = progression();
     const notes = generateBassLine({ segments, key: cMajor, style: 'root' });
@@ -133,6 +157,41 @@ describe('generateBassLine', () => {
       expect(downbeat).toBeDefined();
       if (approach && downbeat) {
         expect(Math.abs(approach.pitch - downbeat.pitch)).toBeLessThanOrEqual(2);
+      }
+    }
+  });
+
+  it('moves on the approach beat for every pair of chord roots', () => {
+    // The beat before a chord change is the one beat that has to move. When the
+    // next chord's bass already sits a step from the note in hand, the neighbour
+    // on the near side is that same note, and the line would stand still on it.
+    for (let from = 0; from < 12; from += 1) {
+      for (let to = 0; to < 12; to += 1) {
+        if (from === to) {
+          continue;
+        }
+        const segments: BassSegment[] = [
+          { startBeat: 0, endBeat: 4, chord: makeChord(from, 'dom7') },
+          { startBeat: 4, endBeat: 8, chord: makeChord(to, 'maj') },
+        ];
+        for (let seed = 0; seed < 4; seed += 1) {
+          const notes = generateBassLine({
+            segments,
+            key: cMajor,
+            style: 'walking',
+            ctx: { seed },
+          });
+          const where = `${from}->${to} seed ${seed}`;
+          const approach = notes.find((note) => note.startBeat === 3);
+          const before = notes.find((note) => note.startBeat === 2);
+          const downbeat = notes.find((note) => note.startBeat === 4);
+          expect(approach, where).toBeDefined();
+          expect(approach?.pitch, where).not.toBe(before?.pitch);
+          // And it is still a neighbour of what it leads into.
+          const approachPc = (((approach?.pitch ?? 0) % 12) + 12) % 12;
+          const downbeatPc = (((downbeat?.pitch ?? 0) % 12) + 12) % 12;
+          expect(pcDistance(approachPc, downbeatPc), where).toBeLessThanOrEqual(2);
+        }
       }
     }
   });

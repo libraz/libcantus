@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { hypermeter, phrasesFromTimeline, sectionsFromNotes } from '../src/analyze/form/index.js';
 import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../src/analyze/keys/index.js';
 import { extractMotifs, melodicContour } from '../src/analyze/melody/index.js';
-import { chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
+import { chordTimelineFromNotes, detectCadences } from '../src/analyze/timeline/index.js';
 import { analyzeVoice } from '../src/analyze/voice/index.js';
 import { createNoteEventIndex } from '../src/core/event-index/index.js';
 import { BASS_4_STRING } from '../src/core/instrument/index.js';
@@ -361,11 +361,24 @@ describe('Score analysis', () => {
     );
   });
 
-  it('reads the hypermeter the hypermeter reader reads', () => {
-    expect(tune().hypermeter()).toEqual(hypermeter(notes, tune().meters));
+  it('reads the hypermeter the hypermeter reader reads, on the score own cadences', () => {
+    const timeline = chordTimelineFromNotes(notes, { meters: tune().meters }).timeline;
+    const regions = keyTimelineFromNotes(notes, { meters: tune().meters });
+    const keyAt = keyLookup(regions, prevailingKeyOf(regions) ?? Key.major('C').scale);
+    const cadenceBeats = detectCadences(timeline, keyAt).map((hit) => hit.atBeat);
+    expect(cadenceBeats.length).toBeGreaterThan(0);
+    expect(tune().hypermeter()).toEqual(hypermeter(notes, tune().meters, { cadenceBeats }));
     expect(tune().hypermeter({ cadenceBeats: [8] })).toEqual(
       hypermeter(notes, tune().meters, { cadenceBeats: [8] }),
     );
+  });
+
+  it('reads its phrases on the grouping it reports as its hypermeter', () => {
+    // The phrase reader builds its own grouping from the score's cadences. Handing
+    // it the grouping the score reports must therefore change nothing: one score
+    // holds one reading of where its hyperbars are.
+    const score = tune();
+    expect(score.phrases({ hypermeter: score.hypermeter() })).toEqual(score.phrases());
   });
 
   it('reads the motifs and the contour the melody reader reads', () => {
@@ -390,6 +403,10 @@ describe('Score analysis', () => {
     const prevailing = prevailingKeyOf(regions);
     expect(prevailing).not.toBeNull();
     expect(score.voices()).toHaveLength(notes.length);
+    // This tune is a single line, so the polyphonic reading the score makes and
+    // the single-voice reader's answer are the same answer — down to the shape,
+    // since the score answers about its own array and says nothing about having
+    // taken it apart to read it.
     expect(score.voices()).toEqual(
       analyzeVoice(notes, timeline.at, keyLookup(regions, prevailing ?? Key.major('C').scale)),
     );

@@ -38,6 +38,41 @@ describe('chordTimelineFromNotes', () => {
     expect(result.timeline.segments[0]?.chord.bassPc).toBeUndefined();
   });
 
+  it('reads a triad over a foreign bass as the slash chord it is written as', () => {
+    // F/G, G/A and C/D: the bass sounds nowhere above the triad, so the ninth an
+    // extended reading would name it was never voiced. These are core pop
+    // vocabulary, and naming them `Fadd9/G` empties a chart of them.
+    const cases: [number[], number, number][] = [
+      [[43, 65, 69, 72], 5, 7], // G2 + F A C -> F/G
+      [[45, 67, 71, 74], 7, 9], // A2 + G B D -> G/A
+      [[50, 72, 76, 79], 0, 2], // D3 + C E G -> C/D
+    ];
+    for (const [pitches, rootPc, bassPc] of cases) {
+      const chord = chordTimelineFromNotes(blockChord(pitches, 0)).timeline.segments[0]?.chord;
+      expect(chord?.rootPc).toBe(rootPc);
+      expect(chord?.quality).toBe('maj');
+      expect(chord?.bassPc).toBe(bassPc);
+    }
+  });
+
+  it('still names the extension when the extension is actually voiced', () => {
+    // The same bass with a G inside the upper structure: now a ninth sounds
+    // above the chord, and the reading that names it is the right one.
+    const chord = chordTimelineFromNotes(blockChord([43, 65, 67, 69, 72], 0)).timeline.segments[0]
+      ?.chord;
+    expect(chord?.rootPc).toBe(5);
+    expect(chord?.quality).toBe('add9');
+    expect(chord?.bassPc).toBe(7);
+  });
+
+  it('leaves an inversion an inversion when the bass is a chord tone', () => {
+    // The fifth in the bass is a chord tone, not a pedal: C/G stays C/G.
+    const chord = chordTimelineFromNotes(blockChord([55, 72, 76], 0)).timeline.segments[0]?.chord;
+    expect(chord?.rootPc).toBe(0);
+    expect(chord?.quality).toBe('maj');
+    expect(chord?.bassPc).toBe(7);
+  });
+
   it('recovers a C-F-G-C progression, one chord per bar', () => {
     const result = chordTimelineFromNotes(cfgcNotes());
     const roots = result.timeline.segments.map((seg) => seg.chord.rootPc);

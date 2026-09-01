@@ -39,9 +39,11 @@ const SECTIONS: Section[] = ['intro', 'verse', 'prechorus', 'chorus', 'bridge', 
  * move code rather than notes shows up here, and a change of the notes has to
  * be made deliberately by re-pinning it.
  *
- * It last moved when a named feel stopped being halved on its way to the grid —
- * a shuffle is the triplet it is named for — and when the stroke a fill lands on
- * was lifted above the backbeats around it.
+ * It last moved when the backbeat voice began reading the style as well as the
+ * role — a latin groove writes the rim-click clave that names it, and a style
+ * that thins a groove out no longer takes the snare drum away from a caller who
+ * asked for every voice — and when the open hi-hat accents stopped depending on
+ * the subdivision the hats happen to be written on.
  */
 function grooveDigest(): string {
   const hash = createHash('sha256');
@@ -110,7 +112,7 @@ function fillDigest(): string {
 
 describe('moving the drum vocabulary into data', () => {
   it('pins every generated groove', () => {
-    expect(grooveDigest()).toBe('a35ae5c8fa4e0bf60ab44a01a7750933f159b54f8505479875ce08fc1e4f5b06');
+    expect(grooveDigest()).toBe('2cabbd00271c2d90321215bb1644384b343c2335283ccb350953f581b49399c1');
   });
 
   it('leaves every fill selection exactly as it was', () => {

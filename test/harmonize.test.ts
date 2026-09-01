@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InvalidInputError } from '../src/core/errors/index.js';
+import { BudgetExceededError, InvalidInputError } from '../src/core/errors/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import {
   buildCandidates,
@@ -9,6 +9,7 @@ import {
 } from '../src/generate/harmonize/index.js';
 import type { ChordSpan } from '../src/generate/progression/index.js';
 import { chordFromSpan, chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
+import { roleOf } from '../src/theory/harmony/index.js';
 import {
   majorKey,
   minorKey,
@@ -670,3 +671,108 @@ const REHARMONIZE_POSITION = {
   secondaryDominant: 0.5,
   borrowed: 1,
 } as const;
+
+describe('the role a note is reported in', () => {
+  /** The chord the result has sounding at a beat, as a chord. */
+  function chordUnder(result: HarmonizeResult, beat: number) {
+    const span = chordAt(result, beat);
+    return span ? chordFromSpan(span) : undefined;
+  }
+
+  /** A performed onset: a beat played a little early or late. */
+  function played(pitch: number, startBeat: number, durationBeat: number): NoteEvent {
+    return { pitch, startBeat, durationBeat };
+  }
+
+  // The chord grid changes on beat 2, and the B is played 0.03 of a beat early:
+  // the snap that decides which slot the note is charged against reads it as
+  // beat 2, so the role reported for it is its role in the chord chosen there.
+  const jittered: NoteEvent[] = [
+    played(60, 0, 1),
+    played(64, 1.02, 0.95),
+    played(71, 1.97, 1),
+    played(67, 3.01, 1),
+    played(65, 3.98, 1),
+    played(64, 5.02, 1),
+    played(62, 5.99, 1),
+    played(60, 7, 1),
+  ];
+
+  it('reports a note against the chord chosen for the slot it was charged to', () => {
+    const result = harmonizeMelody({
+      melody: jittered,
+      key: cMajor,
+      harmonicRhythm: 2,
+      placement: { transposeSearch: false, octaveSearch: false },
+    });
+    for (const [index, note] of jittered.entries()) {
+      const snapped =
+        Math.abs(Math.round(note.startBeat) - note.startBeat) <= 0.05
+          ? Math.round(note.startBeat)
+          : note.startBeat;
+      const chord = chordUnder(result, snapped);
+      expect(chord).toBeDefined();
+      expect(result.melodyRoles[index]?.role).toBe(
+        roleOf(note.pitch + result.transposeSemitones, chord ?? makeChord(0, 'maj')).role,
+      );
+    }
+  });
+
+  it('reports a note that begins just before a boundary as a tone of the chord after it', () => {
+    // The B lands on the slot beginning at beat 2, which the search covers with
+    // a chord that has it: a note the cost model paid to explain is not then
+    // reported as one the harmony left unexplained.
+    const result = harmonizeMelody({
+      melody: jittered,
+      key: cMajor,
+      harmonicRhythm: 2,
+      placement: { transposeSearch: false, octaveSearch: false },
+    });
+    const chord = chordUnder(result, 2);
+    expect(chordPitchClasses(chord ?? makeChord(0, 'maj'))).toContain(11);
+    expect(result.melodyRoles[2]?.role).not.toBe('tension');
+  });
+
+  it('reports every note of a melody played straight against its own slot', () => {
+    const result = harmonizeMelody({ melody: twinkle, key: cMajor });
+    for (const [index, note] of twinkle.entries()) {
+      const chord = chordUnder(result, note.startBeat);
+      expect(result.melodyRoles[index]?.role).toBe(
+        roleOf(note.pitch, chord ?? makeChord(0, 'maj')).role,
+      );
+    }
+  });
+});
+
+describe('the work a harmonization may do', () => {
+  /** A whole piece: 120 bars of 4/4, one note a beat. */
+  const FIGURE = [0, 2, 4, 5, 7, 5, 4, 2];
+  const wholePiece: NoteEvent[] = Array.from({ length: 480 }, (_, index) => ({
+    pitch: 60 + (FIGURE[index % FIGURE.length] ?? 0),
+    startBeat: index,
+    durationBeat: 1,
+  }));
+
+  it('harmonizes a whole piece with the transposition search when given the budget', () => {
+    const result = harmonizeMelody({
+      melody: wholePiece,
+      key: cMajor,
+      reharmonize: 'borrowed',
+      placement: { transposeSearch: true, octaveSearch: false },
+      budget: 10_000_000,
+    });
+    expect(result.chords.length).toBeGreaterThan(0);
+    expect(result.melodyRoles.length).toBe(wholePiece.length);
+  });
+
+  it('honours a budget the caller lowers', () => {
+    expect(() => harmonizeMelody({ melody: twinkle, key: cMajor, budget: 1 })).toThrow(
+      BudgetExceededError,
+    );
+  });
+
+  it('leaves the harmonization a raised budget yields identical to the one it allows', () => {
+    const opts = { melody: twinkle, key: cMajor } as const;
+    expect(harmonizeMelody({ ...opts, budget: 10_000_000 })).toEqual(harmonizeMelody(opts));
+  });
+});

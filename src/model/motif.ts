@@ -87,10 +87,9 @@ function copyNote(note: MotifNote): MotifNote {
  * and a zero-length note in one would be tiled and transformed as though it
  * were a note.
  *
- * The notes keep the order they arrive in rather than being sorted into time
- * order: the transforms read the first note of the array as the cell's pivot
- * and its head, and a retrograde is exactly the cell whose notes no longer run
- * forwards.
+ * The notes keep the order they arrive in; a transform is what puts a cell into
+ * time order, so a caller reading back exactly what it handed in is reading its
+ * own array.
  */
 function copyCell(cell: MotifCell): MotifCell {
   assertDataObject(cell, 'motif cell');
@@ -213,11 +212,15 @@ export class Motif {
   /**
    * The cell put through one of the classical transformations.
    *
-   * `invert` reflects the pitches about the first note and `retrograde` mirrors
-   * the onsets about the cell's span, both self-inverse; `augment` and
+   * `invert` reflects the pitches about the earliest note and `retrograde`
+   * mirrors the onsets about the cell's span, both self-inverse; `augment` and
    * `diminish` scale the note values by `amount` and its reciprocal;
    * `transposeChromatic` moves by semitones; `transposeDiatonic` and `sequence`
    * move by scale degrees with a key in hand, and by semitones without one.
+   *
+   * The result's notes run in time order whichever way the source cell was
+   * written, so an inversion of a retrograde reflects about the note that now
+   * sounds first.
    *
    * @param kind The transformation.
    * @param amount Semitones, scale degrees, or the time factor, as the

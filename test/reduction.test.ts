@@ -128,7 +128,7 @@ describe('reduceProgression', () => {
     const salient = reduceProgression(timeline, cMajor, { basis: 'duration' });
     expect(salient.map((entry) => entry.level)).toEqual(['structural', 'structural', 'structural']);
     expect(salient[1]?.rationale).toBe(
-      'Structural: it holds the harmony at least as long as the median chord',
+      'Structural: it holds the harmony longer than the chords around it',
     );
   });
 
@@ -253,6 +253,59 @@ describe('reduceProgression', () => {
     expect(reduceProgression(timeline, cMajor)[1]?.rationale).toBe(
       'Structural: the tonic of the key, which the progression is heard against',
     );
+  });
+
+  it('still demotes a figure when every chord is the same length', () => {
+    // C | C | C#dim7 | C. An even harmonic rhythm is the loop, the vamp and the
+    // cue — the repertoire the salience reading exists for — so a reading that
+    // protects every chord because none outlasts the median reduces nothing
+    // exactly where it is wanted.
+    const spans: Omit<ChordSpan, 'startBeat'>[] = [
+      { rootPc: 0, quality: 'maj' },
+      { rootPc: 0, quality: 'maj' },
+      { rootPc: 1, quality: 'dim7' },
+      { rootPc: 0, quality: 'maj' },
+    ];
+    const salient = reduceProgression(progression(spans), cMajor, { basis: 'duration' });
+    expect(salient[2]?.level).toBe('neighbor');
+    expect(frame(salient)).toEqual([0, 0, 0]);
+    // The functional reading demotes it too: the chromatic chord frames nothing.
+    const functional = reduceProgression(progression(spans), cMajor);
+    expect(functional[2]?.level).toBe('neighbor');
+  });
+
+  it('demotes an even-length passing chord under either reading', () => {
+    // C | C#dim7 | D: the root steps through in one direction rather than away
+    // and back, so the figure is a passing one under both bases.
+    const spans: Omit<ChordSpan, 'startBeat'>[] = [
+      { rootPc: 0, quality: 'maj' },
+      { rootPc: 1, quality: 'dim7' },
+      { rootPc: 2, quality: 'min7' },
+      { rootPc: 0, quality: 'maj' },
+    ];
+    expect(reduceProgression(progression(spans), cMajor, { basis: 'duration' })[1]?.level).toBe(
+      'passing',
+    );
+  });
+
+  it('keeps the chord that outlasts its neighbours in the frame', () => {
+    // Four beats against one: the long chord is salient, the short ones are not,
+    // and the figure between them is free to demote the middle one.
+    const timeline = chordTimelineFromChords(
+      [
+        { rootPc: 0, quality: 'maj', startBeat: 0 },
+        { rootPc: 1, quality: 'dim7', startBeat: 4 },
+        { rootPc: 2, quality: 'min7', startBeat: 5 },
+        { rootPc: 7, quality: 'dom7', startBeat: 6 },
+      ],
+      10,
+    );
+    const salient = reduceProgression(timeline, cMajor, { basis: 'duration' });
+    expect(salient[0]?.level).toBe('structural');
+    expect(salient[0]?.rationale).toBe(
+      'Structural: it holds the harmony longer than the chords around it',
+    );
+    expect(salient[1]?.level).toBe('passing');
   });
 
   it('rejects a reading it does not have', () => {

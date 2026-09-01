@@ -20,4 +20,4 @@ export type {
   TrackAnalysis,
   TrackRole,
 } from './tracks.js';
-export { analyzeArrangement } from './tracks.js';
+export { analyzeArrangement, analyzePolyphony } from './tracks.js';

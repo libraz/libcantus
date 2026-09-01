@@ -153,6 +153,20 @@ function labelAt(index: number): string {
  * chords under a new tune is a different section of the same song. A unit with
  * too little melody to compare falls back to its harmony alone.
  */
+/**
+ * Whether nothing sounds in a unit.
+ *
+ * A unit holds the notes that begin in it, and its weights are drawn from those
+ * notes, so a unit with no onsets carries no melodic content and an all-zero
+ * histogram: a tacet, a general pause, a drum break, a track that enters late.
+ * Silence states nothing, restates nothing and is like nothing, so it takes no
+ * label of its own — the fixed-length grid put a boundary there, the music did
+ * not.
+ */
+function isSilent(unit: Unit): boolean {
+  return unit.notes.length === 0;
+}
+
 function unitSimilarity(a: Unit, b: Unit): number {
   const harmony = weightSimilarity(a.weights, b.weights);
   if (a.notes.length < 2 || b.notes.length < 2) {
@@ -264,8 +278,10 @@ export function sectionsFromNotes(
   }
   assertGenerationBudget(comparisons, 'form section melody comparisons', opts.budget);
 
-  // Label every unit, then merge the neighbours that agree.
-  const labels: string[] = [];
+  // Label every unit, then merge the neighbours that agree. A silent unit takes
+  // no label: it is carried by the section it follows, so the letters count
+  // statements rather than stretches of the grid.
+  const labels: (string | null)[] = [];
   const scores: number[] = [];
   let distinct = 0;
   for (let index = 0; index < units.length; index += 1) {
@@ -273,11 +289,16 @@ export function sectionsFromNotes(
     if (unit === undefined) {
       continue;
     }
+    if (isSilent(unit)) {
+      labels.push(null);
+      scores.push(scores[index - 1] ?? 1);
+      continue;
+    }
     let bestScore = -1;
     let bestIndex = -1;
     for (let earlier = 0; earlier < index; earlier += 1) {
       const other = units[earlier];
-      if (other === undefined) {
+      if (other === undefined || isSilent(other)) {
         continue;
       }
       const score = unitSimilarity(unit, other);
@@ -300,11 +321,25 @@ export function sectionsFromNotes(
   const sections: FormSection[] = [];
   const firstByLabel = new Map<string, number>();
   for (let index = 0; index < units.length; ) {
-    const label = labels[index] ?? labelAt(0);
+    const label = labels[index] ?? null;
+    if (label === null) {
+      // Only reachable before anything sounds, which the unit grid rules out:
+      // it starts at the first onset. Nothing to report over silence either way.
+      index += 1;
+      continue;
+    }
     let end = index;
     let scoreSum = 0;
+    let sounded = 0;
     while (end < units.length && labels[end] === label) {
       scoreSum += scores[end] ?? 1;
+      sounded += 1;
+      end += 1;
+    }
+    // Silence following the statement belongs to it — a section runs on until
+    // the next one begins — but it also closes it: a restatement after a general
+    // pause is heard as a second statement, not as more of the first.
+    while (end < units.length && labels[end] === null) {
       end += 1;
     }
     const startBeat = units[index]?.startBeat ?? 0;
@@ -323,7 +358,7 @@ export function sectionsFromNotes(
     if (first === undefined) {
       firstByLabel.set(label, sectionIndex);
     }
-    const similarity = first === undefined ? 1 : clamp01(scoreSum / (end - index));
+    const similarity = first === undefined ? 1 : clamp01(scoreSum / Math.max(1, sounded));
     sections.push({
       label,
       startBeat,

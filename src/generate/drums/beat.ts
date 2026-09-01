@@ -13,16 +13,18 @@ import {
   hiHatTypeVelocityMultiplier,
   hiHatVelocityMultiplier,
   OHH_VEL_BOOST,
+  offbeatOpenHiHatChance,
   roleHiHatInstrument,
   sectionHiHatType,
   shouldAddOpenHHAccent,
   shouldPlayHiHat,
-  shouldUseBridgeCrossStick,
+  usesOffbeatOpenHiHat,
 } from './hihat.js';
 import type { HitList } from './hit.js';
 import type { DrumRole, DrumStyle, Feel, SectionType } from './internal.js';
 import {
   BACKBEAT_LIFT,
+  backbeatBeats,
   EIGHTH,
   GM,
   leanedBy,
@@ -145,41 +147,63 @@ export function generateKickForBeat(ctx: BeatCtx, sec: SectionCtx, kick: KickPat
   }
 }
 
+/** One stroke of the backbeat voice: which drum it is and how hard it is hit. */
+export type BackbeatStroke = {
+  pitch: number;
+  velocity: number;
+};
+
+/** How loudly a role plays the backbeat, relative to the beat it lands on. */
+function roleBackbeatWeight(role: DrumRole): number {
+  if (role === 'minimal') {
+    return 0.65;
+  }
+  return role === 'ambient' ? 0.8 : 1;
+}
+
+/**
+ * The backbeat voice of a section, decided by its role and its style together.
+ *
+ * The style names the instrument: a latin groove is defined by its rim-click
+ * clave, so it keeps the side-stick whatever the role asks for, and every other
+ * style writes the drum itself. The role then sets the weight: `'full'` plays
+ * the backbeat at full value, `'ambient'` and `'minimal'` step down to the
+ * side-stick and grow quieter with it, and `'fxOnly'` writes no backbeat at
+ * all. `'minimal'` is one step quieter than `'ambient'` in every style — never
+ * the full backbeat and never nothing at all.
+ *
+ * Reading the role alone left the styles that name a genre writing another
+ * genre's backbeat; reading a density style as if it were a role took the
+ * backbeat drum away from callers who had asked for every voice.
+ *
+ * @param sec Section context.
+ * @param velocity Base velocity of the beat the stroke lands on.
+ * @returns The stroke to write, or undefined when the role writes no backbeat.
+ */
+export function backbeatStroke(sec: SectionCtx, velocity: number): BackbeatStroke | undefined {
+  if (sec.role === 'fxOnly') {
+    return undefined;
+  }
+  const sideStick = sec.style === 'latin' || sec.role === 'ambient' || sec.role === 'minimal';
+  if (sideStick) {
+    return { pitch: GM.SIDESTICK, velocity: velocity * roleBackbeatWeight(sec.role) };
+  }
+  return { pitch: GM.SD, velocity: Math.min(127, velocity + BACKBEAT_LIFT) };
+}
+
 /** Emit the backbeat snare (or side-stick) for one beat. */
 export function generateSnareForBeat(ctx: BeatCtx, sec: SectionCtx, isIntroFirst: boolean): void {
   if (ctx.inPrechorusLift) {
     return;
   }
-  const snareOn = sec.snareBeat3 ? ctx.beat === 2 : ctx.beat === 1 || ctx.beat === 3;
-  if (!snareOn || isIntroFirst) {
+  if (!backbeatBeats(sec.snareBeat3).includes(ctx.beat) || isIntroFirst) {
     return;
   }
-  if (sec.useRide && shouldUseBridgeCrossStick(ctx.section, ctx.beat)) {
+  const stroke = backbeatStroke(sec, ctx.velocity);
+  if (!stroke) {
     return;
   }
-
-  const backbeatVel = Math.min(127, ctx.velocity + BACKBEAT_LIFT);
-  const promoteSparseChorus =
-    sec.style === 'sparse' && ctx.section === 'chorus' && sec.role === 'full';
-
-  if (sec.role === 'fxOnly') {
-    return;
-  }
-  // `minimal` is one step quieter than `ambient` in every style: a side-stick
-  // at a reduced velocity, never the full backbeat and never nothing at all.
-  // Deciding it per style produced the loudest snare of any role in one branch
-  // and no snare whatsoever in another.
-  if (sec.role === 'minimal') {
-    ctx.track.add(GM.SIDESTICK, ctx.beatTick, EIGHTH, ctx.velocity * 0.65);
-    return;
-  }
-  if (promoteSparseChorus) {
-    ctx.track.add(GM.SD, ctx.beatTick, EIGHTH, backbeatVel);
-  } else if (sec.style === 'sparse' || sec.role === 'ambient') {
-    ctx.track.add(GM.SIDESTICK, ctx.beatTick, EIGHTH, ctx.velocity * 0.8);
-  } else {
-    ctx.track.add(GM.SD, ctx.beatTick, EIGHTH, backbeatVel);
-  }
+  ctx.track.add(stroke.pitch, ctx.beatTick, EIGHTH, stroke.velocity);
 }
 
 /** Emit ghost snares at the "e"/"a" 16ths of beats 1 and 3. */
@@ -253,40 +277,63 @@ export function generatePreChorusBuildup(
   }
 }
 
+/**
+ * Whether the downbeat of this beat carries an open hi-hat accent.
+ *
+ * The decision belongs to the beat rather than to the subdivision it is written
+ * on, so a finer grid reached by raising the rhythmic dial keeps the open hat
+ * the coarser one had: the dial fills strokes in between the ones already
+ * sounding instead of changing what they are. A style that opens off the beat
+ * takes no part here, so that one beat never carries two open-hat rules.
+ */
+function opensOnDownbeat(ctx: BeatCtx, sec: SectionCtx): boolean {
+  if (usesOffbeatOpenHiHat(sec.style)) {
+    return false;
+  }
+  return shouldAddOpenHHAccent(ctx.section, ctx.beat, ctx.bar, ctx.draw);
+}
+
+/**
+ * Whether the "and" of this beat carries an open hi-hat, for the styles that
+ * write their open hats there. The draw is addressed by the eighth it lands on,
+ * so the same "and" opens whichever grid the bar is written on.
+ */
+function opensOffbeat(ctx: BeatCtx, sec: SectionCtx): boolean {
+  if (!usesOffbeatOpenHiHat(sec.style) || (ctx.beat !== 1 && ctx.beat !== 3)) {
+    return false;
+  }
+  return ctx.draw.prob(offbeatOpenHiHatChance(ctx.bpm), 'openHat', ctx.bar, ctx.beat, 1);
+}
+
 /** Emit the timekeeping hi-hat (or ride/foot) for one beat. */
 export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
   if (!shouldPlayHiHat(sec.role)) {
     return;
   }
 
-  const crossStick = sec.useRide && shouldUseBridgeCrossStick(ctx.section, ctx.beat);
-  const hhInstrument = crossStick ? GM.SIDESTICK : roleHiHatInstrument(sec.role, sec.useRide);
+  const hhInstrument = roleHiHatInstrument(sec.role, sec.useRide);
   const hhType = sectionHiHatType(ctx.section, sec.role);
   const typeMult = hiHatTypeVelocityMultiplier(hhType);
-  const isDynamicOpen = ctx.barHasOpenHh && ctx.beat === ctx.openHhBeat;
   const allowsOpenHiHat = sec.role !== 'ambient' && sec.role !== 'minimal';
+  const isDynamicOpen =
+    ctx.barHasOpenHh && ctx.beat === ctx.openHhBeat && !usesOffbeatOpenHiHat(sec.style);
   const dm = sec.densityMult;
 
   if (ctx.hhLevel === 'quarter') {
-    const introRest = ctx.section === 'intro' && ctx.beat !== 0;
-    if (!introRest) {
-      if (isDynamicOpen && allowsOpenHiHat) {
-        ctx.track.add(
-          GM.OHH,
-          ctx.beatTick,
-          EIGHTH,
-          ctx.velocity * dm * 0.75 * typeMult + OHH_VEL_BOOST,
-        );
-      } else {
-        ctx.track.add(
-          hhInstrument,
-          ctx.beatTick,
-          EIGHTH,
-          Math.max(20, ctx.velocity * dm * 0.75 * typeMult),
-        );
-      }
-    } else if (sec.useFootHh) {
-      ctx.track.add(GM.FHH, ctx.beatTick, EIGHTH, footHiHatVelocity(ctx.draw, ctx.bar, ctx.beat));
+    // The intro's quarter grid rests between its downbeats. The foot pulse is
+    // written for the bar rather than for these beats: a pedal hat here is a
+    // stroke the denser grids replace with a stick hat, and the dial would then
+    // take a sound away as it was raised.
+    if (ctx.section === 'intro' && ctx.beat !== 0) {
+      return;
+    }
+    const hhVel = Math.max(20, ctx.velocity * dm * 0.75 * typeMult);
+    if (allowsOpenHiHat && isDynamicOpen) {
+      ctx.track.add(GM.OHH, ctx.beatTick, EIGHTH, hhVel + OHH_VEL_BOOST);
+    } else if (allowsOpenHiHat && opensOnDownbeat(ctx, sec)) {
+      ctx.track.add(hiHatNote('open'), ctx.beatTick, EIGHTH, Math.max(20, hhVel * 1.1));
+    } else {
+      ctx.track.add(hhInstrument, ctx.beatTick, EIGHTH, hhVel);
     }
     return;
   }
@@ -308,15 +355,7 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
         ctx.track.add(GM.OHH, hhTick, EIGHTH, hhVel + OHH_VEL_BOOST);
         continue;
       }
-      let useOpen = false;
-      if (sec.style === 'fourOnFloor' && eighth === 1) {
-        const openProb = Math.max(0.15, Math.min(0.8, 45 / ctx.bpm));
-        useOpen =
-          (ctx.beat === 1 || ctx.beat === 3) &&
-          ctx.draw.prob(openProb, 'openHat', ctx.bar, ctx.beat, eighth);
-      } else if (eighth === 0) {
-        useOpen = shouldAddOpenHHAccent(ctx.section, ctx.beat, ctx.bar, ctx.draw);
-      }
+      const useOpen = eighth === 0 ? opensOnDownbeat(ctx, sec) : opensOffbeat(ctx, sec);
       if (useOpen && allowsOpenHiHat) {
         ctx.track.add(hiHatNote('open'), hhTick, EIGHTH, Math.max(20, hhVel * 1.1));
       } else {
@@ -341,6 +380,18 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
     const hhVel = Math.max(20, ctx.velocity * dm * typeMult * metricVel);
     if (isDynamicOpen && allowsOpenHiHat && sixteenth === 0) {
       ctx.track.add(GM.OHH, hhTick, SIXTEENTH, hhVel + OHH_VEL_BOOST);
+      continue;
+    }
+    // The accents of the coarser grids are taken here as well, at the positions
+    // those grids write them on: the beat itself, and the "and" for the styles
+    // that open there. Deciding them only on the eighth grid meant reaching the
+    // sixteenths turned an open hat back into a closed one.
+    if (allowsOpenHiHat && sixteenth === 0 && opensOnDownbeat(ctx, sec)) {
+      ctx.track.add(hiHatNote('open'), hhTick, SIXTEENTH, Math.max(20, hhVel * 1.1));
+      continue;
+    }
+    if (allowsOpenHiHat && sixteenth === 2 && opensOffbeat(ctx, sec)) {
+      ctx.track.add(hiHatNote('open'), hhTick, SIXTEENTH, Math.max(20, hhVel * 1.1));
       continue;
     }
     if (allowsOpenHiHat && ctx.beat === 3 && sixteenth === 3) {

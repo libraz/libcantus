@@ -176,6 +176,12 @@ const OMITTED_TONE_PENALTY = 0.15;
 const BASS_ROOT_STANDING = 0.95;
 
 /**
+ * Semitones in an octave, as the boundary between a chord's core tones and the
+ * extensions written above them: a ninth is a second an octave up.
+ */
+const OCTAVE = 12;
+
+/**
  * How {@link chordTimelineFromNotes} decides where one chord ends and the next
  * begins.
  *
@@ -338,6 +344,7 @@ function scoreMatch(
   weights: number[],
   maxWeight: number,
   key: KeyScale,
+  pedalPc: number | null,
 ): number {
   const rootWeight = maxWeight > 0 ? (weights[match.rootPc] ?? 0) / maxWeight : 0;
   // `inversion === 0` is exactly "the sounding bass is this candidate's root".
@@ -345,17 +352,125 @@ function scoreMatch(
   // filtered out as noise lifts nothing.
   const rootStanding =
     match.inversion === 0 ? Math.max(rootWeight, BASS_ROOT_STANDING) : rootWeight;
-  const tones = chordPitchClasses(makeChord(match.rootPc, match.quality));
+  const chord = makeChord(match.rootPc, match.quality);
+  const account = matchAccount(match, chord, pedalPc);
   let score = rootStanding;
-  if (tones.every((pc) => isScaleTone(pc, key))) {
+  if (chordPitchClasses(chord).every((pc) => isScaleTone(pc, key))) {
     score += DIATONIC_BONUS;
   }
-  if (match.exact) {
+  if (account.exact) {
     score += EXACT_BONUS;
   }
-  score -= EXTRA_TONE_PENALTY * match.extraPcs.length;
-  score -= OMITTED_TONE_PENALTY * match.missingPcs.length;
+  score -= EXTRA_TONE_PENALTY * account.extras;
+  score -= OMITTED_TONE_PENALTY * account.missing;
   return score;
+}
+
+/**
+ * The qualities a slash chord's upper structure is written in.
+ *
+ * A complete plain triad over a foreign bass is what the notation exists for —
+ * `F/G`, `Dm/G`, `C/D` — and it is how such a bar is written on a chart. An
+ * altered or extended upper structure over a foreign bass is not: whatever those
+ * tones spell, they are read as a chord of their own rather than as a triad
+ * standing on someone else's bass.
+ */
+const SLASH_UPPER_QUALITIES: ReadonlySet<ChordQuality> = new Set<ChordQuality>(['maj', 'min']);
+
+/**
+ * Whether a candidate reads the window as a triad standing on a foreign bass.
+ *
+ * Every tone of the triad sounds, the bass is the one thing outside it, and the
+ * bass is heard nowhere above it. That is a slash chord, and the bass is part of
+ * the reading rather than a pitch class it failed to name.
+ */
+function isSlashReading(match: ChordMatch, pedalPc: number | null): boolean {
+  return (
+    pedalPc !== null &&
+    match.inversion === null &&
+    match.missingPcs.length === 0 &&
+    match.extraPcs.length === 1 &&
+    match.extraPcs[0] === pedalPc &&
+    SLASH_UPPER_QUALITIES.has(match.quality)
+  );
+}
+
+/** How much of a window a candidate accounts for, and what it costs to. */
+type MatchAccount = {
+  /** Sounding pitch classes the candidate does not name. */
+  extras: number;
+  /** Chord tones nothing voices. */
+  missing: number;
+  /** Whether the candidate accounts for the window exactly. */
+  exact: boolean;
+};
+
+/**
+ * Whether a candidate names a pitch class as an upper extension — a tone voiced
+ * an octave or more above the root, which is what a ninth, an eleventh or a
+ * thirteenth is — rather than as one of its core tones.
+ */
+function namesAsExtension(chord: Chord, pc: number): boolean {
+  return chord.intervals.some((iv) => iv >= OCTAVE && pitchClass(chord.rootPc + iv) === pc);
+}
+
+/**
+ * Weigh a candidate against the window with the pedal bass set aside.
+ *
+ * A ninth, an eleventh or a thirteenth is a tone voiced above the chord. When the
+ * only thing sounding that pitch class is the bass, the reading naming it an
+ * extension has not explained the bass at all: it is short the tone it claims,
+ * and the bass it was supposed to account for is still unaccounted for. Both are
+ * charged, so the reading loses to the slash chord that says what the input
+ * played — otherwise the two readings of `G2 + F4 A4 C5` are separated by the
+ * exactness bonus alone and the ninth nobody played wins every time.
+ *
+ * The slash reading, for its part, is not charged for the bass at all: it names
+ * it, in the only place a chord symbol can. It earns no exactness either, since
+ * the chord proper does not contain the bass, so a reading that does contain
+ * every sounding tone still outranks it.
+ */
+function matchAccount(match: ChordMatch, chord: Chord, pedalPc: number | null): MatchAccount {
+  const unvoiced = pedalPc !== null && namesAsExtension(chord, pedalPc) ? 1 : 0;
+  const named = isSlashReading(match, pedalPc) ? 1 : 0;
+  return {
+    extras: match.extraPcs.length - named + unvoiced,
+    missing: match.missingPcs.length + unvoiced,
+    exact: match.exact && unvoiced === 0,
+  };
+}
+
+/**
+ * Whether the window's bass pitch class is heard only underneath the harmony.
+ *
+ * The upper structure is everything sounding above the lowest note that is not
+ * the bass pitch class itself; a bass doubled at the octave is still a bass. When
+ * the pitch class never reaches into that structure, no voice above the chord
+ * sounds it, and the extended readings that would name it a ninth or an eleventh
+ * have nothing to name.
+ */
+function bassSoundsOnlyBelow(
+  notes: readonly NoteEvent[],
+  windowStart: number,
+  windowEnd: number,
+  bassPc: number,
+): boolean {
+  let upperFloor = Number.POSITIVE_INFINITY;
+  let highestBass = Number.NEGATIVE_INFINITY;
+  for (const note of notes) {
+    const overlap =
+      Math.min(note.startBeat + note.durationBeat, windowEnd) -
+      Math.max(note.startBeat, windowStart);
+    if (overlap <= EPS) {
+      continue;
+    }
+    if (pitchClass(note.pitch) === bassPc) {
+      highestBass = Math.max(highestBass, note.pitch);
+    } else {
+      upperFloor = Math.min(upperFloor, note.pitch);
+    }
+  }
+  return highestBass <= upperFloor;
 }
 
 /** Confidence of a chord for a window: chord-tone weight over total weight. */
@@ -423,11 +538,17 @@ function analyzeWindow(
     ? selected.map((pc) => (pc === bassPc ? pc : pc + 12))
     : selected;
 
+  // A bass heard nowhere above the harmony is a bass, whatever pitch class it
+  // carries, so no reading may spend it twice — once as the slash the input
+  // played and once as an extension it did not.
+  const pedalPc =
+    hasBass && bassSoundsOnlyBelow(notes, windowStart, windowEnd, bassPc) ? bassPc : null;
+
   const matches = detectChord(detectionPitches, { input: hasBass ? 'midi' : 'pitchClass' });
   let bestMatch: ChordMatch | null = null;
   let bestScore = Number.NEGATIVE_INFINITY;
   for (const match of matches) {
-    const score = scoreMatch(match, weights, maxWeight, key);
+    const score = scoreMatch(match, weights, maxWeight, key, pedalPc);
     if (score > bestScore) {
       bestScore = score;
       bestMatch = match;
@@ -435,9 +556,14 @@ function analyzeWindow(
   }
   if (bestMatch) {
     const chord = makeChord(bestMatch.rootPc, bestMatch.quality, bestMatch.bassPc);
+    const account = matchAccount(
+      bestMatch,
+      makeChord(bestMatch.rootPc, bestMatch.quality),
+      pedalPc,
+    );
     const reading: WindowChord = {
       chord,
-      confidence: chordConfidence(chord, weights, totalWeight, bestMatch.exact),
+      confidence: chordConfidence(chord, weights, totalWeight, account.exact),
     };
     // An augmented sixth is a bass and an interval rather than a stack of
     // thirds, so no tertian match can carry one: over the lowered submediant

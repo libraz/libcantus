@@ -4,7 +4,14 @@ import { type SectionCtx, swing16 } from './beat.js';
 import { HH_16TH_BPM_THRESHOLD } from './hihat.js';
 import type { HitList } from './hit.js';
 import type { DrumRole, SectionType } from './internal.js';
-import { EIGHTH, GM, PercMoodCategory, SIXTEENTH, sectionIndex } from './internal.js';
+import {
+  backbeatBeats,
+  EIGHTH,
+  GM,
+  PercMoodCategory,
+  SIXTEENTH,
+  sectionIndex,
+} from './internal.js';
 
 /** Enabled auxiliary percussion voices for a section. */
 export type PercussionConfig = {
@@ -85,8 +92,13 @@ export function generateAuxPercussionForBar(
     return;
   }
 
+  // Tambourine and hand-claps reinforce the backbeat, so they land where the
+  // section says the backbeat is: a style that moves it to beat 3 would
+  // otherwise have two voices naming two different backbeats in one bar.
+  const backbeats = backbeatBeats(sec.snareBeat3, barBeats);
+
   if (config.tambourine) {
-    for (let beat = 1; beat < barBeats; beat += 2) {
+    for (const beat of backbeats) {
       const raw = 70 * densityMult * draw.float(0.9, 1.1, 'tambourine', barStart, beat);
       track.add(GM.TAMBOURINE, barStart + beat, EIGHTH, Math.max(40, Math.min(90, raw)));
     }
@@ -140,7 +152,7 @@ export function generateAuxPercussionForBar(
   }
 
   if (config.handclap) {
-    for (let beat = 1; beat < barBeats; beat += 2) {
+    for (const beat of backbeats) {
       const raw = 85 * densityMult * draw.float(0.9, 1.1, 'handclap', barStart, beat);
       track.add(GM.HANDCLAP, barStart + beat, EIGHTH, Math.max(50, Math.min(100, raw)));
     }

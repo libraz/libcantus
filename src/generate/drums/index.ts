@@ -315,8 +315,13 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
     rhythmic,
     ornament: ornamentDial,
     difficulty,
+    // Ghost notes decorate a backbeat played on the snare head. A latin groove
+    // states its backbeat as a rim-click clave, so the snare drum is not the
+    // voice being decorated and ghosts would answer a stroke that is not there.
     useGhostNotes:
-      (section === 'b' || section === 'chorus' || section === 'bridge') && style !== 'sparse',
+      (section === 'b' || section === 'chorus' || section === 'bridge') &&
+      style !== 'sparse' &&
+      style !== 'latin',
     ghostBoost: mapping.ghostBoost,
     useRide: shouldUseRideForSection(section, style),
     useFootHh: shouldUseFootHiHat(section, role),

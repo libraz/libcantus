@@ -1,3 +1,4 @@
+import { analyzePolyphony } from '../analyze/arrange/index.js';
 import type { DetectKeyOptions } from '../analyze/detect/index.js';
 import { detectKeyFromNotes } from '../analyze/detect/index.js';
 import type {
@@ -20,9 +21,9 @@ import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../analyze/key
 import type { ExtractMotifsOptions, MelodicContour, MotifData } from '../analyze/melody/index.js';
 import { extractMotifs, melodicContour } from '../analyze/melody/index.js';
 import type { ChordTimeline, ChordTimelineOptions } from '../analyze/timeline/index.js';
-import { chordTimelineFromNotes } from '../analyze/timeline/index.js';
+import { chordTimelineFromNotes, detectCadences } from '../analyze/timeline/index.js';
 import type { AnalyzedNote, IdentifiedVoiceNote, KeyContext } from '../analyze/voice/index.js';
-import { analyzeVoice, toVoiceNotes } from '../analyze/voice/index.js';
+import { toVoiceNotes } from '../analyze/voice/index.js';
 import type { NoteEventIndex, NoteEventIndexOptions } from '../core/event-index/index.js';
 import { createNoteEventIndex } from '../core/event-index/index.js';
 import type { PlayabilityReport } from '../core/instrument/playability.js';
@@ -716,11 +717,18 @@ export class Score {
   /**
    * The bar-level pulse above the meter.
    *
+   * The cadences come from the score's own harmony unless the caller passes
+   * their own, so this reads the same grouping {@link Score.phrases} builds its
+   * phrases on rather than a second one that ignores where the music closes.
+   *
    * @param opts Analysis options; see {@link HypermeterOptions}.
    * @returns The grouping, its downbeats, a confidence, and a rationale.
    */
   hypermeter(opts?: HypermeterOptions): Hypermeter {
-    return hypermeter(this.#data.notes, this.#data.meters, opts);
+    return hypermeter(this.#data.notes, this.#data.meters, {
+      cadenceBeats: this.#cadenceBeats(),
+      ...opts,
+    });
   }
 
   /**
@@ -772,13 +780,19 @@ export class Score {
    * chord — reads every note against C major and no chord at all, which labels
    * the notes as the non-chord tones they are rather than failing.
    *
+   * A score holds a whole piece rather than a single line, so the notes are read
+   * as the polyphony they are: each note is classified in its own voice, against
+   * everything else sounding under it. That is what a suspension needs — a
+   * dissonance is dissonant against something — and it is what keeps a note of
+   * one voice from being heard as the passing tone of another.
+   *
    * @param key The key to read the notes in, as a key name, a plain key/scale,
    *   or a {@link Key}; defaults to the score's own.
    * @returns One annotation per note, in the score's own time order.
    */
   voices(key?: KeyLike): AnalyzedNote[] {
     const timeline = this.#chordTimeline();
-    return analyzeVoice(this.#data.notes, timeline.at, this.#keyContext(key));
+    return analyzePolyphony(this.#data.notes, timeline.at, this.#keyContext(key));
   }
 
   /**
@@ -983,6 +997,13 @@ export class Score {
         : statedKeyRegions(this.#key, this.#data.notes, this.totalBeats));
     this.#regions = regions;
     return regions;
+  }
+
+  /** Where the score's own harmony closes, as beats. */
+  #cadenceBeats(): number[] {
+    return detectCadences(this.#chordTimeline(), this.#keyContext(undefined)).map(
+      (hit) => hit.atBeat,
+    );
   }
 
   /** The score's context as chord-timeline options, with the caller's on top. */

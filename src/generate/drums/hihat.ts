@@ -310,6 +310,23 @@ export function footHiHatVelocity(draw: Draw, bar: number, beat: number): number
   return draw.range(FHH_VEL_MIN, FHH_VEL_MAX, 'fhhVelocity', bar, beat);
 }
 
+/**
+ * Whether a style writes its open hi-hats off the beat.
+ *
+ * A four-on-the-floor kick already occupies every downbeat, so the open hat
+ * that answers it belongs on the "and". Letting the generic accent rule speak
+ * for the same beat put two rules on one decision, and the open hat that
+ * defines the style then sounded only when both agreed.
+ */
+export function usesOffbeatOpenHiHat(style: DrumStyle): boolean {
+  return style === 'fourOnFloor';
+}
+
+/** Chance an off-beat open hi-hat is taken, slower tempos opening more often. */
+export function offbeatOpenHiHatChance(bpm: number): number {
+  return Math.max(0.15, Math.min(0.8, 45 / bpm));
+}
+
 /** Whether the section uses a ride cymbal instead of hi-hats. */
 export function shouldUseRideForSection(section: SectionType, style: DrumStyle): boolean {
   if (style === 'rock' && section === 'chorus') {
@@ -319,9 +336,4 @@ export function shouldUseRideForSection(section: SectionType, style: DrumStyle):
     return false;
   }
   return section === 'bridge';
-}
-
-/** Whether a bridge beat is carried by a cross-stick instead of the hi-hat. */
-export function shouldUseBridgeCrossStick(section: SectionType, beat: number): boolean {
-  return section === 'bridge' && (beat === 1 || beat === 3);
 }

@@ -81,9 +81,11 @@ export type ReducedChord = {
  * What a reduction treats as the frame.
  *
  * `'function'` is the functional reading: the tonic, the dominant and the
- * chords that cadence are the frame. `'duration'` is the salience reading: the
- * chords that hold the harmony at least as long as the median chord are the
- * frame, whatever function they carry.
+ * chords that cadence are the frame. `'duration'` is the salience reading: a
+ * chord is the frame when it outlasts the chords around it — its length beats
+ * the median of the other chords' — whatever function it carries. Nothing
+ * outlasts anything in an even harmonic rhythm, so a loop or a vamp protects no
+ * chord by length and the two figures decide, as they do under either reading.
  *
  * @category Arrangement & Analysis
  */
@@ -136,17 +138,44 @@ function touches(before: ChordSegment, after: ChordSegment): boolean {
   return Math.abs(after.startBeat - before.endBeat) <= ADJACENCY_EPS;
 }
 
-/** Median of a list of durations, averaging the middle pair on an even count. */
-function median(values: readonly number[]): number {
-  if (values.length === 0) {
-    return 0;
+/**
+ * The length each segment has to beat to count as salient: the median of the
+ * lengths of every *other* segment.
+ *
+ * Leaving the segment itself out is what keeps the reading from protecting
+ * everything at once. A progression whose harmonic rhythm is even — the loop, the
+ * modular vamp, the cue — has every segment sitting on the median, so measuring
+ * against the median of the whole set would call every chord salient and reduce
+ * nothing, in exactly the repertoire the salience reading exists for. Measured
+ * against its neighbours, an even progression singles out nobody and the figures
+ * decide, while a chord that genuinely outlasts the harmony around it still does.
+ */
+function salienceFloors(durations: readonly number[]): number[] {
+  const order = durations
+    .map((_, index) => index)
+    .sort((a, b) => {
+      const left = durations[a] ?? 0;
+      const right = durations[b] ?? 0;
+      return left - right || a - b;
+    });
+  const rankOf: number[] = new Array<number>(durations.length).fill(0);
+  for (let rank = 0; rank < order.length; rank += 1) {
+    rankOf[order[rank] ?? 0] = rank;
   }
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = sorted.length >> 1;
-  if (sorted.length % 2 === 1) {
-    return sorted[middle] ?? 0;
+  const floors: number[] = [];
+  const remaining = durations.length - 1;
+  for (let index = 0; index < durations.length; index += 1) {
+    if (remaining <= 0) {
+      floors.push(0);
+      continue;
+    }
+    const skipped = rankOf[index] ?? 0;
+    const at = (position: number): number =>
+      durations[order[position < skipped ? position : position + 1] ?? 0] ?? 0;
+    const middle = remaining >> 1;
+    floors.push(remaining % 2 === 1 ? at(middle) : (at(middle - 1) + at(middle)) / 2);
   }
-  return ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
+  return floors;
 }
 
 /** Whether a chord stands on the key's tonic. */
@@ -246,7 +275,7 @@ function describe(reason: ReductionReason): string {
     case 'cadenceAgent':
       return `Structural: the chord that drives a ${reason.cadence} cadence`;
     case 'salient':
-      return 'Structural: it holds the harmony at least as long as the median chord';
+      return 'Structural: it holds the harmony longer than the chords around it';
     case 'first':
       return 'Structural: the first chord of the progression frames it';
     case 'last':
@@ -266,6 +295,7 @@ type FrameContext = {
   before: ChordSegment | undefined;
   after: ChordSegment | undefined;
   keyAt: (beat: number) => KeyScale;
+  /** The length this segment has to outlast; see {@link salienceFloors}. */
   salienceFloor: number;
 };
 
@@ -279,7 +309,7 @@ type FrameContext = {
 const BASIS_READINGS: Record<ReductionBasis, (context: FrameContext) => ReductionReason | null> = {
   function: ({ segment, before, after, keyAt }) => functionalReason(segment, before, after, keyAt),
   duration: ({ segment, salienceFloor }) =>
-    segment.endBeat - segment.startBeat >= salienceFloor ? { kind: 'salient' } : null,
+    segment.endBeat - segment.startBeat > salienceFloor ? { kind: 'salient' } : null,
 };
 
 /** Every reading's name, read from the table so the two cannot drift apart. */
@@ -349,10 +379,10 @@ export function reduceProgression(
   const basis = assertOneOf(opts.basis ?? 'function', REDUCTION_BASES, 'reduction basis');
   const reading = BASIS_READINGS[basis];
   const segments = timeline.segments;
-  const salienceFloor =
+  const floors =
     basis === 'duration'
-      ? median(segments.map((segment) => segment.endBeat - segment.startBeat))
-      : 0;
+      ? salienceFloors(segments.map((segment) => segment.endBeat - segment.startBeat))
+      : [];
   const result: ReducedChord[] = [];
 
   for (let index = 0; index < segments.length; index += 1) {
@@ -365,7 +395,7 @@ export function reduceProgression(
     const before = previous !== undefined && touches(previous, segment) ? previous : undefined;
     const after = following !== undefined && touches(segment, following) ? following : undefined;
 
-    let reason = reading({ segment, before, after, keyAt, salienceFloor });
+    let reason = reading({ segment, before, after, keyAt, salienceFloor: floors[index] ?? 0 });
     if (reason === null && index === 0) {
       reason = { kind: 'first' };
     }

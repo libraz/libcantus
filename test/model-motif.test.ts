@@ -179,12 +179,14 @@ describe('Motif plain data', () => {
     );
   });
 
-  it('holds the notes in the order the transforms read them', () => {
-    // A retrograde is the cell whose notes no longer run forwards, and the
-    // pivot of an inversion is whichever note the array puts first.
+  it('holds the notes in the order they sound', () => {
+    // A retrograde reverses when the notes sound, not the order they are
+    // written in, so the cell it hands back still runs forwards and the pivot
+    // of an inversion on top of it is the note that now sounds first.
     const retrograde = Motif.fromNotes(CELL).transform('retrograde');
-    expect(retrograde.notes.map((note) => note.startBeat)).toEqual([2, 1, 0]);
-    expect(retrograde.equals(Motif.fromNotes([...retrograde.notes].reverse()))).toBe(false);
+    expect(retrograde.notes.map((note) => note.startBeat)).toEqual([0, 1, 2]);
+    expect(retrograde.notes.map((note) => note.pitch)).toEqual([64, 62, 60]);
+    expect(retrograde.transform('invert').notes.map((note) => note.pitch)).toEqual([64, 66, 68]);
   });
 });
 

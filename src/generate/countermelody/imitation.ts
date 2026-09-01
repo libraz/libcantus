@@ -123,7 +123,9 @@ function assertPlayable(pitch: number): number {
  * @param opts Where the answer enters, at what interval, and in what key.
  * @returns The imitation as note events sorted by onset; `[]` when the chosen
  *   span holds no sounding notes. Notes with a zero or negative duration never
- *   sound and are not copied, so the answer can be shorter than the span.
+ *   sound and are not copied, so the answer can be shorter than the span. Every
+ *   other field of a copied note — its articulation, and its velocity through
+ *   `velocityScale` — comes across with it.
  * @throws If the span is reversed, the answer is not a known kind, or a
  *   transposed pitch leaves the MIDI range.
  * @example
@@ -200,10 +202,13 @@ export function imitate(lead: readonly NoteEvent[], opts: ImitationOptions): Not
     pitch = tonal
       ? shiftByScaleDegrees(pitch, degrees, key) + offset
       : pitch + Math.round(interval.semitones);
+    // The pass owns the pitch and the placement; everything else the subject
+    // carries — the articulation an ornament pass wrote, above all — belongs to
+    // the answer too, so an imitation composes with the passes before it.
     const answer: NoteEvent = {
+      ...note,
       pitch: assertPlayable(pitch),
       startBeat: note.startBeat + shift,
-      durationBeat: note.durationBeat,
     };
     if (note.velocity !== undefined) {
       answer.velocity = Math.max(1, Math.min(127, Math.round(note.velocity * velocityScale)));

@@ -127,6 +127,28 @@ export const PUBLIC_SECTIONS = [
  */
 export type Section = (typeof PUBLIC_SECTIONS)[number];
 
+/**
+ * The beats of a bar that carry the backbeat, zero-based.
+ *
+ * Every voice that reinforces the backbeat reads this one definition: when a
+ * style moves the backbeat to beat 3, the hand-claps and the tambourine move
+ * with it instead of staying where a 2-and-4 groove would have put them, which
+ * is two voices disagreeing about where the backbeat of the bar is.
+ *
+ * @param snareBeat3 Whether the style states its backbeat on beat 3 alone.
+ * @param barBeats Beats in the bar.
+ */
+export function backbeatBeats(snareBeat3: boolean, barBeats = 4): number[] {
+  if (snareBeat3) {
+    return barBeats > 2 ? [2] : [];
+  }
+  const beats: number[] = [];
+  for (let beat = 1; beat < barBeats; beat += 2) {
+    beats.push(beat);
+  }
+  return beats;
+}
+
 /** Resolved internal parameters for a public groove style. */
 export type StyleMapping = {
   style: DrumStyle;

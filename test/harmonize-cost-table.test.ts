@@ -334,3 +334,99 @@ describe('a minor key can cadence', () => {
     expect(result.transposeSemitones).toBe(0);
   });
 });
+
+describe('what a chord of the key costs to use', () => {
+  /** The vocabulary cost of one chord of a key, by root and quality. */
+  function baseOf(key: Parameters<typeof buildCandidates>[0], rootPc: number, quality: string) {
+    return buildCandidates(key, 0).find((c) => c.rootPc === rootPc && c.quality === quality)?.base;
+  }
+
+  it('prices the same triad the same in a major key and in a minor key', () => {
+    // B diminished is the seventh degree of C major and the second of A minor.
+    // It is the same unstable sonority in both, and the ordinal its degree
+    // happens to occupy is no reason for one key to buy it more cheaply.
+    expect(baseOf(aMinor, 11, 'dim')).toBe(baseOf(cMajor, 11, 'dim'));
+  });
+
+  it('prices a dominant triad the same in the major and the parallel minor', () => {
+    expect(baseOf(minorKey(0), 7, 'maj')).toBe(baseOf(cMajor, 7, 'maj'));
+  });
+
+  it('charges every diminished triad what an unstable sonority costs', () => {
+    for (let tonic = 0; tonic < 12; tonic += 1) {
+      for (const key of [majorKey(tonic), minorKey(tonic)]) {
+        for (const candidate of buildCandidates(key, 0)) {
+          if (candidate.quality === 'dim') {
+            expect(candidate.base).toBe(0.9);
+          }
+        }
+      }
+    }
+  });
+
+  it('charges a subdominant and a dominant what their function is worth in either mode', () => {
+    for (let tonic = 0; tonic < 12; tonic += 1) {
+      const major = buildCandidates(majorKey(tonic), 0);
+      const minor = buildCandidates(minorKey(tonic), 0);
+      const at = (candidates: Candidate[], semitones: number) =>
+        candidates.filter((c) => c.rootPc === (tonic + semitones) % 12 && c.quality !== 'dim');
+      for (const semitones of [0, 5, 7]) {
+        for (const chord of [...at(major, semitones), ...at(minor, semitones)]) {
+          expect(chord.base).toBe(at(major, semitones)[0]?.base);
+        }
+      }
+    }
+  });
+
+  it('reads the price from what a chord is, not from where it sits in the list', () => {
+    // Each key's own triads, priced by the semitones between root and tonic and
+    // by the chord's own quality: a mode that spells its second degree as a
+    // diminished triad pays for a diminished triad, and one whose seventh is a
+    // major triad pays for a subtonic.
+    const priced = new Map<string, number>();
+    for (let tonic = 0; tonic < 12; tonic += 1) {
+      for (const key of [majorKey(tonic), minorKey(tonic)]) {
+        for (const candidate of buildCandidates(key, 0)) {
+          const id = `${(candidate.rootPc - tonic + 12) % 12}:${candidate.quality}`;
+          const seen = priced.get(id);
+          if (seen === undefined) {
+            priced.set(id, candidate.base);
+          } else {
+            expect(candidate.base).toBe(seen);
+          }
+        }
+      }
+    }
+    expect(priced.get('2:dim')).toBe(priced.get('11:dim'));
+    // The subtonic a minor key closes plagally through is one of its own
+    // chords, not the leading-tone triad of a major key.
+    expect(priced.get('10:maj')).toBeLessThan(priced.get('2:dim') ?? 0);
+  });
+});
+
+describe('a minor key is harmonized by what its chords are', () => {
+  it('harmonizes the subtonic triad the melody spells with the subtonic triad', () => {
+    // G-B-D over a slot of A minor is the subtonic, the chord idiomatic minor
+    // harmony reaches for; nothing else in the key covers all three notes.
+    const result = harmonizeMelody({
+      melody: quarters([67, 71, 74, 71]),
+      key: aMinor,
+      harmonicRhythm: 4,
+      placement: asWritten,
+    });
+    expect(result.chords[0]).toMatchObject({ rootPc: 7, quality: 'maj' });
+  });
+
+  it('prefers a stable triad to the diminished one where both explain the notes', () => {
+    // B and D belong to the subtonic triad as well as to the diminished triad
+    // on the supertonic, and a root-position diminished triad is not what a
+    // minor phrase is built on.
+    const result = harmonizeMelody({
+      melody: quarters([71, 74, 71, 74]),
+      key: aMinor,
+      harmonicRhythm: 4,
+      placement: asWritten,
+    });
+    expect(result.chords[0]?.quality).not.toBe('dim');
+  });
+});

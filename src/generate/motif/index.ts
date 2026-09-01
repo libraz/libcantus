@@ -222,6 +222,30 @@ function clone(cell: MotifCell): MotifCell {
   return { notes: cell.notes.map((n) => ({ ...n })) };
 }
 
+/**
+ * The cell with its notes in time order.
+ *
+ * A cell is read by index in several places — the pivot of an inversion is its
+ * first note, and an analysis of the line reads note `i + 1` as the one that
+ * follows note `i` — so every cell that leaves this module runs forwards. The
+ * sort is stable, which leaves the notes of a chord in the order they were
+ * written.
+ */
+function inTimeOrder(cell: MotifCell): MotifCell {
+  return { notes: [...cell.notes].sort((a, b) => a.startBeat - b.startBeat) };
+}
+
+/** The pitch an inversion reflects about: the cell's earliest note. */
+function pivotPitch(notes: readonly MotifNote[]): number {
+  let pivot: MotifNote | undefined;
+  for (const note of notes) {
+    if (pivot === undefined || note.startBeat < pivot.startBeat) {
+      pivot = note;
+    }
+  }
+  return pivot?.pitch ?? 0;
+}
+
 /** Diatonic scale-degree offsets shaping a contour of `count` notes. */
 function contourOffsets(contour: MotifContour, count: number): number[] {
   const offsets: number[] = [];
@@ -339,7 +363,7 @@ export function motifToNoteEvents(cell: MotifCell): NoteEvent[] {
 /**
  * Apply a transformation to a motif cell.
  *
- * `invert` reflects pitches about the first note (chromatic, self-inverse);
+ * `invert` reflects pitches about the earliest note (chromatic, self-inverse);
  * `retrograde` mirrors onsets about the cell span, preserving rests (self-inverse);
  * `augment`/`diminish` scale time by `amount ?? 2` and its reciprocal;
  * `transposeChromatic` adds `amount` semitones; `transposeDiatonic` shifts by
@@ -354,7 +378,8 @@ export function motifToNoteEvents(cell: MotifCell): NoteEvent[] {
  * @param key Key context for the diatonic transforms, as a key name such as
  *   `'C major'` or as a key/scale; without it, `transposeDiatonic` and
  *   `sequence` shift chromatically by semitones.
- * @returns The transformed cell.
+ * @returns The transformed cell, its notes in time order whatever order the
+ *   source cell was written in, so it can be read as a line.
  * @throws If a transformed pitch would fall outside the MIDI range 0..127.
  *
  * @example
@@ -384,7 +409,10 @@ function transformCell(
   amount?: number,
   key?: KeyScale,
 ): MotifCell {
-  return assertInRange(transformUnchecked(cell, t, amount, key));
+  // Every transform leaves through here, so this is where the result is put
+  // back into time order — a retrograde reverses when the notes sound, not the
+  // order they are written in.
+  return assertInRange(inTimeOrder(transformUnchecked(cell, t, amount, key)));
 }
 
 /**
@@ -452,7 +480,7 @@ function transformUnchecked(
       };
     }
     case 'invert': {
-      const pivot = notes[0]?.pitch ?? 0;
+      const pivot = pivotPitch(notes);
       return { notes: notes.map((n) => ({ ...n, pitch: 2 * pivot - n.pitch })) };
     }
     case 'retrograde': {
@@ -514,7 +542,7 @@ function scaleTime(cell: MotifCell, factor: number): MotifCell {
  *   the notes off the structural positions are kept in it.
  * @param bars Number of bars to fill.
  * @param ts Meter the bars are counted in; defaults to 4/4.
- * @returns The developed, harmony-aware cell.
+ * @returns The developed, harmony-aware cell, its notes in time order.
  *
  * @example
  * ```ts
@@ -547,7 +575,7 @@ export function developMotif(
   const out: MotifNote[] = [];
 
   if (span <= 0) {
-    return clone(cell);
+    return inTimeOrder(cell);
   }
 
   // Clamp a degenerate near-zero span so the tile count stays finite, and step
@@ -582,5 +610,5 @@ export function developMotif(
       out.push({ pitch, startBeat, durationBeat: n.durationBeat });
     }
   }
-  return { notes: out };
+  return inTimeOrder({ notes: out });
 }

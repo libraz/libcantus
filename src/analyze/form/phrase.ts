@@ -526,7 +526,7 @@ function structuralWeightOf(
   if (isLast) {
     weight += FINAL_PHRASE_BONUS;
   }
-  if (aligned || isLast) {
+  if (aligned) {
     weight += HYPERMETRIC_CLOSE_BONUS;
   }
   return clamp01(weight);
