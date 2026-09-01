@@ -90,6 +90,36 @@ describe('TSDoc examples', () => {
     expect(collected.length).toBeGreaterThan(200);
   });
 
+  // Every specifier an example imports from, across the whole tree. An example
+  // ships in the reference and in the type declarations, where the repository is
+  // not on disk, so a path into `src/` reads as a working line and is not one:
+  // it resolves here only because the harness writes the generated module inside
+  // the repository. The names a published package answers to are read from
+  // `exports` rather than listed, so a new subpath is covered the day it is added.
+  const IMPORT_SPECIFIER = /\bfrom\s+['"]([^'"]+)['"]/g;
+  const subpaths = Object.keys(
+    (
+      JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as {
+        exports: Record<string, unknown>;
+      }
+    ).exports,
+  );
+  const published = new Set(
+    subpaths.map((subpath) => path.posix.join('@libraz/libcantus', subpath)),
+  );
+
+  it('imports the package by name in every example, never the source tree', () => {
+    const foreign = documented.flatMap((file) =>
+      examplesOf(file).flatMap((block) =>
+        [...block.code.matchAll(IMPORT_SPECIFIER)]
+          .map((match) => match[1] as string)
+          .filter((specifier) => !published.has(specifier) && !specifier.startsWith('node:'))
+          .map((specifier) => `${file}:${block.line} imports ${specifier}`),
+      ),
+    );
+    expect(foreign).toEqual([]);
+  });
+
   it('lists no source as pending that has no example to run', () => {
     for (const file of PENDING_EXAMPLE_SOURCES) {
       expect(existsSync(path.join(SRC, file)), `${file} is listed but absent`).toBe(true);
