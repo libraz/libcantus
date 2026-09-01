@@ -10,14 +10,9 @@
 import { transposeNote } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import { assertFiniteNumber, assertInteger } from '../../core/validation/index.js';
-import type { Chord, ChordQuality } from '../../theory/chord/index.js';
+import type { Chord } from '../../theory/chord/index.js';
 import { makeChord } from '../../theory/chord/index.js';
-import {
-  isScaleTone,
-  type KeyLike,
-  scaleTonesInDegreeOrder,
-  toKeyScale,
-} from '../../theory/scale/index.js';
+import { type KeyLike, scaleTonesInDegreeOrder, toKeyScale } from '../../theory/scale/index.js';
 import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
 import { augmentedSixthKindOf } from './augmented-sixth.js';
 import { type BorrowedSource, borrowedSourceOf } from './borrowed.js';
@@ -33,6 +28,7 @@ import {
 } from './internal.js';
 import { capitalize, type RejectedCandidate } from './rationale.js';
 import { type ChordToRomanOptions, renderRoman, romanAlternatives } from './roman.js';
+import { isAppliedDominant } from './tonicization.js';
 
 /**
  * The three broad harmonic functions of tonal music.
@@ -57,20 +53,28 @@ const FUNCTION_BY_OFFSET: readonly HarmonicFunction[] = [
   'dominant', // 11 vii
 ];
 
-/** Harmonic function of each root offset in a natural-minor context. */
+/**
+ * Harmonic function of each root offset in a natural-minor context.
+ *
+ * The diatonic degrees take the function the textbooks give them; a chromatic
+ * offset takes the function its role as a displaced neighbour of a diatonic
+ * degree implies. The raised mediant is the case that shows the difference: it
+ * carries neither a dominant sonority nor a dominant resolution, so as a
+ * chromatic mediant it prolongs the tonic through the tones it shares with it.
+ */
 const MINOR_FUNCTION_BY_OFFSET: readonly HarmonicFunction[] = [
-  'tonic',
-  'subdominant',
-  'subdominant',
-  'tonic',
-  'dominant',
-  'subdominant',
-  'dominant',
-  'dominant',
-  'tonic',
-  'tonic',
-  'subdominant',
-  'dominant',
+  'tonic', // 0  i
+  'subdominant', // 1  bII (Neapolitan)
+  'subdominant', // 2  iio
+  'tonic', // 3  III
+  'tonic', // 4  #III, the chromatic mediant
+  'subdominant', // 5  iv
+  'dominant', // 6  #iv / bv
+  'dominant', // 7  V
+  'tonic', // 8  VI
+  'tonic', // 9  #VI
+  'subdominant', // 10 VII
+  'dominant', // 11 viio
 ];
 
 /**
@@ -93,11 +97,14 @@ export function isMinorKey(key: KeyLike): boolean {
  * an ambiguity the root offset cannot:
  *
  * - A chord that *sounds* like a dominant — a major third with a minor seventh,
- *   or a diminished-family chord — and is not diatonic to the key has dominant
- *   function when its root resolves down a fifth or by a semitone onto a
- *   diatonic degree. This is what makes an applied dominant (`A7` in C, which
- *   tonicizes ii) and its tritone substitute (`Db7`) read as dominant rather
- *   than inheriting the function of the degree they happen to sit on.
+ *   or a diminished-family chord — and is neither diatonic to the key nor
+ *   borrowed from its parallel mode has dominant function when its root
+ *   resolves onto a degree that can be made a local tonic. This is what makes an
+ *   applied dominant (`A7` in C, which tonicizes ii) and its tritone substitute
+ *   (`Db7`) read as dominant rather than inheriting the function of the degree
+ *   they happen to sit on. A bare major triad carries no tritone, so it only
+ *   tonicizes by falling a fifth onto a degree other than the tonic: the Picardy
+ *   third of a minor key and its borrowed major IV sound their own degrees.
  * - The Neapolitan is subdominant.
  * - An augmented sixth is subdominant. All three are altered predominants that
  *   resolve outward onto the dominant, so they take subdominant function even
@@ -157,32 +164,6 @@ export function functionWithReason(
     return { function: 'subdominant', reason: 'flatSideMajor' };
   }
   return { function: degreeFunction(chord, key), reason: 'degree' };
-}
-
-/**
- * Whether the chord is a dominant sonority pointing at a diatonic degree.
- *
- * A chord already diatonic to the key keeps the offset table's reading; what is
- * classified here is the chromatic chord whose sonority and resolution give it
- * dominant function regardless of the degree it sits on.
- *
- * The resolution required depends on the sonority. A dominant seventh (major
- * third plus minor seventh) must fall a perfect fifth — the applied dominants —
- * or a semitone, which is the same motion its tritone substitute makes. A
- * diminished-family chord must rise a semitone, the leading-tone resolution;
- * requiring that is what keeps a borrowed `iiø7`, which falls a fifth like any
- * other supertonic chord, reading as a predominant rather than a dominant.
- */
-function isAppliedDominant(chord: Chord, key: KeyScale): boolean {
-  if (isDiatonicChord(chord, key)) {
-    return false;
-  }
-  const root = mod12(chord.rootPc);
-  const resolvesTo = (step: number) => isScaleTone(mod12(root + step), key);
-  if (isAppliedDominantSonority(chord)) {
-    return chord.quality === 'maj' ? resolvesTo(5) : resolvesTo(5) || resolvesTo(11);
-  }
-  return isDiminishedQuality(chord.quality) && resolvesTo(1);
 }
 
 /**
@@ -339,11 +320,6 @@ export function isDiatonic(chord: ChordLike, key: KeyLike): boolean {
  */
 export function parallelKey(key: KeyLike): KeyScale {
   return parallelScale(toKeyScale(key));
-}
-
-/** Diminished-family qualities: diminished triad, dim7, half-diminished. */
-function isDiminishedQuality(quality: ChordQuality): boolean {
-  return quality === 'dim' || quality === 'dim7' || quality === 'm7b5';
 }
 
 /**

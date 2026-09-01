@@ -22,7 +22,6 @@ import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
 import { augmentedSixthFromSymbol, augmentedSixthSymbol } from './augmented-sixth.js';
 import {
   degreeRootPc,
-  isAppliedDominantSonority,
   isDiatonicChord,
   isNeapolitan,
   loweredDegrees,
@@ -30,6 +29,7 @@ import {
   romanReference,
 } from './internal.js';
 import type { RejectedCandidate } from './rationale.js';
+import { appliedTarget, LEADING_TONE_QUALITIES } from './tonicization.js';
 
 /** Roman numeral glyphs indexed by degree number - 1. */
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'] as const;
@@ -195,15 +195,16 @@ function parseSimpleRoman(
     degreeRootPc(degreeNumber, frame) + (redundantFlat ? 0 : accidental),
   );
 
-  // In a minor key, an unaltered diminished seventh-degree numeral conventionally
-  // denotes the harmonic-minor leading tone: `viio` in A minor is G#, not G.
-  // An explicit accidental remains literal, so callers can still write `#viio`
-  // (or `bviio`) when that distinction is meaningful to them.
+  // In a minor key, an unaltered diminished-family seventh-degree numeral
+  // conventionally denotes the harmonic-minor leading tone: `viio`, `viio7` and
+  // `viiø7` in A minor all stand on G#, not G. An explicit accidental remains
+  // literal, so callers can still write `#viio` (or `bviio`) when that
+  // distinction is meaningful to them.
   const rootForQuality = (quality: ChordQuality): number =>
     accidental === 0 &&
     degreeNumber === 7 &&
     loweredDegrees(frame).has(7) &&
-    (quality === 'dim' || quality === 'dim7')
+    LEADING_TONE_QUALITIES.has(quality)
       ? mod12(diatonicRootPc + 1)
       : diatonicRootPc;
 
@@ -412,12 +413,14 @@ function romanSpelling(
  * The accidental a seventh-degree numeral is written with, which is the one
  * place the spelling is not the literal one.
  *
- * A bare `viio`/`viio7` conventionally names the raised leading tone in a key
- * whose seventh degree is lowered, so the raised root drops its sharp — and the
- * lowered root, which that numeral therefore no longer names, has to take a
- * flat. Both halves are needed: this is the exact inverse of the reading
+ * A bare `viio`/`viio7`/`viiø7` conventionally names the raised leading tone in
+ * a key whose seventh degree is lowered, so the raised root drops its sharp —
+ * and the lowered root, which that numeral therefore no longer names, has to
+ * take a flat. Both halves are needed: this is the exact inverse of the reading
  * `parseSimpleRoman` applies, and without the second one the two roots collapse
- * onto a single numeral.
+ * onto a single numeral. The convention covers the whole diminished family, so
+ * the half-diminished seventh on the leading tone is not left pointing at a
+ * different root than the fully diminished one beside it.
  */
 function seventhDegreeAccidental(
   accidental: string,
@@ -427,7 +430,7 @@ function seventhDegreeAccidental(
 ): string {
   if (
     degreeNumber !== 7 ||
-    (quality !== 'dim' && quality !== 'dim7') ||
+    !LEADING_TONE_QUALITIES.has(quality) ||
     !loweredDegrees(romanReference(key)).has(7)
   ) {
     return accidental;
@@ -493,54 +496,6 @@ function numeralFor(degreeNumber: number, lower: boolean): string {
     throw new InvalidInputError(`no Roman numeral for scale degree ${degreeNumber}`);
   }
   return lower ? glyph.toLowerCase() : glyph;
-}
-
-/** Diminished-family qualities, which tonicize from a semitone below. */
-const LEADING_TONE_QUALITIES: ReadonlySet<ChordQuality> = new Set(['dim', 'dim7', 'm7b5']);
-
-/** The third and fifth above a scale degree, measured within its own scale. */
-function degreeTriad(tones: readonly number[], index: number): { third: number; fifth: number } {
-  const root = tones[index] ?? 0;
-  return {
-    third: mod12((tones[(index + 2) % tones.length] ?? 0) - root),
-    fifth: mod12((tones[(index + 4) % tones.length] ?? 0) - root),
-  };
-}
-
-/**
- * The scale degree a chromatic chord tonicizes, or null when it tonicizes
- * nothing. A dominant sonority points a fifth below itself, a diminished one a
- * semitone above itself; the tonic is never a target (that chord is the key's own
- * dominant) and neither is a degree whose triad has no perfect fifth — a
- * tonicized degree has to be a major or minor triad to be a tonic at all, so
- * the diminished seventh degree of a major key is no target and a chord over it
- * is named against the home key instead (`F#7` in C major is `#IV7`).
- */
-function appliedTarget(
-  chord: Chord,
-  key: KeyScale,
-): { degreeNumber: number; rootPc: number; lower: boolean } | null {
-  const dominant = isAppliedDominantSonority(chord);
-  const leadingTone = LEADING_TONE_QUALITIES.has(chord.quality);
-  if (!dominant && !leadingTone) {
-    return null;
-  }
-  const tones = scaleTonesInDegreeOrder(romanReference(key));
-  for (let index = 1; index < tones.length; index += 1) {
-    const targetRoot = tones[index];
-    if (targetRoot === undefined) {
-      continue;
-    }
-    const triad = degreeTriad(tones, index);
-    if (triad.fifth !== 7) {
-      continue;
-    }
-    const expectedRoot = mod12(targetRoot + (dominant ? 7 : -1));
-    if (expectedRoot === mod12(chord.rootPc)) {
-      return { degreeNumber: index + 1, rootPc: targetRoot, lower: triad.third === 3 };
-    }
-  }
-  return null;
 }
 
 /**
@@ -646,7 +601,16 @@ type RomanDerivation =
   | {
       kind: 'degree';
       degreeNumber: number;
+      /** The accidental the numeral is printed with. */
       accidental: string;
+      /**
+       * The accidental the root literally stands at above the degree, which is
+       * the printed one everywhere except the seventh degree of a key that
+       * lowers it. Keeping both is what lets the explanation state where the
+       * root actually is instead of reading the display convention back as a
+       * fact about the key.
+       */
+      literalAccidental: string;
       quality: ChordQuality;
       bass: RomanBass;
       figure?: string;
@@ -711,6 +675,7 @@ export function renderRoman(
           kind: 'degree',
           degreeNumber,
           accidental,
+          literalAccidental: spelledAccidental,
           quality: chord.quality,
           bass: 'figured',
           figure,
@@ -725,20 +690,42 @@ export function renderRoman(
   }
   return {
     roman: `${accidental}${cased}${suffix}`,
-    derivation: { kind: 'degree', degreeNumber, accidental, quality: chord.quality, bass },
+    derivation: {
+      kind: 'degree',
+      degreeNumber,
+      accidental,
+      literalAccidental: spelledAccidental,
+      quality: chord.quality,
+      bass,
+    },
   };
 }
 
 /** Ordinal names of the seven scale degrees, indexed by degree number - 1. */
 const DEGREE_NAMES = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'] as const;
 
-/** The phrase naming where a numeral's root came from. */
-function describeDegree(degreeNumber: number, accidental: string): string {
+/**
+ * The phrase naming where a numeral's root came from.
+ *
+ * The claim is made about the root itself, so it reads the accidental the root
+ * literally stands at and not the one the numeral is printed with. The two part
+ * company on the seventh degree of a key that lowers it, where the bare numeral
+ * is reserved for the raised leading tone; saying the root is chromatic because
+ * the numeral wears a flat would state the opposite of where the root is, and
+ * would make the same root chromatic or diatonic according to the chord's
+ * quality.
+ */
+function describeDegree(degreeNumber: number, accidental: string, literal: string): string {
   const name = DEGREE_NAMES[degreeNumber - 1] ?? `${degreeNumber}th`;
-  if (accidental === '') {
+  if (accidental !== literal) {
+    return literal === ''
+      ? `the root is the ${name} degree of the key, written with a flat because the bare numeral is reserved by convention for the raised leading tone above it`
+      : `the root is the raised leading tone, a semitone above the ${name} degree of the key, which the bare numeral denotes by convention`;
+  }
+  if (literal === '') {
     return `the root is the ${name} degree of the key`;
   }
-  const direction = accidental === 'b' ? 'lowered' : 'raised';
+  const direction = literal === 'b' ? 'lowered' : 'raised';
   return `the root is chromatic, spelled as the ${name} degree ${direction} a semitone`;
 }
 
@@ -779,7 +766,7 @@ function describeRoman(roman: string, derivation: RomanDerivation): string {
     case 'neapolitan':
       return `${roman}: the first-inversion Neapolitan under its figured name, the chord bII6 also spells`;
     case 'degree': {
-      const text = `${roman}: ${describeDegree(derivation.degreeNumber, derivation.accidental)}, the case and suffix come from the ${derivation.quality} quality, ${describeBass(derivation.bass, derivation.figure)}`;
+      const text = `${roman}: ${describeDegree(derivation.degreeNumber, derivation.accidental, derivation.literalAccidental)}, the case and suffix come from the ${derivation.quality} quality, ${describeBass(derivation.bass, derivation.figure)}`;
       const tonicSixFour =
         derivation.degreeNumber === 1 && derivation.accidental === '' && derivation.figure === '64';
       return tonicSixFour ? `${text}${SIX_FOUR_NOTE}` : text;

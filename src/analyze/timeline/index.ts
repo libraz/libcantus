@@ -309,6 +309,16 @@ export type ChordTimelineResult = {
 type WindowChord = {
   chord: Chord;
   confidence: number;
+  /**
+   * The augmented-sixth reading of the very same tones, when they spell one over
+   * the sounding bass.
+   *
+   * A window cannot tell whether that reading is the one the music supports,
+   * because what decides it is where the harmony goes next. So both readings are
+   * carried out of the window and {@link resolvesOntoDominant} settles which one
+   * the segment reports.
+   */
+  augmented?: { chord: Chord; confidence: number };
 };
 
 /**
@@ -424,25 +434,79 @@ function analyzeWindow(
     }
   }
   if (bestMatch) {
+    const chord = makeChord(bestMatch.rootPc, bestMatch.quality, bestMatch.bassPc);
+    const reading: WindowChord = {
+      chord,
+      confidence: chordConfidence(chord, weights, totalWeight, bestMatch.exact),
+    };
     // An augmented sixth is a bass and an interval rather than a stack of
     // thirds, so no tertian match can carry one: over the lowered submediant
     // the same pitch classes are read as bVI7, whose seventh is spelled a
-    // semitone below where the augmented sixth is. The reading is made here,
-    // where the sounding bass and the key are both known, and the chord it
-    // yields carries the spelling that keeps it.
+    // semitone below where the augmented sixth is. What those tones could spell
+    // is worked out here, where the sounding bass and the key are both known;
+    // whether they do is not a question this window can answer, so the reading
+    // is offered alongside the tertian one rather than taken over it.
     const augmented = hasBass ? augmentedSixthFromPitchClasses(selected, bassPc, key) : null;
     if (augmented !== null) {
       // Its tones are exactly the window's, so it explains them exactly.
-      return {
+      reading.augmented = {
         chord: augmented,
         confidence: chordConfidence(augmented, weights, totalWeight, true),
       };
     }
-    const chord = makeChord(bestMatch.rootPc, bestMatch.quality, bestMatch.bassPc);
-    return { chord, confidence: chordConfidence(chord, weights, totalWeight, bestMatch.exact) };
+    return reading;
   }
 
   return null;
+}
+
+/** Semitones from a tonic up to its dominant. */
+const DOMINANT_ABOVE_TONIC = 7;
+
+/**
+ * Whether the augmented-sixth reading offered at `index` is the one the music
+ * supports.
+ *
+ * The family is defined by an outward resolution onto the dominant, so the
+ * reading is accepted only where the harmony gets there: straight onto V or V7,
+ * or through a dominant preparation already standing on the dominant in the bass
+ * — the cadential six-four, which is the dominant arriving under a suspension
+ * rather than another chord in the way. Anything else the same tones move to,
+ * the tonic above all, is an ordinary bVI7 acting as a backdoor dominant or a
+ * chromatic mediant, and its seventh is a minor seventh.
+ *
+ * A candidate with no harmony sounding after it ends the piece with its
+ * resolution still to come, which is silence rather than evidence against it.
+ * A rest between the two chords is read the same way, and a window repeating the
+ * candidate's own chord is the same harmony held on across a boundary.
+ */
+function resolvesOntoDominant(
+  readings: readonly (WindowChord | null)[],
+  index: number,
+  key: KeyScale,
+): boolean {
+  const dominantPc = pitchClass(key.rootPc + DOMINANT_ABOVE_TONIC);
+  const candidate = readings[index]?.chord;
+  for (let i = index + 1; i < readings.length; i += 1) {
+    const next = readings[i];
+    if (!next) {
+      continue;
+    }
+    const chord = next.chord;
+    if (candidate !== undefined && sameChord(chord, candidate)) {
+      continue;
+    }
+    if (pitchClass(chord.bassPc ?? chord.rootPc) !== dominantPc) {
+      return false;
+    }
+    if (pitchClass(chord.rootPc) === dominantPc) {
+      return true;
+    }
+    // Standing on the dominant bass without being the dominant is the
+    // preparation the dominant arrives through, so the dominant it prepares is
+    // what the next window still has to hold.
+  }
+  return true;
 }
 
 /** Whether two chords are the same root, quality, and bass. */
@@ -1183,6 +1247,12 @@ export function analyzeTimeline(
       : dynamicSpans(slotWeights, tables, grid, harmonicRhythm, meters);
 
   const windows = new Map<string, WindowChord | null>();
+  // The chord of every settled span, read before any of them is reported: an
+  // augmented sixth is told from the bVI7 it sounds like by where the harmony
+  // goes next, which is a question about the span after this one.
+  const readings: (WindowChord | null)[] = [];
+  const readingKeys: KeyScale[] = [];
+  const readingBounds: { start: number; end: number }[] = [];
   for (const span of spans) {
     // The slot before the pickup is analyzed — its notes are the pickup's — but
     // the stretch of it that precedes the first note holds nothing, so the
@@ -1202,10 +1272,36 @@ export function analyzeTimeline(
       cached !== undefined
         ? cached
         : analyzeWindow(notesOfSpan(slotNotes, span, grid), start, end, meters, spanKey);
+    // What is cached is the window's own reading, both spellings and all: an
+    // edit elsewhere can change which of them the music supports without
+    // changing a note this span holds.
     windows.set(id, inferred);
-    if (!inferred) {
+    readings.push(inferred);
+    readingKeys.push(spanKey);
+    readingBounds.push({ start, end });
+  }
+
+  // Settle the augmented sixths against what follows them, in the key each was
+  // read in — the resolution belongs to the key the chord stands in.
+  for (let i = 0; i < readings.length; i += 1) {
+    const offered = readings[i]?.augmented;
+    const spanKey = readingKeys[i];
+    if (
+      offered !== undefined &&
+      spanKey !== undefined &&
+      resolvesOntoDominant(readings, i, spanKey)
+    ) {
+      readings[i] = offered;
+    }
+  }
+
+  for (let i = 0; i < readings.length; i += 1) {
+    const inferred = readings[i];
+    const bounds = readingBounds[i];
+    if (!inferred || bounds === undefined) {
       continue;
     }
+    const { start, end } = bounds;
     const last = segments[segments.length - 1];
     if (last && sameChord(last.chord, inferred.chord) && Math.abs(last.endBeat - start) < EPS) {
       // Merge into the previous segment, blending confidence by duration.

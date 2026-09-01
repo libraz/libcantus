@@ -58,18 +58,28 @@ describe('chordToRoman and romanToChord are mutual inverses', () => {
   });
 });
 
+/**
+ * The diminished-family qualities and the numeral stem each renders with. All
+ * three stand on the raised leading tone under a bare seventh-degree numeral.
+ */
+const DIMINISHED_FAMILY = [
+  ['dim', 'o'],
+  ['dim7', 'o7'],
+  ['m7b5', 'ø7'],
+] as const;
+
 describe('the seventh degree of a key that lowers it', () => {
   it('separates the subtonic from the raised leading tone in every minor key', () => {
     for (let tonic = 0; tonic < 12; tonic += 1) {
       const key = minorKey(tonic);
       const subtonic = (tonic + 10) % 12;
       const leadingTone = (tonic + 11) % 12;
-      for (const quality of ['dim', 'dim7'] as const) {
+      for (const [quality, stem] of DIMINISHED_FAMILY) {
         expect(chordToRoman(makeChord(subtonic, quality), key), `subtonic in ${tonic}`).toBe(
-          quality === 'dim' ? 'bviio' : 'bviio7',
+          `bvii${stem}`,
         );
         expect(chordToRoman(makeChord(leadingTone, quality), key), `leading tone in ${tonic}`).toBe(
-          quality === 'dim' ? 'viio' : 'viio7',
+          `vii${stem}`,
         );
       }
     }
@@ -84,12 +94,23 @@ describe('the seventh degree of a key that lowers it', () => {
     expect(romanToChord('bviio65', aMinor)).toMatchObject({ rootPc: 7, quality: 'dim7' });
   });
 
-  it('leaves qualities the numeral reads literally alone', () => {
+  it('reads the half-diminished seventh on the same root as its family', () => {
+    const aMinor = minorKey(9);
+    // The bare numeral names one root per key, whatever seventh quality stands
+    // on it: G#ø7 and G#o7 are both the leading-tone chord, differing only in
+    // the colour of the sixth degree above.
+    expect(chordToRoman(makeChord(8, 'm7b5'), aMinor)).toBe('viiø7');
+    expect(chordToRoman(makeChord(7, 'm7b5'), aMinor)).toBe('bviiø7');
+    expect(romanToChord('viiø7', aMinor).rootPc).toBe(8);
+    expect(romanToChord('bviiø7', aMinor).rootPc).toBe(7);
+  });
+
+  it('leaves qualities outside the diminished family literal', () => {
     const aMinor = minorKey(9);
     // Only the diminished family carries the raised-leading-tone convention, so
     // the subtonic keeps its bare numeral for every other quality.
     expect(chordToRoman(makeChord(7, 'maj'), aMinor)).toBe('VII');
-    expect(chordToRoman(makeChord(7, 'm7b5'), aMinor)).toBe('viiø7');
-    expect(romanToChord('viiø7', aMinor).rootPc).toBe(7);
+    expect(chordToRoman(makeChord(7, 'min7'), aMinor)).toBe('vii7');
+    expect(romanToChord('vii7', aMinor).rootPc).toBe(7);
   });
 });

@@ -269,12 +269,17 @@ export function spelledKeyOf(key: KeyScale): SpelledKey {
  * tonic is read off the circle of fifths rather than transposed by semitones,
  * the relative of Db major is Bb minor and not its enharmonic A# minor.
  *
+ * A key that is not a plain major or minor is read through the mode its third
+ * names and stepped from where its tonic stands on the circle, the origin every
+ * relation here shares: the relative of D dorian is F major, the relative of the
+ * D minor its third names.
+ *
  * @param tonic The spelled tonic of the key, as a note name, note data, or a
  *   `Note`.
  * @param key The key/scale, as a key name, a key/scale, or a `Key`; its mask
  *   decides which mode the relative is in.
  * @returns The relative key and the tonic spelling it is written with.
- * @throws If the tonic or the mask is malformed, or if the key's signature
+ * @throws If the tonic or the mask is malformed, or if the resulting signature
  *   falls outside [-12, 12] fifths.
  * @example
  * ```ts
@@ -285,8 +290,13 @@ export function spelledKeyOf(key: KeyScale): SpelledKey {
  * @category Scales
  */
 export function relativeKeyOf(tonic: NoteLike, key: KeyLike): SpelledKey {
-  const scale = toKeyScale(key);
-  return keyFromFifths(keySignatureFifths(tonic, scale), oppositeMode(modeOf(scale)));
+  const mode = modeOf(toKeyScale(key));
+  // Counted from where the tonic itself stands on the circle, as every other
+  // relation here counts: a mode's own signature carries an offset that
+  // `keyFromFifths` cannot give back, so stepping from it would answer C major
+  // for D dorian — the key one of its own neighbours already names — instead of
+  // the F major a fifth flatter.
+  return keyFromFifths(tonicFifths(toNoteData(tonic), mode), oppositeMode(mode));
 }
 
 /**

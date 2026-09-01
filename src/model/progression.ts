@@ -440,9 +440,18 @@ export class Progression {
     const chords = this.#chords.map((chord) => chord.analyze(resolved, opts));
     const from = this.#chords[this.#chords.length - 2];
     const to = this.#chords[this.#chords.length - 1];
+    // The chord before the closing pair is supplied from the progression
+    // itself, exactly as `cadences` supplies it, so a cadential six-four is
+    // reported as one event by both and the two never explain the same final
+    // pair differently. A caller's own `approach` still reaches a progression
+    // too short to have one of its own.
+    const approach = this.#chords[this.#chords.length - 3];
     const cadence =
       from !== undefined && to !== undefined
-        ? detectCadence(from.data, to.data, resolved.scale, opts)
+        ? detectCadence(from.data, to.data, resolved.scale, {
+            ...opts,
+            ...(approach === undefined ? {} : { approach: approach.data }),
+          })
         : null;
     return { chords, cadence };
   }

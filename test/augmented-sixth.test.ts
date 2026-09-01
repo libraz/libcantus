@@ -318,6 +318,69 @@ describe('augmented sixths in analysed music', () => {
     const { timeline } = chordTimelineFromNotes(ontoTheDominant(SOUNDING.german), { key: cMajor });
     expect(detectCadences(timeline, cMajor).map((hit) => hit.cadence.type)).toEqual(['half']);
   });
+
+  /** The chords of a progression, one bar each, as sounding pitches. */
+  function bars(...chords: readonly (readonly number[])[]): NoteEvent[] {
+    return chords.flatMap((pitches, bar) =>
+      pitches.map((pitch) => ({ pitch, startBeat: bar * 4, durationBeat: 4 })),
+    );
+  }
+
+  /** The tonic of C major in root position, and the dominant under it. */
+  const TONIC = [48, 60, 64, 67];
+  const CADENTIAL_SIX_FOUR = [55, 60, 64, 72];
+  const DOMINANT = [55, 59, 62, 67];
+
+  /** The chord the analysis reports for the first bar of a progression. */
+  function firstChord(notes: NoteEvent[]) {
+    const { timeline } = chordTimelineFromNotes(notes, { key: cMajor });
+    const chord = timeline.segments[0]?.chord;
+    expect(chord).toBeDefined();
+    return chord;
+  }
+
+  it('reads a bVI7 that resolves to the tonic as a bVI7, seventh and all', () => {
+    const chord = firstChord(bars(SOUNDING.german, TONIC));
+    if (chord === undefined) return;
+    // Ab7 walking into C is a backdoor dominant, not a predominant resolving
+    // outward, so its tenth semitone above the bass is a minor seventh.
+    expect(noteNames(spellChord(chord, parseNote('C'), cMajor))).toEqual(['Ab', 'C', 'Eb', 'Gb']);
+    expect(chordToRoman(chord, cMajor)).toBe('bVI7');
+    expect(augmentedSixthKind(chord, cMajor)).toBeNull();
+  });
+
+  it('reads the same tones resolving to the dominant as the German sixth', () => {
+    const chord = firstChord(bars(SOUNDING.german, DOMINANT));
+    if (chord === undefined) return;
+    expect(noteNames(spellChord(chord, parseNote('C'), cMajor))).toEqual(['Ab', 'C', 'Eb', 'F#']);
+    expect(chordToRoman(chord, cMajor)).toBe('Ger6');
+  });
+
+  it('accepts a sixth resolving through a cadential six-four', () => {
+    const chord = firstChord(bars(SOUNDING.german, CADENTIAL_SIX_FOUR, DOMINANT));
+    if (chord === undefined) return;
+    // The six-four stands on the dominant bass: the dominant has arrived, under
+    // the suspension it resolves.
+    expect(augmentedSixthKind(chord, cMajor)).toBe('german');
+  });
+
+  it('rejects a six-four that never reaches its dominant', () => {
+    const chord = firstChord(bars(SOUNDING.german, CADENTIAL_SIX_FOUR, TONIC));
+    if (chord === undefined) return;
+    expect(augmentedSixthKind(chord, cMajor)).toBeNull();
+  });
+
+  it('accepts a sixth left unresolved at the end of the piece', () => {
+    const chord = firstChord(bars(SOUNDING.german));
+    if (chord === undefined) return;
+    expect(augmentedSixthKind(chord, cMajor)).toBe('german');
+  });
+
+  it.each(KINDS)('holds the rule for the %s sixth both ways', (kind) => {
+    const onto = (next: readonly number[]) => firstChord(bars(SOUNDING[kind], next));
+    expect(augmentedSixthKind(onto(DOMINANT) ?? makeChord(0, 'maj'), cMajor)).toBe(kind);
+    expect(augmentedSixthKind(onto(TONIC) ?? makeChord(0, 'maj'), cMajor)).toBeNull();
+  });
 });
 
 describe('augmented sixths as predominants', () => {
