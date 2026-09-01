@@ -1,4 +1,6 @@
+import { InvalidInputError } from '../../core/errors/index.js';
 import type { Note } from '../../core/pitch/index.js';
+import { formatNote, noteToPitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import { type KeyLike, toKeyScale } from './coerce.js';
 import type { KeyVariant, ResolvedKey } from './kinds.js';
@@ -30,6 +32,33 @@ function carriesIdentity(value: unknown): value is { tonic?: Note; variant?: Key
 }
 
 /**
+ * A carried tonic, refused when it spells a pitch class the scale is not rooted
+ * on.
+ *
+ * A key whose tonic and scale disagree is two answers to what the key is, and
+ * nothing downstream can tell which was meant: the chord builders read the
+ * pitch classes and the spellers read the letters, so an augmented sixth comes
+ * back naming one chord by its pitches and another by its letters. The words
+ * are `Key.of`'s, because a resolver that accepted what the class refuses would
+ * make the two APIs answer the same input differently.
+ */
+function carriedTonic(tonic: Note, scale: KeyScale): Note {
+  if (noteToPitchClass(tonic) !== scale.rootPc) {
+    throw new InvalidInputError(
+      `tonic ${formatNote(tonic)} does not match the scale root pitch class ${scale.rootPc}; ` +
+        'pass a tonic that spells the scale root, or omit it to have one chosen',
+    );
+  }
+  return { letter: tonic.letter, alter: tonic.alter };
+}
+
+/** A carried scale form, refused when the mask it arrived with does not hold it. */
+function carriedVariant(variant: KeyVariant, scale: KeyScale): KeyVariant {
+  assertKeyVariant(variant, scale.modeMask12);
+  return variant;
+}
+
+/**
  * Resolve any key-shaped value to the whole key it names.
  *
  * The counterpart of {@link toKeyScale}, and the one to prefer: both read the
@@ -45,11 +74,18 @@ function carriesIdentity(value: unknown): value is { tonic?: Note; variant?: Key
  * minor rather than being reduced to pitch classes and spelled back as the G#
  * minor those read best as.
  *
+ * What it carries is checked rather than trusted. Accepting a wide range of
+ * shapes is not the same as accepting whatever those shapes hold, and a key
+ * whose tonic or form contradicts its own scale is refused here in the words
+ * `Key.of` refuses it — the two APIs answer the same input alike, and the
+ * refusal reaches every entry point built on this one.
+ *
  * @param value A key name, a plain key/scale, a resolved key, or a value whose
  *   `toJSON` returns one of those.
  * @returns The key, whole.
- * @throws If the value names no key, or its mask is out of range or excludes
- *   its own root.
+ * @throws If the value names no key, its mask is out of range or excludes its
+ *   own root, its tonic spells a pitch class its scale is not rooted on, or its
+ *   form is not one that mask holds.
  * @example
  * ```ts
  * import { formatNote, resolveKey } from '@libraz/libcantus';
@@ -69,11 +105,11 @@ export function resolveKey(value: KeyLike): ResolvedKey {
       : value;
   const tonic =
     carriesIdentity(carried) && carried.tonic !== undefined
-      ? { letter: carried.tonic.letter, alter: carried.tonic.alter }
+      ? carriedTonic(carried.tonic, scale)
       : spelledKeyOf(scale).tonic;
   const variant =
     carriesIdentity(carried) && carried.variant !== undefined
-      ? carried.variant
+      ? carriedVariant(carried.variant, scale)
       : variantOfMask(scale.modeMask12);
   return { scale, tonic, variant };
 }

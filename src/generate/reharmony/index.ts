@@ -21,7 +21,6 @@ import {
   parallelKey,
 } from '../../analyze/functional/index.js';
 import {
-  midiToNote,
   pitchClassOf as mod12,
   type Note,
   noteToPitchClass,
@@ -39,10 +38,10 @@ import {
 import {
   isScaleTone,
   type KeyLike,
+  resolveKey,
   scaleTonesInDegreeOrder,
-  toKeyScale,
 } from '../../theory/scale/index.js';
-import { spellPitchClass, spellScale } from '../../theory/spelling/index.js';
+import { spellPitchClass } from '../../theory/spelling/index.js';
 import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
 import { soundsDominantSeventh } from '../../theory/tendency/index.js';
 
@@ -125,38 +124,12 @@ function sameChord(a: Chord, b: Chord): boolean {
 /** Root offsets (semitones) that form a third above or below a root. */
 const THIRD_OFFSETS = [3, 4, 8, 9] as const;
 
-/** Middle C: the octave the two bare tonic candidates are named in. */
-const MIDDLE_C = 60;
-
 /** Widest alteration a {@link PitchSpelling} hint may carry: a double accidental. */
 const MAX_HINT_ALTER = 2;
 
 /** Reduce a spelled note to the bare letter/alter a chord records as a hint. */
 function bareSpelling(note: Note): PitchSpelling {
   return { letter: note.letter, alter: note.alter };
-}
-
-/** Total accidentals a spelled tonic produces across a key's whole scale. */
-function accidentalLoad(tonic: Note, key: KeyScale): number {
-  return spellScale(tonic, key).reduce((sum, note) => sum + Math.abs(note.alter), 0);
-}
-
-/**
- * The tonic spelling a key is written on.
- *
- * A `KeyScale` carries a root pitch class and no letter, so the side has to be
- * chosen: take whichever spelling writes the scale with the fewest accidentals,
- * and flats on a tie. That is what makes pitch class 1 major spell as Db major
- * rather than C# major, while pitch class 6 minor still spells as F# minor.
- */
-function keyTonicOf(key: KeyScale): Note {
-  const rootPc = mod12(key.rootPc);
-  const sharp = bareSpelling(midiToNote(MIDDLE_C + rootPc, 'sharp'));
-  const flat = bareSpelling(midiToNote(MIDDLE_C + rootPc, 'flat'));
-  if (sharp.letter === flat.letter) {
-    return sharp;
-  }
-  return accidentalLoad(flat, key) <= accidentalLoad(sharp, key) ? flat : sharp;
 }
 
 /**
@@ -250,17 +223,17 @@ export function substituteChord(
   key: KeyLike,
   opts?: SubstituteOptions,
 ): Substitution[] {
-  // Chord and key are read into their plain form once, here at the boundary;
-  // everything below works on the plain forms alone.
+  // Chord and key are read once, here at the boundary. The key keeps the tonic
+  // it was named with: everything below spells from that tonic, so the letters
+  // are the caller's key's rather than the ones its pitch classes read best as.
   const source = toChordData(chord);
-  const scale = toKeyScale(key);
+  const { scale, tonic } = resolveKey(key);
   // The relative test counts common tones against the chord's triad, not its
   // full pitch-class set: an exact count of two would otherwise be decided by
   // how many tensions the input carries, so C proposes both Em and Am while
   // Cmaj7 proposes only Am — penalising the candidate that overlaps *more*.
   const originalTriad = chordPitchClasses(makeChord(source.rootPc, triadQualityOf(source)));
   const candidates: { chord: Chord; type: SubstitutionType }[] = [];
-  const tonic = keyTonicOf(scale);
 
   // Tritone substitution: only for dominant-type chords.
   if (soundsDominantSeventh(source)) {
@@ -373,8 +346,9 @@ export type BorrowedChord = {
  * @category Reharmonization
  */
 export function modalInterchangePalette(key: KeyLike): BorrowedChord[] {
-  // The key is read into its plain form once, here at the boundary.
-  const scale = toKeyScale(key);
+  // The key is read once, here at the boundary, and keeps the tonic it was
+  // named with: every chord below is spelled from that tonic.
+  const { scale, tonic } = resolveKey(key);
   const palette: BorrowedChord[] = [];
   const seen = new Set<string>();
   const add = (chord: Chord) => {
@@ -390,7 +364,6 @@ export function modalInterchangePalette(key: KeyLike): BorrowedChord[] {
     });
   };
 
-  const tonic = keyTonicOf(scale);
   const parallel = parallelKey(scale);
   for (const triad of diatonicTriadsOf(parallel)) {
     if (!isDiatonic(triad, scale) && borrowedSource(triad, scale) !== null) {
@@ -433,11 +406,11 @@ export function modalInterchangePalette(key: KeyLike): BorrowedChord[] {
  * @category Reharmonization
  */
 export function negativeHarmonyMirror(chord: ChordLike, key: KeyLike): Chord {
-  // Chord and key are read into their plain form once, here at the boundary.
+  // Chord and key are read once, here at the boundary. The key keeps the tonic
+  // it was named with, which is what the mirrored chord is spelled from.
   const source = toChordData(chord);
-  const scale = toKeyScale(key);
+  const { scale, tonic } = resolveKey(key);
   const tonicPc = mod12(scale.rootPc);
-  const tonic = keyTonicOf(scale);
   const mirror = (p: number) => mod12(2 * tonicPc + 7 - p);
   const pcs = chordPitchClasses(source).map(mirror);
   const bassPc = source.bassPc !== undefined ? mirror(source.bassPc) : undefined;

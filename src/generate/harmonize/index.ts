@@ -32,9 +32,10 @@ import {
   type KeyLike,
   majorKey,
   minorKey,
+  type ResolvedKey,
+  resolveKey,
   scaleSystemOf,
   scaleTonesInDegreeOrder,
-  toKeyScale,
 } from '../../theory/scale/index.js';
 import { leadingTonePcOf } from '../../theory/tendency/index.js';
 import { type GenerationContextInput, resolveContext } from '../context/index.js';
@@ -200,7 +201,16 @@ export type HarmonizeResult = {
    * much puts it in `key`, which is the key the chords are in.
    */
   transposeSemitones: number;
-  key: KeyScale;
+  /**
+   * The key the chords are in, whole.
+   *
+   * A key/scale alone says nothing about how it is written, so a result
+   * carrying one would report whichever spelling its pitch classes read best
+   * from, and an Ab minor handed in would come back out a G# minor. It matters
+   * most under `key: 'infer'`, where this is the only account of which key was
+   * chosen and a caller has nothing else to spell the chord spans from.
+   */
+  key: ResolvedKey;
   /** One span per chord change, each starting on a harmonic-rhythm boundary. */
   chords: ChordSpan[];
   /** Each melody note's role in the chord sounding under it, once chosen. */
@@ -1158,9 +1168,14 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   const ts = meterAt(0, toMeterData(opts.ts ?? DEFAULT_METER, 'ts'));
   assertTimeSignature(ts);
   const requestedKey = opts.key ?? 'infer';
-  // The key is read into its plain form once, here at the boundary; the search
-  // below is given the scale it resolved to.
-  const key = requestedKey === 'infer' ? inferKey(soundingMelody) : toKeyScale(requestedKey);
+  // The key is read once, here at the boundary, and kept whole: the search
+  // below wants only the pitch classes, and the result reports the key the
+  // caller named — spelling and all — rather than the pitch classes it worked
+  // from. An inferred key is read the same way, so both arrive spelled.
+  const resolvedKey = resolveKey(
+    requestedKey === 'infer' ? inferKey(soundingMelody) : requestedKey,
+  );
+  const key = resolvedKey.scale;
   const placement = opts.placement ?? DEFAULT_PLACEMENT;
   const ctx = resolveContext(opts.ctx);
   // `reharmonize` names three points on the dial the context sets continuously,
@@ -1179,7 +1194,7 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   // ghost chord into a chart built by harmonizing sections and concatenating
   // them. The sibling generators return an empty result for empty input too.
   if (soundingMelody.length === 0) {
-    return { transposeSemitones: 0, key, chords: [], melodyRoles: [] };
+    return { transposeSemitones: 0, key: resolvedKey, chords: [], melodyRoles: [] };
   }
   const candidates = buildCandidates(key, harmonic);
   const candAt = (i: number): Candidate => candidates[i] ?? FALLBACK;
@@ -1394,5 +1409,5 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
     return { noteIndex, role: roleOf(note.pitch + bestTs, chord).role };
   });
 
-  return { transposeSemitones: bestTs, key, chords, melodyRoles };
+  return { transposeSemitones: bestTs, key: resolvedKey, chords, melodyRoles };
 }

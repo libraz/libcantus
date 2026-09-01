@@ -112,8 +112,9 @@ function spelledLike(a: Note, b: Note): boolean {
  * @example
  * ```ts
  * import type { ResolvedKey } from '@libraz/libcantus';
- * import { majorKey, parseNote } from '@libraz/libcantus';
- * const dbMajor = spelledKeyOf(majorKey(1));
+ * import { formatNote, majorKey, spelledKeyOf } from '@libraz/libcantus';
+ * const dbMajor: ResolvedKey = spelledKeyOf(majorKey(1));
+ * formatNote(dbMajor.tonic); // 'Db'
  * ```
  * @category Scales
  */
@@ -574,7 +575,7 @@ export function relatedKeysOf(
  *   falls outside [-12, 12] fifths.
  * @example
  * ```ts
- * import { keyRelationBetween, majorKey, minorKey, parseNote } from '@libraz/libcantus';
+ * import { keyRelationBetween, majorKey, minorKey, spelledKeyOf } from '@libraz/libcantus';
  * const cMajor = spelledKeyOf(majorKey(0));
  * keyRelationBetween(cMajor, spelledKeyOf(minorKey(9))); // 'relative'
  * keyRelationBetween(cMajor, spelledKeyOf(minorKey(3))); // null

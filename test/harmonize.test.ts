@@ -138,7 +138,7 @@ describe('harmonizeMelody', () => {
       reharmonize: 'diatonic',
       placement: { transposeSearch: false, octaveSearch: false },
     });
-    expect(result.key.rootPc).toBe(7); // G major
+    expect(result.key.scale.rootPc).toBe(7); // G major
   });
 
   it('does not let a zero-length imported artefact change the inferred key', () => {
@@ -167,8 +167,8 @@ describe('harmonizeMelody', () => {
       reharmonize: 'diatonic',
       placement: { transposeSearch: false, octaveSearch: false },
     });
-    expect(result.key.rootPc).toBe(9); // A minor, not C major
-    expect(result.key.modeMask12).toBe(NATURAL_MINOR_MASK);
+    expect(result.key.scale.rootPc).toBe(9); // A minor, not C major
+    expect(result.key.scale.modeMask12).toBe(NATURAL_MINOR_MASK);
   });
 
   it('treats the seed as a tie-break only: seed does not change a well-determined result', () => {
@@ -262,7 +262,7 @@ describe('harmonizeMelody', () => {
     expect(result.chords).toEqual([]);
     expect(result.melodyRoles).toEqual([]);
     expect(result.transposeSemitones).toBe(0);
-    expect(result.key).toEqual(cMajor);
+    expect(result.key.scale).toEqual(cMajor);
   });
 
   it('starts the harmonic grid at the first sounding section instead of adding an intro', () => {
@@ -571,7 +571,7 @@ describe('harmonizeMelody placement', () => {
       placement: { transposeSearch: true, octaveSearch: false },
     });
     expect(result.transposeSemitones).toBe(-5);
-    expect(result.key).toEqual(gMajor);
+    expect(result.key.scale).toEqual(gMajor);
     // The melody the caller is told to play and the key it is told to play it
     // in are the same key: every transposed note belongs to the reported scale.
     const moved = cScale.map((n) => n.pitch + result.transposeSemitones);
@@ -592,7 +592,7 @@ describe('harmonizeMelody placement', () => {
       placement: { transposeSearch: true, octaveSearch: false },
     });
     expect(result.transposeSemitones).toBe(0);
-    expect(result.key).toEqual(cMajor);
+    expect(result.key.scale).toEqual(cMajor);
   });
 
   it('moves a melody written out of register by octaves alone', () => {
@@ -630,7 +630,7 @@ describe('harmonizeMelody placement', () => {
     });
     // Down a fifth into G major, then up an octave into a comfortable register.
     expect(result.transposeSemitones).toBe(7);
-    expect(result.key).toEqual(gMajor);
+    expect(result.key.scale).toEqual(gMajor);
   });
 });
 

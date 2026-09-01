@@ -741,7 +741,7 @@ export class Chord {
    * ```
    */
   substitutions(key?: KeyLike, opts?: SubstituteOptions): Substitution[] {
-    return substituteChord(this.#data, this.#resolveKey(key).scale, opts);
+    return substituteChord(this.#data, this.#resolveKey(key), opts);
   }
 
   /**
@@ -767,7 +767,7 @@ export class Chord {
    * ```
    */
   modalInterchange(key?: KeyLike): BorrowedChord[] {
-    return modalInterchangePalette(this.#resolveKey(key).scale);
+    return modalInterchangePalette(this.#resolveKey(key));
   }
 
   /**
@@ -824,8 +824,10 @@ export class Chord {
   negativeHarmony(key?: KeyLike): Chord {
     const resolved = this.#resolveKey(key);
     // Retain the key that anchored the reflection (explicit first, then carried)
-    // so a later no-arg analysis method still has a key context.
-    return new Chord(negativeHarmonyMirror(this.#data, resolved.scale), resolved);
+    // so a later no-arg analysis method still has a key context. The whole key
+    // goes to the mirror as well: reducing it to its scale here is what would
+    // spell the reflection in an Ab minor with the sharps of a G# minor.
+    return new Chord(negativeHarmonyMirror(this.#data, resolved), resolved);
   }
 
   /**

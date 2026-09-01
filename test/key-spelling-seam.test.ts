@@ -6,8 +6,10 @@ import { formatNote, parseNote } from '../src/core/pitch/index.js';
 import * as api from '../src/index.js';
 import { Key } from '../src/model/key.js';
 import { Voicing } from '../src/model/voicing.js';
+import { makeChord } from '../src/theory/chord/index.js';
 import { figuredBassRealization } from '../src/theory/figured-bass/index.js';
 import { spellVoicing } from '../src/theory/partwriting/index.js';
+import { type ResolvedKey, resolveKey } from '../src/theory/scale/index.js';
 import { toChordData } from '../src/theory/symbol/index.js';
 import { TRANSPOSING_INSTRUMENTS } from '../src/theory/transposition/index.js';
 import { functionParams, type ParamInfo, sourceFiles } from './support/signatures.js';
@@ -233,5 +235,226 @@ describe('a key reaching an entry point goes through the one resolver', () => {
     // Without this the checks above would pass by measuring nothing at all.
     expect(keyParams.length).toBeGreaterThan(30);
     expect(textByFile.size).toBeGreaterThan(50);
+  });
+});
+
+/**
+ * The same convention measured by what the entry points answer rather than by
+ * what they call it.
+ *
+ * The checks above read the tree for one name. A second derivation written
+ * under another name is invisible to them, and that is exactly how one grew: a
+ * private tonic speller sat beside the resolver and wrote the borrowed chords
+ * of an A flat minor with double sharps, because it was not called
+ * `spelledKeyOf`.
+ *
+ * This asks the entry points instead. An A flat minor and a G sharp minor are
+ * one set of pitch classes and two sets of letters, so an entry point that
+ * hands back letters has to hand back different ones for the two. An entry
+ * point that reduces its key and derives a tonic back from what is left — under
+ * any name at all — answers both alike, and fails here.
+ *
+ * The subject is what the package root exports, so an entry point written
+ * tomorrow is measured without anybody listing it here.
+ */
+describe('an entry point spells its answer from the key it was handed', () => {
+  /** One sound, written on the two sides of the circle that name it. */
+  const ENHARMONIC_KEYS = ['Ab minor', 'G# minor'] as const;
+
+  /** What to pass for one parameter of an entry point being measured. */
+  type Recipe = (key: ResolvedKey) => unknown;
+
+  /**
+   * What to pass for a parameter beside the key, by the type it declares.
+   *
+   * A recipe reads the key, so an argument that has to agree with it — a tonic,
+   * a bass — follows the key being measured instead of pinning the answer to
+   * one spelling of its own.
+   */
+  const BY_TYPE: Readonly<Record<string, Recipe>> = {
+    AugmentedSixthKind: () => 'german',
+    // The key's own tonic triad, carrying no spelling of its own: a chord that
+    // brought one would answer in its own letters whatever the key said.
+    Chord: (key) => makeChord(key.scale.rootPc, 'maj'),
+    ChordLike: (key) => makeChord(key.scale.rootPc, 'maj'),
+    ChordQuality: () => 'maj',
+    'ChordTimeline | null': () => null,
+    KeyLike: (key) => key,
+    Note: (key) => ({ ...key.tonic, octave: 4 }),
+    NoteLike: (key) => key.tonic,
+    number: () => 1,
+    'number | Note': () => 1,
+    'number[]': () => [0, 4, 7],
+    'readonly number[]': () => [0, 4, 7],
+    'readonly NoteEvent[]': () =>
+      [60, 62, 63].map((pitch, index) => ({ pitch, startBeat: index, durationBeat: 1 })),
+    'readonly NoteLike[]': (key) => [key.tonic],
+    ResolvedKey: (key) => key,
+    // Optional, and omitted the way a caller with nothing to say about the
+    // surrounding line omits it.
+    SpellingContext: () => undefined,
+    string: () => '',
+  };
+
+  /** What to pass where the declared type alone does not say what would be valid. */
+  const BY_PARAM: Readonly<Record<string, Recipe>> = {
+    // The tones and the bass of the German sixth of the key being measured, so
+    // the reading has something to recognize.
+    'augmentedSixthFromPitchClasses.pcs': (key) =>
+      [0, 4, 7, 10].map((tone) => (key.scale.rootPc + BASS_ABOVE_TONIC + tone) % 12),
+    'augmentedSixthFromPitchClasses.bassPc': (key) => (key.scale.rootPc + BASS_ABOVE_TONIC) % 12,
+    // A numeral whose chord is spelled from the tonic rather than numbered from
+    // the scale degrees.
+    'romanToChord.text': () => 'Ger6',
+  };
+
+  /** Semitones from a tonic up to the lowered submediant an augmented sixth stands on. */
+  const BASS_ABOVE_TONIC = 8;
+
+  /**
+   * Entry points the recipes cannot call, each with what it would take.
+   *
+   * Short by design, and asserted to be exact: an entry point that drops off
+   * this list without becoming callable is one this check quietly stopped
+   * measuring.
+   */
+  const NOT_EXERCISED: Readonly<Record<string, string>> = {
+    // Wants a written voicing per chord, which no recipe can derive from a key.
+    checkPartWriting: 'needs a spelled voicing for every chord it checks',
+    checkSpecies: 'needs a cantus firmus and a counterpoint written against it',
+    // Want a motif, which is a shape rather than anything the key implies.
+    developMotif: 'needs a motif cell and a chord timeline to develop it over',
+    relateMotifs: 'needs two motifs to compare',
+    transformMotif: 'needs a motif cell to transform',
+    placeLicks: 'needs a chord timeline to place licks into',
+  };
+
+  /** Every letter-and-accidental pair anywhere in an answer, in the order found. */
+  function spellingsIn(value: unknown, found: string[] = []): string[] {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        spellingsIn(item, found);
+      }
+      return found;
+    }
+    if (typeof value === 'object' && value !== null) {
+      const fields = value as Record<string, unknown>;
+      if (typeof fields.letter === 'number' && typeof fields.alter === 'number') {
+        found.push(`${fields.letter}:${fields.alter}`);
+      }
+      for (const field of Object.values(fields)) {
+        spellingsIn(field, found);
+      }
+    }
+    return found;
+  }
+
+  /**
+   * Every function a caller can reach from the package root that declares a key,
+   * with the parameters of the signature that declares it.
+   *
+   * One entry per name: an overload set is measured through its first
+   * signature, which is the one a caller reads first.
+   */
+  const entryPoints = (): Map<string, ParamInfo[]> => {
+    const reachable = new Set(
+      Object.entries(api as Record<string, unknown>)
+        .filter(([, value]) => typeof value === 'function')
+        .map(([name]) => name),
+    );
+    const signatures = new Map<string, ParamInfo[]>();
+    for (const param of functionParams()) {
+      const id = `${param.file}:${param.line}:${param.fn}`;
+      signatures.set(id, [...(signatures.get(id) ?? []), param]);
+    }
+    const found = new Map<string, ParamInfo[]>();
+    for (const params of signatures.values()) {
+      const [first] = params;
+      if (first === undefined || !first.exported || !reachable.has(first.fn)) {
+        continue;
+      }
+      if (params.some((param) => /\bKeyLike\b/.test(param.type)) && !found.has(first.fn)) {
+        found.set(first.fn, params);
+      }
+    }
+    return found;
+  };
+
+  /** The arguments one entry point is called with in one key, or null for none. */
+  function argumentsFor(fn: string, params: ParamInfo[], key: ResolvedKey): unknown[] | null {
+    const args: unknown[] = [];
+    for (const param of params) {
+      // An options bag is what a caller omits, so the check omits it too.
+      const recipe = param.type.endsWith('Options')
+        ? () => undefined
+        : (BY_PARAM[`${fn}.${param.param}`] ?? BY_TYPE[param.type]);
+      if (recipe === undefined) {
+        return null;
+      }
+      args.push(recipe(key));
+    }
+    while (args.length > 0 && args[args.length - 1] === undefined) {
+      args.pop();
+    }
+    return args;
+  }
+
+  /** What an entry point answers in one key, or null when it cannot be called. */
+  function answerOf(fn: string, params: ParamInfo[], keyName: string): unknown | null {
+    const key = resolveKey(keyName);
+    const args = argumentsFor(fn, params, key);
+    if (args === null) {
+      return null;
+    }
+    const call = (api as unknown as Record<string, (...args: unknown[]) => unknown>)[fn];
+    try {
+      return call === undefined ? null : { answer: call(...args) };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Each entry point's two answers, or null where the recipes could not call it. */
+  const answers = new Map<string, { flat: unknown; sharp: unknown } | null>();
+  for (const [fn, params] of entryPoints()) {
+    const [flatName, sharpName] = ENHARMONIC_KEYS;
+    const flat = answerOf(fn, params, flatName);
+    const sharp = answerOf(fn, params, sharpName);
+    answers.set(fn, flat === null || sharp === null ? null : { flat, sharp });
+  }
+
+  it('answers the two spellings of one sound differently', () => {
+    const offenders = [...answers.entries()]
+      .filter(([, pair]) => pair !== null)
+      .filter(([, pair]) => spellingsIn(pair?.flat).length > 0)
+      .filter(
+        ([, pair]) => spellingsIn(pair?.flat).join(' ') === spellingsIn(pair?.sharp).join(' '),
+      )
+      .map(
+        ([fn, pair]) =>
+          `${fn} spells an Ab minor and a G# minor alike: ${spellingsIn(pair?.flat).join(' ')}`,
+      );
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('names exactly the entry points the recipes cannot call', () => {
+    const uncallable = [...answers.entries()]
+      .filter(([, pair]) => pair === null)
+      .map(([fn]) => fn)
+      .sort();
+
+    expect(uncallable).toEqual(Object.keys(NOT_EXERCISED).sort());
+  });
+
+  it('reads a subject the tree supplies rather than a list', () => {
+    // Without these the checks above would pass by calling nothing, or by
+    // calling only the entry points that answer in pitch classes.
+    const spelled = [...answers.values()].filter(
+      (pair) => pair !== null && spellingsIn(pair.flat).length > 0,
+    );
+
+    expect(answers.size).toBeGreaterThan(40);
+    expect(spelled.length).toBeGreaterThan(10);
   });
 });
