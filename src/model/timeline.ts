@@ -6,6 +6,7 @@ import type { ReducedChord, ReduceProgressionOptions } from '../analyze/reductio
 import { reduceProgression } from '../analyze/reduction/index.js';
 import type { CadenceHit, ChordTimeline, ChordTimelineOptions } from '../analyze/timeline/index.js';
 import {
+  chordAtBeat,
   chordTimelineFromChords,
   chordTimelineFromNotes,
   detectCadences,
@@ -14,7 +15,7 @@ import { InvalidInputError } from '../core/errors/index.js';
 import type { IntervalLike } from '../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../core/types.js';
 import { assertFiniteNumber, assertRange } from '../core/validation/index.js';
-import type { Chord as ChordData, ChordSegment, ChordSpan } from '../theory/chord/index.js';
+import type { ChordSegment, ChordSpan } from '../theory/chord/index.js';
 import { spanFromChord } from '../theory/chord/index.js';
 import type { KeyLike } from '../theory/scale/index.js';
 import { scaleOf, toKeyScale } from '../theory/scale/index.js';
@@ -120,31 +121,6 @@ function copyConfidence(
   return confidence.map((value, index) =>
     assertRange(value, 0, 1, `timeline segmentConfidence[${index}]`),
   );
-}
-
-/**
- * The chord sounding at a beat, or null where nothing is.
- *
- * Segments are disjoint and in beat order, so the covering one is found by
- * binary search rather than by scanning: this is what `at(beat)` and every
- * analysis reading the timeline go through.
- */
-function chordAtBeat(segments: readonly ChordSegment[], beat: number): ChordData | null {
-  assertFiniteNumber(beat, 'timeline query beat');
-  let low = 0;
-  let high = segments.length;
-  while (low < high) {
-    const middle = Math.floor((low + high) / 2);
-    if ((segments[middle]?.startBeat ?? Number.POSITIVE_INFINITY) <= beat) {
-      low = middle + 1;
-    } else {
-      high = middle;
-    }
-  }
-  const candidate = segments[low - 1];
-  return candidate !== undefined && beat >= candidate.startBeat && beat < candidate.endBeat
-    ? candidate.chord
-    : null;
 }
 
 /** The part of a span lying inside `[fromBeat, toBeat)`, or null when none does. */

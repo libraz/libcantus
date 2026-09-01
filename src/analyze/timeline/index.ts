@@ -102,30 +102,43 @@ export function chordTimelineFromChords(
 }
 
 /**
- * Build the `at(beat)` lookup over a segment list.
+ * The chord sounding at a beat, or null where nothing is.
  *
- * Segments are disjoint and in beat order, so the covering one is found by
- * binary search. A linear scan here is the inner loop of arrangement analysis,
- * which queries it once per note per chord change.
+ * A segment covers `[startBeat, endBeat)`, so the beat a chord gives way on
+ * answers with the chord arriving rather than the one leaving. Segments are
+ * disjoint and in beat order, so the covering one is found by binary search
+ * rather than by a scan: this is the inner loop of arrangement analysis, which
+ * queries it once per note per chord change.
+ *
+ * The class-side timeline answers `at(beat)` through this same search, so the
+ * function and the class cannot come to differ over where a chord starts.
+ *
+ * @param segments The segments to search, disjoint and in beat order.
+ * @param beat The beat to read.
+ * @returns The covering segment's chord, or null outside every segment.
+ * @throws If `beat` is not finite.
  */
-function segmentLookup(segments: ChordSegment[]): (beat: number) => Chord | null {
-  return (beat) => {
-    assertFiniteNumber(beat, 'timeline query beat');
-    let low = 0;
-    let high = segments.length;
-    while (low < high) {
-      const middle = Math.floor((low + high) / 2);
-      if ((segments[middle]?.startBeat ?? Number.POSITIVE_INFINITY) <= beat) {
-        low = middle + 1;
-      } else {
-        high = middle;
-      }
+export function chordAtBeat(segments: readonly ChordSegment[], beat: number): Chord | null {
+  assertFiniteNumber(beat, 'timeline query beat');
+  let low = 0;
+  let high = segments.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if ((segments[middle]?.startBeat ?? Number.POSITIVE_INFINITY) <= beat) {
+      low = middle + 1;
+    } else {
+      high = middle;
     }
-    const candidate = segments[low - 1];
-    return candidate !== undefined && beat >= candidate.startBeat && beat < candidate.endBeat
-      ? candidate.chord
-      : null;
-  };
+  }
+  const candidate = segments[low - 1];
+  return candidate !== undefined && beat >= candidate.startBeat && beat < candidate.endBeat
+    ? candidate.chord
+    : null;
+}
+
+/** Build the `at(beat)` lookup a {@link ChordTimeline} carries. */
+function segmentLookup(segments: ChordSegment[]): (beat: number) => Chord | null {
+  return (beat) => chordAtBeat(segments, beat);
 }
 
 const EPS = 1e-9;
