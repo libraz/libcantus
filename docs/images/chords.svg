@@ -1,0 +1,197 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" width="960" height="360" role="img" aria-labelledby="ttl dsc">
+  <title id="ttl">Chords are stacked thirds</title>
+  <desc id="dsc">On the left, four columns build a chord upward from C: root, major third E and perfect fifth G give C; adding a minor seventh B flat gives C7; adding a major ninth D gives C9; adding a sharp eleventh F sharp gives C7 with a sharp eleventh. The middle panel lists five qualities by the intervals above the root: major, minor, diminished, augmented and dominant seventh. The right panel shows the same three notes C, E and G stacked three ways, root position, first inversion and second inversion, written C, C slash E and C slash G.</desc>
+
+  <style>
+    .bg    { fill:#f7f5f1 }
+    .grp   { fill:#edeae4 }
+    .chip  { fill:#ffffff; stroke:#d7d4cd }
+    .card  { fill:#ffffff; stroke:#8a6a1f }
+    .alt   { fill:#ffffff; stroke:#3f6b8a }
+    .seam  { fill:none; stroke:#b8b4ac; stroke-dasharray:6 5 }
+    .rule  { fill:none; stroke:#b8b4ac; stroke-width:1 }
+    .ln    { fill:none; stroke:#8a6a1f; stroke-width:1.4 }
+    .ln2   { fill:none; stroke:#3f6b8a; stroke-width:1.4 }
+    .ah    { fill:#8a6a1f }
+    .ah2   { fill:#3f6b8a }
+    .fill1 { fill:#8a6a1f; opacity:.16 }
+    .fill2 { fill:#3f6b8a; opacity:.16 }
+    .warn  { fill:none; stroke:#a3401f; stroke-width:1.6 }
+    .warnt { fill:#a3401f }
+    text   { font-family:Inter,"Helvetica Neue","Hiragino Sans","Noto Sans JP",Arial,sans-serif; fill:#1f2328 }
+    .h     { font-size:12.5px }
+    .lbl   { font-size:11px; fill:#6e7781; letter-spacing:.06em }
+    .s     { font-size:10.5px; fill:#6e7781 }
+    .mono  { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:10.5px; fill:#8a6a1f }
+    @media (prefers-color-scheme: dark) {
+      .bg{fill:#0d1117} .grp{fill:#12171d}
+      .chip{fill:#161b22;stroke:#30363d} .card{fill:#161b22;stroke:#d9b45c} .alt{fill:#161b22;stroke:#7fb3d5}
+      .seam{stroke:#484f58} .rule{stroke:#484f58}
+      .ln{stroke:#d9b45c} .ln2{stroke:#7fb3d5} .ah{fill:#d9b45c} .ah2{fill:#7fb3d5}
+      .fill1{fill:#d9b45c} .fill2{fill:#7fb3d5}
+      .warn{stroke:#e08a68} .warnt{fill:#e08a68} .mono{fill:#d9b45c}
+      text{fill:#e6edf3} .lbl{fill:#8b949e} .s{fill:#8b949e}
+    }
+  </style>
+
+  <defs>
+    <marker id="a" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+    <marker id="b" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah2" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="960" height="360" rx="12"/>
+
+  <text class="h" x="32" y="40">Chords are stacked thirds</text>
+
+  <!-- left panel: building the stack -->
+  <rect class="grp" x="32" y="56" width="308" height="260" rx="10"/>
+
+  <!-- column 1: C -->
+  <rect class="chip" x="44" y="169" width="62" height="31" rx="6"/>
+  <text class="h" x="75" y="182" text-anchor="middle">G</text>
+  <text class="lbl" x="75" y="194" text-anchor="middle">P5</text>
+  <rect class="chip" x="44" y="204" width="62" height="31" rx="6"/>
+  <text class="h" x="75" y="217" text-anchor="middle">E</text>
+  <text class="lbl" x="75" y="229" text-anchor="middle">M3</text>
+  <rect class="chip" x="44" y="239" width="62" height="31" rx="6"/>
+  <text class="h" x="75" y="252" text-anchor="middle">C</text>
+  <text class="lbl" x="75" y="264" text-anchor="middle">root</text>
+  <rect class="chip" x="44" y="278" width="62" height="26" rx="6"/>
+  <text class="mono" x="75" y="295" text-anchor="middle">C</text>
+
+  <!-- column 2: C7 -->
+  <rect class="chip" x="118" y="134" width="62" height="31" rx="6"/>
+  <text class="h" x="149" y="147" text-anchor="middle">B♭</text>
+  <text class="lbl" x="149" y="159" text-anchor="middle">m7</text>
+  <rect class="chip" x="118" y="169" width="62" height="31" rx="6"/>
+  <text class="h" x="149" y="182" text-anchor="middle">G</text>
+  <text class="lbl" x="149" y="194" text-anchor="middle">P5</text>
+  <rect class="chip" x="118" y="204" width="62" height="31" rx="6"/>
+  <text class="h" x="149" y="217" text-anchor="middle">E</text>
+  <text class="lbl" x="149" y="229" text-anchor="middle">M3</text>
+  <rect class="chip" x="118" y="239" width="62" height="31" rx="6"/>
+  <text class="h" x="149" y="252" text-anchor="middle">C</text>
+  <text class="lbl" x="149" y="264" text-anchor="middle">root</text>
+  <rect class="chip" x="118" y="278" width="62" height="26" rx="6"/>
+  <text class="mono" x="149" y="295" text-anchor="middle">C7</text>
+
+  <!-- column 3: C9 -->
+  <rect class="chip" x="192" y="99" width="62" height="31" rx="6"/>
+  <text class="h" x="223" y="112" text-anchor="middle">D</text>
+  <text class="lbl" x="223" y="124" text-anchor="middle">M9</text>
+  <rect class="chip" x="192" y="134" width="62" height="31" rx="6"/>
+  <text class="h" x="223" y="147" text-anchor="middle">B♭</text>
+  <text class="lbl" x="223" y="159" text-anchor="middle">m7</text>
+  <rect class="chip" x="192" y="169" width="62" height="31" rx="6"/>
+  <text class="h" x="223" y="182" text-anchor="middle">G</text>
+  <text class="lbl" x="223" y="194" text-anchor="middle">P5</text>
+  <rect class="chip" x="192" y="204" width="62" height="31" rx="6"/>
+  <text class="h" x="223" y="217" text-anchor="middle">E</text>
+  <text class="lbl" x="223" y="229" text-anchor="middle">M3</text>
+  <rect class="chip" x="192" y="239" width="62" height="31" rx="6"/>
+  <text class="h" x="223" y="252" text-anchor="middle">C</text>
+  <text class="lbl" x="223" y="264" text-anchor="middle">root</text>
+  <rect class="chip" x="192" y="278" width="62" height="26" rx="6"/>
+  <text class="mono" x="223" y="295" text-anchor="middle">C9</text>
+
+  <!-- column 4: C9(#11) -->
+  <rect class="chip" x="266" y="64" width="62" height="31" rx="6"/>
+  <text class="h" x="297" y="77" text-anchor="middle">F♯</text>
+  <text class="lbl" x="297" y="89" text-anchor="middle">♯11</text>
+  <rect class="chip" x="266" y="99" width="62" height="31" rx="6"/>
+  <text class="h" x="297" y="112" text-anchor="middle">D</text>
+  <text class="lbl" x="297" y="124" text-anchor="middle">M9</text>
+  <rect class="chip" x="266" y="134" width="62" height="31" rx="6"/>
+  <text class="h" x="297" y="147" text-anchor="middle">B♭</text>
+  <text class="lbl" x="297" y="159" text-anchor="middle">m7</text>
+  <rect class="chip" x="266" y="169" width="62" height="31" rx="6"/>
+  <text class="h" x="297" y="182" text-anchor="middle">G</text>
+  <text class="lbl" x="297" y="194" text-anchor="middle">P5</text>
+  <rect class="chip" x="266" y="204" width="62" height="31" rx="6"/>
+  <text class="h" x="297" y="217" text-anchor="middle">E</text>
+  <text class="lbl" x="297" y="229" text-anchor="middle">M3</text>
+  <rect class="chip" x="266" y="239" width="62" height="31" rx="6"/>
+  <text class="h" x="297" y="252" text-anchor="middle">C</text>
+  <text class="lbl" x="297" y="264" text-anchor="middle">root</text>
+  <rect class="chip" x="266" y="278" width="62" height="26" rx="6"/>
+  <text class="mono" x="297" y="295" text-anchor="middle">C9(♯11)</text>
+
+  <!-- middle panel: quality -->
+  <rect class="grp" x="356" y="56" width="280" height="260" rx="10"/>
+  <text class="lbl" x="368" y="80">quality is the size of those</text>
+  <text class="lbl" x="368" y="96">thirds and the fifth</text>
+
+  <text class="h" x="368" y="118">major</text>
+  <text class="s" x="368" y="134">M3, P5</text>
+  <rect class="chip" x="556" y="113" width="64" height="26" rx="6"/>
+  <text class="mono" x="588" y="130" text-anchor="middle">C</text>
+
+  <text class="h" x="368" y="158">minor</text>
+  <text class="s" x="368" y="174">m3, P5</text>
+  <rect class="chip" x="556" y="153" width="64" height="26" rx="6"/>
+  <text class="mono" x="588" y="170" text-anchor="middle">Cm</text>
+
+  <text class="h" x="368" y="198">diminished</text>
+  <text class="s" x="368" y="214">m3, d5</text>
+  <rect class="chip" x="556" y="193" width="64" height="26" rx="6"/>
+  <text class="mono" x="588" y="210" text-anchor="middle">Cdim</text>
+
+  <text class="h" x="368" y="238">augmented</text>
+  <text class="s" x="368" y="254">M3, A5</text>
+  <rect class="chip" x="556" y="233" width="64" height="26" rx="6"/>
+  <text class="mono" x="588" y="250" text-anchor="middle">Caug</text>
+
+  <text class="h" x="368" y="278">dominant seventh</text>
+  <text class="s" x="368" y="294">M3, P5, m7</text>
+  <rect class="chip" x="556" y="273" width="64" height="26" rx="6"/>
+  <text class="mono" x="588" y="290" text-anchor="middle">C7</text>
+
+  <!-- right panel: inversion -->
+  <rect class="grp" x="652" y="56" width="276" height="260" rx="10"/>
+  <text class="lbl" x="664" y="80">inversion is which note is lowest</text>
+
+  <rect class="chip" x="680" y="96" width="52" height="24" rx="6"/>
+  <text class="h" x="706" y="112" text-anchor="middle">G</text>
+  <rect class="chip" x="680" y="124" width="52" height="24" rx="6"/>
+  <text class="h" x="706" y="140" text-anchor="middle">E</text>
+  <rect class="chip" x="680" y="152" width="52" height="24" rx="6"/>
+  <rect class="fill1" x="680" y="152" width="52" height="24" rx="6"/>
+  <text class="h" x="706" y="168" text-anchor="middle">C</text>
+  <text class="s" x="706" y="194" text-anchor="middle">root</text>
+  <text class="s" x="706" y="208" text-anchor="middle">position</text>
+  <rect class="chip" x="680" y="220" width="52" height="26" rx="6"/>
+  <text class="mono" x="706" y="237" text-anchor="middle">C</text>
+
+  <rect class="chip" x="764" y="96" width="52" height="24" rx="6"/>
+  <text class="h" x="790" y="112" text-anchor="middle">C</text>
+  <rect class="chip" x="764" y="124" width="52" height="24" rx="6"/>
+  <text class="h" x="790" y="140" text-anchor="middle">G</text>
+  <rect class="chip" x="764" y="152" width="52" height="24" rx="6"/>
+  <rect class="fill1" x="764" y="152" width="52" height="24" rx="6"/>
+  <text class="h" x="790" y="168" text-anchor="middle">E</text>
+  <text class="s" x="790" y="194" text-anchor="middle">first</text>
+  <text class="s" x="790" y="208" text-anchor="middle">inversion</text>
+  <rect class="chip" x="764" y="220" width="52" height="26" rx="6"/>
+  <text class="mono" x="790" y="237" text-anchor="middle">C/E</text>
+
+  <rect class="chip" x="848" y="96" width="52" height="24" rx="6"/>
+  <text class="h" x="874" y="112" text-anchor="middle">E</text>
+  <rect class="chip" x="848" y="124" width="52" height="24" rx="6"/>
+  <text class="h" x="874" y="140" text-anchor="middle">C</text>
+  <rect class="chip" x="848" y="152" width="52" height="24" rx="6"/>
+  <rect class="fill1" x="848" y="152" width="52" height="24" rx="6"/>
+  <text class="h" x="874" y="168" text-anchor="middle">G</text>
+  <text class="s" x="874" y="194" text-anchor="middle">second</text>
+  <text class="s" x="874" y="208" text-anchor="middle">inversion</text>
+  <rect class="chip" x="848" y="220" width="52" height="26" rx="6"/>
+  <text class="mono" x="874" y="237" text-anchor="middle">C/G</text>
+
+  <text class="s" x="790" y="268" text-anchor="middle">the same three notes,</text>
+  <text class="s" x="790" y="284" text-anchor="middle">and the same chord identity</text>
+
+  <text class="s" x="480" y="332" text-anchor="middle">A symbol names the material and the bass; <tspan class="mono">Chord.parse('C7(b9,#11)')</tspan> reads one back into that structure.</text>
+</svg>

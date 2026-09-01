@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" width="960" height="360" role="img" aria-labelledby="ttl dsc">
+  <title id="ttl">和音区間の見つけ方</title>
+  <desc id="dsc">同じ4小節を4つの層に重ねた図です。最上段は C・F・G7・C の4つのブロックコードのピアノロールで、3小節目には和音に属さない短い経過音が1つ横切ります。次の段は破線で並べた境界の候補で、選ばれた境界だけを実線で示します。その下は各拍にまたがる4つの和音区間で、C・F・G7・C と、ローマ数字 I・IV・V7・I を添え、それぞれに確信度のバーが付き、3番目だけが明らかに短くなっています。最下段は C major の調区間を表す1本の帯です。</desc>
+
+  <style>
+    .bg    { fill:#f7f5f1 }
+    .grp   { fill:#edeae4 }
+    .chip  { fill:#ffffff; stroke:#d7d4cd }
+    .card  { fill:#ffffff; stroke:#8a6a1f }
+    .alt   { fill:#ffffff; stroke:#3f6b8a }
+    .seam  { fill:none; stroke:#b8b4ac; stroke-dasharray:6 5 }
+    .rule  { fill:none; stroke:#b8b4ac; stroke-width:1 }
+    .ln    { fill:none; stroke:#8a6a1f; stroke-width:1.4 }
+    .ln2   { fill:none; stroke:#3f6b8a; stroke-width:1.4 }
+    .ah    { fill:#8a6a1f }
+    .ah2   { fill:#3f6b8a }
+    .fill1 { fill:#8a6a1f; opacity:.16 }
+    .fill2 { fill:#3f6b8a; opacity:.16 }
+    .warn  { fill:none; stroke:#a3401f; stroke-width:1.6 }
+    .warnt { fill:#a3401f }
+    text   { font-family:Inter,"Helvetica Neue","Hiragino Sans","Noto Sans JP",Arial,sans-serif; fill:#1f2328 }
+    .h     { font-size:12.5px }
+    .lbl   { font-size:11px; fill:#6e7781; letter-spacing:.06em }
+    .s     { font-size:10.5px; fill:#6e7781 }
+    .mono  { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:10.5px; fill:#8a6a1f }
+    @media (prefers-color-scheme: dark) {
+      .bg{fill:#0d1117} .grp{fill:#12171d}
+      .chip{fill:#161b22;stroke:#30363d} .card{fill:#161b22;stroke:#d9b45c} .alt{fill:#161b22;stroke:#7fb3d5}
+      .seam{stroke:#484f58} .rule{stroke:#484f58}
+      .ln{stroke:#d9b45c} .ln2{stroke:#7fb3d5} .ah{fill:#d9b45c} .ah2{fill:#7fb3d5}
+      .fill1{fill:#d9b45c} .fill2{fill:#7fb3d5}
+      .warn{stroke:#e08a68} .warnt{fill:#e08a68} .mono{fill:#d9b45c}
+      text{fill:#e6edf3} .lbl{fill:#8b949e} .s{fill:#8b949e}
+    }
+  </style>
+
+  <defs>
+    <marker id="a" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+    <marker id="b" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah2" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="960" height="360" rx="12"/>
+
+  <text class="h" x="24" y="32">和音区間の見つけ方</text>
+
+  <!-- layer 1: note events -->
+  <text class="lbl" x="24" y="112">ノートイベント</text>
+  <line class="rule" x1="120" y1="66" x2="120" y2="158"/>
+  <line class="rule" x1="312" y1="66" x2="312" y2="158"/>
+  <line class="rule" x1="504" y1="66" x2="504" y2="158"/>
+  <line class="rule" x1="696" y1="66" x2="696" y2="158"/>
+  <line class="rule" x1="888" y1="66" x2="888" y2="158"/>
+
+  <rect class="fill1" x="122" y="143" width="188" height="6"/>
+  <rect class="fill1" x="122" y="119" width="188" height="6"/>
+  <rect class="fill1" x="122" y="101" width="188" height="6"/>
+
+  <rect class="fill1" x="314" y="113" width="188" height="6"/>
+  <rect class="fill1" x="314" y="89" width="188" height="6"/>
+  <rect class="fill1" x="314" y="71" width="188" height="6"/>
+
+  <rect class="fill1" x="506" y="149" width="188" height="6"/>
+  <rect class="fill1" x="506" y="131" width="188" height="6"/>
+  <rect class="fill1" x="506" y="113" width="188" height="6"/>
+  <rect class="fill1" x="506" y="101" width="188" height="6"/>
+
+  <rect class="fill1" x="698" y="143" width="188" height="6"/>
+  <rect class="fill1" x="698" y="119" width="188" height="6"/>
+  <rect class="fill1" x="698" y="101" width="188" height="6"/>
+
+  <rect class="fill2" x="576" y="89" width="24" height="6"/>
+  <rect class="ln2" x="576" y="89" width="24" height="6"/>
+  <path class="ln2" d="M601,90 L611,82"/>
+  <text class="s" x="615" y="85">和音に属さない経過音</text>
+
+  <!-- layer 2: boundaries -->
+  <text class="lbl" x="24" y="182">境界候補</text>
+  <line class="seam" x1="144" y1="170" x2="144" y2="188"/>
+  <line class="seam" x1="168" y1="170" x2="168" y2="188"/>
+  <line class="seam" x1="192" y1="170" x2="192" y2="188"/>
+  <line class="seam" x1="216" y1="170" x2="216" y2="188"/>
+  <line class="seam" x1="240" y1="170" x2="240" y2="188"/>
+  <line class="seam" x1="264" y1="170" x2="264" y2="188"/>
+  <line class="seam" x1="288" y1="170" x2="288" y2="188"/>
+  <line class="seam" x1="336" y1="170" x2="336" y2="188"/>
+  <line class="seam" x1="360" y1="170" x2="360" y2="188"/>
+  <line class="seam" x1="384" y1="170" x2="384" y2="188"/>
+  <line class="seam" x1="408" y1="170" x2="408" y2="188"/>
+  <line class="seam" x1="432" y1="170" x2="432" y2="188"/>
+  <line class="seam" x1="456" y1="170" x2="456" y2="188"/>
+  <line class="seam" x1="480" y1="170" x2="480" y2="188"/>
+  <line class="seam" x1="528" y1="170" x2="528" y2="188"/>
+  <line class="seam" x1="552" y1="170" x2="552" y2="188"/>
+  <line class="seam" x1="576" y1="170" x2="576" y2="188"/>
+  <line class="seam" x1="600" y1="170" x2="600" y2="188"/>
+  <line class="seam" x1="624" y1="170" x2="624" y2="188"/>
+  <line class="seam" x1="648" y1="170" x2="648" y2="188"/>
+  <line class="seam" x1="672" y1="170" x2="672" y2="188"/>
+  <line class="seam" x1="720" y1="170" x2="720" y2="188"/>
+  <line class="seam" x1="744" y1="170" x2="744" y2="188"/>
+  <line class="seam" x1="768" y1="170" x2="768" y2="188"/>
+  <line class="seam" x1="792" y1="170" x2="792" y2="188"/>
+  <line class="seam" x1="816" y1="170" x2="816" y2="188"/>
+  <line class="seam" x1="840" y1="170" x2="840" y2="188"/>
+  <line class="seam" x1="864" y1="170" x2="864" y2="188"/>
+
+  <line class="ln" x1="120" y1="164" x2="120" y2="194"/>
+  <line class="ln" x1="312" y1="164" x2="312" y2="194"/>
+  <line class="ln" x1="504" y1="164" x2="504" y2="194"/>
+  <line class="ln" x1="696" y1="164" x2="696" y2="194"/>
+  <line class="ln" x1="888" y1="164" x2="888" y2="194"/>
+
+  <text class="lbl" x="120" y="206">境界の候補は探索され、小節線から読み取るのではない</text>
+
+  <!-- layer 3: chord segments -->
+  <text class="lbl" x="24" y="238">和音区間</text>
+  <rect class="chip" x="122" y="218" width="188" height="34" rx="4"/>
+  <rect class="chip" x="314" y="218" width="188" height="34" rx="4"/>
+  <rect class="chip" x="506" y="218" width="188" height="34" rx="4"/>
+  <rect class="chip" x="698" y="218" width="188" height="34" rx="4"/>
+
+  <text class="h" x="216" y="234" text-anchor="middle">C</text>
+  <text class="s" x="216" y="247" text-anchor="middle">I</text>
+  <text class="h" x="408" y="234" text-anchor="middle">F</text>
+  <text class="s" x="408" y="247" text-anchor="middle">IV</text>
+  <text class="h" x="600" y="234" text-anchor="middle">G7</text>
+  <text class="s" x="600" y="247" text-anchor="middle">V7</text>
+  <text class="h" x="792" y="234" text-anchor="middle">C</text>
+  <text class="s" x="792" y="247" text-anchor="middle">I</text>
+
+  <rect class="fill1" x="130" y="258" width="146" height="6" rx="3"/>
+  <rect class="fill1" x="322" y="258" width="138" height="6" rx="3"/>
+  <rect class="fill1" x="514" y="258" width="77" height="6" rx="3"/>
+  <rect class="fill1" x="706" y="258" width="146" height="6" rx="3"/>
+  <text class="s" x="506" y="278">非和声音が証拠をぼかし、確信度が下がる箇所</text>
+
+  <!-- layer 4: key region -->
+  <text class="lbl" x="24" y="303">調区間</text>
+  <rect class="grp" x="120" y="286" width="768" height="26" rx="4"/>
+  <text class="h" x="134" y="303">C major</text>
+  <text class="s" x="200" y="303">転調する曲は複数の調区間として返り、各区間が自分の範囲を持つ</text>
+
+  <text class="s" x="480" y="336" text-anchor="middle">各区間は範囲と和音を持ち、その読みの確信度は <tspan class="mono">segmentConfidence</tspan> として同時に返ります。</text>
+</svg>

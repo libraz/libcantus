@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 320" width="960" height="320" role="img" aria-labelledby="ttl dsc">
+  <title id="ttl">Reharmonization, one substitution at a time</title>
+  <desc id="dsc">A progression in C major runs across the top — C, Am, Dm, G7, C, with the numerals I, vi, ii, V7, I underneath. Three cards below show one substitution each: a tritone substitution replacing G7 with D flat 7, a modal interchange replacing F with F minor, and a secondary dominant approaching Dm with A7. Each card gives the reason in one short line.</desc>
+
+  <style>
+    .bg    { fill:#f7f5f1 }
+    .grp   { fill:#edeae4 }
+    .chip  { fill:#ffffff; stroke:#d7d4cd }
+    .card  { fill:#ffffff; stroke:#8a6a1f }
+    .alt   { fill:#ffffff; stroke:#3f6b8a }
+    .seam  { fill:none; stroke:#b8b4ac; stroke-dasharray:6 5 }
+    .rule  { fill:none; stroke:#b8b4ac; stroke-width:1 }
+    .ln    { fill:none; stroke:#8a6a1f; stroke-width:1.4 }
+    .ln2   { fill:none; stroke:#3f6b8a; stroke-width:1.4 }
+    .ah    { fill:#8a6a1f }
+    .ah2   { fill:#3f6b8a }
+    .fill1 { fill:#8a6a1f; opacity:.16 }
+    .fill2 { fill:#3f6b8a; opacity:.16 }
+    .warn  { fill:none; stroke:#a3401f; stroke-width:1.6 }
+    .warnt { fill:#a3401f }
+    text   { font-family:Inter,"Helvetica Neue","Hiragino Sans","Noto Sans JP",Arial,sans-serif; fill:#1f2328 }
+    .h     { font-size:12.5px }
+    .lbl   { font-size:11px; fill:#6e7781; letter-spacing:.06em }
+    .s     { font-size:10.5px; fill:#6e7781 }
+    .mono  { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:10.5px; fill:#8a6a1f }
+    @media (prefers-color-scheme: dark) {
+      .bg{fill:#0d1117} .grp{fill:#12171d}
+      .chip{fill:#161b22;stroke:#30363d} .card{fill:#161b22;stroke:#d9b45c} .alt{fill:#161b22;stroke:#7fb3d5}
+      .seam{stroke:#484f58} .rule{stroke:#484f58}
+      .ln{stroke:#d9b45c} .ln2{stroke:#7fb3d5} .ah{fill:#d9b45c} .ah2{fill:#7fb3d5}
+      .fill1{fill:#d9b45c} .fill2{fill:#7fb3d5}
+      .warn{stroke:#e08a68} .warnt{fill:#e08a68} .mono{fill:#d9b45c}
+      text{fill:#e6edf3} .lbl{fill:#8b949e} .s{fill:#8b949e}
+    }
+  </style>
+
+  <defs>
+    <marker id="a" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+    <marker id="b" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah2" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="960" height="320" rx="12"/>
+  <text class="h" x="24" y="40">Reharmonization, one substitution at a time</text>
+
+  <!-- the original progression -->
+  <rect class="chip" x="24" y="56" width="176" height="38" rx="6"/>
+  <text class="h" x="112" y="80" text-anchor="middle">C</text>
+  <text class="s" x="112" y="110" text-anchor="middle">I</text>
+  <rect class="chip" x="208" y="56" width="176" height="38" rx="6"/>
+  <text class="h" x="296" y="80" text-anchor="middle">Am</text>
+  <text class="s" x="296" y="110" text-anchor="middle">vi</text>
+  <rect class="chip" x="392" y="56" width="176" height="38" rx="6"/>
+  <text class="h" x="480" y="80" text-anchor="middle">Dm</text>
+  <text class="s" x="480" y="110" text-anchor="middle">ii</text>
+  <rect class="chip" x="576" y="56" width="176" height="38" rx="6"/>
+  <text class="h" x="664" y="80" text-anchor="middle">G7</text>
+  <text class="s" x="664" y="110" text-anchor="middle">V7</text>
+  <rect class="chip" x="760" y="56" width="176" height="38" rx="6"/>
+  <text class="h" x="848" y="80" text-anchor="middle">C</text>
+  <text class="s" x="848" y="110" text-anchor="middle">I</text>
+
+  <!-- tritone substitution -->
+  <rect class="card" x="24" y="124" width="293" height="144" rx="10"/>
+  <text class="lbl" x="36" y="148">tritone substitution</text>
+  <rect class="chip" x="36" y="160" width="106" height="34" rx="6"/>
+  <text class="h" x="89" y="182" text-anchor="middle">G7 (V7)</text>
+  <path class="ln" d="M150,177 H190" marker-end="url(#a)"/>
+  <rect class="chip" x="192" y="160" width="106" height="34" rx="6"/>
+  <text class="h" x="245" y="182" text-anchor="middle">D♭7</text>
+  <text class="s" x="170" y="214" text-anchor="middle">the two share one tritone — G7’s B and F</text>
+  <text class="s" x="170" y="230" text-anchor="middle">are D♭7’s C♭ and F — so the pull to C</text>
+  <text class="s" x="170" y="246" text-anchor="middle">survives while the bass moves by a semitone</text>
+
+  <!-- modal interchange -->
+  <rect class="card" x="333" y="124" width="293" height="144" rx="10"/>
+  <text class="lbl" x="345" y="148">modal interchange</text>
+  <rect class="chip" x="345" y="160" width="106" height="34" rx="6"/>
+  <text class="h" x="398" y="182" text-anchor="middle">F (IV)</text>
+  <path class="ln" d="M459,177 H499" marker-end="url(#a)"/>
+  <rect class="chip" x="501" y="160" width="106" height="34" rx="6"/>
+  <text class="h" x="554" y="182" text-anchor="middle">Fm (iv)</text>
+  <text class="s" x="479" y="222" text-anchor="middle">a chord borrowed from</text>
+  <text class="s" x="479" y="238" text-anchor="middle">the parallel minor</text>
+
+  <!-- secondary dominant -->
+  <rect class="card" x="643" y="124" width="293" height="144" rx="10"/>
+  <text class="lbl" x="655" y="148">secondary dominant</text>
+  <rect class="chip" x="655" y="160" width="106" height="34" rx="6"/>
+  <text class="h" x="708" y="182" text-anchor="middle">Dm (ii)</text>
+  <path class="ln" d="M769,177 H809" marker-end="url(#a)"/>
+  <rect class="chip" x="811" y="160" width="106" height="34" rx="6"/>
+  <text class="h" x="864" y="182" text-anchor="middle">A7 → Dm</text>
+  <text class="s" x="789" y="222" text-anchor="middle">A7 is the dominant of D minor, so the ii</text>
+  <text class="s" x="789" y="238" text-anchor="middle">arrives as if it were a local tonic</text>
+
+  <text class="s" x="480" y="294" text-anchor="middle">Each proposal says which technique produced it, and the caller decides what to keep.</text>
+</svg>

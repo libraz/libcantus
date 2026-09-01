@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" width="960" height="300" role="img" aria-labelledby="ttl dsc">
+  <title id="ttl">フレーズの終わり方 — 4つの終止形</title>
+  <desc id="dsc">ハ長調で書いた4種類の終止形を、1つずつパネルに並べた図です。完全終止は V→I（G→C）、変格終止は IV→I（F→C）、半終止は V（G）で止まり、偽終止は V→vi（G→Am）です。各パネルはローマ数字と、それが指す和音、終わり方を表す一行を示します。</desc>
+
+  <style>
+    .bg    { fill:#f7f5f1 }
+    .grp   { fill:#edeae4 }
+    .chip  { fill:#ffffff; stroke:#d7d4cd }
+    .card  { fill:#ffffff; stroke:#8a6a1f }
+    .alt   { fill:#ffffff; stroke:#3f6b8a }
+    .seam  { fill:none; stroke:#b8b4ac; stroke-dasharray:6 5 }
+    .rule  { fill:none; stroke:#b8b4ac; stroke-width:1 }
+    .ln    { fill:none; stroke:#8a6a1f; stroke-width:1.4 }
+    .ln2   { fill:none; stroke:#3f6b8a; stroke-width:1.4 }
+    .ah    { fill:#8a6a1f }
+    .ah2   { fill:#3f6b8a }
+    .fill1 { fill:#8a6a1f; opacity:.16 }
+    .fill2 { fill:#3f6b8a; opacity:.16 }
+    .warn  { fill:none; stroke:#a3401f; stroke-width:1.6 }
+    .warnt { fill:#a3401f }
+    text   { font-family:Inter,"Helvetica Neue","Hiragino Sans","Noto Sans JP",Arial,sans-serif; fill:#1f2328 }
+    .h     { font-size:12.5px }
+    .lbl   { font-size:11px; fill:#6e7781; letter-spacing:.06em }
+    .s     { font-size:10.5px; fill:#6e7781 }
+    .mono  { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:10.5px; fill:#8a6a1f }
+    @media (prefers-color-scheme: dark) {
+      .bg{fill:#0d1117} .grp{fill:#12171d}
+      .chip{fill:#161b22;stroke:#30363d} .card{fill:#161b22;stroke:#d9b45c} .alt{fill:#161b22;stroke:#7fb3d5}
+      .seam{stroke:#484f58} .rule{stroke:#484f58}
+      .ln{stroke:#d9b45c} .ln2{stroke:#7fb3d5} .ah{fill:#d9b45c} .ah2{fill:#7fb3d5}
+      .fill1{fill:#d9b45c} .fill2{fill:#7fb3d5}
+      .warn{stroke:#e08a68} .warnt{fill:#e08a68} .mono{fill:#d9b45c}
+      text{fill:#e6edf3} .lbl{fill:#8b949e} .s{fill:#8b949e}
+    }
+  </style>
+
+  <defs>
+    <marker id="a" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+    <marker id="b" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah2" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="960" height="300" rx="12"/>
+
+  <text class="h" x="24" y="42">フレーズの終わり方 — 4つの終止形</text>
+  <text class="lbl" x="936" y="42" text-anchor="end">ローマ数字とその和音（ハ長調）</text>
+
+  <!-- authentic -->
+  <rect class="card" x="24" y="68" width="216" height="158" rx="8"/>
+  <text class="lbl" x="132" y="96" text-anchor="middle">完全終止</text>
+  <text x="86" y="138" text-anchor="middle">V</text>
+  <text x="178" y="138" text-anchor="middle">I</text>
+  <line class="ln" x1="112" y1="144" x2="152" y2="144" marker-end="url(#a)"/>
+  <text class="h" x="86" y="162" text-anchor="middle">G</text>
+  <text class="h" x="178" y="162" text-anchor="middle">C</text>
+  <text class="s" x="132" y="190" text-anchor="middle">最も強い終止</text>
+
+  <!-- plagal -->
+  <rect class="card" x="256" y="68" width="216" height="158" rx="8"/>
+  <text class="lbl" x="364" y="96" text-anchor="middle">変格終止</text>
+  <text x="318" y="138" text-anchor="middle">IV</text>
+  <text x="410" y="138" text-anchor="middle">I</text>
+  <line class="ln" x1="344" y1="144" x2="384" y2="144" marker-end="url(#a)"/>
+  <text class="h" x="318" y="162" text-anchor="middle">F</text>
+  <text class="h" x="410" y="162" text-anchor="middle">C</text>
+  <text class="s" x="364" y="190" text-anchor="middle">やわらかい終止</text>
+
+  <!-- half -->
+  <rect class="card" x="488" y="68" width="216" height="158" rx="8"/>
+  <text class="lbl" x="596" y="96" text-anchor="middle">半終止</text>
+  <text x="550" y="138" text-anchor="middle">…</text>
+  <text x="642" y="138" text-anchor="middle">V</text>
+  <line class="ln" x1="576" y1="144" x2="616" y2="144" marker-end="url(#a)"/>
+  <text class="h" x="550" y="162" text-anchor="middle">…</text>
+  <text class="h" x="642" y="162" text-anchor="middle">G</text>
+  <text class="s" x="596" y="190" text-anchor="middle">ドミナントで止まり</text>
+  <text class="s" x="596" y="204" text-anchor="middle">開いたままになる</text>
+
+  <!-- deceptive -->
+  <rect class="card" x="720" y="68" width="216" height="158" rx="8"/>
+  <text class="lbl" x="828" y="96" text-anchor="middle">偽終止</text>
+  <text x="782" y="138" text-anchor="middle">V</text>
+  <text x="874" y="138" text-anchor="middle">vi</text>
+  <line class="ln" x1="808" y1="144" x2="848" y2="144" marker-end="url(#a)"/>
+  <text class="h" x="782" y="162" text-anchor="middle">G</text>
+  <text class="h" x="874" y="162" text-anchor="middle">Am</text>
+  <text class="s" x="828" y="190" text-anchor="middle">ドミナントが主和音以外へ</text>
+  <text class="s" x="828" y="204" text-anchor="middle">解決する</text>
+
+  <text class="s" x="480" y="258" text-anchor="middle">転回形や、ドミナントの代わりに置かれた導音上の和音は、和音だけで不完全形と判定されます。</text>
+  <text class="s" x="480" y="274" text-anchor="middle">どちらでもない場合はソプラノを決めるボイシングが要るので、それが無ければ判定は null のまま返ります。</text>
+</svg>

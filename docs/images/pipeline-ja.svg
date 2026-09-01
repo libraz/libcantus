@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 340" width="960" height="340" role="img" aria-labelledby="ttl dsc">
+  <title id="ttl">ノートイベントからパートへ、そしてまた戻る</title>
+  <desc id="dsc">左から右への流れです。ノートイベントを Score.of(notes) に渡すと、解析が和音区間・調区間・ローマ数字を復元します。その和声を Composer.of に渡し、コード進行・ベース・ドラム・対旋律をふたたびノートイベントとして書き出します。下部の破線は、ファイル入出力・記譜・音声を扱わないことを示します。</desc>
+
+  <style>
+    .bg    { fill:#f7f5f1 }
+    .grp   { fill:#edeae4 }
+    .chip  { fill:#ffffff; stroke:#d7d4cd }
+    .card  { fill:#ffffff; stroke:#8a6a1f }
+    .alt   { fill:#ffffff; stroke:#3f6b8a }
+    .seam  { fill:none; stroke:#b8b4ac; stroke-dasharray:6 5 }
+    .rule  { fill:none; stroke:#b8b4ac; stroke-width:1 }
+    .ln    { fill:none; stroke:#8a6a1f; stroke-width:1.4 }
+    .ln2   { fill:none; stroke:#3f6b8a; stroke-width:1.4 }
+    .ah    { fill:#8a6a1f }
+    .ah2   { fill:#3f6b8a }
+    .fill1 { fill:#8a6a1f; opacity:.16 }
+    .fill2 { fill:#3f6b8a; opacity:.16 }
+    .warn  { fill:none; stroke:#a3401f; stroke-width:1.6 }
+    .warnt { fill:#a3401f }
+    text   { font-family:Inter,"Helvetica Neue","Hiragino Sans","Noto Sans JP",Arial,sans-serif; fill:#1f2328 }
+    .h     { font-size:12.5px }
+    .lbl   { font-size:11px; fill:#6e7781; letter-spacing:.06em }
+    .s     { font-size:10.5px; fill:#6e7781 }
+    .mono  { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:10.5px; fill:#8a6a1f }
+    @media (prefers-color-scheme: dark) {
+      .bg{fill:#0d1117} .grp{fill:#12171d}
+      .chip{fill:#161b22;stroke:#30363d} .card{fill:#161b22;stroke:#d9b45c} .alt{fill:#161b22;stroke:#7fb3d5}
+      .seam{stroke:#484f58} .rule{stroke:#484f58}
+      .ln{stroke:#d9b45c} .ln2{stroke:#7fb3d5} .ah{fill:#d9b45c} .ah2{fill:#7fb3d5}
+      .fill1{fill:#d9b45c} .fill2{fill:#7fb3d5}
+      .warn{stroke:#e08a68} .warnt{fill:#e08a68} .mono{fill:#d9b45c}
+      text{fill:#e6edf3} .lbl{fill:#8b949e} .s{fill:#8b949e}
+    }
+  </style>
+
+  <defs>
+    <marker id="a" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+    <marker id="b" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah2" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="960" height="340" rx="12"/>
+
+  <rect class="chip" x="24" y="108" width="140" height="104" rx="6"/>
+  <text class="h" x="34" y="128">ノートイベント</text>
+  <text class="mono" x="34" y="147">{ pitch, startBeat,</text>
+  <text class="mono" x="34" y="160">  durationBeat }</text>
+  <text class="s" x="34" y="180">DAW、MIDI パーサー、</text>
+  <text class="s" x="34" y="192">コード譜などが</text>
+  <text class="s" x="34" y="204">供給するもの</text>
+
+  <path class="ln" d="M 164 160 H 186" marker-end="url(#a)"/>
+
+  <rect class="card" x="188" y="142" width="120" height="36" rx="6"/>
+  <text class="mono" x="248" y="165" text-anchor="middle">Score.of(notes)</text>
+
+  <path class="ln" d="M 308 160 H 328" marker-end="url(#a)"/>
+
+  <rect class="grp" x="330" y="58" width="220" height="204" rx="8"/>
+  <text class="lbl" x="342" y="78">解析で復元されるもの</text>
+  <rect class="chip" x="338" y="88" width="204" height="50" rx="5"/>
+  <text class="h" x="348" y="104">和音区間</text>
+  <text class="s" x="348" y="118">境界は小節線から読むのでは</text>
+  <text class="s" x="348" y="130">なく、探索して求める</text>
+  <rect class="chip" x="338" y="146" width="204" height="62" rx="5"/>
+  <text class="h" x="348" y="162">調区間</text>
+  <text class="s" x="348" y="176">転調する曲は、始まりの</text>
+  <text class="s" x="348" y="188">調に対して読み取ること</text>
+  <text class="s" x="348" y="200">はない</text>
+  <rect class="chip" x="338" y="216" width="204" height="36" rx="5"/>
+  <text class="s" x="348" y="232">ローマ数字、終止形、</text>
+  <text class="s" x="348" y="244">フレーズ、セクション</text>
+
+  <text class="s" x="607" y="106" text-anchor="middle">解析で得られた</text>
+  <text class="s" x="607" y="118" text-anchor="middle">和声こそが、</text>
+  <text class="s" x="607" y="130" text-anchor="middle">ジェネレーターが</text>
+  <text class="s" x="607" y="142" text-anchor="middle">書く前提になる</text>
+  <path class="ln2" d="M 550 160 H 664" marker-end="url(#b)"/>
+
+  <rect class="card" x="666" y="136" width="140" height="48" rx="6"/>
+  <text class="mono" x="676" y="157">Composer.of({</text>
+  <text class="mono" x="676" y="170">  key, bpm, seed })</text>
+
+  <path class="ln2" d="M 806 160 H 824" marker-end="url(#b)"/>
+
+  <rect class="grp" x="826" y="99" width="110" height="122" rx="8"/>
+  <rect class="chip" x="834" y="107" width="94" height="22" rx="5"/>
+  <text class="s" x="881" y="122" text-anchor="middle">コード進行</text>
+  <rect class="chip" x="834" y="135" width="94" height="22" rx="5"/>
+  <text class="s" x="881" y="150" text-anchor="middle">ベース</text>
+  <rect class="chip" x="834" y="163" width="94" height="22" rx="5"/>
+  <text class="s" x="881" y="178" text-anchor="middle">ドラム</text>
+  <rect class="chip" x="834" y="191" width="94" height="22" rx="5"/>
+  <text class="s" x="881" y="206" text-anchor="middle">対旋律</text>
+
+  <path class="ln2" d="M 881 221 V 235" marker-end="url(#b)"/>
+  <rect class="chip" x="826" y="237" width="110" height="26" rx="6"/>
+  <text class="h" x="881" y="255" text-anchor="middle">ノートイベント</text>
+
+  <path class="seam" d="M 24 272 H 936"/>
+  <text class="s" x="480" y="290" text-anchor="middle">ファイル I/O も記譜も音声も扱わない — そこはホスト側の役割</text>
+
+  <text class="s" x="480" y="314" text-anchor="middle">解析と生成は同じデータモデルを共有するので、読み取った結果をそのままパートの計画として渡せます。</text>
+</svg>

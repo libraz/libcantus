@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" width="960" height="360" role="img" aria-labelledby="ttl dsc">
+  <title id="ttl">The layers, and what each one owns</title>
+  <desc id="dsc">Four stacked bands, bottom to top: core, theory, analyze and generate, each listing what it covers and carrying its import subpath. A full-height card on the right holds the model layer, the immutable class API built over the other layers. An arrow up the left edge shows that each layer builds on the one below it.</desc>
+
+  <style>
+    .bg    { fill:#f7f5f1 }
+    .grp   { fill:#edeae4 }
+    .chip  { fill:#ffffff; stroke:#d7d4cd }
+    .card  { fill:#ffffff; stroke:#8a6a1f }
+    .alt   { fill:#ffffff; stroke:#3f6b8a }
+    .seam  { fill:none; stroke:#b8b4ac; stroke-dasharray:6 5 }
+    .rule  { fill:none; stroke:#b8b4ac; stroke-width:1 }
+    .ln    { fill:none; stroke:#8a6a1f; stroke-width:1.4 }
+    .ln2   { fill:none; stroke:#3f6b8a; stroke-width:1.4 }
+    .ah    { fill:#8a6a1f }
+    .ah2   { fill:#3f6b8a }
+    .fill1 { fill:#8a6a1f; opacity:.16 }
+    .fill2 { fill:#3f6b8a; opacity:.16 }
+    .warn  { fill:none; stroke:#a3401f; stroke-width:1.6 }
+    .warnt { fill:#a3401f }
+    text   { font-family:Inter,"Helvetica Neue","Hiragino Sans","Noto Sans JP",Arial,sans-serif; fill:#1f2328 }
+    .h     { font-size:12.5px }
+    .lbl   { font-size:11px; fill:#6e7781; letter-spacing:.06em }
+    .s     { font-size:10.5px; fill:#6e7781 }
+    .mono  { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:10.5px; fill:#8a6a1f }
+    @media (prefers-color-scheme: dark) {
+      .bg{fill:#0d1117} .grp{fill:#12171d}
+      .chip{fill:#161b22;stroke:#30363d} .card{fill:#161b22;stroke:#d9b45c} .alt{fill:#161b22;stroke:#7fb3d5}
+      .seam{stroke:#484f58} .rule{stroke:#484f58}
+      .ln{stroke:#d9b45c} .ln2{stroke:#7fb3d5} .ah{fill:#d9b45c} .ah2{fill:#7fb3d5}
+      .fill1{fill:#d9b45c} .fill2{fill:#7fb3d5}
+      .warn{stroke:#e08a68} .warnt{fill:#e08a68} .mono{fill:#d9b45c}
+      text{fill:#e6edf3} .lbl{fill:#8b949e} .s{fill:#8b949e}
+    }
+  </style>
+
+  <defs>
+    <marker id="a" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+    <marker id="b" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah2" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="960" height="360" rx="12"/>
+
+  <path class="ln" d="M 48 304 V 48" marker-end="url(#a)"/>
+  <text class="lbl" x="34" y="174" text-anchor="middle" transform="rotate(-90 34 174)">each layer builds on the one below</text>
+
+  <rect class="grp" x="62" y="44" width="592" height="59" rx="8"/>
+  <text class="lbl" x="76" y="63">generate</text>
+  <text class="mono" x="142" y="63">@libraz/libcantus/generate</text>
+  <rect class="chip" x="76" y="72" width="86" height="24" rx="5"/>
+  <text class="s" x="119" y="89" text-anchor="middle">progressions</text>
+  <rect class="chip" x="170" y="72" width="51" height="24" rx="5"/>
+  <text class="s" x="195" y="89" text-anchor="middle">motifs</text>
+  <rect class="chip" x="229" y="72" width="109" height="24" rx="5"/>
+  <text class="s" x="283" y="89" text-anchor="middle">rhythm and drums</text>
+  <rect class="chip" x="346" y="72" width="39" height="24" rx="5"/>
+  <text class="s" x="365" y="89" text-anchor="middle">bass</text>
+  <rect class="chip" x="393" y="72" width="97" height="24" rx="5"/>
+  <text class="s" x="441" y="89" text-anchor="middle">counter-melody</text>
+
+  <rect class="grp" x="62" y="111" width="592" height="59" rx="8"/>
+  <text class="lbl" x="76" y="130">analyze</text>
+  <text class="mono" x="142" y="130">@libraz/libcantus/analyze</text>
+  <rect class="chip" x="76" y="139" width="149" height="24" rx="5"/>
+  <text class="s" x="150" y="156" text-anchor="middle">chord and key detection</text>
+  <rect class="chip" x="233" y="139" width="68" height="24" rx="5"/>
+  <text class="s" x="267" y="156" text-anchor="middle">timelines</text>
+  <rect class="chip" x="309" y="139" width="39" height="24" rx="5"/>
+  <text class="s" x="328" y="156" text-anchor="middle">form</text>
+  <rect class="chip" x="356" y="139" width="126" height="24" rx="5"/>
+  <text class="s" x="419" y="156" text-anchor="middle">arrangement reports</text>
+
+  <rect class="grp" x="62" y="178" width="592" height="59" rx="8"/>
+  <text class="lbl" x="76" y="197">theory</text>
+  <text class="mono" x="142" y="197">@libraz/libcantus/theory</text>
+  <rect class="chip" x="76" y="206" width="109" height="24" rx="5"/>
+  <text class="s" x="130" y="223" text-anchor="middle">scales and modes</text>
+  <rect class="chip" x="193" y="206" width="51" height="24" rx="5"/>
+  <text class="s" x="218" y="223" text-anchor="middle">chords</text>
+  <rect class="chip" x="252" y="206" width="62" height="24" rx="5"/>
+  <text class="s" x="283" y="223" text-anchor="middle">spelling</text>
+  <rect class="chip" x="322" y="206" width="91" height="24" rx="5"/>
+  <text class="s" x="367" y="223" text-anchor="middle">harmony rules</text>
+  <rect class="chip" x="421" y="206" width="57" height="24" rx="5"/>
+  <text class="s" x="449" y="223" text-anchor="middle">voicing</text>
+
+  <rect class="grp" x="62" y="245" width="592" height="59" rx="8"/>
+  <text class="lbl" x="76" y="264">core</text>
+  <text class="mono" x="142" y="264">@libraz/libcantus/core</text>
+  <rect class="chip" x="76" y="273" width="126" height="24" rx="5"/>
+  <text class="s" x="139" y="290" text-anchor="middle">pitch and intervals</text>
+  <rect class="chip" x="210" y="273" width="103" height="24" rx="5"/>
+  <text class="s" x="261" y="290" text-anchor="middle">meter and tempo</text>
+  <rect class="chip" x="321" y="273" width="51" height="24" rx="5"/>
+  <text class="s" x="346" y="290" text-anchor="middle">tuning</text>
+  <rect class="chip" x="380" y="273" width="74" height="24" rx="5"/>
+  <text class="s" x="417" y="290" text-anchor="middle">validation</text>
+  <rect class="chip" x="462" y="273" width="80" height="24" rx="5"/>
+  <text class="s" x="502" y="290" text-anchor="middle">instruments</text>
+
+  <rect class="card" x="666" y="44" width="270" height="260" rx="8"/>
+  <text class="lbl" x="682" y="72">model</text>
+  <text class="mono" x="682" y="92">@libraz/libcantus/model</text>
+  <text class="s" x="682" y="120">the immutable class API</text>
+  <rect class="chip" x="682" y="136" width="74" height="28" rx="5"/>
+  <text class="s" x="719" y="154" text-anchor="middle">Note</text>
+  <rect class="chip" x="764" y="136" width="74" height="28" rx="5"/>
+  <text class="s" x="801" y="154" text-anchor="middle">Chord</text>
+  <rect class="chip" x="846" y="136" width="74" height="28" rx="5"/>
+  <text class="s" x="883" y="154" text-anchor="middle">Key</text>
+  <rect class="chip" x="682" y="172" width="74" height="28" rx="5"/>
+  <text class="s" x="719" y="190" text-anchor="middle">Score</text>
+  <rect class="chip" x="764" y="172" width="74" height="28" rx="5"/>
+  <text class="s" x="801" y="190" text-anchor="middle">Timeline</text>
+  <rect class="chip" x="846" y="172" width="74" height="28" rx="5"/>
+  <text class="s" x="883" y="190" text-anchor="middle">Composer</text>
+  <text class="s" x="682" y="232">one class per thing the other layers</text>
+  <text class="s" x="682" y="247">work with, and a thin skin over their</text>
+  <text class="s" x="682" y="262">functions</text>
+
+  <text class="s" x="480" y="326" text-anchor="middle">The package root re-exports every layer; importing a subpath is a packaging choice, not a different API.</text>
+</svg>

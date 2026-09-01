@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" width="960" height="300" role="img" aria-labelledby="ttl dsc">
+  <title id="ttl">ひとつのノートイベント</title>
+  <desc id="dsc">横軸が −1 拍から 8 拍までのピアノロールに、MIDI 60（C4）、64（E4）、67（G4）の 3 段を描いた図です。G4 は 2 拍目から 1.5 拍分鳴り、その startBeat・durationBeat・pitch・省略可能な velocity を引き出し線で示しています。0 拍より前の領域は弱起（アウフタクト）が置かれる場所です。</desc>
+
+  <style>
+    .bg    { fill:#f7f5f1 }
+    .grp   { fill:#edeae4 }
+    .chip  { fill:#ffffff; stroke:#d7d4cd }
+    .card  { fill:#ffffff; stroke:#8a6a1f }
+    .alt   { fill:#ffffff; stroke:#3f6b8a }
+    .seam  { fill:none; stroke:#b8b4ac; stroke-dasharray:6 5 }
+    .rule  { fill:none; stroke:#b8b4ac; stroke-width:1 }
+    .ln    { fill:none; stroke:#8a6a1f; stroke-width:1.4 }
+    .ln2   { fill:none; stroke:#3f6b8a; stroke-width:1.4 }
+    .ah    { fill:#8a6a1f }
+    .ah2   { fill:#3f6b8a }
+    .fill1 { fill:#8a6a1f; opacity:.16 }
+    .fill2 { fill:#3f6b8a; opacity:.16 }
+    .warn  { fill:none; stroke:#a3401f; stroke-width:1.6 }
+    .warnt { fill:#a3401f }
+    text   { font-family:Inter,"Helvetica Neue","Hiragino Sans","Noto Sans JP",Arial,sans-serif; fill:#1f2328 }
+    .h     { font-size:12.5px }
+    .lbl   { font-size:11px; fill:#6e7781; letter-spacing:.06em }
+    .s     { font-size:10.5px; fill:#6e7781 }
+    .mono  { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:10.5px; fill:#8a6a1f }
+    @media (prefers-color-scheme: dark) {
+      .bg{fill:#0d1117} .grp{fill:#12171d}
+      .chip{fill:#161b22;stroke:#30363d} .card{fill:#161b22;stroke:#d9b45c} .alt{fill:#161b22;stroke:#7fb3d5}
+      .seam{stroke:#484f58} .rule{stroke:#484f58}
+      .ln{stroke:#d9b45c} .ln2{stroke:#7fb3d5} .ah{fill:#d9b45c} .ah2{fill:#7fb3d5}
+      .fill1{fill:#d9b45c} .fill2{fill:#7fb3d5}
+      .warn{stroke:#e08a68} .warnt{fill:#e08a68} .mono{fill:#d9b45c}
+      text{fill:#e6edf3} .lbl{fill:#8b949e} .s{fill:#8b949e}
+    }
+  </style>
+
+  <defs>
+    <marker id="a" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+    <marker id="b" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah2" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="960" height="300" rx="12"/>
+
+  <rect class="seam" x="96" y="88" width="60" height="126"/>
+
+  <path class="rule" d="M 96 88 V 214"/>
+  <path class="rule" d="M 216 88 V 214"/>
+  <path class="rule" d="M 276 88 V 214"/>
+  <path class="rule" d="M 336 88 V 214"/>
+  <path class="rule" d="M 456 88 V 214"/>
+  <path class="rule" d="M 516 88 V 214"/>
+  <path class="rule" d="M 576 88 V 214"/>
+  <path class="rule" style="stroke-width:2" d="M 156 88 V 214"/>
+  <path class="rule" style="stroke-width:2" d="M 396 88 V 214"/>
+  <path class="rule" style="stroke-width:2" d="M 636 88 V 214"/>
+  <path class="rule" d="M 96 214 H 636"/>
+
+  <text class="mono" x="28" y="112">67</text>
+  <text class="s" x="52" y="112">G4</text>
+  <text class="mono" x="28" y="152">64</text>
+  <text class="s" x="52" y="152">E4</text>
+  <text class="mono" x="28" y="192">60</text>
+  <text class="s" x="52" y="192">C4</text>
+
+  <rect class="chip" x="156" y="174" width="120" height="28" rx="4"/>
+  <rect class="fill1" x="156" y="174" width="120" height="28" rx="4"/>
+  <rect class="chip" x="156" y="134" width="120" height="28" rx="4"/>
+  <rect class="fill1" x="156" y="134" width="120" height="28" rx="4"/>
+  <rect class="chip" x="276" y="94" width="90" height="28" rx="4"/>
+  <rect class="fill1" x="276" y="94" width="90" height="28" rx="4"/>
+
+  <text class="mono" x="140" y="40">startBeat: 2</text>
+  <text class="s" x="222" y="40">— 開始位置。4分音符 = 1拍で数える</text>
+  <path class="ln" d="M 190 50 V 108 H 268" marker-end="url(#a)"/>
+
+  <text class="mono" x="221" y="70">durationBeat: 1.5</text>
+  <text class="s" x="334" y="70">— 鳴っている長さ</text>
+  <path class="ln" d="M 276 84 V 80 H 366 V 84"/>
+
+  <text class="mono" x="648" y="104">pitch: 67</text>
+  <text class="s" x="710" y="104">— MIDI 番号。67 は G4</text>
+  <path class="ln" d="M 642 100 H 372" marker-end="url(#a)"/>
+
+  <text class="mono" x="648" y="146">velocity: 96</text>
+  <text class="s" x="729" y="146">— 省略可能</text>
+  <text class="s" x="648" y="160">発音のタイミングには影響しない</text>
+  <path class="ln" d="M 642 153 H 500 V 114 H 340" marker-end="url(#a)"/>
+
+  <text class="s" x="96" y="230" text-anchor="middle">−1</text>
+  <text class="s" x="156" y="230" text-anchor="middle">0</text>
+  <text class="s" x="216" y="230" text-anchor="middle">1</text>
+  <text class="s" x="276" y="230" text-anchor="middle">2</text>
+  <text class="s" x="336" y="230" text-anchor="middle">3</text>
+  <text class="s" x="396" y="230" text-anchor="middle">4</text>
+  <text class="s" x="456" y="230" text-anchor="middle">5</text>
+  <text class="s" x="516" y="230" text-anchor="middle">6</text>
+  <text class="s" x="576" y="230" text-anchor="middle">7</text>
+  <text class="s" x="636" y="230" text-anchor="middle">8</text>
+
+  <text class="s" x="36" y="248">負の startBeat は弱起（アウフタクト）</text>
+
+  <text class="s" x="480" y="272" text-anchor="middle">時間は一貫して4分音符 = 1拍で数えます。ティックでも秒でもありません。</text>
+</svg>

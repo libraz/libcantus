@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 320" width="960" height="320" role="img" aria-labelledby="ttl dsc">
+  <title id="ttl">音程は度数と性質の組み合わせ</title>
+  <desc id="dsc">左側では C4 と E4 を括弧で結び、音程が度数（両端を含めて C, D, E と数えるので 3 度）と性質（半音 4 つ分なので長）からなり、合わせて M3 になることを示します。右側では C4 から F♯4 が増 4 度、C4 から G♭4 が減 5 度であることを示し、鍵盤上の距離はどちらも半音 6 つ分でも同じ音程ではないことを角括弧で示します。</desc>
+
+  <style>
+    .bg    { fill:#f7f5f1 }
+    .grp   { fill:#edeae4 }
+    .chip  { fill:#ffffff; stroke:#d7d4cd }
+    .card  { fill:#ffffff; stroke:#8a6a1f }
+    .alt   { fill:#ffffff; stroke:#3f6b8a }
+    .seam  { fill:none; stroke:#b8b4ac; stroke-dasharray:6 5 }
+    .rule  { fill:none; stroke:#b8b4ac; stroke-width:1 }
+    .ln    { fill:none; stroke:#8a6a1f; stroke-width:1.4 }
+    .ln2   { fill:none; stroke:#3f6b8a; stroke-width:1.4 }
+    .ah    { fill:#8a6a1f }
+    .ah2   { fill:#3f6b8a }
+    .fill1 { fill:#8a6a1f; opacity:.16 }
+    .fill2 { fill:#3f6b8a; opacity:.16 }
+    .warn  { fill:none; stroke:#a3401f; stroke-width:1.6 }
+    .warnt { fill:#a3401f }
+    text   { font-family:Inter,"Helvetica Neue","Hiragino Sans","Noto Sans JP",Arial,sans-serif; fill:#1f2328 }
+    .h     { font-size:12.5px }
+    .lbl   { font-size:11px; fill:#6e7781; letter-spacing:.06em }
+    .s     { font-size:10.5px; fill:#6e7781 }
+    .mono  { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:10.5px; fill:#8a6a1f }
+    @media (prefers-color-scheme: dark) {
+      .bg{fill:#0d1117} .grp{fill:#12171d}
+      .chip{fill:#161b22;stroke:#30363d} .card{fill:#161b22;stroke:#d9b45c} .alt{fill:#161b22;stroke:#7fb3d5}
+      .seam{stroke:#484f58} .rule{stroke:#484f58}
+      .ln{stroke:#d9b45c} .ln2{stroke:#7fb3d5} .ah{fill:#d9b45c} .ah2{fill:#7fb3d5}
+      .fill1{fill:#d9b45c} .fill2{fill:#7fb3d5}
+      .warn{stroke:#e08a68} .warnt{fill:#e08a68} .mono{fill:#d9b45c}
+      text{fill:#e6edf3} .lbl{fill:#8b949e} .s{fill:#8b949e}
+    }
+  </style>
+
+  <defs>
+    <marker id="a" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+    <marker id="b" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah2" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="960" height="320" rx="12"/>
+
+  <text class="h" x="32" y="40">音程は度数と性質の組み合わせ</text>
+
+  <!-- left panel: number and quality -->
+  <rect class="grp" x="32" y="64" width="420" height="200" rx="10"/>
+
+  <rect class="chip" x="102" y="92" width="90" height="34" rx="6"/>
+  <text class="h" x="147" y="114" text-anchor="middle">C4</text>
+  <rect class="chip" x="292" y="92" width="90" height="34" rx="6"/>
+  <text class="h" x="337" y="114" text-anchor="middle">E4</text>
+
+  <path class="ln" d="M147,138 L147,146 L337,146 L337,138"/>
+  <path class="ln" d="M242,146 L242,154"/>
+  <rect class="chip" x="210" y="154" width="64" height="26" rx="6"/>
+  <text class="mono" x="242" y="171" text-anchor="middle">M3</text>
+
+  <text class="h" x="52" y="204">度数：3度</text>
+  <text class="s" x="52" y="220">両端を含めて音名を数える：C, D, E</text>
+  <text class="h" x="52" y="242">性質：長（メジャー）</text>
+  <text class="s" x="52" y="258">実際の距離は半音4つ分</text>
+
+  <!-- right panel: six semitones, two intervals -->
+  <rect class="grp" x="476" y="64" width="452" height="200" rx="10"/>
+  <text class="lbl" x="496" y="88">同じ半音6つ分でも別の音程</text>
+
+  <path class="warn" d="M504,100 L496,100 L496,198 L504,198"/>
+
+  <rect class="chip" x="516" y="100" width="56" height="30" rx="6"/>
+  <text class="h" x="544" y="120" text-anchor="middle">C4</text>
+  <path class="ln" d="M580,115 L606,115" marker-end="url(#a)"/>
+  <rect class="chip" x="612" y="100" width="64" height="30" rx="6"/>
+  <text class="h" x="644" y="120" text-anchor="middle">F♯4</text>
+  <rect class="chip" x="700" y="100" width="52" height="30" rx="6"/>
+  <text class="mono" x="726" y="120" text-anchor="middle">A4</text>
+  <text class="s" x="516" y="148">増4度 — C から F を広げた形</text>
+
+  <rect class="chip" x="516" y="168" width="56" height="30" rx="6"/>
+  <text class="h" x="544" y="188" text-anchor="middle">C4</text>
+  <path class="ln" d="M580,183 L606,183" marker-end="url(#a)"/>
+  <rect class="chip" x="612" y="168" width="64" height="30" rx="6"/>
+  <text class="h" x="644" y="188" text-anchor="middle">G♭4</text>
+  <rect class="chip" x="700" y="168" width="52" height="30" rx="6"/>
+  <text class="mono" x="726" y="188" text-anchor="middle">d5</text>
+  <text class="s" x="516" y="216">減5度 — C から G を狭めた形</text>
+
+  <text class="warnt" font-size="10.5" x="516" y="240">鍵盤上の距離は同じでも別の音程</text>
+
+  <text class="s" x="480" y="292" text-anchor="middle"><tspan class="mono">parseInterval</tspan> はこの違いを保持します。声部書法と対位法のチェックがこの区別に依存するためです。</text>
+</svg>

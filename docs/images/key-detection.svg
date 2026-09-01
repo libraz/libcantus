@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 320" width="960" height="320" role="img" aria-labelledby="ttl dsc">
+  <title id="ttl">How a key is chosen</title>
+  <desc id="dsc">A bar chart on the left shows the twelve pitch classes weighted by how long each sounded: the seven notes of C major stand well above the rest, and F sharp is almost absent. An arrow in the middle says the weights are compared against a profile for every candidate key. On the right, a card lists the reading — C major chosen, with A minor and G major returned as alternatives, and a rationale available on request.</desc>
+
+  <style>
+    .bg    { fill:#f7f5f1 }
+    .grp   { fill:#edeae4 }
+    .chip  { fill:#ffffff; stroke:#d7d4cd }
+    .card  { fill:#ffffff; stroke:#8a6a1f }
+    .alt   { fill:#ffffff; stroke:#3f6b8a }
+    .seam  { fill:none; stroke:#b8b4ac; stroke-dasharray:6 5 }
+    .rule  { fill:none; stroke:#b8b4ac; stroke-width:1 }
+    .ln    { fill:none; stroke:#8a6a1f; stroke-width:1.4 }
+    .ln2   { fill:none; stroke:#3f6b8a; stroke-width:1.4 }
+    .ah    { fill:#8a6a1f }
+    .ah2   { fill:#3f6b8a }
+    .fill1 { fill:#8a6a1f; opacity:.16 }
+    .fill2 { fill:#3f6b8a; opacity:.16 }
+    .warn  { fill:none; stroke:#a3401f; stroke-width:1.6 }
+    .warnt { fill:#a3401f }
+    text   { font-family:Inter,"Helvetica Neue","Hiragino Sans","Noto Sans JP",Arial,sans-serif; fill:#1f2328 }
+    .h     { font-size:12.5px }
+    .lbl   { font-size:11px; fill:#6e7781; letter-spacing:.06em }
+    .s     { font-size:10.5px; fill:#6e7781 }
+    .mono  { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:10.5px; fill:#8a6a1f }
+    @media (prefers-color-scheme: dark) {
+      .bg{fill:#0d1117} .grp{fill:#12171d}
+      .chip{fill:#161b22;stroke:#30363d} .card{fill:#161b22;stroke:#d9b45c} .alt{fill:#161b22;stroke:#7fb3d5}
+      .seam{stroke:#484f58} .rule{stroke:#484f58}
+      .ln{stroke:#d9b45c} .ln2{stroke:#7fb3d5} .ah{fill:#d9b45c} .ah2{fill:#7fb3d5}
+      .fill1{fill:#d9b45c} .fill2{fill:#7fb3d5}
+      .warn{stroke:#e08a68} .warnt{fill:#e08a68} .mono{fill:#d9b45c}
+      text{fill:#e6edf3} .lbl{fill:#8b949e} .s{fill:#8b949e}
+    }
+  </style>
+
+  <defs>
+    <marker id="a" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+    <marker id="b" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="ah2" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="960" height="320" rx="12"/>
+  <text class="h" x="24" y="42">How a key is chosen</text>
+
+  <!-- left: pitch-class weights -->
+  <rect class="grp" x="24" y="56" width="406" height="216" rx="10"/>
+  <text class="lbl" x="44" y="76">the pitch classes that sounded,</text>
+  <text class="lbl" x="44" y="91">weighted by how long they sounded</text>
+
+  <path class="fill1" d="M58.1,226 V112 Q58.1,108 62.1,108 H72.1 Q76.1,108 76.1,112 V226 z"/>
+  <path class="fill1" d="M88.2,226 V222 Q88.2,218 92.2,218 H102.2 Q106.2,218 106.2,222 V226 z"/>
+  <path class="fill1" d="M118.4,226 V157 Q118.4,153 122.4,153 H132.4 Q136.4,153 136.4,157 V226 z"/>
+  <path class="fill1" d="M148.6,226 V218 Q148.6,214 152.6,214 H162.6 Q166.6,214 166.6,218 V226 z"/>
+  <path class="fill1" d="M178.7,226 V138 Q178.7,134 182.7,134 H192.7 Q196.7,134 196.7,138 V226 z"/>
+  <path class="fill1" d="M208.9,226 V165 Q208.9,161 212.9,161 H222.9 Q226.9,161 226.9,165 V226 z"/>
+  <path class="fill1" d="M239.1,226 V224 Q239.1,222 241.1,222 H255.1 Q257.1,222 257.1,224 V226 z"/>
+  <path class="fill1" d="M269.2,226 V126 Q269.2,122 273.2,122 H283.2 Q287.2,122 287.2,126 V226 z"/>
+  <path class="fill1" d="M299.4,226 V220 Q299.4,216 303.4,216 H313.4 Q317.4,216 317.4,220 V226 z"/>
+  <path class="fill1" d="M329.6,226 V159 Q329.6,155 333.6,155 H343.6 Q347.6,155 347.6,159 V226 z"/>
+  <path class="fill1" d="M359.7,226 V216 Q359.7,212 363.7,212 H373.7 Q377.7,212 377.7,216 V226 z"/>
+  <path class="fill1" d="M389.9,226 V177 Q389.9,173 393.9,173 H403.9 Q407.9,173 407.9,177 V226 z"/>
+
+  <path class="rule" d="M46,226 H418"/>
+
+  <text class="s" x="67.1" y="242" text-anchor="middle">C</text>
+  <text class="s" x="97.2" y="242" text-anchor="middle">C♯</text>
+  <text class="s" x="127.4" y="242" text-anchor="middle">D</text>
+  <text class="s" x="157.6" y="242" text-anchor="middle">D♯</text>
+  <text class="s" x="187.7" y="242" text-anchor="middle">E</text>
+  <text class="s" x="217.9" y="242" text-anchor="middle">F</text>
+  <text class="s" x="248.1" y="242" text-anchor="middle">F♯</text>
+  <text class="s" x="278.2" y="242" text-anchor="middle">G</text>
+  <text class="s" x="308.4" y="242" text-anchor="middle">G♯</text>
+  <text class="s" x="338.6" y="242" text-anchor="middle">A</text>
+  <text class="s" x="368.7" y="242" text-anchor="middle">A♯</text>
+  <text class="s" x="398.9" y="242" text-anchor="middle">B</text>
+
+  <text class="s" x="232" y="262" text-anchor="middle">pitch class</text>
+
+  <!-- middle: comparison arrow -->
+  <text class="lbl" x="522" y="138" text-anchor="middle">compared against a profile</text>
+  <text class="lbl" x="522" y="153" text-anchor="middle">for every candidate key</text>
+  <path class="ln" d="M444,168 H598" marker-end="url(#a)"/>
+
+  <!-- right: the reading -->
+  <rect class="card" x="612" y="56" width="324" height="216" rx="10"/>
+  <text class="h" x="628" y="76">the reading</text>
+
+  <rect class="chip" x="628" y="84" width="292" height="34" rx="6"/>
+  <rect class="fill1" x="628" y="84" width="292" height="34" rx="6"/>
+  <text class="h" x="644" y="106">C major</text>
+  <text class="lbl" x="904" y="106" text-anchor="end">chosen</text>
+
+  <rect class="chip" x="628" y="124" width="292" height="40" rx="6"/>
+  <text class="h" x="644" y="142">A minor</text>
+  <text class="s" x="644" y="158">the same seven notes, a different centre</text>
+
+  <rect class="chip" x="628" y="170" width="292" height="40" rx="6"/>
+  <text class="h" x="644" y="188">G major</text>
+  <text class="s" x="644" y="204">one sharp away</text>
+
+  <text class="lbl" x="628" y="226">the readings that were turned down come</text>
+  <text class="lbl" x="628" y="240">back as alternatives, and a rationale is</text>
+  <text class="lbl" x="628" y="254">available on request</text>
+
+  <text class="s" x="480" y="294" text-anchor="middle"><tspan class="mono">detectKey</tspan> reports evidence rather than a verdict, and a piece that modulates comes back as key regions rather than one key.</text>
+</svg>
