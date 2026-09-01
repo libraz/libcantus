@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseNote } from '../src/core/pitch/index.js';
 import {
+  createsBattuta,
   createsHiddenParallelPerfect,
   createsParallelOctave,
   createsParallelPerfect,
@@ -81,6 +82,32 @@ describe('hidden parallel step exception', () => {
     // Octave C4/C5 to fifth C5/G5, both voices ascending: a direct fifth that a
     // guard exempting any prior perfect interval would wrongly allow.
     expect(createsHiddenParallelPerfect(72, 79, 60, 72)).toBe(true);
+  });
+});
+
+describe('battuta subsumption', () => {
+  // An anti-parallel octave (contrary motion, octave to octave) must be counted
+  // exactly once, on createsParallelPerfect. It is not also a battuta, even
+  // though the upper voice leaps down into the arrival — that leap is what a
+  // caller checking createsBattuta in isolation would otherwise double-flag.
+  it('does not flag an anti-parallel octave already caught by createsParallelPerfect', () => {
+    expect(createsBattuta(84, 72, 60, 72)).toBe(false);
+    expect(createsParallelPerfect(84, 72, 60, 72)).toBe(true);
+  });
+
+  it('still flags a genuine battuta, where the octave was not already there', () => {
+    // Fifth (7) contracting to a unison (0) by contrary motion, upper voice
+    // leaping down: the perfect class is new, so createsParallelPerfect stays
+    // silent and battuta is the sole report.
+    expect(createsBattuta(72, 60, 53, 60)).toBe(true);
+    expect(createsParallelPerfect(72, 60, 53, 60)).toBe(false);
+  });
+
+  it('does not flag an arrival at a perfect fifth, only at octave or unison', () => {
+    // Same contrary-motion, downward-leap shape as a genuine battuta, but
+    // landing on a fifth rather than an octave: battuta is reserved for the
+    // octave/unison case, so this is false regardless of the leap.
+    expect(createsBattuta(79, 67, 55, 60)).toBe(false);
   });
 });
 

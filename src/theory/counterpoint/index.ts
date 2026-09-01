@@ -356,6 +356,10 @@ export function createsHiddenParallelPerfect(
  *
  * The stepwise arrival is allowed, as is the same octave reached with the upper
  * voice rising, so only the downward leap into the perfect class is flagged.
+ * Arriving at a perfect class the voices were already sitting on (e.g. octave
+ * to octave by contrary motion) is the anti-parallel case owned by
+ * {@link createsParallelPerfect}; battuta is reserved for a perfect class that
+ * was not already there.
  *
  * @category Voicing & Counterpoint
  */
@@ -376,8 +380,13 @@ export function createsBattuta(
   if (!bothVoicesMove(aMove, bMove) || similarMotion(aMove, bMove)) {
     return false;
   }
-  if (simpleClass(a1 - b1) !== 0) {
+  const nowClass = simpleClass(a1 - b1);
+  if (nowClass !== 0) {
     return false;
+  }
+  const prevClass = simpleClass(a0 - b0);
+  if (prevClass === nowClass) {
+    return false; // anti-parallel octave, owned by createsParallelPerfect
   }
   const upperMove = a1 >= b1 ? aMove : bMove;
   return upperMove < -2;
