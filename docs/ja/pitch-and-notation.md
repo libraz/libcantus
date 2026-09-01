@@ -1,5 +1,7 @@
 # 音高と記譜
 
+音楽用語になじみがない場合は、入門編の[音高と音程](primer/pitch-and-intervals.md)がこのページで使う用語を説明します。
+
 ## 音と MIDI
 
 `Note` は音名の文字、変化記号、任意のオクターブを保持します。音名の文字列からクラス値を得るには `Note.parse`、各要素から組み立てるには `Note.of`、プレーンデータ API には `parseNote` を使います。オクターブを持たない音はピッチクラスを持ちますが、MIDI 番号は持ちません。
@@ -32,7 +34,7 @@ formatNote(midiToNote(58)); // 'A#3'
 
 ## 綴られた音程
 
-音程は全音階上の度数と半音数の両方を持ちます。この区別により、増4度と減5度の違いが保たれます。
+`SpelledInterval` は4つのフィールドをすべて必須で持ちます。音名の文字で数えた全音階上の大きさ `number`（3度は性質によらず 3）、`P`・`M`・`m` または増減を表す `A`・`d` の連なりのいずれかである `quality`、符号つきの半音数 `semitones`、そして `descending` です。度数を半音数と並べて持つことが、響きは同じで書き方が異なる増4度と減5度の区別を保ちます。
 
 ```ts
 import { Interval, Note } from '@libraz/libcantus';
@@ -42,9 +44,20 @@ Interval.between(Note.parse('C4'), Note.parse('Gb4')).name; // 'd5'
 Note.parse('C4').transposeBy('A4').name; // 'F#4'
 ```
 
+`descending` は必須で、`semitones` の符号から読み取れるものではありません。下行のユニゾンは半音数が 0 であり、重減2度は音高が下がりながら音名の文字は上がります。文字列表記では先頭の `-` が方向を表し、`parseInterval` がこれを読み、`Interval.name` がこれを書きます。
+
+```ts
+import { Interval, Note, parseInterval, spelledInterval } from '@libraz/libcantus';
+
+parseInterval('-P5'); // { number: 5, quality: 'P', semitones: -7, descending: true }
+parseInterval('dd2'); // { number: 2, quality: 'dd', semitones: -1, descending: false }
+spelledInterval(Note.parse('G4'), Note.parse('C4')); // { number: 5, quality: 'P', semitones: -7, descending: true }
+Interval.between(Note.parse('G4'), Note.parse('C4')).name; // '-P5'
+```
+
 対応する関数は `spelledInterval`、`parseInterval`、`transposeByInterval`、`transposeNote` です。
 
-音程は協和の分類も持ちます。対位法の規則はこの分類の上に組み立てられています。
+音程は協和の分類も持ちます。協和とは2つの音を同時に鳴らしたときの安定の度合いで、対位法の規則はこの分類の上に組み立てられています。
 
 ```ts
 import { classifyInterval, ConsonanceClass, isConsonantInterval, isPerfectInterval } from '@libraz/libcantus';
@@ -57,6 +70,21 @@ isConsonantInterval(4); // true
 ```
 
 `classifyInterval` が第2引数を取るのは完全4度のためです。2声書法では不協和として扱われ、より厚いテクスチャで下から支えられている場合はそうではありません。既定は2声の読みで、種目対位法が前提とするものと一致します。
+
+`twoVoice` を切ったときに完全4度が入る区分は `ImperfectConsonance` ですが、これは音楽理論ではなくこの API の取り決めです。一般的な理論では、協和として扱われる4度は完全協和音程に数えます。`ConsonanceClass` があるのは、並行進行の規則が監視する音程 — ユニゾン、オクターブ、完全5度 — をそれ以外から分けるためで、完全4度は監視の対象ではありません。`isPerfectInterval` が完全4度に `false` を返すのも同じ理由です。どちらの答えも規則が何を監視するかを表しており、音程そのものの性質を表してはいません。
+
+`classifyInterval` は半音数を読むため、減4度と長3度を区別できません。`classifySpelledInterval` は綴られた音程を受け取り、綴りに判断させます。入力がすでに綴られている場合はこちらを使ってください。
+
+```ts
+import { classifySpelledInterval, ConsonanceClass, parseInterval } from '@libraz/libcantus';
+
+classifySpelledInterval(parseInterval('M3')); // ConsonanceClass.ImperfectConsonance
+classifySpelledInterval(parseInterval('d4')); // ConsonanceClass.Dissonance
+classifySpelledInterval(parseInterval('P4')); // ConsonanceClass.Dissonance
+classifySpelledInterval(parseInterval('P4'), false); // ConsonanceClass.ImperfectConsonance
+```
+
+減4度は長3度と同じ響きですが、不協和として数えます。対位法の検査が見る必要があるのはこちらです。
 
 ## 調とスケール
 

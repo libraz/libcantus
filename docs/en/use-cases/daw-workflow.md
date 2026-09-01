@@ -2,6 +2,8 @@
 
 Use this flow after a DAW, piano roll, or MIDI parser has supplied timed notes. Wrap the tracks that contribute to harmony as a `Score`, read the chord timeline off it, then write material against that timeline.
 
+The flow assumes note events with a MIDI pitch, a start beat and a length, and nothing else; the key, the chords and the cadences are all read from them here. For the vocabulary it reports in — chord, Roman numeral, cadence, key region — see the [primer](../primer/index.md).
+
 ```ts
 import { Composer, Score } from '@libraz/libcantus';
 
@@ -32,7 +34,7 @@ bass.notes.length; // 16
 
 A timeline carries the key regions it was read against. `harmony.keys` is the list, for a user inspecting a modulation; `harmony.key` is the one held longest, which is the label to print when only one is wanted. It is also the key to hand a generator: the analysis is where the key is read from, not something that travels downstream on its own. A `Composer` writes in the key it holds and takes only the chords off the timeline it is given, so `harmony.key` goes into `Composer.of` above.
 
-The confidence of each reading travels with the chords. `harmony.segmentConfidence` holds one value per segment, in segment order, and four unambiguous triads all read at 1. Show it — chord recognition is evidence-based rather than a guarantee, and sparse or deliberately ambiguous material comes back lower:
+The confidence of each reading travels with the chords. `harmony.segmentConfidence` holds one value per segment, in segment order, and the three triads and the dominant seventh above leave nothing open, so each reads at 1. Show it — chord recognition is evidence-based rather than a guarantee, and sparse or deliberately ambiguous material comes back lower:
 
 ```ts
 import { Score } from '@libraz/libcantus';
@@ -50,14 +52,14 @@ timeline.segmentConfidence; // [0.425, 0.425]
 
 ## Feeding the analysis correctly
 
-- Give the score its `meters` when the song changes meter, and its `tempo` when seconds matter; both stay with the score and reach every analysis made from it. `pickupBeats` belongs to the timeline options, for notes that begin before beat zero.
+- Give the score its `meters` when the song changes meter, and its `tempo` when seconds matter; both stay with the score and reach every analysis made from it. `pickupBeats` belongs to the timeline options: an upbeat already sounds at negative beats without it, and naming its length is what rejects a note starting earlier than the pickup does.
 - Feed only sounding notes. Zero and negative durations are ignored, and `score.filter` drops them explicitly after an import.
-- Set `harmonicRhythm` to the chord rate the song actually uses. Too fine a value fragments a held chord; too coarse a value merges a real change.
+- Set `harmonicRhythm` near the chord rate the song actually uses — how often the harmony changes, in beats. Under the default `'dynamic'` segmentation it is a prior rather than a window: a shorter value makes a change cheaper and fragments a held chord, a longer one demands more evidence and merges a real change. Pass `segmentation: 'grid'` to make it the exact window instead.
 - Pool only the tracks that carry harmony. A melody or a drum track fed into chord inference will move the result.
 
 ## An editor that re-analyzes
 
-A host holding several tracks at once has `Arrangement` instead: one harmony inferred from every pitched track pooled, each track annotated against it, and the notes that clash with the chord beneath them collected as conflicts. `update` recomputes only the beats an edit could have reached, so a re-analysis on every keystroke costs what the edit touched rather than what the song contains:
+A host holding several tracks at once has `Arrangement` instead: one harmony inferred from every pitched track pooled, each track annotated against it, and the notes worth reporting collected as conflicts. `update` recomputes only the beats an edit could have reached, so a re-analysis on every keystroke costs what the edit touched rather than what the song contains:
 
 ```ts
 import { Arrangement } from '@libraz/libcantus';
@@ -90,6 +92,6 @@ An arrangement never changes, so the reading taken before an edit stays valid �
 
 Use the generated bass as a new track, not as a replacement for the user's notes. Preserve the original events and expose the inferred result for correction: a label the user can fix is more useful than one that looks authoritative and is wrong.
 
-Conflicts are a report, not a fault list. Every ordinary non-chord tone — a passing note, a neighbour, a prepared suspension — is dissonant against the chord under it by definition, and each conflict carries the labels that tell those apart from a note that is simply wrong.
+Conflicts are a report, not a fault list, and they cover two kinds of thing. Every ordinary non-chord tone — a passing note, a neighbour, a prepared suspension — is dissonant against the chord under it by definition, and a chord tone is reported too when it makes a voice-leading defect against another track: the two above are the parallel fifths F–C5 to G–D5 between the keys and the lead, both of them chord tones. Read `labels` to tell a passing tone from a note that is simply wrong, and `rationale` for which rule fired.
 
 For the cost of holding an analysis open across edits, see [Performance](../performance.md).

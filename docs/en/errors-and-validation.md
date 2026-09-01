@@ -78,12 +78,27 @@ clampToMidi(140); // 127
 assertNoteEvents([{ pitch: 60, startBeat: 0, durationBeat: 1 }]).length; // 1
 ```
 
-Each helper returns its argument, so it can wrap a value in place instead of sitting on a line of its own. `assertMidiPitch` rejects an out-of-range pitch; `clampToMidi` folds it into 0..127 instead, which is what an importer usually wants.
+Each helper returns its argument, so it can wrap a value in place instead of sitting on a line of its own. Both `assertMidiPitch` and `clampToMidi` require a whole number — a MIDI byte has no fractional value to carry — and they differ only in what they do with the range: `assertMidiPitch` rejects a pitch outside 0..127, while `clampToMidi` folds it into 0..127, which is what an importer usually wants.
+
+Every note event is held to that rule. `pitch` is a whole number in 0..127, and `velocity`, where an event carries one, has the same domain and is checked the same way: a velocity arriving at 96.5 is a rounding left undone upstream, and admitting it would hand the writer a note the format cannot store. `articulation`, where an event carries one, is checked against the names the library knows, so a misspelt technique is an input error rather than the musical claim that the instrument cannot play it that way. `startBeat` and `durationBeat` are beats rather than MIDI bytes and take any finite value.
+
+```ts
+import { assertNoteEvents, isLibcantusError } from '@libraz/libcantus';
+
+let reported = 'ok';
+try {
+  assertNoteEvents([{ pitch: 60, startBeat: 0, durationBeat: 1, velocity: 96.5 }], 'score notes');
+} catch (error) {
+  if (isLibcantusError(error)) reported = error.message;
+}
+
+reported; // 'score notes[0].velocity must be an integer in [0, 127]; received 96.5'
+```
 
 `assertNoteEvents` checks an array without copying it, and takes the tolerances an import needs:
 
 - `allowNonPositiveDuration` accepts the zero-length artefacts a MIDI import produces, so the array can be validated before they are dropped.
-- `minStartBeat` rejects a note earlier than the pickup the caller declared. Onsets are unbounded below by default, because a pickup sounds before beat 0.
+- `minStartBeat` rejects a note earlier than the pickup the caller declared — the pickup being the notes that lead into the first downbeat, which therefore sound before beat 0. Onsets are unbounded below by default for that reason.
 - `budget` caps the event count.
 
 A hole in a sparse array and an explicit `undefined` are both rejected, rather than being dropped silently or surfacing as a `TypeError` further along.

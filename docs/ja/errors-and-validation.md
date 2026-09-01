@@ -78,12 +78,27 @@ clampToMidi(140); // 127
 assertNoteEvents([{ pitch: 60, startBeat: 0, durationBeat: 1 }]).length; // 1
 ```
 
-いずれの関数も引数をそのまま返すため、独立した1行を割かずに値を包めます。`assertMidiPitch` は範囲外のピッチを拒否し、`clampToMidi` は 0..127 に丸めます。インポート処理では後者が適することが多いです。
+いずれの関数も引数をそのまま返すため、独立した1行を割かずに値を包めます。`assertMidiPitch` と `clampToMidi` はどちらも整数を要求します。MIDI のバイトは小数を載せられないためです。両者の違いは範囲の扱いだけで、`assertMidiPitch` は 0..127 を外れたピッチを拒否し、`clampToMidi` は 0..127 に丸めます。インポート処理では後者が適することが多いです。
+
+ノートイベントも同じ規則に従います。`pitch` は 0..127 の整数で、イベントが `velocity` を持つ場合もその領域は同じであり、検査のしかたも同じです。96.5 という velocity は上流で丸め損ねた値であり、これを通せば、フォーマットが保持できないノートを書き出し側に渡すことになります。イベントが `articulation` を持つ場合は、ライブラリが知る名前の一覧に照らして検査されます。綴り違いの奏法は入力の誤りとして扱われ、「その楽器はその奏法で演奏できない」という音楽上の主張にはなりません。`startBeat` と `durationBeat` は MIDI のバイトではなく拍なので、有限の値であれば受け取ります。
+
+```ts
+import { assertNoteEvents, isLibcantusError } from '@libraz/libcantus';
+
+let reported = 'ok';
+try {
+  assertNoteEvents([{ pitch: 60, startBeat: 0, durationBeat: 1, velocity: 96.5 }], 'score notes');
+} catch (error) {
+  if (isLibcantusError(error)) reported = error.message;
+}
+
+reported; // 'score notes[0].velocity must be an integer in [0, 127]; received 96.5'
+```
 
 `assertNoteEvents` は配列をコピーせずに検査し、インポートに必要な緩和を受け取ります。
 
 - `allowNonPositiveDuration`: MIDI インポートが生む長さ0のノートを受け入れます。取り除く前に配列を検査できます。
-- `minStartBeat`: 宣言したアウフタクトより前から鳴る音を拒否します。既定では開始位置に下限はありません。アウフタクトは拍0より前で鳴るためです。
+- `minStartBeat`: 宣言したアウフタクトより前から鳴る音を拒否します。アウフタクトとは最初の強拍へ導く音のことで、したがって拍0より前で鳴ります。そのため既定では開始位置に下限がありません。
 - `budget`: イベント数の上限。
 
 疎配列の穴と明示的な `undefined` は、どちらも拒否されます。黙って捨てられることも、後続の `TypeError` として現れることもありません。

@@ -2,6 +2,8 @@
 
 Use one seed per composition and derive every generated part from the same harmonic plan. A preview is then repeatable, while the host stays free to store or edit the emitted note events. A `Composer` is where the seed, the key, the tempo and the complexity dials live, so each part inherits them instead of restating them.
 
+The flow assumes nothing musical in hand: a key name, a tempo and a seed are the whole input, and the chords come from the library. For the vocabulary — key, chord progression, section, playability — see the [primer](../primer/index.md).
+
 ```ts
 import { Composer, Instrument } from '@libraz/libcantus';
 
@@ -101,4 +103,4 @@ bass4.foldIntoRange(24); // 36
 
 `playability` is the fuller check, and its three layers separate "this note is not on the instrument" from "this is hard at this tempo" — see [Instruments and playability](../instruments-and-playability.md).
 
-Store the seed and every option alongside the emitted notes; `composer.data` is the settings half of that record. The version the generators ran under is not one of a composer's settings and cannot be handed back to one — read it with `resolveContext(composer.context).algorithmVersion` and record it beside them, as the note that says which release produced the take. Generation does not write a MIDI file, select a sound, or establish that a result is stylistically appropriate; those decisions belong to the host and its user.
+Store `composer.data` alongside the emitted notes. It is the whole reproduction recipe: the seed and the `algorithmVersion` the parts were drawn under are resolved into it even when the caller named neither, so `Composer.fromData` reopens the take rather than whatever the build it is reopened on happens to default to. Generation does not write a MIDI file, select a sound, or establish that a result is stylistically appropriate; those decisions belong to the host and its user.

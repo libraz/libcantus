@@ -1,6 +1,8 @@
 # Scales and modes
 
-A scale in this library is a twelve-bit mask plus a root pitch class, wrapped up as `KeyScale`. Bit `n` is set when the scale contains the pitch `n` semitones above its root, so a scale is a set rather than a list of names, and any subset of the twelve pitch classes is expressible.
+If the musical vocabulary here is unfamiliar, [Scales and keys](primer/scales-and-keys.md) in the primer teaches the terms this page uses.
+
+A scale in this library is a twelve-bit mask plus a root pitch class, wrapped up as `KeyScale`. Bit `n` is set when the scale contains the pitch `n` semitones above its root, so a scale is a set rather than a list of names, and any subset of the twelve pitch classes that contains the root is expressible. Bit 0 is always on: a scale that does not sound its own root has no root to measure the rest from, and `maskFromOffsets` sets the bit whether or not the offset list names it.
 
 ```ts
 import { majorKey, MAJOR_MASK, minorKey } from '@libraz/libcantus';
@@ -17,16 +19,17 @@ That representation is why membership and degree questions are arithmetic rather
 `NAMED_SCALES` holds the Western vocabulary — the church modes, the minor forms, the symmetric scales, the pentatonics. `WORLD_SCALES` holds scales named in other traditions, and `SCALE_ALIASES` maps common alternative spellings onto them.
 
 ```ts
-import { NAMED_SCALES, scaleByName, WORLD_SCALES } from '@libraz/libcantus';
+import { NAMED_SCALES, resolveScaleName, scaleByName, WORLD_SCALES } from '@libraz/libcantus';
 
 Object.hasOwn(NAMED_SCALES, 'lydianDominant'); // true
 Object.hasOwn(WORLD_SCALES, 'miyakoBushi'); // true
 
 scaleByName('dorian', 2).rootPc; // 2
 scaleByName('okinawan', 4).modeMask12 === scaleByName('ryukyu', 4).modeMask12; // true
+resolveScaleName('bogus'); // undefined
 ```
 
-The two tables are kept apart because they answer different questions. Chord-scale theory ranks candidates from `NAMED_SCALES`; a scale from `WORLD_SCALES` is a request for a specific sound, not a candidate to be scored. `resolveScaleName` and `requireScaleMask` resolve a name through the aliases when the mask itself is needed, and reject an unknown name rather than returning an empty scale — an empty result already means "no answer", so a typo must not be indistinguishable from one.
+The two tables are kept apart because they answer different questions. Chord-scale theory ranks candidates from `NAMED_SCALES`; a scale from `WORLD_SCALES` is a request for a specific sound, not a candidate to be scored. `resolveScaleName` and `requireScaleMask` both resolve a name through the aliases, and they differ in what an unknown name gets. `resolveScaleName` returns `undefined`, so it is the form to test a name with. `requireScaleMask` throws, and so does `scaleByName`, which is built on it. Neither returns an empty scale — an empty result already means "no answer", so a typo must not be indistinguishable from one.
 
 A scale that is in neither table is built from its offsets:
 
@@ -85,6 +88,38 @@ c.pitchClasses(); // [0, 2, 4, 5, 7, 9, 11]
 
 `Key.degreeOf` answers `null` for a pitch outside the scale rather than the `-1` the function returns, so a degree read straight into a UI cannot be mistaken for the tonic.
 
+## Moving by degrees
+
+Membership asks where a pitch already sits. Moving *by* degrees is the other question, and the one a diatonic transpose or a snap-up-a-third asks. `shiftByScaleDegrees` counts along the scale rather than adding a fixed number of semitones:
+
+```ts
+import { majorKey, shiftByScaleDegrees } from '@libraz/libcantus';
+
+const c = majorKey(0);
+
+shiftByScaleDegrees(60, 2, c); // 64
+shiftByScaleDegrees(64, 2, c); // 67
+shiftByScaleDegrees(60, -1, c); // 59
+shiftByScaleDegrees(61, 1, c); // 63
+```
+
+Two degrees up from C4 is E4 and two degrees up from E4 is G4 — four semitones and then three, which is the difference between counting degrees and counting semitones. A pitch off the scale keeps its distance above the scale tone below it, so C#4 moved one degree up is D#4 rather than D4, and a chromatic passing note survives the shift as one.
+
+`scaleLadderPosition` and `scaleLadderPitch` are the two halves of that arithmetic, for code that has to count degrees itself. A position is a `rung` — scale tones counted from the tonic, continuing across octaves and negative below it — plus the `offset` in semitones the pitch sounds above that rung:
+
+```ts
+import { majorKey, scaleLadderPitch, scaleLadderPosition } from '@libraz/libcantus';
+
+const c = majorKey(0);
+const here = scaleLadderPosition(61, c);
+
+here.offset; // 1
+scaleLadderPitch(here.rung, c); // 60
+scaleLadderPitch(here.rung + 4, c); // 67
+```
+
+Keeping the offset apart from the rung is what lets a note between two scale tones come back as itself. Flattening it onto the scale first would make a shift of zero degrees change the pitch.
+
 ## Which scales support functional harmony
 
 Roman numerals, cadences, and harmonic function are conventions of common-practice tonality. Applied to a scale with no leading tone or no tertian triads, they produce labels that carry no meaning.
@@ -117,7 +152,9 @@ Key.named('miyakoBushi', 'C').supportsFunctionalHarmony(); // false
 
 ## Chord–scale relationships
 
-Given a chord, `chordScales` ranks the scales that contain it. The keys of that ranking, in order: the idiomatic choice for the chord's quality, where the library names one; then, for a triad, seven-note scales ahead of smaller ones; then the fewest extra tones over the chord; then a conventional preference among the modes, brightest first; then the fewest avoid notes; then the name. Idiom is ranked before fit rather than used to break ties, so the idiomatic scale for a quality leads even where another scale contains the chord more tightly — `locrian` heads a half-diminished seventh though the blues scale adds fewer tones.
+Given a chord, `chordScales` ranks the scales that contain it. The keys of that ranking, in order: the idiomatic choice for the chord's quality, where the library names one; then, for a triad, seven-note scales ahead of smaller ones; then the fewest extra tones over the chord; then a fixed preference among the modes; then the fewest avoid notes; then the name. Idiom is ranked before fit rather than used to break ties, so the idiomatic scale for a quality leads even where another scale contains the chord more tightly — `locrian` heads a half-diminished seventh though the blues scale adds fewer tones.
+
+The fixed preference runs ionian, major, mixolydian, dorian, lydian, aeolian, naturalMinor, phrygian, locrian. That is descending brightness — how far the mode's degrees sit above the ones a minor mode would use — with one departure: lydian ranks below dorian rather than at the top, because its raised fourth is the more marked colour rather than the more neutral one. The order only decides among modes that fit a chord equally well, which happens whenever a chord states no third or sixth.
 
 ```ts
 import { chordScales, makeChord } from '@libraz/libcantus';

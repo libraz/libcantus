@@ -2,6 +2,8 @@
 
 A chord chart is text: symbols with a bar each, or several to a bar. Parsing them into chords, placing them in time, and realizing them as sound are three separate steps, and each one can fail differently.
 
+The flow assumes chord symbols as strings and nothing else — no key, no durations, no notes. For the vocabulary — chord symbol, key, voicing, Roman numeral — see the [primer](../primer/index.md).
+
 ```ts
 import { Chord, Key, Progression } from '@libraz/libcantus';
 

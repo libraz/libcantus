@@ -2,6 +2,8 @@
 
 Each moment of a four-part exercise is a `Voicing`: the sounding pitches, lowest voice first. Grading is the motion from one to the next, read against the chord each realizes and the key the exercise is written in.
 
+The flow assumes the student's answer as pitches or as spelled note names, plus the chords the exercise was set on and its key. For the vocabulary — voice, voicing, part-writing rule, species counterpoint — see the [primer](../primer/index.md).
+
 ```ts
 import { Voicing } from '@libraz/libcantus';
 
@@ -42,7 +44,7 @@ checkPartWriting(asFlats, chords, key).map((violation) => violation.kind); // []
 checkPartWriting(asSharps, chords, key).map((violation) => violation.kind); // ['crossRelation']
 ```
 
-The classes build what that call takes — `Key.major('C').scale` and `Chord.parse('C').data` — so nothing has to be assembled by hand around it.
+The classes build what that call takes — `Chord.parse('C').data` for the chords — and the key goes in whole. `checkPartWriting` takes a `KeyLike` in its third parameter, so a key name, a `Key`, or the key/scale used above all go straight in, and nothing has to be assembled by hand around it.
 
 ## Species counterpoint
 

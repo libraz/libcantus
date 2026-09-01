@@ -2,6 +2,8 @@
 
 A `Score` is the notes together with the context they are read against, and every question below is a single method call — on the score, or on the timeline the score hands back. Start with that timeline: it establishes the harmonic units that reduction, cadence, phrase, and form analysis all work from.
 
+The flow assumes note events and, where it is known, a meter; the key, the chords and every boundary below are read from them. For the vocabulary — chord, cadence, reduction, phrase, motif — see the [primer](../primer/index.md).
+
 ```ts
 import { Score } from '@libraz/libcantus';
 

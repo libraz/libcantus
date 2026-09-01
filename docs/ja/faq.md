@@ -15,7 +15,7 @@
 ありません。パッケージは依存のない純粋な TypeScript で、すべての入り口が同期的です。
 
 **ブラウザやワーカーで動きますか。**
-動きます。ライブラリに Node 固有の API はなく、入出力はすべて JSON 互換のプレーンデータであるため、構造化クローンでワーカー境界を越えられます。
+動きます。ライブラリに Node 固有の API はなく、入出力は、和音区間のタイムラインが持つ `at` を除いてすべて JSON 互換のプレーンデータです。`at` は関数なので、タイムラインそのものではなく `timeline.segments` を送り、受け取った側で `Timeline.fromJSON` を使って参照を組み直します。それ以外は構造化クローンでワーカー境界を越えられ、復元処理は不要です。
 
 ## 解析
 
@@ -28,8 +28,31 @@
 **半音階的な属和音が `V7/V` ではなく `II7` になるのはなぜですか。**
 主調に対してルートを名指しする綴りは常に正しく、そのコードが実際に「適用された」ものかどうかは読みだからです。`chordToRoman` に `{ applied: true }` を渡すと適用形になります。
 
+**音楽が調性的であることを前提にしていますか。**
+していません。音の素材は根音のピッチクラスと12ビットのマスクとして保持され、それがどの伝統から来たかは何も語りません。したがって、ある楽節を「調とローマ数字」の読みへ押し込む仕組みはどこにもありません。名前のついた音階がそもそもその読みを許すかどうかは、前提ではなく問い合わせるべきことです。`supportsFunctionalHarmony` は、機能和声が定義された音階と、同じ素材から作られた旋法に対して true を返し、それ自体の和音機能を持たない音の集合に対して false を返します。長音階の回転である `'dorian'` は true、和音ではなく旋律で組み立てられる日本の5音音階 `'miyakoBushi'` は false です。
+
+```ts
+import { supportsFunctionalHarmony } from '@libraz/libcantus';
+
+supportsFunctionalHarmony('dorian'); // true
+supportsFunctionalHarmony('miyakoBushi'); // false
+```
+
 **全音音階の箇所にローマ数字が出るのはなぜですか。**
 ローマ数字を要求したためです。先に `supportsFunctionalHarmony` を確認してください。[スケールとモード](scales-and-modes.md)を参照してください。
+
+**`functionOf` が「カデンツの四六の和音」をトニックと答えるのはなぜですか。**
+`functionOf` が答えの根拠にするのは和音と調だけであり、音階の第5度の上に立つ主和音は、それだけを取れば転回された主和音だからです。`chordToRoman` はこれを `I64` と書きます。終止形の中で聴けば、これはすでにドミナントです。バスは属音に到達しており、その上の2音は、その属和音自身の導音と第5音へ解決する掛留音（アポジャトゥーラ）です。ある `I64` がどちらであるかを決めるのはその前の和音だけなので、この読みは時間を見る層の担当になります。`detectCadence` は、ドミナントの前の和音を `approach` として渡すとその読みを返し、そのとき rationale は「終止はドミナントの到達点ではなく四六の和音から始まる」と述べます。
+
+```ts
+import { chordToRoman, detectCadence, functionOf } from '@libraz/libcantus';
+
+functionOf('C/G', 'C major'); // 'tonic'
+chordToRoman('C/G', 'C major'); // 'I64'
+
+detectCadence('G', 'C', 'C major').rationale?.includes('cadential six-four'); // false
+detectCadence('G', 'C', 'C major', { approach: 'C/G' }).rationale?.includes('cadential six-four'); // true
+```
 
 **セクションのラベルは Verse や Chorus を意味しますか。**
 意味しません。`sectionsFromNotes` は繰り返される単位を見つけ、A、B のように名付けます。どれが Verse かは曲についての判断であり、音符から決まるものではありません。
@@ -56,8 +79,15 @@
 
 ## 綴りと記譜
 
-**ピッチクラス6が F# ではなく Gb と綴られるのはなぜですか。**
-どちらも C から臨時記号6つ分の距離にあり、同点の場合はフラット側を採るためです。曲がもう一方の綴りで書かれている場合は、主音を明示的に渡してください。
+**ピッチクラス6の調が F# major ではなく Gb major と綴られるのはなぜですか。**
+どちらの調号も臨時記号6つ分の長さで、同点の場合はフラット側を採るためです。ピッチクラス3の短調が D# minor ではなく Eb minor になるのも同じ理由です。曲がもう一方の綴りで書かれている場合は、主音を明示的に渡してください。調の内側にあるピッチクラスは別の問題で、この同点処理ではなく、それを読む調によって決まります。
+
+```ts
+import { formatNote, midiToNote, spellPitchClass } from '@libraz/libcantus';
+
+formatNote(spellPitchClass(6, 'C', 'C major')); // 'F#'
+formatNote(midiToNote(66)); // 'F#4'
+```
 
 **変ニ長調の平行調が嬰イ短調ではなく変ロ短調なのはなぜですか。**
 調関係を5度空間で計算し、主音を5度圏から読み戻しているためです。これにより綴りが慣用的な形に保たれます。

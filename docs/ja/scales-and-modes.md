@@ -1,6 +1,8 @@
 # スケールとモード
 
-このライブラリでのスケールは、12ビットのマスクとルートのピッチクラスの組で、`KeyScale` として表します。ビット n が立っている場合、ルートの n 半音上の音がそのスケールに含まれます。したがってスケールは名前の一覧ではなく集合であり、12ピッチクラスの任意の部分集合を表現できます。
+音楽用語になじみがない場合は、入門編の[スケールと調](primer/scales-and-keys.md)がこのページで使う用語を説明します。
+
+このライブラリでのスケールは、12ビットのマスクとルートのピッチクラスの組で、`KeyScale` として表します。ビット n が立っている場合、ルートの n 半音上の音がそのスケールに含まれます。したがってスケールは名前の一覧ではなく集合であり、ルートを含む部分集合であれば12ピッチクラスのどれでも表現できます。ビット 0 は常に立ちます。自分のルートを鳴らさないスケールには、残りを測る基準がないためです。`maskFromOffsets` は、渡された音程の並びに 0 が入っていなくてもこのビットを立てます。
 
 ```ts
 import { majorKey, MAJOR_MASK, minorKey } from '@libraz/libcantus';
@@ -17,16 +19,17 @@ minorKey(9).rootPc; // 9
 `NAMED_SCALES` には西洋音楽の語彙 — 教会旋法、各種短音階、対称スケール、ペンタトニック — が入ります。`WORLD_SCALES` には他の伝統で名を持つスケールが入り、`SCALE_ALIASES` がよく使われる別表記をそこへ対応づけます。
 
 ```ts
-import { NAMED_SCALES, scaleByName, WORLD_SCALES } from '@libraz/libcantus';
+import { NAMED_SCALES, resolveScaleName, scaleByName, WORLD_SCALES } from '@libraz/libcantus';
 
 Object.hasOwn(NAMED_SCALES, 'lydianDominant'); // true
 Object.hasOwn(WORLD_SCALES, 'miyakoBushi'); // true
 
 scaleByName('dorian', 2).rootPc; // 2
 scaleByName('okinawan', 4).modeMask12 === scaleByName('ryukyu', 4).modeMask12; // true
+resolveScaleName('bogus'); // undefined
 ```
 
-2つの表が分かれているのは、答える問いが異なるためです。コードスケール理論は `NAMED_SCALES` から候補を順位づけます。`WORLD_SCALES` のスケールは、採点される候補ではなく特定の響きの指定として扱われます。マスクを直接必要とする場合は `resolveScaleName` と `requireScaleMask` が別名を解決します。未知の名前は空のスケールを返さずに拒否します。空の結果はすでに「該当なし」を意味するため、入力の誤りがそれと区別できなくなることを避けています。
+2つの表が分かれているのは、答える問いが異なるためです。コードスケール理論は `NAMED_SCALES` から候補を順位づけます。`WORLD_SCALES` のスケールは、採点される候補ではなく特定の響きの指定として扱われます。`resolveScaleName` と `requireScaleMask` はどちらも別名を解決しますが、未知の名前に対する挙動が異なります。`resolveScaleName` は `undefined` を返すため、名前を検査するときはこちらを使います。`requireScaleMask` は例外を投げ、その上に作られている `scaleByName` も投げます。どちらも空のスケールは返しません。空の結果はすでに「該当なし」を意味するため、入力の誤りがそれと区別できなくなることを避けています。
 
 どちらの表にもないスケールは、音程の並びから構成します。
 
@@ -85,6 +88,38 @@ c.pitchClasses(); // [0, 2, 4, 5, 7, 9, 11]
 
 スケール外のピッチに対して `Key.degreeOf` が返すのは、関数版の `-1` ではなく `null` です。度数をそのまま UI に流し込んでも、主音と取り違える形にはなりません。
 
+## 度数で動かす
+
+所属の判定は、あるピッチがどこにあるかを尋ねます。度数「で」動かすのはこれとは別の問いで、全音階的な移調や「スケール上で3度上へ寄せる」操作が尋ねるのはこちらです。`shiftByScaleDegrees` は、決まった半音数を足すのではなくスケールに沿って数えます。
+
+```ts
+import { majorKey, shiftByScaleDegrees } from '@libraz/libcantus';
+
+const c = majorKey(0);
+
+shiftByScaleDegrees(60, 2, c); // 64
+shiftByScaleDegrees(64, 2, c); // 67
+shiftByScaleDegrees(60, -1, c); // 59
+shiftByScaleDegrees(61, 1, c); // 63
+```
+
+C4 から2度分上は E4、E4 から2度分上は G4 です。4半音のあとに3半音というこの違いが、度数で数えることと半音で数えることの差です。スケール外のピッチは、その下にあるスケール音からの距離を保ちます。C#4 を1度分上げると D4 ではなく D#4 になり、半音階的な経過音は移動後も経過音のままです。
+
+`scaleLadderPosition` と `scaleLadderPitch` は、その計算を2つに割ったものです。自分で度数を数える必要のあるコードのために用意されています。位置は `rung` と `offset` の組で、`rung` は主音から数えたスケール音の段数（オクターブをまたいで続き、主音より下では負になります）、`offset` はそのピッチが段から何半音上で鳴っているかを表します。
+
+```ts
+import { majorKey, scaleLadderPitch, scaleLadderPosition } from '@libraz/libcantus';
+
+const c = majorKey(0);
+const here = scaleLadderPosition(61, c);
+
+here.offset; // 1
+scaleLadderPitch(here.rung, c); // 60
+scaleLadderPitch(here.rung + 4, c); // 67
+```
+
+`offset` を `rung` と別に保つことで、2つのスケール音のあいだにある音がそのままの姿で戻ります。先にスケール上へ丸めてしまうと、0度分の移動でもピッチが変わってしまいます。
+
 ## 機能和声が成り立つスケール
 
 ローマ数字、終止、和声機能は、いずれも古典的な調性音楽の約束事です。導音を持たないスケールや3度堆積の和音を持たないスケールに適用すると、意味を持たないラベルが生成されます。
@@ -117,7 +152,9 @@ Key.named('miyakoBushi', 'C').supportsFunctionalHarmony(); // false
 
 ## コードとスケールの対応
 
-コードを渡すと、`chordScales` はそれを含むスケールを並べます。順位づけのキーは次の順です。まず、そのコードの性質に対して慣用的とされているスケール（登録がある場合）、次に、三和音であれば7音のスケールをそれ以外より先に、次にコードに対する余分な音の少なさ、次に旋法どうしの慣用的な優先順位（明るいものから）、次にアボイドノートの少なさ、最後に名前です。慣用は同点の際の決め手ではなく適合より先に効くので、他により密着するスケールがあっても、その性質に慣用的なスケールが先頭に来ます。半減七の和音では、ブルーススケールのほうが余分な音は少ないものの `locrian` が先頭になります。
+コードを渡すと、`chordScales` はそれを含むスケールを並べます。順位づけのキーは次の順です。まず、そのコードの性質に対して慣用的とされているスケール（登録がある場合）、次に、三和音であれば7音のスケールをそれ以外より先に、次にコードに対する余分な音の少なさ、次に旋法どうしの固定された優先順位、次にアボイドノートの少なさ、最後に名前です。慣用は同点の際の決め手ではなく適合より先に効くので、他により密着するスケールがあっても、その性質に慣用的なスケールが先頭に来ます。半減七の和音では、ブルーススケールのほうが余分な音は少ないものの `locrian` が先頭になります。
+
+固定された優先順位は ionian、major、mixolydian、dorian、lydian、aeolian、naturalMinor、phrygian、locrian の順です。これは明るさの降順 — 短調系の旋法が使う度数より各度数がどれだけ高いか — ですが、1点だけ外れます。lydian は先頭ではなく dorian の下に置かれます。その増4度が、より中立的な色ではなく、より際立った色だからです。この順位が効くのは、あるコードに同じ程度に適合する旋法どうしのあいだだけで、コードが3度も6度も示していない場合に起こります。
 
 ```ts
 import { chordScales, makeChord } from '@libraz/libcantus';

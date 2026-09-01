@@ -8,7 +8,7 @@
 | --- | --- |
 | 音高・音程・コード・スケールの演算 | 定数時間。12ビットマスクのビット操作です。 |
 | `detectChord`、`detectKey` | 候補集合に比例。候補数は固定です。 |
-| `chordTimelineFromNotes` | 音符とスロットの帰属数に比例。各音符は自身が鳴るスロットでのみ読まれます。既定の `'dynamic'` 分割では、スロット長は `minChordBeats` から決まり、1スロットあたりコード辞書に対する境界探索の一定コストがかかります。ここでの `harmonicRhythm` はウィンドウ長ではなく事前分布です。`segmentation: 'grid'` にすると `harmonicRhythm` ごとに1ウィンドウとなり、探索は行われません。 |
+| `chordTimelineFromNotes` | 音符とスロットの帰属数に比例。各音符は自身が鳴るスロットでのみ読まれます。既定の `'dynamic'` 分割では、スロット長は `minChordBeats` から決まり、1スロットあたりコード辞書に対する境界探索の一定コストがかかります。ここでの `harmonicRhythm`、つまり和声が何拍ごとに変わると見込むかは、ウィンドウ長ではなく事前分布です。`segmentation: 'grid'` にすると `harmonicRhythm` ごとに1ウィンドウとなり、探索は行われません。 |
 | `keyTimelineFromNotes`、`detectModulations` | 同じ計算量を `minKeyBeats` のスロット単位で行い、加えてスロットごとに一定量の探索を行います。候補は24で、順序付きの全ペアについて遷移を評価するため、1ステップあたり 24 x 24 です。 |
 | `voiceChord` | `maxCandidates`（既定4000）で上限が決まります。 |
 | `voiceProgression` | コード数に比例。1コードあたりの探索に上限があるためです。 |
@@ -19,7 +19,7 @@
 
 ## ノートイベントのインデックス
 
-`createNoteEventIndex` は検査と安定ソートを一度だけ行い、以降は発音位置と鳴っている音の問い合わせに `O(log n + k)` で答えます。`n` は音符数、`k` は答えの元になる発音位置を共有する音符の数です。同時発音の密なクラスタ(オーケストラのトゥッティ、持続するパッド)はタイブレークを決めるために全て読むため、1 回の問い合わせのコストは曲の長さではなくそのクラスタの大きさに応じて増えます。
+`createNoteEventIndex` は検査と安定ソートを一度だけ行い、以降は発音位置と鳴っている音の問い合わせに `O(log n + k)` で答えます。`n` は音符数、`k` は答えの元になる発音位置を共有する音符の数です。同時発音の密なクラスタ、つまりオーケストラのトゥッティや持続するパッドのように多数の音符が同じ拍で発音する箇所はタイブレークを決めるために全て読むため、1 回の問い合わせのコストは曲の長さではなくそのクラスタの大きさに応じて増えます。
 
 ```ts
 import { createNoteEventIndex } from '@libraz/libcantus';
@@ -36,6 +36,21 @@ index.at(1.5)?.note.pitch; // 64
 index.attacksAt(4); // true
 index.attacksAt(3); // false
 index.onsetsBetween(0, 5); // [1, 4]
+```
+
+インデックスが与えられた音符をどう読むかは、3つのオプションで決まります。`tieBreak` は、複数の音符が同時に発音したとき `at` がどれを答えるかを決めます。既定の `'highest'` と `'lowest'` は声部を指すため、呼び出し側が和音をどの順で格納したかに答えが左右されません。`'last'` は入力配列で最も後ろにある音符を取ります。`allowNonPositiveDuration` は長さが0以下のイベントを検査に通すので、取り込んだトラックをそれらの除外前にインデックス化できます。ただしそれらが鳴っている音になることはなく、`at` がそれらを答えることもありません。`budget` はイベント数の上限で、これを超えると `BudgetExceededError` を投げます。ホストが渡すつもりのなかった配列をソートしてしまうことはありません。
+
+```ts
+import { createNoteEventIndex } from '@libraz/libcantus';
+
+const chord = [
+  { pitch: 67, startBeat: 0, durationBeat: 4 },
+  { pitch: 60, startBeat: 0, durationBeat: 4 },
+];
+
+createNoteEventIndex(chord).at(0)?.note.pitch; // 67
+createNoteEventIndex(chord, { tieBreak: 'lowest' }).at(0)?.note.pitch; // 60
+createNoteEventIndex(chord, { tieBreak: 'last' }).at(0)?.note.pitch; // 60
 ```
 
 `Score.index()` はスコア自身の音符に対して同じインデックスを作ります。`Score` を持っているホストは、音符を取り出してから渡す必要がありません。
@@ -114,7 +129,7 @@ session.analysis.timeline.segments.length >= 1; // true
 - 解析は編集の後ろでデバウンスし、1打鍵ごとに走らせません。
 - アレンジ解析にはセッションを使います。`createArrangementSession` か、内部でセッションを持つ `Arrangement.update` です。位置の反復的な問い合わせには `createNoteEventIndex` か `Score.index` のインデックスを使います。
 - 入力を絞ります。`chordTimelineFromNotes` は曲全体より画面上の小節だけのほうが速く、既にコードが分かっているホストは推定し直さずに `chordTimelineFromChords` を呼びます。
-- 時間のかかる解析はワーカーへ移します。関数 API の入出力はすべて JSON 互換のプレーンデータであるため、構造化クローンでワーカー境界を越えられ、復元処理は不要です。
+- 時間のかかる解析はワーカーへ移します。関数 API の入出力は、和音区間のタイムラインが持つ `at` を除いてすべて JSON 互換のプレーンデータです。`at` は関数なので、タイムラインそのものではなく `timeline.segments` を送り、受け取った側で `Timeline.fromJSON` を使って参照を組み直します。それ以外は構造化クローンでワーカー境界を越えられ、復元処理は不要です。
 
 クラスの値はそのままでは越えられません。状態はプライベートフィールドにあるため、インスタンスをクローンしても中身のない、もはや `Score` ですらないオブジェクトになります。代わりに `toJSON()` を送り、対応する `fromJSON` で組み立て直します。モデルのクラスはいずれも両方を持っています。
 

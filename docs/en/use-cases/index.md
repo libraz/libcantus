@@ -2,6 +2,8 @@
 
 These guides start with the data an application already has and show what to do with the result. They complement the domain pages and the generated API reference.
 
+A guide assumes the material is already in memory as note events or chord symbols, and that a key and a meter are either known or left to detection. Nothing earlier than that is covered here. For the musical vocabulary the guides use, such as degree, cadence, voicing and pivot chord, see the [primer](../primer/index.md).
+
 Each one is written in the class API, since a flow that runs end to end is what the classes are for: a `Score` holds the notes with their meter, tempo and key, a `Composer` holds the key, tempo and seed one piece is written under, and a chain of questions asks each one once. Where a step has no class to hold it, the guide calls the function and says why.
 
 Analysis and inspection:

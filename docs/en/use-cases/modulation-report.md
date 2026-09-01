@@ -2,8 +2,10 @@
 
 A key change is a proposal supported by evidence. A useful report shows where the analysis thinks the key moved, how strongly it believes it, and what chord carried the change.
 
+The flow starts from chord symbols a user typed, or from note events an importer supplied; a key is never required as input, because reading one is the point. For the vocabulary — key, pivot chord, modulation, key region — see the [primer](../primer/index.md).
+
 ```ts
-import { Chord, detectModulations, Key, Timeline } from '@libraz/libcantus';
+import { Chord, Key, Timeline } from '@libraz/libcantus';
 
 // Eleven bars typed as a chord chart: four in C, then a turn towards G.
 const chart = ['C', 'F', 'G7', 'C', 'Am', 'D7', 'G', 'Em', 'Am7', 'D7', 'G'];
@@ -13,9 +15,9 @@ const timeline = Timeline.fromChords(
   chart.length * 4,
 );
 
-// A timeline built from stated chords holds the chords and nothing more, so
-// the key search over them is the one step with no method of its own:
-const regions = detectModulations(timeline.segments);
+// A timeline built from stated chords carries no key regions until it is asked
+// to read them; this is where the chords are searched for the keys they imply.
+const regions = timeline.modulations();
 
 const rows = regions.map((region) => ({
   from: region.startBeat,
@@ -29,7 +31,7 @@ rows[0]?.from; // 0
 rows.map((row) => row.key); // ['C major', 'G major']
 ```
 
-Each region is a plain `KeyRegion`, and `Key.of` is what turns one back into a value that can answer questions — including how it stands to the region before it:
+`detectModulations` is the same search over bare segments, for a caller holding no `Timeline`. Each region it returns is a plain `KeyRegion`, and `Key.of` turns one back into a value that can answer questions:
 
 ```ts
 import { Chord, detectModulations, Key, Timeline } from '@libraz/libcantus';
@@ -40,8 +42,14 @@ const timeline = Timeline.fromChords(
   chart.length * 4,
 );
 
-const keys = detectModulations(timeline.segments).map((region) => Key.of(region.key));
+const regions = detectModulations(timeline.segments);
 
+// How each region stands to the one before it, already named by the analysis:
+regions.map((region) => region.modulation ?? null); // [null, 'dominant']
+
+const keys = regions.map((region) => Key.of(region.key));
+
+// The same question, asked of two keys the analysis did not pair:
 keys.slice(1).map((key, index) => keys[index]?.relationTo(key) ?? null); // ['dominant']
 keys[1]?.tonic.name; // 'G'
 keys[1]?.fifths; // 1
@@ -49,14 +57,15 @@ keys[1]?.fifths; // 1
 
 ## What to put in the report
 
-Each `KeyRegion` carries four things worth showing:
+Each `KeyRegion` carries five things worth showing:
 
-- **The span** — `startBeat` and `endBeat`, which a UI converts to bar numbers with `Score.barAt`. `barAt` is 0-based, so add 1 before showing the number, or pass the beat to `formatBarPosition`, which is 1-based like a printed score. See [Time and arrangement](../time-and-arrangement.md) for the two origins.
-- **The key** — `Key.of(region.key)` spells the tonic the way a score would write it, which is what a reader expects rather than a pitch class, and `fifths` is the signature to print with it.
+- **The span** — `startBeat` and `endBeat`, which a UI converts to bar numbers with `Score.barAt`. `barAt` is 0-based, so add 1 before showing the number, or pass the beat and the score's meter to `formatBarPosition`, which is 1-based like a printed score. See [Time and arrangement](../time-and-arrangement.md) for the two origins.
+- **The key** — `region.key` is the whole key, spelled tonic and all, so it prints the way a score would write it without being re-derived. `Key.of` wraps it in a value that can answer questions, and `fifths` is the key signature to print with it: how many sharps or flats the key is written with, negative for flats.
+- **The relation** — `region.modulation` already names how each region stands to the one before it: `dominant`, `relative`, `parallel`, and so on. It is absent on the first region, and wherever the two keys stand in none of the named relations. A report that says "modulates to the dominant" says more than one that says "modulates to G".
 - **The confidence** — the correlation between the region's pitch-class distribution and the key's profile, in 0..1. A region below the threshold your UI chooses should read as uncertain rather than not appear.
 - **The pivot**, where the chords support one — the last chord to end before the boundary, filled in by the analysis and only when that chord reads in both keys. A chord still sounding across the boundary is not a candidate.
 
-`relationTo` names how consecutive regions stand to each other: `dominant`, `relative`, `parallel`, and so on, or `null` for a distant move. A report that says "modulates to the dominant" says more than one that says "modulates to G".
+`Key.relationTo` answers the same relation question for two keys the analysis never paired, which is what a UI comparing an arbitrary pair of regions needs.
 
 ## Tuning the sensitivity
 

@@ -2,6 +2,8 @@
 
 四声体の課題の各時点は `Voicing` です。鳴っている音を低い順に並べた値になります。採点の対象は、ある時点から次の時点への進行を、それぞれが実現するコードと課題の調に対して読むことです。
 
+この流れが前提にするのは、学習者の解答をピッチまたは綴られた音名で持っていること、そして課題が設定されたコードとその調です。語彙 — 声部、ボイシング、和声課題の規則、種目対位法 — については[入門](../primer/index.md)を参照してください。
+
 ```ts
 import { Voicing } from '@libraz/libcantus';
 
@@ -42,7 +44,7 @@ checkPartWriting(asFlats, chords, key).map((violation) => violation.kind); // []
 checkPartWriting(asSharps, chords, key).map((violation) => violation.kind); // ['crossRelation']
 ```
 
-この呼び出しが受け取る値は、いずれもクラスが組み立てます。`Key.major('C').scale` と `Chord.parse('C').data` がそれで、周辺を手で組み立てる必要はありません。
+この呼び出しが受け取る値のうち、コードはクラスが組み立てます。`Chord.parse('C').data` がそれです。調はまるごと渡します。`checkPartWriting` の第3引数は `KeyLike` なので、調名でも `Key` でも、上で使った key/scale でもそのまま通り、周辺を手で組み立てる必要はありません。
 
 ## 種目対位法
 

@@ -39,6 +39,29 @@ g7.data.rootPc; // 7
 chordToRoman(g7.data, majorKey(0)); // 'V7'
 ```
 
+## The note event
+
+Anything positioned in time is a `NoteEvent` — what a `Score` holds, what analysis reads, and what a generator returns.
+
+![A note event: MIDI pitch, start beat, duration in beats, and velocity](../images/note-event.svg)
+
+`pitch` is a MIDI number, so 60 is middle C, and both `pitch` and `velocity` are integers from 0 to 127. `startBeat` and `durationBeat` count quarter-note beats from the start of the piece, never seconds and never bars. Bars appear only where a time signature is applied to those beats:
+
+```ts
+import { beatToBarPosition, type NoteEvent } from '@libraz/libcantus';
+
+const note: NoteEvent = {
+  pitch: 60,
+  startBeat: 4,
+  durationBeat: 1,
+  velocity: 96,
+};
+
+beatToBarPosition(note.startBeat, '4/4'); // { bar: 1, beat: 0 }
+```
+
+Bars are 0-based, so a `startBeat` of 4 in 4/4 lands on the opening beat of the second bar. A negative `startBeat` is a pickup — notes sounding before the first downbeat.
+
 ## Analyze a short timeline
 
 A `Score` is note events together with the context they are read against, and the questions you would ask of a piece are its methods. This example supplies four bars of block chords, reads their harmony, and labels each segment:
@@ -133,6 +156,7 @@ The root entry point re-exports these symbols, so subpaths are a packaging choic
 
 ## Next steps
 
+- [Primer](primer/index.md) covers the musical ideas the API is named after, for a reader with no musical training: [pitch and intervals](primer/pitch-and-intervals.md), [scales and keys](primer/scales-and-keys.md), [chords](primer/chords.md), [harmony](primer/harmony.md), [voices](primer/voices.md), [rhythm and meter](primer/rhythm-and-meter.md).
 - [Use cases](use-cases/index.md) shows complete flows for a DAW assistant, a harmony exercise checker, a piece analyzer, and a generative arrangement.
 - [Introduction](introduction.md) explains the data model and what the engine assumes.
 - The generated TypeDoc reference covers every symbol; see [API reference](api-reference.md).

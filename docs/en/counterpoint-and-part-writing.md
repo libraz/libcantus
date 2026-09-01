@@ -1,5 +1,7 @@
 # Counterpoint and part-writing
 
+The musical vocabulary this page assumes — voice, motion, dissonance, cadence — is taught in [the primer's page on voices](primer/voices.md).
+
 These checkers report what a texture does wrong. They never rewrite it. A student's answer is the thing being graded, and silently repairing it destroys the information the exercise exists to produce.
 
 Everything here works on **spelled notes with octaves**. A MIDI pitch cannot tell an augmented fourth from a diminished fifth, and cannot identify a cross relation at all, so the rules that depend on spelling would be quietly skipped if the input were numbers.
@@ -54,6 +56,8 @@ Between consecutive chords: `parallelFifth`, `parallelOctave`, `hiddenPerfect`, 
 
 Species exercises add `wrongRhythmicRatio`, `unpreparedDissonance`, `unresolvedSuspension`, `illegalLeap`, `battuta`, `missingCadence`, and `melodicShape`.
 
+`hiddenPerfect` — two voices arriving at a perfect fifth or octave by similar motion — is judged more narrowly than the rest, and differently by the two checkers. `checkPartWriting` judges it on the outer voices alone, where a bare fifth or octave is exposed and the inner voices are what would otherwise cover it, so a direct fifth between two inner voices is never reported. `checkSpecies` judges it at two-voice strictness, which drops the stepwise-approach exception entirely: with nothing sounding between the two lines, the arrival is forbidden however the upper voice reached it.
+
 `unresolvedLeadingTone` asks the leading tone to rise to the tonic, with the exception the style itself makes: in an inner voice it may fall a third onto the fifth of the tonic chord — the frustrated leading tone, written that way to keep the triad complete — and that is not reported. In an outer voice, where the line is exposed, it still is.
 
 ### Cross relations
@@ -99,11 +103,11 @@ checkPartWriting(voicings, chords, key).map((violation) => violation.kind);
 
 The `range` rule is judged against `SATB_RANGES` — `Voicing.satbRanges` is the same four ranges, copied — for a four-voice exercise. For any other voice count there is no conventional compass to assume, so the rule is skipped unless `ranges` is given. Supply explicit ranges when the exercise is not SATB. `maxSpacing` defaults to twelve semitones between adjacent upper voices; the bass–tenor pair is exempt, as convention has it.
 
-Both options are checked before any rule runs, by the same validators the voicing search uses. A `maxSpacing` that is not a finite non-negative number, and `ranges` that are empty, malformed, or fewer than the voices being graded, raise `InvalidInputError` instead of quietly switching a rule off. An empty result therefore means that nothing was broken, never that something could not be judged.
+Both options are checked before any rule runs, by the same validators the voicing search uses. A `maxSpacing` that is not a finite non-negative number, and `ranges` that are empty, malformed, or fewer than the voices being graded, raise `InvalidInputError` instead of quietly switching a rule off. An empty result therefore means that nothing the checker judged was broken. The skipped `range` rule is the one thing it does not speak for: on any voice count but four, with no `ranges` given, compass is not judged at all and nothing is reported about it either way.
 
 ## Species counterpoint
 
-`checkSpecies` grades a two-voice exercise in species one through five:
+`checkSpecies` grades a two-voice exercise in species one through five. The two voices are the cantus firmus, the given line, and the counterpoint written against it; the species fixes how many counterpoint notes fall against one cantus-firmus note, and with that which dissonances the rhythm licenses:
 
 ```ts
 import { checkSpecies, majorKey, parseNote } from '@libraz/libcantus';
@@ -130,7 +134,7 @@ The cantus firmus is one note per measure. The counterpoint is aligned by positi
 
 The fifth species mixes note values, so it needs `opts.durations`, given in cantus-firmus notes. `opts.counterpointAbove` says which side the written voice is on; by default it is inferred from the mean pitch of each line.
 
-Each species licenses different dissonances, and the checker applies the right one: none in the first, a passing dissonance on the weak half in the second and third, a prepared suspension on the downbeat in the fourth, both in the fifth.
+Each species licenses different dissonances, and the checker applies the right one. What decides the licence is the downbeat alone, not how far into the measure a note falls: the first species licenses nothing anywhere; the second and third license a passing dissonance anywhere off the downbeat — the second half note, or any quarter but the first — and nothing on it; the fourth licenses a prepared suspension on the downbeat and nothing off it; the fifth licenses the suspension on the downbeat and the passing dissonance off it.
 
 Violations come back in the exercise's own time order rather than grouped by rule, so the first one reported is the first one heard and a student can be walked through them from the top of the page.
 
@@ -149,7 +153,7 @@ const counterpoint = ['C5', 'A4', 'C5', 'B4', 'C5'].map((name) => parseNote(name
 checkSpecies(cantus, counterpoint, 1, majorKey(0)).map((violation) => violation.kind); // ['melodicShape']
 ```
 
-The counterpoint above touches C5 twice, so the line has no one high point to arch toward. The rules are: the highest note is reached once, counting a repetition in place as one arrival and leaving the closing note out; at most two leaps in a row go the same way, spanning at most an octave together; a leap of a sixth or wider is answered by a step in the other direction; a run of notes between two turning points does not outline a tritone; and the second and third species do not repeat a note, the closing measure excepted, where a repetition is the final being held.
+The counterpoint above writes C5 three times and reaches it twice by the rule's count: the closing note is left out of the comparison, because where a line ends is fixed by the cadence rather than by the line's own shape, and a counterpoint that climbs to its final would otherwise be charged with reaching its peak twice. Two arrivals leave the line with no one high point to arch toward. The rules are: the highest note is reached once, counting a repetition in place as one arrival and leaving the closing note out; at most two leaps in a row go the same way, spanning at most an octave together; a leap of a sixth or wider is answered by a step in the other direction; a run of notes between two turning points does not outline a tritone; and the second and third species do not repeat a note, the closing measure excepted, where a repetition is the final being held.
 
 These belong to the species exercise. `checkPartWriting` grades a chorale chord by chord, where a voice may leap as the harmony asks, and does not apply them.
 
@@ -173,6 +177,18 @@ isForbiddenMelodicLeap(68, 71); // false
 The last two lines are the same two pitches. As spelled notes they form an augmented second and are forbidden; as MIDI numbers they form a minor third and are permitted. This is why the checkers take spelled input.
 
 Each predicate accepts either spelled notes or MIDI numbers, and the numeric form skips exactly the rules that need spelling. The full set: `createsParallelPerfect`, `createsParallelOctave`, `createsParallelUnison`, `createsHiddenParallelPerfect`, `createsVoiceCrossing`, `createsVoiceOverlap`, `createsVerticalDissonance`, `createsBattuta`, `exceedsSpacing`, `isForbiddenMelodicLeap`, `isAugmentedMelodicInterval`, and `isLeadingToneResolution`.
+
+`createsHiddenParallelPerfect` takes a fifth argument the others have no counterpart for, because the two textures disagree about the rule: `strictness`, either `'fourPart'` or `'twoVoice'`, defaulting to `'fourPart'`. The default applies the chorale's exception and allows the arrival where the upper voice moves by step, since the two remaining voices cover it. `'twoVoice'` exempts nothing, and is the reading `checkSpecies` uses:
+
+```ts
+import { createsHiddenParallelPerfect, parseNote } from '@libraz/libcantus';
+
+const n = (name: string) => parseNote(name);
+
+// The bass leaps C4 to F4 under a soprano stepping B4 to C5, arriving at a fifth.
+createsHiddenParallelPerfect(n('B4'), n('C5'), n('C4'), n('F4')); // false
+createsHiddenParallelPerfect(n('B4'), n('C5'), n('C4'), n('F4'), 'twoVoice'); // true
+```
 
 ## Voice independence
 
@@ -200,7 +216,7 @@ lead.independence(counter, { key: 'C major' }).motion.parallel; // 1
 
 `motion` holds the share of moves in each category — contrary, oblique, similar, parallel — summing to 1. The harmony line above runs a sixth below the lead throughout and so comes out entirely parallel, which is not a violation of anything; it is a description of what was written. A slot where neither voice moves is not a move at all and is left out, so an accompaniment that mostly sits still can still report mostly contrary motion.
 
-The report also carries `rhythmicComplementarity` (how often the counter attacks where the lead holds), `separation` (mean and closest distance), `crossings`, and `longestPerfectRun`. Together they are what distinguishes a second voice from a thickened first one. Use them to judge a generated counter-melody, or to show a student what their line is actually doing.
+The report also carries `rhythmicComplementarity` (how often the counter attacks where the lead holds), `separation` (mean and closest distance), `crossings`, `longestPerfectRun`, and `sounding` — how many slots both lines sound in, which is the denominator `separation` is averaged over and the figure a sparse counter-melody's other numbers have to be read against. Together they are what distinguishes a second voice from a thickened first one. Use them to judge a generated counter-melody, or to show a student what their line is actually doing.
 
 ## What these checkers are not
 

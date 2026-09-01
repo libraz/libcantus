@@ -39,6 +39,29 @@ g7.data.rootPc; // 7
 chordToRoman(g7.data, majorKey(0)); // 'V7'
 ```
 
+## ノートイベント
+
+時間上の位置を持つものはすべて `NoteEvent` です。`Score` が保持するのも、解析が読むのも、ジェネレータが返すのもこの形です。
+
+![ノートイベント: MIDI ピッチ、開始拍、拍数での長さ、ベロシティ](../images/note-event-ja.svg)
+
+`pitch` は MIDI 番号で、60 が中央の C です。`pitch` と `velocity` はいずれも 0 から 127 の整数です。`startBeat` と `durationBeat` は曲頭からの4分音符を単位とする拍を数えます。秒でも小節でもありません。小節は、その拍に拍子を当てはめたときにはじめて現れます。
+
+```ts
+import { beatToBarPosition, type NoteEvent } from '@libraz/libcantus';
+
+const note: NoteEvent = {
+  pitch: 60,
+  startBeat: 4,
+  durationBeat: 1,
+  velocity: 96,
+};
+
+beatToBarPosition(note.startBeat, '4/4'); // { bar: 1, beat: 0 }
+```
+
+小節番号は0始まりなので、4/4 で `startBeat` が 4 の音は2小節目の先頭の拍にあたります。`startBeat` が負の値なら弱起（アウフタクト）で、最初の強拍より前に鳴る音を表します。
+
 ## 短いタイムラインを解析する
 
 `Score` はノートイベントと、それを読むための文脈をひとまとめにした値です。曲に対して尋ねたいことは、そのメソッドとして並んでいます。次の例は4小節のブロックコードを渡し、その和声を読み、各区間にラベルを付けます。
@@ -133,6 +156,7 @@ import { Note, Key } from '@libraz/libcantus/model';
 
 ## 次のステップ
 
+- [入門](primer/index.md)は、API の名前のもとになっている音楽の考え方を、音楽の知識がない読者向けに扱います: [音高と音程](primer/pitch-and-intervals.md)、[音階と調](primer/scales-and-keys.md)、[和音](primer/chords.md)、[和声](primer/harmony.md)、[声部](primer/voices.md)、[リズムと拍子](primer/rhythm-and-meter.md)。
 - [ユースケース](use-cases/index.md)には、DAW アシスタント、和声課題チェッカー、楽曲解析、生成アレンジの一連の流れがあります。
 - [はじめに](introduction.md)ではデータモデルとエンジンの前提を説明します。
 - 生成された TypeDoc リファレンスが全シンボルを網羅します。[API リファレンス](api-reference.md)を参照してください。

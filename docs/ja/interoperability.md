@@ -4,10 +4,12 @@
 
 ## データの取り決め
 
-2つの約束がすべてを支えます。
+4つの約束がすべてを支えます。
 
 - **ピッチは MIDI ノート番号です。** 中央ハは60です。[音律と周波数](tuning-and-frequency.md)を使わない限り、周波数は現れません。
-- **時間は4分音符を単位とする拍です。** `startBeat` と `durationBeat` は浮動小数の拍数で、ティックでも秒でもありません。拍0が最初の強拍で、アウフタクトは負の拍から始まります。
+- **時間は4分音符を単位とする拍です。** `startBeat` と `durationBeat` は浮動小数の拍数で、ティックでも秒でもありません。拍0が最初の強拍で、そこへ導く音であるアウフタクトは負の拍から始まります。
+- **ベロシティは省略でき、ある場合は MIDI のベロシティです。** `velocity` は 0..127 の整数で、隣のピッチと同じ領域です。ベロシティを持たない音符に既定値が割り当てられることはなく、解析はその音符を最大の重みで数えます。
+- **アーティキュレーションは省略でき、記録するのは意図だけです。** `articulation` はその音符の奏法を閉じた一覧から名指します。`accent`、`ghost`、`staccato`、`legato`、`slide`、`hammer`、`mute`、`flam`、`drag`、`roll`、`choke`、`open` です。`slide` をピッチベンドに、`ghost` をベロシティの下限に写す方法は、受け取る側の楽器とコントローラの割り当てによって変わります。そのためライブラリは名前を記録するだけにとどめ、実際の表現はホストに委ねます。一覧にない名前は、イベントを受け取る時点で `InvalidInputError` になります。黙って通り抜けることはありません。
 
 解析と生成の結果は JSON 互換のプレーンデータです。関数 API にクラスインスタンスは現れず、隠れたプロトタイプもありません。結果はそのままプロジェクトファイルに直列化でき、復元処理なしで読み戻せます。クラス API は同じデータを包み、`.data` で公開します。
 
@@ -23,20 +25,23 @@
 | --- | --- | --- |
 | 音 | 音名、MIDI 番号、`NoteData`、`Note` | `toNoteData` |
 | 音程 | 音程名、`SpelledInterval`、`Interval` | `toSpelledInterval` |
-| 調 | 調名、`KeyScale`、`Key` | `toKeyScale` |
+| 調 | 調名、`KeyScale`、解決済みの調、`Key` | `resolveKey` |
 | 和音 | コードネーム、`ChordData`、`Chord` | `toChordData` |
 | 拍子 | 拍子記号の文字列、`TimeSignature`、`MeterMap`、`Meter` | `toMeterData` |
 
 ```ts
-import { toChordData, toKeyScale, toNoteData } from '@libraz/libcantus';
+import { formatNote, resolveKey, toChordData, toKeyScale, toNoteData } from '@libraz/libcantus';
 
 toNoteData('Eb4'); // { letter: 2, alter: -1, octave: 4 }
 toNoteData(60); // { letter: 0, alter: 0, octave: 4 }
+formatNote(resolveKey('Eb major').tonic); // 'Eb'
 toKeyScale('A minor').rootPc; // 9
 toChordData('Cmaj7').intervals; // [0, 4, 7, 11]
 ```
 
-楽器も同じ受け取り方をします。楽器を必要とする入り口はいずれも `InstrumentProfileLike`、つまりプレーンなプロファイルか `Instrument` を受け取ります。ただしその変換関数は内部にあり公開していないので、呼び出し側で解決せずそのまま渡します。
+調に変換関数が2つあるのは、調がピッチクラスより多くのものを持つためです。`resolveKey` は綴られた主音と音階の形、つまりプロジェクトファイルが保存する `{ scale, tonic, variant }` の形をそのまま保ちます。クラス層とジェネレーターが受け取るのはこちらです。`toKeyScale` は同じ形を読んで、根音のピッチクラスとマスクだけを返します。それだけが欲しい呼び出し側のためのもので、これを通した調は、第6度を変イと綴るのか嬰トと綴るのかを答えられなくなります。
+
+楽器も同じ受け取り方をします。楽器を必要とする入り口はいずれも `InstrumentProfileLike`、つまりプレーンなプロファイルか `Instrument` を受け取り、その変換関数も公開されています。`toInstrumentProfile` は楽器の形をした値をプレーンなプロファイルへ広げ、あわせて検査します。`toStringedProfile` は弦楽器の系統へ絞り込むので、ネックしか扱えない入り口はドラムキットを名指しで拒否できます（`instrument must be a stringed instrument; drum kit has no strings`）。tuning が無いことによる後段の失敗にはなりません。
 
 クラスは型ではなく `toJSON` を通して読まれます。これにより、下の層がクラスを import せずにインスタンスを受け取れます。同じ形を返す `toJSON` を持つ独自の値も、同じように受け取られます。
 
@@ -131,7 +136,7 @@ formatNote(parseNote('Bb'), { system: 'german' }); // 'b'
 
 ## 移調楽器
 
-移調楽器用に書かれたパートは実音ではありません。解析の前に `toSoundingPitch` で変換し、その奏者のパートを出力する際に `toWrittenPitch` で戻します。[楽器と演奏可能性](instruments-and-playability.md)を参照してください。
+移調楽器、つまり奏者が読む音と実際に鳴る音がずれる楽器（B♭ クラリネットは C と書かれた音を読んで B♭ を鳴らします）のために書かれたパートは、実音ではありません。解析の前に `toSoundingPitch` で変換し、その奏者のパートを出力する際に `toWrittenPitch` で戻します。[楽器と演奏可能性](instruments-and-playability.md)を参照してください。
 
 ## プロジェクトファイルへの保存
 

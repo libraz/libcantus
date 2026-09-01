@@ -1,5 +1,7 @@
 # Pitch and notation
 
+If the musical vocabulary here is unfamiliar, [Pitch and intervals](primer/pitch-and-intervals.md) in the primer teaches the terms this page uses.
+
 ## Notes and MIDI
 
 `Note` preserves a letter, an alteration, and an optional octave. Use `Note.parse` to read a name into a class value, `Note.of` to build one from its parts, or `parseNote` for the plain-data API. A note without an octave has a pitch class but no MIDI number.
@@ -32,7 +34,7 @@ formatNote(midiToNote(58)); // 'A#3'
 
 ## Spelled intervals
 
-An interval includes both its diatonic number and chromatic span. That distinction lets the library preserve the difference between an augmented fourth and a diminished fifth:
+A `SpelledInterval` has four required fields: `number`, the diatonic size counted in letters, so a third is 3 whatever its quality; `quality`, one of `P`, `M`, `m`, or a run of `A` or `d` for augmented and diminished; `semitones`, the signed chromatic span; and `descending`. Carrying the number alongside the span is what preserves the difference between an augmented fourth and a diminished fifth, which sound the same and are written differently:
 
 ```ts
 import { Interval, Note } from '@libraz/libcantus';
@@ -42,9 +44,20 @@ Interval.between(Note.parse('C4'), Note.parse('Gb4')).name; // 'd5'
 Note.parse('C4').transposeBy('A4').name; // 'F#4'
 ```
 
+`descending` is required and is not read off the sign of `semitones`: a descending unison spans zero semitones, and a doubly diminished second climbs a letter while the pitch falls. The text form marks the direction with a leading `-`, which `parseInterval` reads and `Interval.name` writes:
+
+```ts
+import { Interval, Note, parseInterval, spelledInterval } from '@libraz/libcantus';
+
+parseInterval('-P5'); // { number: 5, quality: 'P', semitones: -7, descending: true }
+parseInterval('dd2'); // { number: 2, quality: 'dd', semitones: -1, descending: false }
+spelledInterval(Note.parse('G4'), Note.parse('C4')); // { number: 5, quality: 'P', semitones: -7, descending: true }
+Interval.between(Note.parse('G4'), Note.parse('C4')).name; // '-P5'
+```
+
 The functional equivalents are `spelledInterval`, `parseInterval`, `transposeByInterval`, and `transposeNote`.
 
-Intervals also classify by consonance, which is what the counterpoint rules are built on:
+Intervals also classify by consonance — how stable two notes sound together — which is what the counterpoint rules are built on:
 
 ```ts
 import { classifyInterval, ConsonanceClass, isConsonantInterval, isPerfectInterval } from '@libraz/libcantus';
@@ -57,6 +70,21 @@ isConsonantInterval(4); // true
 ```
 
 The perfect fourth is the reason `classifyInterval` takes a second argument. In two-voice writing it counts as a dissonance; supported from below in a fuller texture it does not. The default is the two-voice reading, which is what species counterpoint assumes.
+
+The class the fourth falls into with `twoVoice` off is `ImperfectConsonance`, and that is a convention of this API rather than of theory: conventional theory calls a consonant fourth a perfect consonance. `ConsonanceClass` exists to separate the intervals the parallel-motion rules watch — the unison, octave, and fifth — from the ones they do not, and the fourth is not watched. That is the same reason `isPerfectInterval` answers `false` for it. Both answers describe what the rule set watches, not what the interval is.
+
+`classifyInterval` reads a semitone count, so it cannot tell a diminished fourth from a major third. `classifySpelledInterval` takes the spelled interval instead and lets the spelling decide, which is the form to reach for when the input is already spelled:
+
+```ts
+import { classifySpelledInterval, ConsonanceClass, parseInterval } from '@libraz/libcantus';
+
+classifySpelledInterval(parseInterval('M3')); // ConsonanceClass.ImperfectConsonance
+classifySpelledInterval(parseInterval('d4')); // ConsonanceClass.Dissonance
+classifySpelledInterval(parseInterval('P4')); // ConsonanceClass.Dissonance
+classifySpelledInterval(parseInterval('P4'), false); // ConsonanceClass.ImperfectConsonance
+```
+
+A diminished fourth sounds like a major third and still counts as a dissonance, which is what a counterpoint check has to see.
 
 ## Keys and scales
 

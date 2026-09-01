@@ -8,7 +8,7 @@ Everything in the library is synchronous and single-threaded. A call returns bef
 | --- | --- |
 | Pitch, interval, chord, and scale arithmetic | Constant time. Bit operations on a twelve-bit mask. |
 | `detectChord`, `detectKey` | Linear in the candidate set, which is fixed. |
-| `chordTimelineFromNotes` | Linear in the number of note-to-slot memberships: each note is read once per slot it sounds in. Under the default `'dynamic'` segmentation the slot length follows from `minChordBeats`, and each slot costs one constant step of the boundary search over the chord lexicon; `harmonicRhythm` is a prior there rather than a window length. `segmentation: 'grid'` collapses that to one window every `harmonicRhythm` beats with no search at all. |
+| `chordTimelineFromNotes` | Linear in the number of note-to-slot memberships: each note is read once per slot it sounds in. Under the default `'dynamic'` segmentation the slot length follows from `minChordBeats`, and each slot costs one constant step of the boundary search over the chord lexicon; `harmonicRhythm` — how often the harmony is expected to change, in beats — is a prior there rather than a window length. `segmentation: 'grid'` collapses that to one window every `harmonicRhythm` beats with no search at all. |
 | `keyTimelineFromNotes`, `detectModulations` | The same, over slots of `minKeyBeats`, plus a constant search per slot: 24 candidates, and a transition weighed for every ordered pair of them, so 24 x 24 per step. |
 | `voiceChord` | Bounded by `maxCandidates`, 4000 by default. |
 | `voiceProgression` | Linear in the number of chords, because the per-chord search is bounded. |
@@ -19,7 +19,7 @@ None of these grows quadratically in the number of notes, but a full arrangement
 
 ## Indexing note events
 
-`createNoteEventIndex` validates and stable-sorts once, then answers onset and active-note queries in `O(log n + k)`, where `n` is the number of notes and `k` is how many of them share the onset the answer comes from. A dense simultaneous cluster — an orchestral tutti, a sustained pad — is read through in full to settle the tie-break, so the cost of one query grows with the size of that cluster and not with the piece:
+`createNoteEventIndex` validates and stable-sorts once, then answers onset and active-note queries in `O(log n + k)`, where `n` is the number of notes and `k` is how many of them share the onset the answer comes from. A dense simultaneous cluster — many notes attacking on the same beat, as in an orchestral tutti or a sustained pad — is read through in full to settle the tie-break, so the cost of one query grows with the size of that cluster and not with the piece:
 
 ```ts
 import { createNoteEventIndex } from '@libraz/libcantus';
@@ -36,6 +36,21 @@ index.at(1.5)?.note.pitch; // 64
 index.attacksAt(4); // true
 index.attacksAt(3); // false
 index.onsetsBetween(0, 5); // [1, 4]
+```
+
+Three options decide how the index reads what it is given. `tieBreak` settles which note `at` answers with when several attack together: `'highest'`, the default, and `'lowest'` name a voice, so the answer does not depend on the order the caller happened to store the chord in, while `'last'` takes whichever note is latest in the input array. `allowNonPositiveDuration` lets zero- and negative-length events through validation, so an imported track can be indexed before those are filtered out; they are still never sounding, so `at` never answers with one. `budget` caps the event count and raises `BudgetExceededError` above it, rather than sorting an array the host did not mean to hand over.
+
+```ts
+import { createNoteEventIndex } from '@libraz/libcantus';
+
+const chord = [
+  { pitch: 67, startBeat: 0, durationBeat: 4 },
+  { pitch: 60, startBeat: 0, durationBeat: 4 },
+];
+
+createNoteEventIndex(chord).at(0)?.note.pitch; // 67
+createNoteEventIndex(chord, { tieBreak: 'lowest' }).at(0)?.note.pitch; // 60
+createNoteEventIndex(chord, { tieBreak: 'last' }).at(0)?.note.pitch; // 60
 ```
 
 `Score.index()` builds the same index over a score's own notes, so a host holding a `Score` does not have to unpack it first:
@@ -114,7 +129,7 @@ See [Errors and validation](errors-and-validation.md) for how those failures are
 - Debounce analysis behind the edit rather than running it per keystroke.
 - Use a session for arrangement analysis — `createArrangementSession`, or `Arrangement.update`, which holds one internally — and an index for repeated positional queries, from `createNoteEventIndex` or `Score.index`.
 - Narrow the input: `chordTimelineFromNotes` over the bars on screen answers faster than over the whole piece, and a host that already knows its chords should call `chordTimelineFromChords` instead of re-inferring them.
-- Move a long analysis to a worker. Every input and output of the functional API is plain JSON-compatible data, so it crosses a worker boundary with a structured clone and no revival step.
+- Move a long analysis to a worker. Every input and output of the functional API is plain JSON-compatible data apart from a chord timeline's `at`, which is a function: post the result with `timeline.segments` in place of the timeline itself, and rebuild the lookup on the far side with `Timeline.fromJSON`. Everything else crosses a worker boundary with a structured clone and no revival step.
 
 A class value does not cross that way: the state lives in private fields, and cloning the instance yields an empty object that is no longer a `Score`. Send `toJSON()` instead and rebuild with the matching `fromJSON` — every model class carries both:
 

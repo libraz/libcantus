@@ -1,8 +1,10 @@
 # Voicing
 
+The musical vocabulary this page assumes — voice, register, spacing, doubling — is taught in [the primer's page on voices](primer/voices.md).
+
 Voicing turns a chord — a root and a set of intervals — into actual pitches for actual voices. Two different questions hide inside that, and each has an answer of its own.
 
-- `voiceChord` and `voiceProgression` **search**: given per-voice ranges, they find the arrangement that satisfies the constraints and moves least from the previous chord. This is the SATB case.
+- `voiceChord` and `voiceProgression` **search**: given per-voice ranges, they find the arrangement that satisfies the constraints and moves least from the previous chord. This is the SATB case — four voices named soprano, alto, tenor and bass, each with a compass of its own.
 - `voiceChordStyled` **builds**: it stacks the chord tones in a named style at a named octave. This is the lead-sheet and comping case.
 
 Both answers are also on the `Voicing` class, which holds one set of sounding pitches: `Voicing.satb` searches, `Voicing.forChord` builds, and every other question on this page — the next voicing, the cost of getting there, the spelling — is a method on the pitches it already holds. The class takes a chord as a symbol and a key as a name, so nothing has to be built up first.
@@ -40,10 +42,12 @@ The options that shape the search:
 | --- | --- |
 | `voices` | How many voices, when no explicit ranges are given. |
 | `ranges` | Explicit per-voice ranges, ascending. Takes precedence over `voices`. |
-| `maxSpacing` | Largest gap in semitones between adjacent upper voices. Defaults to 12. |
+| `maxSpacing` | Largest gap in semitones between adjacent voices. Defaults to 12, with the bass–tenor pair allowed an octave more. |
 | `key` | Enables the rules that need a tonic: the leading tone is neither doubled nor left unresolved. |
 | `maxCandidates` | How many candidate voicings are evaluated for one chord. Defaults to 4000. |
 | `budget` | How many chords `voiceProgression` will voice at all. |
+
+`maxSpacing` binds every adjacent pair, the lowest two included: the bass–tenor pair is allowed `maxSpacing + 12` rather than left unconstrained, which is what keeps the bass from being voiced arbitrarily far under a stack that is itself in range. The part-writing checker draws that line elsewhere and exempts the bass–tenor pair outright, so the two are not the same rule; see [Counterpoint and part-writing](counterpoint-and-part-writing.md).
 
 Supplying `key` changes the answer, not just the checking. Without it the search works from chord structure and voice-leading distance alone:
 
@@ -99,7 +103,7 @@ Pass `previousChord` alongside `key` when the chord being left had a seventh: ch
 | `close` | Chord tones stacked from the bass, no gaps. |
 | `drop2` | The second voice from the top dropped an octave, which puts that voice in the bass. Takes at least three voices. |
 | `drop3` | The third voice from the top dropped an octave. Takes at least four voices. |
-| `shell` | Root, third, and seventh — the guide tones. A sixth chord keeps its sixth in place of the seventh, and a triad, having neither, keeps its fifth. |
+| `shell` | The root plus the guide tones — the third and the seventh, the two that fix the chord's quality. A sixth chord keeps its sixth in place of the seventh, and a triad, having neither, keeps its fifth. |
 | `rootless` | Root omitted, keeping third, fifth, seventh, and tensions. |
 
 ```ts
@@ -120,6 +124,7 @@ import { Voicing } from '@libraz/libcantus';
 
 Voicing.forChord('Dm7', { style: 'drop2' }).pitches; // [57, 62, 65, 72]
 Voicing.forChord('D', { style: 'shell' }).pitches; // [62, 66, 69]
+Voicing.forChord('C6', { style: 'shell' }).pitches; // [60, 64, 69]
 Voicing.forChord('Dm7', { style: 'drop2', rootless: true }).pitches; // [57, 65, 72]
 Voicing.forChord('Dm7', { topNote: 5 }).pitches; // [69, 72, 74, 77]
 Voicing.forChord('Dm7', { topNote: 6 }).pitches; // [69, 72, 74, 77]

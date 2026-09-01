@@ -1,5 +1,7 @@
 # Tuning and frequency
 
+If the musical vocabulary here is unfamiliar, [Pitch and intervals](primer/pitch-and-intervals.md) in the primer teaches the terms this page uses.
+
 Everything above the pitch layer reasons in twelve pitch classes, which is a deliberate scope choice for tonal theory. This module is the escape hatch for the questions that scope leaves out: actual frequencies, cents, equal temperaments other than twelve, and the acoustic ratios behind the tempered intervals.
 
 Nothing here feeds back into harmonic analysis. A 19-EDO step index is not a pitch class, and `detectKey` will not read one.
@@ -62,7 +64,7 @@ Nineteen steps of a 19-EDO octave still span an octave — the reference step an
 
 ## Just intonation
 
-`JUST_RATIOS` gives five-limit ratios for the twelve interval classes above a unison, indexed by semitone class. `justDeviationCents` reports how far each tempered interval sits from its just counterpart:
+A just interval is one whose two frequencies stand in a small whole-number ratio, which is what an unaccompanied ensemble drifts towards and what equal temperament trades away for the freedom to change key. `JUST_RATIOS` gives the five-limit ratio for each semitone class: thirteen entries indexed 0 through 12, from the unison `[1, 1]` to the octave `[2, 1]`. The type narrows the key to those thirteen, so indexing outside the range is a compile error rather than an `undefined` at run time. `justDeviationCents` reports how far each tempered interval sits from its just counterpart:
 
 ```ts
 import { JUST_RATIOS, justDeviationCents, ratioToCents } from '@libraz/libcantus';
@@ -77,7 +79,9 @@ A positive deviation means the just interval is wider than the tempered one. The
 
 ## The Tuning class
 
-`TuningTable` is the plain data — a reference step, a reference frequency, and a division count — and `Tuning` is the class over it. Every function above takes a table as its last argument; the class binds one and offers the same conversions as methods, so a host that works in a single temperament states it once.
+`TuningTable` is the plain data — a reference step, a reference frequency, and a division count — and `Tuning` is the class over it.
+
+The functions above fall into two groups. The step-and-frequency conversions — `frequencyOf`, `nearestStep`, `stepOf`, `centsFromNearestStep`, `stepsOfCents`, `centsOfSteps` — take a table as an optional last argument, defaulting to `TWELVE_TET`. The ratio conversions — `centsToRatio`, `centsBetweenFreq`, `ratioToCents`, `justDeviationCents` — decide nothing a temperament affects and take no table at all. The class follows the same split: it binds a table once and offers the first group as methods, the second as statics.
 
 ```ts
 import { Tuning } from '@libraz/libcantus';

@@ -15,7 +15,7 @@ No. Pitch detection from audio and playback both belong to the host. `nearestSte
 No. The package is pure TypeScript with no dependencies, and every entry point is synchronous.
 
 **Can it run in a browser or a worker?**
-Yes. There is no Node-specific API in the library, and every input and output is plain JSON-compatible data, so it crosses a worker boundary with a structured clone.
+Yes. There is no Node-specific API in the library, and every input and output is plain JSON-compatible data apart from a chord timeline's `at`, which is a function: post `timeline.segments` in place of the timeline itself and rebuild the lookup on the far side with `Timeline.fromJSON`. Everything else crosses a worker boundary with a structured clone and no revival step.
 
 ## Analysis
 
@@ -28,8 +28,31 @@ Key regions are inferred from pitch-class distribution over a window. A short to
 **Why is my chromatic dominant written `II7` instead of `V7/V`?**
 Naming the root against the home key is always a correct spelling, and whether the chord is genuinely applied is a reading. Pass `{ applied: true }` to `chordToRoman` to get the applied form.
 
+**Does it assume the music is tonal?**
+No. Pitch material is held as a root pitch class and a twelve-bit mask, which says nothing about the tradition it came from, so nothing forces a passage into a key-and-Roman-numeral reading. Whether a named scale admits one at all is a question to ask rather than an assumption: `supportsFunctionalHarmony` is true for the scales functional harmony was defined on and for the modes built from the same material, and false for the collections that carry no chord function of their own. `'dorian'`, a rotation of the major scale, answers true; `'miyakoBushi'`, a Japanese pentatonic scale organised melodically rather than by chords, answers false.
+
+```ts
+import { supportsFunctionalHarmony } from '@libraz/libcantus';
+
+supportsFunctionalHarmony('dorian'); // true
+supportsFunctionalHarmony('miyakoBushi'); // false
+```
+
 **Why do I get Roman numerals for a whole-tone passage?**
 Because a numeral was asked for. Check `supportsFunctionalHarmony` first — see [Scales and modes](scales-and-modes.md).
+
+**Why does `functionOf` call a cadential six-four a tonic?**
+Because `functionOf` answers from a chord and a key alone, and a tonic triad standing on the fifth degree of the scale is, taken by itself, an inverted tonic: `chordToRoman` writes it `I64`. Heard in a cadence it is the dominant already — the bass has arrived on the dominant, and the two notes above it are appoggiaturas that fall onto that chord's own leading tone and fifth. Only the chord before it settles which of the two a given `I64` is, so that reading belongs to the layers that see time. `detectCadence` gives it when the chord preceding the dominant is passed as `approach`, and the rationale then says the cadence begins at the six-four rather than at the dominant's own arrival:
+
+```ts
+import { chordToRoman, detectCadence, functionOf } from '@libraz/libcantus';
+
+functionOf('C/G', 'C major'); // 'tonic'
+chordToRoman('C/G', 'C major'); // 'I64'
+
+detectCadence('G', 'C', 'C major').rationale?.includes('cadential six-four'); // false
+detectCadence('G', 'C', 'C major', { approach: 'C/G' }).rationale?.includes('cadential six-four'); // true
+```
 
 **Do section labels mean verse and chorus?**
 No. `sectionsFromNotes` identifies repeated units and labels them A, B, and so on. Which one is a verse is a decision about the song, not something the notes determine.
@@ -56,8 +79,15 @@ Yes. `GenerationContext.vocabulary` carries caller-supplied figures for every pa
 
 ## Spelling and notation
 
-**Why is pitch class 6 spelled Gb rather than F#?**
-Both are six accidentals from C, and the tie is broken towards the flat side. Pass an explicit tonic when the piece is written the other way.
+**Why is the key on pitch class 6 spelled Gb major rather than F# major?**
+Both signatures are six accidentals long, and the tie is broken towards the flat side; the minor key on pitch class 3 is Eb minor rather than D# minor for the same reason. Pass an explicit tonic when the piece is written the other way. A pitch class *inside* a key is a different question, decided by the key it is read in rather than by that tie-break:
+
+```ts
+import { formatNote, midiToNote, spellPitchClass } from '@libraz/libcantus';
+
+formatNote(spellPitchClass(6, 'C', 'C major')); // 'F#'
+formatNote(midiToNote(66)); // 'F#4'
+```
 
 **Why is the relative of D-flat major B-flat minor and not A-sharp minor?**
 Because key relations are computed in fifths space and the tonic is read back off the circle, which keeps the spelling conventional.

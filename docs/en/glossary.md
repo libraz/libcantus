@@ -30,7 +30,7 @@ Terms as this library uses them. Where a musical term has more than one common m
 
 ## Pitch and interval
 
-**Spelled interval** — An interval with both a diatonic number and a chromatic span, so an augmented fourth and a diminished fifth stay distinct despite spanning the same six semitones.
+**Spelled interval** — An interval as it is written rather than only as it is counted. Four required fields: `number`, the diatonic size (1 for a unison, 3 for a third); `quality`, one of `P`, `M`, `m`, or a run of `A` or `d`; `semitones`, the signed chromatic span; and `descending`. Number and span together keep an augmented fourth and a diminished fifth distinct despite both spanning six semitones. `descending` is carried separately because the sign of the span cannot stand in for it: a descending unison spans zero semitones, and a doubly diminished second climbs a letter while the pitch falls.
 
 **Enharmonic** — Two spellings of the same sounding pitch or key: F-sharp and G-flat, C-sharp minor and D-flat minor.
 
@@ -54,15 +54,15 @@ Terms as this library uses them. Where a musical term has more than one common m
 
 **Pivot chord** — A chord diatonic in both the old key and the new one, used to explain a modulation.
 
-**Cadence** — A harmonic closing formula. `detectCadence` names the type — `authentic`, `plagal`, `half`, `deceptive`, `phrygian`, or `modal` — and, when a voicing identifies the soprano, grades an authentic cadence as perfect or imperfect. `phrygian` is a half cadence reported under its own name, so counting half cadences means counting both; `modal` is the ♭VII–I arrival no common-practice type covers.
+**Cadence** — A harmonic closing formula, the chord pair a phrase comes to rest on. `detectCadence` names the type — `authentic`, `plagal`, `half`, `deceptive`, `phrygian`, or `modal` — and grades an authentic cadence perfect or imperfect. Two of the three conditions are read from the chords alone, so the grade is `imperfect` with no voicing at all when a leading-tone chord stands in for the dominant, or when either chord is inverted. The soprano decides only the case those two leave open, and where no voicing says what the soprano is, the grade is `null` rather than assumed. `phrygian` is a half cadence reported under its own name, so counting half cadences means counting both; `modal` is the ♭VII–I arrival no common-practice type covers.
 
 **Harmonic function** — Whether a chord acts as tonic, subdominant, or dominant. `functionOf` reports it; it is meaningful only where `supportsFunctionalHarmony` is true.
 
-**Augmented sixth** — Italian, French, and German chords built on the lowered submediant. No Roman numeral names them, so they render as `It6`, `Fr6`, and `Ger6`.
+**Augmented sixth** — Italian, French, and German chords built on the lowered sixth degree, the submediant. No Roman numeral names them, so they render as `It6`, `Fr6`, and `Ger6`.
 
 **Neapolitan** — The major triad on the lowered second degree, written `bII6` in first inversion, or `N6` when `neapolitan: true`. It is an altered chord, so a mode that has a lowered second of its own — phrygian, locrian — sounds the same triad as its native `II` rather than as the Neapolitan.
 
-**Negative harmony** — Reflection of a chord across the axis of its key. A transformation with exactly one result, not a proposal.
+**Negative harmony** — Reflection of a chord across the tonic–dominant axis of its key, which turns major into minor and back. A transformation with exactly one result, not a proposal.
 
 ## Scales
 
@@ -91,6 +91,8 @@ Terms as this library uses them. Where a musical term has more than one common m
 **Parallel perfect** — Two moving voices arriving at the same class of perfect interval they already held: fifth to fifth, octave to octave, unison to unison. Similar motion is the usual case, and contrary motion into the same class — a twelfth contracting to a fifth, the anti-parallel — counts as well; both voices have to move, so oblique motion is not one. `createsParallelPerfect` tests one motion.
 
 **Hidden (direct) perfect** — Similar motion into a perfect interval with the upper voice leaping; the lower voice may move by step. Less severe than a parallel and reported separately.
+
+**Battuta** — An octave or unison reached by contrary motion with the upper voice leaping down: the *ottava battuta* sixteenth-century theory forbids. A stepwise arrival is allowed and so is one the upper voice leaps up into, so only the downward leap is flagged. An octave the two voices were already sitting on is the anti-parallel case instead, which `createsParallelPerfect` owns; `createsBattuta` answers only for a perfect class that was not already there.
 
 **Cross relation** — The natural and altered forms of a note sounding in different voices across a chord change. Detectable only from spelled notes.
 

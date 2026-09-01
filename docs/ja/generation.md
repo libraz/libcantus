@@ -4,12 +4,14 @@
 
 `Composer` は、1つの曲を書くための設定、すなわち調、拍子、テンポ、シード、complexity のダイヤル、楽器、vocabulary を保持します。そこから書き出すパートはその設定を受け継ぐため、曲ごとに一度指定すれば足ります。その下にあるのが生成関数で、同じ設定を引数として受け取ります。クラスは、同じ指定を繰り返さずに済ませるための層です。
 
+このページが素材にするのは和音・調・進行という語彙です。音楽の予備知識がない読者向けには[和声の入門](primer/harmony.md)で扱っています。
+
 ## 生成された曲の構成
 
 生成は1回の呼び出しではなく、複数のパスに分かれます。典型的な順序は次のとおりです。
 
-1. 和声を決める: `composer.progression`、またはホストが既に持つコードタイムライン。
-2. それに対してパートを書く: `composer.bass`、`composer.drums`、`composer.counterMelody`、`composer.harmonize`。
+1. 和声を決める: `composer.progression`、まだ和声のない旋律には `composer.harmonize`、またはホストが既に持つコードタイムライン。
+2. それに対してパートを書く: `composer.bass`、`composer.drums`、`composer.counterMelody`。
 3. 表層を整える: `score.ornament`、`score.groove`、`score.humanize`。
 
 どのパスにも関数版があります。`generateProgression`、`generateBassLine`、`generateDrums`、`generateCounterMelody`、`harmonizeMelody`、`ornament`、`applyGrooveTemplate`、`humanize` は、調・拍子・コンテキストを受け継ぐのではなく引数として受け取ります。どちらの経路も同じジェネレータに届き、同じ音を返します。
@@ -55,13 +57,13 @@ chords.length; // 8
 motif.notes.length >= 1; // true
 ```
 
-`generateProgression` は1小節につき1つの `ChordSpan` を返します。`style` はプリセットの候補群を選び、`presetId` は特定のプリセットを指定し、`preset` は度数列を直接渡します。後続和音のセカンダリドミナントへ置き換える割合は `ctx.complexity.harmonic` が決め、既定の0では進行に手を加えません。このダイヤルと代理和音の語彙は[リハーモナイズ](reharmonization.md)を参照してください。
+`generateProgression` は1小節につき1つの `ChordSpan` を返します。`style` はプリセットの候補群を選び、`presetId` は特定のプリセットを指定し、`preset` は度数列を直接渡します。後続和音のセカンダリドミナント、すなわち次の和音自身の調から借りてきた属七の和音へ置き換える割合は `ctx.complexity.harmonic` が決めます。この和音は耳を次の和音へ引き寄せます。既定の0では進行に手を加えません。このダイヤルと代理和音の語彙は[リハーモナイズ](reharmonization.md)を参照してください。
 
 `Rhythm` と `Motif`、そして関数版の `generateRhythm`、`motifToNoteEvents`、`developMotif`、`transformMotif` は、素材の選択と配置・変形を分離します。[旋律とモチーフ](melody-and-motifs.md)と[リズムとグルーヴ](rhythm-and-groove.md)を参照してください。
 
 ## パート
 
-ベース、ドラム、対旋律、和音付けは、いずれも `Score` として返ります。`Score` はノートイベントと、それを書いた拍子・テンポ・調をひとまとめにした値です。
+ベース、ドラム、対旋律は、いずれも `Score` として返ります。`Score` はノートイベントと、それを書いた拍子・テンポを、音高を持つパートであれば調も併せてひとまとめにした値です。例外は `composer.harmonize` で、和音は `Timeline`、旋律はその和音が読む `Score`、そして渡された線とその旋律との隔たりは `transposeSemitones` として、それぞれ別に返します。
 
 ```ts
 import { Composer } from '@libraz/libcantus';
@@ -110,6 +112,21 @@ drums.length > 0; // true
 
 `generateBassLine` は開始拍と終了拍を明示したセグメントを受け取ります。コードタイムラインが返すのがこの形です。進行が返す `ChordSpan` はセグメントではないため、先に配置する必要があります。`composer.bass` は `Timeline` でも同じセグメントでも受け取りますが、配置を代行することはありません。ベースのスタイルは `root`、`rootFifth`、`pop`、`walking`、`arpeggio` です。`octave` は目標の音域を指定し、`instrument` を指定するとその楽器で演奏可能な線になります。
 
+composer は、設定が支えられないパートを既定値で埋めずに拒否します。`progression`、`bass`、`counterMelody` はいずれも調の上に書くものなので、調を持たない composer では3つとも例外を投げます。旋律から調を読み取るのは `harmonize` の役目で、`with({ key })` を使えばその調を以降のパートへ引き継げます。`progression` はさらに、パート全体で1つの拍子であることを要求します。1小節に1つの和音を並べるため、拍子が変わるとその地点から先で和音が小節線から外れてしまうからです。`drums` は調を持たないためどちらでも書けますが、キットのパターンは4拍の小節を前提に書かれているため、受け付ける拍子は 4/4 だけです。
+
+```ts
+import { Composer, isLibcantusError } from '@libraz/libcantus';
+
+let code = 'ok';
+try {
+  Composer.of({ bpm: 96 }).progression({ style: 'rock', bars: 4 });
+} catch (error) {
+  if (isLibcantusError(error)) code = error.code;
+}
+
+code; // 'INVALID_INPUT'
+```
+
 ## 装飾
 
 装飾は既存の素材に対する操作なので、素材そのもののメソッドとして呼び出せます。
@@ -146,7 +163,7 @@ ornament(notes, { style: 'ghost', amount: 0.6, ctx: { seed: 4 } }).length; // 8
 
 ## コンテキストと再現性
 
-`GenerationContext` が持つのは、プロジェクトの `seed`、`bpm`、パートを書く対象の `instruments`、`vocabulary`、ダイヤルをまとめた `complexity`、生成の契約を固定する `algorithmVersion`、そしてシードから導かれる乱数源ではなく自前の乱数源を渡したい場合の `rng` です。ダイヤルは `complexity` の側にあります。`rhythmic`、`harmonic`、`ornament` を 0..1 で持ち、加えて `difficulty` が1から5の上限で、強度を上げるのではなく候補を削ります。`vocabulary` は曲全体が引くジャンル辞書で、[リズムとグルーヴ](rhythm-and-groove.md)の「ジャンル語彙」で説明しています。
+`GenerationContext` が持つのは、プロジェクトの `seed`、`bpm`、パートを書く対象の `instruments`、`vocabulary`、ダイヤルをまとめた `complexity`、生成の契約を固定する `algorithmVersion`、そしてシードから導かれる乱数源ではなく自前の乱数源を渡したい場合の `rng` です。シード自体は省略可能で、省略時は0になります。テンポだけを指定したコンテキストもそれ自体で完結した要求です。ダイヤルは `complexity` の側にあります。`rhythmic`、`harmonic`、`ornament` を 0..1 で持ち、加えて `difficulty` が1から5の上限で、強度を上げるのではなく候補を削ります。`vocabulary` は曲全体が引くジャンル辞書で、[リズムとグルーヴ](rhythm-and-groove.md)の「ジャンル語彙」で説明しています。
 
 ジェネレータが応答するダイヤルはすべてここにあります。呼び出しごとに `ctx` として渡すか、composer に持たせるかのどちらかです。`composer.context` はクラスが覆っていない呼び出しへ渡すための同じプレーンなコンテキストで、`with…` 系のメソッドは手元の composer を書き換えるのではなく新しい composer を返します。
 
@@ -187,7 +204,7 @@ canSound(GUITAR_STANDARD, 38); // false
 playability([{ pitch: 27, startBeat: 0, durationBeat: 1 }], BASS_4_STRING).issues.length; // 1
 ```
 
-コンテキストでプロファイルを指定すること、すなわち `Composer.of({ instruments: { bass: BASS_4_STRING } })` や呼び出し時の `ctx.instruments` は、そのパートを演奏可能にするという要求そのものです。難易度の上限が何を指していても、音域と物理的な制限は適用されます。[楽器と演奏可能性](instruments-and-playability.md)を参照してください。
+コンテキストでプロファイルを指定すること、すなわち `Composer.of({ instruments: { bass: BASS_4_STRING } })` や呼び出し時の `ctx.instruments` は、そのパートを演奏可能にするという要求そのものです。難易度の上限が何を指していても、音域と物理的な制限は適用されます。ジェネレータが読むパート名は `bass` と `drums` の2つだけで、それ以外の名前で登録したプロファイルは参照されません。リードや鍵盤のプロファイルはコンテキストに載って運ばれるだけで、ジェネレータには届きません。[楽器と演奏可能性](instruments-and-playability.md)を参照してください。
 
 ## 生成が主張しないこと
 

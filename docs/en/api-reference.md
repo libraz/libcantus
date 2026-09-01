@@ -22,10 +22,10 @@ import { Chord, Key, Note } from '@libraz/libcantus/model';
 
 The public entry points are:
 
-- `core`: pitch, intervals, meter, duration, tempo, tuning, validation, random utilities, and instrument profiles.
+- `core`: pitch, intervals, meter, duration, tempo, tuning, validation, the error taxonomy, the note-event index, random utilities, and instrument profiles.
 - `theory`: scales, chord specifications, symbols, spelling, functional rules, counterpoint, figured bass, and voicing.
 - `analyze`: chord/key detection, harmonic analysis, timelines, reduction, melodic analysis, form, and arrangement reports.
-- `generate`: progressions, bass, counter-melody, drums, groove, harmonization, motifs, ornaments, rhythms, reharmonization, and vocabulary.
+- `generate`: the generation context and its complexity dials, progressions, bass, counter-melody, drums, groove, harmonization, motifs, ornaments, rhythms, reharmonization, and vocabulary.
 - `model`: the immutable class API. One class per thing the other layers work with, each a thin skin over their functions, so an analysis or generation path can be written in the class API from end to end. A few helpers stay functions only — `barPositionToBeat`, `barPositionToPulse`, `chordFromSpec`, `secondaryDominant`, and `shiftByScaleDegrees` — and are imported alongside the classes.
 
 Each layer barrel also re-exports the types its own signatures name, so a consumer importing a single subpath can still spell every type in the API it uses.
@@ -54,6 +54,9 @@ Both CommonJS and ESM builds are published, and TypeScript declarations accompan
 | Error taxonomy, parsers, assertions | [Errors and validation](errors-and-validation.md) |
 | Indexing, sessions, budgets | [Performance](performance.md) |
 | MIDI, ticks, note-name systems | [Interoperability](interoperability.md) |
+| End-to-end flows for one application | [Use cases](use-cases/index.md) |
+| Terms and the API that implements them | [Glossary](glossary.md) |
+| Scope, limitations, design decisions | [Questions and limitations](faq.md) |
 
 ## Generated TypeDoc
 

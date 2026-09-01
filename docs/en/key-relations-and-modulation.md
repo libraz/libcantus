@@ -1,6 +1,8 @@
 # Key relations and modulation
 
-A key is a root pitch class plus a mode mask, which says nothing about how it is written. The relation functions add that: they travel around the circle of fifths and read the tonic back off it, which is what keeps the spelling right.
+The musical vocabulary this page assumes — scale, degree, key signature, tonic — is taught in [the primer's page on scales and keys](primer/scales-and-keys.md).
+
+A key is a root pitch class plus a mode mask, which says nothing about how it is written. The relation functions add that: they travel around the circle of fifths — the ordering of keys by signature, each a fifth from the next — and read the tonic back off it, which is what keeps the spelling right.
 
 ## Spelling a key
 
@@ -50,7 +52,35 @@ Key.parse('A harmonic minor').toString(); // 'A harmonic minor'
 
 The scale word is an English qualifier. Asked for another notation system — `toString({ system: 'german' })` — a key names its parallel plain major or minor there, because the other systems have no word for the form.
 
+The form itself is the key's `variant`: `'major'`, `'natural'`, `'harmonic'`, `'melodic'`, or `'modal'` for a key standing in none of the four. It is set by naming the scale that carries it, and read back off the resolved key. `variantOfMask` makes the same reading from a bare mode mask, which is what `resolveKey` does for a key that arrives as pitch classes alone:
+
+```ts
+import { Key, majorKey, scaleByName, variantOfMask } from '@libraz/libcantus';
+
+Key.named('harmonicMinor', 'A').variant; // 'harmonic'
+Key.minor('A').variant; // 'natural'
+Key.named('dorian', 'D').variant; // 'modal'
+
+variantOfMask(scaleByName('harmonicMinor', 9).modeMask12); // 'harmonic'
+variantOfMask(majorKey(0).modeMask12); // 'major'
+```
+
+A `variant` handed in alongside a scale is checked rather than trusted: `resolveKey` and `Key.of` raise `InvalidInputError` for a form the mask does not hold, since a key claiming `'harmonic'` over a major mask would print as a harmonic minor while comparing equal to plain C major. `assertKeyVariant` is that check on its own, for a caller validating a stored key before building it.
+
+`isSignatureKey` says whether a key is written with a signature of its own — the seven diatonic modes, and the harmonic and melodic minor, whose raised degrees are printed as accidentals against the minor signature — rather than borrowing its parallel major's or minor's as an approximation. A scale that only borrows one has to be spelled from the scale itself, since nothing about how it is written follows from that signature:
+
+```ts
+import { isSignatureKey, scaleByName } from '@libraz/libcantus';
+
+isSignatureKey(scaleByName('harmonicMinor', 9)); // true
+isSignatureKey(scaleByName('majorPentatonic', 0)); // false
+```
+
 ## The closely related keys
+
+![How one key relates to its closest neighbours](../images/key-relations.svg)
+
+Each spoke is one short move: the relative minor keeps the signature and moves the tonic, the parallel minor keeps the tonic and changes the signature, and the dominant and subdominant are a single step sharpwards and flatwards around the circle. Distance is counted in those steps, and the closer two keys sit the more material they share — which is what makes a chord both of them own a place a modulation can turn. `relatedKeysOf` returns those four together with the relative minors of the dominant and the subdominant, in a fixed order.
 
 ```ts
 import { formatNote, majorKey, parseNote, relatedKeysOf } from '@libraz/libcantus';
@@ -148,9 +178,15 @@ const timeline = chordTimelineFromChords(
 const regions = detectModulations(timeline.segments);
 regions.length >= 1; // true
 regions[0]?.startBeat; // 0
+regions[0]?.modulation; // undefined
+regions[1]?.modulation; // 'dominant'
+regions[1]?.pivot?.romanFrom; // 'I'
+regions[1]?.pivot?.romanTo; // 'IV'
 ```
 
-Each `KeyRegion` carries its span, the key in force, and a `confidence` in [0, 1] — the correlation between the span's pitch-class distribution and the key's profile. A modulation is a proposal supported by evidence, not a fact: show the confidence and let a user override the reading.
+Each `KeyRegion` carries its span, the key in force, and a `confidence` in [0, 1] — the correlation between the span's pitch-class distribution and the key's profile, with a negative correlation reported as 0 rather than as itself.
+
+From the second region on it also carries `modulation`, the named relation to the previous region's key. It is absent on the first region, which follows nothing, and absent where the two keys stand in none of the named relations; it is never `'same'`, since a region is the maximal span of one key and consecutive regions never share one. `pivot` names the chord the change turned on, and only the chord-aware entry points fill it in: a pivot is a chord that reads in both keys, so it cannot be identified without knowing which chord sounded. A modulation is a proposal supported by evidence, not a fact: show the confidence and let a user override the reading.
 
 Both functions take the same options. The ones that matter most in practice:
 
@@ -158,7 +194,9 @@ Both functions take the same options. The ones that matter most in practice:
 - `expectedKeyBeats` — how long a key is expected to hold, which sets how eagerly the search proposes a new region. It defaults to four bars.
 - `minKeyBeats` — the shortest region the search will emit, one bar by default. Raise it when brief tonicizations are being reported as modulations. `keyTimelineFromNotes` sizes its slots by it; `detectModulations` takes its slots from the chords and folds a shorter region into the neighbouring key that reads its chords best. Either way a shorter region survives only where the analyzed span itself ends.
 
-The two paths differ over one option. `profile` names a pitch-class profile, and in the note path it is what every slot is scored against. `detectModulations` scores each chord by the part it plays in a key instead, so the profile takes no part in choosing which keys are reported — the chords settle that. It still scores each region's `confidence`, the correlation described above, exactly as it does in the note path.
+The two paths differ over one option. `profile` names a pitch-class profile — a twelve-entry vector indexed from the tonic, saying how strongly each chromatic degree is expected to sound — and in the note path it is what every slot is scored against. `detectModulations` scores each chord by the part it plays in a key instead, so the profile takes no part in choosing which keys are reported — the chords settle that. It still scores each region's `confidence`, the correlation described above, exactly as it does in the note path.
+
+Three profiles are built in, named by `'krumhansl'`, `'temperley'`, and `'flat'`. `'krumhansl'` is the default and holds the Krumhansl–Kessler probe-tone ratings, which are listener judgements and so keep some weight on every chromatic degree. `'temperley'` holds the Kostka–Payne corpus proportions, where the chromatic degrees fall close to zero: decisive on diatonic music, blunt on chromatic music. `'flat'` weights every scale degree alike and every chromatic degree at nothing, which reduces the ranking to plain scale membership. A caller's own `{ major, minor }` pair goes in the same option, each vector indexed from its own tonic and every entry a finite number.
 
 `prevailingKeyOf` collapses a set of regions to the single key that holds for most of the span, which is what a global label in a UI should show.
 

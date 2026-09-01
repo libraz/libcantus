@@ -1,6 +1,8 @@
 # Melody and motifs
 
-A motif is a short pattern that recurs, transformed. The library treats analysis and generation of motifs as the same vocabulary read in two directions: naming the transformation between two statements, and applying one. A `Motif` holds a cell so the two directions chain — `relateTo` and `transform` are its methods — and `relateMotifs` and `transformMotif` are the same operations as functions over plain cells.
+A motif is a short pattern that recurs, transformed. The library treats analysis and generation of motifs as the same vocabulary read in two directions: naming the transformation between two statements, and applying one. A `Motif` holds a cell so the two directions chain — `relateTo` and `transform` are its methods — and `transformMotif` is the same operation as a function over a plain cell, with `relateMotifs` naming the pair over the reading `motifFromNotes` hands out.
+
+A motif is as much rhythm as pitch, and every option on this page is counted in beats and bars; [the rhythm and meter primer](primer/rhythm-and-meter.md) covers those.
 
 ## Contour
 
@@ -64,6 +66,8 @@ extractMotifs([...phrase(60, 0), ...phrase(67, 4)]).length >= 1; // true
 ```
 
 Each `MotifData` carries its interval-and-rhythm pattern and every occurrence with its onset. The two phrases above are the same shape a fifth apart, so they are one motif with two occurrences rather than two motifs.
+
+The search reads every run of `minNotes` to `maxNotes` consecutive notes as a candidate — 3 to 8 notes unless the caller says otherwise — and reports a pattern only once it recurs `minOccurrences` times, which is 2. Raising `minOccurrences` is how a line thick with incidental repetition is cut down to the figures a listener would hear as motifs.
 
 ## Naming the relationship between two statements
 
@@ -132,7 +136,7 @@ notes.length >= 1; // true
 notes.every((note) => note.durationBeat > 0); // true
 ```
 
-`chord` constrains the motif to a chord as well as a key. `contour` picks the shape. The result is deterministic for a given seed, which defaults to 0.
+`chord` pulls the notes that land on a bar downbeat — the first beat of a bar — to the nearest tone of that chord; the rest of the line stays where the contour and the key put it. `contour` picks the shape, and `ts` names the meter the `bars` are counted in, 4/4 unless given, so a motif shares a bar grid with the other generators instead of assuming four beats. `jitter` is the probability in [0, 1] that a note is nudged a single diatonic step, up or down with equal odds; it is sugar for `ctx: { complexity: { ornament } }`, which wins where both are given, and defaults to 0, which reproduces the requested contour exactly. The result is deterministic for a given seed, which defaults to 0.
 
 ## Transforming and developing
 
@@ -171,13 +175,15 @@ The two directions use different names for the same devices, so the corresponden
 | `diminish` | `diminution` |
 | `sequence` | none |
 
-`sequence` is the transform with no relation of its own: it appends a shifted copy, so the result carries twice the notes of the model and a relation, which compares statements note for note, answers null. Relate the two halves of the result instead — they stand as a `transposition` or a `tonalTransposition` whose `sequence` flag is set.
+`sequence` is the transform with no relation of its own: it appends a shifted copy, so the result carries twice the notes of the model and a relation, which compares statements note for note, answers null. Relate the two halves of the result instead — with a key in hand they stand as a `transposition` or a `tonalTransposition` whose `sequence` flag is set, and a diatonic sequence read without one is left unnamed.
 
 Two relations have no single transform behind them either: `repetition`, which is the cell restated unchanged, and `retrogradeInversion`, which is `retrograde` followed by `invert`.
 
 Pass the key when you have one. Without it the tonal reading is unavailable, so a diatonic restatement is named from its intervals alone: `transposition` when the shift happened to keep every interval, and otherwise either nothing or a member of the retrograde family whose interval pattern it shares. A triad restated a degree higher swaps its two interval sizes, which is what a retrograde inversion does to it as well, and equal note values read the same way round in both directions — so C E G answered by D F A is a `retrogradeInversion` without the key and the `tonalTransposition` it is with one.
 
 Every transform returns its notes in ascending onset order, `retrograde` included: the cell comes back read backwards in time but listed forwards, which is what the analyses taking a melody expect. `invert` therefore mirrors about the note that sounds first, so `retrograde` followed by `invert` pivots on what became the earliest onset.
+
+A transposition that would push a note off the keyboard is refused rather than folded back into range: `transformMotif` throws when a transformed pitch leaves 0..127, and `imitate` throws on the same condition, since a clamped pitch would answer at an interval nobody asked for.
 
 Because a motif holds its cell, naming the transform and reading it back is one expression:
 
@@ -309,9 +315,11 @@ const counter = generateCounterMelody({
 counter.length >= 1; // true
 ```
 
-`chordAt` is a callback rather than a timeline so a host can answer from whatever it already has. Use `voiceIndependence` from [Counterpoint and part-writing](counterpoint-and-part-writing.md) to check that the result behaves as a second voice.
+The harmony crosses over as a `timeline` or as a `chordAt` callback, and the timeline is the one to prefer: it lists its own segment boundaries, so a chord change anywhere is seen, while a callback is opaque and is probed on a half-beat grid unless `chordChangeBeats` names the changes.
 
-`imitate` restates a line at an interval and a delay, which is the canonic answer. It has no class method of its own — it takes two lines and a distance rather than belonging to either:
+`register` decides which side of the melody the counter line occupies — `'below'` unless named — and sets the default pitch range around it, which `pitchLow` and `pitchHigh` replace outright. `rhythm` decides the onsets: `'complement'` moves where the melody holds or rests, `'follow'` mirrors the melody's own onsets. `profile` sets what is rejected and what is preferred among what survives, `'strict'` seeking contrary motion where the default `'pop'` reads a run of parallel thirds or sixths as the harmony line an arranger would write, and `weights` overrides individual ranking weights for a preference neither profile expresses. Use `voiceIndependence` from [Counterpoint and part-writing](counterpoint-and-part-writing.md) to check that the result behaves as a second voice.
+
+`imitate` restates a line at an interval and a delay, which is the canonic answer. It has no class method of its own — it takes the leading line alone and hands back the answer, leaving the caller to place the two voices together:
 
 ```ts
 import { imitate, majorKey } from '@libraz/libcantus';
@@ -323,7 +331,9 @@ answer.length; // 3
 answer[0]?.startBeat; // 2
 ```
 
-`answer: 'tonal'` counts scale degrees instead of semitones, and `invert` mirrors the subject about its first note before transposing. A pitch outside the key keeps its distance from the scale tone below it, mirrored along with everything else, so a chromatic passing note answers as one. Where the mirror puts such a note inside a diatonic semitone there is no room left for it and it lands on the scale tone there — a subject moving in chromatic steps throughout can answer with a pitch repeated, which is the point at which a real answer is the one to ask for. Notes that never sound are not copied, so the answer holds only sounding notes.
+`answer: 'tonal'` counts scale degrees instead of semitones, and `invert` mirrors the subject about its first note before transposing. In a tonal answer a pitch outside the key keeps its distance from the scale tone below it, mirrored along with everything else, so a chromatic passing note answers as one. Where the mirror puts such a note inside a diatonic semitone there is no room left for it and it lands on the scale tone there — a subject moving in chromatic steps throughout can answer with a pitch repeated, which is the point at which a real answer is the one to ask for. The default `'real'` answer adds the interval's semitones to every pitch and consults no scale at all, so it keeps the subject's intervals and lets the key fall where the transposition puts it.
+
+`from` and `to` bound the span of the lead that is copied, defaulting to the start and the end of the line, and `velocityScale` multiplies the copied velocities for an answer meant to sit under the voice it follows. Notes that never sound are not copied, so the answer holds only sounding notes.
 
 ## Ornamentation
 

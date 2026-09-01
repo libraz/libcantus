@@ -4,10 +4,12 @@ The library does not read or write MIDI files, render notation, analyze audio, o
 
 ## The data contract
 
-Two conventions carry everything:
+Four conventions carry everything:
 
 - **Pitch is a MIDI note number.** Middle C is 60. Nothing here uses frequencies unless [Tuning and frequency](tuning-and-frequency.md) is involved.
-- **Time is quarter-note beats.** `startBeat` and `durationBeat` are floating-point beats, not ticks and not seconds. Beat 0 is the first downbeat, and a pickup starts at a negative beat.
+- **Time is quarter-note beats.** `startBeat` and `durationBeat` are floating-point beats, not ticks and not seconds. Beat 0 is the first downbeat, and a pickup — the notes leading into it — starts at a negative beat.
+- **Velocity is optional, and a MIDI velocity when present.** `velocity` is a whole number in 0..127, the same domain as the pitch beside it. A note carrying none is not assigned a default: analysis counts it at full weight.
+- **Articulation is optional, and carries intent only.** `articulation` names how the note is played, from a closed list: `accent`, `ghost`, `staccato`, `legato`, `slide`, `hammer`, `mute`, `flam`, `drag`, `roll`, `choke`, `open`. Turning `slide` into pitch bend or `ghost` into a velocity floor depends on the instrument and controller at the far end, so the library records the name and leaves the rendering to the host. A name outside the list is an `InvalidInputError` where the event is accepted, not a silent pass-through.
 
 Analysis and generation results are plain JSON-compatible data — no class instances in the functional API, no hidden prototypes — so a result can be serialized into a project file and read back without a revival step. The class API wraps the same data and exposes it through `.data`.
 
@@ -23,20 +25,23 @@ Every public entry point that takes one of these accepts it in whatever form you
 | --- | --- | --- |
 | Note | a name, a MIDI number, `NoteData`, a `Note` | `toNoteData` |
 | Interval | a name, `SpelledInterval`, an `Interval` | `toSpelledInterval` |
-| Key | a key name, `KeyScale`, a `Key` | `toKeyScale` |
+| Key | a key name, a `KeyScale`, a resolved key, a `Key` | `resolveKey` |
 | Chord | a chord symbol, `ChordData`, a `Chord` | `toChordData` |
 | Meter | a signature name, `TimeSignature`, `MeterMap`, a `Meter` | `toMeterData` |
 
 ```ts
-import { toChordData, toKeyScale, toNoteData } from '@libraz/libcantus';
+import { formatNote, resolveKey, toChordData, toKeyScale, toNoteData } from '@libraz/libcantus';
 
 toNoteData('Eb4'); // { letter: 2, alter: -1, octave: 4 }
 toNoteData(60); // { letter: 0, alter: 0, octave: 4 }
+formatNote(resolveKey('Eb major').tonic); // 'Eb'
 toKeyScale('A minor').rootPc; // 9
 toChordData('Cmaj7').intervals; // [0, 4, 7, 11]
 ```
 
-An instrument is taken the same way — every entry point that needs one takes an `InstrumentProfileLike`, a plain profile or an `Instrument` — but its coercer is internal, so a profile is handed over rather than resolved by the caller.
+A key has two coercers because a key carries more than its pitch classes. `resolveKey` keeps the spelled tonic and the scale form — the `{ scale, tonic, variant }` shape a project file stores — and is what the class layer and the generators take. `toKeyScale` reads the same shapes and gives back the root pitch class and the mask alone, for a caller that wants exactly those; a key put through it comes back unable to say whether its sixth degree is written A-flat or G-sharp.
+
+An instrument is taken the same way — every entry point that needs one takes an `InstrumentProfileLike`, a plain profile or an `Instrument` — and its coercers are public too. `toInstrumentProfile` widens any instrument-shaped value to a plain profile and validates it; `toStringedProfile` narrows it to the stringed family, so an entry point with only a neck to work with refuses a drum kit by name (`instrument must be a stringed instrument; drum kit has no strings`) rather than failing later on a missing tuning.
 
 A class is read through its `toJSON`, not by its type. That is what lets a layer accept an instance without importing the class that defines it, and it means any value of your own with a `toJSON` returning the right shape is accepted too.
 
@@ -131,7 +136,7 @@ The systems are `english`, `german`, `japanese`, `italian`, and `fixedDo`. `B` i
 
 ## Transposing instruments
 
-A part written for a transposing instrument is not at concert pitch. Convert with `toSoundingPitch` before analysis and `toWrittenPitch` when producing that player's part; see [Instruments and playability](instruments-and-playability.md).
+A part written for a transposing instrument — one whose player reads a note at one pitch and sounds another, a clarinet in B-flat reading C and sounding B-flat — is not at concert pitch. Convert with `toSoundingPitch` before analysis and `toWrittenPitch` when producing that player's part; see [Instruments and playability](instruments-and-playability.md).
 
 ## Storing analysis and generation in a project file
 

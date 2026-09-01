@@ -2,6 +2,8 @@
 
 A part that a person will read has to satisfy two conditions the sounding pitches do not: it must be playable on the instrument, and it must be written at the pitch that player reads.
 
+The flow starts from note events at concert pitch — what everything else in the library produces — and an instrument profile. For the vocabulary here, chiefly the transposing instrument and the key signature that travels with it, see the [primer](../primer/index.md).
+
 ```ts
 import { Instrument, Score } from '@libraz/libcantus';
 
@@ -23,7 +25,7 @@ bass.range(); // { low: 28, high: 67 }
 
 ## Fitting the part to the instrument
 
-`playability` reports three layers of obstacle, and only the first is about existence: `noteOutOfRange` means the instrument does not have the note at all. `Instrument.foldIntoRange` moves such a note by octaves until it fits, which is what a player would do with a bass line written below the low string, and `Score.map` carries the whole part through that fold in one step while keeping its meter and tempo.
+`playability` reports three layers of obstacle, and only the first is about existence. It holds two issue types: `noteOutOfRange` means the instrument does not have the note at all, and `articulationUnavailable` that it does not offer the technique the note was written with. `Instrument.foldIntoRange` answers a note out of range with the nearest octave of it the instrument sounds, which is what a player would do with a bass line written below the low string, and `Score.map` carries the whole part through that fold in one step while keeping its meter and tempo.
 
 The second layer — stretches, string conflicts, limb conflicts, polyphony — cannot be fixed by folding, because it is about how the notes sit together. The third layer, `tooFast`, depends on the tempo, which a `Score` already holds; call `Instrument.playability(notes)` with no bpm instead to see only what the instrument itself decides.
 
