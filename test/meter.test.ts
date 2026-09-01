@@ -103,6 +103,22 @@ describe('bar positions', () => {
     expect(barPositionToPulse({ bar: 2, beat: 0 }, ts)).toBe(1);
     expect(barPositionToPulse({ bar: 2, beat: 1.5 }, ts)).toBe(2);
   });
+
+  it('refuses a bar no meter could hold, whichever form the meter came in', () => {
+    // The single signature and the map are the same argument, so a position the
+    // map form rejects is not a position the signature form answers.
+    const map = [{ startBeat: 0, ts: parseTimeSignature('4/4') }];
+    for (const meter of ['4/4', parseTimeSignature('4/4'), map]) {
+      const name = JSON.stringify(meter);
+      expect(() => barPositionToPulse({ bar: Number.NaN, beat: 0 }, meter), name).toThrow(
+        InvalidInputError,
+      );
+      expect(() => barPositionToPulse({ bar: 1.5, beat: 0 }, meter), name).toThrow(
+        InvalidInputError,
+      );
+      expect(barPositionToPulse({ bar: 1, beat: 2 }, meter), name).toBe(3);
+    }
+  });
 });
 
 describe('metric weight', () => {
@@ -181,6 +197,35 @@ describe('additive meter grouping', () => {
     const ts: TimeSignature = { numerator: 7, denominator: 8, grouping: [2, 2, 2] };
     // pulse index 0 short-circuits, but any later pulse validates the grouping.
     expect(() => metricWeight(0.5, ts)).toThrow();
+  });
+
+  it('accents the group heads of an additive reading whose groups are equal', () => {
+    // 6/8 written 2+2+2 is three pairs of quavers, not the compound bar: its
+    // groups say where the accents are, and equal groups say it no less than
+    // uneven ones do. The midpoint the compound reading accents (beat 1.5) is
+    // not a group head here.
+    const hemiola: TimeSignature = { numerator: 6, denominator: 8, grouping: [2, 2, 2] };
+    expect(pulsesPerBar(hemiola)).toBe(6);
+    expect(pulseBeats(hemiola)).toBe(0.5);
+    const weights = [0, 1, 2, 3, 4, 5].map((pulse) => metricWeight(pulse * 0.5, hemiola));
+    expect(weights).toEqual([3, 1, 2, 1, 2, 1]);
+    expect(metricWeight(1.5, hemiola)).toBe(1);
+    expect(metricWeight(1.5, parseTimeSignature('6/8'))).toBe(2);
+    // The same position asked for in quarter-note beats reads the same weight.
+    expect(metricWeight(0, hemiola)).toBe(metricWeight(0 * pulseBeats(hemiola), hemiola));
+    expect(isStrongBeat(1, hemiola)).toBe(true);
+    expect(isStrongBeat(0.5, hemiola)).toBe(false);
+  });
+
+  it('accents the group heads of a 12/8 blues written in fours', () => {
+    const blues: TimeSignature = { numerator: 12, denominator: 8, grouping: [4, 4, 4] };
+    expect(pulsesPerBar(blues)).toBe(12);
+    // Group heads at quaver pulses 0, 4 and 8 — beats 0, 2 and 4.
+    const weights = Array.from({ length: 12 }, (_, pulse) => metricWeight(pulse * 0.5, blues));
+    expect(weights).toEqual([3, 1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1]);
+    // The compound reading of the same signature accents its own midpoint.
+    expect(metricWeight(3, parseTimeSignature('12/8'))).toBe(2);
+    expect(metricWeight(3, blues)).toBe(1);
   });
 });
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeArrangement } from '../src/analyze/arrange/index.js';
 import { chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
-import { BudgetExceededError } from '../src/core/errors/index.js';
+import { BudgetExceededError, InvalidInputError } from '../src/core/errors/index.js';
 import type { MeterChange, MeterMap } from '../src/core/meter/index.js';
 import {
   barIndexAt,
@@ -17,6 +17,7 @@ import {
   resolveMeters,
 } from '../src/core/meter/index.js';
 import type { NoteEvent } from '../src/core/types.js';
+import { assertMeterMap } from '../src/core/validation/index.js';
 
 const COMMON = parseTimeSignature('4/4');
 const WALTZ = parseTimeSignature('3/4');
@@ -81,6 +82,59 @@ describe('metric weight under a meter change', () => {
     for (let beat = 0; beat < 12; beat += 0.5) {
       expect(metricWeight(beat, single)).toBe(metricWeight(beat, COMMON));
     }
+  });
+});
+
+describe('a map whose first entry is not written at beat 0', () => {
+  /** The map a pickup is written as: the opening signature stated at the pickup. */
+  const PICKUP: MeterMap = [{ startBeat: -1, ts: COMMON }];
+
+  it('keeps beat 0 the downbeat of bar 0', () => {
+    expect(barStartBeat(0, PICKUP)).toBe(0);
+    expect(barIndexAt(0, PICKUP)).toBe(0);
+    expect(metricWeight(0, PICKUP)).toBe(3);
+    expect(formatBarPosition(0, PICKUP)).toBe('1.1');
+    // The pickup itself is the bar before it, as it is under the bare signature.
+    expect(barIndexAt(-1, PICKUP)).toBe(-1);
+    expect(barStartBeat(-1, PICKUP)).toBe(-4);
+    expect(formatBarPosition(-1, PICKUP)).toBe('0.4');
+  });
+
+  it('answers exactly as the bare signature does, at every offset', () => {
+    for (const startBeat of [-1, -4, -2.5, 0, 3, 7]) {
+      const map: MeterMap = [{ startBeat, ts: COMMON }];
+      const name = `first entry at ${startBeat}`;
+      for (let beat = -8; beat < 12; beat += 0.5) {
+        expect(barStartBeat(beat, map), `${name} @${beat}`).toBe(barStartBeat(beat, COMMON));
+        expect(barIndexAt(beat, map), `${name} @${beat}`).toBe(barIndexAt(beat, COMMON));
+        expect(beatToBarPosition(beat, map), `${name} @${beat}`).toEqual(
+          beatToBarPosition(beat, COMMON),
+        );
+        expect(metricWeight(beat, map), `${name} @${beat}`).toBe(metricWeight(beat, COMMON));
+        expect(formatBarPosition(beat, map), `${name} @${beat}`).toBe(
+          formatBarPosition(beat, COMMON),
+        );
+      }
+      for (const bar of [-2, -1, 0, 1, 3]) {
+        expect(barPositionToBeat({ bar, beat: 1 }, map), `${name} bar ${bar}`).toBe(
+          barPositionToBeat({ bar, beat: 1 }, COMMON),
+        );
+      }
+    }
+  });
+
+  it('starts a bar at every later change all the same', () => {
+    // Only the opening signature is anchored at beat 0; a change still begins a
+    // bar where it takes effect, cutting the bar it interrupts short.
+    const map: MeterMap = [
+      { startBeat: -1, ts: COMMON },
+      { startBeat: 6, ts: WALTZ },
+    ];
+    expect([0, 4, 6, 9].map((beat) => barStartBeat(beat, map))).toEqual([0, 4, 6, 9]);
+    expect([0, 4, 6, 9].map((beat) => barIndexAt(beat, map))).toEqual([0, 1, 2, 3]);
+    expect(barPositionToBeat({ bar: 2, beat: 0 }, map)).toBe(6);
+    expect(metricWeight(6, map)).toBe(3);
+    expect(metricWeight(4, map)).toBe(3);
   });
 });
 
@@ -193,8 +247,11 @@ describe('reading a long meter map', () => {
     expect(barIndexAt(last.startBeat + last.ts.numerator, map)).toBe(map.length);
   });
 
-  it('answers a piece-long sweep without walking the map for each beat', () => {
-    const bars = 10_000;
+  it('answers a piece-long sweep without rebuilding the map for each beat', () => {
+    // Longer than any piece changes meter, and short enough that the cost the
+    // sweep cannot avoid — reading the map once per question — stays well inside
+    // the bound below while the cost it can avoid does not.
+    const bars = 5_000;
     const map = everyBar(bars);
     const meters = resolveMeters({ meters: map });
     const start = performance.now();
@@ -207,8 +264,12 @@ describe('reading a long meter map', () => {
     const elapsed = performance.now() - start;
     // Every entry is a downbeat, so the sweep really did read all of them.
     expect(weight).toBe(3 * bars);
-    // A walk per lookup is quadratic and takes seconds here; the bound is loose
-    // enough that only that regression can reach it.
+    // Reading the map is what trusting a caller's array costs, and the sweep
+    // pays it once per question: an array the caller keeps says nothing about
+    // whether it has been written to since it was validated. What the index
+    // saves is everything derived from that read — the bar lengths, the running
+    // bar count, the arrays holding them — which costs some twenty-five times
+    // the comparison does, and that is the distance this bound stands in.
     expect(elapsed).toBeLessThan(2000);
   });
 
@@ -220,6 +281,58 @@ describe('reading a long meter map', () => {
     expect(() => resolveMeters({ meters: tooMany })).toThrow(BudgetExceededError);
     expect(() => resolveMeters({ meters: tooMany })).toThrow(/meters count/);
     expect(() => resolveMeters({ meters: tooMany.slice(0, 100_000) })).not.toThrow();
+  });
+
+  it('re-reads a map whose entries were written to in place', () => {
+    /** Three 4/4 spans, freshly built so the edits below touch nothing else. */
+    const map: MeterMap = [0, 8, 20].map((startBeat) => ({
+      startBeat,
+      ts: { numerator: 4, denominator: 4 },
+    }));
+    // Read once, which validates the map and builds the index the reads below
+    // would otherwise answer out of.
+    expect(meterAt(10, map)).toEqual({ numerator: 4, denominator: 4 });
+    expect(barStartBeat(10, map)).toBe(8);
+    (map[1] as MeterChange).ts.numerator = 3;
+    // Every positional answer now comes from the 3/4 the entry holds: its bars
+    // run 8, 11, 14, and none of them is derived from the 4/4 it used to hold.
+    expect(meterAt(10, map)).toEqual({ numerator: 3, denominator: 4 });
+    expect(beatsPerBarAt(11.5, map)).toBe(3);
+    expect(barStartBeat(11.5, map)).toBe(11);
+    expect(barIndexAt(11.5, map)).toBe(3);
+    expect(formatBarPosition(12, map)).toBe('4.2');
+    for (let beat = 8; beat < 20; beat += 0.5) {
+      const barLength = beatsPerBarAt(beat, map);
+      const barStart = barStartBeat(beat, map);
+      expect((barStart - 8) % barLength, `@${beat}`).toBe(0);
+      expect(beat - barStart, `@${beat}`).toBeLessThan(barLength);
+    }
+  });
+
+  it('refuses a signature written into a validated map in place', () => {
+    const map: MeterMap = [0, 8, 20].map((startBeat) => ({
+      startBeat,
+      ts: { numerator: 4, denominator: 4 },
+    }));
+    expect(meterAt(10, map)).toEqual({ numerator: 4, denominator: 4 });
+    (map[1] as MeterChange).ts.numerator = 0;
+    // Validation is not a thing the map passed once; it is a thing that holds of
+    // the map as it now reads.
+    expect(() => assertMeterMap(map)).toThrow(InvalidInputError);
+    expect(() => meterAt(10, map)).toThrow(InvalidInputError);
+    expect(() => metricWeight(10, map)).toThrow(InvalidInputError);
+  });
+
+  it('re-validates a grouping written into an entry after the fact', () => {
+    const map: MeterMap = [{ startBeat: 0, ts: { numerator: 7, denominator: 8 } }];
+    expect(metricWeight(1, map)).toBe(1);
+    // A grouping summing to neither the pulse count nor the numerator is refused
+    // here as it is on the way in, rather than weighed against a bar it does not
+    // describe.
+    (map[0] as MeterChange).ts.grouping = [2, 2, 2];
+    expect(() => metricWeight(1, map)).toThrow(InvalidInputError);
+    (map[0] as MeterChange).ts.grouping = [2, 2, 3];
+    expect(metricWeight(1, map)).toBe(2);
   });
 
   it('re-reads a map that changed after it was validated', () => {

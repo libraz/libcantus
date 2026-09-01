@@ -46,6 +46,38 @@ describe('the metric grid a meter states', () => {
     // A quarter and a dotted quarter share a half-beat step, and nothing longer.
     expect(metricGridUnit(changes)).toBe(0.5);
   });
+
+  it('steps onto a change that does not fall on a bar line', () => {
+    const changes = [
+      { startBeat: 0, ts: { numerator: 4, denominator: 4 } },
+      { startBeat: 4.25, ts: { numerator: 4, denominator: 4 } },
+    ];
+    // Both spans are quarter-note pulses, but the second span's pulses sit a
+    // quarter of a beat off the first's, so a step of one quarter lands on none
+    // of them.
+    const unit = metricGridUnit(changes);
+    expect(unit).toBe(0.25);
+    for (const change of changes) {
+      const steps = (change.startBeat - 0) / unit;
+      expect(Math.abs(steps - Math.round(steps)), `change at ${change.startBeat}`).toBeLessThan(
+        1e-9,
+      );
+      const pulses = pulseBeats(change.ts) / unit;
+      expect(Math.abs(pulses - Math.round(pulses)), `pulse of ${change.startBeat}`).toBeLessThan(
+        1e-9,
+      );
+    }
+  });
+
+  it('reads an onset written a hair off a beat as unmeasured', () => {
+    // A grid dividing that hair costs a slot per step of the piece and lands on
+    // nothing anyone plays, so the pulses keep the step they state.
+    const changes = [
+      { startBeat: 0, ts: { numerator: 4, denominator: 4 } },
+      { startBeat: 4.000001, ts: { numerator: 4, denominator: 4 } },
+    ];
+    expect(metricGridUnit(changes)).toBe(1);
+  });
 });
 
 describe('chord segmentation in compound meters', () => {

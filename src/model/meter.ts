@@ -165,13 +165,19 @@ export class Meter {
    * additive grouping and one is asked for.
    *
    * @param opts Set `grouping: true` to render an additive grouping. A
-   *   grouping counted in main pulses cannot be written additively and falls
-   *   back to the plain form.
+   *   grouping counted in main pulses has no additive spelling: one whose
+   *   groups are all the same length states the division the bare signature
+   *   already has and falls back to the plain form, and one whose groups differ
+   *   is refused rather than printed as a bar that weighs its pulses otherwise.
    * @returns The formatted signature.
+   * @throws If `grouping: true` is asked of a grouping that no signature text
+   *   can spell: one counted in main pulses, on a compound numerator, whose
+   *   groups are not all the same length — 12/8 as `[1, 1, 2]`.
    * @example
    * ```ts
    * import { Meter } from '@libraz/libcantus';
    * Meter.of(7, 8, [2, 2, 3]).format({ grouping: true }); // '2+2+3/8'
+   * Meter.of(12, 8, [1, 1, 1, 1]).format({ grouping: true }); // '12/8'
    * ```
    */
   format(opts: { grouping?: boolean } = {}): string {
@@ -221,13 +227,18 @@ export class Meter {
    *
    * @param beatInQuarters Position in quarter-note beats.
    * @param decimals Digits of the fractional beat to keep.
-   * @returns The formatted position, e.g. `'3.2'` for bar 3, felt beat 2.
+   * @returns The formatted position in one of two forms: `bar.beat` on a felt
+   *   beat, e.g. `'3.2'` for bar 3, felt beat 2; and `bar.beat+fraction`
+   *   between felt beats, e.g. `'3.2+0.5'` halfway from the second felt beat to
+   *   the third. A reader of these strings has to take both, since most onsets
+   *   of an ordinary piece fall between pulses.
    * @throws If the position is not finite or `decimals` is not an integer in
    *   0..100.
    * @example
    * ```ts
    * import { Meter } from '@libraz/libcantus';
    * Meter.parse('6/8').formatPosition(7.5); // '3.2'
+   * Meter.parse('6/8').formatPosition(8.25); // '3.2+0.5'
    * ```
    */
   formatPosition(beatInQuarters: number, decimals = 2): string {

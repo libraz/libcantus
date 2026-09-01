@@ -153,17 +153,23 @@ export function copyMeterData(data: MeterData): MeterData {
 }
 
 /**
- * The bar arithmetic of one meter map, precomputed so that a positional
- * question costs a binary search rather than a walk.
+ * The bar arithmetic of one meter map, precomputed so that a positional question
+ * finds its entry by halving the range rather than by re-deriving the bars
+ * before it.
  *
- * Every entry is read once here and never again: a per-slot analysis pass asks
- * thousands of positional questions of the same map, and re-deriving the bars
- * before an entry on each of them is what makes such a pass quadratic in the
- * number of meter changes.
+ * A per-slot analysis pass asks thousands of positional questions of the same
+ * map. Each of them still reads the array, since a caller may write to it
+ * between two of them; what none of them repeats is the derivation — the bar
+ * lengths, the running bar count and the arrays holding them — which is the part
+ * that would make such a pass quadratic in the number of meter changes.
  */
 type MeterIndex = {
   /** Onsets in map order, as they read when the index was built. */
   startBeats: number[];
+  /** Each entry's signature, as it read when the index was built. */
+  signatures: TimeSignature[];
+  /** Beat each entry's bars are counted from. */
+  barAnchors: number[];
   /** Bar length in quarter-note beats of each entry's signature. */
   barBeats: number[];
   /** Bars completed before each entry — the prefix sum of the spans above. */
@@ -176,22 +182,86 @@ type MeterIndex = {
  * Indexes held against the identity of the map they describe.
  *
  * A caller keeps its own array and may write to it after the library has read
- * it, so an index is only trusted while the map still has the length and the
- * end onsets it was built from; anything else rebuilds. The index answers out
- * of its own snapshot rather than out of the caller's array, so a map written
- * to in place mid-analysis reads as it did when it was validated instead of
- * producing a position derived from half of each.
+ * it, so an index is only trusted while every entry still reads as it did when
+ * the index was built — the same onsets and the same signatures, compared by
+ * value down to the grouping. Anything else rebuilds, and a map that had passed
+ * validation is validated again. The index answers out of one snapshot of the
+ * whole array, so a map written to in place mid-analysis never yields a position
+ * derived from a cached bar length of one entry and a live signature of another.
  */
 const INDEX_CACHE = new WeakMap<MeterMap, MeterIndex>();
 
-/** Whether a cached index still describes the array it was built from. */
+/**
+ * The map last read entry by entry, and the index that read produced.
+ *
+ * Reading every entry is what a caller's array costs to trust, and one question
+ * pays it once: the guard that answers whether the map is valid reads the whole
+ * array, and the helpers that then place the bars answer out of the index that
+ * read produced rather than reading it again per bar arithmetic. The guard never
+ * consults this — it is the thing that writes it — so the mark is renewed at the
+ * start of every question and never outlives one, which is the only window in
+ * which a caller can write to its array.
+ */
+let readMap: MeterMap | undefined;
+let readIndex: MeterIndex | undefined;
+
+/** Record the index a full read of `map` produced, and hand it back. */
+function rememberRead(map: MeterMap, index: MeterIndex): MeterIndex {
+  readMap = map;
+  readIndex = index;
+  return index;
+}
+
+/** Whether two signatures name the same bar, grouping included. */
+function sameSignature(ts: TimeSignature, snapshot: TimeSignature): boolean {
+  if (typeof ts !== 'object' || ts === null) {
+    return false;
+  }
+  if (ts.numerator !== snapshot.numerator || ts.denominator !== snapshot.denominator) {
+    return false;
+  }
+  const grouping = ts.grouping;
+  const was = snapshot.grouping;
+  if (grouping === undefined || was === undefined) {
+    return grouping === was;
+  }
+  if (grouping.length !== was.length) {
+    return false;
+  }
+  for (let i = 0; i < was.length; i += 1) {
+    if (grouping[i] !== was[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Whether a cached index still describes the array it was built from.
+ *
+ * Every entry is compared, and by value: a signature edited in place keeps both
+ * the array's length and its object identities, so anything cheaper reports a
+ * map that has changed as one that has not — and the change may be the one that
+ * makes the map invalid.
+ */
 function describesMap(index: MeterIndex, map: MeterMap): boolean {
-  const last = map.length - 1;
-  return (
-    index.startBeats.length === map.length &&
-    index.startBeats[0] === map[0]?.startBeat &&
-    index.startBeats[last] === map[last]?.startBeat
-  );
+  if (index.startBeats.length !== map.length) {
+    return false;
+  }
+  for (let i = 0; i < map.length; i += 1) {
+    const entry = map[i];
+    const signature = index.signatures[i];
+    if (
+      entry === undefined ||
+      entry === null ||
+      signature === undefined ||
+      entry.startBeat !== index.startBeats[i] ||
+      !sameSignature(entry.ts, signature)
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /**
@@ -203,6 +273,8 @@ function describesMap(index: MeterIndex, map: MeterMap): boolean {
  */
 function buildMeterIndex(map: MeterMap, validated: boolean): MeterIndex {
   const startBeats = new Array<number>(map.length);
+  const signatures = new Array<TimeSignature>(map.length);
+  const barAnchors = new Array<number>(map.length);
   const barBeats = new Array<number>(map.length);
   const barsBefore = new Array<number>(map.length);
   let bars = 0;
@@ -210,34 +282,61 @@ function buildMeterIndex(map: MeterMap, validated: boolean): MeterIndex {
     const entry = map[i];
     const startBeat = entry?.startBeat ?? 0;
     const barLen = entry === undefined ? 0 : barBeatsOf(entry.ts);
+    // The opening signature counts its bars from beat 0 rather than from the
+    // onset the map is written at: beat 0 is the downbeat, so a map whose first
+    // entry sits at the pickup it covers lays its bar lines exactly where the
+    // bare signature lays them. Every later entry starts a bar of its own.
+    const anchor = i === 0 ? 0 : startBeat;
     startBeats[i] = startBeat;
+    signatures[i] =
+      entry === undefined ? { numerator: 4, denominator: 4 } : copyTimeSignature(entry.ts);
+    barAnchors[i] = anchor;
     barBeats[i] = barLen;
     barsBefore[i] = bars;
     const next = map[i + 1];
     if (next !== undefined && barLen > 0) {
-      bars += Math.max(1, Math.ceil((next.startBeat - startBeat) / barLen - EPS));
+      bars += Math.max(1, Math.ceil((next.startBeat - anchor) / barLen - EPS));
     }
   }
-  const index: MeterIndex = { startBeats, barBeats, barsBefore, validated };
+  const index: MeterIndex = { startBeats, signatures, barAnchors, barBeats, barsBefore, validated };
   INDEX_CACHE.set(map, index);
-  return index;
+  return rememberRead(map, index);
 }
 
-/** The map's index, built on first use and rebuilt when the map has changed. */
+/**
+ * The map's index, built on first use and rebuilt when the map has changed.
+ *
+ * Reached only from a question that has just read the map through the guard
+ * below, so the mark that read left is what says the index still describes the
+ * array. A map arriving here unread is compared entry by entry as it would be
+ * there.
+ */
 function meterIndexOf(map: MeterMap): MeterIndex {
+  if (readMap === map && readIndex !== undefined) {
+    return readIndex;
+  }
   const cached = INDEX_CACHE.get(map);
-  return cached !== undefined && describesMap(cached, map) ? cached : buildMeterIndex(map, false);
+  return cached !== undefined && describesMap(cached, map)
+    ? rememberRead(map, cached)
+    : buildMeterIndex(map, false);
 }
 
 /**
  * Whether the map has already passed validation and is unchanged since.
  *
  * The guard that lets a per-slot pass re-enter a validating entry point without
- * paying for the whole map on every slot.
+ * re-deriving the bar arithmetic of the whole map on every slot. What it still
+ * pays on every slot is a comparison per entry: an array the caller keeps says
+ * nothing about whether it has been written to since, so the only way to know a
+ * validated map is still the one that was validated is to read it.
  */
 export function isValidatedMeterMap(map: MeterMap): boolean {
   const cached = INDEX_CACHE.get(map);
-  return cached?.validated === true && describesMap(cached, map);
+  if (cached?.validated !== true || !describesMap(cached, map)) {
+    return false;
+  }
+  rememberRead(map, cached);
+  return true;
 }
 
 /** Record that a map passed validation, and precompute its bar arithmetic. */
@@ -281,12 +380,12 @@ export function entryIndexOf(map: MeterMap, beat: number): number {
 export function barStartOf(map: MeterMap, beat: number): number {
   const index = meterIndexOf(map);
   const at = lastAtOrBefore(index.startBeats, beat + EPS);
-  const startBeat = index.startBeats[at];
+  const anchor = index.barAnchors[at];
   const barLen = index.barBeats[at];
-  if (startBeat === undefined || barLen === undefined || barLen === 0) {
+  if (anchor === undefined || barLen === undefined || barLen === 0) {
     return 0;
   }
-  return startBeat + Math.floor((beat - startBeat) / barLen + EPS) * barLen;
+  return anchor + Math.floor((beat - anchor) / barLen + EPS) * barLen;
 }
 
 /**
@@ -308,7 +407,7 @@ export function barLengthOf(map: MeterMap, beat: number): number {
 }
 
 /**
- * Bar index of a beat, counting the map's first bar as 0.
+ * Bar index of a beat, counting the bar that begins at beat 0 as bar 0.
  *
  * Beats before that bar count backwards, which is what numbers a pickup bar as
  * bar -1 rather than folding it into the first full bar.
@@ -316,22 +415,22 @@ export function barLengthOf(map: MeterMap, beat: number): number {
 export function barIndexOf(map: MeterMap, beat: number): number {
   const index = meterIndexOf(map);
   const at = lastAtOrBefore(index.startBeats, beat + EPS);
-  const startBeat = index.startBeats[at];
+  const anchor = index.barAnchors[at];
   const barLen = index.barBeats[at];
-  if (startBeat === undefined || barLen === undefined || barLen === 0) {
+  if (anchor === undefined || barLen === undefined || barLen === 0) {
     return 0;
   }
-  return (index.barsBefore[at] ?? 0) + Math.floor((beat - startBeat) / barLen + EPS);
+  return (index.barsBefore[at] ?? 0) + Math.floor((beat - anchor) / barLen + EPS);
 }
 
 /** Absolute beat at which bar `barIndex` begins. */
 export function beatOfBarIndex(map: MeterMap, barIndex: number): number {
   const index = meterIndexOf(map);
   const at = lastAtOrBefore(index.barsBefore, barIndex);
-  const startBeat = index.startBeats[at];
+  const anchor = index.barAnchors[at];
   const barLen = index.barBeats[at];
-  if (startBeat === undefined || barLen === undefined) {
+  if (anchor === undefined || barLen === undefined) {
     return 0;
   }
-  return startBeat + (barIndex - (index.barsBefore[at] ?? 0)) * barLen;
+  return anchor + (barIndex - (index.barsBefore[at] ?? 0)) * barLen;
 }

@@ -52,6 +52,17 @@ Metric weight runs from 0 (off-pulse) to 3 (downbeat) and is what onset placemen
 
 Bar numbers come in two origins, and which one you get depends on whether you asked for a number or for a string. The numeric conversions are 0-based: `barIndexAt`, `beatToBarPosition`, `Meter.barPositionAt`, and `Score.barAt` all call the first full bar 0, which is what makes a pickup bar -1 and lets bar arithmetic run through it. The formatters are 1-based, the way a printed score is numbered: `formatBarPosition` and `Meter.formatPosition` render that same first bar as `1.1`, and the pickup as bar 0. So a UI that shows a number straight from `barAt` reads one lower than the position the library prints — add 1 to it, or format the beat with `formatBarPosition` instead of numbering it yourself.
 
+The formatters print two forms, and a reader of their output has to take both. A position on a felt beat reads `bar.beat`; one between felt beats reads `bar.beat+fraction`, which most onsets of an ordinary piece do:
+
+```ts
+import { formatBarPosition, parseTimeSignature } from '@libraz/libcantus';
+
+const sixEight = parseTimeSignature('6/8');
+
+formatBarPosition(7.5, sixEight); // '3.2'
+formatBarPosition(8.25, sixEight); // '3.2+0.5'
+```
+
 ## Compound, additive, and tuplet meters
 
 A `Meter` answers what the bar is made of:
@@ -96,7 +107,9 @@ A compound signature groups its eighths into dotted pulses, so 6/8 has two pulse
 
 On a compound numerator the shape of the grouping picks the reading. Groups of nothing but threes spell the compound division itself, so 9/8 as `[3, 3, 3]` is the ordinary three dotted-quarter pulses, exactly as `[1, 1, 1]` or no grouping at all. Any other grouping summing to the numerator counts units and reads additively, so 9/8 as `[2, 2, 2, 3]` is nine quaver pulses grouped the way aksak meters are written.
 
-`metricWeight` — `Meter.weightAt` on the class side — accents the head of each group, so 7/8 as `[2, 2, 3]` is felt as three beats rather than seven equal ones. A grouping whose groups are all the same length states the division the meter already has, so it accents nothing extra. `formatTimeSignature(ts, { grouping: true })` writes the additive form — `'2+2+3/8'` — which `parseTimeSignature` reads back; a grouping counted in pulses has no additive spelling and falls back to the plain `'9/8'`, which is the same bar.
+`metricWeight` — `Meter.weightAt` on the class side — accents the head of each group, so 7/8 as `[2, 2, 3]` is felt as three beats rather than seven equal ones, and 6/8 as `[2, 2, 2]` is felt in three pairs of quavers rather than on the midpoint of a compound bar. A grouping counted in the meter's own pulses whose groups are all the same length states the division the meter already has, so it accents nothing extra.
+
+`formatTimeSignature(ts, { grouping: true })` writes the additive form — `'2+2+3/8'` — which `parseTimeSignature` reads back. A grouping counted in pulses has no additive spelling: where its groups are all the same length it falls back to the plain `'9/8'`, which is the same bar, and where they differ — 12/8 as `[1, 1, 2]` — it is refused with an `InvalidInputError`, since the plain form would name a bar whose accents are not this one's. `Meter.format` throws the same error under the same condition.
 
 `tuplet` divides a span into equal parts, which is the placement side of a tuplet; the notation side — the `{ actual, normal }` ratio a renderer prints — comes from `beatsToDuration`.
 

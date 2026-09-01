@@ -91,6 +91,11 @@ export type MeterChange = {
  * The first entry also governs everything before it, which is what reads a
  * pickup written at negative beats in the signature the piece opens in.
  *
+ * Beat 0 is the first downbeat here as everywhere else: the opening signature
+ * lays its bar lines from beat 0 whatever beat the first entry is written at, so
+ * a map opening at the pickup it covers numbers its bars exactly as the bare
+ * signature does. Every later entry starts a bar at the beat it takes effect.
+ *
  * @category Rhythm & Meter
  */
 export type MeterMap = MeterChange[];
@@ -232,6 +237,14 @@ const EPS = 1e-9;
  * whole process then reads differently.
  */
 const DEFAULT_TS: TimeSignature = Object.freeze({ numerator: 4, denominator: 4 });
+
+/**
+ * How far {@link metricGridUnit} divides a pulse to land on a meter change.
+ *
+ * The finest subdivision a bar is written in, which is what separates a change
+ * placed inside a bar from one placed a floating hair off a beat.
+ */
+const MAX_CHANGE_DIVISIONS = 16;
 
 /** Whether `value` is an integer multiple of `unit` (within a float tolerance). */
 function isMultiple(value: number, unit: number): boolean {
@@ -434,7 +447,17 @@ function meterAtChecked(beatInQuarters: number, meter: MeterData): TimeSignature
   if (!isMeterMap(meter)) {
     return meter;
   }
-  return meter[entryIndexOf(meter, beatInQuarters)]?.ts ?? DEFAULT_TS;
+  const ts = meter[entryIndexOf(meter, beatInQuarters)]?.ts;
+  if (ts === undefined) {
+    // A validated map is a non-empty run whose first entry governs everything
+    // before it, so there is always an entry in force. Reaching here means the
+    // map was emptied or holed after it was read, and answering 4/4 would put
+    // the whole position system on a bar the caller never named.
+    throw new InvalidInputError(
+      `meters names no time signature in force at beat ${beatInQuarters}; a meter map must stay a non-empty run of changes while it is being read`,
+    );
+  }
+  return ts;
 }
 
 /**
@@ -657,6 +680,12 @@ export function pulseBeats(ts: MeterLike): number {
  * @category Rhythm & Meter
  */
 export function barPositionToPulse(pos: BarPosition, meter: MeterLike): number {
+  // The bar is checked before the meter is read, so a position no meter could
+  // hold is refused the same way whichever form the meter came in: which bar a
+  // signature is asked about is the caller's own answer, and a single signature
+  // hiding a NaN behind arithmetic that never touches it is the reading the map
+  // form already rejects.
+  assertInteger(pos.bar, 'position.bar');
   assertFiniteNumber(pos.beat, 'position.beat');
   return pulseChecked(pos, readMeterData(meter));
 }
@@ -687,11 +716,16 @@ function meterAtBarChecked(bar: number, meter: MeterData): TimeSignature {
  * @param beatInQuarters Absolute position in quarter-note beats.
  * @param meter A single signature, or the piece's meter map.
  * @param decimals Digits of the fractional beat to keep.
- * @returns The formatted position, e.g. `'3.2'` for bar 3, felt beat 2.
+ * @returns The formatted position in one of two forms: `bar.beat` on a felt
+ *   beat, e.g. `'3.2'` for bar 3, felt beat 2; and `bar.beat+fraction` between
+ *   felt beats, e.g. `'3.2+0.5'` halfway from the second felt beat to the third.
+ *   A reader of these strings has to take both, since most onsets of an ordinary
+ *   piece fall between pulses.
  * @example
  * ```ts
  * import { formatBarPosition, parseTimeSignature } from '@libraz/libcantus';
  * formatBarPosition(7.5, parseTimeSignature('6/8')); // '3.2'
+ * formatBarPosition(8.25, parseTimeSignature('6/8')); // '3.2+0.5'
  * ```
  * @category Rhythm & Meter
  */
@@ -787,7 +821,12 @@ export function metricWeight(beatInQuarters: number, meter: MeterLike): number {
     return 3;
   }
   const grouping = pulseGroupingOf(ts);
-  if (grouping !== undefined && !isUniformGrouping(grouping)) {
+  // A grouping of equal-length groups states no accent only when it restates the
+  // division its own meter already has. An additive reading has flattened the
+  // bar into its units, so its groups are the only thing saying where the accents
+  // are: 6/8 as [2, 2, 2] is felt on the head of each pair, and the midpoint the
+  // compound reading would accent is not one of them.
+  if (grouping !== undefined && (isAdditiveReading(ts) || !isUniformGrouping(grouping))) {
     return isGroupHead(grouping, pulseIndex) ? 2 : 1;
   }
   if (pulses % 2 === 0 && pulseIndex === pulses / 2) {
@@ -803,7 +842,10 @@ export function metricWeight(beatInQuarters: number, meter: MeterLike): number {
  * One signature answers with its own {@link pulseBeats} — a quarter in 4/4, a
  * dotted quarter in 6/8. A meter map answers with the longest step that is a
  * whole division of every signature it names, so a grid built on it lands on the
- * pulses of each of them rather than on the ones the piece opened in.
+ * pulses of each of them rather than on the ones the piece opened in. A change
+ * need not fall on a bar line of the signature before it, so the beat each of
+ * them takes effect at divides the step too: a grid that steps over the onset of
+ * a change lands on none of the pulses that follow it.
  *
  * This is the single derivation of the grid that everything metric is laid out
  * against: a slot grid that steps over pulses never sees what happens on them,
@@ -824,7 +866,19 @@ export function metricGridUnit(meter: MeterLike): number {
   for (const change of resolved) {
     unit = commonStep(unit, pulseBeatsOf(change.ts));
   }
-  return unit > 0 ? unit : pulseBeatsOf(DEFAULT_TS);
+  if (unit <= 0) {
+    return pulseBeatsOf(DEFAULT_TS);
+  }
+  const origin = resolved[0]?.startBeat ?? 0;
+  let onChanges = unit;
+  for (const change of resolved) {
+    onChanges = commonStep(onChanges, Math.abs(change.startBeat - origin));
+  }
+  // An onset written a hair off a beat divides into a step no coarser than the
+  // hair, and a grid that fine costs a slot per step of the piece while landing
+  // on nothing anyone plays. Past the division limit the onset is read as
+  // unmeasured and the grid keeps the step the pulses alone state.
+  return onChanges * MAX_CHANGE_DIVISIONS >= unit - EPS ? onChanges : unit;
 }
 
 /**
