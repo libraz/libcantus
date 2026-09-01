@@ -8,11 +8,13 @@
  * dictionary's business.
  */
 
+import { InvalidInputError } from '../../core/errors/index.js';
 import { instrumentRange, type StringedProfile } from '../../core/instrument/index.js';
 import { beatsPerBar, pulseBeats, type TimeSignature } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import type { Chord } from '../../theory/chord/index.js';
+import { assertRange } from '../../core/validation/index.js';
+import type { Chord, ChordSegment } from '../../theory/chord/index.js';
 import { nearestScaleTone } from '../../theory/scale/index.js';
 
 /** Velocity for notes on metrically strong positions. */
@@ -33,6 +35,94 @@ export const EPS = 1e-9;
  */
 export function placePc(pc: number, anchor: number, low: number): number {
   return foldIntoBand(pc + 12 * Math.round((anchor - pc) / 12), low);
+}
+
+/**
+ * Place a segment's bass note in the register band.
+ *
+ * The octave is a function of the pitch class and the band alone rather than of
+ * whatever sounded last, so a chord that comes back lands on the note it landed
+ * on before however far the line travelled in between: a two-chord vamp holds
+ * the register the caller asked for instead of climbing out of it by its second
+ * bar, and every degree measured from the root is then fixed by the chord too.
+ */
+export function placeRoot(pc: number, low: number): number {
+  return low + pitchClass(pc - low);
+}
+
+/** A bar-long slice of a segment: the span one turn of a figure fills. */
+export type BarTile = {
+  startBeat: number;
+  endBeat: number;
+};
+
+/**
+ * The bars a segment spans, one tile per bar of it.
+ *
+ * A figure is a bar long and a chord is not: a ballad or a modal vamp holds one
+ * chord for four of them. What a bass part writes over such a chord repeats
+ * once per bar rather than being stretched across the whole span, so the bar
+ * after the first is played rather than held. The tiles run from the segment's
+ * own onset, which is where the harmony changed, and the last one is cut at the
+ * next change.
+ */
+export function barTiles(startBeat: number, endBeat: number, ts: TimeSignature): BarTile[] {
+  const barBeats = beatsPerBar(ts);
+  const tiles: BarTile[] = [];
+  for (let index = 0; ; index += 1) {
+    const tileStart = startBeat + index * barBeats;
+    if (tileStart >= endBeat - EPS) {
+      break;
+    }
+    tiles.push({ startBeat: tileStart, endBeat: Math.min(tileStart + barBeats, endBeat) });
+  }
+  return tiles;
+}
+
+/**
+ * The pulse a bar's second half begins on, which is where an alternating bass
+ * answers the root.
+ *
+ * The bar's midpoint need not be a pulse — a three-beat bar has none there — so
+ * the pulse at or before it is taken, keeping the answer on the grid the meter
+ * states rather than on an invented local one.
+ */
+export function midBarPulse(barStart: number, ts: TimeSignature): number {
+  const pulse = pulseBeats(ts);
+  return barStart + Math.floor((beatsPerBar(ts) / 2 + EPS) / pulse) * pulse;
+}
+
+/**
+ * Check a chord placement a bass part can be written over.
+ *
+ * Both entry points consume the same {@link ChordSegment} contract, so both ask
+ * the same questions of it: a segment runs forward in time, and no two of them
+ * sound at once. Overlapping segments are rejected rather than laid over each
+ * other, because a bass part is monophonic and interleaving two lines produces
+ * notes belonging to neither chord.
+ *
+ * @param segments The placement, sorted by onset.
+ * @throws If a segment starts outside the timeline, has a non-positive
+ *   duration, or overlaps the segment before it.
+ */
+export function assertBassSegments(segments: readonly ChordSegment[]): void {
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
+    if (segment === undefined) {
+      continue;
+    }
+    assertRange(segment.startBeat, 0, Number.MAX_SAFE_INTEGER, `segments[${index}].startBeat`);
+    assertRange(segment.endBeat, 0, Number.MAX_SAFE_INTEGER, `segments[${index}].endBeat`);
+    if (segment.endBeat <= segment.startBeat) {
+      throw new InvalidInputError(`segments[${index}] must have a positive duration`);
+    }
+    const previous = segments[index - 1];
+    if (previous !== undefined && segment.startBeat < previous.endBeat - EPS) {
+      throw new InvalidInputError(
+        `bass segments must not overlap: segments ${index - 1} and ${index} overlap`,
+      );
+    }
+  }
 }
 
 /** Chord-tone pitch classes in stacked-thirds order, deduplicated. */
@@ -151,20 +241,22 @@ export function bandFloor(low: number, instrument: StringedProfile | undefined):
 /**
  * A diatonic or chromatic neighbor of `target`, a step toward `from`.
  *
- * The result is folded back into the register band: an approach note may be
- * emitted with an explicit MIDI value, bypassing the placement clamp, and a
- * target on the band edge would otherwise put it a semitone outside — below
- * MIDI 0 at the lowest accepted octave.
+ * The note stays where the step puts it, a semitone or a scale step from the
+ * target, even when that is just outside the register band: leading into the
+ * next chord is what this note is for, and folding it by an octave to keep it
+ * in the band would turn the step into a leap of eleven semitones whenever the
+ * target sat on the band's floor.
  *
  * Where the line already sits on that neighbour — the note it is coming from is
  * a step from the target — the neighbour on the far side of the target is taken
  * instead. The approach then comes from the other direction, which is the one
  * thing that cannot happen on the beat whose whole job is to move: repeating
- * the note just played would stop the line at the chord change.
+ * the note just played would stop the line at the chord change. The far side is
+ * taken for a neighbour outside the MIDI domain too, which is the only thing
+ * that can happen to a target on the lowest accepted octave's floor.
  *
  * @param target The note being led into.
  * @param from Where the line is coming from, which decides the direction.
- * @param low Floor of the register band.
  * @param key Key context for the diatonic neighbour.
  * @param chromatic Whether to take the semitone rather than the scale step. The
  *   choice is the caller's so that each caller addresses its own draw.
@@ -172,28 +264,26 @@ export function bandFloor(low: number, instrument: StringedProfile | undefined):
 export function approachNote(
   target: number,
   from: number,
-  low: number,
   key: KeyScale,
   chromatic: boolean,
 ): number {
   const dir = from <= target ? -1 : 1;
-  const near = neighborOnSide(target, dir, low, key, chromatic);
-  return near === from ? neighborOnSide(target, -dir, low, key, chromatic) : near;
+  const near = neighborOnSide(target, dir, key, chromatic);
+  const far = neighborOnSide(target, -dir, key, chromatic);
+  const playable = (midi: number): boolean => midi >= 0 && midi <= 127;
+  if (playable(near) && near !== from) {
+    return near;
+  }
+  return playable(far) ? far : near;
 }
 
-/** The neighbour of `target` on the side `dir` points to, folded into the band. */
-function neighborOnSide(
-  target: number,
-  dir: number,
-  low: number,
-  key: KeyScale,
-  chromatic: boolean,
-): number {
+/** The neighbour of `target` on the side `dir` points to. */
+function neighborOnSide(target: number, dir: number, key: KeyScale, chromatic: boolean): number {
   const semitone = target + dir;
   if (chromatic) {
-    return foldIntoBand(semitone, low);
+    return semitone;
   }
   const cand = nearestScaleTone(target + dir * 2, key);
   const step = Math.abs(cand - target);
-  return foldIntoBand(step >= 1 && step <= 2 ? cand : semitone, low);
+  return step >= 1 && step <= 2 ? cand : semitone;
 }

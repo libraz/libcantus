@@ -9,7 +9,6 @@
  * plays, and each records the ground it qualifies under.
  */
 
-import { InvalidInputError } from '../../core/errors/index.js';
 import {
   type Articulation,
   foldIntoRange,
@@ -17,7 +16,6 @@ import {
   toStringedProfile,
 } from '../../core/instrument/index.js';
 import {
-  beatsPerBar,
   isStrongBeat,
   type MeterLike,
   meterAt,
@@ -30,11 +28,16 @@ import {
   assertGenerationBudget,
   assertInteger,
   assertOneOf,
-  assertRange,
   clampToMidi,
 } from '../../core/validation/index.js';
 import type { Chord, ChordSegment } from '../../theory/chord/index.js';
-import { type KeyLike, nearestScaleTone, toKeyScale } from '../../theory/scale/index.js';
+import { chordScales } from '../../theory/chordscale/index.js';
+import {
+  type KeyLike,
+  namedScaleMask,
+  nearestScaleTone,
+  toKeyScale,
+} from '../../theory/scale/index.js';
 import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
 import { assertDifficulty, type GenerationContextInput, resolveContext } from '../context/index.js';
 import { deepFreeze } from '../vocabulary/freeze.js';
@@ -53,9 +56,12 @@ import {
 } from '../vocabulary/index.js';
 import {
   approachNote,
+  assertBassSegments,
   bandFloor,
+  barTiles,
   bassPcOf,
   placePc,
+  placeRoot,
   STRONG_VELOCITY,
   WEAK_VELOCITY,
 } from './internal.js';
@@ -66,8 +72,11 @@ import {
  * A degree is 1-based and counts up from the chord's root: 1 is the root, 3 the
  * third, 8 the octave. Degrees the chord itself names — the third, fifth and
  * seventh — are taken from the chord, so the same figure comes out major over a
- * major chord and minor over a minor one; the rest are taken from the key. That
- * is what lets a figure be written once and fit a whole progression.
+ * major chord and minor over a minor one. A degree the chord's quality settles
+ * without stating it follows the quality: the third of a suspended chord is the
+ * tone the suspension put there, and a seventh chord's remaining degrees are
+ * its own chord scale's. Only what the harmony leaves open is taken from the
+ * key. That is what lets a figure be written once and fit a whole progression.
  *
  * @category Composition
  */
@@ -335,13 +344,80 @@ export const BASS_LICKS: readonly BassLick[] = deepFreeze([
 /** Semitones above the root for each degree of a major scale, 1-based. */
 const MAJOR_DEGREE_SEMITONES = [0, 2, 4, 5, 7, 9, 11] as const;
 
+/** How many tones a scale has one degree apiece. */
+const HEPTATONIC_SIZE = 7;
+
+/**
+ * The scale a chord's own quality implies, as semitones above its root.
+ *
+ * A chord that states a seventh has named its mode — the third and the seventh
+ * together are what chord-scale theory reads a chord scale from — so the
+ * degrees it does not state are still its own rather than the surrounding key's:
+ * the sixth over a dominant seventh is the major sixth its mode carries,
+ * whatever the key spells in that place. A triad names no mode, and a chord
+ * whose set no seven-tone scale contains has no degrees to give, so both leave
+ * the answer to the key.
+ *
+ * @param chord The chord being played over.
+ * @returns One semitone offset per degree, 1-based, or undefined when the
+ *   quality determines no scale.
+ */
+function impliedScaleTones(chord: Chord): readonly number[] | undefined {
+  if (chordDegreeSemitone(7, chord) === undefined) {
+    return undefined;
+  }
+  for (const match of chordScales(chord)) {
+    const mask = namedScaleMask(match.name);
+    if (mask === undefined) {
+      continue;
+    }
+    const tones: number[] = [];
+    for (let offset = 0; offset < 12; offset += 1) {
+      if (((mask >> offset) & 1) === 1) {
+        tones.push(offset);
+      }
+    }
+    if (tones.length === HEPTATONIC_SIZE) {
+      return tones;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The tone standing in the place of a degree the chord replaced.
+ *
+ * A suspension does not leave its third unstated; it puts another tone there.
+ * Filling the third back in from the key is the one thing a suspension exists
+ * to prevent, so a figure written on the third sounds the tone the chord
+ * suspended into instead. Read from the tones the chord sounds rather than from
+ * its quality name: one suspension is written `sus4`, `7sus4`, `9sus4` and
+ * `11`, and the eleventh states it by omitting the third rather than by naming
+ * a suspension at all.
+ */
+function replacedDegreeSemitone(degree: number, chord: Chord): number | undefined {
+  if (degree !== 3) {
+    return undefined;
+  }
+  const sounds = (semitones: number): boolean =>
+    chord.intervals.some((interval) => pitchClass(interval) === semitones);
+  if (sounds(3) || sounds(4)) {
+    return undefined;
+  }
+  return sounds(5) ? 5 : sounds(2) ? 2 : undefined;
+}
+
 /**
  * Semitones above the chord's root that a degree names.
  *
  * The chord answers for the degrees it actually contains, so a figure written
  * on the third comes out minor over a minor chord without the dictionary having
- * to hold two versions of it. Every other degree is taken from the key, which
- * is what keeps a passing tone inside the music rather than inside a template.
+ * to hold two versions of it. Next comes what the chord's quality settles
+ * without stating: the tone a suspension put in the third's place, and the
+ * degrees of the chord scale a seventh chord names. Only what is left — a
+ * degree the harmony genuinely leaves open, which is where a passing tone lives
+ * — is taken from the key, which keeps it inside the music rather than inside a
+ * template.
  *
  * An alteration is a displacement from the plain diatonic degree, so it is
  * measured against the major-scale template rather than stacked on top of what
@@ -353,7 +429,13 @@ const MAJOR_DEGREE_SEMITONES = [0, 2, 4, 5, 7, 9, 11] as const;
  * reducing it modulo twelve would spell it as the root the figure just played,
  * turning every octave figure into a repeated note.
  */
-function degreeSemitone(degree: number, alter: number, chord: Chord, key: KeyScale): number {
+function degreeSemitone(
+  degree: number,
+  alter: number,
+  chord: Chord,
+  key: KeyScale,
+  implied: readonly number[] | undefined,
+): number {
   const octaves = Math.floor((degree - 1) / 7);
   const within = ((degree - 1) % 7) + 1;
   const template = MAJOR_DEGREE_SEMITONES[within - 1] ?? 0;
@@ -361,7 +443,10 @@ function degreeSemitone(degree: number, alter: number, chord: Chord, key: KeySca
     alter !== 0
       ? template
       : (chordDegreeSemitone(within, chord) ??
-        // A degree the chord does not name is a passing tone, so the key decides it.
+        replacedDegreeSemitone(within, chord) ??
+        implied?.[within - 1] ??
+        // A degree neither the chord nor its quality settles is a passing tone,
+        // so the key decides it.
         nearestScaleTone(chord.rootPc + template, key) - chord.rootPc);
   // A degree names a position inside one octave; the octaves it spans are what
   // `octaves` carries. An extended chord states its ninth as fourteen semitones
@@ -478,8 +563,10 @@ const EPS = 1e-9;
  *   key name such as `'C major'` is read as that key.
  * @param opts Genre, density, ceiling and seed.
  * @returns Bass notes sorted by onset, non-overlapping.
- * @throws If a segment has a non-positive duration, or the genre is not one
- *   this library names.
+ * @throws If a segment has a non-positive duration, two segments overlap, or
+ *   the genre is not one this library names. A bass part is monophonic, so
+ *   overlapping segments are refused here exactly as {@link generateBassLine}
+ *   refuses them rather than being laid over each other.
  *
  * @example
  * ```ts
@@ -509,14 +596,7 @@ export function placeLicks(
   const segments: ChordSegment[] = timeline
     .map((segment) => ({ ...segment, chord: toChordData(segment.chord) }))
     .sort((a, b) => a.startBeat - b.startBeat);
-  for (const segment of segments) {
-    assertRange(segment.startBeat, 0, Number.MAX_SAFE_INTEGER, 'lick segment startBeat');
-    if (segment.endBeat <= segment.startBeat) {
-      throw new InvalidInputError(
-        `lick segment at beat ${segment.startBeat} must have a positive duration`,
-      );
-    }
-  }
+  assertBassSegments(segments);
   if (segments.length === 0) {
     return [];
   }
@@ -525,11 +605,15 @@ export function placeLicks(
   const draw = resolved.part('bass');
   const bpm = resolved.bpm ?? DEFAULT_BPM;
   const density = resolved.rhythmic ?? DEFAULT_LICK_DENSITY;
-  const difficulty =
-    resolved.difficulty ??
-    (opts.difficulty === undefined
+  // The caller's own ceiling is validated whether or not the context also names
+  // one: whether the context does is not something the caller of this surface
+  // can see, so an out-of-range value is rejected the same way either time.
+  // Only leaving it out skips the check.
+  const supplied =
+    opts.difficulty === undefined
       ? undefined
-      : assertDifficulty(opts.difficulty, 'lick difficulty'));
+      : assertDifficulty(opts.difficulty, 'lick difficulty');
+  const difficulty = resolved.difficulty ?? supplied;
   const named = resolved.instrument('bass');
   const instrument =
     opts.instrument === undefined
@@ -547,13 +631,8 @@ export function placeLicks(
   // figure calling for a technique it cannot produce — a slide on an instrument
   // with no slide — is not offered rather than written and misread.
   const playable = instrument === undefined ? {} : { articulations: instrument.articulations };
-  const barBeats = beatsPerBar(ts);
 
-  const raw: { startBeat: number; pitch: number; velocity: number; note?: LickNote }[] = [];
-  /** The last pitch that sounded, which decides where a connecting tone leads. */
-  let anchor = low;
-  /** Where the last root sat, which is what keeps the line in its register. */
-  let rootAnchor = low;
+  const raw: RawLickNote[] = [];
 
   for (let index = 0; index < segments.length; index += 1) {
     const segment = segments[index];
@@ -561,21 +640,21 @@ export function placeLicks(
       continue;
     }
     const rootPc = bassPcOf(segment.chord);
-    const onsets: number[] = [];
+    // Where this chord sounds its bass note, and what its own quality settles
+    // about the degrees it does not state: both are properties of the chord, so
+    // both are read once for the whole segment.
+    const rootMidi = placeRoot(rootPc, low);
+    const implied = impliedScaleTones(segment.chord);
     let lastTilePlayed = false;
     let firstOnset = segment.startBeat;
 
-    // A figure is a bar long and a chord is not: a ballad or a modal vamp holds
-    // one chord for four of them. The figure is laid across the whole segment,
-    // one tile per bar of it, and each tile draws its own figure at its own
-    // address — so the bar after the first is played rather than held, and a
-    // chord elsewhere in the piece changing does not move any of them.
-    for (let tile = 0; ; tile += 1) {
-      const tileStart = segment.startBeat + tile * barBeats;
+    // Each tile draws its own figure at its own address, so the bar after the
+    // first is played rather than held, and a chord elsewhere in the piece
+    // changing does not move any of them.
+    const tiles = barTiles(segment.startBeat, segment.endBeat, ts);
+    for (let tile = 0; tile < tiles.length; tile += 1) {
+      const tileStart = tiles[tile]?.startBeat ?? segment.startBeat;
       const remaining = segment.endBeat - tileStart;
-      if (remaining <= EPS) {
-        break;
-      }
       // The figure this tile would play is decided before the density dial is
       // consulted, so where its root sounds does not move as the dial travels:
       // a genre whose figures land after the downbeat keeps its root there
@@ -609,39 +688,37 @@ export function placeLicks(
       if (tile === 0) {
         firstOnset = rootAt;
       }
-      onsets.push(rootAt);
-      // Roots are placed against the root before them rather than against the
-      // last note that sounded: a figure that ends on its octave would
-      // otherwise pull the next root up with it, and a four-bar vamp would
-      // climb out of the register the caller asked for by its second bar.
-      rootAnchor = placePc(rootPc, rootAnchor, low);
-      anchor = rootAnchor;
       // Where the figure states its own note on this position, that note is the
       // one that sounds: the two share an onset, and the zero-length root is
       // dropped when durations are measured.
-      raw.push({ startBeat: rootAt, pitch: rootAnchor, velocity: STRONG_VELOCITY });
+      raw.push({ startBeat: rootAt, pitch: rootMidi, velocity: STRONG_VELOCITY });
 
       if (notes) {
-        const figureRoot = placePc(pitchClass(segment.chord.rootPc), rootAnchor, low);
+        const figureRoot = placePc(pitchClass(segment.chord.rootPc), rootMidi, low);
         for (const lickNote of notes) {
           const at = tileStart + lickNote.step * STEP_BEATS;
           // Placed against the figure's own root rather than folded one note at
           // a time into the register band, which is what an octave figure
           // needs: its octave has to stay an octave.
-          const offset = degreeSemitone(lickNote.degree, lickNote.alter ?? 0, segment.chord, scale);
+          const offset = degreeSemitone(
+            lickNote.degree,
+            lickNote.alter ?? 0,
+            segment.chord,
+            scale,
+            implied,
+          );
           // The figure's plain root on the anchor onset is that onset's bass
           // note, so over a slash chord it sounds the written bass: the two
           // notes share the position and only one of them survives, and which
           // one it is must not decide what the chord change sounds like. The
           // rest of the figure stays measured from the chord's own root.
-          anchor =
+          const pitch =
             Math.abs(at - rootAt) < EPS && lickNote.degree === 1 && (lickNote.alter ?? 0) === 0
-              ? rootAnchor
+              ? rootMidi
               : figureRoot + offset;
-          onsets.push(at);
           raw.push({
             startBeat: at,
-            pitch: anchor,
+            pitch,
             velocity: Math.round(
               (isStrongBeat(at, ts) ? STRONG_VELOCITY : WEAK_VELOCITY) * lickNote.velocity,
             ),
@@ -660,18 +737,26 @@ export function placeLicks(
     const next = segments[index + 1];
     if (next && lastTilePlayed) {
       const approachAt = next.startBeat - STEP_BEATS * BEAT_STEPS;
-      const alreadySounds = onsets.some((onset) => Math.abs(onset - approachAt) < EPS);
-      if (approachAt > firstOnset + EPS && !alreadySounds) {
-        const nextRoot = placePc(bassPcOf(next.chord), rootAnchor, low);
-        const midi = approachNote(
-          nextRoot,
-          anchor,
-          low,
-          scale,
-          draw.prob(0.5, 'lickApproach', index),
-        );
-        anchor = midi;
-        raw.push({ startBeat: approachAt, pitch: midi, velocity: WEAK_VELOCITY });
+      if (approachAt > firstOnset + EPS) {
+        const nextRoot = placeRoot(bassPcOf(next.chord), low);
+        const occupied = soundingAt(raw, approachAt);
+        // What matters is that the beat before the change leads into it by
+        // step, not that something sounds there: the figure's own fixed degree
+        // holds that beat whatever the next chord is, so leaving it alone
+        // because it is occupied is what kept a walking line from ever walking
+        // into the change. A note already a step away is the approach and
+        // stands; any other is replaced by the connecting tone, which keeps the
+        // figure's rhythm and takes over its pitch.
+        const distance = occupied === undefined ? 0 : Math.abs(occupied.pitch - nextRoot);
+        if (occupied === undefined || distance < 1 || distance > 2) {
+          const from = lastPitchBefore(raw, approachAt, rootMidi);
+          const midi = approachNote(nextRoot, from, scale, draw.prob(0.5, 'lickApproach', index));
+          if (occupied === undefined) {
+            raw.push({ startBeat: approachAt, pitch: midi, velocity: WEAK_VELOCITY });
+          } else {
+            occupied.pitch = midi;
+          }
+        }
       }
     }
   }
@@ -706,6 +791,49 @@ export function placeLicks(
     out.push(event);
   }
   return out;
+}
+
+/** A note on its way into the line, before durations are measured from it. */
+type RawLickNote = {
+  startBeat: number;
+  pitch: number;
+  velocity: number;
+  note?: LickNote;
+};
+
+/**
+ * The note carrying a position, if one is written there.
+ *
+ * Where a figure states its own note on a position the segment also sounds its
+ * root on, the last one written is the one that survives the duration pass, so
+ * that is the note the position carries.
+ */
+function soundingAt(raw: readonly RawLickNote[], at: number): RawLickNote | undefined {
+  for (let index = raw.length - 1; index >= 0; index -= 1) {
+    const item = raw[index];
+    if (item !== undefined && Math.abs(item.startBeat - at) < EPS) {
+      return item;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The pitch the line is coming from at a position, which decides which side of
+ * the next chord's bass it is approached from.
+ *
+ * @param raw The notes written so far, in the order they were written.
+ * @param at The position being led into.
+ * @param fallback The pitch to answer with when nothing precedes it.
+ */
+function lastPitchBefore(raw: readonly RawLickNote[], at: number, fallback: number): number {
+  for (let index = raw.length - 1; index >= 0; index -= 1) {
+    const item = raw[index];
+    if (item !== undefined && item.startBeat < at - EPS) {
+      return item.pitch;
+    }
+  }
+  return fallback;
 }
 
 /**

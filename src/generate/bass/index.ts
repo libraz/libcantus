@@ -12,7 +12,6 @@
  * library-wide convention.
  */
 
-import { InvalidInputError } from '../../core/errors/index.js';
 import {
   foldIntoRange,
   type StringedProfile,
@@ -31,7 +30,6 @@ import {
   assertGenerationBudget,
   assertInteger,
   assertOneOf,
-  assertRange,
   clampToMidi,
 } from '../../core/validation/index.js';
 import type { ChordSegment } from '../../theory/chord/index.js';
@@ -44,14 +42,18 @@ import {
   sustainsShift,
 } from '../context/index.js';
 import {
+  assertBassSegments,
   bandFloor,
+  barTiles,
   bassPcOf,
   bassToneCycle,
   beatPositions,
   EPS,
   fifthPcOf,
+  midBarPulse,
   approachNote as neighborOf,
   placePc,
+  placeRoot,
   STRONG_VELOCITY,
   WEAK_VELOCITY,
 } from './internal.js';
@@ -176,6 +178,14 @@ type BuildContext = {
   /** Position-addressed draws: every decision is keyed by where it happens. */
   draw: Draw;
   notes: RawNote[];
+  /**
+   * Where the chord being written sounds its bass note. Every pitch of the
+   * segment is placed against it rather than against the note before, so the
+   * same chord degree over the same chord is the same MIDI note every time that
+   * chord comes round.
+   */
+  rootMidi: number;
+  /** The last note emitted, which decides which way an approach note leads. */
   prevMidi: number;
   instrument: StringedProfile | undefined;
   /** How often a weak beat takes a pickup, in [0, 1]. */
@@ -184,10 +194,10 @@ type BuildContext = {
   difficulty: number | undefined;
 };
 
-/** Append a note for pitch class `pc` at `pos`, placed near the running anchor. */
+/** Append a note for pitch class `pc` at `pos`, placed against the chord's bass. */
 function emit(ctx: BuildContext, pos: number, pc: number, midiOverride?: number): number {
   const placed = clampToMidi(
-    midiOverride ?? placePc(pc, ctx.prevMidi, ctx.low),
+    midiOverride ?? placePc(pc, ctx.rootMidi, ctx.low),
     'generated bass pitch',
   );
   // The band already sits inside the instrument, so this catches the placements
@@ -196,20 +206,30 @@ function emit(ctx: BuildContext, pos: number, pc: number, midiOverride?: number)
   const midi = ctx.instrument ? foldIntoRange(placed, ctx.instrument) : placed;
   const velocity = isStrongBeat(pos, ctx.ts) ? STRONG_VELOCITY : WEAK_VELOCITY;
   ctx.notes.push({ startBeat: pos, pitch: midi, velocity });
+  ctx.prevMidi = midi;
   return midi;
 }
 
 /** One root note per segment. */
 function buildRoot(ctx: BuildContext, seg: BassSegment): void {
-  ctx.prevMidi = emit(ctx, seg.startBeat, bassPcOf(seg.chord));
+  emit(ctx, seg.startBeat, bassPcOf(seg.chord));
 }
 
-/** Root on the downbeat, fifth on the segment's midpoint. */
+/**
+ * Root and fifth alternating, once per bar the segment covers.
+ *
+ * The alternation is the style's name, so it is written against the bar the
+ * meter states rather than against the segment's length: a chord held for four
+ * bars is played four times, not stretched into a root and a fifth of eight
+ * beats each.
+ */
 function buildRootFifth(ctx: BuildContext, seg: BassSegment): void {
-  ctx.prevMidi = emit(ctx, seg.startBeat, bassPcOf(seg.chord));
-  const mid = (seg.startBeat + seg.endBeat) / 2;
-  if (mid > seg.startBeat + EPS && mid < seg.endBeat - EPS) {
-    ctx.prevMidi = emit(ctx, mid, fifthPcOf(seg.chord));
+  for (const tile of barTiles(seg.startBeat, seg.endBeat, ctx.ts)) {
+    emit(ctx, tile.startBeat, bassPcOf(seg.chord));
+    const answer = midBarPulse(tile.startBeat, ctx.ts);
+    if (answer > tile.startBeat + EPS && answer < tile.endBeat - EPS) {
+      emit(ctx, answer, fifthPcOf(seg.chord));
+    }
   }
 }
 
@@ -220,28 +240,27 @@ function buildPop(ctx: BuildContext, seg: BassSegment, index: number): void {
   let emitted = false;
   for (const pos of positions) {
     if (isStrongBeat(pos, ctx.ts)) {
-      ctx.prevMidi = emit(ctx, pos, rootPc);
+      emit(ctx, pos, rootPc);
       emitted = true;
     } else if (ctx.draw.prob(ctx.pickupDensity, 'pickup', index, pos)) {
       // The octave pickup is a leap, so it is the candidate a difficulty
       // ceiling rejects first: at that tempo the hand does not get there, and
       // the player takes the fifth instead of dropping the pickup.
       if (ctx.draw.prob(0.5, 'pickupKind', index, pos) && reachableLeap(ctx, pos, 12)) {
-        // Octave pickup: the root an octave below where it would normally sit.
-        // `placePc` already lands inside `[low, low + 12]`, so clamping the drop
-        // back into that band would return the band's floor — pitch class 0 —
-        // whatever the chord root is. The pickup is allowed the octave below the
-        // band instead, and falls back to the plain root when that leaves MIDI.
-        const base = placePc(rootPc, ctx.prevMidi, ctx.low);
-        const dropped = base - 12;
-        emit(ctx, pos, rootPc, dropped >= 0 ? dropped : base);
+        // Octave pickup: the root an octave below where the segment sounds it.
+        // The band is one octave wide, so clamping the drop back into it would
+        // return the root itself and the pickup would be a repeated note. It is
+        // allowed the octave below the band instead, and falls back to the
+        // plain root when that leaves MIDI.
+        const dropped = ctx.rootMidi - 12;
+        emit(ctx, pos, rootPc, dropped >= 0 ? dropped : ctx.rootMidi);
       } else {
-        ctx.prevMidi = emit(ctx, pos, fifthPcOf(seg.chord));
+        emit(ctx, pos, fifthPcOf(seg.chord));
       }
     }
   }
   if (!emitted) {
-    ctx.prevMidi = emit(ctx, seg.startBeat, rootPc);
+    emit(ctx, seg.startBeat, rootPc);
   }
 }
 
@@ -263,7 +282,7 @@ function buildArpeggio(ctx: BuildContext, seg: BassSegment): void {
   const positions = beatPositions(seg.startBeat, seg.endBeat, ctx.ts);
   positions.forEach((pos, i) => {
     const pc = tones[i % tones.length] ?? bassPcOf(seg.chord);
-    ctx.prevMidi = emit(ctx, pos, pc);
+    emit(ctx, pos, pc);
   });
 }
 
@@ -274,7 +293,7 @@ function buildArpeggio(ctx: BuildContext, seg: BassSegment): void {
  * choice is fixed by where in the piece it happens.
  */
 function approachNote(ctx: BuildContext, target: number, from: number, index: number): number {
-  return neighborOf(target, from, ctx.low, ctx.key, ctx.draw.prob(0.5, 'approach', index));
+  return neighborOf(target, from, ctx.key, ctx.draw.prob(0.5, 'approach', index));
 }
 
 /** A quarter-note line of chord tones that leads by step into each chord change. */
@@ -289,17 +308,20 @@ function buildWalking(
   const count = positions.length;
   positions.forEach((pos, i) => {
     if (i === 0) {
-      ctx.prevMidi = emit(ctx, pos, bassPcOf(seg.chord));
+      emit(ctx, pos, bassPcOf(seg.chord));
       return;
     }
     if (next && count > 1 && i === count - 1) {
-      const nextBass = placePc(bassPcOf(next.chord), ctx.prevMidi, ctx.low);
+      // The next chord's bass is already fixed by its own pitch class and the
+      // band, so the line leads into the note that will actually sound rather
+      // than into a copy of it placed somewhere else.
+      const nextBass = placeRoot(bassPcOf(next.chord), ctx.low);
       const midi = approachNote(ctx, nextBass, ctx.prevMidi, index);
-      ctx.prevMidi = emit(ctx, pos, pitchClass(midi), midi);
+      emit(ctx, pos, pitchClass(midi), midi);
       return;
     }
     const pc = tones[i % tones.length] ?? bassPcOf(seg.chord);
-    ctx.prevMidi = emit(ctx, pos, pc);
+    emit(ctx, pos, pc);
   });
 }
 
@@ -336,29 +358,12 @@ function buildWalking(
  */
 export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
   assertGenerationBudget(opts.segments.length, 'bass segments', opts.budget);
-  for (let index = 0; index < opts.segments.length; index += 1) {
-    const segment = opts.segments[index];
-    if (!segment) continue;
-    assertRange(segment.startBeat, 0, Number.MAX_SAFE_INTEGER, `segments[${index}].startBeat`);
-    assertRange(segment.endBeat, 0, Number.MAX_SAFE_INTEGER, `segments[${index}].endBeat`);
-    if (segment.endBeat <= segment.startBeat) {
-      throw new InvalidInputError(`segments[${index}] must have a positive duration`);
-    }
-  }
   // The chords are read into their plain form once, here at the boundary; the
   // builders below work on chord data alone.
   const segments: BassSegment[] = opts.segments
     .map((segment) => ({ ...segment, chord: toChordData(segment.chord) }))
     .sort((a, b) => a.startBeat - b.startBeat);
-  for (let index = 1; index < segments.length; index += 1) {
-    const previous = segments[index - 1];
-    const current = segments[index];
-    if (previous !== undefined && current !== undefined && current.startBeat < previous.endBeat) {
-      throw new InvalidInputError(
-        `bass segments must not overlap: segments ${index - 1} and ${index} overlap`,
-      );
-    }
-  }
+  assertBassSegments(segments);
   if (segments.length === 0) {
     return [];
   }
@@ -390,6 +395,7 @@ export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
     key: toKeyScale(opts.key),
     draw: resolved.part('bass'),
     notes: [],
+    rootMidi: low,
     prevMidi: low,
     instrument,
     pickupDensity: resolved.rhythmic ?? DEFAULT_PICKUP_DENSITY,
@@ -402,6 +408,7 @@ export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
     if (!seg) {
       continue;
     }
+    ctx.rootMidi = placeRoot(bassPcOf(seg.chord), ctx.low);
     switch (style) {
       case 'rootFifth':
         buildRootFifth(ctx, seg);

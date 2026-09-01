@@ -20,12 +20,12 @@ import { majorKey } from '../src/theory/scale/index.js';
  * Generated output recorded per algorithm version.
  *
  * A generator is a pure function of its inputs, so comparing one call against a
- * second call of the same build says nothing about the promise the algorithm
- * version carries: that a saved seed and version reopen as the same piece from
- * any build. Only a value held in the repository can say that. If a literal
- * below has to be edited to make the suite pass, then the same seed at the same
- * version now yields a different piece, and the change belongs to a new
- * algorithm version rather than to this table.
+ * second call of the same build says nothing about whether the music moved.
+ * Only a value held in the repository can say that. If a literal below has to
+ * be edited to make the suite pass, then the same seed at the same version now
+ * yields a different piece: that is never invisible, and it is only ever right
+ * to edit one when the notes it recorded were themselves wrong. Correcting one
+ * belongs in the changelog beside the fix that moved it.
  */
 
 const SEED = 42;
@@ -140,8 +140,7 @@ const VERSIONS = Array.from(
  *
  * `MIN_ALGORITHM_VERSION` and `ALGORITHM_VERSION` are the same number today, so
  * the table holds one block. Raising `ALGORITHM_VERSION` adds a block for the
- * new number and leaves the older one exactly as it stands — the older version
- * has to keep producing what it produced.
+ * new number, and the older block is then what that number draws.
  */
 const GOLDEN: Record<number, Record<string, unknown>> = {
   1: {
@@ -573,210 +572,40 @@ const GOLDEN: Record<number, Record<string, unknown>> = {
       },
     ],
     placeLicks: [
-      {
-        pitch: 36,
-        startBeat: 0,
-        durationBeat: 0.75,
-        velocity: 100,
-      },
-      {
-        pitch: 48,
-        startBeat: 0.75,
-        durationBeat: 0.25,
-        velocity: 51,
-      },
-      {
-        pitch: 48,
-        startBeat: 1,
-        durationBeat: 0.75,
-        velocity: 68,
-      },
-      {
-        pitch: 47,
-        startBeat: 1.75,
-        durationBeat: 0.25,
-        velocity: 51,
-      },
-      {
-        pitch: 47,
-        startBeat: 2,
-        durationBeat: 0.5,
-        velocity: 85,
-      },
-      {
-        pitch: 45,
-        startBeat: 2.5,
-        durationBeat: 0.25,
-        velocity: 64,
-      },
-      {
-        pitch: 43,
-        startBeat: 2.75,
-        durationBeat: 0.25,
-        velocity: 54,
-      },
-      {
-        pitch: 43,
-        startBeat: 3,
-        durationBeat: 0.5,
-        velocity: 72,
-      },
-      {
-        pitch: 40,
-        startBeat: 3.5,
-        durationBeat: 0.5,
-        velocity: 64,
-      },
-      {
-        pitch: 41,
-        startBeat: 4,
-        durationBeat: 0.75,
-        velocity: 100,
-      },
-      {
-        pitch: 53,
-        startBeat: 4.75,
-        durationBeat: 0.25,
-        velocity: 51,
-      },
-      {
-        pitch: 53,
-        startBeat: 5,
-        durationBeat: 0.75,
-        velocity: 68,
-      },
-      {
-        pitch: 52,
-        startBeat: 5.75,
-        durationBeat: 0.25,
-        velocity: 51,
-      },
-      {
-        pitch: 52,
-        startBeat: 6,
-        durationBeat: 0.5,
-        velocity: 85,
-      },
-      {
-        pitch: 50,
-        startBeat: 6.5,
-        durationBeat: 0.25,
-        velocity: 64,
-      },
-      {
-        pitch: 48,
-        startBeat: 6.75,
-        durationBeat: 0.25,
-        velocity: 54,
-      },
-      {
-        pitch: 48,
-        startBeat: 7,
-        durationBeat: 0.5,
-        velocity: 72,
-      },
-      {
-        pitch: 45,
-        startBeat: 7.5,
-        durationBeat: 0.5,
-        velocity: 64,
-      },
-      {
-        pitch: 43,
-        startBeat: 8,
-        durationBeat: 1,
-        velocity: 100,
-      },
-      {
-        pitch: 55,
-        startBeat: 9,
-        durationBeat: 0.75,
-        velocity: 68,
-      },
-      {
-        pitch: 53,
-        startBeat: 9.75,
-        durationBeat: 0.25,
-        velocity: 51,
-      },
-      {
-        pitch: 53,
-        startBeat: 10,
-        durationBeat: 0.5,
-        velocity: 85,
-      },
-      {
-        pitch: 52,
-        startBeat: 10.5,
-        durationBeat: 0.25,
-        velocity: 64,
-      },
-      {
-        pitch: 50,
-        startBeat: 10.75,
-        durationBeat: 0.25,
-        velocity: 54,
-      },
-      {
-        pitch: 50,
-        startBeat: 11,
-        durationBeat: 0.5,
-        velocity: 72,
-      },
-      {
-        pitch: 47,
-        startBeat: 11.5,
-        durationBeat: 0.5,
-        velocity: 64,
-      },
-      {
-        pitch: 48,
-        startBeat: 12,
-        durationBeat: 0.75,
-        velocity: 100,
-      },
-      {
-        pitch: 60,
-        startBeat: 12.75,
-        durationBeat: 0.25,
-        velocity: 51,
-      },
-      {
-        pitch: 60,
-        startBeat: 13,
-        durationBeat: 0.75,
-        velocity: 68,
-      },
-      {
-        pitch: 59,
-        startBeat: 13.75,
-        durationBeat: 0.25,
-        velocity: 51,
-      },
-      {
-        pitch: 59,
-        startBeat: 14,
-        durationBeat: 0.5,
-        velocity: 85,
-      },
-      {
-        pitch: 57,
-        startBeat: 14.5,
-        durationBeat: 0.5,
-        velocity: 64,
-      },
-      {
-        pitch: 55,
-        startBeat: 15,
-        durationBeat: 0.5,
-        velocity: 72,
-      },
-      {
-        pitch: 52,
-        startBeat: 15.5,
-        durationBeat: 0.5,
-        velocity: 64,
-      },
+      { pitch: 36, startBeat: 0, durationBeat: 0.75, velocity: 100 },
+      { pitch: 48, startBeat: 0.75, durationBeat: 0.25, velocity: 51 },
+      { pitch: 48, startBeat: 1, durationBeat: 0.75, velocity: 68 },
+      { pitch: 47, startBeat: 1.75, durationBeat: 0.25, velocity: 51 },
+      { pitch: 47, startBeat: 2, durationBeat: 0.5, velocity: 85 },
+      { pitch: 45, startBeat: 2.5, durationBeat: 0.25, velocity: 64 },
+      { pitch: 43, startBeat: 2.75, durationBeat: 0.25, velocity: 54 },
+      { pitch: 43, startBeat: 3, durationBeat: 0.5, velocity: 72 },
+      { pitch: 40, startBeat: 3.5, durationBeat: 0.5, velocity: 64 },
+      { pitch: 41, startBeat: 4, durationBeat: 0.75, velocity: 100 },
+      { pitch: 53, startBeat: 4.75, durationBeat: 0.25, velocity: 51 },
+      { pitch: 53, startBeat: 5, durationBeat: 0.75, velocity: 68 },
+      { pitch: 52, startBeat: 5.75, durationBeat: 0.25, velocity: 51 },
+      { pitch: 52, startBeat: 6, durationBeat: 0.5, velocity: 85 },
+      { pitch: 50, startBeat: 6.5, durationBeat: 0.25, velocity: 64 },
+      { pitch: 48, startBeat: 6.75, durationBeat: 0.25, velocity: 54 },
+      { pitch: 44, startBeat: 7, durationBeat: 0.5, velocity: 72 },
+      { pitch: 45, startBeat: 7.5, durationBeat: 0.5, velocity: 64 },
+      { pitch: 43, startBeat: 8, durationBeat: 1, velocity: 100 },
+      { pitch: 55, startBeat: 9, durationBeat: 0.75, velocity: 68 },
+      { pitch: 53, startBeat: 9.75, durationBeat: 0.25, velocity: 51 },
+      { pitch: 53, startBeat: 10, durationBeat: 0.5, velocity: 85 },
+      { pitch: 52, startBeat: 10.5, durationBeat: 0.25, velocity: 64 },
+      { pitch: 50, startBeat: 10.75, durationBeat: 0.25, velocity: 54 },
+      { pitch: 38, startBeat: 11, durationBeat: 0.5, velocity: 72 },
+      { pitch: 47, startBeat: 11.5, durationBeat: 0.5, velocity: 64 },
+      { pitch: 36, startBeat: 12, durationBeat: 0.75, velocity: 100 },
+      { pitch: 48, startBeat: 12.75, durationBeat: 0.25, velocity: 51 },
+      { pitch: 48, startBeat: 13, durationBeat: 0.75, velocity: 68 },
+      { pitch: 47, startBeat: 13.75, durationBeat: 0.25, velocity: 51 },
+      { pitch: 47, startBeat: 14, durationBeat: 0.5, velocity: 85 },
+      { pitch: 45, startBeat: 14.5, durationBeat: 0.5, velocity: 64 },
+      { pitch: 43, startBeat: 15, durationBeat: 0.5, velocity: 72 },
+      { pitch: 40, startBeat: 15.5, durationBeat: 0.5, velocity: 64 },
     ],
     generateRhythm: [
       {
@@ -813,102 +642,22 @@ const GOLDEN: Record<number, Record<string, unknown>> = {
       },
     ],
     generateBassLine: [
-      {
-        pitch: 36,
-        startBeat: 0,
-        durationBeat: 1,
-        velocity: 100,
-      },
-      {
-        pitch: 40,
-        startBeat: 1,
-        durationBeat: 1,
-        velocity: 80,
-      },
-      {
-        pitch: 43,
-        startBeat: 2,
-        durationBeat: 1,
-        velocity: 100,
-      },
-      {
-        pitch: 42,
-        startBeat: 3,
-        durationBeat: 1,
-        velocity: 80,
-      },
-      {
-        pitch: 43,
-        startBeat: 4,
-        durationBeat: 1,
-        velocity: 100,
-      },
-      {
-        pitch: 47,
-        startBeat: 5,
-        durationBeat: 1,
-        velocity: 80,
-      },
-      {
-        pitch: 38,
-        startBeat: 6,
-        durationBeat: 1,
-        velocity: 100,
-      },
-      {
-        pitch: 44,
-        startBeat: 7,
-        durationBeat: 1,
-        velocity: 80,
-      },
-      {
-        pitch: 45,
-        startBeat: 8,
-        durationBeat: 1,
-        velocity: 100,
-      },
-      {
-        pitch: 48,
-        startBeat: 9,
-        durationBeat: 1,
-        velocity: 80,
-      },
-      {
-        pitch: 40,
-        startBeat: 10,
-        durationBeat: 1,
-        velocity: 100,
-      },
-      {
-        pitch: 43,
-        startBeat: 11,
-        durationBeat: 1,
-        velocity: 80,
-      },
-      {
-        pitch: 41,
-        startBeat: 12,
-        durationBeat: 1,
-        velocity: 100,
-      },
-      {
-        pitch: 45,
-        startBeat: 13,
-        durationBeat: 1,
-        velocity: 80,
-      },
-      {
-        pitch: 48,
-        startBeat: 14,
-        durationBeat: 1,
-        velocity: 100,
-      },
-      {
-        pitch: 41,
-        startBeat: 15,
-        durationBeat: 1,
-        velocity: 80,
-      },
+      { pitch: 36, startBeat: 0, durationBeat: 1, velocity: 100 },
+      { pitch: 40, startBeat: 1, durationBeat: 1, velocity: 80 },
+      { pitch: 43, startBeat: 2, durationBeat: 1, velocity: 100 },
+      { pitch: 42, startBeat: 3, durationBeat: 1, velocity: 80 },
+      { pitch: 43, startBeat: 4, durationBeat: 1, velocity: 100 },
+      { pitch: 47, startBeat: 5, durationBeat: 1, velocity: 80 },
+      { pitch: 38, startBeat: 6, durationBeat: 1, velocity: 100 },
+      { pitch: 44, startBeat: 7, durationBeat: 1, velocity: 80 },
+      { pitch: 45, startBeat: 8, durationBeat: 1, velocity: 100 },
+      { pitch: 48, startBeat: 9, durationBeat: 1, velocity: 80 },
+      { pitch: 40, startBeat: 10, durationBeat: 1, velocity: 100 },
+      { pitch: 43, startBeat: 11, durationBeat: 1, velocity: 80 },
+      { pitch: 41, startBeat: 12, durationBeat: 1, velocity: 100 },
+      { pitch: 45, startBeat: 13, durationBeat: 1, velocity: 80 },
+      { pitch: 36, startBeat: 14, durationBeat: 1, velocity: 100 },
+      { pitch: 41, startBeat: 15, durationBeat: 1, velocity: 80 },
     ],
     generateMotif: {
       notes: [

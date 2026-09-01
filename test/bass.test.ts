@@ -48,6 +48,68 @@ describe('generateBassLine', () => {
     ).toThrow(/must not overlap/);
   });
 
+  it('holds its register over a vamp instead of climbing out of it', () => {
+    // Sixteen turns of I-V. The register the caller asked for is the one the
+    // whole line is written in, so a chord that comes back sounds where it
+    // sounded before rather than an octave higher every time the line turns
+    // around.
+    const segments: BassSegment[] = [];
+    for (let bar = 0; bar < 16; bar += 1) {
+      segments.push({
+        startBeat: bar * 4,
+        endBeat: bar * 4 + 4,
+        chord: makeChord(bar % 2 === 0 ? 0 : 7, 'maj'),
+      });
+    }
+    const notes = generateBassLine({ segments, key: cMajor, style: 'root', octave: 2 });
+    expect(notes.map((note) => note.pitch)).toEqual(
+      segments.map((segment) => (segment.chord.rootPc === 0 ? 36 : 43)),
+    );
+    for (let i = 1; i < notes.length; i += 1) {
+      expect(Math.abs((notes[i]?.pitch ?? 0) - (notes[i - 1]?.pitch ?? 0))).toBeLessThanOrEqual(7);
+    }
+  });
+
+  it('sounds the same chord degree on the same pitch every time the chord returns', () => {
+    // Four bars of I-V in every style: the second turn of the vamp is the same
+    // notes as the first, so the line keeps the band it was written for.
+    const segments: BassSegment[] = [
+      { startBeat: 0, endBeat: 4, chord: makeChord(0, 'maj') },
+      { startBeat: 4, endBeat: 8, chord: makeChord(7, 'maj') },
+      { startBeat: 8, endBeat: 12, chord: makeChord(0, 'maj') },
+      { startBeat: 12, endBeat: 16, chord: makeChord(7, 'maj') },
+    ];
+    for (const style of ALL_STYLES) {
+      const notes = generateBassLine({ segments, key: cMajor, style, octave: 2, ctx: { seed: 8 } });
+      // Which weak beats take a pop pickup is drawn per position and so differs
+      // from bar to bar by design; what a given chord tone sounds as does not.
+      const heard = new Map<string, Set<number>>();
+      for (const note of notes) {
+        const segment = segmentAt(segments, note.startBeat);
+        const pc = ((note.pitch % 12) + 12) % 12;
+        const key = `${segment?.chord.rootPc ?? -1}:${pc}`;
+        const pitches = heard.get(key) ?? new Set<number>();
+        // The pop style's octave pickup is documented to drop below the band.
+        pitches.add(style === 'pop' ? note.pitch + (note.pitch < 36 ? 12 : 0) : note.pitch);
+        heard.set(key, pitches);
+      }
+      for (const [where, pitches] of heard) {
+        expect([...pitches], `${style} ${where}`).toHaveLength(1);
+      }
+    }
+  });
+
+  it('repeats the alternating bass once per bar of a long chord', () => {
+    // A modal vamp holds one chord for four bars. Root and fifth is what the
+    // style is named for, so it is written against the bar rather than stretched
+    // across the whole span as one root and one fifth of eight beats each.
+    const segments: BassSegment[] = [{ startBeat: 0, endBeat: 16, chord: makeChord(2, 'min7') }];
+    const notes = generateBassLine({ segments, key: cMajor, style: 'rootFifth', octave: 2 });
+    expect(notes.map((note) => note.startBeat)).toEqual([0, 2, 4, 6, 8, 10, 12, 14]);
+    expect(notes.map((note) => note.pitch)).toEqual([38, 45, 38, 45, 38, 45, 38, 45]);
+    expect(notes.every((note) => note.durationBeat === 2)).toBe(true);
+  });
+
   it('places every note in the bass register', () => {
     for (const style of ALL_STYLES) {
       const notes = generateBassLine({

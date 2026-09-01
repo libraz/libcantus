@@ -235,6 +235,107 @@ describe('placeLicks', () => {
     expect(sounded).toEqual([36, 43, 45, 46, 45, 43, 36]);
   });
 
+  it('takes the boogie sixth from the chord it is played over, not from the key', () => {
+    // The boogie figure names its own sixth, so over a dominant seventh it is
+    // the major sixth that chord's mode carries wherever the chord sits in the
+    // key: F# over A7, C# over E7. The key's own sixth from those roots is a
+    // semitone lower and belongs to a different chord.
+    const cases = [
+      { rootPc: 9, sixthPc: 6, keySixthPc: 5 },
+      { rootPc: 4, sixthPc: 1, keySixthPc: 0 },
+    ] as const;
+    for (const { rootPc, sixthPc, keySixthPc } of cases) {
+      const notes = placeLicks(
+        [{ startBeat: 0, endBeat: 4, chord: makeChord(rootPc, 'dom7') }],
+        KEY,
+        { genre: 'blues', ctx: { seed: 0, bpm: 120, complexity: { rhythmic: 1 } } },
+      );
+      // The boogie states its sixth on the third sixteenth pair of the bar.
+      const sixth = notes.find((note) => Math.abs(note.startBeat - 1) < 1e-9);
+      const where = `dom7 on ${rootPc}`;
+      expect(sixth?.pitch, where).toBeDefined();
+      expect(((sixth?.pitch ?? 0) % 12) + 0, where).toBe(sixthPc);
+      expect(
+        notes.some((note) => note.pitch % 12 === keySixthPc),
+        where,
+      ).toBe(false);
+    }
+  });
+
+  it('leaves a suspended chord suspended instead of sounding the third it replaced', () => {
+    // A suspension does not omit its third, it puts the fourth in that place.
+    // Restoring the third from the key is what the chord exists to prevent, so
+    // a figure written on the third sounds the tone the chord suspended into.
+    const cases = [
+      { rootPc: 0, thirdPc: 4, suspendedPc: 5 },
+      { rootPc: 7, thirdPc: 11, suspendedPc: 0 },
+    ] as const;
+    for (const genre of ['jazz', 'gospel', 'reggae'] as const) {
+      for (const { rootPc, thirdPc, suspendedPc } of cases) {
+        const notes = placeLicks(
+          [{ startBeat: 0, endBeat: 4, chord: makeChord(rootPc, 'sus4') }],
+          KEY,
+          { genre, ctx: { seed: 1, bpm: 100, complexity: { rhythmic: 1 } } },
+        );
+        const pcs = new Set(notes.map((note) => note.pitch % 12));
+        const where = `${genre} over sus4 on ${rootPc}`;
+        expect(pcs.has(thirdPc), where).toBe(false);
+        expect(pcs.has(suspendedPc), where).toBe(true);
+      }
+    }
+  });
+
+  it('walks into every chord change by step, even where the figure fills that beat', () => {
+    // The figure's own fixed degrees hold the beat before the change whatever
+    // the next chord is, so the beat sounding is not the same thing as the line
+    // leading into the change: what is written there has to be a step from the
+    // note the next chord starts on.
+    const changes = [
+      { startBeat: 0, endBeat: 4, chord: makeChord(2, 'min7') },
+      { startBeat: 4, endBeat: 8, chord: makeChord(7, 'dom7') },
+      { startBeat: 8, endBeat: 12, chord: makeChord(0, 'maj7') },
+    ];
+    const notes = placeLicks(changes, KEY, {
+      genre: 'jazz',
+      ctx: { seed: 1, bpm: 140, complexity: { rhythmic: 1 } },
+    });
+    const at = (beat: number) => notes.find((note) => Math.abs(note.startBeat - beat) < 1e-9);
+    for (const change of [4, 8]) {
+      const approach = at(change - 1);
+      const landing = at(change);
+      expect(approach, `beat ${change - 1}`).toBeDefined();
+      expect(landing, `beat ${change}`).toBeDefined();
+      const step = Math.abs((approach?.pitch ?? 0) - (landing?.pitch ?? 0));
+      expect(step, `into beat ${change}`).toBeGreaterThanOrEqual(1);
+      expect(step, `into beat ${change}`).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it('rejects a ceiling off the scale whether or not the context also names one', () => {
+    // Whether the context names the same dial is not something this caller can
+    // see, so a value outside the scale is refused either way rather than
+    // silently dropped when the context happens to win.
+    expect(() => placeLicks(TIMELINE, KEY, { genre: 'motown', difficulty: 99 })).toThrow();
+    expect(() =>
+      placeLicks(TIMELINE, KEY, {
+        genre: 'motown',
+        difficulty: 99,
+        ctx: { complexity: { difficulty: 3 } },
+      }),
+    ).toThrow();
+  });
+
+  it('rejects overlapping chord segments exactly as the styled generator does', () => {
+    // Both surfaces read the same placement, so the same placement is either
+    // playable on both or refused by both.
+    const overlapping = [
+      { startBeat: 0, endBeat: 4, chord: makeChord(0, 'maj7') },
+      { startBeat: 2, endBeat: 6, chord: makeChord(5, 'maj7') },
+    ];
+    expect(() => placeLicks(overlapping, KEY, { genre: 'motown' })).toThrow(/must not overlap/);
+    expect(() => generateBassLine({ segments: overlapping, key: KEY })).toThrow(/must not overlap/);
+  });
+
   it('honours the chord qualities a figure states it fits over', () => {
     // The walk-down states major-family chords only, so a bar of m7b5 cannot
     // take it; the line still sounds, on its root.

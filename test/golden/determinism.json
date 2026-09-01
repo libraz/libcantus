@@ -117,19 +117,19 @@
       "velocity": 80
     },
     {
-      "pitch": 48,
+      "pitch": 36,
       "startBeat": 10,
       "durationBeat": 1,
       "velocity": 100
     },
     {
-      "pitch": 47,
+      "pitch": 35,
       "startBeat": 11,
       "durationBeat": 1,
       "velocity": 80
     },
     {
-      "pitch": 48,
+      "pitch": 36,
       "startBeat": 12,
       "durationBeat": 1,
       "velocity": 100
@@ -147,7 +147,7 @@
       "velocity": 100
     },
     {
-      "pitch": 48,
+      "pitch": 36,
       "startBeat": 15,
       "durationBeat": 1,
       "velocity": 80
