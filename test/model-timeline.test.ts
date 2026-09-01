@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { chordToRoman } from '../src/analyze/functional/index.js';
-import { prevailingKeyOf } from '../src/analyze/keys/index.js';
+import { prevailingKeyOf, spelledKeyScale } from '../src/analyze/keys/index.js';
 import { reduceProgression } from '../src/analyze/reduction/index.js';
 import {
   chordTimelineFromChords,
@@ -11,7 +11,7 @@ import { InvalidInputError } from '../src/core/errors/index.js';
 import { toSpelledInterval } from '../src/core/pitch/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import { Chord } from '../src/model/chord.js';
-import { Key } from '../src/model/key.js';
+import { Key, keyIdentity } from '../src/model/key.js';
 import { Progression } from '../src/model/progression.js';
 import { Timeline, type TimelineData } from '../src/model/timeline.js';
 import type { ChordSpan } from '../src/theory/chord/index.js';
@@ -151,7 +151,7 @@ describe('construction', () => {
     const timeline = Timeline.fromNotes(NOTES);
     expect(timeline.segments).toEqual(analysis.timeline.segments);
     expect(timeline.keys).toEqual(analysis.keys);
-    expect(timeline.key?.scale).toEqual(analysis.prevailingKey);
+    expect(keyIdentity(timeline.key as Key)).toEqual(analysis.prevailingKey);
     expect(timeline.totalBeats).toBe(
       Math.max(
         ...analysis.timeline.segments.map((segment) => segment.endBeat),
@@ -359,8 +359,14 @@ describe('analysis equivalence', () => {
       ],
       totalBeats: 12,
       keys: [
-        { startBeat: 0, endBeat: 6, key: majorKey(0), confidence: 1 },
-        { startBeat: 6, endBeat: 12, key: majorKey(7), confidence: 1, modulation: 'dominant' },
+        { startBeat: 0, endBeat: 6, key: spelledKeyScale(majorKey(0)), confidence: 1 },
+        {
+          startBeat: 6,
+          endBeat: 12,
+          key: spelledKeyScale(majorKey(7)),
+          confidence: 1,
+          modulation: 'dominant',
+        },
       ],
     });
     expect(modulating.roman().map((entry) => entry.roman)).toEqual([
@@ -368,12 +374,12 @@ describe('analysis equivalence', () => {
       chordToRoman(makeChord(2, 'dom7'), majorKey(0)),
       chordToRoman(makeChord(7, 'maj'), majorKey(7)),
     ]);
-    expect(modulating.key?.scale).toEqual(prevailingKeyOf(modulating.keys));
+    expect(keyIdentity(modulating.key as Key)).toEqual(prevailingKeyOf(modulating.keys));
   });
 
   it('reports the prevailing key the key module reports', () => {
     const timeline = Timeline.fromNotes(NOTES);
-    expect(timeline.key?.scale).toEqual(prevailingKeyOf(timeline.keys));
+    expect(keyIdentity(timeline.key as Key)).toEqual(prevailingKeyOf(timeline.keys));
   });
 
   it('needs a key before it will read the chords', () => {

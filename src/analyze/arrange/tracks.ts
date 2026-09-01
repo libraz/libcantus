@@ -24,6 +24,8 @@ import {
   keyLookup,
   keyTimelineFromNotes,
   prevailingKeyOf,
+  type SpelledKeyScale,
+  spelledKeyScale,
 } from '../keys/index.js';
 import {
   analyzeTimeline,
@@ -161,7 +163,7 @@ function callerTimeline(
 ): {
   timeline: ChordTimeline;
   keys: KeyRegion[];
-  prevailingKey: KeyScale;
+  prevailingKey: SpelledKeyScale;
   segmentConfidence: number[];
 } {
   const totalBeats = timeline.segments.reduce((end, segment) => Math.max(end, segment.endBeat), 0);
@@ -172,14 +174,14 @@ function callerTimeline(
     given ??
     attachPivots(
       key !== undefined
-        ? [{ startBeat: 0, endBeat: totalBeats, key, confidence: 1 }]
+        ? [{ startBeat: 0, endBeat: totalBeats, key: spelledKeyScale(key), confidence: 1 }]
         : keyTimelineFromNotes(pooled, { meters, totalBeats, budget }),
       timeline.segments,
     );
   return {
     timeline,
     keys,
-    prevailingKey: prevailingKeyOf(keys) ?? majorKey(0),
+    prevailingKey: prevailingKeyOf(keys) ?? spelledKeyScale(majorKey(0)),
     segmentConfidence: timeline.segments.map(() => 0),
   };
 }

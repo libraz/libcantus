@@ -5,6 +5,7 @@ import {
   detectModulations,
   keyTimelineFromNotes,
   prevailingKeyOf,
+  spelledKeyScale,
 } from '../src/analyze/keys/index.js';
 import { analyzeTimeline, chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
 import { InvalidInputError } from '../src/core/errors/index.js';
@@ -589,7 +590,7 @@ describe('detectModulations', () => {
 describe('prevailingKeyOf', () => {
   /** A region of the given span and key; confidence is irrelevant to the sum. */
   function region(startBeat: number, endBeat: number, key: KeyScale): KeyRegion {
-    return { startBeat, endBeat, key, confidence: 1 };
+    return { startBeat, endBeat, key: spelledKeyScale(key), confidence: 1 };
   }
 
   it('has no answer when there are no regions', () => {
@@ -695,8 +696,8 @@ describe('detectModulations names the pivot from the triad the chord is heard as
       const chord = makeChord(0, quality);
       const regions = attachPivots(
         [
-          { startBeat: 0, endBeat: 24, key: majorKey(0), confidence: 1 },
-          { startBeat: 24, endBeat: 32, key: majorKey(7), confidence: 1 },
+          { startBeat: 0, endBeat: 24, key: spelledKeyScale(majorKey(0)), confidence: 1 },
+          { startBeat: 24, endBeat: 32, key: spelledKeyScale(majorKey(7)), confidence: 1 },
         ],
         [{ startBeat: 20, endBeat: 24, chord }],
       );

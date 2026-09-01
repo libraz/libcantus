@@ -4,7 +4,7 @@ import { Key } from '../src/model/key.js';
 import { Score } from '../src/model/score.js';
 import { Timeline } from '../src/model/timeline.js';
 import { spanFromChord } from '../src/theory/chord/index.js';
-import { NAMED_SCALES, type ScaleName } from '../src/theory/scale/index.js';
+import { majorKey, NAMED_SCALES, type ScaleName, spelledKeyOf } from '../src/theory/scale/index.js';
 
 /**
  * The identity of a key — its spelled tonic and the scale form it was read
@@ -175,9 +175,12 @@ describe('a timeline carries the key it was given', () => {
     expect(timeline.progression().key?.tonic.name).toBe('Ab');
   });
 
-  it('leaves an inferred key the bare scale the analysis read', () => {
+  it('spells an inferred key the way every other layer would spell it', () => {
+    // An inferred key has no caller spelling to keep, so it is written the way
+    // the theory layer writes that scale — one kind of region key, not two.
     const inferred = Timeline.fromNotes(TRIAD);
-    expect(inferred.keys.every((region) => region.key.tonic === undefined)).toBe(true);
+    expect(inferred.keys.every((region) => region.key.tonic !== undefined)).toBe(true);
+    expect(inferred.keys[0]?.key.tonic).toEqual(spelledKeyOf(majorKey(0)).tonic);
     expect(inferred.key?.toString()).toBe('C major');
   });
 

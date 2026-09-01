@@ -6,6 +6,7 @@ import {
   tensionCurve,
   tensionCurveFrom,
 } from '../src/analyze/arrange/index.js';
+import { spelledKeyScale } from '../src/analyze/keys/index.js';
 import { chordTimelineFromChords } from '../src/analyze/timeline/index.js';
 import { BudgetExceededError, InvalidInputError } from '../src/core/errors/index.js';
 import { type MeterMap, parseTimeSignature } from '../src/core/meter/index.js';
@@ -605,7 +606,7 @@ describe('an analysis against a supplied timeline', () => {
   it('leaves caller-supplied key regions exactly as they were given', () => {
     const tracks = modulatingPiece();
     const inferred = analyzeArrangement(tracks);
-    const given = [{ startBeat: 0, endBeat: 28, key: majorKey(0), confidence: 1 }];
+    const given = [{ startBeat: 0, endBeat: 28, key: spelledKeyScale(majorKey(0)), confidence: 1 }];
     const supplied = analyzeArrangement(tracks, { timeline: inferred.timeline, keys: given });
     expect(supplied.keys).toEqual(given);
   });

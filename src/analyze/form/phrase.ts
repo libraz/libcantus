@@ -25,7 +25,12 @@ import {
 } from '../../core/validation/index.js';
 import { majorKey } from '../../theory/scale/index.js';
 import type { CadenceResult } from '../functional/index.js';
-import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
+import {
+  keyLookup,
+  keyTimelineFromNotes,
+  prevailingKeyOf,
+  spelledKeyScale,
+} from '../keys/index.js';
 import { melodicSimilarity } from '../melody/index.js';
 import type { CadenceHit, ChordTimeline } from '../timeline/index.js';
 import { detectCadences } from '../timeline/index.js';
@@ -430,7 +435,7 @@ function resolveKey(
     totalBeats,
     budget: opts.budget,
   });
-  return keyLookup(regions, prevailingKeyOf(regions) ?? majorKey(0));
+  return keyLookup(regions, prevailingKeyOf(regions) ?? spelledKeyScale(majorKey(0)));
 }
 
 /** Boundaries argued for by silence in the melody. */

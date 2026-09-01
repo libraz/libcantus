@@ -67,8 +67,8 @@ export type TimelineRoman = {
  * analysis inferred has neither, and writing a spelling into it would invent
  * one the reading never made.
  */
-function regionKeyLike(source: SpelledKeyScale, key: Key): SpelledKeyScale {
-  return source.tonic === undefined && source.variant === undefined ? key.scale : keyIdentity(key);
+function regionKeyLike(_source: SpelledKeyScale, key: Key): SpelledKeyScale {
+  return keyIdentity(key);
 }
 
 /** A validated, defensive copy of one chord segment. */

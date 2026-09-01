@@ -161,6 +161,7 @@ import {
   voiceProgression,
   withinCeiling,
 } from '../src/index.js';
+import { keyIdentity } from '../src/model/key.js';
 
 /**
  * The library publishes one engine twice: as standalone functions, and as the
@@ -945,7 +946,7 @@ describe('Score', () => {
     expect(score.timeline().segments).toEqual(found.timeline.segments);
     expect(score.timeline().keys).toEqual(found.keys);
     expect(score.keys()).toEqual(keyTimelineFromNotes(score.notes, { meters: score.meters }));
-    expect(score.key()?.scale).toEqual(prevailingKeyOf(score.keys()));
+    expect(keyIdentity(score.key() as Key)).toEqual(prevailingKeyOf(score.keys()));
   });
 
   it('reads the form the way the form analyses read it, options and all', () => {

@@ -21,7 +21,7 @@ import {
   humanize,
   ornament,
 } from '../src/generate/index.js';
-import { Key } from '../src/model/key.js';
+import { Key, keyIdentity } from '../src/model/key.js';
 import { Score, type ScoreData } from '../src/model/score.js';
 import { Timeline } from '../src/model/timeline.js';
 
@@ -335,7 +335,7 @@ describe('Score analysis', () => {
     const regions = keyTimelineFromNotes(notes, { meters: tune().meters });
     const prevailing = prevailingKeyOf(regions);
     expect(prevailing).not.toBeNull();
-    expect(tune().key()?.scale).toEqual(prevailing);
+    expect(keyIdentity(tune().key() as Key)).toEqual(prevailing);
     // A score with nothing sounding has no key to name.
     expect(Score.empty().key()).toBeUndefined();
     // A carried key is the key, without a search.
@@ -364,7 +364,7 @@ describe('Score analysis', () => {
   it('reads the hypermeter the hypermeter reader reads, on the score own cadences', () => {
     const timeline = chordTimelineFromNotes(notes, { meters: tune().meters }).timeline;
     const regions = keyTimelineFromNotes(notes, { meters: tune().meters });
-    const keyAt = keyLookup(regions, prevailingKeyOf(regions) ?? Key.major('C').scale);
+    const keyAt = keyLookup(regions, prevailingKeyOf(regions) ?? keyIdentity(Key.major('C')));
     const cadenceBeats = detectCadences(timeline, keyAt).map((hit) => hit.atBeat);
     expect(cadenceBeats.length).toBeGreaterThan(0);
     expect(tune().hypermeter()).toEqual(hypermeter(notes, tune().meters, { cadenceBeats }));
@@ -408,7 +408,11 @@ describe('Score analysis', () => {
     // since the score answers about its own array and says nothing about having
     // taken it apart to read it.
     expect(score.voices()).toEqual(
-      analyzeVoice(notes, timeline.at, keyLookup(regions, prevailing ?? Key.major('C').scale)),
+      analyzeVoice(
+        notes,
+        timeline.at,
+        keyLookup(regions, prevailing ?? keyIdentity(Key.major('C'))),
+      ),
     );
     // A key given at the call reaches the analysis as one key for every beat.
     expect(score.voices('C major')).toEqual(analyzeVoice(notes, timeline.at, Key.major('C').scale));

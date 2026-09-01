@@ -15,7 +15,12 @@ import { chordPitchClasses } from '../../theory/chord/index.js';
 import { evaluateSafety, NoteSafety, type SafetyProfile } from '../../theory/safety/index.js';
 import { majorKey } from '../../theory/scale/index.js';
 import { functionOf } from '../functional/index.js';
-import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
+import {
+  keyLookup,
+  keyTimelineFromNotes,
+  prevailingKeyOf,
+  spelledKeyScale,
+} from '../keys/index.js';
 import { type ChordTimeline, chordTimelineFromNotes } from '../timeline/index.js';
 import {
   arrangementProfile,
@@ -126,7 +131,14 @@ export function tensionCurve(
       ? undefined
       : (opts.keys ??
         (opts.key !== undefined
-          ? [{ startBeat: 0, endBeat: totalBeats, key: opts.key, confidence: 1 }]
+          ? [
+              {
+                startBeat: 0,
+                endBeat: totalBeats,
+                key: spelledKeyScale(opts.key),
+                confidence: 1,
+              },
+            ]
           : keyTimelineFromNotes(pooled, { meters, totalBeats, budget })));
   const { timeline, keys, prevailingKey } =
     opts.timeline === undefined || suppliedKeys === undefined
@@ -140,7 +152,7 @@ export function tensionCurve(
       : {
           timeline: opts.timeline,
           keys: suppliedKeys,
-          prevailingKey: prevailingKeyOf(suppliedKeys) ?? majorKey(0),
+          prevailingKey: prevailingKeyOf(suppliedKeys) ?? spelledKeyScale(majorKey(0)),
         };
   // Harmonic tension is judged against the key in force at the sample, not
   // against one key for the piece: a chord is only tense relative to a tonic.

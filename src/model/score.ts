@@ -36,7 +36,7 @@ import type { IntervalLike } from '../core/pitch/index.js';
 import { toSpelledInterval } from '../core/pitch/index.js';
 import type { TempoMap } from '../core/tempo/index.js';
 import { beatsToSeconds, beatsToTicks, tempoAt, ticksToBeats } from '../core/tempo/index.js';
-import type { KeyScale, NoteEvent } from '../core/types.js';
+import type { NoteEvent } from '../core/types.js';
 import { assertFiniteNumber, assertNoteEvent, assertRange } from '../core/validation/index.js';
 import type { GrooveTemplate, HumanizeOptions, OrnamentOptions } from '../generate/index.js';
 import {
@@ -1028,7 +1028,7 @@ export class Score {
       return keyIdentity(this.#key);
     }
     const regions = this.#keyRegions();
-    const prevailing: KeyScale = prevailingKeyOf(regions) ?? Key.major('C').scale;
+    const prevailing = prevailingKeyOf(regions) ?? keyIdentity(Key.major('C'));
     return keyLookup(regions, prevailing);
   }
 }

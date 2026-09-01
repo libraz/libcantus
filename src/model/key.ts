@@ -8,6 +8,7 @@ import {
   romanToChord,
 } from '../analyze/functional/index.js';
 import type { SpelledKeyScale } from '../analyze/keys/index.js';
+import { spelledKeyScale } from '../analyze/keys/index.js';
 import { InvalidInputError, type ParseResult, unwrapParse } from '../core/errors/index.js';
 import type {
   IntervalLike,
@@ -93,7 +94,7 @@ export type DetectedKeyMatch = Omit<KeyMatch, 'key'> & { key: Key };
 export function detectedKeyMatch(match: KeyMatch): DetectedKeyMatch {
   // The same spelling the detector's own rationale is written with, so a match
   // never names its tonic one way in `toString()` and another in `rationale`.
-  const key: SpelledKeyScale = { ...match.key, variant: match.variant };
+  const key: SpelledKeyScale = { ...spelledKeyScale(match.key), variant: match.variant };
   return { ...match, key: toKey(key) };
 }
 
@@ -1473,10 +1474,10 @@ export function toKey(value: KeyLike): Key {
  * @returns The key/scale, its spelled tonic, and its scale form when it has one.
  */
 export function keyIdentity(key: Key): SpelledKeyScale {
-  const identity: SpelledKeyScale = { ...key.scale, tonic: key.tonic.data };
-  const variant = key.variant;
-  if (variant !== undefined) {
-    identity.variant = variant;
-  }
+  const identity: SpelledKeyScale = {
+    ...key.scale,
+    tonic: key.tonic.data,
+    variant: key.variant,
+  };
   return identity;
 }

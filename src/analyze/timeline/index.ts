@@ -27,7 +27,14 @@ import { gridOriginOf } from '../grid.js';
 import type { SlotGrid, WindowWeights } from '../histogram.js';
 import { bucketNotesBySlot, windowWeights } from '../histogram.js';
 import type { KeyRegion } from '../keys/index.js';
-import { attachPivots, keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
+import {
+  attachPivots,
+  keyLookup,
+  keyTimelineFromNotes,
+  prevailingKeyOf,
+  type SpelledKeyScale,
+  spelledKeyScale,
+} from '../keys/index.js';
 import type { KeyContext } from '../voice/index.js';
 
 export type { ChordSegment } from '../../theory/chord/index.js';
@@ -306,7 +313,7 @@ export type ChordTimelineResult = {
    * The key held longest across {@link ChordTimelineResult.keys} — the one to
    * print on a key signature or hand to a generator that takes a single key.
    */
-  prevailingKey: KeyScale;
+  prevailingKey: SpelledKeyScale;
   /** One confidence value in [0, 1] per segment, in segment order. */
   segmentConfidence: number[];
 };
@@ -1293,9 +1300,16 @@ export function analyzeTimeline(
   // modulates is not analysed against the wrong key for every bar after it does.
   const keys: KeyRegion[] =
     opts.key !== undefined
-      ? [{ startBeat: musicStart, endBeat: totalBeats, key: opts.key, confidence: 1 }]
+      ? [
+          {
+            startBeat: musicStart,
+            endBeat: totalBeats,
+            key: spelledKeyScale(opts.key),
+            confidence: 1,
+          },
+        ]
       : keyTimelineFromNotes(sounding, { meters, totalBeats, budget });
-  const prevailingKey = prevailingKeyOf(keys) ?? majorKey(0);
+  const prevailingKey = prevailingKeyOf(keys) ?? spelledKeyScale(majorKey(0));
   const keyAt = keyLookup(keys, prevailingKey);
 
   const segments: ChordSegment[] = [];
