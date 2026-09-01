@@ -30,11 +30,17 @@ import type { Draw } from '../context/draw.js';
 import { PUBLIC_SECTIONS, type Section } from '../drums/internal.js';
 
 /**
- * Every genre the built-in dictionaries name, in declaration order.
+ * Every genre name a vocabulary entry may carry, in declaration order.
+ *
+ * Each built-in dictionary stocks part of the list, not all of it: the drum
+ * patterns carry `motown`, `funk`, `blues`, `bossa`, `samba`, `gospel` and
+ * `dnb`; the bass licks carry `motown`, `soul`, `funk`, `blues`, `jazz`,
+ * `bossa`, `gospel`, `country` and `reggae`. Asking a dictionary for a genre it
+ * has nothing for selects nothing rather than failing.
  *
  * The list is open in spirit even though the type is closed: a caller with a
- * genre of its own supplies entries through the generation context rather than
- * waiting for this list to grow.
+ * genre of its own — or one the built-ins do not stock — supplies entries
+ * through the generation context rather than waiting for this list to grow.
  *
  * @category Composition
  */

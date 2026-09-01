@@ -74,7 +74,7 @@ next; // [53, 60, 65, 69]
 voiceLeadingCost(current, next); // 8
 ```
 
-`voiceLeadingCost` is the total semitone movement between two voicings. It is exposed so a host can rank its own candidates, show why one voicing was preferred, or refuse a suggestion that moves too far.
+`voiceLeadingCost` is the total semitone movement between two voicings, and nothing else. It is exposed so a host can rank its own candidates, show why one voicing was preferred, or refuse a suggestion that moves too far. The penalties for a direct fifth or octave belong to the voicing search, which weighs them while choosing, so a low cost says the voices moved little rather than that the motion is clean — `checkPartWriting` is what answers that.
 
 `Voicing.next` and `Voicing.costTo` are the same two calls on a voicing the host is holding:
 

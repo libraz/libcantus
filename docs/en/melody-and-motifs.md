@@ -175,6 +175,8 @@ The two directions use different names for the same devices, so the corresponden
 
 Two relations have no single transform behind them either: `repetition`, which is the cell restated unchanged, and `retrogradeInversion`, which is `retrograde` followed by `invert`.
 
+Every transform returns its notes in ascending onset order, `retrograde` included: the cell comes back read backwards in time but listed forwards, which is what the analyses taking a melody expect. `invert` therefore mirrors about the note that sounds first, so `retrograde` followed by `invert` pivots on what became the earliest onset.
+
 Because a motif holds its cell, naming the transform and reading it back is one expression:
 
 ```ts
@@ -312,7 +314,7 @@ answer.length; // 3
 answer[0]?.startBeat; // 2
 ```
 
-A `'tonal'` answer counts scale degrees instead of semitones, and `invert` mirrors the subject about its first note before transposing. A pitch outside the key keeps its distance from the scale tone below it, mirrored along with everything else, so a chromatic passing note answers as one. Where the mirror puts such a note inside a diatonic semitone there is no room left for it and it lands on the scale tone there — a subject moving in chromatic steps throughout can answer with a pitch repeated, which is the point at which a real answer is the one to ask for. Notes that never sound are not copied, so the answer holds only sounding notes.
+`answer: 'tonal'` counts scale degrees instead of semitones, and `invert` mirrors the subject about its first note before transposing. A pitch outside the key keeps its distance from the scale tone below it, mirrored along with everything else, so a chromatic passing note answers as one. Where the mirror puts such a note inside a diatonic semitone there is no room left for it and it lands on the scale tone there — a subject moving in chromatic steps throughout can answer with a pitch repeated, which is the point at which a real answer is the one to ask for. Notes that never sound are not copied, so the answer holds only sounding notes.
 
 ## Ornamentation
 

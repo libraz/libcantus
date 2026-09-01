@@ -54,6 +54,8 @@ Between consecutive chords: `parallelFifth`, `parallelOctave`, `hiddenPerfect`, 
 
 Species exercises add `wrongRhythmicRatio`, `unpreparedDissonance`, `unresolvedSuspension`, `illegalLeap`, `battuta`, `missingCadence`, and `melodicShape`.
 
+`unresolvedLeadingTone` asks the leading tone to rise to the tonic, with the exception the style itself makes: in an inner voice it may fall a third onto the fifth of the tonic chord — the frustrated leading tone, written that way to keep the triad complete — and that is not reported. In an outer voice, where the line is exposed, it still is.
+
 ### Cross relations
 
 A cross relation is one letter carrying two different accidentals in two different voices across a chord change. What the rule forbids is the semitone left exposed across the texture, so three things take that exposure away, and none of them is reported:
@@ -129,6 +131,8 @@ The cantus firmus is one note per measure. The counterpoint is aligned by positi
 The fifth species mixes note values, so it needs `opts.durations`, given in cantus-firmus notes. `opts.counterpointAbove` says which side the written voice is on; by default it is inferred from the mean pitch of each line.
 
 Each species licenses different dissonances, and the checker applies the right one: none in the first, a passing dissonance on the weak half in the second and third, a prepared suspension on the downbeat in the fourth, both in the fifth.
+
+Violations come back in the exercise's own time order rather than grouped by rule, so the first one reported is the first one heard and a student can be walked through them from the top of the page.
 
 The third and fifth species also write two figures that quit a dissonance by leap, and both are accepted where they belong: the *nota cambiata* — a consonance, a dissonance stepped down onto, a leap of a third down onto a consonance, and a step back up — and the double neighbour, which steps to one side of a note, leaps a third across to the other, and steps back. Neither is licensed in the second species, whose half notes are not where the style writes them.
 

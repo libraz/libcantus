@@ -48,13 +48,13 @@ Terms as this library uses them. Where a musical term has more than one common m
 
 **Borrowed chord** — A chord taken from the parallel mode without changing the tonic — F minor in C major. `borrowedSource` names where it came from.
 
-**Modal interchange** — Borrowing as a general practice; `modalInterchangePalette` returns the whole available set for a key.
+**Modal interchange** — Borrowing as a general practice; `modalInterchangePalette` lists the parallel mode's triads the key does not already have, plus the Neapolitan. In a minor key the major dominant and the diminished triad on the raised seventh are not among them: raising the seventh degree is an alteration inside the key rather than a chord taken from the parallel mode.
 
 **Tonicization** — Treating a degree as a temporary tonic without leaving the key. A modulation, by contrast, moves the tonal centre for a sustained span.
 
 **Pivot chord** — A chord diatonic in both the old key and the new one, used to explain a modulation.
 
-**Cadence** — A harmonic closing formula. `detectCadence` names the type and, when a voicing identifies the soprano, grades an authentic cadence as perfect or imperfect.
+**Cadence** — A harmonic closing formula. `detectCadence` names the type — `authentic`, `plagal`, `half`, `deceptive`, `phrygian`, or `modal` — and, when a voicing identifies the soprano, grades an authentic cadence as perfect or imperfect. `phrygian` is a half cadence reported under its own name, so counting half cadences means counting both; `modal` is the ♭VII–I arrival no common-practice type covers.
 
 **Harmonic function** — Whether a chord acts as tonic, subdominant, or dominant. `functionOf` reports it; it is meaningful only where `supportsFunctionalHarmony` is true.
 
@@ -88,9 +88,9 @@ Terms as this library uses them. Where a musical term has more than one common m
 
 **Rootless voicing** — Third, fifth, seventh, and tensions, with the root left to the bass.
 
-**Parallel perfect** — Two voices moving in the same direction while holding a perfect fifth, octave, or unison. `createsParallelPerfect` tests one motion.
+**Parallel perfect** — Two moving voices arriving at the same class of perfect interval they already held: fifth to fifth, octave to octave, unison to unison. Similar motion is the usual case, and contrary motion into the same class — a twelfth contracting to a fifth, the anti-parallel — counts as well; both voices have to move, so oblique motion is not one. `createsParallelPerfect` tests one motion.
 
-**Hidden (direct) perfect** — Similar motion into a perfect interval, with the outer voices leaping. Less severe than a parallel and reported separately.
+**Hidden (direct) perfect** — Similar motion into a perfect interval with the upper voice leaping; the lower voice may move by step. Less severe than a parallel and reported separately.
 
 **Cross relation** — The natural and altered forms of a note sounding in different voices across a chord change. Detectable only from spelled notes.
 

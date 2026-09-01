@@ -238,7 +238,7 @@ DRUM_PATTERNS.every((entry) => GENRES.includes(entry.genre)); // true
 
 The three dials never fight, because each owns a different step. The genre chooses which figures are candidates, the complexity dials deform the chosen figure, and the difficulty ceiling rejects a figure whose closest pair of strokes is faster than a player at that ceiling sustains. A rejected figure is dropped from the candidates rather than simplified, since a simplified figure is a different figure.
 
-`GENRES` lists the genres the built-in entries carry, from `pop` and `motown` through `bossa` and `dnb`. `DRUM_PATTERNS` is the dictionary itself, frozen: each entry names its genre, its difficulty from 1 to 5, the sections and tempo band it suits, the time signature it is written in, the articulations it needs from the kit, and the provenance under which it may be published — the common currency of a genre, never a phrase from a particular recording.
+`GENRES` is the closed list of names a figure may carry, not a promise of material for each. The built-in drum dictionary covers seven of them — `motown`, `funk`, `gospel`, `blues`, `bossa`, `samba`, and `dnb` — and the bass dictionary covers its own set. A genre with no built-in figures, `pop` and `house` among them, is a name waiting for entries supplied through `ctx.vocabulary`: asking for one without them returns nothing rather than failing. `DRUM_PATTERNS` is the dictionary itself, frozen: each entry names its genre, its difficulty from 1 to 5, the sections and tempo band it suits, the time signature it is written in, the articulations it needs from the kit, and the provenance under which it may be published — the common currency of a genre, never a phrase from a particular recording.
 
 ### Figures of your own
 

@@ -1007,7 +1007,8 @@ function figureText(spec: ChordSpec, core: ChordSpec | undefined): string[] {
  * chart already uses is unchanged. Anything else is written as the largest name
  * that fits inside it followed by the figures it does not cover — the way a
  * lead sheet writes tensions — so a combination no name covers still writes
- * itself out, and reads back.
+ * itself out, and reads back as the same tones bar the ones it omits, which
+ * {@link figureText} leaves unwritten.
  */
 function specSuffix(spec: ChordSpec): string {
   const named = exactChordSpecQuality(spec);
@@ -1042,8 +1043,11 @@ export type ChordSymbolOptions = NoteNameOptions & {
  * quality maps to one canonical suffix spelling, the root and bass are written
  * in `system`, and a slash bass is appended only when it differs from the root.
  * Every symbol written here reads back through {@link parseChordSymbol} as the
- * same root, sounding bass and tones — whatever combination of tensions the
- * chord carries, and whether or not a quality name covers it.
+ * same root, sounding bass and tones apart from the degrees the chord omits —
+ * whatever combination of tensions it carries, and whether or not a quality
+ * name covers it. Those omissions are the one difference the round trip has: a
+ * chord that leaves a degree out is written without saying so, so reading the
+ * symbol back puts the degree in.
  * When the chord carries `rootSpelling`/`bassSpelling` hints (as chords from
  * {@link parseChordSymbol} do) and no explicit `flats` preference is given, the
  * hints are reused so flat symbols round-trip unchanged.

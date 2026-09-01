@@ -247,8 +247,13 @@ function assertPitches(
  * A match is reported when all of the chord's tones are present in the input, or
  * when the only absent tone is the perfect fifth (a common omission in shell
  * voicings); matches are ranked best-first by fewest extra notes, then fewest
- * missing notes, then most specific (largest) chord. An exact match (no extras,
- * no missing) is flagged and ranked first.
+ * missing notes, then root position over an inversion, then most specific
+ * (largest) chord. An exact match (no extras, no missing) is flagged and ranked
+ * first.
+ *
+ * The root-position step decides between readings of the same pitches that are
+ * otherwise equally good: `[55, 59, 62, 64]` is read as G6 rather than Em7,
+ * because G is in the bass.
  *
  * @param pitches MIDI pitches or bare pitch classes (octave-agnostic).
  * @returns Ranked chord interpretations (may be empty).
@@ -632,9 +637,11 @@ export function detectKey(pitches: readonly number[], opts: DetectKeyOptions = {
       });
     }
   }
-  // Floating-point scores tie often enough — a chromatic input ties all 24 —
-  // that leaving the order to the sort's stability would make construction
-  // order the contract. Rank on the reported fields instead.
+  // Floating-point scores tie often enough — a chromatic input scores every
+  // rotation of one mode the same, so the twelve major keys tie with each other
+  // and the twelve minor keys tie with each other — that leaving the order to
+  // the sort's stability would make construction order the contract. Rank on
+  // the reported fields instead.
   results.sort((a, b) => {
     if (a.score !== b.score) {
       return b.score - a.score;

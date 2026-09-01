@@ -252,8 +252,10 @@ function nearestChordTone(pitch: number, chord: Chord, maxDistance: number): num
  * resolving by step the other way), and escape tones, then fall back to
  * tension, avoid, or an unresolved-dissonance label. The figures are named as
  * {@link classifyMelodyTones} names them, so a caller reading a melody through
- * both layers gets one vocabulary; that classifier weighs the metre as well,
- * which this one is not given, so it is the stricter of the two. Leading-tone resolutions are noted
+ * both layers gets one vocabulary. The two answer different questions and
+ * neither refines the other: that classifier weighs the metre, which this one is
+ * not given, so it can call ornamental a note this one reads as a chord tone,
+ * and the reverse. Leading-tone resolutions are noted
  * additionally, judged against the key in force at the beat the resolution
  * lands on, so a modulation is heard from its new tonic.
  *

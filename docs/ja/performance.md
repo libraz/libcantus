@@ -102,8 +102,10 @@ session.analysis.timeline.segments.length >= 1; // true
 上限のない要求を受け取り得る入り口は、予算を受け取ります。
 
 - `chordTimelineFromNotes`、`keyTimelineFromNotes`、`detectModulations`、`voiceProgression` の `budget` は、入力または探索の規模を制限します。
+- タイムラインが予算に対して計上するのは、窓の数だけではなく、これから評価する候補の数です。動的なセグメンテーションはスロットごとに語彙1行分の表を作るため、スロット数 × コード語彙の大きさが計上されます。固定格子は格子から区間を切り出すだけなので、スロット数のみが計上されます。予算を通った要求は、収まる大きさの表を意味します。計測した量よりはるかに大きな確保が受理後に起きることはありません。
+- 拍子マップはエントリ数で制限されます。マップは解析するスロットごとに参照されるため、その長さは1回限りの費用ではなくスロットあたりの費用になるからです。
 - `voiceChord` と `voiceProgression` の `maxCandidates` は、1コードあたりの探索を制限します。上げると、時間と引き換えに最適解へ近いボイシングが得られます。
-- `DEFAULT_GENERATION_BUDGET` が既定の上限で、超過するとブロックせずに `BudgetExceededError` を投げます。
+- `DEFAULT_GENERATION_BUDGET` が既定の上限で、超過するとブロックせずに `BudgetExceededError` を投げます。大きすぎるのではなく壊れている値、たとえばフレット数や開放弦が MIDI の音域を外れた楽器プロファイルは、受け取った時点で `InvalidInputError` として拒否されます。
 
 これらの失敗の報告方法は[エラーと検証](errors-and-validation.md)を参照してください。
 

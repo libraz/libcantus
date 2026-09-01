@@ -329,7 +329,7 @@ function pairViolations(transition: Transition): PartWritingViolation[] {
         [0, voices - 1],
         from.index,
         to.index,
-        'The outer voices leap into a perfect interval by similar motion',
+        'The outer voices reach a perfect interval by similar motion, the upper one by leap',
       ),
     );
   }

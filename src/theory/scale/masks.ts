@@ -201,7 +201,7 @@ export const MIYAKO_BUSHI_MASK = maskFromOffsets([0, 1, 5, 7, 8]);
  *
  * Two ritsu tetrachords a fourth apart: the middle note sits a whole tone above
  * the lower nuclear tone. The result is the same five pitch classes as the
- * major pentatonic a fourth below, which is why the mask alone cannot say which
+ * major pentatonic a fourth above, which is why the mask alone cannot say which
  * tradition is meant.
  *
  * @category Scales

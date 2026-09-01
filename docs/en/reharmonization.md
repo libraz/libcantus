@@ -36,7 +36,7 @@ The four relationships:
 | --- | --- | --- |
 | `tritone` | Dominant-type chords | Replaces the dominant with the one a tritone away; the guide tones are shared. |
 | `relative` | Triads and sevenths | Swaps in a chord sharing two triad tones. |
-| `borrowed` | Any chord | Takes the same degree from the parallel mode. |
+| `borrowed` | Any chord | Takes a triad from the parallel mode carrying the same harmonic function. |
 | `chromaticMediant` | Any chord | A third away, with one common tone and a chromatic shift. |
 
 An applied dominant is not one of them. Which dominant applies is decided by the chord that follows, and `substituteChord` is asked about one chord in a key. Where the target is known, `secondaryDominantOf` — or `Chord.secondaryDominant` — builds the applied dominant of a named chord; where the whole progression is being chosen, `harmonizeMelody` opens its vocabulary with `reharmonize: 'secondaryDominant'`.
@@ -59,7 +59,7 @@ Without it the result is the full set of theoretically available substitutions; 
 
 ## The modal-interchange palette
 
-Rather than asking chord by chord, take the whole set of chords available from the parallel mode:
+Rather than asking chord by chord, take the chords available from the parallel mode as a set:
 
 ```ts
 import { Chord, formatChordSymbol, Key, majorKey, modalInterchangePalette } from '@libraz/libcantus';
@@ -70,7 +70,7 @@ modalInterchangePalette(majorKey(0)).map((borrowed) => formatChordSymbol(borrowe
 Chord.parse('C').withKey(Key.major('C')).modalInterchange().length; // 8
 ```
 
-Each entry carries its numeral and its `source`, so a UI can group them by where they were borrowed from. The spellings stay on the flat side, as borrowed chords in a major key are written. The palette belongs to the key rather than to any one chord, so `Chord.modalInterchange` returns the same list — it is reachable from a chord because that is where a caller looking for somewhere else to go already is.
+Each entry carries its numeral and its `source`, so a UI can group them by where they were borrowed from. The spellings stay on the flat side, as borrowed chords in a major key are written. The palette holds the parallel mode's triads the key does not already have, plus the Neapolitan; in a major key that is all seven of them, but a minor key gets five. The major dominant and the diminished triad on the raised seventh — `E` and `G#dim` in A minor, the two a caller is most likely to look for — are missing by design, because raising the seventh degree is an alteration inside the key rather than a chord taken from the parallel mode. A picker that wants to offer them has to add them as alterations. The palette belongs to the key rather than to any one chord, so `Chord.modalInterchange` returns the same list — it is reachable from a chord because that is where a caller looking for somewhere else to go already is.
 
 ## Negative harmony
 

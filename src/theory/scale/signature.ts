@@ -152,7 +152,7 @@ export function keySignatureFifths(tonic: NoteLike, key: KeyScale): number {
  *
  * A signature names two keys — three sharps is both A major and F# minor — so
  * the mode decides which one is built. The tonic is spelled the way that key is
- * written, including the theoretical keys past ±7 (nine sharps is B# major).
+ * written, including the theoretical keys past ±7 (nine sharps is D# major).
  *
  * @param fifths The signed number of sharps (positive) or flats (negative).
  * @param mode Which of the signature's two keys to build; defaults to major.

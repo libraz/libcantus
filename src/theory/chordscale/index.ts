@@ -159,18 +159,28 @@ function isAlteredDominant(chord: Chord, scaleName: string): boolean {
  * conventional chord-scale relationship. Every entry of {@link NAMED_SCALES}
  * whose pitch-class set is a superset of the chord's is returned once per
  * distinct pitch-class set (aliased masks such as major/ionian report only the
- * modal name), ranked by fewest extra scale tones beyond the chord and then by
- * conventional
- * preference. For bare triads and smaller chords, heptatonic scales rank before
- * pentatonics and other sizes: a pentatonic adds no modal color over a triad,
- * so the seven-note modes are the more useful answer. The chromatic scale is
- * only returned as a fallback when no other scale contains the chord.
+ * modal name). The chromatic scale is only returned as a fallback when no other
+ * scale contains the chord.
  *
- * The ranking is by fit, so the first entry is the tightest-fitting scale
- * rather than the idiomatic choice: a four-note chord that a pentatonic covers
- * exactly puts that pentatonic ahead of the mode a player would name. Read the
- * whole list, or pick by name, when the idiomatic scale is what is wanted;
- * {@link scalesForChanges} makes that choice for a progression.
+ * The ranking applies these keys in order:
+ *
+ * 1. The idiomatic scales for the chord quality, in the order they are named
+ *    there, ahead of every scale that is not one of them.
+ * 2. For bare triads and smaller chords, heptatonic scales ahead of pentatonics
+ *    and other sizes: a pentatonic adds no modal color over a triad, so the
+ *    seven-note modes are the more useful answer.
+ * 3. Fewest extra scale tones beyond the chord.
+ * 4. Conventional modal preference.
+ * 5. Fewest avoid notes, which separates the symmetric and melodic-minor
+ *    scales the modal preference does not name.
+ * 6. Alphabetical order, so the list is stable.
+ *
+ * The idiomatic key comes first, so the head of the list is the scale a player
+ * would name rather than the tightest fit: over `Cm7b5` the locrian mode leads
+ * even though the blues scale adds fewer tones, because locrian is what a
+ * half-diminished chord is read as. Read further down the list, or pick by name,
+ * when the closest fit is what is wanted; {@link scalesForChanges} makes the
+ * choice for a whole progression.
  *
  * @param chord The chord to fit scales over, as a chord symbol, chord data, or
  *   a `Chord`.

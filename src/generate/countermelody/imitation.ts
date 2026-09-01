@@ -34,8 +34,10 @@ const IMITATION_ANSWERS = ['real', 'tonal'] as const;
  *
  * A `real` answer transposes literally, keeping every interval of the subject
  * and leaving the key where the interval puts it. A `tonal` answer counts scale
- * degrees instead, so the answer stays in the key and adjusts an interval or two
- * to do it — the fifth of a subject answered by a fourth.
+ * degrees instead, so the answer stays in the key: every interval keeps the
+ * number of degrees it spanned in the subject, and only its quality changes as
+ * the key's own pattern of steps and half steps asks — a major third answered by
+ * a minor one.
  *
  * @category Composition
  */

@@ -20,7 +20,7 @@ chordSpecOf(altered.data).alterations;
 
 `Chord.spec` is the one-step form; `chordSpecOf` reads plain chord data, which is why it has to be handed `chord.data`. `Chord` values can be inverted, transposed, formatted, and converted to a progression. The pure functions `makeChord`, `chordFromSpec`, `chordPitchClasses`, and `formatChordSymbol` expose the same data model without class wrappers.
 
-A symbol survives a round trip — a chord no quality name covers included — and an inversion is carried as a bass pitch class rather than as a reordered interval list:
+A symbol survives a round trip — a chord no quality name covers included — and an inversion is carried as a bass pitch class rather than as a reordered interval list. Omissions are the one exception: a tone a chord leaves out is not written, so `'C7(omit3)'` formats as `'C7'` and parses back with its third. The round trip holds for the root, the slash bass, and the sounding tones, less whatever `chordSpecOf(chord).omissions` names:
 
 ```ts
 import { Chord, formatChordSymbol, parseChordSymbol } from '@libraz/libcantus';

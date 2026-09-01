@@ -38,6 +38,18 @@ Key.fromFifths(2).toString(); // 'D major'
 Key.fromFifths(2, 'minor').toString(); // 'B minor'
 ```
 
+`Key.toString` names the scale the key actually carries rather than the major or minor key nearest to it: a mode names its mode, and a minor key holding a harmonic or melodic form says so. `Key.parse` reads that same text back, so a key stored as a string is restored as the key it was:
+
+```ts
+import { Key } from '@libraz/libcantus';
+
+Key.named('dorian', 'D').toString(); // 'D dorian'
+Key.parse('D dorian').toString(); // 'D dorian'
+Key.parse('A harmonic minor').toString(); // 'A harmonic minor'
+```
+
+The scale word is an English qualifier. Asked for another notation system — `toString({ system: 'german' })` — a key names its parallel plain major or minor there, because the other systems have no word for the form.
+
 ## The closely related keys
 
 ```ts

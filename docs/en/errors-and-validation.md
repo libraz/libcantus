@@ -88,6 +88,8 @@ Each helper returns its argument, so it can wrap a value in place instead of sit
 
 A hole in a sparse array and an explicit `undefined` are both rejected, rather than being dropped silently or surfacing as a `TypeError` further along.
 
+An instrument profile is checked the same way, at the point it is accepted. A stringed profile needs at least one string, every open string is a MIDI pitch in 0..127, and its fret count is an integer in 0..127 — a neck longer than the MIDI compass would name positions that sound no pitch. A percussion profile needs at least one voice within reach, and every voice it reaches is a MIDI pitch in 0..127. A profile outside those bounds is an `InvalidInputError` naming the field, not a failure further in.
+
 ## Notes that never sound
 
 Analysis entry points ignore events with a non-positive duration. `dropSilentNotes` — also exported as `soundingNotesOnly` — applies that policy explicitly, which is useful right after an import:

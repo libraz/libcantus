@@ -117,7 +117,7 @@ Key.named('miyakoBushi', 'C').supportsFunctionalHarmony(); // false
 
 ## Chord–scale relationships
 
-Given a chord, `chordScales` ranks the scales that contain it, best fit first. "Best" means fewest extra tones, with the idiomatic and heptatonic choices preferred among equals:
+Given a chord, `chordScales` ranks the scales that contain it. The keys of that ranking, in order: the idiomatic choice for the chord's quality, where the library names one; then, for a triad, seven-note scales ahead of smaller ones; then the fewest extra tones over the chord; then a conventional preference among the modes, brightest first; then the fewest avoid notes; then the name. Idiom is ranked before fit rather than used to break ties, so the idiomatic scale for a quality leads even where another scale contains the chord more tightly — `locrian` heads a half-diminished seventh though the blues scale adds fewer tones.
 
 ```ts
 import { chordScales, makeChord } from '@libraz/libcantus';
@@ -126,13 +126,27 @@ chordScales(makeChord(0, 'maj7'))[0]; // { name: 'ionian', rootPc: 0 }
 chordScales(makeChord(0, 'dom7'))[0]; // { name: 'mixolydian', rootPc: 0 }
 ```
 
+Where a quality has no idiom named for it and the chord has four tones, fit decides alone, and the smallest scale containing the chord wins. For a minor seventh that is the pentatonic rather than the mode a chart would write:
+
+```ts
+import { chordScaleReport, chordScales, makeChord } from '@libraz/libcantus';
+
+chordScales(makeChord(2, 'min7'))[0]?.name; // 'minorPentatonic'
+chordScaleReport(makeChord(2, 'min7'), 1)[0]?.tensions; // [7]
+```
+
+Dm7 leads with `minorPentatonic`, and a report limited to one scale then offers the eleventh alone — the ninth and thirteenth that dorian carries are not in the pentatonic at all. Take a later entry when the mode is what is wanted, or use `scalesForChanges`, which chooses across a whole progression with continuity rather than one chord at a time.
+
 Two questions follow from a chosen scale. An **available tension** is a non-chord scale tone that can be added as colour; an **avoid note** is a non-chord scale tone a semitone directly above a chord tone — or the third a suspension displaced — which clashes when sounded against it.
 
 That rule says which tones may not be *sounded* against the chord, which is not the same question as which tones a line may not touch. `{ use: 'melodic' }` asks the second one: only the semitone above the root survives it, so the melodic answer is always a subset of the harmonic one.
 
+Both answers are absolute pitch classes, 0 to 11, not degree numbers — `[4, 7, 11]` over Dm7 is E, G and B, the ninth, eleventh and thirteenth. A C-rooted example cannot tell the two readings apart, so a UI that labels the numbers as degrees is wrong everywhere but on C:
+
 ```ts
 import { availableTensions, avoidNotes, chordScaleReport, makeChord } from '@libraz/libcantus';
 
+availableTensions(makeChord(2, 'min7'), 'dorian'); // [4, 7, 11]
 availableTensions(makeChord(0, 'maj7'), 'ionian'); // [2, 9]
 avoidNotes(makeChord(0, 'maj7'), 'ionian'); // [5]
 avoidNotes(makeChord(0, 'maj7'), 'ionian', { use: 'melodic' }); // []
@@ -216,6 +230,6 @@ Key.major('Gb').spell()[0].name; // 'Gb'
 
 `spelledKeyOf` picks the tonic spelling with the fewest accidentals: pitch class 1 in major comes out as Db rather than C#. Where the two spellings are equally far out — pitch class 6 is F# at six sharps and Gb at six flats — the flat side is taken. Pass an explicit tonic when the piece is written the other way.
 
-A heptatonic scale gives every degree the next letter. A gapped scale gets one letter per tone wherever its pitch set allows it, and is spelled tone by tone on the side it leans towards where it does not — the blues scale has to name one letter twice however it is read.
+A heptatonic scale gives every degree the next letter. An eight-note scale uses all seven letters and doubles exactly one of them, so an octatonic is read as a scale with one letter stated twice rather than as a run of accidentals. A gapped scale gets one letter per tone wherever its pitch set allows it, and is spelled tone by tone on the side it leans towards where it does not — the blues scale has to name one letter twice however it is read.
 
 See [Pitch and notation](pitch-and-notation.md) for the spelling rules this follows, and [Key relations and modulation](key-relations-and-modulation.md) for how a tonic spelling is chosen in the first place.

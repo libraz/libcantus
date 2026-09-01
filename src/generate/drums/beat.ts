@@ -172,10 +172,6 @@ function roleBackbeatWeight(role: DrumRole): number {
  * all. `'minimal'` is one step quieter than `'ambient'` in every style — never
  * the full backbeat and never nothing at all.
  *
- * Reading the role alone left the styles that name a genre writing another
- * genre's backbeat; reading a density style as if it were a role took the
- * backbeat drum away from callers who had asked for every voice.
- *
  * @param sec Section context.
  * @param velocity Base velocity of the beat the stroke lands on.
  * @returns The stroke to write, or undefined when the role writes no backbeat.

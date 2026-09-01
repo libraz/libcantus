@@ -522,6 +522,35 @@ describe('generateDrums onset ordering', () => {
   });
 });
 
+describe('HitList crash proximity', () => {
+  const CRASH = 49;
+
+  it('sees a crash on either side of the beat it is asked about', () => {
+    // The guard keeps an open hi-hat off a beat a crash already covers, and a
+    // crash written a 32nd earlier covers the beat just as much as one written a
+    // 32nd later.
+    for (const offset of [-0.125, -0.0625, 0, 0.0625, 0.125]) {
+      const track = new HitList();
+      track.add(CRASH, 2 + offset, 0.5, 100);
+      expect(track.hasCrashNear(2), `crash at ${offset} from the beat`).toBe(true);
+    }
+  });
+
+  it('ignores a crash a 16th or more away, equally in both directions', () => {
+    for (const offset of [-1, -0.5, -0.25, 0.25, 0.5, 1]) {
+      const track = new HitList();
+      track.add(CRASH, 2 + offset, 0.5, 100);
+      expect(track.hasCrashNear(2), `crash at ${offset} from the beat`).toBe(false);
+    }
+  });
+
+  it('answers for the crash voice alone', () => {
+    const track = new HitList();
+    track.add(SNARE, 1.9375, 0.25, 90);
+    expect(track.hasCrashNear(2)).toBe(false);
+  });
+});
+
 describe('generateDrums option validation', () => {
   it('rejects a name that is not one of the documented values', () => {
     // A name from a config file or a JavaScript caller used to be read against

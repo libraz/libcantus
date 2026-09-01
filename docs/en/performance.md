@@ -102,8 +102,10 @@ Notes are compared as values and by multiplicity, so re-ordering a track's array
 Entry points that could be handed an unbounded request take a budget:
 
 - `budget` on `chordTimelineFromNotes`, `keyTimelineFromNotes`, `detectModulations`, and `voiceProgression` caps the size of the input or the search.
+- A timeline is charged for the candidates it is about to evaluate rather than for its window count alone: dynamic segmentation builds one lexicon row per slot, so it is charged slots times the size of the chord lexicon, while a fixed grid cuts its segments from the grid and is charged its slots only. A budget that passes therefore stands for a table that fits, which is what keeps a request from being accepted and then allocating far more than it was measured at.
+- A meter map is bounded by its entry count, because the map is consulted once per analysed slot: its length is a per-slot cost rather than a one-time one.
 - `maxCandidates` on `voiceChord` and `voiceProgression` caps the per-chord search. Raising it buys a closer-to-optimal voicing at the cost of time.
-- `DEFAULT_GENERATION_BUDGET` is the default cap, and exceeding it raises `BudgetExceededError` rather than blocking.
+- `DEFAULT_GENERATION_BUDGET` is the default cap, and exceeding it raises `BudgetExceededError` rather than blocking. A value that is not oversized but malformed — an instrument profile whose frets or open strings fall outside the MIDI compass — is refused where it is accepted, as an `InvalidInputError`.
 
 See [Errors and validation](errors-and-validation.md) for how those failures are reported.
 

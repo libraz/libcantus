@@ -20,7 +20,7 @@ chordSpecOf(altered.data).alterations;
 
 1段で得たいときは `Chord.spec` を使います。`chordSpecOf` が受け取るのはプレーンなコードデータであり、`chord.data` を渡す必要があるのはそのためです。`Chord` の値は転回、移調、整形、進行への変換ができます。純粋関数の `makeChord`、`chordFromSpec`、`chordPitchClasses`、`formatChordSymbol` は、クラスラッパーなしで同じデータモデルを公開します。
 
-記号は往復しても保たれ（どの品質名にも当てはまらない和音を含みます）、転回は音程リストの並べ替えではなくベースのピッチクラスとして保持されます。
+記号は往復しても保たれ（どの品質名にも当てはまらない和音を含みます）、転回は音程リストの並べ替えではなくベースのピッチクラスとして保持されます。例外は省略音です。和音が省いた音は書き出されないため、`'C7(omit3)'` は `'C7'` として整形され、読み戻すと3度が戻ります。往復が保証するのはルート、スラッシュのベース、そして鳴っている構成音であり、`chordSpecOf(chord).omissions` が名指す度数はその対象から外れます。
 
 ```ts
 import { Chord, formatChordSymbol, parseChordSymbol } from '@libraz/libcantus';

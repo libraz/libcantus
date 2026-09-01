@@ -38,6 +38,18 @@ Key.fromFifths(2).toString(); // 'D major'
 Key.fromFifths(2, 'minor').toString(); // 'B minor'
 ```
 
+`Key.toString` は、もっとも近い長調・短調ではなく、その調が実際に持つ音階を名乗ります。旋法は旋法の名前を、和声的短音階や旋律的短音階を保つ短調はその音階形を印字します。`Key.parse` は同じ文字列を読み戻すので、文字列として保存した調は元の調のまま復元されます。
+
+```ts
+import { Key } from '@libraz/libcantus';
+
+Key.named('dorian', 'D').toString(); // 'D dorian'
+Key.parse('D dorian').toString(); // 'D dorian'
+Key.parse('A harmonic minor').toString(); // 'A harmonic minor'
+```
+
+音階形を表す語は英語表記に限った修飾です。他の記譜体系（`toString({ system: 'german' })` など）では、その音階形を表す語がないため、同主の素の長調または短調として名乗ります。
+
 ## 近親調
 
 ```ts

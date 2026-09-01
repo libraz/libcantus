@@ -2,7 +2,7 @@
 
 Analysis returns structured reports. They keep the answer, the evidence used to choose it, and — in APIs that support it — the alternatives that were rejected.
 
-The class API asks these questions of a value: a `Chord` recognized from pitches, a `Timeline` that knows its own cadences, a `Score` that can name its phrases. The functional API takes the same plain data and returns the same reports. Neither is more capable than the other, so a page of analysis code can be written either way.
+The class API asks these questions of a value: a `Chord` recognized from pitches, a `Timeline` that knows its own cadences, a `Score` that can name its phrases. The functional API takes the same plain data and returns the same reports. An analysis path is complete on the class side — every reading on this page is reachable from a `Chord`, `Timeline`, `Score`, or `Arrangement` — so a page of analysis code can be written either way. That does not extend to the library as a whole: `barPositionToBeat`, `barPositionToPulse`, `chordFromSpec`, `secondaryDominant`, and `shiftByScaleDegrees` are functions with no class face.
 
 Every result on this page is a reading supported by evidence, not a fact recovered from the notes. A UI that presents one should show the supporting figures and allow an override.
 
@@ -70,7 +70,7 @@ detectKeyBest(histogram)?.mode; // 'minor'
 
 A `KeyMatch` carries the scale that scored best, the major or minor key it is closest to, which scale form it uses (`variant`), the exact name from `NAMED_SCALES`, and the score. `Key.detectMatches` reports all of it, with the key itself as a `Key`; a detected `Key` keeps the scale form it was matched under, which is why the one above names itself melodic rather than just minor. `modes: true` puts the church modes in the running; without it the candidates are the major and the three minor forms.
 
-`profile` chooses what the observed distribution is correlated against — `krumhansl` by default, `temperley` for corpus proportions, or `flat` for an unweighted comparison. `weights` says how much each pitch counts; `detectKeyFromNotes` supplies duration times velocity, which is how chord inference weighs its own histogram, and is the right entry point when the input is note events rather than a histogram. `Score.detectKeys()` is the same ranking from the class side, over a whole score read as one key, so a caller can see what the winner beat and by how much:
+`profile` chooses what the observed distribution is correlated against — `krumhansl` by default, `temperley` for corpus proportions, or `flat` for an unweighted comparison. `weights` says how much each pitch counts; `detectKeyFromNotes` supplies duration times velocity, and is the right entry point when the input is note events rather than a histogram. It weighs notes the way chord inference weighs its own histogram, down to the default velocity for a note that carries none and the normalization applied afterwards, with one deliberate exception: the metrical accent chord inference adds is not part of it, because `detectKeyFromNotes` is never told the time signature that accent would be measured against. `Score.detectKeys()` is the same ranking from the class side, over a whole score read as one key, so a caller can see what the winner beat and by how much:
 
 ```ts
 import { Score } from '@libraz/libcantus';
@@ -156,6 +156,8 @@ detectCadence(g, c, key).strength; // null
 
 Cadences are measured against the degrees the key actually has, not against fixed semitone distances: a mode resolves deceptively onto its own submediant, and where its dominant carries no leading tone — the `v` of aeolian or dorian — an arrival on that dominant is a half cadence too. A major key keeps its leading tone, so a borrowed minor `v` there is not one.
 
+`cadence.type` is one of six labels — `authentic`, `plagal`, `half`, `deceptive`, `phrygian`, `modal` — or null when the pair forms no cadence. The last two are the ones a filter drops silently. `phrygian` is a particular half cadence and is reported in place of `half`, so code counting half cadences has to count `phrygian` alongside it; `modal` is the ♭VII–I arrival no common-practice type covers, which is where a popular or modal piece puts weight that a search for `authentic` never sees. The TSDoc on `CadenceResult.type` is the exhaustive reference.
+
 A cadential six-four is the dominant, not an inverted tonic: its bass has already arrived and the notes above it resolve down onto the dominant's own. Pass the chord before the dominant as `approach` and the cadence is reported as the one event it is — the type and the beat stay with the dominant's resolution, and the rationale says the cadence began at the six-four. A six-four the bass leaves, as in `IV–I64–IV`, is an ordinary inverted tonic and reads as one.
 
 ## Reduction and form
@@ -175,7 +177,7 @@ timeline.reduce().map((entry) => entry.level);
 // ['structural', 'passing', 'structural']
 ```
 
-The reading needs a key, so a timeline built without one — `Timeline.fromChords` with no third argument — refuses rather than guessing. `reduceProgression` is the function, and takes the key as its own argument:
+The reading needs a key, so a timeline built without one — `Timeline.fromChords` with no third argument — refuses rather than guessing. `basis` chooses what counts as the frame: the default `'function'` keeps the tonic, the dominant, and the chords that cadence, while `'duration'` keeps a chord that outlasts the chords around it — its length is compared strictly against the median of the other chords' lengths, so an even harmonic rhythm singles out nobody and the two embellishing figures decide. `reduceProgression` is the function, and takes the key as its own argument:
 
 ```ts
 import { chordTimelineFromChords, majorKey, reduceProgression } from '@libraz/libcantus';
@@ -245,6 +247,6 @@ report.timeline.segments.length >= 1; // true
 Array.isArray(report.conflicts); // true
 ```
 
-`tensionCurve` and `analyzeVoice` expose parts of that report when a complete arrangement result is unnecessary, and `toVoiceNotes` prepares a single track for voice-level analysis; `Arrangement.tension` and `Score.voices` are the same two readings from the class side. `createArrangementSession` keeps an analysis open across edits, which is what `Arrangement.update` uses; see [Performance](performance.md).
+`tensionCurve` and `analyzeVoice` expose parts of that report when a complete arrangement result is unnecessary, and `toVoiceNotes` prepares a single track for voice-level analysis; `Arrangement.tension` is the first of those from the class side. `Score.voices` is the second, read over a whole piece: a score is polyphony, so its notes are separated into voices and each note is classified in its own voice against everything else sounding under it. That is what a suspension needs — a dissonance is dissonant against something — and it keeps a note of one voice from being heard as the passing tone of another. `createArrangementSession` keeps an analysis open across edits, which is what `Arrangement.update` uses; see [Performance](performance.md).
 
 The ornament figures `analyzeVoice` names — passing, neighbour, suspension, appoggiatura, anticipation, escape — are the words `classifyMelodyTones` uses for the same notes, so one melody read through the analysis and through the harmonizer comes back under one vocabulary; `analyzeVoice` reads the melodic shape alone, without the metre the other one also weighs, so it names a figure in fewer places rather than under a different name.

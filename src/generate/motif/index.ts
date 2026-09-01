@@ -363,6 +363,9 @@ export function motifToNoteEvents(cell: MotifCell): NoteEvent[] {
 /**
  * Apply a transformation to a motif cell.
  *
+ * Every transform hands the cell back in onset order, so the note a later
+ * transform reads as the first one is the note that sounds first.
+ *
  * `invert` reflects pitches about the earliest note (chromatic, self-inverse);
  * `retrograde` mirrors onsets about the cell span, preserving rests (self-inverse);
  * `augment`/`diminish` scale time by `amount ?? 2` and its reciprocal;

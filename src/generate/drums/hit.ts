@@ -126,12 +126,15 @@ export class HitList {
     return this.#onsets.has(onsetKey(pitch, startBeat));
   }
 
-  /** True when a crash already sits within a 16th of `startBeat`. */
+  /**
+   * True when a crash already sits less than a 16th from `startBeat`, on either
+   * side of it.
+   */
   hasCrashNear(startBeat: number): boolean {
-    // The window is a 16th, and every grid in use is at least a 128th, so it is
-    // enough to probe the quantized positions inside it.
+    // The window is a 16th either way, and every grid in use is at least a
+    // 128th, so it is enough to probe the quantized positions inside it.
     const steps = Math.round(0.25 * ONSET_KEY_SCALE);
-    for (let step = 0; step < steps; step += 1) {
+    for (let step = -steps + 1; step < steps; step += 1) {
       if (this.#onsets.has(onsetKey(GM.CRASH, startBeat + step / ONSET_KEY_SCALE))) {
         return true;
       }

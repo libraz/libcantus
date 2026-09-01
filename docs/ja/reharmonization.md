@@ -36,7 +36,7 @@ progression.substitute(0, 'tritone').toString(); // 'Db7 C'
 | --- | --- | --- |
 | `tritone` | 属和音型 | 三全音離れた属和音に置き換えます。ガイドトーンが共有されます。 |
 | `relative` | 三和音・七の和音 | 三和音の構成音を2つ共有するコードに差し替えます。 |
-| `borrowed` | 任意 | 同主調から同じ度数を借ります。 |
+| `borrowed` | 任意 | 同主調から、同じ和声機能を持つ三和音を借ります。 |
 | `chromaticMediant` | 任意 | 3度離れ、共通音1つと半音変化を伴います。 |
 
 副属和音はこの一覧に入りません。どの属和音が当たるかは後続の和音が決めるもので、`substituteChord` が受け取るのは1つの和音と調だけだからです。対象が分かっている場面では `secondaryDominantOf`（クラスでは `Chord.secondaryDominant`）が指定した和音に対する副属和音を作ります。進行全体を選び直す場面では、`harmonizeMelody` が `reharmonize: 'secondaryDominant'` で語彙を広げます。
@@ -59,7 +59,7 @@ overE.every((sub) => sub.chord.intervals.length > 0); // true
 
 ## モーダルインターチェンジのパレット
 
-コードごとに問い合わせる代わりに、同主調から利用できるコードをまとめて取得できます。
+コードごとに問い合わせる代わりに、同主調から借りられるコードを集合として取得できます。
 
 ```ts
 import { Chord, formatChordSymbol, Key, majorKey, modalInterchangePalette } from '@libraz/libcantus';
@@ -70,7 +70,7 @@ modalInterchangePalette(majorKey(0)).map((borrowed) => formatChordSymbol(borrowe
 Chord.parse('C').withKey(Key.major('C')).modalInterchange().length; // 8
 ```
 
-各項目はローマ数字と `source` を持つため、UI は借用元ごとにまとめて表示できます。綴りはフラット側に寄ります。長調における借用和音はそのように書かれるためです。パレットは個々のコードではなく調に属するので、`Chord.modalInterchange` も同じ一覧を返します。コードから辿れるようにしてあるのは、次の行き先を探している呼び出し側がすでにコードのところにいるからです。
+各項目はローマ数字と `source` を持つため、UI は借用元ごとにまとめて表示できます。綴りはフラット側に寄ります。長調における借用和音はそのように書かれるためです。パレットが持つのは、同主調の三和音のうちその調が持たないものとナポリの和音です。長調では同主短調の7つの三和音がすべて入りますが、短調では5つになります。長三和音の属和音と、上げた第7度上の減三和音（イ短調の `E` と `G#dim`）は入りません。呼び出し側がもっとも探しそうな2つですが、第7度を上げるのは同主調から取った和音ではなく調の内側での変位であるため、意図的に外れています。これらを提示したい UI は、変位として自前で加えることになります。パレットは個々のコードではなく調に属するので、`Chord.modalInterchange` も同じ一覧を返します。コードから辿れるようにしてあるのは、次の行き先を探している呼び出し側がすでにコードのところにいるからです。
 
 ## ネガティブハーモニー
 

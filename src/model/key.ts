@@ -477,7 +477,7 @@ export class Key {
    *
    * A signature names two keys — three sharps is both A major and F# minor — so
    * the mode decides which one is built. The tonic is spelled the way that key
-   * is written, including the theoretical keys past ±7 (nine sharps is B#
+   * is written, including the theoretical keys past ±7 (nine sharps is D#
    * major).
    *
    * @param fifths The signed number of sharps (positive) or flats (negative).
