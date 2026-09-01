@@ -23,6 +23,7 @@ import {
   Tuning,
   Voicing,
 } from '../src/model/index.js';
+import { availableTensions } from '../src/theory/chordscale/index.js';
 
 /**
  * Contracts the model classes hold as a family rather than one at a time:
@@ -611,7 +612,11 @@ describe('methods offer the options their delegate accepts', () => {
     const dominant = Chord.of('G', 'dom7');
     expect(
       dominant.tensions('phrygianDominant', { resolvesTo: Chord.of('C', 'min').data }),
-    ).toEqual(dominant.tensions('phrygianDominant', { resolvesTo: Chord.of('C', 'min').data }));
+    ).toEqual(
+      availableTensions(dominant.data, 'phrygianDominant', {
+        resolvesTo: Chord.of('C', 'min').data,
+      }),
+    );
     expect(
       dominant.tensions('phrygianDominant', { resolvesTo: Chord.of('C', 'min').data }).length,
     ).toBeGreaterThan(dominant.tensions('phrygianDominant').length);

@@ -10,7 +10,13 @@ import {
 import { Chord } from '../src/model/index.js';
 import { parseChordSymbol, tryParseChordSymbol } from '../src/theory/symbol/index.js';
 
-/** The error a throwing parser raises, as the value it threw. */
+/**
+ * The error a throwing parser raises, as the value it threw.
+ *
+ * Callers that narrow a `ParseResult` inline must assert `ok` first: a
+ * comparison whose two sides both read through `!result.ok` collapses to
+ * `false === false` when the parser unexpectedly succeeds.
+ */
 function thrownBy(parse: () => unknown): unknown {
   try {
     parse();
@@ -46,6 +52,7 @@ describe('tryParseNote', () => {
     const failure = tryParseNote('C#b');
     const thrown = thrownBy(() => parseNote('C#b'));
     expect(thrown).toBeInstanceOf(InvalidInputError);
+    expect(failure.ok).toBe(false);
     expect(!failure.ok && (thrown as Error).message).toBe(!failure.ok && failure.error.message);
   });
 });
@@ -72,6 +79,7 @@ describe('tryParseInterval', () => {
     const failure = tryParseInterval('M5');
     const thrown = thrownBy(() => parseInterval('M5'));
     expect(thrown).toBeInstanceOf(InvalidInputError);
+    expect(failure.ok).toBe(false);
     expect(!failure.ok && (thrown as Error).message).toBe(!failure.ok && failure.error.message);
   });
 });
@@ -108,6 +116,7 @@ describe('tryParseChordSymbol', () => {
     const failure = tryParseChordSymbol('Cfoo');
     const thrown = thrownBy(() => parseChordSymbol('Cfoo'));
     expect(thrown).toBeInstanceOf(InvalidInputError);
+    expect(failure.ok).toBe(false);
     expect(!failure.ok && (thrown as Error).message).toBe(!failure.ok && failure.error.message);
   });
 });
@@ -186,6 +195,7 @@ describe('Chord.tryParse', () => {
     const failure = Chord.tryParse('Cfoo');
     const thrown = thrownBy(() => Chord.parse('Cfoo'));
     expect(thrown).toBeInstanceOf(InvalidInputError);
+    expect(failure.ok).toBe(false);
     expect(!failure.ok && (thrown as Error).message).toBe(!failure.ok && failure.error.message);
   });
 });
