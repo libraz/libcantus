@@ -25,6 +25,9 @@ import {
   barLengthOf,
   barStartOf,
   beatOfBarIndex,
+  copyMeterData,
+  copyMeterMap,
+  copyTimeSignature,
   entryIndexOf,
   groupingSumOf,
   isAdditiveReading,
@@ -135,10 +138,25 @@ export type MeterLike =
  *   value whose `toJSON` returns one of those.
  * @param name What the meter is called in an error message, so a caller that
  *   holds several of them hears which one was malformed.
- * @returns The validated signature, or the validated map.
+ * @returns The validated signature, or the validated map, freshly allocated
+ *   down to every grouping array — so a caller may keep and edit what it gets
+ *   back without editing the meter it passed in, and without any two calls
+ *   handing out the same object.
  * @throws If the value names no meter, or the meter it names is malformed.
  */
 export function toMeterData(value: MeterLike, name = 'meter'): MeterData {
+  return copyMeterData(readMeterData(value, name));
+}
+
+/**
+ * {@link toMeterData} without the copy, for the library's own reads.
+ *
+ * The copy is what keeps a returned meter from aliasing the caller's, and the
+ * functions below only read what they resolve — a positional question is asked
+ * once per slot, and copying the map for each of them would cost more than
+ * answering it.
+ */
+function readMeterData(value: MeterLike, name = 'meter'): MeterData {
   if (typeof value === 'string') {
     return parseTimeSignature(value);
   }
@@ -176,8 +194,14 @@ export type BarPosition = {
 
 const EPS = 1e-9;
 
-/** The meter assumed when a caller names none. */
-const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
+/**
+ * The meter assumed when a caller names none.
+ *
+ * Frozen, and copied on the way out of every function that hands a default
+ * meter back: a shared default that a caller can write to is a default the
+ * whole process then reads differently.
+ */
+const DEFAULT_TS: TimeSignature = Object.freeze({ numerator: 4, denominator: 4 });
 
 /** Whether `value` is an integer multiple of `unit` (within a float tolerance). */
 function isMultiple(value: number, unit: number): boolean {
@@ -340,7 +364,7 @@ export function beatsPerBar(ts: TimeSignature): number {
  */
 export function meterAt(beatInQuarters: number, meter: MeterLike): TimeSignature {
   assertFiniteNumber(beatInQuarters, 'beat');
-  return meterAtChecked(beatInQuarters, toMeterData(meter));
+  return copyTimeSignature(meterAtChecked(beatInQuarters, readMeterData(meter)));
 }
 
 /** {@link meterAt} without re-reading an already resolved meter. */
@@ -361,7 +385,7 @@ function meterAtChecked(beatInQuarters: number, meter: MeterData): TimeSignature
  */
 export function barStartBeat(beatInQuarters: number, meter: MeterLike): number {
   assertFiniteNumber(beatInQuarters, 'beat');
-  return barStartChecked(beatInQuarters, toMeterData(meter));
+  return barStartChecked(beatInQuarters, readMeterData(meter));
 }
 
 /** {@link barStartBeat} without re-reading an already resolved meter. */
@@ -395,7 +419,7 @@ function barStartChecked(beatInQuarters: number, meter: MeterData): number {
  */
 export function barIndexAt(beatInQuarters: number, meter: MeterLike): number {
   assertFiniteNumber(beatInQuarters, 'beat');
-  return barIndexChecked(beatInQuarters, toMeterData(meter));
+  return barIndexChecked(beatInQuarters, readMeterData(meter));
 }
 
 /** {@link barIndexAt} without re-reading an already resolved meter. */
@@ -431,7 +455,9 @@ export function beatsPerBarAt(beatInQuarters: number, meter: MeterLike): number 
  *
  * @param opts The options carrying `ts`, `meters`, or neither.
  * @param name What the options belong to, for the error message.
- * @returns The meter map to analyse against; 4/4 throughout when neither is given.
+ * @returns The meter map to analyse against, freshly allocated down to every
+ *   signature and grouping array, so writing to it changes nothing another
+ *   caller reads; 4/4 throughout when neither `ts` nor `meters` is given.
  * @throws If both `ts` and `meters` are given, or the map is malformed.
  * @example
  * ```ts
@@ -451,11 +477,11 @@ export function resolveMeters(
     );
   }
   if (opts.meters !== undefined) {
-    return assertMeterMap(opts.meters, name);
+    return copyMeterMap(assertMeterMap(opts.meters, name));
   }
   const ts = opts.ts ?? DEFAULT_TS;
   assertTimeSignature(ts);
-  return [{ startBeat: 0, ts }];
+  return [{ startBeat: 0, ts: copyTimeSignature(ts) }];
 }
 
 /**
@@ -516,7 +542,7 @@ function isUniformGrouping(grouping: number[]): boolean {
  */
 export function beatToBarPosition(beatInQuarters: number, meter: MeterLike): BarPosition {
   assertFiniteNumber(beatInQuarters, 'beat');
-  return barPositionChecked(beatInQuarters, toMeterData(meter));
+  return barPositionChecked(beatInQuarters, readMeterData(meter));
 }
 
 /** {@link beatToBarPosition} without re-reading an already resolved meter. */
@@ -567,7 +593,7 @@ export function pulseBeats(ts: TimeSignature): number {
  */
 export function barPositionToPulse(pos: BarPosition, meter: MeterLike): number {
   assertFiniteNumber(pos.beat, 'position.beat');
-  return pulseChecked(pos, toMeterData(meter));
+  return pulseChecked(pos, readMeterData(meter));
 }
 
 /** {@link barPositionToPulse} without re-reading an already resolved meter. */
@@ -607,7 +633,7 @@ function meterAtBarChecked(bar: number, meter: MeterData): TimeSignature {
 export function formatBarPosition(beatInQuarters: number, meter: MeterLike, decimals = 2): string {
   assertInteger(decimals, 'decimals', 0, 100);
   assertFiniteNumber(beatInQuarters, 'beat');
-  const resolved = toMeterData(meter);
+  const resolved = readMeterData(meter);
   const position = barPositionChecked(beatInQuarters, resolved);
   const ts = meterAtChecked(beatInQuarters, resolved);
   const pulse = pulseChecked(position, ts);
@@ -641,7 +667,7 @@ export function formatBarPosition(beatInQuarters: number, meter: MeterLike, deci
 export function barPositionToBeat(pos: BarPosition, meter: MeterLike): number {
   assertInteger(pos.bar, 'bar position bar');
   assertFiniteNumber(pos.beat, 'bar position beat');
-  const resolved = toMeterData(meter);
+  const resolved = readMeterData(meter);
   if (isMeterMap(resolved)) {
     return beatOfBarIndex(resolved, pos.bar) + pos.beat;
   }
@@ -683,7 +709,7 @@ export function barPositionToBeat(pos: BarPosition, meter: MeterLike): number {
  */
 export function metricWeight(beatInQuarters: number, meter: MeterLike): number {
   assertFiniteNumber(beatInQuarters, 'beat');
-  const resolved = toMeterData(meter);
+  const resolved = readMeterData(meter);
   const ts = meterAtChecked(beatInQuarters, resolved);
   const beat = beatInQuarters - barStartChecked(beatInQuarters, resolved);
   const pulse = pulseBeatsOf(ts);

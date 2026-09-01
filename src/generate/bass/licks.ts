@@ -14,6 +14,7 @@ import {
   type Articulation,
   foldIntoRange,
   type StringedProfile,
+  toStringedProfile,
 } from '../../core/instrument/index.js';
 import { beatsPerBar, isStrongBeat, type TimeSignature } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
@@ -30,6 +31,7 @@ import type { Chord, ChordSegment } from '../../theory/chord/index.js';
 import { type KeyLike, nearestScaleTone, toKeyScale } from '../../theory/scale/index.js';
 import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
 import { assertDifficulty, type GenerationContextInput, resolveContext } from '../context/index.js';
+import { deepFreeze } from '../vocabulary/freeze.js';
 import {
   BEAT_STEPS,
   deform,
@@ -135,7 +137,7 @@ const FOUR_FOUR: TimeSignature = { numerator: 4, denominator: 4 };
  *
  * @category Composition
  */
-export const BASS_LICKS: readonly BassLick[] = Object.freeze([
+export const BASS_LICKS: readonly BassLick[] = deepFreeze([
   {
     id: 'motownWalkDown',
     genre: 'motown',
@@ -518,7 +520,11 @@ export function placeLicks(
       : assertDifficulty(opts.difficulty, 'lick difficulty'));
   const named = resolved.instrument('bass');
   const instrument =
-    opts.instrument ?? (named !== undefined && named.kind === 'stringed' ? named : undefined);
+    opts.instrument === undefined
+      ? named !== undefined && named.kind === 'stringed'
+        ? named
+        : undefined
+      : toStringedProfile(opts.instrument, 'instrument');
   const low = bandFloor(octave * 12 + 12, instrument);
 
   const dictionary = mergeVocabulary(

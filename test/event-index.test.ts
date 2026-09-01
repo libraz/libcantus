@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { InvalidInputError } from '../src/core/errors/index.js';
-import { createNoteEventIndex } from '../src/core/event-index/index.js';
+import { createNoteEventIndex, sortedNoteEvents } from '../src/core/event-index/index.js';
 
 describe('note event timeline index', () => {
   it('stable-sorts once and resolves attacks and overlaps by latest onset', () => {
@@ -49,6 +49,52 @@ describe('note event timeline index', () => {
     expect(index.onsetsBetween(-4, 4)).toEqual([0, 2]);
     expect(index.at(-1)).toBeUndefined();
     expect(index.attacksAt(-1)).toBe(false);
+  });
+
+  it('answers the same whichever query is asked first', () => {
+    // The active-note tree is built when the first `at` asks for it, so the
+    // queries that answer without it must not leave it half-built — and must
+    // give the same answers whichever order a caller puts them in.
+    const notes = [
+      { pitch: 48, startBeat: 0, durationBeat: 8 },
+      { pitch: 60, startBeat: 2, durationBeat: 1 },
+      { pitch: 64, startBeat: 2, durationBeat: 4 },
+      { pitch: 67, startBeat: 6, durationBeat: 1 },
+    ];
+    const onsetsFirst = createNoteEventIndex(notes);
+    expect(onsetsFirst.onsetsBetween(0, 8)).toEqual([2, 6]);
+    expect(onsetsFirst.attacksAt(6)).toBe(true);
+    const atFirst = createNoteEventIndex(notes);
+    for (const beat of [0, 1, 2, 3, 5, 6, 7, 8]) {
+      expect(atFirst.at(beat)?.note.pitch).toBe(onsetsFirst.at(beat)?.note.pitch);
+    }
+    expect(atFirst.onsetsBetween(0, 8)).toEqual(onsetsFirst.onsetsBetween(0, 8));
+    expect(atFirst.attacksAt(6)).toBe(onsetsFirst.attacksAt(6));
+    // Repeated queries read the tree the first one built.
+    expect(atFirst.at(2)?.note.pitch).toBe(64);
+    expect(atFirst.at(2)?.note.pitch).toBe(64);
+  });
+
+  it('orders notes for a reader that asks the index nothing', () => {
+    const source = [
+      { pitch: 64, startBeat: 2, durationBeat: 2 },
+      { pitch: 60, startBeat: 0, durationBeat: 4 },
+      { pitch: 67, startBeat: 2, durationBeat: 1 },
+    ];
+    const sorted = sortedNoteEvents(source);
+    // The order is the index's own, so a pass may read either and see the same
+    // notes in the same places.
+    expect(sorted.map((note) => note.pitch)).toEqual(
+      createNoteEventIndex(source).notes.map(({ note }) => note.pitch),
+    );
+    // Copies, so the sequence is the caller's and two entries that arrived as
+    // one shared object stay two.
+    expect(sorted[0]).not.toBe(source[1]);
+    expect(sorted[0]).toEqual(source[1]);
+    const shared = { pitch: 60, startBeat: 0, durationBeat: 1 };
+    const twice = sortedNoteEvents([shared, shared]);
+    expect(twice).toHaveLength(2);
+    expect(twice[0]).not.toBe(twice[1]);
   });
 
   it('keeps a defensive snapshot and finds notes after a long held pad', () => {

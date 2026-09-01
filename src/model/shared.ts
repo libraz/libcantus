@@ -2,9 +2,73 @@ import { InvalidInputError } from '../core/errors/index.js';
 import type { TimeSignature } from '../core/meter/index.js';
 import { midiToNote, pitchClassOf as mod12, type Note as NoteData } from '../core/pitch/index.js';
 import type { NoteEvent } from '../core/types.js';
-import { assertTimeSignature } from '../core/validation/index.js';
+import { assertFiniteNumber, assertTimeSignature } from '../core/validation/index.js';
 
 export { pitchClassOf as mod12 } from '../core/pitch/index.js';
+
+/** How a value that failed a shape check is named in the error explaining it. */
+function describeShape(value: unknown): string {
+  if (value === null) {
+    return 'null';
+  }
+  return Array.isArray(value) ? 'an array' : typeof value;
+}
+
+/**
+ * The value as a data record, refused before any field of it is read.
+ *
+ * A factory rebuilding a class from stored data reads named fields off its
+ * argument, and a project file that lost one — or a `null` where the object
+ * should be — would otherwise surface as a `TypeError` from inside the
+ * library, which is the shape reserved for the library's own faults. Checking
+ * here keeps a malformed document an input error, at the field that is wrong.
+ *
+ * @param value The value a factory was handed.
+ * @param name What the value is called in an error message.
+ * @returns The value, typed as the record the caller expects.
+ * @throws If the value is not a non-null, non-array object.
+ */
+export function assertDataObject<T>(value: unknown, name: string): T {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new InvalidInputError(`${name} must be an object; received ${describeShape(value)}`);
+  }
+  return value as T;
+}
+
+/**
+ * The value as a data array, refused before it is iterated or spread.
+ *
+ * @param value The value a factory was handed.
+ * @param name What the value is called in an error message.
+ * @returns The value, typed as the array the caller expects.
+ * @throws If the value is not an array.
+ */
+export function assertDataArray<T>(value: unknown, name: string): readonly T[] {
+  if (!Array.isArray(value)) {
+    throw new InvalidInputError(`${name} must be an array; received ${describeShape(value)}`);
+  }
+  return value as readonly T[];
+}
+
+/**
+ * The value as an array of data records, every element checked.
+ *
+ * A hole in a sparse array, an explicit `null`, and a bare number in a list of
+ * objects are all refused here rather than at whichever field of the element is
+ * read first.
+ *
+ * @param value The value a factory was handed.
+ * @param name What the value is called in an error message.
+ * @returns The value, typed as the array the caller expects.
+ * @throws If the value is not an array, or an element is not a record.
+ */
+export function assertDataObjects<T>(value: unknown, name: string): readonly T[] {
+  const items = assertDataArray<unknown>(value, name);
+  for (let index = 0; index < items.length; index += 1) {
+    assertDataObject(items[index], `${name}[${index}]`);
+  }
+  return items as readonly T[];
+}
 
 /**
  * Refuse anything but a key where a method takes the key first.
@@ -89,12 +153,90 @@ export function copyNoteEvent(note: NoteEvent): NoteEvent {
  * @param name - What the signature is called in an error message.
  */
 export function copyTimeSignature(ts: TimeSignature, name?: string): TimeSignature {
+  assertDataObject(ts, name ?? 'time signature');
   assertTimeSignature(ts, name);
   const copy: TimeSignature = { numerator: ts.numerator, denominator: ts.denominator };
   if (ts.grouping !== undefined) {
     copy.grouping = [...ts.grouping];
   }
   return copy;
+}
+
+/**
+ * How far a plain-data copy follows nesting before it calls the value
+ * pathological.
+ *
+ * Nothing the library holds as data is nested anywhere near this deep, so a
+ * value that reaches the limit describes a document built to exhaust the stack
+ * rather than music.
+ */
+const MAX_PLAIN_DEPTH = 64;
+
+/**
+ * A deep copy of caller data, with every number checked and every absent field
+ * left out.
+ *
+ * The values that reach here are the open-ended ones: the `material` a
+ * vocabulary figure is made of, an instrument profile, the records an
+ * arrangement's analysis reports. None has a fixed shape, so the only way to
+ * promise that nothing non-finite and nothing unserializable reaches a
+ * generator — or survives a round trip through a project file — is to walk the
+ * value. Dropping `undefined` properties is what keeps the copy equal to its
+ * own JSON.
+ *
+ * A value that refers back to itself, or one nested past
+ * {@link MAX_PLAIN_DEPTH} levels, is refused: recursing into either overflows
+ * the stack, and a `RangeError` from inside the library is not one of the
+ * failures the library documents.
+ *
+ * @param value The data to copy.
+ * @param name What the value is called in an error message.
+ * @returns The copy.
+ * @throws If a number is not finite, a value is not plain data, or the value
+ *   is cyclic or pathologically deep.
+ */
+export function copyPlain<T>(value: T, name: string): T {
+  return copyPlainAt(value, name, new WeakSet<object>(), 0);
+}
+
+/** One level of {@link copyPlain}, carrying the ancestors and the depth. */
+function copyPlainAt<T>(value: T, name: string, seen: WeakSet<object>, depth: number): T {
+  if (typeof value === 'number') {
+    return assertFiniteNumber(value, name) as T;
+  }
+  if (typeof value === 'function' || typeof value === 'symbol' || typeof value === 'bigint') {
+    throw new InvalidInputError(`${name} must be plain data; received ${typeof value}`);
+  }
+  if (typeof value !== 'object' || value === null) {
+    return value;
+  }
+  // Only the ancestors are held, not everything already copied, so a record
+  // named twice beside itself is copied twice rather than reported as a cycle.
+  if (seen.has(value)) {
+    throw new InvalidInputError(`${name} must be plain data; received a value referring to itself`);
+  }
+  if (depth >= MAX_PLAIN_DEPTH) {
+    throw new InvalidInputError(
+      `${name} must be plain data; received a value nested more than ${MAX_PLAIN_DEPTH} levels deep`,
+    );
+  }
+  seen.add(value);
+  try {
+    if (Array.isArray(value)) {
+      return value.map((item, index) =>
+        copyPlainAt(item, `${name}[${index}]`, seen, depth + 1),
+      ) as T;
+    }
+    const copy: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value)) {
+      if (item !== undefined) {
+        copy[key] = copyPlainAt(item, `${name}.${key}`, seen, depth + 1);
+      }
+    }
+    return copy as T;
+  } finally {
+    seen.delete(value);
+  }
 }
 
 /**

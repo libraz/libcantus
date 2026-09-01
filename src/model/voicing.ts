@@ -40,6 +40,7 @@ import {
   voiceLeadingCost,
 } from '../theory/voicing/index.js';
 import { Note } from './note.js';
+import { assertDataArray } from './shared.js';
 
 /**
  * The plain form of a {@link Voicing}: the sounding MIDI pitches, ascending.
@@ -101,6 +102,7 @@ export type VoicingSafetyQuery = Omit<
  * the check exists to find.
  */
 function copyPitches(pitches: readonly number[]): number[] {
+  assertDataArray(pitches, 'voicing pitches');
   if (pitches.length === 0) {
     throw new InvalidInputError('a voicing must contain at least one pitch');
   }

@@ -6,6 +6,7 @@ import {
   ticksToBeats,
 } from '../core/tempo/index.js';
 import { assertRange } from '../core/validation/index.js';
+import { assertDataObject } from './shared.js';
 
 /**
  * Upper bound on a tempo, the bound the tempo module and the generators
@@ -75,7 +76,7 @@ export class Tempo {
    * @throws If the marking is not a positive, finite number the library holds.
    */
   static fromData(data: TempoData): Tempo {
-    return new Tempo(data.bpm);
+    return new Tempo(assertDataObject<TempoData>(data, 'tempo data').bpm);
   }
 
   /**
@@ -86,7 +87,7 @@ export class Tempo {
    * @throws If the marking is not a positive, finite number the library holds.
    */
   static fromJSON(data: TempoData): Tempo {
-    return new Tempo(data.bpm);
+    return new Tempo(assertDataObject<TempoData>(data, 'tempo data').bpm);
   }
 
   /** Quarter-note beats per minute. */

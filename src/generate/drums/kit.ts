@@ -1,5 +1,6 @@
 import type { Articulation, Limb, PercussionProfile } from '../../core/instrument/index.js';
 import { LIMBS } from '../../core/instrument/index.js';
+import { deepFreeze } from '../vocabulary/freeze.js';
 import { DRUM_NOTES, type DrumVoice } from './hit.js';
 
 /** Which limbs reach each voice, in the order a player would take them. */
@@ -69,7 +70,7 @@ export const DRUM_KIT: PercussionProfile = Object.freeze({
   kind: 'percussion',
   name: 'drum kit',
   limbs: LIMBS,
-  reach: Object.freeze(reachByNote()),
+  reach: deepFreeze(reachByNote()),
   articulations: KIT_ARTICULATIONS,
   polyphony: 4,
 });

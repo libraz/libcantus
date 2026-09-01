@@ -23,7 +23,7 @@ import { Chord as ChordClass } from './chord.js';
 import type { Key } from './key.js';
 import { Key as KeyClass } from './key.js';
 import { Progression } from './progression.js';
-import { spanEnd } from './shared.js';
+import { assertDataArray, assertDataObject, spanEnd } from './shared.js';
 
 /** The plain form a {@link Timeline} hands out and is rebuilt from. */
 export type TimelineData = {
@@ -62,6 +62,7 @@ const GIVEN_KEY_CONFIDENCE = 1;
 
 /** A validated, defensive copy of one chord segment. */
 function copySegment(segment: ChordSegment): ChordSegment {
+  assertDataObject(segment, 'timeline segment');
   return {
     startBeat: assertFiniteNumber(segment.startBeat, 'timeline segment startBeat'),
     endBeat: assertFiniteNumber(segment.endBeat, 'timeline segment endBeat'),
@@ -74,6 +75,7 @@ function copySegment(segment: ChordSegment): ChordSegment {
 
 /** A validated, defensive copy of one key region, pivot chord included. */
 function copyKeyRegion(region: KeyRegion): KeyRegion {
+  assertDataObject(region, 'key region');
   const copy: KeyRegion = {
     startBeat: assertFiniteNumber(region.startBeat, 'key region startBeat'),
     endBeat: assertFiniteNumber(region.endBeat, 'key region endBeat'),
@@ -84,6 +86,7 @@ function copyKeyRegion(region: KeyRegion): KeyRegion {
     copy.modulation = region.modulation;
   }
   if (region.pivot !== undefined) {
+    assertDataObject(region.pivot, 'key region pivot');
     copy.pivot = {
       chord: new ChordClass(region.pivot.chord).toJSON(),
       romanFrom: region.pivot.romanFrom,
@@ -108,6 +111,7 @@ function copyConfidence(
   if (confidence === undefined) {
     return [];
   }
+  assertDataArray(confidence, 'timeline segmentConfidence');
   if (confidence.length !== segments) {
     throw new InvalidInputError(
       `timeline segmentConfidence must hold one value per segment; received ${confidence.length} for ${segments}`,
@@ -190,14 +194,19 @@ export class Timeline {
    *   the confidences do not run one per segment.
    */
   constructor(data: TimelineData) {
-    this.#segments = Object.freeze(data.segments.map(copySegment));
+    assertDataObject(data, 'timeline data');
+    this.#segments = Object.freeze(
+      assertDataArray<ChordSegment>(data.segments, 'timeline segments').map(copySegment),
+    );
     this.#totalBeats = assertRange(
       data.totalBeats,
       0,
       Number.MAX_SAFE_INTEGER,
       'timeline totalBeats',
     );
-    this.#keys = Object.freeze((data.keys ?? []).map(copyKeyRegion));
+    this.#keys = Object.freeze(
+      assertDataArray<KeyRegion>(data.keys ?? [], 'timeline keys').map(copyKeyRegion),
+    );
     this.#segmentConfidence = Object.freeze(
       copyConfidence(data.segmentConfidence, this.#segments.length),
     );

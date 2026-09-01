@@ -15,6 +15,7 @@ import {
   stepsOfCents,
   TWELVE_TET,
 } from '../core/tuning/index.js';
+import { assertDataObject } from './shared.js';
 
 /**
  * An immutable equal temperament: a reference pitch and a number of equal
@@ -61,7 +62,8 @@ export class Tuning {
   static of(table: TuningTable): Tuning {
     // The tuning module's own constructor does the checking and returns a
     // fresh table, so a caller's object cannot become library state.
-    return new Tuning(edo(table.divisions, table.refFreq, table.refStep));
+    const given = assertDataObject<TuningTable>(table, 'tuning table');
+    return new Tuning(edo(given.divisions, given.refFreq, given.refStep));
   }
 
   /**

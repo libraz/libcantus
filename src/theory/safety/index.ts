@@ -152,6 +152,11 @@ export enum NoteSafety {
   Dissonant = 2,
 }
 
+// An enum is emitted as a plain object carrying both the name-to-value and the
+// value-to-name mapping, so without this it is a public table a consumer could
+// write to — and a second consumer in the same process would read the edit.
+Object.freeze(NoteSafety);
+
 /**
  * Bit flags describing why a pitch received its verdict.
  *
@@ -176,6 +181,8 @@ export enum ReasonFlag {
   NeedsResolution = 1 << 15,
   MelodicTritone = 1 << 16,
 }
+
+Object.freeze(ReasonFlag);
 
 /**
  * A neighbouring voice's current and previous pitch.

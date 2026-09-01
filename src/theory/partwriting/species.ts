@@ -23,6 +23,7 @@ import {
   spelledInterval,
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
+import { describeRejected } from '../../core/validation/index.js';
 import {
   classifySpelledInterval,
   createsBattuta,
@@ -978,7 +979,7 @@ export function checkSpecies(
 ): PartWritingViolation[] {
   if (!SPECIES_NUMBERS.includes(species)) {
     throw new InvalidInputError(
-      `species must be one of ${SPECIES_NUMBERS.join(', ')}; received ${JSON.stringify(species)}`,
+      `species must be one of ${SPECIES_NUMBERS.join(', ')}; received ${describeRejected(species)}`,
     );
   }
   if (cantusFirmus.length === 0 || counterpoint.length === 0) {

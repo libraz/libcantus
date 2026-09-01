@@ -1,4 +1,4 @@
-import { createNoteEventIndex } from '../../core/event-index/index.js';
+import { sortedNoteEvents } from '../../core/event-index/index.js';
 import type { MeterMap, TimeSignature } from '../../core/meter/index.js';
 import { beatsPerBarAt, metricWeight, resolveMeters } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
@@ -914,7 +914,18 @@ export type TimelineEvidence = {
   /** Whether the key was given rather than searched for. */
   keyGiven: boolean;
   slotWeights: WindowWeights[];
-  tables: BoundaryTables;
+  /**
+   * The score table the analysis ran on, or undefined once a later analysis has
+   * taken it over.
+   *
+   * Only one re-analysis may carry a given table forward: the carrying pass
+   * writes the edited slots straight into it rather than reallocating a table
+   * the size of the piece per edit, which leaves the evidence it came from with
+   * rows that no longer describe its own notes. An evidence whose table has
+   * moved on therefore lends nothing, and an analysis carrying it re-derives
+   * every slot — the same answer, over the work a first analysis does.
+   */
+  tables: BoundaryTables | undefined;
   /**
    * The chord inferred over each settled span, keyed by the span's bounds and
    * the key it was read in — the two things besides the span's notes that
@@ -1052,11 +1063,10 @@ export function analyzeTimeline(
   }
   assertNoteEvents(notes, 'timeline notes', noteOptions);
   // Zero/negative-length notes never sound; drop them before any inference.
-  const soundingIndex = createNoteEventIndex(
-    notes.filter((note) => note.durationBeat > 0),
-    { name: 'timeline notes', budget },
-  );
-  const sounding = soundingIndex.notes.map(({ note }) => note);
+  // What the passes below read is the sequence in onset order, so that is what
+  // is built: none of them asks which note sounds at a beat, and an index would
+  // charge every analysis for lookups it never makes.
+  const sounding = sortedNoteEvents(notes.filter((note) => note.durationBeat > 0));
   const lastNoteEnd = sounding.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
   const totalBeats = opts.totalBeats ?? lastNoteEnd;
   assertRange(totalBeats, 0, Number.MAX_SAFE_INTEGER, 'timeline totalBeats');
@@ -1083,7 +1093,17 @@ export function analyzeTimeline(
   const segments: ChordSegment[] = [];
   const segmentConfidence: number[] = [];
   const slotCount = Math.max(0, Math.ceil((totalBeats - grid.origin) / slotBeats - EPS));
-  assertGenerationBudget(slotCount, 'timeline windows', budget);
+  const dynamic = segmentation === 'dynamic';
+  // The boundary search allocates and fills one lexicon row per slot, so what
+  // the budget has to bound is the table about to be built rather than the slot
+  // count alone: a slot count inside the budget stands for a table the whole
+  // lexicon wider. A grid cuts its segments from the grid itself and builds no
+  // table, so it is charged for its slots and nothing more.
+  assertGenerationBudget(
+    dynamic ? slotCount * LEXICON_SIZE : slotCount,
+    'timeline windows',
+    budget,
+  );
   const slotNotes = bucketNotesBySlot(sounding, grid, slotCount, {
     name: 'timeline note-to-window memberships',
     budget,
@@ -1092,6 +1112,7 @@ export function analyzeTimeline(
   const carried =
     previous !== undefined &&
     dirty !== undefined &&
+    previous.tables !== undefined &&
     evidenceFits(
       previous,
       grid,
@@ -1106,11 +1127,19 @@ export function analyzeTimeline(
   const dirtyFrom = carried === undefined ? 0 : Math.max(0, dirty?.from ?? 0);
   const dirtyTo = carried === undefined ? slotCount : Math.min(slotCount, dirty?.to ?? slotCount);
 
-  const tables = createBoundaryTables(slotCount);
-  const slotWeights: WindowWeights[] = new Array<WindowWeights>(slotCount);
+  // A grid cuts its segments from the grid alone, so it consults no candidate
+  // and needs no row per slot: an empty table keeps the evidence's shape without
+  // the megabytes a search would have filled. A carried-over table is taken over
+  // rather than copied — the rows the edit cannot reach are already what this
+  // analysis would write into them, and reallocating the table would cost one
+  // the size of the piece per edit.
+  const tables = carried?.tables ?? createBoundaryTables(dynamic ? slotCount : 0);
   if (carried !== undefined) {
-    tables.scores.set(carried.tables.scores);
+    // The evidence lending the table gives it up: the edited rows are about to
+    // say what these notes say rather than what its own did.
+    carried.tables = undefined;
   }
+  const slotWeights: WindowWeights[] = new Array<WindowWeights>(slotCount);
   for (let i = 0; i < slotCount; i += 1) {
     const reusable = i < dirtyFrom || i >= dirtyTo ? carried?.slotWeights[i] : undefined;
     if (reusable !== undefined) {
@@ -1125,7 +1154,9 @@ export function analyzeTimeline(
       meters,
     );
     slotWeights[i] = weights;
-    scoreSlot(tables, weights, i);
+    if (dynamic) {
+      scoreSlot(tables, weights, i);
+    }
   }
 
   const spans =

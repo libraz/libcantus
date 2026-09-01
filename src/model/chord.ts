@@ -85,7 +85,7 @@ import {
 import type { Key } from './key.js';
 import { Note } from './note.js';
 import { Progression } from './progression.js';
-import { assertKeyArgument, mod12 } from './shared.js';
+import { assertDataArray, assertDataObject, assertKeyArgument, mod12 } from './shared.js';
 
 /** Whether a spelling hint still names the pitch class it is attached to. */
 function hintMatches(hint: PitchSpelling | undefined, pc: number | undefined): boolean {
@@ -167,13 +167,14 @@ function transposeToneHintsByInterval(
  * including the derived bass spelling, reads a hint it can trust.
  */
 function copyChord(data: ChordData): ChordData {
+  assertDataObject(data, 'chord data');
   const copy: ChordData = {
     rootPc: pitchClassOf(data.rootPc),
     quality: data.quality,
     // Each offset is checked rather than copied blind: a chord holding a NaN
     // interval voices, spells and formats as a chord that looks real, and the
     // failure surfaces wherever the number is finally used.
-    intervals: data.intervals.map((interval, index) =>
+    intervals: assertDataArray<number>(data.intervals, 'chord intervals').map((interval, index) =>
       assertFiniteNumber(interval, `chord intervals[${index}]`),
     ),
   };

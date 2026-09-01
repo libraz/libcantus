@@ -16,7 +16,7 @@
  */
 
 import { InvalidInputError } from '../../core/errors/index.js';
-import { assertFiniteNumber } from '../../core/validation/index.js';
+import { assertFiniteNumber, describeRejected } from '../../core/validation/index.js';
 
 /**
  * Chord quality identifiers understood by the chord builder.
@@ -676,7 +676,7 @@ export function chordSpecFromIntervals(intervals: readonly number[]): ChordSpec 
 function assertPart<T extends string>(value: T, allowed: readonly T[], name: string): T {
   if (!allowed.includes(value)) {
     throw new InvalidInputError(
-      `${name} must be one of ${allowed.join(', ')}; received ${JSON.stringify(value)}`,
+      `${name} must be one of ${allowed.join(', ')}; received ${describeRejected(value)}`,
     );
   }
   return value;

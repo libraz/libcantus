@@ -19,6 +19,7 @@ import { InvalidInputError } from '../src/core/errors/index.js';
 import { createNoteEventIndex } from '../src/core/event-index/index.js';
 import { GUITAR_STANDARD, playability } from '../src/core/instrument/index.js';
 import {
+  ConsonanceClass,
   classifyInterval,
   isConsonantInterval,
   isPerfectInterval,
@@ -40,14 +41,7 @@ import {
   pitchClassOf,
 } from '../src/core/pitch/index.js';
 import { createRng } from '../src/core/random/index.js';
-import {
-  edo,
-  frequencyOf,
-  JUST_RATIOS,
-  nearestStep,
-  ratioToCents,
-  TWELVE_TET,
-} from '../src/core/tuning/index.js';
+import { edo, frequencyOf, nearestStep, ratioToCents } from '../src/core/tuning/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import {
   assertDegree,
@@ -63,9 +57,9 @@ import {
   clampToMidi,
   dropSilentNotes,
 } from '../src/core/validation/index.js';
-import { BASS_STYLES, generateBassLine } from '../src/generate/bass/index.js';
+import { generateBassLine } from '../src/generate/bass/index.js';
 import { generateCounterMelody, imitate } from '../src/generate/countermelody/index.js';
-import { DRUM_NOTES, generateDrums } from '../src/generate/drums/index.js';
+import { generateDrums } from '../src/generate/drums/index.js';
 import {
   applyGrooveTemplate,
   extractGrooveTemplate,
@@ -74,13 +68,14 @@ import {
 import { classifyMelodyTones, harmonizeMelody } from '../src/generate/harmonize/index.js';
 import { developMotif, generateMotif, transformMotif } from '../src/generate/motif/index.js';
 import { ornament } from '../src/generate/ornament/index.js';
-import { BORROWED_DEGREES, generateProgression } from '../src/generate/progression/index.js';
+import { generateProgression } from '../src/generate/progression/index.js';
 import { generateRhythm } from '../src/generate/rhythm/index.js';
+import * as api from '../src/index.js';
 import { Note } from '../src/model/index.js';
 import { makeChord } from '../src/theory/chord/index.js';
-import { majorKey, NAMED_SCALES, scaleByName } from '../src/theory/scale/index.js';
+import { NoteSafety, ReasonFlag } from '../src/theory/safety/index.js';
+import { majorKey, scaleByName } from '../src/theory/scale/index.js';
 import { parseChordSymbol } from '../src/theory/symbol/index.js';
-import { SATB_RANGES } from '../src/theory/voicing/index.js';
 import { filesUnder, ROOT, SRC } from './support/source-files.js';
 
 describe('shared numeric input contracts', () => {
@@ -500,6 +495,33 @@ describe('public NoteEvent validation entry points', () => {
   });
 });
 
+/**
+ * Paths to every value reachable from a public constant that a caller could
+ * still write to.
+ *
+ * @param value The value to inspect.
+ * @param path Dotted path to it, for the failure message.
+ * @param seen Objects already inspected, so a shared entry is reported once and
+ *   a cyclic table terminates.
+ * @returns The paths of the unfrozen values, empty when the table is frozen
+ *   through.
+ */
+function unfrozenUnder(value: unknown, path: string, seen: WeakSet<object>): string[] {
+  if (value === null || typeof value !== 'object') {
+    return [];
+  }
+  const object = value as object;
+  if (seen.has(object)) {
+    return [];
+  }
+  seen.add(object);
+  const out = Object.isFrozen(object) ? [] : [path];
+  for (const [key, child] of Object.entries(object)) {
+    out.push(...unfrozenUnder(child, `${path}.${key}`, seen));
+  }
+  return out;
+}
+
 describe('lookup tables cannot be reached through the prototype chain', () => {
   it('rejects an inherited property name as a scale', () => {
     for (const name of [
@@ -521,16 +543,34 @@ describe('lookup tables cannot be reached through the prototype chain', () => {
     expect(() => makeChord(0, 'toString' as never)).toThrow();
   });
 
-  it('leaves the public constant tables frozen', () => {
-    expect(Object.isFrozen(TWELVE_TET)).toBe(true);
-    expect(Object.isFrozen(NAMED_SCALES)).toBe(true);
-    expect(Object.isFrozen(JUST_RATIOS)).toBe(true);
-    expect(Object.isFrozen(JUST_RATIOS[7])).toBe(true);
-    expect(Object.isFrozen(SATB_RANGES)).toBe(true);
-    expect(SATB_RANGES.every((range) => Object.isFrozen(range))).toBe(true);
-    expect(Object.isFrozen(DRUM_NOTES)).toBe(true);
-    expect(Object.isFrozen(BASS_STYLES)).toBe(true);
-    expect(Object.isFrozen(BORROWED_DEGREES)).toBe(true);
+  it('leaves every public constant table frozen through', () => {
+    // Derived from what the package actually exports rather than from a list of
+    // names kept by hand, so a table added later is covered on the same commit.
+    const tables = Object.entries(api).filter(([name]) => /^[A-Z0-9_]+$/.test(name));
+    // The filter has to find the tables at all, or the assertion below would
+    // hold over an empty list.
+    expect(tables.length).toBeGreaterThanOrEqual(9);
+    const seen = new WeakSet<object>();
+    const unfrozen = tables.flatMap(([name, table]) => unfrozenUnder(table, name, seen));
+    expect(unfrozen).toEqual([]);
+  });
+
+  it('leaves the public enums frozen while keeping their reverse mapping', () => {
+    const enums = [
+      ['ConsonanceClass', ConsonanceClass, 'Dissonance'],
+      ['NoteSafety', NoteSafety, 'Dissonant'],
+      ['ReasonFlag', ReasonFlag, 'ChordTone'],
+    ] as const;
+    for (const [name, table, member] of enums) {
+      expect(Object.isFrozen(table), name).toBe(true);
+      expect(() => {
+        (table as unknown as Record<string, number>)[member] = 99;
+      }, name).toThrow(TypeError);
+    }
+    // Freezing an enum must not cost the name lookup a numeric enum carries.
+    expect(ConsonanceClass[ConsonanceClass.Dissonance]).toBe('Dissonance');
+    expect(NoteSafety[NoteSafety.Warning]).toBe('Warning');
+    expect(ReasonFlag[ReasonFlag.Tritone]).toBe('Tritone');
   });
 });
 
@@ -567,8 +607,11 @@ describe('generation budget is caller-adjustable', () => {
   }));
 
   it('rejects work beyond an explicit budget and accepts it beyond the default', () => {
+    // The budget measures the candidates the boundary search weighs, and the
+    // search weighs the whole chord lexicon against every slot of the span, so
+    // forty beats of music is thousands of candidates rather than forty.
     expect(() => chordTimelineFromNotes(notes, { budget: 8 })).toThrow(RangeError);
-    expect(() => chordTimelineFromNotes(notes, { budget: 1000 })).not.toThrow();
+    expect(() => chordTimelineFromNotes(notes, { budget: 10_000 })).not.toThrow();
     expect(() =>
       analyzeArrangement([{ name: 'a', role: 'harmony', notes }], { budget: 8 }),
     ).toThrow(RangeError);

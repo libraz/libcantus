@@ -61,7 +61,11 @@ export type KeyRegion = {
   startBeat: number;
   /** End of the region, exclusive. */
   endBeat: number;
-  /** The key in force across the region. */
+  /**
+   * The key in force across the region, owned by it: every entry point hands
+   * back a key of the region's own, so writing to one changes neither the other
+   * regions of the same run nor what a later call reports.
+   */
   key: KeyScale;
   /**
    * How well the region's music fits the key, in [0, 1]: the correlation
@@ -600,7 +604,12 @@ export function keyTimelineFromNotes(
 
   const regions = grouped.map((region) => {
     const candidate = KEY_CANDIDATES[region.candidate];
-    const key = candidate?.key ?? majorKey(0);
+    // A fresh key per region: the candidate table is built once for the process
+    // and its distances are precomputed from it, so handing a region the table's
+    // own key would let a caller writing to `region.key` rewrite what every
+    // later search scores against — and let two regions of one piece share the
+    // key that one of them edits.
+    const key = { ...(candidate?.key ?? majorKey(0)) };
     // Only the first region can start before the music: the slot holding the
     // pickup begins a whole slot before beat 0, and nothing sounds in the part
     // of it that precedes the upbeat.
@@ -803,7 +812,9 @@ export function detectModulations(
   const profile = resolveKeyProfile(opts.profile);
   const regions: KeyRegion[] = grouped.map((region) => {
     const candidate = KEY_CANDIDATES[region.candidate];
-    const key = candidate?.key ?? majorKey(0);
+    // Owned by the region, for the reason the note path spells out: the
+    // candidate table outlives the call, and a region's key is writable.
+    const key = { ...(candidate?.key ?? majorKey(0)) };
     // The confidence is the statistic the note path reports, not the chord fit
     // the search ran on: a chord fit says which key won, and a correlation says
     // how much of the region the winner explains. Reporting the search's own

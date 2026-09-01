@@ -425,3 +425,47 @@ describe('a caller-supplied drum dictionary', () => {
     ).toThrow();
   });
 });
+
+describe('the built-in drum dictionaries are one object for the whole process', () => {
+  it('holds every entry and every stroke frozen', () => {
+    for (const entry of DRUM_PATTERNS) {
+      expect(Object.isFrozen(entry), entry.id).toBe(true);
+      expect(Object.isFrozen(entry.material), entry.id).toBe(true);
+      expect(Object.isFrozen(entry.material.strokes), entry.id).toBe(true);
+      for (const stroke of entry.material.strokes) {
+        expect(Object.isFrozen(stroke), `${entry.id} step ${stroke.step}`).toBe(true);
+      }
+    }
+    for (const [style, figure] of Object.entries(KICK_FIGURES)) {
+      expect(Object.isFrozen(figure), style).toBe(true);
+      for (const slot of figure) {
+        expect(Object.isFrozen(slot), `${style} step ${slot.step}`).toBe(true);
+      }
+    }
+    for (const [id, archetype] of Object.entries(FILL_ARCHETYPES)) {
+      expect(Object.isFrozen(archetype), id).toBe(true);
+      for (const beat of archetype.atBeat) {
+        expect(Object.isFrozen(beat), id).toBe(true);
+        for (const stroke of beat) {
+          expect(Object.isFrozen(stroke), id).toBe(true);
+          expect(Object.isFrozen(stroke.velocity), id).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('refuses a caller edit to an entry rather than keeping it for the process', () => {
+    const first = DRUM_PATTERNS[0];
+    if (!first) {
+      throw new Error('the dictionary is empty');
+    }
+    const id = first.id;
+    expect(() => {
+      (first as { id: string }).id = 'hijacked';
+    }).toThrow(TypeError);
+    expect(() => {
+      first.material.strokes.push({ voice: 'kick', step: 1, velocity: 1 });
+    }).toThrow(TypeError);
+    expect(DRUM_PATTERNS[0]?.id).toBe(id);
+  });
+});

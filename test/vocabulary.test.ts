@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BASS_LICKS } from '../src/generate/bass/licks.js';
 import { resolveContext } from '../src/generate/context/index.js';
 import {
   BAR_STEPS,
@@ -366,5 +367,33 @@ describe('transformation rules', () => {
     // A limit nobody stated constrains nothing.
     expect(withinCeiling(sixteenths, undefined, 1)).toBe(true);
     expect(withinCeiling(sixteenths, 160, undefined)).toBe(true);
+  });
+});
+
+describe('the built-in lick dictionary is one object for the whole process', () => {
+  it('holds every entry and every note frozen', () => {
+    for (const lick of BASS_LICKS) {
+      expect(Object.isFrozen(lick), lick.id).toBe(true);
+      expect(Object.isFrozen(lick.material), lick.id).toBe(true);
+      expect(Object.isFrozen(lick.material.notes), lick.id).toBe(true);
+      for (const note of lick.material.notes) {
+        expect(Object.isFrozen(note), `${lick.id} step ${note.step}`).toBe(true);
+      }
+    }
+  });
+
+  it('refuses a caller edit to an entry rather than keeping it for the process', () => {
+    const first = BASS_LICKS[0];
+    if (!first) {
+      throw new Error('the dictionary is empty');
+    }
+    const id = first.id;
+    expect(() => {
+      (first as { id: string }).id = 'hijacked';
+    }).toThrow(TypeError);
+    expect(() => {
+      first.material.notes.push({ degree: 1, step: 1, velocity: 1 });
+    }).toThrow(TypeError);
+    expect(BASS_LICKS[0]?.id).toBe(id);
   });
 });

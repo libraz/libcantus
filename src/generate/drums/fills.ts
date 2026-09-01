@@ -8,6 +8,7 @@
 
 import type { Articulation } from '../../core/instrument/index.js';
 import { type Draw, sustainsStrokes } from '../context/index.js';
+import { deepFreeze } from '../vocabulary/freeze.js';
 import type { HitList } from './hit.js';
 import type { DrumStyle, SectionEnergy, SectionType } from './internal.js';
 import { BACKBEAT_LIFT, EIGHTH, FILL_ACCENT_LIFT, GM, SIXTEENTH } from './internal.js';
@@ -145,7 +146,7 @@ function archetype(
  * the kind every drummer plays and nobody owns. None reproduces a fill from a
  * particular recording.
  */
-export const FILL_ARCHETYPES: Readonly<Record<FillType, FillArchetype>> = Object.freeze({
+export const FILL_ARCHETYPES: Readonly<Record<FillType, FillArchetype>> = deepFreeze({
   // One crescendo of seven strokes across the two beats, not two of four and
   // three: the roll is a single gesture and its second half continues where its
   // first half left off.

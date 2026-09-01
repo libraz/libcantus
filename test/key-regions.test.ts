@@ -880,3 +880,62 @@ describe('the timeline entry points take the note arrays the library hands out',
     expect(analyzeTimeline(notes).result.timeline.segments.length).toBeGreaterThan(0);
   });
 });
+
+describe('a region owns the key it reports', () => {
+  /** Every field of a region except the key object's identity. */
+  function readingOf(regions: readonly KeyRegion[]): unknown[] {
+    return regions.map((region) => ({
+      startBeat: region.startBeat,
+      endBeat: region.endBeat,
+      key: keyName(region.key),
+      confidence: region.confidence,
+      modulation: region.modulation,
+      pivot:
+        region.pivot === undefined
+          ? undefined
+          : `${region.pivot.romanFrom}=${region.pivot.romanTo}`,
+    }));
+  }
+
+  it('gives the note path a key per region that no later call shares', () => {
+    // The candidate table is built once for the process and the search's
+    // distances are precomputed from it, so a region handed the table's own key
+    // would let a caller writing to it rewrite what every later search reports.
+    const notes = [...cPhrase(0), ...gPhrase(16)];
+    const regions = keyTimelineFromNotes(notes);
+    expect(regions).toHaveLength(2);
+    expect(regions[0]?.key).not.toBe(regions[1]?.key);
+    const reading = readingOf(regions);
+    for (const region of regions) {
+      region.key.rootPc = 11;
+      region.key.modeMask12 = NATURAL_MINOR_MASK;
+    }
+    // Neither the other regions of the same run nor a second call moved.
+    expect(readingOf(keyTimelineFromNotes(notes))).toEqual(reading);
+  });
+
+  it('gives the chord path the same', () => {
+    const regions = detectModulations(C_TO_G_CHORDS);
+    expect(regions).toHaveLength(2);
+    expect(regions[0]?.key).not.toBe(regions[1]?.key);
+    const reading = readingOf(regions);
+    for (const region of regions) {
+      region.key.rootPc = 11;
+      region.key.modeMask12 = NATURAL_MINOR_MASK;
+    }
+    expect(readingOf(detectModulations(C_TO_G_CHORDS))).toEqual(reading);
+  });
+
+  it('keeps the keys a timeline analysis ran against out of the candidate table', () => {
+    const notes = [...cPhrase(0), ...gPhrase(16)];
+    const first = analyzeTimeline(notes).result;
+    const chords = first.timeline.segments.map((segment) => segment.chord.rootPc);
+    for (const region of first.keys) {
+      region.key.rootPc = 11;
+      region.key.modeMask12 = NATURAL_MINOR_MASK;
+    }
+    const second = analyzeTimeline(notes).result;
+    expect(keyNames(second.keys)).toEqual(['C major', 'G major']);
+    expect(second.timeline.segments.map((segment) => segment.chord.rootPc)).toEqual(chords);
+  });
+});

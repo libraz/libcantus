@@ -1,7 +1,6 @@
 import type { MotifRelation } from '../analyze/melody/index.js';
 import { melodicSimilarity, motifFromNotes, relateMotifs } from '../analyze/melody/index.js';
 import type { ChordTimeline } from '../analyze/timeline/index.js';
-import { InvalidInputError } from '../core/errors/index.js';
 import type { TimeSignature } from '../core/meter/index.js';
 import type { NoteEvent } from '../core/types.js';
 import { assertNoteEvent } from '../core/validation/index.js';
@@ -23,7 +22,7 @@ import { type KeyLike, toKeyScale } from '../theory/scale/index.js';
 import { type ChordLike, toChordData } from '../theory/symbol/index.js';
 import type { ScoreOptions } from './score.js';
 import { Score } from './score.js';
-import { withoutNegativeZero } from './shared.js';
+import { assertDataObject, assertDataObjects, withoutNegativeZero } from './shared.js';
 import type { Timeline } from './timeline.js';
 
 /**
@@ -93,16 +92,11 @@ function copyNote(note: MotifNote): MotifNote {
  * forwards.
  */
 function copyCell(cell: MotifCell): MotifCell {
-  if (!Array.isArray(cell.notes)) {
-    throw new InvalidInputError(`motif notes must be an array; received ${typeof cell.notes}`);
-  }
+  assertDataObject(cell, 'motif cell');
   return {
-    notes: cell.notes.map((note, index) => {
-      if (note === undefined) {
-        throw new InvalidInputError(`motif notes[${index}] must be a note; received undefined`);
-      }
-      return copyNote(assertNoteEvent(note, `motif notes[${index}]`));
-    }),
+    notes: assertDataObjects<NoteEvent>(cell.notes, 'motif notes').map((note, index) =>
+      copyNote(assertNoteEvent(note, `motif notes[${index}]`)),
+    ),
   };
 }
 

@@ -32,7 +32,12 @@ import {
   transposeNote,
   tryParseNote,
 } from '../../core/pitch/index.js';
-import { assertFiniteNumber, assertFiniteSemitones } from '../../core/validation/index.js';
+import { maxNoteNameLength } from '../../core/pitch/naming.js';
+import {
+  assertFiniteNumber,
+  assertFiniteSemitones,
+  describeRejected,
+} from '../../core/validation/index.js';
 import type {
   Alteration,
   AlteredDegree,
@@ -562,8 +567,14 @@ type RootSplit = { root: Note; rest: string };
  * An English root is a letter and an optional accidental, which the pattern
  * settles in one step. The other systems write the accidental as an affix that
  * can also open a quality suffix — German `As` is the A flat, but `Asus4` is an
- * A chord — so every prefix is offered and the caller keeps the longest one
- * whose remainder it recognizes as a quality.
+ * A chord — so every prefix a name could fill is offered and the caller keeps
+ * the longest one whose remainder it recognizes as a quality.
+ *
+ * How far those prefixes reach is a property of the system, not of the text: a
+ * root is a bare note name, and no system writes one longer than a letter and
+ * two accidentals. Offering every prefix of the text instead would make the
+ * same symbol cost more to read in one system than in another, and would read a
+ * long line of text as many candidate roots when it can hold at most one.
  */
 function rootSplits(text: string, system: NoteNameSystem): RootSplit[] {
   if (system === 'english') {
@@ -575,7 +586,8 @@ function rootSplits(text: string, system: NoteNameSystem): RootSplit[] {
   }
   assertNamingSystem(system);
   const splits: RootSplit[] = [];
-  for (let end = text.length; end > 0; end -= 1) {
+  const longest = Math.min(text.length, maxNoteNameLength(system));
+  for (let end = longest; end > 0; end -= 1) {
     const root = bareNote(text.slice(0, end), system);
     if (root !== undefined) {
       splits.push({ root, rest: text.slice(end) });
@@ -714,7 +726,7 @@ export function tryParseChordSymbol(text: string, opts?: NoteNameOptions): Parse
       .replaceAll('∆', 'Δ');
     const splits = rootSplits(trimmed, system);
     if (splits.length === 0) {
-      throw new InvalidInputError(`Invalid chord symbol: ${text}`);
+      throw new InvalidInputError(`Invalid chord symbol: ${describeRejected(text)}`);
     }
     for (const { root, rest } of splits) {
       const chord = chordAfterRoot(root, rest, system);
@@ -722,7 +734,7 @@ export function tryParseChordSymbol(text: string, opts?: NoteNameOptions): Parse
         return { ok: true, value: chord };
       }
     }
-    throw new InvalidInputError(`Unrecognized chord quality: ${text}`);
+    throw new InvalidInputError(`Unrecognized chord quality: ${describeRejected(text)}`);
   } catch (error) {
     return parseFailure(error);
   }

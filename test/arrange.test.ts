@@ -637,11 +637,16 @@ describe('analysis cost', () => {
     // Not a timing assertion: the guard is that the whole analysis finishes
     // inside the test timeout. A per-beat scan of every note in the piece —
     // which is what this replaced — takes minutes at this size.
+    //
+    // The budget is named because the piece is 8,000 beats long: the boundary
+    // search weighs the whole chord lexicon against every one of its slots, and
+    // that is the count the budget measures, so a span of this length asks for
+    // more than the default admits however few notes fill it.
     const notes: NoteEvent[] = [];
     for (let i = 0; i < 32_000; i += 1) {
       notes.push({ pitch: 48 + (i % 24), startBeat: i * 0.25, durationBeat: 0.5 });
     }
-    const analysis = analyzeArrangement([{ notes }]);
+    const analysis = analyzeArrangement([{ notes }], { budget: 2_000_000 });
     expect(analysis.tracks[0]?.notes).toHaveLength(32_000);
   }, 60_000);
 

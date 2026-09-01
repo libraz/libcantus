@@ -1,4 +1,5 @@
 import { InvalidInputError } from '../errors/index.js';
+import { assertInteger, assertMidiPitch } from '../validation/index.js';
 import type { Articulation } from './articulation.js';
 
 /**
@@ -178,19 +179,34 @@ export type StringFingering = {
   fret: number;
 };
 
+/**
+ * Greatest fret number a neck can carry.
+ *
+ * A fret sounds an open string a semitone higher per fret, so a neck longer
+ * than the MIDI compass names positions that sound no pitch. Bounding it here
+ * is what keeps every routine that walks the instrument by octaves — the range,
+ * the fingerings, the folding — finite for every profile the library accepts.
+ */
+const MAX_FRETS = 127;
+
 /** Reject a profile whose own description is contradictory. */
 function assertProfile(profile: InstrumentProfile): void {
   if (profile.kind === 'stringed') {
     if (profile.tuning.length === 0) {
       throw new InvalidInputError(`${profile.name} must have at least one string`);
     }
-    if (!Number.isInteger(profile.frets) || profile.frets < 0) {
-      throw new InvalidInputError(`${profile.name} frets must be a non-negative integer`);
+    for (const [index, open] of profile.tuning.entries()) {
+      assertMidiPitch(open, `${profile.name} tuning[${index}]`);
     }
+    assertInteger(profile.frets, `${profile.name} frets`, 0, MAX_FRETS);
     return;
   }
-  if (Object.keys(profile.reach).length === 0) {
+  const voices = Object.keys(profile.reach);
+  if (voices.length === 0) {
     throw new InvalidInputError(`${profile.name} must have at least one voice within reach`);
+  }
+  for (const key of voices) {
+    assertMidiPitch(Number(key), `${profile.name} reach pitch`);
   }
 }
 
@@ -328,12 +344,18 @@ export function foldIntoRange(pitch: number, profile: InstrumentProfile): number
     return pitch;
   }
   const { low, high } = instrumentRange(profile);
-  for (let candidate = pitch + 12; candidate <= high; candidate += 12) {
+  // The search starts at the first octave inside the instrument rather than
+  // stepping up to it one octave at a time: nothing under the lowest string or
+  // over the top fret sounds, so those candidates are known answers, and a
+  // pitch far outside the range would otherwise be walked in the loop.
+  const firstUp = pitch + 12 * Math.max(1, Math.ceil((low - pitch) / 12));
+  for (let candidate = firstUp; candidate <= high; candidate += 12) {
     if (canSound(profile, candidate)) {
       return candidate;
     }
   }
-  for (let candidate = pitch - 12; candidate >= low; candidate -= 12) {
+  const firstDown = pitch - 12 * Math.max(1, Math.ceil((pitch - high) / 12));
+  for (let candidate = firstDown; candidate >= low; candidate -= 12) {
     if (canSound(profile, candidate)) {
       return candidate;
     }

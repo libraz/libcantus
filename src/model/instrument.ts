@@ -24,7 +24,7 @@ import {
 import type { NoteLike } from '../core/pitch/index.js';
 import { toNoteData } from '../core/pitch/index.js';
 import type { NoteEvent } from '../core/types.js';
-import { assertInteger, assertPositiveInt } from '../core/validation/index.js';
+import { assertInteger, assertMidiPitch, assertPositiveInt } from '../core/validation/index.js';
 import type { TransposingInstrument } from '../theory/transposition/index.js';
 import { toSoundingPitch } from '../theory/transposition/index.js';
 import { Note } from './note.js';
@@ -89,12 +89,12 @@ function checkedProfile(profile: InstrumentProfileLike): InstrumentProfile {
   assertPositiveInt(copy.polyphony, `${copy.name} polyphony`);
   if (copy.kind === 'stringed') {
     for (const [index, open] of copy.tuning.entries()) {
-      assertInteger(open, `${copy.name} tuning[${index}]`);
+      assertMidiPitch(open, `${copy.name} tuning[${index}]`);
     }
     assertInteger(copy.maxStretch, `${copy.name} maxStretch`, 0);
   } else {
     for (const pitch of Object.keys(copy.reach)) {
-      assertInteger(Number(pitch), `${copy.name} reach pitch`);
+      assertMidiPitch(Number(pitch), `${copy.name} reach pitch`);
     }
   }
   // The instrument module's own reading of the profile settles the rest: a

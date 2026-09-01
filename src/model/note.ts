@@ -15,9 +15,11 @@ import {
   tryParseNote,
 } from '../core/pitch/index.js';
 import { frequencyOf, type TuningTable } from '../core/tuning/index.js';
+import { describeRejected } from '../core/validation/index.js';
 import { type KeyLike, pitchToScaleDegree, toKeyScale } from '../theory/scale/index.js';
 import { type TransposingInstrument, toWrittenPitch } from '../theory/transposition/index.js';
 import { Interval } from './interval.js';
+import { assertDataObject } from './shared.js';
 
 /**
  * Defensive copy of a plain note, with the letter checked.
@@ -27,6 +29,7 @@ import { Interval } from './interval.js';
  * print the same name and report the same pitch class yet compare unequal.
  */
 function copyNote(data: NoteData): NoteData {
+  assertDataObject(data, 'note data');
   if (!Number.isInteger(data.letter) || data.letter < 0 || data.letter > 6) {
     throw new InvalidInputError(
       `note letter must be an integer in [0, 6]; received ${data.letter}`,
@@ -61,7 +64,7 @@ function letterNumberOf(letter: number | string): number {
   }
   if (!NATURAL_LETTER.test(letter)) {
     throw new InvalidInputError(
-      `Note.of takes a letter number 0..6 or a bare letter name 'C'..'B'; received ${JSON.stringify(letter)}. Use Note.parse(${JSON.stringify(letter)}) to read a note name with an accidental or an octave.`,
+      `Note.of takes a letter number 0..6 or a bare letter name 'C'..'B'; received ${describeRejected(letter)}. Use Note.parse(${describeRejected(letter)}) to read a note name with an accidental or an octave.`,
     );
   }
   return unwrapParse(tryParseNote(letter)).letter;

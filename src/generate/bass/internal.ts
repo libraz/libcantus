@@ -32,15 +32,7 @@ export const EPS = 1e-9;
  * `[low, low + 12]` if it falls outside.
  */
 export function placePc(pc: number, anchor: number, low: number): number {
-  const high = low + 12;
-  let midi = pc + 12 * Math.round((anchor - pc) / 12);
-  while (midi < low) {
-    midi += 12;
-  }
-  while (midi > high) {
-    midi -= 12;
-  }
-  return midi;
+  return foldIntoBand(pc + 12 * Math.round((anchor - pc) / 12), low);
 }
 
 /** Chord-tone pitch classes in stacked-thirds order, deduplicated. */
@@ -107,16 +99,15 @@ export function beatPositions(start: number, end: number, ts: TimeSignature): nu
   return positions;
 }
 
-/** Shift a pitch by whole octaves until it lies in the band `[low, low + 12]`. */
+/**
+ * Shift a pitch by whole octaves until it lies in the band `[low, low + 12]`.
+ *
+ * The octave count is computed rather than stepped, so a pitch arbitrarily far
+ * from the band costs the same as one just outside it.
+ */
 export function foldIntoBand(midi: number, low: number): number {
-  let result = midi;
-  while (result < low) {
-    result += 12;
-  }
-  while (result > low + 12) {
-    result -= 12;
-  }
-  return result;
+  const raised = midi + 12 * Math.max(0, Math.ceil((low - midi) / 12));
+  return raised - 12 * Math.max(0, Math.ceil((raised - low - 12) / 12));
 }
 
 /**
@@ -126,20 +117,20 @@ export function foldIntoBand(midi: number, low: number): number {
  * Moving the band rather than each note is what keeps the line intact: every
  * interval between consecutive notes survives, and only the register — the one
  * thing a player would have chosen differently — moves.
+ *
+ * Each move is computed as an octave count rather than stepped one octave at a
+ * time, so a band far outside the instrument costs the same as one just outside
+ * it. The band is dropped under the top fret first and then lifted over the
+ * lowest string, so an instrument spanning less than an octave keeps its lowest
+ * note reachable.
  */
 export function bandFloor(low: number, instrument: StringedProfile | undefined): number {
   if (!instrument) {
     return low;
   }
   const range = instrumentRange(instrument);
-  let floor = low;
-  while (floor + 12 > range.high) {
-    floor -= 12;
-  }
-  while (floor < range.low) {
-    floor += 12;
-  }
-  return floor;
+  const dropped = low - 12 * Math.max(0, Math.ceil((low + 12 - range.high) / 12));
+  return dropped + 12 * Math.max(0, Math.ceil((range.low - dropped) / 12));
 }
 
 /**

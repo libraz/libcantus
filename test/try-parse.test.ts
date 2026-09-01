@@ -4,6 +4,7 @@ import {
   parseInterval,
   parseNote,
   tryParseInterval,
+  tryParseKeyName,
   tryParseNote,
 } from '../src/core/pitch/index.js';
 import { Chord } from '../src/model/index.js';
@@ -93,9 +94,9 @@ describe('tryParseChordSymbol', () => {
 
   it('says which half of the symbol it could not read', () => {
     const root = tryParseChordSymbol('H7');
-    expect(!root.ok && root.error.message).toMatch(/Invalid chord symbol: H7/);
+    expect(!root.ok && root.error.message).toMatch(/Invalid chord symbol: "H7"/);
     const quality = tryParseChordSymbol('Cfoo');
-    expect(!quality.ok && quality.error.message).toMatch(/Unrecognized chord quality: Cfoo/);
+    expect(!quality.ok && quality.error.message).toMatch(/Unrecognized chord quality: "Cfoo"/);
   });
 
   it('reports an unknown notation system as the failure it is', () => {
@@ -108,6 +109,55 @@ describe('tryParseChordSymbol', () => {
     const thrown = thrownBy(() => parseChordSymbol('Cfoo'));
     expect(thrown).toBeInstanceOf(InvalidInputError);
     expect(!failure.ok && (thrown as Error).message).toBe(!failure.ok && failure.error.message);
+  });
+});
+
+describe('an option object a host built by reference', () => {
+  /** Every non-throwing parser that reads a notation system from its options. */
+  const parsers = [
+    ['tryParseNote', (opts: never) => tryParseNote('C', opts)],
+    ['tryParseKeyName', (opts: never) => tryParseKeyName('C major', opts)],
+    ['tryParseChordSymbol', (opts: never) => tryParseChordSymbol('C', opts)],
+    ['Chord.tryParse', (opts: never) => Chord.tryParse('C', opts)],
+  ] as const;
+
+  /** An options object that holds itself, as one assembled from a graph does. */
+  function circularOptions(): unknown {
+    const opts: Record<string, unknown> = {};
+    opts.self = opts;
+    opts.system = opts;
+    return opts;
+  }
+
+  it('reports a circular option instead of failing to describe it', () => {
+    for (const [label, parse] of parsers) {
+      const result = parse(circularOptions() as never);
+      expect(result.ok, label).toBe(false);
+      expect(!result.ok && isLibcantusError(result.error), label).toBe(true);
+      expect(!result.ok && result.error.message, label).toMatch(/system must be one of/);
+      expect(!result.ok && result.error.message.length, label).toBeLessThan(500);
+    }
+  });
+
+  it('names a value that is not text by its type, whatever type it is', () => {
+    for (const system of [null, 42, Symbol('german'), 10n, [], () => 'german']) {
+      const result = tryParseNote('C', { system } as never);
+      expect(result.ok).toBe(false);
+      expect(!result.ok && result.error.message.length).toBeLessThan(500);
+    }
+    expect(!tryParseNote('C', { system: null } as never).ok).toBe(true);
+    const nulled = tryParseNote('C', { system: null } as never);
+    expect(!nulled.ok && nulled.error.message).toMatch(/received null$/);
+  });
+
+  it('keeps the message bounded when the rejected option is a pasted document', () => {
+    const pasted = 'german'.repeat(50_000);
+    const result = tryParseNote('C', { system: pasted } as never);
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error.message.length).toBeLessThan(500);
+    // The head of what was given is still shown, so the field can explain
+    // itself, and the length that was cut is named rather than reprinted.
+    expect(!result.ok && result.error.message).toMatch(/truncated from 300000 characters/);
   });
 });
 

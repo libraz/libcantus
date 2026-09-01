@@ -18,6 +18,7 @@ import {
   assertTimeSignature,
 } from '../../core/validation/index.js';
 import { type GenerationContextInput, resolveContext } from '../context/index.js';
+import { deepFreeze } from '../vocabulary/freeze.js';
 import {
   BAR_STEPS,
   deform,
@@ -129,7 +130,7 @@ const FOUR_FOUR: TimeSignature = { numerator: 4, denominator: 4 };
  *
  * @category Composition
  */
-export const DRUM_PATTERNS: readonly DrumVocabulary[] = Object.freeze([
+export const DRUM_PATTERNS: readonly DrumVocabulary[] = deepFreeze([
   {
     id: 'motownBackbeat',
     genre: 'motown',

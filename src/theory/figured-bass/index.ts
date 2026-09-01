@@ -21,6 +21,7 @@ import {
   toNoteData,
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
+import { describeRejected } from '../../core/validation/index.js';
 import type { Chord, ChordQuality } from '../chord/index.js';
 import { chordQualities, makeChord } from '../chord/index.js';
 import { type KeyLike, scaleTonesInDegreeOrder, spelledKeyOf, toKeyScale } from '../scale/index.js';
@@ -89,7 +90,7 @@ const ACCIDENTAL_GLYPHS: Record<number, string> = {
 
 /** An error naming the figure string that was rejected. */
 function invalidFigures(figures: string, detail: string): InvalidInputError {
-  return new InvalidInputError(`figured bass ${JSON.stringify(figures)} ${detail}`);
+  return new InvalidInputError(`figured bass ${describeRejected(figures)} ${detail}`);
 }
 
 /** The alteration an accidental produces from the one the key gives. */
@@ -334,7 +335,7 @@ function realizeSonority(
     const tone = tones.find((candidate) => mod7(candidate.letter - root.letter) === step * 2);
     if (tone === undefined) {
       throw new NoSolutionError(
-        `figured bass ${JSON.stringify(text)} sounds ${noteNames(tones).join(' ')}, which does not stack in thirds`,
+        `figured bass ${describeRejected(text)} sounds ${noteNames(tones).join(' ')}, which does not stack in thirds`,
       );
     }
     stack.push(mod12(noteToPitchClass(tone) - rootPc));
@@ -342,7 +343,7 @@ function realizeSonority(
   const quality = TERTIAN_QUALITIES.get(stack.join(','));
   if (quality === undefined) {
     throw new NoSolutionError(
-      `figured bass ${JSON.stringify(text)} sounds ${noteNames(tones).join(' ')}, which no chord quality names`,
+      `figured bass ${describeRejected(text)} sounds ${noteNames(tones).join(' ')}, which no chord quality names`,
     );
   }
   const chord = makeChord(rootPc, quality, noteToPitchClass(bass));
@@ -624,7 +625,7 @@ function pitchClassesOf(notes: readonly Note[]): number[] {
 function assertRealizesAs(bass: Note, figures: string, key: KeyScale, tones: Note[]): void {
   const noFigures = (detail: string): NoSolutionError =>
     new NoSolutionError(
-      `no figured bass names ${noteNames(tones).join(' ')} over ${noteNames([bass])[0]}: the figures ${JSON.stringify(figures)} ${detail}`,
+      `no figured bass names ${noteNames(tones).join(' ')} over ${noteNames([bass])[0]}: the figures ${describeRejected(figures)} ${detail}`,
     );
   let realized: FiguredBassRealization;
   try {

@@ -14,7 +14,6 @@ import {
 } from '../analyze/arrange/index.js';
 import type { KeyRegion } from '../analyze/keys/index.js';
 import type { ChordTimeline } from '../analyze/timeline/index.js';
-import { InvalidInputError } from '../core/errors/index.js';
 import type { MeterLike, MeterMap } from '../core/meter/index.js';
 import { resolveMeters, toMeterData } from '../core/meter/index.js';
 import type { NoteEvent } from '../core/types.js';
@@ -30,7 +29,15 @@ import type { KeyLike } from '../theory/scale/index.js';
 import { toKeyScale } from '../theory/scale/index.js';
 import type { ScoreOptions } from './score.js';
 import { Score } from './score.js';
-import { copyNoteEvent, samePlain, spanEnd } from './shared.js';
+import {
+  assertDataArray,
+  assertDataObject,
+  assertDataObjects,
+  copyNoteEvent,
+  copyPlain,
+  samePlain,
+  spanEnd,
+} from './shared.js';
 import { Timeline } from './timeline.js';
 
 /**
@@ -90,30 +97,9 @@ export type ArrangementData = {
   settings?: ArrangementSettings;
 };
 
-/**
- * A deep copy of a plain value.
- *
- * The tracks, the settings and every part of the analysis are plain data —
- * records, arrays and numbers — so one recursive copy keeps a caller from
- * reaching into the arrangement's own state without a bespoke clone of each of
- * the shapes the analysis reports.
- */
-function copyPlain<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value.map((item: unknown) => copyPlain(item)) as unknown as T;
-  }
-  if (typeof value === 'object' && value !== null) {
-    const copy: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value)) {
-      copy[key] = copyPlain(item);
-    }
-    return copy as unknown as T;
-  }
-  return value;
-}
-
 /** Defensive copy of one note event, checked as it is copied. */
 function copyNote(note: NoteEvent, name: string): NoteEvent {
+  assertDataObject(note, name);
   assertNoteEvent(note, name, { allowNonPositiveDuration: true });
   return copyNoteEvent(note);
 }
@@ -125,22 +111,14 @@ function copyNote(note: NoteEvent, name: string): NoteEvent {
  * a MIDI import carries them, and the analysis drops them itself.
  */
 function copyNotes(notes: readonly NoteEvent[], name: string): NoteEvent[] {
-  if (!Array.isArray(notes)) {
-    throw new InvalidInputError(`${name} must be an array; received ${typeof notes}`);
-  }
-  return notes.map((note, index) => {
-    if (note === undefined) {
-      throw new InvalidInputError(`${name}[${index}] must be a note event; received undefined`);
-    }
-    return copyNote(note, `${name}[${index}]`);
-  });
+  return assertDataObjects<NoteEvent>(notes, name).map((note, index) =>
+    copyNote(note, `${name}[${index}]`),
+  );
 }
 
 /** Defensive copy of one track, its notes checked as they are copied. */
 function copyTrack(track: ArrangementTrack, index: number): ArrangementTrack {
-  if (track === undefined) {
-    throw new InvalidInputError(`tracks[${index}] must be a track; received undefined`);
-  }
+  assertDataObject(track, `tracks[${index}]`);
   const copy: ArrangementTrack = { notes: copyNotes(track.notes, `tracks[${index}].notes`) };
   if (track.name !== undefined) {
     copy.name = track.name;
@@ -159,12 +137,14 @@ function copyTrack(track: ArrangementTrack, index: number): ArrangementTrack {
  * them again here would be a second reading of the same rules.
  */
 function copyKeyRegions(keys: readonly KeyRegion[]): KeyRegion[] {
-  return [...new Timeline({ segments: [], totalBeats: 0, keys: [...keys] }).keys];
+  const given = assertDataObjects<KeyRegion>(keys, 'arrangement keys');
+  return [...new Timeline({ segments: [], totalBeats: 0, keys: [...given] }).keys];
 }
 
 /** Chord segments validated and copied by the class that owns the shape. */
 function copySegments(segments: readonly ChordSegment[]): ChordSegment[] {
-  return [...new Timeline({ segments: [...segments], totalBeats: spanEnd(segments) }).segments];
+  const given = assertDataObjects<ChordSegment>(segments, 'arrangement timeline');
+  return [...new Timeline({ segments: [...given], totalBeats: spanEnd(given) }).segments];
 }
 
 /** The `{ at, segments }` shape the analysis functions take, over segments. */
@@ -192,16 +172,17 @@ function copySettings(
   if (settings === undefined) {
     return undefined;
   }
+  assertDataObject(settings, 'arrangement settings');
   const copy: ArrangementSettings = {};
   // The meter is read through the same resolver every meter-aware entry point
   // reads its options through, so an arrangement accepts exactly what they
   // accept and naming both `ts` and `meters` is the error it always was.
   const meters = resolveMeters({ ts: settings.ts, meters: settings.meters }, 'arrangement meters');
   if (settings.ts !== undefined) {
-    copy.ts = copyPlain(settings.ts);
+    copy.ts = copyPlain(settings.ts, 'arrangement ts');
   }
   if (settings.meters !== undefined) {
-    copy.meters = copyPlain(meters);
+    copy.meters = copyPlain(meters, 'arrangement meters');
   }
   if (settings.key !== undefined) {
     copy.key = toKeyScale(settings.key);
@@ -213,7 +194,10 @@ function copySettings(
     copy.timeline = copySegments(settings.timeline);
   }
   if (settings.harmonyTracks !== undefined) {
-    copy.harmonyTracks = settings.harmonyTracks.map((track, index) =>
+    copy.harmonyTracks = assertDataArray<number>(
+      settings.harmonyTracks,
+      'arrangement harmonyTracks',
+    ).map((track, index) =>
       assertInteger(track, `arrangement harmonyTracks[${index}]`, 0, trackCount - 1),
     );
   }
@@ -252,12 +236,10 @@ function copySettings(
 
 /** Defensive copy of plain arrangement data, with every part validated. */
 function copyArrangement(data: ArrangementData): ArrangementData {
-  if (!Array.isArray(data.tracks)) {
-    throw new InvalidInputError(
-      `arrangement tracks must be an array; received ${typeof data.tracks}`,
-    );
-  }
-  const tracks = data.tracks.map(copyTrack);
+  assertDataObject(data, 'arrangement data');
+  const tracks = assertDataArray<ArrangementTrack>(data.tracks, 'arrangement tracks').map(
+    copyTrack,
+  );
   const settings = copySettings(data.settings, tracks.length);
   return settings === undefined ? { tracks } : { tracks, settings };
 }
@@ -267,7 +249,9 @@ function arrangementData(
   tracks: readonly ArrangementTrack[],
   settings: ArrangementSettings | undefined,
 ): ArrangementData {
-  const data: ArrangementData = { tracks: [...tracks] };
+  const data: ArrangementData = {
+    tracks: [...assertDataArray<ArrangementTrack>(tracks, 'tracks')],
+  };
   if (settings !== undefined) {
     data.settings = settings;
   }
@@ -287,6 +271,7 @@ function settingsFrom(setup: ArrangementSetup | undefined): ArrangementSettings 
   if (setup === undefined) {
     return undefined;
   }
+  assertDataObject(setup, 'arrangement options');
   const { key, meters, timeline, ...rest } = setup;
   const settings: ArrangementSettings = { ...rest };
   if (key !== undefined) {
@@ -296,7 +281,10 @@ function settingsFrom(setup: ArrangementSetup | undefined): ArrangementSettings 
     settings.meters = metersFrom(meters);
   }
   if (timeline !== undefined) {
-    settings.timeline = [...timeline.segments];
+    assertDataObject(timeline, 'arrangement timeline');
+    settings.timeline = [
+      ...assertDataArray<ChordSegment>(timeline.segments, 'arrangement timeline segments'),
+    ];
   }
   return settings;
 }
@@ -308,6 +296,7 @@ function analysisOptionsOf(
   if (setup === undefined) {
     return {};
   }
+  assertDataObject(setup, 'arrangement options');
   const { key, meters, ...rest } = setup;
   const opts: ArrangementOptions & { step?: number } = { ...rest };
   if (key !== undefined) {
@@ -414,7 +403,7 @@ export class Arrangement {
 
   /** The tracks as they were given, in that order. */
   get tracks(): readonly ArrangementTrack[] {
-    return copyPlain(this.#data.tracks);
+    return copyPlain(this.#data.tracks, 'arrangement tracks');
   }
 
   /**
@@ -425,7 +414,7 @@ export class Arrangement {
    */
   get analysis(): ArrangementAnalysis {
     const { timeline, ...rest } = this.#session().analysis;
-    return { ...copyPlain(rest), timeline: this.timeline().chordTimeline };
+    return { ...copyPlain(rest, 'arrangement analysis'), timeline: this.timeline().chordTimeline };
   }
 
   /**
@@ -438,7 +427,7 @@ export class Arrangement {
    * labels to tell those apart.
    */
   get conflicts(): Conflict[] {
-    return copyPlain(this.#session().analysis.conflicts);
+    return copyPlain(this.#session().analysis.conflicts, 'arrangement conflicts');
   }
 
   /**
@@ -585,7 +574,7 @@ export class Arrangement {
 
   /** A copy of the underlying plain data. */
   get data(): ArrangementData {
-    return copyPlain(this.#data);
+    return copyPlain(this.#data, 'arrangement data');
   }
 
   /** The plain form of the arrangement, for `JSON.stringify`. */

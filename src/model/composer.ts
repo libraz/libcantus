@@ -1,5 +1,4 @@
 import type { ChordTimeline } from '../analyze/timeline/index.js';
-import { InvalidInputError } from '../core/errors/index.js';
 import type { InstrumentProfile, InstrumentProfileLike } from '../core/instrument/profile.js';
 import { toStringedProfile } from '../core/instrument/profile.js';
 import type { MeterLike, MeterMap, TimeSignature } from '../core/meter/index.js';
@@ -25,7 +24,7 @@ import { majorKey, toKeyScale } from '../theory/scale/index.js';
 import { Instrument } from './instrument.js';
 import type { ScoreOptions } from './score.js';
 import { Score } from './score.js';
-import { samePlain } from './shared.js';
+import { assertDataObject, assertDataObjects, copyPlain, samePlain } from './shared.js';
 import { Timeline } from './timeline.js';
 
 /** The settings a composer holds and hands to every generator it drives. */
@@ -116,38 +115,6 @@ const PROGRESSION_BAR_BEATS = 4;
 const DEFAULT_KEY: KeyScale = majorKey(0);
 
 /**
- * A deep copy of caller data, with every number checked and every absent field
- * left out.
- *
- * The vocabulary a composer carries holds a `material` of whatever shape the
- * figure is made of, and an instrument profile is a plain record too, so the
- * only way to promise that nothing non-finite reaches a generator — or survives
- * a round trip through a project file — is to walk the value. Dropping
- * `undefined` properties is what keeps the copy equal to its own JSON.
- */
-function copyPlain<T>(value: T, name: string): T {
-  if (typeof value === 'number') {
-    return assertFiniteNumber(value, name) as T;
-  }
-  if (Array.isArray(value)) {
-    return value.map((item, index) => copyPlain(item, `${name}[${index}]`)) as T;
-  }
-  if (typeof value === 'object' && value !== null) {
-    const copy: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value)) {
-      if (item !== undefined) {
-        copy[key] = copyPlain(item, `${name}.${key}`);
-      }
-    }
-    return copy as T;
-  }
-  if (typeof value === 'function' || typeof value === 'symbol' || typeof value === 'bigint') {
-    throw new InvalidInputError(`${name} must be plain data; received ${typeof value}`);
-  }
-  return value;
-}
-
-/**
  * The plain chord timeline a harmony value stands for.
  *
  * Read through the public surface rather than by `instanceof`, so a timeline
@@ -171,6 +138,7 @@ function metersFrom(meters: MeterLike | undefined): MeterMap {
 
 /** A copy of the dials, carrying only the ones the caller named. */
 function copyComplexity(complexity: Complexity): Complexity {
+  assertDataObject(complexity, 'composer complexity');
   const copy: Complexity = {};
   for (const dial of ['rhythmic', 'harmonic', 'ornament', 'difficulty'] as const) {
     const value = complexity[dial];
@@ -185,6 +153,7 @@ function copyComplexity(complexity: Complexity): Complexity {
 function copyInstruments(
   instruments: Record<string, InstrumentProfileLike>,
 ): Record<string, InstrumentProfile> {
+  assertDataObject(instruments, 'composer instruments');
   const copy: Record<string, InstrumentProfile> = {};
   for (const [part, profile] of Object.entries(instruments)) {
     // Checked and copied by the class that speaks for a profile everywhere
@@ -205,6 +174,7 @@ function copyInstruments(
  * one, which is a different request from harmonizing in C major.
  */
 function copyOptions(options: ComposerOptions): ComposerOptions {
+  assertDataObject(options, 'composer options');
   const copy: ComposerOptions = { meters: metersFrom(options.meters) };
   if (options.key !== undefined) {
     copy.key = toKeyScale(options.key);
@@ -222,9 +192,10 @@ function copyOptions(options: ComposerOptions): ComposerOptions {
     copy.instruments = copyInstruments(options.instruments);
   }
   if (options.vocabulary !== undefined) {
-    copy.vocabulary = options.vocabulary.map((entry, index) =>
-      copyPlain(entry, `composer vocabulary[${index}]`),
-    );
+    copy.vocabulary = assertDataObjects<Vocabulary<unknown>>(
+      options.vocabulary,
+      'composer vocabulary',
+    ).map((entry, index) => copyPlain(entry, `composer vocabulary[${index}]`));
   }
   return copy;
 }
@@ -245,7 +216,10 @@ function contextOf(options: ComposerOptions): GenerationContext {
     ctx.instruments = copyInstruments(options.instruments);
   }
   if (options.vocabulary !== undefined) {
-    ctx.vocabulary = options.vocabulary.map((entry) => copyPlain(entry, 'composer vocabulary'));
+    ctx.vocabulary = assertDataObjects<Vocabulary<unknown>>(
+      options.vocabulary,
+      'composer vocabulary',
+    ).map((entry, index) => copyPlain(entry, `composer vocabulary[${index}]`));
   }
   return ctx;
 }

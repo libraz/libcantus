@@ -13,7 +13,7 @@
  */
 
 import { InvalidInputError } from '../errors/index.js';
-import { assertOneOf } from '../validation/index.js';
+import { assertOneOf, describeRejected } from '../validation/index.js';
 import type { Note } from './index.js';
 
 /**
@@ -125,6 +125,55 @@ const JAPANESE_DOUBLE = '重';
 const ITALIAN_SHARP = 'diesis';
 const ITALIAN_FLAT = 'bemolle';
 const ITALIAN_DOUBLE = 'doppio';
+
+/**
+ * The most accidentals a written name carries.
+ *
+ * Notation stops at the double accidental, and so does every letter-and-mark
+ * name in these tables; past it there is no spelling to read.
+ */
+const MAX_NAME_ACCIDENTALS = 2;
+
+/** Longest glyph in a table's letters. */
+function longestGlyph(glyphs: readonly string[]): number {
+  return Math.max(...glyphs.map((glyph) => glyph.length));
+}
+
+/** Longest letter each table writes. */
+const MAX_LETTER_LENGTH: Record<NamingTable, number> = {
+  english: longestGlyph(ENGLISH_LETTERS),
+  german: longestGlyph(GERMAN_LETTERS),
+  japanese: longestGlyph(JAPANESE_LETTERS),
+  italian: longestGlyph(ITALIAN_LETTERS),
+};
+
+/** Longest one accidental takes in each table, its separator included. */
+const MAX_ACCIDENTAL_LENGTH: Record<NamingTable, number> = {
+  /** `#`, `x` and `b`. */
+  english: 1,
+  /** The `-is` and `-es` affixes, whose first mark may elide to a bare `s`. */
+  german: 2,
+  /** 嬰 and 変; 重 stands in for the second mark of a double, not beside it. */
+  japanese: 1,
+  /** A space and the accidental word; `doppio` covers two marks in one word. */
+  italian: 1 + Math.max(ITALIAN_SHARP.length, ITALIAN_FLAT.length),
+};
+
+/**
+ * The greatest number of characters a bare note name takes in a system.
+ *
+ * A name is a letter and at most two accidentals, so its length has a ceiling
+ * that depends only on the system. A caller looking for a name at the front of
+ * a longer text — the root of a chord symbol — offers the prefixes up to this
+ * length rather than every prefix the text has.
+ *
+ * @param system The system the name is written in.
+ * @returns The greatest length such a name has.
+ */
+export function maxNoteNameLength(system: NoteNameSystem): number {
+  const table = tableOf(assertSystem(system));
+  return MAX_LETTER_LENGTH[table] + MAX_NAME_ACCIDENTALS * MAX_ACCIDENTAL_LENGTH[table];
+}
 
 /** Trim and collapse internal whitespace, so `'do  diesis'` reads as one name. */
 function normalize(text: string): string {
@@ -323,13 +372,29 @@ function formatItalian(note: Note): string {
   return `${glyph} ${accidental}`;
 }
 
-/** Split a trailing scientific octave off a name written in words or glyphs. */
+/** Whether a character is one of the ten digits an octave is written with. */
+function isDigit(ch: string): boolean {
+  return ch >= '0' && ch <= '9';
+}
+
+/**
+ * Split a trailing scientific octave off a name written in words or glyphs.
+ *
+ * The digits are scanned backwards from the end, and the minus sign taken by
+ * hand, rather than matched by a pattern with a lazy prefix: the pattern reads
+ * the same names but restarts at every position of a name that has no octave,
+ * which costs the square of the length on text that is not a name at all.
+ */
 function splitOctave(text: string): { name: string; octave: number | undefined } {
-  const match = text.match(/^(.*?)(-?\d+)$/);
-  if (match === null) {
+  let start = text.length;
+  while (start > 0 && isDigit(text.charAt(start - 1))) {
+    start -= 1;
+  }
+  if (start === text.length) {
     return { name: text, octave: undefined };
   }
-  return { name: match[1] ?? '', octave: Number.parseInt(match[2] ?? '0', 10) };
+  const signed = start > 0 && text.charAt(start - 1) === '-' ? start - 1 : start;
+  return { name: text.slice(0, signed), octave: Number.parseInt(text.slice(signed), 10) };
 }
 
 /** Read a name in one system, or null when that system does not accept it. */
@@ -346,6 +411,20 @@ function parseIn(text: string, system: NoteNameSystem): Note | null {
     return null;
   }
   return octave === undefined ? note : { ...note, octave };
+}
+
+/**
+ * Drop the separators a mode word is written against the tonic with.
+ *
+ * Scanned backwards rather than matched by an unanchored pattern, which would
+ * retry from every position of a text made entirely of separators.
+ */
+function trimSeparators(text: string): string {
+  let end = text.length;
+  while (end > 0 && /[\s-]/.test(text.charAt(end - 1))) {
+    end -= 1;
+  }
+  return text.slice(0, end);
 }
 
 /** A key name split into its tonic text and the mode its mode word gives. */
@@ -378,7 +457,7 @@ function splitModeWord(text: string): ModeSplit {
     return { tonic: text, mode: undefined, system: undefined };
   }
   return {
-    tonic: text.slice(0, text.length - best.word.length).replace(/[\s-]+$/, ''),
+    tonic: trimSeparators(text.slice(0, text.length - best.word.length)),
     mode: best.mode,
     system: best.system,
   };
@@ -396,21 +475,28 @@ function splitModeWord(text: string): ModeSplit {
  */
 function resolveSystem(text: string): NoteNameSystem | null {
   const { tonic, system: wordSystem } = splitModeWord(text);
-  const accepted = DETECTION_ORDER.filter((system) => parseIn(tonic, system) !== null);
-  const first = accepted[0];
-  if (first === undefined) {
+  // Each system is asked only until one answers: a name attributed to the first
+  // of them says nothing about the rest, and the whole list is needed only to
+  // name the systems in the message a mixed name is rejected with.
+  if (wordSystem === undefined) {
+    for (const system of DETECTION_ORDER) {
+      if (parseIn(tonic, system) !== null) {
+        return system;
+      }
+    }
     return null;
   }
-  if (wordSystem === undefined) {
-    return first;
+  if (parseIn(tonic, wordSystem) !== null) {
+    return wordSystem;
   }
-  if (!accepted.includes(wordSystem)) {
-    throw new InvalidInputError(
-      `${JSON.stringify(text)} mixes note-name systems: ${JSON.stringify(tonic)} is ` +
-        `${accepted.join(' or ')} but its mode word is ${wordSystem}`,
-    );
+  const accepted = DETECTION_ORDER.filter((system) => parseIn(tonic, system) !== null);
+  if (accepted.length === 0) {
+    return null;
   }
-  return wordSystem;
+  throw new InvalidInputError(
+    `${describeRejected(text)} mixes note-name systems: ${describeRejected(tonic)} is ` +
+      `${accepted.join(' or ')} but its mode word is ${wordSystem}`,
+  );
 }
 
 /**
@@ -442,7 +528,7 @@ export function detectNoteNameSystem(text: string): NoteNameSystem {
   }
   const system = resolveSystem(normalize(text));
   if (system === null) {
-    throw new InvalidInputError(`no note-name system reads ${JSON.stringify(text)}`);
+    throw new InvalidInputError(`no note-name system reads ${describeRejected(text)}`);
   }
   return system;
 }
@@ -453,7 +539,7 @@ export function readNoteName(text: string, opts?: NoteNameOptions): Note {
   const system = opts?.system === undefined ? resolveSystem(name) : assertSystem(opts.system);
   const note = system === null ? null : parseIn(name, system);
   if (note === null) {
-    throw new InvalidInputError(`Invalid note: ${text}`);
+    throw new InvalidInputError(`Invalid note: ${describeRejected(text)}`);
   }
   return note;
 }
@@ -495,15 +581,15 @@ export function readKeyName(text: string, opts?: NoteNameOptions): KeyName {
   const system = opts?.system === undefined ? resolveSystem(name) : assertSystem(opts.system);
   if (system !== null && split.system !== undefined && split.system !== tableOf(system)) {
     throw new InvalidInputError(
-      `${JSON.stringify(text)} is not a ${system} key name: its mode word is ${split.system}`,
+      `${describeRejected(text)} is not a ${system} key name: its mode word is ${split.system}`,
     );
   }
   const tonic = system === null ? null : parseIn(split.tonic, system);
   if (tonic === null || system === null) {
-    throw new InvalidInputError(`Invalid key name: ${text}`);
+    throw new InvalidInputError(`Invalid key name: ${describeRejected(text)}`);
   }
   if (tonic.octave !== undefined) {
-    throw new InvalidInputError(`a key name carries no octave; received ${JSON.stringify(text)}`);
+    throw new InvalidInputError(`a key name carries no octave; received ${describeRejected(text)}`);
   }
   // An explicit mode word outranks the German case convention, so `C moll` is C
   // minor: the word is what the writer said, the case only what they typed.

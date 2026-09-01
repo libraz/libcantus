@@ -474,6 +474,11 @@ function repetitionBoundaries(
   assertGenerationBudget(slices.length * notes.length, 'form repetition comparisons', budget);
   const onsetsIn = (from: number, to: number): NoteEvent[] =>
     notes.filter((note) => note.startBeat >= from - EPS && note.startBeat < to - EPS);
+  // Comparing the two windows runs an edit distance over their notes, so the
+  // work is the product of what each side holds rather than one unit per slice.
+  // It is charged as it is incurred, so a passage dense enough to matter is
+  // refused before its distance is run rather than after.
+  let comparisons = 0;
   for (const slice of slices) {
     const beat = slice.startBeat;
     if (beat - windowBeats < spanStart - EPS || beat + windowBeats > spanEnd + EPS) {
@@ -486,6 +491,8 @@ function repetitionBoundaries(
     if (before.length < 2 || after.length < 2) {
       continue;
     }
+    comparisons += before.length * after.length;
+    assertGenerationBudget(comparisons, 'form repetition melody comparisons', budget);
     const similarity = melodicSimilarity(before, after);
     if (similarity >= REPETITION_THRESHOLD) {
       addSignal(boundaries, beat, 'repetition', REPETITION_STRENGTH * similarity);

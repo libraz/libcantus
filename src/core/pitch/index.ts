@@ -10,7 +10,12 @@
  */
 
 import { InvalidInputError, type ParseResult, parseFailure, unwrapParse } from '../errors/index.js';
-import { assertFiniteNumber, assertInteger, assertOneOf } from '../validation/index.js';
+import {
+  assertFiniteNumber,
+  assertInteger,
+  assertOneOf,
+  describeRejected,
+} from '../validation/index.js';
 import type { KeyName, NoteNameOptions } from './naming.js';
 import { readKeyName, readNoteName, writeKeyName, writeNoteName } from './naming.js';
 
@@ -626,7 +631,7 @@ export function intervalSemitones(numberValue: number, quality: IntervalQualityL
     }
     return Math.abs(reference - quality.length - (perfect ? 0 : 1));
   }
-  throw new InvalidInputError(`unknown interval quality ${JSON.stringify(quality)}`);
+  throw new InvalidInputError(`unknown interval quality ${describeRejected(quality)}`);
 }
 
 /** Interval name grammar: an optional descent marker, a quality, a number. */
@@ -683,7 +688,7 @@ export function tryParseInterval(name: string): ParseResult<SpelledInterval> {
     const numberValue = Number(match?.[3]);
     if (quality === undefined || !Number.isFinite(numberValue)) {
       throw new InvalidInputError(
-        `interval must be a quality followed by a number, such as 'P5'; received ${JSON.stringify(name)}`,
+        `interval must be a quality followed by a number, such as 'P5'; received ${describeRejected(name)}`,
       );
     }
     const span = intervalSemitones(numberValue, quality);

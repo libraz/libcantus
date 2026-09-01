@@ -68,6 +68,29 @@ function upperBound(values: readonly IndexedNoteEvent[], beat: number): number {
 }
 
 /**
+ * Copy note events and put them in stable onset order.
+ *
+ * The order is the one {@link createNoteEventIndex} numbers its notes in, so a
+ * pass may read the sequence here and the index there and see the same notes in
+ * the same places. What it does not build is the index itself: a caller that
+ * only walks the notes in time order would otherwise pay for a segment tree and
+ * a wrapper per note that it never queries.
+ *
+ * The events are copied, so the sequence is the caller's own and two entries
+ * that arrived as one shared object stay two.
+ *
+ * @param events The events to order; already validated by the caller.
+ * @returns The copies, earliest onset first, ties in input order.
+ */
+export function sortedNoteEvents(events: readonly NoteEvent[]): NoteEvent[] {
+  const sorted = events.map((note) => ({ ...note }));
+  // Array sort is stable, so events sharing an onset keep the order they were
+  // given in — the tie-break the index spells out as `originalIndex`.
+  sorted.sort((a, b) => a.startBeat - b.startBeat);
+  return sorted;
+}
+
+/**
  * How an index reads the events it is built from.
  *
  * @category Core
@@ -104,21 +127,35 @@ export function createNoteEventIndex(
   );
   // Segment-tree maxima find the latest active onset in logarithmic time even
   // when an early, very long note would defeat a prefix-max backwards scan.
-  let treeSize = 1;
-  while (treeSize < notes.length) treeSize *= 2;
-  const maxEndTree = new Array<number>(treeSize * 2).fill(Number.NEGATIVE_INFINITY);
-  for (let index = 0; index < notes.length; index += 1) {
-    maxEndTree[treeSize + index] = notes[index]?.endBeat ?? Number.NEGATIVE_INFINITY;
-  }
-  for (let index = treeSize - 1; index > 0; index -= 1) {
-    maxEndTree[index] = Math.max(
-      maxEndTree[index * 2] ?? Number.NEGATIVE_INFINITY,
-      maxEndTree[index * 2 + 1] ?? Number.NEGATIVE_INFINITY,
-    );
-  }
+  //
+  // It is built on the first `at` query rather than on construction: the onset
+  // queries answer from the sorted notes alone, so a caller that never asks
+  // which note is sounding would otherwise pay for a structure it never reads.
+  let maxEndTree: number[] | undefined;
+  let treeSize = 0;
+  const endTree = (): number[] => {
+    if (maxEndTree !== undefined) {
+      return maxEndTree;
+    }
+    treeSize = 1;
+    while (treeSize < notes.length) treeSize *= 2;
+    const tree = new Array<number>(treeSize * 2).fill(Number.NEGATIVE_INFINITY);
+    for (let index = 0; index < notes.length; index += 1) {
+      tree[treeSize + index] = notes[index]?.endBeat ?? Number.NEGATIVE_INFINITY;
+    }
+    for (let index = treeSize - 1; index > 0; index -= 1) {
+      tree[index] = Math.max(
+        tree[index * 2] ?? Number.NEGATIVE_INFINITY,
+        tree[index * 2 + 1] ?? Number.NEGATIVE_INFINITY,
+      );
+    }
+    maxEndTree = tree;
+    return tree;
+  };
   const latestActiveIndex = (exclusive: number, beat: number): number => {
+    const tree = endTree();
     const find = (node: number, start: number, end: number): number => {
-      if (start >= exclusive || (maxEndTree[node] ?? Number.NEGATIVE_INFINITY) <= beat + EPS) {
+      if (start >= exclusive || (tree[node] ?? Number.NEGATIVE_INFINITY) <= beat + EPS) {
         return -1;
       }
       if (end - start === 1) return start < notes.length ? start : -1;

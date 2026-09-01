@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeArrangement } from '../src/analyze/arrange/index.js';
 import { chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
-import type { MeterMap } from '../src/core/meter/index.js';
+import { BudgetExceededError } from '../src/core/errors/index.js';
+import type { MeterChange, MeterMap } from '../src/core/meter/index.js';
 import {
   barIndexAt,
   barPositionToBeat,
@@ -145,6 +146,90 @@ describe('resolving the meter options', () => {
     expect(() => resolveMeters({ meters: [{ startBeat: Number.NaN, ts: COMMON }] })).toThrow(
       RangeError,
     );
+  });
+});
+
+describe('reading a long meter map', () => {
+  /** A piece that changes meter on every bar, alternating 3/4 and 4/4. */
+  function everyBar(bars: number): MeterMap {
+    const map: MeterMap = [];
+    let beat = 0;
+    for (let bar = 0; bar < bars; bar += 1) {
+      const numerator = (bar % 2) + 3;
+      map.push({ startBeat: beat, ts: { numerator, denominator: 4 } });
+      beat += numerator;
+    }
+    return map;
+  }
+
+  /** The entry in force at a beat, found by walking the map. */
+  function entryByScan(map: MeterMap, beat: number): MeterChange | undefined {
+    let found = map[0];
+    for (const entry of map) {
+      if (entry.startBeat <= beat + 1e-9) {
+        found = entry;
+      }
+    }
+    return found;
+  }
+
+  it('finds the same entry the walk finds, at and around every change', () => {
+    const map = everyBar(64);
+    const last = map[map.length - 1] as MeterChange;
+    for (const entry of map) {
+      for (const beat of [entry.startBeat - 0.5, entry.startBeat, entry.startBeat + 0.5]) {
+        expect(meterAt(beat, map), `beat ${beat}`).toEqual(entryByScan(map, beat)?.ts);
+      }
+    }
+    // Bar indices accumulate one per entry, since every entry is one bar long.
+    expect(map.map((entry) => barIndexAt(entry.startBeat, map))).toEqual(map.map((_, i) => i));
+    expect(map.map((entry) => barStartBeat(entry.startBeat, map))).toEqual(
+      map.map((entry) => entry.startBeat),
+    );
+    expect(barPositionToBeat({ bar: map.length - 1, beat: 0 }, map)).toBe(last.startBeat);
+    // Before the map and past its end, the outer entries keep governing.
+    expect(meterAt(-4, map)).toEqual(map[0]?.ts);
+    expect(barIndexAt(-1, map)).toBe(-1);
+    expect(barIndexAt(last.startBeat + last.ts.numerator, map)).toBe(map.length);
+  });
+
+  it('answers a piece-long sweep without walking the map for each beat', () => {
+    const bars = 10_000;
+    const map = everyBar(bars);
+    const meters = resolveMeters({ meters: map });
+    const start = performance.now();
+    let weight = 0;
+    for (const entry of meters) {
+      weight += metricWeight(entry.startBeat, meters);
+      barIndexAt(entry.startBeat, meters);
+      formatBarPosition(entry.startBeat, meters);
+    }
+    const elapsed = performance.now() - start;
+    // Every entry is a downbeat, so the sweep really did read all of them.
+    expect(weight).toBe(3 * bars);
+    // A walk per lookup is quadratic and takes seconds here; the bound is loose
+    // enough that only that regression can reach it.
+    expect(elapsed).toBeLessThan(2000);
+  });
+
+  it('rejects a map longer than a piece can declare', () => {
+    const tooMany: MeterMap = new Array<MeterChange>(100_001);
+    for (let index = 0; index < tooMany.length; index += 1) {
+      tooMany[index] = { startBeat: index * 4, ts: { numerator: 4, denominator: 4 } };
+    }
+    expect(() => resolveMeters({ meters: tooMany })).toThrow(BudgetExceededError);
+    expect(() => resolveMeters({ meters: tooMany })).toThrow(/meters count/);
+    expect(() => resolveMeters({ meters: tooMany.slice(0, 100_000) })).not.toThrow();
+  });
+
+  it('re-reads a map that changed after it was validated', () => {
+    const map = everyBar(8);
+    expect(meterAt(0, map)).toEqual({ numerator: 3, denominator: 4 });
+    map.push({ startBeat: Number.NaN, ts: { numerator: 4, denominator: 4 } });
+    expect(() => meterAt(0, map)).toThrow(RangeError);
+    map.pop();
+    map[map.length - 1] = { startBeat: 1, ts: { numerator: 4, denominator: 4 } };
+    expect(() => meterAt(0, map)).toThrow(RangeError);
   });
 });
 

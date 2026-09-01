@@ -1,4 +1,3 @@
-import { InvalidInputError } from '../core/errors/index.js';
 import type { TimeSignature } from '../core/meter/index.js';
 import { assertRange } from '../core/validation/index.js';
 import type {
@@ -23,7 +22,13 @@ import {
   withinCeiling,
 } from '../generate/index.js';
 import { Score } from './score.js';
-import { copyTimeSignature, withoutNegativeZero } from './shared.js';
+import {
+  assertDataArray,
+  assertDataObject,
+  assertDataObjects,
+  copyTimeSignature,
+  withoutNegativeZero,
+} from './shared.js';
 
 /** The plain form a {@link Rhythm} hands out and is rebuilt from. */
 export type RhythmData = {
@@ -86,21 +91,14 @@ function copyEvent(event: RhythmEvent, name: string): RhythmEvent {
  * patterns holding the same onsets, then reads the same sequence.
  */
 function copyEvents(events: readonly RhythmEvent[], name: string): RhythmEvent[] {
-  if (!Array.isArray(events)) {
-    throw new InvalidInputError(`${name} must be an array; received ${typeof events}`);
-  }
-  return events
-    .map((event, index) => {
-      if (event === undefined) {
-        throw new InvalidInputError(`${name}[${index}] must be an onset; received undefined`);
-      }
-      return copyEvent(event, `${name}[${index}]`);
-    })
+  return assertDataObjects<RhythmEvent>(events, name)
+    .map((event, index) => copyEvent(event, `${name}[${index}]`))
     .sort((a, b) => a.position - b.position || a.duration - b.duration);
 }
 
 /** Defensive copy of plain rhythm data, with every part validated. */
 function copyRhythm(data: RhythmData): RhythmData {
+  assertDataObject(data, 'rhythm data');
   return {
     events: copyEvents(data.events, 'rhythm events'),
     ts: copyTimeSignature(data.ts, 'rhythm ts'),
@@ -216,7 +214,7 @@ export class Rhythm {
    * @returns The pattern.
    */
   static of(events: readonly RhythmEvent[], ts: TimeSignature = DEFAULT_TS): Rhythm {
-    return new Rhythm({ events: [...events], ts });
+    return new Rhythm({ events: [...assertDataArray<RhythmEvent>(events, 'rhythm events')], ts });
   }
 
   /** Rebuild a pattern from the plain data {@link Rhythm.data} hands out. */

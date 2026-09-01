@@ -13,7 +13,11 @@
  */
 
 import { InvalidInputError } from '../../core/errors/index.js';
-import { foldIntoRange, type StringedProfile } from '../../core/instrument/index.js';
+import {
+  foldIntoRange,
+  type StringedProfile,
+  toStringedProfile,
+} from '../../core/instrument/index.js';
 import { isStrongBeat, type TimeSignature } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
@@ -369,7 +373,11 @@ export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
   const resolved = resolveContext(opts.ctx);
   const named = resolved.instrument('bass');
   const instrument =
-    opts.instrument ?? (named !== undefined && named.kind === 'stringed' ? named : undefined);
+    opts.instrument === undefined
+      ? named !== undefined && named.kind === 'stringed'
+        ? named
+        : undefined
+      : toStringedProfile(opts.instrument, 'instrument');
   const low = bandFloor(octave * 12 + 12, instrument);
 
   const ctx: BuildContext = {

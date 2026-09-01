@@ -250,6 +250,20 @@ export function sectionsFromNotes(
     });
   }
 
+  // Comparing two units runs an edit distance over their notes, so what the
+  // comparisons cost is the sum over pairs of the product of what each holds —
+  // not the pair count, and not the pair count times the piece. A piece whose
+  // notes gather in a few units keeps both of those inside the budget while the
+  // distances themselves run for seconds, so the sum is charged before the
+  // first of them is run.
+  let comparisons = 0;
+  let earlierNotes = 0;
+  for (const unit of units) {
+    comparisons += unit.notes.length * earlierNotes;
+    earlierNotes += unit.notes.length;
+  }
+  assertGenerationBudget(comparisons, 'form section melody comparisons', opts.budget);
+
   // Label every unit, then merge the neighbours that agree.
   const labels: string[] = [];
   const scores: number[] = [];

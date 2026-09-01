@@ -23,7 +23,6 @@ import type { ChordTimeline, ChordTimelineOptions } from '../analyze/timeline/in
 import { chordTimelineFromNotes } from '../analyze/timeline/index.js';
 import type { AnalyzedNote, IdentifiedVoiceNote, KeyContext } from '../analyze/voice/index.js';
 import { analyzeVoice, toVoiceNotes } from '../analyze/voice/index.js';
-import { InvalidInputError } from '../core/errors/index.js';
 import type { NoteEventIndex, NoteEventIndexOptions } from '../core/event-index/index.js';
 import { createNoteEventIndex } from '../core/event-index/index.js';
 import type { PlayabilityReport } from '../core/instrument/playability.js';
@@ -48,7 +47,13 @@ import {
 import { type KeyLike, toKeyScale } from '../theory/scale/index.js';
 import type { KeyData } from './key.js';
 import { Key } from './key.js';
-import { copyNoteEvent, withoutNegativeZero } from './shared.js';
+import {
+  assertDataArray,
+  assertDataObject,
+  assertDataObjects,
+  copyNoteEvent,
+  withoutNegativeZero,
+} from './shared.js';
 import { Timeline } from './timeline.js';
 
 /** The plain form a {@link Score} hands out and is rebuilt from. */
@@ -91,18 +96,10 @@ const DEFAULT_BPM = 120;
  * drop them themselves.
  */
 function orderNotes(notes: readonly NoteEvent[], name: string): NoteEvent[] {
-  if (!Array.isArray(notes)) {
-    throw new InvalidInputError(`${name} must be an array; received ${typeof notes}`);
-  }
-  return notes
-    .map((note, index) => {
-      if (note === undefined) {
-        throw new InvalidInputError(`${name}[${index}] must be a note event; received undefined`);
-      }
-      return copyNoteEvent(
-        assertNoteEvent(note, `${name}[${index}]`, { allowNonPositiveDuration: true }),
-      );
-    })
+  return assertDataObjects<NoteEvent>(notes, name)
+    .map((note, index) =>
+      copyNoteEvent(assertNoteEvent(note, `${name}[${index}]`, { allowNonPositiveDuration: true })),
+    )
     .sort(
       (a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch || a.durationBeat - b.durationBeat,
     );
@@ -110,7 +107,8 @@ function orderNotes(notes: readonly NoteEvent[], name: string): NoteEvent[] {
 
 /** Defensive copy of a meter map, with its signatures copied entry by entry. */
 function copyMeters(meters: MeterMap): MeterMap {
-  return meters.map((change) => {
+  return assertDataObjects<MeterMap[number]>(meters, 'score meters').map((change) => {
+    assertDataObject(change.ts, 'score meters ts');
     const ts: TimeSignature = {
       numerator: change.ts.numerator,
       denominator: change.ts.denominator,
@@ -131,6 +129,7 @@ function copyMeters(meters: MeterMap): MeterMap {
  * than at the first conversion a caller happens to ask for.
  */
 function copyTempo(tempo: TempoMap): TempoMap {
+  assertDataObjects<TempoMap[number]>(tempo, 'score tempo');
   tempoAt(0, tempo);
   return tempo.map((event) => ({
     startBeat: withoutNegativeZero(event.startBeat),
@@ -147,6 +146,7 @@ function copyTempo(tempo: TempoMap): TempoMap {
  * below could not hold.
  */
 function copyScore(data: ScoreData): ScoreData {
+  assertDataObject(data, 'score data');
   const copy: ScoreData = {
     notes: orderNotes(data.notes, 'score notes'),
     // The map is validated by the same resolver every meter-aware entry point
@@ -182,7 +182,7 @@ function tempoFrom(tempo: TempoMap | number | undefined): TempoMap {
 /** The plain data a set of notes and a context describe. */
 function scoreData(notes: readonly NoteEvent[], opts: ScoreOptions | undefined): ScoreData {
   const data: ScoreData = {
-    notes: [...notes],
+    notes: [...assertDataArray<NoteEvent>(notes, 'score notes')],
     meters: metersFrom(opts?.meters),
     tempo: tempoFrom(opts?.tempo),
   };
@@ -285,7 +285,7 @@ export class Score {
    * ```
    */
   static fromTicks(events: readonly NoteEvent[], ppq: number, opts?: ScoreOptions): Score {
-    const notes = events.map((event) => ({
+    const notes = assertDataObjects<NoteEvent>(events, 'score notes').map((event) => ({
       ...event,
       startBeat: ticksToBeats(event.startBeat, ppq),
       durationBeat: ticksToBeats(event.durationBeat, ppq),

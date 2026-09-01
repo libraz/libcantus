@@ -1,6 +1,10 @@
 import { BudgetExceededError, InvalidInputError } from '../errors/index.js';
 import type { MeterMap, TimeSignature } from '../meter/index.js';
-import { isCompoundNumerator } from '../meter/internal.js';
+import {
+  isCompoundNumerator,
+  isValidatedMeterMap,
+  rememberValidatedMeterMap,
+} from '../meter/internal.js';
 import type { NoteEvent } from '../types.js';
 
 /**
@@ -9,6 +13,49 @@ import type { NoteEvent } from '../types.js';
  * @category Core
  */
 export const DEFAULT_GENERATION_BUDGET = 1_000_000;
+
+/**
+ * Upper bound on the number of changes one meter map may declare.
+ *
+ * A meter map is read on every slot of an analysis pass, so an unbounded map is
+ * an unbounded per-slot cost the way an unbounded event array is an unbounded
+ * pass. The bound is far above any notated piece — a change on every bar of a
+ * hundred thousand bars — and rejects the map rather than the work built on it.
+ */
+const MAX_METER_CHANGES = 100_000;
+
+/**
+ * Longest echo of a rejected value an error message carries.
+ *
+ * A message is shown to a person and written to a log, so it names what was
+ * given without reprinting it: a validated field can hold a pasted document,
+ * and repeating that back turns one bad keystroke into a megabyte of log.
+ */
+const MAX_ECHOED_LENGTH = 64;
+
+/**
+ * Describe a rejected value for an error message, without ever throwing.
+ *
+ * The value reaching a validator is untyped by definition — it arrives from
+ * JSON, a config file, or a plugin host — so it may be circular, a BigInt, or a
+ * pasted document. Only a string is echoed, and only its head; anything else is
+ * named by its type, which is the part a caller can act on.
+ *
+ * Exported for the other modules that build the same kind of message. It is not
+ * re-exported from `./core`, because it describes how this library words an
+ * error rather than anything a caller decides.
+ */
+export function describeRejected(value: unknown): string {
+  if (value === null) {
+    return 'null';
+  }
+  if (typeof value !== 'string') {
+    return typeof value;
+  }
+  return value.length <= MAX_ECHOED_LENGTH
+    ? JSON.stringify(value)
+    : `${JSON.stringify(value.slice(0, MAX_ECHOED_LENGTH))} (truncated from ${value.length} characters)`;
+}
 
 /**
  * Require a finite JavaScript number and return it unchanged.
@@ -103,7 +150,10 @@ export const soundingNotesOnly = dropSilentNotes;
  * @param allowed Every accepted name.
  * @param name What the value is, for the error message.
  * @returns The value, narrowed to the allowed union.
- * @throws If the value is not one of `allowed`.
+ * @throws If the value is not one of `allowed`. The message names the value by
+ *   its type unless it is a string, and echoes at most the head of that string,
+ *   so building it cannot itself fail on a circular object and cannot grow with
+ *   the size of what was pasted into the field.
  *
  * @category Core
  */
@@ -114,7 +164,7 @@ export function assertOneOf<const T extends string>(
 ): T {
   if (typeof value !== 'string' || !(allowed as readonly string[]).includes(value)) {
     throw new InvalidInputError(
-      `${name} must be one of ${allowed.join(', ')}; received ${JSON.stringify(value)}`,
+      `${name} must be one of ${allowed.join(', ')}; received ${describeRejected(value)}`,
     );
   }
   return value as T;
@@ -176,9 +226,22 @@ export function assertGenerationBudget(
  * @category Core
  */
 export function assertTimeSignature(ts: TimeSignature, name = 'time signature'): TimeSignature {
+  // The shape is checked before any field is read: a value from JSON or a
+  // plugin host may be null or a number, and reading a numerator off it would
+  // report the library's own TypeError instead of the caller's bad input.
+  if (typeof ts !== 'object' || ts === null) {
+    throw new InvalidInputError(
+      `${name} must be a time signature; received ${describeRejected(ts)}`,
+    );
+  }
   assertPositiveInt(ts.numerator, `${name}.numerator`);
   assertPositiveInt(ts.denominator, `${name}.denominator`);
   if (ts.grouping !== undefined) {
+    if (!Array.isArray(ts.grouping)) {
+      throw new InvalidInputError(
+        `${name}.grouping must be an array of group lengths; received ${describeRejected(ts.grouping)}`,
+      );
+    }
     if (ts.grouping.length === 0) {
       throw new InvalidInputError(`${name}.grouping must not be empty`);
     }
@@ -207,6 +270,10 @@ export function assertTimeSignature(ts: TimeSignature, name = 'time signature'):
  * beat 0 — that is what lets a pickup at a negative beat be read in the
  * signature the piece opens in.
  *
+ * The map is also bounded, the way an event array is: a map is consulted once
+ * per analysed slot, so its length is a per-slot cost and not only a one-time
+ * one.
+ *
  * @category Core
  */
 export function assertMeterMap(meters: MeterMap, name = 'meters'): MeterMap {
@@ -216,11 +283,23 @@ export function assertMeterMap(meters: MeterMap, name = 'meters'): MeterMap {
   if (meters.length === 0) {
     throw new InvalidInputError(`${name} must not be empty`);
   }
+  assertGenerationBudget(meters.length, `${name} count`, MAX_METER_CHANGES);
+  // A map is re-validated on every positional question asked of it, so a pass
+  // over a long piece pays for the whole map per slot unless a map it has
+  // already read is recognized as one.
+  if (isValidatedMeterMap(meters)) {
+    return meters;
+  }
   let previous = Number.NEGATIVE_INFINITY;
   for (let index = 0; index < meters.length; index += 1) {
     const entry = meters[index];
-    if (entry === undefined) {
-      throw new InvalidInputError(`${name}[${index}] must be a meter change; received undefined`);
+    // A hole in a sparse array, an explicit null, and a number are all rejected
+    // here rather than at the first field read, which would surface as the
+    // library's own TypeError instead of as the malformed input it is.
+    if (typeof entry !== 'object' || entry === null) {
+      throw new InvalidInputError(
+        `${name}[${index}] must be a meter change; received ${describeRejected(entry)}`,
+      );
     }
     assertFiniteNumber(entry.startBeat, `${name}[${index}].startBeat`);
     if (index > 0 && entry.startBeat <= previous) {
@@ -231,6 +310,7 @@ export function assertMeterMap(meters: MeterMap, name = 'meters'): MeterMap {
     previous = entry.startBeat;
     assertTimeSignature(entry.ts, `${name}[${index}].ts`);
   }
+  rememberValidatedMeterMap(meters);
   return meters;
 }
 
@@ -269,6 +349,14 @@ export function assertNoteEvent(
   name = 'note event',
   options: NoteEventAssertOptions = {},
 ): NoteEvent {
+  // The shape is checked before any field is read, so a null or a number from a
+  // JSON import is reported as the malformed event it is rather than as the
+  // library's own TypeError.
+  if (typeof event !== 'object' || event === null) {
+    throw new InvalidInputError(
+      `${name} must be a note event; received ${describeRejected(event)}`,
+    );
+  }
   assertMidiPitch(event.pitch, `${name}.pitch`);
   // An onset is not bounded below: the downbeat is beat 0, so a pickup sounds
   // at a negative beat. A nonsensical onset is still rejected — the bound is
@@ -312,11 +400,13 @@ export function assertNoteEvents(
   assertGenerationBudget(events.length, `${name} count`, options.budget);
   for (let index = 0; index < events.length; index += 1) {
     const event = events[index];
-    // A hole in a sparse array and an explicit undefined are both rejected
-    // here: letting either through only moves the failure to a later
-    // TypeError, or drops the note silently.
-    if (event === undefined) {
-      throw new InvalidInputError(`${name}[${index}] must be a note event; received undefined`);
+    // A hole in a sparse array, an explicit undefined, and a null are all
+    // rejected here: letting any of them through only moves the failure to a
+    // later TypeError, or drops the note silently.
+    if (typeof event !== 'object' || event === null) {
+      throw new InvalidInputError(
+        `${name}[${index}] must be a note event; received ${describeRejected(event)}`,
+      );
     }
     assertNoteEvent(event, `${name}[${index}]`, options);
   }

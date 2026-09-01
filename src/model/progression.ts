@@ -19,7 +19,12 @@ import type { Chord } from './chord.js';
 import { Chord as ChordClass } from './chord.js';
 import type { Key, KeyData } from './key.js';
 import { Key as KeyClass } from './key.js';
-import { assertKeyArgument } from './shared.js';
+import {
+  assertDataArray,
+  assertDataObject,
+  assertDataObjects,
+  assertKeyArgument,
+} from './shared.js';
 import { Timeline } from './timeline.js';
 
 /**
@@ -67,7 +72,8 @@ export class Progression {
    * number of times a key was attached.
    */
   static #attachKey(chords: readonly Chord[], key: Key | undefined): Chord[] {
-    return key === undefined ? [...chords] : chords.map((chord) => chord.withKey(key));
+    const given = assertDataObjects<Chord>(chords, 'progression chords');
+    return key === undefined ? [...given] : given.map((chord) => chord.withKey(key));
   }
 
   /**
@@ -111,7 +117,9 @@ export class Progression {
    * ```
    */
   static fromSpans(spans: readonly ChordSpan[], key?: Key): Progression {
-    const chords = spans.map((span) => ChordClass.fromData(chordFromSpan(span)));
+    const chords = assertDataObjects<ChordSpan>(spans, 'progression spans').map((span) =>
+      ChordClass.fromData(chordFromSpan(span)),
+    );
     return new Progression(chords, key);
   }
 
@@ -122,8 +130,11 @@ export class Progression {
    * @returns The progression.
    */
   static fromJSON(data: ProgressionData): Progression {
+    assertDataObject(data, 'progression data');
     const key = data.key === undefined ? undefined : KeyClass.fromJSON(data.key);
-    const chords = data.chords.map((chord) => ChordClass.fromJSON(chord));
+    const chords = assertDataArray<ChordData>(data.chords, 'progression chords').map((chord) =>
+      ChordClass.fromJSON(chord),
+    );
     return key === undefined ? new Progression(chords) : new Progression(chords, key);
   }
 

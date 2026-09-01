@@ -8,6 +8,7 @@
  */
 
 import type { Draw } from '../context/index.js';
+import { deepFreeze } from '../vocabulary/freeze.js';
 import { BAR_STEPS, BEAT_STEPS } from '../vocabulary/transform.js';
 import {
   type DrumStyle,
@@ -86,7 +87,7 @@ const DEFAULT_FIGURE: KickFigure = [
  * floor dance kick, the backbeat-answering "and" of two, the clave-leaning
  * latin figure — none of them traceable to a particular record.
  */
-export const KICK_FIGURES: Readonly<Record<DrumStyle, KickFigure>> = Object.freeze({
+export const KICK_FIGURES: Readonly<Record<DrumStyle, KickFigure>> = deepFreeze({
   sparse: [{ step: BEAT_1 }, { step: BEAT_3, sections: ['chorus'], barParity: 1 }],
   fourOnFloor: [
     { step: BEAT_1 },

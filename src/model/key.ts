@@ -62,7 +62,7 @@ import { Chord } from './chord.js';
 import { Interval } from './interval.js';
 import { Note } from './note.js';
 import { Progression } from './progression.js';
-import { mod12 } from './shared.js';
+import { assertDataObject, mod12 } from './shared.js';
 
 /** A detected key paired with the score and scale form that produced it. */
 export type DetectedKeyMatch = Omit<KeyMatch, 'key'> & { key: Key };
@@ -175,6 +175,7 @@ export class Key {
    * @param variant Optional detected scale form retained for display.
    */
   constructor(scale: KeyScale, tonic: Note, variant?: KeyVariant) {
+    assertDataObject(scale, 'scale');
     assertInteger(scale.rootPc, 'scale.rootPc');
     assertInteger(scale.modeMask12, 'scale.modeMask12', 1, 0b111111111111);
     if ((scale.modeMask12 & 1) === 0) {
@@ -369,6 +370,9 @@ export class Key {
    * @throws If the given tonic is not the scale's root pitch class.
    */
   static of(scale: KeyScale, tonic?: Note): Key {
+    // Checked before the tonic is synthesized: reading a root off a value that
+    // is not a key would fail inside the spelling functions instead of here.
+    assertDataObject(scale, 'scale');
     return new Key(scale, tonic ?? spelledTonicFor(scale));
   }
 
@@ -379,6 +383,7 @@ export class Key {
    * @returns The key.
    */
   static fromJSON(data: KeyData): Key {
+    assertDataObject(data, 'key data');
     return new Key(data.scale, new Note(data.tonic), data.variant);
   }
 

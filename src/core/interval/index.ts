@@ -17,6 +17,12 @@ export enum ConsonanceClass {
   Dissonance = 2,
 }
 
+// An enum is emitted as a plain object carrying both the name-to-value and the
+// value-to-name mapping, so without this it is the one public table here a
+// consumer could write to — and a second consumer in the same process would
+// read the edit.
+Object.freeze(ConsonanceClass);
+
 /**
  * Reduce an interval to a simple interval class in the range [0, 11].
  *
