@@ -213,11 +213,14 @@ function assertProfile(profile: InstrumentProfile): void {
     return;
   }
   const voices = Object.keys(profile.reach);
-  if (voices.length === 0) {
-    throw new InvalidInputError(`${profile.name} must have at least one voice within reach`);
-  }
   for (const key of voices) {
     assertMidiPitch(Number(key), `${profile.name} reach pitch`);
+  }
+  // A voice is on the kit only when a limb the player has can strike it, so a
+  // reach table naming limbs the player has not got describes a kit with
+  // nothing on it — and a range read off one has no low or high to report.
+  if (voices.every((key) => reachOf(profile, Number(key)).length === 0)) {
+    throw new InvalidInputError(`${profile.name} must have at least one voice within reach`);
   }
   // An overdub is still held in a hand, on a pass of its own, so it is read
   // through the reach and the limbs like every other voice: naming one the
@@ -366,8 +369,9 @@ export function fingeringsFor(profile: StringedProfile, pitch: number): StringFi
  *
  * @param pitch MIDI pitch to place.
  * @param profile The instrument.
- * @returns The nearest octave transposition the instrument sounds, searching
- *   upward first; the pitch unchanged when no transposition of it is available.
+ * @returns The nearest octave transposition the instrument sounds, taking the
+ *   upper one when two are equally near; the pitch unchanged when no
+ *   transposition of it is available.
  *
  * @example
  * ```ts
@@ -381,21 +385,23 @@ export function foldIntoRange(pitch: number, profile: InstrumentProfile): number
     return pitch;
   }
   const { low, high } = instrumentRange(profile);
-  // The search starts at the first octave inside the instrument rather than
-  // stepping up to it one octave at a time: nothing under the lowest string or
-  // over the top fret sounds, so those candidates are known answers, and a
-  // pitch far outside the range would otherwise be walked in the loop.
-  const firstUp = pitch + 12 * Math.max(1, Math.ceil((low - pitch) / 12));
-  for (let candidate = firstUp; candidate <= high; candidate += 12) {
-    if (canSound(profile, candidate)) {
-      return candidate;
+  // Every octave of the pitch that lies inside the instrument is weighed, and
+  // the least distant of the ones it sounds wins: on a gapped range the octave
+  // below can be nearer than the octave above, and answering with the first one
+  // found upward would change the voice rather than the register. The walk
+  // starts at the first octave inside the instrument rather than stepping up to
+  // it one octave at a time, so a pitch far outside the range costs no loop.
+  const first = pitch + 12 * Math.ceil((low - pitch) / 12);
+  let best: number | undefined;
+  for (let candidate = first; candidate <= high; candidate += 12) {
+    if (!canSound(profile, candidate)) {
+      continue;
+    }
+    // Not strictly nearer: the candidates rise, so an equal distance means the
+    // upper octave, which is the one a player reaches for.
+    if (best === undefined || Math.abs(candidate - pitch) <= Math.abs(best - pitch)) {
+      best = candidate;
     }
   }
-  const firstDown = pitch - 12 * Math.max(1, Math.ceil((pitch - high) / 12));
-  for (let candidate = firstDown; candidate >= low; candidate -= 12) {
-    if (canSound(profile, candidate)) {
-      return candidate;
-    }
-  }
-  return pitch;
+  return best ?? pitch;
 }

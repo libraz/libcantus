@@ -8,6 +8,7 @@ import {
   type Limb,
   reachOf,
   type StringFingering,
+  toInstrumentProfile,
 } from './profile.js';
 
 /**
@@ -107,8 +108,8 @@ const MIN_DIFFICULTY = 1;
 const MAX_DIFFICULTY = 5;
 /** Cost of crossing one string, relative to moving one fret. */
 const STRING_CROSSING_COST = 2;
-/** Onsets closer than this fraction of a beat count as simultaneous. */
-const ONSET_GRID = 128;
+/** Onsets no further apart than this many beats count as simultaneous. */
+const SIMULTANEITY_BEATS = 1 / 128;
 
 const EPS = 1e-9;
 
@@ -140,6 +141,9 @@ type Analysis = {
  * @param profile The instrument to play it on.
  * @param bpm Tempo in quarter-note beats per minute; enables the third layer.
  * @returns Difficulty, the issues found, and each note's string/fret or limb.
+ * @throws If the notes are not note events, the tempo is not a finite positive
+ *   number of beats per minute, or the profile describes no instrument — a neck
+ *   with no strings or a kit no limb reaches, whatever the passage holds.
  *
  * @example
  * ```ts
@@ -158,6 +162,10 @@ export function playability(
   if (bpm !== undefined) {
     assertRange(bpm, Number.MIN_VALUE, 1000, 'playability bpm');
   }
+  // The profile is read once here, as every sibling in the module reads it
+  // before answering: a contradictory instrument is refused whether or not the
+  // passage happens to hold a note that would have exposed it.
+  const instrument = toInstrumentProfile(profile, 'playability profile');
 
   const order = notes
     .map((_, index) => index)
@@ -179,11 +187,11 @@ export function playability(
     secondsPerBeat: bpm === undefined ? undefined : 60 / bpm,
   };
 
-  checkExistence(state, profile);
-  if (profile.kind === 'stringed') {
-    placeOnNeck(state, profile);
+  checkExistence(state, instrument);
+  if (instrument.kind === 'stringed') {
+    placeOnNeck(state, instrument);
   } else {
-    placeOnKit(state, profile);
+    placeOnKit(state, instrument);
   }
 
   return {
@@ -210,6 +218,9 @@ function checkExistence(state: Analysis, profile: InstrumentProfile): void {
         message: `${profile.name} cannot sound MIDI ${note.pitch}`,
       });
     }
+    // The note has been validated, so this names a technique the library knows:
+    // the issue below says this instrument does not offer it, which is a fact
+    // about the instrument rather than about the string that was written.
     const articulation = note.articulation;
     if (articulation !== undefined && !profile.articulations.includes(articulation)) {
       state.issues.push({
@@ -224,23 +235,34 @@ function checkExistence(state: Analysis, profile: InstrumentProfile): void {
   }
 }
 
+/**
+ * Whether an onset falls inside the simultaneity window opened by an earlier one.
+ *
+ * Simultaneity is the distance between two onsets, never the cell each of them
+ * rounds into: two strokes a ten-thousandth of a beat apart are one attack
+ * wherever a fixed grid would happen to cut between them, and a part played by
+ * hand lands on no grid at all.
+ */
+function isSimultaneous(anchorBeat: number, startBeat: number): boolean {
+  return startBeat - anchorBeat <= SIMULTANEITY_BEATS + EPS;
+}
+
 /** Note indices sounding at each distinct onset, in onset order. */
 function soundingGroups(state: Analysis): { startBeat: number; members: number[] }[] {
   const groups: { startBeat: number; members: number[] }[] = [];
   let active: number[] = [];
   let cursor = 0;
-  let previousKey = Number.NaN;
+  let anchor: number | undefined;
   for (const index of state.order) {
     const note = state.notes[index];
     if (!note) {
       continue;
     }
-    const key = Math.round(note.startBeat * ONSET_GRID);
-    if (key === previousKey) {
+    if (anchor !== undefined && isSimultaneous(anchor, note.startBeat)) {
       continue;
     }
-    previousKey = key;
     const at = note.startBeat;
+    anchor = at;
     active = active.filter((member) => {
       const held = state.notes[member];
       return held !== undefined && held.startBeat + held.durationBeat > at + EPS;
@@ -248,7 +270,7 @@ function soundingGroups(state: Analysis): { startBeat: number; members: number[]
     while (cursor < state.order.length) {
       const candidateIndex = state.order[cursor];
       const candidate = candidateIndex === undefined ? undefined : state.notes[candidateIndex];
-      if (!candidate || candidate.startBeat > at + EPS) {
+      if (!candidate || !isSimultaneous(at, candidate.startBeat)) {
         break;
       }
       if (candidateIndex !== undefined && candidate.startBeat + candidate.durationBeat > at + EPS) {
@@ -587,18 +609,18 @@ function checkStrokeSpeed(
 /** Note indices sharing each distinct onset, in onset order. */
 function onsetGroups(state: Analysis): { startBeat: number; members: number[] }[] {
   const groups: { startBeat: number; members: number[] }[] = [];
-  let key = Number.NaN;
   let current: { startBeat: number; members: number[] } | undefined;
   for (const index of state.order) {
     const note = state.notes[index];
-    if (!note) {
+    // A note of no length never sounds, so no limb strikes it: it neither takes
+    // a hand from the stroke it lands on nor counts among the voices at once,
+    // which is how a neck reads the same note.
+    if (!note || note.durationBeat <= 0) {
       continue;
     }
-    const onsetKey = Math.round(note.startBeat * ONSET_GRID);
-    if (!current || onsetKey !== key) {
+    if (!current || !isSimultaneous(current.startBeat, note.startBeat)) {
       current = { startBeat: note.startBeat, members: [] };
       groups.push(current);
-      key = onsetKey;
     }
     current.members.push(index);
   }

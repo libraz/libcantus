@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { InvalidInputError } from '../src/core/errors/index.js';
 import {
   BASS_4_STRING,
   BASS_5_STRING,
@@ -19,6 +20,7 @@ import { type BassSegment, generateBassLine } from '../src/generate/bass/index.j
 import { DRUM_NOTES } from '../src/generate/drums/hit.js';
 import { DRUM_KIT, generateDrums } from '../src/generate/drums/index.js';
 import { GROOVE_STYLES, PUBLIC_SECTIONS } from '../src/generate/drums/internal.js';
+import { Instrument } from '../src/model/instrument.js';
 import { makeChord } from '../src/theory/chord/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
 import { filesUnder, ROOT, SRC } from './support/source-files.js';
@@ -222,15 +224,47 @@ describe('a kit is bounded by the limbs the player has', () => {
     const range = instrumentRange(THREE_LIMB_KIT);
     expect(canSound(THREE_LIMB_KIT, range.low)).toBe(true);
     expect(canSound(THREE_LIMB_KIT, range.high)).toBe(true);
-    // A kit with one voice, and no limb to strike it, has nothing in range.
+  });
+
+  it("refuses a kit whose every voice is out of the player's reach", () => {
+    // One voice, and no limb to strike it: there is no instrument here to
+    // answer for, so it is refused rather than answered with an empty range.
     const unplayable: PercussionProfile = {
       ...DRUM_KIT,
       name: 'no-limb kit',
       limbs: ['rightHand'],
       reach: { [DRUM_NOTES.pedalHiHat]: ['leftFoot'] },
     };
-    expect(canSound(unplayable, DRUM_NOTES.pedalHiHat)).toBe(false);
-    expect(instrumentRange(unplayable).low).toBe(Number.POSITIVE_INFINITY);
+    expect(() => instrumentRange(unplayable)).toThrow(InvalidInputError);
+    expect(() => instrumentRange(unplayable)).toThrow(/within reach/);
+    expect(() => canSound(unplayable, DRUM_NOTES.pedalHiHat)).toThrow(InvalidInputError);
+    expect(() => Instrument.of(unplayable)).toThrow(InvalidInputError);
+    // Give the player the foot that reaches it and the kit is an instrument
+    // again, with a range that names a pitch it really sounds.
+    const played: PercussionProfile = { ...unplayable, limbs: ['rightHand', 'leftFoot'] };
+    expect(instrumentRange(played)).toEqual({
+      low: DRUM_NOTES.pedalHiHat,
+      high: DRUM_NOTES.pedalHiHat,
+    });
+  });
+
+  it('reports a finite range for every kit it accepts', () => {
+    // The sentinels the range is accumulated from never leave the function: a
+    // profile that would return them is not a profile the library takes.
+    for (const limbs of [
+      DRUM_KIT.limbs,
+      ['rightHand', 'leftHand', 'rightFoot'],
+      ['rightFoot'],
+      ['leftFoot'],
+    ] as PercussionProfile['limbs'][]) {
+      const kit: PercussionProfile = { ...DRUM_KIT, limbs };
+      const range = instrumentRange(kit);
+      expect(Number.isFinite(range.low), `${limbs}`).toBe(true);
+      expect(Number.isFinite(range.high), `${limbs}`).toBe(true);
+      expect(range.low).toBeLessThanOrEqual(range.high);
+      expect(canSound(kit, range.low)).toBe(true);
+      expect(canSound(kit, range.high)).toBe(true);
+    }
   });
 });
 
@@ -533,5 +567,122 @@ describe('an explicit request outranks a difficulty ceiling', () => {
     const report = playability(kicks, DRUM_KIT, bpm);
     expect(issuesOfType(report, 'tooFast').length).toBeGreaterThan(0);
     expect(report.placements).toHaveLength(kicks.length);
+  });
+});
+
+describe('simultaneity is the distance between two onsets', () => {
+  /** Two onsets a ten-thousandth of a beat apart, either side of a 128th. */
+  const STRADDLING = [0.00385, 0.00395] as const;
+  /** The same distance, both onsets well inside one 128th of a beat. */
+  const TOGETHER = [0.0001, 0.0002] as const;
+
+  /** Two kicks at the given onsets; the right foot is the only limb that reaches. */
+  function kickPair([first, second]: readonly [number, number]): NoteEvent[] {
+    return [note(DRUM_NOTES.kick, first, 0.25), note(DRUM_NOTES.kick, second, 0.25)];
+  }
+
+  /** What a report says, without the onset the two placements differ in. */
+  function verdict(report: ReturnType<typeof playability>) {
+    return report.issues.map(({ type, notes, impossible }) => ({ type, notes, impossible }));
+  }
+
+  it('hears two kicks a ten-thousandth of a beat apart as one foot struck twice', () => {
+    const found = issuesOfType(playability(kickPair(STRADDLING), DRUM_KIT), 'limbConflict');
+    expect(found).toHaveLength(1);
+    expect(found[0]?.impossible).toBe(true);
+    expect(found[0]?.notes).toEqual([0, 1]);
+  });
+
+  it('answers the same wherever a fixed grid would fall between them', () => {
+    // A humanized part lands on no grid, so the two onsets must not be told
+    // apart by which cell each one rounds into.
+    expect(verdict(playability(kickPair(STRADDLING), DRUM_KIT))).toEqual(
+      verdict(playability(kickPair(TOGETHER), DRUM_KIT)),
+    );
+  });
+
+  it('holds a neck to one hand across the same distance', () => {
+    const stretch = (onsets: readonly [number, number]): NoteEvent[] => [
+      note(29, onsets[0]),
+      note(55, onsets[1]),
+    ];
+    expect(verdict(playability(stretch(STRADDLING), BASS_4_STRING))).toEqual(
+      verdict(playability(stretch(TOGETHER), BASS_4_STRING)),
+    );
+    expect(
+      issuesOfType(playability(stretch(STRADDLING), BASS_4_STRING), 'stretchTooWide'),
+    ).toHaveLength(1);
+  });
+});
+
+describe('a note of no length is not a stroke', () => {
+  it('takes no limb on a kit and no hand on a neck', () => {
+    // A note-on and note-off at one instant sounds nothing, so it neither takes
+    // a limb from the stroke it lands on nor widens the hand that is stopping.
+    const strokes = [
+      note(DRUM_NOTES.snare, 0, 0.25),
+      note(DRUM_NOTES.highTom, 0, 0),
+      note(DRUM_NOTES.ride, 0, 0),
+    ];
+    expect(issuesOfType(playability(strokes, DRUM_KIT), 'limbConflict')).toHaveLength(0);
+    expect(issuesOfType(playability(strokes, DRUM_KIT), 'polyphonyExceeded')).toHaveLength(0);
+    // Give those two strokes a length and the third hand is missing again.
+    const sounding = strokes.map((hit) => note(hit.pitch, hit.startBeat, 0.25));
+    expect(issuesOfType(playability(sounding, DRUM_KIT), 'limbConflict')).toHaveLength(1);
+    // The same import read on a neck: the silent note is out of the stretch.
+    const stopped = [note(29, 0, 1), note(55, 0, 0)];
+    expect(issuesOfType(playability(stopped, BASS_4_STRING), 'stretchTooWide')).toHaveLength(0);
+    expect(
+      issuesOfType(playability([note(29, 0, 1), note(55, 0, 1)], BASS_4_STRING), 'stretchTooWide'),
+    ).toHaveLength(1);
+  });
+});
+
+describe('foldIntoRange answers with the nearest octave', () => {
+  it('folds down when down is nearer, over a gapped range', () => {
+    // MIDI 58 is not on the kit. The open hi-hat is an octave below it and the
+    // shaker two octaves above, so folding upward first would change the voice
+    // rather than the register.
+    expect(canSound(DRUM_KIT, 58)).toBe(false);
+    expect(DRUM_NOTES.openHiHat).toBe(46);
+    expect(foldIntoRange(58, DRUM_KIT)).toBe(DRUM_NOTES.openHiHat);
+  });
+
+  it('never passes a nearer sounding octave by', () => {
+    for (let pitch = 0; pitch <= 127; pitch += 1) {
+      const folded = foldIntoRange(pitch, DRUM_KIT);
+      expect(Math.abs(folded - pitch) % 12, `${pitch}`).toBe(0);
+      for (let octave = pitch % 12; octave <= 127; octave += 12) {
+        if (!canSound(DRUM_KIT, octave)) {
+          continue;
+        }
+        expect(canSound(DRUM_KIT, folded), `${pitch}`).toBe(true);
+        expect(Math.abs(octave - pitch), `${pitch}`).toBeGreaterThanOrEqual(
+          Math.abs(folded - pitch),
+        );
+      }
+    }
+  });
+
+  it('takes the upper octave when both are equally near', () => {
+    const bookends: PercussionProfile = {
+      ...DRUM_KIT,
+      name: 'two-voice kit',
+      reach: { 36: ['rightFoot'], 60: ['rightHand'] },
+    };
+    expect(foldIntoRange(48, bookends)).toBe(60);
+  });
+});
+
+describe('playability reads the instrument before the passage', () => {
+  it('refuses a profile that describes no instrument, empty passage or not', () => {
+    const neckless = { ...GUITAR_STANDARD, name: 'stringless guitar', tuning: [] };
+    expect(() => playability([], neckless)).toThrow(InvalidInputError);
+    expect(() => playability([note(40, 0)], neckless)).toThrow(InvalidInputError);
+    const handless: PercussionProfile = { ...DRUM_KIT, name: 'kit with no player', limbs: [] };
+    expect(() => playability([], handless)).toThrow(/within reach/);
+    expect(() => playability([note(DRUM_NOTES.kick, 0, 0.25)], handless)).toThrow(/within reach/);
+    // A profile the instrument module accepts is read the same either way.
+    expect(playability([], DRUM_KIT).issues).toEqual([]);
   });
 });

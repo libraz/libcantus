@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { ARTICULATIONS, type Articulation } from '../src/core/instrument/index.js';
+import { InvalidInputError } from '../src/core/errors/index.js';
+import {
+  ARTICULATIONS,
+  type Articulation,
+  BASS_4_STRING,
+  playability,
+} from '../src/core/instrument/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import {
   assertNoteEvent,
@@ -10,6 +16,7 @@ import { type BassSegment, generateBassLine } from '../src/generate/bass/index.j
 import { generateFill } from '../src/generate/drums/fills.js';
 import { DRUM_NOTES, HitList } from '../src/generate/drums/hit.js';
 import { generateDrums } from '../src/generate/drums/index.js';
+import { Score } from '../src/model/score.js';
 import { makeChord } from '../src/theory/chord/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
 
@@ -94,6 +101,38 @@ describe('Articulation', () => {
       velocity,
     });
     expect(asKnownFields(ornamented)).toEqual(asKnownFields(plain));
+  });
+
+  it('is refused when it names no technique the library carries', () => {
+    // The cast is the point: a JSON import or a JavaScript caller holds no
+    // closed type, so the name arrives unchecked and the run-time check is the
+    // only thing standing between it and the rest of the library.
+    const unknown = {
+      pitch: 38,
+      startBeat: 0,
+      durationBeat: 0.5,
+      articulation: 'sforzando',
+    } as unknown as NoteEvent;
+    expect(() => assertNoteEvent(unknown)).toThrow(InvalidInputError);
+    expect(() => assertNoteEvent(unknown)).toThrow(/articulation/);
+    expect(() => assertNoteEvents([unknown])).toThrow(InvalidInputError);
+    expect(() => Score.of([unknown])).toThrow(InvalidInputError);
+    expect(() => Score.fromJSON({ ...Score.empty().toJSON(), notes: [unknown] })).toThrow(
+      InvalidInputError,
+    );
+    // The instrument is never consulted, so the unknown name reaches no report:
+    // it is an input error, not the musical claim that a bass cannot play it.
+    expect(() => playability([unknown], BASS_4_STRING)).toThrow(InvalidInputError);
+  });
+
+  it('still reads a known technique the instrument lacks as a playability issue', () => {
+    // The other side of the same line: `flam` is a technique, and a bass not
+    // offering it is a fact about the bass rather than about the input.
+    const report = playability(
+      [{ pitch: 40, startBeat: 0, durationBeat: 1, articulation: 'flam' }],
+      BASS_4_STRING,
+    );
+    expect(report.issues.map((issue) => issue.type)).toEqual(['articulationUnavailable']);
   });
 });
 

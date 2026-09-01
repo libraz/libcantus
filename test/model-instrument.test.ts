@@ -224,6 +224,17 @@ describe('Instrument answers what the instrument functions answer', () => {
     );
   });
 
+  it('reads its part at the pitch it sounds, drop D included', () => {
+    // Both built-in guitars are printed an octave above concert pitch, and the
+    // transposition is looked up by the profile's own name. Lowering a string
+    // retunes the instrument, not the interval between the part and the sound.
+    expect(Instrument.guitar().soundingPitch('C4').name).toBe('C3');
+    expect(Instrument.guitarDropD().soundingPitch('C4').name).toBe('C3');
+    expect(
+      Instrument.guitarDropD().soundingPitch('E4').equals(Instrument.guitar().soundingPitch('E4')),
+    ).toBe(true);
+  });
+
   it('reads a kit passage limb by limb', () => {
     const hits = [
       { pitch: 36, startBeat: 0, durationBeat: 0.5 },

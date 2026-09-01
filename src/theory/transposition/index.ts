@@ -74,6 +74,20 @@ export const TRANSPOSING_INSTRUMENTS = Object.freeze({
 });
 
 /**
+ * Built-in profile names whose transposition is another entry's.
+ *
+ * An instrument profile names its tuning where the table names the instrument:
+ * `'guitar (drop D)'` is a guitar with one string lowered, and retuning a
+ * string does not move the interval between the part and the pitch it sounds.
+ * The alias resolves to the instrument so that every built-in profile answers
+ * from its own name, rather than one of them alone needing a transposition
+ * spelled out.
+ */
+const PROFILE_NAME_ALIASES: Readonly<Record<string, TransposingInstrumentName>> = Object.freeze({
+  'guitar (drop D)': 'guitar',
+});
+
+/**
  * The name of a built-in transposing instrument, as
  * {@link TRANSPOSING_INSTRUMENTS} keys them.
  *
@@ -136,8 +150,11 @@ export function instrumentTransposition(instrument: TransposingInstrument): Spel
   }
   // Looked up through `hasOwn` so a name such as `'constructor'` cannot resolve
   // to something inherited from `Object.prototype`.
-  if (Object.hasOwn(TRANSPOSING_INSTRUMENTS, instrument)) {
-    return parseInterval(TRANSPOSING_INSTRUMENTS[instrument as TransposingInstrumentName]);
+  const name = Object.hasOwn(PROFILE_NAME_ALIASES, instrument)
+    ? (PROFILE_NAME_ALIASES[instrument] as TransposingInstrumentName)
+    : instrument;
+  if (Object.hasOwn(TRANSPOSING_INSTRUMENTS, name)) {
+    return parseInterval(TRANSPOSING_INSTRUMENTS[name as TransposingInstrumentName]);
   }
   try {
     return parseInterval(instrument);

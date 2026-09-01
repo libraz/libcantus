@@ -136,6 +136,13 @@ describe('instrumentTransposition', () => {
     expect(formatNote(toWrittenPitch(parseNote('G3'), '-P4'))).toBe('C4');
   });
 
+  it('resolves a built-in profile that names its tuning as the instrument it is', () => {
+    // A profile names its tuning where the table names the instrument, and a
+    // lowered string moves no interval between the part and what it sounds.
+    expect(instrumentTransposition('guitar (drop D)')).toEqual(instrumentTransposition('guitar'));
+    expect(formatNote(toSoundingPitch(parseNote('C4'), 'guitar (drop D)'))).toBe('C3');
+  });
+
   it('rejects a value that is neither an instrument nor an interval', () => {
     expect(() => instrumentTransposition('clarinetBB')).toThrow(/unknown transposing instrument/);
     expect(() => instrumentTransposition('constructor')).toThrow(/unknown transposing instrument/);

@@ -1,4 +1,7 @@
 import { BudgetExceededError, InvalidInputError } from '../errors/index.js';
+// The table itself rather than the instrument barrel: the barrel reaches back
+// into this module, and an articulation name is a bare list with no such tie.
+import { ARTICULATIONS } from '../instrument/articulation.js';
 import type { MeterMap, TimeSignature } from '../meter/index.js';
 import {
   isCompoundNumerator,
@@ -268,7 +271,9 @@ export function assertTimeSignature(ts: TimeSignature, name = 'time signature'):
  *
  * The first entry also governs everything before it, so a map need not start at
  * beat 0 — that is what lets a pickup at a negative beat be read in the
- * signature the piece opens in.
+ * signature the piece opens in. Where the first entry is written does not move
+ * the bar lines: the opening signature counts its bars from beat 0 either way,
+ * so beat 0 is the downbeat of bar 0 and the pickup before it is bar -1.
  *
  * The map is also bounded, the way an event array is: a map is consulted once
  * per analysed slot, so its length is a per-slot cost and not only a one-time
@@ -380,6 +385,13 @@ export function assertNoteEvent(
   );
   if (event.velocity !== undefined) {
     assertRange(event.velocity, 0, 127, `${name}.velocity`);
+  }
+  // Both optional fields carry a closed domain, so both are checked here. A
+  // technique outside the table is a misspelt or unmapped name, and passing it
+  // on turns an input error into the musical claim that the instrument cannot
+  // play it — a statement about a technique that does not exist.
+  if (event.articulation !== undefined) {
+    assertOneOf(event.articulation, ARTICULATIONS, `${name}.articulation`);
   }
   return event;
 }

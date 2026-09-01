@@ -151,7 +151,7 @@ export class Instrument {
    *   tuning, stretch or voice count that is not finite.
    * @example
    * ```ts
-   * import { GUITAR_DROP_D } from '../../src/core/index.js';
+   * import { GUITAR_DROP_D } from '@libraz/libcantus/core';
    * import { Instrument } from '@libraz/libcantus';
    * Instrument.of(GUITAR_DROP_D).range().low; // 38
    * ```
@@ -299,8 +299,9 @@ export class Instrument {
    * what a player does with a line written below the instrument.
    *
    * @param pitch MIDI pitch to place.
-   * @returns The nearest octave transposition the instrument sounds, searching
-   *   upward first; the pitch unchanged when no transposition is available.
+   * @returns The nearest octave transposition the instrument sounds, taking the
+   *   upper one when two are equally near; the pitch unchanged when no
+   *   transposition is available.
    * @example
    * ```ts
    * import { Instrument } from '@libraz/libcantus';
