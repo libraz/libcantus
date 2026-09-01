@@ -163,7 +163,7 @@ retrograde.notes.length; // cell.notes.length
 
 | `transform` / `transformMotif` | `relateTo` / `relateMotifs` |
 | --- | --- |
-| `transposeDiatonic` | 調を渡せば `tonalTransposition`、渡さなければ `transposition` |
+| `transposeDiatonic` | 調を渡せば `tonalTransposition`、渡さなければ音程の並びだけで決まる名前 |
 | `transposeChromatic` | `transposition` |
 | `invert` | `inversion` |
 | `retrograde` | `retrograde` |
@@ -174,6 +174,8 @@ retrograde.notes.length; // cell.notes.length
 `sequence` だけは対応する関係を持ちません。移高した複製を後ろに連結するため、結果の音数はモデルの2倍になり、音を1つずつ対応させて比べる関係付けは null を返します。代わりに結果の前半と後半を比べてください。両者は `transposition` または `tonalTransposition` として、`sequence` フラグが立った状態で対応します。
 
 逆に、単独の変形が対応しない関係も2つあります。セルをそのまま繰り返す `repetition` と、`retrograde` に続けて `invert` を適用した `retrogradeInversion` です。
+
+調が手元にあるなら渡してください。渡さない場合は調性的な読みが選択肢に入らないため、全音階的な再提示は音程の並びだけから名前が決まります。移動によって全音程がそのまま保たれたときは `transposition` になり、そうでなければ、名前が付かないか、同じ音程の並びを持つ逆行系の関係が返ります。三和音を1度上げると2つの音程の幅が入れ替わりますが、これは逆行反行が同じ三和音に対して行うことでもあり、音価が等しいと前から読んでも後ろから読んでも同じ並びになります。したがって C E G に対する D F A は、調を渡さなければ `retrogradeInversion`、渡せば実際の姿である `tonalTransposition` として返ります。
 
 どの変形も、返すノートを発音位置の昇順で並べます。`retrograde` も同様で、時間の並びは逆向きに読まれますが、配列は前から順に並びます。旋律を受け取る解析はこの順序を前提とします。したがって `invert` の軸は最初に鳴る音であり、`retrograde` のあとに `invert` を適用すると、逆行後にもっとも早い発音位置となった音が軸になります。
 

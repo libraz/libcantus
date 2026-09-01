@@ -163,7 +163,7 @@ The two directions use different names for the same devices, so the corresponden
 
 | `transform` / `transformMotif` | `relateTo` / `relateMotifs` |
 | --- | --- |
-| `transposeDiatonic` | `tonalTransposition` with a key, `transposition` without one |
+| `transposeDiatonic` | `tonalTransposition` with a key; without one, whatever the intervals alone allow |
 | `transposeChromatic` | `transposition` |
 | `invert` | `inversion` |
 | `retrograde` | `retrograde` |
@@ -174,6 +174,8 @@ The two directions use different names for the same devices, so the corresponden
 `sequence` is the transform with no relation of its own: it appends a shifted copy, so the result carries twice the notes of the model and a relation, which compares statements note for note, answers null. Relate the two halves of the result instead — they stand as a `transposition` or a `tonalTransposition` whose `sequence` flag is set.
 
 Two relations have no single transform behind them either: `repetition`, which is the cell restated unchanged, and `retrogradeInversion`, which is `retrograde` followed by `invert`.
+
+Pass the key when you have one. Without it the tonal reading is unavailable, so a diatonic restatement is named from its intervals alone: `transposition` when the shift happened to keep every interval, and otherwise either nothing or a member of the retrograde family whose interval pattern it shares. A triad restated a degree higher swaps its two interval sizes, which is what a retrograde inversion does to it as well, and equal note values read the same way round in both directions — so C E G answered by D F A is a `retrogradeInversion` without the key and the `tonalTransposition` it is with one.
 
 Every transform returns its notes in ascending onset order, `retrograde` included: the cell comes back read backwards in time but listed forwards, which is what the analyses taking a melody expect. `invert` therefore mirrors about the note that sounds first, so `retrograde` followed by `invert` pivots on what became the earliest onset.
 

@@ -741,6 +741,11 @@ type PitchRelation = 'exact' | 'inversion' | 'retrograde' | 'retrogradeInversion
  * Checked simplest first, so a cell symmetrical enough to answer to more than
  * one name — the retrograde of an evenly rising line is also its inversion —
  * takes the plainest of them.
+ *
+ * Only the readings that survive without a key are here. The tonal one is
+ * decided by the caller of this, since it needs the scale, and a pattern that
+ * is a tonal transposition and a retrograde inversion at once reaches here as
+ * the second of those.
  */
 function pitchRelation(a: readonly number[], b: readonly number[]): PitchRelation {
   if (sameNumbers(a, b)) {
@@ -794,8 +799,13 @@ function stretchPhrase(ratio: number): string {
  *
  * @param a The model statement.
  * @param b The statement to name against it.
- * @param key Key context for the tonal reading; without it, a statement that
- *   only holds diatonically is not recognised.
+ * @param key Key context for the tonal reading. Without one that reading is
+ *   unavailable, and a statement holding only diatonically is left unnamed
+ *   unless its interval pattern also fits a member of the retrograde family, in
+ *   which case it is named there: a triad restated a degree higher swaps two
+ *   adjacent interval sizes, which is what a retrograde inversion does to it as
+ *   well, and equal note values read the same way round in both directions, so
+ *   the notes alone cannot separate the two. A key separates them.
  * @returns The relation, or null when the two stand in none.
  * @example
  * ```ts

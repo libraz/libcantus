@@ -275,8 +275,10 @@ export class Motif {
    * the other, named.
    *
    * @param other The statement to name against this one.
-   * @param key Key context for the tonal reading; without it, an answer that
-   *   only holds diatonically is not recognised.
+   * @param key Key context for the tonal reading. Without one an answer holding
+   *   only diatonically is left unnamed unless its interval pattern also fits
+   *   the retrograde family, in which case it is named there; a motif carries no
+   *   key of its own, so this is the only way to have the tonal reading offered.
    * @returns The relation, or null when the two stand in none.
    */
   relateTo(other: Motif, key?: KeyLike): MotifRelation | null {

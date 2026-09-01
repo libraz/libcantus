@@ -93,6 +93,40 @@ function lineOf(source: ts.SourceFile, node: ts.Node): number {
 }
 
 /**
+ * The string members a declared union type lists, in declaration order.
+ *
+ * For the checks whose subject is a vocabulary: a member added to the union is
+ * carried into the check without anybody adding it there too, which is the
+ * whole reason to read the declaration instead of restating it.
+ *
+ * Throws rather than answering empty when the type is not there or is not such
+ * a union: a check whose subject silently became nothing would pass by
+ * measuring no members at all.
+ *
+ * @param file Absolute path of the file declaring the type.
+ * @param name The type alias to read.
+ * @returns Its string-literal members.
+ * @throws If the file declares no such alias, or the alias is not a union of
+ *   string literals.
+ */
+export function unionMembers(file: string, name: string): string[] {
+  for (const statement of parse(file).statements) {
+    if (
+      ts.isTypeAliasDeclaration(statement) &&
+      statement.name.text === name &&
+      ts.isUnionTypeNode(statement.type)
+    ) {
+      return statement.type.types.map((member) =>
+        ts.isLiteralTypeNode(member) && ts.isStringLiteral(member.literal)
+          ? member.literal.text
+          : '',
+      );
+    }
+  }
+  throw new Error(`${name} is not a string-literal union in ${file}`);
+}
+
+/**
  * Every parameter of every function declared at the top level of the given
  * files, including the signatures of an overload set.
  *

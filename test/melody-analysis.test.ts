@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
+import type { MotifRelationKind } from '../src/analyze/melody/index.js';
 import {
   compareMelodies,
   extractMotifs,
@@ -15,6 +15,7 @@ import type { NoteEvent } from '../src/core/types.js';
 import type { MotifCell, MotifContour, MotifTransform } from '../src/generate/motif/index.js';
 import { generateMotif, motifToNoteEvents, transformMotif } from '../src/generate/motif/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
+import { unionMembers } from './support/signatures.js';
 
 const cMajor = majorKey(0);
 
@@ -59,10 +60,23 @@ describe('real versus tonal restatement', () => {
     expect(real?.kind).not.toBe(tonal?.kind);
   });
 
-  it('cannot read the diatonic answer without a key', () => {
+  it('leaves this diatonic answer unnamed without a key', () => {
     expect(relateMotifs(subject, tonalAnswer)).toBeNull();
     // The literal answer needs no key: every interval is preserved outright.
     expect(relateMotifs(subject, realAnswer)?.kind).toBe('transposition');
+  });
+
+  it('names a diatonic answer under the retrograde family when its shape fits one', () => {
+    // The limit of the case above, which holds for that subject rather than in
+    // general. A triad restated a degree higher swaps its two interval sizes,
+    // and that is also what a retrograde inversion does to it; equal note
+    // values read the same way round in both directions, so with no key to
+    // offer the tonal reading the backward name is what is left.
+    const triad = motifFromNotes(line(0, [60, 64, 67]));
+    const answer = motifFromNotes(line(3, [62, 65, 69]));
+
+    expect(relateMotifs(triad, answer, cMajor)?.kind).toBe('tonalTransposition');
+    expect(relateMotifs(triad, answer)?.kind).toBe('retrogradeInversion');
   });
 
   it('calls a literal restatement elsewhere a transposition, not a sequence', () => {
@@ -409,30 +423,6 @@ describe('the contour vocabulary the generator and the analysis share', () => {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-/** The members of a string-literal union, in the order they are declared. */
-function unionMembers(file: string, name: string): string[] {
-  const source = ts.createSourceFile(
-    file,
-    readFileSync(file, 'utf8'),
-    ts.ScriptTarget.ES2022,
-    true,
-  );
-  for (const statement of source.statements) {
-    if (
-      ts.isTypeAliasDeclaration(statement) &&
-      statement.name.text === name &&
-      ts.isUnionTypeNode(statement.type)
-    ) {
-      return statement.type.types.map((member) =>
-        ts.isLiteralTypeNode(member) && ts.isStringLiteral(member.literal)
-          ? member.literal.text
-          : '',
-      );
-    }
-  }
-  throw new Error(`${name} is not a string-literal union in ${file}`);
-}
-
 /** Rows of the guide's correspondence table, as `[transform, relations]` cells. */
 function tableRows(file: string): string[][] {
   return readFileSync(file, 'utf8')
@@ -499,13 +489,40 @@ describe('the transform / relation correspondence the guide tabulates', () => {
       key,
     )?.kind ?? null;
 
-  it('reports the relation the table promises for each transform', () => {
-    expect(nameOf('transposeDiatonic')).toBe('tonalTransposition');
-    expect(nameOf('transposeChromatic')).toBe('transposition');
-    expect(nameOf('invert')).toBe('inversion');
-    expect(nameOf('retrograde')).toBe('retrograde');
-    expect(nameOf('augment')).toBe('augmentation');
-    expect(nameOf('diminish')).toBe('diminution');
+  /** What each transform's output has to come back from the analysis as. */
+  const named: Readonly<Record<string, MotifRelationKind | null>> = {
+    transposeDiatonic: 'tonalTransposition',
+    transposeChromatic: 'transposition',
+    invert: 'inversion',
+    retrograde: 'retrograde',
+    augment: 'augmentation',
+    diminish: 'diminution',
+    // A sequence states the cell and then answers it, so its output is two
+    // statements rather than one transformed one; the halves are named below.
+    // Null is the answer here, not a gap.
+    sequence: null,
+  };
+
+  /** The relations reached by composing transforms rather than by one of them. */
+  const composed: readonly MotifRelationKind[] = ['repetition', 'retrogradeInversion'];
+
+  it('answers for every transform the generator declares', () => {
+    // Derived from the union rather than listed twice: a transform added
+    // tomorrow arrives here without anybody remembering to bring it.
+    expect(Object.keys(named).sort()).toEqual([...transforms].sort());
+  });
+
+  it.each(Object.entries(named))('reports %s as the table promises', (transform, kind) => {
+    expect(nameOf(transform as MotifTransform)).toBe(kind);
+  });
+
+  it('accounts for every relation the analysis can report', () => {
+    const reached = new Set<string>(
+      [...Object.values(named), ...composed].filter((kind): kind is MotifRelationKind =>
+        Boolean(kind),
+      ),
+    );
+    expect(kinds.filter((kind) => !reached.has(kind))).toEqual([]);
   });
 
   it('falls back to a chromatic reading of transposeDiatonic without a key', () => {
@@ -528,7 +545,10 @@ describe('the transform / relation correspondence the guide tabulates', () => {
     expect(relation?.sequence).toBe(true);
   });
 
-  it('reaches the two relations no single transform produces', () => {
+  it('reaches the relations no single transform produces', () => {
+    // The two the list above names, reached the way it says they are, so the
+    // accounting stays a measurement rather than becoming a claim.
+    expect(composed).toEqual(['repetition', 'retrogradeInversion']);
     expect(relateMotifs(model, model, cMajor)?.kind).toBe('repetition');
     const turned = transformMotif(transformMotif(figure, 'retrograde'), 'invert');
     expect(relateMotifs(model, motifFromNotes(motifToNoteEvents(turned)), cMajor)?.kind).toBe(
