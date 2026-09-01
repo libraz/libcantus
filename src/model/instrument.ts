@@ -73,7 +73,18 @@ function copyProfile(profile: InstrumentProfile): InstrumentProfile {
   for (const [pitch, limbs] of Object.entries(profile.reach)) {
     reach[Number(pitch)] = [...limbs];
   }
-  return { kind: 'percussion', ...common, limbs: [...profile.limbs], reach };
+  const percussion: PercussionProfile = {
+    kind: 'percussion',
+    ...common,
+    limbs: [...profile.limbs],
+    reach,
+  };
+  // Carried only when the kit names one, so a profile that was copied and one
+  // that was written by hand serialize to the same object.
+  if (profile.overdub !== undefined) {
+    percussion.overdub = [...profile.overdub];
+  }
+  return percussion;
 }
 
 /**
@@ -389,7 +400,12 @@ export class Instrument {
         sameList(a.tuning, b.tuning)
       );
     }
-    return b.kind === 'percussion' && sameList(a.limbs, b.limbs) && sameReach(a.reach, b.reach);
+    return (
+      b.kind === 'percussion' &&
+      sameList(a.limbs, b.limbs) &&
+      sameReach(a.reach, b.reach) &&
+      sameList(a.overdub ?? [], b.overdub ?? [])
+    );
   }
 
   /**

@@ -4,6 +4,7 @@ import {
   canSound,
   fingeringsFor,
   type InstrumentProfile,
+  isOverdub,
   type Limb,
   reachOf,
   type StringFingering,
@@ -414,73 +415,139 @@ function checkPolyphony(
   });
 }
 
+/** One take a percussion part is recorded on: the kit, or a voice dubbed over it. */
+type KitPass = {
+  /** Identity of the pass, so no two of them share a limb's history. */
+  id: string;
+  /** Note indices struck on this pass at one onset. */
+  members: number[];
+};
+
+/** What the limbs were last doing, carried from one onset to the next. */
+type KitMemory = {
+  /** Limb that last struck each voice, so a voice keeps its stick. */
+  limbForVoice: Map<number, Limb>;
+  /** Last stroke of each limb on each pass, as a note index. */
+  lastStroke: Map<string, number>;
+};
+
+/**
+ * The passes one onset is played on.
+ *
+ * A percussion part is a kit performance with voices dubbed over it, and each
+ * overdubbed voice is its own take: it takes no limb from the kit and none from
+ * another overdub. That is what lets a tambourine sound on a backbeat where a
+ * snare is already in one hand and a hi-hat in the other — a player does not
+ * grow a third arm for it, the part is recorded twice.
+ */
+function passesAt(
+  state: Analysis,
+  profile: InstrumentProfile & { kind: 'percussion' },
+  members: readonly number[],
+): KitPass[] {
+  const kit: KitPass = { id: 'kit', members: [] };
+  const overdubs = new Map<number, KitPass>();
+  for (const index of members) {
+    const pitch = state.notes[index]?.pitch;
+    if (pitch === undefined || !isOverdub(profile, pitch)) {
+      kit.members.push(index);
+      continue;
+    }
+    let pass = overdubs.get(pitch);
+    if (!pass) {
+      pass = { id: `overdub ${pitch}`, members: [] };
+      overdubs.set(pitch, pass);
+    }
+    pass.members.push(index);
+  }
+  return [kit, ...overdubs.values()];
+}
+
+/**
+ * Hand every stroke of one pass to a limb, at one onset.
+ *
+ * @returns True when the pass wants more limbs at once than it has.
+ */
+function placePass(
+  state: Analysis,
+  profile: InstrumentProfile & { kind: 'percussion' },
+  pass: KitPass,
+  memory: KitMemory,
+): boolean {
+  const taken = new Set<Limb>();
+  let conflicted = false;
+  // The most constrained voice picks first: a kick only the right foot
+  // reaches must not lose it to a snare that either hand could have taken.
+  const members = [...pass.members].sort((a, b) => {
+    const left = reachOf(profile, state.notes[a]?.pitch);
+    const right = reachOf(profile, state.notes[b]?.pitch);
+    return left.length - right.length || a - b;
+  });
+  for (const index of members) {
+    const note = state.notes[index];
+    const placement = state.placements[index];
+    if (!note || !placement) {
+      continue;
+    }
+    const candidates = reachOf(profile, note.pitch);
+    if (candidates.length === 0) {
+      continue;
+    }
+    const preferred = memory.limbForVoice.get(note.pitch);
+    const free = candidates.filter((limb) => !taken.has(limb));
+    const chosen =
+      free.length === 0
+        ? candidates[0]
+        : preferred !== undefined && free.includes(preferred)
+          ? preferred
+          : free[0];
+    if (free.length === 0) {
+      conflicted = true;
+    }
+    if (chosen === undefined) {
+      continue;
+    }
+    taken.add(chosen);
+    placement.limb = chosen;
+    memory.limbForVoice.set(note.pitch, chosen);
+
+    state.movement += 1;
+    const strokeKey = `${pass.id} ${chosen}`;
+    const previousIndex = memory.lastStroke.get(strokeKey);
+    if (previousIndex !== undefined) {
+      const previousNote = state.notes[previousIndex];
+      if (previousNote && previousNote.pitch !== note.pitch) {
+        // The limb had to travel across the kit rather than repeat a voice.
+        state.movement += 1;
+      }
+      checkStrokeSpeed(state, profile, previousIndex, index, chosen);
+    }
+    memory.lastStroke.set(strokeKey, index);
+  }
+  return conflicted;
+}
+
 /** Layers 2 and 3 for a kit, and the limb assignment that goes with them. */
 function placeOnKit(state: Analysis, profile: InstrumentProfile & { kind: 'percussion' }): void {
-  /** Limb that last struck each voice, so a voice keeps its stick. */
-  const limbForVoice = new Map<number, Limb>();
-  /** Last stroke of each limb, as a note index. */
-  const lastStroke = new Map<Limb, number>();
+  const memory: KitMemory = { limbForVoice: new Map(), lastStroke: new Map() };
 
   for (const group of onsetGroups(state)) {
-    const taken = new Set<Limb>();
     let conflicted = false;
-    // The most constrained voice picks first: a kick only the right foot
-    // reaches must not lose it to a snare that either hand could have taken.
-    const members = [...group.members].sort((a, b) => {
-      const left = reachOf(profile, state.notes[a]?.pitch);
-      const right = reachOf(profile, state.notes[b]?.pitch);
-      return left.length - right.length || a - b;
-    });
-    for (const index of members) {
-      const note = state.notes[index];
-      const placement = state.placements[index];
-      if (!note || !placement) {
+    for (const pass of passesAt(state, profile, group.members)) {
+      if (!placePass(state, profile, pass, memory)) {
         continue;
       }
-      const candidates = reachOf(profile, note.pitch);
-      if (candidates.length === 0) {
-        continue;
-      }
-      const preferred = limbForVoice.get(note.pitch);
-      const free = candidates.filter((limb) => !taken.has(limb));
-      const chosen =
-        free.length === 0
-          ? candidates[0]
-          : preferred !== undefined && free.includes(preferred)
-            ? preferred
-            : free[0];
-      if (free.length === 0) {
-        conflicted = true;
-      }
-      if (chosen === undefined) {
-        continue;
-      }
-      taken.add(chosen);
-      placement.limb = chosen;
-      limbForVoice.set(note.pitch, chosen);
-
-      state.movement += 1;
-      const previousIndex = lastStroke.get(chosen);
-      if (previousIndex !== undefined) {
-        const previousNote = state.notes[previousIndex];
-        if (previousNote && previousNote.pitch !== note.pitch) {
-          // The limb had to travel across the kit rather than repeat a voice.
-          state.movement += 1;
-        }
-        checkStrokeSpeed(state, profile, previousIndex, index, chosen);
-      }
-      lastStroke.set(chosen, index);
-    }
-    if (conflicted) {
+      conflicted = true;
       state.issues.push({
         type: 'limbConflict',
         layer: 2,
-        notes: [...group.members].sort((a, b) => a - b),
+        notes: [...pass.members].sort((a, b) => a - b),
         startBeat: group.startBeat,
         impossible: true,
-        message: `${group.members.length} simultaneous strokes cannot be shared among the limbs of ${profile.name}`,
+        message: `${pass.members.length} simultaneous strokes cannot be shared among the limbs of ${profile.name}`,
       });
-    } else {
+    }
+    if (!conflicted) {
       checkPolyphony(state, profile, group);
     }
   }

@@ -18,6 +18,7 @@ import type { NoteEvent } from '../src/core/types.js';
 import { type BassSegment, generateBassLine } from '../src/generate/bass/index.js';
 import { DRUM_NOTES } from '../src/generate/drums/hit.js';
 import { DRUM_KIT, generateDrums } from '../src/generate/drums/index.js';
+import { GROOVE_STYLES, PUBLIC_SECTIONS } from '../src/generate/drums/internal.js';
 import { makeChord } from '../src/theory/chord/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
 import { filesUnder, ROOT, SRC } from './support/source-files.js';
@@ -230,6 +231,129 @@ describe('a kit is bounded by the limbs the player has', () => {
     };
     expect(canSound(unplayable, DRUM_NOTES.pedalHiHat)).toBe(false);
     expect(instrumentRange(unplayable).low).toBe(Number.POSITIVE_INFINITY);
+  });
+});
+
+describe('a drum part is a kit take with voices dubbed over it', () => {
+  /** The same kit read as a single take, with nothing dubbed over it. */
+  const ONE_TAKE: PercussionProfile = { ...DRUM_KIT, overdub: [] };
+
+  /** The groove the kit profile shows as its own example. */
+  function exampleGroove(): ReturnType<typeof generateDrums> {
+    return generateDrums({
+      bars: 1,
+      style: 'funk',
+      section: 'chorus',
+      ctx: { bpm: 120, complexity: { rhythmic: 0.8 } },
+    });
+  }
+
+  it('sounds a tambourine over a backbeat that already takes both hands', () => {
+    const hits = [
+      note(DRUM_NOTES.snare, 1, 0.25),
+      note(DRUM_NOTES.closedHiHat, 1, 0.25),
+      note(DRUM_NOTES.tambourine, 1, 0.25),
+    ];
+    // The snare is in one hand and the hi-hat in the other, and the tambourine
+    // sounds anyway: it is a second pass over the groove, not a third arm.
+    expect(issuesOfType(playability(hits, DRUM_KIT), 'limbConflict')).toHaveLength(0);
+    expect(issuesOfType(playability(hits, ONE_TAKE), 'limbConflict')).toHaveLength(1);
+  });
+
+  it('gives every dubbed voice a take of its own', () => {
+    const hits = [
+      note(DRUM_NOTES.snare, 1, 0.25),
+      note(DRUM_NOTES.closedHiHat, 1, 0.25),
+      note(DRUM_NOTES.tambourine, 1, 0.25),
+      note(DRUM_NOTES.handClap, 1, 0.25),
+      note(DRUM_NOTES.shaker, 1, 0.25),
+    ];
+    // Three overdubs at one instant are three passes, so they share no hand
+    // with the kit and none with each other.
+    const report = playability(hits, DRUM_KIT);
+    expect(report.issues.filter((issue) => issue.impossible)).toEqual([]);
+    for (const placement of report.placements) {
+      expect(placement.limb).toBeDefined();
+    }
+  });
+
+  it('leaves the four limbs the bound on the groove itself', () => {
+    const hits = [
+      note(DRUM_NOTES.snare, 0, 0.25),
+      note(DRUM_NOTES.highTom, 0, 0.25),
+      note(DRUM_NOTES.ride, 0, 0.25),
+      note(DRUM_NOTES.shaker, 0, 0.25),
+    ];
+    const found = issuesOfType(playability(hits, DRUM_KIT), 'limbConflict');
+    expect(found).toHaveLength(1);
+    // Three voices of the kit for two hands is still unplayable, and the
+    // shaker is not one of the strokes competing for them.
+    expect(found[0]?.notes).toEqual([0, 1, 2]);
+  });
+
+  it('does not charge a dubbed stroke to the hand that plays the kit', () => {
+    // Hi-hat sixteenths with a shaker between them: one hand playing both would
+    // be striking twice too quickly, and the shaker is not that hand's.
+    const hits = [
+      note(DRUM_NOTES.closedHiHat, 0, 0.25),
+      note(DRUM_NOTES.shaker, 0.125, 0.125),
+      note(DRUM_NOTES.closedHiHat, 0.25, 0.25),
+    ];
+    expect(issuesOfType(playability(hits, DRUM_KIT, 240), 'tooFast')).toHaveLength(0);
+    expect(issuesOfType(playability(hits, ONE_TAKE, 240), 'tooFast').length).toBeGreaterThan(0);
+  });
+
+  it('plays the example groove as recorded, auxiliary layer and all', () => {
+    const hits = exampleGroove();
+    expect(playability(hits, DRUM_KIT, 120).issues.filter((issue) => issue.impossible)).toEqual([]);
+    // Playable with the auxiliary voices sounding, not by having lost them.
+    for (const voice of ['handClap', 'tambourine', 'shaker'] as const) {
+      expect(
+        hits.some((hit) => hit.pitch === DRUM_NOTES[voice]),
+        voice,
+      ).toBe(true);
+    }
+    // Read as a single take, the same bar is what one player cannot do alone.
+    expect(
+      playability(hits, ONE_TAKE, 120).issues.filter((issue) => issue.impossible).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('writes nothing impossible in any style, section or density', () => {
+    for (const style of GROOVE_STYLES) {
+      for (const section of PUBLIC_SECTIONS) {
+        for (const rhythmic of [0.2, 0.5, 0.8]) {
+          const hits = generateDrums({
+            bars: 4,
+            style,
+            section,
+            ctx: { bpm: 120, seed: 7, complexity: { rhythmic } },
+          });
+          const report = playability(hits, DRUM_KIT, 120);
+          expect(
+            report.issues.filter((issue) => issue.impossible),
+            `${style}/${section}/${rhythmic}`,
+          ).toEqual([]);
+        }
+      }
+    }
+  });
+
+  it('holds a dubbed voice in a hand like any other', () => {
+    const footwork: PercussionProfile = {
+      ...DRUM_KIT,
+      name: 'pedals only',
+      limbs: ['rightFoot', 'leftFoot'],
+    };
+    // An overdub is a second pass, not a second instrument: the player still
+    // has to hold the shaker, so without hands it is not on the kit at all.
+    expect(canSound(DRUM_KIT, DRUM_NOTES.shaker)).toBe(true);
+    expect(canSound(footwork, DRUM_NOTES.shaker)).toBe(false);
+  });
+
+  it('refuses a kit that dubs something that is not a pitch', () => {
+    const malformed = { ...DRUM_KIT, name: 'bad kit', overdub: [999] } as PercussionProfile;
+    expect(() => canSound(malformed, DRUM_NOTES.kick)).toThrow(/overdub pitch/);
   });
 });
 

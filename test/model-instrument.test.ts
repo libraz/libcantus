@@ -34,6 +34,15 @@ const KIT: PercussionProfile = {
   polyphony: 3,
 };
 
+/** The same kit with a shaker dubbed over the pair of hands its backbeat commits. */
+const OVERDUBBED_KIT: PercussionProfile = {
+  ...KIT,
+  name: 'kit with a shaker over it',
+  reach: { ...KIT.reach, 70: ['rightHand', 'leftHand'] },
+  polyphony: 4,
+  overdub: [70],
+};
+
 /** Every built-in profile, with the named constructor that hands it out. */
 const BUILT_INS: [string, InstrumentProfile, Instrument][] = [
   ['guitar', GUITAR_STANDARD, Instrument.guitar()],
@@ -163,6 +172,13 @@ describe('Instrument equality', () => {
     ).toBe(false);
     expect(kit.equals(Instrument.guitar())).toBe(false);
   });
+
+  it('separates a kit played in one take from the same kit with a voice dubbed over it', () => {
+    const dubbed = Instrument.of(OVERDUBBED_KIT);
+    expect(dubbed.equals(Instrument.of(OVERDUBBED_KIT))).toBe(true);
+    expect(dubbed.equals(Instrument.of({ ...OVERDUBBED_KIT, overdub: [] }))).toBe(false);
+    expect(dubbed.data).toEqual(OVERDUBBED_KIT);
+  });
 });
 
 describe('Instrument answers what the instrument functions answer', () => {
@@ -216,5 +232,29 @@ describe('Instrument answers what the instrument functions answer', () => {
     ];
     expect(Instrument.of(KIT).playability(hits, 120)).toEqual(playability(hits, KIT, 120));
     expect(Instrument.of(KIT).playability(hits).placements[0]?.limb).toBe('rightFoot');
+  });
+
+  it('reads a voice dubbed over the kit as the pass the kit says it is', () => {
+    // A backbeat commits both hands, and the shaker rides over it.
+    const hits = [
+      { pitch: 38, startBeat: 0, durationBeat: 0.5 },
+      { pitch: 42, startBeat: 0, durationBeat: 0.5 },
+      { pitch: 70, startBeat: 0, durationBeat: 0.5 },
+    ];
+    expect(Instrument.of(OVERDUBBED_KIT).playability(hits)).toEqual(
+      playability(hits, OVERDUBBED_KIT),
+    );
+    expect(
+      Instrument.of(OVERDUBBED_KIT)
+        .playability(hits)
+        .issues.filter((issue) => issue.impossible),
+    ).toEqual([]);
+    // Take the overdub away and the same instant needs a third hand.
+    const oneTake: PercussionProfile = { ...OVERDUBBED_KIT, overdub: [] };
+    expect(
+      Instrument.of(oneTake)
+        .playability(hits)
+        .issues.some((issue) => issue.impossible && issue.type === 'limbConflict'),
+    ).toBe(true);
   });
 });

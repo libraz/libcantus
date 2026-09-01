@@ -74,6 +74,17 @@ export type PercussionProfile = InstrumentProfileCommon & {
   limbs: readonly Limb[];
   /** Limbs that can strike each voice, in preference order, keyed by MIDI note. */
   reach: Readonly<Record<number, readonly Limb[]>>;
+  /**
+   * Voices dubbed over the kit on a pass of their own, by MIDI note number.
+   *
+   * A tambourine or a shaker riding a groove whose backbeat already commits
+   * both hands is a second pass, not a third hand: it is played over the kit,
+   * so it takes no limb from the kit and none from another overdub. Such a
+   * voice is still held in a hand on its own pass, so it keeps its `reach`
+   * entry and remains a voice of the instrument; this names which of them are
+   * played that way.
+   */
+  overdub?: readonly number[];
 };
 
 /**
@@ -208,6 +219,32 @@ function assertProfile(profile: InstrumentProfile): void {
   for (const key of voices) {
     assertMidiPitch(Number(key), `${profile.name} reach pitch`);
   }
+  // An overdub is still held in a hand, on a pass of its own, so it is read
+  // through the reach and the limbs like every other voice: naming one the
+  // player cannot hold leaves it off the instrument rather than in dispute.
+  for (const pitch of profile.overdub ?? []) {
+    assertMidiPitch(pitch, `${profile.name} overdub pitch`);
+  }
+}
+
+/**
+ * Whether a voice is dubbed over the kit rather than played by the limbs
+ * holding it together.
+ *
+ * An overdubbed voice is recorded on a pass of its own, so it shares limbs
+ * neither with the kit nor with another overdub — which is what lets a shaker
+ * sound through a bar whose every stroke is already spoken for.
+ *
+ * @param profile The kit.
+ * @param pitch MIDI pitch, or `undefined` for a note that is not there.
+ * @returns True when the kit names this voice as an overdub.
+ * @category Core
+ */
+export function isOverdub(profile: PercussionProfile, pitch: number | undefined): boolean {
+  if (pitch === undefined) {
+    return false;
+  }
+  return (profile.overdub ?? []).includes(pitch);
 }
 
 /**
