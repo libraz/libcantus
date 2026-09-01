@@ -19,6 +19,7 @@ import {
   assertPositiveInt,
   assertRange,
 } from '../../core/validation/index.js';
+import { barGridStart } from '../grid.js';
 import { windowWeights } from '../histogram.js';
 import { melodicSimilarity } from '../melody/index.js';
 import { hypermeter } from './hypermeter.js';
@@ -146,14 +147,6 @@ function labelAt(index: number): string {
 }
 
 /**
- * How alike two units are, in [0, 1].
- *
- * Melody and harmony are both asked, because either alone is fooled: the same
- * tune over new chords is a variation and not a restatement, and the same
- * chords under a new tune is a different section of the same song. A unit with
- * too little melody to compare falls back to its harmony alone.
- */
-/**
  * Whether nothing sounds in a unit.
  *
  * A unit holds the notes that begin in it, and its weights are drawn from those
@@ -167,6 +160,21 @@ function isSilent(unit: Unit): boolean {
   return unit.notes.length === 0;
 }
 
+/**
+ * How alike two units are, in [0, 1].
+ *
+ * Melody and harmony are both asked, because either alone is fooled: the same
+ * tune over new chords is a variation and not a restatement, and the same
+ * chords under a new tune is a different section of the same song.
+ *
+ * A figure needs two notes, so a unit holding fewer has no melody to compare.
+ * Two such units are compared on their harmony alone; one of them against a
+ * unit that does have a melody is not a restatement at all, and scores zero
+ * however alike the two harmonies are — a bar reduced to a single held tone is
+ * not a statement of the passage it was reduced from. The harmony is compared
+ * as pitch-class weight over the unit, which is a shape rather than a series,
+ * so it says nothing about the two units being the same length.
+ */
 function unitSimilarity(a: Unit, b: Unit): number {
   const harmony = weightSimilarity(a.weights, b.weights);
   if (a.notes.length < 2 || b.notes.length < 2) {
@@ -222,7 +230,9 @@ export function sectionsFromNotes(
     // an empty span would name a stretch of silence as a statement.
     return [];
   }
-  const firstOnset = firstSoundingBeat(sounding);
+  // The pickup rule the whole analysis shares: a note a millibeat before the
+  // downbeat is playing it, and only one a whole bar early opens a pickup.
+  const firstOnset = barGridStart(firstSoundingBeat(sounding), meters);
   const lastEnd = sounding.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
   const spanEnd = Math.max(firstOnset, opts.totalBeats ?? lastEnd);
   assertRange(spanEnd, 0, Number.MAX_SAFE_INTEGER, 'section totalBeats');

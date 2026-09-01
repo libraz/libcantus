@@ -9,14 +9,14 @@
  */
 
 import type { MeterLike } from '../../core/meter/index.js';
-import { barIndexAt, beatsPerBarAt, resolveMeters } from '../../core/meter/index.js';
+import { barIndexAt, resolveMeters } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import {
   assertGenerationBudget,
   assertNoteEvents,
   assertRange,
 } from '../../core/validation/index.js';
-import { gridOriginOf } from '../grid.js';
+import { barGridStart } from '../grid.js';
 import type { BarSlice } from './internal.js';
 import {
   clamp01,
@@ -58,11 +58,11 @@ const CONTRAST_SHARE = 0.65;
 /** Share of the evidence carried by cadences landing at group ends. */
 const CADENCE_SHARE = 0.35;
 
-/** How much of a cadence's fit a group-final arrival earns. */
+/** How much of a group end's fit a cadence arriving in it earns. */
 const GROUP_FINAL_FIT = 1;
 
 /**
- * How much of a cadence's fit an arrival on the next group's head earns.
+ * How much of a group end's fit an arrival on the next group's head earns.
  *
  * An elided cadence lands on the downbeat that starts the next hyperbar, so the
  * reading is real; it is weaker evidence than a group-final arrival only
@@ -186,21 +186,40 @@ function accentContrast(
   return headSum / headCount - otherSum / otherCount;
 }
 
-/** Share of the cadences arriving where the grouping says a hyperbar ends. */
-function cadenceFitOf(cadenceBars: readonly number[], groupBars: number, phase: number): number {
-  if (cadenceBars.length === 0) {
-    return 0;
-  }
+/**
+ * Share of the hyperbar ends the reading predicts that a cadence closes.
+ *
+ * Measured over the group ends rather than over the cadences, because the two
+ * count different things: a cadence every four bars sits at a group end under a
+ * two-bar reading as readily as under a four-bar one, so counting cadences
+ * cannot tell the two apart. Counting group ends can — half the two-bar groups
+ * end in nothing.
+ */
+function cadenceFitOf(
+  cadenceBars: ReadonlySet<number>,
+  slices: readonly BarSlice[],
+  groupBars: number,
+  phase: number,
+): number {
+  const lastBar = slices[slices.length - 1]?.index ?? -1;
+  let ends = 0;
   let fit = 0;
-  for (const bar of cadenceBars) {
-    const position = floorMod(bar - phase, groupBars);
-    if (position === groupBars - 1) {
+  for (const slice of slices) {
+    // A pickup heads no group, so it ends none either.
+    if (slice.index < 0 || floorMod(slice.index - phase, groupBars) !== groupBars - 1) {
+      continue;
+    }
+    ends += 1;
+    if (cadenceBars.has(slice.index)) {
       fit += GROUP_FINAL_FIT;
-    } else if (position === 0) {
+    } else if (slice.index < lastBar && cadenceBars.has(slice.index + 1)) {
+      // Elision needs a next group to arrive into. Past the last bar the span
+      // holds there is none, so a cadence beat beyond the music is not evidence
+      // about how the music that was read is grouped.
       fit += ELIDED_FIT;
     }
   }
-  return clamp01(fit / cadenceBars.length);
+  return ends === 0 ? 0 : clamp01(fit / ends);
 }
 
 /**
@@ -229,9 +248,11 @@ function undecidedReading(slices: readonly BarSlice[]): Hypermeter {
  * Groupings of 2, 3, 4, 6, and 8 bars are tried at every phase, and each
  * reading is scored on two counts: how much more harmonic change lands on the
  * bars it calls group heads than on the bars between them, and how many of the
- * cadences it is given arrive where it says a hyperbar ends. The commonest
- * groupings are believed a little more readily than the rare ones, which
- * settles ties without letting a prior overrule the music.
+ * hyperbar ends it predicts are closed by one of the cadences it is given.
+ * Where cadences are given they settle the phase, since a hyperbar is what a
+ * cadence ends; the harmony then chooses among the phases they agree with. The
+ * commonest groupings are believed a little more readily than the rare ones,
+ * which settles ties without letting a prior overrule the music.
  *
  * The meter is read at the beat in question rather than at the start, so a
  * piece that changes metre keeps being cut at its own bar lines. Bar 0 is the
@@ -280,15 +301,15 @@ export function hypermeter(
   // early is an upbeat. Reading a hair-early onset as a pickup would hand the
   // phase search a silent bar of its own to group against. An excerpt that
   // begins later keeps the beat it begins on.
-  const spanStart =
-    firstOnset < 0
-      ? gridOriginOf(firstOnset, beatsPerBarAt(firstOnset, meters)).startBeat
-      : firstOnset;
+  const spanStart = barGridStart(firstOnset, meters);
   const slices = sliceBars(sounding, meters, spanStart, spanEnd, opts.budget);
 
-  const candidates = GROUP_CANDIDATES.filter(
-    (groupBars) => slices.length >= groupBars * MIN_GROUPS,
-  );
+  // Counted over the bars a grouping can actually occupy, which is the set
+  // `undecidedReading` and the downbeats are read from: a pickup leads into the
+  // first hyperbar rather than filling one, so it cannot be what makes a span
+  // long enough to hold two groups.
+  const fullBars = slices.reduce((count, slice) => (slice.index >= 0 ? count + 1 : count), 0);
+  const candidates = GROUP_CANDIDATES.filter((groupBars) => fullBars >= groupBars * MIN_GROUPS);
   if (candidates.length === 0) {
     return undecidedReading(slices);
   }
@@ -299,17 +320,34 @@ export function hypermeter(
   );
 
   const novelty = slices.map((_, index) => harmonicNovelty(slices, index));
-  const cadenceBars = (opts.cadenceBeats ?? []).map((beat) => barIndexAt(beat, meters));
+  const cadenceBars = new Set((opts.cadenceBeats ?? []).map((beat) => barIndexAt(beat, meters)));
+  const hasCadences = cadenceBars.size > 0;
 
   const readings: Reading[] = [];
   for (const groupBars of candidates) {
-    for (let phase = 0; phase < groupBars; phase += 1) {
-      const contrast = accentContrast(novelty, slices, groupBars, phase);
-      const cadenceFit = cadenceFitOf(cadenceBars, groupBars, phase);
+    const phases = Array.from({ length: groupBars }, (_, phase) => ({
+      phase,
+      contrast: accentContrast(novelty, slices, groupBars, phase),
+      cadenceFit: cadenceFitOf(cadenceBars, slices, groupBars, phase),
+    }));
+    // Where the cadences are known, they decide the phase: a cadence is what a
+    // hyperbar ends with, so a reading that leaves them mid-group has misread
+    // the phase however the harmony moves. Harmonic contrast then chooses among
+    // the phases the cadences agree with, and across the groupings.
+    const bestFit = phases.reduce((best, reading) => Math.max(best, reading.cadenceFit), 0);
+    for (const { phase, contrast, cadenceFit } of phases) {
+      if (hasCadences && cadenceFit < bestFit - EPS) {
+        continue;
+      }
       const evidence = clamp01(
-        cadenceBars.length === 0
-          ? contrast
-          : CONTRAST_SHARE * contrast + CADENCE_SHARE * cadenceFit,
+        hasCadences
+          ? // Floored at zero rather than summed raw: group heads that restate
+            // the harmony their group opened with — the commonest way a phrase
+            // begins — change less than the bars between them, and a negative
+            // contrast subtracted from the cadence term would count that
+            // restatement as evidence against the very phase it confirms.
+            CONTRAST_SHARE * clamp01(contrast) + CADENCE_SHARE * cadenceFit
+          : contrast,
       );
       readings.push({
         groupBars,
@@ -346,10 +384,9 @@ export function hypermeter(
   const downbeats = slices
     .filter((slice) => slice.index >= 0 && floorMod(slice.index - best.phase, best.groupBars) === 0)
     .map((slice) => slice.startBeat);
-  const cadencePart =
-    cadenceBars.length === 0
-      ? 'no cadences given'
-      : `${Math.round(best.cadenceFit * 100)}% of cadences arriving at a group end`;
+  const cadencePart = hasCadences
+    ? `${Math.round(best.cadenceFit * 100)}% of group ends closed by a cadence`
+    : 'no cadences given';
 
   return {
     groupBars: best.groupBars,

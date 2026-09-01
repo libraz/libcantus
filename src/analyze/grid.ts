@@ -9,6 +9,8 @@
  * excerpt lifted from the middle of a piece.
  */
 
+import type { MeterLike } from '../core/meter/index.js';
+import { beatsPerBarAt } from '../core/meter/index.js';
 import type { NoteEvent } from '../core/types.js';
 import { firstSoundingBeat } from './form/internal.js';
 
@@ -80,4 +82,22 @@ export function gridOriginOf(firstOnset: number, slotBeats: number): GridOrigin 
  */
 export function gridForNotes(notes: readonly NoteEvent[], slotBeats: number): GridOrigin {
   return gridOriginOf(firstSoundingBeat(notes), slotBeats);
+}
+
+/**
+ * First beat of a span read in bars, with the pickup rule applied.
+ *
+ * The bar is the slot the form analyses work in, so phrases, sections and
+ * hypermeter answer the pickup question from here rather than from a raw
+ * minimum of their own. Three readings of one piece that disagree about where
+ * bar 1 begins are not three opinions: an export that puts the first note a
+ * millibeat early would give one of them a pickup the other two never saw.
+ *
+ * @param firstOnset The earliest onset of the span, from
+ *   {@link firstSoundingBeat}.
+ * @param meter A single signature, or the piece's meter map.
+ * @returns The beat the span's bars are counted from.
+ */
+export function barGridStart(firstOnset: number, meter: MeterLike): number {
+  return gridOriginOf(firstOnset, beatsPerBarAt(firstOnset, meter)).startBeat;
 }

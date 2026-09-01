@@ -16,15 +16,22 @@
  */
 
 import type { MeterLike, MeterMap } from '../../core/meter/index.js';
-import { barPositionToBeat, beatsPerBarAt, resolveMeters } from '../../core/meter/index.js';
+import {
+  barIndexAt,
+  barPositionToBeat,
+  beatsPerBarAt,
+  resolveMeters,
+} from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import {
   assertGenerationBudget,
   assertNoteEvents,
+  assertPositiveInt,
   assertRange,
 } from '../../core/validation/index.js';
 import { majorKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
 import type { CadenceResult } from '../functional/index.js';
+import { barGridStart } from '../grid.js';
 import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
 import { melodicSimilarity } from '../melody/index.js';
 import type { CadenceHit, ChordTimeline } from '../timeline/index.js';
@@ -105,9 +112,11 @@ export type PhraseOptions = {
    */
   ts?: MeterLike;
   /**
-   * The meter as it changes over the span. Bar lines, hypermetric downbeats and
-   * the default phrase length all follow the signature in force at the beat in
-   * question, so a piece that changes metre is not read in the one it opened in.
+   * The meter as it changes over the span. Bar lines and hypermetric downbeats
+   * follow the signature in force at the beat in question, so a piece that
+   * changes metre is cut at its own bar lines; the length defaults below are
+   * lengths rather than positions, and each is taken once from the meter the
+   * span opens in.
    *
    * @defaultValue 4/4 throughout
    */
@@ -415,6 +424,26 @@ function arrivalEnd(timeline: ChordTimeline, atBeat: number): number {
   return atBeat;
 }
 
+/**
+ * How many bars a span covers, in the meters in force across it.
+ *
+ * Counted bar line by bar line rather than by dividing the length by one bar,
+ * so a span inside a 3/4 stretch is six beats of two bars and not of one and a
+ * half. The whole bars between the two ends, plus the part of each end bar the
+ * span actually holds.
+ */
+function barSpanOf(startBeat: number, endBeat: number, meters: MeterMap): number {
+  const firstBar = barIndexAt(startBeat, meters);
+  const lastBar = barIndexAt(endBeat, meters);
+  const partOf = (beat: number, bar: number): number => {
+    const barStart = barPositionToBeat({ bar, beat: 0 }, meters);
+    const barLength = beatsPerBarAt(barStart, meters);
+    return barLength > 0 ? (beat - barStart) / barLength : 0;
+  };
+  const bars = lastBar - firstBar + partOf(endBeat, lastBar) - partOf(startBeat, firstBar);
+  return Math.round(bars * 100) / 100;
+}
+
 /** The key context cadence detection is to be read against. */
 function keyContextFor(
   opts: PhraseOptions,
@@ -550,7 +579,10 @@ function describeCadence(cadence: CadenceHit | null): string {
  *
  * Three kinds of evidence are gathered independently and then reconciled. The
  * harmony contributes its cadences, each closing at the end of the chord it
- * arrives on. The melody contributes the rests it breathes at and the notes it
+ * arrives on, and at the bar line where that chord is held across one — a tonic
+ * still sounding into the next phrase closed this one at the bar line. The
+ * cadence reported for a phrase is always one that arrived inside it. The
+ * melody contributes the rests it breathes at and the notes it
  * holds long enough to read as arrivals. Repetition contributes the beats where
  * the music restarts material it has just played. The metre contributes its
  * hypermetric downbeats, which confirm a boundary but never declare one on
@@ -573,18 +605,25 @@ function describeCadence(cadence: CadenceHit | null): string {
  *   that never sound are dropped.
  * @param opts Analysis options; see {@link PhraseOptions}.
  * @returns The phrases, in time order; one phrase covering the whole span when
- *   the span is too short to divide.
+ *   the span is too short to divide, and none at all when nothing sounds —
+ *   silence is no material to hear a phrase in.
  * @example
  * ```ts
  * import { chordTimelineFromNotes, phrasesFromTimeline } from '@libraz/libcantus';
+ * // Four bars of C - F - G - C. Triads rather than single notes: one line at a
+ * // time names no harmony, so nothing would cadence.
+ * const triad = (pitches: number[], startBeat: number) =>
+ *   pitches.map((pitch) => ({ pitch, startBeat, durationBeat: 4 }));
  * const notes = [
- *   { pitch: 60, startBeat: 0, durationBeat: 4 },
- *   { pitch: 67, startBeat: 4, durationBeat: 4 },
- *   { pitch: 60, startBeat: 8, durationBeat: 8 },
+ *   ...triad([60, 64, 67], 0),
+ *   ...triad([65, 69, 72], 4),
+ *   ...triad([67, 71, 74], 8),
+ *   ...triad([60, 64, 67], 12),
  * ];
  * const { timeline } = chordTimelineFromNotes(notes);
  * const phrases = phrasesFromTimeline(timeline, notes);
- * phrases[phrases.length - 1]?.cadence?.cadence.type; // 'authentic', when one closes it
+ * phrases[phrases.length - 1]?.cadence?.cadence.type; // 'authentic'
+ * phrases[phrases.length - 1]?.cadence?.atBeat; // 12, inside the phrase it closes
  * ```
  * @category Arrangement & Analysis
  */
@@ -598,20 +637,37 @@ export function phrasesFromTimeline(
     allowNonPositiveDuration: true,
     budget: opts.budget,
   });
+  if (opts.hypermeter !== undefined) {
+    // The one structured option, held to the contract its own type states: a
+    // confidence outside [0, 1] scales the metrical signal past the cost of a
+    // cut, which would let the metre declare a boundary rather than confirm
+    // one, and a fractional group is not a number of bars.
+    assertRange(opts.hypermeter.confidence, 0, 1, 'phrase hypermeter confidence');
+    assertPositiveInt(opts.hypermeter.groupBars, 'phrase hypermeter groupBars');
+  }
   const sounding = notes.filter((note) => note.durationBeat > 0);
   const segments = timeline.segments;
   const firstSegment = segments[0];
   const lastSegment = segments[segments.length - 1];
-  const spanStart = sounding.reduce(
+  const firstOnset = sounding.reduce(
     (first, n) => Math.min(first, n.startBeat),
     firstSegment?.startBeat ?? 0,
   );
+  // The pickup rule the whole analysis shares, so the first beat this reports
+  // is the one sections and hypermeter report for the same notes.
+  const spanStart = barGridStart(firstOnset, meters);
   const notesEnd = sounding.reduce(
     (end, n) => Math.max(end, n.startBeat + n.durationBeat),
     lastSegment?.endBeat ?? 0,
   );
   const spanEnd = Math.max(spanStart, opts.totalBeats ?? notesEnd);
   assertRange(spanEnd, 0, Number.MAX_SAFE_INTEGER, 'phrase totalBeats');
+  if (spanEnd <= spanStart + EPS) {
+    // Nothing sounds, so there is no material to hear a phrase in — the answer
+    // `sectionsFromNotes` gives an empty span. A phrase of no length, closed by
+    // nothing, would be a marker rather than a phrase.
+    return [];
+  }
 
   const barBeats = beatsPerBarAt(Math.max(0, spanStart), meters);
   const restBeats = opts.restBeats ?? barBeats / 2;
@@ -644,13 +700,18 @@ export function phrasesFromTimeline(
     if (type === null) {
       continue;
     }
-    addSignal(
-      boundaries,
-      arrivalEnd(timeline, hit.atBeat),
-      'cadence',
-      CADENCE_BOUNDARY_STRENGTH[type],
-      hit,
-    );
+    const strength = CADENCE_BOUNDARY_STRENGTH[type];
+    const chordEnd = arrivalEnd(timeline, hit.atBeat);
+    addSignal(boundaries, chordEnd, 'cadence', strength, hit);
+    // A chord held past the bar line closes its phrase at that line as well as
+    // where it stops sounding: the tonic a period's consequent opens on is the
+    // same tonic the antecedent cadenced to, and reading the arrival only at
+    // the end of the held chord would leave the seam between the two with no
+    // cadence on it and hand the cadence to the phrase that follows it.
+    const barEnd = barPositionToBeat({ bar: barIndexAt(hit.atBeat, meters) + 1, beat: 0 }, meters);
+    if (chordEnd > barEnd + EPS) {
+      addSignal(boundaries, barEnd, 'cadence', strength, hit);
+    }
   }
   restBoundaries(boundaries, sounding, meters, restBeats);
   for (const note of sounding) {
@@ -704,14 +765,22 @@ export function phrasesFromTimeline(
         (1 - CLOSING_SHARE) * Math.max(0, lengthFit(length, expected)),
     );
     const isLast = n === path.length - 1;
-    const cadence = stop?.cadence ?? null;
+    // A cadence that arrived before this phrase began cannot be the one closing
+    // it: its chord was still sounding at the boundary, which is a held arrival
+    // and not a second one. The cadence belongs to the phrase it arrived in, so
+    // a reported `cadence.atBeat` always lies inside `[startBeat, endBeat)`.
+    const closing = stop?.cadence ?? null;
+    const cadence =
+      closing !== null && closing.atBeat >= startBeat - EPS && closing.atBeat < endBeat - EPS
+        ? closing
+        : null;
     const structuralWeight = structuralWeightOf(
       cadence,
       confidence,
       downbeatKeys.has(Math.round(endBeat / EPS)),
       isLast,
     );
-    const bars = barBeats > 0 ? Math.round((length / barBeats) * 100) / 100 : 0;
+    const bars = barSpanOf(startBeat, endBeat, meters);
     phrases.push({
       startBeat,
       endBeat,
@@ -741,14 +810,18 @@ export function phrasesFromTimeline(
  * @example
  * ```ts
  * import { chordTimelineFromNotes, phrasesFromTimeline, structuralCadences } from '@libraz/libcantus';
+ * const triad = (pitches: number[], startBeat: number) =>
+ *   pitches.map((pitch) => ({ pitch, startBeat, durationBeat: 4 }));
  * const notes = [
- *   { pitch: 60, startBeat: 0, durationBeat: 4 },
- *   { pitch: 67, startBeat: 4, durationBeat: 4 },
- *   { pitch: 60, startBeat: 8, durationBeat: 8 },
+ *   ...triad([60, 64, 67], 0),
+ *   ...triad([65, 69, 72], 4),
+ *   ...triad([67, 71, 74], 8),
+ *   ...triad([60, 64, 67], 12),
  * ];
  * const { timeline } = chordTimelineFromNotes(notes);
  * const ranked = structuralCadences(phrasesFromTimeline(timeline, notes));
- * ranked[0]; // the cadence carrying the most structural weight, if any
+ * ranked[0]?.cadence.type; // 'authentic' — the cadence carrying the most weight
+ * ranked[0]?.atBeat; // 12
  * ```
  * @category Arrangement & Analysis
  */

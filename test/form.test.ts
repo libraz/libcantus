@@ -6,10 +6,12 @@ import {
   structuralCadences,
 } from '../src/analyze/form/index.js';
 import { choosePhrasePath, PHRASE_CUT_COST } from '../src/analyze/form/phrase.js';
-import { chordTimelineFromChords } from '../src/analyze/timeline/index.js';
+import { chordTimelineFromChords, chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
+import { InvalidInputError } from '../src/core/errors/index.js';
 import type { MeterMap } from '../src/core/meter/index.js';
-import { parseTimeSignature } from '../src/core/meter/index.js';
+import { barIndexAt, parseTimeSignature } from '../src/core/meter/index.js';
 import type { NoteEvent } from '../src/core/types.js';
+import { Score } from '../src/model/score.js';
 import type { ChordQuality, ChordSpan } from '../src/theory/chord/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
 
@@ -189,6 +191,57 @@ describe('structuralCadences', () => {
   });
 });
 
+describe('a cadence whose chord is held across the phrase seam', () => {
+  // The tonic the cadence arrives on is still sounding when the next phrase
+  // starts, which is how a period is normally written and how
+  // `chordTimelineFromNotes` reads it: the held tonic is one segment running
+  // from the arrival at beat 12 to the end of the piece.
+  const harmony: NoteEvent[] = [
+    ...blockChord([48, 60, 64, 67], 0, 4), // C
+    ...blockChord([53, 57, 60, 65], 4, 4), // F
+    ...blockChord([55, 59, 62, 67], 8, 4), // G
+    ...blockChord([48, 60, 64, 67], 12, 20), // the tonic, held to the end
+  ];
+  const melody: NoteEvent[] = [
+    ...quarters([72, 74, 76, 77], 0),
+    ...quarters([79, 77, 76, 74], 4),
+    ...quarters([72, 74, 76, 79], 8),
+    { pitch: 72, startBeat: 12, durationBeat: 4 },
+    ...quarters([72, 76, 79, 76], 16),
+    ...quarters([72, 76, 79, 76], 20),
+    ...quarters([72, 76, 79, 76], 24),
+    { pitch: 72, startBeat: 28, durationBeat: 4 },
+  ];
+  const { timeline } = chordTimelineFromNotes([...harmony, ...melody], { key: majorKey(0) });
+  const phrases = phrasesFromTimeline(timeline, melody, { key: majorKey(0) });
+
+  it('names the cadence on the phrase it closes', () => {
+    const closing = phrases.find((phrase) => phrase.startBeat <= 12 && phrase.endBeat > 12);
+    expect(closing?.cadence?.cadence.type).toBe('authentic');
+    expect(closing?.cadence?.atBeat).toBe(12);
+  });
+
+  it('reports no cadence for a phrase the held chord merely runs through', () => {
+    for (const phrase of phrases) {
+      const atBeat = phrase.cadence?.atBeat;
+      if (atBeat === undefined) {
+        continue;
+      }
+      expect(atBeat).toBeGreaterThanOrEqual(phrase.startBeat);
+      expect(atBeat).toBeLessThan(phrase.endBeat);
+    }
+  });
+
+  it('ranks the cadence against the phrase it actually closes', () => {
+    const ranked = structuralCadences(phrases);
+    const authentic = ranked.find((entry) => entry.atBeat === 12);
+    expect(authentic?.cadence.type).toBe('authentic');
+    const closing = phrases[authentic?.phraseIndex ?? -1];
+    expect(closing?.startBeat).toBeLessThanOrEqual(12);
+    expect(closing?.endBeat).toBeGreaterThan(12);
+  });
+});
+
 describe('hypermeter', () => {
   it('finds four-bar groups when the harmony turns every four bars', () => {
     const notes = [
@@ -232,6 +285,31 @@ describe('hypermeter', () => {
     const result = hypermeter(notes, undefined, { cadenceBeats: [12, 28] });
     expect(result.groupBars).toBe(4);
     expect(result.downbeats).toEqual([0, 16]);
+  });
+
+  it('puts the group heads where the cadences close rather than between them', () => {
+    // One chord per bar, I - IV - V - I four times over, with the cadences
+    // arriving at the end of every four-bar group. The two signals disagree
+    // outright: each group head restates the tonic the group before it closed
+    // on, so bar-to-bar harmonic change is at its weakest exactly where the
+    // grouping begins and at its strongest on the dominant in between.
+    const roots: number[][] = [
+      [48, 60, 64, 67], // C
+      [53, 57, 60, 65], // F
+      [55, 59, 62, 67], // G
+      [48, 60, 64, 67], // C
+    ];
+    const notes = Array.from({ length: 16 }, (_, bar) =>
+      blockChord(roots[bar % 4] ?? [], bar * 4, 4),
+    ).flat();
+    const cadenceBeats = [12, 28, 44, 60];
+    const result = hypermeter(notes, undefined, { cadenceBeats });
+    expect(result.groupBars).toBe(4);
+    expect(result.downbeats).toEqual([0, 16, 32, 48]);
+    // The cadences are what moved the phase: harmony alone reads these bars
+    // differently, which is the disagreement the two shares exist to settle.
+    expect(hypermeter(notes).downbeats).not.toEqual(result.downbeats);
+    expect(result.rationale).toMatch(/100% of group ends/);
   });
 
   it('keeps a pickup bar out of the hypermetric downbeats', () => {
@@ -564,5 +642,238 @@ describe('determinism', () => {
       sectionsFromNotes(melody, { unitBars: 4 }),
     );
     expect(hypermeter(shuffled)).toEqual(hypermeter(melody));
+  });
+});
+
+describe('the same music read from a later bar', () => {
+  /** Four harmonies, four bars each, written from `fromBar`. */
+  function harmonies(fromBar: number): NoteEvent[] {
+    const at = fromBar * 4;
+    return [
+      ...blockChord([48, 60, 64, 67], at, 16),
+      ...blockChord([53, 57, 60, 65], at + 16, 16),
+      ...blockChord([55, 59, 62, 67], at + 32, 16),
+      ...blockChord([48, 60, 64, 67], at + 48, 16),
+    ];
+  }
+
+  it('is the same reading, moved along', () => {
+    // A DAW selection or a cut-out chorus is the same music as the passage it
+    // was cut from. Reading it as weaker, or in another phase, would make the
+    // answer depend on where the caller happened to start looking.
+    const opening = hypermeter(harmonies(0));
+    const later = hypermeter(harmonies(5));
+    expect(later.groupBars).toBe(opening.groupBars);
+    expect(later.confidence).toBeCloseTo(opening.confidence, 12);
+    expect(later.downbeats).toEqual(opening.downbeats.map((beat) => beat + 20));
+  });
+});
+
+describe('a note a millibeat before the downbeat', () => {
+  // A performance exported from a DAW puts the first note a hair early. That is
+  // the downbeat being played, not an upbeat, and all three form analyses have
+  // to say so or a host drawing them together gets a bar that does not line up.
+  const notes: NoteEvent[] = [
+    { pitch: 60, startBeat: -0.02, durationBeat: 1.02 },
+    ...quarters([62, 64, 65], 1),
+    ...quarters([67, 65, 64, 62], 4),
+    ...quarters([60, 62, 64, 65], 8),
+    ...quarters([67, 65, 64, 62], 12),
+  ];
+  const chords = [span(0, 'maj', 0), span(7, 'maj', 4), span(2, 'min', 8), span(0, 'maj', 12)];
+
+  it('starts all three form analyses on beat 0', () => {
+    const phrases = phrasesFromTimeline(chordTimelineFromChords(chords, 16), notes, {
+      key: majorKey(0),
+    });
+    expect(phrases[0]?.startBeat).toBe(0);
+    expect(sectionsFromNotes(notes, { unitBars: 4 })[0]?.startBeat).toBe(0);
+    expect(Math.min(...hypermeter(notes).downbeats)).toBe(0);
+  });
+});
+
+describe('a pickup does not make a span long enough to group', () => {
+  const threeBars = [0, 1, 2].flatMap((bar) => blockChord([60, 64, 67], bar * 4, 4));
+
+  it('answers the same with an upbeat in front of it as without', () => {
+    // Three bars cannot hold two groups of anything. A beat of upbeat leads
+    // into the first hyperbar rather than filling one, so it cannot be what
+    // makes the span long enough.
+    const plain = hypermeter(threeBars);
+    const withPickup = hypermeter([{ pitch: 67, startBeat: -1, durationBeat: 1 }, ...threeBars]);
+    expect(plain.rationale).toMatch(/too short/);
+    expect(withPickup.rationale).toMatch(/too short/);
+    expect(withPickup.groupBars).toBe(plain.groupBars);
+    expect(withPickup.confidence).toBe(plain.confidence);
+    expect(withPickup.downbeats).toEqual(plain.downbeats);
+  });
+});
+
+describe('a span with nothing sounding in it', () => {
+  it('reports no phrases, the way it reports no sections', () => {
+    // Two readers of one object may not answer the same question differently:
+    // a phrase of no length, closed by nothing, is a marker rather than a
+    // phrase, and a host dividing by its length divides by zero.
+    expect(Score.of([]).phrases()).toEqual([]);
+    expect(sectionsFromNotes([])).toEqual([]);
+    const silent = [{ pitch: 60, startBeat: 8, durationBeat: 0 }];
+    expect(Score.of(silent).phrases()).toEqual([]);
+    expect(sectionsFromNotes(silent)).toEqual([]);
+  });
+
+  it('gives every phrase it does report some length', () => {
+    const chords = [span(0, 'maj', 0), span(7, 'maj', 4), span(0, 'maj', 8)];
+    const phrases = phrasesFromTimeline(
+      chordTimelineFromChords(chords, 12),
+      quarters([60, 62, 64, 65], 0),
+      { key: majorKey(0) },
+    );
+    for (const phrase of phrases) {
+      expect(phrase.endBeat).toBeGreaterThan(phrase.startBeat);
+    }
+  });
+});
+
+describe('the phrase examples state what the functions return', () => {
+  // The data of the published `@example` blocks, kept here so the values their
+  // closing comments name are checked rather than only executed.
+  const triad = (pitches: number[], startBeat: number): NoteEvent[] =>
+    pitches.map((pitch) => ({ pitch, startBeat, durationBeat: 4 }));
+  const notes = [
+    ...triad([60, 64, 67], 0),
+    ...triad([65, 69, 72], 4),
+    ...triad([67, 71, 74], 8),
+    ...triad([60, 64, 67], 12),
+  ];
+
+  it('closes the last phrase on the authentic cadence the example names', () => {
+    const { timeline } = chordTimelineFromNotes(notes);
+    const phrases = phrasesFromTimeline(timeline, notes);
+    const last = phrases[phrases.length - 1];
+    expect(last?.cadence?.cadence.type).toBe('authentic');
+    expect(last?.cadence?.atBeat).toBe(12);
+  });
+
+  it('ranks that cadence first', () => {
+    const { timeline } = chordTimelineFromNotes(notes);
+    const ranked = structuralCadences(phrasesFromTimeline(timeline, notes));
+    expect(ranked[0]?.cadence.type).toBe('authentic');
+    expect(ranked[0]?.atBeat).toBe(12);
+  });
+});
+
+describe('a hypermeter handed in by the caller', () => {
+  const timeline = chordTimelineFromChords(
+    [span(0, 'maj', 0), span(7, 'maj', 4), span(0, 'maj', 8)],
+    12,
+  );
+  const melody = quarters([60, 62, 64, 65], 0);
+  const grouping = { groupBars: 2, downbeats: [0, 8], confidence: 0.5, rationale: 'given' };
+
+  it('refuses a confidence outside the range its type states', () => {
+    const call = () =>
+      phrasesFromTimeline(timeline, melody, {
+        key: majorKey(0),
+        hypermeter: { ...grouping, confidence: 4 },
+      });
+    expect(call).toThrow(InvalidInputError);
+    expect(call).toThrow(/hypermeter/);
+  });
+
+  it('refuses a grouping that is not a whole number of bars', () => {
+    const call = () =>
+      phrasesFromTimeline(timeline, melody, {
+        key: majorKey(0),
+        hypermeter: { ...grouping, groupBars: 2.5 },
+      });
+    expect(call).toThrow(InvalidInputError);
+    expect(call).toThrow(/hypermeter/);
+  });
+});
+
+describe('a unit with too little melody to compare', () => {
+  it('is like another thin unit and unlike a full one', () => {
+    // One bar of a figure, then two bars each holding a single tone of it. A
+    // held tone states nothing the figure stated, so it takes a letter of its
+    // own; two of them state the same nothing, so they share it.
+    const notes: NoteEvent[] = [
+      ...quarters([60, 62, 64, 65], 0),
+      { pitch: 60, startBeat: 4, durationBeat: 4 },
+      { pitch: 60, startBeat: 8, durationBeat: 4 },
+    ];
+    const sections = sectionsFromNotes(notes, { unitBars: 1 });
+    expect(sections.map((section) => section.label)).toEqual(['A', 'B']);
+    expect(sections[1]?.startBeat).toBe(4);
+    expect(sections[1]?.bars).toBe(2);
+  });
+});
+
+describe('phrases over a metre change', () => {
+  // Four bars of 4/4, then four bars of 3/4.
+  const meters: MeterMap = [
+    { startBeat: 0, ts: parseTimeSignature('4/4') },
+    { startBeat: 16, ts: parseTimeSignature('3/4') },
+  ];
+  const notes: NoteEvent[] = [
+    ...quarters([60, 62, 64, 65], 0),
+    ...quarters([67, 65, 64, 62], 4),
+    ...quarters([60, 62, 64, 67], 8),
+    { pitch: 64, startBeat: 12, durationBeat: 4 },
+    ...quarters([60, 62, 64], 16),
+    ...quarters([65, 64, 62], 19),
+    ...quarters([60, 64, 67], 22),
+    { pitch: 60, startBeat: 25, durationBeat: 3 },
+  ];
+  const timeline = chordTimelineFromChords(
+    [
+      span(0, 'maj', 0),
+      span(5, 'maj', 4),
+      span(7, 'maj', 8),
+      span(0, 'maj', 12),
+      span(5, 'maj', 16),
+      span(2, 'min', 19),
+      span(7, 'maj', 22),
+      span(0, 'maj', 25),
+    ],
+    28,
+  );
+  const grouping = { groupBars: 2, downbeats: [0, 8], confidence: 0.5, rationale: 'given' };
+
+  it('counts the bars of a phrase in the metre the phrase is in', () => {
+    // Twelve beats of 3/4 are four bars. Counting them in the metre the piece
+    // opened in would put three next to a bar number the rest of the library
+    // reads as four.
+    const phrases = phrasesFromTimeline(timeline, notes, { meters, key: majorKey(0) });
+    const inThree = phrases.filter((phrase) => phrase.startBeat >= 16);
+    expect(inThree.length).toBeGreaterThan(0);
+    for (const phrase of phrases) {
+      const bars = barIndexAt(phrase.endBeat, meters) - barIndexAt(phrase.startBeat, meters);
+      expect(phrase.rationale).toContain(`Phrase of ${bars} bar(s)`);
+    }
+  });
+
+  it('takes the default phrase length once, from the metre the span opens in', () => {
+    // A length is a length rather than a position: the hyperbar the default is
+    // drawn from is measured where the span begins, so a later 3/4 stretch does
+    // not shorten what a phrase is expected to run.
+    const withDefault = phrasesFromTimeline(timeline, notes, {
+      meters,
+      key: majorKey(0),
+      hypermeter: grouping,
+    });
+    const openingHyperbar = phrasesFromTimeline(timeline, notes, {
+      meters,
+      key: majorKey(0),
+      hypermeter: grouping,
+      expectedPhraseBeats: 8,
+    });
+    const laterHyperbar = phrasesFromTimeline(timeline, notes, {
+      meters,
+      key: majorKey(0),
+      hypermeter: grouping,
+      expectedPhraseBeats: 6,
+    });
+    expect(withDefault).toEqual(openingHyperbar);
+    expect(withDefault).not.toEqual(laterHyperbar);
   });
 });

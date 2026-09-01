@@ -183,7 +183,10 @@ export function harmonicNovelty(slices: readonly BarSlice[], index: number): num
   }
   const previous = slices[index - 1];
   if (previous === undefined) {
-    return current.index === 0 ? 1 : 0;
+    // The first slice of the analysed span, wherever the span was cut from: an
+    // excerpt taken from bar 9 opens on bar 9, and nothing precedes it there
+    // either. Only a pickup, which is bar -1, is not an opening.
+    return current.index >= 0 ? 1 : 0;
   }
   return 1 - weightSimilarity(previous.weights, current.weights);
 }
