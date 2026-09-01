@@ -359,4 +359,4 @@ const line = [60, 62, 64, 65, 67, 65, 64, 62].map((pitch, i) => ({
 ornament(line, { style: 'ghost', amount: 0.6, ctx: { seed: 4 } }).length; // 8
 ```
 
-`ghost` softens weak-position notes, `accent` lifts strong-position ones, `flam` marks the same strong positions `accent` takes, `drag` marks a weak-position note whose next onset falls on a strong one, and `slide` marks a note reached by a leap. `amount` scales how many notes are affected; the choice is seeded, so the same options give the same result. Notes that never sound are dropped, so the result can be shorter than the input.
+`ghost` softens weak-position notes, `accent` lifts strong-position ones, `flam` marks the same strong positions `accent` takes, `drag` marks a weak-position note whose next onset falls on a strong one, and `slide` marks a note the line moved to, by a step or a leap alike — only a repeated pitch, which is no move at all, is left out. `amount` scales how many notes are affected; the choice is seeded, so the same options give the same result. Notes that never sound are dropped, so the result can be shorter than the input.
