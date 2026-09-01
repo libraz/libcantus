@@ -5,6 +5,190 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **A key keeps the tonic it was written with.** Ten public entry points reduced
+  a key to its pitch classes on the way in and spelled a tonic back out of them,
+  so a flat-side key arrived as its sharp-side twin. `figuredBassRealization`
+  threw rather than return the tonic triad of `F# major`, `C# major` or
+  `Ab minor`; `spellLine` wrote `Ab minor` in the sharps of `G# minor`;
+  `Key.parse('Ab minor').augmentedSixth('german')` returned `E G# B C##` instead
+  of `Fb Ab Cb D`; and `Voicing#spell` disagreed with `spellVoicing` on the same
+  input. Every such entry now reads the key through one resolver, and deriving a
+  tonic from bare pitch classes happens only inside it.
+
+- **A key built on a world scale names itself.** `Key.named('miyakoBushi','D')`
+  printed `'D major'` and did not read back; `ryukyu`, `ritsu`, `hijazkar`,
+  `bhairav`, `marwa`, `purvi` and `todi` did the same. A key now prints the
+  scale it stands on, and `Key.parse` reads it.
+
+- **A derived key stays inside the signatures a player is handed.**
+  `Key.keyOnDegree` could return a key at nine flats, and
+  `Key.major('F#').forInstrument('clarinetBb')` a key at eight sharps carrying
+  `F##`. Both now end on the respelling rule `Key.transpose` already had.
+
+- **A figure's accidental is the sign a score prints.** `figuredBassOf` wrote
+  `#3` for the leading tone of `C minor`, which as a figure names `B#`; the
+  reader, meanwhile, already treated `n` as an absolute statement. Reading and
+  writing are now derived from one table and are exact inverses: the six minor
+  keys whose signature flattens the seventh take `n3`, and the crossed figure
+  `+` is again the sign that raises whatever the key gives, in any key. A caller
+  who wants the old "raise what the key gives" behaviour writes `+`. The
+  documentation that said an augmented sixth carries no figures now names the
+  French sixth, which returns `#643`.
+
+- **A chord keeps both accidentals written on one degree.**
+  `parseChordSymbol('C7(b9,#9)')` dropped one of them, and which one depended on
+  the order the chart wrote them in; `formatChordSymbol` then wrote a bare `C7`
+  over a chord carrying both. Alterations are now identified by degree and
+  accidental together, in the symbol layer and the chord spec alike.
+
+- **A chord with an omission keeps the seventh it plays.** `Chord.parse('G7no5')`
+  reported quality `maj` and a `V` numeral in C major, while the same object's
+  `symbol()` wrote `G7`. Omitted degrees are now ignored on both sides of the
+  quality comparison. `Cno3` reports `maj` rather than `5` as a consequence;
+  `5` remains the power chord's own quality.
+
+- **`chordQualities()` enumerates in declaration order.** Quality names that look
+  like integers — `5`, `6`, `11`, `13` — were hoisted to the front by JavaScript
+  object key order. The enumeration is now an ordered list, and `detectChord`
+  takes its tie-break from it, so `detectChordBest([9,0,4,7])` and
+  `detectChordBest([2,5,9,0])` no longer name the same set of pitch classes two
+  different ways.
+
+- **A chord is validated where it is built.** `Chord.fromData({quality:'Maj7'})`
+  was accepted and surfaced later as a `TypeError`; it now throws
+  `InvalidInputError` at construction. A slash bass equal to the root is
+  dropped, so `Chord.of('C','maj',0).equals(Chord.of('C','maj'))` and `toJSON()`
+  no longer carries a redundant `bassPc`. `Chord.parse('C7omit1').roleOf(60)`
+  returns `null` rather than calling a tone the chord does not sound the root.
+  An eleventh drops the third for a dominant only, settled in one place, so
+  `C11#9` and `C11b9` behave as `C11` does.
+
+- **More of the vocabulary a chart writes is read.** `CMaj7`, `FMaj9`, `CMaj13`
+  and `CMaj7#11` parse; `Comit3`, `Comit5` and `Comit1` parse as their `no`
+  equivalents; and a tension carries over the half-diminished glyphs, so `Cø9`,
+  `Ch9`, `Cø11` and `Cø7(b9)` read as the `m7b5` forms they name.
+
+- **A transposed slash chord names a bass it contains.**
+  `Chord.parse('Bb7/D').transpose(1).symbol()` was `B7/Eb`; it is now `B7/D#`,
+  and the same holds through `Progression.transpose` and timeline
+  transposition. `ChordSymbolOptions.flats` now chooses the side the whole
+  symbol is written on rather than each note separately, so
+  `transposeChordSymbol('Bb/F', 1, { flats: true })` is `Cb/Gb` — a chord and a
+  bass that agree — rather than `B/Gb`.
+
+- **A dominant is heard by the tones it sounds.** Four layers each had their own
+  test for it, one of them a string comparison against `dom7`. As a result
+  `detectModulations` collapsed a piece whose dominants were written `G13` or
+  `G7b9` into a single region and named the wrong home key, and
+  `reduceProgression` cut `G7sus4` out of the frame. All four now ask one
+  predicate, as do the tests for a Neapolitan, for a minor key, and for the
+  degrees an applied dominant may target.
+
+- **A mode is not read as a minor key that cadences through a raised seventh.**
+  `harmonizeMelody`'s diatonic tier injected the major dominant of a harmonic
+  minor into `D dorian` and `B locrian`; the half-cadence relaxation written for
+  the modes was applied to natural minor, so `Am → Em` in A minor was reported
+  as a half cadence; a diatonic `VII` in `G mixolydian` was described as
+  borrowed while reporting `borrowed: false`; and secondary dominants were
+  offered for diminished triads. Each now turns on whether the key is a
+  common-practice minor rather than on whether it merely lowers its third.
+
+- **An applied dominant is named only where it can point somewhere.** The tonic
+  was accepted as a target, so a plain `V7` in a minor key was described as an
+  applied dominant and a tonic-degree chord in a reduction was labelled the
+  tonic while tonicizing something else. The target is also cased as the key
+  writes that degree, so `B7` in A minor is `V7/V` and `D#dim7` is `viio7/V`.
+  `ChordToRomanOptions.applied` now documents all three conditions under which
+  the reading is declined.
+
+- **A cadential six-four no longer swallows the cadence it leads to.**
+  `I64 → V` was classified as no cadence at all, taking the half cadence and the
+  phrase boundary with it. The plagal test is measured by the fourth degree the
+  mode has rather than by a fixed distance, so `F#→C` in C lydian is plagal and
+  `F→C`, which the key does not contain, is not.
+
+- **An excerpt starts where it sounds.** `keyTimelineFromNotes`, the chord
+  timeline and `tensionCurve` each pinned their origin to beat 0, so a passage
+  lifted from bar nine was read as eight bars of silence followed by the music.
+  All three now read the first sounding beat through the derivation that already
+  answered that question.
+
+- **An altered tension over a seventh chord is named as a tension.** An `Ab` over
+  `G7` was reported as `{kind:'needsResolution'}` rather than as the flat ninth
+  it is, depending on whether the symbol wrote the alteration. Over a bare
+  triad, where the harmony implies no such extension, the reading is unchanged.
+
+- **A retrograde can be named, and its ratio measured backwards.** A cell whose
+  pitches also read as an inversion came back unnamed, and where a name was
+  given the `timeRatio` was still measured start-aligned: an uneven-valued
+  retrograde reported 1.5 where it should report 1.
+
+- **`melodicContour`, `Score.contour()` and `Score.motifs()` state what they
+  read.** Notes struck together were sorted low to high and read as consecutive
+  melody notes, so a chord read as an ascending line. Simultaneous notes are now
+  one event, taken at the top voice, and every surface that reduces a phrase to
+  a line says so.
+
+- **The voicing search and the part-writing checker judge by one rule.** The
+  search accepted a diminished-third descent the checker reports as an
+  unresolved seventh, never scored a cross relation the checker reports, and
+  applied the four-part exception for arriving at a perfect interval to
+  two-voice counterpoint. Second species now judges a dissonant neighbour on the
+  weak half, fifth species judges a tie against every measure it is carried
+  into, and the chromatic-harmony exemption is granted only to a chord the key
+  does not already contain — so a mode that lowers its own second no longer
+  suppresses a real cross relation. A diminished seventh in a flat-side key is
+  also spelled as the seventh it is, since a chord tone's degree is now read
+  from the chord rather than from its distance above the root.
+
+- **A drop voicing over a slash bass is a drop.** `C/E` in drop-2 came back with
+  a seventeen-semitone gap; the named bass is now the voice the style drops, so
+  `Cmaj7/G` in drop-2 is the textbook `G3 C4 E4 B4`. A chord with too few voices
+  to drop is voiced in close position, which the documentation now states along
+  with the minimum each style needs.
+
+- **A bass line holds the register it was asked for.** `generateBassLine` placed
+  each note against the last one it wrote, so a I-V vamp climbed an octave and
+  stayed there. A segment's bass is now a function of its pitch class and the
+  requested band. `style:'rootFifth'` is tiled by the bar rather than by the
+  segment; a degree the chord's quality settles is taken from that chord's own
+  scale, so a boogie sixth over `A7` is `F#` and a suspension is not made to
+  sound the third it replaced; a walking line steps into a chord change rather
+  than leaping into it; and `placeLicks` refuses an overlapping segment and an
+  out-of-range dial exactly as `generateBassLine` does.
+
+- **A drum part is written as its style is named.** A doubled rate wrote the same
+  voice twice at the same position — fifteen such pairs in funk, twenty-two in
+  samba — which hangs a note in a MIDI writer; a duplicate is now refused where
+  onsets are written. A groove that moves its backbeat to a side stick no longer
+  writes snare-head ghosts underneath it; the ornament dial answers in a verse
+  and an intro rather than only in a chorus or a bridge; `style:'breakbeat'`
+  differs from `standard` in every section, as do the dance and latin outros;
+  and the pickup beats every fill archetype is written with are reachable again.
+  A part with a tambourine, hand-clap or shaker over a full groove is no longer
+  reported as impossible: `PercussionProfile` gains an optional `overdub`, and
+  `DRUM_KIT` names those three voices as dubbed over the kit.
+
+- **A preset turns over on its own period.** A preset whose borrowing doubles a
+  degree — `aeolianPop` in a minor key — collapsed the repeat and turned over
+  every three bars against parts written in four. Borrowed chords also open in
+  the order an arranger reaches for them rather than in scale-degree order, and
+  a slide is written into a note reached by a semitone.
+
+### Changed
+
+- **What the algorithm version promises is stated accurately.** The
+  documentation said a version already accepted keeps returning what it
+  returned. The generators hold one implementation rather than one per version —
+  the number is drawn into the seed — so pinning an older number selects a
+  different draw of the current implementation and does not restore what that
+  number produced before. A correction to musically wrong output therefore moves
+  the notes of a version in use, ships as a patch, and is recorded here.
+
 ## [1.0.1] - 2026-08-18
 
 ### Fixed
