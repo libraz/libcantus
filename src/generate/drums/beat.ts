@@ -51,7 +51,6 @@ export type SectionCtx = {
   ornament: number;
   /** Difficulty ceiling, or undefined when the caller set none. */
   difficulty: number | undefined;
-  useGhostNotes: boolean;
   ghostBoost: boolean;
   useRide: boolean;
   useFootHh: boolean;
@@ -162,29 +161,70 @@ function roleBackbeatWeight(role: DrumRole): number {
 }
 
 /**
- * The backbeat voice of a section, decided by its role and its style together.
+ * The drum a section states its backbeat on, or undefined where the role writes
+ * no backbeat at all.
  *
- * The style names the instrument: a latin groove is defined by its rim-click
- * clave, so it keeps the side-stick whatever the role asks for, and every other
- * style writes the drum itself. The role then sets the weight: `'full'` plays
- * the backbeat at full value, `'ambient'` and `'minimal'` step down to the
- * side-stick and grow quieter with it, and `'fxOnly'` writes no backbeat at
- * all. `'minimal'` is one step quieter than `'ambient'` in every style — never
- * the full backbeat and never nothing at all.
+ * The style names the instrument: a latin groove states its backbeat as a rim
+ * click, so it keeps the side-stick whatever the role asks for, and every other
+ * style writes the drum itself. The quieter roles cross-stick theirs, and
+ * `'fxOnly'` states none. Only the voice is decided here — the backbeat keeps
+ * the positions {@link backbeatBeats} names, so a latin groove is the timbre of
+ * a clave rather than its rhythm; the pattern dictionary is where a written-out
+ * clave lives.
+ *
+ * Every voice that answers the backbeat reads this one predicate, so a groove
+ * cannot decorate a stroke it never plays.
+ *
+ * @param sec Section context.
+ * @returns The note number of the backbeat voice, or undefined for no backbeat.
+ */
+export function backbeatVoice(sec: SectionCtx): number | undefined {
+  if (sec.role === 'fxOnly') {
+    return undefined;
+  }
+  const sideStick = sec.style === 'latin' || sec.role === 'ambient' || sec.role === 'minimal';
+  return sideStick ? GM.SIDESTICK : GM.SD;
+}
+
+/**
+ * Whether a section decorates its backbeat with ghost snares.
+ *
+ * A ghost is a soft stroke on the snare head leading into the backbeat, so a
+ * groove ghosts exactly when {@link backbeatVoice} is the snare drum: a
+ * rim-click clave and a cross-sticked backbeat are not the voice being
+ * decorated, and a ghost against either answers a stroke that is not there. A
+ * sparse groove keeps its silence whatever it states its backbeat on.
+ *
+ * The section is not part of the question. How many ghosts survive is the
+ * ornament dial's business in every section, and the density table
+ * ({@link getGhostDensity}) carries a row for each of them, so a section scales
+ * the dial rather than switching the voice off.
+ */
+export function writesSnareGhosts(sec: SectionCtx): boolean {
+  return backbeatVoice(sec) === GM.SD && sec.style !== 'sparse';
+}
+
+/**
+ * The backbeat stroke of a section: the drum {@link backbeatVoice} names, at
+ * the weight its role plays it.
+ *
+ * `'full'` plays the backbeat at full value, `'ambient'` and `'minimal'` grow
+ * quieter with the side-stick they step down to, and `'fxOnly'` writes no
+ * backbeat. `'minimal'` is one step quieter than `'ambient'` in every style —
+ * never the full backbeat and never nothing at all.
  *
  * @param sec Section context.
  * @param velocity Base velocity of the beat the stroke lands on.
  * @returns The stroke to write, or undefined when the role writes no backbeat.
  */
 export function backbeatStroke(sec: SectionCtx, velocity: number): BackbeatStroke | undefined {
-  if (sec.role === 'fxOnly') {
+  const pitch = backbeatVoice(sec);
+  if (pitch === undefined) {
     return undefined;
   }
-  const sideStick = sec.style === 'latin' || sec.role === 'ambient' || sec.role === 'minimal';
-  if (sideStick) {
-    return { pitch: GM.SIDESTICK, velocity: velocity * roleBackbeatWeight(sec.role) };
-  }
-  return { pitch: GM.SD, velocity: Math.min(127, velocity + BACKBEAT_LIFT) };
+  return pitch === GM.SD
+    ? { pitch, velocity: Math.min(127, velocity + BACKBEAT_LIFT) }
+    : { pitch, velocity: velocity * roleBackbeatWeight(sec.role) };
 }
 
 /** Emit the backbeat snare (or side-stick) for one beat. */
@@ -204,6 +244,11 @@ export function generateSnareForBeat(ctx: BeatCtx, sec: SectionCtx, isIntroFirst
 
 /** Emit ghost snares at the "e"/"a" 16ths of beats 1 and 3. */
 export function generateGhostNotesForBeat(ctx: BeatCtx, sec: SectionCtx): void {
+  // The one gate on the voice, so no exit path can write a snare-head ghost
+  // into a groove whose backbeat is not on the snare head.
+  if (!writesSnareGhosts(sec)) {
+    return;
+  }
   if (ctx.beat !== 0 && ctx.beat !== 2) {
     return;
   }

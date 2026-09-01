@@ -221,27 +221,42 @@ export function halfTime<T extends GridEvent>(events: readonly T[], spanSteps = 
  * The repeat is what makes this the mirror of {@link halfTime} rather than a
  * figure with a hole in it: the bar stays full.
  *
+ * Halving brings positions together, and two onsets of one stream landing on
+ * the same step are one stroke played louder rather than two: a drum struck
+ * twice at the same instant is a pair of note-ons a reader turns into a hung or
+ * cut note, so the pair is merged and the louder of the two is what sounds.
+ * Streams stay apart, since two limbs striking together is a chord and not a
+ * repeat.
+ *
  * @param events The figure.
  * @param spanSteps Length of the figure in sixteenths.
- * @returns The compressed figure, repeated to fill the span.
+ * @returns The compressed figure, repeated to fill the span, at most one event
+ *   per stream and step.
  *
  * @category Composition
  */
 export function doubleTime<T extends GridEvent>(events: readonly T[], spanSteps = BAR_STEPS): T[] {
-  const out: T[] = [];
+  const merged = new Map<string, T>();
+  const place = (event: T, step: number, velocity: number): void => {
+    const key = `${streamOf(event)}@${step}`;
+    const held = merged.get(key);
+    if (held === undefined || velocity > held.velocity) {
+      merged.set(key, { ...event, step, velocity });
+    }
+  };
   for (const event of events) {
     // An odd step halves onto no grid position, so it is placed on the nearest
     // one. Dropping it instead took the "a" of the kick and three of the four
     // ghosts out of the figure that names the genre, and returned the result as
     // though it were the same figure played faster.
     const step = Math.round(event.step / 2);
-    out.push({ ...event, step });
+    place(event, step, event.velocity);
     const repeated = step + spanSteps / 2;
     if (repeated < spanSteps) {
-      out.push({ ...event, step: repeated, velocity: event.velocity * ADDED_NOTE_VELOCITY });
+      place(event, repeated, event.velocity * ADDED_NOTE_VELOCITY);
     }
   }
-  return out.sort((a, b) => a.step - b.step);
+  return [...merged.values()].sort((a, b) => a.step - b.step);
 }
 
 /**

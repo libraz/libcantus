@@ -44,6 +44,7 @@ import {
 } from '../../theory/scale/index.js';
 import { spellPitchClass, spellScale } from '../../theory/spelling/index.js';
 import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
+import { soundsDominantSeventh } from '../../theory/tendency/index.js';
 
 /**
  * The kind of substitution relationship a candidate realizes.
@@ -83,16 +84,6 @@ export type SubstituteOptions = {
    */
   melodyPcs?: number[];
 };
-
-/** Whether the chord's template carries a given interval (mod 12). */
-function hasInterval(chord: Chord, semitone: number): boolean {
-  return chord.intervals.some((iv) => mod12(iv) === semitone);
-}
-
-/** Whether a chord is a dominant type: a major third with a minor seventh. */
-function isDominantType(chord: Chord): boolean {
-  return hasInterval(chord, 4) && hasInterval(chord, 10);
-}
 
 /** Count the pitch classes shared between two pitch-class sets. */
 function commonToneCount(a: number[], b: number[]): number {
@@ -272,7 +263,7 @@ export function substituteChord(
   const tonic = keyTonicOf(scale);
 
   // Tritone substitution: only for dominant-type chords.
-  if (isDominantType(source)) {
+  if (soundsDominantSeventh(source)) {
     const substitute = makeChord(mod12(source.rootPc + 6), 'dom7');
     candidates.push({
       chord: spelledOnRoot(substitute, tritoneSubstituteRoot(source, tonic, scale), tonic, scale),

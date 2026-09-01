@@ -75,6 +75,10 @@ export function getPercussionConfig(
  * The shaker's off-16ths are where the rhythmic dial reaches this voice: each
  * has its own draw, so turning the dial up fills the subdivision in one
  * position at a time rather than switching the whole bar between two patterns.
+ *
+ * These voices are an overdub layer rather than strokes the kit player has a
+ * hand free for: a tambourine and a hand-clap on the backbeat sound over a
+ * snare and a hi-hat that already take both hands.
  */
 export function generateAuxPercussionForBar(
   track: HitList,

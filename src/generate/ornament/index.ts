@@ -49,7 +49,8 @@ export const ORNAMENT_STYLES = Object.freeze(['ghost', 'flam', 'drag', 'slide', 
  *   also takes, voiced as a grace stroke instead of a velocity lift.
  * - `'drag'`: mark notes leading into a strong position as dragged. A weak-position
  *   note qualifies only when the next onset in the material falls on a strong one.
- * - `'slide'`: mark a note reached by a step or a leap as slid into.
+ * - `'slide'`: mark a note reached by a step or a leap as slid into. A repeated
+ *   pitch is not: a slide is the move between two pitches, and there is none.
  * - `'accent'`: mark strong-position notes as accented, and lift their velocity.
  *
  * @category Composition
@@ -102,8 +103,13 @@ const ACCENT_VELOCITY_BOOST = 12;
 const DEFAULT_VELOCITY = 80;
 const MIN_VELOCITY = 1;
 const MAX_VELOCITY = 127;
-/** Interval, in semitones, from which a move reads as slid into rather than fingered. */
-const SLIDE_MIN_SEMITONES = 2;
+/**
+ * Interval, in semitones, from which a move reads as slid into rather than
+ * restruck. A semitone is the most idiomatic slide there is on a fretted or a
+ * bowed instrument, so every move of the line qualifies and only a repeated
+ * pitch, which is no move at all, does not.
+ */
+const SLIDE_MIN_SEMITONES = 1;
 
 /** Whether a note is a candidate for an ornament of this style. */
 function eligible(
@@ -158,7 +164,8 @@ function clampVelocity(velocity: number): number {
  *
  * Which notes are eligible follows from the style and the meter — ghosts fall on
  * weak positions, drags on the weak position before a strong one, flams and
- * accents on strong ones, slides on notes reached by a leap — and `amount`
+ * accents on strong ones, slides on notes the line moves to, by a step or by a
+ * leap — and `amount`
  * decides how many of those eligible notes are taken. The choice is addressed by
  * each note's own position, so raising `amount` adds ornaments without moving the
  * ones already there, and no onset is ever added or shifted: a decorated note is

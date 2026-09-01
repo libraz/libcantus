@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { chordToRoman } from '../src/analyze/functional/index.js';
 import type { KeyScale } from '../src/core/types.js';
 import {
   generateProgression,
@@ -7,7 +8,7 @@ import {
 } from '../src/generate/progression/index.js';
 import { Progression } from '../src/model/progression.js';
 import type { ChordSpan } from '../src/theory/chord/index.js';
-import { makeChord } from '../src/theory/chord/index.js';
+import { chordFromSpan, makeChord } from '../src/theory/chord/index.js';
 import { MAJOR_MASK, majorKey, minorKey } from '../src/theory/scale/index.js';
 
 const cMajor: KeyScale = { rootPc: 0, modeMask12: MAJOR_MASK };
@@ -163,6 +164,69 @@ describe('generateProgression', () => {
     }
   });
 
+  it('gives no secondary dominant to a degree the key cannot make a local tonic', () => {
+    // The supertonic of a minor key is a diminished triad, and nothing
+    // tonicizes one: an F#7 in front of that B diminished is a chord the
+    // numeral layer reads against A minor as #VI7, not as an applied dominant.
+    const aMinor = minorKey(9);
+    const offenders: string[] = [];
+    let diminished = 0;
+    let flagged = 0;
+    for (const harmonic of [0.3, 0.5, 1]) {
+      for (let seed = 0; seed < 6; seed += 1) {
+        const chords = generateProgression({
+          key: aMinor,
+          presetId: 'cityPop',
+          style: 'idol',
+          bars: 8,
+          ctx: { seed, complexity: { harmonic } },
+        });
+        const where = `harmonic ${harmonic}, seed ${seed}`;
+        for (let i = 0; i < chords.length; i += 1) {
+          const chord = chords[i] as ChordSpan;
+          if (chord.quality === 'dim') {
+            diminished += 1;
+          }
+          if (chord.secondaryDominant !== true) {
+            continue;
+          }
+          flagged += 1;
+          if (chords[i + 1]?.quality === 'dim') {
+            offenders.push(`${where}: a dominant stands in front of a diminished triad`);
+          }
+          // The analysis layer has to be able to name what the generator
+          // claims: an absolute numeral back means it tonicizes nothing.
+          const numeral = chordToRoman(chordFromSpan(chord), aMinor, { applied: true });
+          if (!numeral.includes('/')) {
+            offenders.push(`${where}: ${numeral} is flagged as a secondary dominant`);
+          }
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+    // The diminished supertonic still reaches the output, so the rule above is
+    // measured rather than vacuous, and the key still offers the dominants it
+    // can carry.
+    expect(diminished).toBeGreaterThan(0);
+    expect(flagged).toBeGreaterThan(0);
+  });
+
+  it('still offers the secondary dominants a major key can carry', () => {
+    const chords = generateProgression({
+      key: cMajor,
+      presetId: 'cityPop',
+      style: 'idol',
+      bars: 8,
+      ctx: { seed: 0, complexity: { harmonic: 1 } },
+    });
+    const applied = chords.filter((chord) => chord.secondaryDominant === true);
+    expect(applied.length).toBeGreaterThan(0);
+    for (const chord of applied) {
+      expect(chord.quality).toBe('dom7');
+      expect(chordToRoman(chordFromSpan(chord), cMajor, { applied: true })).toContain('/');
+    }
+  });
+
   it('throws on an unknown presetId instead of falling back silently', () => {
     expect(() =>
       generateProgression({
@@ -205,32 +269,59 @@ describe('Progression.fromSpans', () => {
 });
 
 describe('preset degeneracy across keys', () => {
-  it('never repeats the same chord twice in a row in any key', () => {
+  it('turns over on the preset period in every key', () => {
     // A preset's diatonic degrees and its chromatic borrowings can name the same
     // chord: `vi bVI bVII I` is a major-key device, and in a minor key its first
-    // two degrees both land on bVI. Presets that name a degree twice on purpose
-    // (`I IV V I`) are covered by the test below instead.
-    const distinctDegrees = (preset: { degrees: number[] }) =>
-      new Set(preset.degrees).size === preset.degrees.length;
-    for (const preset of progressions().filter(distinctDegrees)) {
+    // two degrees both land on bVI. That is one chord held over two bars, not a
+    // loop one bar shorter — a harmony that turns over every three bars while
+    // the parts around it are written in four crosses every phrase boundary.
+    for (const preset of progressions()) {
+      const period = preset.degrees.length;
       for (let tonic = 0; tonic < 12; tonic += 1) {
         for (const key of [majorKey(tonic), minorKey(tonic)]) {
           const chords = generateProgression({
             key,
             style: 'dance',
-            bars: 8,
+            bars: period * 2,
             presetId: preset.id,
           });
-          for (let i = 1; i < chords.length; i += 1) {
-            const previous = chords[i - 1];
-            const current = chords[i];
-            const same =
-              previous?.rootPc === current?.rootPc && previous?.quality === current?.quality;
-            expect(same, `${preset.id} on ${tonic} (${key.modeMask12})`).toBe(false);
+          const label = `${preset.id} on ${tonic} (${key.modeMask12})`;
+          for (let i = 0; i < period; i += 1) {
+            expect(chords[i + period]?.rootPc, label).toBe(chords[i]?.rootPc);
+            expect(chords[i + period]?.quality, label).toBe(chords[i]?.quality);
           }
         }
       }
     }
+  });
+
+  it('holds a chord for the bar a borrowed degree doubles, in the key it doubles in', () => {
+    // `aeolianPop` is vi bVI bVII I. In C major the four degrees are four
+    // chords; in A minor the first two are both F, which is F held for two bars
+    // and then G and Am — still a four-bar loop the phrase can be built on.
+    const major = generateProgression({
+      key: majorKey(0),
+      style: 'dance',
+      presetId: 'aeolianPop',
+      bars: 4,
+    });
+    expect(major.map((chord) => chord.rootPc)).toEqual([9, 8, 10, 0]);
+    const minor = generateProgression({
+      key: minorKey(9),
+      style: 'dance',
+      presetId: 'aeolianPop',
+      bars: 8,
+    });
+    expect(minor.map((chord) => `${chord.rootPc}${chord.quality}`)).toEqual([
+      '5maj',
+      '5maj',
+      '7maj',
+      '9min',
+      '5maj',
+      '5maj',
+      '7maj',
+      '9min',
+    ]);
   });
 
   it('keeps a preset that closes on its own tonic intact', () => {

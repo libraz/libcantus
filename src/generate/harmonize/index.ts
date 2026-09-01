@@ -1,4 +1,9 @@
-import { isDiatonic, parallelKey } from '../../analyze/functional/index.js';
+import {
+  isDiatonic,
+  isMinorKey,
+  parallelKey,
+  tonicizableDegrees,
+} from '../../analyze/functional/index.js';
 import type { MeterLike, TimeSignature } from '../../core/meter/index.js';
 import {
   beatsPerBar,
@@ -27,6 +32,7 @@ import {
   type KeyLike,
   majorKey,
   minorKey,
+  scaleSystemOf,
   scaleTonesInDegreeOrder,
   toKeyScale,
 } from '../../theory/scale/index.js';
@@ -463,9 +469,19 @@ const OUT_OF_KEY_PER_BEAT = 3;
  */
 const TIE_BREAK_JITTER = 1e-6;
 
-/** Whether a key's scale is minor: it has a minor third and no major third. */
-function isMinorKey(key: KeyScale): boolean {
-  return ((key.modeMask12 >> 3) & 1) === 1 && ((key.modeMask12 >> 4) & 1) === 0;
+/**
+ * Whether a key cadences through the raised seventh of the harmonic minor.
+ *
+ * A minor key does, and it is the only key that raises a seventh its own
+ * signature lowers. A mode with a lowered third does not: dorian and phrygian
+ * are held together by the sevenths they have, and locrian has no perfect fifth
+ * to stand that dominant on at all, so raising theirs would overwrite the very
+ * degree that names them. The scale system is what separates the two — a
+ * natural-minor mask and an aeolian one are the same twelve bits, and the
+ * difference is which tradition the key is being read in.
+ */
+function cadencesThroughRaisedSeventh(key: KeyScale): boolean {
+  return isMinorKey(key) && scaleSystemOf(key) === 'common-practice';
 }
 
 /**
@@ -476,10 +492,14 @@ function isMinorKey(key: KeyScale): boolean {
  * is evidence for the key rather than a note foreign to it. Every term that asks
  * whether a note is in the key reads it this way — key inference, the emission
  * term's out-of-key surcharge, and the transposition search — so the dominant a
- * minor phrase closes with is not paid for twice.
+ * minor phrase closes with is not paid for twice. A modal key gets no such
+ * allowance: its seventh is a degree, not an accidental waiting to be raised.
  */
 function isKeyTone(pitch: number, key: KeyScale): boolean {
-  return isScaleTone(pitch, key) || (isMinorKey(key) && pitchClass(pitch) === leadingTonePcOf(key));
+  return (
+    isScaleTone(pitch, key) ||
+    (cadencesThroughRaisedSeventh(key) && pitchClass(pitch) === leadingTonePcOf(key))
+  );
 }
 
 /**
@@ -530,6 +550,21 @@ function inferKey(melody: readonly MelodyNote[]): KeyScale {
 const SECONDARY_DOMINANT_TARGETS = [2, 4, 5, 6];
 
 /**
+ * Those degrees the key at hand can actually make a local tonic.
+ *
+ * Nothing tonicizes a diminished triad, so a degree whose own triad spans no
+ * perfect fifth is no target: the supertonic of a minor key is diminished, and
+ * a dominant seventh placed in front of it is a chord the analysis layer refuses
+ * to read as applied. The degrees come from the same predicate that layer names
+ * its targets with, so what the generator marks as a secondary dominant is what
+ * the numeral can be written for.
+ */
+function secondaryDominantTargets(key: KeyScale): number[] {
+  const tonicizable = new Set(tonicizableDegrees(key).map((degree) => degree.degreeNumber));
+  return SECONDARY_DOMINANT_TARGETS.filter((degree) => tonicizable.has(degree));
+}
+
+/**
  * The order those dominants open up in as the harmonic dial rises, by the
  * degree each tonicizes: the dominant's own dominant is the one an arranger
  * reaches for first, then the relative minor's, and the subdominant's last.
@@ -537,6 +572,18 @@ const SECONDARY_DOMINANT_TARGETS = [2, 4, 5, 6];
  * vocabulary adds to the candidate list without reordering it.
  */
 const SECONDARY_DOMINANT_ENTRY_ORDER = [5, 6, 2, 4];
+
+/**
+ * The order the parallel mode's chords open up in as the dial rises, keyed by
+ * the semitone each root stands above the tonic: the minor subdominant first,
+ * then the flat-side major triads a pop arranger reaches for, and the chords
+ * that displace the tonic itself — the minor tonic and the diminished
+ * supertonic — last. Kept apart from the vocabulary for the reason
+ * {@link SECONDARY_DOMINANT_ENTRY_ORDER} is, and read as a preference rather
+ * than a filter, so an offset it does not name still opens, behind the ones it
+ * does.
+ */
+const BORROWED_ENTRY_ORDER = [5, 10, 8, 3, 7, 2, 0];
 
 /**
  * The dial position at which the last secondary dominant has entered. Above it
@@ -593,13 +640,18 @@ export function buildCandidates(key: KeyScale, harmonic: number): Candidate[] {
 
   // A minor key cadences through the harmonic-minor dominant, so the major triad
   // a fifth above the tonic belongs to the key's own vocabulary rather than to
-  // any widening of it — the reading `generateProgression` already takes. Without
-  // it the dominant-to-tonic and cadence terms are unreachable in minor, and a
-  // minor melody can be harmonized but never closed. The natural-minor `v` stays
-  // alongside it and carries the same degree, so the search chooses between them
-  // on the melody. A major key already holds this chord as its diatonic V, and
-  // the duplicate filter below drops the repeat.
-  if (isMinorKey(key)) {
+  // any widening of it. Without it the dominant-to-tonic and cadence terms are
+  // unreachable in minor, and a minor melody can be harmonized but never closed.
+  // The natural-minor `v` stays alongside it and carries the same degree, so the
+  // search chooses between them on the melody. `generateProgression` has no
+  // melody to choose on and settles the same question once, from the preset it
+  // is writing: it raises the third of the fifth degree only under a preset
+  // labelled `functional: 'cadenceStrong'`, and writes the natural-minor `v`
+  // under every other one. A major key already holds this chord as its diatonic V, and
+  // the duplicate filter below drops the repeat. A mode is left alone: the
+  // diatonic tier promises the key's own triads, and the raised seventh this
+  // adds is not one of dorian's, phrygian's or locrian's.
+  if (cadencesThroughRaisedSeventh(key)) {
     const rootPc = (tonicPc + 7) % 12;
     candidates.push({
       rootPc,
@@ -613,12 +665,11 @@ export function buildCandidates(key: KeyScale, harmonic: number): Candidate[] {
 
   // The degrees are kept in the same 1-based space as `Candidate.degree`, which
   // the voice-leading cost compares them against.
-  const secondaryOpen = admittedCount(
-    harmonic / SECONDARY_DOMINANT_BAND,
-    SECONDARY_DOMINANT_TARGETS.length,
-  );
-  for (const target of SECONDARY_DOMINANT_TARGETS) {
-    if (SECONDARY_DOMINANT_ENTRY_ORDER.indexOf(target) >= secondaryOpen) {
+  const targets = secondaryDominantTargets(key);
+  const entryOrder = SECONDARY_DOMINANT_ENTRY_ORDER.filter((degree) => targets.includes(degree));
+  const secondaryOpen = admittedCount(harmonic / SECONDARY_DOMINANT_BAND, targets.length);
+  for (const target of targets) {
+    if (entryOrder.indexOf(target) >= secondaryOpen) {
       continue;
     }
     const targetRoot = tones[target - 1] ?? 0;
@@ -642,6 +693,15 @@ export function buildCandidates(key: KeyScale, harmonic: number): Candidate[] {
       borrowed.push(chord);
     }
   }
+  // Usefulness, not degree order, decides which borrowing the next notch of the
+  // dial buys: bVII is the borrowed chord pop writing reaches for most often and
+  // the minor tonic the least, and taking them in degree order opened them the
+  // other way round.
+  const borrowedRank = (chord: Chord): number => {
+    const offset = BORROWED_ENTRY_ORDER.indexOf(pitchClass(chord.rootPc - tonicPc));
+    return offset < 0 ? BORROWED_ENTRY_ORDER.length : offset;
+  };
+  borrowed.sort((a, b) => borrowedRank(a) - borrowedRank(b));
   const borrowedOpen = admittedCount(
     (harmonic - SECONDARY_DOMINANT_BAND) / (1 - SECONDARY_DOMINANT_BAND),
     borrowed.length,

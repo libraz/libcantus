@@ -73,9 +73,14 @@ export type FillArchetype = {
   /** Strokes per beat of the bar, indexed 0..3. */
   atBeat: readonly (readonly FillStroke[])[];
   /**
-   * Whether a bar longer than four beats keeps playing the last beat's strokes.
-   * The archetypes are written against a four-beat bar; most read naturally when
-   * extended, but the half-time figure is a bar-long gesture and stops there.
+   * Whether the archetype stops where its own strokes stop, rather than holding
+   * its last beat over the beats of the bar it does not write.
+   *
+   * It answers for an archetype shorter than the bar it is placed in, so the
+   * built-in archetypes — written beat by beat against the four-beat bar
+   * {@link generateDrums} accepts — are unaffected by it; a caller's archetype
+   * that writes fewer beats is where it decides anything. Most figures read
+   * naturally when held, but a half-time gesture is bar-long and stops there.
    */
   boundToBar?: boolean;
 };
@@ -266,7 +271,13 @@ export function fillArchetypeFor(
   return supplied?.get(id) ?? FILL_ARCHETYPES[id as FillType];
 }
 
-/** Beat at which a fill begins, widening with section energy. */
+/**
+ * Beat at which a fill begins, widening with section energy.
+ *
+ * One beat per step of energy, so every beat an archetype writes is played by
+ * some transition: a peak takes the bar from its downbeat, pickup included, and
+ * a low-energy phrase end is the last beat alone.
+ */
 export function getFillStartBeat(energy: SectionEnergy): number {
   switch (energy) {
     case 'low':
@@ -274,8 +285,9 @@ export function getFillStartBeat(energy: SectionEnergy): number {
     case 'medium':
       return 2;
     case 'high':
+      return 1;
     case 'peak':
-      return 2;
+      return 0;
   }
 }
 

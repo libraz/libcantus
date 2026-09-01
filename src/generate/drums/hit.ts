@@ -94,10 +94,17 @@ const ONSET_KEY_SCALE = 128;
  */
 export class HitList {
   readonly hits: DrumHit[] = [];
-  /** Onset keys already occupied, as `pitch:quantizedBeat`. */
-  readonly #onsets = new Set<string>();
+  /** Voices already struck at each quantized beat. */
+  readonly #onsets = new Map<number, Set<number>>();
 
-  /** Append a hit, clamping velocity and dropping non-positive positions. */
+  /**
+   * Append a hit, clamping velocity and dropping non-positive positions.
+   *
+   * A voice already struck at this instant is left as it stands: one drum
+   * sounds once however many voices ask for it, and a second entry at the same
+   * pitch and position is a note-on a reader answers with no note-off, heard as
+   * a hung or cut stroke rather than as a louder one.
+   */
   add(
     pitch: number,
     startBeat: number,
@@ -106,6 +113,9 @@ export class HitList {
     articulation?: Articulation,
   ): void {
     const beat = Math.max(0, startBeat);
+    if (this.hasOnset(pitch, beat)) {
+      return;
+    }
     const hit: DrumHit = {
       pitch,
       startBeat: beat,
@@ -118,12 +128,17 @@ export class HitList {
       hit.articulation = articulation;
     }
     this.hits.push(hit);
-    this.#onsets.add(onsetKey(pitch, beat));
+    const struck = this.#onsets.get(beatSlot(beat));
+    if (struck) {
+      struck.add(pitch);
+    } else {
+      this.#onsets.set(beatSlot(beat), new Set([pitch]));
+    }
   }
 
   /** Whether a hit of this pitch already starts exactly at `startBeat`. */
   hasOnset(pitch: number, startBeat: number): boolean {
-    return this.#onsets.has(onsetKey(pitch, startBeat));
+    return this.#onsets.get(beatSlot(startBeat))?.has(pitch) ?? false;
   }
 
   /**
@@ -135,12 +150,17 @@ export class HitList {
     // 128th, so it is enough to probe the quantized positions inside it.
     const steps = Math.round(0.25 * ONSET_KEY_SCALE);
     for (let step = -steps + 1; step < steps; step += 1) {
-      if (this.#onsets.has(onsetKey(GM.CRASH, startBeat + step / ONSET_KEY_SCALE))) {
+      if (this.hasOnset(GM.CRASH, startBeat + step / ONSET_KEY_SCALE)) {
         return true;
       }
     }
     return false;
   }
+}
+
+/** The quantized instant an onset belongs to. */
+function beatSlot(startBeat: number): number {
+  return Math.round(startBeat * ONSET_KEY_SCALE);
 }
 
 /**

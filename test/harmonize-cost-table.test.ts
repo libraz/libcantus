@@ -84,16 +84,19 @@ describe('the chord vocabulary a key opens', () => {
         [2, 'dom7', null, 5],
         [4, 'dom7', null, 6],
       ],
+      // The borrowings arrive in order of use, not of scale degree: the minor
+      // subdominant and the flat-side major triads first, the minor tonic and
+      // the diminished supertonic last.
       '0.75': [
         ...diatonic,
         [9, 'dom7', null, 2],
         [0, 'dom7', null, 4],
         [2, 'dom7', null, 5],
         [4, 'dom7', null, 6],
-        [0, 'min', null, null],
-        [2, 'dim', null, null],
-        [3, 'maj', null, null],
         [5, 'min', null, null],
+        [10, 'maj', null, null],
+        [8, 'maj', null, null],
+        [3, 'maj', null, null],
       ],
       '1': [
         ...diatonic,
@@ -101,13 +104,13 @@ describe('the chord vocabulary a key opens', () => {
         [0, 'dom7', null, 4],
         [2, 'dom7', null, 5],
         [4, 'dom7', null, 6],
-        [0, 'min', null, null],
-        [2, 'dim', null, null],
-        [3, 'maj', null, null],
         [5, 'min', null, null],
-        [7, 'min', null, null],
-        [8, 'maj', null, null],
         [10, 'maj', null, null],
+        [8, 'maj', null, null],
+        [3, 'maj', null, null],
+        [7, 'min', null, null],
+        [2, 'dim', null, null],
+        [0, 'min', null, null],
       ],
     };
     for (const [dial, chords] of Object.entries(expected)) {

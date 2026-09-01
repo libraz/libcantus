@@ -39,11 +39,12 @@ const SECTIONS: Section[] = ['intro', 'verse', 'prechorus', 'chorus', 'bridge', 
  * move code rather than notes shows up here, and a change of the notes has to
  * be made deliberately by re-pinning it.
  *
- * It last moved when the backbeat voice began reading the style as well as the
- * role — a latin groove writes the rim-click clave that names it, and a style
- * that thins a groove out no longer takes the snare drum away from a caller who
- * asked for every voice — and when the open hi-hat accents stopped depending on
- * the subdivision the hats happen to be written on.
+ * It last moved when the ghost snares began following the voice the backbeat is
+ * struck on and the ornament dial alone, in every section; when the broken
+ * backbeat kick of the breakbeat figure became part of the figure rather than a
+ * chorus slot; when a phrase end kept the onsets its style states outright; and
+ * when a fill widened by one beat per step of section energy, so the pickup
+ * beats every archetype is written with are played at a peak.
  */
 function grooveDigest(): string {
   const hash = createHash('sha256');
@@ -110,9 +111,37 @@ function fillDigest(): string {
   return hash.digest('hex');
 }
 
+describe('one onset per voice and position', () => {
+  it('writes no voice twice at one position at a doubled rate', () => {
+    // A vocabulary of continuous sixteenths — the closed hi-hat of funk, the
+    // shaker of samba — halves two of them onto every step, and a drum struck
+    // twice at one instant is a pair of note-ons rather than a louder stroke.
+    for (const genre of GENRES) {
+      for (const rate of ['straight', 'half', 'double'] as const) {
+        const hits = placeDrumPattern({ bars: 2, genre, rate });
+        const seen = new Set<string>();
+        for (const hit of hits) {
+          const key = `${genre}/${rate} ${hit.pitch}@${hit.startBeat}`;
+          expect(seen.has(key), key).toBe(false);
+          seen.add(key);
+        }
+      }
+    }
+  });
+
+  it('keeps a doubled figure as dense as the dictionary wrote it', () => {
+    // Merging the pairs must not empty the bar: the compressed figure still
+    // states the genre.
+    for (const genre of ['funk', 'samba'] as const) {
+      const hits = placeDrumPattern({ bars: 1, genre, rate: 'double' });
+      expect(hits.length, genre).toBeGreaterThan(16);
+    }
+  });
+});
+
 describe('moving the drum vocabulary into data', () => {
   it('pins every generated groove', () => {
-    expect(grooveDigest()).toBe('2cabbd00271c2d90321215bb1644384b343c2335283ccb350953f581b49399c1');
+    expect(grooveDigest()).toBe('467887cfc8083be17c10c42098db9e4964b97da61413ba7b6feb240fb466963d');
   });
 
   it('leaves every fill selection exactly as it was', () => {

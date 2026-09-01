@@ -1,3 +1,4 @@
+import { isMinorKey, tonicizableDegrees } from '../../analyze/functional/index.js';
 import { InvalidInputError } from '../../core/errors/index.js';
 import { beatsPerBar, type MeterLike } from '../../core/meter/index.js';
 import type { KeyScale } from '../../core/types.js';
@@ -8,8 +9,9 @@ import {
   assertPositiveInt,
 } from '../../core/validation/index.js';
 import type { ChordQuality, ChordSpan } from '../../theory/chord/index.js';
-import { chordQualities, diatonicTriad } from '../../theory/chord/index.js';
+import { chordQualities, diatonicTriad, makeChord } from '../../theory/chord/index.js';
 import { type KeyLike, scaleTonesInDegreeOrder, toKeyScale } from '../../theory/scale/index.js';
+import { fifthPcOf } from '../../theory/tendency/index.js';
 import { type GenerationContextInput, resolveContext } from '../context/index.js';
 
 export type { ChordSpan } from '../../theory/chord/index.js';
@@ -350,10 +352,9 @@ function degreeToRootPc(degree: number, key: KeyScale): number {
  */
 function autoQuality(degree: number, key: KeyScale, harmonicDominant: boolean): ChordQuality {
   if (degree >= 1 && degree <= 7) {
-    const isMinor = ((key.modeMask12 >> 3) & 1) === 1 && ((key.modeMask12 >> 4) & 1) === 0;
     // A cadence-oriented progression needs a leading tone in minor too: use
     // the conventional harmonic-minor V rather than the natural-minor v.
-    if (harmonicDominant && isMinor && degree === 5) {
+    if (harmonicDominant && isMinorKey(key) && degree === 5) {
       return 'maj';
     }
     return diatonicTriad(degree, key).quality;
@@ -367,21 +368,20 @@ function autoQuality(degree: number, key: KeyScale, harmonicDominant: boolean): 
   return 'maj';
 }
 
-/** One resolved step of a preset cycle, with the preset degree it came from. */
-type CycleStep = { source: number; degree?: number; rootPc: number; quality: ChordQuality };
+/** One resolved step of a preset cycle. */
+type CycleStep = { degree?: number; rootPc: number; quality: ChordQuality };
 
 /**
- * Resolve a preset's degrees against a key, dropping any step that lands on the
- * chord already sounding.
+ * Resolve a preset's degrees against a key, one step per degree.
  *
  * Presets are written in scale degrees plus a handful of chromatic borrowings
  * measured from the tonic, and the two can name the same chord: `bVI` is the
  * sixth degree of a minor key, so `vi bVI bVII I` — a major-key device — turns
- * into `bVI bVI bVII i` there, sounding one chord twice. Collapsing the repeat
- * keeps the progression moving. Only a repeat produced by *different* degrees is
- * collapsed: a preset that names the same degree twice — `I IV V I` closing on
- * its tonic — means it. The wrap from the last step back to the first is treated
- * the same way, since the cycle repeats to fill the bars.
+ * into `bVI bVI bVII i` there. The repeat is kept, which is one chord held over
+ * two bars rather than a chord change: dropping it shortened the loop to three
+ * bars in that key and four in every other, and a harmony that turns over every
+ * three bars crosses every phrase boundary the bass, the drums and the
+ * countermelody are written against.
  */
 function resolveCycle(
   degrees: readonly number[],
@@ -389,10 +389,8 @@ function resolveCycle(
   ext: ProgressionOptions['ext'],
   harmonicDominant: boolean,
 ): CycleStep[] {
-  const steps: CycleStep[] = [];
-  for (const degree of degrees) {
+  const steps: CycleStep[] = degrees.map((degree) => {
     const step: CycleStep = {
-      source: degree,
       rootPc: degreeToRootPc(degree, key),
       quality:
         ext !== undefined && ext !== 'auto' ? ext : autoQuality(degree, key, harmonicDominant),
@@ -400,31 +398,9 @@ function resolveCycle(
     if (degree >= 1 && degree <= 7) {
       step.degree = degree;
     }
-    const previous = steps[steps.length - 1];
-    if (previous !== undefined && previous.source !== step.source && sameStep(previous, step)) {
-      continue;
-    }
-    steps.push(step);
-  }
-  const first = steps[0];
-  const last = steps[steps.length - 1];
-  if (
-    steps.length > 1 &&
-    first !== undefined &&
-    last !== undefined &&
-    first.source !== last.source &&
-    sameStep(first, last)
-  ) {
-    steps.pop();
-  }
-  return steps.length > 0
-    ? steps
-    : [{ source: 0, degree: 0, rootPc: degreeToRootPc(0, key), quality: 'maj' }];
-}
-
-/** Whether two resolved steps name the same chord. */
-function sameStep(a: CycleStep, b: CycleStep): boolean {
-  return a.rootPc === b.rootPc && a.quality === b.quality;
+    return step;
+  });
+  return steps.length > 0 ? steps : [{ degree: 0, rootPc: degreeToRootPc(0, key), quality: 'maj' }];
 }
 
 /**
@@ -460,6 +436,37 @@ export function pickProgressionPreset(style: ProgStyle, seed = 0): ProgressionPr
 }
 
 /**
+ * The pitch classes of the degrees this key can make a local tonic.
+ *
+ * The degrees come from the same predicate the analysis layer names an applied
+ * numeral's target with, so a chord flagged as a secondary dominant here is one
+ * that layer can write `V7/x` for.
+ */
+function tonicizableRootPcs(key: KeyScale): Set<number> {
+  return new Set(tonicizableDegrees(key).map((degree) => degree.rootPc));
+}
+
+/**
+ * Whether the chord a secondary dominant would resolve to can stand as a local
+ * tonic.
+ *
+ * Nothing tonicizes a diminished triad: the supertonic of a minor key is one,
+ * and a dominant seventh placed in front of it is a chord read against the home
+ * key rather than as an applied dominant. Both the degree and the chord
+ * actually sounding on it have to hold a perfect fifth, since a caller's `ext`
+ * can force a quality the degree does not carry.
+ *
+ * @param span The chord the dominant would point at.
+ * @param tonicizable The key's tonicizable degree roots, as pitch classes.
+ */
+function canBeTonicized(span: ChordSpan, tonicizable: ReadonlySet<number>): boolean {
+  if (!tonicizable.has(span.rootPc)) {
+    return false;
+  }
+  return fifthPcOf(makeChord(span.rootPc, span.quality)) === (span.rootPc + 7) % 12;
+}
+
+/**
  * Generate a chord progression laid out one chord per bar.
  *
  * A preset is chosen by `presetId` when given, otherwise deterministically from
@@ -474,7 +481,9 @@ export function pickProgressionPreset(style: ProgStyle, seed = 0): ProgressionPr
  * secondary dominant and is therefore always a `dom7`. With
  * `complexity.harmonic` above 0, some chords are deterministically replaced with
  * the secondary dominant (V7) of the following chord, flagged with
- * `secondaryDominant`.
+ * `secondaryDominant`. Only a chord the key can make a local tonic is given one:
+ * nothing tonicizes a diminished triad, so the supertonic of a minor key takes
+ * no dominant of its own.
  *
  * @param opts Generation options.
  * @returns One chord per bar in timeline order.
@@ -565,6 +574,7 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
   const harmonic = ctx.harmonic ?? DEFAULT_HARMONIC;
   if (harmonic > 0) {
     const tonicPc = (((key.rootPc % 12) + 12) % 12) as number;
+    const tonicizable = tonicizableRootPcs(key);
     const draw = ctx.part('progression');
     let tonicStatements = chords.filter((chord) => chord.rootPc === tonicPc).length;
     for (let i = 0; i < chords.length - 1; i += 1) {
@@ -580,7 +590,14 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
       // A secondary dominant inserted at i-1 resolves onto this chord; replacing
       // it here would orphan that dominant.
       const isResolutionTarget = chords[i - 1]?.secondaryDominant === true;
-      if (targetsTonic || isLastTonicStatement || alreadySecondary || isResolutionTarget) {
+      const takesNoDominant = !canBeTonicized(next, tonicizable);
+      if (
+        targetsTonic ||
+        isLastTonicStatement ||
+        alreadySecondary ||
+        isResolutionTarget ||
+        takesNoDominant
+      ) {
         continue;
       }
       if (draw.prob(harmonic, 'reharmonize', i)) {

@@ -64,12 +64,27 @@ const BEAT_3 = beatStep(2);
 const BEAT_4 = beatStep(3);
 const AND_2 = beatStep(1) + 2;
 const AND_4 = beatStep(3) + 2;
+/** The last sixteenth of beat three, which pushes into the fourth. */
+const A_OF_3 = beatStep(2) + 3;
 
 /**
- * The kick a section plays whatever the style: two half notes, so the phrase
- * ends without pushing.
+ * The kick under every phrase end: two half notes, so the outro stops pushing.
+ *
+ * A style's own unconditional onsets are played over it — a four-on-the-floor
+ * dance kick and a clave-leaning latin figure are those grooves, and an outro
+ * that dropped them would end the piece in a style it was never in — while the
+ * slots the dials may fill are left out, which is what keeps the phrase end
+ * from building.
  */
 const OUTRO_FIGURE: KickFigure = [{ step: BEAT_1 }, { step: BEAT_3 }];
+
+/** The onsets a figure states outright, with none of the slots a dial fills. */
+function statedSlots(figure: KickFigure): KickSlot[] {
+  return figure.filter(
+    (slot) =>
+      slot.probability === undefined && slot.sections === undefined && slot.barParity === undefined,
+  );
+}
 
 /** The figure a style with no entry of its own plays. */
 const DEFAULT_FIGURE: KickFigure = [
@@ -105,9 +120,13 @@ export const KICK_FIGURES: Readonly<Record<DrumStyle, KickFigure>> = deepFreeze(
   rock: [
     { step: BEAT_1 },
     { step: BEAT_3 },
-    { step: AND_2, probability: 0.65, slot: 'beat2and', sections: ['chorus'] },
+    // The broken beat: the "and" of two answers the snare and the "a" of three
+    // pushes into the fourth, in every section. That displacement is the figure
+    // rather than a slot a dial may or may not fill in a chorus, which is what
+    // separates it from the plain pop pulse wherever it is played.
+    { step: AND_2 },
+    { step: A_OF_3 },
     { step: AND_4, probability: 0.4, slot: 'beat4and', sections: ['chorus'] },
-    { step: AND_2, probability: 0.3, slot: 'beat2and', sections: ['prechorus'] },
   ],
   synth: [
     { step: BEAT_1 },
@@ -210,6 +229,7 @@ export function getKickPattern(
   draw: Draw,
   rhythmic: number,
 ): KickPattern {
-  const figure = section === 'outro' ? OUTRO_FIGURE : (KICK_FIGURES[style] ?? DEFAULT_FIGURE);
+  const own = KICK_FIGURES[style] ?? DEFAULT_FIGURE;
+  const figure = section === 'outro' ? [...OUTRO_FIGURE, ...statedSlots(own)] : own;
   return realiseKickFigure(figure, section, bar, draw, rhythmic);
 }

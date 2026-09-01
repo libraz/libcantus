@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { resolveContext } from '../src/generate/context/index.js';
 import { euclideanRhythm } from '../src/generate/drums/euclid.js';
 import {
+  type FillArchetype,
   type FillType,
   generateFill,
   getFillStartBeat,
   selectFillType,
 } from '../src/generate/drums/fills.js';
-import { HitList } from '../src/generate/drums/hit.js';
+import { DRUM_NOTES, HitList } from '../src/generate/drums/hit.js';
 import type {
   DrumRole,
   DrumsOptions,
@@ -238,11 +239,34 @@ describe('fills', () => {
     }
   });
 
-  it('sizes fills by energy', () => {
+  it('sizes fills by energy, one beat per step', () => {
     expect(getFillStartBeat('low')).toBe(3);
     expect(getFillStartBeat('medium')).toBe(2);
-    expect(getFillStartBeat('high')).toBe(2);
-    expect(getFillStartBeat('peak')).toBe(2);
+    expect(getFillStartBeat('high')).toBe(1);
+    expect(getFillStartBeat('peak')).toBe(0);
+  });
+
+  it('plays the pickup beats every archetype is written with', () => {
+    // The pickup beats are material like any other: an archetype that writes
+    // kick and snare on beat 1 and snare and tom on beat 2 has to be heard
+    // playing them at the energies whose fills start that early.
+    for (const fill of ALL_FILLS) {
+      for (const beat of [0, 1]) {
+        const track = new HitList();
+        generateFill(track, beat, beat, fill, 100);
+        expect(track.hits.length, `${fill} at beat ${beat}`).toBeGreaterThan(0);
+      }
+    }
+    const peak = generateDrums({
+      bars: 2,
+      style: 'standard',
+      section: 'chorus',
+      fills: true,
+      ctx: { seed: 5, bpm: 120 },
+    });
+    const pickup = peak.filter((hit) => hit.startBeat >= 4 && hit.startBeat < 5);
+    expect(pickup.map((hit) => hit.pitch)).toContain(DRUM_NOTES.kick);
+    expect(pickup.map((hit) => hit.pitch)).toContain(DRUM_NOTES.snare);
   });
 
   it('selects fills from the expected set for each transition context', () => {
@@ -382,5 +406,104 @@ describe('fills', () => {
     for (const fill of ALL_FILLS) {
       expect(seen.has(fill)).toBe(true);
     }
+  });
+});
+
+describe('the ornament dial is the ghost density in every section', () => {
+  /** Snare-drum onsets off the beat: the ghosts, with no fill or lift to add any. */
+  const ghostCount = (section: Section, ornament: number) =>
+    generateDrums({
+      bars: 4,
+      style: 'funk',
+      section,
+      role: 'full',
+      ctx: { bpm: 120, complexity: { rhythmic: 0.5, ornament }, seed: 0 },
+    }).filter((hit) => hit.pitch === DRUM_NOTES.snare && !Number.isInteger(hit.startBeat)).length;
+
+  it('answers the dial in the sections a verse and an intro are written in', () => {
+    // The ghosts are what makes the groove this genre rather than a plain pop
+    // beat, and the dial is the caller's only lever on them: a section may scale
+    // the density, but none of them may leave the lever doing nothing.
+    for (const section of SECTIONS) {
+      const quiet = ghostCount(section, 0);
+      const middle = ghostCount(section, 0.5);
+      const busy = ghostCount(section, 1);
+      expect(middle, section).toBeGreaterThanOrEqual(quiet);
+      expect(busy, section).toBeGreaterThanOrEqual(middle);
+      expect(busy, section).toBeGreaterThan(quiet);
+    }
+  });
+});
+
+describe('two style names are two grooves', () => {
+  const skeleton = (style: GrooveStyle, section: Section, seed: number, rhythmic: number) =>
+    generateDrums({
+      bars: 2,
+      style,
+      section,
+      ctx: { bpm: 120, complexity: { rhythmic }, seed },
+    })
+      .filter((hit) => hit.pitch === DRUM_NOTES.kick || hit.pitch === DRUM_NOTES.snare)
+      .map((hit) => `${hit.pitch}@${hit.startBeat}`)
+      .join(' ');
+
+  it('separates a breakbeat from a plain pop beat in every section', () => {
+    // The difference has to be in the figure rather than in a slot the dial may
+    // fill in a chorus: a caller who chose the style for a verse would otherwise
+    // receive the plain beat with nothing to tell them so.
+    for (const section of SECTIONS) {
+      for (const seed of [0, 1, 5]) {
+        for (const rhythmic of [0.2, 0.5, 0.9]) {
+          const label = `${section}/${seed}/${rhythmic}`;
+          expect(skeleton('breakbeat', section, seed, rhythmic), label).not.toBe(
+            skeleton('standard', section, seed, rhythmic),
+          );
+        }
+      }
+    }
+  });
+
+  it('keeps a dance kick and a latin kick through the phrase end', () => {
+    // The outro plays two half notes under whatever the style states outright,
+    // so a four-on-the-floor and a clave-leaning figure are still themselves
+    // where the piece ends.
+    for (const style of ['house', 'bossa'] as GrooveStyle[]) {
+      expect(skeleton(style, 'outro', 0, 0.5), style).not.toBe(
+        skeleton('standard', 'outro', 0, 0.5),
+      );
+    }
+  });
+});
+
+describe('an archetype shorter than the bar', () => {
+  // `boundToBar` answers for the beats an archetype does not write itself,
+  // which is what a caller's two-beat figure runs into: held, its last beat
+  // sounds again on the beats after it; bound, it stops where it was written.
+  const twoBeats: FillArchetype = {
+    atBeat: [
+      [{ voice: DRUM_NOTES.snare, offset: 0, duration: 0.5, velocity: { base: 'fill' } }],
+      [{ voice: DRUM_NOTES.lowTom, offset: 0, duration: 0.5, velocity: { base: 'accent' } }],
+    ],
+  };
+
+  it('holds its last beat over the rest of the bar', () => {
+    const track = new HitList();
+    for (let beat = 0; beat < 4; beat += 1) {
+      generateFill(track, beat, beat, twoBeats, 100);
+    }
+    expect(track.hits.map((hit) => hit.pitch)).toEqual([
+      DRUM_NOTES.snare,
+      DRUM_NOTES.lowTom,
+      DRUM_NOTES.lowTom,
+      DRUM_NOTES.lowTom,
+    ]);
+  });
+
+  it('stops where it was written when it is bound to the bar', () => {
+    const track = new HitList();
+    for (let beat = 0; beat < 4; beat += 1) {
+      generateFill(track, beat, beat, { ...twoBeats, boundToBar: true }, 100);
+    }
+    expect(track.hits.map((hit) => hit.pitch)).toEqual([DRUM_NOTES.snare, DRUM_NOTES.lowTom]);
   });
 });

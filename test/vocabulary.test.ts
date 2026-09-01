@@ -265,6 +265,37 @@ describe('transformation rules', () => {
     }
   });
 
+  it('merges the onsets a doubled rate brings onto one step of one voice', () => {
+    // Halving a run of sixteenths puts two of them on the same step. One drum
+    // sounds once there, so the pair is one stroke and the louder of the two is
+    // what it is; two entries would be a note-on a reader answers with no
+    // note-off.
+    const run: GridEvent[] = [
+      { step: 0, velocity: 0.5, voice: 'closedHiHat' },
+      { step: 1, velocity: 0.9, voice: 'closedHiHat' },
+      { step: 2, velocity: 0.55, voice: 'closedHiHat' },
+      { step: 3, velocity: 0.55, voice: 'closedHiHat' },
+      // Another voice on the same steps is another hand: it stays.
+      { step: 0, velocity: 1, voice: 'kick' },
+      { step: 1, velocity: 1, voice: 'kick' },
+    ];
+    const compressed = doubleTime(run, BAR_STEPS);
+    const seen = new Set<string>();
+    for (const event of compressed) {
+      const key = `${event.voice}@${event.step}`;
+      expect(seen.has(key), key).toBe(false);
+      seen.add(key);
+    }
+    const merged = compressed.find((e) => e.voice === 'closedHiHat' && e.step === 1);
+    expect(merged?.velocity).toBe(0.9);
+    expect(
+      compressed
+        .filter((e) => e.step === 0)
+        .map((e) => e.voice)
+        .sort(),
+    ).toEqual(['closedHiHat', 'kick']);
+  });
+
   it('lets another voice sit where this one wants to anticipate', () => {
     // Two hands are two players: a ghost snare on the step a hi-hat wants to
     // anticipate into is not an obstacle, and blocking on it left the upper

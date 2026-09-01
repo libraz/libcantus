@@ -25,7 +25,10 @@ const positionsOf = (hits: ReturnType<typeof generateDrums>, pitch: number) =>
   hits.filter((hit) => hit.pitch === pitch).map((hit) => hit.startBeat % 4);
 
 describe('the backbeat voice follows the role and the style together', () => {
-  it('writes a rim-click clave for bossa at every role and section', () => {
+  // The groove states the backbeat of a latin style with the side-stick timbre
+  // on the backbeat positions themselves. It is not a clave rhythm: the pattern
+  // dictionary carries one for `bossaNova`, and this is the other path.
+  it('states the backbeat of bossa on the side stick at every role and section', () => {
     for (const role of ROLES) {
       for (const section of SECTIONS) {
         const hits = generateDrums({ ...base, style: 'bossa', section, role });
@@ -143,5 +146,67 @@ describe('voices that reinforce the backbeat follow where it moved', () => {
     const claps = positionsOf(hits, HANDCLAP);
     expect(claps.length).toBeGreaterThan(0);
     expect([...new Set(claps)].sort((a, b) => a - b)).toEqual([1, 3]);
+  });
+});
+
+describe('a ghost decorates the backbeat it answers', () => {
+  // A ghost is a soft stroke on the snare head leading into the backbeat, so it
+  // belongs to a groove that states its backbeat there. With the fills off and
+  // no chorus to lift into, every snare-drum onset in these parts is a ghost or
+  // the backbeat itself.
+  const ghostsOf = (hits: ReturnType<typeof generateDrums>) =>
+    hits.filter((hit) => hit.pitch === SNARE && !Number.isInteger(hit.startBeat));
+
+  it('writes no snare-head ghost where the backbeat is a side stick', () => {
+    for (const role of ['ambient', 'minimal'] as const) {
+      for (const style of ['standard', 'funk', 'synthpop', 'breakbeat'] as const) {
+        for (const section of SECTIONS) {
+          const hits = generateDrums({
+            ...base,
+            bars: 4,
+            style,
+            section,
+            role,
+            ctx: { bpm: 120, complexity: { rhythmic: 0.9, ornament: 1 }, seed: 1 },
+          });
+          const label = `${style}/${section}/${role}`;
+          expect(
+            hits.filter((hit) => hit.pitch === SNARE),
+            label,
+          ).toEqual([]);
+        }
+      }
+    }
+  });
+
+  it('writes them where the backbeat is the snare drum itself', () => {
+    for (const section of SECTIONS) {
+      const hits = generateDrums({
+        ...base,
+        bars: 4,
+        style: 'funk',
+        section,
+        role: 'full',
+        ctx: { bpm: 120, complexity: { rhythmic: 0.9, ornament: 1 }, seed: 1 },
+      });
+      expect(ghostsOf(hits).length, section).toBeGreaterThan(0);
+    }
+  });
+
+  it('writes none for a latin groove, which states its backbeat on the rim', () => {
+    for (const section of SECTIONS) {
+      const hits = generateDrums({
+        ...base,
+        bars: 4,
+        style: 'bossa',
+        section,
+        role: 'full',
+        ctx: { bpm: 120, complexity: { rhythmic: 0.9, ornament: 1 }, seed: 1 },
+      });
+      expect(
+        hits.filter((hit) => hit.pitch === SNARE),
+        section,
+      ).toEqual([]);
+    }
   });
 });

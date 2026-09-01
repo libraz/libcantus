@@ -23,6 +23,21 @@ const REACH_BY_VOICE: Readonly<Record<DrumVoice, readonly Limb[]>> = {
   shaker: ['rightHand', 'leftHand'],
 };
 
+/**
+ * Voices a drum track lays over the kit on a take of their own.
+ *
+ * The groove commits both hands wherever it puts a hi-hat under a snare, so a
+ * tambourine, a hand-clap or a shaker riding over it is a second pass rather
+ * than a stroke the player has a hand free for — which is how these parts reach
+ * a record, and why keeping them means overdubbing rather than thinning the
+ * groove that carries them.
+ */
+const OVERDUB_VOICES: readonly DrumVoice[] = Object.freeze([
+  'handClap',
+  'tambourine',
+  'shaker',
+] as const);
+
 /** The reach table keyed the way a hit is: by General MIDI note number. */
 function reachByNote(): Record<number, readonly Limb[]> {
   const reach: Record<number, readonly Limb[]> = {};
@@ -53,6 +68,11 @@ const KIT_ARTICULATIONS: readonly Articulation[] = Object.freeze([
  * hand at the same instant is what makes a pattern unplayable, and a voice no
  * limb reaches is not on the kit at all.
  *
+ * The auxiliary percussion — hand-claps, tambourine, shaker — is dubbed over
+ * the kit on a pass of its own, so it sounds through a backbeat whose snare and
+ * hi-hat already take both hands, and the four limbs stay the bound on the
+ * groove itself.
+ *
  * @example
  * ```ts
  * import { DRUM_KIT, generateDrums, playability } from '@libraz/libcantus';
@@ -71,6 +91,8 @@ export const DRUM_KIT: PercussionProfile = Object.freeze({
   name: 'drum kit',
   limbs: LIMBS,
   reach: deepFreeze(reachByNote()),
+  overdub: deepFreeze(OVERDUB_VOICES.map((voice) => DRUM_NOTES[voice])),
   articulations: KIT_ARTICULATIONS,
-  polyphony: 4,
+  // One stroke per limb, and one more per voice dubbed over them.
+  polyphony: LIMBS.length + OVERDUB_VOICES.length,
 });
