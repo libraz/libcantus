@@ -51,6 +51,8 @@ export {
   instrumentRange,
   LIMBS,
   playability,
+  toInstrumentProfile,
+  toStringedProfile,
 } from './instrument/index.js';
 export {
   ConsonanceClass,

@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
 import { InvalidInputError } from '../src/core/errors/index.js';
-import { BASS_4_STRING, playability } from '../src/core/index.js';
-import { toInstrumentProfile, toStringedProfile } from '../src/core/instrument/index.js';
+import {
+  BASS_4_STRING,
+  playability,
+  toInstrumentProfile,
+  toStringedProfile,
+} from '../src/core/index.js';
 import { DRUM_KIT } from '../src/generate/index.js';
 import {
   Chord,
