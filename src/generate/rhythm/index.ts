@@ -20,10 +20,10 @@ import {
 } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import {
-  assertFiniteNumber,
   assertGenerationBudget,
+  assertInteger,
+  assertMidiPitch,
   assertPositiveInt,
-  assertRange,
 } from '../../core/validation/index.js';
 import { type GenerationContextInput, resolveContext } from '../context/index.js';
 
@@ -54,6 +54,7 @@ const DEFAULT_RHYTHM_VELOCITY = 96;
  * @param pitch The MIDI pitch to give every note.
  * @param velocity Velocity for every note; defaults to a mezzo-forte 96.
  * @returns The note events, in the order given.
+ * @throws If the pitch or the velocity is not a whole MIDI value in [0, 127].
  * @example
  * ```ts
  * import { generateRhythm, humanize, rhythmToNoteEvents } from '@libraz/libcantus';
@@ -67,8 +68,13 @@ export function rhythmToNoteEvents(
   pitch: number,
   velocity: number = DEFAULT_RHYTHM_VELOCITY,
 ): NoteEvent[] {
-  assertFiniteNumber(pitch, 'pitch');
-  assertRange(velocity, 0, 127, 'velocity');
+  // Both fields are checked here rather than left to whatever reads the result:
+  // this builds a note event without going through the note-event guard, so a
+  // pitch or a velocity the guard would refuse would otherwise reach a public
+  // note by the one path that does not ask. The domains are the guard's — whole
+  // MIDI quantities, not merely finite numbers.
+  assertMidiPitch(pitch, 'pitch');
+  assertInteger(velocity, 'velocity', 0, 127);
   return events.map((event) => ({
     pitch,
     startBeat: event.position,

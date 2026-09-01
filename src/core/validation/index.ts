@@ -384,7 +384,12 @@ export function assertNoteEvent(
     `${name}.durationBeat`,
   );
   if (event.velocity !== undefined) {
-    assertRange(event.velocity, 0, 127, `${name}.velocity`);
+    // The same domain as the pitch beside it, and checked the same way: both
+    // are documented as MIDI quantities in [0, 127], and a MIDI byte has no
+    // fractional value to carry. A velocity that arrives at 63.7 is a rounding
+    // left undone upstream, and admitting it here hands the writer a note the
+    // format cannot hold rather than the caller an error where it was made.
+    assertInteger(event.velocity, `${name}.velocity`, 0, 127);
   }
   // Both optional fields carry a closed domain, so both are checked here. A
   // technique outside the table is a misspelt or unmapped name, and passing it

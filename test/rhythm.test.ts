@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { InvalidInputError } from '../src/core/errors/index.js';
 import { beatsPerBar, metricWeight, type TimeSignature } from '../src/core/meter/index.js';
+import { assertNoteEvents } from '../src/core/validation/index.js';
 import {
   generateRhythm,
   onsetWeightCurve,
   type RhythmEvent,
   rhythmDensity,
+  rhythmToNoteEvents,
 } from '../src/generate/rhythm/index.js';
 
 const FOUR_FOUR: TimeSignature = { numerator: 4, denominator: 4 };
@@ -25,6 +28,30 @@ describe('onsetWeightCurve', () => {
       expect(onsetWeightCurve(w)).toBeGreaterThanOrEqual(0);
       expect(onsetWeightCurve(w)).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+describe('rhythmToNoteEvents pitch and velocity', () => {
+  const events: RhythmEvent[] = [{ position: 0, duration: 1 }];
+
+  it.each([
+    ['fractional pitch', 60.5, 96],
+    ['pitch above the MIDI range', 128, 96],
+    ['negative pitch', -1, 96],
+    ['fractional velocity', 38, 63.7],
+    ['velocity above the MIDI range', 38, 128],
+    ['negative velocity', 38, -1],
+  ])('refuses a %s, as the note-event guard does', (_label, pitch, velocity) => {
+    expect(() => rhythmToNoteEvents(events, pitch, velocity)).toThrow(InvalidInputError);
+  });
+
+  it('hands back notes the note-event guard accepts', () => {
+    // The bridge builds note events without going through the guard, so what it
+    // writes is checked against the guard rather than against itself.
+    const notes = rhythmToNoteEvents(events, 38, 100);
+    expect(() => assertNoteEvents(notes, 'notes')).not.toThrow();
+    expect(notes[0]?.pitch).toBe(38);
+    expect(notes[0]?.velocity).toBe(100);
   });
 });
 

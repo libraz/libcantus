@@ -423,7 +423,9 @@ export class Rhythm {
    * @param pitch The MIDI pitch to give every onset.
    * @param velocity Velocity for every onset; a mezzo-forte 96 by default.
    * @returns The score holding the pattern.
-   * @throws If the pitch is not finite or the velocity is outside [0, 127].
+   * @throws If the pitch or the velocity is not a whole MIDI value in [0, 127];
+   *   both are the numbers a note event carries, and a fractional one is not a
+   *   note anything downstream can sound.
    * @example
    * ```ts
    * import { parseTimeSignature } from '@libraz/libcantus';
