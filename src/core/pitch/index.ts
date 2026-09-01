@@ -670,9 +670,9 @@ const INTERVAL_NAME_PATTERN = /^(-?)(P|M|m|A+|d+)(\d+)$/;
  *
  * @param name The interval name: an optional `'-'`, a quality label, and a
  *   diatonic number. Surrounding whitespace is ignored.
- * @returns The spelled interval. An ascending name carries no `descending`
- *   flag, and its span is the one {@link intervalSemitones} reports — negative
- *   for the rare second narrowed past a zero span.
+ * @returns The spelled interval. `descending` is always present, `false` for an
+ *   ascending name, and the span is the one {@link intervalSemitones} reports —
+ *   negative for the rare second narrowed past a zero span.
  * @throws If the name is not a quality label followed by a number, or the two
  *   cannot describe the same interval. Use {@link tryParseInterval} where
  *   failure is ordinary, such as an interval field read on every keystroke.
@@ -823,8 +823,8 @@ function normalizedInterval(data: IntervalData): SpelledInterval {
  *
  * @param value An interval name, plain interval data, or a value whose `toJSON`
  *   returns interval data.
- * @returns The validated interval data, carrying `descending` only when the
- *   interval descends.
+ * @returns The validated interval data, always carrying `descending`, `false`
+ *   for an interval that ascends.
  * @throws If the value is not interval-shaped, or its number, quality, and span
  *   do not describe the same interval.
  * @example

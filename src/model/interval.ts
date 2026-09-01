@@ -112,14 +112,9 @@ export class Interval {
     // sign: an interval can climb a letter while losing a semitone — C# up to
     // Dbb is a doubly diminished second — and only the pitch module's reading
     // of number, quality and span together tells that from a descent. The
-    // canonical form carries the flag exactly when the interval descends.
+    // canonical form always carries the flag, whichever way the interval goes.
     const checked = toSpelledInterval(data);
-    return new Interval(
-      checked.number,
-      checked.quality,
-      checked.semitones,
-      checked.descending ?? false,
-    );
+    return new Interval(checked.number, checked.quality, checked.semitones, checked.descending);
   }
 
   /**
@@ -293,27 +288,20 @@ export class Interval {
    *
    * Private class fields do not serialize, so an explicit `toJSON` keeps
    * `JSON.stringify(interval)` from collapsing to `{}`. The result is the
-   * canonical shape the pitch module produces: `descending` appears only on an
-   * interval that descends, so a measured interval, a parsed name, and this
-   * method all serialize to the same object.
+   * canonical shape the pitch module produces: `descending` is always there, so
+   * a measured interval, a parsed name, and this method all serialize to the
+   * same object and none of them leaves the direction to be guessed.
    *
-   * @returns The diatonic number, quality, and semitone span, with
-   *   `descending` when the interval descends.
+   * @returns The diatonic number, quality, and semitone span, with `descending`
+   *   telling which way the interval goes.
    */
   toJSON(): SpelledInterval {
-    return this.#descending
-      ? {
-          number: this.#number,
-          quality: this.#quality,
-          semitones: this.#semitones,
-          descending: true,
-        }
-      : {
-          number: this.#number,
-          quality: this.#quality,
-          semitones: this.#semitones,
-          descending: false,
-        };
+    return {
+      number: this.#number,
+      quality: this.#quality,
+      semitones: this.#semitones,
+      descending: this.#descending,
+    };
   }
 
   /**

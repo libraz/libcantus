@@ -1,12 +1,11 @@
 /**
- * The reproducibility contract for generated output.
+ * How generated output is pinned across builds.
  *
- * A saved project is a seed plus parameters, and it only reopens as the same
- * piece if the library still turns them into the same notes. Package versions
- * cannot carry that promise: a bug fix inside a generator is a patch release
- * and still moves every note. The algorithm version is the separate number
- * that does carry it, declared here and recorded by the caller alongside the
- * seed.
+ * A saved project is a seed plus parameters, and it reopens as the same piece
+ * only while the library turns them into the same notes. The algorithm version
+ * is the number that says which reading of those parameters a project was
+ * written against. It is drawn into every seed, so two versions never draw the
+ * same stream, and a caller records it beside the seed.
  */
 
 import { InvalidInputError } from '../errors/index.js';
@@ -15,24 +14,30 @@ import { assertInteger } from '../validation/index.js';
 /**
  * The generator algorithm version this build produces by default.
  *
- * The guarantee it carries: for a fixed algorithm version, the same inputs —
- * seed, version and every documented parameter — produce the same generated
- * output from any build of this library that accepts that version. It covers
- * what the generators return, and nothing else: analysis results, error
- * messages and output taken under a different version are outside it.
+ * What it carries: for a fixed algorithm version, the same inputs — seed,
+ * version and every documented parameter — produce the same generated output
+ * from a given build. It covers what the generators return, and nothing else:
+ * analysis results, error messages and output taken under a different version
+ * are outside it.
  *
- * Changing what a generator returns for a version it already accepts is a
- * defect. New behaviour raises this constant instead, and the older version
- * keeps producing what it produced. Withdrawing an accepted version is a
- * breaking change, and a project pinned to a withdrawn or not-yet-known
- * version is rejected rather than reinterpreted.
+ * What it does not carry is a reading frozen against correction. The
+ * generators hold one implementation rather than one per version, so pinning
+ * an older number selects a different draw of the current implementation and
+ * does not restore what that number produced before: a fix to output that was
+ * musically wrong moves the notes of a version already in use, ships as a
+ * patch, and is stated in the changelog. Reproducing a piece exactly therefore
+ * means recording the package version alongside the seed and this number.
+ *
+ * Raising this constant marks a deliberate change of approach rather than a
+ * correction. A project pinned to a version this build does not know is
+ * rejected rather than reinterpreted.
  *
  * @category Utilities
  */
 export const ALGORITHM_VERSION = 1;
 
 /**
- * The oldest algorithm version this build still produces.
+ * The oldest algorithm version this build still accepts.
  *
  * @category Utilities
  */
