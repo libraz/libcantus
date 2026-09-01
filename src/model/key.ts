@@ -58,7 +58,6 @@ import {
   type ScaleName,
   type ScaleNameInput,
   type ScaleSystem,
-  type SpelledKey,
   scaleByName,
   scaleSystemOf,
   scaleTonesInDegreeOrder,
@@ -305,8 +304,8 @@ export class Key {
    * already the one the key is written with; re-deriving it from the pitch class
    * would throw that spelling away (Bb minor would come back as A# minor).
    */
-  static #fromSpelled(spelled: SpelledKey): Key {
-    return new Key(spelled.key, new Note(spelled.tonic));
+  static #fromSpelled(spelled: ResolvedKey): Key {
+    return new Key(spelled.scale, new Note(spelled.tonic), spelled.variant);
   }
 
   /**
@@ -845,10 +844,7 @@ export class Key {
   relationTo(other: Key): KeyRelation | null {
     // The other key is read through its public accessors, not its private
     // fields, so a bundle that emits two copies of this class still compares.
-    return keyRelationBetween(
-      { tonic: this.#tonic.data, key: this.#scale },
-      { tonic: other.tonic.data, key: other.scale },
-    );
+    return keyRelationBetween(this.toJSON(), other.toJSON());
   }
 
   /**

@@ -1,4 +1,4 @@
-import type { Note, NoteLike } from '../../core/pitch/index.js';
+import type { NoteLike } from '../../core/pitch/index.js';
 import {
   diatonicLetterOf,
   pitchClassOf as mod12,
@@ -8,8 +8,9 @@ import {
 import type { KeyScale } from '../../core/types.js';
 import { assertInteger, assertOneOf } from '../../core/validation/index.js';
 import { type KeyLike, toKeyScale } from './coerce.js';
+import type { ResolvedKey } from './identity.js';
 import { majorKey, minorKey } from './key.js';
-import { HARMONIC_MINOR_MASK, MAJOR_MASK, MELODIC_MINOR_MASK } from './masks.js';
+import { HARMONIC_MINOR_MASK, MAJOR_MASK, MELODIC_MINOR_MASK, variantOfMask } from './masks.js';
 
 /**
  * Which of the two modes a key signature is read in.
@@ -168,10 +169,7 @@ export function keySignatureFifths(tonic: NoteLike, key: KeyLike): number {
  * ```
  * @category Scales
  */
-export function keyFromFifths(
-  fifths: number,
-  mode: KeyMode = 'major',
-): { tonic: Note; key: KeyScale } {
+export function keyFromFifths(fifths: number, mode: KeyMode = 'major'): ResolvedKey {
   assertInteger(fifths, 'fifths', -MAX_FIFTHS, MAX_FIFTHS);
   const which = assertOneOf(mode, ['major', 'minor'], 'mode');
   // The circle of fifths starts at F, so the major tonic of `fifths` sharps is
@@ -180,8 +178,10 @@ export function keyFromFifths(
   const letter = FIFTHS_LETTERS[((index % 7) + 7) % 7] ?? 0;
   const alter = Math.floor(index / 7);
   const rootPc = mod12(naturalPitchClassOf(letter) + alter);
+  const scale = which === 'minor' ? minorKey(rootPc) : majorKey(rootPc);
   return {
     tonic: { letter, alter },
-    key: which === 'minor' ? minorKey(rootPc) : majorKey(rootPc),
+    scale,
+    variant: variantOfMask(scale.modeMask12),
   };
 }

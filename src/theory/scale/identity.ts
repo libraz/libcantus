@@ -1,14 +1,7 @@
-import { InvalidInputError } from '../../core/errors/index.js';
 import type { Note } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import { assertOneOf } from '../../core/validation/index.js';
 import { type KeyLike, type KeyVariant, toKeyScale } from './coerce.js';
-import {
-  HARMONIC_MINOR_MASK,
-  MAJOR_MASK,
-  MELODIC_MINOR_MASK,
-  NATURAL_MINOR_MASK,
-} from './masks.js';
+import { assertKeyVariant, variantOfMask } from './masks.js';
 import { spelledKeyOf } from './relations.js';
 
 /**
@@ -27,6 +20,7 @@ import { spelledKeyOf } from './relations.js';
  */
 
 export type { KeyVariant };
+export { assertKeyVariant, variantOfMask };
 
 /**
  * The complete identity of a key: what it sounds, how it is written, and which
@@ -47,63 +41,6 @@ export type ResolvedKey = {
   /** The scale form the key stands in. */
   readonly variant: KeyVariant;
 };
-
-/** The mask each named form stands for, and the only place that pairing is written. */
-const VARIANT_MASKS: Readonly<Record<Exclude<KeyVariant, 'modal'>, number>> = {
-  major: MAJOR_MASK,
-  natural: NATURAL_MINOR_MASK,
-  harmonic: HARMONIC_MINOR_MASK,
-  melodic: MELODIC_MINOR_MASK,
-};
-
-/**
- * The form a mask stands in, when it stands in one.
- *
- * A bare scale still names its form — a major mask is a major key whoever built
- * it — so the form is read from the mask rather than defaulted away. Only a
- * mask matching none of the four is modal.
- */
-export function variantOfMask(modeMask12: number): KeyVariant {
-  for (const [variant, mask] of Object.entries(VARIANT_MASKS)) {
-    if (mask === modeMask12) {
-      return variant as KeyVariant;
-    }
-  }
-  return 'modal';
-}
-
-/** Every value a key's variant may hold, in a fixed order. */
-const KEY_VARIANTS: readonly KeyVariant[] = [
-  ...(Object.keys(VARIANT_MASKS) as Exclude<KeyVariant, 'modal'>[]),
-  'modal',
-];
-
-/**
- * Refuse a scale form the key's own mask does not hold.
- *
- * A key whose variant says `'harmonic'` over a major mask prints as a harmonic
- * minor while comparing equal to plain C major, so a project file that carried
- * the two apart is refused where the mismatch is still an argument. Kept beside
- * the type it validates: the pairing of form and mask is written once, and
- * every construction path reads that one.
- *
- * @param variant The form claimed for the key.
- * @param modeMask12 The mask the key actually holds.
- * @throws If the form is not one a key may stand in, or the mask does not hold it.
- * @category Scales
- */
-export function assertKeyVariant(variant: KeyVariant, modeMask12: number): void {
-  assertOneOf(variant, KEY_VARIANTS, 'variant');
-  const named = VARIANT_MASKS[variant as Exclude<KeyVariant, 'modal'>];
-  const matches =
-    named === undefined ? !Object.values(VARIANT_MASKS).includes(modeMask12) : named === modeMask12;
-  if (!matches) {
-    throw new InvalidInputError(
-      `variant ${variant} does not match the scale mask ${modeMask12}; ` +
-        'pass the scale that variant names, or omit the variant',
-    );
-  }
-}
 
 /** Whether a value carries the fields a resolved key is read through. */
 function carriesIdentity(value: unknown): value is { tonic?: Note; variant?: KeyVariant } {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SpelledKey } from '../src/index.js';
+import type { ResolvedKey } from '../src/index.js';
 import {
   diatonicLetterOf,
   dominantKeyOf,
@@ -17,6 +17,7 @@ import {
   parseNote,
   relatedKeysOf,
   relativeKeyOf,
+  resolveKey,
   scaleByName,
   spelledKeyOf,
   subdominantKeyOf,
@@ -28,11 +29,11 @@ import * as theory from '../src/theory/index.js';
 const ALL_SCALE_NAMES = [...Object.keys(NAMED_SCALES), ...Object.keys(WORLD_SCALES)];
 
 /** Name a spelled key the way it is read aloud, e.g. `'Bb minor'`. */
-function name(spelled: SpelledKey | null): string {
+function name(spelled: ResolvedKey | null): string {
   if (spelled === null) {
     return 'none';
   }
-  const mode = spelled.key.modeMask12 === NATURAL_MINOR_MASK ? 'minor' : 'major';
+  const mode = spelled.scale.modeMask12 === NATURAL_MINOR_MASK ? 'minor' : 'major';
   return `${formatNote(spelled.tonic)} ${mode}`;
 }
 
@@ -51,8 +52,8 @@ describe('relativeKeyOf', () => {
   it('is its own inverse for every major key', () => {
     for (let fifths = -5; fifths <= 6; fifths += 1) {
       const original = keyFromFifths(fifths);
-      const relative = relativeKeyOf(original.tonic, original.key);
-      expect(name(relativeKeyOf(relative.tonic, relative.key)), `${fifths}`).toBe(name(original));
+      const relative = relativeKeyOf(original.tonic, original.scale);
+      expect(name(relativeKeyOf(relative.tonic, relative.scale)), `${fifths}`).toBe(name(original));
     }
   });
 
@@ -67,7 +68,7 @@ describe('parallelKeyOf', () => {
   it('swaps mode on the same tonic', () => {
     const cMinor = parallelKeyOf(parseNote('C'), majorKey(0));
     expect(name(cMinor)).toBe('C minor');
-    expect(name(parallelKeyOf(cMinor.tonic, cMinor.key))).toBe('C major');
+    expect(name(parallelKeyOf(cMinor.tonic, cMinor.scale))).toBe('C major');
   });
 
   it('keeps the tonic spelling it was given', () => {
@@ -76,7 +77,7 @@ describe('parallelKeyOf', () => {
   });
 
   it('roots the returned key on the spelled tonic', () => {
-    expect(parallelKeyOf(parseNote('Eb'), majorKey(3)).key).toEqual(minorKey(3));
+    expect(parallelKeyOf(parseNote('Eb'), majorKey(3)).scale).toEqual(minorKey(3));
   });
 });
 
@@ -133,8 +134,8 @@ describe('dominantKeyOf and subdominantKeyOf', () => {
           diatonicLetterOf(tonic.letter + 3),
         );
         expect(noteToPitchClass(below.tonic), where).toBe((noteToPitchClass(tonic) + 5) % 12);
-        expect(formatNote(subdominantKeyOf(above.tonic, above.key).tonic), where).toBe(tonicName);
-        expect(formatNote(dominantKeyOf(below.tonic, below.key).tonic), where).toBe(tonicName);
+        expect(formatNote(subdominantKeyOf(above.tonic, above.scale).tonic), where).toBe(tonicName);
+        expect(formatNote(dominantKeyOf(below.tonic, below.scale).tonic), where).toBe(tonicName);
       }
     }
   });
@@ -154,16 +155,16 @@ describe('dominantKeyOf and subdominantKeyOf', () => {
           diatonicLetterOf(tonic.letter + 4),
         );
         expect(noteToPitchClass(above.tonic), where).toBe((rootPc + 7) % 12);
-        expect(above.key.rootPc, where).toBe(noteToPitchClass(above.tonic));
+        expect(above.scale.rootPc, where).toBe(noteToPitchClass(above.tonic));
         expect(diatonicLetterOf(below.tonic.letter), where).toBe(
           diatonicLetterOf(tonic.letter + 3),
         );
         expect(noteToPitchClass(below.tonic), where).toBe((rootPc + 5) % 12);
-        expect(below.key.rootPc, where).toBe(noteToPitchClass(below.tonic));
-        expect(formatNote(subdominantKeyOf(above.tonic, above.key).tonic), where).toBe(
+        expect(below.scale.rootPc, where).toBe(noteToPitchClass(below.tonic));
+        expect(formatNote(subdominantKeyOf(above.tonic, above.scale).tonic), where).toBe(
           formatNote(tonic),
         );
-        expect(formatNote(dominantKeyOf(below.tonic, below.key).tonic), where).toBe(
+        expect(formatNote(dominantKeyOf(below.tonic, below.scale).tonic), where).toBe(
           formatNote(tonic),
         );
       }
@@ -187,11 +188,11 @@ describe('enharmonicKeyOf', () => {
     for (let fifths = -7; fifths <= 7; fifths += 1) {
       for (const mode of ['major', 'minor'] as const) {
         const original = keyFromFifths(fifths, mode);
-        const other = enharmonicKeyOf(original.tonic, original.key);
+        const other = enharmonicKeyOf(original.tonic, original.scale);
         if (other === null) {
           continue;
         }
-        expect(name(enharmonicKeyOf(other.tonic, other.key)), `${fifths}/${mode}`).toBe(
+        expect(name(enharmonicKeyOf(other.tonic, other.scale)), `${fifths}/${mode}`).toBe(
           name(original),
         );
       }
@@ -204,9 +205,9 @@ describe('enharmonicKeyOf', () => {
     const lydian = scaleByName('lydian', 1);
     const other = enharmonicKeyOf(parseNote('C#'), lydian);
     expect(other).not.toBeNull();
-    expect(formatNote((other as SpelledKey).tonic)).toBe('Db');
-    expect((other as SpelledKey).key.modeMask12).toBe(lydian.modeMask12);
-    expect((other as SpelledKey).key.rootPc).toBe(1);
+    expect(formatNote((other as ResolvedKey).tonic)).toBe('Db');
+    expect((other as ResolvedKey).scale.modeMask12).toBe(lydian.modeMask12);
+    expect((other as ResolvedKey).scale.rootPc).toBe(1);
   });
 
   it('answers every named scale with a respelling of the same sound, or with nothing', () => {
@@ -220,11 +221,11 @@ describe('enharmonicKeyOf', () => {
         }
         const where = `${scaleName}/${rootPc}`;
         expect(noteToPitchClass(other.tonic), where).toBe(rootPc);
-        expect(other.key.rootPc, where).toBe(noteToPitchClass(other.tonic));
-        expect(other.key.modeMask12, where).toBe(key.modeMask12);
+        expect(other.scale.rootPc, where).toBe(noteToPitchClass(other.tonic));
+        expect(other.scale.modeMask12, where).toBe(key.modeMask12);
         // The answer is itself a spelling the key is written on, so the
         // relation takes it straight back.
-        const back = enharmonicKeyOf(other.tonic, other.key);
+        const back = enharmonicKeyOf(other.tonic, other.scale);
         expect(back === null ? 'none' : formatNote(back.tonic), where).toBe(
           formatNote(spelled.tonic),
         );
@@ -237,20 +238,22 @@ describe('enharmonicKeyOf', () => {
     // anyone writes: from there the relation names the written twin rather
     // than another unwritten spelling. It is one-way for such a tonic — the
     // twin it names is written, so the twin itself has no second spelling.
-    const outOfRange: [string, SpelledKey][] = [
-      ['D#', { tonic: parseNote('D#'), key: majorKey(3) }],
-      ['Db', { tonic: parseNote('Db'), key: minorKey(1) }],
-      ['Cb', { tonic: parseNote('Cb'), key: minorKey(11) }],
+    const outOfRange: [string, ResolvedKey][] = [
+      ['D#', resolveKey({ tonic: parseNote('D#'), scale: majorKey(3) })],
+      ['Db', resolveKey({ tonic: parseNote('Db'), scale: minorKey(1) })],
+      ['Cb', resolveKey({ tonic: parseNote('Cb'), scale: minorKey(11) })],
     ];
     for (const [label, unwritten] of outOfRange) {
-      const written = enharmonicKeyOf(unwritten.tonic, unwritten.key);
+      const written = enharmonicKeyOf(unwritten.tonic, unwritten.scale);
       expect(written, label).not.toBeNull();
-      const spelled = written as SpelledKey;
+      const spelled = written as ResolvedKey;
       expect(noteToPitchClass(spelled.tonic), label).toBe(noteToPitchClass(unwritten.tonic));
-      expect(spelled.key.rootPc, label).toBe(noteToPitchClass(spelled.tonic));
-      expect(spelled.key.modeMask12, label).toBe(unwritten.key.modeMask12);
-      expect(formatNote(spelled.tonic), label).toBe(formatNote(spelledKeyOf(unwritten.key).tonic));
-      expect(enharmonicKeyOf(spelled.tonic, spelled.key), label).toBeNull();
+      expect(spelled.scale.rootPc, label).toBe(noteToPitchClass(spelled.tonic));
+      expect(spelled.scale.modeMask12, label).toBe(unwritten.scale.modeMask12);
+      expect(formatNote(spelled.tonic), label).toBe(
+        formatNote(spelledKeyOf(unwritten.scale).tonic),
+      );
+      expect(enharmonicKeyOf(spelled.tonic, spelled.scale), label).toBeNull();
     }
   });
 });
@@ -284,60 +287,74 @@ describe('relatedKeysOf', () => {
 });
 
 describe('keyRelationBetween', () => {
-  const cMajor: SpelledKey = { tonic: parseNote('C'), key: majorKey(0) };
+  const cMajor: ResolvedKey = resolveKey({ tonic: parseNote('C'), scale: majorKey(0) });
 
   it('reports every relation it knows', () => {
-    expect(keyRelationBetween(cMajor, { tonic: parseNote('C'), key: majorKey(0) })).toBe('same');
+    expect(
+      keyRelationBetween(cMajor, resolveKey({ tonic: parseNote('C'), scale: majorKey(0) })),
+    ).toBe('same');
     expect(
       keyRelationBetween(
-        { tonic: parseNote('Db'), key: majorKey(1) },
-        { tonic: parseNote('C#'), key: majorKey(1) },
+        resolveKey({ tonic: parseNote('Db'), scale: majorKey(1) }),
+        resolveKey({ tonic: parseNote('C#'), scale: majorKey(1) }),
       ),
     ).toBe('enharmonic');
-    expect(keyRelationBetween(cMajor, { tonic: parseNote('A'), key: minorKey(9) })).toBe(
-      'relative',
-    );
-    expect(keyRelationBetween(cMajor, { tonic: parseNote('C'), key: minorKey(0) })).toBe(
-      'parallel',
-    );
-    expect(keyRelationBetween(cMajor, { tonic: parseNote('G'), key: majorKey(7) })).toBe(
-      'dominant',
-    );
-    expect(keyRelationBetween(cMajor, { tonic: parseNote('F'), key: majorKey(5) })).toBe(
-      'subdominant',
-    );
-    expect(keyRelationBetween(cMajor, { tonic: parseNote('E'), key: minorKey(4) })).toBe(
-      'relativeOfDominant',
-    );
-    expect(keyRelationBetween(cMajor, { tonic: parseNote('D'), key: minorKey(2) })).toBe(
-      'relativeOfSubdominant',
-    );
+    expect(
+      keyRelationBetween(cMajor, resolveKey({ tonic: parseNote('A'), scale: minorKey(9) })),
+    ).toBe('relative');
+    expect(
+      keyRelationBetween(cMajor, resolveKey({ tonic: parseNote('C'), scale: minorKey(0) })),
+    ).toBe('parallel');
+    expect(
+      keyRelationBetween(cMajor, resolveKey({ tonic: parseNote('G'), scale: majorKey(7) })),
+    ).toBe('dominant');
+    expect(
+      keyRelationBetween(cMajor, resolveKey({ tonic: parseNote('F'), scale: majorKey(5) })),
+    ).toBe('subdominant');
+    expect(
+      keyRelationBetween(cMajor, resolveKey({ tonic: parseNote('E'), scale: minorKey(4) })),
+    ).toBe('relativeOfDominant');
+    expect(
+      keyRelationBetween(cMajor, resolveKey({ tonic: parseNote('D'), scale: minorKey(2) })),
+    ).toBe('relativeOfSubdominant');
   });
 
   it('returns null for an unrelated key', () => {
-    expect(keyRelationBetween(cMajor, { tonic: parseNote('Eb'), key: minorKey(3) })).toBeNull();
-    expect(keyRelationBetween(cMajor, { tonic: parseNote('B'), key: majorKey(11) })).toBeNull();
+    expect(
+      keyRelationBetween(cMajor, resolveKey({ tonic: parseNote('Eb'), scale: minorKey(3) })),
+    ).toBeNull();
+    expect(
+      keyRelationBetween(cMajor, resolveKey({ tonic: parseNote('B'), scale: majorKey(11) })),
+    ).toBeNull();
   });
 
   it('ignores the spelling of the second key beyond the identity test', () => {
-    const eMajor: SpelledKey = { tonic: parseNote('E'), key: majorKey(4) };
-    expect(keyRelationBetween(eMajor, { tonic: parseNote('C#'), key: minorKey(1) })).toBe(
-      'relative',
-    );
-    expect(keyRelationBetween(eMajor, { tonic: parseNote('Db'), key: minorKey(1) })).toBe(
-      'relative',
-    );
+    const eMajor: ResolvedKey = resolveKey({ tonic: parseNote('E'), scale: majorKey(4) });
+    expect(
+      keyRelationBetween(eMajor, resolveKey({ tonic: parseNote('C#'), scale: minorKey(1) })),
+    ).toBe('relative');
+    expect(
+      keyRelationBetween(eMajor, resolveKey({ tonic: parseNote('Db'), scale: minorKey(1) })),
+    ).toBe('relative');
   });
 
   it('reads a minor variant as the minor key it is a form of, from either side', () => {
     // A harmonic minor is the key detection reports for a minor cadence, and it
     // stands to C major exactly as A minor does — asked in either direction.
-    const aHarmonic: SpelledKey = { tonic: parseNote('A'), key: scaleByName('harmonicMinor', 9) };
-    const aMelodic: SpelledKey = { tonic: parseNote('A'), key: scaleByName('melodicMinor', 9) };
+    const aHarmonic: ResolvedKey = resolveKey({
+      tonic: parseNote('A'),
+      scale: scaleByName('harmonicMinor', 9),
+    });
+    const aMelodic: ResolvedKey = resolveKey({
+      tonic: parseNote('A'),
+      scale: scaleByName('melodicMinor', 9),
+    });
     expect(keyRelationBetween(aHarmonic, cMajor)).toBe('relative');
     expect(keyRelationBetween(cMajor, aHarmonic)).toBe('relative');
     expect(keyRelationBetween(cMajor, aMelodic)).toBe('relative');
-    expect(keyRelationBetween(aHarmonic, { tonic: parseNote('A'), key: minorKey(9) })).toBe('same');
+    expect(
+      keyRelationBetween(aHarmonic, resolveKey({ tonic: parseNote('A'), scale: minorKey(9) })),
+    ).toBe('same');
   });
 
   it('answers from either side wherever the related keys name the other', () => {
@@ -353,7 +370,7 @@ describe('keyRelationBetween', () => {
       relativeOfDominant: 'relativeOfSubdominant',
       relativeOfSubdominant: 'relativeOfDominant',
     } as const;
-    const keys: SpelledKey[] = [];
+    const keys: ResolvedKey[] = [];
     for (let rootPc = 0; rootPc < 12; rootPc += 1) {
       for (const key of [
         majorKey(rootPc),
@@ -365,10 +382,10 @@ describe('keyRelationBetween', () => {
       }
     }
     for (const a of keys) {
-      for (const related of relatedKeysOf(a.tonic, a.key)) {
+      for (const related of relatedKeysOf(a.tonic, a.scale)) {
         const back = keyRelationBetween(related, a);
         const forward = keyRelationBetween(a, related);
-        const where = `${formatNote(a.tonic)}/${a.key.modeMask12} -> ${related.relation}`;
+        const where = `${formatNote(a.tonic)}/${a.scale.modeMask12} -> ${related.relation}`;
         expect(forward, where).not.toBeNull();
         expect(back, where).toBe(inverse[forward as keyof typeof inverse]);
       }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { KeyScale, SpelledKey } from '../src/index.js';
+import type { KeyScale, ResolvedKey } from '../src/index.js';
 import {
   formatNote,
   keyRelationBetween,
@@ -9,6 +9,7 @@ import {
   parseNote,
   relatedKeysOf,
   relativeKeyOf,
+  resolveKey,
   scaleByName,
   spelledKeyOf,
 } from '../src/index.js';
@@ -46,7 +47,7 @@ describe('relativeKeyOf counts fifths from the same origin as its siblings', () 
     const dDorian = scaleByName('dorian', 2);
     const relative = relativeKeyOf('D', dDorian);
     expect(formatNote(relative.tonic)).toBe('F');
-    expect(relative.key).toEqual(majorKey(5));
+    expect(relative.scale).toEqual(majorKey(5));
   });
 
   it('leaves the plain major and minor keys where they were', () => {
@@ -62,7 +63,7 @@ describe('the six closely related keys', () => {
       const key = scaleByName(name, rootPc);
       const tonic = spelledKeyOf(key).tonic;
       const related = relatedKeysOf(tonic, key);
-      const distinct = new Set(related.map((entry) => soundingId(entry.key)));
+      const distinct = new Set(related.map((entry) => soundingId(entry.scale)));
       expect(distinct.size, `${formatNote(tonic)} ${name}`).toBe(related.length);
     }
   });
@@ -70,9 +71,9 @@ describe('the six closely related keys', () => {
   it.each(MODE_NAMES)('reports every relation from both sides in every %s key', (name) => {
     for (let rootPc = 0; rootPc < 12; rootPc += 1) {
       const key = scaleByName(name, rootPc);
-      const self: SpelledKey = { tonic: spelledKeyOf(key).tonic, key };
+      const self = spelledKeyOf(key);
       for (const entry of relatedKeysOf(self.tonic, key)) {
-        const far: SpelledKey = { tonic: entry.tonic, key: entry.key };
+        const far: ResolvedKey = { tonic: entry.tonic, scale: entry.scale, variant: entry.variant };
         const where = `${formatNote(self.tonic)} ${name} -> ${formatNote(entry.tonic)}`;
         expect(keyRelationBetween(self, far), where).toBe(entry.relation);
         expect(keyRelationBetween(far, self), `${where} reversed`).toBe(
@@ -83,9 +84,9 @@ describe('the six closely related keys', () => {
   });
 
   it('names D dorian its own relation from C major and F major', () => {
-    const dDorian: SpelledKey = { tonic: parseNote('D'), key: scaleByName('dorian', 2) };
-    const cMajor: SpelledKey = { tonic: parseNote('C'), key: majorKey(0) };
-    const fMajor: SpelledKey = { tonic: parseNote('F'), key: majorKey(5) };
+    const dDorian = resolveKey({ tonic: parseNote('D'), scale: scaleByName('dorian', 2) });
+    const cMajor = resolveKey({ tonic: parseNote('C'), scale: majorKey(0) });
+    const fMajor = resolveKey({ tonic: parseNote('F'), scale: majorKey(5) });
     expect(keyRelationBetween(dDorian, fMajor)).toBe('relative');
     expect(keyRelationBetween(fMajor, dDorian)).toBe('relative');
     // C major is the relative of D dorian's dominant, and only that.

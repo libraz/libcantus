@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SpelledKey } from '../src/index.js';
+import type { ResolvedKey } from '../src/index.js';
 import {
   Arrangement,
   analyzeArrangement,
@@ -243,8 +243,8 @@ function at<T>(items: readonly T[], index: number): T {
 }
 
 /** A key as the theory layer spells one: the scale, and the tonic it is written on. */
-function spelledOf(key: Key): SpelledKey {
-  return { key: key.scale, tonic: key.tonic.data };
+function spelledOf(key: Key): ResolvedKey {
+  return { scale: key.scale, tonic: key.tonic.data, variant: key.variant };
 }
 
 /**
@@ -649,10 +649,7 @@ describe('Key', () => {
         .map((related) => ({ relation: related.relation, ...spelledOf(related.key) })),
     ).toEqual(relatedKeysOf(key.tonic.data, key.scale));
     expect(key.relationTo(Key.minor('Bb'))).toBe(
-      keyRelationBetween(
-        { tonic: key.tonic.data, key: key.scale },
-        { tonic: Key.minor('Bb').tonic.data, key: Key.minor('Bb').scale },
-      ),
+      keyRelationBetween(key.toJSON(), Key.minor('Bb').toJSON()),
     );
   });
 

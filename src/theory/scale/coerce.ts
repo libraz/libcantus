@@ -4,17 +4,10 @@ import { noteToPitchClass, parseKeyName, pitchClassOf } from '../../core/pitch/i
 import type { KeyScale } from '../../core/types.js';
 import { assertInteger } from '../../core/validation/index.js';
 import { majorKey, minorKey } from './key.js';
+import type { KeyVariant } from './kinds.js';
 import { CHROMATIC_MASK } from './masks.js';
 
-/**
- * Which scale form a key stands in.
- *
- * Declared beside {@link KeyLike} because it is part of what a key-shaped value
- * may carry; {@link ResolvedKey} is what hands it back decided.
- *
- * @category Scales
- */
-export type KeyVariant = 'major' | 'natural' | 'harmonic' | 'melodic' | 'modal';
+export type { KeyVariant };
 
 /**
  * Anything that names a key: a key name, a plain {@link KeyScale}, the plain

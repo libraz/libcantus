@@ -32,8 +32,9 @@ import type { KeyScale } from '../../core/types.js';
 import { assertInteger } from '../../core/validation/index.js';
 import { spellScale } from '../spelling/index.js';
 import { type KeyLike, toKeyScale } from './coerce.js';
+import type { ResolvedKey } from './identity.js';
 import { majorKey, minorKey } from './key.js';
-import { CHROMATIC_MASK } from './masks.js';
+import { CHROMATIC_MASK, variantOfMask } from './masks.js';
 import type { KeyMode } from './signature.js';
 import { isSignatureKey, keyFromFifths, keySignatureFifths } from './signature.js';
 
@@ -115,13 +116,12 @@ function spelledLike(a: Note, b: Note): boolean {
  *
  * @example
  * ```ts
- * import type { SpelledKey } from '@libraz/libcantus';
+ * import type { ResolvedKey } from '@libraz/libcantus';
  * import { majorKey, parseNote } from '@libraz/libcantus';
- * const dbMajor: SpelledKey = { tonic: parseNote('Db'), key: majorKey(1) };
+ * const dbMajor = spelledKeyOf(majorKey(1));
  * ```
  * @category Scales
  */
-export type SpelledKey = { tonic: Note; key: KeyScale };
 
 /**
  * How one key stands to another, as reported by {@link keyRelationBetween} and
@@ -236,7 +236,7 @@ function spellsBetter(a: TonicCost, b: TonicCost, signatureKey: boolean): boolea
  * ```
  * @category Scales
  */
-export function spelledKeyOf(key: KeyScale): SpelledKey {
+export function spelledKeyOf(key: KeyScale): ResolvedKey {
   const scale = key;
   const rootPc = pitchClassOf(scale.rootPc);
   const signatureKey = isSignatureKey(scale);
@@ -258,7 +258,7 @@ export function spelledKeyOf(key: KeyScale): SpelledKey {
       best = cost;
     }
   }
-  return { tonic, key };
+  return { tonic, scale: key, variant: variantOfMask(key.modeMask12) };
 }
 
 /**
@@ -289,7 +289,7 @@ export function spelledKeyOf(key: KeyScale): SpelledKey {
  * ```
  * @category Scales
  */
-export function relativeKeyOf(tonic: NoteLike, key: KeyLike): SpelledKey {
+export function relativeKeyOf(tonic: NoteLike, key: KeyLike): ResolvedKey {
   const mode = modeOf(toKeyScale(key));
   // Counted from where the tonic itself stands on the circle, as every other
   // relation here counts: a mode's own signature carries an offset that
@@ -320,15 +320,17 @@ export function relativeKeyOf(tonic: NoteLike, key: KeyLike): SpelledKey {
  * ```
  * @category Scales
  */
-export function parallelKeyOf(tonic: NoteLike, key: KeyLike): SpelledKey {
+export function parallelKeyOf(tonic: NoteLike, key: KeyLike): ResolvedKey {
   const note = toNoteData(tonic);
   const mode = oppositeMode(modeOf(toKeyScale(key)));
   // The spelled tonic decides the root, so the returned key and its tonic agree
   // even when the caller's `rootPc` was left on the other mode's root.
   const rootPc = noteToPitchClass(note);
+  const scale = mode === 'minor' ? minorKey(rootPc) : majorKey(rootPc);
   return {
     tonic: { letter: diatonicLetterOf(note.letter), alter: note.alter },
-    key: mode === 'minor' ? minorKey(rootPc) : majorKey(rootPc),
+    scale,
+    variant: variantOfMask(scale.modeMask12),
   };
 }
 
@@ -391,7 +393,7 @@ function isWrittenTonic(tonic: Note, key: KeyScale): boolean {
  * ```
  * @category Scales
  */
-export function dominantKeyOf(tonic: NoteLike, key: KeyLike): SpelledKey {
+export function dominantKeyOf(tonic: NoteLike, key: KeyLike): ResolvedKey {
   const mode = modeOf(toKeyScale(key));
   return keyFromFifths(tonicFifths(toNoteData(tonic), mode) + 1, mode);
 }
@@ -414,7 +416,7 @@ export function dominantKeyOf(tonic: NoteLike, key: KeyLike): SpelledKey {
  * ```
  * @category Scales
  */
-export function subdominantKeyOf(tonic: NoteLike, key: KeyLike): SpelledKey {
+export function subdominantKeyOf(tonic: NoteLike, key: KeyLike): ResolvedKey {
   const mode = modeOf(toKeyScale(key));
   return keyFromFifths(tonicFifths(toNoteData(tonic), mode) - 1, mode);
 }
@@ -455,7 +457,7 @@ export function subdominantKeyOf(tonic: NoteLike, key: KeyLike): SpelledKey {
  * ```
  * @category Scales
  */
-export function enharmonicKeyOf(tonic: NoteLike, key: KeyLike): SpelledKey | null {
+export function enharmonicKeyOf(tonic: NoteLike, key: KeyLike): ResolvedKey | null {
   const note = toNoteData(tonic);
   const scale = toKeyScale(key);
   assertModeMask(scale);
@@ -474,22 +476,23 @@ export function enharmonicKeyOf(tonic: NoteLike, key: KeyLike): SpelledKey | nul
       tonic: spelled,
       // The mask is the caller's; only the root is re-read, so a tonic that did
       // not spell the mask's own root still comes back consistent.
-      key: { rootPc: noteToPitchClass(spelled), modeMask12: scale.modeMask12 },
+      scale: { rootPc: noteToPitchClass(spelled), modeMask12: scale.modeMask12 },
+      variant: variantOfMask(scale.modeMask12),
     };
   }
   return null;
 }
 
 /** The relative of the dominant key: two moves along the circle, then across. */
-function relativeOfDominantKeyOf(tonic: Note, key: KeyScale): SpelledKey {
+function relativeOfDominantKeyOf(tonic: Note, key: KeyScale): ResolvedKey {
   const dominant = dominantKeyOf(tonic, key);
-  return relativeKeyOf(dominant.tonic, dominant.key);
+  return relativeKeyOf(dominant.tonic, dominant.scale);
 }
 
 /** The relative of the subdominant key. */
-function relativeOfSubdominantKeyOf(tonic: Note, key: KeyScale): SpelledKey {
+function relativeOfSubdominantKeyOf(tonic: Note, key: KeyScale): ResolvedKey {
   const subdominant = subdominantKeyOf(tonic, key);
-  return relativeKeyOf(subdominant.tonic, subdominant.key);
+  return relativeKeyOf(subdominant.tonic, subdominant.scale);
 }
 
 /**
@@ -498,7 +501,7 @@ function relativeOfSubdominantKeyOf(tonic: Note, key: KeyScale): SpelledKey {
  */
 const CLOSELY_RELATED: readonly {
   relation: KeyRelation;
-  of: (tonic: Note, key: KeyScale) => SpelledKey;
+  of: (tonic: Note, key: KeyScale) => ResolvedKey;
 }[] = [
   { relation: 'relative', of: relativeKeyOf },
   { relation: 'parallel', of: parallelKeyOf },
@@ -538,7 +541,7 @@ const CLOSELY_RELATED: readonly {
 export function relatedKeysOf(
   tonic: NoteLike,
   key: KeyLike,
-): (SpelledKey & { relation: KeyRelation })[] {
+): (ResolvedKey & { relation: KeyRelation })[] {
   const note = toNoteData(tonic);
   const scale = toKeyScale(key);
   return CLOSELY_RELATED.map(({ relation, of }) => ({ ...of(note, scale), relation }));
@@ -567,20 +570,20 @@ export function relatedKeysOf(
  * @example
  * ```ts
  * import { keyRelationBetween, majorKey, minorKey, parseNote } from '@libraz/libcantus';
- * const cMajor = { tonic: parseNote('C'), key: majorKey(0) };
- * keyRelationBetween(cMajor, { tonic: parseNote('A'), key: minorKey(9) }); // 'relative'
- * keyRelationBetween(cMajor, { tonic: parseNote('Eb'), key: minorKey(3) }); // null
+ * const cMajor = spelledKeyOf(majorKey(0));
+ * keyRelationBetween(cMajor, spelledKeyOf(minorKey(9))); // 'relative'
+ * keyRelationBetween(cMajor, spelledKeyOf(minorKey(3))); // null
  * ```
  * @category Scales
  */
-export function keyRelationBetween(a: SpelledKey, b: SpelledKey): KeyRelation | null {
-  assertModeMask(a.key, 'a.key');
-  assertModeMask(b.key, 'b.key');
-  if (soundsLike(a.key, b.key)) {
+export function keyRelationBetween(a: ResolvedKey, b: ResolvedKey): KeyRelation | null {
+  assertModeMask(a.scale, 'a.scale');
+  assertModeMask(b.scale, 'b.scale');
+  if (soundsLike(a.scale, b.scale)) {
     return spelledLike(a.tonic, b.tonic) ? 'same' : 'enharmonic';
   }
   for (const { relation, of } of CLOSELY_RELATED) {
-    if (soundsLike(of(a.tonic, a.key).key, b.key)) {
+    if (soundsLike(of(a.tonic, a.scale).scale, b.scale)) {
       return relation;
     }
   }

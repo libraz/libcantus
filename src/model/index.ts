@@ -222,10 +222,10 @@ export type {
   KeyLike,
   KeyMode,
   KeyRelation,
+  ResolvedKey,
   ScaleName,
   ScaleNameInput,
   ScaleSystem,
-  SpelledKey,
 } from '../theory/scale/index.js';
 export type { ChordLike, ChordSymbolOptions } from '../theory/symbol/index.js';
 export type {

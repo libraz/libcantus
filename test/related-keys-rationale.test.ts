@@ -6,8 +6,8 @@ import {
   keySignatureFifths,
   majorKey,
   minorKey,
+  type ResolvedKey,
   relatedKeysOf,
-  type SpelledKey,
   scaleByName,
   spelledKeyOf,
 } from '../src/theory/scale/index.js';
@@ -25,8 +25,8 @@ import {
  */
 
 /** Every key the relations are defined for, diatonic modes and minor forms alike. */
-function everyKey(): SpelledKey[] {
-  const keys: SpelledKey[] = [];
+function everyKey(): ResolvedKey[] {
+  const keys: ResolvedKey[] = [];
   for (let rootPc = 0; rootPc < 12; rootPc += 1) {
     for (const key of [
       majorKey(rootPc),
@@ -55,11 +55,11 @@ const SIGNATURE_DISTANCE: Readonly<Record<KeyRelation, number | undefined>> = {
 describe('the closely related keys are what the docs say they are', () => {
   it('places five of the six within one accidental and the parallel three away', () => {
     let checked = 0;
-    for (const { tonic, key } of everyKey()) {
+    for (const { tonic, scale: key } of everyKey()) {
       const own = keySignatureFifths(tonic, key);
       const where = `${formatNote(tonic)} ${key.modeMask12}`;
       for (const related of relatedKeysOf(tonic, key)) {
-        const distance = Math.abs(keySignatureFifths(related.tonic, related.key) - own);
+        const distance = Math.abs(keySignatureFifths(related.tonic, related.scale) - own);
         expect(distance, `${where} -> ${related.relation}`).toBe(
           SIGNATURE_DISTANCE[related.relation],
         );
@@ -70,7 +70,7 @@ describe('the closely related keys are what the docs say they are', () => {
   });
 
   it('makes a shared tonic the mark of the parallel key alone', () => {
-    for (const { tonic, key } of everyKey()) {
+    for (const { tonic, scale: key } of everyKey()) {
       const where = `${formatNote(tonic)} ${key.modeMask12}`;
       for (const related of relatedKeysOf(tonic, key)) {
         const shares = noteToPitchClass(related.tonic) === noteToPitchClass(tonic);
@@ -80,7 +80,7 @@ describe('the closely related keys are what the docs say they are', () => {
   });
 
   it('says the same thing through the class API', () => {
-    for (const { key } of everyKey()) {
+    for (const { scale: key } of everyKey()) {
       // No tonic is passed: the class spells one the same way `spelledKeyOf`
       // does, so both surfaces are asked about the same key.
       const wrapped = Key.of(key);

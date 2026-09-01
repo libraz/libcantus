@@ -96,12 +96,12 @@ The relative of D-flat major is B-flat minor, not A-sharp minor. Every relation 
 `keyRelationBetween`, or `Key.relationTo`, answers the reverse question:
 
 ```ts
-import { Key, keyRelationBetween, majorKey, minorKey, parseNote } from '@libraz/libcantus';
+import { Key, keyRelationBetween, majorKey, minorKey, parseNote, resolveKey } from '@libraz/libcantus';
 
-const cMajor = { tonic: parseNote('C'), key: majorKey(0) };
+const cMajor = resolveKey({ tonic: parseNote('C'), scale: majorKey(0) });
 
-keyRelationBetween(cMajor, { tonic: parseNote('A'), key: minorKey(9) }); // 'relative'
-keyRelationBetween(cMajor, { tonic: parseNote('Eb'), key: minorKey(3) }); // null
+keyRelationBetween(cMajor, resolveKey({ tonic: parseNote('A'), scale: minorKey(9) })); // 'relative'
+keyRelationBetween(cMajor, resolveKey({ tonic: parseNote('Eb'), scale: minorKey(3) })); // null
 
 Key.major('C').relationTo(Key.minor('A')); // 'relative'
 Key.major('C').relationTo(Key.minor('Eb')); // null

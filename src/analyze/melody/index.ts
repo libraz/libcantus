@@ -447,7 +447,7 @@ function spellingOf(key?: KeyScale): 'sharp' | 'flat' {
     return 'sharp';
   }
   const spelled = spelledKeyOf(key);
-  return keySignatureFifths(spelled.tonic, spelled.key) < 0 ? 'flat' : 'sharp';
+  return keySignatureFifths(spelled.tonic, spelled.scale) < 0 ? 'flat' : 'sharp';
 }
 
 /** Name the distance between two pitches as a spelled interval. */

@@ -116,8 +116,8 @@ describe('spelledKeyOf', () => {
       const key = { rootPc: 8, modeMask12: mask };
       const spelled = spelledKeyOf(key);
       expect(formatNote(spelled.tonic), `mask ${mask}`).toBe('G#');
-      expect(spelled.key).toBe(key);
-      expect(spelled.key.modeMask12).toBe(mask);
+      expect(spelled.scale).toBe(key);
+      expect(spelled.scale.modeMask12).toBe(mask);
       expect(keySignatureFifths(spelled.tonic, key)).toBe(5);
     }
     expect(tonicOf(scaleByName('harmonicMinor', 8))).toBe('G#');
@@ -139,14 +139,14 @@ describe('spelledKeyOf', () => {
     expect(tonicOf({ rootPc: 13, modeMask12: MAJOR_MASK })).toBe('Db');
     expect(tonicOf({ rootPc: -25, modeMask12: NATURAL_MINOR_MASK })).toBe('B');
     // The key still comes back as it was passed, unnormalised root and all.
-    expect(spelledKeyOf({ rootPc: -1, modeMask12: MAJOR_MASK }).key.rootPc).toBe(-1);
+    expect(spelledKeyOf({ rootPc: -1, modeMask12: MAJOR_MASK }).scale.rootPc).toBe(-1);
   });
 
   it('feeds the key relations', () => {
     for (let pc = 0; pc < 12; pc += 1) {
       for (const key of [majorKey(pc), minorKey(pc)]) {
         const spelled = spelledKeyOf(key);
-        const relative = relativeKeyOf(spelled.tonic, spelled.key);
+        const relative = relativeKeyOf(spelled.tonic, spelled.scale);
         expect(keyRelationBetween(spelled, relative), formatNote(spelled.tonic)).toBe('relative');
       }
     }

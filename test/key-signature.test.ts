@@ -84,23 +84,23 @@ describe('keyFromFifths', () => {
   });
 
   it('builds a scale whose root is the spelled tonic', () => {
-    expect(keyFromFifths(-2).key).toEqual(majorKey(10));
-    expect(keyFromFifths(-2, 'minor').key).toEqual(minorKey(7));
+    expect(keyFromFifths(-2).scale).toEqual(majorKey(10));
+    expect(keyFromFifths(-2, 'minor').scale).toEqual(minorKey(7));
   });
 
   it('round-trips every conventional signature, in both modes', () => {
     for (let fifths = -7; fifths <= 7; fifths += 1) {
       for (const mode of ['major', 'minor'] as const) {
-        const { tonic, key } = keyFromFifths(fifths, mode);
-        expect(keySignatureFifths(tonic, key), `${fifths}/${mode}`).toBe(fifths);
+        const { tonic, scale } = keyFromFifths(fifths, mode);
+        expect(keySignatureFifths(tonic, scale), `${fifths}/${mode}`).toBe(fifths);
       }
     }
   });
 
   it('round-trips the theoretical signatures too', () => {
     for (let fifths = -12; fifths <= 12; fifths += 1) {
-      const { tonic, key } = keyFromFifths(fifths);
-      expect(keySignatureFifths(tonic, key), `${fifths}`).toBe(fifths);
+      const { tonic, scale } = keyFromFifths(fifths);
+      expect(keySignatureFifths(tonic, scale), `${fifths}`).toBe(fifths);
     }
   });
 

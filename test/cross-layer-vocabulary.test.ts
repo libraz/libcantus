@@ -151,8 +151,8 @@ describe('the two parallel-key functions name the same key', () => {
     ] as const) {
       const plain = parallelKey(key);
       const spelled = parallelKeyOf(parseNote(name.split(' ')[0] as string), key);
-      expect(spelled.key.rootPc, name).toBe(plain.rootPc);
-      expect(scaleTonesInDegreeOrder(spelled.key), name).toEqual(scaleTonesInDegreeOrder(plain));
+      expect(spelled.scale.rootPc, name).toBe(plain.rootPc);
+      expect(scaleTonesInDegreeOrder(spelled.scale), name).toEqual(scaleTonesInDegreeOrder(plain));
     }
   });
 });

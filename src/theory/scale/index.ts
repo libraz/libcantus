@@ -52,7 +52,7 @@ export {
   WHOLE_TONE_MASK,
   WORLD_SCALES,
 } from './masks.js';
-export type { KeyRelation, SpelledKey } from './relations.js';
+export type { KeyRelation } from './relations.js';
 export {
   dominantKeyOf,
   enharmonicKeyOf,
