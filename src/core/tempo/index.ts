@@ -53,8 +53,16 @@ const SECONDS_PER_MINUTE = 60;
 const MAX_BPM = 1000;
 
 /**
+ * Lower bound on a tempo. One beat lasts ten minutes here; anything slower is a
+ * corrupt or mis-scaled value rather than a marking, and letting it through
+ * would make the conversions overflow to infinity while still reporting a
+ * validated tempo.
+ */
+const MIN_BPM = 0.1;
+
+/**
  * Validate a tempo map: non-empty, strictly ascending, finite onsets, and
- * positive tempos.
+ * tempos inside the range the conversions stay finite over.
  *
  * An onset is not bounded below, for the reason the note events are not: beat 0
  * is the first downbeat, so a piece that opens with a pickup marks its tempo
@@ -73,7 +81,7 @@ function assertTempoMap(map: TempoMap, name = 'tempo map'): TempoMap {
       throw new InvalidInputError(`${name}[${index}] must be a tempo event; received undefined`);
     }
     assertFiniteNumber(event.startBeat, `${name}[${index}].startBeat`);
-    assertRange(event.bpm, Number.MIN_VALUE, MAX_BPM, `${name}[${index}].bpm`);
+    assertRange(event.bpm, MIN_BPM, MAX_BPM, `${name}[${index}].bpm`);
     const previous = map[index - 1];
     if (previous !== undefined && event.startBeat <= previous.startBeat) {
       throw new InvalidInputError(
@@ -139,7 +147,8 @@ function integrateSeconds(map: TempoMap, fromBeat: number, toBeat: number): numb
  * @param beat Position in quarter-note beats.
  * @param map The tempo map; its first event is the time origin.
  * @returns Elapsed seconds, 0 at the map's first event and negative before it.
- * @throws If the map is empty, unsorted, or carries a non-positive tempo.
+ * @throws If the map is empty, unsorted, or carries a tempo outside 0.1..1000
+ *   quarter-note beats per minute.
  * @example
  * ```ts
  * import { beatsToSeconds } from '@libraz/libcantus';
@@ -267,7 +276,9 @@ export function tempoAt(beat: number, map: TempoMap): number {
  * back quantized.
  *
  * A position before the first downbeat is a negative tick count, which is how a
- * pickup crosses the MIDI boundary and comes back.
+ * pickup crosses the MIDI boundary and comes back. A position that rounds to
+ * the downbeat from below comes back as positive zero: `-0` and `0` are the
+ * same tick, and only one of them keys as it under `Object.is`.
  *
  * @param beat Position or length in quarter-note beats.
  * @param ppq Pulses (ticks) per quarter note, e.g. 96, 480, or 960.
@@ -283,7 +294,8 @@ export function tempoAt(beat: number, map: TempoMap): number {
 export function beatsToTicks(beat: number, ppq: number): number {
   assertFiniteNumber(beat, 'beat');
   assertPositiveInt(ppq, 'ppq');
-  return Math.round(beat * ppq);
+  const ticks = Math.round(beat * ppq);
+  return ticks === 0 ? 0 : ticks;
 }
 
 /**

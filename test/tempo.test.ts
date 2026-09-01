@@ -171,6 +171,25 @@ describe('tempo map validation', () => {
     expect(() => beatsToSeconds(0, [{ startBeat: 0, bpm: 1001 }])).toThrow(InvalidInputError);
   });
 
+  it('keeps every conversion finite by refusing a tempo below the floor', () => {
+    // A denormal tempo used to pass validation and then hand back Infinity,
+    // which `secondsToBeats` refuses in turn — so the round trip broke on a map
+    // the module had already called valid.
+    const denormal: TempoMap = [{ startBeat: 0, bpm: Number.MIN_VALUE }];
+    expect(() => beatsToSeconds(1, denormal)).toThrow(InvalidInputError);
+    expect(() => beatsToSeconds(1, [{ startBeat: 0, bpm: 0.09 }])).toThrow(InvalidInputError);
+    const slowest: TempoMap = [{ startBeat: 0, bpm: 0.1 }];
+    expect(Number.isFinite(beatsToSeconds(1, slowest))).toBe(true);
+    expect(beatsToSeconds(1, slowest)).toBe(600);
+    expect(secondsToBeats(beatsToSeconds(1, slowest), slowest)).toBeCloseTo(1, 9);
+  });
+
+  it('states the bound it rejects a tempo against in plain decimals', () => {
+    // The message is what a host shows the person holding the broken project
+    // file, so the bounds in it have to be numbers they can act on.
+    expect(() => beatsToSeconds(0, [{ startBeat: 0, bpm: 0 }])).toThrow(/\[0\.1, 1000\]/);
+  });
+
   it('accepts a negative onset, because a tempo is marked on the pickup', () => {
     // The module doc used to send a caller with a pickup here — "move the
     // origin" — and this is the map that instruction produces.
@@ -232,6 +251,17 @@ describe('ticks', () => {
         expect(ticksToBeats(beatsToTicks(beat, ppq), ppq)).toBe(beat);
       }
     }
+  });
+
+  it('rounds a beat just before the downbeat to positive zero', () => {
+    // A humanized or slightly early pickup note rounds down onto the downbeat.
+    // `-0` and `0` are the same tick, but they key apart under `Object.is`, so
+    // a writer bucketing events by tick would see two beat 0s.
+    expect(Object.is(beatsToTicks(-0.0005, 480), 0)).toBe(true);
+    expect(Object.is(beatsToTicks(-0.0005, 960), 0)).toBe(true);
+    expect(Object.is(beatsToTicks(-0, 480), 0)).toBe(true);
+    // A beat far enough before the downbeat is still a negative tick count.
+    expect(beatsToTicks(-0.5, 480)).toBe(-240);
   });
 });
 

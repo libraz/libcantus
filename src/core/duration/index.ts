@@ -235,8 +235,10 @@ export function durationToBeats(
  * values are preferred to dotted ones and both to tuplets, and within the
  * tuplets triplets come before quintuplets and septuplets.
  *
- * Lengths are matched within 1e-6 beats, so a rounded decimal such as 0.3333333
- * still reads as a triplet.
+ * Lengths are matched within 1e-6 quarter notes, so a rounded decimal such as
+ * 0.3333333 still reads as a triplet. The tolerance is measured in quarter
+ * notes whatever `beatUnit` names, so a longer beat unit narrows it in
+ * proportion: under `{ beatUnit: 'whole' }` it is 2.5e-7 of a beat.
  *
  * @param beats The length in beats.
  * @param options `beatUnit` sets what one beat is; a quarter note by default.
@@ -271,9 +273,12 @@ export function beatsToDuration(
  * else is broken into undotted values, longest first, and a value immediately
  * followed by its own half is then written as a dot instead: 5 beats reads as a
  * whole note tied to a quarter, and 1.9375 beats as a double-dotted quarter tied
- * to a dotted thirty-second. The chain knows nothing of barlines or beat
- * grouping — an engraver splits further at those — and it uses no tuplets, so a
- * length off the plain grid and with no single spelling has no chain either.
+ * to a dotted thirty-second. The dot is only written where it leaves the chain
+ * in longest-first order, so 10 beats reads as two whole notes tied to a half
+ * rather than as a whole note tied to a longer dotted whole. The chain knows
+ * nothing of barlines or beat grouping — an engraver splits further at those —
+ * and it uses no tuplets, so a length off the plain grid and with no single
+ * spelling has no chain either.
  *
  * @param beats The length in beats.
  * @param options `beatUnit` sets what one beat is; a quarter note by default.
@@ -311,10 +316,20 @@ export function beatsToTiedDurations(
       throw new NoSolutionError(`no chain of tied note values sums to ${beats} beats`);
     }
     const last = chain[chain.length - 1];
-    // A value followed by exactly its own half is one dotted note, not a tie.
+    const before = chain[chain.length - 2];
+    // A value followed by exactly its own half is one dotted note, not a tie —
+    // but the dot lengthens a value already written, so it is only taken where
+    // the result still fits under the value it is tied after. Dotting the
+    // second whole note of 10 beats would make it outlast the first.
+    const dotted =
+      last === undefined || last.dots >= MAX_SPELLED_DOTS
+        ? undefined
+        : quartersOfParts(last.base, last.dots + 1, undefined);
+    const staysInOrder =
+      dotted !== undefined && (before === undefined || dotted <= quartersOf(before) + EPS);
     if (
       last !== undefined &&
-      last.dots < MAX_SPELLED_DOTS &&
+      staysInOrder &&
       Math.abs(next.quarters * 2 - previousQuarters) <= EPS
     ) {
       last.dots += 1;

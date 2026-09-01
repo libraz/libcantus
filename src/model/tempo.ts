@@ -16,6 +16,13 @@ import { assertDataObject } from './shared.js';
 const MAX_BPM = 1000;
 
 /**
+ * Lower bound on a tempo, the bound the tempo module accepts. One beat lasts
+ * ten minutes here; anything slower is a corrupt or mis-scaled value rather
+ * than a marking, and the conversions it feeds would overflow to infinity.
+ */
+const MIN_BPM = 0.1;
+
+/**
  * A constant tempo as plain data: quarter-note beats per minute.
  *
  * @category Class API
@@ -44,7 +51,7 @@ export class Tempo {
   readonly #bpm: number;
 
   private constructor(bpm: number) {
-    this.#bpm = assertRange(bpm, Number.MIN_VALUE, MAX_BPM, 'bpm');
+    this.#bpm = assertRange(bpm, MIN_BPM, MAX_BPM, 'bpm');
   }
 
   /**

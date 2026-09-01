@@ -19,7 +19,7 @@ None of these grows quadratically in the number of notes, but a full arrangement
 
 ## Indexing note events
 
-`createNoteEventIndex` validates and stable-sorts once, then answers onset and active-note queries in logarithmic time:
+`createNoteEventIndex` validates and stable-sorts once, then answers onset and active-note queries in `O(log n + k)`, where `n` is the number of notes and `k` is how many of them share the onset the answer comes from. A dense simultaneous cluster — an orchestral tutti, a sustained pad — is read through in full to settle the tie-break, so the cost of one query grows with the size of that cluster and not with the piece:
 
 ```ts
 import { createNoteEventIndex } from '@libraz/libcantus';

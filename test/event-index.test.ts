@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { InvalidInputError } from '../src/core/errors/index.js';
+import type { IndexedNoteEvent } from '../src/core/event-index/index.js';
 import { createNoteEventIndex, sortedNoteEvents } from '../src/core/event-index/index.js';
+import type { NoteEvent } from '../src/core/types.js';
 
 describe('note event timeline index', () => {
   it('stable-sorts once and resolves attacks and overlaps by latest onset', () => {
@@ -95,6 +97,69 @@ describe('note event timeline index', () => {
     const twice = sortedNoteEvents([shared, shared]);
     expect(twice).toHaveLength(2);
     expect(twice[0]).not.toBe(twice[1]);
+  });
+
+  it('settles a unison on one note, so the two voice tie-breaks agree', () => {
+    // Two notes of the same pitch name no voice apart. `'highest'` used to keep
+    // whichever was stored last and `'lowest'` whichever was stored first, so
+    // one sounding unison answered differently depending on the name asked for.
+    const soft: NoteEvent = { pitch: 67, startBeat: 0, durationBeat: 2, velocity: 40 };
+    const loud: NoteEvent = { pitch: 67, startBeat: 0, durationBeat: 2, velocity: 100 };
+    const answers = (order: readonly NoteEvent[]) => ({
+      highest: createNoteEventIndex(order, { tieBreak: 'highest' }).at(1),
+      lowest: createNoteEventIndex(order, { tieBreak: 'lowest' }).at(1),
+    });
+    const forward = answers([soft, loud]);
+    expect(forward.highest?.originalIndex).toBe(0);
+    expect(forward.lowest?.originalIndex).toBe(0);
+    expect(forward.highest?.note).toEqual(soft);
+    expect(forward.lowest?.note).toEqual(soft);
+    const reversed = answers([loud, soft]);
+    expect(reversed.highest?.originalIndex).toBe(0);
+    expect(reversed.lowest?.originalIndex).toBe(0);
+    expect(reversed.highest?.note).toEqual(loud);
+    expect(reversed.lowest?.note).toEqual(loud);
+    // `'last'` names the input order outright, and still does.
+    expect(createNoteEventIndex([soft, loud], { tieBreak: 'last' }).at(1)?.originalIndex).toBe(1);
+  });
+
+  it('answers a dense simultaneous cluster by the tie-break it was built with', () => {
+    // One query reads the whole cluster the answer comes from, which is the `k`
+    // in the `O(log n + k)` bound the performance notes state.
+    const cluster: NoteEvent[] = Array.from({ length: 128 }, (_, pitch) => ({
+      pitch,
+      startBeat: 4,
+      durationBeat: 2,
+    }));
+    const withPad: NoteEvent[] = [{ pitch: 60, startBeat: 0, durationBeat: 16 }, ...cluster];
+    expect(createNoteEventIndex(withPad, { tieBreak: 'highest' }).at(5)?.note.pitch).toBe(127);
+    expect(createNoteEventIndex(withPad, { tieBreak: 'lowest' }).at(5)?.note.pitch).toBe(0);
+    expect(createNoteEventIndex(withPad, { tieBreak: 'last' }).at(5)?.note.pitch).toBe(127);
+    // The voice tie-breaks name a pitch, so reversing the input does not move
+    // their answers; `'last'` names a position, so it follows the input.
+    const reversed = [...cluster].reverse();
+    expect(createNoteEventIndex(reversed, { tieBreak: 'highest' }).at(5)?.note.pitch).toBe(127);
+    expect(createNoteEventIndex(reversed, { tieBreak: 'lowest' }).at(5)?.note.pitch).toBe(0);
+    expect(createNoteEventIndex(reversed, { tieBreak: 'last' }).at(5)?.note.pitch).toBe(0);
+    // The pad sounds under the cluster but attacks earlier, so it never wins.
+    expect(createNoteEventIndex(withPad, { tieBreak: 'lowest' }).at(3)?.note.pitch).toBe(60);
+  });
+
+  it('refuses a write to the wrappers it hands out', () => {
+    const index = createNoteEventIndex([
+      { pitch: 60, startBeat: 0, durationBeat: 4 },
+      { pitch: 64, startBeat: 1, durationBeat: 4 },
+    ]);
+    expect(index.at(2)?.note.pitch).toBe(64);
+    const wrapper = index.notes[1] as IndexedNoteEvent;
+    expect(Object.isFrozen(wrapper)).toBe(true);
+    expect(() => {
+      // @ts-expect-error the span the index answers from is readonly; a host
+      // reaching past the type must not be able to move it.
+      wrapper.endBeat = 1;
+    }).toThrow(TypeError);
+    expect(wrapper.endBeat).toBe(5);
+    expect(index.at(2)?.note.pitch).toBe(64);
   });
 
   it('keeps a defensive snapshot and finds notes after a long held pad', () => {

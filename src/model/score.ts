@@ -35,7 +35,13 @@ import { beatToBarPosition, meterAt, resolveMeters, toMeterData } from '../core/
 import type { IntervalLike } from '../core/pitch/index.js';
 import { toSpelledInterval } from '../core/pitch/index.js';
 import type { TempoMap } from '../core/tempo/index.js';
-import { beatsToSeconds, beatsToTicks, tempoAt, ticksToBeats } from '../core/tempo/index.js';
+import {
+  beatsToSeconds,
+  beatsToTicks,
+  secondsToBeats,
+  tempoAt,
+  ticksToBeats,
+} from '../core/tempo/index.js';
 import type { NoteEvent } from '../core/types.js';
 import { assertFiniteNumber, assertNoteEvent, assertRange } from '../core/validation/index.js';
 import type { GrooveTemplate, HumanizeOptions, OrnamentOptions } from '../generate/index.js';
@@ -828,7 +834,11 @@ export class Score {
   /**
    * Whether an instrument can play the score, and what makes it hard.
    *
-   * The tempo the third layer needs is the score's own, read at beat 0.
+   * The third layer asks how much time separates two notes, and the score
+   * answers it from its whole tempo map: a passage under an accelerando is
+   * judged at the tempo actually in force across it, the same integral
+   * {@link Score.secondsAt} reports. The beats the issues name are the score's
+   * own.
    *
    * @param instrument The instrument to play it on: a plain
    *   {@link InstrumentProfile} or an {@link Instrument}.
@@ -843,11 +853,39 @@ export class Score {
    * ```
    */
   playability(instrument: InstrumentProfileLike): PlayabilityReport {
-    return playability(
-      this.#data.notes,
-      toInstrumentProfile(instrument),
-      tempoAt(0, this.#data.tempo),
-    );
+    const profile = toInstrumentProfile(instrument);
+    const tempo = this.#data.tempo;
+    const openingBpm = tempoAt(0, tempo);
+    if (tempo.length < 2) {
+      // One marking governs the whole score, so it already is the tempo every
+      // note is played at and there is nothing to integrate.
+      return playability(this.#data.notes, profile, openingBpm);
+    }
+    // Otherwise each onset is restated as the beat it would fall on if the
+    // score ran at its opening tempo throughout and took the same wall-clock
+    // time to get there. That leaves the elapsed seconds between any two notes
+    // exactly what the map says, which is what the scalar tempo the analysis
+    // takes cannot express on its own.
+    const opening: TempoMap = [{ startBeat: 0, bpm: openingBpm }];
+    const restate = (beat: number): number => secondsToBeats(beatsToSeconds(beat, tempo), opening);
+    const scoreBeats = new Map<number, number>();
+    const evenlyPaced = this.#data.notes.map((note) => {
+      const startBeat = restate(note.startBeat);
+      scoreBeats.set(startBeat, note.startBeat);
+      return {
+        ...note,
+        startBeat,
+        durationBeat: restate(note.startBeat + note.durationBeat) - startBeat,
+      };
+    });
+    const report = playability(evenlyPaced, profile, openingBpm);
+    return {
+      ...report,
+      issues: report.issues.map((issue) => ({
+        ...issue,
+        startBeat: scoreBeats.get(issue.startBeat) ?? issue.startBeat,
+      })),
+    };
   }
 
   /**

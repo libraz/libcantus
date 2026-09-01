@@ -7,9 +7,9 @@ import { assertFiniteNumber, assertNoteEvents } from '../validation/index.js';
  * @category Core
  */
 export type IndexedNoteEvent = {
-  note: Readonly<NoteEvent>;
-  originalIndex: number;
-  endBeat: number;
+  readonly note: Readonly<NoteEvent>;
+  readonly originalIndex: number;
+  readonly endBeat: number;
 };
 
 /**
@@ -17,7 +17,9 @@ export type IndexedNoteEvent = {
  *
  * `'highest'` and `'lowest'` name a voice, so the answer does not depend on the
  * order the caller happened to store the chord in; `'last'` takes the one
- * latest in the input array.
+ * latest in the input array. Two notes of the same pitch name no voice apart,
+ * so both voice tie-breaks settle a unison on the lower `originalIndex` and
+ * name the same note.
  *
  * @category Core
  */
@@ -104,9 +106,10 @@ export type NoteEventIndexOptions = {
 };
 
 /**
- * Validate and stable-sort note events once, then expose logarithmic onset and
- * active-note lookups. Non-positive-duration notes may be retained for callers
- * that intentionally filter them later, but never count as sounding.
+ * Validate and stable-sort note events once, then expose onset and active-note
+ * lookups that cost `O(log n + k)`, where `k` is how many notes share the onset
+ * the answer comes from. Non-positive-duration notes may be retained for
+ * callers that intentionally filter them later, but never count as sounding.
  *
  * @category Core
  */
@@ -116,13 +119,18 @@ export function createNoteEventIndex(
 ): NoteEventIndex {
   assertNoteEvents(events, options.name ?? 'note events', options);
   const tieBreak = options.tieBreak ?? 'highest';
+  // Each wrapper is frozen, not only the array and the note inside it: `endBeat`
+  // is what the active-note search is built from, so a host that writes to it
+  // would leave the index answering from a span nothing else knows about.
   const notes = Object.freeze(
     events
-      .map((note, originalIndex) => ({
-        note: Object.freeze({ ...note }),
-        originalIndex,
-        endBeat: note.startBeat + note.durationBeat,
-      }))
+      .map((note, originalIndex) =>
+        Object.freeze({
+          note: Object.freeze({ ...note }),
+          originalIndex,
+          endBeat: note.startBeat + note.durationBeat,
+        }),
+      )
       .sort((a, b) => a.note.startBeat - b.note.startBeat || a.originalIndex - b.originalIndex),
   );
   // Segment-tree maxima find the latest active onset in logarithmic time even
@@ -194,8 +202,16 @@ export function createNoteEventIndex(
           continue;
         }
         if (tieBreak === 'last') continue;
-        const higher = indexed.note.pitch > best.note.pitch;
-        if (tieBreak === 'highest' ? higher : !higher) {
+        const difference = indexed.note.pitch - best.note.pitch;
+        // Equal pitches name no voice apart, so they are settled on the lower
+        // original index rather than on whichever end of the array the scan
+        // happens to reach last — otherwise `'highest'` and `'lowest'` would
+        // answer a unison differently.
+        const wins =
+          difference === 0
+            ? indexed.originalIndex < best.originalIndex
+            : difference > 0 === (tieBreak === 'highest');
+        if (wins) {
           best = indexed;
         }
       }

@@ -159,6 +159,18 @@ describe('beats to duration', () => {
     expect(() => beatsToDuration(8)).toThrow(NoSolutionError);
     expect(() => beatsToDuration(2.5)).toThrow(NoSolutionError);
   });
+
+  it('matches within a tolerance counted in quarter notes, not in beats', () => {
+    // The comparison is made in quarter notes whatever `beatUnit` names, so a
+    // longer beat unit narrows the tolerance in proportion: under a whole-note
+    // beat the documented 1e-6 quarter notes is 2.5e-7 of a beat.
+    const inWholeNotes = { beatUnit: 'whole' as NoteValue };
+    expect(beatsToDuration(1 + 2e-7, inWholeNotes)).toEqual({ base: 'whole', dots: 0 });
+    expect(() => beatsToDuration(1 + 3e-7, inWholeNotes)).toThrow(NoSolutionError);
+    // The same distance in beats is well inside the tolerance when the beat is
+    // itself a quarter note.
+    expect(beatsToDuration(1 + 3e-7)).toEqual({ base: 'quarter', dots: 0 });
+  });
 });
 
 describe('tied durations', () => {
@@ -201,5 +213,49 @@ describe('tied durations', () => {
 
   it('has no chain for a length off the notatable grid', () => {
     expect(() => beatsToTiedDurations(1.1)).toThrow(NoSolutionError);
+  });
+
+  it('writes no dot that would put the chain out of longest-first order', () => {
+    // A dot lengthens a value that is already written, so 10 beats used to come
+    // back as a whole note tied to a longer dotted whole — the right total in
+    // the wrong order, which an engraver splitting at barlines reads as a
+    // different rhythm.
+    expect(beatsToTiedDurations(10)).toEqual([
+      { base: 'whole', dots: 0 },
+      { base: 'whole', dots: 0 },
+      { base: 'half', dots: 0 },
+    ]);
+    expect(beatsToTiedDurations(11.5)).toEqual([
+      { base: 'whole', dots: 0 },
+      { base: 'whole', dots: 0 },
+      { base: 'half', dots: 2 },
+    ]);
+    expect(beatsToTiedDurations(14)).toEqual([
+      { base: 'whole', dots: 0 },
+      { base: 'whole', dots: 0 },
+      { base: 'whole', dots: 0 },
+      { base: 'half', dots: 0 },
+    ]);
+    expect(beatsToTiedDurations(18)).toEqual([
+      { base: 'whole', dots: 0 },
+      { base: 'whole', dots: 0 },
+      { base: 'whole', dots: 0 },
+      { base: 'whole', dots: 0 },
+      { base: 'half', dots: 0 },
+    ]);
+  });
+
+  it('never rises in length along a chain, whatever the requested total', () => {
+    for (const beats of [5, 8, 10, 11.5, 14, 18, 2.5, 4.25, 6.5, 9.9375, 17, 1.9375]) {
+      const chain = beatsToTiedDurations(beats);
+      expect(chain.length).toBeGreaterThan(0);
+      const lengths = chain.map((duration) => durationToBeats(duration));
+      expect(lengths.reduce((sum, length) => sum + length, 0)).toBeCloseTo(beats, 9);
+      for (let index = 1; index < lengths.length; index += 1) {
+        const previous = lengths[index - 1] ?? Number.NEGATIVE_INFINITY;
+        const current = lengths[index] ?? Number.POSITIVE_INFINITY;
+        expect(current).toBeLessThanOrEqual(previous);
+      }
+    }
   });
 });
