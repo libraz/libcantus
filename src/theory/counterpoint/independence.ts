@@ -12,7 +12,7 @@ import { InvalidInputError } from '../../core/errors/index.js';
 import { ConsonanceClass } from '../../core/interval/index.js';
 import type { Note } from '../../core/pitch/index.js';
 import { spelledInterval } from '../../core/pitch/index.js';
-import { assertArray } from '../../core/validation/index.js';
+import { assertArray, assertOptions } from '../../core/validation/index.js';
 import { classifySpelledInterval, pitchOf, simpleIntervalNumber } from './internal.js';
 
 /**
@@ -179,6 +179,7 @@ export function voiceIndependence(
   counter: readonly (Note | null)[],
   opts?: VoiceIndependenceOptions,
 ): VoiceIndependenceReport {
+  assertOptions(opts, 'opts');
   const upper = assertArray<Note | null>(lead, 'lead');
   const lower = assertArray<Note | null>(counter, 'counter');
   if (upper.length !== lower.length) {

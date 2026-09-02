@@ -24,7 +24,7 @@ import {
   spelledInterval,
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import { describeRejected } from '../../core/validation/index.js';
+import { assertArray, assertOptions, describeRejected } from '../../core/validation/index.js';
 import {
   classifySpelledInterval,
   createsBattuta,
@@ -1063,6 +1063,9 @@ export function checkSpecies(
   modeLike: KeyLike,
   opts?: SpeciesOptions,
 ): PartWritingViolation[] {
+  assertArray<Note>(cantusFirmus, 'cantus firmus');
+  assertArray<Note>(counterpoint, 'counterpoint');
+  const asked = assertOptions(opts, 'opts');
   const mode = toKeyScale(modeLike);
   if (!SPECIES_NUMBERS.includes(species)) {
     throw new InvalidInputError(
@@ -1072,14 +1075,14 @@ export function checkSpecies(
   if (cantusFirmus.length === 0 || counterpoint.length === 0) {
     throw new InvalidInputError('checkSpecies needs both a cantus firmus and a counterpoint');
   }
-  const resolved = resolveDurations(counterpoint, cantusFirmus.length, species, opts);
+  const resolved = resolveDurations(counterpoint, cantusFirmus.length, species, asked);
   if ('problem' in resolved) {
     return inTimeOrder([
       violation('wrongRhythmicRatio', [1], 0, counterpoint.length - 1, resolved.problem),
     ]);
   }
   const counterpointAbove =
-    opts?.counterpointAbove ?? meanPitch(counterpoint) >= meanPitch(cantusFirmus);
+    asked.counterpointAbove ?? meanPitch(counterpoint) >= meanPitch(cantusFirmus);
   const entries = buildEntries(cantusFirmus, counterpoint, resolved.durations, counterpointAbove);
   // Every interval the exercise sounds is judged, including the ones a held
   // note forms in the measure it is carried into. The line itself is read from

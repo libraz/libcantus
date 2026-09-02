@@ -21,8 +21,25 @@
 import { ConsonanceClass, isConsonantInterval } from '../../core/interval/index.js';
 import type { Note, SpelledInterval } from '../../core/pitch/index.js';
 import { pitchClassOf as pitchClass, spelledInterval } from '../../core/pitch/index.js';
+import { assertFiniteNumber, assertOneOf } from '../../core/validation/index.js';
 import { type KeyLike, toKeyScale } from '../scale/index.js';
 import { classifySpelledInterval, pitchOf, simpleIntervalNumber } from './internal.js';
+
+/**
+ * The readings {@link createsHiddenParallelPerfect} judges an approach by.
+ *
+ * Named once so the three places the choice is spelled — the two overloads and
+ * the implementation — cannot fall out of step with the check that a caller's
+ * value is one of them.
+ */
+const HIDDEN_PARALLEL_READINGS = Object.freeze(['fourPart', 'twoVoice'] as const);
+
+/**
+ * Which reading of hidden parallels an approach is judged by.
+ *
+ * @category Voicing & Counterpoint
+ */
+export type HiddenParallelReading = (typeof HIDDEN_PARALLEL_READINGS)[number];
 
 /**
  * Whether an upper voice has crossed below a lower voice.
@@ -309,22 +326,26 @@ export function createsHiddenParallelPerfect(
   aCur: Note,
   bPrev: Note,
   bCur: Note,
-  strictness?: 'fourPart' | 'twoVoice',
+  strictness?: HiddenParallelReading,
 ): boolean;
 export function createsHiddenParallelPerfect(
   aPrev: number,
   aCur: number,
   bPrev: number,
   bCur: number,
-  strictness?: 'fourPart' | 'twoVoice',
+  strictness?: HiddenParallelReading,
 ): boolean;
 export function createsHiddenParallelPerfect(
   aPrev: number | Note,
   aCur: number | Note,
   bPrev: number | Note,
   bCur: number | Note,
-  strictness: 'fourPart' | 'twoVoice' = 'fourPart',
+  strictness: HiddenParallelReading = 'fourPart',
 ): boolean {
+  // A reading outside the two named ones would silently take the four-part
+  // exemption, which is the lenient half of the rule: an approach the caller
+  // asked to have judged strictly would come back clean.
+  assertOneOf(strictness, HIDDEN_PARALLEL_READINGS, 'strictness');
   const a0 = pitchOf(aPrev);
   const a1 = pitchOf(aCur);
   const b0 = pitchOf(bPrev);
@@ -445,6 +466,9 @@ export function exceedsSpacing(
   lower: number | Note,
   maxSemitones = 12,
 ): boolean {
+  // A limit that is not a number compares false against every distance, so the
+  // spacing rule answers "within the limit" for a texture nobody could play.
+  assertFiniteNumber(maxSemitones, 'maxSemitones');
   return Math.abs(pitchOf(upper) - pitchOf(lower)) > maxSemitones;
 }
 

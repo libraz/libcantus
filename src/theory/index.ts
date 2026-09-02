@@ -73,6 +73,7 @@ export {
   scalesForChanges,
 } from './chordscale/index.js';
 export type {
+  HiddenParallelReading,
   VoiceIndependenceOptions,
   VoiceIndependenceReport,
 } from './counterpoint/index.js';

@@ -21,7 +21,7 @@ import {
   spelledInterval,
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import { assertArray } from '../../core/validation/index.js';
+import { assertArray, assertOptions } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
 import { assertChord, chordPitchClasses } from '../chord/index.js';
 import {
@@ -529,6 +529,9 @@ export function checkPartWriting(
   keyLike: KeyLike,
   opts?: PartWritingOptions,
 ): PartWritingViolation[] {
+  assertArray<SpelledVoicing>(voicings, 'voicings');
+  assertArray<Chord>(chords, 'chords');
+  const asked = assertOptions(opts, 'opts');
   const key = toKeyScale(keyLike);
   if (voicings.length !== chords.length) {
     throw new InvalidInputError(
@@ -539,16 +542,16 @@ export function checkPartWriting(
   // uses, and before any rule runs: a NaN limit would silently switch the
   // spacing rule off, and ranges too short for the texture would leave the top
   // voices unjudged, both of which report as a clean exercise.
-  const maxSpacing = resolveMaxSpacing(opts);
+  const maxSpacing = resolveMaxSpacing(asked);
   const voiceCount = voicings.reduce((widest, voicing) => Math.max(widest, voicing.length), 0);
   let ranges: readonly Readonly<VoiceRange>[] | undefined;
-  if (opts?.ranges === undefined) {
+  if (asked.ranges === undefined) {
     // Four voices are the SATB exercise these ranges were written for; any other
     // count has no conventional compass, so an unasked-for range check would
     // invent one.
     ranges = voiceCount === 4 ? SATB_RANGES : undefined;
   } else {
-    ranges = resolveRanges(opts);
+    ranges = resolveRanges(asked);
     if (ranges.length < voiceCount) {
       throw new InvalidInputError(
         `checkPartWriting needs one range per voice; received ${ranges.length} ranges for ${voiceCount} voices`,
