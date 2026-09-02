@@ -61,6 +61,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the conversions themselves place a beat by binary search over the map rather
   than by walking it. Every answer is unchanged.
 
+- **A score reads its own harmony and its own keys once.** `Score.timeline()`
+  and `Score.keys()` asked with no options are the score's own question, and
+  both re-ran the analysis every time they were asked — so the documented order,
+  timeline then phrases then keys then key, inferred the harmony twice and
+  searched for the keys twice over readings the class was already keeping. Both
+  now read what the score keeps; asked with options they name a different
+  question, which is answered afresh and does not become the kept answer. The
+  regions handed out are copies, so what a caller does with them cannot reach
+  what the score reads next.
+
+- **The documentation of two options says what the code does.**
+  `ArrangementOptions.harmonicRhythm` was described as a chord-slot length,
+  where the arrangement analysis always infers its harmony with dynamic
+  segmentation and reads the value as a prior — a chord may still begin wherever
+  the notes argue for one, and `timeline` is how boundaries are fixed.
+  `VoicingOptions.previousChord` was described as enabling the resolution of a
+  chordal seventh; it enables every rule read from the chord being left — that
+  resolution, a leading tone's resolution, and the cross relation between the
+  two chords — none of which is scored without it, since a voicing does not say
+  what it was written on.
+
 - **An instrument is checked by the functions, not by the class over them.** The
   instrument profile every entry point takes is now read whole where it enters:
   the technique list, the polyphony, the fret span, the limbs and the reach
