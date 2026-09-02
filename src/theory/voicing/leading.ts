@@ -12,6 +12,22 @@ import {
 } from './satb.js';
 
 /**
+ * Read a voicing as one: an array, holding a pitch in every voice.
+ *
+ * Both entrances here walk a voicing pitch by pitch and do arithmetic on what
+ * they find, and arithmetic coerces — a voice holding a `null` measures as
+ * having moved nowhere, and one holding a string as `NaN` that then loses every
+ * comparison it takes part in.
+ */
+function assertVoicing(pitches: readonly number[], name: string): readonly number[] {
+  const voices = assertArray<number>(pitches, name);
+  for (let index = 0; index < voices.length; index += 1) {
+    assertFiniteNumber(voices[index] ?? Number.NaN, `${name}[${index}]`);
+  }
+  return voices;
+}
+
+/**
  * Total voice-leading cost between two voicings: the sum of absolute semitone
  * motion across voices, and nothing besides. The rules the search also weighs —
  * parallels, hidden perfects, unresolved tendency tones — are judged and
@@ -25,8 +41,10 @@ import {
  * @category Voicing & Counterpoint
  */
 export function voiceLeadingCost(from: number[], to: number[]): number {
-  const previous = assertArray<number>(from, 'from');
-  const next = assertArray<number>(to, 'to');
+  // The voices are subtracted from one another, and subtraction coerces: a
+  // voicing holding a null would be measured as having moved nowhere.
+  const previous = assertVoicing(from, 'from');
+  const next = assertVoicing(to, 'to');
   if (previous.length !== next.length) {
     return Number.POSITIVE_INFINITY;
   }
@@ -71,9 +89,7 @@ export function nextVoicing(current: number[], chord: ChordLike, opts?: VoicingO
     if (current.length === 0) {
       throw new InvalidInputError('current must contain at least one pitch');
     }
-    for (let index = 0; index < current.length; index += 1) {
-      assertFiniteNumber(current[index] ?? Number.NaN, `current[${index}]`);
-    }
+    assertVoicing(current, 'current');
   }
   // Both branches end in the same resolver, so the voice-count budget and the
   // range checks apply wherever the ranges came from: a texture read off
@@ -88,9 +104,7 @@ export function nextVoicing(current: number[], chord: ChordLike, opts?: VoicingO
         }),
       })
     : resolveRanges(opts);
-  for (let index = 0; index < current.length; index += 1) {
-    assertFiniteNumber(current[index] ?? Number.NaN, `current[${index}]`);
-  }
+  assertVoicing(current, 'current');
   if (current.length < ranges.length) {
     throw new InvalidInputError(
       `current has ${current.length} voices but the requested ranges require ${ranges.length}`,

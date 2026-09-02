@@ -3,12 +3,14 @@ import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import {
   assertArray,
   assertGenerationBudget,
+  assertPitchClass,
   assertPositiveInt,
 } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
 import { chordPitchClasses, displacedThirds } from '../chord/index.js';
 import type { ScaleNameInput } from '../scale/index.js';
 import {
+  assertModeMask,
   NAMED_SCALES,
   namedScaleMask,
   requireScaleMask,
@@ -71,7 +73,13 @@ export function scaleMatchesChord(
   scaleMask: number,
   scaleRootPc: number,
 ): boolean {
-  for (const pc of assertArray<number>(chordPcs, 'chord pitch classes')) {
+  // The mask is read with bit operations and a pitch class shifts it, so both
+  // coerce: an entry that is not a pitch class would silently be read as one.
+  assertModeMask(scaleMask, 'scaleMask');
+  assertPitchClass(scaleRootPc, 'scaleRootPc');
+  const pcs = assertArray<number>(chordPcs, 'chord pitch classes');
+  for (let index = 0; index < pcs.length; index += 1) {
+    const pc = assertPitchClass(pcs[index] ?? Number.NaN, `chord pitch classes[${index}]`);
     if (!maskHasPitchClass(scaleMask, scaleRootPc, pc)) {
       return false;
     }

@@ -7,11 +7,28 @@
  * make the module graph circular.
  */
 
+import { InvalidInputError } from '../../core/errors/index.js';
 import type { ConsonanceClass } from '../../core/interval/index.js';
 import { ConsonanceClass as Consonance } from '../../core/interval/index.js';
-import type { Note, SpelledInterval } from '../../core/pitch/index.js';
+import type { IntervalQualityLabel, Note, SpelledInterval } from '../../core/pitch/index.js';
 import { noteToMidi } from '../../core/pitch/index.js';
-import { assertRecord } from '../../core/validation/index.js';
+import { assertDegree, assertRecord, describeRejected } from '../../core/validation/index.js';
+
+/**
+ * Require an interval quality label.
+ *
+ * The label is open at both ends — an augmented interval is `'A'` repeated and a
+ * diminished one `'d'` repeated, so there is no list to check against — but its
+ * shape is closed: one of the three plain qualities, or a run of one glyph.
+ */
+function assertQualityLabel(quality: IntervalQualityLabel): IntervalQualityLabel {
+  if (typeof quality !== 'string' || !/^(P|M|m|A+|d+)$/.test(quality)) {
+    throw new InvalidInputError(
+      `interval.quality must be an interval quality; received ${describeRejected(quality)}`,
+    );
+  }
+  return quality;
+}
 
 /** The sounding pitch of a predicate argument, whichever form it arrived in. */
 export function pitchOf(value: number | Note): number {
@@ -48,9 +65,12 @@ export function classifySpelledInterval(
   interval: SpelledInterval,
   twoVoice = true,
 ): ConsonanceClass {
-  assertRecord<SpelledInterval>(interval, 'interval');
-  const simple = simpleIntervalNumber(interval.number);
-  const quality = interval.quality;
+  // The record check alone leaves the two fields the answer is read from
+  // unread, and an interval carrying neither would classify as a dissonance —
+  // the same verdict a real tritone gets, and one a counterpoint report acts on.
+  const read = assertRecord<SpelledInterval>(interval, 'interval');
+  const simple = simpleIntervalNumber(assertDegree(read.number, 'interval.number'));
+  const quality = assertQualityLabel(read.quality);
   if (quality === 'P') {
     if (simple === 1 || simple === 5) {
       return Consonance.PerfectConsonance;
