@@ -8,7 +8,9 @@
  * side by side, and a sweep in another worker slows a pass here by an order of
  * magnitude without anything being wrong with it. The ratio of two runs taken
  * moments apart on the same machine survives that, because a busy machine slows
- * both of them.
+ * both of them — but only if each side is read well enough that the ratio
+ * stands for the passes and not for what else the machine was doing during
+ * them, which is what {@link READINGS} is for.
  *
  * ## When a growth assertion is worth writing
  *
@@ -39,6 +41,32 @@ function elapsed(run: () => unknown): number {
 }
 
 /**
+ * How many times each side is read, so the shortest reading of it can be kept.
+ *
+ * Scheduling noise is one-sided: a busy machine can only ever make a pass look
+ * slower than it is, never faster. The shortest of several readings is
+ * therefore the closest estimate of what the pass costs, and taking it on both
+ * sides is what keeps the ratio from turning on a single descheduled slice.
+ *
+ * It matters most where the smaller run is only tens of milliseconds — which is
+ * the usual case here, because the smaller input is chosen small enough that
+ * the pair is affordable. At that scale one interruption is a larger share of
+ * the reading than the whole difference the assertion is looking for, and a
+ * single reading of each side scatters the ratio far enough to cross a
+ * threshold that the pass itself is nowhere near.
+ */
+const READINGS = 3;
+
+/** The shortest of several readings of the same call. */
+function shortest(run: () => unknown): number {
+  let best = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < READINGS; index += 1) {
+    best = Math.min(best, elapsed(run));
+  }
+  return best;
+}
+
+/**
  * The factor by which `run` slows down when its input grows `times` over.
  *
  * A cost that grows with the input answers near `times`; one that grows with
@@ -55,9 +83,9 @@ export function growthFactor(times: number, run: (scale: number) => unknown): nu
   // compiler warming up on the code both of them execute.
   run(1);
   const small = Math.max(
-    elapsed(() => run(1)),
+    shortest(() => run(1)),
     1,
   );
-  const large = elapsed(() => run(times));
+  const large = shortest(() => run(times));
   return large / small;
 }
