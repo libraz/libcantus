@@ -24,6 +24,7 @@ import type { NoteEvent } from '../../core/types.js';
 import {
   assertNoteEvents,
   assertOneOf,
+  assertOptions,
   assertRange,
   assertTimeSignature,
   dropSilentNotes,
@@ -195,14 +196,15 @@ function clampVelocity(velocity: number): number {
  * @category Composition
  */
 export function ornament(notes: readonly NoteEvent[], opts: OrnamentOptions = {}): NoteEvent[] {
+  const asked = assertOptions(opts, 'opts');
   assertNoteEvents(notes, 'ornament notes', { allowNonPositiveDuration: true });
-  const style = assertOneOf(opts.style ?? DEFAULT_STYLE, ORNAMENT_STYLES, 'ornament style');
-  const ts = meterAt(0, toMeterData(opts.ts ?? DEFAULT_TS, 'ts'));
+  const style = assertOneOf(asked.style ?? DEFAULT_STYLE, ORNAMENT_STYLES, 'ornament style');
+  const ts = meterAt(0, toMeterData(asked.ts ?? DEFAULT_TS, 'ts'));
   assertTimeSignature(ts);
-  if (opts.amount !== undefined) {
-    assertRange(opts.amount, 0, 1, 'ornament amount');
+  if (asked.amount !== undefined) {
+    assertRange(asked.amount, 0, 1, 'ornament amount');
   }
-  const ctx = resolveContextWith(opts.ctx, { ornament: opts.amount });
+  const ctx = resolveContextWith(asked.ctx, { ornament: asked.amount });
   const amount = ctx.ornament ?? DEFAULT_AMOUNT;
   const draw = ctx.part('ornament');
 

@@ -24,6 +24,7 @@ import {
   assertGenerationBudget,
   assertInteger,
   assertMidiPitch,
+  assertOptions,
   assertPositiveInt,
 } from '../../core/validation/index.js';
 import { type GenerationContextInput, resolveContext } from '../context/index.js';
@@ -173,10 +174,11 @@ export function onsetWeightCurve(weight: number): number {
 export function generateRhythm(ts: MeterLike, opts: RhythmOptions = {}): RhythmEvent[] {
   // The meter is read once, here: the grid below is one repeated bar, so a
   // caller who names a whole map gets the signature the map opens in.
+  const asked = assertOptions(opts, 'opts');
   const meter = meterAt(0, toMeterData(ts, 'ts'));
-  const bars = opts.bars ?? DEFAULT_BARS;
-  const subdivision = opts.subdivision ?? DEFAULT_SUBDIVISION;
-  const ctx = resolveContext(opts.ctx);
+  const bars = asked.bars ?? DEFAULT_BARS;
+  const subdivision = asked.subdivision ?? DEFAULT_SUBDIVISION;
+  const ctx = resolveContext(asked.ctx);
   const density = ctx.rhythmic ?? DEFAULT_DENSITY;
 
   assertPositiveInt(bars, 'rhythm bars');
@@ -230,6 +232,7 @@ export function generateRhythm(ts: MeterLike, opts: RhythmOptions = {}): RhythmE
  * @category Rhythm & Meter
  */
 export function rhythmDensity(events: RhythmEvent[], ts: MeterLike): number {
+  assertArray<RhythmEvent>(events, 'events');
   // Read before the empty case, so a malformed meter is rejected whichever way
   // the call leaves rather than only when there is something to count.
   const barBeats = beatsPerBar(ts);

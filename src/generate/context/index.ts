@@ -9,6 +9,7 @@
  * its own randomness from the same project seed.
  */
 
+import { InvalidInputError } from '../../core/errors/index.js';
 import type { InstrumentProfile } from '../../core/instrument/index.js';
 import {
   createPositionalRng,
@@ -16,7 +17,7 @@ import {
   type PositionalRng,
   resolveAlgorithmVersion,
 } from '../../core/random/index.js';
-import { assertInteger, assertRange } from '../../core/validation/index.js';
+import { assertInteger, assertRange, assertRecord } from '../../core/validation/index.js';
 import { assertVocabulary, type Vocabulary } from '../vocabulary/types.js';
 import { assertDifficulty } from './difficulty.js';
 import { type Draw, drawsFrom } from './draw.js';
@@ -172,6 +173,15 @@ const VERSION_SEGMENT = 'v';
  * ```
  */
 export function resolveContext(input?: GenerationContextInput): ResolvedContext {
+  // Absent is the default context; anything else has to be a seed or a context,
+  // so a `null` passed on by a caller that had none is refused rather than
+  // silently answered with the defaults it looks nothing like.
+  if (input !== null && typeof input !== 'number' && input !== undefined) {
+    assertRecord<GenerationContext>(input, 'ctx');
+  }
+  if (input === null) {
+    throw new InvalidInputError('ctx must be a seed or a generation context; received null');
+  }
   const ctx: GenerationContext =
     typeof input === 'number' ? { seed: input } : (input ?? { seed: DEFAULT_SEED });
   const seed = assertInteger(ctx.seed ?? DEFAULT_SEED, 'seed', 0, 0xffffffff);

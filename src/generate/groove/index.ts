@@ -23,6 +23,7 @@ import {
   assertFiniteNumber,
   assertGenerationBudget,
   assertNoteEvents,
+  assertOptions,
   assertPositiveInt,
   assertRange,
   dropSilentNotes,
@@ -138,24 +139,25 @@ const MAX_VELOCITY = 127;
  * @category Rhythm & Meter
  */
 export function humanize(events: readonly NoteEvent[], opts: HumanizeOptions = {}): NoteEvent[] {
+  const asked = assertOptions(opts, 'opts');
   // The meter is read once, here, and every position below is weighed against
   // the signature it names — the one the piece opens in, given a whole map.
-  const ts = meterAt(0, toMeterData(opts.ts ?? DEFAULT_TS, 'ts'));
+  const ts = meterAt(0, toMeterData(asked.ts ?? DEFAULT_TS, 'ts'));
   // Zero-length artefacts are routine in MIDI imports and never sound, so they
   // are accepted and dropped here, exactly as the analysis layer does — the two
   // sides of a pipeline must not disagree about the same array.
   assertNoteEvents(events, 'humanize events', { allowNonPositiveDuration: true });
   const sounding = dropSilentNotes(events);
-  const timing = opts.timing ?? DEFAULT_TIMING;
-  const velocityJitter = opts.velocity ?? DEFAULT_VELOCITY_JITTER;
-  const accent = opts.accent ?? DEFAULT_ACCENT;
-  const baseVelocity = opts.baseVelocity ?? DEFAULT_BASE_VELOCITY;
+  const timing = asked.timing ?? DEFAULT_TIMING;
+  const velocityJitter = asked.velocity ?? DEFAULT_VELOCITY_JITTER;
+  const accent = asked.accent ?? DEFAULT_ACCENT;
+  const baseVelocity = asked.baseVelocity ?? DEFAULT_BASE_VELOCITY;
   assertRange(timing, 0, Number.MAX_SAFE_INTEGER, 'humanize timing');
   assertRange(velocityJitter, 0, 127, 'humanize velocity jitter');
   assertRange(accent, 0, 127, 'humanize accent');
   assertRange(baseVelocity, 0, 127, 'humanize base velocity');
-  const ctx = resolveContext(opts.ctx);
-  const draw = ctx.part(opts.part ?? DEFAULT_PART);
+  const ctx = resolveContext(asked.ctx);
+  const draw = ctx.part(asked.part ?? DEFAULT_PART);
 
   return sounding.map((event) => {
     // Addressed by the event rather than by how many events came before it, so

@@ -10,6 +10,7 @@ import {
   assertGenerationBudget,
   assertInteger,
   assertNoteEvents,
+  assertOneOf,
   assertPositiveInt,
   assertRecord,
   clampToMidi,
@@ -30,14 +31,17 @@ import { type GenerationContextInput, resolveContextWith } from '../context/inde
  *
  * @category Composition
  */
-export type MotifTransform =
-  | 'transposeDiatonic'
-  | 'transposeChromatic'
-  | 'invert'
-  | 'retrograde'
-  | 'augment'
-  | 'diminish'
-  | 'sequence';
+const MOTIF_TRANSFORMS = Object.freeze([
+  'transposeDiatonic',
+  'transposeChromatic',
+  'invert',
+  'retrograde',
+  'augment',
+  'diminish',
+  'sequence',
+] as const);
+
+export type MotifTransform = (typeof MOTIF_TRANSFORMS)[number];
 
 /**
  * A single note within a motif cell.
@@ -468,6 +472,11 @@ function transformUnchecked(
   key?: KeyScale,
 ): MotifCell {
   const notes = assertCellNotes(cell, 'motif notes');
+  // The switch below has a case per transform and no fallthrough, so a name
+  // that is in no case returns nothing at all and fails as a missing cell one
+  // frame later. A union is checked when the caller compiles, and this is where
+  // one from a config file or a JavaScript caller arrives.
+  assertOneOf(t, MOTIF_TRANSFORMS, 'motif transform');
   if (amount !== undefined) {
     assertFiniteNumber(amount, 'motif transform amount');
   }

@@ -27,7 +27,7 @@ import {
   assertRange,
   assertRecord,
 } from '../../core/validation/index.js';
-import { sustainsStrokes } from '../context/difficulty.js';
+import { assertDifficulty, sustainsStrokes } from '../context/difficulty.js';
 import { assertDraw, type Draw } from '../context/draw.js';
 
 /** Sixteenth steps in one 4/4 bar; the grid every figure is written on. */
@@ -135,6 +135,10 @@ function subdivisionBeats(ts: TimeSignature): number {
  * @category Composition
  */
 export function gridMetricWeight(step: number, ts: MeterLike): number {
+  // Checked before the grid position is turned into beats: multiplying a `null`
+  // by the step length gives beat 0, which is the downbeat — the strongest
+  // answer this returns, for a position nobody named.
+  assertFiniteNumber(step, 'step');
   return stepWeight(step, meterAt(0, toMeterData(ts, 'ts')));
 }
 
@@ -535,7 +539,14 @@ export function withinCeiling(
   difficulty: number | undefined,
 ): boolean {
   const figure = assertGridEvents(events);
-  if (difficulty === undefined || bpm === undefined || figure.length < 2) {
+  if (difficulty === undefined || bpm === undefined) {
+    return true;
+  }
+  // Read on the same terms as the ceiling check it delegates to: absent means
+  // no constraint, and anything else has to be a tempo and a ceiling.
+  assertFiniteNumber(bpm, 'bpm');
+  assertDifficulty(difficulty);
+  if (figure.length < 2) {
     return true;
   }
   const byStream = new Map<string, Set<number>>();
