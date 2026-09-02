@@ -231,4 +231,23 @@ export const CONCEPT_OWNERS: readonly ConceptOwner[] = [
     owner: 'src/core/pitch/index.ts',
     reserved: ['intervalDescends', 'intervalSemitones', 'spelledInterval'],
   },
+  {
+    // What stands in a chord's third slot: the degree that says what the chord
+    // is. Three readers had their own, and the loosest of them answered a
+    // suspension by whichever of the fourth and the second happened to sound —
+    // which folded pitch classes cannot decide, since an eleventh chord's
+    // tensions land on both. The tone that identifies a chord and the tone that
+    // must not be sounded against it are two consequences of one fact.
+    concept: "what stands in a chord's third slot",
+    owner: 'src/theory/chord/index.ts',
+    reserved: ['thirdSlotOf', 'displacedThirds', 'suspendedTone', 'suspendedIntervalOf'],
+  },
+  {
+    // Whether a chord sounds a pitch class. Held as a twelve-bit mask, the way
+    // a scale is: a second reader that builds a Set and an array to answer it
+    // gives the same answer at a cost the documented model does not have.
+    concept: "a chord's pitch classes as a mask",
+    owner: 'src/theory/chord/index.ts',
+    reserved: ['chordPcMask'],
+  },
 ];

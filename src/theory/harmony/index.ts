@@ -1,5 +1,5 @@
 import { pitchClassOf } from '../../core/pitch/index.js';
-import { type Chord, type ChordToneRole, chordSpecOf, chordToneRole } from '../chord/index.js';
+import { type ChordToneRole, chordToneRole, thirdSlotOf } from '../chord/index.js';
 import { type ChordLike, toChordData } from '../symbol/index.js';
 
 /**
@@ -30,32 +30,6 @@ export type VoicedRole = {
   lock: LockLevel;
   belongsToChordId: number;
 };
-
-/**
- * The one interval class standing in for a chord's absent third, if any.
- *
- * Read from the chord's structure rather than from its sounding pitch classes:
- * an eleventh chord's tensions fold onto 2 and 5 in pitch-class space, so a set
- * of folded intervals cannot say which of them replaced the third — and both
- * would answer, leaving one chord with two quality-defining tones. The
- * suspension a `sus4` or `sus2` names is its fourth or its second; an eleventh
- * chord's is the eleventh, the tone its omitted third gave way to.
- */
-function suspendedIntervalOf(chord: Chord): number | undefined {
-  const sounds = (ic: number): boolean =>
-    chord.intervals.some((interval) => pitchClassOf(interval) === ic);
-  if (sounds(3) || sounds(4)) {
-    return undefined;
-  }
-  const spec = chordSpecOf(chord);
-  if (spec.base === 'sus4') {
-    return sounds(5) ? 5 : undefined;
-  }
-  if (spec.base === 'sus2') {
-    return sounds(2) ? 2 : undefined;
-  }
-  return spec.omissions.includes(3) && sounds(5) ? 5 : undefined;
-}
 
 /**
  * Classify a pitch's harmonic role and lock level within a chord.
@@ -92,8 +66,11 @@ function suspendedIntervalOf(chord: Chord): number | undefined {
 export function roleOf(pitch: number, chord: ChordLike, chordId = 0): VoicedRole {
   const data = toChordData(chord);
   const interval = (pitchClassOf(pitch) - pitchClassOf(data.rootPc) + 12) % 12;
-  const suspended = suspendedIntervalOf(data);
-  const isSuspendedTone = suspended !== undefined && interval === suspended;
+  // What stands in the third's slot is read where the chord is read, not here:
+  // the tone that identifies a chord and the tone the avoid-note rule refuses
+  // against it are two consequences of one fact about the chord.
+  const slot = thirdSlotOf(data);
+  const isSuspendedTone = slot.kind === 'suspension' && interval === slot.interval;
   const chordRole = chordToneRole(pitch, data);
   let role: HarmonyRole;
   let lock: LockLevel;

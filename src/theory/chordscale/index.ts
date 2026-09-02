@@ -2,7 +2,7 @@ import { InvalidInputError } from '../../core/errors/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import { assertGenerationBudget, assertPositiveInt } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
-import { chordPitchClasses } from '../chord/index.js';
+import { chordPitchClasses, displacedThirds } from '../chord/index.js';
 import type { ScaleNameInput } from '../scale/index.js';
 import {
   NAMED_SCALES,
@@ -259,35 +259,6 @@ export function chordScales(chord: ChordLike): ChordScaleMatch[] {
 }
 
 /**
- * The tone standing in the third's place when a chord suspends its third.
- *
- * Read from the tones the chord sounds rather than from its quality name: one
- * suspension is written `sus4`, `7sus4`, `9sus4`, `11` and `sus4(add9)`, and
- * the eleventh chord states it by omitting the third rather than by naming a
- * suspension, so a set of names can only ever cover part of it. A chord with no
- * third that sounds a fourth suspends into that fourth; one that sounds a
- * second suspends into the second.
- *
- * @param chordPcs The chord's pitch classes.
- * @param rootPc The chord root's pitch class.
- * @returns The suspended tone's pitch class, or undefined when the chord states
- *   a third of its own.
- */
-function suspendedTone(chordPcs: number[], rootPc: number): number | undefined {
-  const sounds = (semitones: number): boolean => chordPcs.includes(pitchClass(rootPc + semitones));
-  if (sounds(3) || sounds(4)) {
-    return undefined;
-  }
-  if (sounds(5)) {
-    return pitchClass(rootPc + 5);
-  }
-  if (sounds(2)) {
-    return pitchClass(rootPc + 2);
-  }
-  return undefined;
-}
-
-/**
  * Which use an avoid note is judged for: sounding it, or passing through it.
  *
  * `'harmonic'` is the Berklee-style rule in full — a tone that must not be
@@ -355,10 +326,11 @@ export function avoidNotes(
     return [];
   }
   const chordSet = new Set(chordPcs);
-  const suspended = suspendedTone(chordPcs, rootPc);
-  // The tone the suspension displaced sits a semitone below it, and sounding it
-  // is what undoes the suspension.
-  const displacedThird = suspended === undefined ? undefined : pitchClass(suspended - 1);
+  // Sounding the third a suspension stands in for is what undoes the
+  // suspension, so it is an avoid note however consonant it is against the
+  // scale. Both thirds are named: a suspension does not say which one it
+  // displaced — that is what suspending is — so meeting either one ends it.
+  const displaced = new Set(displacedThirds(data));
   const melodic = opts.use === 'melodic';
   const semitoneAboveRoot = pitchClass(rootPc + 1);
   const avoid: number[] = [];
@@ -369,7 +341,7 @@ export function avoidNotes(
     if (melodic && pc !== semitoneAboveRoot) {
       continue;
     }
-    if (!alteredDominant && (chordSet.has(pitchClass(pc - 1)) || pc === displacedThird)) {
+    if (!alteredDominant && (chordSet.has(pitchClass(pc - 1)) || displaced.has(pc))) {
       avoid.push(pc);
     }
   }

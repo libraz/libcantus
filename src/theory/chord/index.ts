@@ -544,6 +544,49 @@ function spelledToneRole(pitch: number, chord: Chord): ChordToneRole | null | un
 }
 
 /**
+ * A chord's pitch classes as a twelve-bit mask, bit `n` for pitch class `n`.
+ *
+ * The same representation a scale is held in, and for the same reason: asking
+ * whether a chord sounds a pitch is one shift and one and, on a number the
+ * caller never has to allocate. The analysers ask it per note per beat, so the
+ * set and the sorted array the enumeration hands out are built only where a
+ * caller actually wants to walk the tones.
+ *
+ * @param chord The chord to read.
+ * @param opts Set `includeBass: false` to omit a slash bass.
+ * @returns The mask, in [0, 4095].
+ */
+export function chordPcMask(chord: Chord, opts: { includeBass?: boolean } = {}): number {
+  let mask = 0;
+  for (const interval of chord.intervals) {
+    mask |= 1 << pitchClass(chord.rootPc + interval);
+  }
+  if (opts.includeBass !== false && chord.bassPc !== undefined) {
+    mask |= 1 << pitchClass(chord.bassPc);
+  }
+  return mask;
+}
+
+/** Whether a twelve-bit pitch-class mask carries a pitch class. */
+function hasPitchClass(mask: number, pc: number): boolean {
+  return ((mask >> pc) & 1) === 1;
+}
+
+/**
+ * A chord's intervals as a twelve-bit mask of interval classes above its root.
+ *
+ * The root's own frame rather than the sounding one: what a chord is made of is
+ * a question about its template, so a slash bass is never part of the answer.
+ */
+function chordIntervalMask(chord: Chord): number {
+  let mask = 0;
+  for (const interval of chord.intervals) {
+    mask |= 1 << (((interval % 12) + 12) % 12);
+  }
+  return mask;
+}
+
+/**
  * Get the sorted, deduplicated pitch classes of a chord.
  *
  * A slash bass is one of them: `F/G` sounds a G, the voicers put it in the
@@ -564,14 +607,14 @@ function spelledToneRole(pitch: number, chord: Chord): ChordToneRole | null | un
  * @category Chords
  */
 export function chordPitchClasses(chord: Chord, opts: { includeBass?: boolean } = {}): number[] {
-  const set = new Set<number>();
-  for (const interval of chord.intervals) {
-    set.add(pitchClass(chord.rootPc + interval));
+  const mask = chordPcMask(chord, opts);
+  const pcs: number[] = [];
+  for (let pc = 0; pc < 12; pc += 1) {
+    if (hasPitchClass(mask, pc)) {
+      pcs.push(pc);
+    }
   }
-  if (opts.includeBass !== false && chord.bassPc !== undefined) {
-    set.add(pitchClass(chord.bassPc));
-  }
-  return [...set].sort((a, b) => a - b);
+  return pcs;
 }
 
 /**
@@ -598,12 +641,7 @@ export function intervalAboveRoot(pitch: number, chord: Chord): number {
  * @category Chords
  */
 export function isChordMember(pitch: number, chord: Chord | null): boolean {
-  return chord === null ? false : chordPitchClasses(chord).includes(pitchClass(pitch));
-}
-
-/** The chord-tone offsets present in a chord, reduced to pitch-class space. */
-function chordToneOffsets(chord: Chord): Set<number> {
-  return new Set(chord.intervals.map((i) => ((i % 12) + 12) % 12));
+  return chord === null ? false : hasPitchClass(chordPcMask(chord), pitchClass(pitch));
 }
 
 /**
@@ -630,43 +668,117 @@ export function chordToneRole(pitch: number, chord: Chord): ChordToneRole | null
     return spelled;
   }
   const interval = (pitchClass(pitch) - pitchClass(chord.rootPc) + 12) % 12;
-  const tones = chordToneOffsets(chord);
+  const tones = chordIntervalMask(chord);
+  const sounds = (ic: number): boolean => hasPitchClass(tones, ic);
   if (interval === 0) {
     // A chord that leaves its root out does not sound one, so the pitch has no
     // role in it: every other branch below asks the same of its own degree.
-    return tones.has(0) ? 'root' : null;
+    return sounds(0) ? 'root' : null;
   }
   if (interval === 3 || interval === 4) {
-    return tones.has(interval) && (interval !== 3 || !tones.has(4)) ? 'third' : null;
+    return sounds(interval) && (interval !== 3 || !sounds(4)) ? 'third' : null;
   }
   if (interval === 7) {
-    return tones.has(7) ? 'fifth' : null;
+    return sounds(7) ? 'fifth' : null;
   }
   if (interval === 6) {
     // A diminished fifth is the chord's fifth only when no perfect fifth is
     // present; alongside a perfect fifth it is a #11 tension, not a fifth.
-    return tones.has(6) && !tones.has(7) ? 'fifth' : null;
+    return sounds(6) && !sounds(7) ? 'fifth' : null;
   }
   if (interval === 8) {
     // An augmented fifth is the chord's fifth only without a perfect fifth;
     // alongside a perfect fifth it is a b13 tension, not a fifth.
-    return tones.has(8) && !tones.has(7) ? 'fifth' : null;
+    return sounds(8) && !sounds(7) ? 'fifth' : null;
   }
   if (interval === 9) {
-    const hasHigherSeventh = tones.has(10) || tones.has(11);
-    const isDiminishedSeventh = tones.has(3) && tones.has(6) && !hasHigherSeventh;
-    if (tones.has(9) && isDiminishedSeventh) {
+    const hasHigherSeventh = sounds(10) || sounds(11);
+    const isDiminishedSeventh = sounds(3) && sounds(6) && !hasHigherSeventh;
+    if (sounds(9) && isDiminishedSeventh) {
       return 'seventh';
     }
-    if (tones.has(9) && !hasHigherSeventh) {
+    if (sounds(9) && !hasHigherSeventh) {
       return 'sixth';
     }
     return null;
   }
   if (interval === 10 || interval === 11) {
-    return tones.has(interval) ? 'seventh' : null;
+    return sounds(interval) ? 'seventh' : null;
   }
   return null;
+}
+
+/**
+ * What occupies a chord's third slot: the degree that says what the chord is.
+ *
+ * A discriminated union rather than a nullable interval, because the three
+ * cases are not degrees of one thing. A chord states a third, or a suspension
+ * stands in its place, or the slot is empty — and a reader that has to handle
+ * the suspension differently from the third (the avoid-note rule, the voicing
+ * lock) says so in the shape of the answer rather than in a comment beside it.
+ */
+export type ThirdSlot =
+  /** The chord states its own third: 4 for a major, 3 for a minor. */
+  | { readonly kind: 'third'; readonly interval: 3 | 4 }
+  /** A suspension stands in the third's place: the fourth, or the second. */
+  | { readonly kind: 'suspension'; readonly interval: 2 | 5 }
+  /** The chord names no third and suspends nothing into its place. */
+  | { readonly kind: 'none' };
+
+/**
+ * Read what stands in a chord's third slot.
+ *
+ * One reading for every layer that needs it — the avoid notes a suspension
+ * creates, the voicing lock that says a tone identifies the chord, the cadence
+ * reader asking whether a chord carries a leading tone. Three of them had their
+ * own, and the loosest of the three answered a suspension by whichever of the
+ * fourth and the second happened to sound, which is not a question folded pitch
+ * classes can answer: an eleventh chord's tensions fold onto 2 and 5 alike. So
+ * the spelling decides — the suspension a `sus4` or a `sus2` names is its
+ * fourth or its second, and an eleventh chord's is the eleventh its omitted
+ * third gave way to.
+ *
+ * At most one interval class is ever reported, so a consumer reading the answer
+ * as "this is the tone that identifies the chord" gets one tone rather than two.
+ *
+ * @param chord The chord to read.
+ * @returns What occupies the slot.
+ */
+export function thirdSlotOf(chord: Chord): ThirdSlot {
+  const tones = chordIntervalMask(chord);
+  if (hasPitchClass(tones, 4)) {
+    return { kind: 'third', interval: 4 };
+  }
+  if (hasPitchClass(tones, 3)) {
+    return { kind: 'third', interval: 3 };
+  }
+  const spec = chordSpecOf(chord);
+  if (spec.base === 'sus2') {
+    return hasPitchClass(tones, 2) ? { kind: 'suspension', interval: 2 } : { kind: 'none' };
+  }
+  // An eleventh chord states its suspension by omitting the third rather than
+  // by naming one, so it is read the same way a `sus4` is.
+  if (spec.base === 'sus4' || spec.omissions.includes(3)) {
+    return hasPitchClass(tones, 5) ? { kind: 'suspension', interval: 5 } : { kind: 'none' };
+  }
+  return { kind: 'none' };
+}
+
+/**
+ * The thirds a suspension is standing in for, as pitch classes.
+ *
+ * Sounding either of them against the chord resolves the suspension and the
+ * chord stops being the chord that was written: over a `Csus2` an E makes a
+ * `Cadd9`. Both are named because the suspension does not say which third it
+ * displaced — that is what suspending is — so both are what it must not meet.
+ *
+ * @param chord The chord to read.
+ * @returns The two thirds, or an empty array when the chord states its own.
+ */
+export function displacedThirds(chord: Chord): number[] {
+  return thirdSlotOf(chord).kind === 'suspension'
+    ? [pitchClass(chord.rootPc + 3), pitchClass(chord.rootPc + 4)]
+    : [];
 }
 
 /** Classify a stacked-thirds triad into a chord quality from its interval set. */

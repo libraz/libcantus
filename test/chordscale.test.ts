@@ -5,6 +5,7 @@ import {
   chordFromSpec,
   chordPitchClasses,
   chordQualities,
+  displacedThirds,
   makeChord,
 } from '../src/theory/chord/index.js';
 import {
@@ -376,36 +377,55 @@ describe('suspended chords', () => {
   });
 
   it('reports the displaced third the same way for every suspension in the vocabulary', () => {
-    // Structural, not a list of quality names: any chord that sounds a fourth
-    // and no third has suspended into that fourth.
+    // Structural, not a list of quality names: the subject is every chord the
+    // library reads as suspending its third, whichever tone stands there. It
+    // used to be every chord sounding a fourth, which quietly left the whole
+    // `sus2` family out of the sweep — and the `sus2` family was where the rule
+    // was wrong.
     const failures: string[] = [];
+    let swept = 0;
     for (const chord of everyChord()) {
-      const pcs = chordPitchClasses(chord);
-      const sounds = (semitones: number) => pcs.includes((chord.rootPc + semitones) % 12);
-      if (sounds(3) || sounds(4) || !sounds(5)) {
+      const displaced = displacedThirds(chord);
+      if (displaced.length === 0) {
         continue;
       }
-      const third = (chord.rootPc + 4) % 12;
-      for (const name of SCALE_NAMES) {
-        const tensions = availableTensions(chord, name);
-        const avoid = avoidNotes(chord, name);
-        const inScale = scalePitchClasses(name, chord.rootPc).has(third);
-        if (tensions.includes(third)) {
-          failures.push(`${chord.quality}@${chord.rootPc}/${name}: third offered as a tension`);
-        }
-        if (inScale && analysed(chord, name) && !avoid.includes(third)) {
-          failures.push(`${chord.quality}@${chord.rootPc}/${name}: third not avoided`);
+      swept += 1;
+      // Both thirds, not one: a suspension does not say which it displaced.
+      for (const third of displaced) {
+        for (const name of SCALE_NAMES) {
+          const tensions = availableTensions(chord, name);
+          const avoid = avoidNotes(chord, name);
+          const inScale = scalePitchClasses(name, chord.rootPc).has(third);
+          if (tensions.includes(third)) {
+            failures.push(`${chord.quality}@${chord.rootPc}/${name}: third offered as a tension`);
+          }
+          if (inScale && analysed(chord, name) && !avoid.includes(third)) {
+            failures.push(`${chord.quality}@${chord.rootPc}/${name}: third not avoided`);
+          }
         }
       }
     }
+    // The sweep has to have found suspensions, and both families of them.
+    expect(swept).toBeGreaterThan(0);
+    expect(displacedThirds(makeChord(0, 'sus2'))).toHaveLength(2);
+    expect(displacedThirds(makeChord(0, 'sus4'))).toHaveLength(2);
     expect(failures).toEqual([]);
+  });
+
+  it('avoids the third a second suspends away from, not the flat ninth', () => {
+    // The displaced third was computed as a semitone below the suspended tone,
+    // which is the major third only for a `sus4`; over a `sus2` it named the
+    // root's own flat ninth, a pitch class no major scale even carries, so
+    // nothing was avoided and the third was offered as a free colour.
+    expect(avoidNotes(makeChord(0, 'sus2'), 'ionian')).toEqual([4]);
+    expect(availableTensions(makeChord(0, 'sus2'), 'ionian')).not.toContain(4);
   });
 
   it('leaves a chord that states its own third alone', () => {
     // The rule reads the tones, so a chord with a third keeps the plain
     // semitone-above rule and nothing else.
     expect(avoidNotes(makeChord(0, 'dom7'), 'mixolydian')).toEqual([5]);
-    expect(avoidNotes(makeChord(0, 'sus2'), 'ionian')).toEqual([]);
+    expect(displacedThirds(makeChord(0, 'dom7'))).toEqual([]);
   });
 });
 
