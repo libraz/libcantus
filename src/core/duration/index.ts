@@ -225,7 +225,8 @@ function assertPositiveBeats(beats: number, name: string): number {
  * import { durationToBeats } from '@libraz/libcantus';
  * durationToBeats('quarter'); // 1
  * durationToBeats({ base: 'quarter', dots: 1 }); // 1.5
- * durationToBeats({ base: 'eighth', tuplet: { actual: 3, normal: 2 } }); // 1/3
+ * durationToBeats({ base: 'eighth', tuplet: { actual: 3, normal: 2 } }) * 3; // 1 — three
+ * // eighth-note triplets fill the beat two eighths would
  * ```
  * @category Rhythm & Meter
  */

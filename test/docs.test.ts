@@ -3,7 +3,10 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   codeBlocks,
+  expectedValue,
   markdownFiles,
+  namesValue,
+  splitComment,
   tsdocExamples,
   withoutComments,
 } from './support/doc-examples.js';
@@ -107,6 +110,38 @@ describe('TSDoc examples', () => {
   const published = new Set(
     subpaths.map((subpath) => path.posix.join('@libraz/libcantus', subpath)),
   );
+
+  it('compares every example against the value it prints', () => {
+    // The form a comment takes here is `// value — why`: the value the line
+    // publishes, then the reason for it. Reading only the comments that spend
+    // their whole length on the value left every explained one unchecked, so an
+    // example could print an answer the library had stopped giving. The two
+    // readings — what a reader takes as the published value, and what the
+    // harness compares against — are held to each other here.
+    const unasserted: string[] = [];
+    const check = (label: string, code: string): void => {
+      for (const line of code.split('\n')) {
+        const { comment } = splitComment(line);
+        if (comment === null || !namesValue(comment)) {
+          continue;
+        }
+        if (expectedValue(comment) === null) {
+          unasserted.push(`${label}: ${comment}`);
+        }
+      }
+    };
+    for (const file of documented) {
+      for (const block of examplesOf(file)) {
+        check(`${file}:${block.line}`, block.code);
+      }
+    }
+    for (const file of english) {
+      for (const block of blocksOf(path.join(DOCS_EN, file))) {
+        check(`${file}:${block.line}`, block.code);
+      }
+    }
+    expect(unasserted).toEqual([]);
+  });
 
   it('imports the package by name in every example, never the source tree', () => {
     const foreign = documented.flatMap((file) =>

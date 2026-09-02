@@ -560,7 +560,7 @@ function explainMatches(results: KeyMatch[], inputSize: number): void {
  * import { detectKey } from '@libraz/libcantus';
  * const keys = detectKey([60, 62, 64, 65, 67, 69, 71]); // C major scale
  * keys[0].mode; // 'major', with keys[0].key.rootPc === 0
- * keys[1].mode; // 'minor' on 9: A minor, the relative, ranked just below
+ * keys[1].mode; // 'minor' — on 9: A minor, the relative, ranked just below
  * const riff = detectKey([62, 62, 65, 69, 71, 69, 65, 62], { modes: true });
  * riff[0].scaleName; // 'dorian', on rootPc 2, still reported as mode 'minor'
  * ```

@@ -433,8 +433,8 @@ export function secondaryDominant(targetDegree: number, key: KeyLike): Chord {
  * @example
  * ```ts
  * import { makeChord, secondaryDominantOf } from '@libraz/libcantus';
- * secondaryDominantOf(makeChord(8, 'maj'));
- * // { rootPc: 3, quality: 'dom7' } — Eb7 tonicizes the borrowed bVI of C major
+ * secondaryDominantOf(makeChord(8, 'maj')).rootPc; // 3 — Eb7 tonicizes the
+ * // borrowed bVI of C major
  * ```
  * @category Functional Harmony
  */

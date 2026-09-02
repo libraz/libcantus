@@ -101,7 +101,7 @@ export function tsdocExamples(source: string): CodeBlock[] {
 }
 
 /** Split a line into its code part and its trailing line comment, ignoring quoted text. */
-function splitComment(line: string): { code: string; comment: string | null } {
+export function splitComment(line: string): { code: string; comment: string | null } {
   let quote: string | null = null;
   for (let i = 0; i < line.length; i += 1) {
     const ch = line[i] as string;
@@ -155,7 +155,7 @@ function bracketDelta(code: string): number {
 }
 
 const KEYWORD_LITERAL = /^(true|false|null|undefined|NaN|Infinity)\b/;
-const NUMBER_LITERAL = /^-?(\d+(\.\d+)?|\.\d+)(e[+-]?\d+)?/i;
+const NUMBER_LITERAL = /^-?(0[bxo][\da-f_]+|\d+(\.\d+)?|\.\d+)(e[+-]?\d+)?/i;
 const IDENTIFIER = /^[A-Za-z_$][\w$]*/;
 
 /**
@@ -229,11 +229,47 @@ function skipSpace(text: string, start: number): number {
   return i;
 }
 
-/** True when the whole comment text is a literal expected value. */
+/**
+ * Where prose may begin after the value a comment names.
+ *
+ * The dominant form in this codebase is `// value — why`: the value first and
+ * the reason after an em dash. A comment that spends its whole length on the
+ * value is the exception rather than the rule, so requiring one left the reason
+ * a comment gives standing between the reader and the check — the example ran
+ * and nothing was compared against what it published.
+ */
+const PROSE_AFTER_VALUE = [' — ', ' (', ', ', ' = ', ' so ', ' which '];
+
+/** The literal an expected-value comment names, or nothing when it names none. */
+export function expectedValue(text: string): string | null {
+  // `// => value` is the other form the guides use, and the arrow is notation
+  // rather than part of the value.
+  const named = text.trim().replace(/^=>\s*/, '');
+  if (named === '') return null;
+  const end = readLiteral(named, 0);
+  if (end <= 0) return null;
+  const rest = named.slice(end);
+  if (skipSpace(named, end) === named.length) return named.slice(0, end);
+  return PROSE_AFTER_VALUE.some((start) => rest.startsWith(start)) ? named.slice(0, end) : null;
+}
+
+/** True when a comment names a literal expected value. */
 export function isLiteral(text: string): boolean {
-  if (text === '') return false;
-  const end = readLiteral(text, 0);
-  return end > 0 && skipSpace(text, end) === text.length;
+  return expectedValue(text) !== null;
+}
+
+/**
+ * True when a comment opens with a literal, whatever follows it.
+ *
+ * What {@link expectedValue} answers for is which of these become assertions;
+ * this answers which of them a reader would take as a published value. The two
+ * are meant to agree, and a guard in the documentation suite holds them to it —
+ * a comment that opens with a value and is not compared against it is an
+ * example whose printed answer nothing checks.
+ */
+export function namesValue(text: string): boolean {
+  const named = text.trim().replace(/^=>\s*/, '');
+  return named !== '' && readLiteral(named, 0) > 0;
 }
 
 const STATEMENT_KEYWORD =
@@ -258,8 +294,10 @@ export interface Runnable {
  * Rewrite a documentation snippet into executable form.
  *
  * A trailing `// value` comment — inline or on the lines that follow — becomes an
- * `expect(...).toEqual(value)` call whenever the comment text is a literal. Prose
- * comments are left alone, so the expression is still evaluated but not checked.
+ * `expect(...).toEqual(value)` call whenever the comment names a literal, which
+ * it may follow with prose: `// 39 — Eb1 is under the low E` is the value and
+ * the reason for it. Comments that name no value are left alone, so the
+ * expression is still evaluated but not checked.
  */
 export function toRunnable(code: string): Runnable {
   const lines = code.split('\n');
@@ -308,8 +346,9 @@ export function toRunnable(code: string): Runnable {
       imports.push(statement);
       continue;
     }
-    if (expected !== null && isLiteral(expected) && isExpression(statement)) {
-      body.push(`expect(${statement.trimEnd().replace(/;$/, '')}).toEqual(${expected});`);
+    const value = expected === null ? null : expectedValue(expected);
+    if (value !== null && isExpression(statement)) {
+      body.push(`expect(${statement.trimEnd().replace(/;$/, '')}).toEqual(${value});`);
       assertions += 1;
       i += consumed;
       continue;
