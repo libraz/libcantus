@@ -35,6 +35,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A bar is as long as the bar is, not as long as its signature says.**
+  `beatsPerBarAt` returned the nominal length of the signature in force. A
+  change of meter starts a new bar, so a bar interrupted by one is shorter than
+  its own signature — and the reading put that bar's end past where the next one
+  begins. Every span the form and key analyses measure in bars was counted
+  against a bar the music never had, so a phrase over a meter change came back
+  short. Separately, the phrase reader measured its hyperbar from bar 0 of the
+  meter map, which is always the bar beginning at beat 0: an excerpt starting
+  after a change was handed the bar length of a meter it never sounds in, as the
+  expected phrase length every phrase in it was then fitted against. Both now
+  measure from the bar in question.
+
+- **`placeDrumPattern` swings the bar it is writing.** The swing was applied to
+  the absolute position, which takes the offset inside a quarter note — the same
+  thing as the offset inside the bar only while a bar is a whole number of them.
+  Following the documented path of supplying a vocabulary in another meter, a
+  7/8 bar had its downbeat warped and its offbeats left straight, alternating
+  bar by bar with nothing to report it. 4/4 and 3/4 are unchanged.
+
+- **One tolerance compares the beat axis.** The adjacency module was written to
+  hold both beat-axis tolerances — the exact one a beat boundary is compared
+  with, and the wider one a played onset is read with — and fourteen other
+  modules still declared their own copy of one or the other. All the values
+  agreed, so nothing was wrong today; what was wrong is that a correction to any
+  one of them would have left the rest behind with no failure anywhere. The
+  number is declared once in the meter layer, which sits below every reader of
+  the axis, and a guard now refuses a new declaration of either value outside
+  the two modules that own them.
+
 - **A dominant is read from the tones it sounds, at both ends of a cadence.**
   The sonority test asked for the quality name `maj`, and a triad that grows a
   colour tone is named something else — `add9`, `6`, `6/9` — so `Vadd9` and `V6`,
