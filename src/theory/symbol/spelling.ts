@@ -107,6 +107,19 @@ export function bySameStep(
 }
 
 /**
+ * The spelling `letters` letters above `root` that sounds `pc`.
+ *
+ * How a chord writes one of its own tones: the degree decides the letter and
+ * the pitch class decides the accidental, which is what makes the augmented
+ * fifth of a G sharp a D double sharp rather than an E.
+ */
+export function spellingAbove(root: PitchSpelling, letters: number, pc: number): PitchSpelling {
+  const letter = (((root.letter + letters) % 7) + 7) % 7;
+  const natural = noteToPitchClass({ letter, alter: 0 });
+  return { letter, alter: ((((pc - natural) % 12) + 18) % 12) - 6 };
+}
+
+/**
  * A slash bass carried by the root's own step, kept to what a chart writes.
  *
  * The step is what keeps the bass inside the chord the root names, so it is
@@ -116,32 +129,35 @@ export function bySameStep(
  * pitch class on the side already in force, which is the reading a chart would
  * have written in the first place.
  *
- * A bass that is one of the chord's own tones is left alone whatever it spells.
- * The augmented fifth of a G sharp is a D double sharp, and writing the first
- * inversion of that chord over an E would name a note the chord does not
- * contain: the odd spelling is what the chord is, not a failure to write it
- * down. The fallback is for the other bass — the one under the chord rather
- * than in it, which the step moved somewhere no chart would have put it.
+ * A bass carried onto the spelling the chord itself gives that tone is left
+ * alone whatever it spells. The augmented fifth of a G sharp is a D double
+ * sharp, and writing the first inversion of that chord over an E would name a
+ * note the chord does not contain: the odd spelling is what the chord is, not a
+ * failure to write it down. Being a chord tone is not enough on its own — the
+ * F under a `C#` is the chord's third, and carried onto the flat side it lands
+ * on a G double flat, which is neither what a chart writes nor how a D flat
+ * chord spells its third.
  *
  * @param spelling The bass as it is written now.
  * @param from The root as it is written now.
  * @param to The root as it is being written.
  * @param asFlat Which side to fall back to when the carried spelling is not one
  *   a chart writes.
- * @param isChordTone Whether a pitch class is one of the chord's own tones.
- * @returns The carried bass: a chord tone as the chord spells it, otherwise a
- *   spelling {@link isWrittenSpelling} takes.
+ * @param isOwnSpelling Whether a spelling is how the chord writes that tone.
+ * @returns The carried bass: the chord's own spelling of one of its tones,
+ *   otherwise a spelling {@link isWrittenSpelling} takes.
  */
 export function carriedBass(
   spelling: PitchSpelling,
   from: PitchSpelling,
   to: PitchSpelling,
   asFlat: boolean,
-  isChordTone: (pc: number) => boolean,
+  isOwnSpelling: (spelling: PitchSpelling) => boolean,
 ): PitchSpelling {
   const carried = bySameStep(spelling, from, to);
-  const pc = noteToPitchClass(carried);
-  return isChordTone(pc) || isWrittenSpelling(carried) ? carried : plainSpelling(pc, asFlat);
+  return isOwnSpelling(carried) || isWrittenSpelling(carried)
+    ? carried
+    : plainSpelling(noteToPitchClass(carried), asFlat);
 }
 
 /** A spelling hint, or undefined when it no longer names `pc`. */

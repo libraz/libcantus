@@ -31,7 +31,7 @@ import {
 } from '../../core/pitch/index.js';
 import { assertFiniteSemitones, describeRejected } from '../../core/validation/index.js';
 import type { Chord, PitchSpelling } from '../chord/index.js';
-import { chordPitchClasses, chordSpecOf } from '../chord/index.js';
+import { chordPitchClasses, chordSpecOf, degreeOfInterval } from '../chord/index.js';
 import { type ChordLike, toChordData } from './coerce.js';
 import { chordAfterRoot, DEFAULT_SYSTEM, rootSplits } from './grammar.js';
 import { CANONICAL_SUFFIX, specSuffix } from './suffix.js';
@@ -50,6 +50,7 @@ import {
   pitchClassName,
   plainSpelling,
   rootSpellingFor,
+  spellingAbove,
   symbolName,
 } from './spelling.js';
 
@@ -229,10 +230,19 @@ export function formatChordSymbol(chord: ChordLike, opts?: ChordSymbolOptions): 
   if (data.bassPc !== undefined && pitchClass(data.bassPc) !== rootPc) {
     const bassPc = pitchClass(data.bassPc);
     const bassHint = hintFor(data.bassSpelling, bassPc);
-    // The chord's own tones, without the bass: a bass that is one of them is
-    // spelled as the chord spells it, and the point of the test is to tell
-    // that bass from the one merely standing under the chord.
+    // How the chord itself writes the tone standing in the bass, when the bass
+    // is one of its tones at all: the degree decides the letter, so the
+    // augmented fifth of a G sharp is a D double sharp and the third of a D
+    // flat is an F. The point of the test is to tell a bass the chord spells
+    // that way from one that merely sounds the same pitch class.
     const tonePcs = new Set(chordPitchClasses(data, { includeBass: false }));
+    const ownSpelling = tonePcs.has(bassPc)
+      ? spellingAbove(
+          rootSpelling,
+          (degreeOfInterval(pitchClass(bassPc - rootPc), data) ?? 1) - 1,
+          bassPc,
+        )
+      : undefined;
     // Respelling the root respells the bass with it: the two are one symbol, so
     // a preference that moves the root to the flat side takes the bass there
     // too rather than leaving a sharp bass under a flat root. The step the root
@@ -243,8 +253,15 @@ export function formatChordSymbol(chord: ChordLike, opts?: ChordSymbolOptions): 
     const bassName =
       rootHint !== undefined && bassHint !== undefined
         ? symbolName(
-            carriedBass(bassHint, rootHint, rootSpelling, flats ?? rootSpelling.alter < 0, (pc) =>
-              tonePcs.has(pc),
+            carriedBass(
+              bassHint,
+              rootHint,
+              rootSpelling,
+              flats ?? rootSpelling.alter < 0,
+              (spelling) =>
+                ownSpelling !== undefined &&
+                spelling.letter === ownSpelling.letter &&
+                spelling.alter === ownSpelling.alter,
             ),
             system,
           )
