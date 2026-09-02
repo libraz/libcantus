@@ -3,16 +3,17 @@
  * also available from the package root.
  */
 
+export type { LibcantusError, ParseResult } from '../core/errors/index.js';
 // Types from the layers below that this layer's own signatures name, so a
 // consumer importing only `@libraz/libcantus/theory` can still spell them.
-export type {
-  BudgetExceededError,
-  InvalidInputError,
-  LibcantusError,
-  NoSolutionError,
-  ParseResult,
-} from '../core/errors/index.js';
-export type { ConsonanceClass } from '../core/interval/index.js';
+// Classes, so a value export: a consumer of this subpath catches and constructs
+// them. Re-exporting a class as a type leaves the declaration saying it is
+// there and the module never binding it, which fails the whole barrel at link
+// time in ESM and yields undefined in CJS.
+export { BudgetExceededError, InvalidInputError, NoSolutionError } from '../core/errors/index.js';
+// An enum, so a value export: `classifySpelledInterval` ships from this subpath
+// and its answer is one of these members.
+export { ConsonanceClass } from '../core/interval/index.js';
 export type {
   IntervalData,
   IntervalLike,

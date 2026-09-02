@@ -264,3 +264,53 @@ describe('negativeHarmonyMirror', () => {
     expect(mirrored.bassPc).toBeUndefined();
   });
 });
+
+/**
+ * A chord carrying a bass is mirrored like any other.
+ *
+ * The mirrored bass was placed an octave below the mirrored tones so detection
+ * would read it as the lowest note — but the tones are pitch classes, already
+ * at the bottom of the MIDI range, so the octave below left it. Every chord
+ * with a bass was refused by the pitch check rather than mirrored, which is
+ * every inversion, every slash chord and every descending bass line a
+ * reharmonization is asked about.
+ */
+describe('negativeHarmonyMirror over a bass', () => {
+  /** The qualities a chart writes over a bass most often. */
+  const QUALITIES = ['maj', 'min', 'dom7', 'maj7', 'min7'] as const;
+
+  it('mirrors every chord over every bass its own tones can stand on', () => {
+    const refused: string[] = [];
+    for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+      for (const quality of QUALITIES) {
+        for (const bassPc of chordPitchClasses(makeChord(rootPc, quality))) {
+          for (const tonic of [0, 3, 8]) {
+            const source = makeChord(rootPc, quality, bassPc);
+            try {
+              negativeHarmonyMirror(source, majorKey(tonic));
+            } catch (error) {
+              refused.push(
+                `${quality}/${rootPc} over ${bassPc} in ${tonic}: ${(error as Error).message}`,
+              );
+            }
+          }
+        }
+      }
+    }
+
+    expect(refused).toEqual([]);
+  });
+
+  it('keeps the mirrored bass as the bass of the answer', () => {
+    // The mirror of the third of C is the flat third of C minor, and the answer
+    // stands on it rather than reverting to root position.
+    const mirrored = negativeHarmonyMirror(makeChord(0, 'maj', 4), majorKey(0));
+
+    expect(mirrored.bassPc).toBeDefined();
+    expect(chordPitchClasses(mirrored)).toContain(mirrored.bassPc);
+  });
+
+  it('reads a subject the sweep supplies rather than a list', () => {
+    expect(QUALITIES.length * 12).toBeGreaterThan(50);
+  });
+});

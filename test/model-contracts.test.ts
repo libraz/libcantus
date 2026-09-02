@@ -85,9 +85,22 @@ function isStatic(member: ts.MethodDeclaration): boolean {
 /** The constructors among the barrel's exports; everything else it exports is a type or an enum. */
 type ModelClass = Extract<(typeof model)[keyof typeof model], new (...args: never[]) => object>;
 
-/** Every class the model barrel exports; its callable members are all classes. */
+/**
+ * Every value object the model barrel exports.
+ *
+ * The barrel also exports the error classes, which a consumer of this subpath
+ * constructs and catches. They are not value objects: an error carries a
+ * message and a code rather than plain data with an identity, so the contract
+ * below — `.data`, `equals`, a round trip through `toJSON` — is not a contract
+ * they were ever meant to hold.
+ */
 const CLASSES = Object.entries(model).filter(
-  (entry): entry is [string, ModelClass] => typeof entry[1] === 'function',
+  (entry): entry is [string, ModelClass] =>
+    typeof entry[1] === 'function' &&
+    !Object.prototype.isPrototypeOf.call(
+      Error.prototype,
+      (entry[1] as { prototype?: object }).prototype ?? {},
+    ),
 );
 
 /** The exported classes by name, so a discovered name reaches its class. */

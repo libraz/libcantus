@@ -414,9 +414,12 @@ export function negativeHarmonyMirror(chord: ChordLike, key: SpelledKeyLike): Ch
   const mirror = (p: number) => mod12(2 * tonicPc + 7 - p);
   const pcs = chordPitchClasses(source).map(mirror);
   const bassPc = source.bassPc !== undefined ? mirror(source.bassPc) : undefined;
-  // Place the mirrored bass an octave below so it is recognized as the lowest
-  // note and preserved through detection.
-  const pitches = bassPc !== undefined ? [bassPc - 12, ...pcs] : pcs;
+  // Place the mirrored bass below the rest so it is recognized as the lowest
+  // note and preserved through detection. The others move up rather than the
+  // bass moving down: a pitch class is already at the bottom of the MIDI range,
+  // so dropping one an octave leaves it, and every chord carrying a bass was
+  // refused by the pitch check rather than mirrored.
+  const pitches = bassPc !== undefined ? [bassPc, ...pcs.map((pc) => pc + 12)] : pcs;
   const detected = detectChordBest(pitches);
   if (detected) {
     // Without an input bass the mirrored tones are octave-less, so detection may

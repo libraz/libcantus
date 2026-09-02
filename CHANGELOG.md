@@ -35,6 +35,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`@libraz/libcantus/theory` and `/model` bind the errors they declare.**
+  Both subpaths re-exported `InvalidInputError`, `NoSolutionError` and
+  `BudgetExceededError` — and `theory` also `ConsonanceClass` — as types, so the
+  shipped declaration said the name was there and the module never bound it.
+  Importing one the way the guides do compiled, then failed at link time in ESM
+  with the whole barrel behind it, and read as `undefined` in CommonJS, which
+  surfaced as `not a constructor` inside a catch block. They are value exports
+  now, and the packed-consumer matrix constructs each one and catches through it
+  rather than only naming it.
+
+- **`negativeHarmonyMirror` mirrors a chord that carries a bass.** The mirrored
+  bass was placed an octave below the mirrored tones so detection would read it
+  as the lowest note, but those tones are pitch classes and there is no octave
+  below them: every chord with a bass reached the pitch check as a negative
+  number and was refused. `Chord.parse('C/E').negativeHarmony('C major')` threw
+  where it now answers `Cm/Eb`, and with it every inversion, every slash chord
+  and every descending bass line a reharmonization is asked about.
+
 - **A church mode has the same second spelling from either side.**
   `enharmonicKeyOf` filtered candidate tonics through a window drawn from where
   the major and minor keys put one, so the ends of the other modes fell outside

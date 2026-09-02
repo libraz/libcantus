@@ -22,12 +22,19 @@ const BUILD_DIR = 'dist';
 afterAll(() => rmSync(temp, { recursive: true, force: true }));
 
 function run(command: string, args: string[], cwd = ROOT): string {
-  return execFileSync(command, args, {
-    cwd,
-    encoding: 'utf8',
-    env: { ...process.env, npm_config_update_notifier: 'false' },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  try {
+    return execFileSync(command, args, {
+      cwd,
+      encoding: 'utf8',
+      env: { ...process.env, npm_config_update_notifier: 'false' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (error) {
+    const shown = error as { stdout?: string; stderr?: string; message?: string };
+    throw new Error(
+      `${shown.message ?? 'command failed'}\n${shown.stdout ?? ''}\n${shown.stderr ?? ''}`,
+    );
+  }
 }
 
 function write(file: string, contents: string): void {
@@ -107,6 +114,52 @@ const sameClass =
   modelProgression instanceof root.Progression;
 if (!sameClass) {
   throw new Error('cross-entry instanceof disagreed across the class API');
+}
+// A declaration that says a name is exported and a module that never binds it
+// is not a type error anywhere: it fails when the module is linked. In ESM the
+// whole barrel fails to instantiate, so every other name goes with it; in CJS
+// the name is quietly undefined and the failure surfaces as \`not a
+// constructor\` inside somebody's catch block. Each class and enum a subpath
+// offers is therefore constructed here rather than only named.
+const errorBindings = [
+  ['theory.InvalidInputError', theory.InvalidInputError, root.InvalidInputError],
+  ['theory.NoSolutionError', theory.NoSolutionError, root.NoSolutionError],
+  ['theory.BudgetExceededError', theory.BudgetExceededError, root.BudgetExceededError],
+  ['model.InvalidInputError', model.InvalidInputError, root.InvalidInputError],
+  ['model.NoSolutionError', model.NoSolutionError, root.NoSolutionError],
+  ['model.BudgetExceededError', model.BudgetExceededError, root.BudgetExceededError],
+];
+for (const [label, ctor, fromRootEntry] of errorBindings) {
+  if (typeof ctor !== 'function') {
+    throw new Error(label + ' is not a runtime binding');
+  }
+  const thrown = new ctor('probe');
+  if (!(thrown instanceof Error) || thrown.message !== 'probe') {
+    throw new Error(label + ' did not construct');
+  }
+  if (ctor !== fromRootEntry) {
+    throw new Error(label + ' is a second copy of the root class');
+  }
+}
+// The enum whose members a function of this same subpath answers with.
+if (typeof theory.ConsonanceClass !== 'object' || theory.ConsonanceClass === null) {
+  throw new Error('theory.ConsonanceClass is not a runtime binding');
+}
+if (
+  theory.classifySpelledInterval(root.parseInterval('P5')) !==
+  theory.ConsonanceClass.PerfectConsonance
+) {
+  throw new Error('theory.ConsonanceClass does not name what its own function answers');
+}
+// A caught error is recognised through the subpath a consumer imported from.
+let caught = null;
+try {
+  model.Chord.parse('not a chord');
+} catch (error) {
+  caught = error;
+}
+if (!(caught instanceof model.InvalidInputError)) {
+  throw new Error('a thrown error was not an instance of the subpath class');
 }
 `;
 

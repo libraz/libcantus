@@ -84,13 +84,12 @@ export type {
   SpelledDuration,
   Tuplet,
 } from '../core/duration/index.js';
-export type {
-  BudgetExceededError,
-  InvalidInputError,
-  LibcantusError,
-  NoSolutionError,
-  ParseResult,
-} from '../core/errors/index.js';
+export type { LibcantusError, ParseResult } from '../core/errors/index.js';
+// Classes, so a value export: a consumer of this subpath catches and constructs
+// them. Re-exporting a class as a type leaves the declaration saying it is
+// there and the module never binding it, which fails the whole barrel at link
+// time in ESM and yields undefined in CJS.
+export { BudgetExceededError, InvalidInputError, NoSolutionError } from '../core/errors/index.js';
 export type {
   IndexedNoteEvent,
   NoteEventIndex,
