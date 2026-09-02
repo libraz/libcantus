@@ -10,7 +10,11 @@
 
 import { InvalidInputError } from '../../core/errors/index.js';
 import type { NoteEvent } from '../../core/types.js';
-import { assertGenerationBudget, assertInteger } from '../../core/validation/index.js';
+import {
+  assertGenerationBudget,
+  assertInteger,
+  assertOptions,
+} from '../../core/validation/index.js';
 import { BEAT_EPS } from '../adjacency.js';
 import { melodicContour } from './contour.js';
 import {
@@ -284,23 +288,28 @@ export function extractMotifs(
   notes: readonly NoteEvent[],
   opts: ExtractMotifsOptions = {},
 ): MotifData[] {
-  const minNotes = assertInteger(opts.minNotes ?? MIN_CELL_NOTES, 'motif minNotes', 2, 64);
-  const maxNotes = assertInteger(opts.maxNotes ?? MAX_CELL_NOTES, 'motif maxNotes', 2, 64);
+  const asked = assertOptions(opts, 'opts');
+  const minNotes = assertInteger(asked.minNotes ?? MIN_CELL_NOTES, 'motif minNotes', 2, 64);
+  const maxNotes = assertInteger(asked.maxNotes ?? MAX_CELL_NOTES, 'motif maxNotes', 2, 64);
   if (maxNotes < minNotes) {
     throw new InvalidInputError(
       `motif maxNotes must be at least minNotes ${minNotes}; received ${maxNotes}`,
     );
   }
   const minOccurrences = assertInteger(
-    opts.minOccurrences ?? MIN_OCCURRENCES,
+    asked.minOccurrences ?? MIN_OCCURRENCES,
     'motif minOccurrences',
     2,
   );
-  const sounding = orderedNotes(notes, 'melody notes', opts.budget);
+  const sounding = orderedNotes(notes, 'melody notes', asked.budget);
   if (sounding.length < minNotes) {
     return [];
   }
-  assertGenerationBudget(sounding.length * (maxNotes - minNotes + 1), 'motif windows', opts.budget);
+  assertGenerationBudget(
+    sounding.length * (maxNotes - minNotes + 1),
+    'motif windows',
+    asked.budget,
+  );
 
   const groups = new Map<string, WindowGroup>();
   for (let length = minNotes; length <= maxNotes; length += 1) {
@@ -366,7 +375,7 @@ export function extractMotifs(
     }
     // Charged as it is spent rather than estimated: what the pass costs is the
     // statements the candidates hold, which the window count alone does not say.
-    assertGenerationBudget(comparisons, 'motif subsumption comparisons', opts.budget);
+    assertGenerationBudget(comparisons, 'motif subsumption comparisons', asked.budget);
     if (!covered) {
       kept.push(candidate);
       let byStart = keptByLength.get(candidate.length);

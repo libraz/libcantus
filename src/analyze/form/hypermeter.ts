@@ -14,6 +14,7 @@ import type { NoteEvent } from '../../core/types.js';
 import {
   assertGenerationBudget,
   assertNoteEvents,
+  assertOptions,
   assertRange,
 } from '../../core/validation/index.js';
 import { BEAT_EPS } from '../adjacency.js';
@@ -277,17 +278,19 @@ export function hypermeter(
   meter?: MeterLike,
   opts: HypermeterOptions = {},
 ): Hypermeter {
+  const asked = assertOptions(opts, 'opts');
   // Read once, here: every bar question below is asked of the resolved map
-  // rather than of whichever form the caller happened to hold.
+  // rather than of whichever form the caller happened to hold. Absent is the
+  // library's default bar; a `null` is a caller that meant to name one.
   const meters = resolveMeters({ meters: meter }, 'meter');
   assertNoteEvents(notes, 'hypermeter notes', {
     allowNonPositiveDuration: true,
-    budget: opts.budget,
+    budget: asked.budget,
   });
   const sounding = notes.filter((note) => note.durationBeat > 0);
   const firstOnset = firstSoundingBeat(sounding);
   const lastEnd = sounding.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
-  const spanEnd = opts.totalBeats ?? lastEnd;
+  const spanEnd = asked.totalBeats ?? lastEnd;
   assertRange(spanEnd, 0, Number.MAX_SAFE_INTEGER, 'hypermeter totalBeats');
   // Whether the music starts before the downbeat is the analysis-wide pickup
   // question, and the slot grids of chord and key inference answer it here: a
@@ -296,7 +299,7 @@ export function hypermeter(
   // phase search a silent bar of its own to group against. An excerpt that
   // begins later keeps the beat it begins on.
   const spanStart = barGridStart(firstOnset, meters);
-  const slices = sliceBars(sounding, meters, spanStart, spanEnd, opts.budget);
+  const slices = sliceBars(sounding, meters, spanStart, spanEnd, asked.budget);
 
   // Counted over the bars a grouping can actually occupy, which is the set
   // `undecidedReading` and the downbeats are read from: a pickup leads into the
@@ -310,11 +313,11 @@ export function hypermeter(
   assertGenerationBudget(
     candidates.reduce((sum, groupBars) => sum + groupBars * slices.length, 0),
     'hypermeter readings',
-    opts.budget,
+    asked.budget,
   );
 
   const novelty = slices.map((_, index) => harmonicNovelty(slices, index));
-  const cadenceBars = new Set((opts.cadenceBeats ?? []).map((beat) => barIndexAt(beat, meters)));
+  const cadenceBars = new Set((asked.cadenceBeats ?? []).map((beat) => barIndexAt(beat, meters)));
   const hasCadences = cadenceBars.size > 0;
 
   const readings: Reading[] = [];

@@ -11,6 +11,7 @@ import type { NoteEvent } from '../../core/types.js';
 import type { NoteEventAssertOptions } from '../../core/validation/index.js';
 import {
   assertArray,
+  assertFunction,
   assertGenerationBudget,
   assertInteger,
   assertNoteEvents,
@@ -414,6 +415,7 @@ export function analyzePolyphony(
   // in the array reports this library's own `TypeError` rather than the input.
   // Zero-length events are admitted here too — the split drops them.
   const passage = assertNoteEvents(notes, 'notes', { allowNonPositiveDuration: true });
+  assertFunction<(beat: number) => Chord | null>(chordAtBeat, 'chordAtBeat');
   const prepared = prepareTracks([{ notes: [...passage] }]);
   const track = prepared[0];
   // Every note is read against the other sub-voices sounding under it, so the

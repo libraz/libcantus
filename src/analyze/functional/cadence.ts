@@ -7,6 +7,7 @@
  */
 
 import type { KeyScale } from '../../core/types.js';
+import { assertOptions } from '../../core/validation/index.js';
 import type { Chord, ChordToneRole } from '../../theory/chord/index.js';
 import { chordToneRole } from '../../theory/chord/index.js';
 import { isScaleTone, type KeyLike, scaleSystemOf, toKeyScale } from '../../theory/scale/index.js';
@@ -574,7 +575,7 @@ export function detectCadence(
   key: KeyLike,
   opts: DetectCadenceOptions = {},
 ): CadenceResult {
-  const { approach, ...rest } = opts;
+  const { approach, ...rest } = assertOptions(opts, 'opts');
   return cadenceBetween(
     toChordData(from),
     toChordData(to),

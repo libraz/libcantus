@@ -12,6 +12,7 @@ import type { NoteEventAssertOptions } from '../../core/validation/index.js';
 import {
   allocateCandidateTable,
   allocateChoiceTable,
+  assertArray,
   assertFiniteNumber,
   assertGenerationBudget,
   assertNoteEvents,
@@ -75,6 +76,7 @@ export function chordTimelineFromChords(
   totalBeats: number,
 ): ChordTimeline {
   assertRange(totalBeats, 0, Number.MAX_SAFE_INTEGER, 'timeline totalBeats');
+  assertArray<ChordSpan>(chords, 'chords');
   assertGenerationBudget(chords.length, 'timeline chords');
   for (let index = 0; index < chords.length; index += 1) {
     // Unbounded below, like a note onset: a chord may sound in the pickup.

@@ -10,6 +10,7 @@
 
 import { InvalidInputError } from '../../core/errors/index.js';
 import type { KeyScale } from '../../core/types.js';
+import { assertOptions } from '../../core/validation/index.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { chordToneSpellings, makeChord } from '../../theory/chord/index.js';
 import {
@@ -661,7 +662,7 @@ export function chordToRoman(
   key: KeyLike,
   opts: ChordToRomanOptions = {},
 ): string {
-  return renderRoman(toChordData(chord), key, opts).roman;
+  return renderRoman(toChordData(chord), key, assertOptions(opts, 'opts')).roman;
 }
 
 /**

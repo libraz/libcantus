@@ -13,6 +13,7 @@ import {
   assertGenerationBudget,
   assertMidiPitch,
   assertNoteEvents,
+  assertOptions,
   assertRecord,
 } from '../../core/validation/index.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
@@ -275,21 +276,22 @@ export function detectChord(
   pitches: readonly number[],
   opts: DetectChordOptions = {},
 ): ChordMatch[] {
+  const asked = assertOptions(opts, 'opts');
   assertPitches(pitches, 'chord detection pitches');
-  if (opts.bassPc !== undefined) assertFiniteNumber(opts.bassPc, 'bassPc');
+  if (asked.bassPc !== undefined) assertFiniteNumber(asked.bassPc, 'bassPc');
   const input = uniquePitchClasses(pitches);
   if (input.length === 0) {
     return [];
   }
   const inputKind =
-    opts.input === undefined || opts.input === 'auto'
+    asked.input === undefined || asked.input === 'auto'
       ? pitches.every((pitch) => Number.isInteger(pitch) && pitch >= 0 && pitch <= 11)
         ? 'pitchClass'
         : 'midi'
-      : opts.input;
+      : asked.input;
   const bassPc =
-    opts.bassPc !== undefined
-      ? pitchClass(opts.bassPc)
+    asked.bassPc !== undefined
+      ? pitchClass(asked.bassPc)
       : inputKind === 'midi'
         ? pitchClass(pitches.reduce((lowest, pitch) => Math.min(lowest, pitch), Infinity))
         : undefined;
@@ -731,19 +733,20 @@ export function detectKeyFromNotes(
   notes: readonly NoteEvent[],
   opts: Omit<DetectKeyOptions, 'weights'> = {},
 ): KeyMatch[] {
+  const asked = assertOptions(opts, 'opts');
   assertNoteEvents(notes, 'key detection notes', {
     allowNonPositiveDuration: true,
-    budget: opts.budget,
+    budget: asked.budget,
   });
   const sounding = notes.filter((note) => note.durationBeat > 0);
   return detectKey(
     sounding.map((note) => note.pitch),
     {
       weights: sounding.map((note) => noteWeight(note, note.durationBeat)),
-      profile: opts.profile,
-      modes: opts.modes,
-      explain: opts.explain,
-      budget: opts.budget,
+      profile: asked.profile,
+      modes: asked.modes,
+      explain: asked.explain,
+      budget: asked.budget,
     },
   );
 }

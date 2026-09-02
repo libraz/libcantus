@@ -24,7 +24,7 @@ import {
   transposeByInterval,
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import { assertOneOf } from '../../core/validation/index.js';
+import { assertArray, assertOneOf } from '../../core/validation/index.js';
 import type { Chord, ChordQuality, PitchSpelling } from '../../theory/chord/index.js';
 import { chordPitchClasses, makeChord } from '../../theory/chord/index.js';
 import {
@@ -320,7 +320,9 @@ export function augmentedSixthFromPitchClasses(
   bassPc: number,
   key: SpelledKeyLike,
 ): Chord | null {
-  return augmentedSixthOverBass(pcs, bassPc, key);
+  // Null means "these pitch classes are no augmented sixth", which is a
+  // statement about a set of pitch classes; a value that is not one is refused.
+  return augmentedSixthOverBass(assertArray<number>(pcs, 'pcs'), bassPc, key);
 }
 
 /**
