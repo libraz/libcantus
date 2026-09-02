@@ -24,11 +24,12 @@ import {
   assertArray,
   assertFiniteNumber,
   assertFunction,
+  assertPositiveInt,
   assertRange,
   assertRecord,
 } from '../../core/validation/index.js';
 import { assertDifficulty, sustainsStrokes } from '../context/difficulty.js';
-import { assertDraw, type Draw } from '../context/draw.js';
+import { assertDraw, assertSeedPath, type Draw } from '../context/draw.js';
 
 /** Sixteenth steps in one 4/4 bar; the grid every figure is written on. */
 export const BAR_STEPS = 16;
@@ -54,6 +55,18 @@ function assertGridEvents<T extends GridEvent>(events: readonly T[]): readonly T
     assertFiniteNumber(event.step, `figure events[${index}].step`);
   });
   return events;
+}
+
+/**
+ * The figure's length in steps, checked wherever a transform is bounded by it.
+ *
+ * Every transform here compares an onset against the span, and a span that is
+ * not a number compares false both ways: the figure is silently emptied, or
+ * every onset is silently kept. Either way the caller is handed a figure that
+ * is not the one the span asked for.
+ */
+function assertSpanSteps(spanSteps: number): number {
+  return assertPositiveInt(spanSteps, 'figure span steps');
 }
 
 /**
@@ -205,6 +218,7 @@ export function thin<T extends GridEvent>(
  * @category Composition
  */
 export function double<T extends GridEvent>(events: readonly T[], spanSteps = BAR_STEPS): T[] {
+  assertSpanSteps(spanSteps);
   const sorted = [...assertGridEvents(events)].sort((a, b) => a.step - b.step);
   const out: T[] = [];
   for (let i = 0; i < sorted.length; i += 1) {
@@ -238,6 +252,7 @@ const ADDED_NOTE_VELOCITY = 0.75;
  * @category Composition
  */
 export function halfTime<T extends GridEvent>(events: readonly T[], spanSteps = BAR_STEPS): T[] {
+  assertSpanSteps(spanSteps);
   return assertGridEvents(events)
     .map((event) => ({ ...event, step: event.step * 2 }))
     .filter((event) => event.step < spanSteps);
@@ -264,6 +279,7 @@ export function halfTime<T extends GridEvent>(events: readonly T[], spanSteps = 
  * @category Composition
  */
 export function doubleTime<T extends GridEvent>(events: readonly T[], spanSteps = BAR_STEPS): T[] {
+  assertSpanSteps(spanSteps);
   assertGridEvents(events);
   const merged = new Map<string, T>();
   const place = (event: T, step: number, velocity: number): void => {
@@ -342,6 +358,7 @@ export function syncopate<T extends GridEvent>(
 ): T[] {
   const figure = assertGridEvents<T>(events);
   const sampler = assertDraw(draw);
+  assertSeedPath(path);
   const asked =
     typeof amount === 'number' ? undefined : assertRecord<SyncopateOptions>(amount, 'amount');
   const dial = asked === undefined ? amount : asked.amount;
@@ -395,6 +412,7 @@ export function ornamentBy<T extends GridEvent>(
   const figure = assertGridEvents<T>(events);
   const marks = assertFunction<(event: T) => boolean>(isOrnament, 'isOrnament');
   const sampler = assertDraw(draw);
+  assertSeedPath(path);
   assertRange(amount, 0, 1, 'ornament amount');
   return figure.filter(
     (event) => !marks(event) || sampler.prob(amount, ...path, 'ornament', event.step),
@@ -480,7 +498,8 @@ export function deform<T extends GridEvent>(
   const figure = assertGridEvents<T>(events);
   const asked = assertRecord<DeformOptions>(opts, 'opts');
   assertDraw(draw);
-  const spanSteps = asked.spanSteps ?? BAR_STEPS;
+  assertSeedPath(path);
+  const spanSteps = assertSpanSteps(asked.spanSteps === undefined ? BAR_STEPS : asked.spanSteps);
   const ts = asked.ts ?? FIGURE_TS;
   let out: T[] =
     asked.rate === 'half'

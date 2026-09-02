@@ -35,7 +35,7 @@ import {
   describeRejected,
 } from '../../core/validation/index.js';
 import { type ChordQuality, chordQualities } from '../../theory/chord/index.js';
-import type { Draw } from '../context/draw.js';
+import { assertDraw, assertSeedPath, type Draw } from '../context/draw.js';
 import { PUBLIC_SECTIONS, type Section } from '../drums/internal.js';
 
 /**
@@ -293,12 +293,14 @@ export function pickVocabulary<T>(
   draw: Draw,
   ...path: readonly (string | number)[]
 ): Vocabulary<T> | undefined {
+  // Read before the early return: a dictionary that happens to select nothing
+  // must not be the reason a malformed sampler goes unreported.
+  const sampler = assertDraw(draw);
+  assertSeedPath(path);
   const candidates = selectVocabulary(dictionary, query);
   if (candidates.length === 0) {
     return undefined;
   }
-  const sampler = assertRecord<Draw>(draw, 'draw');
-  assertFunction(sampler.range, 'draw.range');
   return candidates[sampler.range(0, candidates.length - 1, ...path)];
 }
 

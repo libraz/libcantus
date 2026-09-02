@@ -1,10 +1,12 @@
 import { InvalidInputError } from '../../core/errors/index.js';
 import { includeAt, type PositionalRng, type SeedPath } from '../../core/random/index.js';
 import {
+  assertArray,
   assertFiniteNumber,
   assertFunction,
   assertInteger,
   assertRecord,
+  describeRejected,
 } from '../../core/validation/index.js';
 
 /**
@@ -62,6 +64,36 @@ export function assertDraw(draw: Draw, name = 'draw'): Draw {
     assertFunction(sampler[method], `${name}.${method}`);
   }
   return sampler;
+}
+
+/**
+ * Read the path a draw is addressed by, before it names a position.
+ *
+ * The path is what makes a draw reproducible: the same path is the same number,
+ * for the same source, forever. A caller assembling one from its own ids can
+ * put a `null` or an `undefined` in it — a track that has no name yet, an index
+ * that was not computed — and nothing downstream objects, because a path
+ * segment is only ever concatenated into a seed string. What the caller gets is
+ * a different piece of music under a path it thought it had named, and two
+ * different requests that seed identically. Reading the path here refuses that
+ * by the segment that is wrong.
+ *
+ * @param path The path segments as the caller passed them.
+ * @param name What the path is, for the error message.
+ * @returns The same segments.
+ * @throws If a segment is neither a string nor a finite number.
+ */
+export function assertSeedPath(path: SeedPath, name = 'draw path'): SeedPath {
+  const steps = assertArray<SeedPath[number]>(path, name);
+  for (let index = 0; index < steps.length; index += 1) {
+    const step = steps[index];
+    if (typeof step !== 'string' && !Number.isFinite(step)) {
+      throw new InvalidInputError(
+        `${name}[${index}] must be a string or a finite number; received ${describeRejected(step)}`,
+      );
+    }
+  }
+  return steps;
 }
 
 /**
