@@ -1041,7 +1041,7 @@ function motionPairs(entries: readonly Entry[]): [number, number][] {
  * @param cantusFirmus The given voice, one spelled note per measure.
  * @param counterpoint The written voice, in spelled notes.
  * @param species Which species the exercise is written in.
- * @param mode The mode the exercise is in.
+ * @param modeLike The mode the exercise is in.
  * @param opts Note lengths, and which side the counterpoint is written on.
  * @returns Every violation found, in the order the exercise commits them; an
  *   empty array for a clean exercise.

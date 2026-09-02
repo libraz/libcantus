@@ -41,6 +41,14 @@ const MOTIF_TRANSFORMS = Object.freeze([
   'sequence',
 ] as const);
 
+/**
+ * The name of a transformation {@link transformMotif} can apply to a cell.
+ *
+ * Derived from the table the transforms are dispatched from, so a transform
+ * added to one is named by the other on the same commit.
+ *
+ * @category Composition
+ */
 export type MotifTransform = (typeof MOTIF_TRANSFORMS)[number];
 
 /**

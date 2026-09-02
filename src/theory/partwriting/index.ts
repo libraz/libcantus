@@ -502,7 +502,7 @@ export function spellVoicing(
  *
  * @param voicings One voicing per chord, in voice order, in spelled notes.
  * @param chords The chords those voicings realize, in the same order.
- * @param key The key the exercise is written in; it names the leading tone.
+ * @param keyLike The key the exercise is written in; it names the leading tone.
  * @param opts Ranges and the upper-voice spacing limit. Both are validated
  *   before any rule runs: an empty result has to mean that nothing was broken,
  *   never that a rule could not be evaluated.

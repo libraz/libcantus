@@ -199,26 +199,6 @@ export function resolveMaxCandidates(opts?: VoicingOptions): number | undefined 
 }
 
 /**
- * Realize a single chord as one MIDI pitch per voice, ascending (index 0 =
- * lowest). The bass voice takes the chord's `bassPc` when set, otherwise the
- * root; upper voices take chord pitch classes, doubling the root or fifth as
- * needed to fill all voices. The result stays inside each voice's range, keeps
- * adjacent upper voices within `maxSpacing`, avoids voice crossing, and is
- * deterministic: a compact close-position voicing centered in the ranges.
- *
- * @param chord The chord to voice.
- * @param opts Voicing options; defaults to four voices in {@link SATB_RANGES}.
- * @returns MIDI pitches, ascending, one per voice.
- * @throws If no voicing fits the given ranges.
- * @example
- * ```ts
- * import { parseChordSymbol, voiceChord } from '@libraz/libcantus';
- * const chord = parseChordSymbol('Cmaj7');
- * voiceChord(chord); // four ascending MIDI pitches within the SATB ranges
- * ```
- * @category Voicing & Counterpoint
- */
-/**
  * How far a candidate sits from the middle of each voice's range, summed.
  *
  * A chord with nothing before it is placed by this alone once its structure is
@@ -244,6 +224,26 @@ function centeringPenalty(
   return penalty;
 }
 
+/**
+ * Realize a single chord as one MIDI pitch per voice, ascending (index 0 =
+ * lowest). The bass voice takes the chord's `bassPc` when set, otherwise the
+ * root; upper voices take chord pitch classes, doubling the root or fifth as
+ * needed to fill all voices. The result stays inside each voice's range, keeps
+ * adjacent upper voices within `maxSpacing`, avoids voice crossing, and is
+ * deterministic: a compact close-position voicing centered in the ranges.
+ *
+ * @param chord The chord to voice.
+ * @param opts Voicing options; defaults to four voices in {@link SATB_RANGES}.
+ * @returns MIDI pitches, ascending, one per voice.
+ * @throws If no voicing fits the given ranges.
+ * @example
+ * ```ts
+ * import { parseChordSymbol, voiceChord } from '@libraz/libcantus';
+ * const chord = parseChordSymbol('Cmaj7');
+ * voiceChord(chord); // four ascending MIDI pitches within the SATB ranges
+ * ```
+ * @category Voicing & Counterpoint
+ */
 export function voiceChord(chord: ChordLike, opts?: VoicingOptions): number[] {
   const data = toChordData(chord);
   const ranges = resolveRanges(opts);

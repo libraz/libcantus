@@ -53,6 +53,18 @@ export type SpelledKeyScale = KeyScale & {
   variant: KeyVariant;
 };
 
+/**
+ * A key read into the three things every reader of one needs: the pitch
+ * classes it is built from, the spelled tonic its letter names are anchored on,
+ * and the scale form it stands in.
+ *
+ * What a key-shaped argument becomes once it has been read, whatever form the
+ * caller held it in — a name, a scale, a `Key`. Carrying the tonic beside the
+ * scale is what keeps an A flat minor an A flat minor rather than the G sharp
+ * minor its pitch classes alone would be spelled back as.
+ *
+ * @category Scales
+ */
 export type ResolvedKey = {
   /** The pitch classes the key is built from. */
   readonly scale: KeyScale;

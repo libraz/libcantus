@@ -227,7 +227,7 @@ function stretchPhrase(ratio: number): string {
  *
  * @param a The model statement.
  * @param b The statement to name against it.
- * @param key Key context for the tonal reading. Without one that reading is
+ * @param keyLike Key context for the tonal reading. Without one that reading is
  *   unavailable, and a statement holding only diatonically is left unnamed
  *   unless its interval pattern also fits a member of the retrograde family, in
  *   which case it is named there: a triad restated a degree higher swaps two

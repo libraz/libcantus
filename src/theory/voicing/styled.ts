@@ -128,7 +128,7 @@ function nearestPc(target: number, pcs: number[]): number {
  * off either end of the 0..127 range is rejected rather than voiced out of
  * range, matching {@link nextVoicing}, which clamps its derived ranges.
  *
- * @param chord The chord to voice, in whatever form it is held: a chord symbol,
+ * @param given The chord to voice, in whatever form it is held: a chord symbol,
  *   plain chord data, or a `Chord`.
  * @param opts Styled voicing options; defaults to a close voicing at octave 4.
  * @returns MIDI pitches, ascending, one per retained voice.
