@@ -535,8 +535,9 @@ export function detectNoteNameSystem(text: string): NoteNameSystem {
 
 /** Read a note name, in the given system or in the one the name is written in. */
 export function readNoteName(text: string, opts?: NoteNameOptions): Note {
+  const asked = assertOptions(opts, 'opts');
   const name = normalize(text);
-  const system = opts?.system === undefined ? resolveSystem(name) : assertSystem(opts.system);
+  const system = asked.system === undefined ? resolveSystem(name) : assertSystem(asked.system);
   const note = system === null ? null : parseIn(name, system);
   if (note === null) {
     throw new InvalidInputError(`Invalid note: ${describeRejected(text)}`);
@@ -578,8 +579,9 @@ function impliedMode(system: NoteNameSystem, tonic: string): 'major' | 'minor' {
 /** Read a key name, in the given system or in the one the name is written in. */
 export function readKeyName(text: string, opts?: NoteNameOptions): KeyName {
   const name = normalize(text);
+  const asked = assertOptions(opts, 'opts');
   const split = splitModeWord(name);
-  const system = opts?.system === undefined ? resolveSystem(name) : assertSystem(opts.system);
+  const system = asked.system === undefined ? resolveSystem(name) : assertSystem(asked.system);
   if (system !== null && split.system !== undefined && split.system !== tableOf(system)) {
     throw new InvalidInputError(
       `${describeRejected(text)} is not a ${system} key name: its mode word is ${split.system}`,

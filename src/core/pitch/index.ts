@@ -235,11 +235,14 @@ export function parseNote(text: string, opts?: NoteNameOptions): Note {
  * @category Pitch & Intervals
  */
 export function tryParseNote(text: string, opts?: NoteNameOptions): ParseResult<Note> {
+  // Read before the try: the options are the caller's own configuration, so a
+  // malformed bag is a fault to raise rather than a name that failed to parse.
+  const asked = assertOptions(opts, 'opts');
   try {
     if (typeof text !== 'string') {
       throw new InvalidInputError(`note must be a string; received ${typeof text}`);
     }
-    return { ok: true, value: assertNote(readNoteName(text, opts), `note ${text}`) };
+    return { ok: true, value: assertNote(readNoteName(text, asked), `note ${text}`) };
   } catch (error) {
     return parseFailure(error);
   }
@@ -328,11 +331,12 @@ export function parseKeyName(text: string, opts?: NoteNameOptions): KeyName {
  * @category Scales
  */
 export function tryParseKeyName(text: string, opts?: NoteNameOptions): ParseResult<KeyName> {
+  const asked = assertOptions(opts, 'opts');
   try {
     if (typeof text !== 'string') {
       throw new InvalidInputError(`key name must be a string; received ${typeof text}`);
     }
-    const key = readKeyName(text, opts);
+    const key = readKeyName(text, asked);
     assertNote(key.tonic, `key ${text}`);
     return { ok: true, value: key };
   } catch (error) {
