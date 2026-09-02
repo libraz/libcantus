@@ -1,5 +1,5 @@
 import { InvalidInputError } from '../../core/errors/index.js';
-import { assertFiniteNumber, assertInteger } from '../../core/validation/index.js';
+import { assertFiniteNumber, assertInteger, assertOptions } from '../../core/validation/index.js';
 import { chordToneRole } from '../chord/index.js';
 import { type ChordLike, toChordData } from '../symbol/index.js';
 import { pitchClass } from './internal.js';
@@ -141,6 +141,7 @@ function nearestPc(target: number, pcs: number[]): number {
  * @category Voicing & Counterpoint
  */
 export function voiceChordStyled(given: ChordLike, opts?: StyledVoicingOptions): number[] {
+  assertOptions(opts, 'opts');
   const chord = toChordData(given);
   const style = opts?.style ?? 'close';
   const octave = opts?.octave ?? DEFAULT_STYLE_OCTAVE;

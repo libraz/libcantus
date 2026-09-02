@@ -1,6 +1,6 @@
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import { clampToMidi } from '../../core/validation/index.js';
+import { assertFiniteNumber, clampToMidi } from '../../core/validation/index.js';
 import { type KeyLike, toKeyScale } from './coerce.js';
 
 /** Scale offset of a pitch relative to the key root, in [0, 11]. */
@@ -49,6 +49,9 @@ export function isScaleTone(pitch: number, key: KeyLike): boolean {
  */
 export function nearestScaleTone(pitch: number, key: KeyLike): number {
   const scale = toKeyScale(key);
+  // Before the rounding: `Math.round` reads a `null` as zero, which the clamp
+  // then accepts as the lowest MIDI pitch.
+  assertFiniteNumber(pitch, 'pitch');
   const base = clampToMidi(Math.round(pitch), 'pitch');
   for (let distance = 0; distance < 12; distance += 1) {
     const lower = base - distance;
@@ -112,6 +115,10 @@ export function scaleLadderPosition(pitch: number, key: KeyLike): ScaleLadderPos
 
 /** {@link scaleLadderPosition} over an already-resolved scale. */
 function ladderPosition(pitch: number, key: KeyScale): ScaleLadderPosition {
+  // Both directions of the ladder do arithmetic on the number they are given
+  // and both are reached from a public entrance, so each checks its own: a
+  // `null` pitch would place itself on a rung of a real key.
+  assertFiniteNumber(pitch, 'pitch');
   const offsets = scaleOffsets(key);
   const size = offsets.length;
   if (size === 0) {
@@ -148,6 +155,7 @@ export function scaleLadderPitch(rung: number, key: KeyLike): number {
 
 /** {@link scaleLadderPitch} over an already-resolved scale. */
 function ladderPitch(rung: number, key: KeyScale): number {
+  assertFiniteNumber(rung, 'rung');
   const offsets = scaleOffsets(key);
   const size = offsets.length;
   if (size === 0) {
@@ -178,7 +186,7 @@ function ladderPitch(rung: number, key: KeyScale): number {
  */
 export function shiftByScaleDegrees(pitch: number, degrees: number, key: KeyLike): number {
   const scale = toKeyScale(key);
-  const steps = Math.trunc(degrees);
+  const steps = Math.trunc(assertFiniteNumber(degrees, 'degrees'));
   if (steps === 0) {
     return pitch;
   }

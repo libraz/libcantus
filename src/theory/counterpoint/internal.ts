@@ -12,7 +12,12 @@ import type { ConsonanceClass } from '../../core/interval/index.js';
 import { ConsonanceClass as Consonance } from '../../core/interval/index.js';
 import type { IntervalQualityLabel, Note, SpelledInterval } from '../../core/pitch/index.js';
 import { noteToMidi } from '../../core/pitch/index.js';
-import { assertDegree, assertRecord, describeRejected } from '../../core/validation/index.js';
+import {
+  assertDegree,
+  assertFlag,
+  assertRecord,
+  describeRejected,
+} from '../../core/validation/index.js';
 
 /**
  * Require an interval quality label.
@@ -68,6 +73,7 @@ export function classifySpelledInterval(
   // The record check alone leaves the two fields the answer is read from
   // unread, and an interval carrying neither would classify as a dissonance —
   // the same verdict a real tritone gets, and one a counterpoint report acts on.
+  assertFlag(twoVoice, 'twoVoice');
   const read = assertRecord<SpelledInterval>(interval, 'interval');
   const simple = simpleIntervalNumber(assertDegree(read.number, 'interval.number'));
   const quality = assertQualityLabel(read.quality);

@@ -1,5 +1,5 @@
 import { InvalidInputError, NoSolutionError } from '../../core/errors/index.js';
-import { assertArray, assertFiniteNumber } from '../../core/validation/index.js';
+import { assertArray, assertFiniteNumber, assertOptions } from '../../core/validation/index.js';
 import { type ChordLike, toChordData } from '../symbol/index.js';
 import { enumerateVoicings, leadingCost, moveScore, moveScoring } from './internal.js';
 import type { VoicingOptions } from './satb.js';
@@ -80,6 +80,8 @@ export function voiceLeadingCost(from: number[], to: number[]): number {
  * @category Voicing & Counterpoint
  */
 export function nextVoicing(current: number[], chord: ChordLike, opts?: VoicingOptions): number[] {
+  assertOptions(opts, 'opts');
+  assertVoicing(current, 'current');
   const data = toChordData(chord);
   const derived = opts?.ranges === undefined && opts?.voices === undefined;
   if (derived) {

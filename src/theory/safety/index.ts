@@ -6,6 +6,7 @@ import {
   assertGenerationBudget,
   assertMidiPitch,
   assertOneOf,
+  assertOptions,
   assertRecord,
 } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
@@ -146,6 +147,7 @@ export function profileWeights(
   if (overrides === undefined) {
     return { ...base };
   }
+  assertRecord<Partial<ProfileWeights>>(overrides, 'overrides');
   const weights: ProfileWeights = { ...base };
   for (const [field, value] of Object.entries(overrides)) {
     if (value === undefined) {
@@ -347,7 +349,7 @@ function stepResolution(pitch: number, chord: Chord): number | undefined {
 export function evaluateSafety(q: SafetyQuery, opts: EvaluateSafetyOptions = {}): SafetyResult {
   assertSafetyContext(q);
   assertMidiPitch(q.candidatePitch, 'candidatePitch');
-  return evaluateInternal(q, opts.suggestions ?? true);
+  return evaluateInternal(q, assertOptions(opts, 'opts').suggestions ?? true);
 }
 
 /**

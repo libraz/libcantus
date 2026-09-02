@@ -3,6 +3,7 @@ import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import {
   assertArray,
   assertGenerationBudget,
+  assertOptions,
   assertPitchClass,
   assertPositiveInt,
 } from '../../core/validation/index.js';
@@ -329,6 +330,7 @@ export function avoidNotes(
   scaleName: ScaleNameInput,
   opts: AvoidNotesOptions = {},
 ): number[] {
+  const asked = assertOptions(opts, 'opts');
   const mask = requireChordScaleMask(scaleName);
   const data = toChordData(chord);
   const rootPc = pitchClass(data.rootPc);
@@ -343,7 +345,7 @@ export function avoidNotes(
   // scale. Both thirds are named: a suspension does not say which one it
   // displaced — that is what suspending is — so meeting either one ends it.
   const displaced = new Set(displacedThirds(data));
-  const melodic = opts.use === 'melodic';
+  const melodic = asked.use === 'melodic';
   const semitoneAboveRoot = pitchClass(rootPc + 1);
   const avoid: number[] = [];
   for (let pc = 0; pc < 12; pc += 1) {
@@ -442,6 +444,7 @@ export function availableTensions(
   scaleName: ScaleNameInput,
   opts: AvailableTensionsOptions = {},
 ): number[] {
+  const asked = assertOptions(opts, 'opts');
   const mask = requireChordScaleMask(scaleName);
   const data = toChordData(chord);
   const rootPc = pitchClass(data.rootPc);
@@ -455,7 +458,7 @@ export function availableTensions(
   const functional = resolvesToMinorTonic(
     data,
     chordPcs,
-    opts.resolvesTo === undefined ? undefined : toChordData(opts.resolvesTo),
+    asked.resolvesTo === undefined ? undefined : toChordData(asked.resolvesTo),
   )
     ? new Set(MINOR_RESOLUTION_TENSIONS.map((semitones) => pitchClass(rootPc + semitones)))
     : undefined;

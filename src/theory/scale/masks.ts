@@ -5,6 +5,7 @@ import {
   assertInteger,
   assertOneOf,
   assertRecord,
+  describeRejected,
 } from '../../core/validation/index.js';
 import type { KeyVariant } from './kinds.js';
 
@@ -507,6 +508,12 @@ export type ScaleNameInput = ScaleName | (string & {});
  * @category Scales
  */
 export function resolveScaleName(name: ScaleNameInput): ScaleName | WorldScaleName | undefined {
+  // Undefined means "no scale goes by this name", which is a statement about a
+  // name; a value that is no name at all is refused instead, so a caller cannot
+  // read the two as the same answer.
+  if (typeof name !== 'string') {
+    throw new InvalidInputError(`scale name must be a string; received ${describeRejected(name)}`);
+  }
   if (Object.hasOwn(NAMED_SCALES, name)) {
     return name as ScaleName;
   }
@@ -628,6 +635,9 @@ const KEY_VARIANTS: readonly KeyVariant[] = [
  */
 export function assertKeyVariant(variant: KeyVariant, modeMask12: number): void {
   assertOneOf(variant, KEY_VARIANTS, 'variant');
+  // Read as a mask before it is compared with one: `modal` is the form that
+  // matches no named mask, so a value that is no mask at all would agree with it.
+  assertModeMask(modeMask12);
   const named = VARIANT_MASKS[variant as Exclude<KeyVariant, 'modal'>];
   const matches =
     named === undefined ? !Object.values(VARIANT_MASKS).includes(modeMask12) : named === modeMask12;

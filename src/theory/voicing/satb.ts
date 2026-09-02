@@ -3,6 +3,7 @@ import {
   assertArray,
   assertFiniteNumber,
   assertGenerationBudget,
+  assertOptions,
   assertPositiveInt,
 } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
@@ -119,6 +120,9 @@ const DERIVED_SPAN = 19;
  * ranges spanning roughly the bass-to-soprano compass.
  */
 export function resolveRanges(opts?: VoicingOptions): VoiceRange[] {
+  // Every voicing entrance resolves its ranges, so the options bag they share is
+  // read as one here rather than at four entrances separately.
+  assertOptions(opts, 'opts');
   if (opts?.ranges !== undefined) {
     if (opts.ranges.length === 0) {
       throw new InvalidInputError('ranges must contain at least one voice range');
