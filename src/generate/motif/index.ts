@@ -1,5 +1,5 @@
 import { BEAT_EPS } from '../../analyze/adjacency.js';
-import type { ChordTimeline } from '../../analyze/timeline/index.js';
+import { assertChordTimeline, type ChordTimeline } from '../../analyze/timeline/index.js';
 import { InvalidInputError } from '../../core/errors/index.js';
 import type { MeterLike, TimeSignature } from '../../core/meter/index.js';
 import { beatsPerBar, meterAt, toMeterData } from '../../core/meter/index.js';
@@ -598,6 +598,7 @@ export function developMotif(
   ts: MeterLike,
 ): MotifCell {
   const meter = meterAt(0, toMeterData(ts, 'ts'));
+  assertChordTimeline(timeline);
   assertPositiveInt(bars, 'development bars');
   const cellNotes = assertCellNotes(cell, 'motif notes');
   // The key is read into its plain form once, here at the boundary; the tiling

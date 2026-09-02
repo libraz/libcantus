@@ -27,6 +27,7 @@ import {
   transposeNote,
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
+import { assertOptions } from '../../core/validation/index.js';
 import {
   type Chord,
   type ChordQuality,
@@ -223,6 +224,7 @@ export function substituteChord(
   key: SpelledKeyLike,
   opts?: SubstituteOptions,
 ): Substitution[] {
+  assertOptions(opts, 'opts');
   // Chord and key are read once, here at the boundary. The key keeps the tonic
   // it was named with: everything below spells from that tonic, so the letters
   // are the caller's key's rather than the ones its pitch classes read best as.

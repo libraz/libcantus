@@ -16,6 +16,7 @@ import {
   assertFiniteNumber,
   assertNoteEvents,
   assertOneOf,
+  assertRecord,
   dropSilentNotes,
 } from '../../core/validation/index.js';
 import {
@@ -141,6 +142,7 @@ function assertPlayable(pitch: number): number {
  */
 export function imitate(lead: readonly NoteEvent[], opts: ImitationOptions): NoteEvent[] {
   assertNoteEvents(lead, 'imitate lead', { allowNonPositiveDuration: true });
+  assertRecord<ImitationOptions>(opts, 'opts');
   // Onsets are unbounded below library-wide, because a pickup sounds before the
   // downbeat and the downbeat is beat 0; an answer to a pickup enters there too.
   assertFiniteNumber(opts.atBeat, 'atBeat');
