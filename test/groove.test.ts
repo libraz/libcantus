@@ -349,3 +349,64 @@ describe('groove-template meter validation', () => {
     expect(template.slotsPerBar).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe('a groove template written by hand', () => {
+  /** A template of `slotsPerBar` slots, every one of them silent and on the beat. */
+  function flat(subdivision: number, slotsPerBar: number): GrooveTemplate {
+    return {
+      subdivision,
+      slotsPerBar,
+      slots: Array.from({ length: slotsPerBar }, () => ({ timingOffset: 0, velocity: null })),
+    };
+  }
+
+  const target: NoteEvent[] = [
+    { pitch: 36, startBeat: 0, durationBeat: 1, velocity: 80 },
+    { pitch: 38, startBeat: 2.5, durationBeat: 1, velocity: 80 },
+  ];
+
+  it('is refused when its slot count is not the bar it will be read against', () => {
+    // Eight slots at a sixteenth-note subdivision is half a 4/4 bar. Every check
+    // the template already carried passes: the count is a positive integer, the
+    // array is that long, and no meter is declared to disagree with. The note on
+    // beat 2.5 then quantizes to slot 10, wraps to slot 0, and sounds a bar and
+    // a half beat late.
+    expect(() => applyGrooveTemplate(target, flat(4, 8), FOUR_FOUR)).toThrow(/slotsPerBar/);
+  });
+
+  it('is taken when its slot count is the bar it will be read against', () => {
+    const applied = applyGrooveTemplate(target, flat(4, 16), FOUR_FOUR);
+    expect(applied.map((event) => event.startBeat)).toEqual([0, 2.5]);
+  });
+
+  it('is refused a slot that carries a timing offset nothing can be placed at', () => {
+    const template = flat(4, 16);
+    (template.slots[0] as { timingOffset: number }).timingOffset = Number.NaN;
+    expect(() => applyGrooveTemplate(target, template, FOUR_FOUR)).toThrow(/timingOffset/);
+  });
+
+  it('is refused a slot that carries a velocity no note event can hold', () => {
+    for (const velocity of [200, -5]) {
+      const template = flat(4, 16);
+      (template.slots[0] as { velocity: number | null }).velocity = velocity;
+      expect(() => applyGrooveTemplate(target, template, FOUR_FOUR)).toThrow(/velocity/);
+    }
+  });
+
+  it('never returns a note the library would refuse to read back', () => {
+    // The output is this library's own, so every field on it has to hold: the
+    // function surface returning a broken array and the class surface throwing
+    // on the same input were two answers to one question.
+    const template = extractGrooveTemplate(
+      makeEvents([0, 0.51, 1.02, 1.48, 2.03, 2.49, 3.01, 3.52], 90),
+      FOUR_FOUR,
+    );
+    const applied = applyGrooveTemplate(target, template, FOUR_FOUR);
+    for (const event of applied) {
+      expect(Number.isFinite(event.startBeat)).toBe(true);
+      expect(event.velocity === undefined || Number.isInteger(event.velocity)).toBe(true);
+      expect(event.velocity ?? 0).toBeGreaterThanOrEqual(0);
+      expect(event.velocity ?? 0).toBeLessThanOrEqual(127);
+    }
+  });
+});

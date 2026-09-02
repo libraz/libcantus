@@ -20,6 +20,7 @@ import {
 } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import {
+  assertFiniteNumber,
   assertGenerationBudget,
   assertNoteEvents,
   assertPositiveInt,
@@ -333,13 +334,19 @@ export function extractGrooveTemplate(
  * If the template carries a time signature (see {@link GrooveTemplate.ts}) it
  * must match `ts`, since a differing bar length would misalign the per-bar
  * grid and drift the feel; a mismatch throws rather than corrupting timing
- * silently.
+ * silently. `slotsPerBar` is held to the same standard, since it is what the
+ * grid is read through: a template built by hand whose count does not match the
+ * bar would send a note past the end of the grid and land it on the next bar's
+ * downbeat. What the slots carry is checked too, so nothing this returns is a
+ * note event the rest of the library would refuse.
  *
  * @param events The events to reshape.
  * @param template The groove template, from {@link extractGrooveTemplate}.
  * @param ts The time signature, used to compute the bar length.
  * @returns Reshaped copies of `events`, in input order.
- * @throws If `template.ts` is set and does not match `ts`.
+ * @throws If `template.ts` is set and does not match `ts`, if `slotsPerBar` is
+ *   not the number of slots a bar of `ts` holds at the template's subdivision,
+ *   or if a slot carries a non-finite offset or a velocity outside [0, 127].
  * @example
  * ```ts
  * import { extractGrooveTemplate, applyGrooveTemplate, parseTimeSignature } from '@libraz/libcantus';
@@ -379,6 +386,36 @@ export function applyGrooveTemplate(
     );
   }
   const barBeats = beatsPerBar(meter);
+  // `slotsPerBar` is what the grid is read through, so it has to be the number
+  // of slots this bar actually holds — the definition the field is documented
+  // with. Neither check above reaches it: `slots.length` says the array matches
+  // the count, and `template.ts` is optional and says nothing about the
+  // subdivision. A count too small quantizes a note past the end of the grid and
+  // the wrap lands it on the next bar's downbeat, which is the silent
+  // corruption the meter check is there to prevent, arriving by another door.
+  const expectedSlots = Math.ceil(barBeats * template.subdivision);
+  if (template.slotsPerBar !== expectedSlots) {
+    throw new InvalidInputError(
+      `Groove template slotsPerBar ${template.slotsPerBar} does not match ` +
+        `${expectedSlots} slots per bar of ${formatTimeSignature(meter)} ` +
+        `at subdivision ${template.subdivision}`,
+    );
+  }
+  // The slots are read for what goes onto a note, so what they carry is checked
+  // before any of it does. A `timingOffset` of NaN moves a note nowhere the
+  // caller can find it, and a velocity outside the MIDI byte is a note no
+  // format can hold: both are rejected here rather than written out and read
+  // back as this library's own output.
+  for (let index = 0; index < template.slots.length; index += 1) {
+    const slot = template.slots[index];
+    if (slot === undefined) {
+      continue;
+    }
+    assertFiniteNumber(slot.timingOffset, `template slots[${index}].timingOffset`);
+    if (slot.velocity !== null && slot.velocity !== undefined) {
+      assertRange(slot.velocity, 0, 127, `template slots[${index}].velocity`);
+    }
+  }
   return dropSilentNotes(events).map((event) => {
     const { quantizedBeat, slotIndex } = quantizeToGrid(
       event.startBeat,
