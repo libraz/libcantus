@@ -708,6 +708,44 @@ export function chordToneRole(pitch: number, chord: Chord): ChordToneRole | null
   return null;
 }
 
+/** The degree a chord tone names, once the chord has said which tone it is. */
+const DEGREE_BY_ROLE: Readonly<Record<ChordToneRole, number>> = {
+  root: 1,
+  third: 3,
+  fifth: 5,
+  sixth: 6,
+  seventh: 7,
+};
+
+/**
+ * The degree an interval class names when the chord's own template does not
+ * claim it, indexed by interval class.
+ *
+ * A tone the chord does not read as one of its degrees is a tension, and the
+ * degree a tension names is the one its letter would be written on: the six and
+ * the eight beside a perfect fifth are the sharp eleventh and the flat
+ * thirteenth, not a second fifth and a sixth.
+ */
+const TENSION_DEGREE: readonly number[] = [1, 2, 2, 2, 3, 4, 4, 5, 6, 6, 7, 7];
+
+/**
+ * Which chord degree one of a chord's own intervals spells.
+ *
+ * The chord decides, through the same reading every other layer asks — a flat
+ * thirteenth over a chord that already sounds its fifth is a thirteenth, and a
+ * flattened fifth over a chord that does not is the fifth. Answering from the
+ * interval class alone folded 6, 7 and 8 onto the fifth, so a figure asking a
+ * `7(b13)` for its thirteenth matched nothing, fell through to the key, and
+ * played a tone the chord had already contradicted.
+ */
+export function degreeOfInterval(interval: number, chord: Chord): number | undefined {
+  const role = chordToneRole(pitchClass(chord.rootPc + interval), chord);
+  if (role !== null) {
+    return DEGREE_BY_ROLE[role];
+  }
+  return TENSION_DEGREE[((interval % 12) + 12) % 12];
+}
+
 /**
  * What occupies a chord's third slot: the degree that says what the chord is.
  *

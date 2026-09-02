@@ -32,6 +32,7 @@ import {
   clampToMidi,
 } from '../../core/validation/index.js';
 import type { Chord, ChordSegment } from '../../theory/chord/index.js';
+import { degreeOfInterval } from '../../theory/chord/index.js';
 import { chordScales } from '../../theory/chordscale/index.js';
 import {
   type KeyLike,
@@ -61,6 +62,9 @@ import {
   bandFloor,
   barTiles,
   bassPcOf,
+  DEFAULT_OCTAVE,
+  DEFAULT_TS,
+  EPS,
   placePc,
   placeRoot,
   STRONG_VELOCITY,
@@ -458,35 +462,11 @@ function degreeSemitone(
 /** The semitone a chord gives one of its own degrees, if it has that degree. */
 function chordDegreeSemitone(degree: number, chord: Chord): number | undefined {
   for (const interval of chord.intervals) {
-    if (degreeOfInterval(interval) === degree) {
+    if (degreeOfInterval(interval, chord) === degree) {
       return interval;
     }
   }
   return undefined;
-}
-
-/** Which chord degree an interval from the root spells. */
-function degreeOfInterval(interval: number): number | undefined {
-  const within = ((interval % 12) + 12) % 12;
-  if (within === 0) {
-    return 1;
-  }
-  if (within === 1 || within === 2) {
-    return 2;
-  }
-  if (within === 3 || within === 4) {
-    return 3;
-  }
-  if (within === 5) {
-    return 4;
-  }
-  if (within === 6 || within === 7 || within === 8) {
-    return 5;
-  }
-  if (within === 9) {
-    return 6;
-  }
-  return 7;
 }
 
 /**
@@ -540,14 +520,10 @@ export type PlaceLicksOptions = {
   budget?: number;
 };
 
-const DEFAULT_TS: TimeSignature = FOUR_FOUR;
-const DEFAULT_OCTAVE = 2;
 const DEFAULT_BPM = 120;
 
 /** How much of the line is figures when the caller names nothing. */
 const DEFAULT_LICK_DENSITY = 0.6;
-
-const EPS = 1e-9;
 
 /**
  * Lay licks over a chord placement.

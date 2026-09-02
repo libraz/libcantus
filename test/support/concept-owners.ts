@@ -232,6 +232,26 @@ export const CONCEPT_OWNERS: readonly ConceptOwner[] = [
     reserved: ['intervalDescends', 'intervalSemitones', 'spelledInterval'],
   },
   {
+    // Which degree one of a chord's own intervals names. Answered from the
+    // interval class alone, six, seven and eight all fold onto the fifth, so a
+    // chord's sharp eleventh and its flat thirteenth stop being degrees the
+    // chord states and a figure asking for them matches nothing. The chord's
+    // own reading already distinguishes them, and it is the only one.
+    concept: 'which degree a chord tone plays',
+    owner: 'src/theory/chord/index.ts',
+    reserved: ['chordToneRole', 'degreeOfInterval'],
+  },
+  {
+    // Which tone is the chord's fifth. Two readers, one asking the chord and
+    // one scanning the intervals for 7, then 6, then 8: they agree today by
+    // coincidence, and the scan has no way to know that a diminished fifth
+    // beside a perfect one is a sharp eleventh.
+    concept: "the chord's own fifth",
+    owner: 'src/theory/tendency/index.ts',
+    reserved: ['fifthPcOf', 'seventhPcOf'],
+    allowed: ['src/generate/bass/internal.ts:fifthPcOf'],
+  },
+  {
     // What stands in a chord's third slot: the degree that says what the chord
     // is. Three readers had their own, and the loosest of them answered a
     // suspension by whichever of the fourth and the second happened to sound —

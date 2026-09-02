@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { TimeSignature } from '../src/core/meter/index.js';
 import { generateBassLine } from '../src/generate/bass/index.js';
+import type { LickMaterial } from '../src/generate/bass/licks.js';
 import { BASS_LICKS, isLickMaterial, placeLicks } from '../src/generate/bass/licks.js';
 import { GENRES, selectVocabulary, type Vocabulary } from '../src/generate/vocabulary/index.js';
-import { makeChord } from '../src/theory/chord/index.js';
+import { chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
 import { majorKey, minorKey } from '../src/theory/scale/index.js';
 
 const KEY = majorKey(0);
@@ -615,5 +616,59 @@ describe('the meter a lick is shaped against', () => {
       ctx: { seed: 7, bpm: 120 },
     });
     expect(named).toEqual(inFour);
+  });
+});
+
+describe('a figure asks the chord for a degree the chord states', () => {
+  // "Which degree is this interval" was answered three ways in this module, and
+  // the loosest of them folded six, seven and eight onto the fifth. A chord's
+  // own flat thirteenth sits eight semitones above the root, so a figure asking
+  // for the thirteenth matched nothing, fell through to the key, and played a
+  // tone the chord had already contradicted.
+
+  const SIXTEENTH = 0.25;
+
+  /** A one-bar figure asking for a single degree, as a caller's own vocabulary. */
+  function figureOn(degree: number, alter = 0): Vocabulary<LickMaterial> {
+    return {
+      id: `degree${degree}`,
+      genre: 'jazz',
+      difficulty: 1,
+      articulations: [],
+      ts: { numerator: 4, denominator: 4 },
+      material: { lengthSteps: 16, notes: [{ degree, step: 0, velocity: 1, alter }] },
+      provenance: { basis: 'idiom', note: 'a single degree, to read what the chord answers' },
+    };
+  }
+
+  /** The pitch class the figure sounded over `chord`. */
+  function sounded(figure: Vocabulary<LickMaterial>, chord: ReturnType<typeof makeChord>): number {
+    const notes = placeLicks([{ startBeat: 0, endBeat: 4, chord }], KEY, {
+      genre: 'jazz',
+      difficulty: 5,
+      ctx: { seed: 0, bpm: 120, complexity: { rhythmic: 1 }, vocabulary: [figure] },
+    });
+    const first = notes.find((note) => Math.abs(note.startBeat) < SIXTEENTH);
+    return (((first?.pitch ?? Number.NaN) % 12) + 12) % 12;
+  }
+
+  it('plays the flat thirteenth a chord states rather than the key’s own sixth', () => {
+    // C7b13 sounds A flat. The key is C major, whose sixth degree is A, so the
+    // two answers differ by a semitone and the wrong one is audible.
+    const chord = makeChord(0, '7b13');
+    expect(chordPitchClasses(chord)).toContain(8);
+    expect(sounded(figureOn(13), chord)).toBe(8);
+  });
+
+  it('plays the diminished fifth of a chord that has one', () => {
+    // The same reading the other way: a flattened fifth with no perfect fifth
+    // beside it is the chord's fifth, and asking for degree five must find it.
+    expect(sounded(figureOn(5), makeChord(0, 'dim'))).toBe(6);
+  });
+
+  it('does not read a sharp eleventh as the chord’s fifth', () => {
+    // Six semitones alongside a perfect fifth is a sharp eleventh, so degree
+    // five is the perfect fifth the chord actually states.
+    expect(sounded(figureOn(5), makeChord(0, 'maj7#11'))).toBe(7);
   });
 });

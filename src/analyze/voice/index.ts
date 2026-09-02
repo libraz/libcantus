@@ -200,6 +200,21 @@ function tensionDegree(ic: number): 9 | 11 | 13 | undefined {
   return TENSION_DEGREE_BY_INTERVAL[ic];
 }
 
+/**
+ * A chord with the bass it is written over among its own tones.
+ *
+ * Only for reading a tone the template leaves out: a slash chord states a bass
+ * its stack of thirds does not reach, and the sonority the two make together is
+ * what a listener hears. Everything else reads the template, which is what the
+ * chord is rather than what it happens to sound under.
+ */
+function asSounded(chord: Chord): Chord {
+  if (chord.bassPc === undefined) {
+    return chord;
+  }
+  return { ...chord, intervals: [...chord.intervals, intervalAboveRoot(chord.bassPc, chord)] };
+}
+
 function isStep(a: number, b: number): boolean {
   const d = Math.abs(a - b);
   return d === 1 || d === 2;
@@ -359,6 +374,18 @@ export function analyzeVoice(
       } else if (degree !== undefined) {
         labels.push({ kind: 'tension', degree });
         handled = true;
+      } else {
+        // A slash bass the chord's own template does not contain falls between
+        // two readings: the membership test counts the bass, the role test
+        // reads the template, and every branch below is closed by `!member`.
+        // It is the one tone a chord names without stacking it, so it is read
+        // against the chord as it sounds — the B flat under a C triad is the
+        // seventh that sonority has, and carries that tone's obligation.
+        const bassRole = chordToneRole(note.pitch, asSounded(chord));
+        if (bassRole !== null) {
+          labels.push({ kind: 'chordTone', role: bassRole });
+          handled = true;
+        }
       }
     }
 

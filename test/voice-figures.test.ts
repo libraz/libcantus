@@ -5,7 +5,12 @@ import type { NoteEvent } from '../src/core/types.js';
 import type { MelodyToneRole } from '../src/generate/harmonize/nct.js';
 import { classifyMelodyTones } from '../src/generate/harmonize/nct.js';
 import type { Chord } from '../src/theory/chord/index.js';
-import { chordQualities, intervalAboveRoot, makeChord } from '../src/theory/chord/index.js';
+import {
+  chordPitchClasses,
+  chordQualities,
+  intervalAboveRoot,
+  makeChord,
+} from '../src/theory/chord/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
 import { parseChordSymbol } from '../src/theory/symbol/index.js';
 
@@ -156,26 +161,41 @@ describe('tension degrees', () => {
     // Every chord on every root against every pitch class: a tension label may
     // only name the extension its interval above the root forms, and no note
     // sounding against a chord may come back unclassified.
+    //
+    // Every bass, too. A slash bass the chord's own template does not contain
+    // was counted as a member by one reading and given no role by the other,
+    // and the note fell out of the analysis with an empty label list — while
+    // this sweep, which used `makeChord(rootPc, quality)` and never passed a
+    // bass, said every note was classified.
     const failures: string[] = [];
     let tensions = 0;
+    let slashed = 0;
     for (const quality of chordQualities()) {
       for (let rootPc = 0; rootPc < 12; rootPc += 1) {
-        const chord = makeChord(rootPc, quality);
-        for (let pc = 0; pc < 12; pc += 1) {
-          const analyzed = analyzeVoice(line([60 + pc]), () => chord, cMajor);
-          const labels = analyzed[0]?.labels ?? [];
-          const where = `${quality}@${rootPc}/${pc}`;
-          if (labels.length === 0) {
-            failures.push(`${where}: no label at all`);
+        for (const bassPc of [undefined, ...Array.from({ length: 12 }, (_, pc) => pc)]) {
+          const chord = makeChord(rootPc, quality, bassPc);
+          if (
+            bassPc !== undefined &&
+            !chordPitchClasses(chord, { includeBass: false }).includes(bassPc)
+          ) {
+            slashed += 1;
           }
-          const ic = intervalAboveRoot(60 + pc, chord);
-          for (const label of labels) {
-            if (label.kind !== 'tension') {
-              continue;
+          for (let pc = 0; pc < 12; pc += 1) {
+            const analyzed = analyzeVoice(line([60 + pc]), () => chord, cMajor);
+            const labels = analyzed[0]?.labels ?? [];
+            const where = `${quality}@${rootPc}/${pc}`;
+            if (labels.length === 0) {
+              failures.push(`${where}: no label at all`);
             }
-            tensions += 1;
-            if (label.degree !== TENSION_DEGREES[ic]) {
-              failures.push(`${where}: interval class ${ic} reported as ${label.degree}`);
+            const ic = intervalAboveRoot(60 + pc, chord);
+            for (const label of labels) {
+              if (label.kind !== 'tension') {
+                continue;
+              }
+              tensions += 1;
+              if (label.degree !== TENSION_DEGREES[ic]) {
+                failures.push(`${where}: interval class ${ic} reported as ${label.degree}`);
+              }
             }
           }
         }
@@ -183,5 +203,8 @@ describe('tension degrees', () => {
     }
     expect(failures).toEqual([]);
     expect(tensions).toBeGreaterThan(0);
+    // The sweep has to have reached basses the templates do not contain, which
+    // is the case the two readings disagreed about.
+    expect(slashed).toBeGreaterThan(0);
   });
 });

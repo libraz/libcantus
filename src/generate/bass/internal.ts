@@ -16,6 +16,7 @@ import type { KeyScale } from '../../core/types.js';
 import { assertRange } from '../../core/validation/index.js';
 import type { Chord, ChordSegment } from '../../theory/chord/index.js';
 import { nearestScaleTone } from '../../theory/scale/index.js';
+import { fifthPcOf as chordFifthPcOf } from '../../theory/tendency/index.js';
 
 /** Velocity for notes on metrically strong positions. */
 export const STRONG_VELOCITY = 100;
@@ -25,6 +26,18 @@ export const WEAK_VELOCITY = 80;
 
 /** Tolerance for comparing beat positions. */
 export const EPS = 1e-9;
+
+/**
+ * The meter a bass part is written against when the caller names none.
+ *
+ * Shared by both entry points because it is one default, not two that happen to
+ * agree: a figure placed in one and a phrase shape built in the other have to
+ * fall on the same grid for the two to be laid over each other.
+ */
+export const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
+
+/** The register band a bass part is written in when the caller names none. */
+export const DEFAULT_OCTAVE = 2;
 
 /**
  * Place a pitch class as a MIDI note near an anchor, clamped to the bass band.
@@ -143,17 +156,16 @@ export function chordTonePcs(chord: Chord): number[] {
 }
 
 /**
- * The chord's fifth pitch class.
+ * The chord's fifth pitch class, falling back to the root when it has none.
  *
- * Uses the perfect fifth when present, otherwise the chord's actual altered
- * fifth (diminished = 6, augmented = 8 semitones above the root), so dim/aug/
- * m7b5 chords sound their real fifth rather than a repeated root. Falls back to
- * the root only when the chord has no fifth degree at all.
+ * Which tone is the fifth is the theory layer's reading, not a second one here:
+ * a diminished fifth is the chord's fifth only where no perfect fifth stands
+ * beside it, and beside one it is a sharp eleventh. Answering that here as well
+ * gave dim, aug and m7b5 chords the right tone by agreeing with the definition
+ * rather than by reading it.
  */
 export function fifthPcOf(chord: Chord): number {
-  const fifths = new Set(chord.intervals.map((i) => pitchClass(i)));
-  const chosen = fifths.has(7) ? 7 : fifths.has(6) ? 6 : fifths.has(8) ? 8 : undefined;
-  return chosen === undefined ? pitchClass(chord.rootPc) : pitchClass(chord.rootPc + chosen);
+  return chordFifthPcOf(chord) ?? pitchClass(chord.rootPc);
 }
 
 /** The sounding bass pitch class of a chord: its slash bass, else its root. */

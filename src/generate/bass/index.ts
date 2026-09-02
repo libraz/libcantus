@@ -48,6 +48,8 @@ import {
   bassPcOf,
   bassToneCycle,
   beatPositions,
+  DEFAULT_OCTAVE,
+  DEFAULT_TS,
   EPS,
   fifthPcOf,
   midBarPulse,
@@ -162,9 +164,7 @@ export type BassLineOptions = {
   budget?: number;
 };
 
-const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
 const DEFAULT_STYLE: BassStyle = 'root';
-const DEFAULT_OCTAVE = 2;
 
 /** How often the `pop` style takes a weak-beat pickup when nothing else says. */
 const DEFAULT_PICKUP_DENSITY = 0.35;
