@@ -35,6 +35,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The model layer resolves a meter argument in one place.** `Score`, `Composer`
+  and `Arrangement` each held a private `metersFrom`, all three equivalent to
+  the `resolveMeters` they already imported and each a place a later edit could
+  make one class wrap, default or copy a meter differently from its siblings.
+  The three copies are gone and the classes call the shared function; a meter
+  argument resolves identically whichever class takes it, and a check reads the
+  model tree so a fourth copy cannot be added quietly.
+
 - **A chord timeline spells its augmented sixths in the key it was given.**
   `chordTimelineFromNotes` identified the augmented sixth of a window from the
   key reduced to pitch classes, so a German sixth analysed under `'Ab minor'`

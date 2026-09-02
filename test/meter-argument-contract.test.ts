@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   beatsPerBar,
@@ -8,6 +10,7 @@ import {
   humanize,
   InvalidInputError,
   isCompound,
+  type MeterLike,
   type MeterMap,
   majorKey,
   metricWeight,
@@ -17,6 +20,7 @@ import {
   Rhythm,
   resolveMeters,
   rhythmDensity,
+  Score,
   tryParseTimeSignature,
 } from '../src/index.js';
 import { functionParams, recordFields } from './support/signatures.js';
@@ -238,5 +242,54 @@ describe('the class layer', () => {
     expect(Rhythm.of([{ position: 0, duration: 3 }], '6/8').data.ts).toEqual(
       parseTimeSignature('6/8'),
     );
+  });
+});
+
+/**
+ * The model layer resolves a meter argument through the one function that does
+ * it, rather than each class through a private copy of the mapping.
+ *
+ * `Score`, `Composer` and `Arrangement` each held their own `metersFrom`, all
+ * three equivalent to `resolveMeters` and all three a place a later edit could
+ * make one class wrap, default, copy or label a meter differently from its
+ * siblings. The check reads the tree so a fourth copy cannot be added quietly,
+ * and asserts the three answer alike so removing the copies cannot be undone by
+ * reintroducing one under another name.
+ */
+describe('a meter argument is resolved in one place across the model layer', () => {
+  /** The meter forms a caller holds, each with what it should resolve to. */
+  const FORMS: readonly MeterLike[] = [
+    '3/4',
+    { numerator: 7, denominator: 8 },
+    [
+      { startBeat: 0, ts: { numerator: 4, denominator: 4 } },
+      { startBeat: 8, ts: { numerator: 3, denominator: 4 } },
+    ],
+  ];
+
+  it('wraps every form the same way through each class that takes one', () => {
+    for (const form of FORMS) {
+      const expected = resolveMeters({ meters: form }, 'meters');
+      expect(Score.of([], { meters: form }).meters, JSON.stringify(form)).toEqual(expected);
+      expect(new Composer({ seed: 1, meters: form }).toJSON().meters, JSON.stringify(form)).toEqual(
+        expected,
+      );
+    }
+  });
+
+  it('defaults to the same meter when no form is given', () => {
+    const expected = resolveMeters({}, 'meters');
+    expect(Score.of([]).meters).toEqual(expected);
+    expect(new Composer({ seed: 1 }).toJSON().meters).toEqual(expected);
+  });
+
+  it('holds no private meter mapping in the model layer', () => {
+    // The mapping lives in `core/meter`; a model file that rebuilt it locally is
+    // a second answer to how a caller's meter becomes the map a class holds.
+    const offenders = filesUnder(path.join(SRC, 'model'), '.ts')
+      .filter((file) => /function\s+metersFrom\b/.test(readFileSync(file, 'utf8')))
+      .map((file) => path.relative(path.dirname(SRC), file));
+
+    expect(offenders).toEqual([]);
   });
 });

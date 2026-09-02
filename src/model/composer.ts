@@ -3,7 +3,7 @@ import { InvalidInputError } from '../core/errors/index.js';
 import type { InstrumentProfile, InstrumentProfileLike } from '../core/instrument/profile.js';
 import { toStringedProfile } from '../core/instrument/profile.js';
 import type { MeterLike, MeterMap, TimeSignature } from '../core/meter/index.js';
-import { beatsPerBar, meterAt, resolveMeters, toMeterData } from '../core/meter/index.js';
+import { beatsPerBar, meterAt, resolveMeters } from '../core/meter/index.js';
 import type { PositionalRng } from '../core/random/index.js';
 import { assertFiniteNumber } from '../core/validation/index.js';
 import type { BassLineOptions, BassSegment } from '../generate/bass/index.js';
@@ -132,17 +132,6 @@ function toChordTimeline(harmony: Timeline | ChordTimeline): ChordTimeline {
   return 'chordTimeline' in harmony ? harmony.chordTimeline : harmony;
 }
 
-/** The meter map a {@link ComposerOptions.meters} value names. */
-function metersFrom(meters: MeterLike | undefined): MeterMap {
-  if (meters === undefined) {
-    return resolveMeters({}, 'composer meters');
-  }
-  const meter = toMeterData(meters, 'composer meters');
-  return Array.isArray(meter)
-    ? resolveMeters({ meters: meter }, 'composer meters')
-    : resolveMeters({ ts: meter }, 'composer meters');
-}
-
 /** A copy of the dials, carrying only the ones the caller named. */
 function copyComplexity(complexity: Complexity): Complexity {
   assertDataObject(complexity, 'composer complexity');
@@ -190,7 +179,9 @@ function copyInstruments(
  */
 function copyOptions(options: ComposerOptions): ComposerOptions {
   assertDataObject(options, 'composer options');
-  const copy: ComposerOptions = { meters: metersFrom(options.meters) };
+  const copy: ComposerOptions = {
+    meters: resolveMeters({ meters: options.meters }, 'composer meters'),
+  };
   if (options.key !== undefined) {
     copy.key = resolveKey(options.key);
   }
@@ -335,7 +326,7 @@ export class Composer {
     // dictionaries they accept, at the point the settings are named rather than
     // at the first part written under them.
     this.#options = copyOptions(options);
-    this.#meters = metersFrom(this.#options.meters);
+    this.#meters = resolveMeters({ meters: this.#options.meters }, 'composer meters');
     this.#key = this.#options.key === undefined ? undefined : resolveKey(this.#options.key);
   }
 

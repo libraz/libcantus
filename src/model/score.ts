@@ -31,7 +31,7 @@ import { playability } from '../core/instrument/playability.js';
 import type { InstrumentProfile, InstrumentProfileLike } from '../core/instrument/profile.js';
 import { toInstrumentProfile } from '../core/instrument/profile.js';
 import type { BarPosition, MeterLike, MeterMap, TimeSignature } from '../core/meter/index.js';
-import { beatToBarPosition, meterAt, resolveMeters, toMeterData } from '../core/meter/index.js';
+import { beatToBarPosition, meterAt, resolveMeters } from '../core/meter/index.js';
 import type { IntervalLike } from '../core/pitch/index.js';
 import { toSpelledInterval } from '../core/pitch/index.js';
 import type { TempoMap } from '../core/tempo/index.js';
@@ -169,17 +169,6 @@ function copyScore(data: ScoreData): ScoreData {
   return copy;
 }
 
-/** The meter map a {@link ScoreOptions.meters} value names. */
-function metersFrom(meters: MeterLike | undefined): MeterMap {
-  if (meters === undefined) {
-    return resolveMeters({}, 'score meters');
-  }
-  const meter = toMeterData(meters, 'score meters');
-  return Array.isArray(meter)
-    ? resolveMeters({ meters: meter }, 'score meters')
-    : resolveMeters({ ts: meter }, 'score meters');
-}
-
 /** The tempo map a {@link ScoreOptions.tempo} value names. */
 function tempoFrom(tempo: TempoMap | number | undefined): TempoMap {
   if (tempo === undefined) {
@@ -219,7 +208,7 @@ function statedKeyRegions(key: Key, notes: readonly NoteEvent[], totalBeats: num
 function scoreData(notes: readonly NoteEvent[], opts: ScoreOptions | undefined): ScoreData {
   const data: ScoreData = {
     notes: [...assertDataArray<NoteEvent>(notes, 'score notes')],
-    meters: metersFrom(opts?.meters),
+    meters: resolveMeters({ meters: opts?.meters }, 'score meters'),
     tempo: tempoFrom(opts?.tempo),
   };
   if (opts?.key !== undefined) {
@@ -480,7 +469,7 @@ export class Score {
 
   /** The same notes read against a different meter. */
   withMeters(meters: MeterLike): Score {
-    return new Score({ ...this.#data, meters: metersFrom(meters) });
+    return new Score({ ...this.#data, meters: resolveMeters({ meters }, 'score meters') });
   }
 
   /** The same notes read against a different tempo. */

@@ -15,7 +15,7 @@ import {
 } from '../analyze/arrange/index.js';
 import type { KeyRegion } from '../analyze/keys/index.js';
 import type { ChordTimeline } from '../analyze/timeline/index.js';
-import type { MeterLike, MeterMap } from '../core/meter/index.js';
+import type { MeterLike } from '../core/meter/index.js';
 import { resolveMeters, toMeterData } from '../core/meter/index.js';
 import type { NoteEvent } from '../core/types.js';
 import { assertInteger, assertPositiveInt, assertRange } from '../core/validation/index.js';
@@ -271,14 +271,6 @@ function arrangementData(
   return data;
 }
 
-/** The meter map an {@link ArrangementSetup.meters} value names. */
-function metersFrom(meters: MeterLike): MeterMap {
-  const meter = toMeterData(meters, 'arrangement meters');
-  return Array.isArray(meter)
-    ? resolveMeters({ meters: meter }, 'arrangement meters')
-    : resolveMeters({ ts: meter }, 'arrangement meters');
-}
-
 /** The settings a caller's setup describes, in the plain form data carries. */
 function settingsFrom(setup: ArrangementSetup | undefined): ArrangementSettings | undefined {
   if (setup === undefined) {
@@ -291,7 +283,7 @@ function settingsFrom(setup: ArrangementSetup | undefined): ArrangementSettings 
     settings.key = resolveKey(key);
   }
   if (meters !== undefined) {
-    settings.meters = metersFrom(meters);
+    settings.meters = resolveMeters({ meters }, 'arrangement meters');
   }
   if (timeline !== undefined) {
     assertDataObject(timeline, 'arrangement timeline');
@@ -316,7 +308,7 @@ function analysisOptionsOf(
     opts.key = resolveKey(key);
   }
   if (meters !== undefined) {
-    opts.meters = metersFrom(meters);
+    opts.meters = resolveMeters({ meters }, 'arrangement meters');
   }
   return opts;
 }
