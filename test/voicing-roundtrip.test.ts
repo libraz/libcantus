@@ -284,7 +284,10 @@ describe('the generator marked by its own checker', () => {
         expect(voicing, name).toHaveLength(4);
       }
     }
-  });
+    // Budgeted for catching a hang, not for stating a speed: the sweep voices
+    // every chord of every progression, and a shared runner counting every call
+    // takes several times what a machine to itself does.
+  }, 180_000);
 
   it('marks an exercise that does break a rule', () => {
     // The absences above are only worth something if the checker they are read
@@ -300,10 +303,7 @@ describe('the generator marked by its own checker', () => {
     for (const found of marked) {
       expect(WATCHED_KINDS).toContain(found.kind);
     }
-    // Budgeted for catching a hang, not for stating a speed: the sweep voices
-    // every chord of every progression, and a shared runner under coverage
-    // takes several times what a machine to itself does.
-  }, 180_000);
+  });
 
   it('writes the same voicings every time it is asked', () => {
     for (const { symbols, key } of SWEEP) {

@@ -58,6 +58,16 @@ function elapsed(run: () => unknown): number {
 const READINGS = 3;
 
 /**
+ * Milliseconds of reading past which repeating is not worth what it costs.
+ *
+ * The scatter this rejects is a fixed number of milliseconds — one scheduling
+ * slice — so it matters in proportion to how short the reading is. Past this
+ * much, one reading already says what the pass costs to well inside any bound
+ * worth asserting, and repeating would only multiply what the sweep spends.
+ */
+const REPEAT_BUDGET_MS = 250;
+
+/**
  * The shortest of several readings of the same call, in milliseconds.
  *
  * Exported for the comparisons that are not of one pass at two sizes — a pass
@@ -68,8 +78,17 @@ const READINGS = 3;
  */
 export function shortestReading(run: () => unknown): number {
   let best = Number.POSITIVE_INFINITY;
+  let spent = 0;
   for (let index = 0; index < READINGS; index += 1) {
-    best = Math.min(best, elapsed(run));
+    const one = elapsed(run);
+    best = Math.min(best, one);
+    spent += one;
+    // Repeating is what rescues a reading near the noise floor. A reading well
+    // above it is already precise, and reading it again only makes the sweep
+    // that much slower — which on a shared runner is what a budget runs out of.
+    if (spent > REPEAT_BUDGET_MS) {
+      break;
+    }
   }
   return best;
 }

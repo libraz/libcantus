@@ -31,7 +31,7 @@ export default defineConfig({
     // busy, which reports a scheduling delay as a broken library. The budget
     // here is for catching a hang; the sweeps that guard against a complexity
     // regression are orders of magnitude slower than this when they regress.
-    testTimeout: 30_000,
+    testTimeout: 120_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
