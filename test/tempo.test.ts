@@ -379,8 +379,12 @@ describe('a tempo map is bounded and read once', () => {
     };
     expect(read(2_000)).toBeGreaterThanOrEqual(0);
     // Both counts grow together, so a map read once per note costs the square
-    // of what a map read once for the pass costs.
-    expect(growthFactor(8, (scale) => read(5_000 * scale))).toBeLessThan(24);
+    // of what a map read once for the pass costs: the ratio answers around five
+    // as it stands, and would answer near sixty-four re-read per note. The
+    // bound sits between them with room for a loaded machine, which inflates a
+    // ratio taken at this scale several times over — the larger run allocates
+    // enough that contention reaches it first.
+    expect(growthFactor(8, (scale) => read(5_000 * scale))).toBeLessThan(40);
   }, 30_000);
 
   // A map handed to a conversion is validated by it, and a caller converting

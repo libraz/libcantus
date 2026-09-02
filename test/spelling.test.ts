@@ -14,6 +14,7 @@ import {
   spellPitchClasses,
   spellScale,
 } from '../src/theory/spelling/index.js';
+import { shortestReading } from './support/growth.js';
 
 describe('spellScale', () => {
   it('spells C major with natural letters', () => {
@@ -700,9 +701,17 @@ describe('non-heptatonic scales lean the way the scale does', () => {
       return performance.now() - started;
     };
     const first = masks[0] ?? 1;
+    // The worked side has to be the cold reading: the answer is remembered, so
+    // a second pass over the same masks would time the memo rather than the
+    // work. Read once, it can only be inflated by a busy machine, and that
+    // moves the ratio away from the bound rather than through it.
     const worked = spellAll((round) => masks[round] ?? first);
-    const reread = spellAll(() => first);
-    expect(worked / Math.max(reread, 1)).toBeGreaterThan(5);
+    // The re-read is the cheap side, and the cheap side is where one
+    // descheduled slice is a large share of the reading — which is what used to
+    // collapse this ratio under a loaded suite. It repeats, so it is read the
+    // honest way.
+    const reread = shortestReading(() => spellAll(() => first));
+    expect(worked / Math.max(reread, 0.01)).toBeGreaterThan(5);
     // And the reading is the one it always was.
     expect(Key.named('octatonicHalfWhole', 'C').noteNames()).toEqual(
       Key.named('octatonicHalfWhole', 'C').noteNames(),

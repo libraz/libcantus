@@ -57,8 +57,16 @@ function elapsed(run: () => unknown): number {
  */
 const READINGS = 3;
 
-/** The shortest of several readings of the same call. */
-function shortest(run: () => unknown): number {
+/**
+ * The shortest of several readings of the same call, in milliseconds.
+ *
+ * Exported for the comparisons that are not of one pass at two sizes — a pass
+ * against the memo of itself, say — but that read a timing and so need it read
+ * the same honest way. A call whose answer is remembered must not be read this
+ * way on the working side: every reading after the first would be measuring the
+ * memo. Use it on the side that can be repeated.
+ */
+export function shortestReading(run: () => unknown): number {
   let best = Number.POSITIVE_INFINITY;
   for (let index = 0; index < READINGS; index += 1) {
     best = Math.min(best, elapsed(run));
@@ -83,9 +91,9 @@ export function growthFactor(times: number, run: (scale: number) => unknown): nu
   // compiler warming up on the code both of them execute.
   run(1);
   const small = Math.max(
-    shortest(() => run(1)),
+    shortestReading(() => run(1)),
     1,
   );
-  const large = shortest(() => run(times));
+  const large = shortestReading(() => run(times));
   return large / small;
 }

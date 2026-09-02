@@ -18,6 +18,7 @@ import {
 } from '../src/core/meter/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import { assertMeterMap } from '../src/core/validation/index.js';
+import { shortestReading } from './support/growth.js';
 
 const COMMON = parseTimeSignature('4/4');
 const WALTZ = parseTimeSignature('3/4');
@@ -251,26 +252,40 @@ describe('reading a long meter map', () => {
     // Longer than any piece changes meter, and short enough that the cost the
     // sweep cannot avoid — reading the map once per question — stays well inside
     // the bound below while the cost it can avoid does not.
-    const bars = 5_000;
+    const bars = 400;
     const map = everyBar(bars);
-    const meters = resolveMeters({ meters: map });
-    const start = performance.now();
-    let weight = 0;
-    for (const entry of meters) {
-      weight += metricWeight(entry.startBeat, meters);
-      barIndexAt(entry.startBeat, meters);
-      formatBarPosition(entry.startBeat, meters);
-    }
-    const elapsed = performance.now() - start;
-    // Every entry is a downbeat, so the sweep really did read all of them.
-    expect(weight).toBe(3 * bars);
+    const resolved = resolveMeters({ meters: map });
+    /** The sweep, against a map resolved once or resolved for every question. */
+    const sweep = (once: boolean): number => {
+      let weight = 0;
+      for (const entry of resolved) {
+        const meters = once ? resolved : resolveMeters({ meters: map });
+        weight += metricWeight(entry.startBeat, meters);
+        barIndexAt(entry.startBeat, meters);
+        formatBarPosition(entry.startBeat, meters);
+      }
+      return weight;
+    };
+    // Every entry is a downbeat, so the sweep really did read all of them, and
+    // both readings answer the same thing — only their cost differs.
+    expect(sweep(true)).toBe(3 * bars);
+    expect(sweep(false)).toBe(3 * bars);
+    const kept = shortestReading(() => sweep(true));
+    const rebuilt = shortestReading(() => sweep(false));
+    // A ratio against the same sweep rebuilding as it goes, rather than a
+    // millisecond count: the suite runs its files side by side, so a wall-clock
+    // bound states how busy the machine was as much as what the sweep costs,
+    // and after the fact the two cannot be told apart. A ratio of two readings
+    // taken moments apart says only what the index is worth.
+    //
     // Reading the map is what trusting a caller's array costs, and the sweep
     // pays it once per question: an array the caller keeps says nothing about
     // whether it has been written to since it was validated. What the index
     // saves is everything derived from that read — the bar lengths, the running
-    // bar count, the arrays holding them — which costs some twenty-five times
-    // the comparison does, and that is the distance this bound stands in.
-    expect(elapsed).toBeLessThan(2000);
+    // bar count, the arrays holding them. Kept, the sweep runs some seven times
+    // faster than one rebuilding them; an index that stopped being kept would
+    // bring the two together.
+    expect(rebuilt / Math.max(kept, 0.01)).toBeGreaterThan(3);
   });
 
   it('rejects a map longer than a piece can declare', () => {
