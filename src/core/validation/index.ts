@@ -187,6 +187,31 @@ export function assertRecord<T>(value: unknown, name: string): T {
 }
 
 /**
+ * Require a value to be callable before an entrance calls it.
+ *
+ * The third of the shape checks, for the entrances whose material is a callback:
+ * which chord sounds at a beat, or which material a part recognises. A caller
+ * working in JavaScript reaches these with a value that is not a function, and
+ * calling it reports the library's own `TypeError` from inside the walk, naming
+ * neither the argument nor the caller.
+ *
+ * @param value The value to check.
+ * @param name What the value is, for the error message.
+ * @returns The value as a function.
+ * @throws If the value is not callable.
+ * @category Core
+ */
+export function assertFunction<T extends (...args: never[]) => unknown>(
+  value: unknown,
+  name: string,
+): T {
+  if (typeof value !== 'function') {
+    throw new InvalidInputError(`${name} must be a function; received ${describeRejected(value)}`);
+  }
+  return value as T;
+}
+
+/**
  * Require a value to be one of a fixed set of names.
  *
  * TypeScript checks string-union options at compile time only, so a value that
@@ -210,9 +235,15 @@ export function assertOneOf<const T extends string>(
   allowed: readonly T[],
   name: string,
 ): T {
-  if (typeof value !== 'string' || !(allowed as readonly string[]).includes(value)) {
+  // The allowed set is walked on both paths — the membership test and the
+  // message — so it is checked as a list before either. Building the message is
+  // the reason this matters: a validator that throws its own `TypeError` while
+  // describing what it rejected reports a bug in this library instead of the
+  // input, which is the same thing {@link describeRejected} exists to avoid.
+  const names = assertArray<T>(allowed, `${name} allowed values`);
+  if (typeof value !== 'string' || !(names as readonly string[]).includes(value)) {
     throw new InvalidInputError(
-      `${name} must be one of ${allowed.join(', ')}; received ${describeRejected(value)}`,
+      `${name} must be one of ${names.join(', ')}; received ${describeRejected(value)}`,
     );
   }
   return value as T;
