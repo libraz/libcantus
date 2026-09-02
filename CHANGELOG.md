@@ -33,7 +33,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stack of thirds spells by accident; a caller holding pitch classes alone gets
   those letters from `augmentedSixthFromPitchClasses`.
 
+### Changed
+
+- **The passes that read a piece read it once.** Four analyses asked a question
+  of the whole input once per unit of that same input, so the cost grew with the
+  square of the piece and a request the budget accepted could take half a minute
+  on scans whose answer never changed. `detectModulations` now merges its
+  shortest key areas from a heap with running score totals rather than
+  regrouping the whole search per merge, reads each region's confidence from the
+  chords it was grouped from, and finds each modulation's pivot through one
+  table of the chords in the order they finish. `extractMotifs` indexes the
+  motifs it has kept by the note each of their statements starts on, so a
+  candidate is weighed only against the ones that could hold it. `spellLine` and
+  every other reading of a scale no diatonic mode holds — a pentatonic, the
+  blues scale, the octatonic sets — works that scale's letters out once instead
+  of once per tone asked about. `Score.playability` holds the tempo map for the
+  length of its pass instead of handing it back to a conversion per note, and
+  the conversions themselves place a beat by binary search over the map rather
+  than by walking it. Every answer is unchanged.
+
+- **A tension sample writes its texture down once.** `sampleTension` rebuilt the
+  whole list of sounding voices for each distinct pitch it evaluated, so a
+  sixty-voice pad spent thousands of short-lived objects on a single beat to
+  state the same texture over and over. The list is built once per sample and
+  the candidate's own occurrence lifted out of it; every tension reading is
+  identical.
+
 ### Fixed
+
+- **A budget that passes stands for the table the search fills.** The key search
+  was charged for its slots and then built a row of twenty-four candidate keys
+  per slot, so `keyTimelineFromNotes`, `detectModulations` and every analysis
+  reaching them through a chord timeline accepted a span and then allocated
+  twenty-four times what it had been measured at. Both entry points are charged
+  for the table now, and the tables themselves are allocated through one helper
+  that charges what it hands out — a search that cannot obtain a table without
+  being charged for it cannot obtain one uncharged. A span whose candidate rows
+  outweigh the budget is refused rather than accepted and then run; the chord
+  timeline also asks its own budget before the key search rather than after it,
+  so an oversized request is refused before the passes it pays for begin.
+
+- **A tempo map is bounded, and read once.** `beatsToSeconds` and its siblings
+  re-validated the whole map on every conversion asked of them and walked it
+  from the origin to the beat in question, so timing a piece against a recorded
+  accelerando — a tempo event per tick, which is what a MIDI import gives — cost
+  the note count times the map. A map may now declare at most a hundred thousand
+  changes, the same bound the meter map takes, and a map already validated and
+  unchanged since is recognised rather than validated again.
+
+- **`extractMotifs` is bounded by the fragments it compares, not only by the
+  windows it enumerates.** The pass that drops a cell already stated inside a
+  longer motif was charged for nothing, so a melody repetitive enough to keep
+  tens of thousands of motifs ran for seconds after passing every check. Those
+  comparisons are charged as they are spent, and a melody that would run far
+  past what it was measured at is refused.
+
+- **A key region's confidence is read from the chords the region holds.** Where
+  the chord segments given to `detectModulations` overlap each other — a chord
+  timeline's do not, but a caller may build a list whose spans do — a chord
+  held past the segment after it argued for both regions' keys. Each segment is
+  one slot of the search, so it argues for the region its own slot falls in.
 
 - **A bar is as long as the bar is, not as long as its signature says.**
   `beatsPerBarAt` returned the nominal length of the signature in force. A
