@@ -513,6 +513,88 @@ describe('the phrase search does not invent a break-even boundary', () => {
   });
 });
 
+describe('a boundary the evidence gives nothing for', () => {
+  /** A drone: one chord sounding through the whole span, arguing nowhere. */
+  const drone: NoteEvent[] = [48, 55, 60].map((pitch) => ({
+    pitch,
+    startBeat: 0,
+    durationBeat: 64,
+  }));
+
+  it('is not cut at, however well the lengths would fit', () => {
+    // A hypermeter read with no confidence registers its downbeats at strength
+    // zero. The search weighs a cut by the two lengths it makes as well as by
+    // the evidence, so over music that argues nowhere the length term alone put
+    // boundaries in the reading — reported with a confidence a caller cannot
+    // tell from an evidenced one.
+    const { timeline } = chordTimelineFromNotes(drone, { key: majorKey(0) });
+    const phrases = phrasesFromTimeline(timeline, drone, {
+      key: majorKey(0),
+      hypermeter: {
+        groupBars: 4,
+        downbeats: [0, 16, 32, 48],
+        confidence: 0,
+        rationale: 'a grouping with nothing behind it',
+      },
+      expectedPhraseBeats: 16,
+    });
+    expect(phrases).toHaveLength(1);
+    expect(phrases[0]?.startBeat).toBe(0);
+    expect(phrases[0]?.endBeat).toBe(64);
+  });
+
+  it('still cuts where the same grouping is read with confidence', () => {
+    // Nothing is being suppressed: the same downbeats with evidence behind them
+    // are boundaries.
+    const { timeline } = chordTimelineFromNotes(drone, { key: majorKey(0) });
+    const phrases = phrasesFromTimeline(timeline, drone, {
+      key: majorKey(0),
+      hypermeter: {
+        groupBars: 4,
+        downbeats: [0, 16, 32, 48],
+        confidence: 1,
+        rationale: 'a grouping the search is sure of',
+      },
+      expectedPhraseBeats: 16,
+    });
+    expect(phrases.length).toBeGreaterThan(1);
+  });
+});
+
+describe('a phrase says the same thing twice about its cadence', () => {
+  it('names cadence among its signals exactly when it closes on one', () => {
+    // One cadence hit can register at two boundary positions — the chord's end
+    // and the bar line it is held over — and the later phrase drops the hit as
+    // having arrived before it began. The signals were taken from the boundary
+    // as read, so such a phrase reported `closing on no cadence; boundary from
+    // cadence`, which states both halves of one fact and contradicts itself.
+    const harmony: NoteEvent[] = [
+      ...blockChord([48, 60, 64, 67], 0, 4),
+      ...blockChord([53, 57, 60, 65], 4, 4),
+      ...blockChord([55, 59, 62, 67], 8, 4),
+      ...blockChord([48, 60, 64, 67], 12, 20),
+    ];
+    const melody: NoteEvent[] = [
+      ...quarters([72, 74, 76, 77], 0),
+      ...quarters([79, 77, 76, 74], 4),
+      ...quarters([72, 74, 76, 79], 8),
+      { pitch: 72, startBeat: 12, durationBeat: 4 },
+      ...quarters([72, 76, 79, 76], 16),
+      ...quarters([72, 76, 79, 76], 20),
+      ...quarters([72, 76, 79, 76], 24),
+      { pitch: 72, startBeat: 28, durationBeat: 4 },
+    ];
+    const { timeline } = chordTimelineFromNotes([...harmony, ...melody], { key: majorKey(0) });
+    const phrases = phrasesFromTimeline(timeline, melody, { key: majorKey(0) });
+    expect(phrases.length).toBeGreaterThan(1);
+    for (const phrase of phrases) {
+      expect(phrase.signals.includes('cadence'), `${phrase.startBeat}`).toBe(
+        phrase.cadence !== null,
+      );
+    }
+  });
+});
+
 describe('an upbeat is never a hypermetric downbeat', () => {
   // A one-beat pickup, then harmony that turns at bars 3, 7 and 11 — a four-bar
   // grouping in phase 3. Bar -1 sits on that phase too, which is exactly the

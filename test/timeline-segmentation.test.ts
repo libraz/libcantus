@@ -327,6 +327,23 @@ describe('chordTimelineFromNotes exact output', () => {
   });
 });
 
+describe('a note that weighs nothing', () => {
+  it('does not become the bass of the window it sounds in', () => {
+    // A velocity of zero is a note event this library accepts — a note-off
+    // written as one, a muted ghost layer — and it weighs nothing in the
+    // histogram. Taken as the window's lowest note all the same, it named a
+    // pitch class the histogram had never counted, so the reading found no bass
+    // among the pitches it selected and dropped the inversion with it.
+    const firstInversion = blockChord([64, 67, 72], 0, 4);
+    const silent: NoteEvent = { pitch: 60, startBeat: 0, durationBeat: 4, velocity: 0 };
+    const read = (notes: NoteEvent[]) =>
+      chordTimelineFromNotes(notes, { key: C_MAJOR }).timeline.segments[0]?.chord;
+    const plain = read(firstInversion);
+    expect(plain?.bassPc).toBe(4);
+    expect(read([silent, ...firstInversion])).toEqual(plain);
+  });
+});
+
 describe('chordTimelineFromNotes dynamic segmentation on degenerate input', () => {
   const cases: { name: string; notes: NoteEvent[] }[] = [
     { name: 'a single sustained note', notes: [{ pitch: 60, startBeat: 0, durationBeat: 4 }] },

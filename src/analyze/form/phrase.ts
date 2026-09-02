@@ -741,6 +741,13 @@ export function phrasesFromTimeline(
     .filter(
       (boundary) => boundary.beat > spanStart + BEAT_EPS && boundary.beat < spanEnd - BEAT_EPS,
     )
+    // A stop nothing argues for is not a boundary that a length can buy. A
+    // hypermeter position read with no confidence registers at strength zero,
+    // and the path search weighs a cut by the two lengths it makes as well as
+    // by the evidence: over a pedal point or a drone, where no cadence and no
+    // harmonic novelty argue anywhere, the length term alone put boundaries in
+    // the reading that a caller cannot tell from evidenced ones.
+    .filter((boundary) => readBoundary(boundary).strength > 0)
     .sort((a, b) => a.beat - b.beat);
   const endBoundary = boundaries.get(Math.round(spanEnd / BEAT_EPS)) ?? {
     beat: spanEnd,
@@ -796,17 +803,23 @@ export function phrasesFromTimeline(
       downbeatKeys.has(Math.round(endBeat / BEAT_EPS)),
       isLast,
     );
+    // The signals say what the boundary was read from, so a cadence dropped as
+    // belonging to an earlier phrase is dropped from them too: reporting a
+    // phrase closing on no cadence whose boundary came `from cadence` states
+    // both halves of one fact and contradicts itself.
+    const signals =
+      cadence === null ? reading.signals.filter((signal) => signal !== 'cadence') : reading.signals;
     const bars = barSpanOf(startBeat, endBeat, meters);
     phrases.push({
       startBeat,
       endBeat,
       cadence,
-      signals: reading.signals,
+      signals,
       confidence,
       structuralWeight,
       rationale:
         `Phrase of ${bars} bar(s) closing on ${describeCadence(cadence)}; ` +
-        `boundary from ${reading.signals.length === 0 ? 'the end of the span' : reading.signals.join(', ')}`,
+        `boundary from ${signals.length === 0 ? 'the end of the span' : signals.join(', ')}`,
     });
     from = to;
   }

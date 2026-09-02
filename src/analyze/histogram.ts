@@ -150,8 +150,15 @@ export function windowWeights(
     const pc = pitchClass(note.pitch);
     // The accent is asked for only where the onset falls in the window: a note
     // held across the boundary is already counted for its part of it.
-    weights[pc] = (weights[pc] ?? 0) + noteWeight(note, overlap, onsetInWindow ? meter : undefined);
-    if (note.pitch < lowestPitch) {
+    const weight = noteWeight(note, overlap, onsetInWindow ? meter : undefined);
+    weights[pc] = (weights[pc] ?? 0) + weight;
+    // A note the histogram does not count cannot be the bass either. A velocity
+    // of zero is a note event the library accepts — a note-off written as one,
+    // a muted ghost layer — and it weighs nothing, so a lowest note taken from
+    // it named a pitch class the histogram had never heard of: the reading that
+    // follows then found no bass among the pitches it selected and dropped the
+    // inversion, the slash bass and the augmented-sixth accounting with it.
+    if (weight > BEAT_EPS && note.pitch < lowestPitch) {
       lowestPitch = note.pitch;
     }
   }
