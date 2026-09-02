@@ -117,6 +117,7 @@ const EXPECTED_EXPORTS = [
   'assertKeyVariant',
   'assertMeterMap',
   'assertMidiPitch',
+  'assertModeMask',
   'assertNoteEvent',
   'assertNoteEvents',
   'assertOneOf',
