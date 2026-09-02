@@ -193,6 +193,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tie-break rather than by the melody. Every diminished and augmented triad is
   now charged for what it is, whichever tier of the vocabulary offered it.
 
+- **A key region shorter than the minimum is left only where the span ends.**
+  The first slot of the key search begins a whole slot before the music
+  wherever the first onset is not on a slot boundary, and the reported start is
+  clipped to where the music starts — so an excerpt whose first note is a beat
+  into the bar came back with a key band three beats wide in front of it, which
+  the documented minimum says is only ever left at the end of the analysed span.
+  Such a head is folded into the region after it, which then covers those slots
+  and is read from them.
+
 - **A note that weighs nothing is not the bass of the window it sounds in.** A
   velocity of zero is a note event this library accepts — a note-off written as
   one, a muted ghost layer — and it contributes nothing to the histogram. Taken
