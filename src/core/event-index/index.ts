@@ -1,6 +1,6 @@
 import { BEAT_EPS } from '../meter/internal.js';
 import type { NoteEvent } from '../types.js';
-import { assertFiniteNumber, assertNoteEvents } from '../validation/index.js';
+import { assertFiniteNumber, assertNoteEvents, assertOptions } from '../validation/index.js';
 
 /**
  * A validated note retaining its position in the caller's original array.
@@ -116,8 +116,9 @@ export function createNoteEventIndex(
   events: readonly NoteEvent[],
   options: NoteEventIndexOptions = {},
 ): NoteEventIndex {
-  assertNoteEvents(events, options.name ?? 'note events', options);
-  const tieBreak = options.tieBreak ?? 'highest';
+  const asked = assertOptions(options, 'options');
+  assertNoteEvents(events, asked.name ?? 'note events', asked);
+  const tieBreak = asked.tieBreak ?? 'highest';
   // Each wrapper is frozen, not only the array and the note inside it: `endBeat`
   // is what the active-note search is built from, so a host that writes to it
   // would leave the index answering from a span nothing else knows about.

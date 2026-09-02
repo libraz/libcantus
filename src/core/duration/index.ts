@@ -14,6 +14,7 @@ import {
   assertGenerationBudget,
   assertInteger,
   assertOneOf,
+  assertOptions,
   assertPositiveInt,
   describeRejected,
 } from '../validation/index.js';
@@ -235,7 +236,7 @@ export function durationToBeats(
   options: { beatUnit?: NoteValue | DurationData } = {},
 ): number {
   const quarters = quartersOf(assertDuration(duration, 'duration'));
-  return quarters / beatQuarters(options);
+  return quarters / beatQuarters(assertOptions(options, 'options'));
 }
 
 /**
@@ -271,7 +272,7 @@ export function beatsToDuration(
   options: { beatUnit?: NoteValue | DurationData } = {},
 ): SpelledDuration {
   assertPositiveBeats(beats, 'beats');
-  const spelled = spellQuarters(beats * beatQuarters(options));
+  const spelled = spellQuarters(beats * beatQuarters(assertOptions(options, 'options')));
   if (spelled === undefined) {
     throw new NoSolutionError(`no single note value spells ${beats} beats`);
   }
@@ -310,7 +311,7 @@ export function beatsToTiedDurations(
   options: { beatUnit?: NoteValue | DurationData } = {},
 ): SpelledDuration[] {
   assertPositiveBeats(beats, 'beats');
-  const quarters = beats * beatQuarters(options);
+  const quarters = beats * beatQuarters(assertOptions(options, 'options'));
   const single = spellQuarters(quarters);
   if (single !== undefined) {
     return [single];

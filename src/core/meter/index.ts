@@ -14,6 +14,7 @@ import {
   assertFiniteNumber,
   assertInteger,
   assertMeterMap,
+  assertOptions,
   assertPositiveInt,
   assertRange,
   assertRecord,
@@ -367,9 +368,10 @@ function readTimeSignature(text: string): TimeSignature {
  * @category Rhythm & Meter
  */
 export function formatTimeSignature(ts: MeterLike, opts: { grouping?: boolean } = {}): string {
+  const asked = assertOptions(opts, 'opts');
   const signature = readSignature(ts, 'ts');
   const grouping = signature.grouping;
-  if (opts.grouping === true && grouping !== undefined) {
+  if (asked.grouping === true && grouping !== undefined) {
     if (groupingSumOf(signature) === signature.numerator) {
       return `${grouping.join('+')}/${signature.denominator}`;
     }
@@ -576,6 +578,20 @@ export function resolveMeters(
     throw new InvalidInputError(
       `${name} and ts name the same thing; give one or the other, not both`,
     );
+  }
+  // A null is refused rather than defaulted: the coalescing below reads it as
+  // absent, so a field a caller wrote `null` into — which is what a host with no
+  // meter to give passes on — would silently be answered with the library's own
+  // bar instead of with the meter the caller meant to name.
+  for (const [field, value] of [
+    ['meters', opts.meters],
+    ['ts', opts.ts],
+  ] as const) {
+    if ((value as unknown) === null) {
+      throw new InvalidInputError(
+        `${field === 'meters' ? name : 'ts'} must name a meter, not null`,
+      );
+    }
   }
   const given = opts.meters ?? opts.ts;
   if (given === undefined) {

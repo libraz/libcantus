@@ -13,7 +13,7 @@
  */
 
 import { InvalidInputError } from '../errors/index.js';
-import { assertOneOf, describeRejected } from '../validation/index.js';
+import { assertOneOf, assertOptions, describeRejected } from '../validation/index.js';
 import type { Note } from './index.js';
 
 /**
@@ -550,7 +550,8 @@ export function readNoteName(text: string, opts?: NoteNameOptions): Note {
  * The letter must already be reduced to 0..6; the public entry point does that.
  */
 export function writeNoteName(note: Note, opts?: NoteNameOptions): string {
-  const system = opts?.system === undefined ? 'english' : assertSystem(opts.system);
+  const asked = assertOptions(opts, 'opts');
+  const system = asked.system === undefined ? 'english' : assertSystem(asked.system);
   const table = tableOf(system);
   const name =
     table === 'german'
@@ -603,7 +604,8 @@ export function readKeyName(text: string, opts?: NoteNameOptions): KeyName {
  * the public entry point does both.
  */
 export function writeKeyName(key: KeyName, opts?: NoteNameOptions): string {
-  const system = opts?.system === undefined ? 'english' : assertSystem(opts.system);
+  const asked = assertOptions(opts, 'opts');
+  const system = asked.system === undefined ? 'english' : assertSystem(asked.system);
   const table = tableOf(system);
   const word = MODE_WORDS[table][key.mode];
   const tonic = writeNoteName(key.tonic, { system });

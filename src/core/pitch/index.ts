@@ -15,6 +15,7 @@ import {
   assertInteger,
   assertMidiPitch,
   assertOneOf,
+  assertOptions,
   assertRecord,
   describeRejected,
 } from '../validation/index.js';
@@ -514,14 +515,16 @@ export function transposeNote(
   semitones: number,
   opts?: { spelling?: 'sharp' | 'flat' },
 ): Note {
+  assertNote(note, 'note');
+  const asked = assertOptions(opts, 'opts');
   if (!Number.isFinite(semitones)) {
     throw new InvalidInputError(`semitones must be a finite number; received ${semitones}`);
   }
   const steps = Math.round(semitones);
-  if (opts?.spelling !== undefined) {
+  if (asked.spelling !== undefined) {
     return note.octave === undefined
-      ? bareOf(midiToNote(60 + mod12(noteToPitchClass(note) + steps), opts.spelling))
-      : midiToNote(noteToMidi(note) + steps, opts.spelling);
+      ? bareOf(midiToNote(60 + mod12(noteToPitchClass(note) + steps), asked.spelling))
+      : midiToNote(noteToMidi(note) + steps, asked.spelling);
   }
   const direction = steps < 0 ? -1 : 1;
   const magnitude = Math.abs(steps);

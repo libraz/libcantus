@@ -1,5 +1,5 @@
 import { pitchClassOf } from '../pitch/index.js';
-import { assertFiniteSemitones } from '../validation/index.js';
+import { assertFiniteSemitones, assertFlag } from '../validation/index.js';
 
 /**
  * Counterpoint classification of a harmonic interval by consonance.
@@ -60,6 +60,7 @@ function simpleInterval(semitones: number): number {
  * @category Pitch & Intervals
  */
 export function classifyInterval(semitones: number, twoVoice = true): ConsonanceClass {
+  assertFlag(twoVoice, 'twoVoice');
   const pc = simpleInterval(semitones);
   if (pc === 0 || pc === 7) {
     return ConsonanceClass.PerfectConsonance;
@@ -104,6 +105,7 @@ export function isPerfectInterval(semitones: number): boolean {
  * @category Pitch & Intervals
  */
 export function isConsonantInterval(semitones: number, twoVoice = true): boolean {
+  assertFlag(twoVoice, 'twoVoice');
   const pc = simpleInterval(semitones);
   if (pc === 5) {
     return !twoVoice;
