@@ -224,15 +224,11 @@ export function pitchToScaleDegree(pitch: number, key: KeyLike): number {
  * @category Scales
  */
 export function diatonicPitchClasses(key: KeyLike): number[] {
-  const scale = toKeyScale(key);
-  const root = pitchClass(scale.rootPc);
-  const pcs: number[] = [];
-  for (let n = 0; n < 12; n += 1) {
-    if (((scale.modeMask12 >> n) & 1) === 1) {
-      pcs.push((root + n) % 12);
-    }
-  }
-  return pcs.sort((a, b) => a - b);
+  // The same walk of the mask, sorted: two copies of it would read alike today
+  // and drift the moment one of them was corrected, which is a difference
+  // nothing would report. The array comes back fresh, so sorting it in place
+  // touches nothing the caller holds.
+  return scaleTonesInDegreeOrder(key).sort((a, b) => a - b);
 }
 
 /**

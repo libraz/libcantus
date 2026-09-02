@@ -8,13 +8,19 @@ import {
   MELODIC_MINOR_MASK,
   majorKey,
   minorKey,
+  NAMED_SCALES,
   NATURAL_MINOR_MASK,
   nearestScaleTone,
   pitchToScaleDegree,
   scaleByName,
+  scaleTonesInDegreeOrder,
+  WORLD_SCALES,
 } from '../src/theory/scale/index.js';
 
 const cMajor: KeyScale = { rootPc: 0, modeMask12: MAJOR_MASK };
+
+/** Every scale the library names, so no reading is checked on major alone. */
+const ALL_SCALE_NAMES = [...Object.keys(NAMED_SCALES), ...Object.keys(WORLD_SCALES)];
 
 describe('diatonicPitchClasses', () => {
   it('yields the C major scale', () => {
@@ -24,6 +30,21 @@ describe('diatonicPitchClasses', () => {
   it('is sorted ascending for a non-zero root', () => {
     const gMajor = majorKey(7);
     expect(diatonicPitchClasses(gMajor)).toEqual([0, 2, 4, 6, 7, 9, 11]);
+  });
+
+  it('is the degree-ordered reading sorted, for every named scale and root', () => {
+    // One walk of the mask, read two ways. Written twice they agreed today and
+    // would drift the moment one copy was corrected, and nothing would report
+    // the difference: the two answers are the same set in two orders.
+    for (const name of ALL_SCALE_NAMES) {
+      for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+        const key = scaleByName(name, rootPc);
+        const where = `${name}/${rootPc}`;
+        expect(diatonicPitchClasses(key), where).toEqual(
+          [...scaleTonesInDegreeOrder(key)].sort((a, b) => a - b),
+        );
+      }
+    }
   });
 });
 
