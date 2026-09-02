@@ -92,7 +92,7 @@ moved.pitches; // [53, 60, 65, 69]
 sounding.costTo(moved); // 8
 ```
 
-Pass `previousChord` alongside `key` when the chord being left had a seventh: chordal-seventh resolution is then scored exactly as `voiceProgression` scores it.
+Pass `previousChord` whenever you have the chord being left, not only when it carried a seventh. Three rules are read from that chord — a chordal seventh's resolution, a leading tone's resolution, and the cross relation between the two chords — and none of them is scored without it, because a voicing does not say what it was written on. All three are then scored exactly as `voiceProgression` scores them, which is what keeps the generator and `checkPartWriting` agreeing about the same pair.
 
 ## Styled voicings
 

@@ -86,14 +86,22 @@ export type VoicingOptions = {
   /**
    * The prevailing key, as a key name, a key/scale, or a `Key`. Supplying it
    * enables the rules that only make sense relative to a tonic: the leading
-   * tone is neither doubled nor left unresolved. Without it, voicings are
-   * chosen from chord structure and voice-leading distance alone.
+   * tone is not doubled, and — where the chord being left is known as well —
+   * it is not left unresolved. Without it, voicings are chosen from chord
+   * structure and voice-leading distance alone.
    */
   key?: KeyLike;
   /**
-   * The chord that produced the current voicing passed to {@link nextVoicing},
-   * as a chord symbol, chord data, or a `Chord`. When supplied, chordal-seventh
-   * resolution is scored exactly as it is by {@link voiceProgression}.
+   * The chord the current voicing was written on, as a chord symbol, chord
+   * data, or a `Chord`.
+   *
+   * It enables every rule that is read from the chord being left: the
+   * resolution of a chordal seventh, the resolution of a leading tone, and the
+   * cross relation between the two chords. All three are scored exactly as
+   * {@link voiceProgression} scores them, and none of them is scored without
+   * it — a leading tone cannot be told from the third of a chord that merely
+   * contains it until the chord it belongs to is known. Supply it whenever the
+   * caller has the chord, not only where that chord carried a seventh.
    */
   previousChord?: ChordLike;
 };

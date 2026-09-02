@@ -150,10 +150,14 @@ export function createCandidateBuffer(): VoicingCandidates {
 
 /**
  * All MIDI pitches of a pitch class inside an inclusive range, ordered from the
- * centre of the range outward (ties break toward the lower pitch). Enumerating
- * centre-outward keeps the candidate set balanced around the register when it
- * is truncated at {@link MAX_CANDIDATES}, instead of skewing to the low octaves
- * that a plain ascending scan would visit first.
+ * centre of the range outward (ties break toward the lower pitch).
+ *
+ * The ordering is within one pitch class, not across them: the enumeration
+ * above visits the chord's pitch classes in their own order and walks each
+ * one's octaves centre-outward. So a candidate set truncated at
+ * {@link DEFAULT_MAX_CANDIDATES} holds the register-central octaves of the
+ * pitch classes it reached, rather than the low octaves a plain ascending scan
+ * would visit first — which is what this ordering buys, and no more.
  */
 function pitchesForPc(pc: number, range: VoiceRange): number[] {
   const result: number[] = [];

@@ -204,10 +204,15 @@ const INDEX_CACHE = new WeakMap<MeterMap, MeterIndex>();
  * Reading every entry is what a caller's array costs to trust, and one question
  * pays it once: the guard that answers whether the map is valid reads the whole
  * array, and the helpers that then place the bars answer out of the index that
- * read produced rather than reading it again per bar arithmetic. The guard never
- * consults this — it is the thing that writes it — so the mark is renewed at the
- * start of every question and never outlives one, which is the only window in
- * which a caller can write to its array.
+ * read produced rather than reading it again per bar arithmetic. The guard is
+ * what writes the mark, never what reads it.
+ *
+ * The mark itself is a module variable and outlives the question that set it.
+ * What makes it safe is not that it is cleared but that every public meter
+ * entrance reaches these helpers only after that same call has read the whole
+ * array through the guard, and JavaScript hands a caller no window in between.
+ * A helper reached without such a read would answer out of a previous reading
+ * of the same array, so any new caller belongs behind the guard as well.
  */
 let readMap: MeterMap | undefined;
 let readIndex: MeterIndex | undefined;

@@ -297,7 +297,13 @@ export type ArrangementOptions = {
    */
   pickupBeats?: number;
   /**
-   * Chord-slot length in beats; defaults to the length of the opening bar.
+   * Expected chord length in beats; defaults to the length of the opening bar.
+   *
+   * A prior rather than a grid: the arrangement analysis infers its harmony
+   * with dynamic segmentation, where the longer a chord is expected to last the
+   * more evidence a change needs before the search will place one. A chord may
+   * still begin at any position the notes argue for. Supply `timeline` to
+   * analyse against boundaries you have fixed yourself.
    *
    * @defaultValue the length of the opening bar
    */

@@ -354,6 +354,11 @@ export class Voicing {
    * counterpoint violation. A chord that carries a key passes it to the voicer
    * unless `opts.key` names another one.
    *
+   * The rules read from the chord being left — a chordal seventh's resolution,
+   * a leading tone's resolution, and the cross relation between the two chords
+   * — are scored only when `opts.previousChord` names that chord: a voicing
+   * does not say what it was written on.
+   *
    * @param chord A chord symbol, plain chord data, or a {@link Chord}.
    * @param opts Voicing options; when omitted, the ranges follow this voicing.
    * @returns The chosen voicing.

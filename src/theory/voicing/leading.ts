@@ -41,6 +41,14 @@ export function voiceLeadingCost(from: number[], to: number[]): number {
  * from `current`, and a large penalty per counterpoint violation; the lowest
  * scoring candidate is returned, ascending.
  *
+ * The rules read from the chord being left — the resolution of a chordal
+ * seventh, the resolution of a leading tone, and the cross relation between the
+ * two chords — are scored only when `opts.previousChord` names it: what a
+ * voicing is written on cannot be read back from the pitches it holds. An
+ * editor moving from one chord to the next has that chord, and passing it is
+ * what keeps this generator and {@link checkPartWriting} agreeing about the
+ * pair.
+ *
  * @param current The current voicing to lead from, ascending (index 0 = lowest).
  * @param chord The next chord to voice, as a chord symbol, chord data, or a
  *   `Chord`.
