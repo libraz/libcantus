@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`assertModeMask` is published.** A mode mask is read with bit operations,
+  and those coerce, so a value that is not a mask reads as one and every answer
+  taken from it — the form a key stands in, whether its signature is its own,
+  which system it belongs to — becomes a musical claim about nothing. The check
+  the library now applies at each of those readings is the one a caller can apply
+  at its own boundary, next to `assertKeyVariant` and the other validators.
+
 - **`toInstrumentProfile` and `toStringedProfile` are published.** The widening
   coercers of every other kind — `toNoteData`, `toKeyScale`, `toChordData`,
   `toMeterData`, `toVoiceNotes` — were already exported, and the instrument pair
@@ -209,6 +216,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the notes of a version in use, ships as a patch, and is recorded here.
 
 ### Fixed
+
+- **An entry point no longer answers from a value it never read.** Refusing
+  malformed input is one half of the contract; the other is that an entrance
+  which does not throw answered from what it was given. JavaScript coerces on
+  the way into arithmetic, so a `null` interval measured as a unison — a perfect
+  consonance, which is what the parallel-motion rules act on — a key with no mask
+  reported as modal and as supporting functional harmony, a metric weight off the
+  stated scale answered as the off-pulse rank, a spelled interval with neither
+  number nor quality classified as a dissonance, a difficulty ceiling of 20
+  judged as the strictest one there is, and a progression style that is no style
+  selecting nothing, all read as ordinary answers. Fourteen such readings are now
+  refused, most of them through one shared reading of a mode mask that four
+  places had been making separately. The domains are also swept, derived from the
+  declared parameter types: what does not belong in a parameter follows from what
+  the parameter says it takes, so no table of valid arguments is needed and an
+  entrance is swept under its own signature.
 
 - **An entry point taking more than one argument refuses malformed input as this
   library's own error.** The single-argument entrances already did: anything a
