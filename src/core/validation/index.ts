@@ -198,6 +198,50 @@ export function assertRecord<T>(value: unknown, name: string): T {
 }
 
 /**
+ * Read an entrance's options bag.
+ *
+ * An options parameter written `opts: Options = {}` is filled in only for an
+ * argument that is absent: an explicit `null` — which is what a JavaScript
+ * caller passes on when it has no options to give, and what a restored session
+ * holds where an options object was never written — defeats the default and
+ * reaches the first field read as itself. Absent is answered with the empty
+ * bag, so an entrance reads its options in one place whichever way it declared
+ * them, and anything that is not a bag is refused by name.
+ *
+ * @param value The options as the caller passed them.
+ * @param name What the value is, for the error message.
+ * @returns The options, or an empty bag when none were given.
+ * @throws If the value is present but is not a record.
+ * @category Core
+ */
+export function assertOptions<T extends object>(value: T | undefined, name = 'options'): T {
+  return value === undefined ? ({} as T) : assertRecord<T>(value, name);
+}
+
+/**
+ * Require a value to be a boolean before a branch reads it as one.
+ *
+ * A flag is the one parameter whose default is not always the falsy reading:
+ * where a switch defaults to `true`, a `null` handed in place of it is read as
+ * `false` and the entrance answers the opposite of what leaving it out would
+ * have answered. Absent stays absent — a flag with a default is filled in by
+ * that default, and only a value that is present and is not a boolean is
+ * refused.
+ *
+ * @param value The value to check.
+ * @param name What the value is, for the error message.
+ * @returns The value as a boolean.
+ * @throws If the value is present and is not a boolean.
+ * @category Core
+ */
+export function assertFlag(value: boolean, name: string): boolean {
+  if (typeof value !== 'boolean') {
+    throw new InvalidInputError(`${name} must be a boolean; received ${describeRejected(value)}`);
+  }
+  return value;
+}
+
+/**
  * Require a value to be callable before an entrance calls it.
  *
  * The third of the shape checks, for the entrances whose material is a callback:
