@@ -10,7 +10,12 @@
 
 import { BEAT_EPS } from '../../analyze/adjacency.js';
 import { InvalidInputError } from '../../core/errors/index.js';
-import { instrumentRange, type StringedProfile } from '../../core/instrument/index.js';
+import type { InstrumentProfile, InstrumentProfileLike } from '../../core/instrument/index.js';
+import {
+  instrumentRange,
+  type StringedProfile,
+  toStringedProfile,
+} from '../../core/instrument/index.js';
 import { beatsPerBar, pulseBeats, type TimeSignature } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
@@ -296,4 +301,33 @@ function neighborOnSide(target: number, dir: number, key: KeyScale, chromatic: b
   const cand = nearestScaleTone(target + dir * 2, key);
   const step = Math.abs(cand - target);
   return step >= 1 && step <= 2 ? cand : semitone;
+}
+
+/**
+ * The instrument a bass part is written for, and the floor of its register.
+ *
+ * Both generators ask this the same way and have to: naming an instrument on
+ * one and on the other is one request — write this for that bass — and an
+ * answer that differed between them would put the two parts of one arrangement
+ * in different registers. A stringed instrument the context names is taken as
+ * read; anything else has to be named on the call, since a part written for a
+ * piano has no neck to fold a note back onto.
+ *
+ * @param named The instrument the generation context names for the bass, if any.
+ * @param given The instrument the caller named, if any.
+ * @param octave The register the part is written in.
+ * @returns The instrument to write for, and the lowest pitch of the band.
+ */
+export function bassRegister(
+  named: InstrumentProfile | undefined,
+  given: InstrumentProfileLike | undefined,
+  octave: number,
+): { instrument: StringedProfile | undefined; low: number } {
+  const instrument =
+    given === undefined
+      ? named !== undefined && named.kind === 'stringed'
+        ? named
+        : undefined
+      : toStringedProfile(given, 'instrument');
+  return { instrument, low: bandFloor(octave * 12 + 12, instrument) };
 }

@@ -13,11 +13,7 @@
  */
 
 import { BEAT_EPS } from '../../analyze/adjacency.js';
-import {
-  foldIntoRange,
-  type StringedProfile,
-  toStringedProfile,
-} from '../../core/instrument/index.js';
+import { foldIntoRange, type StringedProfile } from '../../core/instrument/index.js';
 import {
   isStrongBeat,
   type MeterLike,
@@ -44,9 +40,9 @@ import {
 } from '../context/index.js';
 import {
   assertBassSegments,
-  bandFloor,
   barTiles,
   bassPcOf,
+  bassRegister,
   bassToneCycle,
   beatPositions,
   DEFAULT_OCTAVE,
@@ -60,13 +56,10 @@ import {
   WEAK_VELOCITY,
 } from './internal.js';
 
-export type {
-  BassLick,
-  LickMaterial,
-  LickNote,
-  PlaceLicksOptions,
-} from './licks.js';
-export { BASS_LICKS, isLickMaterial, placeLicks } from './licks.js';
+export type { PlaceLicksOptions } from './licks.js';
+export { placeLicks } from './licks.js';
+export type { BassLick, LickMaterial, LickNote } from './licks-data.js';
+export { BASS_LICKS, isLickMaterial } from './licks-data.js';
 
 /**
  * A chord sounding over a half-open beat span `[startBeat, endBeat)`.
@@ -437,14 +430,7 @@ export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
   );
   assertGenerationBudget(estimatedNotes, 'bass notes', opts.budget);
   const resolved = resolveContext(opts.ctx);
-  const named = resolved.instrument('bass');
-  const instrument =
-    opts.instrument === undefined
-      ? named !== undefined && named.kind === 'stringed'
-        ? named
-        : undefined
-      : toStringedProfile(opts.instrument, 'instrument');
-  const low = bandFloor(octave * 12 + 12, instrument);
+  const { instrument, low } = bassRegister(resolved.instrument('bass'), opts.instrument, octave);
 
   const ctx: BuildContext = {
     ts,

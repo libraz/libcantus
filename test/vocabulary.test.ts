@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BASS_LICKS } from '../src/generate/bass/licks.js';
+import { BASS_LICKS } from '../src/generate/bass/licks-data.js';
 import { resolveContext } from '../src/generate/context/index.js';
 import {
   BAR_STEPS,

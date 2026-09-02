@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { TimeSignature } from '../src/core/meter/index.js';
 import { generateBassLine } from '../src/generate/bass/index.js';
-import type { LickMaterial } from '../src/generate/bass/licks.js';
-import { BASS_LICKS, isLickMaterial, placeLicks } from '../src/generate/bass/licks.js';
+import { placeLicks } from '../src/generate/bass/licks.js';
+import type { LickMaterial } from '../src/generate/bass/licks-data.js';
+import { BASS_LICKS, isLickMaterial } from '../src/generate/bass/licks-data.js';
 import { GENRES, selectVocabulary, type Vocabulary } from '../src/generate/vocabulary/index.js';
 import { chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
 import { majorKey, minorKey } from '../src/theory/scale/index.js';

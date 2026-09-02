@@ -19,7 +19,6 @@ import { classifyMelodyTones, snapToPulse } from './nct.js';
 export type { ClassifiedMelodyTone, MelodyToneRole } from './nct.js';
 export { classifyMelodyTones } from './nct.js';
 
-import { buildCandidates } from './candidates.js';
 import type { Candidate, HarmonizeOptions, HarmonizeResult } from './internal.js';
 import {
   DEFAULT_METER,
@@ -40,7 +39,7 @@ export type {
   MelodyNote,
 } from './internal.js';
 
-import { REHARMONIZE_DIAL, REHARMONIZE_STRENGTHS } from './candidates.js';
+import { buildCandidates, REHARMONIZE_DIAL, REHARMONIZE_STRENGTHS } from './candidates.js';
 import { segmentIndexAt } from './segments.js';
 
 /**
