@@ -1,4 +1,5 @@
 import { pitchClassOf } from '../pitch/index.js';
+import { assertFiniteSemitones } from '../validation/index.js';
 
 /**
  * Counterpoint classification of a harmonic interval by consonance.
@@ -26,10 +27,15 @@ Object.freeze(ConsonanceClass);
 /**
  * Reduce an interval to a simple interval class in the range [0, 11].
  *
- * Every public predicate in this module funnels through here, so a non-finite
- * interval is rejected once rather than silently classifying as a dissonance.
+ * Every public predicate in this module funnels through here, so an interval
+ * that is not a number is rejected once rather than silently classifying as
+ * something. The check comes before the absolute value: `Math.abs` reads a
+ * `null` or an empty array as zero, which would report a unison — a perfect
+ * consonance, and so an answer the parallel-motion rules act on — for an
+ * interval nobody ever gave.
  */
 function simpleInterval(semitones: number): number {
+  assertFiniteSemitones(semitones);
   return pitchClassOf(Math.abs(semitones));
 }
 

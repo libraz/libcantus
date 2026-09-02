@@ -97,6 +97,17 @@ export function assertMidiPitch(value: number, name = 'MIDI pitch'): number {
   return assertInteger(value, name, 0, 127);
 }
 
+/**
+ * Require an integer pitch class in the inclusive range 0..11.
+ *
+ * A pitch class is read by shifting a mode mask by it, and a shift coerces, so
+ * a value outside the range — or one that is no number at all — silently names
+ * a pitch class the caller never asked about instead of failing.
+ */
+export function assertPitchClass(value: number, name = 'pitch class'): number {
+  return assertInteger(value, name, 0, 11);
+}
+
 /** Clamp an integer MIDI pitch to the inclusive range 0..127. */
 export function clampToMidi(value: number, name = 'MIDI pitch'): number {
   assertInteger(value, name);
