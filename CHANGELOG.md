@@ -217,6 +217,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **An options argument written `null` is refused rather than read as absent.**
+  A parameter declared `opts: Options = {}` is filled in by that default only
+  when the argument is missing, so an explicit `null` — which is what a host
+  passes on when it has no options to give, and what a session restored without
+  an options object holds — defeated the default and reached the first field
+  read as itself. Across the library that surfaced as a raw `TypeError` naming a
+  field the caller had never heard of; where the fields were read through
+  optional chaining instead, it silently selected every default. Both are gone:
+  the options an entrance takes are read in one place, absent still means the
+  defaults, and anything else is refused by name. A meter, a generation context
+  and a spelling context written `null` are refused on the same terms, and so
+  are a tempo, a difficulty ceiling and a two-voice flag — the last of which
+  used to flip a default of `true` to `false` without saying so.
+
 - **An entry point no longer answers from a value it never read.** Refusing
   malformed input is one half of the contract; the other is that an entrance
   which does not throw answered from what it was given. JavaScript coerces on
