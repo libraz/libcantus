@@ -35,6 +35,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A dominant is read from the tones it sounds, at both ends of a cadence.**
+  The sonority test asked for the quality name `maj`, and a triad that grows a
+  colour tone is named something else — `add9`, `6`, `6/9` — so `Vadd9` and `V6`,
+  which is how pop writes the dominant, stopped being a dominant sonority the
+  moment the tone was added. The applied reading, the part-writing exemption for
+  a cross relation and the printed rationale all went with them. The Neapolitan
+  and the leading-tone chord asked the same question by name and now ask it the
+  same way. Separately, the arrival side of a cadence asked only for a major
+  third: the `V7sus4` of gospel, pop and modal jazz was refused there while the
+  cadential six-four reader in the same file accepted it, so a half cadence came
+  back reporting that its arrival sounded no third the key rests on — about a
+  chord the same file had just called the dominant. Both ends now ask one
+  predicate, and the relaxation a mode without its own leading tone needs is
+  unchanged.
+
+- **A rejected applied-dominant reading is one the chord could have had.**
+  `analyzeChord(..., { alternatives: true })` reported the subdominant and the
+  dominant of a major key as applied dominants it had turned down, and gave
+  being diatonic as the reason. Neither points at a degree the key can tonicize,
+  so neither was ever a rival; the tonic triad, which points at the subdominant,
+  still is one. The reading a caller is told was rejected is now gated on the
+  same test the accepting side applies, so inverting the reason given is what
+  would make the analysis take it.
+
+- **`avoidNotes` names the third a `sus2` suspends away from.** The displaced
+  third was computed as a semitone below the suspended tone, which is the major
+  third only for a `sus4`; over a `sus2` it named the root's own flat ninth — a
+  pitch class no major scale carries — so nothing was avoided and the third came
+  back as a free colour, `Chord.parse('Csus2').tensions('ionian')` offering the
+  E that ends the suspension. Both thirds a suspension stands in for are now
+  named, since a suspension does not say which one it displaced. What stands in
+  a chord's third slot is read in one place now, which is where the discrepancy
+  came from: three readers had their own, and the loosest of them answered a
+  suspension by whichever of the fourth and the second happened to sound.
+
+- **A slash bass the chord's template does not contain is classified.**
+  `analyzeVoice` counted the sounding bass as a chord member and then found no
+  role for it, and every later branch was closed to a member, so the note came
+  back with an empty label list and the rationale `Unclassified note` — a B flat
+  under a `C/Bb`, and every note over such a chord in `Score.voices()`,
+  `analyzePolyphony` and `analyzeArrangement`. It is read against the chord as
+  it sounds, so that B flat is the seventh that sonority has.
+
+- **A figure asks the chord for a degree the chord states.** The bass module
+  read "which degree is this interval" from the interval class alone, folding
+  six, seven and eight onto the fifth, so a chord's own sharp eleventh and flat
+  thirteenth were not degrees it stated. The reading now lives with the chord's
+  role query, which is the one that already distinguishes them, and the bass
+  module's separate reading of a chord's fifth goes with it.
+
 - **A `pop` bass pickup is a note the line does not already have.** The octave
   pickup dropped the root an octave below its register band, but the band is one
   octave wide, so on an instrument with nothing under it the drop folded
