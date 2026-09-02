@@ -54,7 +54,7 @@ violations[0]?.voices; // [0, 1]
 
 連続する和音のあいだ: `parallelFifth`、`parallelOctave`、`hiddenPerfect`、`overlap`、`crossRelation`、`augmentedMelodicInterval`、`unresolvedLeadingTone`、`unresolvedSeventh`。
 
-種目対位法ではさらに `wrongRhythmicRatio`、`unpreparedDissonance`、`unresolvedSuspension`、`illegalLeap`、`battuta`、`missingCadence`、`melodicShape` が加わります。
+種目対位法ではさらに `wrongRhythmicRatio`、`unpreparedDissonance`、`unresolvedSuspension`、`illegalLeap`、`battuta`、`missingCadence`、`melodicShape` が加わります。`wrongRhythmicRatio` は「リズムが定旋律に対して読めない」場合全般を指します。定旋律1音あたりの音数が種目の要求と違う場合に加えて、音価が課題自身のものである第5種では、様式が書かない音価や、渡された対旋律を記述していない `durations` 配列もここに入ります。
 
 `hiddenPerfect`（2声が同方向の進行で完全5度またはオクターブへ到達すること）は、ほかの規則より狭く判定され、しかも2つのチェッカーで判定の仕方が違います。`checkPartWriting` は外声だけで判定します。5度やオクターブがむき出しになるのは外声であり、内声はそれを覆う側だからです。そのため内声どうしの並達5度は報告されません。`checkSpecies` は2声としての厳格さで判定し、順次進行での接近という例外を完全に外します。2つの線のあいだに何も鳴っていない以上、上声がどう到達したかによらず、その到達は禁止されます。
 

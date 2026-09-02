@@ -298,16 +298,27 @@ counter.notes.length >= 1; // true
 `generateCounterMelody` is the same generator with the melody, the key and the context named at the call:
 
 ```ts
-import { generateCounterMelody, majorKey, parseChordSymbol } from '@libraz/libcantus';
+import {
+  chordTimelineFromChords,
+  generateCounterMelody,
+  majorKey,
+  spanFromChord,
+  parseChordSymbol,
+} from '@libraz/libcantus';
 
 const melody = [
   { pitch: 72, startBeat: 0, durationBeat: 2 },
   { pitch: 71, startBeat: 2, durationBeat: 2 },
 ];
 
+const harmony = chordTimelineFromChords(
+  [spanFromChord(parseChordSymbol('C'), 0), spanFromChord(parseChordSymbol('G7'), 2)],
+  4,
+);
+
 const counter = generateCounterMelody({
   melody,
-  chordAt: () => parseChordSymbol('C'),
+  timeline: harmony,
   key: majorKey(0),
   ctx: 5,
 });
@@ -315,7 +326,7 @@ const counter = generateCounterMelody({
 counter.length >= 1; // true
 ```
 
-The harmony crosses over as a `timeline` or as a `chordAt` callback, and the timeline is the one to prefer: it lists its own segment boundaries, so a chord change anywhere is seen, while a callback is opaque and is probed on a half-beat grid unless `chordChangeBeats` names the changes.
+The harmony crosses over as a `timeline`, as above, or as a `chordAt` callback for a host that has no timeline to hand. The timeline is the one to prefer: it lists its own segment boundaries, so a chord change anywhere is seen, while a callback is opaque and is probed on a half-beat grid unless `chordChangeBeats` names the changes — and a change off that grid, which is what a swung or anticipated chart is full of, is then invisible to the note held across it.
 
 `register` decides which side of the melody the counter line occupies — `'below'` unless named — and sets the default pitch range around it, which `pitchLow` and `pitchHigh` replace outright. `rhythm` decides the onsets: `'complement'` moves where the melody holds or rests, `'follow'` mirrors the melody's own onsets. `profile` sets what is rejected and what is preferred among what survives, `'strict'` seeking contrary motion where the default `'pop'` reads a run of parallel thirds or sixths as the harmony line an arranger would write, and `weights` overrides individual ranking weights for a preference neither profile expresses. Use `voiceIndependence` from [Counterpoint and part-writing](counterpoint-and-part-writing.md) to check that the result behaves as a second voice.
 

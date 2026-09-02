@@ -26,7 +26,7 @@ The public entry points are:
 - `theory`: scales, chord specifications, symbols, spelling, functional rules, counterpoint, figured bass, and voicing.
 - `analyze`: chord/key detection, harmonic analysis, timelines, reduction, melodic analysis, form, and arrangement reports.
 - `generate`: the generation context and its complexity dials, progressions, bass, counter-melody, drums, groove, harmonization, motifs, ornaments, rhythms, reharmonization, and vocabulary.
-- `model`: the immutable class API. One class per thing the other layers work with, each a thin skin over their functions, so an analysis or generation path can be written in the class API from end to end. A few helpers stay functions only — `barPositionToBeat`, `barPositionToPulse`, `chordFromSpec`, `secondaryDominant`, and `shiftByScaleDegrees` — and are imported alongside the classes.
+- `model`: the immutable class API. One class per thing the other layers work with, each a thin skin over their functions, so an analysis or generation path can be written in the class API from end to end. Some of the surface stays functions, and stays so deliberately: the validators and type guards a host applies at its own boundary, the counterpoint predicates over a pair of notes, the dictionary and catalogue readings (`BASS_LICKS`, `DRUM_PATTERNS`, `progressions`), the seed primitives, and the generator stages that are a step rather than a part — `imitate`, `placeDrumPattern`, `placeLicks`. A handful more have a receiver to hang off and no method yet: `barPositionToBeat`, `barPositionToPulse`, `chordFromSpec`, `secondaryDominant` and `shiftByScaleDegrees`. All of them are imported alongside the classes.
 
 Each layer barrel also re-exports the types its own signatures name, so a consumer importing a single subpath can still spell every type in the API it uses.
 
@@ -72,4 +72,4 @@ The source comments remain the reference for parameters, return values, categori
 
 ## Verified examples
 
-Every `ts` code block in the English guides is extracted and executed by the test suite, and a trailing `// value` comment holding a literal is checked as an expected result. The Japanese pages carry the same blocks verbatim, which the same suite verifies. An example that appears here has run.
+Every `ts` code block in the English guides is extracted and executed by the test suite, and a trailing `// value` comment is checked as an expected result whenever it names a literal, whether or not it goes on to say why. The Japanese pages carry the same blocks verbatim, which the same suite verifies. An example that appears here has run.

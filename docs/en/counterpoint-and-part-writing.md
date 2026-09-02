@@ -54,7 +54,7 @@ Inside one chord: `voiceCrossing`, `spacing`, `range`.
 
 Between consecutive chords: `parallelFifth`, `parallelOctave`, `hiddenPerfect`, `overlap`, `crossRelation`, `augmentedMelodicInterval`, `unresolvedLeadingTone`, `unresolvedSeventh`.
 
-Species exercises add `wrongRhythmicRatio`, `unpreparedDissonance`, `unresolvedSuspension`, `illegalLeap`, `battuta`, `missingCadence`, and `melodicShape`.
+Species exercises add `wrongRhythmicRatio`, `unpreparedDissonance`, `unresolvedSuspension`, `illegalLeap`, `battuta`, `missingCadence`, and `melodicShape`. `wrongRhythmicRatio` covers the rhythm not reading against the cantus firmus at all: the wrong number of notes per cantus-firmus note, and — in the fifth species, where the note values are the exercise's own — a note value the style does not write or a `durations` array that does not describe the counterpoint it was given.
 
 `hiddenPerfect` — two voices arriving at a perfect fifth or octave by similar motion — is judged more narrowly than the rest, and differently by the two checkers. `checkPartWriting` judges it on the outer voices alone, where a bare fifth or octave is exposed and the inner voices are what would otherwise cover it, so a direct fifth between two inner voices is never reported. `checkSpecies` judges it at two-voice strictness, which drops the stepwise-approach exception entirely: with nothing sounding between the two lines, the arrival is forbidden however the upper voice reached it.
 

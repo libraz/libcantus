@@ -112,6 +112,25 @@ drums.length > 0; // true
 
 `generateBassLine` は開始拍と終了拍を明示したセグメントを受け取ります。コードタイムラインが返すのがこの形です。進行が返す `ChordSpan` はセグメントではないため、先に配置する必要があります。`composer.bass` は `Timeline` でも同じセグメントでも受け取りますが、配置を代行することはありません。ベースのスタイルは `root`、`rootFifth`、`pop`、`walking`、`arpeggio` です。`octave` は目標の音域を指定し、`instrument` を指定するとその楽器で演奏可能な線になります。
 
+ベースパートへのもう一つの入口が `placeLicks` です。`generateDrums` に対する `placeDrumPattern` と同じ関係で、規則として書かれたスタイルの代わりに、[リズムとグルーヴ](rhythm-and-groove.md)が説明する辞書 `BASS_LICKS` からジャンルのフィギュアを引き、セグメントの上に小節単位で敷き、コード交代へはフィギュア自身の最終音から入っていきます。辞書は `motown`、`soul`、`funk`、`blues`、`jazz`、`bossa`、`gospel`、`country`、`reggae` のフィギュアを持ち、ドラム辞書と同じく `ctx.vocabulary` で自作のフィギュアも受け取ります。
+
+```ts
+import { BASS_LICKS, majorKey, placeLicks, makeChord } from '@libraz/libcantus';
+
+const segments = [
+  { startBeat: 0, endBeat: 4, chord: makeChord(0, 'maj7') },
+  { startBeat: 4, endBeat: 8, chord: makeChord(7, 'dom7') },
+];
+
+const line = placeLicks(segments, majorKey(0), {
+  genre: 'motown',
+  ctx: { seed: 4, bpm: 112 },
+});
+
+line.length > 0; // true
+BASS_LICKS.every((entry) => entry.material.notes.length > 0); // true
+```
+
 composer は、設定が支えられないパートを既定値で埋めずに拒否します。`progression`、`bass`、`counterMelody` はいずれも調の上に書くものなので、調を持たない composer では3つとも例外を投げます。旋律から調を読み取るのは `harmonize` の役目で、`with({ key })` を使えばその調を以降のパートへ引き継げます。`progression` はさらに、パート全体で1つの拍子であることを要求します。1小節に1つの和音を並べるため、拍子が変わるとその地点から先で和音が小節線から外れてしまうからです。`drums` は調を持たないためどちらでも書けますが、キットのパターンは4拍の小節を前提に書かれているため、受け付ける拍子は 4/4 だけです。
 
 ```ts

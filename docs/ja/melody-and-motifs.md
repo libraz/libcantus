@@ -298,16 +298,27 @@ counter.notes.length >= 1; // true
 `generateCounterMelody` は同じ生成器を、メロディ・調・コンテキストを呼び出しごとに指定して使う形です。
 
 ```ts
-import { generateCounterMelody, majorKey, parseChordSymbol } from '@libraz/libcantus';
+import {
+  chordTimelineFromChords,
+  generateCounterMelody,
+  majorKey,
+  spanFromChord,
+  parseChordSymbol,
+} from '@libraz/libcantus';
 
 const melody = [
   { pitch: 72, startBeat: 0, durationBeat: 2 },
   { pitch: 71, startBeat: 2, durationBeat: 2 },
 ];
 
+const harmony = chordTimelineFromChords(
+  [spanFromChord(parseChordSymbol('C'), 0), spanFromChord(parseChordSymbol('G7'), 2)],
+  4,
+);
+
 const counter = generateCounterMelody({
   melody,
-  chordAt: () => parseChordSymbol('C'),
+  timeline: harmony,
   key: majorKey(0),
   ctx: 5,
 });
@@ -315,7 +326,7 @@ const counter = generateCounterMelody({
 counter.length >= 1; // true
 ```
 
-和声は `timeline` または `chordAt` コールバックとして渡します。推奨は `timeline` です。タイムラインは自身の区間境界を列挙するのでどこで起きたコード変化も見えますが、コールバックは中身が見えず、`chordChangeBeats` で変化点を明示しないかぎり半拍のグリッドで探りを入れることになります。
+和声は上の例のように `timeline` で渡すか、タイムラインを持たないホストのために `chordAt` コールバックで渡します。推奨は `timeline` です。タイムラインは自身の区間境界を列挙するのでどこで起きたコード変化も見えますが、コールバックは中身が見えず、`chordChangeBeats` で変化点を明示しないかぎり半拍のグリッドで探りを入れることになります。スイングやアンティシペーションで生じるグリッド外のコード変化は、そのままでは跨いで保持される音から見えません。
 
 `register` は対旋律が旋律のどちら側に置かれるかを決め、指定しなければ `'below'` です。既定の音域もこれを基準に決まり、`pitchLow` と `pitchHigh` を渡すとその音域を直接置き換えます。オンセットを決めるのは `rhythm` で、`'complement'` は旋律が音を保つか休んでいる位置で動き、`'follow'` は旋律自身のオンセットをなぞります。`profile` は、何を却下し、残った候補の中で何を好むかを決めます。`'strict'` は反行を求め、既定の `'pop'` は3度や6度の平行が続く形をアレンジャーが書くハモリの線として扱います。どちらのプロファイルでも表せない好みは `weights` で個々の評価重みを上書きします。結果が第2声部として機能しているかは、[対位法と和声課題](counterpoint-and-part-writing.md)の `voiceIndependence` で確認できます。
 

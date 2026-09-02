@@ -61,7 +61,7 @@ The package root exports the whole API. `@libraz/libcantus/core`, `/theory`, `/a
 
 New to music theory? [The primer](docs/en/primer/index.md) teaches the concepts this API is built on — pitch and intervals, scales and keys, chords, harmony, voices, rhythm and meter — for a reader who writes TypeScript rather than scores.
 
-Otherwise start at [Introduction](docs/en/introduction.md) and [Getting started](docs/en/getting-started.md), which index the domain guides and the reference pages. Every `ts` example in the guides is executed by the test suite, and an expected value written as a trailing comment is checked against what the call returns.
+Otherwise start at [Introduction](docs/en/introduction.md) and [Getting started](docs/en/getting-started.md), which index the domain guides and the reference pages. Every `ts` example in the guides is executed by the test suite, and a trailing comment that names a literal — with or without the reason for it after an em dash — is checked against what the call returns.
 
 ## What it doesn't do
 

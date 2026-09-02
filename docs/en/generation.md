@@ -112,6 +112,25 @@ drums.length > 0; // true
 
 `generateBassLine` takes segments with explicit start and end beats, which is what a chord timeline provides — a progression's `ChordSpan` values are not segments and have to be placed first. `composer.bass` accepts either a `Timeline` or those same segments, and places nothing on your behalf. Bass styles are `root`, `rootFifth`, `pop`, `walking`, and `arpeggio`; `octave` sets the target register, and naming an `instrument` makes the line playable on it.
 
+`placeLicks` is the other route into a bass part, and it stands to `generateBassLine` as `placeDrumPattern` stands to `generateDrums`: instead of a style written as rules, it draws a genre figure from `BASS_LICKS` — the dictionary the bass side of [Rhythm and groove](rhythm-and-groove.md) describes — and tiles it over the segments, bar by bar, leading into each chord change from the figure's own last note. The dictionary carries figures for `motown`, `soul`, `funk`, `blues`, `jazz`, `bossa`, `gospel`, `country` and `reggae`, and takes figures of your own through `ctx.vocabulary` exactly as the drum dictionary does.
+
+```ts
+import { BASS_LICKS, majorKey, placeLicks, makeChord } from '@libraz/libcantus';
+
+const segments = [
+  { startBeat: 0, endBeat: 4, chord: makeChord(0, 'maj7') },
+  { startBeat: 4, endBeat: 8, chord: makeChord(7, 'dom7') },
+];
+
+const line = placeLicks(segments, majorKey(0), {
+  genre: 'motown',
+  ctx: { seed: 4, bpm: 112 },
+});
+
+line.length > 0; // true
+BASS_LICKS.every((entry) => entry.material.notes.length > 0); // true
+```
+
 A composer refuses the parts its settings cannot carry rather than filling a gap with a default. `progression`, `bass` and `counterMelody` are written in a key, so a composer that names none throws for all three; `harmonize` is the member that reads a key off the melody it is given, and `with({ key })` carries that key over to the parts written afterwards. `progression` also needs one meter for the whole part, since it lays one chord per bar and a meter change would leave the chords off the bar lines from the change onward. `drums` is in no key and is written either way, but the kit patterns are written against a four-beat bar, so it takes 4/4 and nothing else.
 
 ```ts

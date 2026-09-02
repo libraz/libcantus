@@ -190,3 +190,36 @@ describe('the two parallel-key functions name the same key', () => {
     }
   });
 });
+
+describe('the two readings share their words without sharing their evidence', () => {
+  it('names the same note differently where the evidence differs', () => {
+    // The guides promise one vocabulary across the two readings, not one
+    // answer. What each reads is different: `analyzeVoice` reads a note against
+    // the chord sounding under it, and `classifyMelodyTones` reads the melody
+    // and the metre with no chord at all. Neither answer is a subset of the
+    // other, and a host colouring notes from both sees two legends over one bar
+    // — which is the two questions, not a disagreement.
+    const stepwise = [
+      { pitch: 60, startBeat: 0, durationBeat: 1 },
+      { pitch: 62, startBeat: 1, durationBeat: 1 },
+      { pitch: 64, startBeat: 2, durationBeat: 1 },
+    ];
+    // D is a chord tone of the G7 sounding under it, and a passing tone in the
+    // line: the chord decides one reading and the line decides the other.
+    const overDominant = analyzeVoice(stepwise, () => makeChord(7, 'dom7'), cMajor)[1];
+    expect(overDominant?.labels.map((label) => label.kind)).toContain('chordTone');
+    expect(classifyMelodyTones(stepwise, fourFour)[1]?.role).toBe('passing');
+
+    // The other direction: a leap answered by a step off the beat is an
+    // appoggiatura to the note-level reading, which weighs no metre, and
+    // structural to the one that does.
+    const leaning = [
+      { pitch: 60, startBeat: 0, durationBeat: 1 },
+      { pitch: 65, startBeat: 1, durationBeat: 1 },
+      { pitch: 64, startBeat: 2, durationBeat: 1 },
+    ];
+    const leant = analyzeVoice(leaning, () => makeChord(0, 'maj'), cMajor)[1];
+    expect(leant?.labels.map((label) => label.kind)).toContain('appoggiatura');
+    expect(classifyMelodyTones(leaning, fourFour)[1]?.role).toBe('structural');
+  });
+});
