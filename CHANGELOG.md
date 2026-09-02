@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-02
+
 ### Added
 
 - **`assertChordTimeline` is published.** A chord timeline is the one argument a
@@ -2271,6 +2273,8 @@ Initial public release.
 - Fluent immutable class API (`Note`, `Chord`, `Key`, ...) layered over the tree-shakeable functional core.
 - Dual ESM/CJS builds with bundled type declarations.
 
+[Unreleased]: https://github.com/libraz/libcantus/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/libraz/libcantus/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/libraz/libcantus/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/libraz/libcantus/compare/v0.9.5...v1.0.0
 [0.9.5]: https://github.com/libraz/libcantus/compare/v0.9.4...v0.9.5
