@@ -4,6 +4,7 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import {
   analyzeArrangement,
+  analyzePolyphony,
   createArrangementSession,
   tensionCurve,
   tensionCurveFrom,
@@ -394,6 +395,7 @@ function noteEventCallSites(): string[] {
 const NOTE_EVENT_VALIDATION_COVERAGE: Readonly<Record<string, readonly string[]>> = {
   'src/analyze/arrange/internal.ts:assertTrackNotes': ['analyzeArrangement', 'tensionCurve'],
   'src/analyze/arrange/session.ts:update': ['arrangementSessionUpdate'],
+  'src/analyze/arrange/tracks.ts:analyzePolyphony': ['analyzePolyphony'],
   'src/analyze/detect/index.ts:detectKeyFromNotes': ['detectKeyFromNotes'],
   'src/analyze/form/hypermeter.ts:hypermeter': ['hypermeter'],
   'src/analyze/form/phrase.ts:phrasesFromTimeline': ['phrasesFromTimeline'],
@@ -413,9 +415,13 @@ const NOTE_EVENT_VALIDATION_COVERAGE: Readonly<Record<string, readonly string[]>
   'src/generate/groove/index.ts:humanize': ['humanize'],
   'src/generate/harmonize/index.ts:harmonizeMelody': ['harmonizeMelody'],
   'src/generate/harmonize/nct.ts:classifyMelodyTones': ['classifyMelodyTones'],
-  'src/generate/motif/index.ts:developMotif': ['developMotif'],
-  'src/generate/motif/index.ts:motifToNoteEvents': ['motifToNoteEvents'],
-  'src/generate/motif/index.ts:transformUnchecked': ['transformMotif'],
+  // One reader for the three entrances that take a motif cell, so all three are
+  // measured through it.
+  'src/generate/motif/index.ts:assertCellNotes': [
+    'developMotif',
+    'motifToNoteEvents',
+    'transformMotif',
+  ],
   'src/generate/ornament/index.ts:ornament': ['ornament'],
   // One reader for the three class paths that keep a caller's array as what a
   // class is made of, so all three are measured by the entrances below.
@@ -440,6 +446,7 @@ function noteEventEntries(events: NoteEvent[]): Record<string, () => unknown> {
   return {
     analyzeArrangement: () => analyzeArrangement([{ notes: events }]),
     arrangementOf: () => Arrangement.of([{ notes: events }]),
+    analyzePolyphony: () => analyzePolyphony(events, () => chord, key),
     analyzeVoice: () => analyzeVoice(events, () => chord, key),
     applyGrooveTemplate: () => applyGrooveTemplate(events, template, fourFour),
     arrangementSessionUpdate: () =>
