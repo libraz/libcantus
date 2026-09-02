@@ -71,6 +71,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   regions handed out are copies, so what a caller does with them cannot reach
   what the score reads next.
 
+- **Two readings of a scale's tones are one walk of its mask.**
+  `diatonicPitchClasses` is the degree-ordered reading sorted, rather than a
+  second copy of the same loop: the two agreed, and would have drifted the
+  moment either was corrected without anything reporting the difference.
+
 - **The documentation of what the library answers with says what it answers.**
   `VoicingData` and everything that hands out a voicing said the pitches were
   ascending; the class keeps the order the voicing was built in, which is what
