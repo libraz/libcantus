@@ -161,6 +161,7 @@ export type {
   ChordTimelineResult,
 } from './timeline/index.js';
 export {
+  assertChordTimeline,
   chordTimelineFromChords,
   chordTimelineFromNotes,
   detectCadences,

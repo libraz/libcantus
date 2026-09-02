@@ -30,7 +30,7 @@
 
 import { pitchClassOf as mod12 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import { assertOneOf } from '../../core/validation/index.js';
+import { assertOneOf, assertOptions } from '../../core/validation/index.js';
 import type { Chord, ChordSegment } from '../../theory/chord/index.js';
 import { isDominantChordOf } from '../../theory/tendency/index.js';
 // Segment boundaries are computed, so the end of one and the start of the next
@@ -41,7 +41,7 @@ import { isCadentialSixFour } from '../functional/cadence.js';
 import type { CadenceResult } from '../functional/index.js';
 import { detectCadence } from '../functional/index.js';
 import { isAppliedDominant } from '../functional/tonicization.js';
-import type { ChordTimeline } from '../timeline/index.js';
+import { assertChordTimeline, type ChordTimeline } from '../timeline/index.js';
 import type { KeyContext } from '../voice/index.js';
 import { keyScaleAt } from '../voice/index.js';
 
@@ -368,8 +368,10 @@ export function reduceProgression(
   key: KeyContext,
   opts: ReduceProgressionOptions = {},
 ): ReducedChord[] {
+  assertChordTimeline(timeline);
+  const asked = assertOptions(opts, 'opts');
   const keyAt = keyScaleAt(key);
-  const basis = assertOneOf(opts.basis ?? 'function', REDUCTION_BASES, 'reduction basis');
+  const basis = assertOneOf(asked.basis ?? 'function', REDUCTION_BASES, 'reduction basis');
   const reading = BASIS_READINGS[basis];
   const segments = timeline.segments;
   const floors =

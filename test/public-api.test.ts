@@ -109,6 +109,7 @@ const EXPECTED_EXPORTS = [
   'analyzePolyphony',
   'analyzeVoice',
   'applyGrooveTemplate',
+  'assertChordTimeline',
   'assertDegree',
   'assertFiniteNumber',
   'assertFiniteSemitones',

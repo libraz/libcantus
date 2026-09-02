@@ -38,7 +38,7 @@ import { barGridStart } from '../grid.js';
 import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
 import { melodicSimilarity } from '../melody/index.js';
 import type { CadenceHit, ChordTimeline } from '../timeline/index.js';
-import { detectCadences, segmentStartingAt } from '../timeline/index.js';
+import { assertChordTimeline, detectCadences, segmentStartingAt } from '../timeline/index.js';
 import type { KeyContext } from '../voice/index.js';
 import type { Hypermeter } from './hypermeter.js';
 import { hypermeter } from './hypermeter.js';
@@ -630,6 +630,7 @@ export function phrasesFromTimeline(
   notes: readonly NoteEvent[],
   opts: PhraseOptions = {},
 ): Phrase[] {
+  assertChordTimeline(timeline);
   const meters = resolveMeters(opts, 'phrase meters');
   assertNoteEvents(notes, 'phrase notes', {
     allowNonPositiveDuration: true,

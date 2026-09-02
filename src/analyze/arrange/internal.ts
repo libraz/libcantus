@@ -18,7 +18,7 @@ import { PROFILE_WEIGHTS, type SafetyProfile } from '../../theory/safety/index.j
 import { resolveKey } from '../../theory/scale/index.js';
 import { adjacent, BEAT_EPS, hasEnded, sameInstant } from '../adjacency.js';
 import type { KeyRegion } from '../keys/index.js';
-import type { ChordTimeline } from '../timeline/index.js';
+import { assertChordTimeline, type ChordTimeline } from '../timeline/index.js';
 import type { IdentifiedVoiceNote } from '../voice/index.js';
 import type { ArrangementTrack, TrackRole } from './tracks.js';
 
@@ -166,40 +166,18 @@ export function assertTrackNotes(
 }
 
 /**
- * Reject a caller's chord timeline that is not one.
+ * Reject a caller's chord timeline that is not one, when one was given at all.
  *
- * Every other field of the arrangement options is read for its shape at the
- * entrance; a timeline out of a project file that is missing its `at` reached
- * the analysis and reported the library's own `TypeError` from wherever the
- * lookup happened to be made, which names neither the option nor the caller.
+ * The option is what {@link assertChordTimeline} reads, with the difference
+ * that leaving it out is how a caller asks for the timeline to be inferred.
  *
  * @param timeline The timeline as the caller passed it, or nothing.
  * @param name What the option is called in an error message.
  * @throws If the value is not a timeline of chord segments.
  */
 export function assertGivenTimeline(timeline: ChordTimeline | undefined, name: string): void {
-  if (timeline === undefined) {
-    return;
-  }
-  if (
-    typeof timeline !== 'object' ||
-    timeline === null ||
-    typeof timeline.at !== 'function' ||
-    !Array.isArray(timeline.segments)
-  ) {
-    throw new InvalidInputError(
-      `${name} must be a chord timeline carrying segments and an at(); received ${describeRejected(timeline)}`,
-    );
-  }
-  for (let index = 0; index < timeline.segments.length; index += 1) {
-    const segment = timeline.segments[index];
-    if (typeof segment !== 'object' || segment === null) {
-      throw new InvalidInputError(
-        `${name}.segments[${index}] must be a chord segment; received ${describeRejected(segment)}`,
-      );
-    }
-    assertFiniteNumber(segment.startBeat, `${name}.segments[${index}].startBeat`);
-    assertFiniteNumber(segment.endBeat, `${name}.segments[${index}].endBeat`);
+  if (timeline !== undefined) {
+    assertChordTimeline(timeline, name);
   }
 }
 

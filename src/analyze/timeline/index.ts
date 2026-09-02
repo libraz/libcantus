@@ -14,9 +14,11 @@ import {
   allocateChoiceTable,
   assertArray,
   assertFiniteNumber,
+  assertFunction,
   assertGenerationBudget,
   assertNoteEvents,
   assertRange,
+  assertRecord,
 } from '../../core/validation/index.js';
 import type { Chord, ChordQuality, ChordSpan } from '../../theory/chord/index.js';
 import { chordFromSpan, chordPitchClasses, makeChord } from '../../theory/chord/index.js';
@@ -57,6 +59,42 @@ export type ChordTimeline = {
   at: (beat: number) => Chord | null;
   segments: ChordSegment[];
 };
+
+/**
+ * Reject a value that is not a chord timeline.
+ *
+ * A timeline is the one argument a host is most likely to hold from somewhere
+ * else — a project file, a previous run's JSON, another library's output — and
+ * it is read field by field deep inside an analysis. Checking it once at the
+ * entrance names the argument that is wrong instead of reporting the library's
+ * own `TypeError` from wherever the first `segments` lookup happened to be.
+ *
+ * The segments are checked too: every reader of a timeline compares beats, and
+ * a segment whose bounds are missing compares as neither before nor after, so
+ * it disappears from the analysis rather than being reported.
+ *
+ * @param timeline The timeline as the caller passed it.
+ * @param name What the argument is called in an error message.
+ * @returns The same timeline.
+ * @throws If the value is not a timeline of chord segments.
+ * @example
+ * ```ts
+ * import { assertChordTimeline, chordTimelineFromChords } from '@libraz/libcantus';
+ * assertChordTimeline(chordTimelineFromChords([], 4)); // the timeline, unchanged
+ * ```
+ * @category Arrangement & Analysis
+ */
+export function assertChordTimeline(timeline: ChordTimeline, name = 'timeline'): ChordTimeline {
+  const read = assertRecord<ChordTimeline>(timeline, name);
+  assertFunction(read.at, `${name}.at`);
+  const segments = assertArray<ChordSegment>(read.segments, `${name}.segments`);
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = assertRecord<ChordSegment>(segments[index], `${name}.segments[${index}]`);
+    assertFiniteNumber(segment.startBeat, `${name}.segments[${index}].startBeat`);
+    assertFiniteNumber(segment.endBeat, `${name}.segments[${index}].endBeat`);
+  }
+  return read;
+}
 
 /**
  * Build a chord timeline from placed chords.
@@ -1620,6 +1658,7 @@ export type CadenceHit = {
  * @category Arrangement & Analysis
  */
 export function detectCadences(timeline: ChordTimeline, key: KeyContext): CadenceHit[] {
+  assertChordTimeline(timeline);
   // A cadence belongs to the key it arrives in, so a modulating piece is asked
   // for the key at the arrival beat rather than for one key for the whole span.
   const keyAt = keyScaleAt(key);
