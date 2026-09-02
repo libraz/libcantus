@@ -392,8 +392,10 @@ function regionsFromPath(slots: readonly KeySlot[], path: readonly number[]): Sl
  * Fold every region shorter than `minBeats` into the neighbour that explains it
  * best, and return the amended per-slot choice.
  *
- * The note path gets this for nothing: its slots are `minKeyBeats` long, so no
- * region it groups can come out shorter than one. The chord path takes its
+ * The note path gets this for its inner regions: its slots are `minKeyBeats`
+ * long, so no region it groups from whole slots can come out shorter than one.
+ * Its first region is clipped to where the music starts and is folded into its
+ * neighbour there rather than here. The chord path takes its
  * slots from the chords instead, and a chord is as short as the harmony is —
  * without this a single passing chord is reported as a key area of its own,
  * which is exactly what raising `minKeyBeats` is asked to stop.
@@ -777,7 +779,25 @@ export function keyTimelineFromNotes(
   const changeCost = MODULATION_COST * meanSlotWeight * (expectedKeyBeats / slotBeats);
   const path = chooseKeys(slots, changeCost, meters, budget);
   const grouped = regionsFromPath(slots, path);
+  // The reported span of the first region is clipped to where the music starts,
+  // and the slot holding the first onset begins a whole slot before it wherever
+  // that onset is not on a slot boundary. What the search chose was a region a
+  // slot long; what a caller was handed could be a sliver of one — a key band a
+  // beat wide in front of the piece, which the documented minimum says is only
+  // ever left at the end of the analysed span. It is folded into the region
+  // after it, which then covers those slots and is read from them.
 
+  const head = grouped[0];
+  const next = grouped[1];
+  if (
+    head !== undefined &&
+    next !== undefined &&
+    head.endBeat - Math.max(head.startBeat, musicStart) < slotBeats - BEAT_EPS
+  ) {
+    next.startBeat = head.startBeat;
+    next.from = head.from;
+    grouped.shift();
+  }
   const regions = grouped.map((region) => {
     const candidate = KEY_CANDIDATES[region.candidate];
     // A fresh key per region: the candidate table is built once for the process

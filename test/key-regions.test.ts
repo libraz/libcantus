@@ -365,6 +365,37 @@ describe('keyTimelineFromNotes options', () => {
   });
 });
 
+describe('the shortest key region the note search reports', () => {
+  it('leaves a region shorter than the minimum only where the span ends', () => {
+    // The first slot begins a whole slot before the music wherever the first
+    // onset is not on a slot boundary, and the reported start is clipped to
+    // where the music starts: an excerpt whose first note is a beat into the
+    // bar came back with a key band three beats wide in front of it, which the
+    // documented minimum says is only ever left at the end of the analysed
+    // span. It is folded into the region after it.
+    const notes: NoteEvent[] = [
+      { pitch: 60, startBeat: 1, durationBeat: 1 },
+      { pitch: 64, startBeat: 2, durationBeat: 1 },
+      { pitch: 67, startBeat: 3, durationBeat: 1 },
+      ...Array.from({ length: 16 }, (_, i) => ({
+        pitch: [66, 69, 62, 66][i % 4] ?? 66,
+        startBeat: 4 + i,
+        durationBeat: 1,
+      })),
+    ];
+    const regions = keyTimelineFromNotes(notes);
+    expectWellFormed(regions, { contiguous: true });
+    expect(regions[0]?.startBeat).toBe(1);
+    const last = regions[regions.length - 1];
+    for (const region of regions) {
+      if (region === last) {
+        continue;
+      }
+      expect(region.endBeat - region.startBeat, `${region.startBeat}`).toBeGreaterThanOrEqual(4);
+    }
+  });
+});
+
 describe('keyTimelineFromNotes and the meter', () => {
   /**
    * Two bars of 4/4 then two of 3/4, one triad per bar: C, F, G, C. The bar
