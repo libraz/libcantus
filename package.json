@@ -137,6 +137,7 @@
     "test:coverage": "vitest run --coverage",
     "bench:timeline": "yarn build && node --expose-gc benchmark/timeline-index.mjs",
     "docs": "typedoc",
+    "figures": "node scripts/figures/build.mjs",
     "prepare": "[ -d node_modules/typescript ] && tsup || true",
     "prepublishOnly": "yarn build"
   },

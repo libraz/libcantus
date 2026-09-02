@@ -1,0 +1,21 @@
+libcantus
+Copyright the libcantus authors
+
+This product includes software developed as part of the libcantus project,
+licensed under the Apache License, Version 2.0. See LICENSE.
+
+--------------------------------------------------------------------------------
+
+Third-party assets
+
+The notated figures under docs/images embed glyph outlines (clefs, noteheads,
+accidentals and the brace) taken from the Bravura music font:
+
+  Bravura
+  Copyright (c) 2015 Steinberg Media Technologies GmbH
+  Licensed under the SIL Open Font License, Version 1.1
+  https://github.com/steinbergmedia/bravura
+
+The outlines are embedded as SVG paths so that the figures render without
+loading a font. Bravura itself is not redistributed, and no part of this
+project is licensed under the SIL Open Font License.
