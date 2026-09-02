@@ -38,8 +38,8 @@ import type { TempoMap } from '../core/tempo/index.js';
 import {
   beatsToSeconds,
   beatsToTicks,
-  secondsToBeats,
   tempoAt,
+  tempoReader,
   ticksToBeats,
 } from '../core/tempo/index.js';
 import type { NoteEvent } from '../core/types.js';
@@ -854,8 +854,12 @@ export class Score {
     // time to get there. That leaves the elapsed seconds between any two notes
     // exactly what the map says, which is what the scalar tempo the analysis
     // takes cannot express on its own.
-    const opening: TempoMap = [{ startBeat: 0, bpm: openingBpm }];
-    const restate = (beat: number): number => secondsToBeats(beatsToSeconds(beat, tempo), opening);
+    // The map is read once for the pass rather than once per note: an imported
+    // accelerando marks a tempo every tick, and a conversion handed the map
+    // afresh re-reads the whole of it to know it is still the map it validated.
+    const played = tempoReader(tempo);
+    const evenly = tempoReader([{ startBeat: 0, bpm: openingBpm }]);
+    const restate = (beat: number): number => evenly.beatAt(played.secondsAt(beat));
     const scoreBeats = new Map<number, number>();
     const evenlyPaced = this.#data.notes.map((note) => {
       const startBeat = restate(note.startBeat);

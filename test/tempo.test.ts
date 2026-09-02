@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InvalidInputError } from '../src/core/errors/index.js';
+import { BudgetExceededError, InvalidInputError } from '../src/core/errors/index.js';
 import {
   beatsToSeconds,
   beatsToTicks,
@@ -10,6 +10,7 @@ import {
   ticksToBeats,
 } from '../src/core/tempo/index.js';
 import { assertNoteEvent } from '../src/core/validation/index.js';
+import { Instrument, Score } from '../src/model/index.js';
 
 const CONSTANT: TempoMap = [{ startBeat: 0, bpm: 120 }];
 const CHANGING: TempoMap = [
@@ -317,6 +318,109 @@ describe('the tempo domain covers the onsets the library accepts', () => {
       const seconds = beatsToSeconds(beat, CHANGING);
       expect(seconds).toBeGreaterThan(previous);
       previous = seconds;
+    }
+  });
+});
+
+/**
+ * A recorded accelerando: a tempo event every `every` beats, rising as it goes.
+ *
+ * This is what a MIDI import gives — a sequencer writes a tempo event per tick
+ * through a ritardando, and the interoperability guide sends a caller here with
+ * exactly that map.
+ */
+function accelerando(count: number, every = 1): TempoMap {
+  return Array.from({ length: count }, (_, index) => ({
+    startBeat: index * every,
+    bpm: 60 + (index % 120),
+  }));
+}
+
+describe('a tempo map is bounded and read once', () => {
+  it('refuses a map longer than any piece declares', () => {
+    // The map is read on every conversion asked of it, so an unbounded map is
+    // an unbounded per-note cost. It is the map that is refused, not the work
+    // built on it — the same bound the meter map takes.
+    const huge = accelerando(100_001);
+    expect(() => beatsToSeconds(0, huge)).toThrow(BudgetExceededError);
+    expect(() => beatsToSeconds(0, huge)).toThrow(/tempo map count/);
+    expect(() => secondsToBeats(0, huge)).toThrow(BudgetExceededError);
+    expect(() => durationToSeconds(0, 1, huge)).toThrow(BudgetExceededError);
+    expect(() => tempoAt(0, huge)).toThrow(BudgetExceededError);
+    expect(() => beatsToSeconds(0, accelerando(100_000))).not.toThrow();
+  });
+
+  // Fifty thousand tempo events and fifty thousand notes: both inside every
+  // bound the module states, and once the product of the two. The reading
+  // restates every onset at the score's opening tempo, and each of those
+  // restatements validated the whole map and then walked it from the origin to
+  // the note's own beat. Held for the length of the pass, the map is read once.
+  it('times a piece against a dense map without re-reading it per note', () => {
+    const notes = Array.from({ length: 50_000 }, (_, index) => ({
+      pitch: 48 + (index % 24),
+      startBeat: index,
+      durationBeat: 1,
+    }));
+    const score = Score.of(notes, { tempo: accelerando(50_000) });
+    expect(score.playability(Instrument.guitar()).issues.length).toBeGreaterThanOrEqual(0);
+  }, 5_000);
+
+  // A map handed to a conversion is validated by it, and a caller converting
+  // position after position hands over the same map every time. Validating it
+  // afresh each time — the range of every tempo, the ordering of every onset,
+  // and the messages built to describe them — costs the whole map per question.
+  // A map already validated and unchanged since is recognised instead, which
+  // leaves a comparison per entry rather than a validation.
+  it('validates a map once however many positions are converted against it', () => {
+    const map = accelerando(20_000);
+    let last = 0;
+    for (let beat = 0; beat < 20_000; beat += 1) {
+      last = beatsToSeconds(beat, map);
+    }
+    expect(last).toBeGreaterThan(0);
+  }, 5_000);
+
+  it('re-validates a map the caller has written to since', () => {
+    // The map is remembered by identity, so what makes the memo safe is that a
+    // map whose entries no longer read as they did is validated again — and a
+    // caller's array is theirs to write to.
+    const map: { startBeat: number; bpm: number }[] = [
+      { startBeat: 0, bpm: 120 },
+      { startBeat: 4, bpm: 60 },
+    ];
+    expect(beatsToSeconds(8, map)).toBe(6);
+    map[1] = { startBeat: 4, bpm: 0 };
+    expect(() => beatsToSeconds(8, map)).toThrow(InvalidInputError);
+    map[1] = { startBeat: 4, bpm: 240 };
+    expect(beatsToSeconds(8, map)).toBe(3);
+    // Shortening it is a change too: the memo compares the whole array.
+    map.length = 1;
+    expect(beatsToSeconds(8, map)).toBe(4);
+  });
+
+  it('reads the same times a segment-by-segment walk reads', () => {
+    // The elapsed time to a beat is the sum of the whole segments before it and
+    // the part of the one holding it, whether that sum is made per call or once
+    // for the map.
+    const map = accelerando(64, 2);
+    for (const beat of [-3, 0, 1, 2.5, 63, 126, 200]) {
+      let expected = 0;
+      for (let index = 0; index < map.length; index += 1) {
+        const event = map[index];
+        const next = map[index + 1];
+        if (event === undefined) {
+          continue;
+        }
+        const start = index === 0 ? Number.NEGATIVE_INFINITY : event.startBeat;
+        const end = next?.startBeat ?? Number.POSITIVE_INFINITY;
+        const low = Math.max(Math.min(0, beat), start);
+        const high = Math.min(Math.max(0, beat), end);
+        if (high > low) {
+          expected += ((high - low) * 60) / event.bpm;
+        }
+      }
+      expect(beatsToSeconds(beat, map)).toBeCloseTo(beat < 0 ? -expected : expected, 9);
+      expect(secondsToBeats(beatsToSeconds(beat, map), map)).toBeCloseTo(beat, 9);
     }
   });
 });

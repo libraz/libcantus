@@ -11,10 +11,21 @@
 import { InvalidInputError } from '../errors/index.js';
 import {
   assertFiniteNumber,
+  assertGenerationBudget,
   assertInteger,
   assertPositiveInt,
   assertRange,
 } from '../validation/index.js';
+import {
+  beatAtElapsedIn,
+  beatAtElapsedSeconds,
+  elapsedSecondsAt,
+  elapsedSecondsIn,
+  isValidatedTempoMap,
+  rememberValidatedTempoMap,
+  tempoIndexOf,
+  tempoSegmentAt,
+} from './internal.js';
 
 /**
  * A tempo change: the beat it takes effect on, and the tempo it sets.
@@ -61,6 +72,18 @@ const MAX_BPM = 1000;
 const MIN_BPM = 0.1;
 
 /**
+ * Upper bound on the number of changes one tempo map may declare.
+ *
+ * A map is read on every conversion asked of it, so an unbounded map is an
+ * unbounded per-note cost the way an unbounded event array is an unbounded
+ * pass. The bound is the one the meter map takes, and for the same reason: far
+ * above any notated piece — a change on every bar of a hundred thousand bars —
+ * and it rejects the map rather than the work built on it. A recorded
+ * accelerando reaches it, which is exactly the import the bound is for.
+ */
+const MAX_TEMPO_CHANGES = 100_000;
+
+/**
  * Validate a tempo map: non-empty, strictly ascending, finite onsets, and
  * tempos inside the range the conversions stay finite over.
  *
@@ -74,6 +97,13 @@ const MIN_BPM = 0.1;
 function assertTempoMap(map: TempoMap, name = 'tempo map'): TempoMap {
   if (!Array.isArray(map) || map.length === 0) {
     throw new InvalidInputError(`${name} must hold at least one tempo event`);
+  }
+  assertGenerationBudget(map.length, `${name} count`, MAX_TEMPO_CHANGES);
+  // A map is re-validated on every conversion asked of it, so a pass over a
+  // piece pays for the whole map per note unless a map it has already read is
+  // recognized as one. The meter map is read the same way.
+  if (isValidatedTempoMap(map)) {
+    return map;
   }
   for (let index = 0; index < map.length; index += 1) {
     const event = map[index];
@@ -90,6 +120,7 @@ function assertTempoMap(map: TempoMap, name = 'tempo map'): TempoMap {
       );
     }
   }
+  rememberValidatedTempoMap(map);
   return map;
 }
 
@@ -106,13 +137,18 @@ function firstEvent(map: TempoMap): TempoEvent {
  * Elapsed seconds over `[fromBeat, toBeat]`, summed segment by segment. Both
  * bounds are assumed validated; a span running backwards reports negative time,
  * which is what keeps the integral additive across the origin.
+ *
+ * The sum starts at the segment the span starts in rather than at the map's
+ * first, so a note late in a piece is not charged for every tempo change before
+ * it. What it costs is the segments the span actually crosses, which is what
+ * the span is made of.
  */
 function integrateSeconds(map: TempoMap, fromBeat: number, toBeat: number): number {
   if (toBeat < fromBeat) {
     return -integrateSeconds(map, toBeat, fromBeat);
   }
   let seconds = 0;
-  for (let index = 0; index < map.length; index += 1) {
+  for (let index = tempoSegmentAt(map, fromBeat); index < map.length; index += 1) {
     const event = map[index];
     if (event === undefined) {
       continue;
@@ -160,7 +196,10 @@ function integrateSeconds(map: TempoMap, fromBeat: number, toBeat: number): numb
 export function beatsToSeconds(beat: number, map: TempoMap): number {
   assertFiniteNumber(beat, 'beat');
   assertTempoMap(map);
-  return integrateSeconds(map, firstEvent(map).startBeat, beat);
+  // The origin-to-beat integral crosses every segment before `beat`, so a pass
+  // that asks it of every note re-adds the whole map per note. The sum of the
+  // whole segments is the map's own, made once and read here.
+  return elapsedSecondsAt(map, beat);
 }
 
 /**
@@ -183,30 +222,10 @@ export function beatsToSeconds(beat: number, map: TempoMap): number {
 export function secondsToBeats(seconds: number, map: TempoMap): number {
   assertFiniteNumber(seconds, 'seconds');
   assertTempoMap(map);
-  const origin = firstEvent(map);
-  if (seconds < 0) {
-    // Before the origin only the opening tempo is in force, which is the same
-    // segment {@link beatsToSeconds} integrates backwards over.
-    return origin.startBeat + (seconds * origin.bpm) / SECONDS_PER_MINUTE;
-  }
-  let remaining = seconds;
-  for (let index = 0; index < map.length - 1; index += 1) {
-    const event = map[index];
-    const next = map[index + 1];
-    if (event === undefined || next === undefined) {
-      continue;
-    }
-    const spanSeconds = ((next.startBeat - event.startBeat) * SECONDS_PER_MINUTE) / event.bpm;
-    if (remaining < spanSeconds) {
-      return event.startBeat + (remaining * event.bpm) / SECONDS_PER_MINUTE;
-    }
-    remaining -= spanSeconds;
-  }
-  const last = map[map.length - 1];
-  if (last === undefined) {
-    throw new InvalidInputError('tempo map must hold at least one tempo event');
-  }
-  return last.startBeat + (remaining * last.bpm) / SECONDS_PER_MINUTE;
+  // Before the origin only the opening tempo is in force, which is the segment
+  // {@link beatsToSeconds} integrates backwards over; the prefix sums place a
+  // negative elapsed time there without a case of its own.
+  return beatAtElapsedSeconds(map, seconds);
 }
 
 /**
@@ -258,14 +277,41 @@ export function durationToSeconds(startBeat: number, lengthBeats: number, map: T
 export function tempoAt(beat: number, map: TempoMap): number {
   assertFiniteNumber(beat, 'beat');
   assertTempoMap(map);
-  let bpm = firstEvent(map).bpm;
-  for (const event of map) {
-    if (event.startBeat > beat) {
-      break;
-    }
-    bpm = event.bpm;
-  }
-  return bpm;
+  return map[tempoSegmentAt(map, beat)]?.bpm ?? firstEvent(map).bpm;
+}
+
+/** A reader that converts many positions against one tempo map. */
+export type TempoReader = {
+  /** Elapsed seconds from the map's origin to a beat. */
+  secondsAt(beat: number): number;
+  /** The beat reached after a number of seconds from the origin. */
+  beatAt(seconds: number): number;
+};
+
+/**
+ * Hold a tempo map for the length of one pass, and convert against it.
+ *
+ * A conversion validates the map it is handed and re-reads it to know the
+ * caller has not written to it since, so a pass that converts every note of a
+ * piece pays for the whole map per note — and an imported accelerando marks a
+ * tempo every tick. A pass that reads the map once instead pays for it once.
+ *
+ * The map is read when the reader is made, so the reader answers for the map as
+ * it was then: a pass hands out no reader it does not own the map of.
+ *
+ * Not part of the public surface: it hands out a view of a validated map, which
+ * only the pass that validated it can say is still current.
+ *
+ * @param map The tempo map, validated here.
+ * @returns The conversions, reading one snapshot of the map.
+ */
+export function tempoReader(map: TempoMap): TempoReader {
+  assertTempoMap(map);
+  const index = tempoIndexOf(map);
+  return {
+    secondsAt: (beat) => elapsedSecondsIn(index, assertFiniteNumber(beat, 'beat')),
+    beatAt: (seconds) => beatAtElapsedIn(index, assertFiniteNumber(seconds, 'seconds')),
+  };
 }
 
 /**

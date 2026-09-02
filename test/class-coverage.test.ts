@@ -192,6 +192,12 @@ const NOT_PUBLISHED: Readonly<Record<string, string>> = {
   // that the answer is given in one place rather than two. `Motif.totalBeats`
   // is how a caller asks for it; the transforms are what it is there for.
   cellSpan: 'measures a cell for the transforms; Motif.totalBeats is how it is asked for',
+
+  // A view of a validated tempo map, handed out for the length of one pass.
+  // Only the pass that validated the map can say it is still current, and the
+  // conversions a caller holds — `beatsToSeconds` and the rest — validate the
+  // map they are given each time, which is what makes them safe to publish.
+  tempoReader: 'holds a validated tempo map for one pass; the conversions themselves are published',
 };
 
 /** The `src` files that define the class API, `index.ts` aside. */
