@@ -21,8 +21,9 @@ import {
   spelledInterval,
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
+import { assertArray } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
-import { chordPitchClasses } from '../chord/index.js';
+import { assertChord, chordPitchClasses } from '../chord/index.js';
 import {
   createsHiddenParallelPerfect,
   createsParallelPerfect,
@@ -476,6 +477,8 @@ export function spellVoicing(
   chord: Chord,
   key: SpelledKeyLike,
 ): SpelledVoicing {
+  assertArray<number>(voicing, 'voicing');
+  assertChord(chord);
   // Read whole rather than reduced: a voicing in Ab minor is written on flats,
   // and a key handed in spelled that way was losing its spelling right here.
   const { tonic, scale } = resolveKey(key);

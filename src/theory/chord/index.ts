@@ -10,6 +10,7 @@ import {
   assertDegree,
   assertFiniteNumber,
   assertInteger,
+  assertOptions,
   assertRecord,
 } from '../../core/validation/index.js';
 import { type KeyLike, scaleTonesInDegreeOrder, toKeyScale } from '../scale/index.js';
@@ -171,6 +172,31 @@ export function assertChordQuality(quality: ChordQuality): ChordQuality {
     throw new InvalidInputError(`Unknown chord quality: ${String(quality)}`);
   }
   return quality;
+}
+
+/**
+ * Read a plain chord as one, before any field of it is.
+ *
+ * The entrances that take a {@link ChordLike} go through {@link toChordData},
+ * which reads whatever form the caller held; the ones that take a plain
+ * {@link Chord} skip that, and used to read a root pitch class straight off
+ * whatever they were handed. The two fields every such entrance reads are
+ * checked here, so a chord restored from a session without them is refused
+ * rather than answered — a root of `null` reduces to pitch class 0, which is a
+ * chord on C.
+ *
+ * Not part of the package's public surface.
+ *
+ * @param chord The chord to check.
+ * @param name What the chord is, for the error message.
+ * @returns The chord, unchanged.
+ * @throws If it is not a record carrying a root pitch class and a known quality.
+ */
+export function assertChord(chord: Chord, name = 'chord'): Chord {
+  const read = assertRecord<Chord>(chord, name);
+  assertFiniteNumber(read.rootPc, `${name}.rootPc`);
+  assertChordQuality(read.quality);
+  return read;
 }
 
 /**
@@ -417,7 +443,7 @@ export function chordFromSpan(span: ChordSpan): Chord {
  */
 export function spanFromChord(chord: Chord, startBeat: number): ChordSpan {
   assertFiniteNumber(startBeat, 'chord span startBeat');
-  assertChordQuality(chord.quality);
+  assertChord(chord);
   const span: ChordSpan = { rootPc: chord.rootPc, quality: chord.quality, startBeat };
   if (chord.bassPc !== undefined) {
     span.bassPc = chord.bassPc;
@@ -451,6 +477,7 @@ export function spanFromChord(chord: Chord, startBeat: number): ChordSpan {
  * @category Chords
  */
 export function transposeChord(chord: Chord, semitones: number): Chord {
+  assertChord(chord);
   assertFiniteNumber(semitones, 'semitones');
   const steps = Math.round(semitones);
   const moved: Chord = {
@@ -617,7 +644,7 @@ function chordIntervalMask(chord: Chord): number {
  * @category Chords
  */
 export function chordPitchClasses(chord: Chord, opts: { includeBass?: boolean } = {}): number[] {
-  const mask = chordPcMask(chord, opts);
+  const mask = chordPcMask(assertChord(chord), assertOptions(opts, 'opts'));
   const pcs: number[] = [];
   for (let pc = 0; pc < 12; pc += 1) {
     if (hasPitchClass(mask, pc)) {
@@ -639,7 +666,7 @@ export function chordPitchClasses(chord: Chord, opts: { includeBass?: boolean } 
  * @category Chords
  */
 export function intervalAboveRoot(pitch: number, chord: Chord): number {
-  return (((pitchClass(pitch) - pitchClass(chord.rootPc)) % 12) + 12) % 12;
+  return (((pitchClass(pitch) - pitchClass(assertChord(chord).rootPc)) % 12) + 12) % 12;
 }
 
 /**

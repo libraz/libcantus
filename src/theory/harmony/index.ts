@@ -1,4 +1,5 @@
 import { pitchClassOf } from '../../core/pitch/index.js';
+import { assertFiniteNumber } from '../../core/validation/index.js';
 import { type ChordToneRole, chordToneRole, thirdSlotOf } from '../chord/index.js';
 import { type ChordLike, toChordData } from '../symbol/index.js';
 
@@ -64,6 +65,9 @@ export type VoicedRole = {
  * @category Functional Harmony
  */
 export function roleOf(pitch: number, chord: ChordLike, chordId = 0): VoicedRole {
+  // The id is carried into the result, so a value that is not one would be
+  // reported back as the chord this role belongs to.
+  assertFiniteNumber(chordId, 'chordId');
   const data = toChordData(chord);
   const interval = (pitchClassOf(pitch) - pitchClassOf(data.rootPc) + 12) % 12;
   // What stands in the third's slot is read where the chord is read, not here:

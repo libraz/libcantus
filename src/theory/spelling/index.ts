@@ -21,8 +21,14 @@ import {
   toNoteData,
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import { assertArray } from '../../core/validation/index.js';
 import {
+  assertArray,
+  assertFiniteNumber,
+  assertOptions,
+  assertPitchClass,
+} from '../../core/validation/index.js';
+import {
+  assertChord,
   type Chord,
   type ChordToneRole,
   chordToneLetterOffsets,
@@ -829,6 +835,7 @@ export function spellPitchClass(
   const note = toNoteData(tonic);
   const scale = toKeyScale(key);
   assertTonicOf(note, scale, 'spellPitchClass');
+  assertOptions(context, 'context');
   return spelledPitchClass(pc, note, scale, context);
 }
 
@@ -888,10 +895,13 @@ export function spellScale(tonic: NoteLike, key: KeyLike): Note[] {
  * @category Pitch & Intervals
  */
 export function spellPitchClasses(pcs: number[], tonic: NoteLike, key: KeyLike): Note[] {
+  const classes = assertArray<number>(pcs, 'pcs');
   const note = toNoteData(tonic);
   const scale = toKeyScale(key);
   assertTonicOf(note, scale, 'spellPitchClasses');
-  return pcs.map((pc) => spelledPitchClass(pc, note, scale));
+  return classes.map((pc, index) =>
+    spelledPitchClass(assertPitchClass(pc, `pcs[${index}]`), note, scale),
+  );
 }
 
 /**
@@ -974,7 +984,7 @@ function chordLetterOffset(interval: number, chord: Chord): number {
  *   data, or a `Note`.
  */
 export function spellChordFromRoot(chord: Chord, root: NoteLike): Note[] {
-  return chordTonesFromRoot(chord, toNoteData(root));
+  return chordTonesFromRoot(assertChord(chord), toNoteData(root));
 }
 
 /** Spell chord tones from an already-resolved root spelling. */
@@ -1020,6 +1030,7 @@ function chordTonesFromRoot(chord: Chord, root: Note): Note[] {
  * @category Pitch & Intervals
  */
 export function spellChord(chord: Chord, tonic: NoteLike, key: KeyLike): Note[] {
+  assertChord(chord);
   const note = toNoteData(tonic);
   const scale = toKeyScale(key);
   assertTonicOf(note, scale, 'spellChord');
@@ -1078,7 +1089,8 @@ export function spellPitch(
   const note = toNoteData(tonic);
   const scale = toKeyScale(key);
   assertTonicOf(note, scale, 'spellPitch');
-  const rounded = Math.round(pitch);
+  assertOptions(context, 'context');
+  const rounded = Math.round(assertFiniteNumber(pitch, 'pitch'));
   const spelled = spelledPitchClass(mod12(rounded), note, scale, context);
   const octave = (rounded - naturalPc(spelled.letter) - spelled.alter) / 12 - 1;
   return { letter: spelled.letter, alter: spelled.alter, octave };
