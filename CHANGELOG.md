@@ -170,6 +170,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`Timeline.roman()` numbers a chord in the key as the key is written.** The
+  fallback that reads each segment in the key in force reduced that key to its
+  pitch classes, so a chord whose numeral depends on how the key is spelled came
+  back named for the enharmonic twin: under an Ab minor region a German sixth —
+  `Fb Ab Cb D`, and named from those letters — was numbered as a dominant
+  seventh a fifth away, while `Timeline.at(beat)?.roman()` on the very same
+  segment answered `Ger6`. The regions carry the spelled tonic and the scale
+  form already; the numerals now read them as they stand, and the reduction and
+  the cadence search, which are read from which notes are in the key rather than
+  from how it is written, state the drop themselves.
+
+- **`enharmonicKeyOf` answers for a tonic that does not spell the root it is
+  given.** A key with a signature of its own re-read the root and answered; a
+  scale that only borrows one — a pentatonic, the blues scale, an octatonic set
+  — threw about spelling a root the tonic never sounded, so the same call
+  succeeded or failed on the scale family alone, and the failure was not among
+  the ones the function documents. Both families now read the scale as the tonic
+  in hand roots it, which is what the signature side was already doing.
+
 - **A public entrance refuses malformed input as an error of this library.** The
   documented contract is that anything a caller passes in comes back as one of
   the library's own error classes, and that a raw `TypeError` means a bug inside
