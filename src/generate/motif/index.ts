@@ -208,8 +208,15 @@ function cellEnd(notes: MotifNote[]): number {
   return Number.isFinite(end) ? end : 0;
 }
 
-/** Total beat span covered by a cell (from first onset to last offset). */
-function cellSpan(cell: MotifCell): number {
+/**
+ * Total beat span covered by a cell (from first onset to last offset).
+ *
+ * Shared with the class layer rather than restated there: a cell is accepted up
+ * to the generation budget, which is far past the argument count a spread can
+ * carry, so the loop above is the only way to answer this for every cell the
+ * constructor takes.
+ */
+export function cellSpan(cell: MotifCell): number {
   if (cell.notes.length === 0) {
     return 0;
   }

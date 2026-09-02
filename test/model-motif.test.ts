@@ -340,3 +340,66 @@ describe('Motif chains', () => {
     expect(motif.transform('invert').transform('invert').equals(motif)).toBe(true);
   });
 });
+
+/**
+ * A cell as long as an imported track: the constructor accepts a cell up to the
+ * generation budget, so this is an ordinary caller rather than an extreme one.
+ * `Motif.fromNotes(score.notes)` on a phrase lifted out of a MIDI file is how it
+ * arrives.
+ */
+function longCell(count: number): MotifCell {
+  const notes: MotifNote[] = [];
+  for (let index = 0; index < count; index += 1) {
+    notes.push({ pitch: 60 + (index % 12), startBeat: index * 0.25, durationBeat: 0.25 });
+  }
+  return { notes };
+}
+
+/** The members that answer for a whole cell without being given another one. */
+function wholeCellMembers(): string[] {
+  const found: string[] = [];
+  for (const key of Reflect.ownKeys(Motif.prototype)) {
+    if (typeof key !== 'string' || key === 'constructor') {
+      continue;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(Motif.prototype, key);
+    if (descriptor?.get !== undefined) {
+      found.push(key);
+      continue;
+    }
+    const value = descriptor?.value as ((...args: unknown[]) => unknown) | undefined;
+    if (typeof value === 'function' && value.length === 0) {
+      found.push(key);
+    }
+  }
+  return found.sort();
+}
+
+describe('Motif over a cell the size its constructor accepts', () => {
+  // The cell a `Motif` may hold is bounded by the generation budget, not by the
+  // number of arguments a call can carry. A member that reads the cell by
+  // spreading it into `Math.min` or `Math.max` stops working long before that
+  // bound and fails with a native `RangeError`, which is not one of the errors
+  // this library documents. The subject is derived from the class so a member
+  // added later is covered without being listed here.
+  const members = wholeCellMembers();
+
+  it('has members to check', () => {
+    expect(members).toContain('totalBeats');
+    expect(members.length).toBeGreaterThan(3);
+  });
+
+  it.each(members)('answers from `%s` rather than overflowing the stack', (member) => {
+    const motif = Motif.fromData(longCell(200_000));
+    const descriptor = Object.getOwnPropertyDescriptor(Motif.prototype, member);
+    expect(descriptor).toBeDefined();
+    const reader = descriptor?.get ?? (descriptor?.value as ((this: Motif) => unknown) | undefined);
+    expect(typeof reader).toBe('function');
+    expect(() => (reader as (this: Motif) => unknown).call(motif)).not.toThrow();
+  });
+
+  it('measures the span of a long cell the way the function layer does', () => {
+    const cell = longCell(200_000);
+    expect(Motif.fromData(cell).totalBeats).toBe(200_000 * 0.25);
+  });
+});

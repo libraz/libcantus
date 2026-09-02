@@ -17,6 +17,9 @@ import {
   motifToNoteEvents,
   transformMotif,
 } from '../generate/index.js';
+// Not through the barrel: the span of a cell is the function layer's own
+// answer, shared so it is not restated here, and not a new public entry point.
+import { cellSpan } from '../generate/motif/index.js';
 import type { KeyLike, SpelledKeyLike } from '../theory/scale/index.js';
 import { type ChordLike, toChordData } from '../theory/symbol/index.js';
 import type { ScoreOptions } from './score.js';
@@ -193,12 +196,7 @@ export class Motif {
 
   /** Where the cell stops sounding, measured from its own first onset. */
   get totalBeats(): number {
-    if (this.#cell.notes.length === 0) {
-      return 0;
-    }
-    const start = Math.min(...this.#cell.notes.map((note) => note.startBeat));
-    const end = Math.max(...this.#cell.notes.map((note) => note.startBeat + note.durationBeat));
-    return end - start;
+    return cellSpan(this.#cell);
   }
 
   /** A copy of the underlying plain cell. */

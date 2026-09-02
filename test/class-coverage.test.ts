@@ -187,6 +187,11 @@ const NOT_PUBLISHED: Readonly<Record<string, string>> = {
   // A fragment of a chord rather than a chord: it moves a spellings record,
   // which is one step inside the published transposition of a chord symbol.
   transposeChordSpellings: 'moves a spellings record, a step inside transposeChordSymbol',
+
+  // A measurement the motif transforms make of a cell, shared with the class so
+  // that the answer is given in one place rather than two. `Motif.totalBeats`
+  // is how a caller asks for it; the transforms are what it is there for.
+  cellSpan: 'measures a cell for the transforms; Motif.totalBeats is how it is asked for',
 };
 
 /** The `src` files that define the class API, `index.ts` aside. */
