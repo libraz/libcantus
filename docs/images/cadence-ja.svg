@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" width="960" height="300" role="img" aria-labelledby="ttl dsc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 380" width="960" height="380" role="img" aria-labelledby="ttl dsc">
   <title id="ttl">フレーズの終わり方 — 4つの終止形</title>
-  <desc id="dsc">ハ長調で書いた4種類の終止形を、1つずつパネルに並べた図です。完全終止は V→I（G→C）、変格終止は IV→I（F→C）、半終止は V（G）で止まり、偽終止は V→vi（G→Am）です。各パネルはローマ数字と、それが指す和音、終わり方を表す一行を示します。</desc>
+  <desc id="dsc">ハ長調で書いた4種類の終止形を、大譜表の譜例で1つずつパネルに並べた図です。各パネルは基本形の和音を2つ、高音部譜表に三和音、低音部譜表にその根音を置き、上にコードネーム、下にローマ数字を添えます。完全終止は V→I（G→C）、変格終止は IV→I（F→C）、半終止は I→V（C→G）でドミナントに止まり、偽終止は V→vi（G→Am）です。パネルの下の一行は終わり方の印象を表します。</desc>
 
   <style>
     .bg    { fill:#f7f5f1 }
@@ -8,88 +8,190 @@
     .chip  { fill:#ffffff; stroke:#d7d4cd }
     .card  { fill:#ffffff; stroke:#8a6a1f }
     .alt   { fill:#ffffff; stroke:#3f6b8a }
-    .seam  { fill:none; stroke:#b8b4ac; stroke-dasharray:6 5 }
     .rule  { fill:none; stroke:#b8b4ac; stroke-width:1 }
     .ln    { fill:none; stroke:#8a6a1f; stroke-width:1.4 }
     .ln2   { fill:none; stroke:#3f6b8a; stroke-width:1.4 }
     .ah    { fill:#8a6a1f }
     .ah2   { fill:#3f6b8a }
-    .fill1 { fill:#8a6a1f; opacity:.16 }
-    .fill2 { fill:#3f6b8a; opacity:.16 }
     .warn  { fill:none; stroke:#a3401f; stroke-width:1.6 }
     .warnt { fill:#a3401f }
+    .staff { fill:none; stroke:#1f2328; stroke-width:.9 }
+    .bar   { fill:none; stroke:#1f2328; stroke-width:1.2 }
+    .ledger{ fill:none; stroke:#1f2328; stroke-width:1.3 }
+    .stem  { fill:none; stroke:#1f2328; stroke-width:1.1 }
+    .glyph { fill:#1f2328 }
+    .mark  { fill:#a3401f; stroke:none }
+    .markl { fill:none; stroke:#a3401f; stroke-width:1.1 }
     text   { font-family:Inter,"Helvetica Neue","Hiragino Sans","Noto Sans JP",Arial,sans-serif; fill:#1f2328 }
     .h     { font-size:12.5px }
     .lbl   { font-size:11px; fill:#6e7781; letter-spacing:.06em }
     .s     { font-size:10.5px; fill:#6e7781 }
+    .sym   { font-size:12.5px; fill:#8a6a1f }
+    .rn    { font-size:13px }
     .mono  { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:10.5px; fill:#8a6a1f }
     @media (prefers-color-scheme: dark) {
       .bg{fill:#0d1117} .grp{fill:#12171d}
       .chip{fill:#161b22;stroke:#30363d} .card{fill:#161b22;stroke:#d9b45c} .alt{fill:#161b22;stroke:#7fb3d5}
-      .seam{stroke:#484f58} .rule{stroke:#484f58}
+      .rule{stroke:#484f58}
       .ln{stroke:#d9b45c} .ln2{stroke:#7fb3d5} .ah{fill:#d9b45c} .ah2{fill:#7fb3d5}
-      .fill1{fill:#d9b45c} .fill2{fill:#7fb3d5}
-      .warn{stroke:#e08a68} .warnt{fill:#e08a68} .mono{fill:#d9b45c}
-      text{fill:#e6edf3} .lbl{fill:#8b949e} .s{fill:#8b949e}
+      .warn{stroke:#e08a68} .warnt{fill:#e08a68} .mark{fill:#e08a68} .markl{stroke:#e08a68}
+      .staff{stroke:#e6edf3} .bar{stroke:#e6edf3} .ledger{stroke:#e6edf3}
+      .stem{stroke:#e6edf3} .glyph{fill:#e6edf3}
+      text{fill:#e6edf3} .lbl{fill:#8b949e} .s{fill:#8b949e} .sym{fill:#d9b45c} .mono{fill:#d9b45c}
     }
   </style>
 
   <defs>
+    <!-- Music glyphs from Bravura, (c) Steinberg Media Technologies GmbH, SIL Open Font License 1.1. See NOTICE. -->
+    <path id="brace" d="M20 498C49 516 82 587 82 646C82 651 82 657 81 662C74 722 44 815 44 869C44 921 67 971 72 980C75 986 77 987 77 990C77 993 74 997 71 997C69 997 67 995 63 990C41 963 14 905 14 805C14 706 49 666 49 603C49 556 30 530 2 498C20 478 49 462 49 397C49 327 14 265 14 192C14 92 41 34 63 6C67 1 69 0 71 0C74 0 77 3 77 6C77 9 76 11 72 17C67 25 44 75 44 128C44 181 74 275 81 334C82 339 82 344 82 350C82 409 49 480 20 498Z"/>
+    <path id="gClef" d="M361 262C364 243 364 244 346 238C258 208 201 129 201 44C201 -46 248 -110 316 -133C324 -136 336 -139 343 -139C351 -139 355 -134 355 -128C355 -121 347 -118 340 -115C298 -97 268 -54 268 -8C268 49 307 92 368 109C384 113 386 112 388 101L438 -197C440 -208 439 -208 424 -211C408 -214 388 -216 368 -216C193 -216 80 -119 80 20C80 79 90 158 173 252C233 319 279 356 326 394C336 402 338 401 340 390ZM470 943C503 943 530 916 530 861C530 750 435 660 356 591C349 585 345 586 343 599C339 625 337 659 337 691C337 847 409 943 470 943ZM430 103C428 115 429 118 441 117C522 110 589 42 589 -46C589 -109 551 -160 495 -188C483 -194 481 -194 479 -182ZM376 415C374 427 376 428 382 434C490 535 572 662 572 815C572 902 548 988 507 1048C492 1070 466 1098 455 1098C441 1098 410 1072 390 1050C316 968 292 843 292 739C292 681 299 616 306 575C308 563 309 561 297 551C153 432 0 289 0 87C0 -87 119 -252 364 -252C387 -252 413 -250 433 -246C444 -244 446 -243 448 -255C460 -322 475 -409 475 -456C475 -604 375 -622 316 -622C262 -622 236 -606 236 -593C236 -586 245 -583 268 -576C299 -567 335 -540 335 -482C335 -427 300 -380 239 -380C172 -380 132 -433 132 -495C132 -560 171 -658 322 -658C389 -658 519 -628 519 -458C519 -401 501 -306 490 -244C488 -232 489 -233 503 -227C604 -187 671 -102 671 11C671 139 577 252 430 252C404 252 404 252 401 270Z"/>
+    <path id="fClef" d="M252 262C78 262 0 135 0 39C0 -41 42 -110 123 -110C186 -110 229 -66 229 -4C229 60 182 100 133 100C106 100 96 93 83 93C70 93 67 101 67 111C67 151 127 224 229 224C335 224 381 120 381 -37C381 -316 243 -472 10 -605C1 -610 -5 -615 -5 -623C-5 -629 -1 -635 8 -635C13 -635 19 -633 25 -630C271 -510 531 -332 531 -28C531 146 425 262 252 262ZM630 -71C599 -71 576 -94 576 -125C576 -156 599 -179 630 -179C661 -179 684 -156 684 -125C684 -94 661 -71 630 -71ZM629 180C598 180 574 156 574 125C574 94 598 70 629 70C660 70 684 94 684 125C684 156 660 180 629 180Z"/>
+    <path id="noteheadHalf" d="M75 -87C54 -87 42 -76 35 -64C32 -58 29 -51 29 -44C29 5 174 84 221 84C240 84 251 75 258 63C261 57 264 51 264 44C264 1 123 -87 75 -87ZM97 -125C262 -125 295 9 295 42C295 93 254 125 196 125C47 125 0 10 0 -42C0 -95 42 -125 97 -125Z"/>
     <marker id="a" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
       <path class="ah" d="M0,0 L9,4.5 L0,9 z"/>
     </marker>
     <marker id="b" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
       <path class="ah2" d="M0,0 L9,4.5 L0,9 z"/>
     </marker>
+    <marker id="w" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="mark" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
   </defs>
 
-  <rect class="bg" x="0" y="0" width="960" height="300" rx="12"/>
+  <rect class="bg" x="0" y="0" width="960" height="380" rx="12"/>
 
   <text class="h" x="24" y="42">フレーズの終わり方 — 4つの終止形</text>
-  <text class="lbl" x="936" y="42" text-anchor="end">ローマ数字とその和音（ハ長調）</text>
+  <text class="lbl" x="936" y="42" text-anchor="end">上にコードネーム、下にローマ数字（ハ長調）</text>
 
   <!-- authentic -->
-  <rect class="card" x="24" y="68" width="216" height="158" rx="8"/>
-  <text class="lbl" x="132" y="96" text-anchor="middle">完全終止</text>
-  <text x="86" y="138" text-anchor="middle">V</text>
-  <text x="178" y="138" text-anchor="middle">I</text>
-  <line class="ln" x1="112" y1="144" x2="152" y2="144" marker-end="url(#a)"/>
-  <text class="h" x="86" y="162" text-anchor="middle">G</text>
-  <text class="h" x="178" y="162" text-anchor="middle">C</text>
-  <text class="s" x="132" y="190" text-anchor="middle">最も強い終止</text>
+  <rect class="card" x="24" y="68" width="216" height="244" rx="8"/>
+  <text class="lbl" x="132" y="92" text-anchor="middle">完全終止</text>
+  <text class="sym" x="108" y="110" text-anchor="middle">G</text>
+  <text class="sym" x="176" y="110" text-anchor="middle">C</text>
+  <g class="glyph">
+    <path class="staff" d="M40 122H212M40 130.5H212M40 139H212M40 147.5H212M40 156H212"/>
+    <path class="staff" d="M40 190H212M40 198.5H212M40 207H212M40 215.5H212M40 224H212"/>
+    <path class="bar" style="stroke-width:1.2" d="M40 122V224"/>
+    <use href="#brace" transform="translate(32.35 224) scale(0.09 -0.1)"/>
+    <use href="#gClef" transform="translate(44.25 147.5) scale(0.03 -0.03)"/>
+    <use href="#fClef" transform="translate(44.25 198.5) scale(0.03 -0.03)"/>
+    <path class="bar" style="stroke-width:2" d="M211 122V224"/>
+    <use href="#noteheadHalf" transform="translate(102.99 147.5) scale(0.03 -0.03)"/>
+    <use href="#noteheadHalf" transform="translate(102.99 139) scale(0.03 -0.03)"/>
+    <use href="#noteheadHalf" transform="translate(102.99 130.5) scale(0.03 -0.03)"/>
+    <path class="stem" d="M103.54 130.5V160.25"/>
+    <use href="#noteheadHalf" transform="translate(102.99 224) scale(0.03 -0.03)"/>
+    <path class="stem" d="M112.47 224V194.25"/>
+    <use href="#noteheadHalf" transform="translate(170.99 164.5) scale(0.03 -0.03)"/>
+    <use href="#noteheadHalf" transform="translate(170.99 156) scale(0.03 -0.03)"/>
+    <use href="#noteheadHalf" transform="translate(170.99 147.5) scale(0.03 -0.03)"/>
+    <path class="ledger" d="M167.59 164.5h16.83"/>
+    <path class="stem" d="M180.46 164.5V134.75"/>
+    <use href="#noteheadHalf" transform="translate(170.99 211.25) scale(0.03 -0.03)"/>
+    <path class="stem" d="M180.46 211.25V181.5"/>
+  </g>
+  <text class="rn" x="108" y="252" text-anchor="middle">V</text>
+  <text class="rn" x="176" y="252" text-anchor="middle">I</text>
+  <line class="ln" x1="124" y1="248" x2="160" y2="248" marker-end="url(#a)"/>
+  <text class="s" x="132" y="280" text-anchor="middle">最も強い終止</text>
 
   <!-- plagal -->
-  <rect class="card" x="256" y="68" width="216" height="158" rx="8"/>
-  <text class="lbl" x="364" y="96" text-anchor="middle">変格終止</text>
-  <text x="318" y="138" text-anchor="middle">IV</text>
-  <text x="410" y="138" text-anchor="middle">I</text>
-  <line class="ln" x1="344" y1="144" x2="384" y2="144" marker-end="url(#a)"/>
-  <text class="h" x="318" y="162" text-anchor="middle">F</text>
-  <text class="h" x="410" y="162" text-anchor="middle">C</text>
-  <text class="s" x="364" y="190" text-anchor="middle">やわらかい終止</text>
+  <rect class="card" x="256" y="68" width="216" height="244" rx="8"/>
+  <text class="lbl" x="364" y="92" text-anchor="middle">変格終止</text>
+  <text class="sym" x="340" y="110" text-anchor="middle">F</text>
+  <text class="sym" x="408" y="110" text-anchor="middle">C</text>
+  <g class="glyph">
+    <path class="staff" d="M272 122H444M272 130.5H444M272 139H444M272 147.5H444M272 156H444"/>
+    <path class="staff" d="M272 190H444M272 198.5H444M272 207H444M272 215.5H444M272 224H444"/>
+    <path class="bar" style="stroke-width:1.2" d="M272 122V224"/>
+    <use href="#brace" transform="translate(264.35 224) scale(0.09 -0.1)"/>
+    <use href="#gClef" transform="translate(276.25 147.5) scale(0.03 -0.03)"/>
+    <use href="#fClef" transform="translate(276.25 198.5) scale(0.03 -0.03)"/>
+    <path class="bar" style="stroke-width:2" d="M443 122V224"/>
+    <use href="#noteheadHalf" transform="translate(334.99 151.75) scale(0.03 -0.03)"/>
+    <use href="#noteheadHalf" transform="translate(334.99 143.25) scale(0.03 -0.03)"/>
+    <use href="#noteheadHalf" transform="translate(334.99 134.75) scale(0.03 -0.03)"/>
+    <path class="stem" d="M344.47 151.75V122"/>
+    <use href="#noteheadHalf" transform="translate(334.99 228.25) scale(0.03 -0.03)"/>
+    <path class="stem" d="M344.47 228.25V198.5"/>
+    <use href="#noteheadHalf" transform="translate(402.99 164.5) scale(0.03 -0.03)"/>
+    <use href="#noteheadHalf" transform="translate(402.99 156) scale(0.03 -0.03)"/>
+    <use href="#noteheadHalf" transform="translate(402.99 147.5) scale(0.03 -0.03)"/>
+    <path class="ledger" d="M399.59 164.5h16.83"/>
+    <path class="stem" d="M412.47 164.5V134.75"/>
+    <use href="#noteheadHalf" transform="translate(402.99 211.25) scale(0.03 -0.03)"/>
+    <path class="stem" d="M412.47 211.25V181.5"/>
+  </g>
+  <text class="rn" x="340" y="252" text-anchor="middle">IV</text>
+  <text class="rn" x="408" y="252" text-anchor="middle">I</text>
+  <line class="ln" x1="356" y1="248" x2="392" y2="248" marker-end="url(#a)"/>
+  <text class="s" x="364" y="280" text-anchor="middle">やわらかい終止</text>
 
   <!-- half -->
-  <rect class="card" x="488" y="68" width="216" height="158" rx="8"/>
-  <text class="lbl" x="596" y="96" text-anchor="middle">半終止</text>
-  <text x="550" y="138" text-anchor="middle">…</text>
-  <text x="642" y="138" text-anchor="middle">V</text>
-  <line class="ln" x1="576" y1="144" x2="616" y2="144" marker-end="url(#a)"/>
-  <text class="h" x="550" y="162" text-anchor="middle">…</text>
-  <text class="h" x="642" y="162" text-anchor="middle">G</text>
-  <text class="s" x="596" y="190" text-anchor="middle">ドミナントで止まり</text>
-  <text class="s" x="596" y="204" text-anchor="middle">開いたままになる</text>
+  <rect class="card" x="488" y="68" width="216" height="244" rx="8"/>
+  <text class="lbl" x="596" y="92" text-anchor="middle">半終止</text>
+  <text class="sym" x="572" y="110" text-anchor="middle">C</text>
+  <text class="sym" x="640" y="110" text-anchor="middle">G</text>
+  <g class="glyph">
+    <path class="staff" d="M504 122H676M504 130.5H676M504 139H676M504 147.5H676M504 156H676"/>
+    <path class="staff" d="M504 190H676M504 198.5H676M504 207H676M504 215.5H676M504 224H676"/>
+    <path class="bar" style="stroke-width:1.2" d="M504 122V224"/>
+    <use href="#brace" transform="translate(496.35 224) scale(0.09 -0.1)"/>
+    <use href="#gClef" transform="translate(508.25 147.5) scale(0.03 -0.03)"/>
+    <use href="#fClef" transform="translate(508.25 198.5) scale(0.03 -0.03)"/>
+    <path class="bar" style="stroke-width:2" d="M675 122V224"/>
+    <use href="#noteheadHalf" transform="translate(566.99 164.5) scale(0.03 -0.03)"/>
+    <use href="#noteheadHalf" transform="translate(566.99 156) scale(0.03 -0.03)"/>
+    <use href="#noteheadHalf" transform="translate(566.99 147.5) scale(0.03 -0.03)"/>
+    <path class="ledger" d="M563.59 164.5h16.83"/>
+    <path class="stem" d="M576.47 164.5V134.75"/>
+    <use href="#noteheadHalf" transform="translate(566.99 211.25) scale(0.03 -0.03)"/>
+    <path class="stem" d="M576.47 211.25V181.5"/>
+    <use href="#noteheadHalf" transform="translate(634.99 147.5) scale(0.03 -0.03)"/>
+    <use href="#noteheadHalf" transform="translate(634.99 139) scale(0.03 -0.03)"/>
+    <use href="#noteheadHalf" transform="translate(634.99 130.5) scale(0.03 -0.03)"/>
+    <path class="stem" d="M635.54 130.5V160.25"/>
+    <use href="#noteheadHalf" transform="translate(634.99 224) scale(0.03 -0.03)"/>
+    <path class="stem" d="M644.47 224V194.25"/>
+  </g>
+  <text class="rn" x="572" y="252" text-anchor="middle">I</text>
+  <text class="rn" x="640" y="252" text-anchor="middle">V</text>
+  <line class="ln" x1="588" y1="248" x2="624" y2="248" marker-end="url(#a)"/>
+  <text class="s" x="596" y="280" text-anchor="middle">ドミナントで止まり</text>
+  <text class="s" x="596" y="294" text-anchor="middle">開いたままになる</text>
 
   <!-- deceptive -->
-  <rect class="card" x="720" y="68" width="216" height="158" rx="8"/>
-  <text class="lbl" x="828" y="96" text-anchor="middle">偽終止</text>
-  <text x="782" y="138" text-anchor="middle">V</text>
-  <text x="874" y="138" text-anchor="middle">vi</text>
-  <line class="ln" x1="808" y1="144" x2="848" y2="144" marker-end="url(#a)"/>
-  <text class="h" x="782" y="162" text-anchor="middle">G</text>
-  <text class="h" x="874" y="162" text-anchor="middle">Am</text>
-  <text class="s" x="828" y="190" text-anchor="middle">ドミナントが主和音以外へ</text>
-  <text class="s" x="828" y="204" text-anchor="middle">解決する</text>
+  <rect class="card" x="720" y="68" width="216" height="244" rx="8"/>
+  <text class="lbl" x="828" y="92" text-anchor="middle">偽終止</text>
+  <text class="sym" x="804" y="110" text-anchor="middle">G</text>
+  <text class="sym" x="872" y="110" text-anchor="middle">Am</text>
+  <g class="glyph">
+    <path class="staff" d="M736 122H908M736 130.5H908M736 139H908M736 147.5H908M736 156H908"/>
+    <path class="staff" d="M736 190H908M736 198.5H908M736 207H908M736 215.5H908M736 224H908"/>
+    <path class="bar" style="stroke-width:1.2" d="M736 122V224"/>
+    <use href="#brace" transform="translate(728.35 224) scale(0.09 -0.1)"/>
+    <use href="#gClef" transform="translate(740.25 147.5) scale(0.03 -0.03)"/>
+    <use href="#fClef" transform="translate(740.25 198.5) scale(0.03 -0.03)"/>
+    <path class="bar" style="stroke-width:2" d="M907 122V224"/>
+    <use href="#noteheadHalf" transform="translate(798.99 147.5) scale(0.03 -0.03)"/>
+    <use href="#noteheadHalf" transform="translate(798.99 139) scale(0.03 -0.03)"/>
+    <use href="#noteheadHalf" transform="translate(798.99 130.5) scale(0.03 -0.03)"/>
+    <path class="stem" d="M799.54 130.5V160.25"/>
+    <use href="#noteheadHalf" transform="translate(798.99 224) scale(0.03 -0.03)"/>
+    <path class="stem" d="M808.47 224V194.25"/>
+    <use href="#noteheadHalf" transform="translate(866.99 143.25) scale(0.03 -0.03)"/>
+    <use href="#noteheadHalf" transform="translate(866.99 134.75) scale(0.03 -0.03)"/>
+    <use href="#noteheadHalf" transform="translate(866.99 126.25) scale(0.03 -0.03)"/>
+    <path class="stem" d="M867.54 126.25V156"/>
+    <use href="#noteheadHalf" transform="translate(866.99 219.75) scale(0.03 -0.03)"/>
+    <path class="stem" d="M876.47 219.75V190"/>
+  </g>
+  <text class="rn" x="804" y="252" text-anchor="middle">V</text>
+  <text class="rn" x="872" y="252" text-anchor="middle">vi</text>
+  <line class="ln" x1="820" y1="248" x2="856" y2="248" marker-end="url(#a)"/>
+  <text class="s" x="828" y="280" text-anchor="middle">ドミナントが主和音以外へ</text>
+  <text class="s" x="828" y="294" text-anchor="middle">解決する</text>
 
-  <text class="s" x="480" y="258" text-anchor="middle">転回形や、ドミナントの代わりに置かれた導音上の和音は、和音だけで不完全形と判定されます。</text>
-  <text class="s" x="480" y="274" text-anchor="middle">どちらでもない場合はソプラノを決めるボイシングが要るので、それが無ければ判定は null のまま返ります。</text>
+  <text class="s" x="480" y="342" text-anchor="middle">転回形や、ドミナントの代わりに置かれた導音上の和音は、和音だけで不完全形と判定されます。</text>
+  <text class="s" x="480" y="358" text-anchor="middle">どちらでもない場合はソプラノを決めるボイシングが要るので、それが無ければ判定は null のまま返ります。</text>
 </svg>

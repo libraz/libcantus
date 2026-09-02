@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 380" width="960" height="380" role="img" aria-labelledby="ttl dsc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 574" width="960" height="574" role="img" aria-labelledby="ttl dsc">
   <title id="ttl">音階・度数・旋法</title>
-  <desc id="dsc">上段は C メジャースケール C D E F G A B C を示し、隣り合う音の間隔を全音・全音・半音・全音・全音・全音・半音と記します。その下に最初の 7 音の度数 1 から 7 と、主音から導音までの名称を並べます。下のグループは同じ 7 音を別の音から読んだもので、C から始まるイオニア、D から始まるドリア、A から始まるエオリアを、それぞれの全音・半音の並びとともに示します。</desc>
+  <desc id="dsc">上段の譜表は C メジャースケール C D E F G A B C を書き、隣り合う音符の間隔を全音 W・半音 H で示します（W W H W W W H）。その下に最初の 7 音の度数 1 から 7 と、主音から導音までの名称を並べます。さらに下の 3 段は同じ 7 音を別の音から読んだもので、C から始まるイオニア、D から始まるドリア、A から始まるエオリアを、それぞれの全音・半音の並びとともに示します。</desc>
 
   <style>
     .bg    { fill:#f7f5f1 }
@@ -8,168 +8,228 @@
     .chip  { fill:#ffffff; stroke:#d7d4cd }
     .card  { fill:#ffffff; stroke:#8a6a1f }
     .alt   { fill:#ffffff; stroke:#3f6b8a }
-    .seam  { fill:none; stroke:#b8b4ac; stroke-dasharray:6 5 }
     .rule  { fill:none; stroke:#b8b4ac; stroke-width:1 }
     .ln    { fill:none; stroke:#8a6a1f; stroke-width:1.4 }
     .ln2   { fill:none; stroke:#3f6b8a; stroke-width:1.4 }
     .ah    { fill:#8a6a1f }
     .ah2   { fill:#3f6b8a }
-    .fill1 { fill:#8a6a1f; opacity:.16 }
-    .fill2 { fill:#3f6b8a; opacity:.16 }
     .warn  { fill:none; stroke:#a3401f; stroke-width:1.6 }
     .warnt { fill:#a3401f }
+    .staff { fill:none; stroke:#1f2328; stroke-width:.9 }
+    .bar   { fill:none; stroke:#1f2328; stroke-width:1.2 }
+    .ledger{ fill:none; stroke:#1f2328; stroke-width:1.3 }
+    .stem  { fill:none; stroke:#1f2328; stroke-width:1.1 }
+    .glyph { fill:#1f2328 }
+    .mark  { fill:#a3401f; stroke:none }
+    .markl { fill:none; stroke:#a3401f; stroke-width:1.1 }
     text   { font-family:Inter,"Helvetica Neue","Hiragino Sans","Noto Sans JP",Arial,sans-serif; fill:#1f2328 }
     .h     { font-size:12.5px }
     .lbl   { font-size:11px; fill:#6e7781; letter-spacing:.06em }
     .s     { font-size:10.5px; fill:#6e7781 }
+    .sym   { font-size:12.5px; fill:#8a6a1f }
+    .rn    { font-size:13px }
     .mono  { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:10.5px; fill:#8a6a1f }
     @media (prefers-color-scheme: dark) {
       .bg{fill:#0d1117} .grp{fill:#12171d}
       .chip{fill:#161b22;stroke:#30363d} .card{fill:#161b22;stroke:#d9b45c} .alt{fill:#161b22;stroke:#7fb3d5}
-      .seam{stroke:#484f58} .rule{stroke:#484f58}
+      .rule{stroke:#484f58}
       .ln{stroke:#d9b45c} .ln2{stroke:#7fb3d5} .ah{fill:#d9b45c} .ah2{fill:#7fb3d5}
-      .fill1{fill:#d9b45c} .fill2{fill:#7fb3d5}
-      .warn{stroke:#e08a68} .warnt{fill:#e08a68} .mono{fill:#d9b45c}
-      text{fill:#e6edf3} .lbl{fill:#8b949e} .s{fill:#8b949e}
+      .warn{stroke:#e08a68} .warnt{fill:#e08a68} .mark{fill:#e08a68} .markl{stroke:#e08a68}
+      .staff{stroke:#e6edf3} .bar{stroke:#e6edf3} .ledger{stroke:#e6edf3}
+      .stem{stroke:#e6edf3} .glyph{fill:#e6edf3}
+      text{fill:#e6edf3} .lbl{fill:#8b949e} .s{fill:#8b949e} .sym{fill:#d9b45c} .mono{fill:#d9b45c}
     }
   </style>
 
   <defs>
+    <!-- Music glyphs from Bravura, (c) Steinberg Media Technologies GmbH, SIL Open Font License 1.1. See NOTICE. -->
+    <path id="gClef" d="M361 262C364 243 364 244 346 238C258 208 201 129 201 44C201 -46 248 -110 316 -133C324 -136 336 -139 343 -139C351 -139 355 -134 355 -128C355 -121 347 -118 340 -115C298 -97 268 -54 268 -8C268 49 307 92 368 109C384 113 386 112 388 101L438 -197C440 -208 439 -208 424 -211C408 -214 388 -216 368 -216C193 -216 80 -119 80 20C80 79 90 158 173 252C233 319 279 356 326 394C336 402 338 401 340 390ZM470 943C503 943 530 916 530 861C530 750 435 660 356 591C349 585 345 586 343 599C339 625 337 659 337 691C337 847 409 943 470 943ZM430 103C428 115 429 118 441 117C522 110 589 42 589 -46C589 -109 551 -160 495 -188C483 -194 481 -194 479 -182ZM376 415C374 427 376 428 382 434C490 535 572 662 572 815C572 902 548 988 507 1048C492 1070 466 1098 455 1098C441 1098 410 1072 390 1050C316 968 292 843 292 739C292 681 299 616 306 575C308 563 309 561 297 551C153 432 0 289 0 87C0 -87 119 -252 364 -252C387 -252 413 -250 433 -246C444 -244 446 -243 448 -255C460 -322 475 -409 475 -456C475 -604 375 -622 316 -622C262 -622 236 -606 236 -593C236 -586 245 -583 268 -576C299 -567 335 -540 335 -482C335 -427 300 -380 239 -380C172 -380 132 -433 132 -495C132 -560 171 -658 322 -658C389 -658 519 -628 519 -458C519 -401 501 -306 490 -244C488 -232 489 -233 503 -227C604 -187 671 -102 671 11C671 139 577 252 430 252C404 252 404 252 401 270Z"/>
+    <path id="noteheadHalf" d="M75 -87C54 -87 42 -76 35 -64C32 -58 29 -51 29 -44C29 5 174 84 221 84C240 84 251 75 258 63C261 57 264 51 264 44C264 1 123 -87 75 -87ZM97 -125C262 -125 295 9 295 42C295 93 254 125 196 125C47 125 0 10 0 -42C0 -95 42 -125 97 -125Z"/>
     <marker id="a" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
       <path class="ah" d="M0,0 L9,4.5 L0,9 z"/>
     </marker>
     <marker id="b" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
       <path class="ah2" d="M0,0 L9,4.5 L0,9 z"/>
     </marker>
+    <marker id="w" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path class="mark" d="M0,0 L9,4.5 L0,9 z"/>
+    </marker>
   </defs>
 
-  <rect class="bg" x="0" y="0" width="960" height="380" rx="12"/>
+  <rect class="bg" x="0" y="0" width="960" height="574" rx="12"/>
 
-  <text class="h" x="32" y="40">音階・度数・旋法</text>
-  <text class="s" x="928" y="40" text-anchor="end">H = 半音（半音1つ）· W = 全音（半音2つ）</text>
+  <text class="h" x="24" y="42">音階・度数・旋法</text>
+  <text class="lbl" x="936" y="42" text-anchor="end">H = 半音（半音1つ）· W = 全音（半音2つ）</text>
 
-  <!-- row 1: the C major scale -->
-  <text class="h" x="44" y="93">C メジャー</text>
+  <!-- the scale and its degrees -->
+  <rect class="grp" x="24" y="64" width="912" height="166" rx="10"/>
+  <text class="lbl" x="48" y="88">C メジャー</text>
+  <g class="glyph">
+    <path class="staff" d="M48 104H912M48 112H912M48 120H912M48 128H912M48 136H912"/>
+    <use href="#gClef" transform="translate(52 128) scale(0.03 -0.03)"/>
+    <path class="bar" style="stroke-width:2" d="M911 104V136"/>
+    <use href="#noteheadHalf" transform="translate(135.28 144) scale(0.03 -0.03)"/>
+    <path class="ledger" d="M132.08 144h15.84"/>
+    <path class="stem" d="M144.17 144V116"/>
+    <use href="#noteheadHalf" transform="translate(237.28 140) scale(0.03 -0.03)"/>
+    <path class="stem" d="M246.17 140V112"/>
+    <use href="#noteheadHalf" transform="translate(339.28 136) scale(0.03 -0.03)"/>
+    <path class="stem" d="M348.17 136V108"/>
+    <use href="#noteheadHalf" transform="translate(441.28 132) scale(0.03 -0.03)"/>
+    <path class="stem" d="M450.17 132V104"/>
+    <use href="#noteheadHalf" transform="translate(543.28 128) scale(0.03 -0.03)"/>
+    <path class="stem" d="M552.17 128V100"/>
+    <use href="#noteheadHalf" transform="translate(645.28 124) scale(0.03 -0.03)"/>
+    <path class="stem" d="M654.17 124V96"/>
+    <use href="#noteheadHalf" transform="translate(747.28 120) scale(0.03 -0.03)"/>
+    <path class="stem" d="M747.83 120V148"/>
+    <use href="#noteheadHalf" transform="translate(849.28 116) scale(0.03 -0.03)"/>
+    <path class="stem" d="M849.83 116V144"/>
+  </g>
+  <path class="rule" d="M150 164H182M200 164H232"/>
+  <text class="lbl" x="191" y="168" text-anchor="middle">W</text>
+  <path class="rule" d="M252 164H284M302 164H334"/>
+  <text class="lbl" x="293" y="168" text-anchor="middle">W</text>
+  <path class="rule" d="M354 164H386M404 164H436"/>
+  <text class="lbl" x="395" y="168" text-anchor="middle">H</text>
+  <path class="rule" d="M456 164H488M506 164H538"/>
+  <text class="lbl" x="497" y="168" text-anchor="middle">W</text>
+  <path class="rule" d="M558 164H590M608 164H640"/>
+  <text class="lbl" x="599" y="168" text-anchor="middle">W</text>
+  <path class="rule" d="M660 164H692M710 164H742"/>
+  <text class="lbl" x="701" y="168" text-anchor="middle">W</text>
+  <path class="rule" d="M762 164H794M812 164H844"/>
+  <text class="lbl" x="803" y="168" text-anchor="middle">H</text>
+  <text class="h" x="140" y="196" text-anchor="middle">1</text>
+  <text class="s" x="140" y="212" text-anchor="middle">主音</text>
+  <text class="h" x="242" y="196" text-anchor="middle">2</text>
+  <text class="s" x="242" y="212" text-anchor="middle">上主音</text>
+  <text class="h" x="344" y="196" text-anchor="middle">3</text>
+  <text class="s" x="344" y="212" text-anchor="middle">中音</text>
+  <text class="h" x="446" y="196" text-anchor="middle">4</text>
+  <text class="s" x="446" y="212" text-anchor="middle">下属音</text>
+  <text class="h" x="548" y="196" text-anchor="middle">5</text>
+  <text class="s" x="548" y="212" text-anchor="middle">属音</text>
+  <text class="h" x="650" y="196" text-anchor="middle">6</text>
+  <text class="s" x="650" y="212" text-anchor="middle">下中音</text>
+  <text class="h" x="752" y="196" text-anchor="middle">7</text>
+  <text class="s" x="752" y="212" text-anchor="middle">導音</text>
 
-  <rect class="chip" x="160" y="72" width="60" height="32" rx="6"/>
-  <text class="h" x="190" y="93" text-anchor="middle">C</text>
-  <rect class="chip" x="258" y="72" width="60" height="32" rx="6"/>
-  <text class="h" x="288" y="93" text-anchor="middle">D</text>
-  <rect class="chip" x="356" y="72" width="60" height="32" rx="6"/>
-  <text class="h" x="386" y="93" text-anchor="middle">E</text>
-  <rect class="chip" x="454" y="72" width="60" height="32" rx="6"/>
-  <text class="h" x="484" y="93" text-anchor="middle">F</text>
-  <rect class="chip" x="552" y="72" width="60" height="32" rx="6"/>
-  <text class="h" x="582" y="93" text-anchor="middle">G</text>
-  <rect class="chip" x="650" y="72" width="60" height="32" rx="6"/>
-  <text class="h" x="680" y="93" text-anchor="middle">A</text>
-  <rect class="chip" x="748" y="72" width="60" height="32" rx="6"/>
-  <text class="h" x="778" y="93" text-anchor="middle">B</text>
-  <rect class="chip" x="846" y="72" width="60" height="32" rx="6"/>
-  <text class="h" x="876" y="93" text-anchor="middle">C</text>
+  <!-- the same notes, three homes -->
+  <rect class="grp" x="24" y="246" width="912" height="282" rx="10"/>
+  <text class="lbl" x="48" y="270">同じ7音、どの音を中心にするか</text>
+  <text class="s" x="140" y="312" text-anchor="end">イオニア（C）</text>
+  <g class="glyph">
+    <path class="staff" d="M150 292H912M150 300H912M150 308H912M150 316H912M150 324H912"/>
+    <use href="#gClef" transform="translate(154 316) scale(0.03 -0.03)"/>
+    <path class="bar" style="stroke-width:2" d="M911 292V324"/>
+    <use href="#noteheadHalf" transform="translate(225.28 332) scale(0.03 -0.03)"/>
+    <path class="ledger" d="M222.08 332h15.84"/>
+    <path class="stem" d="M234.17 332V304"/>
+    <use href="#noteheadHalf" transform="translate(315.28 328) scale(0.03 -0.03)"/>
+    <path class="stem" d="M324.17 328V300"/>
+    <use href="#noteheadHalf" transform="translate(405.28 324) scale(0.03 -0.03)"/>
+    <path class="stem" d="M414.17 324V296"/>
+    <use href="#noteheadHalf" transform="translate(495.28 320) scale(0.03 -0.03)"/>
+    <path class="stem" d="M504.17 320V292"/>
+    <use href="#noteheadHalf" transform="translate(585.28 316) scale(0.03 -0.03)"/>
+    <path class="stem" d="M594.17 316V288"/>
+    <use href="#noteheadHalf" transform="translate(675.28 312) scale(0.03 -0.03)"/>
+    <path class="stem" d="M684.17 312V284"/>
+    <use href="#noteheadHalf" transform="translate(765.28 308) scale(0.03 -0.03)"/>
+    <path class="stem" d="M765.83 308V336"/>
+    <use href="#noteheadHalf" transform="translate(855.28 304) scale(0.03 -0.03)"/>
+    <path class="stem" d="M855.83 304V332"/>
+  </g>
+  <path class="rule" d="M240 344H266M284 344H310"/>
+  <text class="lbl" x="275" y="348" text-anchor="middle">W</text>
+  <path class="rule" d="M330 344H356M374 344H400"/>
+  <text class="lbl" x="365" y="348" text-anchor="middle">W</text>
+  <path class="rule" d="M420 344H446M464 344H490"/>
+  <text class="lbl" x="455" y="348" text-anchor="middle">H</text>
+  <path class="rule" d="M510 344H536M554 344H580"/>
+  <text class="lbl" x="545" y="348" text-anchor="middle">W</text>
+  <path class="rule" d="M600 344H626M644 344H670"/>
+  <text class="lbl" x="635" y="348" text-anchor="middle">W</text>
+  <path class="rule" d="M690 344H716M734 344H760"/>
+  <text class="lbl" x="725" y="348" text-anchor="middle">W</text>
+  <path class="rule" d="M780 344H806M824 344H850"/>
+  <text class="lbl" x="815" y="348" text-anchor="middle">H</text>
 
-  <text class="lbl" x="239" y="93" text-anchor="middle">W</text>
-  <text class="lbl" x="337" y="93" text-anchor="middle">W</text>
-  <text class="lbl" x="435" y="93" text-anchor="middle">H</text>
-  <text class="lbl" x="533" y="93" text-anchor="middle">W</text>
-  <text class="lbl" x="631" y="93" text-anchor="middle">W</text>
-  <text class="lbl" x="729" y="93" text-anchor="middle">W</text>
-  <text class="lbl" x="827" y="93" text-anchor="middle">H</text>
+  <text class="s" x="140" y="396" text-anchor="end">ドリア（D）</text>
+  <g class="glyph">
+    <path class="staff" d="M150 376H912M150 384H912M150 392H912M150 400H912M150 408H912"/>
+    <use href="#gClef" transform="translate(154 400) scale(0.03 -0.03)"/>
+    <path class="bar" style="stroke-width:2" d="M911 376V408"/>
+    <use href="#noteheadHalf" transform="translate(225.28 412) scale(0.03 -0.03)"/>
+    <path class="stem" d="M234.17 412V384"/>
+    <use href="#noteheadHalf" transform="translate(315.28 408) scale(0.03 -0.03)"/>
+    <path class="stem" d="M324.17 408V380"/>
+    <use href="#noteheadHalf" transform="translate(405.28 404) scale(0.03 -0.03)"/>
+    <path class="stem" d="M414.17 404V376"/>
+    <use href="#noteheadHalf" transform="translate(495.28 400) scale(0.03 -0.03)"/>
+    <path class="stem" d="M504.17 400V372"/>
+    <use href="#noteheadHalf" transform="translate(585.28 396) scale(0.03 -0.03)"/>
+    <path class="stem" d="M594.17 396V368"/>
+    <use href="#noteheadHalf" transform="translate(675.28 392) scale(0.03 -0.03)"/>
+    <path class="stem" d="M675.83 392V420"/>
+    <use href="#noteheadHalf" transform="translate(765.28 388) scale(0.03 -0.03)"/>
+    <path class="stem" d="M765.83 388V416"/>
+    <use href="#noteheadHalf" transform="translate(855.28 384) scale(0.03 -0.03)"/>
+    <path class="stem" d="M855.83 384V412"/>
+  </g>
+  <path class="rule" d="M240 428H266M284 428H310"/>
+  <text class="lbl" x="275" y="432" text-anchor="middle">W</text>
+  <path class="rule" d="M330 428H356M374 428H400"/>
+  <text class="lbl" x="365" y="432" text-anchor="middle">H</text>
+  <path class="rule" d="M420 428H446M464 428H490"/>
+  <text class="lbl" x="455" y="432" text-anchor="middle">W</text>
+  <path class="rule" d="M510 428H536M554 428H580"/>
+  <text class="lbl" x="545" y="432" text-anchor="middle">W</text>
+  <path class="rule" d="M600 428H626M644 428H670"/>
+  <text class="lbl" x="635" y="432" text-anchor="middle">W</text>
+  <path class="rule" d="M690 428H716M734 428H760"/>
+  <text class="lbl" x="725" y="432" text-anchor="middle">H</text>
+  <path class="rule" d="M780 428H806M824 428H850"/>
+  <text class="lbl" x="815" y="432" text-anchor="middle">W</text>
 
-  <!-- row 2: degrees -->
-  <text class="h" x="190" y="126" text-anchor="middle">1</text>
-  <text class="s" x="190" y="142" text-anchor="middle">主音</text>
-  <text class="h" x="288" y="126" text-anchor="middle">2</text>
-  <text class="s" x="288" y="142" text-anchor="middle">上主音</text>
-  <text class="h" x="386" y="126" text-anchor="middle">3</text>
-  <text class="s" x="386" y="142" text-anchor="middle">中音</text>
-  <text class="h" x="484" y="126" text-anchor="middle">4</text>
-  <text class="s" x="484" y="142" text-anchor="middle">下属音</text>
-  <text class="h" x="582" y="126" text-anchor="middle">5</text>
-  <text class="s" x="582" y="142" text-anchor="middle">属音</text>
-  <text class="h" x="680" y="126" text-anchor="middle">6</text>
-  <text class="s" x="680" y="142" text-anchor="middle">下中音</text>
-  <text class="h" x="778" y="126" text-anchor="middle">7</text>
-  <text class="s" x="778" y="142" text-anchor="middle">導音</text>
+  <text class="s" x="140" y="480" text-anchor="end">エオリア（A）</text>
+  <g class="glyph">
+    <path class="staff" d="M150 460H912M150 468H912M150 476H912M150 484H912M150 492H912"/>
+    <use href="#gClef" transform="translate(154 484) scale(0.03 -0.03)"/>
+    <path class="bar" style="stroke-width:2" d="M911 460V492"/>
+    <use href="#noteheadHalf" transform="translate(225.28 480) scale(0.03 -0.03)"/>
+    <path class="stem" d="M234.17 480V452"/>
+    <use href="#noteheadHalf" transform="translate(315.28 476) scale(0.03 -0.03)"/>
+    <path class="stem" d="M315.83 476V504"/>
+    <use href="#noteheadHalf" transform="translate(405.28 472) scale(0.03 -0.03)"/>
+    <path class="stem" d="M405.83 472V500"/>
+    <use href="#noteheadHalf" transform="translate(495.28 468) scale(0.03 -0.03)"/>
+    <path class="stem" d="M495.83 468V496"/>
+    <use href="#noteheadHalf" transform="translate(585.28 464) scale(0.03 -0.03)"/>
+    <path class="stem" d="M585.83 464V492"/>
+    <use href="#noteheadHalf" transform="translate(675.28 460) scale(0.03 -0.03)"/>
+    <path class="stem" d="M675.83 460V488"/>
+    <use href="#noteheadHalf" transform="translate(765.28 456) scale(0.03 -0.03)"/>
+    <path class="stem" d="M765.83 456V484"/>
+    <use href="#noteheadHalf" transform="translate(855.28 452) scale(0.03 -0.03)"/>
+    <path class="ledger" d="M852.08 452h15.84"/>
+    <path class="stem" d="M855.83 452V480"/>
+  </g>
+  <path class="rule" d="M240 512H266M284 512H310"/>
+  <text class="lbl" x="275" y="516" text-anchor="middle">W</text>
+  <path class="rule" d="M330 512H356M374 512H400"/>
+  <text class="lbl" x="365" y="516" text-anchor="middle">H</text>
+  <path class="rule" d="M420 512H446M464 512H490"/>
+  <text class="lbl" x="455" y="516" text-anchor="middle">W</text>
+  <path class="rule" d="M510 512H536M554 512H580"/>
+  <text class="lbl" x="545" y="516" text-anchor="middle">W</text>
+  <path class="rule" d="M600 512H626M644 512H670"/>
+  <text class="lbl" x="635" y="516" text-anchor="middle">H</text>
+  <path class="rule" d="M690 512H716M734 512H760"/>
+  <text class="lbl" x="725" y="516" text-anchor="middle">W</text>
+  <path class="rule" d="M780 512H806M824 512H850"/>
+  <text class="lbl" x="815" y="516" text-anchor="middle">W</text>
 
-  <!-- row 3: modes -->
-  <rect class="grp" x="32" y="152" width="896" height="184" rx="10"/>
-  <text class="lbl" x="48" y="176">同じ7音、どの音を中心にするか</text>
-
-  <text class="h" x="44" y="204">イオニア（C）</text>
-  <rect class="chip" x="160" y="186" width="60" height="26" rx="6"/>
-  <text class="h" x="190" y="204" text-anchor="middle">C</text>
-  <rect class="chip" x="258" y="186" width="60" height="26" rx="6"/>
-  <text class="h" x="288" y="204" text-anchor="middle">D</text>
-  <rect class="chip" x="356" y="186" width="60" height="26" rx="6"/>
-  <text class="h" x="386" y="204" text-anchor="middle">E</text>
-  <rect class="chip" x="454" y="186" width="60" height="26" rx="6"/>
-  <text class="h" x="484" y="204" text-anchor="middle">F</text>
-  <rect class="chip" x="552" y="186" width="60" height="26" rx="6"/>
-  <text class="h" x="582" y="204" text-anchor="middle">G</text>
-  <rect class="chip" x="650" y="186" width="60" height="26" rx="6"/>
-  <text class="h" x="680" y="204" text-anchor="middle">A</text>
-  <rect class="chip" x="748" y="186" width="60" height="26" rx="6"/>
-  <text class="h" x="778" y="204" text-anchor="middle">B</text>
-  <rect class="chip" x="846" y="186" width="60" height="26" rx="6"/>
-  <text class="h" x="876" y="204" text-anchor="middle">C</text>
-  <text class="lbl" x="239" y="222" text-anchor="middle">W</text>
-  <text class="lbl" x="337" y="222" text-anchor="middle">W</text>
-  <text class="lbl" x="435" y="222" text-anchor="middle">H</text>
-  <text class="lbl" x="533" y="222" text-anchor="middle">W</text>
-  <text class="lbl" x="631" y="222" text-anchor="middle">W</text>
-  <text class="lbl" x="729" y="222" text-anchor="middle">W</text>
-  <text class="lbl" x="827" y="222" text-anchor="middle">H</text>
-
-  <text class="h" x="44" y="254">ドリア（D）</text>
-  <rect class="chip" x="160" y="236" width="60" height="26" rx="6"/>
-  <text class="h" x="190" y="254" text-anchor="middle">D</text>
-  <rect class="chip" x="258" y="236" width="60" height="26" rx="6"/>
-  <text class="h" x="288" y="254" text-anchor="middle">E</text>
-  <rect class="chip" x="356" y="236" width="60" height="26" rx="6"/>
-  <text class="h" x="386" y="254" text-anchor="middle">F</text>
-  <rect class="chip" x="454" y="236" width="60" height="26" rx="6"/>
-  <text class="h" x="484" y="254" text-anchor="middle">G</text>
-  <rect class="chip" x="552" y="236" width="60" height="26" rx="6"/>
-  <text class="h" x="582" y="254" text-anchor="middle">A</text>
-  <rect class="chip" x="650" y="236" width="60" height="26" rx="6"/>
-  <text class="h" x="680" y="254" text-anchor="middle">B</text>
-  <rect class="chip" x="748" y="236" width="60" height="26" rx="6"/>
-  <text class="h" x="778" y="254" text-anchor="middle">C</text>
-  <rect class="chip" x="846" y="236" width="60" height="26" rx="6"/>
-  <text class="h" x="876" y="254" text-anchor="middle">D</text>
-  <text class="lbl" x="239" y="272" text-anchor="middle">W</text>
-  <text class="lbl" x="337" y="272" text-anchor="middle">H</text>
-  <text class="lbl" x="435" y="272" text-anchor="middle">W</text>
-  <text class="lbl" x="533" y="272" text-anchor="middle">W</text>
-  <text class="lbl" x="631" y="272" text-anchor="middle">W</text>
-  <text class="lbl" x="729" y="272" text-anchor="middle">H</text>
-  <text class="lbl" x="827" y="272" text-anchor="middle">W</text>
-
-  <text class="h" x="44" y="304">エオリア（A）</text>
-  <rect class="chip" x="160" y="286" width="60" height="26" rx="6"/>
-  <text class="h" x="190" y="304" text-anchor="middle">A</text>
-  <rect class="chip" x="258" y="286" width="60" height="26" rx="6"/>
-  <text class="h" x="288" y="304" text-anchor="middle">B</text>
-  <rect class="chip" x="356" y="286" width="60" height="26" rx="6"/>
-  <text class="h" x="386" y="304" text-anchor="middle">C</text>
-  <rect class="chip" x="454" y="286" width="60" height="26" rx="6"/>
-  <text class="h" x="484" y="304" text-anchor="middle">D</text>
-  <rect class="chip" x="552" y="286" width="60" height="26" rx="6"/>
-  <text class="h" x="582" y="304" text-anchor="middle">E</text>
-  <rect class="chip" x="650" y="286" width="60" height="26" rx="6"/>
-  <text class="h" x="680" y="304" text-anchor="middle">F</text>
-  <rect class="chip" x="748" y="286" width="60" height="26" rx="6"/>
-  <text class="h" x="778" y="304" text-anchor="middle">G</text>
-  <rect class="chip" x="846" y="286" width="60" height="26" rx="6"/>
-  <text class="h" x="876" y="304" text-anchor="middle">A</text>
-  <text class="lbl" x="239" y="322" text-anchor="middle">W</text>
-  <text class="lbl" x="337" y="322" text-anchor="middle">H</text>
-  <text class="lbl" x="435" y="322" text-anchor="middle">W</text>
-  <text class="lbl" x="533" y="322" text-anchor="middle">W</text>
-  <text class="lbl" x="631" y="322" text-anchor="middle">H</text>
-  <text class="lbl" x="729" y="322" text-anchor="middle">W</text>
-  <text class="lbl" x="827" y="322" text-anchor="middle">W</text>
-
-  <text class="s" x="480" y="352" text-anchor="middle">旋法は同じ素材の回転であり、どの度数を中心とするかだけが変わります。</text>
+  <text class="s" x="480" y="558" text-anchor="middle">旋法は同じ素材の回転であり、どの度数を中心とするかだけが変わります。</text>
 </svg>
