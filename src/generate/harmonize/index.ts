@@ -5,6 +5,7 @@ import {
   assertNoteEvents,
   assertOneOf,
   assertRange,
+  assertRecord,
   assertTimeSignature,
   soundingNotesOnly,
 } from '../../core/validation/index.js';
@@ -89,6 +90,7 @@ import { segmentIndexAt } from './segments.js';
  * @category Reharmonization
  */
 export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
+  assertRecord(opts, 'harmonize options');
   assertNoteEvents(opts.melody, 'harmonize melody', {
     allowNonPositiveDuration: true,
     budget: opts.budget,

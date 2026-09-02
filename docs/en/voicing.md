@@ -107,14 +107,12 @@ Pass `previousChord` alongside `key` when the chord being left had a seventh: ch
 | `rootless` | Root omitted, keeping third, fifth, seventh, and tensions. |
 
 ```ts
-import { parseChordSymbol, voiceChordStyled } from '@libraz/libcantus';
+import { voiceChordStyled } from '@libraz/libcantus';
 
-const dm7 = parseChordSymbol('Dm7');
-
-voiceChordStyled(dm7); // [62, 65, 69, 72]
-voiceChordStyled(dm7, { style: 'drop2' }); // [57, 62, 65, 72]
-voiceChordStyled(dm7, { style: 'shell' }); // [62, 65, 72]
-voiceChordStyled(dm7, { style: 'rootless' }); // [65, 69, 72]
+voiceChordStyled('Dm7'); // [62, 65, 69, 72]
+voiceChordStyled('Dm7', { style: 'drop2' }); // [57, 62, 65, 72]
+voiceChordStyled('Dm7', { style: 'shell' }); // [62, 65, 72]
+voiceChordStyled('Dm7', { style: 'rootless' }); // [65, 69, 72]
 ```
 
 `Voicing.forChord` is the same builder, taking the symbol directly:

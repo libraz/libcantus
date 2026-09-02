@@ -238,7 +238,7 @@ export class Voicing {
    * ```
    */
   static forChord(chord: ChordLike, opts?: StyledVoicingOptions): Voicing {
-    return new Voicing(voiceChordStyled(toChordData(chord), opts));
+    return new Voicing(voiceChordStyled(chord, opts));
   }
 
   /**

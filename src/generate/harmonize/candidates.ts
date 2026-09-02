@@ -1,9 +1,15 @@
-import { isDiatonic, parallelKey, tonicizableDegrees } from '../../analyze/functional/index.js';
+import {
+  isDiatonic,
+  parallelKey,
+  type TonicizableDegree,
+  tonicizableDegrees,
+} from '../../analyze/functional/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { chordPitchClasses, diatonicTriad, makeChord } from '../../theory/chord/index.js';
 import { scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
+import { heptatonicFrameOf } from '../../theory/tendency/index.js';
 import type { Candidate, HarmonizeOptions } from './internal.js';
 import { cadencesThroughRaisedSeventh } from './internal.js';
 
@@ -81,9 +87,13 @@ const SECONDARY_DOMINANT_TARGETS = [2, 4, 5, 6];
  * its targets with, so what the generator marks as a secondary dominant is what
  * the numeral can be written for.
  */
-function secondaryDominantTargets(key: KeyScale): number[] {
-  const tonicizable = new Set(tonicizableDegrees(key).map((degree) => degree.degreeNumber));
-  return SECONDARY_DOMINANT_TARGETS.filter((degree) => tonicizable.has(degree));
+function secondaryDominantTargets(key: KeyScale): TonicizableDegree[] {
+  const tonicizable = new Map(
+    tonicizableDegrees(key).map((degree) => [degree.degreeNumber, degree] as const),
+  );
+  return SECONDARY_DOMINANT_TARGETS.map((degree) => tonicizable.get(degree)).filter(
+    (degree): degree is TonicizableDegree => degree !== undefined,
+  );
 }
 /**
  * The order those dominants open up in as the harmonic dial rises, by the
@@ -137,12 +147,19 @@ function admittedCount(fraction: number, size: number): number {
  */
 export function buildCandidates(key: KeyScale, harmonic: number): Candidate[] {
   const tonicPc = pitchClass(key.rootPc);
-  const tones = scaleTonesInDegreeOrder(key);
+  // A degree is one of seven, so a key with some other number of tones — a
+  // pentatonic or a blues scale, which pops writes tunes in — is read against
+  // its parallel major, which is the frame the numerals and the tonicization
+  // targets below are already measured in. Harmonizing a five-tone melody with
+  // the triads of the major it lives in is what a player does; refusing it
+  // because the scale has five tones is not.
+  const frame = heptatonicFrameOf(key);
+  const tones = scaleTonesInDegreeOrder(frame);
   const candidates: Candidate[] = tones.map((rootPc, index) => {
     // Scale degrees are 1-based across the library, while the array index is
     // not; the candidate records the degree, which is what reaches the caller.
     const degree = index + 1;
-    const quality = diatonicTriad(degree, key).quality;
+    const quality = diatonicTriad(degree, frame).quality;
     return {
       rootPc,
       quality,
@@ -181,19 +198,23 @@ export function buildCandidates(key: KeyScale, harmonic: number): Candidate[] {
   // The degrees are kept in the same 1-based space as `Candidate.degree`, which
   // the voice-leading cost compares them against.
   const targets = secondaryDominantTargets(key);
-  const entryOrder = SECONDARY_DOMINANT_ENTRY_ORDER.filter((degree) => targets.includes(degree));
+  const entryOrder = SECONDARY_DOMINANT_ENTRY_ORDER.filter((degree) =>
+    targets.some((target) => target.degreeNumber === degree),
+  );
   const secondaryOpen = admittedCount(harmonic / SECONDARY_DOMINANT_BAND, targets.length);
   for (const target of targets) {
-    if (entryOrder.indexOf(target) >= secondaryOpen) {
+    if (entryOrder.indexOf(target.degreeNumber) >= secondaryOpen) {
       continue;
     }
-    const targetRoot = tones[target - 1] ?? 0;
-    const rootPc = (targetRoot + 7) % 12;
+    // The root comes from the target itself rather than from a second lookup by
+    // degree number: the targets are numbered in the key's heptatonic frame, so
+    // indexing any other list of tones by that number reads a different degree.
+    const rootPc = (target.rootPc + 7) % 12;
     candidates.push({
       rootPc,
       quality: 'dom7',
       secondaryDominant: true,
-      targetDegree: target,
+      targetDegree: target.degreeNumber,
       base: SECONDARY_DOMINANT_BASE,
       pcs: chordPitchClasses(makeChord(rootPc, 'dom7')),
     });

@@ -7,11 +7,12 @@ import {
   assertGenerationBudget,
   assertOneOf,
   assertPositiveInt,
+  assertRecord,
 } from '../../core/validation/index.js';
 import type { ChordQuality, ChordSpan } from '../../theory/chord/index.js';
 import { chordQualities, diatonicTriad, makeChord } from '../../theory/chord/index.js';
 import { type KeyLike, scaleTonesInDegreeOrder, toKeyScale } from '../../theory/scale/index.js';
-import { fifthPcOf } from '../../theory/tendency/index.js';
+import { fifthPcOf, heptatonicFrameOf } from '../../theory/tendency/index.js';
 import {
   type GenerationContextInput,
   type ResolvedContext,
@@ -335,13 +336,20 @@ export function progressionsByStyle(style: ProgStyle): ProgressionPreset[] {
   return progressions().filter((p) => p.styles.includes(style));
 }
 
-/** Root pitch class of a scale degree in the given key, including borrowed degrees. */
+/**
+ * Root pitch class of a scale degree in the given key, including borrowed
+ * degrees.
+ *
+ * Degrees are read in the key's heptatonic frame, as the numerals and the
+ * tonicization targets are: a preset is written in degrees one to seven, and a
+ * key with some other number of tones has no degree-for-degree frame of its own
+ * to read them in. Wrapping them into a five-tone scale instead answered the
+ * sixth degree with the first.
+ */
 function degreeToRootPc(degree: number, key: KeyScale): number {
   if (degree >= 1 && degree <= 7) {
-    const tones = scaleTonesInDegreeOrder(key);
-    return tones.length > 0
-      ? (tones[(degree - 1) % tones.length] ?? key.rootPc % 12)
-      : key.rootPc % 12;
+    const tones = scaleTonesInDegreeOrder(heptatonicFrameOf(key));
+    return tones[degree - 1] ?? key.rootPc % 12;
   }
   const offset = BORROWED_OFFSET[degree] ?? 0;
   return ((((key.rootPc % 12) + offset) % 12) + 12) % 12;
@@ -361,7 +369,9 @@ function autoQuality(degree: number, key: KeyScale, harmonicDominant: boolean): 
     if (harmonicDominant && isMinorKey(key) && degree === 5) {
       return 'maj';
     }
-    return diatonicTriad(degree, key).quality;
+    // The same frame the root was read in, so the two halves of one chord
+    // cannot come from different degree spaces.
+    return diatonicTriad(degree, heptatonicFrameOf(key)).quality;
   }
   if (degree === 14) {
     return 'dim';
@@ -526,6 +536,7 @@ function canBeTonicized(span: ChordSpan, tonicizable: ReadonlySet<number>): bool
  * @category Composition
  */
 export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
+  assertRecord(opts, 'progression options');
   assertPositiveInt(opts.bars, 'progression bars');
   assertGenerationBudget(opts.bars, 'progression chords');
   // The key is read into its plain form once, here at the boundary; the degree

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BudgetExceededError } from '../src/core/errors/index.js';
+import { BudgetExceededError, InvalidInputError } from '../src/core/errors/index.js';
+import { Voicing } from '../src/model/voicing.js';
 import type { Chord } from '../src/theory/chord/index.js';
 import { chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
 import { createsParallelOctave, createsParallelPerfect } from '../src/theory/counterpoint/index.js';
@@ -236,6 +237,16 @@ describe('voiceProgression', () => {
 });
 
 describe('voiceChordStyled', () => {
+  it('takes a chord in whatever form the caller holds it', () => {
+    // Its three siblings in the module take a chord symbol, and so does the
+    // class that wraps this one, so a caller writing the symbol here was
+    // reaching for something the module offered everywhere but at this entry.
+    const written = voiceChordStyled('Dm7', { style: 'drop2' });
+    expect(written).toEqual(voiceChordStyled(makeChord(2, 'min7'), { style: 'drop2' }));
+    expect(written).toEqual(Voicing.forChord('Dm7', { style: 'drop2' }).pitches);
+    expect(() => voiceChordStyled('not a chord', { style: 'drop2' })).toThrow(InvalidInputError);
+  });
+
   it('drops the second voice from the top an octave below the close voicing', () => {
     const chord = makeChord(0, 'maj7');
     const close = voiceChordStyled(chord, { style: 'close' });

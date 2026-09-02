@@ -107,14 +107,12 @@ sounding.costTo(moved); // 8
 | `rootless` | ルートを省き、3度・5度・7度とテンションを残します。 |
 
 ```ts
-import { parseChordSymbol, voiceChordStyled } from '@libraz/libcantus';
+import { voiceChordStyled } from '@libraz/libcantus';
 
-const dm7 = parseChordSymbol('Dm7');
-
-voiceChordStyled(dm7); // [62, 65, 69, 72]
-voiceChordStyled(dm7, { style: 'drop2' }); // [57, 62, 65, 72]
-voiceChordStyled(dm7, { style: 'shell' }); // [62, 65, 72]
-voiceChordStyled(dm7, { style: 'rootless' }); // [65, 69, 72]
+voiceChordStyled('Dm7'); // [62, 65, 69, 72]
+voiceChordStyled('Dm7', { style: 'drop2' }); // [57, 62, 65, 72]
+voiceChordStyled('Dm7', { style: 'shell' }); // [62, 65, 72]
+voiceChordStyled('Dm7', { style: 'rootless' }); // [65, 69, 72]
 ```
 
 `Voicing.forChord` は同じビルダーで、コード記号をそのまま受け取ります。
