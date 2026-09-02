@@ -1,12 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { BudgetExceededError, InvalidInputError } from '../src/core/errors/index.js';
 import type { NoteEvent } from '../src/core/types.js';
-import {
-  buildCandidates,
-  type HarmonizeOptions,
-  type HarmonizeResult,
-  harmonizeMelody,
-} from '../src/generate/harmonize/index.js';
+import { buildCandidates } from '../src/generate/harmonize/candidates.js';
+import type { HarmonizeOptions, HarmonizeResult } from '../src/generate/harmonize/index.js';
+import { harmonizeMelody } from '../src/generate/harmonize/index.js';
 import type { ChordSpan } from '../src/generate/progression/index.js';
 import {
   chordFromSpan,

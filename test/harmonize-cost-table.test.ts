@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteEvent } from '../src/core/types.js';
-import {
-  buildCandidates,
-  type Candidate,
-  harmonizeMelody,
-} from '../src/generate/harmonize/index.js';
+import { buildCandidates } from '../src/generate/harmonize/candidates.js';
+import { harmonizeMelody } from '../src/generate/harmonize/index.js';
+import type { Candidate } from '../src/generate/harmonize/internal.js';
 import { majorKey, minorKey } from '../src/theory/scale/index.js';
 
 const cMajor = majorKey(0);
