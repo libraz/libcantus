@@ -64,7 +64,8 @@ export type ChordTimeline = {
  * Reject a value that is not a chord timeline.
  *
  * A timeline is the one argument a host is most likely to hold from somewhere
- * else — a project file, a previous run's JSON, another library's output — and
+ * else — an in-memory project value, a previous run restored to a timeline, or
+ * another library's output — and
  * it is read field by field deep inside an analysis. Checking it once at the
  * entrance names the argument that is wrong instead of reporting the library's
  * own `TypeError` from wherever the first `segments` lookup happened to be.

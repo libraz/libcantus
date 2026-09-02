@@ -33,7 +33,7 @@ voiceOrCode('C', { min: 72, max: 60 }); // 'INVALID_INPUT'
 
 `NoSolutionError` は、処理が列を順に辿っていた場合に `at` を持ちます。4つ目のコードで失敗した進行は、進行全体ではなくその位置の失敗として報告できます。
 
-## 例外を投げないテキスト解析
+## 不正なテキストを例外にしない解析
 
 テキスト入力欄は1打鍵ごとに解析され、その大半は有効な記号の途中にあります。`try*` 系のパーサはそれを値として返します。
 
@@ -58,7 +58,9 @@ const typed = tryParseChordSymbol('C(');
 const label = typed.ok ? typed.value.quality : typed.error.message;
 ```
 
-`ParseResult<T>` は `{ ok: true; value: T }` または `{ ok: false; error: LibcantusError }` です。エラーを `null` に潰さず結果に載せるのは、入力欄が「入力された文字列の何が不正なのか」を表示する必要があるためです。テキストを読むパーサはいずれもこの対を持ちます。音名、音程、コードネーム、調名、拍子記号のすべてです。クラス API も、テキストを読むクラスごとに同じ対を持ちます。`Note.parse`、`Interval.parse`、`Key.parse`、`Chord.parse`、`Meter.parse` に対して `Note.tryParse`、`Interval.tryParse`、`Key.tryParse`、`Chord.tryParse`、`Meter.tryParse` です。
+`ParseResult<T>` は `{ ok: true; value: T }` または `{ ok: false; error: LibcantusError }` です。不正な文字列を `null` に潰さず結果に載せるのは、入力欄が「入力された文字列の何が不正なのか」を表示する必要があるためです。テキストを読むパーサはいずれもこの対を持ちます。音名、音程、コードネーム、調名、拍子記号のすべてです。クラス API も、テキストを読むクラスごとに同じ対を持ちます。`Note.parse`、`Interval.parse`、`Key.parse`、`Chord.parse`、`Meter.parse` に対して `Note.tryParse`、`Interval.tryParse`、`Key.tryParse`、`Chord.tryParse`、`Meter.tryParse` です。
+
+パーサの options はテキストではなく API の引数です。解析より先に検証されるため、JavaScript から来た `null` を含む不正な options は、投げる形式でも `try*` 形式でも `InvalidInputError` になります。options が不要なら省略し、入力途中の文字列だけを `ParseResult` で扱います。
 
 例外を投げるパーサは、いずれも投げないパーサの上に実装されています。`parseNote` と `tryParseNote` が妥当性の判定でずれることはありません。
 
@@ -76,6 +78,15 @@ assertOneOf('walking', ['pop', 'walking', 'root'], 'bass style'); // 'walking'
 clampToMidi(140); // 127
 
 assertNoteEvents([{ pitch: 60, startBeat: 0, durationBeat: 1 }]).length; // 1
+```
+
+`assertChordTimeline` は、アプリケーションの別の場所ですでに作られたタイムラインにも同じ境界検証を行います。`at` 関数、区間の配列、各区間の有限な境界を要求し、同じタイムラインを返します。JSON の値は `at` を持たないため、この検証に渡す前にタイムラインへ復元する必要があります。
+
+```ts
+import { assertChordTimeline, chordTimelineFromChords } from '@libraz/libcantus';
+
+const timeline = chordTimelineFromChords([], 4);
+assertChordTimeline(timeline) === timeline; // true
 ```
 
 いずれの関数も引数をそのまま返すため、独立した1行を割かずに値を包めます。`assertMidiPitch` と `clampToMidi` はどちらも整数を要求します。MIDI のバイトは小数を載せられないためです。両者の違いは範囲の扱いだけで、`assertMidiPitch` は 0..127 を外れたピッチを拒否し、`clampToMidi` は 0..127 に丸めます。インポート処理では後者が適することが多いです。

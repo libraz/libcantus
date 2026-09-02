@@ -18,7 +18,7 @@ parseNote('Bb3'); // { letter: 6, alter: -1, octave: 3 }
 tryParseNote('C#b').ok; // false
 ```
 
-`tryParseNote` と、対応する `tryParseInterval`、`tryParseChordSymbol`、`tryParseKeyName`、`tryParseTimeSignature`、そして `Note`・`Interval`・`Key`・`Chord` の `tryParse` メソッドは、例外を投げる代わりに解析結果を返します。テキスト入力欄やインポート処理で役立ちます。[エラーと検証](errors-and-validation.md)を参照してください。
+`tryParseNote` と、対応する `tryParseInterval`、`tryParseChordSymbol`、`tryParseKeyName`、`tryParseTimeSignature`、そして `Note`・`Interval`・`Key`・`Chord` の `tryParse` メソッドは、不正なテキストを解析結果として返します。options は検証対象の API 引数なので、不正な options は `InvalidInputError` になります。テキスト入力欄やインポート処理で役立ちます。[エラーと検証](errors-and-validation.md)を参照してください。
 
 綴られた音と MIDI のあいだの変換は別々の関数になっています。失われる情報が異なるためです。
 

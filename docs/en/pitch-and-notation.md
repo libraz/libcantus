@@ -18,7 +18,7 @@ parseNote('Bb3'); // { letter: 6, alter: -1, octave: 3 }
 tryParseNote('C#b').ok; // false
 ```
 
-`tryParseNote` and the corresponding `tryParseInterval`, `tryParseChordSymbol`, `tryParseKeyName` and `tryParseTimeSignature` functions return a parse result instead of throwing, as do the `tryParse` methods on `Note`, `Interval`, `Key`, and `Chord`. This is useful for text fields and importers; see [Errors and validation](errors-and-validation.md).
+`tryParseNote` and the corresponding `tryParseInterval`, `tryParseChordSymbol`, `tryParseKeyName` and `tryParseTimeSignature` functions return a parse result for invalid text, as do the `tryParse` methods on `Note`, `Interval`, `Key`, and `Chord`. Their options remain validated API arguments, so malformed options can still raise `InvalidInputError`. This is useful for text fields and importers; see [Errors and validation](errors-and-validation.md).
 
 The conversions between spelled notes and MIDI are separate functions, because they lose different things:
 

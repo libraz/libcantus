@@ -33,7 +33,7 @@ Re-throw anything the guard rejects. A `TypeError` raised by a bug inside the li
 
 `NoSolutionError` carries `at` when the operation was working through a sequence, so a progression that fails on its fourth chord can be reported at that chord rather than as a whole.
 
-## Parsing text without exceptions
+## Parsing invalid text without exceptions
 
 A text field is parsed on every keystroke, and most keystrokes land halfway through a valid symbol. The `try*` parsers report that as a value:
 
@@ -58,7 +58,9 @@ const typed = tryParseChordSymbol('C(');
 const label = typed.ok ? typed.value.quality : typed.error.message;
 ```
 
-`ParseResult<T>` is `{ ok: true; value: T }` or `{ ok: false; error: LibcantusError }`. The error travels in the result rather than collapsing to `null`, because an input field has to say what is wrong with what was typed. Every text parser has one: notes, intervals, chord symbols, key names, and time signatures. The class API mirrors the pair on the class that reads the text: `Note.tryParse`, `Interval.tryParse`, `Key.tryParse`, `Chord.tryParse`, and `Meter.tryParse` beside `Note.parse`, `Interval.parse`, `Key.parse`, `Chord.parse`, and `Meter.parse`.
+`ParseResult<T>` is `{ ok: true; value: T }` or `{ ok: false; error: LibcantusError }`. It reports invalid text rather than collapsing it to `null`, because an input field has to say what is wrong with what was typed. Every text parser has one: notes, intervals, chord symbols, key names, and time signatures. The class API mirrors the pair on the class that reads the text: `Note.tryParse`, `Interval.tryParse`, `Key.tryParse`, `Chord.tryParse`, and `Meter.tryParse` beside `Note.parse`, `Interval.parse`, `Key.parse`, `Chord.parse`, and `Meter.parse`.
+
+The parser options are API arguments, not text. They are validated before parsing, so a malformed options bag from JavaScript — including `null` — raises `InvalidInputError` from either the throwing or the `try*` form. Omit options when there are none; use `ParseResult` only for text the user is still typing.
 
 Each throwing parser is written on top of its non-throwing sibling, so `parseNote` and `tryParseNote` cannot disagree about what is valid.
 
@@ -76,6 +78,15 @@ assertOneOf('walking', ['pop', 'walking', 'root'], 'bass style'); // 'walking'
 clampToMidi(140); // 127
 
 assertNoteEvents([{ pitch: 60, startBeat: 0, durationBeat: 1 }]).length; // 1
+```
+
+`assertChordTimeline` applies the same boundary check to a timeline another part of an application has already built. It requires an `at` function, a segment array, and finite bounds on every segment, and returns the same timeline. A JSON value needs to be restored to a timeline with `at` before this check can accept it:
+
+```ts
+import { assertChordTimeline, chordTimelineFromChords } from '@libraz/libcantus';
+
+const timeline = chordTimelineFromChords([], 4);
+assertChordTimeline(timeline) === timeline; // true
 ```
 
 Each helper returns its argument, so it can wrap a value in place instead of sitting on a line of its own. Both `assertMidiPitch` and `clampToMidi` require a whole number — a MIDI byte has no fractional value to carry — and they differ only in what they do with the range: `assertMidiPitch` rejects a pitch outside 0..127, while `clampToMidi` folds it into 0..127, which is what an importer usually wants.
