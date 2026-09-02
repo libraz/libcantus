@@ -242,8 +242,9 @@ export function tensionCurveFrom(
   analysis: ArrangementAnalysis,
   opts: ArrangementOptions & { step?: number } = {},
 ): TensionPoint[] {
-  const carried = carriedHarmony(assertRecord<ArrangementAnalysis>(analysis, 'analysis'), opts);
-  return tensionCurve(tracks, { ...carried, ...opts });
+  const asked = assertRecord<ArrangementOptions & { step?: number }>(opts, 'opts');
+  const carried = carriedHarmony(assertRecord<ArrangementAnalysis>(analysis, 'analysis'), asked);
+  return tensionCurve(tracks, { ...carried, ...asked });
 }
 
 /**

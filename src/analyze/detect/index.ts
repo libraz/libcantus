@@ -13,6 +13,7 @@ import {
   assertGenerationBudget,
   assertMidiPitch,
   assertNoteEvents,
+  assertRecord,
 } from '../../core/validation/index.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { chordPitchClasses, chordQualities, makeChord } from '../../theory/chord/index.js';
@@ -567,8 +568,12 @@ function explainMatches(results: KeyMatch[], inputSize: number): void {
  * @category Recognition
  */
 export function detectKey(pitches: readonly number[], opts: DetectKeyOptions = {}): KeyMatch[] {
-  assertPitches(pitches, 'key detection pitches', opts.budget);
-  const weights = opts.weights;
+  // The default fills in only for an absent argument, so an explicit `null`
+  // reaches the first field read as itself; a caller working in JavaScript, or
+  // one passing on an options object it never built, arrives here with one.
+  const asked = assertRecord<DetectKeyOptions>(opts, 'opts');
+  assertPitches(pitches, 'key detection pitches', asked.budget);
+  const weights = asked.weights;
   if (weights !== undefined && weights.length !== pitches.length) {
     throw new InvalidInputError('weights must have one entry per pitch');
   }
