@@ -1,5 +1,6 @@
 import { InvalidInputError, NoSolutionError } from '../../core/errors/index.js';
 import {
+  assertArray,
   assertFiniteNumber,
   assertGenerationBudget,
   assertPositiveInt,
@@ -386,8 +387,9 @@ function successorWeight(
  * @category Voicing & Counterpoint
  */
 export function voiceProgression(chords: readonly ChordLike[], opts?: VoicingOptions): number[][] {
-  assertGenerationBudget(chords.length, 'voiced progression chords', opts?.budget);
-  const data = chords.map((chord) => toChordData(chord));
+  const progression = assertArray<ChordLike>(chords, 'chords');
+  assertGenerationBudget(progression.length, 'voiced progression chords', opts?.budget);
+  const data = progression.map((chord) => toChordData(chord));
   const key = resolvedKeyOf(opts);
   const ranges = resolveRanges(opts);
   const maxSpacing = resolveMaxSpacing(opts);

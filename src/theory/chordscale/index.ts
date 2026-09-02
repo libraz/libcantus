@@ -71,7 +71,7 @@ export function scaleMatchesChord(
   scaleMask: number,
   scaleRootPc: number,
 ): boolean {
-  for (const pc of chordPcs) {
+  for (const pc of assertArray<number>(chordPcs, 'chord pitch classes')) {
     if (!maskHasPitchClass(scaleMask, scaleRootPc, pc)) {
       return false;
     }

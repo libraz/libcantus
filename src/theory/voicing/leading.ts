@@ -1,5 +1,5 @@
 import { InvalidInputError, NoSolutionError } from '../../core/errors/index.js';
-import { assertFiniteNumber } from '../../core/validation/index.js';
+import { assertArray, assertFiniteNumber } from '../../core/validation/index.js';
 import { type ChordLike, toChordData } from '../symbol/index.js';
 import { enumerateVoicings, leadingCost, moveScore, moveScoring } from './internal.js';
 import type { VoicingOptions } from './satb.js';
@@ -25,10 +25,12 @@ import {
  * @category Voicing & Counterpoint
  */
 export function voiceLeadingCost(from: number[], to: number[]): number {
-  if (from.length !== to.length) {
+  const previous = assertArray<number>(from, 'from');
+  const next = assertArray<number>(to, 'to');
+  if (previous.length !== next.length) {
     return Number.POSITIVE_INFINITY;
   }
-  return leadingCost(from, 0, to, 0, from.length);
+  return leadingCost(previous, 0, next, 0, previous.length);
 }
 
 /**

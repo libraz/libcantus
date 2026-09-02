@@ -12,6 +12,7 @@ import { InvalidInputError } from '../../core/errors/index.js';
 import { ConsonanceClass } from '../../core/interval/index.js';
 import type { Note } from '../../core/pitch/index.js';
 import { spelledInterval } from '../../core/pitch/index.js';
+import { assertArray } from '../../core/validation/index.js';
 import { classifySpelledInterval, pitchOf, simpleIntervalNumber } from './internal.js';
 
 /**
@@ -178,9 +179,11 @@ export function voiceIndependence(
   counter: readonly (Note | null)[],
   opts?: VoiceIndependenceOptions,
 ): VoiceIndependenceReport {
-  if (lead.length !== counter.length) {
+  const upper = assertArray<Note | null>(lead, 'lead');
+  const lower = assertArray<Note | null>(counter, 'counter');
+  if (upper.length !== lower.length) {
     throw new InvalidInputError(
-      `voiceIndependence needs the two lines aligned slot for slot; received ${lead.length} and ${counter.length}`,
+      `voiceIndependence needs the two lines aligned slot for slot; received ${upper.length} and ${lower.length}`,
     );
   }
   // The attack arrays are read slot by slot alongside the lines, so one of the
@@ -190,14 +193,14 @@ export function voiceIndependence(
     ['leadAttacks', opts?.leadAttacks],
     ['counterAttacks', opts?.counterAttacks],
   ] as const) {
-    if (flags !== undefined && flags.length !== lead.length) {
+    if (flags !== undefined && flags.length !== upper.length) {
       throw new InvalidInputError(
-        `voiceIndependence needs ${name} aligned slot for slot with the lines; received ${flags.length} and ${lead.length}`,
+        `voiceIndependence needs ${name} aligned slot for slot with the lines; received ${flags.length} and ${upper.length}`,
       );
     }
   }
-  const slots: Slot[] = lead.map((leadNote, index) => {
-    const counterNote = counter[index] ?? null;
+  const slots: Slot[] = upper.map((leadNote, index) => {
+    const counterNote = lower[index] ?? null;
     return {
       lead: leadNote,
       counter: counterNote,

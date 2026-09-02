@@ -62,7 +62,8 @@ const SHARPEST_TONIC_FIFTHS = MAX_CONVENTIONAL_FIFTHS + MINOR_TONIC_FIFTHS;
 
 /** Validate a key's mode mask, naming it the way the caller sees it. */
 function assertModeMask(key: KeyScale, name = 'key'): number {
-  return assertInteger(key.modeMask12, `${name}.modeMask12`, 1, CHROMATIC_MASK);
+  const scale = assertRecord<KeyScale>(key, name);
+  return assertInteger(scale.modeMask12, `${name}.modeMask12`, 1, CHROMATIC_MASK);
 }
 
 /**
@@ -613,13 +614,15 @@ export function relatedKeysOf(
  * @category Scales
  */
 export function keyRelationBetween(a: ResolvedKey, b: ResolvedKey): KeyRelation | null {
-  assertModeMask(a.scale, 'a.scale');
-  assertModeMask(b.scale, 'b.scale');
-  if (soundsLike(a.scale, b.scale)) {
-    return spelledLike(a.tonic, b.tonic) ? 'same' : 'enharmonic';
+  const from = assertRecord<ResolvedKey>(a, 'a');
+  const to = assertRecord<ResolvedKey>(b, 'b');
+  assertModeMask(from.scale, 'a.scale');
+  assertModeMask(to.scale, 'b.scale');
+  if (soundsLike(from.scale, to.scale)) {
+    return spelledLike(from.tonic, to.tonic) ? 'same' : 'enharmonic';
   }
   for (const { relation, of } of CLOSELY_RELATED) {
-    if (soundsLike(of(a.tonic, a.scale).scale, b.scale)) {
+    if (soundsLike(of(from.tonic, from.scale).scale, to.scale)) {
       return relation;
     }
   }
