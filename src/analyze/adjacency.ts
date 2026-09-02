@@ -12,14 +12,22 @@
  * distance can.
  */
 
+import { BEAT_EPS } from '../core/meter/index.js';
+
 /**
  * Largest difference between two beats that are the same beat.
  *
- * This is float residue rather than playing: it is what arithmetic over beat
- * positions leaves behind — a bar length times a bar count, a grid origin plus a
- * whole number of steps — and nothing musical is measured in it.
+ * Float residue rather than playing: what arithmetic over beat positions leaves
+ * behind — a bar length times a bar count, a grid origin plus a whole number of
+ * steps — and nothing musical is measured in it.
+ *
+ * Re-exported rather than declared, from the meter layer that has to compare
+ * beats below every reader here. Two numbers that happen to be equal are not one
+ * tolerance: a correction to either would leave the bar boundaries the meter
+ * computes and the same instants the analysis reads a hair apart, and nothing
+ * would report it.
  */
-export const BEAT_EPS = 1e-9;
+export { BEAT_EPS } from '../core/meter/index.js';
 
 /**
  * Largest gap or overlap, in beats, at which one note still follows another.

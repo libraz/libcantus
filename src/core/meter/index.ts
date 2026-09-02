@@ -21,6 +21,7 @@ import {
 } from '../validation/index.js';
 import type { MeterData } from './internal.js';
 import {
+  BEAT_EPS,
   barBeatsOf,
   barIndexOf,
   barLengthOf,
@@ -101,6 +102,9 @@ export type MeterChange = {
 export type MeterMap = MeterChange[];
 
 export type { MeterData } from './internal.js';
+// The one tolerance the beat axis is compared with, declared in the layer
+// below every reader of it.
+export { BEAT_EPS } from './internal.js';
 
 /**
  * Anything that names a meter: a signature text such as `'6/8'`, a plain
@@ -227,8 +231,6 @@ export type BarPosition = {
   beat: number;
 };
 
-const EPS = 1e-9;
-
 /**
  * The meter assumed when a caller names none.
  *
@@ -252,7 +254,7 @@ function isMultiple(value: number, unit: number): boolean {
     return false;
   }
   const ratio = value / unit;
-  return Math.abs(ratio - Math.round(ratio)) < EPS;
+  return Math.abs(ratio - Math.round(ratio)) < BEAT_EPS;
 }
 
 /**
@@ -479,7 +481,7 @@ function barStartChecked(beatInQuarters: number, meter: MeterData): number {
     return barStartOf(meter, beatInQuarters);
   }
   const barLen = barBeatsOf(meter);
-  return Math.floor(beatInQuarters / barLen + EPS) * barLen;
+  return Math.floor(beatInQuarters / barLen + BEAT_EPS) * barLen;
 }
 
 /**
@@ -512,7 +514,7 @@ function barIndexChecked(beatInQuarters: number, meter: MeterData): number {
   if (isMeterMap(meter)) {
     return barIndexOf(meter, beatInQuarters);
   }
-  return Math.floor(beatInQuarters / barBeatsOf(meter) + EPS);
+  return Math.floor(beatInQuarters / barBeatsOf(meter) + BEAT_EPS);
 }
 
 /**
@@ -743,7 +745,7 @@ export function formatBarPosition(beatInQuarters: number, meter: MeterLike, deci
   // A short bar has a whole final pulse only in the sense that the pulse it
   // started is cut off, so the count rounds up: 2 beats of 4/4 hold felt beats
   // 1 and 2, and anything past those belongs to the next bar.
-  const pulsesInBar = Math.ceil(barLength / pulseBeatsOf(ts) - EPS);
+  const pulsesInBar = Math.ceil(barLength / pulseBeatsOf(ts) - BEAT_EPS);
   if (rounded >= pulsesInBar + 1) {
     return `${barIndexChecked(barStartChecked(beatInQuarters, resolved) + barLength, resolved) + 1}.1`;
   }
@@ -878,7 +880,7 @@ export function metricGridUnit(meter: MeterLike): number {
   // hair, and a grid that fine costs a slot per step of the piece while landing
   // on nothing anyone plays. Past the division limit the onset is read as
   // unmeasured and the grid keeps the step the pulses alone state.
-  return onChanges * MAX_CHANGE_DIVISIONS >= unit - EPS ? onChanges : unit;
+  return onChanges * MAX_CHANGE_DIVISIONS >= unit - BEAT_EPS ? onChanges : unit;
 }
 
 /**
@@ -893,13 +895,13 @@ export function metricGridUnit(meter: MeterLike): number {
 function commonStep(a: number, b: number): number {
   let longer = Math.max(a, b);
   let shorter = Math.min(a, b);
-  for (let i = 0; i < 8 && shorter > EPS; i += 1) {
-    const remainder = longer - Math.floor(longer / shorter + EPS) * shorter;
+  for (let i = 0; i < 8 && shorter > BEAT_EPS; i += 1) {
+    const remainder = longer - Math.floor(longer / shorter + BEAT_EPS) * shorter;
     longer = shorter;
-    shorter = remainder > EPS ? remainder : 0;
+    shorter = remainder > BEAT_EPS ? remainder : 0;
   }
   const smallest = a > 0 && b > 0 ? Math.min(a, b) : Math.max(a, b);
-  return longer > EPS && longer <= smallest + EPS ? longer : smallest;
+  return longer > BEAT_EPS && longer <= smallest + BEAT_EPS ? longer : smallest;
 }
 
 /**

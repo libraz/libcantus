@@ -9,6 +9,7 @@
  * plays, and each records the ground it qualifies under.
  */
 
+import { BEAT_EPS } from '../../analyze/adjacency.js';
 import {
   type Articulation,
   foldIntoRange,
@@ -64,7 +65,6 @@ import {
   bassPcOf,
   DEFAULT_OCTAVE,
   DEFAULT_TS,
-  EPS,
   placePc,
   placeRoot,
   STRONG_VELOCITY,
@@ -704,7 +704,7 @@ export function placeLicks(
           // one it is must not decide what the chord change sounds like. The
           // rest of the figure stays measured from the chord's own root.
           const pitch =
-            Math.abs(at - rootAt) < EPS && lickNote.degree === 1 && (lickNote.alter ?? 0) === 0
+            Math.abs(at - rootAt) < BEAT_EPS && lickNote.degree === 1 && (lickNote.alter ?? 0) === 0
               ? rootMidi
               : figureRoot + offset;
           raw.push({
@@ -728,7 +728,7 @@ export function placeLicks(
     const next = segments[index + 1];
     if (next && lastTilePlayed) {
       const approachAt = next.startBeat - STEP_BEATS * BEAT_STEPS;
-      if (approachAt > firstOnset + EPS) {
+      if (approachAt > firstOnset + BEAT_EPS) {
         const nextRoot = placeRoot(bassPcOf(next.chord), low);
         const occupied = soundingAt(raw, approachAt);
         // What matters is that the beat before the change leads into it by
@@ -766,7 +766,7 @@ export function placeLicks(
       nextStart - item.startBeat,
       written === undefined ? Number.POSITIVE_INFINITY : written * STEP_BEATS,
     );
-    if (durationBeat <= EPS) {
+    if (durationBeat <= BEAT_EPS) {
       continue;
     }
     const placed = instrument ? foldIntoRange(item.pitch, instrument) : item.pitch;
@@ -802,7 +802,7 @@ type RawLickNote = {
 function soundingAt(raw: readonly RawLickNote[], at: number): RawLickNote | undefined {
   for (let index = raw.length - 1; index >= 0; index -= 1) {
     const item = raw[index];
-    if (item !== undefined && Math.abs(item.startBeat - at) < EPS) {
+    if (item !== undefined && Math.abs(item.startBeat - at) < BEAT_EPS) {
       return item;
     }
   }
@@ -820,7 +820,7 @@ function soundingAt(raw: readonly RawLickNote[], at: number): RawLickNote | unde
 function lastPitchBefore(raw: readonly RawLickNote[], at: number, fallback: number): number {
   for (let index = raw.length - 1; index >= 0; index -= 1) {
     const item = raw[index];
-    if (item !== undefined && item.startBeat < at - EPS) {
+    if (item !== undefined && item.startBeat < at - BEAT_EPS) {
       return item.pitch;
     }
   }
@@ -845,7 +845,7 @@ function anchorStepOf(material: LickMaterial, spanBeats: number): number {
       first = note.step;
     }
   }
-  if (first === undefined || first < 0 || first * STEP_BEATS >= spanBeats - EPS) {
+  if (first === undefined || first < 0 || first * STEP_BEATS >= spanBeats - BEAT_EPS) {
     return 0;
   }
   return first;
@@ -893,7 +893,7 @@ function fitToSegment(
   // A figure longer than the chord it is played over is cut at the chord
   // change: the harmony is the thing the figure exists to serve.
   const spanSteps = spanBeats / STEP_BEATS;
-  const inside = deformed.filter((lickNote) => lickNote.step < spanSteps - EPS);
+  const inside = deformed.filter((lickNote) => lickNote.step < spanSteps - BEAT_EPS);
   if (inside.length === 0 || !withinCeiling(inside, bpm, difficulty)) {
     return undefined;
   }

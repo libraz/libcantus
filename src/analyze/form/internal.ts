@@ -12,10 +12,8 @@ import type { MeterLike } from '../../core/meter/index.js';
 import { barIndexAt, barPositionToBeat } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import { assertGenerationBudget } from '../../core/validation/index.js';
+import { BEAT_EPS } from '../adjacency.js';
 import { windowWeights } from '../histogram.js';
-
-/** Tolerance for beat comparisons reached by float arithmetic. */
-export const EPS = 1e-9;
 
 /** Hold a score inside the [0, 1] range every confidence in this module reports. */
 export function clamp01(value: number): number {
@@ -70,7 +68,7 @@ export function firstSoundingBeat(notes: readonly NoteEvent[], fallback = 0): nu
 export function lastBarOf(meter: MeterLike, spanStart: number, spanEnd: number): number {
   const firstBar = barIndexAt(spanStart, meter);
   const bar = barIndexAt(Math.max(spanStart, spanEnd), meter);
-  if (bar > firstBar && barPositionToBeat({ bar, beat: 0 }, meter) >= spanEnd - EPS) {
+  if (bar > firstBar && barPositionToBeat({ bar, beat: 0 }, meter) >= spanEnd - BEAT_EPS) {
     return bar - 1;
   }
   return bar;
@@ -123,7 +121,7 @@ export function sliceBars(
   for (const note of notes) {
     const noteEnd = note.startBeat + note.durationBeat;
     const from = Math.max(firstBar, barIndexAt(note.startBeat, meter));
-    const to = Math.min(lastBar, barIndexAt(Math.max(note.startBeat, noteEnd - EPS), meter));
+    const to = Math.min(lastBar, barIndexAt(Math.max(note.startBeat, noteEnd - BEAT_EPS), meter));
     memberships += Math.max(0, to - from + 1);
     assertGenerationBudget(memberships, 'form note-to-bar memberships', budget);
     for (let bar = from; bar <= to; bar += 1) {
@@ -160,10 +158,10 @@ export function weightSimilarity(a: readonly number[], b: readonly number[]): nu
     normA += x * x;
     normB += y * y;
   }
-  if (normA <= EPS && normB <= EPS) {
+  if (normA <= BEAT_EPS && normB <= BEAT_EPS) {
     return 1;
   }
-  if (normA <= EPS || normB <= EPS) {
+  if (normA <= BEAT_EPS || normB <= BEAT_EPS) {
     return 0;
   }
   return clamp01(dot / Math.sqrt(normA * normB));

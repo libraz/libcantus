@@ -1,3 +1,4 @@
+import { HUMANIZE_ADJACENCY } from '../../analyze/adjacency.js';
 import type { MeterLike, TimeSignature } from '../../core/meter/index.js';
 import { meterAt, metricWeight, pulseBeats, toMeterData } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
@@ -31,9 +32,6 @@ export type ClassifiedMelodyTone = {
   ornamental: boolean;
 };
 
-/** Maximum gap or overlap still heard as one note leading into the next. */
-const ADJACENCY_TOLERANCE = 0.05;
-
 /**
  * Read an onset as the metric position it is playing, snapping it to the pulse
  * grid when it lies within the tolerance a performance stays inside.
@@ -52,7 +50,7 @@ const ADJACENCY_TOLERANCE = 0.05;
  */
 export function snapToPulse(beat: number, pulse: number): number {
   const snapped = Math.round(beat / pulse) * pulse;
-  return Math.abs(snapped - beat) <= ADJACENCY_TOLERANCE ? snapped : beat;
+  return Math.abs(snapped - beat) <= HUMANIZE_ADJACENCY ? snapped : beat;
 }
 
 /** Largest interval still heard as a step; anything wider is a leap. */
@@ -135,7 +133,7 @@ function roleOfNote(
   // and simultaneous onsets are cluster members rather than melodic neighbours.
   const intoNote = Math.abs(prev.startBeat + prev.durationBeat - note.startBeat);
   const outOfNote = Math.abs(note.startBeat + note.durationBeat - next.startBeat);
-  if (intoNote > ADJACENCY_TOLERANCE || outOfNote > ADJACENCY_TOLERANCE) {
+  if (intoNote > HUMANIZE_ADJACENCY || outOfNote > HUMANIZE_ADJACENCY) {
     return 'structural';
   }
 

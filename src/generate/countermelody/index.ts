@@ -1,3 +1,4 @@
+import { BEAT_EPS } from '../../analyze/adjacency.js';
 import type { ChordTimeline } from '../../analyze/timeline/index.js';
 import { InvalidInputError } from '../../core/errors/index.js';
 import type { NoteEventIndex } from '../../core/event-index/index.js';
@@ -120,12 +121,6 @@ export type CounterMelodyOptions = {
   ctx?: GenerationContextInput;
 };
 
-/** Meter assumed when none is supplied. */
-const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
-
-/** Tolerance for beat-position comparisons. */
-const EPS = 1e-9;
-
 /** Grid resolution, in quarter-note beats, scanned for complement onsets. */
 const GRID_STEP = 0.5;
 
@@ -163,7 +158,7 @@ const TIE_BREAK_JITTER = 1e-6;
 
 /** Whether a beat position falls on a whole quarter-note beat. */
 function isWholeBeat(beat: number): boolean {
-  return Math.abs(beat - Math.round(beat)) < EPS;
+  return Math.abs(beat - Math.round(beat)) < BEAT_EPS;
 }
 
 /** The melody note sounding at a beat (latest onset wins on overlaps). */
@@ -182,8 +177,8 @@ function melodySnapshotAt(melody: NoteEventIndex, beat: number): VoiceSnapshot |
   if (current === undefined) {
     return undefined;
   }
-  const attacked = Math.abs(current.startBeat - beat) < EPS;
-  const previous = attacked ? melodyNoteAt(melody, beat - EPS * 2) : current;
+  const attacked = Math.abs(current.startBeat - beat) < BEAT_EPS;
+  const previous = attacked ? melodyNoteAt(melody, beat - BEAT_EPS * 2) : current;
   const snapshot: VoiceSnapshot = { pitch: current.pitch };
   if (previous !== undefined) {
     snapshot.prevPitch = previous.pitch;
@@ -195,6 +190,19 @@ function melodySnapshotAt(melody: NoteEventIndex, beat: number): VoiceSnapshot |
 function followOnsets(melody: NoteEventIndex): number[] {
   return [...new Set(melody.notes.map(({ note }) => note.startBeat))];
 }
+
+/** Meter assumed when none is supplied. */
+const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
+
+/**
+ * Largest difference between two candidate scores that are the same score.
+ *
+ * Not a beat tolerance: a score is a sum of weighted preferences, so what this
+ * bounds is the residue of adding those weights up in a different order. It is
+ * named apart from the beat axis so that a correction to either does not travel
+ * to the other.
+ */
+const SCORE_EPS = 1e-9;
 
 /**
  * Counter onsets complementing the melody: whole beats inside rests are always
@@ -216,7 +224,7 @@ function complementOnsets(
   const onsets: number[] = [];
   const gridStart = Math.floor(spanStart / GRID_STEP) * GRID_STEP;
   let last = Number.NEGATIVE_INFINITY;
-  for (let beat = gridStart; beat < spanEnd - EPS; beat += GRID_STEP) {
+  for (let beat = gridStart; beat < spanEnd - BEAT_EPS; beat += GRID_STEP) {
     const attacked = melodyAttacksAt(melody, beat);
     const sounding = melodyNoteAt(melody, beat) !== undefined;
     let place = false;
@@ -227,7 +235,7 @@ function complementOnsets(
     } else if (isStrongBeat(beat, ts)) {
       place = draw.prob(REINFORCE_PROB, 'reinforce', beat);
     }
-    if (place && beat - last >= MIN_ONSET_GAP - EPS) {
+    if (place && beat - last >= MIN_ONSET_GAP - BEAT_EPS) {
       onsets.push(beat);
       last = beat;
     }
@@ -353,7 +361,7 @@ function heldNoteBoundaries(
     boundaries.add(onset);
   }
   for (const beat of chordChangeBeats) {
-    if (beat > startBeat + EPS && beat < endBeat - EPS) {
+    if (beat > startBeat + BEAT_EPS && beat < endBeat - BEAT_EPS) {
       boundaries.add(beat);
     }
   }
@@ -361,7 +369,7 @@ function heldNoteBoundaries(
   // complement rhythm so ordinary beat/bar chord changes are still found even
   // when the caller does not provide `chordChangeBeats`.
   const firstGrid = Math.floor(startBeat / GRID_STEP + 1) * GRID_STEP;
-  for (let beat = firstGrid; beat < endBeat - EPS; beat += GRID_STEP) {
+  for (let beat = firstGrid; beat < endBeat - BEAT_EPS; beat += GRID_STEP) {
     boundaries.add(beat);
   }
   return [...boundaries].sort((a, b) => a - b);
@@ -405,7 +413,7 @@ function boundaryContexts(
       otherVoices: melodyVoice === undefined ? [] : [melodyVoice],
       chord: harmony.chordAt(boundary),
       strongBeat: isStrongBeat(boundary, ts),
-      atCounterOnset: Math.abs(boundary - startBeat) < EPS,
+      atCounterOnset: Math.abs(boundary - startBeat) < BEAT_EPS,
     };
   });
 }
@@ -644,10 +652,11 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
         scoreCandidate(candidate, melPitch, melPrev, prevPitch, chord, center, weights) +
         (jitter[candidate - low] ?? 0);
       const tie =
-        Math.abs(score - bestScore) <= EPS && candidate < (bestPitch ?? Number.POSITIVE_INFINITY);
+        Math.abs(score - bestScore) <= SCORE_EPS &&
+        candidate < (bestPitch ?? Number.POSITIVE_INFINITY);
       if (
         worstSafety < bestWorstSafety ||
-        (worstSafety === bestWorstSafety && (score > bestScore + EPS || tie))
+        (worstSafety === bestWorstSafety && (score > bestScore + SCORE_EPS || tie))
       ) {
         bestWorstSafety = worstSafety;
         bestScore = score;

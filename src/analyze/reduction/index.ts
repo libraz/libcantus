@@ -33,6 +33,10 @@ import type { KeyScale } from '../../core/types.js';
 import { assertOneOf } from '../../core/validation/index.js';
 import type { Chord, ChordSegment } from '../../theory/chord/index.js';
 import { isDominantChordOf } from '../../theory/tendency/index.js';
+// Segment boundaries are computed, so the end of one and the start of the next
+// meet to within rounding rather than exactly; a real gap is a rest, and chords
+// either side of a rest embellish nothing.
+import { BEAT_EPS } from '../adjacency.js';
 import { isCadentialSixFour } from '../functional/cadence.js';
 import type { CadenceResult } from '../functional/index.js';
 import { detectCadence } from '../functional/index.js';
@@ -40,15 +44,6 @@ import { isAppliedDominant } from '../functional/tonicization.js';
 import type { ChordTimeline } from '../timeline/index.js';
 import type { KeyContext } from '../voice/index.js';
 import { keyScaleAt } from '../voice/index.js';
-
-/**
- * Tolerance for treating two segments as touching in time.
- *
- * Segment boundaries are computed, so the end of one and the start of the next
- * meet to within rounding rather than exactly; a real gap is a rest, and chords
- * either side of a rest embellish nothing.
- */
-const ADJACENCY_EPS = 1e-9;
 
 /**
  * The place a chord holds in a progression.
@@ -138,7 +133,7 @@ function isStep(distance: number): boolean {
 
 /** Whether two segments touch, so that the motion between them is heard. */
 function touches(before: ChordSegment, after: ChordSegment): boolean {
-  return Math.abs(after.startBeat - before.endBeat) <= ADJACENCY_EPS;
+  return Math.abs(after.startBeat - before.endBeat) <= BEAT_EPS;
 }
 
 /**

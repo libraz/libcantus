@@ -25,6 +25,7 @@ import {
   resolveKey,
   scaleOf,
 } from '../../theory/scale/index.js';
+import { BEAT_EPS } from '../adjacency.js';
 import type { ChordMatch } from '../detect/index.js';
 import { detectChord } from '../detect/index.js';
 import { augmentedSixthFromPitchClasses } from '../functional/augmented-sixth.js';
@@ -140,8 +141,6 @@ export function chordAtBeat(segments: readonly ChordSegment[], beat: number): Ch
 function segmentLookup(segments: ChordSegment[]): (beat: number) => Chord | null {
   return (beat) => chordAtBeat(segments, beat);
 }
-
-const EPS = 1e-9;
 
 /** Fraction of the strongest pitch-class weight below which a pc is noise. */
 const NOISE_THRESHOLD_RATIO = 0.2;
@@ -487,7 +486,7 @@ function bassSoundsOnlyBelow(
     const overlap =
       Math.min(note.startBeat + note.durationBeat, windowEnd) -
       Math.max(note.startBeat, windowStart);
-    if (overlap <= EPS) {
+    if (overlap <= BEAT_EPS) {
       continue;
     }
     if (pitchClass(note.pitch) === bassPc) {
@@ -540,7 +539,7 @@ function analyzeWindow(
     windowEnd,
     meters,
   );
-  if (totalWeight <= EPS) {
+  if (totalWeight <= BEAT_EPS) {
     return null;
   }
 
@@ -776,7 +775,7 @@ function candidateScore(
   for (let index = first; index < last; index += 1) {
     const weight = weights[LEXICON_TONES[index] ?? 0] ?? 0;
     covered += weight;
-    if (weight <= EPS) {
+    if (weight <= BEAT_EPS) {
       missing += 1;
     }
   }
@@ -851,7 +850,7 @@ export function createBoundaryTables(slotCount: number): BoundaryTables {
  */
 export function scoreSlot(tables: BoundaryTables, slot: WindowWeights, index: number): void {
   const base = index * LEXICON_SIZE;
-  if (slot.totalWeight <= EPS) {
+  if (slot.totalWeight <= BEAT_EPS) {
     tables.scores.fill(0, base, base + LEXICON_SIZE);
     return;
   }
@@ -969,7 +968,7 @@ function chooseBoundaries(
  */
 function slotBeatsWithin(gridUnit: number, minChordBeats: number, harmonicRhythm: number): number {
   const resolution = Math.min(minChordBeats, harmonicRhythm);
-  const divisions = Math.max(1, Math.ceil(gridUnit / resolution - EPS));
+  const divisions = Math.max(1, Math.ceil(gridUnit / resolution - BEAT_EPS));
   return gridUnit / divisions;
 }
 
@@ -1002,7 +1001,7 @@ function dynamicSpans(
   let weightSum = 0;
   for (let i = 0; i < slotCount; i += 1) {
     const weight = slotWeights[i]?.totalWeight ?? 0;
-    if (weight > EPS) {
+    if (weight > BEAT_EPS) {
       soundingSlots += 1;
       weightSum += weight;
     }
@@ -1023,7 +1022,7 @@ function dynamicSpans(
   const meanSlotWeight = weightSum / soundingSlots;
   const changeCost = CHANGE_COST * meanSlotWeight * (harmonicRhythm / slotBeats);
 
-  const silent = slotWeights.map((slot) => slot.totalWeight <= EPS);
+  const silent = slotWeights.map((slot) => slot.totalWeight <= BEAT_EPS);
   const breaks = new Array<boolean>(slotCount).fill(false);
   for (let i = 0; i < slotCount; ) {
     if (!silent[i]) {
@@ -1034,7 +1033,7 @@ function dynamicSpans(
     while (end < slotCount && silent[end]) {
       end += 1;
     }
-    if ((end - i) * slotBeats >= harmonicRhythm - EPS) {
+    if ((end - i) * slotBeats >= harmonicRhythm - BEAT_EPS) {
       for (let k = i; k < end; k += 1) {
         breaks[k] = true;
       }
@@ -1353,7 +1352,7 @@ export function analyzeTimeline(
 
   const segments: ChordSegment[] = [];
   const segmentConfidence: number[] = [];
-  const slotCount = Math.max(0, Math.ceil((totalBeats - grid.origin) / slotBeats - EPS));
+  const slotCount = Math.max(0, Math.ceil((totalBeats - grid.origin) / slotBeats - BEAT_EPS));
   const dynamic = segmentation === 'dynamic';
   // The boundary search allocates and fills one lexicon row per slot, so what
   // the budget has to bound is the table about to be built rather than the slot
@@ -1488,7 +1487,11 @@ export function analyzeTimeline(
     }
     const { start, end } = bounds;
     const last = segments[segments.length - 1];
-    if (last && sameChord(last.chord, inferred.chord) && Math.abs(last.endBeat - start) < EPS) {
+    if (
+      last &&
+      sameChord(last.chord, inferred.chord) &&
+      Math.abs(last.endBeat - start) < BEAT_EPS
+    ) {
       // Merge into the previous segment, blending confidence by duration.
       const lastLength = last.endBeat - last.startBeat;
       const length = end - start;
@@ -1583,14 +1586,14 @@ export function detectCadences(timeline: ChordTimeline, key: KeyContext): Cadenc
     if (!prev || !cur) {
       continue;
     }
-    if (Math.abs(cur.startBeat - prev.endBeat) > EPS) {
+    if (Math.abs(cur.startBeat - prev.endBeat) > BEAT_EPS) {
       continue; // A rest separates the chords; no cadential motion across it.
     }
     // The chord before the pair, when it sounded straight into it: a six-four
     // across a rest was not still sounding when the dominant arrived.
     const before = timeline.segments[i - 2];
     const approach =
-      before !== undefined && Math.abs(prev.startBeat - before.endBeat) <= EPS
+      before !== undefined && Math.abs(prev.startBeat - before.endBeat) <= BEAT_EPS
         ? before.chord
         : undefined;
     const key = keyAt(cur.startBeat);
@@ -1607,7 +1610,7 @@ export function detectCadences(timeline: ChordTimeline, key: KeyContext): Cadenc
     // chord already gives that resolution.
     if (cadence.type === 'half' && isCadentialSixFour(prev.chord, cur.chord, key)) {
       const next = timeline.segments[i + 1];
-      if (next !== undefined && Math.abs(next.startBeat - cur.endBeat) <= EPS) {
+      if (next !== undefined && Math.abs(next.startBeat - cur.endBeat) <= BEAT_EPS) {
         const onward = detectCadence(cur.chord, next.chord, keyAt(next.startBeat)).type;
         if (onward === 'authentic' || onward === 'deceptive') {
           continue;

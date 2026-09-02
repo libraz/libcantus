@@ -15,6 +15,7 @@
 
 import { InvalidInputError } from '../../core/errors/index.js';
 import { ConsonanceClass } from '../../core/interval/index.js';
+import { BEAT_EPS } from '../../core/meter/index.js';
 import type { Note, SpelledInterval } from '../../core/pitch/index.js';
 import {
   noteToMidi,
@@ -67,9 +68,6 @@ export type SpeciesOptions = {
    */
   counterpointAbove?: boolean;
 };
-
-/** Tolerance for comparing positions measured in cantus-firmus notes. */
-const EPS = 1e-9;
 
 /** Notes of counterpoint per cantus-firmus note, by species. */
 const SPECIES_RATIO: Readonly<Record<Species, number>> = { 1: 1, 2: 2, 3: 4, 4: 2, 5: 0 };
@@ -893,14 +891,14 @@ function resolveDurations(
     }
     for (const duration of given) {
       const units = duration / MIN_FLORID_VALUE;
-      if (!(duration > 0) || duration > 1 || Math.abs(units - Math.round(units)) > EPS) {
+      if (!(duration > 0) || duration > 1 || Math.abs(units - Math.round(units)) > BEAT_EPS) {
         return {
           problem: `A note lasts ${duration} of a measure, which this style does not write`,
         };
       }
     }
     const total = given.reduce((sum, duration) => sum + duration, 0);
-    if (Math.abs(total - measures) > EPS) {
+    if (Math.abs(total - measures) > BEAT_EPS) {
       return { problem: `The counterpoint fills ${total} of the ${measures} measures` };
     }
     return { durations: [...given] };
@@ -946,9 +944,9 @@ function buildEntries(
     if (note === undefined) {
       continue;
     }
-    const struckOver = Math.min(Math.floor(onset + EPS), cantusFirmus.length - 1);
+    const struckOver = Math.min(Math.floor(onset + BEAT_EPS), cantusFirmus.length - 1);
     const lastOver = Math.min(
-      Math.max(Math.ceil(onset + duration - EPS) - 1, struckOver),
+      Math.max(Math.ceil(onset + duration - BEAT_EPS) - 1, struckOver),
       cantusFirmus.length - 1,
     );
     for (let againstIndex = struckOver; againstIndex <= lastOver; againstIndex += 1) {
@@ -971,7 +969,7 @@ function buildEntries(
         held,
         against,
         againstIndex,
-        downbeat: Math.abs(begins - Math.round(begins)) < EPS,
+        downbeat: Math.abs(begins - Math.round(begins)) < BEAT_EPS,
         interval,
         consonance: classifySpelledInterval(interval),
       });

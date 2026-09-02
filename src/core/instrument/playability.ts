@@ -1,3 +1,4 @@
+import { BEAT_EPS } from '../meter/internal.js';
 import type { NoteEvent } from '../types.js';
 import { assertNoteEvents, assertRange } from '../validation/index.js';
 import {
@@ -110,8 +111,6 @@ const MAX_DIFFICULTY = 5;
 const STRING_CROSSING_COST = 2;
 /** Onsets no further apart than this many beats count as simultaneous. */
 const SIMULTANEITY_BEATS = 1 / 128;
-
-const EPS = 1e-9;
 
 /** Working state shared by both instrument families. */
 type Analysis = {
@@ -244,7 +243,7 @@ function checkExistence(state: Analysis, profile: InstrumentProfile): void {
  * hand lands on no grid at all.
  */
 function isSimultaneous(anchorBeat: number, startBeat: number): boolean {
-  return startBeat - anchorBeat <= SIMULTANEITY_BEATS + EPS;
+  return startBeat - anchorBeat <= SIMULTANEITY_BEATS + BEAT_EPS;
 }
 
 /** Note indices sounding at each distinct onset, in onset order. */
@@ -265,7 +264,7 @@ function soundingGroups(state: Analysis): { startBeat: number; members: number[]
     anchor = at;
     active = active.filter((member) => {
       const held = state.notes[member];
-      return held !== undefined && held.startBeat + held.durationBeat > at + EPS;
+      return held !== undefined && held.startBeat + held.durationBeat > at + BEAT_EPS;
     });
     while (cursor < state.order.length) {
       const candidateIndex = state.order[cursor];
@@ -273,7 +272,10 @@ function soundingGroups(state: Analysis): { startBeat: number; members: number[]
       if (!candidate || !isSimultaneous(at, candidate.startBeat)) {
         break;
       }
-      if (candidateIndex !== undefined && candidate.startBeat + candidate.durationBeat > at + EPS) {
+      if (
+        candidateIndex !== undefined &&
+        candidate.startBeat + candidate.durationBeat > at + BEAT_EPS
+      ) {
         active.push(candidateIndex);
       }
       cursor += 1;
@@ -303,7 +305,7 @@ function placeOnNeck(state: Analysis, profile: InstrumentProfile & { kind: 'stri
       continue;
     }
     const free = candidates.filter(
-      (candidate) => (stringFreeAt[candidate.string] ?? 0) <= note.startBeat + EPS,
+      (candidate) => (stringFreeAt[candidate.string] ?? 0) <= note.startBeat + BEAT_EPS,
     );
     if (free.length === 0) {
       const blocked = candidates
@@ -375,7 +377,7 @@ function checkShiftSpeed(
   }
   const seconds = (note.startBeat - previousNote.startBeat) * secondsPerBeat;
   const shift = Math.abs(to.fret - from.fret);
-  if (seconds <= EPS || shift === 0) {
+  if (seconds <= BEAT_EPS || shift === 0) {
     return;
   }
   if (shift / seconds > MAX_FRET_SHIFT_PER_SECOND) {
@@ -593,7 +595,7 @@ function checkStrokeSpeed(
     return;
   }
   const seconds = (note.startBeat - previousNote.startBeat) * secondsPerBeat;
-  if (seconds <= EPS || seconds >= MIN_LIMB_STROKE_SECONDS) {
+  if (seconds <= BEAT_EPS || seconds >= MIN_LIMB_STROKE_SECONDS) {
     return;
   }
   state.issues.push({
@@ -647,7 +649,7 @@ function difficultyOf(state: Analysis, bpm: number | undefined): number {
     last = Math.max(last, note.startBeat + Math.max(0, note.durationBeat));
   }
   const spanBeats = last - first;
-  if (!Number.isFinite(spanBeats) || spanBeats <= EPS) {
+  if (!Number.isFinite(spanBeats) || spanBeats <= BEAT_EPS) {
     return MIN_DIFFICULTY;
   }
   const seconds = (spanBeats * 60) / (bpm ?? REFERENCE_BPM);

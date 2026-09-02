@@ -12,19 +12,8 @@
 import type { MeterLike } from '../core/meter/index.js';
 import { beatsPerBarAt } from '../core/meter/index.js';
 import type { NoteEvent } from '../core/types.js';
+import { BEAT_EPS, HUMANIZE_ADJACENCY } from './adjacency.js';
 import { firstSoundingBeat } from './form/internal.js';
-
-const EPS = 1e-9;
-
-/**
- * How far below beat 0 an onset may sit and still be read as beat 0.
- *
- * A recording or an export puts the first note a millibeat early; an upbeat
- * puts it a beat early. Only the second is a pickup, and reading the first as
- * one hands the analysis a whole slot of silence before the music. The bound is
- * the tolerance the rest of the library uses for played-not-quantized timing.
- */
-const PICKUP_JITTER = 0.05;
 
 /**
  * The grid a span is analyzed in: equal slots of `slotBeats` from `origin`, and
@@ -57,12 +46,12 @@ export function gridOriginOf(firstOnset: number, slotBeats: number): GridOrigin 
   // A note a millibeat before the downbeat is playing it rather than
   // anticipating it, and reading it as a pickup would hand the analysis a whole
   // silent slot ahead of the music.
-  const startBeat = firstOnset < 0 && firstOnset > -PICKUP_JITTER ? 0 : firstOnset;
+  const startBeat = firstOnset < 0 && firstOnset > -HUMANIZE_ADJACENCY ? 0 : firstOnset;
   // The grid starts where the music does — but a whole number of slots from
   // beat 0, or every slot boundary would sit off the bar lines by however far
   // into a slot the first note falls. Dropping a pickup instead would throw
   // away the very bar that establishes the key.
-  return { origin: Math.floor(startBeat / slotBeats + EPS) * slotBeats, startBeat };
+  return { origin: Math.floor(startBeat / slotBeats + BEAT_EPS) * slotBeats, startBeat };
 }
 
 /**

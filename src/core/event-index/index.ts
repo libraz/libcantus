@@ -1,3 +1,4 @@
+import { BEAT_EPS } from '../meter/internal.js';
 import type { NoteEvent } from '../types.js';
 import { assertFiniteNumber, assertNoteEvents } from '../validation/index.js';
 
@@ -52,8 +53,6 @@ export type NoteEventIndex = {
    */
   onsetsBetween: (startBeat: number, endBeat: number) => number[];
 };
-
-const EPS = 1e-9;
 
 function upperBound(values: readonly IndexedNoteEvent[], beat: number): number {
   let low = 0;
@@ -163,7 +162,7 @@ export function createNoteEventIndex(
   const latestActiveIndex = (exclusive: number, beat: number): number => {
     const tree = endTree();
     const find = (node: number, start: number, end: number): number => {
-      if (start >= exclusive || (tree[node] ?? Number.NEGATIVE_INFINITY) <= beat + EPS) {
+      if (start >= exclusive || (tree[node] ?? Number.NEGATIVE_INFINITY) <= beat + BEAT_EPS) {
         return -1;
       }
       if (end - start === 1) return start < notes.length ? start : -1;
@@ -182,7 +181,7 @@ export function createNoteEventIndex(
       // compares false against every bound, which would read as an open window
       // rather than as the missing value it is.
       assertFiniteNumber(beat, 'beat');
-      const index = latestActiveIndex(upperBound(notes, beat + EPS), beat);
+      const index = latestActiveIndex(upperBound(notes, beat + BEAT_EPS), beat);
       if (index < 0) return undefined;
       const onset = notes[index]?.note.startBeat;
       let best: IndexedNoteEvent | undefined;
@@ -192,8 +191,8 @@ export function createNoteEventIndex(
         if (
           indexed === undefined ||
           indexed.note.durationBeat <= 0 ||
-          indexed.note.startBeat - EPS > beat ||
-          beat >= indexed.endBeat - EPS
+          indexed.note.startBeat - BEAT_EPS > beat ||
+          beat >= indexed.endBeat - BEAT_EPS
         ) {
           continue;
         }
@@ -221,10 +220,10 @@ export function createNoteEventIndex(
       assertFiniteNumber(beat, 'beat');
       // Only a sounding note attacks: a zero-length artefact must not make
       // `attacksAt(b)` true on a beat where `at(b)` finds nothing.
-      let index = upperBound(notes, beat + EPS) - 1;
+      let index = upperBound(notes, beat + BEAT_EPS) - 1;
       while (index >= 0) {
         const candidate = notes[index];
-        if (candidate === undefined || Math.abs(candidate.note.startBeat - beat) >= EPS) {
+        if (candidate === undefined || Math.abs(candidate.note.startBeat - beat) >= BEAT_EPS) {
           return false;
         }
         if (candidate.note.durationBeat > 0) {
@@ -238,11 +237,11 @@ export function createNoteEventIndex(
       assertFiniteNumber(startBeat, 'startBeat');
       assertFiniteNumber(endBeat, 'endBeat');
       const result: number[] = [];
-      let index = upperBound(notes, startBeat + EPS);
+      let index = upperBound(notes, startBeat + BEAT_EPS);
       while (index < notes.length) {
         const indexed = notes[index];
         const onset = indexed?.note.startBeat;
-        if (indexed === undefined || onset === undefined || onset >= endBeat - EPS) {
+        if (indexed === undefined || onset === undefined || onset >= endBeat - BEAT_EPS) {
           break;
         }
         index += 1;
@@ -250,7 +249,7 @@ export function createNoteEventIndex(
           continue;
         }
         const previous = result[result.length - 1];
-        if (previous === undefined || Math.abs(previous - onset) >= EPS) {
+        if (previous === undefined || Math.abs(previous - onset) >= BEAT_EPS) {
           result.push(onset);
         }
       }

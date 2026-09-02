@@ -8,6 +8,7 @@
  * dictionary's business.
  */
 
+import { BEAT_EPS } from '../../analyze/adjacency.js';
 import { InvalidInputError } from '../../core/errors/index.js';
 import { instrumentRange, type StringedProfile } from '../../core/instrument/index.js';
 import { beatsPerBar, pulseBeats, type TimeSignature } from '../../core/meter/index.js';
@@ -23,9 +24,6 @@ export const STRONG_VELOCITY = 100;
 
 /** Velocity for notes on weak positions. */
 export const WEAK_VELOCITY = 80;
-
-/** Tolerance for comparing beat positions. */
-export const EPS = 1e-9;
 
 /**
  * The meter a bass part is written against when the caller names none.
@@ -84,7 +82,7 @@ export function barTiles(startBeat: number, endBeat: number, ts: TimeSignature):
   const tiles: BarTile[] = [];
   for (let index = 0; ; index += 1) {
     const tileStart = startBeat + index * barBeats;
-    if (tileStart >= endBeat - EPS) {
+    if (tileStart >= endBeat - BEAT_EPS) {
       break;
     }
     tiles.push({ startBeat: tileStart, endBeat: Math.min(tileStart + barBeats, endBeat) });
@@ -102,7 +100,7 @@ export function barTiles(startBeat: number, endBeat: number, ts: TimeSignature):
  */
 export function midBarPulse(barStart: number, ts: TimeSignature): number {
   const pulse = pulseBeats(ts);
-  return barStart + Math.floor((beatsPerBar(ts) / 2 + EPS) / pulse) * pulse;
+  return barStart + Math.floor((beatsPerBar(ts) / 2 + BEAT_EPS) / pulse) * pulse;
 }
 
 /**
@@ -130,7 +128,7 @@ export function assertBassSegments(segments: readonly ChordSegment[]): void {
       throw new InvalidInputError(`segments[${index}] must have a positive duration`);
     }
     const previous = segments[index - 1];
-    if (previous !== undefined && segment.startBeat < previous.endBeat - EPS) {
+    if (previous !== undefined && segment.startBeat < previous.endBeat - BEAT_EPS) {
       throw new InvalidInputError(
         `bass segments must not overlap: segments ${index - 1} and ${index} overlap`,
       );
@@ -194,16 +192,16 @@ export function beatPositions(start: number, end: number, ts: TimeSignature): nu
   const barBeats = beatsPerBar(ts);
   const pulse = pulseBeats(ts);
   const firstBar = Math.floor(start / barBeats);
-  const lastBar = Math.floor((end - EPS) / barBeats);
+  const lastBar = Math.floor((end - BEAT_EPS) / barBeats);
   for (let bar = firstBar; bar <= lastBar; bar += 1) {
     const barStart = bar * barBeats;
-    const firstPulse = Math.max(0, Math.ceil((start - barStart - EPS) / pulse));
+    const firstPulse = Math.max(0, Math.ceil((start - barStart - BEAT_EPS) / pulse));
     for (let index = firstPulse; ; index += 1) {
       const position = barStart + index * pulse;
-      if (position >= barStart + barBeats - EPS || position >= end - EPS) {
+      if (position >= barStart + barBeats - BEAT_EPS || position >= end - BEAT_EPS) {
         break;
       }
-      if (position >= start - EPS) {
+      if (position >= start - BEAT_EPS) {
         positions.push(position);
       }
     }

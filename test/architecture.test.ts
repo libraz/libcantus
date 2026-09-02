@@ -226,3 +226,80 @@ describe('the minor-key question', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/**
+ * The modules allowed to declare a beat-axis tolerance, and what each answers.
+ *
+ * `core/meter/internal.ts` declares the number, because the meter layer sits
+ * below every other reader of the beat axis and has to compare beats to place a
+ * bar line. `analyze/adjacency.ts` re-exports it beside the tolerance a played
+ * onset is read with, which is the other question the axis is asked.
+ */
+const BEAT_TOLERANCE_HOMES = [
+  path.join('core', 'meter', 'internal.ts'),
+  path.join('analyze', 'adjacency.ts'),
+];
+
+/**
+ * Constants that carry one of these values without being a beat tolerance.
+ *
+ * A number is not a concept: an epsilon over a quantity that is not a position
+ * on the beat axis may be the same size by coincidence, and collapsing it into
+ * the shared one would carry a correction where it does not belong. Each entry
+ * says what the quantity is.
+ */
+const NOT_A_BEAT_TOLERANCE: Readonly<Record<string, string>> = {
+  SCORE_EPS: 'a sum of weighted preferences, not a position on the beat axis',
+};
+
+/** Every `const NAME = <literal>;` a module declares, with the literal. */
+function declaredConstants(source: string): { name: string; value: string }[] {
+  const found: { name: string; value: string }[] = [];
+  for (const m of source.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)(?::[^=]+)?\s*=\s*([\d.e-]+);/g)) {
+    found.push({ name: m[1] ?? '', value: m[2] ?? '' });
+  }
+  return found;
+}
+
+describe('the beat axis is compared with one tolerance', () => {
+  // Two numbers that happen to be equal are not one tolerance. The adjacency
+  // module was written to hold both of them — "Both are answered here" — and the
+  // consolidation reached four of the fourteen sites that needed it, so the
+  // rest agreed by coincidence and a correction to any one of them would have
+  // left the others behind without a failure anywhere.
+  const VALUES = new Set(['1e-9', '0.05']);
+
+  const declarations = walk(SRC).flatMap((file) => {
+    const rel = path.relative(SRC, file);
+    if (BEAT_TOLERANCE_HOMES.includes(rel)) {
+      return [];
+    }
+    return declaredConstants(readFileSync(file, 'utf8'))
+      .filter((declaration) => VALUES.has(declaration.value))
+      .map((declaration) => ({ ...declaration, rel }));
+  });
+
+  it('finds the tree to check', () => {
+    // The scan reads sources rather than a list, so a parser that stopped
+    // matching would leave the check below passing over nothing.
+    expect(walk(SRC).length).toBeGreaterThan(50);
+    expect(
+      declaredConstants('const A = 1e-9;\nconst B: number = 0.05;\nconst C = 3;'),
+    ).toHaveLength(3);
+  });
+
+  it('is declared nowhere but the two modules that own it', () => {
+    const copies = declarations
+      .filter(({ name }) => !(name in NOT_A_BEAT_TOLERANCE))
+      .map(({ rel, name, value }) => `${rel}: ${name} = ${value}`)
+      .sort();
+    expect(copies).toEqual([]);
+  });
+
+  it('lists nothing as exempt that no longer exists', () => {
+    // The exemption list decays the same way any other registry does: an entry
+    // whose constant is gone describes nothing and is trusted anyway.
+    const live = new Set(declarations.map(({ name }) => name));
+    expect(Object.keys(NOT_A_BEAT_TOLERANCE).filter((name) => !live.has(name))).toEqual([]);
+  });
+});

@@ -1,3 +1,4 @@
+import { BEAT_EPS } from '../../analyze/adjacency.js';
 import {
   isDiatonic,
   isMinorKey,
@@ -906,9 +907,6 @@ function phraseEndBonus(
     (PHRASE_TONIC + (prev !== null && isDominantOf(prev, tonicPc) ? PHRASE_AUTHENTIC : 0)) * weight
   );
 }
-
-/** Tolerance for comparing a phrase boundary with a segment boundary, in beats. */
-const BEAT_EPS = 1e-9;
 
 /**
  * The beats the chord grid may change on: the harmonic rhythm's own boundaries,

@@ -12,8 +12,7 @@ import { metricWeight } from '../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../core/pitch/index.js';
 import type { NoteEvent } from '../core/types.js';
 import { assertGenerationBudget } from '../core/validation/index.js';
-
-const EPS = 1e-9;
+import { BEAT_EPS } from './adjacency.js';
 
 /** Loudest a MIDI velocity goes, which is what a velocity is read against. */
 const MAX_VELOCITY = 127;
@@ -143,10 +142,11 @@ export function windowWeights(
   for (const note of notes) {
     const noteEnd = note.startBeat + note.durationBeat;
     const overlap = Math.min(noteEnd, windowEnd) - Math.max(note.startBeat, windowStart);
-    if (overlap <= EPS) {
+    if (overlap <= BEAT_EPS) {
       continue;
     }
-    const onsetInWindow = note.startBeat >= windowStart - EPS && note.startBeat < windowEnd - EPS;
+    const onsetInWindow =
+      note.startBeat >= windowStart - BEAT_EPS && note.startBeat < windowEnd - BEAT_EPS;
     const pc = pitchClass(note.pitch);
     // The accent is asked for only where the onset falls in the window: a note
     // held across the boundary is already counted for its part of it.

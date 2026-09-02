@@ -28,6 +28,7 @@ import {
   resolveKey,
 } from '../../theory/scale/index.js';
 import { soundsDominantSeventh } from '../../theory/tendency/index.js';
+import { BEAT_EPS } from '../adjacency.js';
 import type { KeyProfileName, KeyProfilePair } from '../detect/index.js';
 import { profileScore, resolveKeyProfile } from '../detect/profiles.js';
 import type { PivotChord } from '../functional/index.js';
@@ -35,8 +36,6 @@ import { pivotChords } from '../functional/index.js';
 import { gridForNotes } from '../grid.js';
 import type { WindowWeights } from '../histogram.js';
 import { bucketNotesBySlot, windowWeights } from '../histogram.js';
-
-const EPS = 1e-9;
 
 /** How many pitch classes a histogram is indexed by. */
 const PITCH_CLASSES = 12;
@@ -401,17 +400,19 @@ function enforceMinimumRegion(
     let after: SlotRegion | undefined;
     for (let i = 0; i < regions.length; i += 1) {
       const region = regions[i];
-      if (region === undefined || region.endBeat - region.startBeat >= minBeats - EPS) {
+      if (region === undefined || region.endBeat - region.startBeat >= minBeats - BEAT_EPS) {
         continue;
       }
       const previous = regions[i - 1];
       const next = regions[i + 1];
       const left =
-        previous !== undefined && Math.abs(previous.endBeat - region.startBeat) < EPS
+        previous !== undefined && Math.abs(previous.endBeat - region.startBeat) < BEAT_EPS
           ? previous
           : undefined;
       const right =
-        next !== undefined && Math.abs(next.startBeat - region.endBeat) < EPS ? next : undefined;
+        next !== undefined && Math.abs(next.startBeat - region.endBeat) < BEAT_EPS
+          ? next
+          : undefined;
       if (left === undefined && right === undefined) {
         continue;
       }
@@ -541,7 +542,7 @@ export function keyTimelineFromNotes(
   // different beats — but the music starts on one beat, and that is the beat
   // both report, so a chord timeline and its keys cover the same span.
   const { origin, startBeat: musicStart } = gridForNotes(sounding, slotBeats);
-  const slotCount = Math.max(0, Math.ceil((totalBeats - origin) / slotBeats - EPS));
+  const slotCount = Math.max(0, Math.ceil((totalBeats - origin) / slotBeats - BEAT_EPS));
   assertGenerationBudget(slotCount, 'key timeline slots', budget);
   if (slotCount === 0 || sounding.length === 0) {
     return [];
@@ -601,7 +602,7 @@ export function keyTimelineFromNotes(
         totalWeight,
     );
     slots.push({ startBeat, endBeat, scores, weight: totalWeight });
-    if (totalWeight > EPS) {
+    if (totalWeight > BEAT_EPS) {
       weightSum += totalWeight;
       soundingSlots += 1;
     }
@@ -846,7 +847,7 @@ export function detectModulations(
     for (const segment of ordered) {
       const overlap =
         Math.min(segment.endBeat, region.endBeat) - Math.max(segment.startBeat, region.startBeat);
-      if (overlap <= EPS) {
+      if (overlap <= BEAT_EPS) {
         continue;
       }
       for (const pc of chordPitchClasses(segment.chord)) {
@@ -950,7 +951,7 @@ export function attachPivots(regions: KeyRegion[], chords: readonly ChordSegment
     }
     let last: ChordSegment | undefined;
     for (const segment of chords) {
-      if (segment.endBeat <= current.startBeat + EPS) {
+      if (segment.endBeat <= current.startBeat + BEAT_EPS) {
         last = segment;
       }
     }

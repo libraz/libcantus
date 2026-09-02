@@ -25,9 +25,7 @@ import {
   type SpelledKeyLike,
   scaleTonesInDegreeOrder,
 } from '../../theory/scale/index.js';
-
-/** Tolerance for beat, ratio, and interval comparisons. */
-const EPS = 1e-9;
+import { BEAT_EPS, HUMANIZE_ADJACENCY } from '../adjacency.js';
 
 /**
  * Grid the rhythmic profile is compared on, as a divisor of the cell's first
@@ -68,17 +66,6 @@ const MAX_CELL_NOTES = 8;
  * caller asks for only the material the piece is actually built from.
  */
 const MIN_OCCURRENCES = 2;
-
-/**
- * Largest gap, in beats, between one statement ending and the next beginning for
- * the pair to be heard as a sequence.
- *
- * A sequence follows its model immediately; anything further off is a
- * restatement somewhere else in the piece. The tolerance is the same order as
- * the timing slack a MIDI take carries, so a statement that starts a hair early
- * still counts.
- */
-const SEQUENCE_GAP = 0.05;
 
 /**
  * Interval difference, in semitones, at which two steps count as wholly
@@ -355,7 +342,7 @@ function orderedNotes(
     const previous = line[line.length - 1];
     // Sorted low to high within an onset, so the last note to arrive at one is
     // its top voice.
-    if (previous !== undefined && Math.abs(note.startBeat - previous.startBeat) <= EPS) {
+    if (previous !== undefined && Math.abs(note.startBeat - previous.startBeat) <= BEAT_EPS) {
       line[line.length - 1] = note;
       continue;
     }
@@ -419,7 +406,7 @@ function retrogradeGaps(notes: readonly NoteEvent[]): number[] {
  */
 function rhythmProfile(gaps: readonly number[]): number[] | null {
   const unit = gaps[0] ?? 0;
-  if (!(unit > EPS)) {
+  if (!(unit > BEAT_EPS)) {
     return gaps.length === 0 ? [] : null;
   }
   return gaps.map((gap) => Math.round((gap / unit) * RHYTHM_GRID) / RHYTHM_GRID);
@@ -431,7 +418,7 @@ function sameNumbers(a: readonly number[], b: readonly number[]): boolean {
     return false;
   }
   for (let i = 0; i < a.length; i += 1) {
-    if (Math.abs((a[i] ?? 0) - (b[i] ?? 0)) > EPS) {
+    if (Math.abs((a[i] ?? 0) - (b[i] ?? 0)) > BEAT_EPS) {
       return false;
     }
   }
@@ -590,12 +577,12 @@ function motifFromGroup(group: WindowGroup, notes: readonly NoteEvent[]): MotifD
       startBeat: statement[0]?.startBeat ?? 0,
       endBeat: endBeatOf(statement),
       transpose: (statement[0]?.pitch ?? 0) - primePitch,
-      timeRatio: primeSpan > EPS ? span / primeSpan : 1,
+      timeRatio: primeSpan > BEAT_EPS ? span / primeSpan : 1,
     };
   });
   const shape = melodicContour(prime).shape;
   const transposed = occurrences.some((occurrence) => occurrence.transpose !== 0);
-  const stretched = occurrences.some((occurrence) => Math.abs(occurrence.timeRatio - 1) > EPS);
+  const stretched = occurrences.some((occurrence) => Math.abs(occurrence.timeRatio - 1) > BEAT_EPS);
   const detail = [
     transposed ? 'at more than one pitch level' : 'at the same pitch level',
     stretched ? 'and in more than one set of note values' : '',
@@ -824,7 +811,7 @@ function totalGap(gaps: readonly number[]): number {
  */
 function stretchRatio(modelGaps: readonly number[], answerGaps: readonly number[]): number {
   const span = totalGap(modelGaps);
-  return span > EPS ? totalGap(answerGaps) / span : 1;
+  return span > BEAT_EPS ? totalGap(answerGaps) / span : 1;
 }
 
 /** Sentence naming a stretch, for the rationales that mention one. */
@@ -909,9 +896,12 @@ export function relateMotifs(
   const semitones = (answer[0]?.pitch ?? 0) - (model[0]?.pitch ?? 0);
   const interval = intervalBetween(model[0]?.pitch ?? 0, answer[0]?.pitch ?? 0, key);
   const gap = (answer[0]?.startBeat ?? 0) - endBeatOf(model);
-  const sequence = gap >= -SEQUENCE_GAP && gap <= SEQUENCE_GAP;
+  // A sequence follows its model immediately; anything further off is a
+  // restatement somewhere else in the piece. Immediately is what the adjacency
+  // test already means by it, so a statement that starts a hair early counts.
+  const sequence = gap >= -HUMANIZE_ADJACENCY && gap <= HUMANIZE_ADJACENCY;
   const timeRatio = stretchRatio(modelGaps, answerGaps);
-  const stretched = Math.abs(timeRatio - 1) > EPS;
+  const stretched = Math.abs(timeRatio - 1) > BEAT_EPS;
   const shapes = pitchShapes(intervalsOf(model), intervalsOf(answer));
   const base = { sequence, semitones, interval, timeRatio };
   // A relation of the retrograde family is a stretch of the model played
@@ -1040,8 +1030,8 @@ function intervalCost(x: number, y: number): number {
  * is the same whichever of the two is the longer.
  */
 function gapCost(x: number, y: number): number {
-  if (!(x > EPS) || !(y > EPS)) {
-    return Math.abs(x - y) > EPS ? 1 : 0;
+  if (!(x > BEAT_EPS) || !(y > BEAT_EPS)) {
+    return Math.abs(x - y) > BEAT_EPS ? 1 : 0;
   }
   return Math.min(1, Math.abs(Math.log2(x / y)));
 }

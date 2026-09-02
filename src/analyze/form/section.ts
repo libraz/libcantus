@@ -19,11 +19,12 @@ import {
   assertPositiveInt,
   assertRange,
 } from '../../core/validation/index.js';
+import { BEAT_EPS } from '../adjacency.js';
 import { barGridStart } from '../grid.js';
 import { windowWeights } from '../histogram.js';
 import { melodicSimilarity } from '../melody/index.js';
 import { hypermeter } from './hypermeter.js';
-import { clamp01, EPS, firstSoundingBeat, lastBarOf, weightSimilarity } from './internal.js';
+import { clamp01, firstSoundingBeat, lastBarOf, weightSimilarity } from './internal.js';
 
 /**
  * A span of music labelled by which earlier span it restates.
@@ -264,7 +265,9 @@ export function sectionsFromNotes(
         ? spanEnd
         : barPositionToBeat({ bar: barStart + unitBars, beat: 0 }, meters);
     const unitNotes = sounding
-      .filter((note) => note.startBeat >= startBeat - EPS && note.startBeat < endBeat - EPS)
+      .filter(
+        (note) => note.startBeat >= startBeat - BEAT_EPS && note.startBeat < endBeat - BEAT_EPS,
+      )
       .sort((a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch);
     units.push({
       startBeat,

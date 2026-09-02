@@ -22,13 +22,20 @@ import type { MeterChange, MeterMap, TimeSignature } from './index.js';
 export type MeterData = TimeSignature | MeterMap;
 
 /**
- * Tolerance for the divisions below.
+ * Largest difference between two beats that are the same beat.
  *
- * A bar boundary reached by accumulating tuplet durations lands an epsilon
- * short of it, and a beat an epsilon short of a bar line belongs to the bar it
- * is arriving at, not to the one it is leaving.
+ * Float residue rather than playing: it is what arithmetic over beat positions
+ * leaves behind — a bar length times a bar count, a grid origin plus a whole
+ * number of steps — and nothing musical is measured in it. A bar boundary
+ * reached by accumulating tuplet durations lands an epsilon short of it, and a
+ * beat an epsilon short of a bar line belongs to the bar it is arriving at
+ * rather than to the one it is leaving.
+ *
+ * Declared here because the meter layer is below every other reader of the beat
+ * axis; the analysis layer's `BEAT_EPS` is this number, re-exported, so the
+ * single-signature path and the map path cannot come to differ by a tolerance.
  */
-const EPS = 1e-9;
+export const BEAT_EPS = 1e-9;
 
 /** Length of one denominator unit in quarter-note beats. */
 export function unitBeatsOf(ts: TimeSignature): number {
@@ -295,7 +302,7 @@ function buildMeterIndex(map: MeterMap, validated: boolean): MeterIndex {
     barsBefore[i] = bars;
     const next = map[i + 1];
     if (next !== undefined && barLen > 0) {
-      bars += Math.max(1, Math.ceil((next.startBeat - anchor) / barLen - EPS));
+      bars += Math.max(1, Math.ceil((next.startBeat - anchor) / barLen - BEAT_EPS));
     }
   }
   const index: MeterIndex = { startBeats, signatures, barAnchors, barBeats, barsBefore, validated };
@@ -373,19 +380,19 @@ function lastAtOrBefore(keys: readonly number[], value: number): number {
  * negative beats is read in the signature the piece opens in.
  */
 export function entryIndexOf(map: MeterMap, beat: number): number {
-  return lastAtOrBefore(meterIndexOf(map).startBeats, beat + EPS);
+  return lastAtOrBefore(meterIndexOf(map).startBeats, beat + BEAT_EPS);
 }
 
 /** Absolute beat at which the bar containing `beat` begins. */
 export function barStartOf(map: MeterMap, beat: number): number {
   const index = meterIndexOf(map);
-  const at = lastAtOrBefore(index.startBeats, beat + EPS);
+  const at = lastAtOrBefore(index.startBeats, beat + BEAT_EPS);
   const anchor = index.barAnchors[at];
   const barLen = index.barBeats[at];
   if (anchor === undefined || barLen === undefined || barLen === 0) {
     return 0;
   }
-  return anchor + Math.floor((beat - anchor) / barLen + EPS) * barLen;
+  return anchor + Math.floor((beat - anchor) / barLen + BEAT_EPS) * barLen;
 }
 
 /**
@@ -397,7 +404,7 @@ export function barStartOf(map: MeterMap, beat: number): number {
  */
 export function barLengthOf(map: MeterMap, beat: number): number {
   const index = meterIndexOf(map);
-  const at = lastAtOrBefore(index.startBeats, beat + EPS);
+  const at = lastAtOrBefore(index.startBeats, beat + BEAT_EPS);
   const full = index.barBeats[at];
   if (full === undefined) {
     return 0;
@@ -414,13 +421,13 @@ export function barLengthOf(map: MeterMap, beat: number): number {
  */
 export function barIndexOf(map: MeterMap, beat: number): number {
   const index = meterIndexOf(map);
-  const at = lastAtOrBefore(index.startBeats, beat + EPS);
+  const at = lastAtOrBefore(index.startBeats, beat + BEAT_EPS);
   const anchor = index.barAnchors[at];
   const barLen = index.barBeats[at];
   if (anchor === undefined || barLen === undefined || barLen === 0) {
     return 0;
   }
-  return (index.barsBefore[at] ?? 0) + Math.floor((beat - anchor) / barLen + EPS);
+  return (index.barsBefore[at] ?? 0) + Math.floor((beat - anchor) / barLen + BEAT_EPS);
 }
 
 /** Absolute beat at which bar `barIndex` begins. */

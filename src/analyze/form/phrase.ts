@@ -30,6 +30,7 @@ import {
   assertRange,
 } from '../../core/validation/index.js';
 import { majorKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
+import { BEAT_EPS } from '../adjacency.js';
 import type { CadenceResult } from '../functional/index.js';
 import { barGridStart } from '../grid.js';
 import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
@@ -39,7 +40,7 @@ import { detectCadences } from '../timeline/index.js';
 import type { KeyContext } from '../voice/index.js';
 import type { Hypermeter } from './hypermeter.js';
 import { hypermeter } from './hypermeter.js';
-import { clamp01, combineEvidence, EPS, sliceBars } from './internal.js';
+import { clamp01, combineEvidence, sliceBars } from './internal.js';
 
 /**
  * A reason a phrase boundary was placed where it was.
@@ -310,7 +311,7 @@ function addSignal(
 ): void {
   // Beats arrive from bar arithmetic and from note ends, which land an epsilon
   // apart on the same boundary; keying on a rounded beat merges them.
-  const key = Math.round(beat / EPS);
+  const key = Math.round(beat / BEAT_EPS);
   const existing = boundaries.get(key);
   const boundary = existing ?? { beat, strengths: new Map(), cadence: null };
   boundary.strengths.set(signal, Math.max(boundary.strengths.get(signal) ?? 0, strength));
@@ -387,7 +388,7 @@ export function choosePhrasePath(
         continue;
       }
       const length = endBeat - (beats[i] ?? 0);
-      if (length < minPhraseBeats - EPS) {
+      if (length < minPhraseBeats - BEAT_EPS) {
         continue;
       }
       const gain =
@@ -417,7 +418,7 @@ export function choosePhrasePath(
 /** The beat at which the chord arriving at `atBeat` gives way to the next. */
 function arrivalEnd(timeline: ChordTimeline, atBeat: number): number {
   for (const segment of timeline.segments) {
-    if (Math.abs(segment.startBeat - atBeat) < EPS) {
+    if (Math.abs(segment.startBeat - atBeat) < BEAT_EPS) {
       return segment.endBeat;
     }
   }
@@ -476,7 +477,7 @@ function restBoundaries(
   let covered = Number.NEGATIVE_INFINITY;
   for (const note of ordered) {
     const gap = note.startBeat - covered;
-    if (Number.isFinite(covered) && gap >= restBeats - EPS) {
+    if (Number.isFinite(covered) && gap >= restBeats - BEAT_EPS) {
       const bar = beatsPerBarAt(note.startBeat, meters);
       addSignal(
         boundaries,
@@ -505,7 +506,7 @@ function repetitionBoundaries(
   const slices = sliceBars(notes, meters, spanStart, spanEnd, budget);
   assertGenerationBudget(slices.length * notes.length, 'form repetition comparisons', budget);
   const onsetsIn = (from: number, to: number): NoteEvent[] =>
-    notes.filter((note) => note.startBeat >= from - EPS && note.startBeat < to - EPS);
+    notes.filter((note) => note.startBeat >= from - BEAT_EPS && note.startBeat < to - BEAT_EPS);
   // Comparing the two windows runs an edit distance over their notes, so the
   // work is the product of what each side holds rather than one unit per slice.
   // It is charged as it is incurred, so a passage dense enough to matter is
@@ -513,7 +514,7 @@ function repetitionBoundaries(
   let comparisons = 0;
   for (const slice of slices) {
     const beat = slice.startBeat;
-    if (beat - windowBeats < spanStart - EPS || beat + windowBeats > spanEnd + EPS) {
+    if (beat - windowBeats < spanStart - BEAT_EPS || beat + windowBeats > spanEnd + BEAT_EPS) {
       continue;
     }
     const before = onsetsIn(beat - windowBeats, beat);
@@ -662,7 +663,7 @@ export function phrasesFromTimeline(
   );
   const spanEnd = Math.max(spanStart, opts.totalBeats ?? notesEnd);
   assertRange(spanEnd, 0, Number.MAX_SAFE_INTEGER, 'phrase totalBeats');
-  if (spanEnd <= spanStart + EPS) {
+  if (spanEnd <= spanStart + BEAT_EPS) {
     // Nothing sounds, so there is no material to hear a phrase in — the answer
     // `sectionsFromNotes` gives an empty span. A phrase of no length, closed by
     // nothing, would be a marker rather than a phrase.
@@ -709,13 +710,13 @@ export function phrasesFromTimeline(
     // the end of the held chord would leave the seam between the two with no
     // cadence on it and hand the cadence to the phrase that follows it.
     const barEnd = barPositionToBeat({ bar: barIndexAt(hit.atBeat, meters) + 1, beat: 0 }, meters);
-    if (chordEnd > barEnd + EPS) {
+    if (chordEnd > barEnd + BEAT_EPS) {
       addSignal(boundaries, barEnd, 'cadence', strength, hit);
     }
   }
   restBoundaries(boundaries, sounding, meters, restBeats);
   for (const note of sounding) {
-    if (note.durationBeat >= longNoteBeats - EPS) {
+    if (note.durationBeat >= longNoteBeats - BEAT_EPS) {
       addSignal(boundaries, note.startBeat + note.durationBeat, 'longNote', LONG_NOTE_STRENGTH);
     }
   }
@@ -728,9 +729,11 @@ export function phrasesFromTimeline(
   // The span's own ends are boundaries whether or not anything argues for them,
   // so the phrases cover the music rather than only its well-marked middle.
   const candidates = [...boundaries.values()]
-    .filter((boundary) => boundary.beat > spanStart + EPS && boundary.beat < spanEnd - EPS)
+    .filter(
+      (boundary) => boundary.beat > spanStart + BEAT_EPS && boundary.beat < spanEnd - BEAT_EPS,
+    )
     .sort((a, b) => a.beat - b.beat);
-  const endBoundary = boundaries.get(Math.round(spanEnd / EPS)) ?? {
+  const endBoundary = boundaries.get(Math.round(spanEnd / BEAT_EPS)) ?? {
     beat: spanEnd,
     strengths: new Map<PhraseSignal, number>(),
     cadence: null,
@@ -750,7 +753,9 @@ export function phrasesFromTimeline(
     expected,
   );
 
-  const downbeatKeys = new Set(grouping.downbeats.map((downbeat) => Math.round(downbeat / EPS)));
+  const downbeatKeys = new Set(
+    grouping.downbeats.map((downbeat) => Math.round(downbeat / BEAT_EPS)),
+  );
   const phrases: Phrase[] = [];
   let from = 0;
   for (let n = 0; n < path.length; n += 1) {
@@ -771,13 +776,15 @@ export function phrasesFromTimeline(
     // a reported `cadence.atBeat` always lies inside `[startBeat, endBeat)`.
     const closing = stop?.cadence ?? null;
     const cadence =
-      closing !== null && closing.atBeat >= startBeat - EPS && closing.atBeat < endBeat - EPS
+      closing !== null &&
+      closing.atBeat >= startBeat - BEAT_EPS &&
+      closing.atBeat < endBeat - BEAT_EPS
         ? closing
         : null;
     const structuralWeight = structuralWeightOf(
       cadence,
       confidence,
-      downbeatKeys.has(Math.round(endBeat / EPS)),
+      downbeatKeys.has(Math.round(endBeat / BEAT_EPS)),
       isLast,
     );
     const bars = barSpanOf(startBeat, endBeat, meters);

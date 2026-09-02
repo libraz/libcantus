@@ -16,16 +16,10 @@ import {
   assertNoteEvents,
   assertRange,
 } from '../../core/validation/index.js';
+import { BEAT_EPS } from '../adjacency.js';
 import { barGridStart } from '../grid.js';
 import type { BarSlice } from './internal.js';
-import {
-  clamp01,
-  EPS,
-  firstSoundingBeat,
-  floorMod,
-  harmonicNovelty,
-  sliceBars,
-} from './internal.js';
+import { clamp01, firstSoundingBeat, floorMod, harmonicNovelty, sliceBars } from './internal.js';
 
 /**
  * The bar groupings the search considers.
@@ -336,7 +330,7 @@ export function hypermeter(
     // the phases the cadences agree with, and across the groupings.
     const bestFit = phases.reduce((best, reading) => Math.max(best, reading.cadenceFit), 0);
     for (const { phase, contrast, cadenceFit } of phases) {
-      if (hasCadences && cadenceFit < bestFit - EPS) {
+      if (hasCadences && cadenceFit < bestFit - BEAT_EPS) {
         continue;
       }
       const evidence = clamp01(
@@ -374,7 +368,7 @@ export function hypermeter(
   }
   const runnerUp = readings.find((reading) => reading.groupBars !== best.groupBars);
   const margin =
-    runnerUp === undefined || best.score <= EPS
+    runnerUp === undefined || best.score <= BEAT_EPS
       ? 1
       : clamp01((best.score - runnerUp.score) / best.score);
 

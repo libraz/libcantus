@@ -12,6 +12,7 @@
  * library-wide convention.
  */
 
+import { BEAT_EPS } from '../../analyze/adjacency.js';
 import {
   foldIntoRange,
   type StringedProfile,
@@ -50,7 +51,6 @@ import {
   beatPositions,
   DEFAULT_OCTAVE,
   DEFAULT_TS,
-  EPS,
   fifthPcOf,
   midBarPulse,
   approachNote as neighborOf,
@@ -239,7 +239,7 @@ function buildRootFifth(ctx: BuildContext, seg: BassSegment): void {
   for (const tile of barTiles(seg.startBeat, seg.endBeat, ctx.ts)) {
     emit(ctx, tile.startBeat, bassPcOf(seg.chord));
     const answer = midBarPulse(tile.startBeat, ctx.ts);
-    if (answer > tile.startBeat + EPS && answer < tile.endBeat - EPS) {
+    if (answer > tile.startBeat + BEAT_EPS && answer < tile.endBeat - BEAT_EPS) {
       emit(ctx, answer, fifthPcOf(seg.chord));
     }
   }
@@ -496,7 +496,7 @@ export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
     }
     const nextStart = ctx.notes[i + 1]?.startBeat ?? lastEnd;
     const durationBeat = nextStart - note.startBeat;
-    if (durationBeat <= EPS) {
+    if (durationBeat <= BEAT_EPS) {
       continue;
     }
     out.push({

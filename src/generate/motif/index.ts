@@ -1,3 +1,4 @@
+import { BEAT_EPS } from '../../analyze/adjacency.js';
 import type { ChordTimeline } from '../../analyze/timeline/index.js';
 import { InvalidInputError } from '../../core/errors/index.js';
 import type { MeterLike, TimeSignature } from '../../core/meter/index.js';
@@ -125,13 +126,10 @@ const MIN_TILE_SPAN = 1 / 256;
 /** Meter assumed when none is supplied. */
 const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
 
-/** Tolerance for beat-position comparisons. */
-const EPS = 1e-9;
-
 /** Whether a beat position falls on a bar line of a `barBeats`-long bar. */
 function isDownbeat(startBeat: number, barBeats: number): boolean {
   const bar = startBeat / barBeats;
-  return Math.abs(bar - Math.round(bar)) < EPS;
+  return Math.abs(bar - Math.round(bar)) < BEAT_EPS;
 }
 
 /** Nearest chord tone to `pitch`, preferring the lower pitch on a tie. */
