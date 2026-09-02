@@ -33,6 +33,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stack of thirds spells by accident; a caller holding pitch classes alone gets
   those letters from `augmentedSixthFromPitchClasses`.
 
+- **A checked instrument profile is a type of its own.** `toInstrumentProfile`
+  and `toStringedProfile` return a `ValidatedProfile` — the same object, marked
+  by the type system as having been read against the domain every field
+  declares. Nothing is added to the value, so it serializes exactly as the
+  profile it was made from; what the mark buys is that the routines reading a
+  profile note by note take only a profile that has been through the checks, so
+  a path that skips them does not compile rather than failing on the one passage
+  that would have exposed it.
+
 ### Changed
 
 - **The passes that read a piece read it once.** Four analyses asked a question
@@ -52,6 +61,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the conversions themselves place a beat by binary search over the map rather
   than by walking it. Every answer is unchanged.
 
+- **An instrument is checked by the functions, not by the class over them.** The
+  instrument profile every entry point takes is now read whole where it enters:
+  the technique list, the polyphony, the fret span, the limbs and the reach
+  table are held to the domains they declare, so a profile out of a project file
+  missing its `maxStretch` is refused by name instead of reporting a chord no
+  hand can hold as playable — a missing span made every comparison against it
+  false. `canSound`, `instrumentRange`, `fingeringsFor`, `foldIntoRange` and
+  `playability` take an instrument in any form the caller holds it, a kit handed
+  to the neck-only pair is refused as a kit rather than as a missing `tuning`,
+  and each of them requires a MIDI pitch where it documents one. The class layer
+  no longer states a second reading of the same rules, so an `Instrument` and
+  the function it delegates to cannot come to disagree about a profile.
+
+- **`playability` reads the instrument once per call.** Both note-by-note stages
+  re-validated the whole profile for every note, and a kit walked its reach
+  table and allocated a list per stroke — so checking a drum track cost the note
+  count times the kit, on the thread a UI is waiting on. The profile is read at
+  the entrance and the kit's limbs and overdubs are read out of it once; the
+  report is unchanged.
+
+- **`voiceChordStyled` takes a chord in whatever form the caller holds it.** Its
+  three siblings in the module — `voiceChord`, `voiceProgression`,
+  `nextVoicing` — and the class over it all took a chord symbol, and this one
+  took resolved chord data alone, so the obvious `voiceChordStyled('Dm7', {
+  style: 'drop2' })` did not compile and, from JavaScript, reached the pitch
+  reader as an error naming a pitch rather than the chord argument.
+
+- **`transposeByInterval` takes its note and its interval in any form.** The
+  class mirror of the same operation already coerced both, so following the
+  interoperability guide with `transposeByInterval('C4', 'A2')` failed at the
+  one entry point in that family that read spelled data only. The remaining
+  spelling primitives in `core` — `formatNote`, `formatKeyName`,
+  `transposeNote`, `spelledInterval` — take the data the coercers produce, and
+  the guide now says so rather than promising every form everywhere.
+
 - **A tension sample writes its texture down once.** `sampleTension` rebuilt the
   whole list of sounding voices for each distinct pitch it evaluated, so a
   sixty-voice pad spent thousands of short-lived objects on a single beat to
@@ -59,7 +103,122 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the candidate's own occurrence lifted out of it; every tension reading is
   identical.
 
+- **An entry point whose answer depends on a key's spelling no longer takes a
+  key that has none.** `figuredBassOf`, `romanToChord`, `spellVoicing`,
+  `spellLine`, `substituteChord`, `modalInterchangePalette`,
+  `negativeHarmonyMirror`, `augmentedSixthChord`,
+  `augmentedSixthFromPitchClasses` and `relateMotifs` — with `Motif.relateTo`
+  beside them — declare `SpelledKeyLike`, which is `KeyLike` minus the bare
+  `KeyScale`. An A flat minor and a G sharp minor are one set of pitch classes
+  and two keys, so handing one of these a key reduced to pitch classes cannot be
+  answered correctly; it is now refused where it is written rather than answered
+  from whichever side of the circle those pitch classes read best as. Reducing a
+  key deliberately is still `toKeyScale`, and spelling one back is `resolveKey`.
+
+- **The key builders carry the spelling they are conventionally written in.**
+  `majorKey`, `minorKey` and `scaleByName` return the scale with the tonic and
+  the scale form written beside it, so `majorKey(6)` is
+  `{ rootPc: 6, modeMask12: 2741, tonic: { letter: 4, alter: -1 }, variant: 'major' }`
+  rather than the first two fields alone. The spelling is the one the resolver
+  already derived for those pitch classes, so no answer moves; what changes is
+  that a built key satisfies the entry points above, and only a key that has
+  been reduced does not. A reader that wants the pitch classes alone takes the
+  result unchanged, or narrows it with `toKeyScale`.
+
+- **The guides open with a primer for a reader who has never studied music.**
+  `docs/en/primer/` and its Japanese mirror teach the ideas the rest of the
+  guides assume — pitch and intervals, scales and keys, chords, harmony, voices,
+  rhythm and meter — and name the API each idea decides, so a page can say
+  "spelled note" or "leading tone" and point at where the term is explained
+  rather than at nothing. Sixteen diagrams under `docs/images/`, in an English
+  and a Japanese cut, carry the parts that are shorter to draw than to describe:
+  the layers, the path from note events to parts, the note event itself, pitch
+  class against spelling, intervals, scale degrees and modes, chord
+  construction, numerals and function, cadences, voice leading, the metric grid,
+  timeline segmentation, key detection, key relations, the generation context,
+  and reharmonization. The README keeps the overview, the worked-guide index and
+  the boundaries of the library, and leaves the layer-by-layer detail to the
+  guides.
+
+- **Guide statements that described behaviour the library does not have are
+  corrected.** The ones that would have produced a wrong call: `resolveMeters`
+  takes the options object an entry point was given, not a signature, and reads
+  its `ts` or `meters` field, so passing a signature straight in silently
+  analyses in 4/4; a chord timeline's `at` is a function, so an analysis crosses
+  a worker boundary as `timeline.segments` rather than whole; `clampToMidi`
+  requires a whole number before it clamps; `Instrument.soundingPitch` resolves
+  only the two guitar profiles and raises for the basses and the kit; a tritone
+  substitute is spelled a semitone above the chord its dominant resolves to,
+  which is the key tonic only when the dominant is the key's own; the
+  harmonizer's transposition search is off unless `placement` asks for it; a
+  cadence is graded `imperfect` from the chords alone when a leading-tone chord
+  stands in for the dominant or either chord is inverted, and only the remaining
+  case waits on a voicing; and `hiddenPerfect` is judged on the outer voices in
+  a chorale and at two-voice strictness in a species exercise. Shipped
+  behaviour that no guide mentioned — `Timeline.modulations`, `analyzePolyphony`,
+  the public instrument coercers, `DetectKeyOptions.explain`, the composer's
+  recorded seed and algorithm version, and the whole-number rule on `pitch` and
+  `velocity` — is documented where it belongs.
+
+- **What the algorithm version promises is stated accurately.** The
+  documentation said a version already accepted keeps returning what it
+  returned. The generators hold one implementation rather than one per version —
+  the number is drawn into the seed — so pinning an older number selects a
+  different draw of the current implementation and does not restore what that
+  number produced before. A correction to musically wrong output therefore moves
+  the notes of a version in use, ships as a patch, and is recorded here.
+
 ### Fixed
+
+- **A public entrance refuses malformed input as an error of this library.** The
+  documented contract is that anything a caller passes in comes back as one of
+  the library's own error classes, and that a raw `TypeError` means a bug inside
+  the library — a distinction a host branches on. Forty-one published functions
+  read a field off whatever they were given instead: a `null` restored from a
+  project file, a hole in an array, or a mistyped argument surfaced as this
+  library's `TypeError` from wherever the first field access happened to be.
+  Every entry point taking a single argument now names what it was given and
+  refuses it, and a sweep derived from the package's own exports holds the whole
+  surface to that contract rather than a list of the entrances someone
+  remembered.
+
+- **A tempo map and a note value name the element that is not one.** A `null`
+  where a tempo event or a nested tuplet belongs came back as a raw `TypeError`
+  naming neither the element nor its index, while the meter map and the note
+  events beside them had always refused the same shape by name.
+
+- **`assertVocabulary` refuses an entry missing a required list.** The
+  `articulations` of a dictionary entry were walked before anything checked they
+  were there, so an entry from a JavaScript caller or a config file without them
+  failed as a raw `TypeError` while every neighbouring field was refused by
+  name. The optional lists and the tempo band are read the same way now.
+
+- **A drum figure naming a voice the kit has not got is refused.** A plausible
+  but unused name — `'hihat'` — was dropped stroke by stroke, so a caller's
+  figure was admitted and then played nothing; an inherited name such as
+  `'constructor'` indexed the note table to a function, which reached the
+  emitted hit where its pitch belongs. A supplied dictionary is read for its
+  voices when the generator takes it, whether or not the draw reaches that
+  entry, and the note number is looked up only among the table's own names.
+
+- **`analyzeArrangement` and `tensionCurve` check the timeline and the key
+  regions they are handed.** Every other field of the arrangement options was
+  read for its shape at the entrance; a timeline missing its `at` and a region
+  missing its `key` went through untouched and became a raw `TypeError` several
+  layers in. The class API refused both already, so one input had two behaviours
+  depending on which surface it arrived at.
+
+- **A melody in a scale of other than seven tones can be harmonized.**
+  `harmonizeMelody` and `generateProgression` threw for a pentatonic or a blues
+  scale — keys `Key` treats as first class and pops writes tunes in — because
+  the chord over a degree was stacked in the scale itself, which has no
+  degree-for-degree frame when it does not hold seven tones. Both now read
+  degrees in the key's heptatonic frame, the frame the numerals and the
+  tonicization targets were already measured in, so a five-tone melody is
+  harmonized with the triads of the major it lives in. The secondary dominants
+  take each target's root from the target itself rather than by re-indexing a
+  differently sized list of tones with a degree number that was never measured
+  against it.
 
 - **A budget that passes stands for the table the search fills.** The key search
   was charged for its slots and then built a row of twenty-four candidate keys
@@ -784,73 +943,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refuses as over budget was accepted, copied and kept. All three read the array
   through one guard now, which caps the count before the pass over the notes
   begins.
-
-### Changed
-
-- **An entry point whose answer depends on a key's spelling no longer takes a
-  key that has none.** `figuredBassOf`, `romanToChord`, `spellVoicing`,
-  `spellLine`, `substituteChord`, `modalInterchangePalette`,
-  `negativeHarmonyMirror`, `augmentedSixthChord`,
-  `augmentedSixthFromPitchClasses` and `relateMotifs` — with `Motif.relateTo`
-  beside them — declare `SpelledKeyLike`, which is `KeyLike` minus the bare
-  `KeyScale`. An A flat minor and a G sharp minor are one set of pitch classes
-  and two keys, so handing one of these a key reduced to pitch classes cannot be
-  answered correctly; it is now refused where it is written rather than answered
-  from whichever side of the circle those pitch classes read best as. Reducing a
-  key deliberately is still `toKeyScale`, and spelling one back is `resolveKey`.
-
-- **The key builders carry the spelling they are conventionally written in.**
-  `majorKey`, `minorKey` and `scaleByName` return the scale with the tonic and
-  the scale form written beside it, so `majorKey(6)` is
-  `{ rootPc: 6, modeMask12: 2741, tonic: { letter: 4, alter: -1 }, variant: 'major' }`
-  rather than the first two fields alone. The spelling is the one the resolver
-  already derived for those pitch classes, so no answer moves; what changes is
-  that a built key satisfies the entry points above, and only a key that has
-  been reduced does not. A reader that wants the pitch classes alone takes the
-  result unchanged, or narrows it with `toKeyScale`.
-
-- **The guides open with a primer for a reader who has never studied music.**
-  `docs/en/primer/` and its Japanese mirror teach the ideas the rest of the
-  guides assume — pitch and intervals, scales and keys, chords, harmony, voices,
-  rhythm and meter — and name the API each idea decides, so a page can say
-  "spelled note" or "leading tone" and point at where the term is explained
-  rather than at nothing. Sixteen diagrams under `docs/images/`, in an English
-  and a Japanese cut, carry the parts that are shorter to draw than to describe:
-  the layers, the path from note events to parts, the note event itself, pitch
-  class against spelling, intervals, scale degrees and modes, chord
-  construction, numerals and function, cadences, voice leading, the metric grid,
-  timeline segmentation, key detection, key relations, the generation context,
-  and reharmonization. The README keeps the overview, the worked-guide index and
-  the boundaries of the library, and leaves the layer-by-layer detail to the
-  guides.
-
-- **Guide statements that described behaviour the library does not have are
-  corrected.** The ones that would have produced a wrong call: `resolveMeters`
-  takes the options object an entry point was given, not a signature, and reads
-  its `ts` or `meters` field, so passing a signature straight in silently
-  analyses in 4/4; a chord timeline's `at` is a function, so an analysis crosses
-  a worker boundary as `timeline.segments` rather than whole; `clampToMidi`
-  requires a whole number before it clamps; `Instrument.soundingPitch` resolves
-  only the two guitar profiles and raises for the basses and the kit; a tritone
-  substitute is spelled a semitone above the chord its dominant resolves to,
-  which is the key tonic only when the dominant is the key's own; the
-  harmonizer's transposition search is off unless `placement` asks for it; a
-  cadence is graded `imperfect` from the chords alone when a leading-tone chord
-  stands in for the dominant or either chord is inverted, and only the remaining
-  case waits on a voicing; and `hiddenPerfect` is judged on the outer voices in
-  a chorale and at two-voice strictness in a species exercise. Shipped
-  behaviour that no guide mentioned — `Timeline.modulations`, `analyzePolyphony`,
-  the public instrument coercers, `DetectKeyOptions.explain`, the composer's
-  recorded seed and algorithm version, and the whole-number rule on `pitch` and
-  `velocity` — is documented where it belongs.
-
-- **What the algorithm version promises is stated accurately.** The
-  documentation said a version already accepted keeps returning what it
-  returned. The generators hold one implementation rather than one per version —
-  the number is drawn into the seed — so pinning an older number selects a
-  different draw of the current implementation and does not restore what that
-  number produced before. A correction to musically wrong output therefore moves
-  the notes of a version in use, ships as a patch, and is recorded here.
 
 ## [1.0.1] - 2026-08-18
 
