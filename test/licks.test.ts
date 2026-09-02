@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { TimeSignature } from '../src/core/meter/index.js';
 import { generateBassLine } from '../src/generate/bass/index.js';
+import { bandFloor, placeRoot } from '../src/generate/bass/internal.js';
 import { placeLicks } from '../src/generate/bass/licks.js';
 import type { LickMaterial } from '../src/generate/bass/licks-data.js';
 import { BASS_LICKS, isLickMaterial } from '../src/generate/bass/licks-data.js';
@@ -160,6 +161,63 @@ describe('placeLicks', () => {
     }
   });
 
+  it("leads into a chord change from the figure's own last note", () => {
+    // The beat before a chord change is where the line walks into it. The
+    // connecting tone was fixed to the head of that beat, so in seven of the
+    // nine genres the note that actually sounded into the change was the
+    // figure's real final onset a sixteenth or two later — left on whatever
+    // template degree it carried, and related to the next chord by nothing.
+    const genres = [...new Set(BASS_LICKS.map((lick) => lick.genre))];
+    for (const genre of genres) {
+      const notes = placeLicks(TIMELINE, KEY, {
+        genre,
+        ctx: { seed: 1, bpm: 100, complexity: { rhythmic: 0.7 } },
+      });
+      for (const segment of TIMELINE.slice(1)) {
+        const change = segment.startBeat;
+        const inLastBeat = notes.filter(
+          (note) => note.startBeat > change - 1 - 1e-9 && note.startBeat < change - 1e-9,
+        );
+        const last = inLastBeat[inLastBeat.length - 1];
+        if (last === undefined) {
+          // No figure was tiled into that beat, so there is nothing leading.
+          continue;
+        }
+        const bass = placeRoot(segment.chord.bassPc ?? segment.chord.rootPc, bandFloor(36));
+        const step = Math.abs(last.pitch - bass);
+        expect(step, `${genre} into ${change} from ${last.startBeat}`).toBeGreaterThanOrEqual(1);
+        expect(step, `${genre} into ${change} from ${last.startBeat}`).toBeLessThanOrEqual(2);
+      }
+    }
+  });
+
+  it("takes the figure's final sixteenth as the connecting tone, not the beat before it", () => {
+    // The motown figure states its last onset on the third sixteenth of the
+    // beat, so that note is the one that leads into the next chord; nothing is
+    // introduced ahead of it on the beat it already fills.
+    const notes = placeLicks(TIMELINE, KEY, {
+      genre: 'motown',
+      ctx: { seed: 1, bpm: 100, complexity: { rhythmic: 0.7 } },
+    });
+    const inLastBeat = (line: readonly { startBeat: number; pitch: number }[]) =>
+      line.filter((note) => note.startBeat > 3 - 1e-9 && note.startBeat < 4 - 1e-9);
+    const leading = inLastBeat(notes);
+    // The same figure with no chord change to lead into, which is the figure's
+    // own rhythm: the connecting tone takes over one of these onsets rather
+    // than adding one of its own.
+    const alone = placeLicks([TIMELINE[0] as (typeof TIMELINE)[number]], KEY, {
+      genre: 'motown',
+      ctx: { seed: 1, bpm: 100, complexity: { rhythmic: 0.7 } },
+    });
+    expect(leading.map((note) => note.startBeat)).toEqual(
+      inLastBeat(alone).map((note) => note.startBeat),
+    );
+    const last = leading[leading.length - 1];
+    expect(last?.startBeat).toBe(3.5);
+    const bass = placeRoot(TIMELINE[1]?.chord.rootPc ?? 0, bandFloor(36));
+    expect(Math.abs((last?.pitch ?? 0) - bass)).toBeLessThanOrEqual(2);
+  });
+
   it('sounds the slash bass at the onset the figure begins on', () => {
     // The written bass is what sounds under the chord, and the figure's own
     // root note shares that onset with it. Whichever of the two survives, the
@@ -177,9 +235,16 @@ describe('placeLicks', () => {
     );
     // The figure above that onset is still measured from the chord's own root,
     // so its octave degree answers C rather than the whole figure being
-    // transposed onto the bass, which would sound it a third too high.
+    // transposed onto the bass, which would sound it a third too high. That
+    // root is placed above the written bass rather than folded into the
+    // register band, which is what makes the segment an inversion: the band is
+    // an octave wide, so the C folded into it sounded under the E the chord
+    // names, and a C under its own E is a root-position C.
     const octave = notes.find((note) => Math.abs(note.startBeat - 1) < 1e-9);
-    expect(octave?.pitch).toBe(48);
+    expect(octave?.pitch).toBe(60);
+    for (const note of notes) {
+      expect(note.pitch, `${note.startBeat}`).toBeGreaterThanOrEqual(40);
+    }
   });
 
   it('sounds a flattened degree below the plain one, whatever the chord supplies', () => {

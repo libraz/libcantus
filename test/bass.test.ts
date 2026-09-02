@@ -508,6 +508,54 @@ function octavePickups(ctx: BassLineOptions['ctx']): { leap: number; beats: numb
   return taken;
 }
 
+describe('a chord written over a bass is played as the inversion it is', () => {
+  /** Every inversion of a seventh chord, one chord per segment. */
+  function inversions(rootPc: number): BassSegment[] {
+    return chordPitchClasses(makeChord(rootPc, 'dom7'))
+      .filter((pc) => pc !== rootPc % 12)
+      .map((bassPc, index) => ({
+        startBeat: index * 4,
+        endBeat: index * 4 + 4,
+        chord: makeChord(rootPc, 'dom7', bassPc),
+      }));
+  }
+
+  it('sounds no tone of the chord under the bass the chord names', () => {
+    // The band is one octave wide, so folding the chord's other tones into it
+    // put them under a bass placed anywhere but the bottom of it: the C of a
+    // C/E came out below its own E, which is a root-position C. Reading such a
+    // line back through this library reported a chord the part was not written
+    // on. The walking style's last note of a segment is the approach into the
+    // next chord and is left out, as the style's own reading is.
+    for (const style of ['root', 'rootFifth', 'arpeggio', 'pop', 'walking'] as BassStyle[]) {
+      for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+        const segments = inversions(rootPc);
+        const notes = generateBassLine({ segments, key: cMajor, style, ctx: 3 });
+        for (const segment of segments) {
+          const bass = placeRoot(segment.chord.bassPc ?? segment.chord.rootPc, bandFloor(36));
+          const inSegment = notes.filter(
+            (note) =>
+              note.startBeat >= segment.startBeat - 1e-9 && note.startBeat < segment.endBeat - 1e-9,
+          );
+          const own =
+            style === 'walking' ? inSegment.slice(0, Math.max(0, inSegment.length - 1)) : inSegment;
+          for (const note of own) {
+            // The pop style's pickup is the bass an octave below itself, which
+            // is the one note written under the bass on purpose.
+            if (style === 'pop' && note.pitch === bass - 12) {
+              continue;
+            }
+            expect(
+              note.pitch,
+              `${style} ${rootPc}/${segment.chord.bassPc} at ${note.startBeat}`,
+            ).toBeGreaterThanOrEqual(bass);
+          }
+        }
+      }
+    }
+  });
+});
+
 describe("the pop style's weak-beat pickup", () => {
   it('is never the note already sounding under it, on any instrument or register', () => {
     // The pickup drops an octave below the band, and the band is one octave

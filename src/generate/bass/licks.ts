@@ -50,6 +50,7 @@ import {
   bassRegister,
   DEFAULT_OCTAVE,
   DEFAULT_TS,
+  placeAboveBass,
   placePc,
   placeRoot,
   STRONG_VELOCITY,
@@ -219,6 +220,7 @@ export function placeLicks(
     const rootMidi = placeRoot(rootPc, low);
     const implied = impliedScaleTones(segment.chord);
     let lastTilePlayed = false;
+    let playedTile: PlayedTile | undefined;
     let firstOnset = segment.startBeat;
 
     // Each tile draws its own figure at its own address, so the bar after the
@@ -255,6 +257,9 @@ export function placeLicks(
           )
         : undefined;
       lastTilePlayed = notes !== undefined;
+      if (notes !== undefined && entry !== undefined) {
+        playedTile = { material: entry.material, tileStart };
+      }
 
       const rootStep = entry === undefined ? 0 : anchorStepOf(entry.material, remaining);
       const rootAt = tileStart + rootStep * STEP_BEATS;
@@ -267,7 +272,15 @@ export function placeLicks(
       raw.push({ startBeat: rootAt, pitch: rootMidi, velocity: STRONG_VELOCITY });
 
       if (notes) {
-        const figureRoot = placePc(pitchClass(segment.chord.rootPc), rootMidi, low);
+        // Over a slash chord the figure is written above the bass the chord
+        // names, not folded into the register band: the band is an octave wide,
+        // so a root folded into it sounds under a bass placed anywhere but the
+        // bottom of it — and a `C/E` whose C sounds under its own E is a
+        // root-position C, which is not the chord the part was written on.
+        const figureRoot =
+          segment.chord.bassPc === undefined
+            ? placePc(pitchClass(segment.chord.rootPc), rootMidi, low)
+            : placeAboveBass(pitchClass(segment.chord.rootPc), rootMidi);
         for (const lickNote of notes) {
           const at = tileStart + lickNote.step * STEP_BEATS;
           // Placed against the figure's own root rather than folded one note at
@@ -309,7 +322,16 @@ export function placeLicks(
     // empties a beat a quieter one filled.
     const next = segments[index + 1];
     if (next && lastTilePlayed) {
-      const approachAt = next.startBeat - STEP_BEATS * BEAT_STEPS;
+      // The connecting tone is the figure's own last note wherever the figure
+      // states one in the beat before the change. Fixing it to the head of that
+      // beat left the figure's real final onset — a sixteenth or two later in
+      // seven of the nine genres — sounding its template degree into the next
+      // chord, so the note that actually leads into the change was whatever the
+      // figure happened to end on. Where the figure sounds nothing in that beat
+      // the tone is introduced on the beat, as it always was, which is what
+      // keeps the beat before a chord change from ever falling silent.
+      const lastBeat = next.startBeat - STEP_BEATS * BEAT_STEPS;
+      const approachAt = materialOnsetIn(playedTile, lastBeat, next.startBeat) ?? lastBeat;
       if (approachAt > firstOnset + BEAT_EPS) {
         const nextRoot = placeRoot(bassPcOf(next.chord), low);
         const occupied = soundingAt(raw, approachAt);
@@ -389,6 +411,37 @@ function soundingAt(raw: readonly RawLickNote[], at: number): RawLickNote | unde
     }
   }
   return undefined;
+}
+
+/** The figure a tile played, and where that tile began. */
+type PlayedTile = { material: LickMaterial; tileStart: number };
+
+/**
+ * The last onset the figure itself states between two positions, if any.
+ *
+ * Read from the material rather than from the notes the density dial left, as
+ * the figure's anchor step is: where a chord change is led into from is a
+ * property of the figure, and reading it off the thinned copy would move it as
+ * the dial travels — a position that sounded at one setting would fall silent
+ * at the next, which is the one thing the dial promises never to do.
+ */
+function materialOnsetIn(
+  played: PlayedTile | undefined,
+  from: number,
+  to: number,
+): number | undefined {
+  if (played === undefined) {
+    return undefined;
+  }
+  let last: number | undefined;
+  for (const note of played.material.notes) {
+    const at = played.tileStart + note.step * STEP_BEATS;
+    if (at < from - BEAT_EPS || at > to - BEAT_EPS) {
+      continue;
+    }
+    last = last === undefined ? at : Math.max(last, at);
+  }
+  return last;
 }
 
 /**

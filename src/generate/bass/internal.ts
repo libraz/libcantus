@@ -54,6 +54,20 @@ export function placePc(pc: number, anchor: number, low: number): number {
 }
 
 /**
+ * Place a pitch class above the bass a chord names, rather than in the band.
+ *
+ * A chord written over a bass is an inversion, and what makes it one is that
+ * the named bass is the lowest note sounding. The band is an octave wide, so
+ * folding the chord's other tones into it puts them under a bass placed
+ * anywhere but the bottom of it: the C of a `C/E` came out below its own E,
+ * which is a root-position C, and reading the line back reported the chord the
+ * part was not written on.
+ */
+export function placeAboveBass(pc: number, bassMidi: number): number {
+  return foldIntoBand(pc + 12 * Math.round((bassMidi - pc) / 12), bassMidi);
+}
+
+/**
  * Place a segment's bass note in the register band.
  *
  * The octave is a function of the pitch class and the band alone rather than of

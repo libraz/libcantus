@@ -52,6 +52,7 @@ import {
   fifthPcOf,
   midBarPulse,
   approachNote as neighborOf,
+  placeAboveBass,
   placePc,
   placeRoot,
   STRONG_VELOCITY,
@@ -181,6 +182,11 @@ type BuildContext = {
    * chord comes round.
    */
   rootMidi: number;
+  /**
+   * The chord names a bass of its own, so the segment is an inversion and every
+   * tone of it is placed above that bass rather than in the band.
+   */
+  overBass: boolean;
   /** The last note emitted, which decides which way an approach note leads. */
   prevMidi: number;
   instrument: StringedProfile | undefined;
@@ -204,12 +210,14 @@ function sounding(ctx: BuildContext, placed: number): number {
   return ctx.instrument ? foldIntoRange(placed, ctx.instrument) : placed;
 }
 
+/** Where a tone of the chord being written goes, band or inversion. */
+function placeTone(ctx: BuildContext, pc: number): number {
+  return ctx.overBass ? placeAboveBass(pc, ctx.rootMidi) : placePc(pc, ctx.rootMidi, ctx.low);
+}
+
 /** Append a note for pitch class `pc` at `pos`, placed against the chord's bass. */
 function emit(ctx: BuildContext, pos: number, pc: number, midiOverride?: number): number {
-  const placed = clampToMidi(
-    midiOverride ?? placePc(pc, ctx.rootMidi, ctx.low),
-    'generated bass pitch',
-  );
+  const placed = clampToMidi(midiOverride ?? placeTone(ctx, pc), 'generated bass pitch');
   const midi = sounding(ctx, placed);
   const velocity = isStrongBeat(pos, ctx.ts) ? STRONG_VELOCITY : WEAK_VELOCITY;
   ctx.notes.push({ startBeat: pos, pitch: midi, velocity });
@@ -286,7 +294,7 @@ function pickup(ctx: BuildContext, seg: BassSegment, pos: number, index: number)
     return true;
   }
   const fifthPc = fifthPcOf(seg.chord);
-  if (sounding(ctx, placePc(fifthPc, ctx.rootMidi, ctx.low)) === sounding(ctx, ctx.rootMidi)) {
+  if (sounding(ctx, placeTone(ctx, fifthPc)) === sounding(ctx, ctx.rootMidi)) {
     return false;
   }
   emit(ctx, pos, fifthPc);
@@ -443,6 +451,7 @@ export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
     draw: resolved.part('bass'),
     notes: [],
     rootMidi: low,
+    overBass: false,
     prevMidi: low,
     instrument,
     pickupDensity: resolved.rhythmic ?? DEFAULT_PICKUP_DENSITY,
@@ -456,6 +465,7 @@ export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
       continue;
     }
     ctx.rootMidi = placeRoot(bassPcOf(seg.chord), ctx.low);
+    ctx.overBass = seg.chord.bassPc !== undefined;
     switch (style) {
       case 'rootFifth':
         buildRootFifth(ctx, seg);
