@@ -142,20 +142,90 @@ function lineOf(source: ts.SourceFile, node: ts.Node): number {
  *   string literals.
  */
 export function unionMembers(file: string, name: string): string[] {
-  for (const statement of parse(file).statements) {
-    if (
-      ts.isTypeAliasDeclaration(statement) &&
-      statement.name.text === name &&
-      ts.isUnionTypeNode(statement.type)
-    ) {
+  const source = parse(file);
+  for (const statement of source.statements) {
+    if (!ts.isTypeAliasDeclaration(statement) || statement.name.text !== name) {
+      continue;
+    }
+    if (ts.isUnionTypeNode(statement.type)) {
       return statement.type.types.map((member) =>
         ts.isLiteralTypeNode(member) && ts.isStringLiteral(member.literal)
           ? member.literal.text
           : '',
       );
     }
+    // The other spelling of the same vocabulary: a frozen table of names, with
+    // the union derived from it as `(typeof TABLE)[number]`. A name is checked
+    // at run time against the table and at compile time against the union, so
+    // reading either spelling is reading one declaration rather than two.
+    const table = indexedTableOf(statement.type);
+    if (table !== undefined) {
+      return literalsOfTable(source, table, file, name);
+    }
   }
   throw new Error(`${name} is not a string-literal union in ${file}`);
+}
+
+/** The table name behind `(typeof TABLE)[number]`, when the type is written that way. */
+function indexedTableOf(type: ts.TypeNode): string | undefined {
+  if (
+    !ts.isIndexedAccessTypeNode(type) ||
+    type.indexType.kind !== ts.SyntaxKind.NumberKeyword ||
+    !ts.isParenthesizedTypeNode(type.objectType)
+  ) {
+    return undefined;
+  }
+  const inner = type.objectType.type;
+  return ts.isTypeQueryNode(inner) && ts.isIdentifier(inner.exprName)
+    ? inner.exprName.text
+    : undefined;
+}
+
+/** The string literals a named table lists, whether or not it is frozen. */
+function literalsOfTable(
+  source: ts.SourceFile,
+  table: string,
+  file: string,
+  name: string,
+): string[] {
+  for (const statement of source.statements) {
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        !ts.isIdentifier(declaration.name) ||
+        declaration.name.text !== table ||
+        declaration.initializer === undefined
+      ) {
+        continue;
+      }
+      const literals = arrayLiteralOf(declaration.initializer);
+      if (literals !== undefined) {
+        return literals.elements.map((element) =>
+          ts.isStringLiteral(element) ? element.text : '',
+        );
+      }
+    }
+  }
+  throw new Error(`${name} is derived from ${table}, which is not a table of names in ${file}`);
+}
+
+/** The array literal an initializer names, through `Object.freeze` and `as const`. */
+function arrayLiteralOf(node: ts.Expression): ts.ArrayLiteralExpression | undefined {
+  let current = node;
+  for (let step = 0; step < 4; step += 1) {
+    if (ts.isAsExpression(current) || ts.isParenthesizedExpression(current)) {
+      current = current.expression;
+      continue;
+    }
+    if (ts.isCallExpression(current) && current.arguments[0] !== undefined) {
+      current = current.arguments[0];
+      continue;
+    }
+    return ts.isArrayLiteralExpression(current) ? current : undefined;
+  }
+  return undefined;
 }
 
 /**
