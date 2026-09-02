@@ -107,7 +107,11 @@ describe('the search and the checker judge a resolution by the same written inte
     );
     expect([...covered].sort()).toEqual([...bearsSeventh].sort());
     expect(divergences).toEqual([]);
-  }, 60000);
+    // Twenty seconds of voicing searches with the machine to itself, and three
+    // times that with the rest of the suite running beside it. The budget is
+    // for catching a hang, as the suite-wide one is: a sweep that took long
+    // enough to reach this is not slow, it is not finishing.
+  }, 180_000);
 });
 
 describe('an applied leading-tone seventh on the flat side', () => {
