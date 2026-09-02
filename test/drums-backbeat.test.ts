@@ -141,6 +141,25 @@ describe('voices that reinforce the backbeat follow where it moved', () => {
     expect([...new Set(backbeat.map((hit) => hit.startBeat % 4))]).toEqual([2]);
   });
 
+  it('leads the trap backbeat in with the ghosts, and does not ghost over it', () => {
+    // A ghost is written on the 16ths of the beat before a backbeat, so where
+    // the backbeat moved the ghosts move with it: trap's snare is on beat 3, so
+    // the lead-in is beat 2. Fixed to beats 1 and 3, they anticipated a beat
+    // trap has no snare on and landed again on the backbeat itself.
+    const hits = generateDrums({
+      ...base,
+      style: 'trap',
+      section: 'chorus',
+      role: 'full',
+      ctx: { seed: 5, bpm: 84, complexity: { ornament: 1 } },
+    });
+    const ghosts = hits.filter((hit) => hit.pitch === SNARE && !Number.isInteger(hit.startBeat));
+    expect(ghosts.length).toBeGreaterThan(0);
+    for (const ghost of ghosts) {
+      expect(Math.floor(ghost.startBeat) % 4, `${ghost.startBeat}`).toBe(1);
+    }
+  });
+
   it('leaves the claps of a 2-and-4 groove where they were', () => {
     const hits = generateDrums({ ...base, style: 'house', section: 'chorus', role: 'full' });
     const claps = positionsOf(hits, HANDCLAP);

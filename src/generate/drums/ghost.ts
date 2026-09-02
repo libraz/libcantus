@@ -85,12 +85,21 @@ export function getGhostVelocity(section: SectionType, beatPosition: number): nu
  * Probability of a ghost at a specific 16th position, higher when the ghost
  * leads straight into the backbeat.
  *
- * Ghosts are only placed on beats 1 and 3 (indices 0 and 2), so those are the
- * positions this answers for; the "a" of each is the one that anticipates the
- * snare.
+ * Which beats those are is the groove's own answer rather than a fixed pair:
+ * a backbeat on the third beat — which is how trap writes one — is led into
+ * from the second, and the amplification written for beats 1 and 3 fell on a
+ * beat nothing follows and on the backbeat itself.
+ *
+ * @param beat Beat index inside the bar.
+ * @param sixteenthInBeat Which 16th of that beat, 0 to 3.
+ * @param leadIns The beats that lead into a backbeat.
  */
-export function getGhostProbabilityAtPosition(beat: number, sixteenthInBeat: number): number {
-  const leadsIntoBackbeat = (beat === 0 || beat === 2) && sixteenthInBeat === 3;
+export function getGhostProbabilityAtPosition(
+  beat: number,
+  sixteenthInBeat: number,
+  leadIns: readonly number[],
+): number {
+  const leadsIntoBackbeat = leadIns.includes(beat) && sixteenthInBeat === 3;
   return leadsIntoBackbeat ? 0.6 : 0.25;
 }
 

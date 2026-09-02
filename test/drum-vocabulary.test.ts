@@ -141,7 +141,7 @@ describe('one onset per voice and position', () => {
 
 describe('moving the drum vocabulary into data', () => {
   it('pins every generated groove', () => {
-    expect(grooveDigest()).toBe('467887cfc8083be17c10c42098db9e4964b97da61413ba7b6feb240fb466963d');
+    expect(grooveDigest()).toBe('68a5cb0a06ce4e7bee1dddb2451d00541df7fa0a91e13de1de0e062b95e618be');
   });
 
   it('leaves every fill selection exactly as it was', () => {

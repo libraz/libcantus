@@ -746,3 +746,36 @@ describe('the meter a drum part is written against', () => {
     expect(() => generateDrums({ ...opts, ts: '3/4' })).toThrow(InvalidInputError);
   });
 });
+
+describe('a fill is written on the grid the bar is swung on', () => {
+  it('places its offbeats where every other voice in the bar sits', () => {
+    // Two voices a sixteenth's swing apart inside one bar are heard as a flam.
+    // The fill's strokes and the section-lift crash were written straight while
+    // the kick, the hats and the ghosts around them went through the section's
+    // swung grid, so a shuffle came apart in the one bar that ends the phrase.
+    const hits = generateDrums({
+      bars: 4,
+      style: 'standard',
+      section: 'chorus',
+      feel: 'shuffle',
+      fills: true,
+      role: 'full',
+      ctx: { seed: 3, bpm: 100 },
+    });
+    const offsets = (bar: number) =>
+      new Set(
+        hits
+          .filter((hit) => Math.floor(hit.startBeat / 4) === bar)
+          .map((hit) => Math.round((hit.startBeat % 1) * 1000) / 1000)
+          .filter((offset) => offset !== 0),
+      );
+    const groove = new Set([...offsets(0), ...offsets(1), ...offsets(2)]);
+    expect(groove.size).toBeGreaterThan(0);
+    // Nothing straight: a swung eighth of this feel is not at the half beat.
+    for (const offset of offsets(3)) {
+      expect(groove.has(offset) || offset > 0.8, `${offset}`).toBe(true);
+      expect(offset).not.toBe(0.5);
+      expect(offset).not.toBe(0.25);
+    }
+  });
+});

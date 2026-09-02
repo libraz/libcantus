@@ -227,6 +227,15 @@ export function backbeatStroke(sec: SectionCtx, velocity: number): BackbeatStrok
     : { pitch, velocity: velocity * roleBackbeatWeight(sec.role) };
 }
 
+/**
+ * Beats in the bar the beat processors are written against.
+ *
+ * The same bar {@link backbeatBeats} answers for by default here: this module
+ * is called once per beat of a four-four bar, and a groove in another metre is
+ * placed by the vocabulary path rather than by these processors.
+ */
+const FOUR_FOUR_BEATS = 4;
+
 /** Emit the backbeat snare (or side-stick) for one beat. */
 export function generateSnareForBeat(ctx: BeatCtx, sec: SectionCtx, isIntroFirst: boolean): void {
   if (ctx.inPrechorusLift) {
@@ -242,14 +251,20 @@ export function generateSnareForBeat(ctx: BeatCtx, sec: SectionCtx, isIntroFirst
   ctx.track.add(stroke.pitch, ctx.beatTick, EIGHTH, stroke.velocity);
 }
 
-/** Emit ghost snares at the "e"/"a" 16ths of beats 1 and 3. */
+/** Emit ghost snares at the "e"/"a" 16ths of the beats that lead into a backbeat. */
 export function generateGhostNotesForBeat(ctx: BeatCtx, sec: SectionCtx): void {
   // The one gate on the voice, so no exit path can write a snare-head ghost
   // into a groove whose backbeat is not on the snare head.
   if (!writesSnareGhosts(sec)) {
     return;
   }
-  if (ctx.beat !== 0 && ctx.beat !== 2) {
+  // The beat before each backbeat, wherever the groove puts its backbeat: a
+  // snare on the third beat — trap's own backbeat — is led into from the
+  // second, and the fixed pair wrote the ghosts a beat early and again on the
+  // backbeat itself, so trap's backbeat had no lead-in written at all.
+  const backbeats = backbeatBeats(sec.snareBeat3);
+  const leadIns = backbeats.map((beat) => (beat - 1 + FOUR_FOUR_BEATS) % FOUR_FOUR_BEATS);
+  if (!leadIns.includes(ctx.beat)) {
     return;
   }
   // A ghost is decoration, so the ornament dial decides how many survive; the
@@ -265,7 +280,7 @@ export function generateGhostNotesForBeat(ctx: BeatCtx, sec: SectionCtx): void {
 
   for (const pos of positions) {
     const sixteenthInBeat = pos === 'e' ? 1 : 3;
-    const posProb = getGhostProbabilityAtPosition(ctx.beat, sixteenthInBeat);
+    const posProb = getGhostProbabilityAtPosition(ctx.beat, sixteenthInBeat, leadIns);
     if (!ctx.draw.prob(ghostProb * posProb, 'ghost', ctx.bar, ctx.beat, pos)) {
       continue;
     }
@@ -314,7 +329,15 @@ export function generatePreChorusBuildup(
     );
   }
   if (isSectionLastBar && ctx.beat === 3) {
-    ctx.track.add(GM.CRASH, ctx.beatTick + EIGHTH + SIXTEENTH, SIXTEENTH, ctx.velocity * 1.1);
+    // Through the section's own grid, as the snare above it is: written
+    // straight while the rest of the bar swings, the crash lands ahead of the
+    // stroke it is meant to land with and reads as a flam.
+    ctx.track.add(
+      GM.CRASH,
+      swing16(ctx.beatTick + EIGHTH + SIXTEENTH, sec, ctx.swingAmount),
+      SIXTEENTH,
+      ctx.velocity * 1.1,
+    );
   }
 }
 

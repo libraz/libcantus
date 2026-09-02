@@ -507,6 +507,10 @@ export function fillWithinCeiling(
  * @param beat Beat index within the bar (0-3).
  * @param fillType Selected archetype, by name or as material of its own.
  * @param velocity Base velocity for the beat.
+ * @param place Where a position inside the beat is written, which is the
+ *   section's own grid: a fill written straight through a bar the rest of the
+ *   kit swings puts its offbeats ahead of every other voice, and two voices a
+ *   sixteenth's swing apart in one bar are heard as a flam.
  */
 export function generateFill(
   track: HitList,
@@ -514,6 +518,7 @@ export function generateFill(
   beat: number,
   fillType: FillType | FillArchetype,
   velocity: number,
+  place: (tick: number) => number = (tick) => tick,
 ): void {
   const shape =
     typeof fillType === 'string' ? FILL_ARCHETYPES[fillType] : (fillType as FillArchetype);
@@ -532,7 +537,7 @@ export function generateFill(
     const scaled = stroke.velocity.scale === undefined ? base : base * stroke.velocity.scale;
     track.add(
       stroke.voice,
-      beatTick + stroke.offset,
+      place(beatTick + stroke.offset),
       stroke.duration,
       scaled + (stroke.velocity.offset ?? 0),
       stroke.articulation,

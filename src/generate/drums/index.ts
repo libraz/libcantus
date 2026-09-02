@@ -432,7 +432,9 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
             // One base velocity for the whole fill, read at the beat it starts
             // on: a crescendo written across two beats is one gesture, and
             // rereading the beat velocity partway through drops it.
-            generateFill(track, beatTick, beat, currentFill, fillVelocity);
+            generateFill(track, beatTick, beat, currentFill, fillVelocity, (tick) =>
+              swing16(tick, sec, swingAmount),
+            );
           }
           if (track.hits.length > before) {
             continue;
