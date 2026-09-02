@@ -10,6 +10,8 @@ import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import type { NoteEventAssertOptions } from '../../core/validation/index.js';
 import {
+  allocateCandidateTable,
+  allocateChoiceTable,
   assertFiniteNumber,
   assertGenerationBudget,
   assertNoteEvents,
@@ -831,14 +833,19 @@ export type BoundaryTables = {
   path: Int32Array;
 };
 
-/** Allocate the boundary-search tables for a piece of `slotCount` slots. */
-export function createBoundaryTables(slotCount: number): BoundaryTables {
+/**
+ * Allocate the boundary-search tables for a piece of `slotCount` slots.
+ *
+ * @param slotCount Number of slots the search runs over.
+ * @param budget Upper bound the tables' size is charged against.
+ */
+export function createBoundaryTables(slotCount: number, budget?: number): BoundaryTables {
   return {
-    scores: new Float64Array(slotCount * LEXICON_SIZE),
-    back: new Int32Array(slotCount * LEXICON_SIZE),
-    costs: new Float64Array(LEXICON_SIZE),
-    spare: new Float64Array(LEXICON_SIZE),
-    path: new Int32Array(slotCount),
+    scores: allocateCandidateTable(slotCount, LEXICON_SIZE, 'timeline window scores', budget),
+    back: allocateChoiceTable(slotCount, LEXICON_SIZE, 'timeline window choices', budget),
+    costs: allocateCandidateTable(1, LEXICON_SIZE, 'timeline window costs', budget),
+    spare: allocateCandidateTable(1, LEXICON_SIZE, 'timeline window costs', budget),
+    path: allocateChoiceTable(slotCount, 1, 'timeline window path', budget),
   };
 }
 
@@ -1323,6 +1330,20 @@ export function analyzeTimeline(
       : slotBeatsWithin(gridUnit, minChordBeats, harmonicRhythm);
   const { origin, startBeat: musicStart } = gridForNotes(sounding, slotBeats);
   const grid: SlotGrid = { origin, slotBeats };
+  const slotCount = Math.max(0, Math.ceil((totalBeats - grid.origin) / slotBeats - BEAT_EPS));
+  const dynamic = segmentation === 'dynamic';
+  // The boundary search allocates and fills one lexicon row per slot, so what
+  // the budget has to bound is the table about to be built rather than the slot
+  // count alone: a slot count inside the budget stands for a table the whole
+  // lexicon wider. A grid cuts its segments from the grid itself and builds no
+  // table, so it is charged for its slots and nothing more. This is asked before
+  // the key search rather than after it, so a request too large to be answered
+  // is refused before the passes it pays for begin.
+  assertGenerationBudget(
+    dynamic ? slotCount * LEXICON_SIZE : slotCount,
+    'timeline windows',
+    budget,
+  );
   // A given key is taken as read across the whole span: the caller has already
   // answered the question, and second-guessing it would make the option mean
   // "a hint" when it reads as an instruction. Its one region starts where the
@@ -1352,18 +1373,6 @@ export function analyzeTimeline(
 
   const segments: ChordSegment[] = [];
   const segmentConfidence: number[] = [];
-  const slotCount = Math.max(0, Math.ceil((totalBeats - grid.origin) / slotBeats - BEAT_EPS));
-  const dynamic = segmentation === 'dynamic';
-  // The boundary search allocates and fills one lexicon row per slot, so what
-  // the budget has to bound is the table about to be built rather than the slot
-  // count alone: a slot count inside the budget stands for a table the whole
-  // lexicon wider. A grid cuts its segments from the grid itself and builds no
-  // table, so it is charged for its slots and nothing more.
-  assertGenerationBudget(
-    dynamic ? slotCount * LEXICON_SIZE : slotCount,
-    'timeline windows',
-    budget,
-  );
   const slotNotes = bucketNotesBySlot(sounding, grid, slotCount, {
     name: 'timeline note-to-window memberships',
     budget,
@@ -1393,7 +1402,7 @@ export function analyzeTimeline(
   // rather than copied — the rows the edit cannot reach are already what this
   // analysis would write into them, and reallocating the table would cost one
   // the size of the piece per edit.
-  const tables = carried?.tables ?? createBoundaryTables(dynamic ? slotCount : 0);
+  const tables = carried?.tables ?? createBoundaryTables(dynamic ? slotCount : 0, budget);
   if (carried !== undefined) {
     // The evidence lending the table gives it up: the edited rows are about to
     // say what these notes say rather than what its own did.

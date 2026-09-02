@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { analyzeArrangement, analyzePolyphony } from '../src/analyze/arrange/index.js';
 import { phrasesFromTimeline } from '../src/analyze/form/phrase.js';
 import { sectionsFromNotes } from '../src/analyze/form/section.js';
+import { detectModulations, keyTimelineFromNotes } from '../src/analyze/keys/index.js';
 import { motifFromNotes } from '../src/analyze/melody/index.js';
 import { analyzeTimeline, chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
 import { BudgetExceededError } from '../src/core/errors/index.js';
@@ -12,6 +13,7 @@ import { DEFAULT_GENERATION_BUDGET } from '../src/core/validation/index.js';
 import { generateBassLine } from '../src/generate/bass/index.js';
 import { placeLicks } from '../src/generate/bass/licks.js';
 import { Arrangement, Motif, Score } from '../src/model/index.js';
+import type { ChordSegment } from '../src/theory/chord/index.js';
 import { makeChord } from '../src/theory/chord/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
 
@@ -167,6 +169,67 @@ describe('the timeline pass builds only what it queries', () => {
     expect(run.evidence.slotCount).toBe(2_000);
     expect(run.result.timeline.segments.length).toBeGreaterThan(0);
   });
+});
+
+describe('the key budget bounds the candidate table the search fills', () => {
+  /** `count` bar-long chords, I IV V7 I in a tonic that moves every four bars. */
+  function modulatingChords(count: number): ChordSegment[] {
+    return Array.from({ length: count }, (_, index) => {
+      const tonic = (Math.floor(index / 4) * 6) % 12;
+      const degree = [0, 5, 7, 0][index % 4] ?? 0;
+      return {
+        startBeat: index * 4,
+        endBeat: (index + 1) * 4,
+        chord: makeChord((tonic + degree) % 12, index % 4 === 2 ? 'dom7' : 'maj'),
+      };
+    });
+  }
+
+  it('refuses a span whose candidate rows outweigh its slot count', () => {
+    // Two notes a million beats apart: the slots alone sit inside the budget,
+    // while the table the search fills — a row of twenty-four keys per slot,
+    // kept for the whole call — is six times it.
+    const notes: NoteEvent[] = [
+      { pitch: 60, startBeat: 0, durationBeat: 1 },
+      { pitch: 64, startBeat: 999_998, durationBeat: 1 },
+    ];
+    expect(() => keyTimelineFromNotes(notes)).toThrow(BudgetExceededError);
+    expect(() => keyTimelineFromNotes(notes)).toThrow(/key timeline slots/);
+  });
+
+  it('refuses the chord path the same way', () => {
+    // Fifty thousand chord segments: a twentieth of the budget by count, and
+    // over it by the table those counts stand for.
+    const chords = modulatingChords(50_000);
+    expect(chords.length).toBeLessThan(DEFAULT_GENERATION_BUDGET);
+    expect(() => detectModulations(chords)).toThrow(BudgetExceededError);
+    expect(() => detectModulations(chords)).toThrow(/modulation chord segments/);
+  });
+
+  it('takes the budget the caller names, on either surface', () => {
+    const chords = modulatingChords(16);
+    expect(() => detectModulations(chords, { budget: 100 })).toThrow(BudgetExceededError);
+    // Sixteen slots against twenty-four keys is the table the search fills, and
+    // at that budget it is written.
+    expect(detectModulations(chords, { budget: 16 * 24 }).length).toBeGreaterThan(0);
+  });
+
+  // Forty thousand chords is the largest chord run the default budget admits,
+  // and it modulates ten thousand times. Every stage after the search — the
+  // shortest-region merge, each region's confidence, each boundary's pivot —
+  // once asked its question of the whole chord list, so a span the budget
+  // accepted spent thirty times the search on scans whose answer never changed.
+  // The time bound is the one thing that shows it: the regions are the same
+  // either way. Read once this is half a second of work and read once per region
+  // it is fourteen, so the bound sits an order of magnitude above the first and
+  // well under the second — a busy machine does not fail it, and a return of the
+  // quadratic scan does.
+  it('reads every chord of an accepted span once', () => {
+    const regions = detectModulations(modulatingChords(40_000));
+    expect(regions.length).toBe(10_000);
+    expect(regions[0]?.startBeat).toBe(0);
+    expect(regions[regions.length - 1]?.endBeat).toBe(160_000);
+  }, 5_000);
 });
 
 describe('the form budget bounds the melodic comparisons', () => {

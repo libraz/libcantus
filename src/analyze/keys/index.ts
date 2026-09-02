@@ -13,6 +13,8 @@ import { beatsPerBarAt, metricWeight, resolveMeters } from '../../core/meter/ind
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
+  allocateCandidateTable,
+  allocateChoiceTable,
   assertGenerationBudget,
   assertNoteEvents,
   assertRange,
@@ -271,20 +273,33 @@ type KeySlot = {
  * predecessor and every pair is considered. With 24 candidates that is 576
  * comparisons per slot, which is nothing next to building the slots.
  */
-function chooseKeys(slots: readonly KeySlot[], changeCost: number, meter: MeterLike): number[] {
+function chooseKeys(
+  slots: readonly KeySlot[],
+  changeCost: number,
+  meter: MeterLike,
+  budget?: number,
+): number[] {
   const count = KEY_CANDIDATES.length;
   if (slots.length === 0) {
     return [];
   }
-  let costs = (slots[0]?.scores ?? []).map((score) => -score);
-  const cameFrom: Int32Array[] = [];
+  // One back-pointer row per slot, charged where it is allocated, and two cost
+  // rows the recurrence alternates between: only the previous slot's costs are
+  // ever read, so keeping a row per slot would allocate the piece twice over.
+  const back = allocateChoiceTable(slots.length, count, 'key search choices', budget);
+  let costs = allocateCandidateTable(1, count, 'key search costs', budget);
+  let spare = allocateCandidateTable(1, count, 'key search costs', budget);
+  const opening = slots[0]?.scores ?? [];
+  for (let c = 0; c < count; c += 1) {
+    costs[c] = -(opening[c] ?? 0);
+  }
   for (let i = 1; i < slots.length; i += 1) {
     const slot = slots[i];
     const previous = costs;
+    const next = spare;
     const accent = metricWeight(slot?.startBeat ?? 0, meter);
     const metricFactor = 1 - (STRONG_BEAT_DISCOUNT * accent) / MAX_METRIC_WEIGHT;
-    const next = new Array<number>(count).fill(0);
-    const back = new Int32Array(count);
+    const rowBase = i * count;
     for (let to = 0; to < count; to += 1) {
       // Holding the key is free; every other predecessor pays by distance.
       let best = previous[to] ?? Number.POSITIVE_INFINITY;
@@ -301,11 +316,11 @@ function chooseKeys(slots: readonly KeySlot[], changeCost: number, meter: MeterL
           bestFrom = from;
         }
       }
-      back[to] = bestFrom;
+      back[rowBase + to] = bestFrom;
       next[to] = best - (slot?.scores[to] ?? 0);
     }
     costs = next;
-    cameFrom.push(back);
+    spare = previous;
   }
 
   let best = 0;
@@ -319,7 +334,7 @@ function chooseKeys(slots: readonly KeySlot[], changeCost: number, meter: MeterL
   for (let i = slots.length - 1; i >= 0; i -= 1) {
     path[i] = current;
     if (i > 0) {
-      current = cameFrom[i - 1]?.[current] ?? current;
+      current = back[i * count + current] ?? current;
     }
   }
   return path;
@@ -389,67 +404,208 @@ function enforceMinimumRegion(
   slots: readonly KeySlot[],
   path: readonly number[],
   minBeats: number,
+  budget?: number,
 ): number[] {
   const chosen = [...path];
-  // Every pass merges two regions into one, so the region count strictly falls
-  // and the loop ends.
-  for (;;) {
-    const regions = regionsFromPath(slots, chosen);
-    let shortest: SlotRegion | undefined;
-    let before: SlotRegion | undefined;
-    let after: SlotRegion | undefined;
-    for (let i = 0; i < regions.length; i += 1) {
-      const region = regions[i];
-      if (region === undefined || region.endBeat - region.startBeat >= minBeats - BEAT_EPS) {
-        continue;
-      }
-      const previous = regions[i - 1];
-      const next = regions[i + 1];
-      const left =
-        previous !== undefined && Math.abs(previous.endBeat - region.startBeat) < BEAT_EPS
-          ? previous
-          : undefined;
-      const right =
-        next !== undefined && Math.abs(next.startBeat - region.endBeat) < BEAT_EPS
-          ? next
-          : undefined;
-      if (left === undefined && right === undefined) {
-        continue;
-      }
-      if (
-        shortest !== undefined &&
-        region.endBeat - region.startBeat >= shortest.endBeat - shortest.startBeat
-      ) {
-        continue;
-      }
-      shortest = region;
-      before = left;
-      after = right;
+  const initial = regionsFromPath(slots, chosen);
+  if (initial.length < 2) {
+    return chosen;
+  }
+  const candidates = KEY_CANDIDATES.length;
+  // Running totals of every slot's candidate scores. The evidence a region
+  // gives a neighbour's key is the difference of two of these, so it is read in
+  // constant time however many slots the region has grown to hold — summing the
+  // slots afresh cost the slot count once per merge, and a piece whose chords
+  // are all shorter than one key area merges once per chord.
+  const totals = allocateCandidateTable(slots.length, candidates, 'key region scores', budget);
+  for (let i = 0; i < slots.length; i += 1) {
+    const scores = slots[i]?.scores ?? [];
+    const base = i * candidates;
+    const previous = base - candidates;
+    for (let c = 0; c < candidates; c += 1) {
+      totals[base + c] = (i === 0 ? 0 : (totals[previous + c] ?? 0)) + (scores[c] ?? 0);
     }
-    if (shortest === undefined) {
+  }
+  const scoreOver = (region: MergeNode, candidate: number): number =>
+    (totals[(region.toExclusive - 1) * candidates + candidate] ?? 0) -
+    (region.from === 0 ? 0 : (totals[(region.from - 1) * candidates + candidate] ?? 0));
+
+  const nodes = initial.map(
+    (region): MergeNode => ({ ...region, previous: undefined, next: undefined, merged: false }),
+  );
+  for (let i = 0; i < nodes.length; i += 1) {
+    const node = nodes[i];
+    if (node === undefined) {
+      continue;
+    }
+    node.previous = nodes[i - 1];
+    node.next = nodes[i + 1];
+  }
+
+  // A region only ever grows, so a region already too long to merge stays too
+  // long, and the neighbour a region adjoins keeps the edge it adjoins on until
+  // one of the two is absorbed. That is what lets the shortest region be taken
+  // from a heap instead of by rescanning every region on every merge: an entry
+  // whose region has since grown is recognised by its length and dropped.
+  const pending = new RegionHeap();
+  for (const node of nodes) {
+    pending.push(node);
+  }
+  for (;;) {
+    const region = pending.pop();
+    if (region === undefined) {
       return chosen;
     }
-    const merging = shortest;
+    const length = region.endBeat - region.startBeat;
+    if (region.merged || length >= minBeats - BEAT_EPS) {
+      continue;
+    }
+    const previous = region.previous;
+    const next = region.next;
+    const before =
+      previous !== undefined && Math.abs(previous.endBeat - region.startBeat) < BEAT_EPS
+        ? previous
+        : undefined;
+    const after =
+      next !== undefined && Math.abs(next.startBeat - region.endBeat) < BEAT_EPS ? next : undefined;
+    if (before === undefined && after === undefined) {
+      continue;
+    }
     // The shorter region joins the neighbouring key that reads its chords best,
     // so a tonicization is absorbed by the key it decorates rather than by
     // whichever side happens to come first.
-    const scoreOver = (candidate: number): number => {
-      let total = 0;
-      for (let i = merging.from; i < merging.toExclusive; i += 1) {
-        total += slots[i]?.scores[candidate] ?? 0;
-      }
-      return total;
-    };
     const left = before?.candidate;
     const right = after?.candidate;
     const winner =
       left === undefined
-        ? (right ?? merging.candidate)
-        : right === undefined || scoreOver(left) >= scoreOver(right)
+        ? (right ?? region.candidate)
+        : right === undefined || scoreOver(region, left) >= scoreOver(region, right)
           ? left
           : right;
-    for (let i = merging.from; i < merging.toExclusive; i += 1) {
+    for (let i = region.from; i < region.toExclusive; i += 1) {
       chosen[i] = winner;
+    }
+    region.candidate = winner;
+    // Two consecutive runs of one key are one region whether or not they adjoin,
+    // which is the grouping {@link regionsFromPath} would give the amended path.
+    let grown = region;
+    if (previous !== undefined && previous.candidate === winner) {
+      grown = absorbNext(previous);
+    }
+    if (grown.next?.candidate === winner) {
+      grown = absorbNext(grown);
+    }
+    pending.push(grown);
+  }
+}
+
+/** A region of the merge pass, in a list that shrinks as regions absorb others. */
+type MergeNode = SlotRegion & {
+  previous: MergeNode | undefined;
+  next: MergeNode | undefined;
+  /** Set when the region has been absorbed, so its heap entries are spent. */
+  merged: boolean;
+};
+
+/** Fold a region's successor into it, and return the region that remains. */
+function absorbNext(region: MergeNode): MergeNode {
+  const next = region.next;
+  if (next === undefined) {
+    return region;
+  }
+  region.endBeat = next.endBeat;
+  region.toExclusive = next.toExclusive;
+  region.next = next.next;
+  if (next.next !== undefined) {
+    next.next.previous = region;
+  }
+  next.merged = true;
+  return region;
+}
+
+/**
+ * The shortest region first, and the earlier of two of one length.
+ *
+ * Regions are taken shortest first because the shortest is the one least able
+ * to stand as a key area of its own. Ties go to the earlier region so that a
+ * piece of evenly cut chords is read left to right rather than in whatever
+ * order the search happened to leave them in.
+ */
+class RegionHeap {
+  readonly #entries: { region: MergeNode; length: number }[] = [];
+
+  push(region: MergeNode): void {
+    const entries = this.#entries;
+    entries.push({ region, length: region.endBeat - region.startBeat });
+    let index = entries.length - 1;
+    while (index > 0) {
+      const parent = (index - 1) >> 1;
+      if (!RegionHeap.#before(entries[index], entries[parent])) {
+        break;
+      }
+      RegionHeap.#swap(entries, index, parent);
+      index = parent;
+    }
+  }
+
+  /** The shortest region still worth merging, skipping entries since spent. */
+  pop(): MergeNode | undefined {
+    const entries = this.#entries;
+    for (;;) {
+      const top = entries[0];
+      if (top === undefined) {
+        return undefined;
+      }
+      const last = entries.pop();
+      if (entries.length > 0 && last !== undefined) {
+        entries[0] = last;
+        this.#sink();
+      }
+      // An entry whose region has since absorbed a neighbour describes a length
+      // the region no longer has; the merge that grew it pushed the new one.
+      if (!top.region.merged && top.region.endBeat - top.region.startBeat === top.length) {
+        return top.region;
+      }
+    }
+  }
+
+  #sink(): void {
+    const entries = this.#entries;
+    let index = 0;
+    for (;;) {
+      const left = index * 2 + 1;
+      const right = left + 1;
+      let smallest = index;
+      if (left < entries.length && RegionHeap.#before(entries[left], entries[smallest])) {
+        smallest = left;
+      }
+      if (right < entries.length && RegionHeap.#before(entries[right], entries[smallest])) {
+        smallest = right;
+      }
+      if (smallest === index) {
+        return;
+      }
+      RegionHeap.#swap(entries, index, smallest);
+      index = smallest;
+    }
+  }
+
+  static #before(
+    a: { region: MergeNode; length: number } | undefined,
+    b: { region: MergeNode; length: number } | undefined,
+  ): boolean {
+    if (a === undefined || b === undefined) {
+      return a !== undefined;
+    }
+    return a.length === b.length ? a.region.from < b.region.from : a.length < b.length;
+  }
+
+  static #swap(entries: { region: MergeNode; length: number }[], a: number, b: number): void {
+    const left = entries[a];
+    const right = entries[b];
+    if (left !== undefined && right !== undefined) {
+      entries[a] = right;
+      entries[b] = left;
     }
   }
 }
@@ -543,7 +699,11 @@ export function keyTimelineFromNotes(
   // both report, so a chord timeline and its keys cover the same span.
   const { origin, startBeat: musicStart } = gridForNotes(sounding, slotBeats);
   const slotCount = Math.max(0, Math.ceil((totalBeats - origin) / slotBeats - BEAT_EPS));
-  assertGenerationBudget(slotCount, 'key timeline slots', budget);
+  // Every slot is scored against the whole candidate list and keeps that row,
+  // so what the budget has to bound is the table about to be built rather than
+  // the slot count alone: a slot count inside the budget stands for a table
+  // twenty-four times that. The chord timeline is charged the same way.
+  assertGenerationBudget(slotCount * KEY_CANDIDATES.length, 'key timeline slots', budget);
   if (slotCount === 0 || sounding.length === 0) {
     return [];
   }
@@ -613,7 +773,7 @@ export function keyTimelineFromNotes(
 
   const meanSlotWeight = weightSum / soundingSlots;
   const changeCost = MODULATION_COST * meanSlotWeight * (expectedKeyBeats / slotBeats);
-  const path = chooseKeys(slots, changeCost, meters);
+  const path = chooseKeys(slots, changeCost, meters, budget);
   const grouped = regionsFromPath(slots, path);
 
   const regions = grouped.map((region) => {
@@ -628,10 +788,6 @@ export function keyTimelineFromNotes(
     // pickup begins a whole slot before beat 0, and nothing sounds in the part
     // of it that precedes the upbeat.
     const startBeat = Math.max(region.startBeat, musicStart);
-    // The histogram over a region is the histogram over its slots: a note's
-    // weight is its overlap with the window, so the parts add up. Nothing
-    // sounds before the first onset, so clipping the reported start to it
-    // removes no weight.
     // The histogram over a region is the histogram over its slots: a note's
     // weight is its overlap with the window, so the parts add up. Nothing
     // sounds before the first onset, so clipping the reported start to it
@@ -738,6 +894,12 @@ function chordFitsKey(chord: Chord, candidate: { key: KeyScale; rootPc: number }
  * confidence, as it does in the note path, but takes no part in choosing which
  * keys are reported: that is settled by how the chords read.
  *
+ * A region's evidence is the run of segments it was grouped from, which is the
+ * same reading the search itself makes of them. Where the segments given
+ * overlap each other — a chart is a sequence, so a chord timeline's are not —
+ * a chord held past the segment after it argues for its own segment's key
+ * rather than for both.
+ *
  * @param chords The chord segments to analyze, in time order; pass a chord
  *   timeline's `segments`.
  * @param opts Analysis options; see {@link KeyTimelineOptions}.
@@ -765,7 +927,13 @@ export function detectModulations(
   assertRange(expectedKeyBeats, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'expectedKeyBeats');
   const minKeyBeats = opts.minKeyBeats ?? bar;
   assertRange(minKeyBeats, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'minKeyBeats');
-  assertGenerationBudget(chords.length, 'modulation chord segments', opts.budget);
+  // One slot per chord, each holding a row of the candidate list: the search's
+  // table, not the chord count, is what the budget stands for.
+  assertGenerationBudget(
+    chords.length * KEY_CANDIDATES.length,
+    'modulation chord segments',
+    opts.budget,
+  );
   const sorted = [...chords]
     .filter((segment) => segment.endBeat > segment.startBeat)
     .sort((a, b) => a.startBeat - b.startBeat);
@@ -823,12 +991,12 @@ export function detectModulations(
   // Here a slot's weight is its length in beats outright, so one expected key
   // area's worth of evidence is just `expectedKeyBeats` and no mean is needed.
   const changeCost = CHORD_MODULATION_COST * expectedKeyBeats;
-  const path = chooseKeys(slots, changeCost, meters);
+  const path = chooseKeys(slots, changeCost, meters, opts.budget);
   // A shortest region longer than a key is expected to hold is a contradiction,
   // and the prior is the one to keep — the note path clamps it the same way.
   const grouped = regionsFromPath(
     slots,
-    enforceMinimumRegion(slots, path, Math.min(minKeyBeats, expectedKeyBeats)),
+    enforceMinimumRegion(slots, path, Math.min(minKeyBeats, expectedKeyBeats), opts.budget),
   );
 
   const profile = resolveKeyProfile(opts.profile);
@@ -844,9 +1012,17 @@ export function detectModulations(
     // tones for all of its length, so the distribution is its pitch classes
     // weighted by how much of the region it holds.
     const weights = new Array<number>(PITCH_CLASSES).fill(0);
-    for (const segment of ordered) {
-      const overlap =
-        Math.min(segment.endBeat, region.endBeat) - Math.max(segment.startBeat, region.startBeat);
+    // A region is exactly the run of slots it was grouped from, and a slot is
+    // exactly one chord, so the chords sounding over it are the run its bounds
+    // already name. Asking that of the whole chord list once per region cost the
+    // two counts multiplied, and read every chord's pitch classes again per
+    // region for the sake of the ones that contribute nothing.
+    for (let i = region.from; i < region.toExclusive; i += 1) {
+      const segment = ordered[i];
+      if (segment === undefined) {
+        continue;
+      }
+      const overlap = segment.endBeat - segment.startBeat;
       if (overlap <= BEAT_EPS) {
         continue;
       }
@@ -917,6 +1093,47 @@ function triadCore(chord: Chord): number[] | null {
   return [root, pitchClass(root + third), pitchClass(root + fifth)].sort((a, b) => a - b);
 }
 
+/**
+ * Build a `chordFinishedBy(beat)` lookup: the last chord to have stopped by it.
+ *
+ * "Last" is last in the order the chords were given, which is the chord a scan
+ * of the whole list would have ended on. Scanning the list again for every
+ * boundary cost the two counts multiplied — a piece of ten thousand chords
+ * modulating every eight bars scans a hundred times over. Reading the chords in
+ * the order they finish instead answers every boundary from one table: the
+ * chords that have stopped by a beat are a prefix of that order, and the one to
+ * report is the latest-given of the prefix.
+ *
+ * @param chords The chords that sounded.
+ * @returns The lookup, which answers `undefined` before the first chord ends.
+ */
+function lastChordFinishedBy(
+  chords: readonly ChordSegment[],
+): (beat: number) => ChordSegment | undefined {
+  const byEnd = chords
+    .map((_, index) => index)
+    .sort((a, b) => (chords[a]?.endBeat ?? 0) - (chords[b]?.endBeat ?? 0));
+  const latest = new Int32Array(byEnd.length);
+  let running = 0;
+  for (let i = 0; i < byEnd.length; i += 1) {
+    running = Math.max(running, byEnd[i] ?? 0);
+    latest[i] = running;
+  }
+  return (beat) => {
+    let low = 0;
+    let high = byEnd.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if ((chords[byEnd[mid] ?? 0]?.endBeat ?? 0) <= beat) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    return low === 0 ? undefined : chords[latest[low - 1] ?? 0];
+  };
+}
+
 /** Whether two ascending pitch-class lists name the same tones. */
 function sameTones(a: readonly number[], b: readonly number[]): boolean {
   return a.length === b.length && a.every((pc, index) => pc === b[index]);
@@ -943,18 +1160,17 @@ function sameTones(a: readonly number[], b: readonly number[]): boolean {
  * @returns The same regions.
  */
 export function attachPivots(regions: KeyRegion[], chords: readonly ChordSegment[]): KeyRegion[] {
+  if (regions.length < 2 || chords.length === 0) {
+    return regions;
+  }
+  const finished = lastChordFinishedBy(chords);
   for (let i = 1; i < regions.length; i += 1) {
     const previous = regions[i - 1];
     const current = regions[i];
     if (previous === undefined || current === undefined) {
       continue;
     }
-    let last: ChordSegment | undefined;
-    for (const segment of chords) {
-      if (segment.endBeat <= current.startBeat + BEAT_EPS) {
-        last = segment;
-      }
-    }
+    const last = finished(current.startBeat + BEAT_EPS);
     if (last === undefined) {
       continue;
     }

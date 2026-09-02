@@ -224,6 +224,61 @@ export function assertGenerationBudget(
 }
 
 /**
+ * Charge a `rows × columns` table against a budget and return its length.
+ *
+ * A search checks its budget at the entry point and allocates its table deep
+ * inside itself, so the two drift apart as the table grows: a call charged for
+ * its slots is then handed a table a whole candidate list wider than that, and
+ * the budget it passed no longer stands for what it allocates. Charging at the
+ * allocation is what keeps them together — a table that cannot be obtained
+ * without being charged cannot be obtained uncharged.
+ */
+function assertTableSize(rows: number, columns: number, name: string, budget?: number): number {
+  assertFiniteNumber(rows, `${name} rows`);
+  assertFiniteNumber(columns, `${name} columns`);
+  return assertGenerationBudget(rows * columns, name, budget);
+}
+
+/**
+ * Allocate the score table of a `rows × columns` search, charging its size.
+ *
+ * @param rows Number of slots the search runs over.
+ * @param columns Number of candidates each slot is scored against.
+ * @param name What the table is, for the error message.
+ * @param budget Upper bound the table's size is charged against.
+ * @returns A zeroed table, read at `row * columns + column`.
+ */
+export function allocateCandidateTable(
+  rows: number,
+  columns: number,
+  name: string,
+  budget?: number,
+): Float64Array {
+  return new Float64Array(assertTableSize(rows, columns, name, budget));
+}
+
+/**
+ * Allocate the back-pointer table of a `rows × columns` search, charging it.
+ *
+ * The companion of {@link allocateCandidateTable}: a dynamic-programming search
+ * allocates one of each, and both are charged for the same reason.
+ *
+ * @param rows Number of slots the search runs over.
+ * @param columns Number of candidates each slot is scored against.
+ * @param name What the table is, for the error message.
+ * @param budget Upper bound the table's size is charged against.
+ * @returns A zeroed table, read at `row * columns + column`.
+ */
+export function allocateChoiceTable(
+  rows: number,
+  columns: number,
+  name: string,
+  budget?: number,
+): Int32Array {
+  return new Int32Array(assertTableSize(rows, columns, name, budget));
+}
+
+/**
  * Validate a time signature, including additive grouping, before any early return.
  *
  * @category Core

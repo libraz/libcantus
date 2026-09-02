@@ -303,3 +303,93 @@ describe('the beat axis is compared with one tolerance', () => {
     expect(Object.keys(NOT_A_BEAT_TOLERANCE).filter((name) => !live.has(name))).toEqual([]);
   });
 });
+
+/**
+ * Buffers sized by a product without being a search table a budget must cap.
+ *
+ * A table whose size is a product of two counts the caller controls is what a
+ * budget stands for, and the charge belongs at the allocation rather than at
+ * whichever entry point last remembered to estimate it. A buffer bounded by
+ * something the module itself fixes is not that, and each entry says what
+ * bounds it.
+ */
+const SELF_BOUNDED_BUFFERS: Readonly<Record<string, string>> = {
+  [path.join('theory', 'voicing', 'internal.ts')]:
+    'the candidate buffer of the voicing search, capped by maxCandidates and grown towards it',
+  [path.join('analyze', 'arrange', 'internal.ts')]:
+    'the lane assignment of one onset, sized by the notes struck together and the lanes free at it',
+};
+
+/** Every `new <TypedArray>(...)` a module writes, with its argument text. */
+function typedArrayAllocations(source: string): string[] {
+  const found: string[] = [];
+  for (const match of source.matchAll(
+    /\bnew\s+(?:Float|Int|Uint)(?:8|16|32|64)(?:Clamped)?Array\(/g,
+  )) {
+    let depth = 1;
+    let index = (match.index ?? 0) + match[0].length;
+    const start = index;
+    while (index < source.length && depth > 0) {
+      const character = source[index];
+      if (character === '(') {
+        depth += 1;
+      } else if (character === ')') {
+        depth -= 1;
+      }
+      index += 1;
+    }
+    found.push(source.slice(start, index - 1));
+  }
+  return found;
+}
+
+describe('a search table is charged where it is allocated', () => {
+  // The budget of a search was checked at its entry point and its table was
+  // allocated deep inside it, so the two drifted apart as the table grew: three
+  // passes charged for their slots and then filled a row of two dozen
+  // candidates per slot. Charging at the allocation is what keeps them
+  // together, so a table obtained any other way is a table nothing bounded.
+  const offenders = walk(SRC).flatMap((file) => {
+    const rel = path.relative(SRC, file);
+    if (rel in SELF_BOUNDED_BUFFERS) {
+      return [];
+    }
+    return typedArrayAllocations(readFileSync(file, 'utf8'))
+      .filter((argument) => argument.includes('*'))
+      .map((argument) => `${rel}: new …Array(${argument})`);
+  });
+
+  it('finds the allocations to check', () => {
+    // The scan reads sources rather than a list, so a parser that stopped
+    // matching would leave the check below passing over nothing.
+    expect(
+      typedArrayAllocations('new Float64Array((a + 1) * b);\nnew Int32Array(12);').map((a) => a),
+    ).toEqual(['(a + 1) * b', '12']);
+    const allocations = walk(SRC).flatMap((file) =>
+      typedArrayAllocations(readFileSync(file, 'utf8')),
+    );
+    expect(allocations.length).toBeGreaterThan(5);
+  });
+
+  it('allocates every table through the charging helpers', () => {
+    expect(offenders.sort()).toEqual([]);
+  });
+
+  it('lists nothing as self-bounded that no longer allocates one', () => {
+    const stale = Object.keys(SELF_BOUNDED_BUFFERS).filter((rel) => {
+      const source = readFileSync(path.join(SRC, rel), 'utf8');
+      return !typedArrayAllocations(source).some((argument) => argument.includes('*'));
+    });
+    expect(stale).toEqual([]);
+  });
+
+  it('has more than one search reaching for the helpers', () => {
+    // A helper one module uses is that module's private shape; the point of
+    // this one is that every search reaches for it, so a second search added
+    // later finds the charged way already laid out.
+    const users = walk(SRC).filter((file) =>
+      /allocate(?:Candidate|Choice)Table\(/.test(readFileSync(file, 'utf8')),
+    );
+    expect(users.length).toBeGreaterThanOrEqual(3);
+  });
+});
