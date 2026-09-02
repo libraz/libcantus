@@ -32,7 +32,12 @@ const IMPORT_RE = /from\s+['"]([^'"]+)['"]/g;
 describe('layer architecture', () => {
   it('never imports from a higher layer', () => {
     const violations: string[] = [];
-    for (const file of walk(SRC)) {
+    // What the walk found, so the check below cannot pass by finding nothing:
+    // a renamed directory or a changed extension would empty the loop, and an
+    // empty violation list reads exactly like a tree that obeys the rule.
+    const files = walk(SRC);
+    let crossings = 0;
+    for (const file of files) {
       const from = layerOf(file);
       if (!from) continue;
       const fromRank = LAYER_ORDER.indexOf(from);
@@ -44,11 +49,19 @@ describe('layer architecture', () => {
         const to = layerOf(target);
         if (!to) continue;
         const toRank = LAYER_ORDER.indexOf(to);
+        if (to !== from) {
+          crossings += 1;
+        }
         if (toRank > fromRank) {
           violations.push(`${path.relative(SRC, file)} (${from}) -> ${spec} (${to})`);
         }
       }
     }
+    expect(files.length).toBeGreaterThan(100);
+    // And that the classifier reached the imports as well as the files: the
+    // layers are built on one another, so a tree with no import crossing a
+    // layer at all is one this walk failed to read.
+    expect(crossings).toBeGreaterThan(50);
     expect(violations).toEqual([]);
   });
 });
@@ -56,25 +69,46 @@ describe('layer architecture', () => {
 /** The unit whose modules share their helpers through one internal module. */
 const FUNCTIONAL = path.join(SRC, 'analyze', 'functional');
 
+/**
+ * Every syntax a top-level function is declared under here.
+ *
+ * A declaration is the form this codebase writes, and an arrow assigned to a
+ * `const` is the form a second copy of a predicate would most easily arrive in
+ * — so the ownership rules would have been silent about exactly the case they
+ * exist for. `async` and `export default` are read for the same reason: the
+ * rule is about what a module defines, not about how it spells the definition.
+ */
+const DECLARATION_RE =
+  /^(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(\w+)|^(?:export\s+)?const\s+(\w+)\s*(?::[^=]*)?=\s*(?:async\s*)?(?:\(|function\b)/;
+
 /** Top-level function bodies of a module, by the name they are declared under. */
 function functionBodies(source: string): Map<string, string> {
   const bodies = new Map<string, string>();
   const lines = source.split('\n');
   for (let index = 0; index < lines.length; index += 1) {
-    const start = (lines[index] ?? '').match(/^(?:export )?function (\w+)/);
+    const start = (lines[index] ?? '').match(DECLARATION_RE);
     if (start === null) {
       continue;
     }
+    const name = start[1] ?? start[2];
+    if (name === undefined) {
+      continue;
+    }
+    // From under the declaration to the line that closes it: what the function
+    // does, not how it was spelled. A copy written as an arrow assigned to a
+    // `const` states the same body under a different first line, and comparing
+    // the whole of it would read the two as different functions — which is the
+    // one shape a second copy is likely to arrive in.
     const body: string[] = [];
-    for (let cursor = index; cursor < lines.length; cursor += 1) {
+    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
       const line = lines[cursor] ?? '';
-      body.push(line.trim());
-      if (line === '}') {
+      if (line === '}' || line === '};') {
         index = cursor;
         break;
       }
+      body.push(line.trim());
     }
-    bodies.set(start[1] as string, body.join(' '));
+    bodies.set(name, body.join(' '));
   }
   return bodies;
 }
@@ -109,6 +143,7 @@ describe('shared helpers in a unit split across modules', () => {
     // different things alike — `bassPcOf` is a key's flat submediant in one
     // module and a chord's sounding bass in another.
     const copied: string[] = [];
+    let found = 0;
     for (const unit of splitUnits()) {
       const byBody = new Map<string, string[]>();
       for (const file of readdirSync(unit).filter((name) => name.endsWith('.ts'))) {
@@ -117,6 +152,9 @@ describe('shared helpers in a unit split across modules', () => {
           byBody.set(key, [...(byBody.get(key) ?? []), file]);
         }
       }
+      // The bodies this unit contributed, so a parser that stopped recognising
+      // a declaration leaves the copy list empty for the right reason.
+      found += byBody.size;
       for (const [key, files] of byBody) {
         if (files.length > 1) {
           copied.push(
@@ -125,6 +163,7 @@ describe('shared helpers in a unit split across modules', () => {
         }
       }
     }
+    expect(found).toBeGreaterThan(20);
     expect(copied.sort()).toEqual([]);
   });
 

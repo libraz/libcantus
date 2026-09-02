@@ -47,12 +47,14 @@ const NOT_A_REJECTION: Readonly<Record<string, string>> = {};
 
 /** Every published function that takes exactly one required argument. */
 function singleArgumentEntrances(): [string, (value: unknown) => unknown][] {
-  return Object.entries(api as Record<string, unknown>)
-    .filter(
-      ([name, value]): value is (arg: unknown) => unknown =>
-        typeof value === 'function' && !/^[A-Z]/.test(name) && value.length === 1,
-    )
-    .sort(([a], [b]) => a.localeCompare(b));
+  const found: [string, (value: unknown) => unknown][] = [];
+  for (const [name, value] of Object.entries(api as Record<string, unknown>)) {
+    if (typeof value !== 'function' || /^[A-Z]/.test(name) || value.length !== 1) {
+      continue;
+    }
+    found.push([name, value as (arg: unknown) => unknown]);
+  }
+  return found.sort(([a], [b]) => a.localeCompare(b));
 }
 
 describe('a public entrance refuses malformed input as a stated error', () => {

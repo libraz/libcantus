@@ -200,7 +200,10 @@ describe('placeLicks', () => {
           // No figure was tiled into that beat, so there is nothing leading.
           continue;
         }
-        const bass = placeRoot(segment.chord.bassPc ?? segment.chord.rootPc, bandFloor(36));
+        const bass = placeRoot(
+          segment.chord.bassPc ?? segment.chord.rootPc,
+          bandFloor(36, undefined),
+        );
         const step = Math.abs(last.pitch - bass);
         expect(step, `${genre} into ${change} from ${last.startBeat}`).toBeGreaterThanOrEqual(1);
         expect(step, `${genre} into ${change} from ${last.startBeat}`).toBeLessThanOrEqual(2);
@@ -231,7 +234,7 @@ describe('placeLicks', () => {
     );
     const last = leading[leading.length - 1];
     expect(last?.startBeat).toBe(3.5);
-    const bass = placeRoot(TIMELINE[1]?.chord.rootPc ?? 0, bandFloor(36));
+    const bass = placeRoot(TIMELINE[1]?.chord.rootPc ?? 0, bandFloor(36, undefined));
     expect(Math.abs((last?.pitch ?? 0) - bass)).toBeLessThanOrEqual(2);
   });
 

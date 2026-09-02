@@ -398,7 +398,7 @@ describe('a tempo map is bounded and read once', () => {
     const size = 10_000;
     const remembered = accelerando(size);
     const rewritten = accelerando(size).map((event) => ({ ...event }));
-    const convert = (map: { startBeat: number; bpm: number }[], touch: boolean): number => {
+    const convert = (map: TempoMap, touch: boolean): number => {
       let last = 0;
       for (let beat = 0; beat < size; beat += 1) {
         if (touch) {

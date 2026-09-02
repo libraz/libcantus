@@ -414,7 +414,10 @@ function innerReadings(
       continue;
     }
     for (const statement of file.statements) {
-      const outer = ts.isFunctionDeclaration(statement) ? statement.name?.text : undefined;
+      if (!ts.isFunctionDeclaration(statement)) {
+        continue;
+      }
+      const outer = statement.name?.text;
       if (outer === undefined || !published.has(originOf(statement))) {
         continue;
       }

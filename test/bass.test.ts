@@ -532,7 +532,10 @@ describe('a chord written over a bass is played as the inversion it is', () => {
         const segments = inversions(rootPc);
         const notes = generateBassLine({ segments, key: cMajor, style, ctx: 3 });
         for (const segment of segments) {
-          const bass = placeRoot(segment.chord.bassPc ?? segment.chord.rootPc, bandFloor(36));
+          const bass = placeRoot(
+            segment.chord.bassPc ?? segment.chord.rootPc,
+            bandFloor(36, undefined),
+          );
           const inSegment = notes.filter(
             (note) =>
               note.startBeat >= segment.startBeat - 1e-9 && note.startBeat < segment.endBeat - 1e-9,

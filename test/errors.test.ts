@@ -91,22 +91,36 @@ describe('failures are told apart by code, not by message', () => {
   });
 
   it('says which chord of a progression could not be voiced', () => {
-    // C fits two voices pinned to C and E; Db, the next chord, contains neither.
-    const chords = [parseChordSymbol('C'), parseChordSymbol('Db'), parseChordSymbol('D')];
-    const error = thrown(() =>
-      voiceProgression(chords, {
-        ranges: [
-          { min: 60, max: 60 },
-          { min: 64, max: 64 },
-        ],
-      }),
-    );
-    expect(error).toBeInstanceOf(NoSolutionError);
-    if (!(error instanceof NoSolutionError)) {
-      throw new Error('expected a NoSolutionError');
-    }
-    expect(error.at).toBeTypeOf('number');
-    expect(error.message).toMatch(/index \d/);
+    // Two voices pinned to C and E: a chord is voiceable here only if its bass
+    // is C and it holds E. `Db` is neither, and where it stands in the
+    // progression is what the error has to name — a host highlighting the bar
+    // reads `at`, and an index off by one points at the wrong bar while the
+    // suite reports the error as working.
+    const failsAt = (symbols: string[]): NoSolutionError => {
+      const error = thrown(() =>
+        voiceProgression(
+          symbols.map((symbol) => parseChordSymbol(symbol)),
+          {
+            ranges: [
+              { min: 60, max: 60 },
+              { min: 64, max: 64 },
+            ],
+          },
+        ),
+      );
+      if (!(error instanceof NoSolutionError)) {
+        throw new Error('expected a NoSolutionError');
+      }
+      return error;
+    };
+    const middle = failsAt(['C', 'Db', 'D']);
+    expect(middle.at).toBe(1);
+    expect(middle.message).toMatch(/Db at index 1/);
+    // The two ends, so an index read from the wrong side of the search — the
+    // chord it looked ahead to rather than the one it was voicing — cannot pass
+    // by landing on a neighbour that happens to be right.
+    expect(failsAt(['Db', 'C', 'D']).at).toBe(0);
+    expect(failsAt(['C', 'Cmaj7', 'Db']).at).toBe(2);
   });
 
   it('keeps the built-in error types a caller already catches', () => {

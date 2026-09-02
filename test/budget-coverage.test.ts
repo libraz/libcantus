@@ -329,7 +329,10 @@ const REACHES: readonly { label: string; run: () => unknown }[] = [
     run: () => generateRhythm('4/4', { bars: 1000, subdivision: 1000 }),
   },
   { label: 'motif notes', run: () => generateMotif({ key: C_MAJOR, bars: 600_000 }) },
-  { label: 'drum hits', run: () => generateDrums({ bars: 10_000, genre: 'rock' }) },
+  {
+    label: 'drum hits',
+    run: () => generateDrums({ bars: 10_000, style: 'standard', section: 'chorus' }),
+  },
   {
     label: 'drum pattern hits',
     run: () => placeDrumPattern({ bars: 20_000, genre: 'rock' }),
