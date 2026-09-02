@@ -556,6 +556,33 @@ describe('harmonizeMelody follows the harmony rather than the melody notes', () 
   });
 });
 
+describe('a melody that sounds before the first downbeat', () => {
+  it('is harmonized to where it ends, not to beat 0', () => {
+    // A pickup sounds at a negative beat, which the note-event contract accepts
+    // outright, and an excerpt can be nothing but a pickup. The grid was
+    // accumulated from beat 0, so such a melody grew segments past its own last
+    // note: the chords ran on into silence and the cadence at the end of the
+    // melody landed on a segment the melody never reaches.
+    const melody: NoteEvent[] = [
+      { pitch: 67, startBeat: -8, durationBeat: 1 },
+      { pitch: 65, startBeat: -7, durationBeat: 1 },
+      { pitch: 64, startBeat: -6, durationBeat: 1 },
+      { pitch: 62, startBeat: -5, durationBeat: 1 },
+      { pitch: 60, startBeat: -4, durationBeat: 1 },
+    ];
+    const result = harmonizeMelody({ melody, key: majorKey(0), harmonicRhythm: 1 });
+    const last = result.chords[result.chords.length - 1];
+    // The line closes on the tonic, which is what the cadence at the melody's
+    // end is for, and it closes over the note that ends it.
+    expect(last?.rootPc).toBe(0);
+    expect(last?.startBeat).toBeLessThan(-3);
+    expect(result.chords.length).toBeGreaterThan(1);
+    for (const chord of result.chords) {
+      expect(chord.startBeat).toBeLessThan(-3);
+    }
+  });
+});
+
 describe('harmonizeMelody placement', () => {
   const cScale = quarters([60, 62, 64, 65, 67, 69, 71, 72]);
 

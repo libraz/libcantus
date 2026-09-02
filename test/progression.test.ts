@@ -270,6 +270,33 @@ describe('Progression.fromSpans', () => {
   });
 });
 
+describe('the degree a written chord carries', () => {
+  it('is a scale degree wherever it is stated at all', () => {
+    // `ChordSpan.degree` is a 1-based scale degree, and the field is what a
+    // caller reads a numeral or a function off. A borrowed degree carries none,
+    // which is a chord standing outside the seven; a zero is neither.
+    for (const preset of progressions()) {
+      for (let tonic = 0; tonic < 12; tonic += 1) {
+        for (const key of [majorKey(tonic), minorKey(tonic)]) {
+          const chords = generateProgression({
+            key,
+            style: 'dance',
+            bars: preset.degrees.length,
+            presetId: preset.id,
+          });
+          for (const chord of chords) {
+            if (chord.degree === undefined) {
+              continue;
+            }
+            expect(chord.degree, `${preset.id} on ${tonic}`).toBeGreaterThanOrEqual(1);
+            expect(chord.degree, `${preset.id} on ${tonic}`).toBeLessThanOrEqual(7);
+          }
+        }
+      }
+    }
+  });
+});
+
 describe('preset degeneracy across keys', () => {
   it('turns over on the preset period in every key', () => {
     // A preset's diatonic degrees and its chromatic borrowings can name the same

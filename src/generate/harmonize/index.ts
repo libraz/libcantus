@@ -151,7 +151,15 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
     (start, span) => Math.min(start, span.startBeat),
     Number.POSITIVE_INFINITY,
   );
-  const melodyEnd = spans.reduce((end, span) => Math.max(end, span.endBeat), 0);
+  // Accumulated from the melody alone rather than from beat 0: a pickup sounds
+  // before the first downbeat, and a melody written entirely in one — an
+  // upbeat lifted out of a chart — ended at beat 0 by the accumulator's own
+  // starting value, which grew a grid past where the melody reaches and put the
+  // cadence bonus on an empty segment after its last note.
+  const melodyEnd = spans.reduce(
+    (end, span) => Math.max(end, span.endBeat),
+    Number.NEGATIVE_INFINITY,
+  );
   // Any positive value is honoured: a silent clamp would make the option mean
   // something different here than it does on the analysis side. A value small
   // enough to make the search explode is caught by the budget assertions below,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Articulation } from '../src/core/instrument/index.js';
 import type { TimeSignature } from '../src/core/meter/index.js';
 import { generateBassLine } from '../src/generate/bass/index.js';
 import { bandFloor, placeRoot } from '../src/generate/bass/internal.js';
@@ -33,6 +34,22 @@ describe('the bass lick dictionary', () => {
         expect(note.step).toBeLessThan(lick.material.lengthSteps);
         expect(note.degree).toBeGreaterThanOrEqual(1);
       }
+    }
+  });
+
+  it('declares exactly the techniques its own notes call for', () => {
+    // The declaration is what a caller's instrument is matched against: an
+    // entry naming a technique its notes never use is dropped for an instrument
+    // that cannot produce it, and a whole genre disappears from a line that
+    // never needed it. Naming one too few is the other way round — the figure
+    // is offered to an instrument that cannot play it.
+    for (const lick of BASS_LICKS) {
+      const used = new Set(
+        lick.material.notes
+          .map((note) => note.articulation)
+          .filter((articulation): articulation is Articulation => articulation !== undefined),
+      );
+      expect([...lick.articulations].sort(), lick.id).toEqual([...used].sort());
     }
   });
 

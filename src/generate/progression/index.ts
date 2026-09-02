@@ -414,7 +414,11 @@ function resolveCycle(
     }
     return step;
   });
-  return steps.length > 0 ? steps : [{ degree: 0, rootPc: degreeToRootPc(0, key), quality: 'maj' }];
+  // The fallback carries no degree at all: `ChordSpan.degree` is a scale degree,
+  // one to seven, and a chord that stands for a cycle with nothing in it is on
+  // none of them. Numbering it zero put a value outside the field's own domain
+  // into a span a caller reads.
+  return steps.length > 0 ? steps : [{ rootPc: degreeToRootPc(1, key), quality: 'maj' }];
 }
 
 /**

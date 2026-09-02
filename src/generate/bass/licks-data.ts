@@ -138,7 +138,7 @@ export const BASS_LICKS: readonly BassLick[] = deepFreeze([
     id: 'funkSixteenthPop',
     genre: 'funk',
     difficulty: 4,
-    articulations: ['mute', 'slide'],
+    articulations: ['mute'],
     ts: FOUR_FOUR,
     tempoRange: [84, 124],
     material: {
@@ -221,7 +221,7 @@ export const BASS_LICKS: readonly BassLick[] = deepFreeze([
     id: 'gospelPassing',
     genre: 'gospel',
     difficulty: 4,
-    articulations: ['slide'],
+    articulations: [],
     ts: FOUR_FOUR,
     tempoRange: [60, 108],
     material: {
@@ -262,7 +262,7 @@ export const BASS_LICKS: readonly BassLick[] = deepFreeze([
     id: 'reggaeOffbeatDrop',
     genre: 'reggae',
     difficulty: 3,
-    articulations: ['mute'],
+    articulations: [],
     ts: FOUR_FOUR,
     tempoRange: [64, 104],
     material: {
