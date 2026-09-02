@@ -35,6 +35,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A `pop` bass pickup is a note the line does not already have.** The octave
+  pickup dropped the root an octave below its register band, but the band is one
+  octave wide, so on an instrument with nothing under it the drop folded
+  straight back onto the root and the pickup sounded as a repeated note. On a
+  four-string bass that is every line in C, C sharp, D and E flat — most of the
+  keys pop is written in — including the `{ style: 'pop', instrument:
+  Instrument.bass4() }` the documentation gives as its example. The figure now
+  takes the octave above where the octave below cannot be heard, which is what a
+  player without the low string does. Two things in the same figure move with
+  it: the difficulty ceiling is measured against the leap the pickup actually
+  is, rather than a flat twelve semitones that ignored where the previous note
+  sat, and a pickup now counts as a note the segment emitted, so a segment
+  covering only weak beats no longer writes the fallback root on top of the
+  pickup and drops the pickup.
+
+- **`applyGrooveTemplate` checks the fields that decide where a note lands.**
+  `slotsPerBar` is what the per-bar grid is read through, and nothing held it to
+  the bar it would be read against: a hand-built template declaring eight slots
+  at a sixteenth-note subdivision passed every check the function made and then
+  quantized a note past the end of its grid, where the wrap moved it a bar and a
+  half late. It is now held to the slot count the apply-time meter holds at the
+  template's subdivision — the definition the field is documented with — and a
+  slot carrying a non-finite timing offset or a velocity outside the MIDI byte
+  is refused before either is written onto a returned note, so what the function
+  hands back is a note event the rest of the library will read.
+
+- **An analysis kept for undo cannot be rewritten by the next edit.** A span an
+  edit does not touch keeps the chord the previous analysis read, so one object
+  reaches both the analysis before the edit and the one after it. A host that
+  wrote to the current timeline — renaming a root for display — was rewriting
+  the state it was holding in order to go back. The chords a window reads are
+  frozen where they are made, so neither analysis hands out anything writable;
+  the class layer, which rebuilt each segment on read, was already safe and
+  reported the same chords the function layer let through.
+
+- **`Motif.totalBeats` answers for a cell of any size the constructor takes.**
+  It spread the cell into `Math.min` and `Math.max`, which fails with a native
+  `RangeError` far below the generation budget the constructor accepts — a
+  phrase lifted out of an imported track with `Motif.fromNotes(score.notes)`
+  reached it. It now measures the cell through the same walk the motif
+  transforms use, so one function answers for both layers.
+
+- **`placeLicks` and `analyzePolyphony` charge the work they do.** `placeLicks`
+  counted segments while laying one figure per bar of each, so a single segment
+  running to a beat taken from a loop length or a project file tiled the whole
+  span before anything bounded it; it now charges the bars the placement covers,
+  the estimate the phrase-shape styles already make before reaching the same
+  tiling. `analyzePolyphony` reads every note against the sub-voices sounding
+  under it and charged neither dimension; it now charges that product before
+  filling the sounding cache, as the two sibling entry points over the same
+  machinery do.
+
 - **`@libraz/libcantus/theory` and `/model` bind the errors they declare.**
   Both subpaths re-exported `InvalidInputError`, `NoSolutionError` and
   `BudgetExceededError` — and `theory` also `ConsonanceClass` — as types, so the
