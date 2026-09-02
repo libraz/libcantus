@@ -210,6 +210,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **An entry point taking more than one argument refuses malformed input as this
+  library's own error.** The single-argument entrances already did: anything a
+  caller passes comes back as one of the library's error classes, and a raw
+  `TypeError` means a bug inside the library rather than a constraint the caller
+  broke — a distinction a host branches on. Twenty-six entrances taking two or
+  more arguments read their material before checking its shape, so a `null`
+  figure, a dictionary that was not an array, a motif restored from a session
+  without its notes, or a sampler set missing a method surfaced as a `TypeError`
+  naming a field instead of the argument. Each of them now goes through the same
+  shared checks the rest of the library uses, and the contract is swept over
+  every published function rather than only the ones taking a single argument.
+
 - **A slash bass is written on the letter the degree it plays gives.** Writing a
   chord read on one side of the enharmonic fence out on the other carried the
   bass by the same step the root moved, and kept whatever that landed on for any
