@@ -285,3 +285,59 @@ describe('createArrangementSession', () => {
     }
   });
 });
+
+describe('an analysis a host keeps in order to undo', () => {
+  // A session hands back a new analysis and leaves the old one valid, which is
+  // what makes it an undo state. The span an edit did not touch is not analysed
+  // again, though, so its chord is the very object the earlier analysis reported
+  // — and a host that writes to what the current timeline hands it, renaming a
+  // root for display, would be rewriting the state it is holding in order to go
+  // back. The two are the same object by design; what stops the write is that
+  // neither analysis hands out anything writable.
+
+  /** Every chord an analysis reports, including the ones inside its keys. */
+  function chordsOf(analysis: ReturnType<typeof analyzeArrangement>): unknown[] {
+    return analysis.timeline.segments.map((segment) => segment.chord);
+  }
+
+  it('shares its chords with the analysis after an edit', () => {
+    // Not a requirement, a fact: this is why the freeze below is needed at all,
+    // and a test that stopped seeing the sharing would stop testing anything.
+    const tracks = piece(8, 11);
+    const session = createArrangementSession(tracks, { key: C_MAJOR });
+    const next = session.update([randomEdit(tracks, seeded(4))]);
+    const before = new Set(chordsOf(session.analysis));
+    const shared = chordsOf(next.analysis).filter((chord) => before.has(chord));
+    expect(shared.length).toBeGreaterThan(0);
+  });
+
+  it('hands out no chord a caller can write to', () => {
+    const tracks = piece(8, 11);
+    const session = createArrangementSession(tracks, { key: C_MAJOR });
+    const next = session.update([randomEdit(tracks, seeded(4))]);
+    for (const [label, analysis] of [
+      ['before the edit', session.analysis],
+      ['after the edit', next.analysis],
+    ] as const) {
+      for (const chord of chordsOf(analysis) as { intervals: number[] }[]) {
+        expect(Object.isFrozen(chord), label).toBe(true);
+        expect(Object.isFrozen(chord.intervals), label).toBe(true);
+      }
+    }
+  });
+
+  it('keeps the earlier analysis intact when a caller writes to the later one', () => {
+    const tracks = piece(8, 11);
+    const session = createArrangementSession(tracks, { key: C_MAJOR });
+    const kept = JSON.stringify(session.analysis.timeline.segments);
+    const next = session.update([randomEdit(tracks, seeded(4))]);
+    for (const chord of next.analysis.timeline.segments.map((segment) => segment.chord)) {
+      // A host renaming a root for display, in the one way a frozen object
+      // allows a caller to try it.
+      expect(() => {
+        (chord as { rootPc: number }).rootPc = 11;
+      }).toThrow(TypeError);
+    }
+    expect(JSON.stringify(session.analysis.timeline.segments)).toBe(kept);
+  });
+});

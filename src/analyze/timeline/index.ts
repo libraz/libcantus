@@ -588,7 +588,7 @@ function analyzeWindow(
       pedalPc,
     );
     const reading: WindowChord = {
-      chord,
+      chord: shared(chord),
       confidence: chordConfidence(chord, weights, totalWeight, account.exact),
     };
     // An augmented sixth is a bass and an interval rather than a stack of
@@ -602,7 +602,7 @@ function analyzeWindow(
     if (augmented !== null) {
       // Its tones are exactly the window's, so it explains them exactly.
       reading.augmented = {
-        chord: augmented,
+        chord: shared(augmented),
         confidence: chordConfidence(augmented, weights, totalWeight, true),
       };
     }
@@ -610,6 +610,22 @@ function analyzeWindow(
   }
 
   return null;
+}
+
+/**
+ * A chord that more than one analysis holds at once.
+ *
+ * A window's reading is cached and handed to the next analysis of the same
+ * span, so one object reaches both the analysis made before an edit and the one
+ * made after it. The earlier analysis is what a host keeps in order to undo, and
+ * an undo state that the next edit can rewrite is not a snapshot: renaming a
+ * root for display in the current timeline would silently rename it in the one
+ * being held. Freezing says so where the object is made, rather than leaving
+ * every reader to copy defensively.
+ */
+function shared(chord: Chord): Chord {
+  Object.freeze(chord.intervals);
+  return Object.freeze(chord);
 }
 
 /** Semitones from a tonic up to its dominant. */
