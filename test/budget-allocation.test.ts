@@ -16,6 +16,7 @@ import { Arrangement, Motif, Score } from '../src/model/index.js';
 import type { ChordSegment } from '../src/theory/chord/index.js';
 import { makeChord } from '../src/theory/chord/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
+import { growthFactor } from './support/growth.js';
 
 /**
  * What a call retains in typed-array memory, in bytes.
@@ -214,22 +215,24 @@ describe('the key budget bounds the candidate table the search fills', () => {
     expect(detectModulations(chords, { budget: 16 * 24 }).length).toBeGreaterThan(0);
   });
 
-  // Forty thousand chords is the largest chord run the default budget admits,
-  // and it modulates ten thousand times. Every stage after the search — the
-  // shortest-region merge, each region's confidence, each boundary's pivot —
-  // once asked its question of the whole chord list, so a span the budget
-  // accepted spent thirty times the search on scans whose answer never changed.
-  // The time bound is the one thing that shows it: the regions are the same
-  // either way. Read once this is half a second of work and read once per region
-  // it is fourteen, so the bound sits an order of magnitude above the first and
-  // well under the second — a busy machine does not fail it, and a return of the
-  // quadratic scan does.
   it('reads every chord of an accepted span once', () => {
+    // Forty thousand chords is the largest chord run the default budget admits,
+    // and it modulates ten thousand times. Every stage after the search — the
+    // shortest-region merge, each region's confidence, each boundary's pivot —
+    // once asked its question of the whole chord list, so a span the budget
+    // accepted spent thirty times the search on scans whose answer never
+    // changed. Only the time says which reading ran, since the regions are the
+    // same either way, and only how it grows says it without depending on how
+    // busy the machine is: eight times the chords is eight times the work when
+    // each is read once, and sixty-four when each is read once per region.
     const regions = detectModulations(modulatingChords(40_000));
     expect(regions.length).toBe(10_000);
     expect(regions[0]?.startBeat).toBe(0);
     expect(regions[regions.length - 1]?.endBeat).toBe(160_000);
-  }, 5_000);
+    expect(
+      growthFactor(8, (scale) => detectModulations(modulatingChords(5_000 * scale))),
+    ).toBeLessThan(24);
+  }, 30_000);
 });
 
 describe('the form budget bounds the melodic comparisons', () => {

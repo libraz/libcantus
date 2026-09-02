@@ -11,6 +11,7 @@ import {
 } from '../src/core/tempo/index.js';
 import { assertNoteEvent } from '../src/core/validation/index.js';
 import { Instrument, Score } from '../src/model/index.js';
+import { growthFactor } from './support/growth.js';
 
 const CONSTANT: TempoMap = [{ startBeat: 0, bpm: 120 }];
 const CHANGING: TempoMap = [
@@ -356,14 +357,20 @@ describe('a tempo map is bounded and read once', () => {
   // restatements validated the whole map and then walked it from the origin to
   // the note's own beat. Held for the length of the pass, the map is read once.
   it('times a piece against a dense map without re-reading it per note', () => {
-    const notes = Array.from({ length: 50_000 }, (_, index) => ({
-      pitch: 48 + (index % 24),
-      startBeat: index,
-      durationBeat: 1,
-    }));
-    const score = Score.of(notes, { tempo: accelerando(50_000) });
-    expect(score.playability(Instrument.guitar()).issues.length).toBeGreaterThanOrEqual(0);
-  }, 5_000);
+    const read = (size: number): number => {
+      const notes = Array.from({ length: size }, (_, index) => ({
+        pitch: 48 + (index % 24),
+        startBeat: index,
+        durationBeat: 1,
+      }));
+      return Score.of(notes, { tempo: accelerando(size) }).playability(Instrument.guitar()).issues
+        .length;
+    };
+    expect(read(2_000)).toBeGreaterThanOrEqual(0);
+    // Both counts grow together, so a map read once per note costs the square
+    // of what a map read once for the pass costs.
+    expect(growthFactor(8, (scale) => read(5_000 * scale))).toBeLessThan(24);
+  }, 30_000);
 
   // A map handed to a conversion is validated by it, and a caller converting
   // position after position hands over the same map every time. Validating it
@@ -372,13 +379,33 @@ describe('a tempo map is bounded and read once', () => {
   // A map already validated and unchanged since is recognised instead, which
   // leaves a comparison per entry rather than a validation.
   it('validates a map once however many positions are converted against it', () => {
-    const map = accelerando(20_000);
-    let last = 0;
-    for (let beat = 0; beat < 20_000; beat += 1) {
-      last = beatsToSeconds(beat, map);
-    }
-    expect(last).toBeGreaterThan(0);
-  }, 5_000);
+    // Two maps of the same size and the same conversions over each. One is left
+    // alone, so every call after the first recognises it; the other is written
+    // to between calls, so every call validates it afresh — which is what the
+    // first map used to cost as well. The two runs are timed moments apart on
+    // the same machine, so what is left between them is the validation.
+    const size = 10_000;
+    const remembered = accelerando(size);
+    const rewritten = accelerando(size).map((event) => ({ ...event }));
+    const convert = (map: { startBeat: number; bpm: number }[], touch: boolean): number => {
+      let last = 0;
+      for (let beat = 0; beat < size; beat += 1) {
+        if (touch) {
+          rewritten[0] = { startBeat: 0, bpm: 60 + (beat % 2) };
+        }
+        last = beatsToSeconds(beat, map);
+      }
+      return last;
+    };
+    convert(remembered, false);
+    const started = performance.now();
+    expect(convert(remembered, false)).toBeGreaterThan(0);
+    const recognised = performance.now() - started;
+    const again = performance.now();
+    expect(convert(rewritten, true)).toBeGreaterThan(0);
+    const revalidated = performance.now() - again;
+    expect(revalidated / Math.max(recognised, 1)).toBeGreaterThan(3);
+  }, 30_000);
 
   it('re-validates a map the caller has written to since', () => {
     // The map is remembered by identity, so what makes the memo safe is that a
