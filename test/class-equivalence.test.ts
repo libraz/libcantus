@@ -6,6 +6,8 @@ import {
   analyzeArrangement,
   analyzeChord,
   analyzeVoice,
+  availableTensions,
+  avoidNotes,
   beatsPerBar,
   beatsToDuration,
   beatsToSeconds,
@@ -30,11 +32,16 @@ import {
   chordTimelineFromNotes,
   chordToneRole,
   chordToRoman,
+  createNoteEventIndex,
   Duration,
   detectCadence,
   detectCadences,
   detectChord,
+  detectChordBest,
   detectKey,
+  detectKeyBest,
+  detectKeyFromNotes,
+  detectModulations,
   developMotif,
   diatonicSeventh,
   diatonicTriad,
@@ -45,12 +52,14 @@ import {
   enharmonicKeyOf,
   enumerateSafePitches,
   evaluateSafety,
+  explainRoman,
   extractMotifs,
   figuredBassOf,
   fingeringsFor,
   foldIntoRange,
   formatBarPosition,
   formatChordSymbol,
+  formatKeyName,
   formatNote,
   formatTimeSignature,
   frequencyOf,
@@ -154,6 +163,9 @@ import {
   transposeByInterval,
   transposeChord,
   transposeNote,
+  tryParseChordSymbol,
+  tryParseKeyName,
+  tryParseNote,
   tuplet,
   Voicing,
   voiceChord,
@@ -322,6 +334,42 @@ describe('Chord', () => {
     expect(slash.contains(65)).toBe(isChordMember(65, slash.data));
     expect(slash.roleOf(69)).toBe(chordToneRole(69, slash.data));
     expect(slash.roleOf(61)).toBe(chordToneRole(61, slash.data));
+  });
+
+  it('reads a symbol, a set of pitches and a scale under the options given', () => {
+    // The options a method advertises have to reach the function under it: a
+    // class that declares them and answers with the function's own defaults
+    // reads exactly as one that carries them, so every case here passes a
+    // non-default set.
+    const german = { system: 'german' as const };
+    const parsed = Chord.tryParse('H7', german);
+    const symbol = tryParseChordSymbol('H7', german);
+    expect(parsed.ok).toBe(true);
+    expect(symbol.ok).toBe(true);
+    expect(parsed.ok ? parsed.value.data : null).toEqual(symbol.ok ? symbol.value : null);
+    expect(Chord.tryParse('H7').ok).toBe(false);
+    const pitches = [60, 64, 67, 70];
+    const asPcs = { input: 'pitchClass' as const };
+    expect(Chord.detectBest(pitches, asPcs)?.data).toEqual(detectChordBest(pitches, asPcs));
+    expect(Chord.detectBest([0, 4, 7, 10], asPcs)?.data).toEqual(
+      detectChordBest([0, 4, 7, 10], asPcs),
+    );
+    const dominant = Chord.of('G', 'dom7');
+    const resolving = { resolvesTo: Chord.of('C', 'min').data };
+    expect(dominant.tensions('phrygianDominant', resolving)).toEqual(
+      availableTensions(dominant.data, 'phrygianDominant', resolving),
+    );
+    const melodic = { use: 'melodic' as const };
+    expect(Chord.of('C', 'maj7').avoidNotes('ionian', melodic)).toEqual(
+      avoidNotes(Chord.of('C', 'maj7').data, 'ionian', melodic),
+    );
+    expect(Chord.of('C', 'maj7').avoidNotes('ionian', melodic)).not.toEqual(
+      Chord.of('C', 'maj7').avoidNotes('ionian'),
+    );
+    const applied = { applied: true as const };
+    expect(Chord.parse('D7').explain(key, applied)).toEqual(
+      explainRoman(Chord.parse('D7').data, key.scale, applied),
+    );
   });
 
   it('answers the functional questions in the key it is read in', () => {
@@ -670,6 +718,23 @@ describe('Key', () => {
     );
   });
 
+  it('reads a name and writes one under the options given', () => {
+    const german = { system: 'german' as const };
+    const read = Key.tryParse('h-moll', german);
+    const named = tryParseKeyName('h-moll', german);
+    expect(read.ok).toBe(true);
+    expect(named.ok).toBe(true);
+    expect(read.ok ? read.value.tonic.data : null).toEqual(named.ok ? named.value.tonic : null);
+    const written = Key.major('C');
+    expect(written.toString(german)).toBe(
+      formatKeyName({ tonic: written.tonic.data, mode: 'major' }, german),
+    );
+    expect(written.toString(german)).not.toBe(written.toString());
+    const pitches = [62, 64, 65, 67, 69, 71, 72];
+    const modal = { modes: true as const, profile: 'temperley' as const };
+    expect(Key.detectBest(pitches, modal)?.scale).toEqual(detectKeyBest(pitches, modal)?.key);
+  });
+
   it('ranks the keys the detector ranks, church modes and all', () => {
     const pitches = [62, 64, 65, 67, 69, 71, 72];
     const opts = { modes: true as const, profile: 'temperley' as const };
@@ -787,6 +852,16 @@ describe('Note', () => {
     expect(note.midi).toBe(noteToMidi(note.data));
     expect(Note.fromMidi(61, 'flat').data).toEqual(midiToNote(61, 'flat'));
     expect(Note.fromMidi(61, 'flat').data).not.toEqual(midiToNote(61, 'sharp'));
+  });
+
+  it('reads a name under the notation system it is given', () => {
+    const german = { system: 'german' as const };
+    const read = Note.tryParse('As4', german);
+    const parsed = tryParseNote('As4', german);
+    expect(read.ok).toBe(true);
+    expect(parsed.ok).toBe(true);
+    expect(read.ok ? read.value.data : null).toEqual(parsed.ok ? parsed.value : null);
+    expect(read.ok ? read.value.name : '').not.toBe('As4');
   });
 
   it('moves the way the pitch module moves a note', () => {
@@ -951,6 +1026,24 @@ describe('Score', () => {
     expect(keyIdentity(score.key() as Key)).toEqual(prevailingKeyOf(score.keys()));
   });
 
+  it('carries its own options into the readings that take them', () => {
+    const timelineOpts = { harmonicRhythm: 1, segmentation: 'grid' as const };
+    expect(score.timeline(timelineOpts).segments).toEqual(
+      chordTimelineFromNotes(score.notes, { meters: score.meters, ...timelineOpts }).timeline
+        .segments,
+    );
+    expect(score.timeline(timelineOpts).segments).not.toEqual(score.timeline().segments);
+    const keyOpts = { modes: true as const, profile: 'temperley' as const };
+    expect(score.detectKeys(keyOpts).map((found) => found.key.scale)).toEqual(
+      detectKeyFromNotes(score.notes, keyOpts).map((match) => match.key),
+    );
+    expect(score.detectKeys(keyOpts).length).toBeGreaterThan(score.detectKeys().length);
+    const indexOpts = { budget: 1000 };
+    expect(score.index(indexOpts).at(2)).toEqual(
+      createNoteEventIndex(score.notes, indexOpts).at(2),
+    );
+  });
+
   it('reads the form the way the form analyses read it, options and all', () => {
     const timeline = chordTimelineFromNotes(score.notes, { meters: score.meters }).timeline;
     const opts = { expectedPhraseBeats: 4, minPhraseBeats: 2 };
@@ -1073,6 +1166,12 @@ describe('Timeline', () => {
     expect(timeline.at(5)?.data).toEqual(Chord.fromData(at(SEGMENTS, 1).chord).withKey(key).data);
     expect(timeline.at(16)).toBeNull();
     expect(timeline.key?.scale).toEqual(key.scale);
+  });
+
+  it('reads the modulations the key search reads, under the same options', () => {
+    const modulating = Timeline.fromNotes(PHRASE);
+    const opts = { minKeyBeats: 2, expectedKeyBeats: 4, totalBeats: modulating.totalBeats };
+    expect(modulating.modulations(opts)).toEqual(detectModulations(modulating.segments, opts));
   });
 
   it('infers a timeline from notes the way the analysis infers one', () => {

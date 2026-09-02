@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
@@ -618,6 +619,44 @@ describe('methods offer the options their delegate accepts', () => {
       }
     },
   );
+
+  /**
+   * Delegating methods the equivalence suite does not drive with options, with
+   * the reason each one is exempt.
+   *
+   * An entry is a claim about the method, not a note that it is untested: a
+   * method whose options cannot change its answer here — or whose answer is not
+   * comparable with the function's — says so and why.
+   */
+  const NOT_EQUIVALENCE_CHECKED: Readonly<Record<string, string>> = {};
+
+  /**
+   * The equivalence suite's own text.
+   *
+   * The methods are read from the sources and the driving is read from the file
+   * that drives them, so a method added with options is covered or listed
+   * without anyone remembering it exists. The match is by name and by there
+   * being an argument in the call: a class that answers with the function's own
+   * defaults answers exactly as it would if it dropped the options, so an
+   * equivalence case that passes none proves nothing about carrying them.
+   */
+  const EQUIVALENCE = readFileSync(resolve(ROOT, 'test/class-equivalence.test.ts'), 'utf8');
+
+  it('drives every delegating method with options where the equivalence is claimed', () => {
+    const uncovered = [...new Set(delegations.map(({ label }) => label))]
+      .filter((label) => {
+        const method = label.split('.')[1] ?? '';
+        return !new RegExp(`\\.${method}\\(\\s*[^)\\s]`).test(EQUIVALENCE);
+      })
+      .filter((label) => !(label in NOT_EQUIVALENCE_CHECKED))
+      .sort();
+    expect(uncovered).toEqual([]);
+  });
+
+  it('lists nothing as unchecked that is no longer a delegation', () => {
+    const live = new Set(delegations.map(({ label }) => label));
+    expect(Object.keys(NOT_EQUIVALENCE_CHECKED).filter((label) => !live.has(label))).toEqual([]);
+  });
 
   it('passes the new chord-scale options through to the functions', () => {
     const chord = Chord.of('C', 'maj7');
