@@ -33,8 +33,8 @@ import { assertInteger } from '../../core/validation/index.js';
 import { spellScale } from '../spelling/index.js';
 import { type KeyLike, toKeyScale } from './coerce.js';
 import type { ResolvedKey } from './identity.js';
-import { majorKey, minorKey } from './key.js';
 import { CHROMATIC_MASK, isMinorMask, variantOfMask } from './masks.js';
+import { majorScale, minorScale } from './scales.js';
 import type { KeyMode } from './signature.js';
 import { isSignatureKey, keyFromFifths, keySignatureFifths } from './signature.js';
 
@@ -325,7 +325,7 @@ export function parallelKeyOf(tonic: NoteLike, key: KeyLike): ResolvedKey {
   // The spelled tonic decides the root, so the returned key and its tonic agree
   // even when the caller's `rootPc` was left on the other mode's root.
   const rootPc = noteToPitchClass(note);
-  const scale = mode === 'minor' ? minorKey(rootPc) : majorKey(rootPc);
+  const scale = mode === 'minor' ? minorScale(rootPc) : majorScale(rootPc);
   return {
     tonic: { letter: diatonicLetterOf(note.letter), alter: note.alter },
     scale,
@@ -335,7 +335,7 @@ export function parallelKeyOf(tonic: NoteLike, key: KeyLike): ResolvedKey {
 
 /** Where a spelled tonic itself stands on the circle of fifths: C at 0, F# at +6. */
 function tonicPosition(tonic: Note): number {
-  return keySignatureFifths(tonic, majorKey(noteToPitchClass(tonic)));
+  return keySignatureFifths(tonic, majorScale(noteToPitchClass(tonic)));
 }
 
 /**

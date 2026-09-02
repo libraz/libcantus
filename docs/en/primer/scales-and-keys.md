@@ -112,19 +112,25 @@ Key.minor('A').fifths; // 0
 
 One number holds the whole signature because the sharps and flats are always added in a fixed order, so the count determines the set. It is also the coordinate the circle of fifths runs on, which is what makes key distance a subtraction — see [Key relations and modulation](../key-relations-and-modulation.md).
 
-## Three ways a key arrives, and only two carry a spelling
+## Three ways a key arrives, and which of them carry a spelling
 
 This is the distinction to keep straight when reading signatures. `KeyScale` is a root pitch class and a mask, and carries **no spelling** — it cannot tell F-sharp major from G-flat major, so nothing built from it alone can produce note names. `ResolvedKey` adds a spelled tonic and a minor variant. The `Key` class wraps a `ResolvedKey` and is the form that answers questions about names.
 
-```ts
-import { majorKey, resolveKey } from '@libraz/libcantus';
+The builders hand back both at once. `majorKey` returns a `KeyScale` — every reader that wants only the pitch classes takes it unchanged — with the spelling the library reads for those pitch classes written beside it. Reducing one back to pitch classes alone is `toKeyScale`, which is named so that dropping the spelling is something you can see in the code.
 
-majorKey(6); // { rootPc: 6, modeMask12: 2741 }
+```ts
+import { majorKey, resolveKey, toKeyScale } from '@libraz/libcantus';
+
+majorKey(6);
+// { rootPc: 6, modeMask12: 2741, tonic: { letter: 4, alter: -1 }, variant: 'major' }
+toKeyScale(majorKey(6)); // { rootPc: 6, modeMask12: 2741 }
 resolveKey('C major');
 // { scale: { rootPc: 0, modeMask12: 2741 }, tonic: { letter: 0, alter: 0 }, variant: 'major' }
 ```
 
-`2741` is the mask for the major pattern, `0b101010110101`. Every entry point that takes a key accepts all three forms plus a string such as `'C major'`, and calls `resolveKey` on it. When a bare `KeyScale` goes in, a tonic spelling is chosen for it — the one with the fewest accidentals — so passing `majorKey(6)` yields G-flat major rather than F-sharp major. Pass a spelled key when the piece is written the other way.
+`2741` is the mask for the major pattern, `0b101010110101`. The spelling a builder writes down is the reading with the fewest accidentals, so `majorKey(6)` is G-flat major rather than F-sharp major. Pass a spelled key such as `'F# major'` when the piece is written the other way.
+
+Which forms an entry point accepts follows from whether its answer depends on the spelling. Most do not, and take a key in any form. The ones that do — `figuredBassOf`, `romanToChord`, `spellVoicing`, `substituteChord` and their neighbours — take only the forms that carry one, so handing such an entry point a key that has been reduced to pitch classes is a compile error rather than an answer spelled from the far side of the circle.
 
 ## Not every scale supports a Roman-numeral reading
 

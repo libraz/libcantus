@@ -17,6 +17,7 @@ import {
   majorKey,
   type ResolvedKey,
   resolveKey,
+  type SpelledKeyLike,
   scaleTonesInDegreeOrder,
 } from '../../theory/scale/index.js';
 import { spellPitchClass } from '../../theory/spelling/index.js';
@@ -411,7 +412,7 @@ function chordFromParsed(parsed: {
  * ```
  * @category Functional Harmony
  */
-export function romanToChord(text: string, key: KeyLike): Chord {
+export function romanToChord(text: string, key: SpelledKeyLike): Chord {
   // The key is kept whole: the chromatic chords named as whole symbols are
   // spelled from its tonic, and a key reduced here would spell them from
   // whichever side of the circle its pitch classes read best as.

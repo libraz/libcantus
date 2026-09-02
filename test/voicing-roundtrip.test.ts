@@ -21,6 +21,7 @@ import type {
   PartWritingViolationKind,
 } from '../src/theory/partwriting/index.js';
 import { checkPartWriting, spellVoicing } from '../src/theory/partwriting/index.js';
+import type { SpelledKeyScale } from '../src/theory/scale/index.js';
 import { majorKey, minorKey, resolveKey } from '../src/theory/scale/index.js';
 import { parseChordSymbol } from '../src/theory/symbol/index.js';
 import { SATB_RANGES, voiceProgression } from '../src/theory/voicing/index.js';
@@ -50,7 +51,7 @@ type Marked = {
 };
 
 /** Voice a progression, spell what came out, and mark it. */
-function roundTrip(symbols: readonly string[], key: KeyScale): Marked {
+function roundTrip(symbols: readonly string[], key: SpelledKeyScale): Marked {
   const chords = symbols.map((symbol) => parseChordSymbol(symbol));
   const voiced = voiceProgression(chords, { key });
   const spelled = voiced.map((pitches, index) =>
@@ -246,7 +247,7 @@ const CHROMATIC_PROGRESSIONS: readonly (readonly string[])[] = [
 ];
 
 /** Every progression of the sweep, with the key it is written in. */
-const SWEEP: readonly { symbols: readonly string[]; key: KeyScale; name: string }[] = [
+const SWEEP: readonly { symbols: readonly string[]; key: SpelledKeyScale; name: string }[] = [
   ...MINOR_PROGRESSIONS.map((symbols) => ({
     symbols,
     key: C_MINOR,

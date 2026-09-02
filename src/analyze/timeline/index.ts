@@ -532,7 +532,7 @@ function analyzeWindow(
   windowStart: number,
   windowEnd: number,
   meters: MeterMap,
-  key: KeyScale,
+  key: ResolvedKey,
 ): WindowChord | null {
   const { weights, totalWeight, maxWeight, lowestPitch } = windowWeights(
     notes,
@@ -574,7 +574,7 @@ function analyzeWindow(
   let bestMatch: ChordMatch | null = null;
   let bestScore = Number.NEGATIVE_INFINITY;
   for (const match of matches) {
-    const score = scoreMatch(match, weights, maxWeight, key, pedalPc);
+    const score = scoreMatch(match, weights, maxWeight, scaleOf(key), pedalPc);
     if (score > bestScore) {
       bestScore = score;
       bestMatch = match;
@@ -1424,6 +1424,12 @@ export function analyzeTimeline(
     const start = Math.max(span.startBeat, musicStart);
     const end = Math.min(span.endBeat, totalBeats);
     const spanKey = scaleAt(start);
+    // The window is analysed against the key whole. Its pitch classes decide
+    // which chord the notes are read as, but an augmented sixth is spelled
+    // rather than scored, and a key reduced on the way in would spell one from
+    // whichever side of the circle those pitch classes read best as: the Ab
+    // minor the caller named would hand back the sharps of a G# minor.
+    const spanKeyWhole = keyAt(start);
     const id = windowId(start, end, spanKey);
     // A span whose slots are all clean holds exactly the notes it held before,
     // so its chord and confidence are the same numbers over the same input.
@@ -1434,7 +1440,7 @@ export function analyzeTimeline(
     const inferred =
       cached !== undefined
         ? cached
-        : analyzeWindow(notesOfSpan(slotNotes, span, grid), start, end, meters, spanKey);
+        : analyzeWindow(notesOfSpan(slotNotes, span, grid), start, end, meters, spanKeyWhole);
     // What is cached is the window's own reading, both spellings and all: an
     // edit elsewhere can change which of them the music supports without
     // changing a note this span holds.

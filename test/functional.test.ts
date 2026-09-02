@@ -8,13 +8,13 @@ import {
   secondaryDominant,
   secondaryDominantOf,
 } from '../src/analyze/functional/index.js';
-import type { KeyScale } from '../src/core/types.js';
 import {
   chordPitchClasses,
   chordQualities,
   diatonicTriad,
   makeChord,
 } from '../src/theory/chord/index.js';
+import type { SpelledKeyScale } from '../src/theory/scale/index.js';
 import {
   majorKey,
   minorKey,
@@ -281,7 +281,7 @@ describe('secondaryDominantOf', () => {
 
 describe('roman round-trip across every chord quality', () => {
   // Tonic, supertonic, subdominant, and dominant degrees of each key.
-  const keyCases: [string, KeyScale, number[]][] = [
+  const keyCases: [string, SpelledKeyScale, number[]][] = [
     ['C major', cMajor, [0, 2, 5, 7]],
     ['A minor', aMinor, [9, 11, 2, 4]],
   ];
@@ -518,7 +518,7 @@ describe('Roman numerals in keys that are not heptatonic', () => {
 });
 
 /** One key of every shape a numeral is measured against, as a function of tonic. */
-const KEY_SHAPES: ((tonic: number) => KeyScale)[] = [
+const KEY_SHAPES: ((tonic: number) => SpelledKeyScale)[] = [
   (tonic) => majorKey(tonic),
   (tonic) => minorKey(tonic),
   (tonic) => scaleByName('harmonicMinor', tonic),

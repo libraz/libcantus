@@ -21,6 +21,7 @@ import {
   scaleByName,
   spelledKeyOf,
   subdominantKeyOf,
+  toKeyScale,
   WORLD_SCALES,
 } from '../src/index.js';
 import * as theory from '../src/theory/index.js';
@@ -77,7 +78,7 @@ describe('parallelKeyOf', () => {
   });
 
   it('roots the returned key on the spelled tonic', () => {
-    expect(parallelKeyOf(parseNote('Eb'), majorKey(3)).scale).toEqual(minorKey(3));
+    expect(parallelKeyOf(parseNote('Eb'), majorKey(3)).scale).toEqual(toKeyScale(minorKey(3)));
   });
 });
 

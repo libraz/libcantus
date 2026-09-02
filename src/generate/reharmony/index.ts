@@ -37,8 +37,8 @@ import {
 } from '../../theory/chord/index.js';
 import {
   isScaleTone,
-  type KeyLike,
   resolveKey,
+  type SpelledKeyLike,
   scaleTonesInDegreeOrder,
 } from '../../theory/scale/index.js';
 import { spellPitchClass } from '../../theory/spelling/index.js';
@@ -220,7 +220,7 @@ function tritoneSubstituteRoot(dominant: Chord, tonic: Note, key: KeyScale): Not
  */
 export function substituteChord(
   chord: ChordLike,
-  key: KeyLike,
+  key: SpelledKeyLike,
   opts?: SubstituteOptions,
 ): Substitution[] {
   // Chord and key are read once, here at the boundary. The key keeps the tonic
@@ -345,7 +345,7 @@ export type BorrowedChord = {
  * ```
  * @category Reharmonization
  */
-export function modalInterchangePalette(key: KeyLike): BorrowedChord[] {
+export function modalInterchangePalette(key: SpelledKeyLike): BorrowedChord[] {
   // The key is read once, here at the boundary, and keeps the tonic it was
   // named with: every chord below is spelled from that tonic.
   const { scale, tonic } = resolveKey(key);
@@ -405,7 +405,7 @@ export function modalInterchangePalette(key: KeyLike): BorrowedChord[] {
  * ```
  * @category Reharmonization
  */
-export function negativeHarmonyMirror(chord: ChordLike, key: KeyLike): Chord {
+export function negativeHarmonyMirror(chord: ChordLike, key: SpelledKeyLike): Chord {
   // Chord and key are read once, here at the boundary. The key keeps the tonic
   // it was named with, which is what the mirrored chord is spelled from.
   const source = toChordData(chord);

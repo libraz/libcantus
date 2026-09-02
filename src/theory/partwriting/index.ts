@@ -32,7 +32,7 @@ import {
   isAugmentedMelodicInterval,
   isLeadingToneResolution,
 } from '../counterpoint/index.js';
-import { type KeyLike, resolveKey, toKeyScale } from '../scale/index.js';
+import { type KeyLike, resolveKey, type SpelledKeyLike, toKeyScale } from '../scale/index.js';
 import { spellPitch } from '../spelling/index.js';
 import {
   isDescendingStep,
@@ -471,7 +471,7 @@ function melodicViolations(transition: Transition): PartWritingViolation[] {
 export function spellVoicing(
   voicing: readonly number[],
   chord: Chord,
-  key: KeyLike,
+  key: SpelledKeyLike,
 ): SpelledVoicing {
   // Read whole rather than reduced: a voicing in Ab minor is written on flats,
   // and a key handed in spelled that way was losing its spelling right here.

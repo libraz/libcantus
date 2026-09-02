@@ -28,6 +28,16 @@ import { filesUnder, SRC } from './support/source-files.js';
  * unbuildable.
  */
 
+/**
+ * A parameter that takes a key, in either declared shape.
+ *
+ * `SpelledKeyLike` is `KeyLike` minus the bare scale, declared by the entry
+ * points whose answer depends on how the key is written. A pattern that named
+ * only the wide type would drop exactly those from the derived subject, which
+ * is the coverage this file exists to hold.
+ */
+const KEY_PARAM = /\b(?:Spelled)?KeyLike\b/;
+
 /** The keys whose written spelling differs from the one their pitches read as. */
 const FAR_SIDE_KEYS = [
   'F# major',
@@ -183,7 +193,7 @@ describe('a key reaching an entry point goes through the one resolver', () => {
   }
 
   const keyParams: ParamInfo[] = functionParams().filter(
-    (param) => param.exported && reachable.has(param.fn) && /\bKeyLike\b/.test(param.type),
+    (param) => param.exported && reachable.has(param.fn) && KEY_PARAM.test(param.type),
   );
 
   /**
@@ -201,6 +211,10 @@ describe('a key reaching an entry point goes through the one resolver', () => {
     // The key was built here out of pitch classes the detector weighed, so
     // there is no caller's spelling for the reading to lose.
     'src/analyze/detect/index.ts',
+    // The key builders: a built key has no caller's spelling to lose either,
+    // and carrying the reading is what lets one be handed to an entry point
+    // that refuses a scale with no spelling on it.
+    'src/theory/scale/key.ts',
   ];
 
   it('derives a tonic in one place only', () => {
@@ -239,6 +253,57 @@ describe('a key reaching an entry point goes through the one resolver', () => {
   });
 });
 
+/** What to pass for one parameter of an entry point being measured. */
+type Recipe = (key: ResolvedKey) => unknown;
+
+/**
+ * What to pass for a parameter beside the key, by the type it declares.
+ *
+ * A recipe reads the key, so an argument that has to agree with it — a tonic,
+ * a bass — follows the key being measured instead of pinning the answer to
+ * one spelling of its own.
+ */
+const BY_TYPE: Readonly<Record<string, Recipe>> = {
+  AugmentedSixthKind: () => 'german',
+  // The key's own tonic triad, carrying no spelling of its own: a chord that
+  // brought one would answer in its own letters whatever the key said.
+  Chord: (key) => makeChord(key.scale.rootPc, 'maj'),
+  ChordLike: (key) => makeChord(key.scale.rootPc, 'maj'),
+  ChordQuality: () => 'maj',
+  'ChordTimeline | null': () => null,
+  KeyLike: (key) => key,
+  Note: (key) => ({ ...key.tonic, octave: 4 }),
+  NoteLike: (key) => key.tonic,
+  number: () => 1,
+  'number | Note': () => 1,
+  'number[]': () => [0, 4, 7],
+  'readonly number[]': () => [0, 4, 7],
+  'readonly NoteEvent[]': () =>
+    [60, 62, 63].map((pitch, index) => ({ pitch, startBeat: index, durationBeat: 1 })),
+  'readonly NoteLike[]': (key) => [key.tonic],
+  ResolvedKey: (key) => key,
+  SpelledKeyLike: (key) => key,
+  // Optional, and omitted the way a caller with nothing to say about the
+  // surrounding line omits it.
+  SpellingContext: () => undefined,
+  string: () => '',
+};
+
+/** What to pass where the declared type alone does not say what would be valid. */
+const BY_PARAM: Readonly<Record<string, Recipe>> = {
+  // The tones and the bass of the German sixth of the key being measured, so
+  // the reading has something to recognize.
+  'augmentedSixthFromPitchClasses.pcs': (key) =>
+    [0, 4, 7, 10].map((tone) => (key.scale.rootPc + BASS_ABOVE_TONIC + tone) % 12),
+  'augmentedSixthFromPitchClasses.bassPc': (key) => (key.scale.rootPc + BASS_ABOVE_TONIC) % 12,
+  // A numeral whose chord is spelled from the tonic rather than numbered from
+  // the scale degrees.
+  'romanToChord.text': () => 'Ger6',
+};
+
+/** Semitones from a tonic up to the lowered submediant an augmented sixth stands on. */
+const BASS_ABOVE_TONIC = 8;
+
 /**
  * The same convention measured by what the entry points answer rather than by
  * what they call it.
@@ -261,56 +326,6 @@ describe('a key reaching an entry point goes through the one resolver', () => {
 describe('an entry point spells its answer from the key it was handed', () => {
   /** One sound, written on the two sides of the circle that name it. */
   const ENHARMONIC_KEYS = ['Ab minor', 'G# minor'] as const;
-
-  /** What to pass for one parameter of an entry point being measured. */
-  type Recipe = (key: ResolvedKey) => unknown;
-
-  /**
-   * What to pass for a parameter beside the key, by the type it declares.
-   *
-   * A recipe reads the key, so an argument that has to agree with it — a tonic,
-   * a bass — follows the key being measured instead of pinning the answer to
-   * one spelling of its own.
-   */
-  const BY_TYPE: Readonly<Record<string, Recipe>> = {
-    AugmentedSixthKind: () => 'german',
-    // The key's own tonic triad, carrying no spelling of its own: a chord that
-    // brought one would answer in its own letters whatever the key said.
-    Chord: (key) => makeChord(key.scale.rootPc, 'maj'),
-    ChordLike: (key) => makeChord(key.scale.rootPc, 'maj'),
-    ChordQuality: () => 'maj',
-    'ChordTimeline | null': () => null,
-    KeyLike: (key) => key,
-    Note: (key) => ({ ...key.tonic, octave: 4 }),
-    NoteLike: (key) => key.tonic,
-    number: () => 1,
-    'number | Note': () => 1,
-    'number[]': () => [0, 4, 7],
-    'readonly number[]': () => [0, 4, 7],
-    'readonly NoteEvent[]': () =>
-      [60, 62, 63].map((pitch, index) => ({ pitch, startBeat: index, durationBeat: 1 })),
-    'readonly NoteLike[]': (key) => [key.tonic],
-    ResolvedKey: (key) => key,
-    // Optional, and omitted the way a caller with nothing to say about the
-    // surrounding line omits it.
-    SpellingContext: () => undefined,
-    string: () => '',
-  };
-
-  /** What to pass where the declared type alone does not say what would be valid. */
-  const BY_PARAM: Readonly<Record<string, Recipe>> = {
-    // The tones and the bass of the German sixth of the key being measured, so
-    // the reading has something to recognize.
-    'augmentedSixthFromPitchClasses.pcs': (key) =>
-      [0, 4, 7, 10].map((tone) => (key.scale.rootPc + BASS_ABOVE_TONIC + tone) % 12),
-    'augmentedSixthFromPitchClasses.bassPc': (key) => (key.scale.rootPc + BASS_ABOVE_TONIC) % 12,
-    // A numeral whose chord is spelled from the tonic rather than numbered from
-    // the scale degrees.
-    'romanToChord.text': () => 'Ger6',
-  };
-
-  /** Semitones from a tonic up to the lowered submediant an augmented sixth stands on. */
-  const BASS_ABOVE_TONIC = 8;
 
   /**
    * Entry points the recipes cannot call, each with what it would take.
@@ -374,7 +389,7 @@ describe('an entry point spells its answer from the key it was handed', () => {
       if (first === undefined || !first.exported || !reachable.has(first.fn)) {
         continue;
       }
-      if (params.some((param) => /\bKeyLike\b/.test(param.type)) && !found.has(first.fn)) {
+      if (params.some((param) => KEY_PARAM.test(param.type)) && !found.has(first.fn)) {
         found.set(first.fn, params);
       }
     }
@@ -611,5 +626,158 @@ describe('a key is not reduced on its way through the class layer', () => {
     const files = filesUnder(path.join(SRC, 'model'), '.ts');
     expect(files.length).toBeGreaterThan(10);
     expect(files.some((file) => file.endsWith('progression.ts'))).toBe(true);
+  });
+});
+
+/**
+ * Which key type an entry point declares, decided by measurement rather than by
+ * taste.
+ *
+ * `KeyLike` accepts a bare scale; `SpelledKeyLike` is the same minus that one
+ * shape. An A flat minor and a G sharp minor are one set of pitch classes and
+ * two keys, so an entry point whose answer differs between them is one a bare
+ * scale cannot be handed and still be right — and one that answers alike has no
+ * use for the spelling and should keep taking the wider type.
+ *
+ * The subject is every reachable entry point that declares a key, and the two
+ * calls differ in the key argument alone: an argument beside it derived from the
+ * key would make the two calls differ in that argument too, and the difference
+ * in the answer would then say nothing about whether the key's own spelling
+ * reached anything.
+ *
+ * This is what keeps the narrowing honest without anybody maintaining a list.
+ * The previous convention here was that a caller must not reduce a key on the
+ * way past, which is a rule a later edit can drop silently — and did, in five
+ * classes at once.
+ */
+describe('an entry point declares the key type its answer needs', () => {
+  /** One sound, written on the two sides of the circle that name it. */
+  const FLAT_SIDE = resolveKey('Ab minor');
+  const SHARP_SIDE = resolveKey('G# minor');
+
+  /**
+   * Entry points that answer differently and still take the wide type, each
+   * with what makes that right.
+   *
+   * Asserted to be exact, so an entry that stops applying takes its allowance
+   * with it. Short by design: an entry here without such a reason is a bare
+   * scale reaching an answer that cannot be spelled from it.
+   */
+  const WIDE_ON_PURPOSE: Readonly<Record<string, string>> = {
+    // The resolver itself. Reading a bare scale into a whole key is what it is
+    // for, and the spelling it derives is the one every other reading uses.
+    resolveKey: 'the one resolver: deriving the spelling a bare scale lacks is its purpose',
+  };
+
+  /** Every reachable entry point that declares a key, by name. */
+  const subjects = (): Map<string, ParamInfo[]> => {
+    const reachable = new Set(
+      Object.entries(api as Record<string, unknown>)
+        .filter(([, value]) => typeof value === 'function')
+        .map(([name]) => name),
+    );
+    const signatures = new Map<string, ParamInfo[]>();
+    for (const param of functionParams()) {
+      const id = `${param.file}:${param.line}:${param.fn}`;
+      signatures.set(id, [...(signatures.get(id) ?? []), param]);
+    }
+    const found = new Map<string, ParamInfo[]>();
+    for (const params of signatures.values()) {
+      const [first] = params;
+      if (first === undefined || !first.exported || !reachable.has(first.fn)) {
+        continue;
+      }
+      if (params.some((param) => KEY_PARAM.test(param.type)) && !found.has(first.fn)) {
+        found.set(first.fn, params);
+      }
+    }
+    return found;
+  };
+
+  /** What one entry point answers with `key` in its key slots, or null. */
+  function answerWith(fn: string, params: ParamInfo[], key: ResolvedKey): unknown | null {
+    const args: unknown[] = [];
+    for (const param of params) {
+      const recipe = param.type.endsWith('Options')
+        ? () => undefined
+        : (BY_PARAM[`${fn}.${param.param}`] ?? BY_TYPE[param.type]);
+      if (recipe === undefined) {
+        return null;
+      }
+      // Only the key slots vary; everything beside them is built from one key.
+      args.push(recipe(KEY_PARAM.test(param.type) ? key : FLAT_SIDE));
+    }
+    while (args.length > 0 && args[args.length - 1] === undefined) {
+      args.pop();
+    }
+    const call = (api as unknown as Record<string, (...a: unknown[]) => unknown>)[fn];
+    try {
+      return call === undefined ? null : { answer: call(...args) };
+    } catch {
+      return null;
+    }
+  }
+
+  /** An answer as a value that can be compared with another. */
+  function seen(value: unknown): string {
+    try {
+      return JSON.stringify(value, (_k, v) => (v instanceof Map || v instanceof Set ? [...v] : v));
+    } catch {
+      return String(value);
+    }
+  }
+
+  /** Each entry point's key parameters, and whether its answer follows them. */
+  const measured = [...subjects()]
+    .map(([fn, params]) => {
+      const flat = answerWith(fn, params, FLAT_SIDE);
+      const sharp = answerWith(fn, params, SHARP_SIDE);
+      return {
+        fn,
+        params: params.filter((param) => KEY_PARAM.test(param.type)),
+        measurable: flat !== null && sharp !== null,
+        follows: flat !== null && sharp !== null && seen(flat) !== seen(sharp),
+      };
+    })
+    .filter((row) => row.measurable);
+
+  it('narrows every entry point whose answer follows the key it was handed', () => {
+    const offenders = measured
+      .filter((row) => row.follows && WIDE_ON_PURPOSE[row.fn] === undefined)
+      .flatMap((row) => row.params.filter((param) => !/\bSpelledKeyLike\b/.test(param.type)))
+      .map(
+        (param) =>
+          `${param.file}:${param.line} ${param.fn}(${param.param}) answers an Ab minor and a G# minor differently but takes ${param.type}`,
+      )
+      .sort();
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('leaves the wide type on every entry point whose answer does not', () => {
+    const overNarrowed = measured
+      .filter((row) => !row.follows)
+      .flatMap((row) => row.params.filter((param) => /\bSpelledKeyLike\b/.test(param.type)))
+      .map(
+        (param) =>
+          `${param.file}:${param.line} ${param.fn}(${param.param}) answers both spellings alike but refuses a bare scale`,
+      )
+      .sort();
+
+    expect(overNarrowed).toEqual([]);
+  });
+
+  it('holds no allowance for an entry point that no longer needs one', () => {
+    const stale = Object.keys(WIDE_ON_PURPOSE).filter(
+      (fn) => !measured.some((row) => row.fn === fn && row.follows),
+    );
+
+    expect(stale).toEqual([]);
+  });
+
+  it('reads a subject the tree supplies rather than a list', () => {
+    // Without this the checks above would pass by measuring nothing at all.
+    expect(measured.length).toBeGreaterThan(30);
+    expect(measured.filter((row) => row.follows).length).toBeGreaterThan(5);
   });
 });

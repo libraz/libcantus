@@ -26,7 +26,14 @@ export type { SafetyProfile, VoiceSnapshot } from '../theory/safety/index.js';
 export { NoteSafety } from '../theory/safety/index.js';
 // `KeyRegion.modulation` names this, so the layer barrel has to carry it even
 // though the relation vocabulary itself belongs to the scale layer.
-export type { KeyLike, KeyRelation, ResolvedKey, ScaleName } from '../theory/scale/index.js';
+export type {
+  KeyLike,
+  KeyRelation,
+  ResolvedKey,
+  ScaleName,
+  SpelledKeyLike,
+  SpelledKeyScale,
+} from '../theory/scale/index.js';
 export type { ChordLike } from '../theory/symbol/index.js';
 export type {
   ArrangementAnalysis,

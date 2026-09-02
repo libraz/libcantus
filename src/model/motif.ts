@@ -17,7 +17,7 @@ import {
   motifToNoteEvents,
   transformMotif,
 } from '../generate/index.js';
-import type { KeyLike } from '../theory/scale/index.js';
+import type { KeyLike, SpelledKeyLike } from '../theory/scale/index.js';
 import { type ChordLike, toChordData } from '../theory/symbol/index.js';
 import type { ScoreOptions } from './score.js';
 import { Score } from './score.js';
@@ -276,7 +276,7 @@ export class Motif {
    *   key of its own, so this is the only way to have the tonal reading offered.
    * @returns The relation, or null when the two stand in none.
    */
-  relateTo(other: Motif, key?: KeyLike): MotifRelation | null {
+  relateTo(other: Motif, key?: SpelledKeyLike): MotifRelation | null {
     return relateMotifs(motifFromNotes(this.#cell.notes), motifFromNotes(other.notes), key);
   }
 

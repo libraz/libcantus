@@ -78,22 +78,22 @@ describe('toNoteData', () => {
 
 describe('toKeyScale', () => {
   it('reads a key name in its natural mode', () => {
-    expect(toKeyScale('C major')).toEqual(majorKey(0));
-    expect(toKeyScale('A minor')).toEqual(minorKey(9));
-    expect(toKeyScale('gis moll')).toEqual(minorKey(8));
-    expect(toKeyScale('嬰ト短調')).toEqual(minorKey(8));
+    expect(toKeyScale('C major')).toEqual(toKeyScale(majorKey(0)));
+    expect(toKeyScale('A minor')).toEqual(toKeyScale(minorKey(9)));
+    expect(toKeyScale('gis moll')).toEqual(toKeyScale(minorKey(8)));
+    expect(toKeyScale('嬰ト短調')).toEqual(toKeyScale(minorKey(8)));
   });
 
   it('reads exactly the names a key field reads, and no shorthand of its own', () => {
     // The coercer delegates to `parseKeyName` rather than adding syntax, so
     // every entry point that takes a key accepts the same names — and a form
     // the parser does not know stays unknown here too.
-    expect(toKeyScale('C')).toEqual(majorKey(0));
+    expect(toKeyScale('C')).toEqual(toKeyScale(majorKey(0)));
     expect(() => toKeyScale('Am')).toThrow(InvalidInputError);
   });
 
   it('reads plain key data', () => {
-    expect(toKeyScale(majorKey(5))).toEqual(majorKey(5));
+    expect(toKeyScale(majorKey(5))).toEqual(toKeyScale(majorKey(5)));
   });
 
   it('reads the plain form a key serializes to, not only the class itself', () => {

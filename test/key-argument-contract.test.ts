@@ -7,12 +7,12 @@ import {
   Composer,
   InvalidInputError,
   Key,
-  type KeyLike,
   Motif,
   majorKey,
   Note,
   Progression,
   Score,
+  type SpelledKeyLike,
   Timeline,
   Voicing,
 } from '../src/index.js';
@@ -40,10 +40,10 @@ import { filesUnder, SRC } from './support/source-files.js';
  * call `spelledKeyOf` — and a module deriving a written tonic under another
  * name is measured by neither.
  */
-const KEY_FORMS: readonly KeyLike[] = ['C major', majorKey(0), Key.major('C')];
+const KEY_FORMS: readonly SpelledKeyLike[] = ['C major', majorKey(0), Key.major('C')];
 
 /** The same three forms of another key, for a method that moves between keys. */
-const OTHER_KEY_FORMS: readonly KeyLike[] = ['Eb major', majorKey(3), Key.major('Eb')];
+const OTHER_KEY_FORMS: readonly SpelledKeyLike[] = ['Eb major', majorKey(3), Key.major('Eb')];
 
 /** A public method of a model class that takes a key in some argument. */
 type KeyMethod = { className: string; method: string };
@@ -66,7 +66,7 @@ function keyTakingMethods(): KeyMethod[] {
     for (const match of source.matchAll(/\n {2}(static )?([a-zA-Z_$][\w$]*)\(/g)) {
       const rest = source.slice(match.index);
       const head = rest.slice(0, rest.indexOf('{') + 1);
-      if (/\bKeyLike\b/.test(head)) {
+      if (KEY_PARAM.test(head)) {
         found.push({ className, method: `${match[1] === undefined ? '' : 'static '}${match[2]}` });
       }
     }
@@ -75,7 +75,17 @@ function keyTakingMethods(): KeyMethod[] {
 }
 
 /** How one key-taking method is called, with the key left to the harness. */
-type Invocation = (key: KeyLike) => unknown;
+/**
+ * A parameter that takes a key, in either declared shape.
+ *
+ * `SpelledKeyLike` is `KeyLike` minus the bare scale, declared by the entry
+ * points whose answer depends on how the key is written. A pattern that named
+ * only the wide type would drop exactly those from the derived subject, which
+ * is the coverage this file exists to hold.
+ */
+const KEY_PARAM = /\b(?:Spelled)?KeyLike\b/;
+
+type Invocation = (key: SpelledKeyLike) => unknown;
 
 const CHORD_DATA = Chord.of('D', 'min7').toJSON();
 const CADENCE = [Chord.parse('G7'), Chord.parse('C')];
@@ -194,7 +204,7 @@ const INPUT_RECORD = /(?:Options|Query|Settings|Input)$/;
  * `KeyContext` is `KeyLike` widened again, with a per-beat function for a
  * passage that modulates, so a field declaring it asks for no reduction.
  */
-const WIDE_KEY = /\bKeyLike\b|\bKeyContext\b/;
+const WIDE_KEY = /\b(?:Spelled)?KeyLike\b|\bKeyContext\b/;
 
 /**
  * Key fields on a caller's record that still ask for the narrow form.

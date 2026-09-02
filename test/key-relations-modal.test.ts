@@ -12,6 +12,7 @@ import {
   resolveKey,
   scaleByName,
   spelledKeyOf,
+  toKeyScale,
 } from '../src/index.js';
 
 /** The relation each entry of `relatedKeysOf` reports back from the far side. */
@@ -47,7 +48,7 @@ describe('relativeKeyOf counts fifths from the same origin as its siblings', () 
     const dDorian = scaleByName('dorian', 2);
     const relative = relativeKeyOf('D', dDorian);
     expect(formatNote(relative.tonic)).toBe('F');
-    expect(relative.scale).toEqual(majorKey(5));
+    expect(relative.scale).toEqual(toKeyScale(majorKey(5)));
   });
 
   it('leaves the plain major and minor keys where they were', () => {

@@ -1,7 +1,6 @@
 import { type ParseResult, unwrapParse } from '../../core/errors/index.js';
 import type { Note, NoteNameOptions } from '../../core/pitch/index.js';
 import { noteToPitchClass, tryParseKeyName, tryParseNote } from '../../core/pitch/index.js';
-import { majorKey, minorKey, scaleByName } from './key.js';
 import type { ResolvedKey } from './kinds.js';
 import {
   NAMED_SCALES,
@@ -12,6 +11,7 @@ import {
   WORLD_SCALES,
   type WorldScaleName,
 } from './masks.js';
+import { majorScale, minorScale, namedScale } from './scales.js';
 
 /**
  * Reading a key from the name it is written under.
@@ -105,7 +105,7 @@ function tryNamedScaleKey(text: string): ResolvedKey | null {
   if (!tonic.ok) {
     return null;
   }
-  const scale = scaleByName(name, noteToPitchClass(tonic.value));
+  const scale = namedScale(name, noteToPitchClass(tonic.value));
   return { scale, tonic: bareTonic(tonic.value), variant: variantOfMask(scale.modeMask12) };
 }
 
@@ -145,8 +145,8 @@ export function tryResolveKeyName(text: string, opts?: NoteNameOptions): ParseRe
   const tonic = bareTonic(parsed.value.tonic);
   const rootPc = noteToPitchClass(tonic);
   return parsed.value.mode === 'major'
-    ? { ok: true, value: { scale: majorKey(rootPc), tonic, variant: 'major' } }
-    : { ok: true, value: { scale: minorKey(rootPc), tonic, variant: 'natural' } };
+    ? { ok: true, value: { scale: majorScale(rootPc), tonic, variant: 'major' } }
+    : { ok: true, value: { scale: minorScale(rootPc), tonic, variant: 'natural' } };
 }
 
 /**

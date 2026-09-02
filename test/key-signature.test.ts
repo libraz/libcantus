@@ -6,6 +6,7 @@ import {
   majorKey,
   minorKey,
   scaleByName,
+  toKeyScale,
 } from '../src/theory/scale/index.js';
 
 describe('keySignatureFifths', () => {
@@ -84,8 +85,8 @@ describe('keyFromFifths', () => {
   });
 
   it('builds a scale whose root is the spelled tonic', () => {
-    expect(keyFromFifths(-2).scale).toEqual(majorKey(10));
-    expect(keyFromFifths(-2, 'minor').scale).toEqual(minorKey(7));
+    expect(keyFromFifths(-2).scale).toEqual(toKeyScale(majorKey(10)));
+    expect(keyFromFifths(-2, 'minor').scale).toEqual(toKeyScale(minorKey(7)));
   });
 
   it('round-trips every conventional signature, in both modes', () => {

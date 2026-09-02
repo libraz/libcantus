@@ -31,6 +31,28 @@ export type KeyVariant = 'major' | 'natural' | 'harmonic' | 'melodic' | 'modal';
  *
  * @category Scales
  */
+/**
+ * A key/scale with the spelling it is conventionally written in beside it.
+ *
+ * What the key builders hand back. It is a {@link KeyScale} — every reader that
+ * wants only the pitch classes takes it unchanged — and it carries the tonic
+ * those pitch classes are conventionally written on, so it also satisfies the
+ * entry points whose answer depends on how the key is written.
+ *
+ * Carrying the spelling here is what lets those entry points refuse a bare
+ * `KeyScale` without refusing the library's own builders. A bare scale reaching
+ * one of them has had a spelling and lost it, which is the defect; a built key
+ * never lost one.
+ *
+ * @category Scales
+ */
+export type SpelledKeyScale = KeyScale & {
+  /** The tonic the key is conventionally written on. */
+  tonic: Note;
+  /** The scale form the mask stands in. */
+  variant: KeyVariant;
+};
+
 export type ResolvedKey = {
   /** The pitch classes the key is built from. */
   readonly scale: KeyScale;

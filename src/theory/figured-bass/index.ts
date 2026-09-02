@@ -31,6 +31,7 @@ import {
   type KeyLike,
   type ResolvedKey,
   resolveKey,
+  type SpelledKeyLike,
   scaleTonesInDegreeOrder,
 } from '../scale/index.js';
 import { noteNames, spellChord, spellScale } from '../spelling/index.js';
@@ -608,7 +609,7 @@ export function realizeFiguredBass(bass: NoteLike, figures: string, key: KeyLike
  * ```
  * @category Functional Harmony
  */
-export function figuredBassOf(chord: ChordLike, key: KeyLike): string {
+export function figuredBassOf(chord: ChordLike, key: SpelledKeyLike): string {
   const data = toChordData(chord);
   const resolved = resolveKey(key);
   const alters = keyLetterAlters(resolved);

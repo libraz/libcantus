@@ -35,6 +35,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A chord timeline spells its augmented sixths in the key it was given.**
+  `chordTimelineFromNotes` identified the augmented sixth of a window from the
+  key reduced to pitch classes, so a German sixth analysed under `'Ab minor'`
+  came back written `E G# B C##` — the sharps of the G# minor those pitch
+  classes read best as — however plainly the caller had named the key. The
+  ordinary tertian reading of the same window was spelled correctly, which is
+  why the two disagreed only where an augmented sixth was read. The window is
+  handed the key whole now; its pitch classes still decide which chord the notes
+  are read as, and nothing that spells is answered from them.
+
 - **A reharmonization is spelled in the key it was handed.**
   `modalInterchangePalette`, `substituteChord` and `negativeHarmonyMirror` —
   along with `Chord.modalInterchange`, `Chord.substitutions` and
@@ -520,6 +530,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   begins.
 
 ### Changed
+
+- **An entry point whose answer depends on a key's spelling no longer takes a
+  key that has none.** `figuredBassOf`, `romanToChord`, `spellVoicing`,
+  `spellLine`, `substituteChord`, `modalInterchangePalette`,
+  `negativeHarmonyMirror`, `augmentedSixthChord`,
+  `augmentedSixthFromPitchClasses` and `relateMotifs` — with `Motif.relateTo`
+  beside them — declare `SpelledKeyLike`, which is `KeyLike` minus the bare
+  `KeyScale`. An A flat minor and a G sharp minor are one set of pitch classes
+  and two keys, so handing one of these a key reduced to pitch classes cannot be
+  answered correctly; it is now refused where it is written rather than answered
+  from whichever side of the circle those pitch classes read best as. Reducing a
+  key deliberately is still `toKeyScale`, and spelling one back is `resolveKey`.
+
+- **The key builders carry the spelling they are conventionally written in.**
+  `majorKey`, `minorKey` and `scaleByName` return the scale with the tonic and
+  the scale form written beside it, so `majorKey(6)` is
+  `{ rootPc: 6, modeMask12: 2741, tonic: { letter: 4, alter: -1 }, variant: 'major' }`
+  rather than the first two fields alone. The spelling is the one the resolver
+  already derived for those pitch classes, so no answer moves; what changes is
+  that a built key satisfies the entry points above, and only a key that has
+  been reduced does not. A reader that wants the pitch classes alone takes the
+  result unchanged, or narrows it with `toKeyScale`.
 
 - **The guides open with a primer for a reader who has never studied music.**
   `docs/en/primer/` and its Japanese mirror teach the ideas the rest of the

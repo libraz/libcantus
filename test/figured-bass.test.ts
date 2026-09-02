@@ -12,6 +12,7 @@ import {
   figuredBassRealization,
   realizeFiguredBass,
 } from '../src/theory/figured-bass/index.js';
+import type { SpelledKeyScale } from '../src/theory/scale/index.js';
 import { majorKey, minorKey, scaleByName, spelledKeyOf } from '../src/theory/scale/index.js';
 import { noteNames, spellChord } from '../src/theory/spelling/index.js';
 
@@ -341,8 +342,8 @@ function bassNoteOf(chord: Chord, key: KeyScale): Note | undefined {
 
 describe('the two directions of the figure grammar reach the same chords', () => {
   /** Every chord the vocabulary builds, over each of its own tones as bass. */
-  function figurableChords(): [Chord, KeyScale][] {
-    const cases: [Chord, KeyScale][] = [];
+  function figurableChords(): [Chord, SpelledKeyScale][] {
+    const cases: [Chord, SpelledKeyScale][] = [];
     for (const key of [cMajor, cMinor, aMinor]) {
       for (const quality of chordQualities()) {
         for (const rootPc of [0, 3, 7]) {

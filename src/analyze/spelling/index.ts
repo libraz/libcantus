@@ -25,7 +25,7 @@ import {
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import { assertGenerationBudget, assertNoteEvents } from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
-import { isScaleTone, type KeyLike, resolveKey } from '../../theory/scale/index.js';
+import { isScaleTone, resolveKey, type SpelledKeyLike } from '../../theory/scale/index.js';
 import { assertTonicOf, spellChord, spellPitchClass } from '../../theory/spelling/index.js';
 import type { ChordTimeline } from '../timeline/index.js';
 
@@ -371,7 +371,7 @@ function transitionCost(from: LineState, source: Note, to: LineState, target: No
 export function spellLine(
   notes: readonly NoteEvent[],
   timeline: ChordTimeline | null,
-  key: KeyLike,
+  key: SpelledKeyLike,
   opts: SpellLineOptions = {},
 ): Note[] {
   // Read whole rather than reduced: a line in Ab minor is written on flats, and

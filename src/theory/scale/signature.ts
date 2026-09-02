@@ -9,7 +9,6 @@ import type { KeyScale } from '../../core/types.js';
 import { assertInteger, assertOneOf } from '../../core/validation/index.js';
 import { type KeyLike, toKeyScale } from './coerce.js';
 import type { ResolvedKey } from './identity.js';
-import { majorKey, minorKey } from './key.js';
 import {
   HARMONIC_MINOR_MASK,
   isMinorMask,
@@ -17,6 +16,7 @@ import {
   MELODIC_MINOR_MASK,
   variantOfMask,
 } from './masks.js';
+import { majorScale, minorScale } from './scales.js';
 
 /**
  * Which of the two modes a key signature is read in.
@@ -179,7 +179,7 @@ export function keyFromFifths(fifths: number, mode: KeyMode = 'major'): Resolved
   const letter = FIFTHS_LETTERS[((index % 7) + 7) % 7] ?? 0;
   const alter = Math.floor(index / 7);
   const rootPc = mod12(naturalPitchClassOf(letter) + alter);
-  const scale = which === 'minor' ? minorKey(rootPc) : majorKey(rootPc);
+  const scale = which === 'minor' ? minorScale(rootPc) : majorScale(rootPc);
   return {
     tonic: { letter, alter },
     scale,

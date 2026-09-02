@@ -1,7 +1,23 @@
-import { pitchClassOf } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
+import type { SpelledKeyScale } from './kinds.js';
 import type { ScaleNameInput } from './masks.js';
-import { MAJOR_MASK, NATURAL_MINOR_MASK, requireScaleMask } from './masks.js';
+import { spelledKeyOf } from './relations.js';
+import { majorScale, minorScale, namedScale } from './scales.js';
+
+/**
+ * A built key, with the spelling it is conventionally written in beside it.
+ *
+ * The tonic is read by the one reader the rest of the library reads keys with,
+ * so a built key is spelled exactly as the same pitch classes would be spelled
+ * anywhere else — nothing about the answer changes by carrying it. What changes
+ * is that the key can now be handed to an entry point whose answer depends on
+ * how the key is written, which a bare scale cannot be: a bare scale reaching
+ * one of those has had a spelling and lost it.
+ */
+function spelled(scale: KeyScale): SpelledKeyScale {
+  const { tonic, variant } = spelledKeyOf(scale);
+  return { ...scale, tonic, variant };
+}
 
 /**
  * Build a `KeyScale` for a major key on the given root pitch class.
@@ -14,8 +30,8 @@ import { MAJOR_MASK, NATURAL_MINOR_MASK, requireScaleMask } from './masks.js';
  *
  * @category Scales
  */
-export function majorKey(rootPc: number): KeyScale {
-  return { rootPc: pitchClassOf(rootPc), modeMask12: MAJOR_MASK };
+export function majorKey(rootPc: number): SpelledKeyScale {
+  return spelled(majorScale(rootPc));
 }
 
 /**
@@ -29,8 +45,8 @@ export function majorKey(rootPc: number): KeyScale {
  *
  * @category Scales
  */
-export function minorKey(rootPc: number): KeyScale {
-  return { rootPc: pitchClassOf(rootPc), modeMask12: NATURAL_MINOR_MASK };
+export function minorKey(rootPc: number): SpelledKeyScale {
+  return spelled(minorScale(rootPc));
 }
 
 /**
@@ -49,6 +65,6 @@ export function minorKey(rootPc: number): KeyScale {
  *
  * @category Scales
  */
-export function scaleByName(name: ScaleNameInput, rootPc: number): KeyScale {
-  return { rootPc: pitchClassOf(rootPc), modeMask12: requireScaleMask(name) };
+export function scaleByName(name: ScaleNameInput, rootPc: number): SpelledKeyScale {
+  return spelled(namedScale(name, rootPc));
 }

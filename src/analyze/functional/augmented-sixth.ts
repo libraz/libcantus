@@ -27,7 +27,12 @@ import type { KeyScale } from '../../core/types.js';
 import { assertOneOf } from '../../core/validation/index.js';
 import type { Chord, ChordQuality, PitchSpelling } from '../../theory/chord/index.js';
 import { chordPitchClasses, makeChord } from '../../theory/chord/index.js';
-import { type KeyLike, type ResolvedKey, resolveKey } from '../../theory/scale/index.js';
+import {
+  type KeyLike,
+  type ResolvedKey,
+  resolveKey,
+  type SpelledKeyLike,
+} from '../../theory/scale/index.js';
 import { spellChord } from '../../theory/spelling/index.js';
 import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
 import { mod12 } from './internal.js';
@@ -172,7 +177,7 @@ function spelledInChordOrder(kind: AugmentedSixthKind, tonic: Note): Note[] {
  * ```
  * @category Functional Harmony
  */
-export function augmentedSixthChord(kind: AugmentedSixthKind, key: KeyLike): Chord {
+export function augmentedSixthChord(kind: AugmentedSixthKind, key: SpelledKeyLike): Chord {
   return augmentedSixthOn(kind, key);
 }
 
@@ -313,7 +318,7 @@ export function augmentedSixthKindOf(chord: Chord, keyLike: KeyLike): AugmentedS
 export function augmentedSixthFromPitchClasses(
   pcs: readonly number[],
   bassPc: number,
-  key: KeyLike,
+  key: SpelledKeyLike,
 ): Chord | null {
   return augmentedSixthOverBass(pcs, bassPc, key);
 }

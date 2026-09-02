@@ -5,7 +5,7 @@ import { makeChord } from '../src/theory/chord/index.js';
 import { isLeadingToneResolution } from '../src/theory/counterpoint/index.js';
 import { checkPartWriting, spellVoicing } from '../src/theory/partwriting/index.js';
 import { checkSpecies } from '../src/theory/partwriting/species.js';
-import { keySignatureFifths, minorKey } from '../src/theory/scale/index.js';
+import { keySignatureFifths, minorKey, type SpelledKeyLike } from '../src/theory/scale/index.js';
 import { noteNames, spellPitch } from '../src/theory/spelling/index.js';
 
 /**
@@ -103,7 +103,7 @@ describe('a spelled voicing follows the key it was handed', () => {
 
   it('checks the part writing the same from every form', () => {
     const chords = [chord];
-    const run = (key: Parameters<typeof checkPartWriting>[2]) =>
+    const run = (key: SpelledKeyLike) =>
       JSON.stringify(checkPartWriting([spellVoicing(voicing, chord, key)], chords, key));
 
     expect(

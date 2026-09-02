@@ -138,6 +138,8 @@ export type {
   ScaleName,
   ScaleNameInput,
   ScaleSystem,
+  SpelledKeyLike,
+  SpelledKeyScale,
   WorldScaleName,
 } from './scale/index.js';
 export {

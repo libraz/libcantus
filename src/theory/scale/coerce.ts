@@ -52,6 +52,48 @@ export type KeyLike =
       toJSON(): { scale: KeyScale; tonic?: Note; variant?: KeyVariant };
     };
 
+/**
+ * A key that says how it is written, for the entry points whose answer depends
+ * on it.
+ *
+ * The shapes {@link KeyLike} accepts, minus the one that cannot carry a
+ * spelling: a bare {@link KeyScale}. An A flat minor and a G sharp minor are one
+ * set of pitch classes and two keys, so an entry point whose answer differs
+ * between them cannot be handed the shape that does not distinguish them and
+ * still be right. Declaring this makes that a compile error rather than a
+ * defect found later — and `Key`, `ResolvedKey`, a key name and stored key data
+ * all satisfy it, so the narrowing costs a caller nothing it was doing
+ * correctly.
+ *
+ * Which entry points declare this is measured rather than chosen: an entry point
+ * belongs here exactly when varying its key argument alone — between the two
+ * spellings of one sound — changes its answer. A scale a caller genuinely wants
+ * to hand in is spelled first, at the place it happens, which is the same rule
+ * the reduction in the other direction already follows.
+ *
+ * @category Scales
+ */
+export type SpelledKeyLike =
+  | string
+  | (KeyScale & {
+      /** The spelled tonic the key is written with. Required: it is the point. */
+      tonic: Note;
+      /** The scale form the key stands in, when it travels beside it. */
+      variant?: KeyVariant;
+    })
+  | {
+      /** The scale this key data denotes. */
+      scale: KeyScale;
+      /** The spelled tonic the key is written with, when the caller named one. */
+      tonic?: Note;
+      /** The scale form the key was read under, when it was read under one. */
+      variant?: KeyVariant;
+    }
+  | {
+      /** The key data this value stands for, carrying everything it knows. */
+      toJSON(): { scale: KeyScale; tonic?: Note; variant?: KeyVariant };
+    };
+
 /** Validate a plain key/scale and return it in the canonical shape. */
 function normalizedKeyScale(scale: KeyScale): KeyScale {
   assertInteger(scale.modeMask12, 'key.modeMask12', 1, CHROMATIC_MASK);

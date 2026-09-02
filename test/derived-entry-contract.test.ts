@@ -120,7 +120,10 @@ function narrowCarrierIn(type: string): string | null {
   for (const narrow of Object.keys(NARROW_TYPES)) {
     // The type is read as written, so `readonly KeyScale[]` and
     // `KeyScale | undefined` are both found, and `SomeKeyScaleThing` is not.
-    if (new RegExp(`\\b${narrow}\\b`).test(type) && !/\bKeyLike\b|\bMeterLike\b/.test(type)) {
+    if (
+      new RegExp(`\\b${narrow}\\b`).test(type) &&
+      !/\b(?:Spelled)?KeyLike\b|\bMeterLike\b/.test(type)
+    ) {
       return narrow;
     }
   }

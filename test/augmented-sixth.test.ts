@@ -606,3 +606,46 @@ describe('spelled tones and pitch classes agree', () => {
     }
   });
 });
+
+/**
+ * The window analysis is handed the key whole, not its pitch classes.
+ *
+ * An augmented sixth is spelled rather than scored: which pitch classes are in
+ * the window decides that the tones are one, and the key decides how it is
+ * written. Those two questions were answered from the same value, and that
+ * value was the key reduced to pitch classes — so the German sixth of an
+ * A flat minor came back written on the sharps of the G sharp minor those
+ * pitch classes read best as, whatever the caller had said the key was.
+ */
+describe('a timeline spells its augmented sixths in the key it was given', () => {
+  /** A German sixth on the lowered submediant, resolving onto the dominant. */
+  const GERMAN_THEN_DOMINANT: NoteEvent[] = [
+    { pitch: 40, startBeat: 0, durationBeat: 4 },
+    { pitch: 56, startBeat: 0, durationBeat: 4 },
+    { pitch: 59, startBeat: 0, durationBeat: 4 },
+    { pitch: 62, startBeat: 0, durationBeat: 4 },
+    { pitch: 39, startBeat: 4, durationBeat: 4 },
+    { pitch: 55, startBeat: 4, durationBeat: 4 },
+    { pitch: 58, startBeat: 4, durationBeat: 4 },
+    { pitch: 63, startBeat: 4, durationBeat: 4 },
+  ];
+
+  /** How the first segment of that span is written under one key. */
+  function spelledUnder(key: string): string[] {
+    const { timeline } = chordTimelineFromNotes(GERMAN_THEN_DOMINANT, { key });
+    const first = timeline.segments[0];
+    return noteNames(first?.chord.toneSpellings ?? []);
+  }
+
+  it('writes the German sixth of a flat-side key on flats', () => {
+    expect(spelledUnder('Ab minor')).toEqual(['Fb', 'Ab', 'Cb', 'D']);
+  });
+
+  it('writes the same sound on sharps in the key that is written on sharps', () => {
+    expect(spelledUnder('G# minor')).toEqual(['E', 'G#', 'B', 'C##']);
+  });
+
+  it('tells the two apart, which is the whole of the guarantee', () => {
+    expect(spelledUnder('Ab minor')).not.toEqual(spelledUnder('G# minor'));
+  });
+});

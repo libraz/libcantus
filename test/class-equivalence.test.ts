@@ -118,6 +118,7 @@ import {
   relateMotifs,
   relativeKeyOf,
   resolveContext,
+  resolveKey,
   rhythmDensity,
   rhythmToNoteEvents,
   romanToChord,
@@ -328,7 +329,7 @@ describe('Chord', () => {
     expect(chord.function()).toBe(functionOf(chord.data, key.scale));
     expect(chord.isBorrowed()).toBe(isBorrowedChord(chord.data, key.scale));
     expect(chord.borrowedSource()).toEqual(borrowedSource(chord.data, key.scale));
-    expect(chord.figuredBass()).toBe(figuredBassOf(chord.data, key.scale));
+    expect(chord.figuredBass()).toBe(figuredBassOf(chord.data, key));
     // The rendering option reaches the analysis rather than being defaulted.
     const applied = Chord.parse('D7').withKey(key);
     expect(applied.analyze(key, { applied: true })).toEqual(
@@ -340,10 +341,10 @@ describe('Chord', () => {
   it('proposes the substitutions the reharmonizer proposes, melody and all', () => {
     const chord = Chord.parse('G7').withKey(key);
     const opts = { melodyPcs: [11] };
-    expect(chord.substitutions()).toEqual(substituteChord(chord.data, key.scale));
-    expect(chord.substitutions(key, opts)).toEqual(substituteChord(chord.data, key.scale, opts));
+    expect(chord.substitutions()).toEqual(substituteChord(chord.data, key));
+    expect(chord.substitutions(key, opts)).toEqual(substituteChord(chord.data, key, opts));
     expect(chord.substitutions(key, opts).length).toBeLessThan(chord.substitutions().length);
-    expect(chord.modalInterchange()).toEqual(modalInterchangePalette(key.scale));
+    expect(chord.modalInterchange()).toEqual(modalInterchangePalette(key));
   });
 
   it('voices, spells, and prints itself through the functions that do those', () => {
@@ -373,7 +374,7 @@ describe('Chord', () => {
 
   it('mirrors, tonicizes, and transposes the way the chord functions do', () => {
     const chord = Chord.parse('Dm7');
-    expect(chord.negativeHarmony(key).data).toEqual(negativeHarmonyMirror(chord.data, key.scale));
+    expect(chord.negativeHarmony(key).data).toEqual(negativeHarmonyMirror(chord.data, key));
     expect(Chord.parse('Eb').secondaryDominant().data).toEqual(
       Chord.fromData(secondaryDominantOf(Chord.parse('Eb').data)).data,
     );
@@ -636,7 +637,7 @@ describe('Key', () => {
       Chord.fromData(diatonicSeventh(5, key.scale)).withKey(key).data,
     );
     expect(key.roman('V7/V').data).toEqual(
-      Chord.fromData(romanToChord('V7/V', key.scale)).withKey(key).data,
+      Chord.fromData(romanToChord('V7/V', key)).withKey(key).data,
     );
   });
 
@@ -768,11 +769,7 @@ describe('Motif', () => {
       relateMotifs(motifFromNotes(motif.notes), motifFromNotes(answer.notes)),
     );
     expect(motif.relateTo(answer, 'C major')).toEqual(
-      relateMotifs(
-        motifFromNotes(motif.notes),
-        motifFromNotes(answer.notes),
-        toKeyScale('C major'),
-      ),
+      relateMotifs(motifFromNotes(motif.notes), motifFromNotes(answer.notes), 'C major'),
     );
     expect(motif.similarityTo(answer)).toBe(melodicSimilarity(motif.notes, answer.notes));
     expect(motif.toScore().notes).toEqual(inScoreOrder(motifToNoteEvents(motif.data)));
@@ -866,7 +863,7 @@ describe('Progression', () => {
 
   it('substitutes the chord the reharmonizer proposes for it', () => {
     const opts = { melodyPcs: [11] };
-    const [chosen] = substituteChord(at(progression.chords, 2).data, key.scale, opts).filter(
+    const [chosen] = substituteChord(at(progression.chords, 2).data, key, opts).filter(
       (candidate) => candidate.type === 'tritone',
     );
     expect(chosen).toBeDefined();
@@ -992,7 +989,7 @@ describe('Score', () => {
       analyzeVoice(
         score.notes,
         chordTimelineFromNotes(score.notes, { meters: score.meters }).timeline.at,
-        toKeyScale('C major'),
+        'C major',
       ),
     );
     // The key reaches the reading where a note is chromatic in one key and a
@@ -1192,7 +1189,7 @@ describe('Voicing', () => {
       Voicing.of([50, 57, 66, 69])
         .spell(key, 'D')
         .map((note) => note.data),
-    ).toEqual(spellVoicing([50, 57, 66, 69], chord, scale));
+    ).toEqual(spellVoicing([50, 57, 66, 69], chord, key));
   });
 
   it('grades a pair of voicings the way the part-writing check grades it', () => {
@@ -1200,8 +1197,8 @@ describe('Voicing', () => {
     const from = toChordData('C');
     const to = toChordData('Dm');
     const spelled = [
-      spellVoicing(voicing.pitches, from, scale),
-      spellVoicing(other.pitches, to, scale),
+      spellVoicing(voicing.pitches, from, key),
+      spellVoicing(other.pitches, to, key),
     ];
     expect(voicing.checkTo(other, ['C', 'Dm'], key)).toEqual(
       checkPartWriting(spelled, [from, to], scale),
@@ -1509,7 +1506,18 @@ describe('a key is carried the same whichever way it is handed over', () => {
   /** A dominant and its tonic in that key, with no key of their own. */
   const chords = () => [Chord.parse('Eb7'), Chord.parse('Abm')];
 
-  it.each(FORM_NAMES)('figures a chord in a key carried as %s', (form) => {
+  /**
+   * The forms that carry a spelling, which are the ones a spelling-sensitive
+   * entry point takes.
+   *
+   * `figuredBassOf` answers differently for an Ab minor and a G# minor, so it
+   * declares the key type that a bare scale cannot satisfy: there is no writing
+   * the call that hands it one. The bare form is still a key the class layer
+   * takes, and it is swept below against the reading the resolver gives it.
+   */
+  const SPELLED_FORM_NAMES = ['name', 'instance', 'data'] as const;
+
+  it.each(SPELLED_FORM_NAMES)('figures a chord in a key carried as %s', (form) => {
     const key = FORMS[form]();
     const carried = chord().withKey(key);
     expect(carried.figuredBass()).toBe(figuredBassOf(carried.data, key));
@@ -1531,9 +1539,10 @@ describe('a key is carried the same whichever way it is handed over', () => {
     );
     expect(new Set(spelled).size).toBe(1);
     // Nothing in a bare scale says Ab minor rather than G# minor, so the answer
-    // is the one the resolver's own spelling gives — the same one the function
-    // API gives for the same bare scale.
+    // is the one the resolver's own spelling gives. Reaching the function API
+    // with it means spelling it first, in as many words: the entry point no
+    // longer takes a shape that cannot say which of the two it is.
     const bare = chord().withKey(FORMS.scale());
-    expect(bare.figuredBass()).toBe(figuredBassOf(bare.data, FORMS.scale()));
+    expect(bare.figuredBass()).toBe(figuredBassOf(bare.data, resolveKey(FORMS.scale())));
   });
 });

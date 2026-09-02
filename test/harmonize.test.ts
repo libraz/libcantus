@@ -22,6 +22,7 @@ import {
   NATURAL_MINOR_MASK,
   scaleByName,
   scaleTonesInDegreeOrder,
+  toKeyScale,
 } from '../src/theory/scale/index.js';
 
 const cMajor = majorKey(0);
@@ -262,7 +263,7 @@ describe('harmonizeMelody', () => {
     expect(result.chords).toEqual([]);
     expect(result.melodyRoles).toEqual([]);
     expect(result.transposeSemitones).toBe(0);
-    expect(result.key.scale).toEqual(cMajor);
+    expect(result.key.scale).toEqual(toKeyScale(cMajor));
   });
 
   it('starts the harmonic grid at the first sounding section instead of adding an intro', () => {
@@ -571,7 +572,7 @@ describe('harmonizeMelody placement', () => {
       placement: { transposeSearch: true, octaveSearch: false },
     });
     expect(result.transposeSemitones).toBe(-5);
-    expect(result.key.scale).toEqual(gMajor);
+    expect(result.key.scale).toEqual(toKeyScale(gMajor));
     // The melody the caller is told to play and the key it is told to play it
     // in are the same key: every transposed note belongs to the reported scale.
     const moved = cScale.map((n) => n.pitch + result.transposeSemitones);
@@ -592,7 +593,7 @@ describe('harmonizeMelody placement', () => {
       placement: { transposeSearch: true, octaveSearch: false },
     });
     expect(result.transposeSemitones).toBe(0);
-    expect(result.key.scale).toEqual(cMajor);
+    expect(result.key.scale).toEqual(toKeyScale(cMajor));
   });
 
   it('moves a melody written out of register by octaves alone', () => {
@@ -630,7 +631,7 @@ describe('harmonizeMelody placement', () => {
     });
     // Down a fifth into G major, then up an octave into a comfortable register.
     expect(result.transposeSemitones).toBe(7);
-    expect(result.key.scale).toEqual(gMajor);
+    expect(result.key.scale).toEqual(toKeyScale(gMajor));
   });
 });
 

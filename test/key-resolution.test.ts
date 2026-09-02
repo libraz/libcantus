@@ -78,7 +78,7 @@ describe('resolving a key keeps what the key knows', () => {
   });
 
   it('reads a key name', () => {
-    expect(resolveKey('C major').scale).toEqual(majorKey(0));
+    expect(resolveKey('C major').scale).toEqual(toKeyScale(majorKey(0)));
     expect(resolveKey('A minor').variant).toBe('natural');
   });
 
@@ -96,7 +96,7 @@ describe('resolving a key keeps what the key knows', () => {
   });
 
   it('reads a name that carries a scale word', () => {
-    expect(resolveKey('D dorian').scale).toEqual(scaleByName('dorian', 2));
+    expect(resolveKey('D dorian').scale).toEqual(toKeyScale(scaleByName('dorian', 2)));
     expect(resolveKey('D dorian').variant).toBe('modal');
     expect(resolveKey('D harmonic minor').variant).toBe('harmonic');
     expect(formatNote(resolveKey('Eb melodic minor').tonic)).toBe('Eb');
@@ -110,13 +110,13 @@ describe('resolving a key keeps what the key knows', () => {
 
 describe('reducing a key says its own name', () => {
   it('hands back the pitch classes alone', () => {
-    expect(scaleOf(resolveKey('C major'))).toEqual(majorKey(0));
+    expect(scaleOf(resolveKey('C major'))).toEqual(toKeyScale(majorKey(0)));
   });
 
   it('is the same scale the narrow reading gives', () => {
     // The two readings agree about the pitch classes; they differ only in what
     // else survives, which is the whole point of having both.
-    expect(scaleOf(resolveKey(Key.minor('Ab')))).toEqual(minorKey(8));
+    expect(scaleOf(resolveKey(Key.minor('Ab')))).toEqual(toKeyScale(minorKey(8)));
   });
 });
 

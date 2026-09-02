@@ -41,7 +41,13 @@ export type { ProfileWeights } from '../theory/safety/index.js';
 // The widened forms this layer's own signatures take: a generator accepts a key
 // or a chord written as text just as the layers below it do, and reports the
 // key it settled on as the resolved key that reading produces.
-export type { KeyLike, KeyVariant, ResolvedKey } from '../theory/scale/index.js';
+export type {
+  KeyLike,
+  KeyVariant,
+  ResolvedKey,
+  SpelledKeyLike,
+  SpelledKeyScale,
+} from '../theory/scale/index.js';
 export type { ChordLike } from '../theory/symbol/index.js';
 export type {
   BassLick,

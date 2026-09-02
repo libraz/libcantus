@@ -19,10 +19,10 @@ import {
   assertNoteEvents,
 } from '../../core/validation/index.js';
 import {
-  type KeyLike,
   keySignatureFifths,
   type ResolvedKey,
   resolveKey,
+  type SpelledKeyLike,
   scaleTonesInDegreeOrder,
 } from '../../theory/scale/index.js';
 
@@ -880,7 +880,11 @@ function stretchPhrase(ratio: number): string {
  * ```
  * @category Arrangement & Analysis
  */
-export function relateMotifs(a: MotifData, b: MotifData, keyLike?: KeyLike): MotifRelation | null {
+export function relateMotifs(
+  a: MotifData,
+  b: MotifData,
+  keyLike?: SpelledKeyLike,
+): MotifRelation | null {
   // Read whole, so the interval names a motif relation is reported under follow
   // the key the caller named rather than the side its pitch classes read best as.
   const key = keyLike === undefined ? undefined : resolveKey(keyLike);

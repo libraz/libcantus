@@ -16,7 +16,7 @@ import type { ComposerOptions } from '../src/model/composer.js';
 import { Composer } from '../src/model/composer.js';
 import { Score } from '../src/model/score.js';
 import { Timeline } from '../src/model/timeline.js';
-import { majorKey, resolveKey } from '../src/theory/scale/index.js';
+import { majorKey, resolveKey, toKeyScale } from '../src/theory/scale/index.js';
 
 /**
  * The settings holder: the contracts every model class holds, and — the point
@@ -291,7 +291,7 @@ describe('the parts a composer writes', () => {
     });
     const bass = held.bass(timeline, { style: 'walking' });
     expect(bass.notes).toEqual(Score.of(notes).notes);
-    expect(bass.data.key?.scale).toEqual(KEY);
+    expect(bass.data.key?.scale).toEqual(toKeyScale(KEY));
     // The segments a timeline holds are what the generator wants, so passing
     // the timeline and passing its segments are the same request.
     expect(held.bass(timeline.segments, { style: 'walking' }).data).toEqual(bass.data);
@@ -310,7 +310,7 @@ describe('the parts a composer writes', () => {
     });
     const counter = held.counterMelody(melody, { timeline: timeline.chordTimeline });
     expect(counter.notes).toEqual(Score.of(notes).notes);
-    expect(counter.data.key?.scale).toEqual(KEY);
+    expect(counter.data.key?.scale).toEqual(toKeyScale(KEY));
     expect(counter.tempo).toEqual([{ startBeat: 0, bpm: 96 }]);
   });
 
@@ -371,7 +371,7 @@ describe('the parts a composer writes', () => {
     const melody = Score.of(MELODY);
     const inferred = Composer.of({}).harmonize(melody);
     expect(inferred.chords.key?.scale).toEqual(harmonizeMelody({ melody: MELODY }).key.scale);
-    expect(composer().harmonize(melody).chords.key?.scale).toEqual(KEY);
+    expect(composer().harmonize(melody).chords.key?.scale).toEqual(toKeyScale(KEY));
   });
 });
 

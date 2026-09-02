@@ -19,6 +19,7 @@ import {
   resolveKey,
   scaleByName,
   spelledKeyOf,
+  toKeyScale,
 } from '../src/theory/scale/index.js';
 import { unionMembers } from './support/signatures.js';
 import { SRC } from './support/source-files.js';
@@ -233,7 +234,8 @@ describe('a resolver refuses a key that contradicts itself', () => {
 
   it('leaves a key that agrees with itself exactly as it was', () => {
     for (const pc of PITCH_CLASSES) {
-      for (const scale of [majorKey(pc), minorKey(pc)]) {
+      // Bare, because the case is a key with nothing but pitch classes on it.
+      for (const scale of [toKeyScale(majorKey(pc)), toKeyScale(minorKey(pc))]) {
         const spelled = spelledKeyOf(scale);
         expect(resolveKey(scale)).toEqual(spelled);
         expect(resolveKey({ scale, tonic: spelled.tonic, variant: spelled.variant })).toEqual(

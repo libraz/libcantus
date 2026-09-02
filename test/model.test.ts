@@ -816,17 +816,15 @@ describe('Chord members over the chord functions', () => {
 
   it('figures a bass, substitutes, and borrows as the functions do', () => {
     const chord = Chord.parse('G7/D').withKey(cMajor);
-    expect(chord.figuredBass()).toBe(figuredBassOf(chord.data, cMajor.scale));
-    expect(chord.substitutions()).toEqual(substituteChord(chord.data, cMajor.scale));
-    expect(chord.modalInterchange()).toEqual(modalInterchangePalette(cMajor.scale));
+    expect(chord.figuredBass()).toBe(figuredBassOf(chord.data, cMajor));
+    expect(chord.substitutions()).toEqual(substituteChord(chord.data, cMajor));
+    expect(chord.modalInterchange()).toEqual(modalInterchangePalette(cMajor));
   });
 
   it('passes the melody constraint through to substituteChord', () => {
     const chord = Chord.parse('G7').withKey(cMajor);
     const opts = { melodyPcs: [2] };
-    expect(chord.substitutions(undefined, opts)).toEqual(
-      substituteChord(chord.data, cMajor.scale, opts),
-    );
+    expect(chord.substitutions(undefined, opts)).toEqual(substituteChord(chord.data, cMajor, opts));
     // The constraint is doing something: it turns candidates away.
     expect(chord.substitutions(undefined, opts).length).toBeLessThan(chord.substitutions().length);
   });
@@ -1338,7 +1336,7 @@ describe('Progression and Key closure over the functional core', () => {
 
   it('substitutes the chord substituteChord proposes for that relationship', () => {
     const dominant = new Progression([Chord.parse('G7'), Chord.parse('C')], key);
-    const expected = substituteChord(Chord.parse('G7').data, key.scale).find(
+    const expected = substituteChord(Chord.parse('G7').data, key).find(
       (candidate) => candidate.type === 'tritone',
     );
     const substituted = dominant.substitute(0, 'tritone');
@@ -1354,7 +1352,7 @@ describe('Progression and Key closure over the functional core', () => {
     const dominant = new Progression([Chord.parse('G7')], key);
     // Db7 sounds no G, so a melody resting on one rules the substitute out —
     // in the function first, and so in the class that reads it.
-    const kept = substituteChord(Chord.parse('G7').data, key.scale, { melodyPcs: [7] });
+    const kept = substituteChord(Chord.parse('G7').data, key, { melodyPcs: [7] });
     expect(kept.some((candidate) => candidate.type === 'tritone')).toBe(false);
     expect(() => dominant.substitute(0, 'tritone', { melodyPcs: [7] })).toThrow(InvalidInputError);
     expect(dominant.substitute(0, 'tritone').toString()).toBe('Db7');

@@ -16,7 +16,7 @@ import { Progression } from '../src/model/progression.js';
 import { Timeline, type TimelineData } from '../src/model/timeline.js';
 import type { ChordSpan } from '../src/theory/chord/index.js';
 import { makeChord, transposeChord } from '../src/theory/chord/index.js';
-import { majorKey, resolveKey } from '../src/theory/scale/index.js';
+import { majorKey, resolveKey, toKeyScale } from '../src/theory/scale/index.js';
 
 /**
  * The timed harmony class: the contracts every model class holds, the three
@@ -125,7 +125,7 @@ describe('construction', () => {
     expect(timeline.segments).toEqual(direct().segments);
     expect(timeline.totalBeats).toBe(TOTAL_BEATS);
     expect(timeline.length).toBe(SPANS.length);
-    expect(timeline.key?.scale).toEqual(majorKey(0));
+    expect(timeline.key?.scale).toEqual(toKeyScale(majorKey(0)));
   });
 
   it('carries a stated key as the one region under the span', () => {
@@ -137,7 +137,7 @@ describe('construction', () => {
       {
         startBeat: 0,
         endBeat: TOTAL_BEATS,
-        key: { scale: majorKey(0), tonic: { letter: 0, alter: 0 }, variant: 'major' },
+        key: { scale: toKeyScale(majorKey(0)), tonic: { letter: 0, alter: 0 }, variant: 'major' },
         confidence: 1,
       },
     ]);
@@ -409,7 +409,7 @@ describe('transforming', () => {
       {
         startBeat: 6,
         endBeat: 14,
-        key: { scale: majorKey(0), tonic: { letter: 0, alter: 0 }, variant: 'major' },
+        key: { scale: toKeyScale(majorKey(0)), tonic: { letter: 0, alter: 0 }, variant: 'major' },
         confidence: 1,
       },
     ]);
@@ -424,7 +424,7 @@ describe('transforming', () => {
     expect(timeline.transpose(2).segments.map((segment) => segment.chord)).toEqual(
       timeline.segments.map((segment) => transposeChord(segment.chord, 2)),
     );
-    expect(timeline.transpose(2).key?.scale).toEqual(majorKey(2));
+    expect(timeline.transpose(2).key?.scale).toEqual(toKeyScale(majorKey(2)));
     expect(timeline.transpose(2).totalBeats).toBe(TOTAL_BEATS);
   });
 
@@ -434,7 +434,7 @@ describe('transforming', () => {
     expect(timeline.transposeBy('A4').segments.map((segment) => segment.chord)).toEqual(
       timeline.segments.map((segment) => transposeChord(segment.chord, semitones)),
     );
-    expect(timeline.transposeBy('A4').key?.scale).toEqual(majorKey(6));
+    expect(timeline.transposeBy('A4').key?.scale).toEqual(toKeyScale(majorKey(6)));
   });
 
   it('spells a chord that carries its own spelling by the interval', () => {
