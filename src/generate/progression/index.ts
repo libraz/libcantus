@@ -25,11 +25,20 @@ export type { ChordSpan } from '../../theory/chord/index.js';
 const DEFAULT_TS = { numerator: 4, denominator: 4 };
 
 /**
+ * Every production style a preset may suit, in declaration order.
+ *
+ * Written as a table rather than only as a union so the names exist at run time:
+ * a union is checked when the caller compiles, and a style arriving from a
+ * config file or a JavaScript caller is checked against this.
+ */
+const PROG_STYLES = Object.freeze(['minimal', 'dance', 'idol', 'rock'] as const);
+
+/**
  * Broad production style a progression preset suits.
  *
  * @category Composition
  */
-export type ProgStyle = 'minimal' | 'dance' | 'idol' | 'rock';
+export type ProgStyle = (typeof PROG_STYLES)[number];
 
 /**
  * Harmonic-function role of a progression as a whole.
@@ -334,7 +343,11 @@ export function progressions(): ProgressionPreset[] {
  * @category Composition
  */
 export function progressionsByStyle(style: ProgStyle): ProgressionPreset[] {
-  return progressions().filter((p) => p.styles.includes(style));
+  // A style union is checked at compile time only, so a name from a config file
+  // or a JavaScript caller would otherwise select nothing — which reads exactly
+  // like a style the library stocks no preset for.
+  const named = assertOneOf(style, PROG_STYLES, 'style');
+  return progressions().filter((p) => p.styles.includes(named));
 }
 
 /**

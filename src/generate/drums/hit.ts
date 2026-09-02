@@ -1,4 +1,5 @@
 import type { Articulation } from '../../core/instrument/index.js';
+import { assertMidiPitch } from '../../core/validation/index.js';
 import { clampVel, GM } from './internal.js';
 
 /**
@@ -74,7 +75,10 @@ export function drumNoteOf(voice: string): number | undefined {
  * @category Composition
  */
 export function drumVoiceOf(pitch: number): DrumVoice | undefined {
-  return VOICE_BY_NOTE.get(pitch);
+  // Undefined means "a note this generator never emits", which is a statement
+  // about a note; a value that is no note at all is refused instead, so the two
+  // do not come back as the same answer.
+  return VOICE_BY_NOTE.get(assertMidiPitch(pitch));
 }
 
 /**

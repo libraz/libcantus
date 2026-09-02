@@ -132,6 +132,10 @@ const DEFAULT_BARS = 1;
  * @category Rhythm & Meter
  */
 export function onsetWeightCurve(weight: number): number {
+  // The rank is a position on a stated scale, so one off it is refused rather
+  // than folded into the lowest: sharing an answer with the off-pulse rank would
+  // make a weight nobody computed read as a weak position of a real bar.
+  assertInteger(weight, 'weight', 0, 3);
   switch (weight) {
     case 3:
       return 1;

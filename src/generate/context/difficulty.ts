@@ -9,7 +9,11 @@
  * the instrument profile and hold regardless of the ceiling.
  */
 
-import { assertRange } from '../../core/validation/index.js';
+import {
+  assertFiniteNumber,
+  assertFiniteSemitones,
+  assertRange,
+} from '../../core/validation/index.js';
 
 /** The ceiling's lowest level: what a beginner sustains. */
 export const MIN_DIFFICULTY = 1;
@@ -63,7 +67,15 @@ export function sustainsStrokes(
   bpm: number | undefined,
   difficulty: number | undefined,
 ): boolean {
-  if (difficulty === undefined || bpm === undefined || stepBeats <= 0) {
+  if (difficulty === undefined || bpm === undefined) {
+    return true;
+  }
+  // A ceiling off the shared scale reads off the end of the rate table and
+  // falls back to its first row, so a ceiling of 20 would be judged as the
+  // strictest one there is — the opposite of what asking for 20 means.
+  assertDifficulty(difficulty);
+  assertFiniteNumber(bpm, 'bpm');
+  if (assertFiniteNumber(stepBeats, 'stepBeats') <= 0) {
     return true;
   }
   const rate = 1 / (stepBeats * secondsPerBeat(bpm));
@@ -86,7 +98,14 @@ export function sustainsShift(
   bpm: number | undefined,
   difficulty: number | undefined,
 ): boolean {
-  if (difficulty === undefined || bpm === undefined || stepBeats <= 0) {
+  if (difficulty === undefined || bpm === undefined) {
+    return true;
+  }
+  // Read against the same scale as its sibling above, and for the same reason.
+  assertDifficulty(difficulty);
+  assertFiniteNumber(bpm, 'bpm');
+  assertFiniteSemitones(semitones);
+  if (assertFiniteNumber(stepBeats, 'stepBeats') <= 0) {
     return true;
   }
   const seconds = stepBeats * secondsPerBeat(bpm);
