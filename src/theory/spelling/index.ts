@@ -422,6 +422,42 @@ function assignDistinctLetters(
  *   reading within the letters the scale is allowed.
  */
 function spellGappedScale(tonic: Note, key: KeyScale): Map<number, Note> | undefined {
+  // The joint reading is a property of the scale, and it is asked for once per
+  // pitch class of that scale — by `spellScale`, by a key's note names, by
+  // every line spelled in it. Walking the whole candidate space again for each
+  // of them costs the scale over and over to answer the same question, so the
+  // reading a scale gets is remembered under the tonic and the scale it was
+  // read for, which is everything it depends on.
+  const cacheKey = `${mod7(tonic.letter)}:${tonic.alter}:${key.rootPc}:${key.modeMask12}`;
+  const cached = JOINT_SPELLINGS.get(cacheKey);
+  if (cached !== undefined) {
+    return cached.spellings;
+  }
+  const answer = readGappedScale(tonic, key);
+  // A caller may name any mask, so the store is capped rather than left to grow
+  // with the scales one process happens to spell. Dropping it whole is what a
+  // cap costs here: nothing below depends on an entry surviving.
+  if (JOINT_SPELLINGS.size >= MAX_REMEMBERED_SCALES) {
+    JOINT_SPELLINGS.clear();
+  }
+  JOINT_SPELLINGS.set(cacheKey, { spellings: answer });
+  return answer;
+}
+
+/**
+ * How many joint scale readings are remembered at once.
+ *
+ * Twelve tonics against the scales a piece is written in, several times over —
+ * far more than any one analysis asks for, and small enough that a process
+ * spelling arbitrary masks never holds much.
+ */
+const MAX_REMEMBERED_SCALES = 512;
+
+/** Joint readings already worked out, by tonic and scale. */
+const JOINT_SPELLINGS = new Map<string, { spellings: Map<number, Note> | undefined }>();
+
+/** Work out the joint reading of a scale, without consulting the store. */
+function readGappedScale(tonic: Note, key: KeyScale): Map<number, Note> | undefined {
   const tones = scaleTonesInDegreeOrder(key);
   if (tones.length > MAX_JOINT_TONE_COUNT) {
     return undefined;
@@ -499,7 +535,9 @@ function spellByKey(pc: number, tonic: Note, key: KeyScale): Note {
     if (isScaleTone(pc, key)) {
       const assigned = spellGappedScale(tonic, key)?.get(mod12(pc));
       if (assigned !== undefined) {
-        return assigned;
+        // A copy: the reading is remembered for the scale, and every caller of
+        // this hands back a note of its own to write to.
+        return { letter: assigned.letter, alter: assigned.alter };
       }
     }
     // Anything that joint spelling does not reach — a chromatic tone, or a
