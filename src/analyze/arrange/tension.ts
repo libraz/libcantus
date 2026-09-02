@@ -15,6 +15,7 @@ import {
   assertGenerationBudget,
   assertInteger,
   assertRange,
+  assertRecord,
 } from '../../core/validation/index.js';
 import { chordPitchClasses } from '../../theory/chord/index.js';
 import { evaluateSafety, NoteSafety, type SafetyProfile } from '../../theory/safety/index.js';
@@ -241,7 +242,8 @@ export function tensionCurveFrom(
   analysis: ArrangementAnalysis,
   opts: ArrangementOptions & { step?: number } = {},
 ): TensionPoint[] {
-  return tensionCurve(tracks, { ...carriedHarmony(analysis, opts), ...opts });
+  const carried = carriedHarmony(assertRecord<ArrangementAnalysis>(analysis, 'analysis'), opts);
+  return tensionCurve(tracks, { ...carried, ...opts });
 }
 
 /**

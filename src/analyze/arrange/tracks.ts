@@ -13,6 +13,7 @@ import {
   assertArray,
   assertGenerationBudget,
   assertInteger,
+  assertNoteEvents,
   assertRange,
 } from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
@@ -408,7 +409,12 @@ export function analyzePolyphony(
   chordAtBeat: (beat: number) => Chord | null,
   key: KeyContext,
 ): AnalyzedNote[] {
-  const prepared = prepareTracks([{ notes: [...notes] }]);
+  // The same reading of an event array the arrangement entrances apply, for the
+  // same reason: the passage is walked note by note further down, where a null
+  // in the array reports this library's own `TypeError` rather than the input.
+  // Zero-length events are admitted here too — the split drops them.
+  const passage = assertNoteEvents(notes, 'notes', { allowNonPositiveDuration: true });
+  const prepared = prepareTracks([{ notes: [...passage] }]);
   const track = prepared[0];
   // Every note is read against the other sub-voices sounding under it, so the
   // work is the product of the two. This entry point takes no options, so it is
@@ -416,7 +422,7 @@ export function analyzePolyphony(
   // before the cache is filled rather than after the comparisons are made.
   // Its siblings over the same machinery charge the same product.
   assertGenerationBudget(
-    notes.length * (track?.voices.length ?? 0),
+    passage.length * (track?.voices.length ?? 0),
     'polyphony note-voice comparisons',
   );
   const soundingCache = new Map<number, SoundingVoice[]>();

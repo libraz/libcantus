@@ -10,6 +10,7 @@
 import type { SpelledInterval } from '../../core/pitch/index.js';
 import { midiToNote, pitchClassOf as pitchClass, spelledInterval } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
+import { assertArray, assertRecord } from '../../core/validation/index.js';
 import {
   keySignatureFifths,
   type ResolvedKey,
@@ -259,8 +260,11 @@ export function relateMotifs(
   // Read whole, so the interval names a motif relation is reported under follow
   // the key the caller named rather than the side its pitch classes read best as.
   const key = keyLike === undefined ? undefined : resolveKey(keyLike);
-  const model = a.notes;
-  const answer = b.notes;
+  // Both motifs are walked note by note below, so both are read as motifs
+  // first: a bare field access on a malformed one reports this library's own
+  // `TypeError` instead of naming the argument that was wrong.
+  const model = assertArray<NoteEvent>(assertRecord<MotifData>(a, 'a').notes, 'a.notes');
+  const answer = assertArray<NoteEvent>(assertRecord<MotifData>(b, 'b').notes, 'b.notes');
   if (model.length === 0 || model.length !== answer.length) {
     return null;
   }
