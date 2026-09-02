@@ -170,6 +170,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A melody that sounds before the first downbeat is harmonized to where it
+  ends.** `harmonizeMelody` measured its grid from beat 0, so a melody written
+  entirely in the pickup — an upbeat lifted out of a chart, which the note-event
+  contract accepts outright — grew chord segments past its own last note and put
+  the cadence at the end of the melody on a segment the melody never reaches.
+  The grid is now accumulated from the melody alone.
+
+- **A crossing is reported once per note, not once per measure it sounds in.**
+  In the fifth species a note held across the bar line is judged in both
+  measures, which is what the species is about; but every field of a
+  `voiceCrossing` record comes from the note's own index, so a note on the wrong
+  side of the cantus firmus in both measures came back as two records nothing
+  could tell apart — one error marked twice, and subtracted twice from a score
+  counted by violations. The vertical interval a held note forms in the measure
+  it is carried into is still judged there.
+
+- **A leap wider than an octave is named in the rationale that reports it.** The
+  rationale is the only channel that distinguishes the melodic-shape rules from
+  one another, and past the octave the interval fell back to the bare noun:
+  `The leap of a interval is not answered by a step the other way`, which names
+  no interval and is not a sentence. Compound numbers are named — a ninth, a
+  tenth — and anything past those is written as the number itself, as the
+  sibling rule that reports an illegal leap already did.
+
+- **A bass figure declares the techniques its own notes call for.** Three
+  entries named a technique they never use — a slide in two figures whose notes
+  slide nowhere, a mute in a figure with no muted note. The declaration is what
+  a caller's instrument is matched against, so an upright or a synth bass
+  profile without that technique lost whole genres to figures that never needed
+  it. A test now derives the set from each figure's own notes, so a declaration
+  and the material it stands for cannot come apart.
+
 - **A bass figure over a slash chord stays above the bass it names.** The
   chord's other tones were folded into the register band, which is one octave
   wide, so every tone of a `C/E` but the E itself came out under it — a
