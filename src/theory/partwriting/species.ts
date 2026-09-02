@@ -37,7 +37,7 @@ import {
 import { simpleIntervalNumber } from '../counterpoint/internal.js';
 import { type KeyLike, toKeyScale } from '../scale/index.js';
 import type { PartWritingViolation } from './index.js';
-import { intervalWord, violation } from './internal.js';
+import { intervalArticle, intervalWord, violation } from './internal.js';
 
 /**
  * Which species an exercise is written in: note against note, two, three or
@@ -308,6 +308,7 @@ function verticalViolations(
   position: number,
   species: Species,
   counterpointAbove: boolean,
+  crossed: Set<number>,
 ): PartWritingViolation[] {
   const entry = entries[position];
   if (entry === undefined) {
@@ -316,7 +317,14 @@ function verticalViolations(
   const found: PartWritingViolation[] = [];
   const upper = counterpointAbove ? entry.note : entry.against;
   const lower = counterpointAbove ? entry.against : entry.note;
-  if (createsVoiceCrossing(upper, lower)) {
+  // Once per written note, not once per measure it sounds in: a note carried
+  // across the bar line has an entry in each measure, and every field of a
+  // crossing record comes from the note's own index, so a second one is a
+  // duplicate a caller cannot tell from the first — two marks on one note in a
+  // scoring UI, and the same error subtracted twice. The vertical interval
+  // below is judged per measure, since a held note forms a new one there.
+  if (!crossed.has(entry.index) && createsVoiceCrossing(upper, lower)) {
+    crossed.add(entry.index);
     found.push(
       violation(
         'voiceCrossing',
@@ -600,7 +608,7 @@ function leapAnswerViolations(moves: readonly Move[]): PartWritingViolation[] {
         [1],
         leap.from.index,
         answer.to.index,
-        `The leap of ${word === 'octave' ? 'an' : 'a'} ${word} is not answered by a step the other way`,
+        `The leap of ${intervalArticle(word)} ${word} is not answered by a step the other way`,
       ),
     );
   }
@@ -1081,8 +1089,9 @@ export function checkSpecies(
   const struck = entries.filter((entry) => !entry.held);
 
   const violations: PartWritingViolation[] = [];
+  const crossed = new Set<number>();
   for (let position = 0; position < entries.length; position += 1) {
-    violations.push(...verticalViolations(entries, position, species, counterpointAbove));
+    violations.push(...verticalViolations(entries, position, species, counterpointAbove, crossed));
   }
   for (let position = 1; position < struck.length; position += 1) {
     const previous = struck[position - 1];

@@ -323,6 +323,18 @@ describe('melodic shape', () => {
     ]);
   });
 
+  it('names a leap wider than an octave in the rationale that reports it', () => {
+    // The rationale is the only channel that tells the shape rules apart, so
+    // the interval it is about has to be in it: past the octave the name fell
+    // back to the bare noun and the sentence read `The leap of a interval`,
+    // which names no interval and is not a sentence.
+    const found = shapes(line('C4 D4 E4 D4 C4'), line('C5 D6 E6 D6 C6'));
+    expect(found).toContain('The leap of a ninth is not answered by a step the other way');
+    for (const rationale of found) {
+      expect(rationale).not.toContain('a interval');
+    }
+  });
+
   it('flags a run of notes outlining a tritone between its turning points', () => {
     const cf = line('C4 D4 E4 F4 G4 F4 D4 C4');
     expect(shapes(cf, line('C5 F4 G4 A4 B4 A4 B4 C5'))).toEqual([
@@ -424,6 +436,20 @@ describe('fifth species', () => {
       expect(kinds(checkSpecies(cantusFirmus, cp, 5, C_MAJOR, { durations: values }))).toContain(
         'unresolvedSuspension',
       );
+    });
+
+    it('reports one crossing for a note that crosses in both its measures', () => {
+      // A counterpoint written above that dips under the cantus firmus and is
+      // held there has an entry per measure it sounds in, and every field of a
+      // crossing record comes from the note's own index — so two of them are
+      // one error a caller cannot tell apart, marked twice in a scoring UI and
+      // subtracted twice from a score counted by violations.
+      const cp = line('C5 B3 D5 C5');
+      const found = checkSpecies(cantusFirmus, cp, 5, C_MAJOR, { durations: values }).filter(
+        (violation) => violation.kind === 'voiceCrossing',
+      );
+      expect(found).toHaveLength(1);
+      expect(found[0]?.fromIndex).toBe(1);
     });
 
     it('passes where it is prepared by a consonance and falls by step', () => {
