@@ -300,6 +300,20 @@ function sampleTension(
   for (const voice of sounding) {
     pitches.set(voice.pitch, (pitches.get(voice.pitch) ?? 0) + 1);
   }
+  // The voices a candidate is weighed against are the texture with one of its
+  // own occurrences taken out, so the texture is written down once for the
+  // sample and that one occurrence is lifted out and put back around each
+  // evaluation. Rebuilding it per distinct pitch instead allocated a record per
+  // voice per pitch — a hundred-voice pad spending ten thousand objects on a
+  // beat to say the same thing a hundred times.
+  const others: { pitch: number }[] = [];
+  const firstOf = new Map<number, number>();
+  for (const [pitch, count] of pitches) {
+    firstOf.set(pitch, others.length);
+    for (let i = 0; i < count; i += 1) {
+      others.push({ pitch });
+    }
+  }
   for (const [pitch, count] of pitches) {
     // Non-chord-tone share only applies when a chord is sounding; at a timeline
     // gap there is no reference harmony, so vertical dissonance alone drives the
@@ -307,23 +321,25 @@ function sampleTension(
     if (chordPcs && !chordPcs.has(pitchClass(pitch))) {
       nonChord += count;
     }
-    const others = [...pitches].flatMap(([otherPitch, otherCount]) =>
-      Array.from({ length: otherCount - (otherPitch === pitch ? 1 : 0) }, () => ({
-        pitch: otherPitch,
-      })),
-    );
+    // One occurrence of the candidate's own pitch is moved to the end and
+    // dropped, which leaves exactly the multiset the caller would have built.
+    const at = firstOf.get(pitch) ?? 0;
+    const last = others.length - 1;
+    const held = others[at];
+    const tail = others[last];
+    if (held !== undefined && tail !== undefined) {
+      others[at] = tail;
+      others.pop();
+    }
     // Only the verdict is read, so the replacement-pitch search is skipped.
     const result = evaluateSafety(
-      {
-        profile,
-        candidatePitch: pitch,
-        chord,
-        key,
-        otherVoices: others,
-        strongBeat,
-      },
+      { profile, candidatePitch: pitch, chord, key, otherVoices: others, strongBeat },
       { suggestions: false },
     );
+    if (held !== undefined && tail !== undefined) {
+      others.push(tail);
+      others[at] = held;
+    }
     if (result.safety === NoteSafety.Dissonant) {
       dissonant += count;
     }
