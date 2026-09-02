@@ -191,6 +191,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A slash bass is written on the letter the degree it plays gives.** Writing a
+  chord read on one side of the enharmonic fence out on the other carried the
+  bass by the same step the root moved, and kept whatever that landed on for any
+  bass whose pitch class the chord contains — so a `C#/F` asked for on the flat
+  side came out `Db/Gbb`, a G a chart never writes under a chord whose third is
+  an F. The carried spelling is kept only where it is the one the chord itself
+  gives that tone, which is what makes the D double sharp of a `G#aug` right and
+  the G double flat wrong; anything else falls back to the plain name of the
+  pitch class.
+
+- **Every published example is compared against the value it prints.** The form
+  these examples take is `// value — why`, and only the ones that spent their
+  whole comment on the value were checked: sixty-odd printed answers ran without
+  anything comparing them, among them the augmented-sixth spellings, the avoid
+  notes, the figured-bass numerals and the voicing costs. All of them are
+  checked now, which corrected one example that printed an abbreviation of what
+  the call returns and two that printed a value in a form no assertion can read.
+
 - **A fill and a section crash are written on the grid the bar is swung on.**
   Under `feel: 'shuffle'` or `'swing'` the strokes of a fill, and the crash that
   lifts into the next section, were placed straight while the kick, the hats and
