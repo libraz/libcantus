@@ -146,6 +146,7 @@ export type {
 export {
   ALTERED_MASK,
   assertKeyVariant,
+  assertModeMask,
   BLUES_MASK,
   CHROMATIC_MASK,
   DORIAN_MASK,

@@ -4,7 +4,7 @@ import { pitchClassOf } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import { assertInteger } from '../../core/validation/index.js';
 import type { KeyVariant } from './kinds.js';
-import { CHROMATIC_MASK } from './masks.js';
+import { assertModeMask } from './masks.js';
 import { resolveKeyName } from './name.js';
 
 export type { KeyVariant };
@@ -96,7 +96,7 @@ export type SpelledKeyLike =
 
 /** Validate a plain key/scale and return it in the canonical shape. */
 function normalizedKeyScale(scale: KeyScale): KeyScale {
-  assertInteger(scale.modeMask12, 'key.modeMask12', 1, CHROMATIC_MASK);
+  assertModeMask(scale.modeMask12, 'key.modeMask12');
   if ((scale.modeMask12 & 1) === 0) {
     // Every scale contains its own root, and the rest of the library reads
     // bit 0 as given. A mask without it names no key and would degrade into

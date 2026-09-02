@@ -17,6 +17,7 @@ export type { KeyVariant, ResolvedKey, SpelledKeyScale } from './kinds.js';
 export type { ScaleAliasName, ScaleName, ScaleNameInput, WorldScaleName } from './masks.js';
 export {
   ALTERED_MASK,
+  assertModeMask,
   BLUES_MASK,
   CHROMATIC_MASK,
   DORIAN_MASK,

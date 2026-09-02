@@ -30,11 +30,11 @@ import {
 } from '../../core/pitch/index.js';
 import { MAX_NAME_ACCIDENTALS } from '../../core/pitch/naming.js';
 import type { KeyScale } from '../../core/types.js';
-import { assertInteger, assertRecord } from '../../core/validation/index.js';
+import { assertRecord } from '../../core/validation/index.js';
 import { spellScale } from '../spelling/index.js';
 import { type KeyLike, toKeyScale } from './coerce.js';
 import type { ResolvedKey } from './identity.js';
-import { CHROMATIC_MASK, isMinorMask, variantOfMask } from './masks.js';
+import { isMinorMask, maskOf, variantOfMask } from './masks.js';
 import { majorScale, minorScale } from './scales.js';
 import type { KeyMode } from './signature.js';
 import { isSignatureKey, keyFromFifths, keySignatureFifths, MAX_FIFTHS } from './signature.js';
@@ -60,12 +60,6 @@ const MINOR_TONIC_FIFTHS = 3;
 const FLATTEST_TONIC_FIFTHS = -MAX_CONVENTIONAL_FIFTHS;
 const SHARPEST_TONIC_FIFTHS = MAX_CONVENTIONAL_FIFTHS + MINOR_TONIC_FIFTHS;
 
-/** Validate a key's mode mask, naming it the way the caller sees it. */
-function assertModeMask(key: KeyScale, name = 'key'): number {
-  const scale = assertRecord<KeyScale>(key, name);
-  return assertInteger(scale.modeMask12, `${name}.modeMask12`, 1, CHROMATIC_MASK);
-}
-
 /**
  * Which of the two modes a key leans to.
  *
@@ -73,7 +67,7 @@ function assertModeMask(key: KeyScale, name = 'key'): number {
  * signature never disagree about a key's mode.
  */
 function modeOf(key: KeyScale): KeyMode {
-  return isMinorMask(assertModeMask(key)) ? 'minor' : 'major';
+  return isMinorMask(maskOf(key)) ? 'minor' : 'major';
 }
 
 /** The other of the two modes a signature is read in. */
@@ -486,7 +480,7 @@ export function subdominantKeyOf(tonic: NoteLike, key: KeyLike): ResolvedKey {
 export function enharmonicKeyOf(tonic: NoteLike, key: KeyLike): ResolvedKey | null {
   const note = toNoteData(tonic);
   const scale = toKeyScale(key);
-  assertModeMask(scale);
+  maskOf(scale);
   for (const position of [
     tonicPosition(note) - ENHARMONIC_FIFTHS,
     tonicPosition(note) + ENHARMONIC_FIFTHS,
@@ -616,8 +610,8 @@ export function relatedKeysOf(
 export function keyRelationBetween(a: ResolvedKey, b: ResolvedKey): KeyRelation | null {
   const from = assertRecord<ResolvedKey>(a, 'a');
   const to = assertRecord<ResolvedKey>(b, 'b');
-  assertModeMask(from.scale, 'a.scale');
-  assertModeMask(to.scale, 'b.scale');
+  maskOf(from.scale, 'a.scale');
+  maskOf(to.scale, 'b.scale');
   if (soundsLike(from.scale, to.scale)) {
     return spelledLike(from.tonic, to.tonic) ? 'same' : 'enharmonic';
   }

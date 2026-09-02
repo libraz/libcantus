@@ -11,9 +11,8 @@
 
 import { InvalidInputError } from '../../core/errors/index.js';
 import type { KeyScale } from '../../core/types.js';
-import { assertRecord } from '../../core/validation/index.js';
 import type { ScaleName, ScaleNameInput, WorldScaleName } from './masks.js';
-import { NAMED_SCALES, resolveScaleName, WORLD_SCALES } from './masks.js';
+import { maskOf, NAMED_SCALES, resolveScaleName, WORLD_SCALES } from './masks.js';
 
 /**
  * The kind of pitch organisation a scale belongs to.
@@ -138,9 +137,6 @@ const SYSTEM_BY_MASK: ReadonlyMap<number, ScaleSystem> = (() => {
  * @category Scales
  */
 export function scaleSystemOf(scale: KeyScale | ScaleNameInput): ScaleSystem | undefined {
-  if (typeof scale !== 'string') {
-    assertRecord<KeyScale>(scale, 'scale');
-  }
   if (typeof scale === 'string') {
     const canonical = resolveScaleName(scale);
     if (canonical === undefined) {
@@ -148,7 +144,7 @@ export function scaleSystemOf(scale: KeyScale | ScaleNameInput): ScaleSystem | u
     }
     return SCALE_SYSTEMS[canonical];
   }
-  return SYSTEM_BY_MASK.get(scale.modeMask12);
+  return SYSTEM_BY_MASK.get(maskOf(scale, 'scale'));
 }
 
 /**

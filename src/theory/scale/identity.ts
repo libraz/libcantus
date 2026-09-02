@@ -5,7 +5,7 @@ import type { KeyScale } from '../../core/types.js';
 import { assertRecord } from '../../core/validation/index.js';
 import { type KeyLike, toKeyScale } from './coerce.js';
 import type { KeyVariant, ResolvedKey } from './kinds.js';
-import { assertKeyVariant, variantOfMask } from './masks.js';
+import { assertKeyVariant, maskOf, variantOfMask } from './masks.js';
 import { resolveKeyName } from './name.js';
 import { spelledKeyOf } from './relations.js';
 
@@ -127,6 +127,7 @@ export function resolveKey(value: KeyLike): ResolvedKey {
  * @category Scales
  */
 export function scaleOf(key: ResolvedKey): KeyScale {
-  assertRecord<ResolvedKey>(key, 'key');
-  return key.scale;
+  const scale = assertRecord<ResolvedKey>(key, 'key').scale;
+  maskOf(scale, 'key.scale');
+  return scale;
 }

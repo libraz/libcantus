@@ -1,5 +1,11 @@
 import { InvalidInputError } from '../../core/errors/index.js';
-import { assertArray, assertInteger, assertOneOf } from '../../core/validation/index.js';
+import type { KeyScale } from '../../core/types.js';
+import {
+  assertArray,
+  assertInteger,
+  assertOneOf,
+  assertRecord,
+} from '../../core/validation/index.js';
 import type { KeyVariant } from './kinds.js';
 
 /**
@@ -131,6 +137,48 @@ export const OCTATONIC_WHOLE_HALF_MASK = maskFromOffsets([0, 2, 3, 5, 6, 8, 9, 1
  * @category Scales
  */
 export const CHROMATIC_MASK = 0b111111111111;
+
+/**
+ * Require a twelve-bit mode mask, and return it.
+ *
+ * A mask is read with bit operations, and those coerce: a `null` reads as the
+ * empty mask, an object as zero. Every answer taken from a mask is a musical
+ * claim — which form a key stands in, whether its signature is its own, which
+ * system it belongs to — so a value that is not a mask has to be refused rather
+ * than answered, and it is refused in one place so the answers cannot disagree
+ * about what a mask is.
+ *
+ * @param modeMask12 The value to check.
+ * @param name What the value is, for the error message.
+ * @returns The mask.
+ * @throws If it is not an integer in [1, {@link CHROMATIC_MASK}].
+ * @example
+ * ```ts
+ * import { assertModeMask, MAJOR_MASK } from '@libraz/libcantus';
+ * assertModeMask(MAJOR_MASK); // 2741
+ * ```
+ * @category Scales
+ */
+export function assertModeMask(modeMask12: number, name = 'modeMask12'): number {
+  return assertInteger(modeMask12, name, 1, CHROMATIC_MASK);
+}
+
+/**
+ * The checked mode mask of a key or scale.
+ *
+ * The companion of {@link assertModeMask} for the entrances that are handed the
+ * record rather than the number: the record is read as one before the field is,
+ * so a key restored without its scale is refused instead of answering from a
+ * mask that was never there.
+ *
+ * @param scale The key or scale to read.
+ * @param name What the value is, for the error message.
+ * @returns Its mode mask.
+ * @throws If it is not a record carrying a mode mask.
+ */
+export function maskOf(scale: KeyScale, name = 'key'): number {
+  return assertModeMask(assertRecord<KeyScale>(scale, name).modeMask12, `${name}.modeMask12`);
+}
 
 /**
  * Lydian dominant (melodic minor's fourth mode): offsets {0,2,4,6,7,9,10}.
@@ -549,6 +597,7 @@ export function isMinorMask(modeMask12: number): boolean {
  * mask matching none of the four is modal.
  */
 export function variantOfMask(modeMask12: number): KeyVariant {
+  assertModeMask(modeMask12);
   for (const [variant, mask] of Object.entries(VARIANT_MASKS)) {
     if (mask === modeMask12) {
       return variant as KeyVariant;
