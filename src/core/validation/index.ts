@@ -73,6 +73,26 @@ export function assertFiniteNumber(value: number, name: string): number {
 }
 
 /**
+ * Reject a range whose ends are not numbers.
+ *
+ * A bound that is not a number compares false against every value, so both
+ * halves of `value < min || value > max` are false and the assertion accepts
+ * everything — the exact opposite of what asking for a range means. A caller
+ * computing a bound from a form field or a project file is the one who ends up
+ * with an assertion that no longer asserts, and nothing in the result says so.
+ *
+ * The check is two `Number.isFinite` calls and builds no message unless it
+ * fails, which is what lets it sit on the path every bounded check runs.
+ */
+function assertBounds(min: number, max: number, name: string): void {
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    throw new InvalidInputError(
+      `${name} must be bounded by finite numbers; received [${describeRejected(min)}, ${describeRejected(max)}]`,
+    );
+  }
+}
+
+/**
  * Require an integer in the inclusive range `[min, max]`.
  *
  * @category Core
@@ -84,6 +104,7 @@ export function assertInteger(
   max = Number.MAX_SAFE_INTEGER,
 ): number {
   assertFiniteNumber(value, name);
+  assertBounds(min, max, name);
   if (!Number.isSafeInteger(value) || value < min || value > max) {
     throw new InvalidInputError(
       `${name} must be an integer in [${min}, ${max}]; received ${value}`,
@@ -324,6 +345,7 @@ export function assertPositiveInt(
  */
 export function assertRange(value: number, min: number, max: number, name: string): number {
   assertFiniteNumber(value, name);
+  assertBounds(min, max, name);
   if (value < min || value > max) {
     throw new InvalidInputError(`${name} must be in [${min}, ${max}]; received ${value}`);
   }
@@ -340,7 +362,9 @@ export function assertGenerationBudget(
   name: string,
   limit: number | undefined = DEFAULT_GENERATION_BUDGET,
 ): number {
-  const cap = limit ?? DEFAULT_GENERATION_BUDGET;
+  // Only an omitted limit means the default one: a null read as absent would
+  // charge the work against a budget the caller never chose.
+  const cap = limit === undefined ? DEFAULT_GENERATION_BUDGET : limit;
   assertFiniteNumber(estimated, name);
   assertPositiveInt(cap, `${name} limit`, Number.MAX_SAFE_INTEGER);
   if (estimated < 0) {
@@ -540,6 +564,7 @@ export function assertNoteEvent(
   name = 'note event',
   options: NoteEventAssertOptions = {},
 ): NoteEvent {
+  const asked = assertOptions(options, `${name} options`);
   // The shape is checked before any field is read, so a null or a number from a
   // JSON import is reported as the malformed event it is rather than as the
   // library's own TypeError.
@@ -552,13 +577,13 @@ export function assertNoteEvent(
   // An onset is not bounded below: the downbeat is beat 0, so a pickup sounds
   // at a negative beat. A nonsensical onset is still rejected — the bound is
   // finite, and a caller that knows its pickup narrows it further.
-  const minStartBeat = options.minStartBeat ?? -Number.MAX_SAFE_INTEGER;
+  const minStartBeat = asked.minStartBeat ?? -Number.MAX_SAFE_INTEGER;
   assertFiniteNumber(minStartBeat, 'minStartBeat');
   assertRange(event.startBeat, minStartBeat, Number.MAX_SAFE_INTEGER, `${name}.startBeat`);
   // The positivity check comes first so the common failure — a zero-length note
   // from a MIDI import — reads as such instead of naming a denormal lower bound.
   assertFiniteNumber(event.durationBeat, `${name}.durationBeat`);
-  if (!options.allowNonPositiveDuration && event.durationBeat <= 0) {
+  if (!asked.allowNonPositiveDuration && event.durationBeat <= 0) {
     throw new InvalidInputError(
       `${name}.durationBeat must be positive; received ${event.durationBeat}`,
     );
@@ -597,10 +622,11 @@ export function assertNoteEvents(
   name = 'note events',
   options: NoteEventAssertOptions = {},
 ): NoteEvent[] {
+  const asked = assertOptions(options, `${name} options`);
   if (!Array.isArray(events)) {
     throw new InvalidInputError(`${name} must be an array; received ${typeof events}`);
   }
-  assertGenerationBudget(events.length, `${name} count`, options.budget);
+  assertGenerationBudget(events.length, `${name} count`, asked.budget);
   for (let index = 0; index < events.length; index += 1) {
     const event = events[index];
     // A hole in a sparse array, an explicit undefined, and a null are all
@@ -611,7 +637,7 @@ export function assertNoteEvents(
         `${name}[${index}] must be a note event; received ${describeRejected(event)}`,
       );
     }
-    assertNoteEvent(event, `${name}[${index}]`, options);
+    assertNoteEvent(event, `${name}[${index}]`, asked);
   }
   return events;
 }
