@@ -701,9 +701,10 @@ export function barPositionToPulse(pos: BarPosition, meter: MeterLike): number {
   // signature is asked about is the caller's own answer, and a single signature
   // hiding a NaN behind arithmetic that never touches it is the reading the map
   // form already rejects.
-  assertInteger(pos.bar, 'position.bar');
-  assertFiniteNumber(pos.beat, 'position.beat');
-  return pulseChecked(pos, readMeterData(meter));
+  const position = assertRecord<BarPosition>(pos, 'position');
+  assertInteger(position.bar, 'position.bar');
+  assertFiniteNumber(position.beat, 'position.beat');
+  return pulseChecked(position, readMeterData(meter));
 }
 
 /** {@link barPositionToPulse} without re-reading an already resolved meter. */
@@ -780,13 +781,14 @@ export function formatBarPosition(beatInQuarters: number, meter: MeterLike, deci
  * @category Rhythm & Meter
  */
 export function barPositionToBeat(pos: BarPosition, meter: MeterLike): number {
-  assertInteger(pos.bar, 'bar position bar');
-  assertFiniteNumber(pos.beat, 'bar position beat');
+  const position = assertRecord<BarPosition>(pos, 'bar position');
+  assertInteger(position.bar, 'bar position bar');
+  assertFiniteNumber(position.beat, 'bar position beat');
   const resolved = readMeterData(meter);
   if (isMeterMap(resolved)) {
-    return beatOfBarIndex(resolved, pos.bar) + pos.beat;
+    return beatOfBarIndex(resolved, position.bar) + position.beat;
   }
-  return pos.bar * barBeatsOf(resolved) + pos.beat;
+  return position.bar * barBeatsOf(resolved) + position.beat;
 }
 
 /**

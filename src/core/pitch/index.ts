@@ -360,10 +360,11 @@ export function tryParseKeyName(text: string, opts?: NoteNameOptions): ParseResu
  * @category Scales
  */
 export function formatKeyName(key: KeyName, opts?: NoteNameOptions): string {
-  assertNote(key.tonic, 'key.tonic');
-  const mode = assertOneOf(key.mode, ['major', 'minor'], 'key.mode');
+  const named = assertRecord<KeyName>(key, 'key');
+  assertNote(named.tonic, 'key.tonic');
+  const mode = assertOneOf(named.mode, ['major', 'minor'], 'key.mode');
   return writeKeyName(
-    { tonic: { letter: mod7(key.tonic.letter), alter: key.tonic.alter }, mode },
+    { tonic: { letter: mod7(named.tonic.letter), alter: named.tonic.alter }, mode },
     opts,
   );
 }
