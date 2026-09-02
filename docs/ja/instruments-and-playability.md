@@ -244,7 +244,7 @@ Instrument.bass4().soundingPitch('C4', '-P8').name; // 'C3'
 
 ## アーティキュレーション
 
-`ARTICULATIONS` は `NoteEvent` が持てる奏法の一覧で、プロファイルはその楽器が出せる奏法を列挙します。`ARTICULATIONS` にはあるがプロファイルに含まれない奏法は、第1層の `articulationUnavailable` になります。難易度の問題ではなく、その楽器がその方法では出せない音であるためです。`ARTICULATIONS` にすらない名前は `playability`、`Score.of`、`Score.fromJSON` が `InvalidInputError` として拒否します。楽器が演奏に失敗し得るものが、そもそも書かれていないからです。
+`ARTICULATIONS` は `NoteEvent` が持てる奏法の一覧で、プロファイルはその楽器が出せる奏法を列挙します。`ARTICULATIONS` にはあるがプロファイルに含まれない奏法は、第1層の `articulationUnavailable` になります。難易度の問題ではなく、その楽器がその方法では出せない音であるためです。`ARTICULATIONS` にすらない名前は `playability`、`Score.of`、`Score.fromJSON` が `InvalidInputError` として拒否します。その名前の奏法はライブラリに定義されていないためです。
 
 ## ノートの安全性
 

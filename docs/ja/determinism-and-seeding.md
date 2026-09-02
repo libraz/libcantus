@@ -78,7 +78,7 @@ createRng(42).next() === first; // true
 createRng(43).next() === first; // false
 ```
 
-`prob`、`range`、`float` は抽選を消費する前に引数を検証します。拒否された呼び出しは乱数列を進めないため、エラーを catch した側と、その呼び出しを行わなかった側とで以降の列が一致します。
+`prob`、`range`、`float` は抽選を消費する前に引数を検証します。拒否された呼び出しは乱数列を進めないため、エラーを捕捉した側と、その呼び出しを行わなかった側とで以降の列が一致します。
 
 ## complexity と difficulty は別種のつまみ
 
