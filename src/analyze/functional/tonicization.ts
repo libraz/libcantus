@@ -99,6 +99,20 @@ export function isAppliedDominant(chord: Chord, key: KeyScale): boolean {
   if (source === 'parallelMajor' || source === 'parallelMinor') {
     return false;
   }
+  return pointsAtTonicizableDegree(chord, key);
+}
+
+/**
+ * Whether a chord points at a degree the key can tonicize.
+ *
+ * The sonority half of {@link isAppliedDominant}, without the chromaticism the
+ * reading also needs. A caller reporting the applied reading a chord did *not*
+ * get has to ask this too: a chord that points at nothing was never a rival, so
+ * naming it one describes a choice the analysis never made, and states the
+ * wrong reason for the outcome. Both readings ask here, so inverting the reason
+ * one of them gives is what would make the other take the chord.
+ */
+export function pointsAtTonicizableDegree(chord: Chord, key: KeyScale): boolean {
   if (appliedTarget(chord, key) !== null) {
     return true;
   }

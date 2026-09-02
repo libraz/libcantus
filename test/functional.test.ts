@@ -649,3 +649,41 @@ describe('one reading of the chord predicates the unit shares', () => {
     expect(analyzeChord(makeChord(10, 'min'), cMajor).rationale).not.toBe(reading.rationale);
   });
 });
+
+describe('a sonority is what a chord sounds, not what it is called', () => {
+  // `quality` is a label for the nearest template in a closed list, and a triad
+  // that grows a colour tone gets a different label — `add9`, `6`, `6/9`. So a
+  // reading taken off the name stopped recognising the chord: `Vadd9` and `V6`
+  // are how pop writes the dominant, and both stopped being a dominant sonority
+  // the moment the tone was added.
+
+  /** A major triad on the mediant of C, which is the applied dominant of vi. */
+  const plainThird = makeChord(4, 'maj');
+
+  it.each(['add9', '6', '6/9'] as const)(
+    'reads a major triad called %s as the triad it is',
+    (quality) => {
+      const coloured = makeChord(4, quality);
+      expect(coloured.quality).not.toBe('maj');
+      expect(analyzeChord(coloured, cMajor).function).toBe(
+        analyzeChord(plainThird, cMajor).function,
+      );
+    },
+  );
+
+  it('applies the same secondary dominant with or without the added tone', () => {
+    // E is V/vi in C major. The numeral names the colour tone, as it should —
+    // what has to survive it is the degree the chord is aimed at.
+    expect(chordToRoman(plainThird, cMajor, { applied: true })).toBe('V/vi');
+    expect(chordToRoman(makeChord(4, 'add9'), cMajor, { applied: true })).toMatch(/\/vi$/);
+  });
+
+  it('still refuses a major triad that has grown a seventh', () => {
+    // What ends the triad is a seventh, which is a different sonority with
+    // different obligations — not a colour tone above it. The widening above
+    // must not reach that far.
+    expect(analyzeChord(makeChord(4, 'maj7'), cMajor).function).not.toBe(
+      analyzeChord(plainThird, cMajor).function,
+    );
+  });
+});

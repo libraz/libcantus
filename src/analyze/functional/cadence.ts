@@ -80,7 +80,14 @@ function deceptiveTargets(key: KeyScale): number[] {
  * as a half cadence and put a phrase boundary where the music has none.
  */
 function restsOnDominant(to: Chord, key: KeyScale): boolean {
-  if (hasMajorThird(to)) {
+  // The shared reading first: whether a chord is the key's own dominant is one
+  // question, and the arrival side of a cadence is not entitled to a narrower
+  // answer than the approach side two functions below. Asking only for the
+  // major third here refused the `V7sus4` of gospel, pop and modal jazz — which
+  // this file's own six-four reader accepts — and left a half cadence reporting
+  // that its arrival stood on the fifth degree and sounded no third the key
+  // rests on, about a chord it had just called the dominant.
+  if (hasMajorThird(to) || isDominantChordOf(to, key)) {
     return true;
   }
   if (scaleSystemOf(key) !== 'modal') {

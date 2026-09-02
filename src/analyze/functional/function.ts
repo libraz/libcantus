@@ -18,7 +18,6 @@ import { augmentedSixthKindOf } from './augmented-sixth.js';
 import { type BorrowedSource, borrowedSourceOf } from './borrowed.js';
 import {
   degreeRootPc,
-  hasDominantSonority,
   hasMajorThird,
   isDiatonicChord,
   isMinorScale,
@@ -28,7 +27,7 @@ import {
 } from './internal.js';
 import { capitalize, type RejectedCandidate } from './rationale.js';
 import { type ChordToRomanOptions, renderRoman, romanAlternatives } from './roman.js';
-import { isAppliedDominant } from './tonicization.js';
+import { isAppliedDominant, pointsAtTonicizableDegree } from './tonicization.js';
 
 /**
  * The three broad harmonic functions of tonal music.
@@ -262,7 +261,14 @@ function functionAlternatives(
   const out: RejectedCandidate[] = [];
   if (reason === 'degree') {
     // The sonority could tonicize, and only its being in the key stopped it.
-    if (hasDominantSonority(chord) && isDiatonicChord(chord, key)) {
+    // Both halves are needed: a reading nothing could have been is not a
+    // reading that was turned down. The subdominant of a major key sounds a
+    // dominant and is diatonic, but points at no degree the key can tonicize,
+    // so reporting it as a rejected applied dominant named a rival that never
+    // existed and gave the wrong reason for its absence. What counts as
+    // pointing is the predicate the accepting side applies, so inverting the
+    // reason stated here is exactly what would make the analysis take it.
+    if (pointsAtTonicizableDegree(chord, key) && isDiatonicChord(chord, key)) {
       out.push({
         label: 'applied dominant',
         reason:

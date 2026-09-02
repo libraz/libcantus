@@ -651,8 +651,10 @@ describe('methods offer the options their delegate accepts', () => {
     }).cadence;
     expect(cadence?.type).toBe('authentic');
     expect(cadence?.strength === 'perfect' || cadence?.strength === 'imperfect').toBe(true);
+    // The tonic, which is the chord of the two with a reading it did not get:
+    // it sounds a dominant and points at the subdominant.
     expect(
-      progression.analyze(undefined, { alternatives: true }).chords[0]?.alternatives.length,
+      progression.analyze(undefined, { alternatives: true }).chords[1]?.alternatives.length,
     ).toBeGreaterThan(0);
   });
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { detectCadence, functionOf } from '../src/analyze/functional/index.js';
 import { makeChord } from '../src/theory/chord/index.js';
-import { majorKey, minorKey } from '../src/theory/scale/index.js';
+import { majorKey, minorKey, scaleByName } from '../src/theory/scale/index.js';
 
 const cMajor = majorKey(0);
 const aMinor = minorKey(9);
@@ -169,5 +169,61 @@ describe('non-cadences', () => {
       type: null,
       rootPosition: false,
     });
+  });
+});
+
+describe('one reading of what the dominant is', () => {
+  // A cadence is read from both ends, and the two ends used to ask different
+  // questions. The approach side asked the shared predicate; the arrival side
+  // asked only for a major third, so the `V7sus4` gospel, pop and modal jazz
+  // write the dominant as arrived at nothing — while the same file's six-four
+  // reader accepted it as the dominant a moment earlier.
+
+  /** G7sus4: the dominant with its third suspended into the fourth. */
+  const suspendedDominant = makeChord(7, '7sus4');
+
+  it('comes to a suspended dominant as it comes to a plain one', () => {
+    expect(detectCadence(makeChord(0, 'maj'), suspendedDominant, cMajor).type).toBe('half');
+  });
+
+  it('leaves a suspended dominant as it leaves a plain one', () => {
+    expect(detectCadence(suspendedDominant, makeChord(0, 'maj'), cMajor).type).toBe('authentic');
+    expect(detectCadence(suspendedDominant, makeChord(9, 'min'), cMajor).type).toBe('deceptive');
+  });
+
+  it('never calls a chord the dominant and then reports no cadence to it', () => {
+    // The six-four reader and the arrival reader are the two halves of one
+    // question, so a pair the first accepts and the second refuses is a result
+    // that contradicts its own rationale: "the arrival stands on the fifth
+    // degree but sounds no third the key rests on", about a chord this file
+    // has just called the dominant.
+    const qualities = ['maj', 'dom7', '7sus4', 'sus4', 'min', 'maj7', '6', 'dim'] as const;
+    const contradictions: string[] = [];
+    let sixFours = 0;
+    for (const key of [cMajor, aMinor]) {
+      for (const quality of qualities) {
+        const to = makeChord((key.rootPc + 7) % 12, quality);
+        // The cadential six-four: the tonic triad over the dominant in the bass.
+        const from = makeChord(key.rootPc, 'maj', (key.rootPc + 7) % 12);
+        const result = detectCadence(from, to, key);
+        if (!result.rationale.includes('six-four')) {
+          continue;
+        }
+        sixFours += 1;
+        if (result.type === null) {
+          contradictions.push(`${key.rootPc}: ${quality}`);
+        }
+      }
+    }
+    expect(sixFours).toBeGreaterThan(0);
+    expect(contradictions).toEqual([]);
+  });
+
+  it('keeps the modal relaxation a mode without its own leading tone needs', () => {
+    // D dorian has no raised seventh, so its own minor `v` is the dominant it
+    // has, and the arrival's own third serves. Widening the reading above must
+    // not take that away.
+    const dDorian = scaleByName('dorian', 2);
+    expect(detectCadence(makeChord(2, 'min'), makeChord(9, 'min'), dDorian).type).toBe('half');
   });
 });

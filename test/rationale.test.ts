@@ -59,8 +59,25 @@ describe('analyzeChord rationale', () => {
   });
 
   it('reports the tonicizing reading a diatonic dominant sonority did not get', () => {
-    const { alternatives } = analyzeChord(makeChord(7, 'dom7'), cMajor, { alternatives: true });
+    // The tonic triad sounds a dominant and points at the subdominant, so V/IV
+    // is a reading it could have had and did not.
+    const { alternatives } = analyzeChord(makeChord(0, 'maj'), cMajor, { alternatives: true });
     expect(alternatives.map((entry) => entry.label)).toEqual(['applied dominant']);
+  });
+
+  it('reports no tonicizing reading for a chord that points at no degree', () => {
+    // A rejected reading has to be a reading. `G7` sounds a dominant, but the
+    // only degree it points at is the tonic — which is the key itself rather
+    // than a degree to tonicize — and the subdominant points at the leading
+    // tone, which is no degree at all. Reporting either as a turned-down rival
+    // named a choice the analysis never made, and gave being in the key as the
+    // reason for an absence the key had nothing to do with.
+    for (const chord of [makeChord(7, 'dom7'), makeChord(7, 'maj'), makeChord(5, 'maj')]) {
+      expect(
+        analyzeChord(chord, cMajor, { alternatives: true }).alternatives,
+        `${chord.rootPc}/${chord.quality}`,
+      ).toEqual([]);
+    }
   });
 
   it('reports the numeral the other rendering option would have emitted', () => {

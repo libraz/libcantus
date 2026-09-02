@@ -68,6 +68,20 @@ export function soundsDominantSeventh(chord: Chord): boolean {
 }
 
 /**
+ * Whether a chord sounds a major triad: a major third with no seventh over it.
+ *
+ * Read from the tones rather than from the quality name, because the name is a
+ * label for the nearest template and the sonority is not. A `Vadd9` and a `V6`
+ * are the major triad every pop chart writes the dominant as, and asking for
+ * the name `maj` stopped calling them one the moment the ninth or the sixth was
+ * added. What ends the triad is a seventh, which makes it a different sonority
+ * with different obligations — not a colour tone above it.
+ */
+export function soundsMajorTriad(chord: Chord): boolean {
+  return hasMajorThird(chord) && !hasInterval(chord, 10) && !hasInterval(chord, 11);
+}
+
+/**
  * Whether a chord has the dominant's sonority: a bare major triad, or any chord
  * sounding a dominant seventh.
  *
@@ -76,7 +90,7 @@ export function soundsDominantSeventh(chord: Chord): boolean {
  * that need the tritone ask {@link soundsDominantSeventh} instead.
  */
 export function hasDominantSonority(chord: Chord): boolean {
-  return chord.quality === 'maj' || soundsDominantSeventh(chord);
+  return soundsMajorTriad(chord) || soundsDominantSeventh(chord);
 }
 
 /**
@@ -117,7 +131,7 @@ export function isDominantChordOf(chord: Chord, key: KeyScale): boolean {
 export function isNeapolitanChordOf(chord: Chord, key: KeyScale): boolean {
   return (
     pitchClassOf(chord.rootPc - key.rootPc) === 1 &&
-    chord.quality === 'maj' &&
+    soundsMajorTriad(chord) &&
     !isDiatonicChord(chord, key)
   );
 }
@@ -238,9 +252,19 @@ export function leadingTonePcOf(key: KeyScale): number {
  */
 export const LEADING_TONE_QUALITIES: ReadonlySet<ChordQuality> = new Set(['dim', 'dim7', 'm7b5']);
 
-/** Whether a chord's quality is one a leading-tone chord takes. */
-export function isLeadingToneQuality(chord: Chord): boolean {
-  return LEADING_TONE_QUALITIES.has(chord.quality);
+/**
+ * Whether a chord sounds the diminished triad a leading-tone chord is built on.
+ *
+ * The tones rather than the name, for the reason {@link soundsMajorTriad} gives:
+ * `quality` is a label for the nearest template in a closed list, so a
+ * diminished chord carrying a colour tone the list cannot name stopped being
+ * one. What ends the sonority is a perfect fifth, which is a different chord —
+ * not an addition above the diminished one. The names remain the vocabulary a
+ * numeral is written from, which is a question about spelling rather than
+ * sound, and {@link LEADING_TONE_QUALITIES} still answers that one.
+ */
+export function soundsDiminishedTriad(chord: Chord): boolean {
+  return hasInterval(chord, 3) && hasInterval(chord, 6) && !hasInterval(chord, 7);
 }
 
 /**
@@ -251,7 +275,7 @@ export function isLeadingToneQuality(chord: Chord): boolean {
  * reader and the voicing search both have to agree about it.
  */
 export function isLeadingToneChordOf(chord: Chord, key: KeyScale): boolean {
-  return pitchClassOf(chord.rootPc) === leadingTonePcOf(key) && isLeadingToneQuality(chord);
+  return pitchClassOf(chord.rootPc) === leadingTonePcOf(key) && soundsDiminishedTriad(chord);
 }
 
 /**
@@ -270,7 +294,7 @@ export function isFunctioningLeadingTone(chord: Chord, key: KeyScale): boolean {
     return pitchClassOf(chord.rootPc) === pitchClassOf(key.rootPc + 7);
   }
   if (role === 'root') {
-    return isLeadingToneQuality(chord);
+    return soundsDiminishedTriad(chord);
   }
   return false;
 }
