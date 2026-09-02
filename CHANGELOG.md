@@ -170,6 +170,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A fill and a section crash are written on the grid the bar is swung on.**
+  Under `feel: 'shuffle'` or `'swing'` the strokes of a fill, and the crash that
+  lifts into the next section, were placed straight while the kick, the hats and
+  the ghosts around them went through the section's swung grid — two voices a
+  sixteenth's swing apart inside one bar, which is heard as a flam at the one
+  place a phrase ends. Both now go through the same grid as everything else in
+  the bar, and the recorded grooves move with them.
+
+- **The ghosts lead into the backbeat the groove actually plays.** They were
+  written on the sixteenths of beats 1 and 3 whatever the groove was, so a style
+  whose backbeat is on the third beat — which is how trap writes one — had them
+  anticipating a beat with no snare on it and landing again on top of the
+  backbeat itself, and the amplification that belongs to the beat leading in
+  fell with them. The beats are read from the groove's own backbeat now, as the
+  tambourine and the hand-claps beside them already were.
+
+- **A borrowed diminished triad costs what an unstable sonority costs.** Chords
+  borrowed from the parallel mode were priced at one flat rate, so the ii
+  diminished borrowed into a major key came out cheaper than that key's own vii
+  diminished — and which of the two a phrase took was settled by the seed's
+  tie-break rather than by the melody. Every diminished and augmented triad is
+  now charged for what it is, whichever tier of the vocabulary offered it.
+
+- **A note that weighs nothing is not the bass of the window it sounds in.** A
+  velocity of zero is a note event this library accepts — a note-off written as
+  one, a muted ghost layer — and it contributes nothing to the histogram. Taken
+  as the window's lowest note all the same, it named a pitch class the histogram
+  had never counted, so the reading found no bass among the pitches it selected
+  and dropped the inversion, the slash bass and the augmented-sixth accounting
+  with it.
+
+- **A phrase boundary stands on evidence.** A hypermeter read with no confidence
+  registers its downbeats at strength zero, and the phrase search weighs a cut
+  by the two lengths it makes as well as by the evidence — so over a pedal point
+  or a drone, where nothing argues anywhere, the length term alone put
+  boundaries into the reading, reported with a confidence a caller cannot tell
+  from an evidenced one. Such a stop is no longer a candidate. Separately, a
+  phrase that drops a cadence as having arrived before it began drops it from
+  its signals too: the reading used to say `closing on no cadence; boundary from
+  cadence`, which states both halves of one fact and contradicts itself.
+
 - **A melody that sounds before the first downbeat is harmonized to where it
   ends.** `harmonizeMelody` measured its grid from beat 0, so a melody written
   entirely in the pickup — an upbeat lifted out of a chart, which the note-event
