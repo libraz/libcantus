@@ -9,6 +9,26 @@
  * magnitude without anything being wrong with it. The ratio of two runs taken
  * moments apart on the same machine survives that, because a busy machine slows
  * both of them.
+ *
+ * ## When a growth assertion is worth writing
+ *
+ * A ratio only separates two implementations when the term it watches is the
+ * one that dominates. A linear scan sitting inside a pass that is already
+ * linear in the same input is not that term: replacing the scan with a binary
+ * search leaves the ratio where it was, so an assertion written for it passes
+ * before the change and after it, and stands for nothing. Worse, it reads as
+ * though the scan were guarded.
+ *
+ * So measure first, then decide. Take the ratio with the scan in place. If it
+ * does not move when the scan is replaced, the assertion does not belong here —
+ * it would be a test of the pass's own shape wearing the label of a guard
+ * against the scan.
+ *
+ * What to write instead, for a scan that is real but not dominant: give the
+ * lookup one implementation, test that implementation directly for the answers
+ * it owes at its edges, and route the call site through it. That is a guard
+ * against the same defect — a second, subtly different search — and unlike a
+ * timing bound it says what it means and cannot be passed by accident.
  */
 
 /** Milliseconds a call takes. */
