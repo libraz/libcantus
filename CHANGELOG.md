@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`assertChordTimeline` is published.** A chord timeline is the one argument a
+  host is most likely to be holding from somewhere else — a project file, a
+  previous run's JSON, another library's output — and the analyses read it field
+  by field, deep inside themselves. The check the arrangement options already
+  applied to a timeline given as an option is now one reader, applied by every
+  entrance that takes a timeline outright, and exported so a caller can apply it
+  at its own boundary next to `assertModeMask` and the other validators.
+
+- **The reading a hidden-parallel check is judged by has a name.**
+  `HiddenParallelReading` is the `fourPart`/`twoVoice` choice
+  `createsHiddenParallelPerfect` takes, spelled once rather than three times
+  across its overloads.
+
 - **`assertModeMask` is published.** A mode mask is read with bit operations,
   and those coerce, so a value that is not a mask reads as one and every answer
   taken from it — the form a key stands in, whether its signature is its own,
@@ -216,6 +229,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the notes of a version in use, ships as a patch, and is recorded here.
 
 ### Fixed
+
+- **A range assertion given a bound that is not a number no longer accepts
+  everything.** `assertInteger` and `assertRange` compare the value against the
+  bounds they are handed, and a bound of `null` — or of anything else that is
+  not a number — compares false in both directions, so every value passed. An
+  assertion that has quietly stopped asserting is worse than none, because the
+  caller reads the value that came back as one that was checked. Both now refuse
+  the range itself, as does the generation budget, which used to read a `null`
+  limit as no limit given and charge the work against the default instead.
+
+- **A text reader holds its options to the same terms as the writer beside it.**
+  `parseNote`, `parseKeyName`, `parseChordSymbol`, their `try` counterparts,
+  `resolveKeyName` and `formatChordSymbol` read the notation system through
+  optional chaining, so an options bag written `null` — which is what a host
+  passes on when it has nothing to say about spelling — silently selected
+  English rather than being refused, while `formatNote` and `formatKeyName` had
+  already been refusing it. The options are also read before the text is: they
+  are the caller's own configuration rather than the name being read, so a
+  malformed bag is now raised as the fault it is instead of being reported as a
+  name that failed to parse.
+
+- **The path a draw is addressed by is read before it names a position.** The
+  path is what makes generation reproducible — the same path is the same number,
+  for the same source, forever — and a caller assembling one from its own ids
+  could put a `null` in it, for a part not yet named or an index not yet
+  computed, with nothing objecting because a segment is only ever concatenated
+  into a seed. What came back was a different piece of music under a path the
+  caller thought it had named, and two different requests that seeded
+  identically. Every entrance taking a path now refuses one by the segment that
+  is wrong.
+
+- **A figure, a line and a timeline are read for their shape before they are
+  measured.** The grid transforms compared each onset against the span of the
+  figure, and a span that is not a number compares false both ways, so the
+  figure came back emptied or wholly unchanged rather than refused. The
+  part-writing and species checks compared the lengths of two lines before
+  establishing that they were lines at all, the counterpoint spacing rule
+  answered "within the limit" for any limit that was not a number, and a hidden
+  parallel judged under a reading that is neither `fourPart` nor `twoVoice` took
+  the lenient four-part exemption — so an approach a caller had asked to have
+  judged strictly came back clean. All of these are now refused, as is a
+  timeline whose segments are missing.
 
 - **An options argument written `null` is refused rather than read as absent.**
   A parameter declared `opts: Options = {}` is filled in by that default only
