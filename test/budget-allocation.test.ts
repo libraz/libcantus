@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { analyzeArrangement } from '../src/analyze/arrange/index.js';
+import { analyzeArrangement, analyzePolyphony } from '../src/analyze/arrange/index.js';
 import { phrasesFromTimeline } from '../src/analyze/form/phrase.js';
 import { sectionsFromNotes } from '../src/analyze/form/section.js';
 import { motifFromNotes } from '../src/analyze/melody/index.js';
@@ -9,7 +9,11 @@ import { analyzeTimeline, chordTimelineFromNotes } from '../src/analyze/timeline
 import { BudgetExceededError } from '../src/core/errors/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import { DEFAULT_GENERATION_BUDGET } from '../src/core/validation/index.js';
+import { generateBassLine } from '../src/generate/bass/index.js';
+import { placeLicks } from '../src/generate/bass/licks.js';
 import { Arrangement, Motif, Score } from '../src/model/index.js';
+import { makeChord } from '../src/theory/chord/index.js';
+import { majorKey } from '../src/theory/scale/index.js';
 
 /**
  * What a call retains in typed-array memory, in bytes.
@@ -274,5 +278,84 @@ describe('the class construction paths hold the note-event budget the functions 
     );
     // At the count the budget allows, both take the track on.
     expect(Arrangement.of([{ notes: shortTrack }], { budget: 3 }).tracks[0]?.notes).toHaveLength(3);
+  });
+});
+
+describe('the budget bounds the bars a bass part lays figures over', () => {
+  const chord = makeChord(0, 'maj7');
+
+  it('refuses a segment running past the music before laying a single bar', () => {
+    // One segment, a loop length wide. The segment count sits inside the budget
+    // and always will — it is one — while the bars that one segment holds are
+    // hundreds of millions, and each of them lays a figure. A host reading a
+    // segment out of a project file or off a DAW's loop markers reaches this
+    // with an `endBeat` nobody chose.
+    const timeline = [{ startBeat: 0, endBeat: 1e9, chord }];
+    expect(() => placeLicks(timeline, majorKey(0), { genre: 'motown' })).toThrow(
+      BudgetExceededError,
+    );
+    expect(() => placeLicks(timeline, majorKey(0), { genre: 'motown' })).toThrow(/lick bars/);
+  });
+
+  it('refuses an end beat at the edge of the safe integers', () => {
+    const timeline = [{ startBeat: 0, endBeat: Number.MAX_SAFE_INTEGER, chord }];
+    expect(() => placeLicks(timeline, majorKey(0), { genre: 'motown' })).toThrow(
+      BudgetExceededError,
+    );
+  });
+
+  it('refuses the same span the phrase-shape styles already refuse', () => {
+    // The two surfaces reach the same bar tiling, so a span one of them will not
+    // lay is a span the other will not lay either.
+    const segments = [{ startBeat: 0, endBeat: 1e9, chord }];
+    expect(() => generateBassLine({ segments, key: majorKey(0), style: 'pop' })).toThrow(
+      BudgetExceededError,
+    );
+  });
+
+  it('takes the budget the caller names, on either surface', () => {
+    const timeline = [{ startBeat: 0, endBeat: 64, chord }];
+    expect(() => placeLicks(timeline, majorKey(0), { genre: 'motown', budget: 4 })).toThrow(
+      BudgetExceededError,
+    );
+    // Sixteen bars of four beats: at the count the budget allows, the figures
+    // are written.
+    expect(
+      placeLicks(timeline, majorKey(0), { genre: 'motown', budget: 16 }).length,
+    ).toBeGreaterThan(0);
+  });
+});
+
+describe('the budget bounds the comparisons a polyphonic reading makes', () => {
+  /** A chorale-thick passage: `voices` notes on every beat, for `beats` beats. */
+  function stacked(beats: number, voices: number): NoteEvent[] {
+    const notes: NoteEvent[] = [];
+    for (let beat = 0; beat < beats; beat += 1) {
+      for (let voice = 0; voice < voices; voice += 1) {
+        notes.push({ pitch: 20 + voice, startBeat: beat, durationBeat: 1 });
+      }
+    }
+    return notes;
+  }
+
+  it('refuses a passage whose note-voice product exceeds the budget', () => {
+    // The note count alone passes every flat check: 200 voices over 6,000 beats
+    // is 1.2 million notes against a budget of a million... so make it fewer
+    // notes than that and let the product be what fails.
+    const notes = stacked(200, 100);
+    expect(notes.length).toBeLessThan(DEFAULT_GENERATION_BUDGET);
+    expect(() => analyzePolyphony(notes, () => null, majorKey(0))).toThrow(BudgetExceededError);
+    expect(() => analyzePolyphony(notes, () => null, majorKey(0))).toThrow(
+      /polyphony note-voice comparisons/,
+    );
+  });
+
+  it('refuses it through the class surface too', () => {
+    expect(() => Score.of(stacked(200, 100)).voices()).toThrow(BudgetExceededError);
+  });
+
+  it('reads a passage inside the budget', () => {
+    const notes = stacked(8, 4);
+    expect(analyzePolyphony(notes, () => null, majorKey(0))).toHaveLength(notes.length);
   });
 });

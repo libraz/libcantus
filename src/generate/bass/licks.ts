@@ -16,6 +16,7 @@ import {
   toStringedProfile,
 } from '../../core/instrument/index.js';
 import {
+  beatsPerBar,
   isStrongBeat,
   type MeterLike,
   meterAt,
@@ -529,9 +530,10 @@ export type PlaceLicksOptions = {
    */
   ctx?: GenerationContextInput;
   /**
-   * Maximum number of segments {@link placeLicks} may lay figures over. One
-   * figure is placed per segment, so this is the guard against an unbounded
-   * caller rather than a limit on any search.
+   * Maximum number of segments {@link placeLicks} may lay figures over, and of
+   * bars those segments span. One figure is placed per bar of a segment, so
+   * both are counted: this is the guard against an unbounded caller — a segment
+   * running to a beat far past the music — rather than a limit on any search.
    *
    * @defaultValue 1000000
    */
@@ -600,6 +602,19 @@ export function placeLicks(
   if (segments.length === 0) {
     return [];
   }
+  // A figure is a bar long, so what is written is one figure per bar of the
+  // placement rather than one per segment: a single segment running to a beat
+  // the caller computed from a loop length or read out of a project file lays
+  // as many bars as that number holds. The count is charged before any of them
+  // is built, which is the same estimate the phrase-shape styles make before
+  // reaching the same tiling.
+  const barBeats = beatsPerBar(ts);
+  const estimatedBars = segments.reduce(
+    (count, segment) =>
+      count + Math.max(1, Math.ceil((segment.endBeat - segment.startBeat) / barBeats)),
+    0,
+  );
+  assertGenerationBudget(estimatedBars, 'lick bars', opts.budget);
 
   const resolved = resolveContext(opts.ctx);
   const draw = resolved.part('bass');

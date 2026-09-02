@@ -397,6 +397,15 @@ export function analyzePolyphony(
 ): AnalyzedNote[] {
   const prepared = prepareTracks([{ notes: [...notes] }]);
   const track = prepared[0];
+  // Every note is read against the other sub-voices sounding under it, so the
+  // work is the product of the two. This entry point takes no options, so it is
+  // the default budget it is charged against; what matters is that it fails
+  // before the cache is filled rather than after the comparisons are made.
+  // Its siblings over the same machinery charge the same product.
+  assertGenerationBudget(
+    notes.length * (track?.voices.length ?? 0),
+    'polyphony note-voice comparisons',
+  );
   const soundingCache = new Map<number, SoundingVoice[]>();
   const byIndex = new Map<number, AnalyzedNote>();
   for (let v = 0; v < (track?.voices.length ?? 0); v += 1) {
