@@ -282,10 +282,14 @@ describe('reading a long meter map', () => {
     // pays it once per question: an array the caller keeps says nothing about
     // whether it has been written to since it was validated. What the index
     // saves is everything derived from that read — the bar lengths, the running
-    // bar count, the arrays holding them. Kept, the sweep runs some seven times
-    // faster than one rebuilding them; an index that stopped being kept would
-    // bring the two together.
-    expect(rebuilt / Math.max(kept, 0.01)).toBeGreaterThan(3);
+    // bar count, the arrays holding them. An index that stopped being kept
+    // would make the two sides the same work and bring the ratio to one, which
+    // is what the bound separates from. How far above one the ratio sits
+    // depends on the machine and on whether coverage is being collected — some
+    // seven times faster uninstrumented, under three on a shared runner
+    // counting every call — so the bound is placed to clear the collapse
+    // rather than to state the distance.
+    expect(rebuilt / Math.max(kept, 0.01)).toBeGreaterThan(1.5);
   });
 
   it('rejects a map longer than a piece can declare', () => {

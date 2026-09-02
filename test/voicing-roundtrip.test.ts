@@ -300,14 +300,18 @@ describe('the generator marked by its own checker', () => {
     for (const found of marked) {
       expect(WATCHED_KINDS).toContain(found.kind);
     }
-  });
+    // Budgeted for catching a hang, not for stating a speed: the sweep voices
+    // every chord of every progression, and a shared runner under coverage
+    // takes several times what a machine to itself does.
+  }, 180_000);
 
   it('writes the same voicings every time it is asked', () => {
     for (const { symbols, key } of SWEEP) {
       const chords = symbols.map((symbol) => parseChordSymbol(symbol));
       expect(voiceProgression(chords, { key })).toEqual(voiceProgression(chords, { key }));
     }
-  });
+    // Twice the sweep above, so twice its budget.
+  }, 360_000);
 
   it('still voices a chord whose every candidate writes an augmented interval', () => {
     // A single bass voice moving from the lowered submediant to the leading

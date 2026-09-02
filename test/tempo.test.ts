@@ -11,7 +11,7 @@ import {
 } from '../src/core/tempo/index.js';
 import { assertNoteEvent } from '../src/core/validation/index.js';
 import { Instrument, Score } from '../src/model/index.js';
-import { growthFactor } from './support/growth.js';
+import { growthFactor, shortestReading } from './support/growth.js';
 
 const CONSTANT: TempoMap = [{ startBeat: 0, bpm: 120 }];
 const CHANGING: TempoMap = [
@@ -413,13 +413,17 @@ describe('a tempo map is bounded and read once', () => {
       return last;
     };
     convert(remembered, false);
-    const started = performance.now();
     expect(convert(remembered, false)).toBeGreaterThan(0);
-    const recognised = performance.now() - started;
-    const again = performance.now();
     expect(convert(rewritten, true)).toBeGreaterThan(0);
-    const revalidated = performance.now() - again;
-    expect(revalidated / Math.max(recognised, 1)).toBeGreaterThan(3);
+    // Each side read more than once and kept at its shortest: both are cheap
+    // enough that one descheduled slice is a large share of a single reading.
+    const recognised = shortestReading(() => convert(remembered, false));
+    const revalidated = shortestReading(() => convert(rewritten, true));
+    // A map recognised as the one already validated is not walked again. How
+    // much that saves depends on the machine and on whether coverage is
+    // counting every call, so the bound separates the saving from none at all
+    // rather than stating its size.
+    expect(revalidated / Math.max(recognised, 0.01)).toBeGreaterThan(2);
     // Ten thousand entries converted ten thousand times, twice: seconds on a
     // machine to itself and a minute or more with the rest of the suite running
     // beside it. The budget is for catching a hang, as the suite-wide one is —

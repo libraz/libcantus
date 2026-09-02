@@ -19,7 +19,7 @@ jobs:
     # exercised. Coverage is uploaded once, from the ubuntu/22 combination that
     # matches mise.toml.
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
