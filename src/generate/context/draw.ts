@@ -1,6 +1,11 @@
 import { InvalidInputError } from '../../core/errors/index.js';
 import { includeAt, type PositionalRng, type SeedPath } from '../../core/random/index.js';
-import { assertFiniteNumber, assertInteger } from '../../core/validation/index.js';
+import {
+  assertFiniteNumber,
+  assertFunction,
+  assertInteger,
+  assertRecord,
+} from '../../core/validation/index.js';
 
 /**
  * The samplers a generator needs, each addressed by the position it is drawing
@@ -27,6 +32,37 @@ export type Draw = {
   /** A float in [lo, hi) at a position. */
   float: (lo: number, hi: number, ...path: SeedPath) => number;
 };
+
+/**
+ * The samplers a {@link Draw} carries, in declaration order.
+ *
+ * Named once so the check below cannot fall behind the type: a sampler added to
+ * `Draw` is added here on the same commit, and the check that the two agree is
+ * the suite's rather than a reader's.
+ */
+export const DRAW_METHODS = ['at', 'prob', 'range', 'float'] as const;
+
+/**
+ * Read a sampler set as one, before a generator draws from it.
+ *
+ * Every generator takes a `Draw` and calls straight into it, so a caller that
+ * built its own — or restored one from a session where the methods did not
+ * survive — reaches the draw as a call on something that is not a function, deep
+ * inside the generator. Checked here, it is refused by the name of the sampler
+ * that is missing.
+ *
+ * @param draw The sampler set as the caller passed it.
+ * @param name What the value is, for the error message.
+ * @returns The sampler set.
+ * @throws If it is not an object carrying all four samplers.
+ */
+export function assertDraw(draw: Draw, name = 'draw'): Draw {
+  const sampler = assertRecord<Draw>(draw, name);
+  for (const method of DRAW_METHODS) {
+    assertFunction(sampler[method], `${name}.${method}`);
+  }
+  return sampler;
+}
 
 /**
  * One draw from a positional source, held to the range the source promises.
