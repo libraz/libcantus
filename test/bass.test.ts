@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { beatsPerBar, pulseBeats, type TimeSignature } from '../src/core/meter/index.js';
+import {
+  BASS_4_STRING,
+  BASS_5_STRING,
+  foldIntoRange,
+  type StringedProfile,
+} from '../src/core/instrument/index.js';
+import {
+  beatsPerBar,
+  isStrongBeat,
+  pulseBeats,
+  type TimeSignature,
+} from '../src/core/meter/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import {
   type BassLineOptions,
@@ -7,6 +18,8 @@ import {
   type BassStyle,
   generateBassLine,
 } from '../src/generate/bass/index.js';
+import { bandFloor, placeRoot } from '../src/generate/bass/internal.js';
+import { sustainsShift } from '../src/generate/context/index.js';
 import { chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
 
@@ -412,5 +425,204 @@ describe('generateBassLine', () => {
         ).toBeLessThan(1e-9);
       }
     }
+  });
+});
+
+const FOUR_FOUR: TimeSignature = { numerator: 4, denominator: 4 };
+
+const THREE_FOUR: TimeSignature = { numerator: 3, denominator: 4 };
+
+/** The roots of {@link waltz}, in order. */
+const WALTZ_ROOTS = [0, 5, 7, 0];
+
+/**
+ * The same I-IV-V-I in three, one bar per chord.
+ *
+ * Three beats to the bar leaves two weak beats after the downbeat, so a pickup
+ * can follow a pickup and the note before an octave pickup is not always the
+ * root a beat below it. What a leap actually is, is then a range rather than a
+ * constant.
+ */
+function waltz(): BassSegment[] {
+  return WALTZ_ROOTS.map((rootPc, bar) => ({
+    startBeat: bar * 3,
+    endBeat: bar * 3 + 3,
+    chord: makeChord(rootPc, 'maj'),
+  }));
+}
+
+/**
+ * Where a chord sounds its bass in a generated line: the band placement, as the
+ * instrument leaves it.
+ *
+ * This is the note a pickup must not be, and it is derived the way the line
+ * derives it rather than read back off the output — a segment whose every note
+ * is a pickup still has to be measured against the right note.
+ */
+function soundingRoot(
+  rootPc: number,
+  octave: number,
+  instrument: StringedProfile | undefined,
+): number {
+  const placed = placeRoot(rootPc, bandFloor(octave * 12 + 12, instrument));
+  return instrument ? foldIntoRange(placed, instrument) : placed;
+}
+
+/**
+ * The octave pickups a `pop` line took, each with the leap it actually is.
+ *
+ * A weak-beat note sounding the chord's own bass pitch class is the octave
+ * pickup; the alternative pickup is the fifth, which is a different pitch class.
+ */
+function octavePickups(ctx: BassLineOptions['ctx']): { leap: number; beats: number }[] {
+  const segments = waltz();
+  const notes = generateBassLine({
+    segments,
+    key: cMajor,
+    style: 'pop',
+    octave: 2,
+    ts: THREE_FOUR,
+    ctx,
+  });
+  const taken: { leap: number; beats: number }[] = [];
+  for (let index = 1; index < notes.length; index += 1) {
+    const note = notes[index];
+    const previous = notes[index - 1];
+    if (note === undefined || previous === undefined) {
+      continue;
+    }
+    if (isStrongBeat(note.startBeat, THREE_FOUR)) {
+      continue;
+    }
+    const at = segments.findIndex(
+      (segment) => note.startBeat >= segment.startBeat && note.startBeat < segment.endBeat,
+    );
+    if (((note.pitch % 12) + 12) % 12 !== WALTZ_ROOTS[at]) {
+      continue;
+    }
+    taken.push({
+      leap: Math.abs(note.pitch - previous.pitch),
+      beats: note.startBeat - previous.startBeat,
+    });
+  }
+  return taken;
+}
+
+describe("the pop style's weak-beat pickup", () => {
+  it('is never the note already sounding under it, on any instrument or register', () => {
+    // The pickup drops an octave below the band, and the band is one octave
+    // wide: on an instrument with nothing under it the drop folds straight back
+    // onto the root and the pickup becomes a repeated note. A four-string bass
+    // has no C, C#, D or D# below its E — between them most of the keys pop is
+    // written in — and `Instrument.bass4()` is the example the class layer's own
+    // documentation gives.
+    let seen = 0;
+    for (const instrument of [undefined, BASS_4_STRING, BASS_5_STRING]) {
+      for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+        for (const octave of [1, 2, 3]) {
+          for (let seed = 0; seed < 8; seed += 1) {
+            const segments: BassSegment[] = [
+              { startBeat: 0, endBeat: 4, chord: makeChord(rootPc, 'maj') },
+            ];
+            const notes = generateBassLine({
+              segments,
+              key: cMajor,
+              style: 'pop',
+              octave,
+              instrument,
+              ctx: { seed, complexity: { rhythmic: 1 } },
+            });
+            const root = soundingRoot(rootPc, octave, instrument);
+            for (const note of notes) {
+              if (isStrongBeat(note.startBeat, FOUR_FOUR)) {
+                continue;
+              }
+              seen += 1;
+              expect(
+                note.pitch,
+                `pc ${rootPc} / octave ${octave} / seed ${seed} @${note.startBeat}`,
+              ).not.toBe(root);
+            }
+          }
+        }
+      }
+    }
+    // The sweep has to have produced pickups for the assertion above to mean
+    // anything.
+    expect(seen).toBeGreaterThan(500);
+  });
+
+  it('still drops below the band on an instrument that reaches under it', () => {
+    const octave = 2;
+    const low = octave * 12 + 12;
+    const dropped: number[] = [];
+    for (let seed = 0; seed < 20; seed += 1) {
+      for (const instrument of [undefined, BASS_5_STRING]) {
+        const notes = generateBassLine({
+          segments: progression(),
+          key: cMajor,
+          style: 'pop',
+          octave,
+          instrument,
+          ctx: { seed, complexity: { rhythmic: 1 } },
+        });
+        dropped.push(...notes.filter((note) => note.pitch < low).map((note) => note.pitch));
+      }
+    }
+    expect(dropped.length).toBeGreaterThan(0);
+  });
+
+  it('sounds instead of the fallback root on a segment with no strong beat', () => {
+    // The fallback is for a segment that produced no note at all. A segment
+    // covering one weak beat produces a pickup, and the pickup is what has to be
+    // heard: writing the fallback on top of it put two notes on one onset, and
+    // the one silently dropped was the one the line had chosen.
+    for (const ts of [
+      { numerator: 4, denominator: 4 },
+      { numerator: 3, denominator: 4 },
+    ] as const) {
+      for (let seed = 0; seed < 8; seed += 1) {
+        const notes = generateBassLine({
+          segments: [{ startBeat: 1, endBeat: 2, chord: makeChord(0, 'maj') }],
+          key: cMajor,
+          style: 'pop',
+          ts,
+          octave: 2,
+          ctx: { seed, complexity: { rhythmic: 1 } },
+        });
+        const label = `${ts.numerator}/${ts.denominator} seed ${seed}`;
+        expect(notes, label).toHaveLength(1);
+        expect(notes[0]?.startBeat, label).toBe(1);
+        expect(notes[0]?.pitch, label).not.toBe(soundingRoot(0, 2, undefined));
+      }
+    }
+  });
+
+  it('is judged by the leap it actually is, not by the octave it is named for', () => {
+    // The pickup leaves the band, so the note before it sits anywhere from a
+    // unison to two octaves away. Charging the difficulty ceiling a flat twelve
+    // semitones accepts leaps the hand cannot make and rejects ones it can.
+    const bpm = 90;
+    const difficulty = 3;
+    let judged = 0;
+    let under = 0;
+    let free = 0;
+    for (let seed = 0; seed < 40; seed += 1) {
+      const density = { rhythmic: 1 };
+      const limited = octavePickups({ seed, bpm, complexity: { ...density, difficulty } });
+      under += limited.length;
+      free += octavePickups({ seed, bpm, complexity: density }).length;
+      for (const pickup of limited) {
+        judged += 1;
+        expect(
+          sustainsShift(pickup.leap, pickup.beats, bpm, difficulty),
+          `seed ${seed}: ${pickup.leap} semitones in ${pickup.beats} beats`,
+        ).toBe(true);
+      }
+    }
+    expect(judged).toBeGreaterThan(0);
+    // And the ceiling has to be doing something, or the assertion above holds
+    // for a line nobody constrained.
+    expect(under).toBeLessThan(free);
   });
 });

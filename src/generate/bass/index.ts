@@ -127,7 +127,8 @@ export type BassLineOptions = {
   /**
    * Target register as a base MIDI octave; roots land around `octave*12+12`.
    * An octave pickup in the `pop` style may drop a note into the octave below
-   * that band, which is where such a pickup belongs.
+   * that band, which is where such a pickup belongs, or take the octave above
+   * instead on an instrument with nothing below the band to drop into.
    *
    * @defaultValue 2
    */
@@ -194,16 +195,27 @@ type BuildContext = {
   difficulty: number | undefined;
 };
 
+/**
+ * The pitch a placement actually sounds as.
+ *
+ * The band already sits inside the instrument, so this catches the placements
+ * that deliberately leave it — the pop octave pickup and walking approach notes
+ * — rather than transposing the line wholesale. It is a function of its own so
+ * that a builder choosing between two placements can ask what each of them will
+ * sound as: a note is only an octave below the band if the instrument reaches
+ * down there, and the choice has to be made about the note that will be heard.
+ */
+function sounding(ctx: BuildContext, placed: number): number {
+  return ctx.instrument ? foldIntoRange(placed, ctx.instrument) : placed;
+}
+
 /** Append a note for pitch class `pc` at `pos`, placed against the chord's bass. */
 function emit(ctx: BuildContext, pos: number, pc: number, midiOverride?: number): number {
   const placed = clampToMidi(
     midiOverride ?? placePc(pc, ctx.rootMidi, ctx.low),
     'generated bass pitch',
   );
-  // The band already sits inside the instrument, so this catches the placements
-  // that deliberately leave it — the pop octave pickup and walking approach
-  // notes — rather than transposing the line wholesale.
-  const midi = ctx.instrument ? foldIntoRange(placed, ctx.instrument) : placed;
+  const midi = sounding(ctx, placed);
   const velocity = isStrongBeat(pos, ctx.ts) ? STRONG_VELOCITY : WEAK_VELOCITY;
   ctx.notes.push({ startBeat: pos, pitch: midi, velocity });
   ctx.prevMidi = midi;
@@ -243,25 +255,70 @@ function buildPop(ctx: BuildContext, seg: BassSegment, index: number): void {
       emit(ctx, pos, rootPc);
       emitted = true;
     } else if (ctx.draw.prob(ctx.pickupDensity, 'pickup', index, pos)) {
-      // The octave pickup is a leap, so it is the candidate a difficulty
-      // ceiling rejects first: at that tempo the hand does not get there, and
-      // the player takes the fifth instead of dropping the pickup.
-      if (ctx.draw.prob(0.5, 'pickupKind', index, pos) && reachableLeap(ctx, pos, 12)) {
-        // Octave pickup: the root an octave below where the segment sounds it.
-        // The band is one octave wide, so clamping the drop back into it would
-        // return the root itself and the pickup would be a repeated note. It is
-        // allowed the octave below the band instead, and falls back to the
-        // plain root when that leaves MIDI.
-        const dropped = ctx.rootMidi - 12;
-        emit(ctx, pos, rootPc, dropped >= 0 ? dropped : ctx.rootMidi);
-      } else {
-        emit(ctx, pos, fifthPcOf(seg.chord));
-      }
+      emitted = pickup(ctx, seg, pos, index) || emitted;
     }
   }
   if (!emitted) {
     emit(ctx, seg.startBeat, rootPc);
   }
+}
+
+/**
+ * The weak-beat pickup a `pop` line leads into the next strong beat with.
+ *
+ * The octave is the idiom's own figure, so it is asked for first. It is a leap,
+ * so it is also the candidate a difficulty ceiling rejects first: at that tempo
+ * the hand does not get there, and the player takes the fifth instead of
+ * dropping the pickup. The leap is measured against the note actually before
+ * it, which sits anywhere in the band, rather than against the octave the
+ * figure is named for.
+ *
+ * The fifth is taken again when the instrument has no octave to give. Where the
+ * chord has no fifth of its own that is the root a second time, and rather than
+ * repeat the note the beat is left empty: a pickup is an extra note, so not
+ * playing it is always available.
+ *
+ * @returns Whether a note was written.
+ */
+function pickup(ctx: BuildContext, seg: BassSegment, pos: number, index: number): boolean {
+  const octave = octavePickup(ctx);
+  if (
+    ctx.draw.prob(0.5, 'pickupKind', index, pos) &&
+    octave !== undefined &&
+    reachableLeap(ctx, pos, Math.abs(sounding(ctx, octave) - ctx.prevMidi))
+  ) {
+    emit(ctx, pos, bassPcOf(seg.chord), octave);
+    return true;
+  }
+  const fifthPc = fifthPcOf(seg.chord);
+  if (sounding(ctx, placePc(fifthPc, ctx.rootMidi, ctx.low)) === sounding(ctx, ctx.rootMidi)) {
+    return false;
+  }
+  emit(ctx, pos, fifthPc);
+  return true;
+}
+
+/**
+ * Where an octave pickup goes, or nothing when the instrument has no octave.
+ *
+ * Below the band is where such a pickup belongs and it is taken whenever it can
+ * be heard. The band is one octave wide, though, so an instrument that does not
+ * reach under it folds the drop straight back onto the root already sounding —
+ * a four-string bass has nothing below its E — and a pickup that repeats the
+ * note under it is the one thing a pickup cannot be. The octave above is the
+ * same figure played the other way, which is what a player without the low
+ * string does, so it is taken before the figure is given up. Both are judged by
+ * what they sound as rather than by where they are written, since the fold is
+ * the whole question.
+ */
+function octavePickup(ctx: BuildContext): number | undefined {
+  const root = sounding(ctx, ctx.rootMidi);
+  for (const candidate of [ctx.rootMidi - 12, ctx.rootMidi + 12]) {
+    if (candidate >= 0 && candidate <= 127 && sounding(ctx, candidate) !== root) {
+      return candidate;
+    }
+  }
+  return undefined;
 }
 
 /**
