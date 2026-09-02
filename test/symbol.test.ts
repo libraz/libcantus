@@ -529,3 +529,74 @@ describe('the fifth a symbol spells', () => {
     }
   });
 });
+
+/**
+ * A slash bass is written the way a chart writes one, whichever side of the
+ * staff the symbol is asked for.
+ *
+ * Respelling a symbol carries the bass by the step the root moved, which is
+ * what keeps a bass that belongs to the chord inside it. Carried far enough
+ * that step lands on a name no chart writes: `C#7/D` asked for on the flat side
+ * came out `Db7/Ebb`, and `Db7/E` on the sharp side came out `C#7/D##`. The
+ * step is still taken, and the answer is still checked against what a chart
+ * writes — with the one exception that the chord's own tones keep the chord's
+ * spelling, because the augmented fifth of a G sharp is a D double sharp and
+ * writing that inversion over an E would name a note the chord does not hold.
+ */
+describe('formatChordSymbol writes a bass a chart would write', () => {
+  /** Roots a chart writes on either side of the staff. */
+  const ROOTS = ['C#', 'Db', 'D#', 'Eb', 'F#', 'Gb', 'G#', 'Ab', 'A#', 'Bb'];
+
+  /** Basses spelled plainly, which is how a caller writes a slash bass. */
+  const BASSES = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+
+  it('never writes a double accidental for a bass the chord does not contain', () => {
+    const offenders: string[] = [];
+    for (const root of ROOTS) {
+      for (const bass of BASSES) {
+        for (const quality of ['7', 'maj7', 'm7']) {
+          const text = `${root}${quality}/${bass}`;
+          const source = parseChordSymbol(text);
+          for (const flats of [true, false, undefined]) {
+            const symbol = formatChordSymbol(source, { flats });
+            const printed = parseChordSymbol(symbol);
+            const printedBass = printed.bassSpelling;
+            if (printedBass === undefined) {
+              continue;
+            }
+            // The pitch class is never allowed to move, whichever spelling wins.
+            expect(mod12(printed.bassPc ?? printed.rootPc), `${text} ${String(flats)}`).toBe(
+              mod12(source.bassPc ?? source.rootPc),
+            );
+            const tones = new Set(chordPitchClasses(printed, { includeBass: false }));
+            if (tones.has(mod12(printed.bassPc ?? printed.rootPc))) {
+              continue;
+            }
+            if (Math.abs(printedBass.alter) > 1) {
+              offenders.push(`${text} {flats:${String(flats)}} => ${symbol}`);
+            }
+          }
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('keeps the chord own spelling for a bass that is one of its tones', () => {
+    // The augmented fifth of G sharp is a D double sharp; the first inversion of
+    // that chord is written over it and not over the E it sounds like.
+    expect(formatChordSymbol(parseChordSymbol('G#aug/D##'))).toBe('G#aug/D##');
+  });
+
+  it('writes the reported cases the way a chart writes them', () => {
+    expect(formatChordSymbol(parseChordSymbol('C#7/D'), { flats: true })).toBe('Db7/D');
+    expect(formatChordSymbol(parseChordSymbol('Db7/E'), { flats: false })).toBe('C#7/E');
+  });
+
+  it('reads a subject the sweep supplies rather than a list', () => {
+    // Without this the sweep above could pass by looking at nothing: the count
+    // is the roots and basses it actually walks, times the three sides.
+    expect(ROOTS.length * BASSES.length * 3).toBeGreaterThan(200);
+  });
+});

@@ -35,6 +35,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A slash bass is written the way a chart writes one.** Respelling a symbol
+  carries the bass by the step its root moved, which is what keeps a bass that
+  belongs to the chord inside it — but the step was taken without asking whether
+  it landed on a name anybody writes, so `formatChordSymbol` answered `Db7/Ebb`
+  for a `C#7/D` asked for on the flat side and `C#7/D##` for a `Db7/E` asked for
+  on the sharp side. The step is still taken and the answer is now held to the
+  written vocabulary, which is the check transposing the same symbol already
+  applied and which both now read from one place. A bass that is one of the
+  chord's own tones keeps the chord's spelling whatever it is: the augmented
+  fifth of a G sharp is a D double sharp, and writing that inversion over an E
+  would name a note the chord does not hold.
+
 - **The model layer resolves a meter argument in one place.** `Score`, `Composer`
   and `Arrangement` each held a private `metersFrom`, all three equivalent to
   the `resolveMeters` they already imported and each a place a later edit could
