@@ -388,3 +388,59 @@ describe('the analysis entry points take a meter map', () => {
     );
   });
 });
+
+describe('the bar a beat is in is the bar it is in', () => {
+  // A change of meter starts a new bar, so a bar interrupted by one is shorter
+  // than its own signature says. Reading the signature's nominal length there
+  // puts the end of the bar past where the next one begins, and every span
+  // measured in bars from that point on is counted against a bar the music
+  // never had.
+
+  /** 4/4 interrupted mid-bar: the bar holding beat 5 runs [4, 6), not [4, 8). */
+  const INTERRUPTED: MeterMap = [
+    { startBeat: 0, ts: { numerator: 4, denominator: 4 } },
+    { startBeat: 6, ts: { numerator: 3, denominator: 4 } },
+  ];
+
+  it('ends the interrupted bar where the next one begins', () => {
+    expect(barStartBeat(5, INTERRUPTED)).toBe(4);
+    expect(beatsPerBarAt(5, INTERRUPTED)).toBe(2);
+    expect(barStartBeat(5, INTERRUPTED) + beatsPerBarAt(5, INTERRUPTED)).toBe(6);
+  });
+
+  it('lands on the next bar from every beat of every map', () => {
+    // The property, not the one case: the bar start plus the bar length is the
+    // beat the next bar begins on, wherever the changes fall.
+    const maps: MeterMap[] = [
+      INTERRUPTED,
+      [
+        { startBeat: 0, ts: { numerator: 4, denominator: 4 } },
+        { startBeat: 3, ts: { numerator: 7, denominator: 8 } },
+        { startBeat: 9.5, ts: { numerator: 6, denominator: 8 } },
+      ],
+      [
+        { startBeat: 0, ts: { numerator: 3, denominator: 4 } },
+        { startBeat: 10, ts: { numerator: 5, denominator: 4 } },
+      ],
+    ];
+    let checked = 0;
+    for (const map of maps) {
+      for (let beat = 0; beat < 24; beat += 0.25) {
+        const start = barStartBeat(beat, map);
+        const next = barPositionToBeat({ bar: barIndexAt(beat, map) + 1, beat: 0 }, map);
+        checked += 1;
+        expect(start + beatsPerBarAt(beat, map), `@${beat}`).toBeCloseTo(next, 9);
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
+  });
+
+  it('answers as the single-signature reading does where nothing interrupts', () => {
+    const plain: MeterMap = [{ startBeat: 0, ts: { numerator: 7, denominator: 8 } }];
+    for (let beat = 0; beat < 20; beat += 0.5) {
+      expect(beatsPerBarAt(beat, plain), `@${beat}`).toBe(
+        beatsPerBarAt(beat, { numerator: 7, denominator: 8 }),
+      );
+    }
+  });
+});

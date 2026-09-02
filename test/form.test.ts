@@ -876,4 +876,33 @@ describe('phrases over a metre change', () => {
     expect(withDefault).toEqual(openingHyperbar);
     expect(withDefault).not.toEqual(laterHyperbar);
   });
+
+  it('draws that length from the metre the span itself opens in', () => {
+    // "The metre the span opens in" is the metre of the span analysed, not of
+    // the piece. Bar 0 is always the bar beginning at beat 0 of the map, so a
+    // hyperbar measured from there hands an excerpt starting after the change
+    // the bar length of a metre it never sounds in — and that wrong length is
+    // the prior every phrase in the excerpt is fitted against.
+    const excerptNotes: NoteEvent[] = [
+      ...quarters([60, 62, 64], 16),
+      ...quarters([65, 64, 62], 19),
+      ...quarters([60, 64, 67], 22),
+      { pitch: 60, startBeat: 25, durationBeat: 3 },
+    ];
+    const excerpt = chordTimelineFromChords(
+      [span(0, 'maj', 16), span(5, 'maj', 19), span(7, 'maj', 22), span(0, 'maj', 25)],
+      28,
+    );
+    const read = (expectedPhraseBeats?: number) =>
+      phrasesFromTimeline(excerpt, excerptNotes, {
+        meters,
+        key: majorKey(0),
+        hypermeter: grouping,
+        ...(expectedPhraseBeats === undefined ? {} : { expectedPhraseBeats }),
+      });
+    // Two bars of 3/4 are six beats, not the eight two bars of the opening 4/4
+    // would give.
+    expect(read()).toEqual(read(6));
+    expect(read(6)).not.toEqual(read(8));
+  });
 });

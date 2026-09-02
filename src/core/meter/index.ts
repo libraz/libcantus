@@ -523,13 +523,25 @@ function barIndexChecked(beatInQuarters: number, meter: MeterData): number {
  * The meter-map counterpart of {@link beatsPerBar}, which answers for one
  * signature and so cannot be asked about a piece that changes meter.
  *
+ * The bar the beat is in, not the bar its signature nominally has: a change of
+ * meter starts a new bar, so a bar interrupted by one is shorter than its own
+ * signature says. Reading the signature's own length there would put the end of
+ * the bar past where the next one begins, and every span measured in bars from
+ * that point on would be counted against a bar length the music never had.
+ *
  * @param beatInQuarters Absolute position in quarter-note beats.
  * @param meter A single signature, or the piece's meter map.
  * @returns The bar length in quarter notes.
  * @category Rhythm & Meter
  */
 export function beatsPerBarAt(beatInQuarters: number, meter: MeterLike): number {
-  return barBeatsOf(meterAt(beatInQuarters, meter));
+  assertFiniteNumber(beatInQuarters, 'beat');
+  const data = readMeterData(meter);
+  // A single signature has no interruption to be cut short by, so the two
+  // readings agree there and the map walk is not paid for.
+  return isMeterMap(data)
+    ? barLengthOf(data, beatInQuarters)
+    : barBeatsOf(meterAt(beatInQuarters, meter));
 }
 
 /**

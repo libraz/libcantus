@@ -687,10 +687,17 @@ export function phrasesFromTimeline(
       cadenceBeats: cadences.map((hit) => hit.atBeat),
       budget: opts.budget,
     });
+  // The hyperbar the span opens in, not the one the piece opens in. Bar 0 is
+  // always the bar beginning at beat 0 of the meter map, so measuring the group
+  // from there hands an excerpt starting after a change of meter the bar length
+  // of a meter it never sounds in — and that wrong length is the prior every
+  // phrase in it is fitted against. The bar the span itself opens in is the
+  // anchor the line above already uses.
+  const firstBar = barIndexAt(Math.max(0, spanStart), meters);
   const hyperBeats = Math.max(
     barBeats,
-    barPositionToBeat({ bar: grouping.groupBars, beat: 0 }, meters) -
-      barPositionToBeat({ bar: 0, beat: 0 }, meters),
+    barPositionToBeat({ bar: firstBar + grouping.groupBars, beat: 0 }, meters) -
+      barPositionToBeat({ bar: firstBar, beat: 0 }, meters),
   );
   const expected = opts.expectedPhraseBeats ?? hyperBeats;
   assertRange(expected, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'phrase expectedPhraseBeats');

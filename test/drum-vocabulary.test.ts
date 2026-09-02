@@ -544,6 +544,54 @@ describe('the meter a drum figure is written in', () => {
     expect(hits.map((hit) => hit.startBeat)).toEqual([0, 1, 2, 3, 4, 5]);
   });
 
+  it('swings every bar of an odd meter the same way', () => {
+    // A 7/8 bar is three and a half quarter notes, so every other bar begins
+    // half a beat into one. Swinging the absolute position takes the offset
+    // inside a quarter note, and that offset is not the offset inside the bar:
+    // the downbeat of the odd bars was warped and their offbeats came out
+    // straight, alternating bar by bar with no error to say so.
+    const seven: Vocabulary<unknown> = {
+      ...waltz,
+      id: 'callerSeven',
+      ts: { numerator: 7, denominator: 8 },
+      material: {
+        steps: 14,
+        strokes: [
+          { voice: 'kick', step: 0, velocity: 1 },
+          { voice: 'snare', step: 2, velocity: 0.9 },
+          { voice: 'snare', step: 6, velocity: 0.9 },
+        ],
+      },
+    };
+    const hits = placeDrumPattern({
+      bars: 4,
+      genre: 'rock',
+      ts: '7/8',
+      feel: 'shuffle',
+      ctx: { seed: 1, bpm: 100, vocabulary: [seven] },
+    });
+    expect(hits.length).toBeGreaterThan(0);
+    const barBeats = 3.5;
+    // Where each bar's strokes sit inside their own bar. Every bar of a
+    // repeated one-bar figure has to answer the same list, or the groove
+    // alternates bar by bar with nothing to say so.
+    const byBar = new Map<number, number[]>();
+    for (const hit of hits) {
+      const bar = Math.floor(hit.startBeat / barBeats + 1e-9);
+      const within = Math.round((hit.startBeat - bar * barBeats) * 1e6) / 1e6;
+      byBar.set(bar, [...(byBar.get(bar) ?? []), within]);
+    }
+    expect(byBar.size).toBe(4);
+    const first = byBar.get(0) ?? [];
+    // The bar line is never moved, whatever the swing.
+    expect(first[0]).toBe(0);
+    // And the swing did something, or the bars agree for the wrong reason.
+    expect(first.some((within) => !Number.isInteger(within * 2))).toBe(true);
+    for (const [bar, offsets] of byBar) {
+      expect(offsets, `bar ${bar}`).toEqual(first);
+    }
+  });
+
   it('thins a figure against the bar it is written in', () => {
     // Below the neutral dial the figure is thinned by how much of the metre
     // each position carries. In 3/4 the beat-2 stroke is a plain main pulse and

@@ -483,7 +483,12 @@ export function placeDrumPattern(opts: DrumPatternOptions): DrumHit[] {
       }
       track.add(
         pitch,
-        quantizeSwing(barStart + stroke.step * STEP_BEATS, swing, 'sixteenth'),
+        // The bar's own grid is what is swung, and the bar start is added
+        // back after. Swinging the absolute beat takes the offset inside a
+        // quarter note, which is the same thing only while a bar is a whole
+        // number of them: in 7/8 every other bar begins half a beat into one,
+        // so the downbeat was warped and the offbeats came out straight.
+        barStart + quantizeSwing(stroke.step * STEP_BEATS, swing, 'sixteenth'),
         stroke.duration ?? STEP_BEATS,
         baseVelocity * stroke.velocity,
         stroke.articulation,
