@@ -9,7 +9,12 @@ import type { MeterLike, MeterMap } from '../../core/meter/index.js';
 import { beatsPerBarAt, isStrongBeat, resolveMeters } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import type { NoteEventAssertOptions } from '../../core/validation/index.js';
-import { assertGenerationBudget, assertInteger, assertRange } from '../../core/validation/index.js';
+import {
+  assertArray,
+  assertGenerationBudget,
+  assertInteger,
+  assertRange,
+} from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
 import {
   evaluateSafety,
@@ -46,6 +51,8 @@ import {
 } from '../voice/index.js';
 import {
   arrangementProfile,
+  assertGivenKeys,
+  assertGivenTimeline,
   assertTrackNotes,
   harmonyTrackSet,
   isPercussion,
@@ -575,6 +582,7 @@ export function analyzeArrangementWith(
     assertRange(opts.pickupBeats, 0, Number.MAX_SAFE_INTEGER, 'arrangement pickupBeats');
     noteOptions.minStartBeat = -opts.pickupBeats;
   }
+  assertArray(tracks, 'arrangement tracks');
   assertGenerationBudget(tracks.length, 'arrangement tracks', budget);
   const noteCount = assertTrackNotes(tracks, noteOptions);
   // The pooled total is what the downstream timeline analysis actually sizes
@@ -593,6 +601,11 @@ export function analyzeArrangementWith(
           NoteSafety.Safe,
           NoteSafety.Dissonant,
         );
+  // The two options a caller can hand a previous pass's work through are read
+  // for their shape here, with the rest of the options, rather than at the line
+  // that first dereferences them several layers down.
+  assertGivenTimeline(opts.timeline, 'arrangement timeline');
+  assertGivenKeys(opts.keys, 'arrangement keys');
   const harmonyTracks = harmonyTrackSet(opts.harmonyTracks, tracks);
   const prepared = prepareTracks(tracks);
   // Every note is evaluated against the other sub-voices sounding beneath it, so

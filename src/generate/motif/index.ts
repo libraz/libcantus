@@ -11,6 +11,7 @@ import {
   assertInteger,
   assertNoteEvents,
   assertPositiveInt,
+  assertRecord,
   clampToMidi,
 } from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
@@ -297,6 +298,7 @@ function contourOffsets(contour: MotifContour, count: number): number[] {
  * @category Composition
  */
 export function generateMotif(opts: MotifOptions): MotifCell {
+  assertRecord(opts, 'motif options');
   const contour = opts.contour ?? 'arch';
   const bars = assertPositiveInt(opts.bars, 'motif bars');
   // The meter is read once, here: a motif is one repeated bar grid, so a
@@ -362,6 +364,8 @@ export function generateMotif(opts: MotifOptions): MotifCell {
  * @category Composition
  */
 export function motifToNoteEvents(cell: MotifCell): NoteEvent[] {
+  assertRecord<MotifCell>(cell, 'motif cell');
+  assertNoteEvents(cell.notes, 'motif cell notes');
   return cell.notes.map((note) => ({ ...note }));
 }
 

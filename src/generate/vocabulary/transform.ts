@@ -20,7 +20,12 @@ import {
   pulseBeats,
   toMeterData,
 } from '../../core/meter/index.js';
-import { assertRange } from '../../core/validation/index.js';
+import {
+  assertArray,
+  assertFiniteNumber,
+  assertRange,
+  assertRecord,
+} from '../../core/validation/index.js';
 import { sustainsStrokes } from '../context/difficulty.js';
 import type { Draw } from '../context/draw.js';
 
@@ -42,6 +47,23 @@ export const STEP_BEATS = 1 / BEAT_STEPS;
  *
  * @category Composition
  */
+/**
+ * The figure as a list of onsets, checked before it is walked.
+ *
+ * Every transform here takes a figure a caller may have assembled itself or
+ * read out of a file, and every one of them starts by walking it: the shape is
+ * read once, in one place, so a `null` figure is refused by name rather than
+ * reported as this module's own `TypeError` from whichever transform was asked.
+ */
+function assertGridEvents<T extends GridEvent>(events: readonly T[]): readonly T[] {
+  assertArray<T>(events, 'figure events');
+  events.forEach((event, index) => {
+    assertRecord<T>(event, `figure events[${index}]`);
+    assertFiniteNumber(event.step, `figure events[${index}].step`);
+  });
+  return events;
+}
+
 export type GridEvent = {
   /** Sixteenth-note index from the start of the figure. */
   step: number;
@@ -177,7 +199,7 @@ export function thin<T extends GridEvent>(
  * @category Composition
  */
 export function double<T extends GridEvent>(events: readonly T[], spanSteps = BAR_STEPS): T[] {
-  const sorted = [...events].sort((a, b) => a.step - b.step);
+  const sorted = [...assertGridEvents(events)].sort((a, b) => a.step - b.step);
   const out: T[] = [];
   for (let i = 0; i < sorted.length; i += 1) {
     const event = sorted[i];
@@ -210,7 +232,7 @@ const ADDED_NOTE_VELOCITY = 0.75;
  * @category Composition
  */
 export function halfTime<T extends GridEvent>(events: readonly T[], spanSteps = BAR_STEPS): T[] {
-  return events
+  return assertGridEvents(events)
     .map((event) => ({ ...event, step: event.step * 2 }))
     .filter((event) => event.step < spanSteps);
 }
@@ -236,6 +258,7 @@ export function halfTime<T extends GridEvent>(events: readonly T[], spanSteps = 
  * @category Composition
  */
 export function doubleTime<T extends GridEvent>(events: readonly T[], spanSteps = BAR_STEPS): T[] {
+  assertGridEvents(events);
   const merged = new Map<string, T>();
   const place = (event: T, step: number, velocity: number): void => {
     const key = `${streamOf(event)}@${step}`;

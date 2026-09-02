@@ -6,6 +6,7 @@ import {
   assertInteger,
   assertOneOf,
   assertPositiveInt,
+  assertRecord,
 } from '../../core/validation/index.js';
 import { type GenerationContextInput, resolveContext, sustainsStrokes } from '../context/index.js';
 import { selectVocabulary, vocabularyOfKind } from '../vocabulary/index.js';
@@ -259,6 +260,7 @@ const DEFAULT_BPM = 120;
  * @category Composition
  */
 export function generateDrums(opts: DrumsOptions): DrumHit[] {
+  assertRecord(opts, 'drum options');
   assertPositiveInt(opts.bars, 'drum bars');
   // Generation is linear in bar count — every lookup inside the bar loop is
   // indexed — so the estimate is the hit count itself.

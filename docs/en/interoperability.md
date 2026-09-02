@@ -39,6 +39,8 @@ toKeyScale('A minor').rootPc; // 9
 toChordData('Cmaj7').intervals; // [0, 4, 7, 11]
 ```
 
+The spelling primitives in `core` are the exception, and they are the layer the coercers hand their result to: `formatNote`, `formatKeyName`, `transposeNote` and `spelledInterval` take the spelled data `toNoteData` produces rather than the text it reads. Pass a name through the coercer first — `formatNote(toNoteData('Eb4'))` — or use the class, which does it for you.
+
 A key has two coercers because a key carries more than its pitch classes. `resolveKey` keeps the spelled tonic and the scale form — the `{ scale, tonic, variant }` shape a project file stores — and is what the class layer and the generators take. `toKeyScale` reads the same shapes and gives back the root pitch class and the mask alone, for a caller that wants exactly those; a key put through it comes back unable to say whether its sixth degree is written A-flat or G-sharp.
 
 An instrument is taken the same way — every entry point that needs one takes an `InstrumentProfileLike`, a plain profile or an `Instrument` — and its coercers are public too. `toInstrumentProfile` widens any instrument-shaped value to a plain profile and validates it; `toStringedProfile` narrows it to the stringed family, so an entry point with only a neck to work with refuses a drum kit by name (`instrument must be a stringed instrument; drum kit has no strings`) rather than failing later on a missing tuning.

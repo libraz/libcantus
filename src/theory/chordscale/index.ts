@@ -1,6 +1,10 @@
 import { InvalidInputError } from '../../core/errors/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
-import { assertGenerationBudget, assertPositiveInt } from '../../core/validation/index.js';
+import {
+  assertArray,
+  assertGenerationBudget,
+  assertPositiveInt,
+} from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
 import { chordPitchClasses, displacedThirds } from '../chord/index.js';
 import type { ScaleNameInput } from '../scale/index.js';
@@ -582,6 +586,7 @@ function symmetricDifferenceSize(a: Set<number>, b: Set<number>): number {
  * @category Scales
  */
 export function scalesForChanges(chords: readonly Chord[]): ScaleChoice[] {
+  assertArray(chords, 'chord-scale changes');
   assertGenerationBudget(chords.length, 'chord-scale changes');
   if (chords.length === 0) {
     return [];

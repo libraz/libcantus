@@ -15,6 +15,7 @@ import {
   assertInteger,
   assertOneOf,
   assertPositiveInt,
+  describeRejected,
 } from '../validation/index.js';
 
 /**
@@ -140,13 +141,23 @@ function assertDuration(value: NoteValue | DurationData, name: string): Duration
     return { base: assertOneOf(value, NOTE_VALUES, name), dots: 0 };
   }
   if (typeof value !== 'object' || value === null) {
-    throw new InvalidInputError(`${name} must be a note value or a duration; received ${value}`);
+    throw new InvalidInputError(
+      `${name} must be a note value or a duration; received ${describeRejected(value)}`,
+    );
   }
   const base = assertOneOf(value.base, NOTE_VALUES, `${name}.base`);
   const dots =
     value.dots === undefined ? 0 : assertInteger(value.dots, `${name}.dots`, 0, MAX_DOTS);
   if (value.tuplet === undefined) {
     return { base, dots };
+  }
+  // A duration restored from a file can carry a null where the tuplet is, and
+  // reading a field off it would report the library's own TypeError rather than
+  // the malformed input it is.
+  if (typeof value.tuplet !== 'object' || value.tuplet === null) {
+    throw new InvalidInputError(
+      `${name}.tuplet must be a tuplet; received ${describeRejected(value.tuplet)}`,
+    );
   }
   const tuplet = {
     actual: assertPositiveInt(value.tuplet.actual, `${name}.tuplet.actual`, MAX_TUPLET),

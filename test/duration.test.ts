@@ -62,6 +62,14 @@ describe('duration to beats', () => {
     );
     expect(() => durationToBeats(null as unknown as DurationData)).toThrow(InvalidInputError);
     expect(() => durationToBeats(4 as unknown as DurationData)).toThrow(InvalidInputError);
+    // A tuplet restored from a file can be a null where the nested record
+    // belongs; reading a field off it reported the library's own TypeError.
+    expect(() => durationToBeats({ base: 'quarter', tuplet: null as unknown as Tuplet })).toThrow(
+      InvalidInputError,
+    );
+    expect(() => durationToBeats({ base: 'quarter', tuplet: 3 as unknown as Tuplet })).toThrow(
+      /tuplet/,
+    );
     expect(() => durationToBeats('quarter', { beatUnit: 'minim' as NoteValue })).toThrow(
       InvalidInputError,
     );

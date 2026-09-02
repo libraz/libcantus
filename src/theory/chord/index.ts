@@ -5,7 +5,13 @@ import {
   pitchClassOf as pitchClass,
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import { assertDegree, assertFiniteNumber, assertInteger } from '../../core/validation/index.js';
+import {
+  assertArray,
+  assertDegree,
+  assertFiniteNumber,
+  assertInteger,
+  assertRecord,
+} from '../../core/validation/index.js';
 import { type KeyLike, scaleTonesInDegreeOrder, toKeyScale } from '../scale/index.js';
 import type { ChordQuality, ChordSpec } from './spec.js';
 import {
@@ -299,6 +305,7 @@ export function chordFromSpec(spec: ChordSpec): Chord {
  * @category Chords
  */
 export function chordSpecOf(chord: Chord): ChordSpec {
+  assertRecord<Chord>(chord, 'chord');
   assertFiniteNumber(chord.rootPc, 'chord rootPc');
   const rootPc = pitchClass(chord.rootPc);
   const bassPc = chord.bassPc === undefined ? undefined : pitchClass(chord.bassPc);
@@ -379,6 +386,7 @@ function hasCustomIntervals(chord: Chord): boolean {
  * @category Composition
  */
 export function chordFromSpan(span: ChordSpan): Chord {
+  assertRecord<ChordSpan>(span, 'chord span');
   const chord = makeChord(span.rootPc, span.quality, span.bassPc);
   if (span.intervals !== undefined) {
     chord.intervals = copySpanIntervals(span.intervals);
@@ -557,6 +565,8 @@ function spelledToneRole(pitch: number, chord: Chord): ChordToneRole | null | un
  * @returns The mask, in [0, 4095].
  */
 export function chordPcMask(chord: Chord, opts: { includeBass?: boolean } = {}): number {
+  assertRecord<Chord>(chord, 'chord');
+  assertArray(chord.intervals, 'chord intervals');
   let mask = 0;
   for (const interval of chord.intervals) {
     mask |= 1 << pitchClass(chord.rootPc + interval);
@@ -663,6 +673,7 @@ export function isChordMember(pitch: number, chord: Chord | null): boolean {
  * @category Chords
  */
 export function chordToneRole(pitch: number, chord: Chord): ChordToneRole | null {
+  assertRecord<Chord>(chord, 'chord');
   const spelled = spelledToneRole(pitch, chord);
   if (spelled !== undefined) {
     return spelled;

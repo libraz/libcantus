@@ -30,7 +30,7 @@ import {
 } from '../../core/pitch/index.js';
 import { MAX_NAME_ACCIDENTALS } from '../../core/pitch/naming.js';
 import type { KeyScale } from '../../core/types.js';
-import { assertInteger } from '../../core/validation/index.js';
+import { assertInteger, assertRecord } from '../../core/validation/index.js';
 import { spellScale } from '../spelling/index.js';
 import { type KeyLike, toKeyScale } from './coerce.js';
 import type { ResolvedKey } from './identity.js';
@@ -231,7 +231,7 @@ function spellsBetter(a: TonicCost, b: TonicCost, signatureKey: boolean): boolea
  * @category Scales
  */
 export function spelledKeyOf(key: KeyScale): ResolvedKey {
-  const scale = key;
+  const scale = assertRecord<KeyScale>(key, 'key');
   const rootPc = pitchClassOf(scale.rootPc);
   const signatureKey = isSignatureKey(scale);
   // Every pitch class is named somewhere in the span, so the starting tonic here

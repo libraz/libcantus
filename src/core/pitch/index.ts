@@ -13,7 +13,9 @@ import { InvalidInputError, type ParseResult, parseFailure, unwrapParse } from '
 import {
   assertFiniteNumber,
   assertInteger,
+  assertMidiPitch,
   assertOneOf,
+  assertRecord,
   describeRejected,
 } from '../validation/index.js';
 import type { KeyName, NoteNameOptions } from './naming.js';
@@ -52,6 +54,7 @@ const MAX_OCTAVE = 100;
  * than where it later fails to match.
  */
 function assertNote(note: Note, name: string): Note {
+  assertRecord<Note>(note, name);
   assertInteger(note.letter, `${name}.letter`, 0, 6);
   assertInteger(note.alter, `${name}.alter`, -MAX_ALTER, MAX_ALTER);
   if (note.octave !== undefined) {
@@ -531,10 +534,19 @@ export function transposeNote(
   const letter = mod7(absoluteLetter);
   const natural = LETTER_SEMITONES[letter] ?? 0;
   if (note.octave === undefined) {
-    return { letter, alter: alterFor(natural, mod12(noteToPitchClass(note) + steps)) };
+    return assertNote(
+      { letter, alter: alterFor(natural, mod12(noteToPitchClass(note) + steps)) },
+      'transposed note',
+    );
   }
   const octave = note.octave + Math.floor(absoluteLetter / 7);
-  return { letter, alter: noteToMidi(note) + steps - ((octave + 1) * 12 + natural), octave };
+  // The same domain this module requires of a note it is given: a transposition
+  // that lands outside it is refused here rather than handed on to be refused
+  // by whichever caller formats or measures it next.
+  return assertNote(
+    { letter, alter: noteToMidi(note) + steps - ((octave + 1) * 12 + natural), octave },
+    'transposed note',
+  );
 }
 
 /** Drop the octave from a spelled note. */
@@ -898,7 +910,11 @@ export function toNoteData(value: NoteLike): Note {
     return parseNote(value);
   }
   if (typeof value === 'number') {
-    return midiToNote(value);
+    // A MIDI note number, and only that: a value from a project file or a
+    // JavaScript caller that is fractional or off the compass spells a note
+    // outside the domain every other entry point requires, and the failure
+    // then surfaces at whichever of them reads it next rather than here.
+    return midiToNote(assertMidiPitch(value, 'note'));
   }
   if (typeof value === 'object' && value !== null) {
     const data = 'toJSON' in value && typeof value.toJSON === 'function' ? value.toJSON() : value;
@@ -922,22 +938,32 @@ export function toNoteData(value: NoteLike): Note {
  * the diatonic number decides the letter here: transposing C by an augmented
  * second gives D#, not Eb.
  *
- * @param note The note to transpose.
- * @param interval The interval to apply; a negative span transposes downward.
+ * Both arguments are taken in whatever form the caller holds them — the text a
+ * field carries, the plain data the library returns, or the class that wraps
+ * it — as the class mirror of this operation already did.
+ *
+ * @param given The note to transpose: a name, a MIDI number, plain note data,
+ *   or a `Note`.
+ * @param named The interval to apply: a name, plain interval data, or an
+ *   `Interval`. A negative span transposes downward.
  * @returns The transposed note, octave-less if the source was.
  * @example
  * ```ts
- * import { formatNote, parseInterval, parseNote, transposeByInterval } from '@libraz/libcantus';
- * formatNote(transposeByInterval(parseNote('C4'), parseInterval('A2'))); // 'D#4'
+ * import { formatNote, transposeByInterval } from '@libraz/libcantus';
+ * formatNote(transposeByInterval('C4', 'A2')); // 'D#4'
  * ```
  * @category Pitch & Intervals
  */
-export function transposeByInterval(note: Note, interval: IntervalData): Note {
-  assertNote(note, 'note');
+export function transposeByInterval(given: NoteLike, named: IntervalLike): Note {
+  const note = toNoteData(given);
+  const interval = toSpelledInterval(named);
   // `spelledInterval` accepts the full supported octave range, so accepting
   // only 64 here made a value produced by that sibling public function
-  // impossible to apply back to its source note.
-  assertInteger(interval.number, 'interval.number', 1);
+  // impossible to apply back to its source note. The bound is the one that
+  // sibling uses: past it the letter arithmetic answers with a note no other
+  // entry point accepts, and the failure surfaces several calls away from the
+  // interval that caused it.
+  assertInteger(interval.number, 'interval.number', 1, MAX_INTERVAL_NUMBER);
   assertFiniteNumber(interval.semitones, 'interval.semitones');
   const letterSteps = (interval.number - 1) * (isDescendingInterval(interval) ? -1 : 1);
   const absoluteLetter = mod7(note.letter) + letterSteps;
@@ -945,10 +971,19 @@ export function transposeByInterval(note: Note, interval: IntervalData): Note {
   const natural = LETTER_SEMITONES[letter] ?? 0;
   const steps = Math.round(interval.semitones);
   if (note.octave === undefined) {
-    return { letter, alter: alterFor(natural, mod12(noteToPitchClass(note) + steps)) };
+    return assertNote(
+      { letter, alter: alterFor(natural, mod12(noteToPitchClass(note) + steps)) },
+      'transposed note',
+    );
   }
   const octave = note.octave + Math.floor(absoluteLetter / 7);
-  return { letter, alter: noteToMidi(note) + steps - ((octave + 1) * 12 + natural), octave };
+  // The same domain this module requires of a note it is given: a transposition
+  // that lands outside it is refused here rather than handed on to be refused
+  // by whichever caller formats or measures it next.
+  return assertNote(
+    { letter, alter: noteToMidi(note) + steps - ((octave + 1) * 12 + natural), octave },
+    'transposed note',
+  );
 }
 
 /** Diatonic ladder index of a note (letter + 7 * octave when octave-bearing). */

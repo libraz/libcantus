@@ -137,6 +137,7 @@ export function keyScaleAt(key: KeyContext): (beat: number) => KeyScale {
  * @category Arrangement & Analysis
  */
 export function toVoiceNotes(events: readonly NoteEvent[]): IdentifiedVoiceNote[] {
+  assertNoteEvents(events, 'voice notes', { allowNonPositiveDuration: true });
   return events.map((event, index) => ({ ...event, id: index, originalIndex: index }));
 }
 

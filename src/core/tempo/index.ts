@@ -15,6 +15,7 @@ import {
   assertInteger,
   assertPositiveInt,
   assertRange,
+  describeRejected,
 } from '../validation/index.js';
 import {
   beatAtElapsedIn,
@@ -107,8 +108,14 @@ function assertTempoMap(map: TempoMap, name = 'tempo map'): TempoMap {
   }
   for (let index = 0; index < map.length; index += 1) {
     const event = map[index];
-    if (event === undefined) {
-      throw new InvalidInputError(`${name}[${index}] must be a tempo event; received undefined`);
+    // A hole in a sparse array, an explicit null, and a number are all rejected
+    // here rather than at the first field read, which would surface as the
+    // library's own TypeError instead of as the malformed input it is. The
+    // meter map is read the same way.
+    if (typeof event !== 'object' || event === null) {
+      throw new InvalidInputError(
+        `${name}[${index}] must be a tempo event; received ${describeRejected(event)}`,
+      );
     }
     assertFiniteNumber(event.startBeat, `${name}[${index}].startBeat`);
     assertRange(event.bpm, MIN_BPM, MAX_BPM, `${name}[${index}].bpm`);

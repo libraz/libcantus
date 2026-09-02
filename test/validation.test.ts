@@ -14,7 +14,7 @@ import { keyTimelineFromNotes } from '../src/analyze/keys/index.js';
 import { motifFromNotes } from '../src/analyze/melody/index.js';
 import { spellLine } from '../src/analyze/spelling/index.js';
 import { chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
-import { analyzeVoice } from '../src/analyze/voice/index.js';
+import { analyzeVoice, toVoiceNotes } from '../src/analyze/voice/index.js';
 import { InvalidInputError } from '../src/core/errors/index.js';
 import { createNoteEventIndex } from '../src/core/event-index/index.js';
 import { GUITAR_STANDARD, playability } from '../src/core/instrument/index.js';
@@ -66,7 +66,12 @@ import {
   humanize,
 } from '../src/generate/groove/index.js';
 import { classifyMelodyTones, harmonizeMelody } from '../src/generate/harmonize/index.js';
-import { developMotif, generateMotif, transformMotif } from '../src/generate/motif/index.js';
+import {
+  developMotif,
+  generateMotif,
+  motifToNoteEvents,
+  transformMotif,
+} from '../src/generate/motif/index.js';
 import { ornament } from '../src/generate/ornament/index.js';
 import { generateProgression } from '../src/generate/progression/index.js';
 import { generateRhythm } from '../src/generate/rhythm/index.js';
@@ -398,6 +403,7 @@ const NOTE_EVENT_VALIDATION_COVERAGE: Readonly<Record<string, readonly string[]>
   'src/analyze/spelling/index.ts:spellLine': ['spellLine'],
   'src/analyze/timeline/index.ts:analyzeTimeline': ['chordTimelineFromNotes'],
   'src/analyze/voice/index.ts:analyzeVoice': ['analyzeVoice'],
+  'src/analyze/voice/index.ts:toVoiceNotes': ['toVoiceNotes'],
   'src/core/event-index/index.ts:createNoteEventIndex': ['createNoteEventIndex'],
   'src/core/instrument/playability.ts:playability': ['playability'],
   'src/generate/countermelody/imitation.ts:imitate': ['imitate'],
@@ -408,6 +414,7 @@ const NOTE_EVENT_VALIDATION_COVERAGE: Readonly<Record<string, readonly string[]>
   'src/generate/harmonize/index.ts:harmonizeMelody': ['harmonizeMelody'],
   'src/generate/harmonize/nct.ts:classifyMelodyTones': ['classifyMelodyTones'],
   'src/generate/motif/index.ts:developMotif': ['developMotif'],
+  'src/generate/motif/index.ts:motifToNoteEvents': ['motifToNoteEvents'],
   'src/generate/motif/index.ts:transformUnchecked': ['transformMotif'],
   'src/generate/ornament/index.ts:ornament': ['ornament'],
   // One reader for the three class paths that keep a caller's array as what a
@@ -452,6 +459,7 @@ function noteEventEntries(events: NoteEvent[]): Record<string, () => unknown> {
     keyTimelineFromNotes: () => keyTimelineFromNotes(events),
     motifFromNotes: () => motifFromNotes(events),
     motifOf: () => Motif.fromNotes(events),
+    motifToNoteEvents: () => motifToNoteEvents({ notes: events, totalBeats: 4 }),
     ornament: () => ornament(events),
     phrasesFromTimeline: () => phrasesFromTimeline(timeline, events, { key }),
     playability: () => playability(events, GUITAR_STANDARD),
@@ -460,6 +468,7 @@ function noteEventEntries(events: NoteEvent[]): Record<string, () => unknown> {
     spellLine: () => spellLine(events, null, key),
     tensionCurve: () => tensionCurve([{ notes: events }]),
     tensionCurveFrom: () => tensionCurveFrom([{ notes: events }], analysis),
+    toVoiceNotes: () => toVoiceNotes(events),
     transformMotif: () => transformMotif({ notes: events }, 'retrograde'),
   };
 }
@@ -500,6 +509,7 @@ describe('public NoteEvent validation entry points', () => {
       // A cell is written material: a note that never sounds would be tiled and
       // transformed as though it were one.
       'motifOf',
+      'motifToNoteEvents',
       'transformMotif',
     ]);
     for (const [name, entry] of Object.entries(entries)) {

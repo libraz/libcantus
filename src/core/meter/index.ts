@@ -16,6 +16,7 @@ import {
   assertMeterMap,
   assertPositiveInt,
   assertRange,
+  assertRecord,
   assertTimeSignature,
   describeRejected,
 } from '../validation/index.js';
@@ -570,6 +571,7 @@ export function resolveMeters(
   opts: { ts?: MeterLike; meters?: MeterLike },
   name = 'meters',
 ): MeterMap {
+  assertRecord(opts, `${name} options`);
   if (opts.ts !== undefined && opts.meters !== undefined) {
     throw new InvalidInputError(
       `${name} and ts name the same thing; give one or the other, not both`,

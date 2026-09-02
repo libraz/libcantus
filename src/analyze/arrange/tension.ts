@@ -10,7 +10,12 @@ import { isStrongBeat, resolveMeters } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { NoteEventAssertOptions } from '../../core/validation/index.js';
-import { assertGenerationBudget, assertInteger, assertRange } from '../../core/validation/index.js';
+import {
+  assertArray,
+  assertGenerationBudget,
+  assertInteger,
+  assertRange,
+} from '../../core/validation/index.js';
 import { chordPitchClasses } from '../../theory/chord/index.js';
 import { evaluateSafety, NoteSafety, type SafetyProfile } from '../../theory/safety/index.js';
 import { majorKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
@@ -21,6 +26,8 @@ import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.
 import { type ChordTimeline, chordTimelineFromNotes } from '../timeline/index.js';
 import {
   arrangementProfile,
+  assertGivenKeys,
+  assertGivenTimeline,
   assertTrackNotes,
   harmonyTrackSet,
   isPercussion,
@@ -101,6 +108,7 @@ export function tensionCurve(
     assertRange(opts.pickupBeats, 0, Number.MAX_SAFE_INTEGER, 'arrangement pickupBeats');
     noteOptions.minStartBeat = -opts.pickupBeats;
   }
+  assertArray(tracks, 'arrangement tracks');
   assertGenerationBudget(tracks.length, 'arrangement tracks', budget);
   const noteCount = assertTrackNotes(tracks, noteOptions);
   // The pooled total is what the sampling and the inferred timeline size their
@@ -121,6 +129,11 @@ export function tensionCurve(
     );
   }
 
+  // The two options a caller can hand a previous pass's work through are read
+  // for their shape here, with the rest of the options, rather than at the line
+  // that first dereferences them several layers down.
+  assertGivenTimeline(opts.timeline, 'arrangement timeline');
+  assertGivenKeys(opts.keys, 'arrangement keys');
   const harmonyTracks = harmonyTrackSet(opts.harmonyTracks, tracks);
   const pooled = poolNotes(tracks, harmonyTracks);
   const all = poolNotes(tracks);

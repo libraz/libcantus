@@ -15,9 +15,11 @@ import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
   allocateCandidateTable,
   allocateChoiceTable,
+  assertArray,
   assertGenerationBudget,
   assertNoteEvents,
   assertRange,
+  assertRecord,
 } from '../../core/validation/index.js';
 import type { Chord, ChordSegment } from '../../theory/chord/index.js';
 import { chordPitchClasses } from '../../theory/chord/index.js';
@@ -921,6 +923,10 @@ export function detectModulations(
   chords: readonly ChordSegment[],
   opts: KeyTimelineOptions = {},
 ): KeyRegion[] {
+  assertArray(chords, 'modulation chord segments');
+  chords.forEach((segment, index) => {
+    assertRecord<ChordSegment>(segment, `modulation chord segments[${index}]`);
+  });
   const meters = resolveMeters(opts, 'modulation meters');
   const bar = beatsPerBarAt(0, meters);
   const expectedKeyBeats = opts.expectedKeyBeats ?? bar * 4;
@@ -1243,10 +1249,13 @@ export function keyLookup(
  * @category Arrangement & Analysis
  */
 export function prevailingKeyOf(regions: readonly KeyRegion[]): ResolvedKey | null {
+  assertArray(regions, 'key regions');
   // Held time is summed per key, not per region: a key returned to after a
   // digression prevails over one stated once at length.
   const totals = new Map<string, { key: ResolvedKey; length: number }>();
-  for (const region of regions) {
+  for (const [index, given] of regions.entries()) {
+    const region = assertRecord<KeyRegion>(given, `key regions[${index}]`);
+    assertRecord<ResolvedKey>(region.key, `key regions[${index}].key`);
     const id = `${pitchClass(region.key.scale.rootPc)}:${region.key.scale.modeMask12}`;
     const entry = totals.get(id);
     const length = Math.max(0, region.endBeat - region.startBeat);

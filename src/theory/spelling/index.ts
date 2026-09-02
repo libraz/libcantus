@@ -21,6 +21,7 @@ import {
   toNoteData,
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
+import { assertArray } from '../../core/validation/index.js';
 import {
   type Chord,
   type ChordToneRole,
@@ -1092,6 +1093,7 @@ export function spellPitch(
  * @category Pitch & Intervals
  */
 export function noteNames(notes: readonly NoteLike[]): string[] {
+  assertArray(notes, 'notes');
   // Wrapped rather than passed by reference: `map` supplies an index that
   // `formatNote`'s options parameter would read as a naming system.
   return notes.map((note) => formatNote(toNoteData(note)));

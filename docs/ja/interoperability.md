@@ -39,6 +39,8 @@ toKeyScale('A minor').rootPc; // 9
 toChordData('Cmaj7').intervals; // [0, 4, 7, 11]
 ```
 
+例外は `core` の綴り primitive で、これらは変換関数が結果を渡す先の層です。`formatNote` `formatKeyName` `transposeNote` `spelledInterval` は、`toNoteData` が読み取った文字列ではなく、それが生成する綴られたデータを受け取ります。名前を渡すときは先に変換関数を通すか（`formatNote(toNoteData('Eb4'))`）、クラス側を使ってください。クラスは同じことを内部で行います。
+
 調に変換関数が2つあるのは、調がピッチクラスより多くのものを持つためです。`resolveKey` は綴られた主音と音階の形、つまりプロジェクトファイルが保存する `{ scale, tonic, variant }` の形をそのまま保ちます。クラス層とジェネレーターが受け取るのはこちらです。`toKeyScale` は同じ形を読んで、根音のピッチクラスとマスクだけを返します。それだけが欲しい呼び出し側のためのもので、これを通した調は、第6度を変イと綴るのか嬰トと綴るのかを答えられなくなります。
 
 楽器も同じ受け取り方をします。楽器を必要とする入り口はいずれも `InstrumentProfileLike`、つまりプレーンなプロファイルか `Instrument` を受け取り、その変換関数も公開されています。`toInstrumentProfile` は楽器の形をした値をプレーンなプロファイルへ広げ、あわせて検査します。`toStringedProfile` は弦楽器の系統へ絞り込むので、ネックしか扱えない入り口はドラムキットを名指しで拒否できます（`instrument must be a stringed instrument; drum kit has no strings`）。tuning が無いことによる後段の失敗にはなりません。

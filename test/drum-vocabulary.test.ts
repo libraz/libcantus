@@ -389,6 +389,42 @@ describe('a caller-supplied drum dictionary', () => {
     expect(placeDrumPattern({ bars: 1, genre: 'reggae', ctx: { seed: 1, bpm: 80 } })).toEqual([]);
   });
 
+  it('refuses a figure that strikes a voice the kit has no note for', () => {
+    // `'hihat'` is a plausible name this kit does not use, and a figure naming
+    // it used to be admitted and then play nothing. `'constructor'` is the
+    // other half of the same bug: an inherited name indexed the note table to
+    // a function, which reached a hit where its pitch belongs.
+    for (const voice of ['hihat', 'constructor', 'toString']) {
+      const mistaken: Vocabulary<unknown> = {
+        ...clave,
+        id: `mistaken-${voice}`,
+        material: { steps: 16, strokes: [{ voice, step: 0, velocity: 1 }] },
+      };
+      const call = () =>
+        placeDrumPattern({
+          bars: 1,
+          genre: 'reggae',
+          ctx: { seed: 1, bpm: 80, vocabulary: [mistaken] },
+        });
+      expect(call, voice).toThrow(InvalidInputError);
+      expect(call, voice).toThrow(/voice/);
+    }
+  });
+
+  it('emits a General MIDI note number for every stroke it places', () => {
+    const hits = placeDrumPattern({
+      bars: 1,
+      genre: 'reggae',
+      ctx: { seed: 1, bpm: 80, vocabulary: [clave] },
+    });
+    expect(hits.length).toBeGreaterThan(0);
+    for (const hit of hits) {
+      expect(Number.isInteger(hit.pitch), JSON.stringify(hit)).toBe(true);
+      expect(hit.pitch).toBeGreaterThanOrEqual(0);
+      expect(hit.pitch).toBeLessThanOrEqual(127);
+    }
+  });
+
   it('replaces a built-in when it reuses the id', () => {
     const replacement: Vocabulary<unknown> = { ...clave, id: 'bossaNova', genre: 'bossa' };
     const hits = placeDrumPattern({

@@ -17,6 +17,7 @@
  * required so the judgment cannot be skipped while curating.
  */
 
+import { InvalidInputError } from '../../core/errors/index.js';
 import { ARTICULATIONS, type Articulation } from '../../core/instrument/index.js';
 import {
   type MeterLike,
@@ -24,7 +25,12 @@ import {
   type TimeSignature,
   toMeterData,
 } from '../../core/meter/index.js';
-import { assertOneOf, assertRange, assertTimeSignature } from '../../core/validation/index.js';
+import {
+  assertOneOf,
+  assertRange,
+  assertTimeSignature,
+  describeRejected,
+} from '../../core/validation/index.js';
 import { type ChordQuality, chordQualities } from '../../theory/chord/index.js';
 import type { Draw } from '../context/draw.js';
 import { PUBLIC_SECTIONS, type Section } from '../drums/internal.js';
@@ -336,6 +342,24 @@ export function vocabularyOfKind<T>(
 }
 
 /**
+ * Check a list of names against the table that defines them, the list included.
+ *
+ * A required list that is absent is the case this exists for: reading it as a
+ * list would report the library's own TypeError, where every other field of an
+ * entry from a config file is refused by name.
+ */
+function assertNames(values: unknown, allowed: readonly string[], label: string): void {
+  if (!Array.isArray(values)) {
+    throw new InvalidInputError(
+      `${label} must be an array of names; received ${describeRejected(values)}`,
+    );
+  }
+  values.forEach((value, index) => {
+    assertOneOf(value, allowed, `${label}[${index}]`);
+  });
+}
+
+/**
  * Reject a dictionary entry whose declared fields are outside their domains.
  *
  * Applied to caller-supplied entries at the point they enter a generator: an
@@ -358,22 +382,30 @@ export function assertVocabulary<T>(
   // the library is admitted by this check on the same commit, and a typo from a
   // JavaScript caller or a config file is a stated error instead of an entry
   // that silently matches nothing.
+  if (typeof entry !== 'object' || entry === null) {
+    throw new InvalidInputError(
+      `${label} must be a dictionary entry; received ${describeRejected(entry)}`,
+    );
+  }
   assertOneOf(entry.genre, GENRES, `${label} genre`);
   assertOneOf(entry.provenance?.basis, PROVENANCE_BASES, `${label} provenance basis`);
-  entry.articulations.forEach((articulation, index) => {
-    assertOneOf(articulation, ARTICULATIONS, `${label} articulations[${index}]`);
-  });
-  entry.sections?.forEach((section, index) => {
-    assertOneOf(section, PUBLIC_SECTIONS, `${label} sections[${index}]`);
-  });
-  entry.fitsOver?.forEach((quality, index) => {
-    assertOneOf(quality, chordQualities(), `${label} fitsOver[${index}]`);
-  });
+  assertNames(entry.articulations, ARTICULATIONS, `${label} articulations`);
+  if (entry.sections !== undefined) {
+    assertNames(entry.sections, PUBLIC_SECTIONS, `${label} sections`);
+  }
+  if (entry.fitsOver !== undefined) {
+    assertNames(entry.fitsOver, chordQualities(), `${label} fitsOver`);
+  }
   if (entry.ts !== undefined) {
     assertTimeSignature(entry.ts, `${label} ts`);
   }
   assertRange(entry.difficulty, 1, 5, `${label} difficulty`);
-  if (entry.tempoRange) {
+  if (entry.tempoRange !== undefined) {
+    if (!Array.isArray(entry.tempoRange) || entry.tempoRange.length !== 2) {
+      throw new InvalidInputError(
+        `${label} tempoRange must be a low and a high tempo; received ${describeRejected(entry.tempoRange)}`,
+      );
+    }
     const [low, high] = entry.tempoRange;
     assertRange(low, Number.MIN_VALUE, 1000, `${label} tempoRange low`);
     assertRange(high, low, 1000, `${label} tempoRange high`);

@@ -12,6 +12,7 @@ import {
   assertNoteEvents,
   assertOneOf,
   assertRange,
+  assertRecord,
   assertTimeSignature,
   clampToMidi,
   describeRejected,
@@ -503,6 +504,7 @@ function heldPitchSafety(
  * @category Voicing & Counterpoint
  */
 export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
+  assertRecord(opts, 'countermelody options');
   // Zero-length artefacts are accepted and ignored, matching the analysis
   // layer, so an array that passed through `analyzeArrangement` can be fed
   // straight in here.

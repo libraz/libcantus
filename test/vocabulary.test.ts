@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { InvalidInputError } from '../src/core/errors/index.js';
 import { BASS_LICKS } from '../src/generate/bass/licks-data.js';
 import { resolveContext } from '../src/generate/context/index.js';
 import {
@@ -111,6 +112,15 @@ describe('vocabulary model', () => {
       /provenance/,
     );
     expect(() => bad({ articulations: ['whammy'] })).toThrow(/articulations\[0\]/);
+    // A required field can be missing outright in data from a JavaScript
+    // caller, and reading it as a list is not a diagnosis anyone can act on.
+    expect(() => bad({ articulations: undefined })).toThrow(InvalidInputError);
+    expect(() => bad({ articulations: undefined })).toThrow(/articulations/);
+    expect(() => bad({ sections: 'chorus' })).toThrow(/sections/);
+    expect(() => bad({ tempoRange: 120 })).toThrow(/tempoRange/);
+    expect(() => assertVocabulary(null as unknown as Vocabulary<Material>)).toThrow(
+      InvalidInputError,
+    );
     expect(() => bad({ sections: ['solo'] })).toThrow(/sections\[0\]/);
     expect(() => bad({ fitsOver: ['maj13sus'] })).toThrow(/fitsOver\[0\]/);
     expect(() => bad({ ts: { numerator: 0, denominator: 4 } })).toThrow(/ts/);

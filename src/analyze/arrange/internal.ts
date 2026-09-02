@@ -7,9 +7,18 @@
 import { InvalidInputError } from '../../core/errors/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import type { NoteEventAssertOptions } from '../../core/validation/index.js';
-import { assertNoteEvents, assertOneOf } from '../../core/validation/index.js';
+import {
+  assertArray,
+  assertFiniteNumber,
+  assertNoteEvents,
+  assertOneOf,
+  describeRejected,
+} from '../../core/validation/index.js';
 import { PROFILE_WEIGHTS, type SafetyProfile } from '../../theory/safety/index.js';
+import { resolveKey } from '../../theory/scale/index.js';
 import { adjacent, BEAT_EPS, hasEnded, sameInstant } from '../adjacency.js';
+import type { KeyRegion } from '../keys/index.js';
+import type { ChordTimeline } from '../timeline/index.js';
 import type { IdentifiedVoiceNote } from '../voice/index.js';
 import type { ArrangementTrack, TrackRole } from './tracks.js';
 
@@ -141,6 +150,7 @@ export function assertTrackNotes(
   tracks: readonly ArrangementTrack[],
   options: NoteEventAssertOptions,
 ): number {
+  assertArray(tracks, 'arrangement tracks');
   let noteCount = 0;
   for (let index = 0; index < tracks.length; index += 1) {
     const notes = tracks[index]?.notes;
@@ -153,6 +163,88 @@ export function assertTrackNotes(
     noteCount += notes.length;
   }
   return noteCount;
+}
+
+/**
+ * Reject a caller's chord timeline that is not one.
+ *
+ * Every other field of the arrangement options is read for its shape at the
+ * entrance; a timeline out of a project file that is missing its `at` reached
+ * the analysis and reported the library's own `TypeError` from wherever the
+ * lookup happened to be made, which names neither the option nor the caller.
+ *
+ * @param timeline The timeline as the caller passed it, or nothing.
+ * @param name What the option is called in an error message.
+ * @throws If the value is not a timeline of chord segments.
+ */
+export function assertGivenTimeline(timeline: ChordTimeline | undefined, name: string): void {
+  if (timeline === undefined) {
+    return;
+  }
+  if (
+    typeof timeline !== 'object' ||
+    timeline === null ||
+    typeof timeline.at !== 'function' ||
+    !Array.isArray(timeline.segments)
+  ) {
+    throw new InvalidInputError(
+      `${name} must be a chord timeline carrying segments and an at(); received ${describeRejected(timeline)}`,
+    );
+  }
+  for (let index = 0; index < timeline.segments.length; index += 1) {
+    const segment = timeline.segments[index];
+    if (typeof segment !== 'object' || segment === null) {
+      throw new InvalidInputError(
+        `${name}.segments[${index}] must be a chord segment; received ${describeRejected(segment)}`,
+      );
+    }
+    assertFiniteNumber(segment.startBeat, `${name}.segments[${index}].startBeat`);
+    assertFiniteNumber(segment.endBeat, `${name}.segments[${index}].endBeat`);
+  }
+}
+
+/**
+ * Reject key regions that are not regions, or that name no key.
+ *
+ * The sibling of {@link assertGivenTimeline}, for the option that answers the
+ * other half of the question: a region missing its `key` became a raw
+ * `TypeError` inside the key reduction, several layers from the option it came
+ * from. The key itself is resolved here rather than described, since resolving
+ * it is what every reader of the region goes on to do.
+ *
+ * @param keys The regions as the caller passed them, or nothing.
+ * @param name What the option is called in an error message.
+ * @throws If the value is not an array of key regions.
+ */
+export function assertGivenKeys(keys: readonly KeyRegion[] | undefined, name: string): void {
+  if (keys === undefined) {
+    return;
+  }
+  if (!Array.isArray(keys)) {
+    throw new InvalidInputError(
+      `${name} must be an array of key regions; received ${describeRejected(keys)}`,
+    );
+  }
+  for (let index = 0; index < keys.length; index += 1) {
+    const region = keys[index];
+    if (typeof region !== 'object' || region === null) {
+      throw new InvalidInputError(
+        `${name}[${index}] must be a key region; received ${describeRejected(region)}`,
+      );
+    }
+    assertFiniteNumber(region.startBeat, `${name}[${index}].startBeat`);
+    assertFiniteNumber(region.endBeat, `${name}[${index}].endBeat`);
+    if (
+      region.key === undefined ||
+      region.key === null ||
+      (typeof region.key !== 'string' && typeof region.key !== 'object')
+    ) {
+      throw new InvalidInputError(
+        `${name}[${index}].key must name a key; received ${describeRejected(region.key)}`,
+      );
+    }
+    resolveKey(region.key);
+  }
 }
 
 /**

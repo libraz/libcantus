@@ -8,6 +8,7 @@ import { InvalidInputError } from '../../core/errors/index.js';
 import { formatNote, pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
+  assertArray,
   assertFiniteNumber,
   assertGenerationBudget,
   assertMidiPitch,
@@ -237,6 +238,7 @@ function assertPitches(
   name: string,
   budget: number | undefined = undefined,
 ): void {
+  assertArray(pitches, name);
   assertGenerationBudget(pitches.length, name, budget);
   for (let index = 0; index < pitches.length; index += 1) {
     assertMidiPitch(pitches[index] ?? Number.NaN, `pitches[${index}]`);

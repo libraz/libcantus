@@ -173,6 +173,37 @@ describe('the span a caller-supplied timeline is read over', () => {
   });
 });
 
+describe('the two options a caller hands a previous pass through', () => {
+  const tracks: ArrangementTrack[] = [{ role: 'harmony', notes: blockChord([60, 64, 67], 0) }];
+
+  it('names the option rather than failing where it is first dereferenced', () => {
+    // Every other field of these options is read for its shape at the entrance;
+    // a timeline missing its `at` and a key region missing its `key` reached the
+    // analysis and reported the library's own TypeError from several layers in,
+    // where the message names neither the option nor the caller. The class API
+    // already refused both, so the two surfaces disagreed about the same input.
+    const broken: [string, Record<string, unknown>, RegExp][] = [
+      ['a timeline that is not one', { timeline: { segments: [] } }, /timeline/],
+      ['a timeline of nothing', { timeline: 'chords' }, /timeline/],
+      ['a segment that is not one', { timeline: chordTimelineFromChords([], 4) }, /timeline/],
+      ['keys that are not an array', { keys: 'C major' }, /keys/],
+      ['a region that is not one', { keys: [null] }, /keys\[0\]/],
+      ['a region naming no key', { keys: [{ startBeat: 0, endBeat: 4 }] }, /keys\[0\]\.key/],
+    ];
+    for (const [label, opts, named] of broken) {
+      if (label === 'a segment that is not one') {
+        // A well-formed timeline whose segments were tampered with after it was
+        // built, which is what a project file round-trip can produce.
+        (opts.timeline as { segments: unknown[] }).segments.push(null);
+      }
+      const options = opts as unknown as Parameters<typeof analyzeArrangement>[1];
+      expect(() => analyzeArrangement(tracks, options), label).toThrow(InvalidInputError);
+      expect(() => analyzeArrangement(tracks, options), label).toThrow(named);
+      expect(() => tensionCurve(tracks, options), label).toThrow(InvalidInputError);
+    }
+  });
+});
+
 describe('where the tension curve starts', () => {
   it('takes no sample before the first note sounds', () => {
     const notes: NoteEvent[] = [

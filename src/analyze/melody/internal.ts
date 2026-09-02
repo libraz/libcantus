@@ -9,7 +9,7 @@
  */
 
 import type { NoteEvent } from '../../core/types.js';
-import { assertNoteEvents } from '../../core/validation/index.js';
+import { assertNoteEvents, assertRecord } from '../../core/validation/index.js';
 import { BEAT_EPS } from '../adjacency.js';
 import type { MotifData } from './motifs.js';
 
@@ -33,7 +33,13 @@ const RHYTHM_GRID = 64;
 export type MelodicPhrase = MotifData | readonly NoteEvent[];
 /** The notes of anything that can be read as a line. */
 export function phraseNotes(phrase: MelodicPhrase): readonly NoteEvent[] {
-  return 'notes' in phrase ? phrase.notes : phrase;
+  if (Array.isArray(phrase)) {
+    return phrase;
+  }
+  // Read for its shape before the `in` test, which is itself an operation a
+  // string or a null cannot answer: a phrase reaches these entrances from a
+  // caller working in JavaScript as readily as from a `Motif`.
+  return assertRecord<{ notes: readonly NoteEvent[] }>(phrase, 'melodic phrase').notes;
 }
 /**
  * The sounding notes of a melody in time order, one note per onset.

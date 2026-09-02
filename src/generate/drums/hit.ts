@@ -52,6 +52,21 @@ const VOICE_BY_NOTE = new Map<number, DrumVoice>(
 );
 
 /**
+ * The note number a voice name stands for.
+ *
+ * Read through `Object.hasOwn` rather than by indexing the table: an inherited
+ * name — `'constructor'`, `'toString'` — indexes to a function, and a figure
+ * naming one of them put that function where a hit's pitch goes.
+ *
+ * @param voice The voice name, from a figure that may be a caller's own.
+ * @returns The General MIDI note number, or undefined for a name this
+ *   generator has no voice for.
+ */
+export function drumNoteOf(voice: string): number | undefined {
+  return Object.hasOwn(DRUM_NOTES, voice) ? DRUM_NOTES[voice as DrumVoice] : undefined;
+}
+
+/**
  * The voice a percussion note number names.
  *
  * @param pitch The General MIDI note number.

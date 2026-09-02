@@ -11,6 +11,7 @@ import type { ConsonanceClass } from '../../core/interval/index.js';
 import { ConsonanceClass as Consonance } from '../../core/interval/index.js';
 import type { Note, SpelledInterval } from '../../core/pitch/index.js';
 import { noteToMidi } from '../../core/pitch/index.js';
+import { assertRecord } from '../../core/validation/index.js';
 
 /** The sounding pitch of a predicate argument, whichever form it arrived in. */
 export function pitchOf(value: number | Note): number {
@@ -47,6 +48,7 @@ export function classifySpelledInterval(
   interval: SpelledInterval,
   twoVoice = true,
 ): ConsonanceClass {
+  assertRecord<SpelledInterval>(interval, 'interval');
   const simple = simpleIntervalNumber(interval.number);
   const quality = interval.quality;
   if (quality === 'P') {

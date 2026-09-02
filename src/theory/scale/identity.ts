@@ -2,6 +2,7 @@ import { InvalidInputError } from '../../core/errors/index.js';
 import type { Note } from '../../core/pitch/index.js';
 import { formatNote, noteToPitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
+import { assertRecord } from '../../core/validation/index.js';
 import { type KeyLike, toKeyScale } from './coerce.js';
 import type { KeyVariant, ResolvedKey } from './kinds.js';
 import { assertKeyVariant, variantOfMask } from './masks.js';
@@ -126,5 +127,6 @@ export function resolveKey(value: KeyLike): ResolvedKey {
  * @category Scales
  */
 export function scaleOf(key: ResolvedKey): KeyScale {
+  assertRecord<ResolvedKey>(key, 'key');
   return key.scale;
 }

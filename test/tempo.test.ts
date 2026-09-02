@@ -150,6 +150,17 @@ describe('tempo map validation', () => {
     expect(() => beatsToSeconds(0, sparse)).toThrow(InvalidInputError);
   });
 
+  it('names the element that is not a tempo event', () => {
+    // A map restored from a file can carry a null where an event belongs, and
+    // reading its fields would report the library's own TypeError — which a
+    // host's error handling for this library never sees.
+    for (const broken of [null, 120, 'fast']) {
+      const map = [{ startBeat: 0, bpm: 120 }, broken] as unknown as TempoMap;
+      expect(() => beatsToSeconds(0, map), String(broken)).toThrow(InvalidInputError);
+      expect(() => beatsToSeconds(0, map), String(broken)).toThrow(/\[1\]/);
+    }
+  });
+
   it('rejects an unsorted map rather than sorting it', () => {
     const unsorted: TempoMap = [
       { startBeat: 4, bpm: 60 },

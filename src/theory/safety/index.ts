@@ -6,6 +6,7 @@ import {
   assertGenerationBudget,
   assertMidiPitch,
   assertOneOf,
+  assertRecord,
 } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
 import { intervalAboveRoot, isChordMember } from '../chord/index.js';
@@ -374,6 +375,7 @@ export type EvaluateSafetyOptions = {
  * would be scored by whichever table a lookup happened to fall back on.
  */
 function assertSafetyContext(q: Omit<SafetyQuery, 'candidatePitch'>): void {
+  assertRecord(q, 'safety query');
   assertOneOf(q.profile, SAFETY_PROFILES, 'safety profile');
   if (q.prevPitch !== undefined) assertMidiPitch(q.prevPitch, 'prevPitch');
   if (q.vocalLow !== undefined) assertMidiPitch(q.vocalLow, 'vocalLow');

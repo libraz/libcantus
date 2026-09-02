@@ -24,10 +24,12 @@ import {
 } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import {
+  assertArray,
   assertGenerationBudget,
   assertNoteEvents,
   assertPositiveInt,
   assertRange,
+  assertRecord,
 } from '../../core/validation/index.js';
 import { majorKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
 import { BEAT_EPS } from '../adjacency.js';
@@ -840,10 +842,15 @@ export function phrasesFromTimeline(
  * @category Arrangement & Analysis
  */
 export function structuralCadences(phrases: readonly Phrase[]): StructuralCadence[] {
+  assertArray(phrases, 'phrases');
   const ranked: StructuralCadence[] = [];
   for (let index = 0; index < phrases.length; index += 1) {
-    const phrase = phrases[index];
-    if (phrase === undefined || phrase.cadence === null || phrase.cadence.cadence.type === null) {
+    const phrase = assertRecord<Phrase>(phrases[index], `phrases[${index}]`);
+    if (
+      phrase.cadence === null ||
+      phrase.cadence === undefined ||
+      phrase.cadence.cadence.type === null
+    ) {
       continue;
     }
     const hit = phrase.cadence;

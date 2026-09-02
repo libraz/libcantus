@@ -6,7 +6,7 @@ import {
   toNoteData,
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import { assertInteger, assertOneOf } from '../../core/validation/index.js';
+import { assertInteger, assertOneOf, assertRecord } from '../../core/validation/index.js';
 import { type KeyLike, toKeyScale } from './coerce.js';
 import type { ResolvedKey } from './identity.js';
 import {
@@ -103,6 +103,7 @@ function modeOffset(key: KeyScale): number {
  * @returns True when the signature is the key's own rather than a stand-in.
  */
 export function isSignatureKey(key: KeyScale): boolean {
+  assertRecord<KeyScale>(key, 'key');
   return (
     DIATONIC_MODE_OFFSETS.has(key.modeMask12) ||
     key.modeMask12 === HARMONIC_MINOR_MASK ||

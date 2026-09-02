@@ -1,5 +1,5 @@
 import { InvalidInputError } from '../../core/errors/index.js';
-import { assertInteger, assertOneOf } from '../../core/validation/index.js';
+import { assertArray, assertInteger, assertOneOf } from '../../core/validation/index.js';
 import type { KeyVariant } from './kinds.js';
 
 /**
@@ -11,6 +11,7 @@ import type { KeyVariant } from './kinds.js';
  * @category Scales
  */
 export function maskFromOffsets(offsets: readonly number[]): number {
+  assertArray(offsets, 'offsets');
   let mask = 1;
   for (const [index, offset] of offsets.entries()) {
     assertInteger(offset, `offsets[${index}]`);

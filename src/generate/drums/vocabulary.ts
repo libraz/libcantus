@@ -23,6 +23,8 @@ import {
   assertOneOf,
   assertPositiveInt,
   assertRange,
+  assertRecord,
+  describeRejected,
 } from '../../core/validation/index.js';
 import { type GenerationContextInput, resolveContext } from '../context/index.js';
 import { deepFreeze } from '../vocabulary/freeze.js';
@@ -40,7 +42,7 @@ import {
   vocabularyOfKind,
   withinCeiling,
 } from '../vocabulary/index.js';
-import { DRUM_NOTES, type DrumHit, type DrumVoice, HitList } from './hit.js';
+import { type DrumHit, type DrumVoice, drumNoteOf, HitList } from './hit.js';
 import {
   DRUM_FEELS,
   feelSwingAmount,
@@ -100,6 +102,31 @@ export function isDrumPattern(material: unknown): material is DrumPattern {
     typeof candidate.steps === 'number' &&
     Array.isArray(candidate.strokes)
   );
+}
+
+/**
+ * Reject a figure that strikes a voice this generator has no note for.
+ *
+ * A figure is recognised by its shape and then read for its voices, which is
+ * why the two are separate: an entry meant for another generator is invisible
+ * here, but one written for this one and naming `'hihat'` — a plausible name
+ * this kit does not use — is a mistake in the dictionary rather than a figure
+ * that quietly plays nothing.
+ */
+function assertDrumPattern(material: DrumPattern, label: string): void {
+  material.strokes.forEach((stroke, index) => {
+    if (
+      typeof stroke !== 'object' ||
+      stroke === null ||
+      typeof stroke.voice !== 'string' ||
+      drumNoteOf(stroke.voice) === undefined
+    ) {
+      throw new InvalidInputError(
+        `${label} strokes[${index}].voice must name a drum voice; received ` +
+          `${describeRejected((stroke as DrumStroke | null)?.voice)}`,
+      );
+    }
+  });
 }
 
 /** One stroke. */
@@ -397,6 +424,7 @@ const MAX_STROKES_PER_BAR = 64;
  * @category Composition
  */
 export function placeDrumPattern(opts: DrumPatternOptions): DrumHit[] {
+  assertRecord(opts, 'drum pattern options');
   assertPositiveInt(opts.bars, 'drum pattern bars');
   assertGenerationBudget(opts.bars * MAX_STROKES_PER_BAR, 'drum pattern hits', opts.budget);
   const genre = assertOneOf(opts.genre, GENRES, 'drum pattern genre');
@@ -417,10 +445,14 @@ export function placeDrumPattern(opts: DrumPatternOptions): DrumHit[] {
   const kit = resolved.instrument('drums');
   const swing = effectiveSwing(feel, feelSwingAmount(feel));
 
-  const dictionary = mergeVocabulary(
-    DRUM_PATTERNS,
-    vocabularyOfKind(resolved.vocabulary, isDrumPattern),
-  );
+  const supplied = vocabularyOfKind(resolved.vocabulary, isDrumPattern);
+  // Read for its voices here rather than where a stroke is placed: an entry the
+  // draw happens not to reach this time is as wrong as one it does, and a
+  // dictionary is worth hearing about before a bar of it is written.
+  supplied.forEach((entry, index) => {
+    assertDrumPattern(entry.material, `drum pattern vocabulary[${index}]`);
+  });
+  const dictionary = mergeVocabulary(DRUM_PATTERNS, supplied);
   // A meter no figure is written in is refused rather than answered with an
   // empty track: the built-in dictionary is written in 4/4 throughout, and a
   // silent result there is indistinguishable from one where the genre, the
@@ -477,7 +509,7 @@ export function placeDrumPattern(opts: DrumPatternOptions): DrumHit[] {
     }
     const barStart = bar * barBeats;
     for (const stroke of strokes) {
-      const pitch = DRUM_NOTES[stroke.voice];
+      const pitch = drumNoteOf(stroke.voice);
       if (pitch === undefined) {
         continue;
       }

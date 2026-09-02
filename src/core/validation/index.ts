@@ -135,11 +135,56 @@ export function assertFiniteSemitones(value: number, name = 'semitones'): number
  * @category Core
  */
 export function dropSilentNotes(events: readonly NoteEvent[]): NoteEvent[] {
-  return events.filter((event) => event !== undefined && event.durationBeat > 0);
+  return assertArray<NoteEvent>(events, 'events').filter(
+    (event) => event !== undefined && event !== null && event.durationBeat > 0,
+  );
 }
 
 /** Alias that makes the shared positive-duration policy explicit at API entrances. */
 export const soundingNotesOnly = dropSilentNotes;
+
+/**
+ * Require a value to be an array before anything walks it.
+ *
+ * The counterpart of {@link assertRecord} for the entrances whose material is a
+ * list. A caller working in JavaScript, or restoring a session from a file, can
+ * hand any of these entrances a `null` where the list should be; reading it as a
+ * list reports the library's own `TypeError`, which names neither the argument
+ * nor the caller and does not reach a host's error handling for this library.
+ *
+ * @param value The value to check.
+ * @param name What the value is, for the error message.
+ * @returns The value as an array.
+ * @throws If the value is not an array.
+ * @category Core
+ */
+export function assertArray<T>(value: unknown, name: string): readonly T[] {
+  if (!Array.isArray(value)) {
+    throw new InvalidInputError(`${name} must be an array; received ${describeRejected(value)}`);
+  }
+  return value as readonly T[];
+}
+
+/**
+ * Require a value to be an object before any field is read off it.
+ *
+ * The counterpart of {@link assertArray} for the entrances whose material — or
+ * whose options — is a record. An entrance that takes a single options object
+ * is the common case: `undefined` there is a caller who forgot the argument, and
+ * both readings arrive at the same first field access.
+ *
+ * @param value The value to check.
+ * @param name What the value is, for the error message.
+ * @returns The value as a record.
+ * @throws If the value is not a non-null object, or is an array.
+ * @category Core
+ */
+export function assertRecord<T>(value: unknown, name: string): T {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new InvalidInputError(`${name} must be an object; received ${describeRejected(value)}`);
+  }
+  return value as T;
+}
 
 /**
  * Require a value to be one of a fixed set of names.

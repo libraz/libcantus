@@ -24,9 +24,11 @@ import {
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
+  assertArray,
   assertGenerationBudget,
   assertInteger,
   assertOneOf,
+  assertRecord,
   clampToMidi,
 } from '../../core/validation/index.js';
 import type { ChordSegment } from '../../theory/chord/index.js';
@@ -407,6 +409,8 @@ function buildWalking(
  * @category Composition
  */
 export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
+  assertRecord(opts, 'bass line options');
+  assertArray(opts.segments, 'bass segments');
   assertGenerationBudget(opts.segments.length, 'bass segments', opts.budget);
   // The chords are read into their plain form once, here at the boundary; the
   // builders below work on chord data alone.
