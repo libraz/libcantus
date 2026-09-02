@@ -123,6 +123,14 @@ export function chordTimelineFromChords(
  */
 export function chordAtBeat(segments: readonly ChordSegment[], beat: number): Chord | null {
   assertFiniteNumber(beat, 'timeline query beat');
+  const candidate = segments[firstAfter(segments, beat) - 1];
+  return candidate !== undefined && beat >= candidate.startBeat && beat < candidate.endBeat
+    ? candidate.chord
+    : null;
+}
+
+/** Index of the first segment beginning after `beat`, by binary search. */
+function firstAfter(segments: readonly ChordSegment[], beat: number): number {
   let low = 0;
   let high = segments.length;
   while (low < high) {
@@ -133,10 +141,35 @@ export function chordAtBeat(segments: readonly ChordSegment[], beat: number): Ch
       high = middle;
     }
   }
-  const candidate = segments[low - 1];
-  return candidate !== undefined && beat >= candidate.startBeat && beat < candidate.endBeat
-    ? candidate.chord
-    : null;
+  return low;
+}
+
+/**
+ * The segment a chord arrives on at a beat, if one begins there.
+ *
+ * The other question a caller asks of a timeline: {@link chordAtBeat} answers
+ * what is sounding at a beat, and this answers what starts on it — which is how
+ * long the chord a cadence arrives on holds. Segments are disjoint and in beat
+ * order, so it is the same binary search rather than a scan: a passage where
+ * most chord changes are cadential — a ii-V-I loop, which is what the
+ * generators write — asks it once per chord, and a scan made that the square of
+ * the piece.
+ *
+ * @param segments The segments to search, disjoint and in beat order.
+ * @param beat The beat a chord may arrive on.
+ * @returns The segment beginning there, or undefined when none does.
+ */
+export function segmentStartingAt(
+  segments: readonly ChordSegment[],
+  beat: number,
+): ChordSegment | undefined {
+  const index = firstAfter(segments, beat);
+  for (const candidate of [segments[index - 1], segments[index]]) {
+    if (candidate !== undefined && Math.abs(candidate.startBeat - beat) < BEAT_EPS) {
+      return candidate;
+    }
+  }
+  return undefined;
 }
 
 /** Build the `at(beat)` lookup a {@link ChordTimeline} carries. */

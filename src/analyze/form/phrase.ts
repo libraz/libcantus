@@ -38,7 +38,7 @@ import { barGridStart } from '../grid.js';
 import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
 import { melodicSimilarity } from '../melody/index.js';
 import type { CadenceHit, ChordTimeline } from '../timeline/index.js';
-import { detectCadences } from '../timeline/index.js';
+import { detectCadences, segmentStartingAt } from '../timeline/index.js';
 import type { KeyContext } from '../voice/index.js';
 import type { Hypermeter } from './hypermeter.js';
 import { hypermeter } from './hypermeter.js';
@@ -419,12 +419,7 @@ export function choosePhrasePath(
 
 /** The beat at which the chord arriving at `atBeat` gives way to the next. */
 function arrivalEnd(timeline: ChordTimeline, atBeat: number): number {
-  for (const segment of timeline.segments) {
-    if (Math.abs(segment.startBeat - atBeat) < BEAT_EPS) {
-      return segment.endBeat;
-    }
-  }
-  return atBeat;
+  return segmentStartingAt(timeline.segments, atBeat)?.endBeat ?? atBeat;
 }
 
 /**

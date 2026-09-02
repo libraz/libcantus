@@ -73,7 +73,7 @@ function copySegment(segment: ChordSegment): ChordSegment {
 }
 
 /** A validated, defensive copy of one key region, pivot chord included. */
-function copyKeyRegion(region: KeyRegion): KeyRegion {
+export function copyKeyRegion(region: KeyRegion): KeyRegion {
   assertDataObject(region, 'key region');
   const copy: KeyRegion = {
     startBeat: assertFiniteNumber(region.startBeat, 'key region startBeat'),

@@ -20,7 +20,11 @@ import type { KeyRegion, KeyTimelineOptions } from '../analyze/keys/index.js';
 import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../analyze/keys/index.js';
 import type { ExtractMotifsOptions, MelodicContour, MotifData } from '../analyze/melody/index.js';
 import { extractMotifs, melodicContour } from '../analyze/melody/index.js';
-import type { ChordTimeline, ChordTimelineOptions } from '../analyze/timeline/index.js';
+import type {
+  ChordTimeline,
+  ChordTimelineOptions,
+  ChordTimelineResult,
+} from '../analyze/timeline/index.js';
 import { chordTimelineFromNotes, detectCadences } from '../analyze/timeline/index.js';
 import type { AnalyzedNote, IdentifiedVoiceNote, KeyContext } from '../analyze/voice/index.js';
 import { toVoiceNotes } from '../analyze/voice/index.js';
@@ -65,7 +69,7 @@ import {
   STATED_KEY_CONFIDENCE,
   withoutNegativeZero,
 } from './shared.js';
-import { Timeline } from './timeline.js';
+import { copyKeyRegion, Timeline } from './timeline.js';
 
 /** The plain form a {@link Score} hands out and is rebuilt from. */
 export type ScoreData = {
@@ -252,7 +256,7 @@ export class Score {
   readonly #data: ScoreData;
   readonly #key: Key | undefined;
   /** The chord reading, made on the first member that needs it. */
-  #chords: ChordTimeline | undefined;
+  #chords: ChordTimelineResult | undefined;
   /** The key regions, made on the first member that needs them. */
   #regions: KeyRegion[] | undefined;
 
@@ -591,7 +595,14 @@ export class Score {
    *   and how sure it is of each segment.
    */
   timeline(opts?: ChordTimelineOptions): Timeline {
-    const result = chordTimelineFromNotes(this.#data.notes, this.#analysisOptions(opts));
+    // The score's own reading when it is the score's own question, so the
+    // documented order — timeline, phrases, keys, key — infers the harmony once
+    // rather than once per member. Options name a different question, and one
+    // asked with them neither reads the kept answer nor becomes it.
+    const result =
+      opts === undefined
+        ? this.#chordAnalysis()
+        : chordTimelineFromNotes(this.#data.notes, this.#analysisOptions(opts));
     return Timeline.fromData({
       segments: result.timeline.segments,
       totalBeats: opts?.totalBeats ?? this.totalBeats,
@@ -632,10 +643,17 @@ export class Score {
    * @returns The regions; empty when nothing sounds.
    */
   keys(opts?: KeyTimelineOptions): KeyRegion[] {
-    if (this.#key !== undefined) {
-      return statedKeyRegions(this.#key, this.#data.notes, opts?.totalBeats ?? this.totalBeats);
+    if (opts !== undefined) {
+      if (this.#key !== undefined) {
+        return statedKeyRegions(this.#key, this.#data.notes, opts.totalBeats ?? this.totalBeats);
+      }
+      return keyTimelineFromNotes(this.#data.notes, { meters: this.#data.meters, ...opts });
     }
-    return keyTimelineFromNotes(this.#data.notes, { meters: this.#data.meters, ...opts });
+    // The reading the class keeps, copied on the way out: the key search is the
+    // second most expensive thing here and every member that needs it reads the
+    // one answer, so what a caller does with the regions it is handed must not
+    // reach what the score reads next.
+    return this.#keyRegions().map(copyKeyRegion);
   }
 
   /**
@@ -1022,10 +1040,19 @@ export class Score {
    * phrases, cadences, voices — would otherwise ask for it once per member.
    */
   #chordTimeline(): ChordTimeline {
-    const timeline =
-      this.#chords ?? chordTimelineFromNotes(this.#data.notes, this.#analysisOptions()).timeline;
-    this.#chords = timeline;
-    return timeline;
+    return this.#chordAnalysis().timeline;
+  }
+
+  /**
+   * The whole reading, not only the timeline it carries: the key regions and
+   * the per-segment confidence come from the same pass, and {@link
+   * Score.timeline} hands all three to the class it builds.
+   */
+  #chordAnalysis(): ChordTimelineResult {
+    const analysis =
+      this.#chords ?? chordTimelineFromNotes(this.#data.notes, this.#analysisOptions());
+    this.#chords = analysis;
+    return analysis;
   }
 
   /**

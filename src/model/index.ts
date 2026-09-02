@@ -44,6 +44,7 @@ export type {
   ChordSegmentation,
   ChordTimeline,
   ChordTimelineOptions,
+  ChordTimelineResult,
   Conflict,
   ContourDirection,
   ExtractMotifsOptions,
