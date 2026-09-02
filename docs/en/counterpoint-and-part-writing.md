@@ -8,7 +8,7 @@ Everything here works on **spelled notes with octaves**. A MIDI pitch cannot tel
 
 ## Checking a chorale
 
-Give one voicing per chord, ascending, one spelled note per voice, alongside the chords those voicings realize:
+Give one voicing per chord, one spelled note per voice in voice order (index 0 is the bass), alongside the chords those voicings realize:
 
 ```ts
 import { checkPartWriting, majorKey, makeChord, spellVoicing } from '@libraz/libcantus';
@@ -30,7 +30,7 @@ violations[0]?.toIndex; // 1
 
 Every violation names the rule, the voices involved, where the motion starts and ends, and a one-sentence rationale. Results come back in musical order: the rules inside a chord first, then the rules taking it to the next one.
 
-Voice indices count from the bottom, matching `voiceChord` and `SATB_RANGES`. A rule about a pair names both ascending; a rule about a single line names one. A cross relation is the exception — it names the voice holding the earlier note first, whichever is higher.
+Voice indices count from the bottom, matching `voiceChord` and `SATB_RANGES`. The order identifies voices; pitches that are not ascending are reported as `voiceCrossing`. A rule about a pair names both ascending by index; a rule about a single line names one. A cross relation is the exception — it names the voice holding the earlier note first, whichever is higher.
 
 `Voicing.checkTo` grades one motion, from a voicing to the one that follows it. It spells both sides itself in the key it is given, and takes the chords and the key in whatever form the caller holds them, so a symbol and a key name are enough:
 

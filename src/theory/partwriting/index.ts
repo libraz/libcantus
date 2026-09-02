@@ -142,8 +142,9 @@ export type PartWritingViolation = {
 };
 
 /**
- * A chord realized as one spelled note per voice, ascending (index 0 = lowest),
- * matching the voice order {@link voiceChord} and {@link SATB_RANGES} use.
+ * A chord realized as one spelled note per voice, in voice order (index 0 =
+ * bass), matching the order {@link voiceChord} and {@link SATB_RANGES} use.
+ * Pitches need not ascend; a crossing is a reportable violation.
  *
  * Every note must carry an octave: the rules measure real distances between
  * sounding pitches, which a bare pitch class does not have.
@@ -460,7 +461,7 @@ function melodicViolations(transition: Transition): PartWritingViolation[] {
  * the F# that resolves outward to the dominant. The octave is kept, since the
  * rules measure real distances.
  *
- * @param voicing MIDI pitches, ascending (index 0 = lowest).
+ * @param voicing MIDI pitches in voice order (index 0 = bass).
  * @param chord The chord sounding, supplying the enharmonic evidence.
  * @param key The key the exercise is written in.
  * @returns One spelled note per pitch, in the same order.
@@ -488,9 +489,10 @@ export function spellVoicing(
 /**
  * Check a finished part-writing exercise and report every rule it breaks.
  *
- * The voicings are given one per chord, each ascending with one spelled note per
- * voice (index 0 = lowest, the bass), the voice order {@link voiceChord} and
- * {@link SATB_RANGES} already use. Notes must carry octaves.
+ * The voicings are given one per chord, each with one spelled note per voice in
+ * voice order (index 0 = bass), the order {@link voiceChord} and
+ * {@link SATB_RANGES} already use. Notes must carry octaves. A crossing is
+ * reported rather than rejected.
  *
  * Each chord is checked for voice crossing, over-wide spacing between adjacent
  * upper voices, and voices outside their range; each pair of consecutive chords
@@ -498,7 +500,7 @@ export function spellVoicing(
  * melodic intervals, and unresolved tendency tones. Violations come back in
  * musical order: the rules inside a chord, then the rules taking it to the next.
  *
- * @param voicings One voicing per chord, ascending, in spelled notes.
+ * @param voicings One voicing per chord, in voice order, in spelled notes.
  * @param chords The chords those voicings realize, in the same order.
  * @param key The key the exercise is written in; it names the leading tone.
  * @param opts Ranges and the upper-voice spacing limit. Both are validated
