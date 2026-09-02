@@ -234,6 +234,27 @@ describe('enharmonicKeyOf', () => {
     }
   });
 
+  it('answers for a tonic that does not spell the root it is given', () => {
+    // A tonic and a root that name different pitch classes reach this from a
+    // caller reading a stored key: the question is still which spelling this
+    // scale is written on, and the two scale families answered it differently
+    // — a key with a signature re-read the root and answered, a scale that only
+    // borrows one threw about a spelling it was never asked for.
+    for (const scaleName of ALL_SCALE_NAMES) {
+      const mismatched = scaleByName(scaleName, 0);
+      const other = enharmonicKeyOf(parseNote('Db'), mismatched);
+      if (other === null) {
+        continue;
+      }
+      const where = `${scaleName} rooted 0, asked from Db`;
+      // The answer spells the tonic it was asked about, not the root it was
+      // handed: the mask is the caller's and the root follows the spelling.
+      expect(noteToPitchClass(other.tonic), where).toBe(1);
+      expect(other.scale.rootPc, where).toBe(1);
+      expect(other.scale.modeMask12, where).toBe(mismatched.modeMask12);
+    }
+  });
+
   it('is the way back from a spelling no key is written on', () => {
     // D# major has nine sharps and Db minor eight flats, so neither is a key
     // anyone writes: from there the relation names the written twin rather

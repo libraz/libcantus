@@ -383,10 +383,17 @@ export function isWrittenTonic(tonic: Note, key: KeyScale): boolean {
   // window stays: without it the double-accidental reading, which is not
   // symmetric between two spellings of one sound, would make the relation
   // one-way for scales that have no written spelling at either end.
+  //
+  // The reading is taken of the scale as this tonic roots it, which is how the
+  // branch above already answers: `keySignatureFifths` reads the mask and the
+  // tonic and never the root the caller's scale carries. Spelling the caller's
+  // root from a tonic that does not sound it is a question with no answer, and
+  // asking it made the same enharmonic lookup that a key with a signature
+  // answers throw for a pentatonic.
   return (
     position >= FLATTEST_TONIC_FIFTHS &&
     position <= SHARPEST_TONIC_FIFTHS &&
-    tonicCost(tonic, key).doubles === 0
+    tonicCost(tonic, { rootPc: noteToPitchClass(tonic), modeMask12: key.modeMask12 }).doubles === 0
   );
 }
 

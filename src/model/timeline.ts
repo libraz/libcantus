@@ -17,7 +17,7 @@ import type { KeyScale, NoteEvent } from '../core/types.js';
 import { assertFiniteNumber, assertRange } from '../core/validation/index.js';
 import type { ChordSegment, ChordSpan } from '../theory/chord/index.js';
 import { spanFromChord } from '../theory/chord/index.js';
-import type { KeyLike } from '../theory/scale/index.js';
+import type { KeyLike, ResolvedKey } from '../theory/scale/index.js';
 import { resolveKey, scaleOf } from '../theory/scale/index.js';
 import type { Chord } from './chord.js';
 import { Chord as ChordClass } from './chord.js';
@@ -235,8 +235,10 @@ export class Timeline {
    * Place a progression's chords on a regular grid.
    *
    * The chords cross over as harmony alone: a spelling one of them carried is
-   * dropped, and a carried key becomes the plain key/scale of the one region
-   * under the span, without its spelled tonic or its detected scale form.
+   * dropped, since a chord placed on the grid is a `ChordSpan` and a span
+   * carries none. A carried key becomes the one key region under the span,
+   * spelled tonic and scale form included — an Ab minor comes back Ab minor,
+   * which is what the numerals over the region are read from.
    *
    * @param progression The chords, in order.
    * @param beatsEach How long each chord sounds.
@@ -442,7 +444,7 @@ export class Timeline {
     // degrees the key spells, so an Ab minor read through its pitch classes
     // alone would be numbered as the G# minor those read best as.
     const given = key === undefined ? undefined : resolveKey(key);
-    const keyAt = given === undefined ? this.#keyContext() : () => given;
+    const keyAt = given === undefined ? this.#resolvedKeyAt() : () => given;
     return this.#segments.map((segment) => ({
       startBeat: segment.startBeat,
       endBeat: segment.endBeat,
@@ -598,22 +600,35 @@ export class Timeline {
   }
 
   /**
-   * The key every beat of the timeline is read against.
+   * The key every beat of the timeline is read against, spelling and all.
    *
    * A lookup rather than one key, so a timeline that modulates has each chord
-   * analyzed in the key it sounds in; beats outside every region fall back to
-   * the prevailing key.
+   * read in the key it sounds in; beats outside every region fall back to the
+   * prevailing key. The regions carry a spelled tonic and a scale form, and
+   * this hands them on as they are: an Ab minor is where a German sixth is
+   * named from — `Fb Ab Cb D` — and reading it through its pitch classes alone
+   * would number it as the G# minor those read best as.
    */
-  #keyContext(): (beat: number) => KeyScale {
+  #resolvedKeyAt(): (beat: number) => ResolvedKey {
     const prevailing = prevailingKeyOf(this.#keys);
     if (prevailing === null) {
       throw new InvalidInputError(
         'timeline carries no key; build it from notes, or pass a key to Timeline.fromChords',
       );
     }
-    // The pitch classes alone: a numeral and a cadence are read from which
-    // notes are in the key, not from how the key is written.
-    const keyAt = keyLookup(this.#keys, prevailing);
+    return keyLookup(this.#keys, prevailing);
+  }
+
+  /**
+   * The pitch classes of that key, for the readings that want them.
+   *
+   * A reduction and a cadence are read from which notes are in the key rather
+   * than from how the key is written, so they take the scale; the reduction is
+   * where the drop is stated rather than in the lookup, which is what let the
+   * numerals lose the spelling by sharing it.
+   */
+  #keyContext(): (beat: number) => KeyScale {
+    const keyAt = this.#resolvedKeyAt();
     return (beat) => scaleOf(keyAt(beat));
   }
 

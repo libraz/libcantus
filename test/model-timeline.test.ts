@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chordToRoman } from '../src/analyze/functional/index.js';
+import { augmentedSixthChord, chordToRoman } from '../src/analyze/functional/index.js';
 import { prevailingKeyOf } from '../src/analyze/keys/index.js';
 import { reduceProgression } from '../src/analyze/reduction/index.js';
 import {
@@ -178,6 +178,19 @@ describe('construction', () => {
     ]);
     expect(timeline.totalBeats).toBe(12);
     expect(timeline.segments.map((segment) => segment.chord.rootPc)).toEqual([0, 5, 7]);
+  });
+
+  it('carries the key of the progression as it is written', () => {
+    // The one region the factory makes holds the key the progression stated,
+    // spelled tonic and scale form and all: it is what the numerals over that
+    // region are then read from, and an Ab minor read back as its pitch classes
+    // would be numbered as the G# minor those read best as.
+    const key = Key.parse('Ab minor');
+    const progression = new Progression([Chord.parse('Abm'), Chord.parse('Ebm')], key);
+    const timeline = Timeline.fromProgression(progression, 4);
+    expect(timeline.keys).toHaveLength(1);
+    expect(timeline.keys[0]?.key).toEqual(keyIdentity(key));
+    expect(timeline.keys[0]?.key.tonic).toEqual(key.tonic.data);
   });
 
   it('refuses a grid whose chords last no time', () => {
@@ -375,6 +388,31 @@ describe('analysis equivalence', () => {
       chordToRoman(makeChord(7, 'maj'), majorKey(7)),
     ]);
     expect(keyIdentity(modulating.key as Key)).toEqual(prevailingKeyOf(modulating.keys));
+  });
+
+  it('numbers a chromatic chord in the key as it is written, not as it sounds', () => {
+    // A German sixth is named from the letters its key writes — in Ab minor
+    // `Fb Ab Cb D` — so a numeral read from the pitch classes alone answers for
+    // the G# minor those read best as and calls the chord something else. The
+    // regions carry the spelled tonic already; this is the path that dropped it
+    // between the region and the numeral, so the timeline disagreed with the
+    // segment inside it about the same chord.
+    const key = resolveKey('Ab minor');
+    const german = augmentedSixthChord('german', key);
+    const timeline = new Timeline({
+      segments: [
+        { startBeat: 0, endBeat: 4, chord: german },
+        { startBeat: 4, endBeat: 8, chord: makeChord(8, 'min') },
+      ],
+      totalBeats: 8,
+      keys: [{ startBeat: 0, endBeat: 8, key, confidence: 1 }],
+    });
+    expect(timeline.roman().map((entry) => entry.roman)).toEqual([
+      chordToRoman(german, key),
+      chordToRoman(makeChord(8, 'min'), key),
+    ]);
+    expect(timeline.roman()[0]?.roman).toBe('Ger6');
+    expect(timeline.roman()[0]?.roman).toBe(timeline.at(0)?.roman());
   });
 
   it('reports the prevailing key the key module reports', () => {
