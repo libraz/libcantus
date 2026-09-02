@@ -170,6 +170,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A bass figure over a slash chord stays above the bass it names.** The
+  chord's other tones were folded into the register band, which is one octave
+  wide, so every tone of a `C/E` but the E itself came out under it — a
+  root-position C written where the chart says first inversion, and read back by
+  this library's own analysis as a different chord. Over a chord that names a
+  bass, the tones are now placed above that bass instead, on both the styled
+  generator and the genre figures. The walking style's approach into the next
+  chord and the pop pickup's deliberate octave below are unchanged, since
+  neither is a tone of the chord standing over its own bass.
+
+- **A genre figure leads into a chord change from its own last note.** The
+  connecting tone before a chord change was fixed to the head of the beat, so in
+  seven of the nine genres the note that actually entered the next chord was the
+  figure's real final onset a sixteenth or two later — left on whatever degree
+  its template carried, and related to the next chord by nothing. That final
+  onset is now the one the connecting tone takes over, read from the figure
+  itself so that the position does not travel with the density dial; where the
+  figure sounds nothing in that beat, the tone is still written on the beat. The
+  recorded output of `placeLicks` moves accordingly.
+
 - **`Timeline.roman()` numbers a chord in the key as the key is written.** The
   fallback that reads each segment in the key in force reduced that key to its
   pitch classes, so a chord whose numeral depends on how the key is spelled came
