@@ -71,6 +71,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   regions handed out are copies, so what a caller does with them cannot reach
   what the score reads next.
 
+- **The documentation of what the library answers with says what it answers.**
+  `VoicingData` and everything that hands out a voicing said the pitches were
+  ascending; the class keeps the order the voicing was built in, which is what
+  makes a voice crossing survive to be reported, so a caller taking the lowest
+  sounding voice takes the minimum rather than the first entry.
+  `ProgressionPreset.degrees` documented a degree space starting at zero, where
+  the implementation counts from one as a musician does. `LickNote.lengthSteps`
+  documented a default of one sixteenth, where a note with no length sounds to
+  the next onset. `wrongRhythmicRatio` is described as the rhythm not reading
+  against the cantus firmus at all, which is what it reports. And the analysis
+  guide no longer says a note-level reading and the harmonizer's name a note the
+  same way in every case: the two share their vocabulary and read different
+  evidence, so neither answer is a subset of the other.
+
 - **The documentation of two options says what the code does.**
   `ArrangementOptions.harmonicRhythm` was described as a chord-slot length,
   where the arrangement analysis always infers its harmony with dynamic
