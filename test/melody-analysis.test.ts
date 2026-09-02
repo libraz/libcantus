@@ -11,10 +11,12 @@ import {
   motifFromNotes,
   relateMotifs,
 } from '../src/analyze/melody/index.js';
+import { BudgetExceededError } from '../src/core/errors/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import type { MotifCell, MotifContour, MotifTransform } from '../src/generate/motif/index.js';
 import { generateMotif, motifToNoteEvents, transformMotif } from '../src/generate/motif/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
+import { growthFactor } from './support/growth.js';
 import { unionMembers } from './support/signatures.js';
 
 const cMajor = majorKey(0);
@@ -313,6 +315,66 @@ describe('extractMotifs', () => {
 
   it('is deterministic', () => {
     expect(extractMotifs(melody)).toEqual(extractMotifs(melody));
+  });
+
+  /** A melody stating a four-note cell on every other bar, filled between. */
+  function longMelody(bars: number): NoteEvent[] {
+    const notes: NoteEvent[] = [];
+    const cell = [0, 2, 4, 2];
+    let noise = 1;
+    for (let bar = 0; bar < bars; bar += 1) {
+      for (let index = 0; index < 4; index += 1) {
+        noise = (noise * 1664525 + 1013904223) >>> 0;
+        const step = bar % 2 === 0 ? (cell[index] ?? 0) : Math.floor((noise / 4294967296) * 8);
+        notes.push({ pitch: 60 + step, startBeat: bar * 4 + index, durationBeat: 1 });
+      }
+    }
+    return notes;
+  }
+
+  // Sixty thousand notes keep tens of thousands of motifs, and the pass that
+  // drops a fragment of a longer one once asked each candidate about every
+  // motif kept so far. A candidate can only be held by a statement that covers
+  // its own first note, so the few statements that could are the ones asked.
+  // The motifs are the same either way, and what the call takes is the one
+  // thing that shows which reading ran — measured as how it grows, which is
+  // what survives another worker keeping the machine busy.
+  it('drops the fragments of a long melody without weighing every motif kept', () => {
+    const motifs = extractMotifs(longMelody(15_000));
+    expect(motifs.length).toBeGreaterThan(1_000);
+    // Every motif reported is a motif: nothing kept fell below the recurrence
+    // threshold on the way through the pass.
+    expect(motifs.every((motif) => motif.occurrences.length >= 2)).toBe(true);
+    expect(growthFactor(8, (scale) => extractMotifs(longMelody(2_500 * scale)))).toBeLessThan(24);
+  }, 30_000);
+
+  it('refuses a melody whose fragments cost more than the budget allows', () => {
+    // The window count the earlier check bounds says nothing about what the
+    // fragments then cost: that is the statements the candidates hold, and a
+    // melody whose filler is itself a short cycle holds tens of thousands of
+    // them per cell. The comparisons are charged as they are spent, so a call
+    // that would run far past what it was measured at is refused instead.
+    const cycling = (bars: number): NoteEvent[] => {
+      const cell = [0, 2, 4, 2];
+      const notes: NoteEvent[] = [];
+      for (let bar = 0; bar < bars; bar += 1) {
+        for (let index = 0; index < 4; index += 1) {
+          const at = bar * 4 + index;
+          notes.push({
+            pitch: 60 + (bar % 2 === 0 ? (cell[index] ?? 0) : at % 7),
+            startBeat: at,
+            durationBeat: 1,
+          });
+        }
+      }
+      return notes;
+    };
+    // Inside the window count the first check bounds: 160,000 notes over six
+    // cell lengths is 960,000 windows, and it is what the windows then cost
+    // that the call is refused for.
+    expect(() => extractMotifs(cycling(20_000))).not.toThrow();
+    expect(() => extractMotifs(cycling(40_000))).toThrow(BudgetExceededError);
+    expect(() => extractMotifs(cycling(40_000))).toThrow(/motif subsumption comparisons/);
   });
 
   it('relates two statements of an extracted motif', () => {

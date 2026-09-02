@@ -545,14 +545,28 @@ function nonOverlapping(starts: readonly number[], length: number): number[] {
   return picked;
 }
 
-/** Whether every statement of `inner` sits inside one statement of `outer`. */
+/**
+ * Whether every statement of `inner` sits inside one statement of `outer`.
+ *
+ * Both runs of onsets are ascending, so the two are walked together rather than
+ * searched: the statement of `outer` that can hold an inner one is the latest
+ * that starts at or before it, since a later start reaches further right.
+ */
 function subsumes(
   outer: { starts: number[]; length: number },
   inner: { starts: number[]; length: number },
 ): boolean {
-  return inner.starts.every((start) =>
-    outer.starts.some((from) => start >= from && start + inner.length <= from + outer.length),
-  );
+  let at = 0;
+  for (const start of inner.starts) {
+    while (at + 1 < outer.starts.length && (outer.starts[at + 1] ?? 0) <= start) {
+      at += 1;
+    }
+    const from = outer.starts[at];
+    if (from === undefined || start < from || start + inner.length > from + outer.length) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /** List the statement onsets for a rationale without letting it run away. */
@@ -691,16 +705,52 @@ export function extractMotifs(
         (a.signature < b.signature ? -1 : a.signature > b.signature ? 1 : 0),
     );
 
+  // A candidate is dropped when a longer motif already kept states it inside
+  // every one of its own statements, so the only groups worth asking are the
+  // ones whose statements cover the candidate's first onset — a window that
+  // misses that onset cannot hold all of them. One window of a given length
+  // starting at a given note is one cell, so the kept groups are indexed by
+  // exactly that and the candidate probes the few starts that could reach it,
+  // instead of every motif kept so far. A melody that states its verse and
+  // chorus twice keeps tens of thousands of groups, and asking each candidate
+  // about all of them is what made the pass take seconds on one track.
+  const keptByLength = new Map<number, Map<number, WindowGroup>>();
   const kept: WindowGroup[] = [];
+  let comparisons = 0;
   for (const candidate of candidates) {
-    const covered = kept.some(
-      (outer) =>
-        outer.length > candidate.length &&
-        outer.starts.length >= candidate.starts.length &&
-        subsumes(outer, candidate),
-    );
+    const first = candidate.starts[0] ?? 0;
+    let covered = false;
+    for (let length = candidate.length + 1; length <= maxNotes && !covered; length += 1) {
+      const byStart = keptByLength.get(length);
+      if (byStart === undefined) {
+        continue;
+      }
+      for (let from = Math.max(0, first - (length - candidate.length)); from <= first; from += 1) {
+        comparisons += 1;
+        const outer = byStart.get(from);
+        if (outer === undefined || outer.starts.length < candidate.starts.length) {
+          continue;
+        }
+        comparisons += outer.starts.length + candidate.starts.length;
+        if (subsumes(outer, candidate)) {
+          covered = true;
+          break;
+        }
+      }
+    }
+    // Charged as it is spent rather than estimated: what the pass costs is the
+    // statements the candidates hold, which the window count alone does not say.
+    assertGenerationBudget(comparisons, 'motif subsumption comparisons', opts.budget);
     if (!covered) {
       kept.push(candidate);
+      let byStart = keptByLength.get(candidate.length);
+      if (byStart === undefined) {
+        byStart = new Map<number, WindowGroup>();
+        keptByLength.set(candidate.length, byStart);
+      }
+      for (const start of candidate.starts) {
+        byStart.set(start, candidate);
+      }
     }
   }
   return kept.map((group) => motifFromGroup(group, sounding));
