@@ -9,7 +9,7 @@
 
 import { transposeNote } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import { assertFiniteNumber, assertInteger } from '../../core/validation/index.js';
+import { assertFiniteNumber, assertInteger, assertOptions } from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
 import { makeChord } from '../../theory/chord/index.js';
 import { type KeyLike, scaleTonesInDegreeOrder, toKeyScale } from '../../theory/scale/index.js';
@@ -371,11 +371,12 @@ export function analyzeChord(
   key: KeyLike,
   opts: AnalyzeChordOptions = {},
 ): ChordAnalysis {
+  const asked = assertOptions(opts, 'opts');
   const data = toChordData(chord);
   const scale = toKeyScale(key);
   const source = borrowedSourceOf(data, scale);
   const { function: fn, reason } = functionWithReason(data, scale);
-  const roman = renderRoman(data, scale, opts).roman;
+  const roman = renderRoman(data, scale, asked).roman;
   return {
     function: fn,
     borrowed: source !== null,
@@ -383,10 +384,10 @@ export function analyzeChord(
     roman,
     rationale: describeChord(fn, reason, roman, source),
     alternatives:
-      opts.alternatives === true
+      asked.alternatives === true
         ? [
             ...functionAlternatives(data, scale, reason, fn),
-            ...romanAlternatives(data, scale, opts),
+            ...romanAlternatives(data, scale, asked),
           ]
         : [],
   };

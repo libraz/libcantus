@@ -23,7 +23,11 @@ import {
   toNoteData,
 } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
-import { assertGenerationBudget, assertNoteEvents } from '../../core/validation/index.js';
+import {
+  assertGenerationBudget,
+  assertNoteEvents,
+  assertOptions,
+} from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
 import { isScaleTone, resolveKey, type SpelledKeyLike } from '../../theory/scale/index.js';
 import { assertTonicOf, spellChord, spellPitchClass } from '../../theory/spelling/index.js';
@@ -374,6 +378,7 @@ export function spellLine(
   key: SpelledKeyLike,
   opts: SpellLineOptions = {},
 ): Note[] {
+  assertOptions(opts, 'opts');
   // Read whole rather than reduced: a line in Ab minor is written on flats, and
   // a key handed in spelled that way would otherwise have its spelling derived
   // back from the pitch classes and come out in G# minor.

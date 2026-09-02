@@ -1,6 +1,6 @@
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
-import { assertNoteEvents } from '../../core/validation/index.js';
+import { assertFunction, assertNoteEvents } from '../../core/validation/index.js';
 import type { Chord, ChordToneRole } from '../../theory/chord/index.js';
 import { chordToneRole, intervalAboveRoot, isChordMember } from '../../theory/chord/index.js';
 import {
@@ -339,6 +339,8 @@ export function analyzeVoice(
   otherVoicesAtBeat: (beat: number) => VoiceSnapshot[] = () => [],
 ): AnalyzedNote[] {
   assertNoteEvents(voice, 'voice notes', { allowNonPositiveDuration: true });
+  assertFunction(chordAtBeat, 'chordAtBeat');
+  assertFunction(otherVoicesAtBeat, 'otherVoicesAtBeat');
   const keyAt = keyScaleAt(key);
   const result: AnalyzedNote[] = [];
 

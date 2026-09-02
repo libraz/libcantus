@@ -990,11 +990,12 @@ export function explainRoman(
   key: KeyLike,
   opts: ExplainRomanOptions = {},
 ): RomanExplanation {
+  const asked = assertOptions(opts, 'opts');
   const data = toChordData(chord);
-  const { roman, derivation } = renderRoman(data, key, opts);
+  const { roman, derivation } = renderRoman(data, key, asked);
   return {
     roman,
     rationale: describeRoman(roman, derivation),
-    alternatives: opts.alternatives === true ? romanAlternatives(data, key, opts) : [],
+    alternatives: asked.alternatives === true ? romanAlternatives(data, key, asked) : [],
   };
 }
