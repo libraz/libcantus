@@ -38,6 +38,12 @@ const NOT_A_CLASS_METHOD: Readonly<Record<string, string>> = {
   classifyInterval: 'predicate on an unspelled semitone count',
   isPerfectInterval: 'predicate on an unspelled semitone count',
 
+  // A predicate on a bare mask. Whether a scale has a signature of its own is a
+  // question about the mask alone; a `Key` is asked the spelled question that
+  // reads it — whether the key is written on the tonic it carries — and the
+  // theory layer owns that one.
+  isSignatureKey: 'predicate on an unspelled mode mask',
+
   // Counterpoint predicates. Each judges one pair of voices at one moment,
   // which is a question about two pitches rather than about a value object;
   // `Voicing.checkTo` is the bundled check a voicing answers, and the class

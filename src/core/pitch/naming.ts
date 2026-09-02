@@ -132,7 +132,7 @@ const ITALIAN_DOUBLE = 'doppio';
  * Notation stops at the double accidental, and so does every letter-and-mark
  * name in these tables; past it there is no spelling to read.
  */
-const MAX_NAME_ACCIDENTALS = 2;
+export const MAX_NAME_ACCIDENTALS = 2;
 
 /** Longest glyph in a table's letters. */
 function longestGlyph(glyphs: readonly string[]): number {

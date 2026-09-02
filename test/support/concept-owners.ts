@@ -169,7 +169,17 @@ export const CONCEPT_OWNERS: readonly ConceptOwner[] = [
     // made the copy invisible to a check that matches names.
     concept: 'the letter a key is written on',
     owner: 'src/theory/scale/relations.ts',
-    reserved: ['spelledKeyOf', 'isWrittenTonic'],
+    reserved: [
+      'spelledKeyOf',
+      'isWrittenTonic',
+      // The constants that decide what "written" means. The second copy of the
+      // predicate did not carry the owner's names, so a check that matched only
+      // those saw nothing; it carried these, and reserving them is what makes a
+      // copy visible whatever the function around it is called. A private class
+      // member is a declaration like any other here.
+      'MAX_CONVENTIONAL_FIFTHS',
+      'DOUBLE_ACCIDENTAL',
+    ],
   },
   {
     // A key name carries a spelled tonic and a scale form. A second reader that

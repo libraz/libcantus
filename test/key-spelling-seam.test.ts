@@ -10,7 +10,7 @@ import { Voicing } from '../src/model/voicing.js';
 import { makeChord } from '../src/theory/chord/index.js';
 import { figuredBassRealization } from '../src/theory/figured-bass/index.js';
 import { spellVoicing } from '../src/theory/partwriting/index.js';
-import { type ResolvedKey, resolveKey } from '../src/theory/scale/index.js';
+import { enharmonicKeyOf, type ResolvedKey, resolveKey } from '../src/theory/scale/index.js';
 import { toChordData } from '../src/theory/symbol/index.js';
 import { TRANSPOSING_INSTRUMENTS } from '../src/theory/transposition/index.js';
 import { functionParams, type ParamInfo, sourceFiles } from './support/signatures.js';
@@ -779,5 +779,90 @@ describe('an entry point declares the key type its answer needs', () => {
     // Without this the checks above would pass by measuring nothing at all.
     expect(measured.length).toBeGreaterThan(30);
     expect(measured.filter((row) => row.follows).length).toBeGreaterThan(5);
+  });
+});
+
+/**
+ * The class layer and the theory layer name the same written spelling.
+ *
+ * `Key.transpose`, `Key.keyOnDegree` and `Key.forInstrument` all end on the
+ * same question — is this key written on this tonic — and the class answered it
+ * for itself, under a private name the ownership check could not see. The two
+ * answers differed wherever the class's own window disagreed with the theory's:
+ * a window drawn from the major and minor keys cuts off the ends of the church
+ * modes, so `D# phrygian` written for a B flat clarinet came back on an E sharp
+ * the theory layer would have written as an F.
+ */
+describe('a written spelling is named the same by the class and by the function', () => {
+  /** Every mode the library names, which is where the two windows disagree. */
+  const MODAL_NAMES = [
+    'ionian',
+    'dorian',
+    'phrygian',
+    'lydian',
+    'mixolydian',
+    'aeolian',
+    'locrian',
+  ] as const;
+
+  it('respells a transposed key onto the tonic the theory layer writes', () => {
+    const offenders: string[] = [];
+    for (const name of MODAL_NAMES) {
+      for (const pc of PITCH_CLASSES) {
+        for (let semitones = -11; semitones <= 11; semitones += 1) {
+          const key = Key.named(name, pc).transpose(semitones);
+          // Whatever tonic the class settled on, the theory layer agrees the
+          // key is written there — or names the one enharmonic it would move to.
+          const written = resolveKey(key);
+          const other = enharmonicKeyOf(written.tonic, written.scale);
+          if (Math.abs(key.fifths) > MAX_CONVENTIONAL_FIFTHS && other !== null) {
+            offenders.push(`${name}/${pc} ${semitones} => ${key} (${key.fifths} fifths)`);
+          }
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('writes a transposing part on the tonic the theory layer writes', () => {
+    const offenders: string[] = [];
+    for (const instrument of Object.keys(TRANSPOSING_INSTRUMENTS)) {
+      for (const name of MODAL_NAMES) {
+        for (const pc of PITCH_CLASSES) {
+          const part = Key.named(name, pc).forInstrument(
+            instrument as keyof typeof TRANSPOSING_INSTRUMENTS,
+          );
+          const written = resolveKey(part);
+          const other = enharmonicKeyOf(written.tonic, written.scale);
+          if (Math.abs(part.fifths) > MAX_CONVENTIONAL_FIFTHS && other !== null) {
+            offenders.push(`${name}/${pc} on ${instrument} => ${part} (${part.fifths} fifths)`);
+          }
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('answers the enharmonic relation in both directions for every mode', () => {
+    // The relation is documented to be its own inverse for a key written on its
+    // tonic, and the modes are where a window drawn from the major and minor
+    // keys made it one-way.
+    for (const name of MODAL_NAMES) {
+      for (const pc of PITCH_CLASSES) {
+        const key = Key.named(name, pc);
+        const other = key.enharmonic();
+        if (other === null) {
+          continue;
+        }
+        expect(other.enharmonic()?.toString(), `${name}/${pc}`).toBe(key.toString());
+      }
+    }
+  });
+
+  it('reads a subject the tree supplies rather than a list', () => {
+    expect(MODAL_NAMES.length * PITCH_CLASSES.length).toBeGreaterThan(80);
+    expect(Object.keys(TRANSPOSING_INSTRUMENTS).length).toBeGreaterThan(3);
   });
 });

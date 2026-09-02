@@ -47,7 +47,7 @@ const FIFTHS_PER_ALTERATION = 7;
 const MINOR_MODE_OFFSET = -3;
 
 /** Widest signature this module builds a key for, including theoretical ones. */
-const MAX_FIFTHS = 12;
+export const MAX_FIFTHS = 12;
 
 /** Rotate a 12-bit mode mask down by `semitones`, wrapping at the octave. */
 function rotateMask(mask: number, semitones: number): number {

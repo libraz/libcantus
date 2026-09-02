@@ -28,6 +28,7 @@ import {
   pitchClassOf,
   toNoteData,
 } from '../../core/pitch/index.js';
+import { MAX_NAME_ACCIDENTALS } from '../../core/pitch/naming.js';
 import type { KeyScale } from '../../core/types.js';
 import { assertInteger } from '../../core/validation/index.js';
 import { spellScale } from '../spelling/index.js';
@@ -36,16 +37,13 @@ import type { ResolvedKey } from './identity.js';
 import { CHROMATIC_MASK, isMinorMask, variantOfMask } from './masks.js';
 import { majorScale, minorScale } from './scales.js';
 import type { KeyMode } from './signature.js';
-import { isSignatureKey, keyFromFifths, keySignatureFifths } from './signature.js';
+import { isSignatureKey, keyFromFifths, keySignatureFifths, MAX_FIFTHS } from './signature.js';
 
 /** How many fifths apart the two spellings of one sounding key sit. */
 const ENHARMONIC_FIFTHS = 12;
 
 /** Widest signature a key is actually written with. */
 const MAX_CONVENTIONAL_FIFTHS = 7;
-
-/** An alteration of two sharps or two flats: the spelling a tonic should avoid. */
-const DOUBLE_ACCIDENTAL = 2;
 
 /** How many fifths a minor key's tonic stands above its signature: A minor is +3. */
 const MINOR_TONIC_FIFTHS = 3;
@@ -154,7 +152,7 @@ function tonicCost(tonic: Note, key: KeyScale): TonicCost {
   for (const note of spellScale(tonic, key)) {
     const alter = Math.abs(note.alter);
     accidentals += alter;
-    if (alter >= DOUBLE_ACCIDENTAL) {
+    if (alter >= MAX_NAME_ACCIDENTALS) {
       doubles += 1;
     }
   }
@@ -356,19 +354,40 @@ function tonicFifths(tonic: Note, mode: KeyMode): number {
  * Whether a key is actually written on this tonic — the same question
  * {@link spelledKeyOf} asks, and answered the same way.
  *
+ * The one answer to it. Every path that reaches the question — the enharmonic
+ * relation here, and the class layer's `Key.transpose`, `Key.keyOnDegree` and
+ * `Key.forInstrument` through the respelling they end on — comes here, because
+ * a predicate written twice drifts the moment one copy is corrected.
+ *
  * A key with a signature of its own is written wherever that signature is: up
  * to seven sharps or flats, which is what makes Ab minor and G# minor two
  * spellings of one key and D# major none at all. A scale that only borrows a
  * signature is written wherever it reads without a double accidental.
  */
-function isWrittenTonic(tonic: Note, key: KeyScale): boolean {
+export function isWrittenTonic(tonic: Note, key: KeyScale): boolean {
   const position = tonicPosition(tonic);
-  if (position < FLATTEST_TONIC_FIFTHS || position > SHARPEST_TONIC_FIFTHS) {
-    return false;
+  if (isSignatureKey(key)) {
+    // A key with a signature of its own is written wherever that signature is,
+    // and the signature says so on its own. Bounding the position by where a
+    // major or a minor key puts a tonic would answer for it and answer wrong:
+    // those two modes sit at offsets 0 and -3, so a window drawn from them cuts
+    // off the ends of the others — a lydian is written as far flatward as F
+    // flat and a locrian as far sharpward as E sharp, and both fall outside it.
+    // What is left here is only the reader's own range.
+    return (
+      Math.abs(position) <= MAX_FIFTHS &&
+      Math.abs(keySignatureFifths(tonic, key)) <= MAX_CONVENTIONAL_FIFTHS
+    );
   }
-  return isSignatureKey(key)
-    ? Math.abs(keySignatureFifths(tonic, key)) <= MAX_CONVENTIONAL_FIFTHS
-    : tonicCost(tonic, key).doubles === 0;
+  // A scale that only borrows a signature has no such test to defer to, so the
+  // window stays: without it the double-accidental reading, which is not
+  // symmetric between two spellings of one sound, would make the relation
+  // one-way for scales that have no written spelling at either end.
+  return (
+    position >= FLATTEST_TONIC_FIFTHS &&
+    position <= SHARPEST_TONIC_FIFTHS &&
+    tonicCost(tonic, key).doubles === 0
+  );
 }
 
 /**
@@ -464,7 +483,11 @@ export function enharmonicKeyOf(tonic: NoteLike, key: KeyLike): ResolvedKey | nu
     tonicPosition(note) - ENHARMONIC_FIFTHS,
     tonicPosition(note) + ENHARMONIC_FIFTHS,
   ]) {
-    if (position < FLATTEST_TONIC_FIFTHS || position > SHARPEST_TONIC_FIFTHS) {
+    // Bounded by what the reader can spell, and no further: narrowing it to the
+    // major/minor window here would refuse the far spelling of a modal key
+    // while the same call from that spelling still found this one, and the
+    // relation is documented to be its own inverse.
+    if (Math.abs(position) > MAX_FIFTHS) {
       continue;
     }
     const spelled = keyFromFifths(position).tonic;

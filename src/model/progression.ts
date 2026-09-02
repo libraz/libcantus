@@ -532,7 +532,7 @@ export class Progression {
    */
   cadences(
     key?: KeyLike,
-    opts?: { voicing?: number[][]; alternatives?: boolean; approach?: Chord },
+    opts?: { voicing?: number[][] } & Pick<DetectCadenceOptions, 'alternatives' | 'approach'>,
   ): CadenceResult[] {
     const resolved = this.#resolveKey(key);
     const found: CadenceResult[] = [];
@@ -542,12 +542,17 @@ export class Progression {
       if (from === undefined || to === undefined) {
         continue;
       }
-      const approach = index >= 2 ? this.#chords[index - 2] : opts?.approach;
+      // The progression supplies its own predecessor wherever it has one; the
+      // caller's `approach` is for the first pair, which has none. It is taken
+      // in the width the option it mirrors declares, so a chord named as a
+      // symbol reaches the detector rather than being read for a field only the
+      // class shape has and arriving as undefined.
+      const approach = index >= 2 ? this.#chords[index - 2]?.data : opts?.approach;
       const pair = opts?.voicing;
       found.push(
         detectCadence(from.data, to.data, resolved, {
           ...(opts?.alternatives === undefined ? {} : { alternatives: opts.alternatives }),
-          ...(approach === undefined ? {} : { approach: approach.data }),
+          ...(approach === undefined ? {} : { approach }),
           ...(pair === undefined
             ? {}
             : { voicing: [pair[index - 1] ?? [], pair[index] ?? []] as [number[], number[]] }),

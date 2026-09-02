@@ -35,6 +35,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A church mode has the same second spelling from either side.**
+  `enharmonicKeyOf` filtered candidate tonics through a window drawn from where
+  the major and minor keys put one, so the ends of the other modes fell outside
+  it: `Key.named('lydian', 'E').enharmonic()` answered with nothing while
+  `Key.named('lydian', 'Fb').enharmonic()` answered with `E lydian`, and the
+  relation documented to be its own inverse ran one way only. The window is now
+  the reader's own range and the signature decides what is written, which is
+  what the doc said all along. Scales that borrow a signature rather than
+  holding one keep the previous window, because the reading they are judged by —
+  no double accidental — is not symmetric between two spellings of one sound.
+
+- **A key names the same written spelling through the class as through the
+  functions.** `Key.transpose`, `Key.keyOnDegree`, `Key.keyHavingTonicAsDegree`
+  and `Key.forInstrument` all end on the question of whether a key is written on
+  the tonic they arrived at, and the class answered it with a second copy of the
+  predicate under a private name. The two disagreed at the ends of the church
+  modes: `Key.parse('D# phrygian').forInstrument('clarinetBb')` gave an
+  `E# phrygian` where the theory layer writes `F`. The class asks the theory
+  layer now, and the constants that decide what "written" means are declared
+  once and reserved to the module that owns the question.
+
+- **`Progression.cadences` takes an approach chord in every form.** It declared
+  the class shape where the option it mirrors declares `ChordLike`, and read a
+  field off it: a chord symbol was a type error, and from plain JavaScript it
+  went through as `undefined`, so the pair was graded with no predecessor and
+  the cadential six-four before it went unseen — while the same value handed to
+  the sibling `analyze` worked.
+
 - **A slash bass is written the way a chart writes one.** Respelling a symbol
   carries the bass by the step its root moved, which is what keeps a bass that
   belongs to the chord inside it — but the step was taken without asking whether

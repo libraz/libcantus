@@ -56,6 +56,39 @@ describe('Progression.analyze and Progression.cadences read the closing pair ali
     }).cadence;
     expect(withApproach?.rationale).toContain('six-four');
   });
+
+  /**
+   * The two methods declare `approach` in the width the option it mirrors
+   * declares, so a chord reaches the detector in whatever form a caller holds
+   * one.
+   *
+   * `cadences` used to declare the class shape and read `.data` off it. A
+   * symbol was a type error, and from plain JavaScript it went through as
+   * `undefined`: the pair was graded with no predecessor at all and the
+   * cadential six-four before it went unseen, while the same value handed to
+   * the sibling `analyze` worked.
+   */
+  it('takes the approach chord in every form a caller holds one', () => {
+    const progression = new Progression([Chord.parse('G'), Chord.parse('C')], Key.major('C'));
+    const forms = [Chord.parse('C/G'), Chord.parse('C/G').data, 'C/G'] as const;
+    const rationales = forms.map(
+      (approach) => progression.cadences(undefined, { approach })[0]?.rationale,
+    );
+
+    for (const rationale of rationales) {
+      expect(rationale).toContain('six-four');
+    }
+    expect(new Set(rationales).size).toBe(1);
+  });
+
+  it('reads the same cadence through cadences as through analyze', () => {
+    const progression = new Progression([Chord.parse('G'), Chord.parse('C')], Key.major('C'));
+    const approach = 'C/G';
+
+    expect(progression.cadences(undefined, { approach })[0]).toEqual(
+      progression.analyze(undefined, { approach }).cadence,
+    );
+  });
 });
 
 describe('the voicing both cadence entries take', () => {

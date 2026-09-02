@@ -36,7 +36,6 @@ import {
   dominantKeyOf,
   enharmonicKeyOf,
   isScaleTone,
-  isSignatureKey,
   type KeyLike,
   type KeyMode,
   type KeyRelation,
@@ -70,6 +69,10 @@ import {
 // word a key prints is how this class writes itself down, not a question the
 // published scale vocabulary answers for a caller.
 import { scaleNameOfMask } from '../theory/scale/name.js';
+// Read from the module that owns it rather than through the barrel: the
+// predicate is shared with this class, which is not the same as offering it
+// as a function of the public API.
+import { isWrittenTonic } from '../theory/scale/relations.js';
 import { spellPitchClasses, spellScale } from '../theory/spelling/index.js';
 import type { TransposingInstrument } from '../theory/transposition/index.js';
 import { toWrittenPitch } from '../theory/transposition/index.js';
@@ -135,12 +138,6 @@ function scaleWord(mask: number, isMinor: boolean): string {
   }
   return name.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();
 }
-
-/** Widest signature a key is actually written with, in fifths. */
-const MAX_CONVENTIONAL_FIFTHS = 7;
-
-/** An alteration of two sharps or two flats: the spelling a tonic should avoid. */
-const DOUBLE_ACCIDENTAL = 2;
 
 /** How many degrees a scale needs before thirds can be stacked on it. */
 const HEPTATONIC_DEGREES = 7;
@@ -1096,17 +1093,13 @@ export class Key {
    * spelling — {@link Key.transpose}, {@link Key.keyOnDegree} and
    * {@link Key.forInstrument} all end on it.
    *
-   * A key with a signature of its own is written wherever that signature is,
-   * up to seven sharps or flats. A scale that only borrows the signature of its
-   * parallel major or minor is written wherever it reads: the borrowed count
-   * says nothing — the octatonic scale on Db borrows eight flats and is spelled
-   * Db all the same — so what counts there is that no note needs a double
-   * accidental.
+   * The theory layer owns the answer and this asks it, so the class and the
+   * functions name the same written spelling — including at the ends of the
+   * church modes, where a window drawn from the major and minor keys and one
+   * drawn from the mode itself disagree.
    */
   #isWritten(): boolean {
-    return isSignatureKey(this.#scale)
-      ? Math.abs(this.fifths) <= MAX_CONVENTIONAL_FIFTHS
-      : this.notes().every((note) => Math.abs(note.alter) < DOUBLE_ACCIDENTAL);
+    return isWrittenTonic(this.#tonic.data, this.#scale);
   }
 
   /**

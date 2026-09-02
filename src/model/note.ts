@@ -14,6 +14,7 @@ import {
   transposeNote,
   tryParseNote,
 } from '../core/pitch/index.js';
+import { MAX_NAME_ACCIDENTALS } from '../core/pitch/naming.js';
 import { frequencyOf, type TuningTable } from '../core/tuning/index.js';
 import { describeRejected } from '../core/validation/index.js';
 import { type KeyLike, pitchToScaleDegree } from '../theory/scale/index.js';
@@ -69,9 +70,6 @@ function letterNumberOf(letter: number | string): number {
   }
   return unwrapParse(tryParseNote(letter)).letter;
 }
-
-/** Widest alteration an enharmonic spelling may carry: a double accidental. */
-const DOUBLE_ACCIDENTAL = 2;
 
 /** The zero-semitone second onto the next letter up, which respells a note. */
 const DIMINISHED_SECOND: SpelledInterval = {
@@ -452,7 +450,7 @@ export class Note {
   enharmonic(): Note[] {
     return [DIMINISHED_SECOND, DESCENDING_DIMINISHED_SECOND]
       .map((interval) => transposeByInterval(this.#data, interval))
-      .filter((note) => Math.abs(note.alter) <= DOUBLE_ACCIDENTAL)
+      .filter((note) => Math.abs(note.alter) <= MAX_NAME_ACCIDENTALS)
       .map((note) => new Note(note));
   }
 
