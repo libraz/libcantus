@@ -26,8 +26,11 @@ import {
   toMeterData,
 } from '../../core/meter/index.js';
 import {
+  assertArray,
+  assertFunction,
   assertOneOf,
   assertRange,
+  assertRecord,
   assertTimeSignature,
   describeRejected,
 } from '../../core/validation/index.js';
@@ -196,37 +199,50 @@ function sameTs(a: TimeSignature, b: TimeSignature): boolean {
  * @category Composition
  */
 export function fitsQuery<T>(entry: Vocabulary<T>, query: VocabularyQuery): boolean {
-  if (query.genre !== undefined && entry.genre !== query.genre) {
+  // Both sides are read field by field below, so both are read as records
+  // first: a `null` from a JavaScript caller or a restored session would report
+  // this library's own `TypeError` from inside the comparison instead.
+  const candidate = assertRecord<Vocabulary<T>>(entry, 'vocabulary entry');
+  const asked = assertRecord<VocabularyQuery>(query, 'vocabulary query');
+  if (asked.genre !== undefined && candidate.genre !== asked.genre) {
     return false;
   }
-  if (query.section !== undefined && entry.sections && !entry.sections.includes(query.section)) {
+  if (
+    asked.section !== undefined &&
+    candidate.sections &&
+    !candidate.sections.includes(asked.section)
+  ) {
     return false;
   }
-  if (query.bpm !== undefined && entry.tempoRange) {
-    const [low, high] = entry.tempoRange;
-    if (query.bpm < low || query.bpm > high) {
+  if (asked.bpm !== undefined && candidate.tempoRange) {
+    const [low, high] = candidate.tempoRange;
+    if (asked.bpm < low || asked.bpm > high) {
       return false;
     }
   }
   if (
-    query.ts !== undefined &&
-    entry.ts &&
-    !sameTs(entry.ts, meterAt(0, toMeterData(query.ts, 'ts')))
+    asked.ts !== undefined &&
+    candidate.ts &&
+    !sameTs(candidate.ts, meterAt(0, toMeterData(asked.ts, 'ts')))
   ) {
     return false;
   }
-  if (query.quality !== undefined && entry.fitsOver && !entry.fitsOver.includes(query.quality)) {
+  if (
+    asked.quality !== undefined &&
+    candidate.fitsOver &&
+    !candidate.fitsOver.includes(asked.quality)
+  ) {
     return false;
   }
-  if (query.articulations !== undefined) {
-    const available = query.articulations;
-    if (entry.articulations.some((articulation) => !available.includes(articulation))) {
+  if (asked.articulations !== undefined) {
+    const available = asked.articulations;
+    if (candidate.articulations.some((articulation) => !available.includes(articulation))) {
       return false;
     }
   }
   // The ceiling is the one condition the entry does not state itself: it is the
   // caller's limit, and it only ever takes candidates away.
-  return query.difficulty === undefined || entry.difficulty <= query.difficulty;
+  return asked.difficulty === undefined || candidate.difficulty <= asked.difficulty;
 }
 
 /**
@@ -252,7 +268,9 @@ export function selectVocabulary<T>(
   dictionary: readonly Vocabulary<T>[],
   query: VocabularyQuery,
 ): Vocabulary<T>[] {
-  return dictionary.filter((entry) => fitsQuery(entry, query));
+  return assertArray<Vocabulary<T>>(dictionary, 'dictionary').filter((entry) =>
+    fitsQuery(entry, query),
+  );
 }
 
 /**
@@ -279,7 +297,9 @@ export function pickVocabulary<T>(
   if (candidates.length === 0) {
     return undefined;
   }
-  return candidates[draw.range(0, candidates.length - 1, ...path)];
+  const sampler = assertRecord<Draw>(draw, 'draw');
+  assertFunction(sampler.range, 'draw.range');
+  return candidates[sampler.range(0, candidates.length - 1, ...path)];
 }
 
 /**
@@ -300,13 +320,24 @@ export function mergeVocabulary<T>(
   builtIn: readonly Vocabulary<T>[],
   supplied: readonly Vocabulary<T>[] | undefined,
 ): Vocabulary<T>[] {
-  if (!supplied || supplied.length === 0) {
-    return [...builtIn];
+  const library = assertArray<Vocabulary<T>>(builtIn, 'builtIn');
+  const extra =
+    supplied === undefined || supplied === null
+      ? []
+      : assertArray<Vocabulary<T>>(supplied, 'supplied');
+  if (extra.length === 0) {
+    return [...library];
   }
-  const byId = new Map(supplied.map((entry) => [entry.id, entry]));
-  const merged = builtIn.map((entry) => byId.get(entry.id) ?? entry);
-  const replaced = new Set(builtIn.map((entry) => entry.id));
-  for (const entry of supplied) {
+  // The id is what decides whether a caller's entry replaces a built-in, so
+  // every entry on both sides is read as one before the ids are compared: an
+  // entry that is not a record has no id to match on, and reading it as one
+  // would report this library's own `TypeError` from inside the merge.
+  const idOf = (entry: Vocabulary<T>, index: number, side: string): string =>
+    assertRecord<Vocabulary<T>>(entry, `${side}[${index}]`).id;
+  const byId = new Map(extra.map((entry, index) => [idOf(entry, index, 'supplied'), entry]));
+  const merged = library.map((entry, index) => byId.get(idOf(entry, index, 'builtIn')) ?? entry);
+  const replaced = new Set(library.map((entry, index) => idOf(entry, index, 'builtIn')));
+  for (const entry of extra) {
     if (!replaced.has(entry.id)) {
       merged.push(entry);
     }
@@ -333,8 +364,9 @@ export function vocabularyOfKind<T>(
   isMaterial: (material: unknown) => material is T,
 ): Vocabulary<T>[] {
   const out: Vocabulary<T>[] = [];
-  for (const entry of entries) {
-    if (isMaterial(entry.material)) {
+  const recognises = assertFunction<(material: unknown) => material is T>(isMaterial, 'isMaterial');
+  for (const entry of assertArray<Vocabulary<unknown>>(entries, 'entries')) {
+    if (recognises(assertRecord<Vocabulary<unknown>>(entry, 'entry').material)) {
       out.push(entry as Vocabulary<T>);
     }
   }

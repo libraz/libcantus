@@ -364,9 +364,22 @@ export function generateMotif(opts: MotifOptions): MotifCell {
  * @category Composition
  */
 export function motifToNoteEvents(cell: MotifCell): NoteEvent[] {
-  assertRecord<MotifCell>(cell, 'motif cell');
-  assertNoteEvents(cell.notes, 'motif cell notes');
-  return cell.notes.map((note) => ({ ...note }));
+  return assertCellNotes(cell, 'motif cell notes').map((note) => ({ ...note }));
+}
+
+/**
+ * Read a cell's statement, checking the cell before the events inside it.
+ *
+ * Every entrance that takes a cell reads the same two things — that it is an
+ * object, and that what it holds is a sounding event array — so both checks
+ * live here. Reading the array off an unchecked cell reports this library's own
+ * `TypeError` rather than the malformed cell, which is what a caller and a host
+ * branch on.
+ */
+function assertCellNotes(cell: MotifCell, name: string): MotifNote[] {
+  const read = assertRecord<MotifCell>(cell, 'motif cell');
+  assertNoteEvents(read.notes, name);
+  return read.notes;
 }
 
 /**
@@ -454,7 +467,7 @@ function transformUnchecked(
   amount?: number,
   key?: KeyScale,
 ): MotifCell {
-  assertNoteEvents(cell.notes, 'motif notes');
+  const notes = assertCellNotes(cell, 'motif notes');
   if (amount !== undefined) {
     assertFiniteNumber(amount, 'motif transform amount');
   }
@@ -470,7 +483,6 @@ function transformUnchecked(
   if ((t === 'augment' || t === 'diminish') && amount !== undefined && amount <= 0) {
     throw new InvalidInputError('time transform amount must be positive');
   }
-  const notes = cell.notes;
   switch (t) {
     case 'transposeChromatic': {
       const semis = amount ?? 0;
@@ -578,14 +590,14 @@ export function developMotif(
 ): MotifCell {
   const meter = meterAt(0, toMeterData(ts, 'ts'));
   assertPositiveInt(bars, 'development bars');
-  assertNoteEvents(cell.notes, 'motif notes');
+  const cellNotes = assertCellNotes(cell, 'motif notes');
   // The key is read into its plain form once, here at the boundary; the tiling
   // below is given the scale it resolved to.
   const scale = toKeyScale(key);
   const span = cellSpan(cell);
   const barBeats = beatsPerBar(meter);
   const totalBeats = bars * barBeats;
-  const origin = cellOrigin(cell.notes);
+  const origin = cellOrigin(cellNotes);
   const out: MotifNote[] = [];
 
   if (span <= 0) {
@@ -596,7 +608,7 @@ export function developMotif(
   // the offset multiplicatively so rounding error cannot accumulate over tiles.
   const tileSpan = Math.max(span, MIN_TILE_SPAN);
   const tileCount = Math.ceil(totalBeats / tileSpan);
-  assertGenerationBudget(tileCount * cell.notes.length, 'developed motif notes');
+  assertGenerationBudget(tileCount * cellNotes.length, 'developed motif notes');
   for (let k = 0; k < tileCount; k += 1) {
     const offset = k * tileSpan;
     // Placed pitch by cell pitch, so a tile cannot fold two of the cell's
@@ -604,7 +616,7 @@ export function developMotif(
     // the same cell pitch under the same harmony wants the same answer.
     const taken = new Map<number, number>();
     let previous: number | undefined;
-    for (const n of cell.notes) {
+    for (const n of cellNotes) {
       const startBeat = offset + (n.startBeat - origin);
       if (startBeat >= totalBeats) {
         continue;

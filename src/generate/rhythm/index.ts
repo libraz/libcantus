@@ -20,6 +20,7 @@ import {
 } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import {
+  assertArray,
   assertGenerationBudget,
   assertInteger,
   assertMidiPitch,
@@ -75,7 +76,7 @@ export function rhythmToNoteEvents(
   // MIDI quantities, not merely finite numbers.
   assertMidiPitch(pitch, 'pitch');
   assertInteger(velocity, 'velocity', 0, 127);
-  return events.map((event) => ({
+  return assertArray<RhythmEvent>(events, 'events').map((event) => ({
     pitch,
     startBeat: event.position,
     durationBeat: event.duration,

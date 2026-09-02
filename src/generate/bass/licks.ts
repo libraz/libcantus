@@ -21,9 +21,11 @@ import {
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import {
+  assertArray,
   assertGenerationBudget,
   assertInteger,
   assertOneOf,
+  assertRecord,
   clampToMidi,
 } from '../../core/validation/index.js';
 import type { ChordSegment } from '../../theory/chord/index.js';
@@ -153,15 +155,20 @@ export function placeLicks(
   key: KeyLike,
   opts: PlaceLicksOptions,
 ): NoteEvent[] {
-  assertGenerationBudget(timeline.length, 'lick segments', opts.budget);
-  const genre = assertOneOf(opts.genre, GENRES, 'lick genre');
-  const ts = meterAt(0, toMeterData(opts.ts ?? DEFAULT_TS, 'ts'));
-  const octave = opts.octave ?? DEFAULT_OCTAVE;
+  const asked = assertRecord<PlaceLicksOptions>(opts, 'opts');
+  const placement = assertArray<Omit<ChordSegment, 'chord'> & { chord: ChordLike }>(
+    timeline,
+    'timeline',
+  );
+  assertGenerationBudget(placement.length, 'lick segments', asked.budget);
+  const genre = assertOneOf(asked.genre, GENRES, 'lick genre');
+  const ts = meterAt(0, toMeterData(asked.ts ?? DEFAULT_TS, 'ts'));
+  const octave = asked.octave ?? DEFAULT_OCTAVE;
   assertInteger(octave, 'lick octave', -1, 8);
   // Key and chords are read into their plain form once, here at the boundary;
   // everything below works on the plain forms alone.
   const scale = toKeyScale(key);
-  const segments: ChordSegment[] = timeline
+  const segments: ChordSegment[] = placement
     .map((segment) => ({ ...segment, chord: toChordData(segment.chord) }))
     .sort((a, b) => a.startBeat - b.startBeat);
   assertBassSegments(segments);
@@ -180,9 +187,9 @@ export function placeLicks(
       count + Math.max(1, Math.ceil((segment.endBeat - segment.startBeat) / barBeats)),
     0,
   );
-  assertGenerationBudget(estimatedBars, 'lick bars', opts.budget);
+  assertGenerationBudget(estimatedBars, 'lick bars', asked.budget);
 
-  const resolved = resolveContext(opts.ctx);
+  const resolved = resolveContext(asked.ctx);
   const draw = resolved.part('bass');
   const bpm = resolved.bpm ?? DEFAULT_BPM;
   const density = resolved.rhythmic ?? DEFAULT_LICK_DENSITY;
@@ -191,11 +198,11 @@ export function placeLicks(
   // can see, so an out-of-range value is rejected the same way either time.
   // Only leaving it out skips the check.
   const supplied =
-    opts.difficulty === undefined
+    asked.difficulty === undefined
       ? undefined
-      : assertDifficulty(opts.difficulty, 'lick difficulty');
+      : assertDifficulty(asked.difficulty, 'lick difficulty');
   const difficulty = resolved.difficulty ?? supplied;
-  const { instrument, low } = bassRegister(resolved.instrument('bass'), opts.instrument, octave);
+  const { instrument, low } = bassRegister(resolved.instrument('bass'), asked.instrument, octave);
 
   const dictionary = mergeVocabulary(
     BASS_LICKS,

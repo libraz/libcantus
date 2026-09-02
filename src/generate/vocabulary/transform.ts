@@ -23,11 +23,12 @@ import {
 import {
   assertArray,
   assertFiniteNumber,
+  assertFunction,
   assertRange,
   assertRecord,
 } from '../../core/validation/index.js';
 import { sustainsStrokes } from '../context/difficulty.js';
-import type { Draw } from '../context/draw.js';
+import { assertDraw, type Draw } from '../context/draw.js';
 
 /** Sixteenth steps in one 4/4 bar; the grid every figure is written on. */
 export const BAR_STEPS = 16;
@@ -38,15 +39,6 @@ export const BEAT_STEPS = 4;
 /** One sixteenth expressed in quarter-note beats. */
 export const STEP_BEATS = 1 / BEAT_STEPS;
 
-/**
- * An onset on the shared sixteenth grid.
- *
- * Both kinds of material are lists of these with their own extra fields, so a
- * transform is generic over the record and only ever reads the fields named
- * here.
- *
- * @category Composition
- */
 /**
  * The figure as a list of onsets, checked before it is walked.
  *
@@ -64,6 +56,15 @@ function assertGridEvents<T extends GridEvent>(events: readonly T[]): readonly T
   return events;
 }
 
+/**
+ * An onset on the shared sixteenth grid.
+ *
+ * Both kinds of material are lists of these with their own extra fields, so a
+ * transform is generic over the record and only ever reads the fields named
+ * here.
+ *
+ * @category Composition
+ */
 export type GridEvent = {
   /** Sixteenth-note index from the start of the figure. */
   step: number;
@@ -178,11 +179,12 @@ export function thin<T extends GridEvent>(
   amount: number,
   ts: MeterLike,
 ): T[] {
+  const figure = assertGridEvents<T>(events);
   assertRange(amount, 0, 1, 'thin amount');
   const signature = meterAt(0, toMeterData(ts, 'ts'));
   // Five ranks (0..4), so a full turn of the dial reaches the downbeat alone.
   const floor = Math.min(4, Math.floor(amount * 5));
-  return events.filter((event) => stepWeight(event.step, signature) >= floor);
+  return figure.filter((event) => stepWeight(event.step, signature) >= floor);
 }
 
 /**
@@ -334,13 +336,16 @@ export function syncopate<T extends GridEvent>(
   draw: Draw,
   ...path: readonly (string | number)[]
 ): T[] {
-  const dial = typeof amount === 'number' ? amount : amount.amount;
-  const named = typeof amount === 'number' ? undefined : amount.ts;
-  const signature = meterAt(0, toMeterData(named ?? FIGURE_TS, 'ts'));
-  assertRange(dial, 0, 1, 'syncopate amount');
-  const occupied = new Set(events.map((event) => `${streamOf(event)}@${event.step}`));
-  const out: T[] = [...events];
-  for (const event of events) {
+  const figure = assertGridEvents<T>(events);
+  const sampler = assertDraw(draw);
+  const asked =
+    typeof amount === 'number' ? undefined : assertRecord<SyncopateOptions>(amount, 'amount');
+  const dial = asked === undefined ? amount : asked.amount;
+  const signature = meterAt(0, toMeterData(asked?.ts ?? FIGURE_TS, 'ts'));
+  assertRange(dial as number, 0, 1, 'syncopate amount');
+  const occupied = new Set(figure.map((event) => `${streamOf(event)}@${event.step}`));
+  const out: T[] = [...figure];
+  for (const event of figure) {
     const anticipated = event.step - 1;
     // The downbeat takes none: its anticipation would fall in the bar before
     // the one the figure belongs to.
@@ -351,7 +356,7 @@ export function syncopate<T extends GridEvent>(
     ) {
       continue;
     }
-    if (!draw.prob(dial, ...path, 'syncopate', event.step)) {
+    if (!sampler.prob(dial as number, ...path, 'syncopate', event.step)) {
       continue;
     }
     out.push({ ...event, step: anticipated, velocity: event.velocity * ADDED_NOTE_VELOCITY });
@@ -383,9 +388,12 @@ export function ornamentBy<T extends GridEvent>(
   draw: Draw,
   ...path: readonly (string | number)[]
 ): T[] {
+  const figure = assertGridEvents<T>(events);
+  const marks = assertFunction<(event: T) => boolean>(isOrnament, 'isOrnament');
+  const sampler = assertDraw(draw);
   assertRange(amount, 0, 1, 'ornament amount');
-  return events.filter(
-    (event) => !isOrnament(event) || draw.prob(amount, ...path, 'ornament', event.step),
+  return figure.filter(
+    (event) => !marks(event) || sampler.prob(amount, ...path, 'ornament', event.step),
   );
 }
 
@@ -465,17 +473,20 @@ export function deform<T extends GridEvent>(
   draw: Draw,
   ...path: readonly (string | number)[]
 ): T[] {
-  const spanSteps = opts.spanSteps ?? BAR_STEPS;
-  const ts = opts.ts ?? FIGURE_TS;
+  const figure = assertGridEvents<T>(events);
+  const asked = assertRecord<DeformOptions>(opts, 'opts');
+  assertDraw(draw);
+  const spanSteps = asked.spanSteps ?? BAR_STEPS;
+  const ts = asked.ts ?? FIGURE_TS;
   let out: T[] =
-    opts.rate === 'half'
-      ? halfTime(events, spanSteps)
-      : opts.rate === 'double'
-        ? doubleTime(events, spanSteps)
-        : [...events];
+    asked.rate === 'half'
+      ? halfTime(figure, spanSteps)
+      : asked.rate === 'double'
+        ? doubleTime(figure, spanSteps)
+        : [...figure];
 
-  if (opts.rhythmic !== undefined) {
-    const rhythmic = assertRange(opts.rhythmic, 0, 1, 'complexity rhythmic');
+  if (asked.rhythmic !== undefined) {
+    const rhythmic = assertRange(asked.rhythmic, 0, 1, 'complexity rhythmic');
     if (rhythmic < NEUTRAL_RHYTHMIC) {
       // Below the middle the request is for less, and less means the notes that
       // carry the least of the metre — of the figure's own metre, so the bar
@@ -491,9 +502,9 @@ export function deform<T extends GridEvent>(
     }
   }
 
-  if (opts.ornament !== undefined && opts.isOrnament) {
-    const isOrnament = opts.isOrnament;
-    out = ornamentBy(out, (event) => isOrnament(event), opts.ornament, draw, ...path);
+  if (asked.ornament !== undefined && asked.isOrnament) {
+    const isOrnament = assertFunction<(event: T) => boolean>(asked.isOrnament, 'opts.isOrnament');
+    out = ornamentBy(out, (event) => isOrnament(event), asked.ornament, draw, ...path);
   }
 
   return out.sort((a, b) => a.step - b.step);
@@ -523,11 +534,12 @@ export function withinCeiling(
   bpm: number | undefined,
   difficulty: number | undefined,
 ): boolean {
-  if (difficulty === undefined || bpm === undefined || events.length < 2) {
+  const figure = assertGridEvents(events);
+  if (difficulty === undefined || bpm === undefined || figure.length < 2) {
     return true;
   }
   const byStream = new Map<string, Set<number>>();
-  for (const event of events) {
+  for (const event of figure) {
     const stream = streamOf(event);
     const steps = byStream.get(stream);
     if (steps) {
