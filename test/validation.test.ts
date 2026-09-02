@@ -394,7 +394,7 @@ const NOTE_EVENT_VALIDATION_COVERAGE: Readonly<Record<string, readonly string[]>
   'src/analyze/form/phrase.ts:phrasesFromTimeline': ['phrasesFromTimeline'],
   'src/analyze/form/section.ts:sectionsFromNotes': ['sectionsFromNotes'],
   'src/analyze/keys/index.ts:keyTimelineFromNotes': ['keyTimelineFromNotes'],
-  'src/analyze/melody/index.ts:orderedNotes': ['motifFromNotes'],
+  'src/analyze/melody/internal.ts:orderedNotes': ['motifFromNotes'],
   'src/analyze/spelling/index.ts:spellLine': ['spellLine'],
   'src/analyze/timeline/index.ts:analyzeTimeline': ['chordTimelineFromNotes'],
   'src/analyze/voice/index.ts:analyzeVoice': ['analyzeVoice'],

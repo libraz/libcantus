@@ -559,7 +559,10 @@ function quoted(text: string): string[] {
 
 describe('the transform / relation correspondence the guide tabulates', () => {
   const transforms = unionMembers(path.join(ROOT, 'src/generate/motif/index.ts'), 'MotifTransform');
-  const kinds = unionMembers(path.join(ROOT, 'src/analyze/melody/index.ts'), 'MotifRelationKind');
+  const kinds = unionMembers(
+    path.join(ROOT, 'src/analyze/melody/relation.ts'),
+    'MotifRelationKind',
+  );
   const guides = ['en', 'ja'].map((lang) => ({
     lang,
     file: path.join(ROOT, 'docs', lang, 'melody-and-motifs.md'),
