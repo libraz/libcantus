@@ -39,13 +39,13 @@ Chord boundaries are searched for rather than assumed, and so is the key, so a p
 
 | Use case | What it does | Worked guide |
 |---|---|---|
-| A DAW assistant | Infers the harmony from tracks, then writes a bass line against it. | [DAW workflow](docs/en/use-cases/daw-workflow.md) |
-| A piece analyzer | Key regions, cadences, harmonic reduction, phrases, sections and motifs from one score. | [Piece analysis](docs/en/use-cases/piece-analysis.md) |
-| A modulation report | Key changes with their pivot chords, confidences and relations. | [Modulation report](docs/en/use-cases/modulation-report.md) |
-| A harmony exercise checker | Part-writing and species-counterpoint violations, each with the voice it happened in and the rule it broke. | [Harmony exercise checker](docs/en/use-cases/harmony-exercise-checker.md) |
-| A generative arrangement | One seeded composer writing a progression, its parts and its drums, then a playability check. | [Generative arrangement](docs/en/use-cases/generative-arrangement.md) |
-| A chord chart importer | Typed chord symbols turned into a timeline, voicings and a bass line. | [Chord chart import](docs/en/use-cases/chord-chart-import.md) |
-| Part preparation | A part fitted to an instrument and written at the pitch its player reads. | [Part preparation](docs/en/use-cases/part-preparation.md) |
+| A DAW assistant | Infers the harmony from tracks, then writes a bass line against it. | [DAW workflow](https://github.com/libraz/libcantus/blob/main/docs/en/use-cases/daw-workflow.md) |
+| A piece analyzer | Key regions, cadences, harmonic reduction, phrases, sections and motifs from one score. | [Piece analysis](https://github.com/libraz/libcantus/blob/main/docs/en/use-cases/piece-analysis.md) |
+| A modulation report | Key changes with their pivot chords, confidences and relations. | [Modulation report](https://github.com/libraz/libcantus/blob/main/docs/en/use-cases/modulation-report.md) |
+| A harmony exercise checker | Part-writing and species-counterpoint violations, each with the voice it happened in and the rule it broke. | [Harmony exercise checker](https://github.com/libraz/libcantus/blob/main/docs/en/use-cases/harmony-exercise-checker.md) |
+| A generative arrangement | One seeded composer writing a progression, its parts and its drums, then a playability check. | [Generative arrangement](https://github.com/libraz/libcantus/blob/main/docs/en/use-cases/generative-arrangement.md) |
+| A chord chart importer | Typed chord symbols turned into a timeline, voicings and a bass line. | [Chord chart import](https://github.com/libraz/libcantus/blob/main/docs/en/use-cases/chord-chart-import.md) |
+| Part preparation | A part fitted to an instrument and written at the pitch its player reads. | [Part preparation](https://github.com/libraz/libcantus/blob/main/docs/en/use-cases/part-preparation.md) |
 
 ## Install
 
@@ -59,9 +59,9 @@ The package root exports the whole API. `@libraz/libcantus/core`, `/theory`, `/a
 
 ## Documentation
 
-New to music theory? [The primer](docs/en/primer/index.md) teaches the concepts this API is built on — pitch and intervals, scales and keys, chords, harmony, voices, rhythm and meter — for a reader who writes TypeScript rather than scores.
+New to music theory? [The primer](https://github.com/libraz/libcantus/blob/main/docs/en/primer/index.md) teaches the concepts this API is built on — pitch and intervals, scales and keys, chords, harmony, voices, rhythm and meter — for a reader who writes TypeScript rather than scores.
 
-Otherwise start at [Introduction](docs/en/introduction.md) and [Getting started](docs/en/getting-started.md), which index the domain guides and the reference pages. Every `ts` example in the guides is executed by the test suite, and a trailing comment that names a literal — with or without the reason for it after an em dash — is checked against what the call returns.
+Otherwise start at [Introduction](https://github.com/libraz/libcantus/blob/main/docs/en/introduction.md) and [Getting started](https://github.com/libraz/libcantus/blob/main/docs/en/getting-started.md), which index the domain guides and the reference pages. Every `ts` example in the guides is executed by the test suite, and a trailing comment that names a literal — with or without the reason for it after an em dash — is checked against what the call returns.
 
 ## What it doesn't do
 
@@ -70,7 +70,7 @@ Otherwise start at [Introduction](docs/en/introduction.md) and [Getting started]
 - **No modal systems.** `WORLD_SCALES` records the pitch material a tradition names — a thāt, a maqām's set, a Japanese pentatonic — and not the grammar built on it.
 - **No corpus.** Nothing is bundled to run statistics over.
 
-[Questions and limitations](docs/en/faq.md) covers the rest, including where a functional reading does not apply and what the engine will not guess.
+[Questions and limitations](https://github.com/libraz/libcantus/blob/main/docs/en/faq.md) covers the rest, including where a functional reading does not apply and what the engine will not guess.
 
 ## License
 
