@@ -79,26 +79,53 @@ function functionBodies(source: string): Map<string, string> {
   return bodies;
 }
 
-describe('shared predicates in the functional-harmony unit', () => {
+/**
+ * Every unit split across modules over a shared `internal.ts`.
+ *
+ * Read from the tree rather than listed: a unit split later is held to the same
+ * rule the moment its `internal.ts` is written, which is the point at which the
+ * rule starts to mean something for it.
+ */
+function splitUnits(): string[] {
+  return walk(SRC)
+    .filter((file) => path.basename(file) === 'internal.ts')
+    .map((file) => path.dirname(file))
+    .sort();
+}
+
+describe('shared helpers in a unit split across modules', () => {
+  it('finds the units to check', () => {
+    // A walk that stopped matching would leave the check below passing over
+    // nothing, and the units it covers are the ones the splits produced.
+    const units = splitUnits().map((unit) => path.relative(SRC, unit));
+    expect(units.length).toBeGreaterThan(5);
+    expect(units).toContain(path.join('analyze', 'functional'));
+    expect(units).toContain(path.join('generate', 'harmonize'));
+  });
+
   it('keeps one definition of a body, in the module the siblings import', () => {
     // A predicate written twice drifts the moment one copy is corrected. The
     // bodies are compared rather than the names, since two modules may name
     // different things alike — `bassPcOf` is a key's flat submediant in one
     // module and a chord's sounding bass in another.
-    const byBody = new Map<string, string[]>();
-    for (const file of readdirSync(FUNCTIONAL).filter((name) => name.endsWith('.ts'))) {
-      for (const [name, body] of functionBodies(
-        readFileSync(path.join(FUNCTIONAL, file), 'utf8'),
-      )) {
-        const key = `${name} ${body}`;
-        byBody.set(key, [...(byBody.get(key) ?? []), file]);
+    const copied: string[] = [];
+    for (const unit of splitUnits()) {
+      const byBody = new Map<string, string[]>();
+      for (const file of readdirSync(unit).filter((name) => name.endsWith('.ts'))) {
+        for (const [name, body] of functionBodies(readFileSync(path.join(unit, file), 'utf8'))) {
+          const key = `${name} ${body}`;
+          byBody.set(key, [...(byBody.get(key) ?? []), file]);
+        }
+      }
+      for (const [key, files] of byBody) {
+        if (files.length > 1) {
+          copied.push(
+            `${path.relative(SRC, unit)}: ${key.split(' ')[0]} in ${files.sort().join(', ')}`,
+          );
+        }
       }
     }
-    const copied = [...byBody.entries()]
-      .filter(([, files]) => files.length > 1)
-      .map(([key, files]) => `${key.split(' ')[0]} in ${files.sort().join(', ')}`);
-
-    expect(copied).toEqual([]);
+    expect(copied.sort()).toEqual([]);
   });
 
   it('routes the shared predicates through the internal module', () => {
@@ -391,5 +418,88 @@ describe('a search table is charged where it is allocated', () => {
       /allocate(?:Candidate|Choice)Table\(/.test(readFileSync(file, 'utf8')),
     );
     expect(users.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+/**
+ * Functions a module declares as its own exports.
+ *
+ * Only declarations, not the re-exports a barrel writes: a barrel passing a
+ * name on is what publishing looks like, and counting those would make every
+ * published name look like a declaration of its own.
+ */
+function exportedFunctions(source: string): string[] {
+  const found: string[] = [];
+  for (const match of source.matchAll(
+    /^export (?:declare )?(?:async )?function\s+([A-Za-z_$][\w$]*)/gm,
+  )) {
+    found.push(match[1] ?? '');
+  }
+  return found;
+}
+
+/** Names an import statement brings in, wherever it came from. */
+function importedNames(source: string): string[] {
+  const found: string[] = [];
+  for (const match of source.matchAll(/(?:import|export)[\s\S]{0,600}?from\s+['"][^'"]+['"]/g)) {
+    const clause = match[0].match(/\{([\s\S]*?)\}/);
+    if (clause?.[1] === undefined) {
+      continue;
+    }
+    for (const part of clause[1].split(',')) {
+      const name = part
+        .trim()
+        .replace(/^type\s+/, '')
+        .split(/\s+as\s+/)[0]
+        ?.trim();
+      if (name !== undefined && name !== '') {
+        found.push(name);
+      }
+    }
+  }
+  return found;
+}
+
+describe("a unit's entry module carries nothing only a test reaches", () => {
+  // A function widened to `export` on the module a caller imports is part of
+  // that module's interface to everyone after, whatever it was widened for.
+  // What a test needs instead is the module that owns the thing — which the
+  // library's own passes then import too, so the export answers to something.
+  // Derived from the tree, because a list would only ever describe the exports
+  // somebody remembered.
+  const entries = walk(SRC).filter((file) => path.basename(file) === 'index.ts');
+  const usedElsewhere = (file: string): Set<string> =>
+    new Set(
+      walk(SRC)
+        .filter((other) => other !== file)
+        .flatMap((other) => importedNames(readFileSync(other, 'utf8'))),
+    );
+  const usedInTests = new Set(
+    walk(fileURLToPath(new URL('.', import.meta.url))).flatMap((file) =>
+      importedNames(readFileSync(file, 'utf8')),
+    ),
+  );
+
+  it('finds the exports to check', () => {
+    expect(entries.length).toBeGreaterThan(20);
+    expect(usedElsewhere(entries[0] ?? '').size).toBeGreaterThan(100);
+    expect(usedInTests.size).toBeGreaterThan(100);
+    expect(
+      exportedFunctions('export function a() {}\nexport type B = 1;\nfunction c() {}'),
+    ).toEqual(['a']);
+  });
+
+  it('is reached by the library itself wherever a test reaches it', () => {
+    const testOnly: string[] = [];
+    for (const file of entries) {
+      const rel = path.relative(SRC, file);
+      const reached = usedElsewhere(file);
+      for (const name of exportedFunctions(readFileSync(file, 'utf8'))) {
+        if (usedInTests.has(name) && !reached.has(name)) {
+          testOnly.push(`${rel}: ${name}`);
+        }
+      }
+    }
+    expect(testOnly.sort()).toEqual([]);
   });
 });
