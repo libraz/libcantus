@@ -268,6 +268,80 @@ describe('a kit is bounded by the limbs the player has', () => {
   });
 });
 
+describe('an instrument is read once, and read whole', () => {
+  /** A kit that counts how often anything asks it for its reach table. */
+  function countingKit(): { profile: PercussionProfile; reads: () => number } {
+    const table = DRUM_KIT.reach;
+    let reads = 0;
+    const profile: PercussionProfile = { ...DRUM_KIT };
+    Object.defineProperty(profile, 'reach', {
+      get: () => {
+        reads += 1;
+        return table;
+      },
+      enumerable: true,
+    });
+    return { profile, reads: () => reads };
+  }
+
+  /** A run of strokes on a voice the kit sounds. */
+  function strokes(count: number): NoteEvent[] {
+    return Array.from({ length: count }, (_, index) => note(DRUM_NOTES.snare, index, 0.25));
+  }
+
+  it('reads the profile the same number of times whatever the passage costs', () => {
+    // What the instrument is does not depend on how long the part is, so the
+    // profile is read on the way in and not once more per note: a kit was
+    // re-validated — and its reach table walked — for every stroke of a track.
+    const brief = countingKit();
+    playability(strokes(4), brief.profile);
+    const long = countingKit();
+    playability(strokes(400), long.profile);
+    expect(brief.reads()).toBeGreaterThan(0);
+    expect(long.reads()).toBe(brief.reads());
+  });
+
+  it('names the field of a profile it will not read a passage against', () => {
+    // A profile out of a project file can be missing any field, and a missing
+    // one does not fail where it is missing: an absent `maxStretch` made every
+    // span comparison false, so a chord no hand can hold read as playable.
+    const passage = [note(40, 0), note(52, 0)];
+    const cases: [Record<string, unknown>, RegExp][] = [
+      [{ polyphony: undefined }, /polyphony/],
+      [{ polyphony: 0 }, /polyphony/],
+      [{ maxStretch: undefined }, /maxStretch/],
+      [{ maxStretch: 1.5 }, /maxStretch/],
+      [{ articulations: undefined }, /articulations/],
+      [{ articulations: ['slap'] }, /articulations\[0\]/],
+      [{ tuning: [] }, /at least one string/],
+    ];
+    for (const [broken, named] of cases) {
+      const profile = { ...BASS_4_STRING, ...broken } as typeof BASS_4_STRING;
+      expect(() => playability(passage, profile), JSON.stringify(broken)).toThrow(
+        InvalidInputError,
+      );
+      expect(() => playability(passage, profile), JSON.stringify(broken)).toThrow(named);
+    }
+  });
+
+  it('refuses a kit a neck was asked for, by whichever face was asked', () => {
+    // The function and the class say the same thing about the same profile:
+    // a kit has no neck, and neither of them places a pitch on one.
+    expect(() => fingeringsFor(DRUM_KIT, DRUM_NOTES.snare)).toThrow(InvalidInputError);
+    expect(() => Instrument.of(DRUM_KIT).fingerings(DRUM_NOTES.snare)).toThrow(InvalidInputError);
+  });
+
+  it('takes a MIDI pitch where it says it takes one', () => {
+    expect(() => canSound(GUITAR_STANDARD, 40.5)).toThrow(InvalidInputError);
+    expect(() => canSound(GUITAR_STANDARD, 9000)).toThrow(InvalidInputError);
+    expect(() => fingeringsFor(GUITAR_STANDARD, 40.5)).toThrow(InvalidInputError);
+    expect(() => foldIntoRange(40.5, GUITAR_STANDARD)).toThrow(InvalidInputError);
+    expect(() => Instrument.guitar().canSound(40.5)).toThrow(InvalidInputError);
+    expect(() => Instrument.guitar().fingerings(40.5)).toThrow(InvalidInputError);
+    expect(() => Instrument.guitar().foldIntoRange(40.5)).toThrow(InvalidInputError);
+  });
+});
+
 describe('a drum part is a kit take with voices dubbed over it', () => {
   /** The same kit read as a single take, with nothing dubbed over it. */
   const ONE_TAKE: PercussionProfile = { ...DRUM_KIT, overdub: [] };
@@ -679,9 +753,24 @@ describe('playability reads the instrument before the passage', () => {
     const neckless = { ...GUITAR_STANDARD, name: 'stringless guitar', tuning: [] };
     expect(() => playability([], neckless)).toThrow(InvalidInputError);
     expect(() => playability([note(40, 0)], neckless)).toThrow(InvalidInputError);
+    // A kit with no limbs is refused by the field that says so, rather than by
+    // the consequence of it: what a caller can act on is the missing limbs.
     const handless: PercussionProfile = { ...DRUM_KIT, name: 'kit with no player', limbs: [] };
-    expect(() => playability([], handless)).toThrow(/within reach/);
-    expect(() => playability([note(DRUM_NOTES.kick, 0, 0.25)], handless)).toThrow(/within reach/);
+    expect(() => playability([], handless)).toThrow(/at least one limb/);
+    expect(() => playability([note(DRUM_NOTES.kick, 0, 0.25)], handless)).toThrow(
+      /at least one limb/,
+    );
+    // A player who has limbs, but none of the ones the kit's voices ask for,
+    // is on an instrument with nothing on it.
+    const wrongLimbs: PercussionProfile = {
+      ...DRUM_KIT,
+      name: 'kit nobody reaches',
+      limbs: ['leftFoot'],
+      reach: Object.fromEntries(
+        Object.keys(DRUM_KIT.reach).map((pitch) => [Number(pitch), ['rightHand'] as const]),
+      ),
+    };
+    expect(() => playability([], wrongLimbs)).toThrow(/within reach/);
     // A profile the instrument module accepts is read the same either way.
     expect(playability([], DRUM_KIT).issues).toEqual([]);
   });

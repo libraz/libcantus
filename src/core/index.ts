@@ -38,6 +38,9 @@ export type {
   PlayabilityReport,
   StringedProfile,
   StringFingering,
+  ValidatedPercussionProfile,
+  ValidatedProfile,
+  ValidatedStringedProfile,
 } from './instrument/index.js';
 export {
   ARTICULATIONS,

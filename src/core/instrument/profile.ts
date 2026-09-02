@@ -1,6 +1,13 @@
 import { InvalidInputError } from '../errors/index.js';
-import { assertInteger, assertMidiPitch } from '../validation/index.js';
+import {
+  assertInteger,
+  assertMidiPitch,
+  assertOneOf,
+  assertPositiveInt,
+  describeRejected,
+} from '../validation/index.js';
 import type { Articulation } from './articulation.js';
+import { ARTICULATIONS } from './articulation.js';
 
 /**
  * Every limb a percussionist strikes with, in declaration order.
@@ -94,6 +101,36 @@ export type PercussionProfile = InstrumentProfileCommon & {
  */
 export type InstrumentProfile = StringedProfile | PercussionProfile;
 
+declare const checked: unique symbol;
+
+/**
+ * A neck whose every field has been checked against the domain it declares.
+ *
+ * @category Core
+ */
+export type ValidatedStringedProfile = StringedProfile & { readonly [checked]: true };
+
+/**
+ * A kit whose every field has been checked against the domain it declares.
+ *
+ * @category Core
+ */
+export type ValidatedPercussionProfile = PercussionProfile & { readonly [checked]: true };
+
+/**
+ * A profile whose every field has been checked against the domain it declares.
+ *
+ * The mark is carried by the type alone — nothing is added to the object, so a
+ * validated profile serializes exactly as the plain one it was made from. Its
+ * only source is {@link toInstrumentProfile}, which is what makes the mark worth
+ * anything: the routines that read a profile note by note take this rather than
+ * a plain {@link InstrumentProfile}, so a path that skipped the checks does not
+ * compile instead of failing on the one passage that happens to expose it.
+ *
+ * @category Core
+ */
+export type ValidatedProfile = ValidatedStringedProfile | ValidatedPercussionProfile;
+
 /**
  * Anything that names an instrument: a plain {@link InstrumentProfile}, or a
  * value that serializes to one such as the `Instrument` class.
@@ -132,7 +169,7 @@ export type InstrumentProfileLike =
 export function toInstrumentProfile(
   value: InstrumentProfileLike,
   name = 'instrument',
-): InstrumentProfile {
+): ValidatedProfile {
   if (typeof value !== 'object' || value === null) {
     throw new InvalidInputError(`${name} must be an instrument profile; received ${typeof value}`);
   }
@@ -147,7 +184,9 @@ export function toInstrumentProfile(
     );
   }
   assertProfile(data);
-  return data;
+  // The only place the mark is applied, and it is applied to a profile every
+  // check has just passed: see {@link ValidatedProfile}.
+  return data as ValidatedProfile;
 }
 
 /**
@@ -168,7 +207,7 @@ export function toInstrumentProfile(
 export function toStringedProfile(
   value: InstrumentProfileLike,
   name = 'instrument',
-): StringedProfile {
+): ValidatedStringedProfile {
   const profile = toInstrumentProfile(value, name);
   if (profile.kind !== 'stringed') {
     throw new InvalidInputError(
@@ -200,17 +239,65 @@ export type StringFingering = {
  */
 const MAX_FRETS = 127;
 
-/** Reject a profile whose own description is contradictory. */
+/**
+ * Greatest number of notes one instrument may sound at once.
+ *
+ * The MIDI compass is 128 pitches, so an instrument sounding more than that at
+ * one instant is sounding one of them twice — which is a voicing question
+ * rather than a property of the instrument.
+ */
+const MAX_POLYPHONY = 128;
+
+/**
+ * Reject a profile whose own description is contradictory.
+ *
+ * Every field the library goes on to read is checked, not only the ones that
+ * describe the family: a profile read out of a project file or written by a
+ * JavaScript caller may be missing any of them, and a missing one does not
+ * fail where it is missing. A `maxStretch` of `undefined` makes every span
+ * comparison false, so a chord no hand can hold reads as playable; a missing
+ * `polyphony` turns every group into one that exceeds it, and says so in a
+ * message with `undefined` in it. Neither is a diagnosis a caller can act on.
+ */
 function assertProfile(profile: InstrumentProfile): void {
+  if (typeof profile.name !== 'string' || profile.name === '') {
+    throw new InvalidInputError(
+      `instrument name must be a non-empty string; received ${describeRejected(profile.name)}`,
+    );
+  }
+  if (!Array.isArray(profile.articulations)) {
+    throw new InvalidInputError(
+      `${profile.name} articulations must be an array; received ${describeRejected(profile.articulations)}`,
+    );
+  }
+  for (const [index, articulation] of profile.articulations.entries()) {
+    assertOneOf(articulation, ARTICULATIONS, `${profile.name} articulations[${index}]`);
+  }
+  assertPositiveInt(profile.polyphony, `${profile.name} polyphony`, MAX_POLYPHONY);
   if (profile.kind === 'stringed') {
-    if (profile.tuning.length === 0) {
+    if (!Array.isArray(profile.tuning) || profile.tuning.length === 0) {
       throw new InvalidInputError(`${profile.name} must have at least one string`);
     }
     for (const [index, open] of profile.tuning.entries()) {
       assertMidiPitch(open, `${profile.name} tuning[${index}]`);
     }
     assertInteger(profile.frets, `${profile.name} frets`, 0, MAX_FRETS);
+    // A hand holds down frets, so the span it can hold is a fret count: zero is
+    // a player who only sounds open strings, and anything wider than the neck
+    // is a stretch the neck has nowhere to put.
+    assertInteger(profile.maxStretch, `${profile.name} maxStretch`, 0, MAX_FRETS);
     return;
+  }
+  if (!Array.isArray(profile.limbs) || profile.limbs.length === 0) {
+    throw new InvalidInputError(`${profile.name} must have at least one limb`);
+  }
+  for (const [index, limb] of profile.limbs.entries()) {
+    assertOneOf(limb, LIMBS, `${profile.name} limbs[${index}]`);
+  }
+  if (typeof profile.reach !== 'object' || profile.reach === null) {
+    throw new InvalidInputError(
+      `${profile.name} reach must be a table of limbs by voice; received ${describeRejected(profile.reach)}`,
+    );
   }
   const voices = Object.keys(profile.reach);
   for (const key of voices) {
@@ -288,8 +375,12 @@ export function reachOf(profile: PercussionProfile, pitch: number | undefined): 
  * ```
  * @category Core
  */
-export function instrumentRange(profile: InstrumentProfile): { low: number; high: number } {
-  assertProfile(profile);
+export function instrumentRange(profile: InstrumentProfileLike): { low: number; high: number } {
+  return rangeIn(toInstrumentProfile(profile));
+}
+
+/** {@link instrumentRange} on a profile that has already been checked. */
+export function rangeIn(profile: ValidatedProfile): { low: number; high: number } {
   if (profile.kind === 'stringed') {
     let low = Number.POSITIVE_INFINITY;
     let high = Number.NEGATIVE_INFINITY;
@@ -327,8 +418,14 @@ export function instrumentRange(profile: InstrumentProfile): { low: number; high
  *   produces it.
  * @category Core
  */
-export function canSound(profile: InstrumentProfile, pitch: number): boolean {
-  assertProfile(profile);
+export function canSound(profile: InstrumentProfileLike, pitch: number): boolean {
+  const resolved = toInstrumentProfile(profile, 'instrument');
+  assertMidiPitch(pitch, 'pitch');
+  return soundsIn(resolved, pitch);
+}
+
+/** {@link canSound} on a profile that has already been checked. */
+export function soundsIn(profile: ValidatedProfile, pitch: number): boolean {
   if (profile.kind === 'stringed') {
     return profile.tuning.some((open) => pitch >= open && pitch - open <= profile.frets);
   }
@@ -343,16 +440,22 @@ export function canSound(profile: InstrumentProfile, pitch: number): boolean {
  * @returns One entry per string that reaches the pitch; empty when none does.
  * @category Core
  */
-export function fingeringsFor(profile: StringedProfile, pitch: number): StringFingering[] {
-  assertProfile(profile);
+export function fingeringsFor(profile: InstrumentProfileLike, pitch: number): StringFingering[] {
+  const stringed = toStringedProfile(profile, 'instrument');
+  assertMidiPitch(pitch, 'pitch');
+  return fingeringsIn(stringed, pitch);
+}
+
+/** {@link fingeringsFor} on a profile that has already been checked. */
+export function fingeringsIn(stringed: ValidatedStringedProfile, pitch: number): StringFingering[] {
   const out: StringFingering[] = [];
-  for (let string = 0; string < profile.tuning.length; string += 1) {
-    const open = profile.tuning[string];
+  for (let string = 0; string < stringed.tuning.length; string += 1) {
+    const open = stringed.tuning[string];
     if (open === undefined) {
       continue;
     }
     const fret = pitch - open;
-    if (fret >= 0 && fret <= profile.frets) {
+    if (fret >= 0 && fret <= stringed.frets) {
       out.push({ string, fret });
     }
   }
@@ -380,11 +483,18 @@ export function fingeringsFor(profile: StringedProfile, pitch: number): StringFi
  * ```
  * @category Core
  */
-export function foldIntoRange(pitch: number, profile: InstrumentProfile): number {
-  if (canSound(profile, pitch)) {
+export function foldIntoRange(pitch: number, profile: InstrumentProfileLike): number {
+  const resolved = toInstrumentProfile(profile, 'instrument');
+  assertMidiPitch(pitch, 'pitch');
+  return foldIn(pitch, resolved);
+}
+
+/** {@link foldIntoRange} on a profile that has already been checked. */
+export function foldIn(pitch: number, resolved: ValidatedProfile): number {
+  if (soundsIn(resolved, pitch)) {
     return pitch;
   }
-  const { low, high } = instrumentRange(profile);
+  const { low, high } = rangeIn(resolved);
   // Every octave of the pitch that lies inside the instrument is weighed, and
   // the least distant of the ones it sounds wins: on a gapped range the octave
   // below can be nearer than the octave above, and answering with the first one
@@ -394,7 +504,7 @@ export function foldIntoRange(pitch: number, profile: InstrumentProfile): number
   const first = pitch + 12 * Math.ceil((low - pitch) / 12);
   let best: number | undefined;
   for (let candidate = first; candidate <= high; candidate += 12) {
-    if (!canSound(profile, candidate)) {
+    if (!soundsIn(resolved, candidate)) {
       continue;
     }
     // Not strictly nearer: the candidates rise, so an equal distance means the

@@ -353,29 +353,123 @@ function delegatesOf(
   member: ts.MethodDeclaration | ts.GetAccessorDeclaration,
   checker: ts.TypeChecker,
 ): ts.FunctionDeclaration[] {
+  return callsOf(member, checker).filter(
+    (declaration) => !declaration.getSourceFile().fileName.startsWith(`${MODEL}${path.sep}`),
+  );
+}
+
+/** The functions this package declares that a body calls by name. */
+function callsOf(node: ts.Node, checker: ts.TypeChecker): ts.FunctionDeclaration[] {
   const called = new Set<ts.FunctionDeclaration>();
-  const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-      const found = checker.getSymbolAtLocation(node.expression);
+  const visit = (child: ts.Node): void => {
+    if (ts.isCallExpression(child) && ts.isIdentifier(child.expression)) {
+      const found = checker.getSymbolAtLocation(child.expression);
       const symbol =
         found !== undefined && (found.flags & ts.SymbolFlags.Alias) !== 0
           ? checker.getAliasedSymbol(found)
           : found;
       for (const declaration of symbol?.getDeclarations() ?? []) {
-        const file = declaration.getSourceFile().fileName;
         if (
           ts.isFunctionDeclaration(declaration) &&
-          file.startsWith(`${SRC}${path.sep}`) &&
-          !file.startsWith(`${MODEL}${path.sep}`)
+          declaration.getSourceFile().fileName.startsWith(`${SRC}${path.sep}`)
         ) {
           called.add(declaration);
         }
       }
     }
-    ts.forEachChild(node, visit);
+    ts.forEachChild(child, visit);
   };
-  ts.forEachChild(member, visit);
+  ts.forEachChild(node, visit);
   return [...called];
+}
+
+/**
+ * For each function no barrel exports, the published function that answers by
+ * handing the question straight to it.
+ *
+ * An entry point that checks its arguments and then hands the work to an inner
+ * reading is one capability written as two functions: the wrapper is what a
+ * caller reaches for, and the inner one is what it runs. A class that holds a
+ * value already checked calls the inner one — repeating the check on a profile
+ * it copied at construction would be the second reading this layer exists not
+ * to have — and in doing so runs exactly the code the published entry runs, so
+ * the capability is on both APIs whatever the call graph looks like from here.
+ *
+ * "Hands it straight to" is what keeps this from excusing anything else: the
+ * call has to be the whole of what a `return` in the wrapper evaluates, and no
+ * second published function may answer through the same inner reading. A shared
+ * helper several entry points call on the way to their own answers is not the
+ * answer to any of them, so reaching it says nothing about reaching them. The
+ * relation is read out of the wrapper's body rather than from a list of names,
+ * so an inner reading that stops being one stops counting on the same run.
+ */
+function innerReadings(
+  program: ts.Program,
+  checker: ts.TypeChecker,
+  published: Set<string>,
+): Map<string, string> {
+  const wrappers = new Map<string, Set<string>>();
+  for (const file of program.getSourceFiles()) {
+    if (!file.fileName.startsWith(`${SRC}${path.sep}`)) {
+      continue;
+    }
+    for (const statement of file.statements) {
+      const outer = ts.isFunctionDeclaration(statement) ? statement.name?.text : undefined;
+      if (outer === undefined || !published.has(originOf(statement))) {
+        continue;
+      }
+      for (const inner of handedTo(statement, checker)) {
+        const origin = originOf(inner);
+        if (published.has(origin)) {
+          continue;
+        }
+        const named = wrappers.get(origin) ?? new Set<string>();
+        named.add(outer);
+        wrappers.set(origin, named);
+      }
+    }
+  }
+  const single = new Map<string, string>();
+  for (const [origin, named] of wrappers) {
+    const only = [...named][0];
+    if (named.size === 1 && only !== undefined) {
+      single.set(origin, only);
+    }
+  }
+  return single;
+}
+
+/** The functions a body returns the result of calling, unwrapped by nothing. */
+function handedTo(node: ts.Node, checker: ts.TypeChecker): ts.FunctionDeclaration[] {
+  const answered: ts.FunctionDeclaration[] = [];
+  const visit = (child: ts.Node): void => {
+    if (ts.isReturnStatement(child) && child.expression !== undefined) {
+      answered.push(...calledDirectly(child.expression, checker));
+    }
+    ts.forEachChild(child, visit);
+  };
+  ts.forEachChild(node, visit);
+  return answered;
+}
+
+/** The function an expression is a call to, if that is all the expression is. */
+function calledDirectly(
+  expression: ts.Expression,
+  checker: ts.TypeChecker,
+): ts.FunctionDeclaration[] {
+  if (!ts.isCallExpression(expression) || !ts.isIdentifier(expression.expression)) {
+    return [];
+  }
+  const found = checker.getSymbolAtLocation(expression.expression);
+  const symbol =
+    found !== undefined && (found.flags & ts.SymbolFlags.Alias) !== 0
+      ? checker.getAliasedSymbol(found)
+      : found;
+  return (symbol?.getDeclarations() ?? []).filter(
+    (declaration): declaration is ts.FunctionDeclaration =>
+      ts.isFunctionDeclaration(declaration) &&
+      declaration.getSourceFile().fileName.startsWith(`${SRC}${path.sep}`),
+  );
 }
 
 /** The public runtime exports that are plain functions rather than classes. */
@@ -391,7 +485,25 @@ describe('class coverage of the functional API', () => {
   const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, ROOT);
   const program = ts.createProgram(parsed.fileNames, { ...parsed.options, noEmit: true });
   const checker = program.getTypeChecker();
+  const published = publishedOrigins(program, checker);
+  const wrappers = innerReadings(program, checker, published);
   const reachable = reachableFromClasses(program, checker);
+  // A class that calls an inner reading reaches the published wrapper around
+  // it: same code, one name outward. See {@link innerReadings}.
+  for (const file of program.getSourceFiles()) {
+    for (const statement of file.statements) {
+      if (!ts.isFunctionDeclaration(statement) || statement.name === undefined) {
+        continue;
+      }
+      if (!reachable.has(statement.name.text)) {
+        continue;
+      }
+      const outer = wrappers.get(originOf(statement));
+      if (outer !== undefined) {
+        reachable.add(outer);
+      }
+    }
+  }
   const reaches = (name: string): boolean => reachable.has(name);
 
   it('reaches every public function that has a receiver to hang off', () => {
@@ -450,10 +562,12 @@ describe('class coverage of the functional API', () => {
     // reached the barrel is absent from the question as well as from the answer.
     // The root barrel is the union of the layer barrels, so a function it does
     // not carry is off every subpath too.
-    const published = publishedOrigins(program, checker);
     const unpublished = faces
       .filter(
-        ({ name, delegate }) => !published.has(originOf(delegate)) && !(name in NOT_PUBLISHED),
+        ({ name, delegate }) =>
+          !published.has(originOf(delegate)) &&
+          !wrappers.has(originOf(delegate)) &&
+          !(name in NOT_PUBLISHED),
       )
       .map(({ label, name }) => `${label} -> ${name}`)
       .sort();
@@ -464,7 +578,6 @@ describe('class coverage of the functional API', () => {
     // The same decay the function-only list has: an entry whose function has
     // since been published, or that no class delegates to any more, describes
     // nothing and is trusted anyway.
-    const published = publishedOrigins(program, checker);
     const live = new Map(faces.map(({ name, delegate }) => [name, delegate]));
     const stale = Object.keys(NOT_PUBLISHED)
       .filter((name) => {

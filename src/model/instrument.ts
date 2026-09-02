@@ -12,19 +12,17 @@ import type {
 import {
   BASS_4_STRING,
   BASS_5_STRING,
-  canSound,
-  fingeringsFor,
-  foldIntoRange,
   GUITAR_DROP_D,
   GUITAR_STANDARD,
-  instrumentRange,
   playability,
   toInstrumentProfile,
+  type ValidatedProfile,
 } from '../core/instrument/index.js';
+import { fingeringsIn, foldIn, rangeIn, soundsIn } from '../core/instrument/profile.js';
 import type { NoteLike } from '../core/pitch/index.js';
 import { toNoteData } from '../core/pitch/index.js';
 import type { NoteEvent } from '../core/types.js';
-import { assertInteger, assertMidiPitch, assertPositiveInt } from '../core/validation/index.js';
+import { assertMidiPitch } from '../core/validation/index.js';
 import type { TransposingInstrument } from '../theory/transposition/index.js';
 import { toSoundingPitch } from '../theory/transposition/index.js';
 import { Note } from './note.js';
@@ -93,26 +91,16 @@ function copyProfile(profile: InstrumentProfile): InstrumentProfile {
  * A fret count that is not a whole number, or a string tuned to no pitch,
  * describes an instrument that answers every question and means none of them:
  * the range it reports, the positions it offers and the passages it accepts are
- * all read off these numbers.
+ * all read off these numbers. What counts as holdable is the instrument
+ * module's own reading — the class states no second one, so an instrument and
+ * the function it delegates to cannot come to differ over the same profile.
  */
-function checkedProfile(profile: InstrumentProfileLike): InstrumentProfile {
-  const copy = copyProfile(toInstrumentProfile(profile));
-  assertPositiveInt(copy.polyphony, `${copy.name} polyphony`);
-  if (copy.kind === 'stringed') {
-    for (const [index, open] of copy.tuning.entries()) {
-      assertMidiPitch(open, `${copy.name} tuning[${index}]`);
-    }
-    assertInteger(copy.maxStretch, `${copy.name} maxStretch`, 0);
-  } else {
-    for (const pitch of Object.keys(copy.reach)) {
-      assertMidiPitch(Number(pitch), `${copy.name} reach pitch`);
-    }
-  }
-  // The instrument module's own reading of the profile settles the rest: a
-  // fret count that is no count, a neck with no strings, or a kit no limb
-  // reaches is refused here rather than at the first passage checked against it.
-  instrumentRange(copy);
-  return copy;
+function checkedProfile(profile: InstrumentProfileLike): ValidatedProfile {
+  // Copied field by field out of a profile that has just been checked, so the
+  // copy holds the same values under the same names and is checked by the same
+  // reading; copying first would mean spreading lists that are not yet known to
+  // be lists.
+  return copyProfile(toInstrumentProfile(profile)) as ValidatedProfile;
 }
 
 /**
@@ -130,9 +118,9 @@ function checkedProfile(profile: InstrumentProfileLike): InstrumentProfile {
  * ```
  */
 export class Instrument {
-  readonly #profile: InstrumentProfile;
+  readonly #profile: ValidatedProfile;
 
-  private constructor(profile: InstrumentProfile) {
+  private constructor(profile: ValidatedProfile) {
     this.#profile = profile;
   }
 
@@ -265,7 +253,7 @@ export class Instrument {
    * ```
    */
   range(): { low: number; high: number } {
-    return instrumentRange(this.#profile);
+    return rangeIn(this.#profile);
   }
 
   /**
@@ -276,7 +264,8 @@ export class Instrument {
    *   produces it.
    */
   canSound(pitch: number): boolean {
-    return canSound(this.#profile, pitch);
+    assertMidiPitch(pitch, 'pitch');
+    return soundsIn(this.#profile, pitch);
   }
 
   /**
@@ -291,7 +280,8 @@ export class Instrument {
     if (profile.kind !== 'stringed') {
       throw new InvalidInputError(`${profile.name} has no strings to finger`);
     }
-    return fingeringsFor(profile, pitch);
+    assertMidiPitch(pitch, 'pitch');
+    return fingeringsIn(profile, pitch);
   }
 
   /**
@@ -309,7 +299,8 @@ export class Instrument {
    * ```
    */
   foldIntoRange(pitch: number): number {
-    return foldIntoRange(pitch, this.#profile);
+    assertMidiPitch(pitch, 'pitch');
+    return foldIn(pitch, this.#profile);
   }
 
   /**

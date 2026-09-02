@@ -110,6 +110,9 @@ export type {
   PlayabilityReport,
   StringedProfile,
   StringFingering,
+  ValidatedPercussionProfile,
+  ValidatedProfile,
+  ValidatedStringedProfile,
 } from '../core/index.js';
 export type {
   BarPosition,

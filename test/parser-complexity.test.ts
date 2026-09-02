@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { InvalidInputError } from '../src/core/errors/index.js';
 import {
   BASS_4_STRING,
   canSound,
@@ -307,9 +308,15 @@ describe('an instrument profile the library accepts cannot be walked forever', (
 
   it('folds a pitch far outside the instrument without walking to it', () => {
     // Before the octave counts were computed, each of these stepped by twelve
-    // from the pitch to the instrument, which is where the process hung.
-    expect(cost(() => void foldIntoRange(-1e9, BASS_4_STRING))).toBeLessThan(CEILING_MS);
-    expect(cost(() => void foldIntoRange(1e9, BASS_4_STRING))).toBeLessThan(CEILING_MS);
+    // from the pitch to the instrument, which is where the process hung. The
+    // published entry no longer reaches the walk at all with a pitch this far
+    // out — it is outside the MIDI compass, and is refused as such — so the
+    // guarantee is stated where the pitch is still nameable, and the internal
+    // band helpers, which take a band rather than an instrument, carry the rest.
+    expect(() => foldIntoRange(-1e9, BASS_4_STRING)).toThrow(InvalidInputError);
+    expect(() => foldIntoRange(1e9, BASS_4_STRING)).toThrow(InvalidInputError);
+    expect(cost(() => void foldIntoRange(0, BASS_4_STRING))).toBeLessThan(CEILING_MS);
+    expect(cost(() => void foldIntoRange(127, BASS_4_STRING))).toBeLessThan(CEILING_MS);
     expect(cost(() => void bandFloor(1e9, BASS_4_STRING))).toBeLessThan(CEILING_MS);
     expect(cost(() => void bandFloor(-1e9, BASS_4_STRING))).toBeLessThan(CEILING_MS);
     expect(cost(() => void foldIntoBand(1e9, 36))).toBeLessThan(CEILING_MS);

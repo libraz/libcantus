@@ -27,6 +27,9 @@ export type {
   PercussionProfile,
   StringedProfile,
   StringFingering,
+  ValidatedPercussionProfile,
+  ValidatedProfile,
+  ValidatedStringedProfile,
 } from './profile.js';
 export {
   canSound,

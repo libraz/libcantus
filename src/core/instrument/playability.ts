@@ -2,14 +2,16 @@ import { BEAT_EPS } from '../meter/internal.js';
 import type { NoteEvent } from '../types.js';
 import { assertNoteEvents, assertRange } from '../validation/index.js';
 import {
-  canSound,
-  fingeringsFor,
-  type InstrumentProfile,
-  isOverdub,
+  fingeringsIn,
+  type InstrumentProfileLike,
   type Limb,
   reachOf,
   type StringFingering,
+  soundsIn,
   toInstrumentProfile,
+  type ValidatedPercussionProfile,
+  type ValidatedProfile,
+  type ValidatedStringedProfile,
 } from './profile.js';
 
 /**
@@ -154,7 +156,7 @@ type Analysis = {
  */
 export function playability(
   notes: readonly NoteEvent[],
-  profile: InstrumentProfile,
+  profile: InstrumentProfileLike,
   bpm?: number,
 ): PlayabilityReport {
   assertNoteEvents(notes, 'playability notes', { allowNonPositiveDuration: true });
@@ -186,11 +188,16 @@ export function playability(
     secondsPerBeat: bpm === undefined ? undefined : 60 / bpm,
   };
 
-  checkExistence(state, instrument);
   if (instrument.kind === 'stringed') {
+    checkExistence(state, instrument, (pitch) => soundsIn(instrument, pitch));
     placeOnNeck(state, instrument);
   } else {
-    placeOnKit(state, instrument);
+    // The kit is read here rather than inside the note-by-note stages, which is
+    // what makes the reading below a lookup: asking the profile per note walked
+    // the reach table for every stroke of the track.
+    const kit = readKit(instrument);
+    checkExistence(state, instrument, (pitch) => limbsFor(kit, pitch).length > 0);
+    placeOnKit(state, kit);
   }
 
   return {
@@ -200,14 +207,25 @@ export function playability(
   };
 }
 
-/** Layer 1: the instrument has no position for the note, or no such technique. */
-function checkExistence(state: Analysis, profile: InstrumentProfile): void {
+/**
+ * Layer 1: the instrument has no position for the note, or no such technique.
+ *
+ * Whether the instrument has a pitch is asked through `sounds`, which the
+ * caller has already read the instrument for: a kit answers out of the table it
+ * built once, and reading the profile again per note is the cost this stage
+ * used to carry.
+ */
+function checkExistence(
+  state: Analysis,
+  profile: ValidatedProfile,
+  sounds: (pitch: number) => boolean,
+): void {
   for (const index of state.order) {
     const note = state.notes[index];
     if (!note) {
       continue;
     }
-    if (!canSound(profile, note.pitch)) {
+    if (!sounds(note.pitch)) {
       state.issues.push({
         type: 'noteOutOfRange',
         layer: 1,
@@ -286,7 +304,7 @@ function soundingGroups(state: Analysis): { startBeat: number; members: number[]
 }
 
 /** Layers 2 and 3 for a string instrument, and the fingering that goes with them. */
-function placeOnNeck(state: Analysis, profile: InstrumentProfile & { kind: 'stringed' }): void {
+function placeOnNeck(state: Analysis, profile: ValidatedStringedProfile): void {
   /** Beat each string becomes free again. */
   const stringFreeAt = profile.tuning.map(() => Number.NEGATIVE_INFINITY);
   /** Note currently holding each string. */
@@ -300,7 +318,7 @@ function placeOnNeck(state: Analysis, profile: InstrumentProfile & { kind: 'stri
     if (!note || !placement) {
       continue;
     }
-    const candidates = fingeringsFor(profile, note.pitch);
+    const candidates = fingeringsIn(profile, note.pitch);
     if (candidates.length === 0) {
       continue;
     }
@@ -360,7 +378,7 @@ function fingeringCost(candidate: StringFingering, previous: StringFingering | u
 /** Layer 3: the fretting hand cannot travel that far in the time available. */
 function checkShiftSpeed(
   state: Analysis,
-  profile: InstrumentProfile,
+  profile: ValidatedProfile,
   fromIndex: number | undefined,
   toIndex: number,
   from: StringFingering,
@@ -395,7 +413,7 @@ function checkShiftSpeed(
 /** Layer 2: one hand cannot span that many frets at once. */
 function checkStretch(
   state: Analysis,
-  profile: InstrumentProfile & { kind: 'stringed' },
+  profile: ValidatedStringedProfile,
   group: { startBeat: number; members: number[] },
 ): void {
   const frets = group.members
@@ -423,7 +441,7 @@ function checkStretch(
 /** Layer 2: more notes sounding at once than the instrument has voices. */
 function checkPolyphony(
   state: Analysis,
-  profile: InstrumentProfile,
+  profile: ValidatedProfile,
   group: { startBeat: number; members: number[] },
 ): void {
   if (group.members.length <= profile.polyphony) {
@@ -447,6 +465,44 @@ type KitPass = {
   members: number[];
 };
 
+/**
+ * The kit a percussion part is read against.
+ *
+ * Which limbs can strike a voice, and whether a voice is dubbed over the kit,
+ * are properties of the instrument rather than of the passage, so both are read
+ * out of the profile once per call: asking the profile per stroke — inside a
+ * sort comparator, at that — rebuilt the same answer for every note of the
+ * track and allocated an array each time it did.
+ */
+type Kit = {
+  profile: ValidatedPercussionProfile;
+  /** Limbs the player has that reach each voice, in preference order. */
+  limbs: ReadonlyMap<number, readonly Limb[]>;
+  /** Voices played on a pass of their own. */
+  overdub: ReadonlySet<number>;
+};
+
+/** No limb reaches a voice the kit does not name. */
+const NO_LIMBS: readonly Limb[] = Object.freeze([]);
+
+/** Read a kit's limbs and overdubs out of the profile, once. */
+function readKit(profile: ValidatedPercussionProfile): Kit {
+  const limbs = new Map<number, readonly Limb[]>();
+  for (const key of Object.keys(profile.reach)) {
+    const pitch = Number(key);
+    limbs.set(pitch, reachOf(profile, pitch));
+  }
+  return { profile, limbs, overdub: new Set(profile.overdub ?? []) };
+}
+
+/** The limbs that can strike a voice, or none for a note that is not there. */
+function limbsFor(kit: Kit, pitch: number | undefined): readonly Limb[] {
+  if (pitch === undefined) {
+    return NO_LIMBS;
+  }
+  return kit.limbs.get(pitch) ?? NO_LIMBS;
+}
+
 /** What the limbs were last doing, carried from one onset to the next. */
 type KitMemory = {
   /** Limb that last struck each voice, so a voice keeps its stick. */
@@ -464,17 +520,13 @@ type KitMemory = {
  * snare is already in one hand and a hi-hat in the other — a player does not
  * grow a third arm for it, the part is recorded twice.
  */
-function passesAt(
-  state: Analysis,
-  profile: InstrumentProfile & { kind: 'percussion' },
-  members: readonly number[],
-): KitPass[] {
-  const kit: KitPass = { id: 'kit', members: [] };
+function passesAt(state: Analysis, kit: Kit, members: readonly number[]): KitPass[] {
+  const played: KitPass = { id: 'kit', members: [] };
   const overdubs = new Map<number, KitPass>();
   for (const index of members) {
     const pitch = state.notes[index]?.pitch;
-    if (pitch === undefined || !isOverdub(profile, pitch)) {
-      kit.members.push(index);
+    if (pitch === undefined || !kit.overdub.has(pitch)) {
+      played.members.push(index);
       continue;
     }
     let pass = overdubs.get(pitch);
@@ -484,7 +536,7 @@ function passesAt(
     }
     pass.members.push(index);
   }
-  return [kit, ...overdubs.values()];
+  return [played, ...overdubs.values()];
 }
 
 /**
@@ -492,19 +544,14 @@ function passesAt(
  *
  * @returns True when the pass wants more limbs at once than it has.
  */
-function placePass(
-  state: Analysis,
-  profile: InstrumentProfile & { kind: 'percussion' },
-  pass: KitPass,
-  memory: KitMemory,
-): boolean {
+function placePass(state: Analysis, kit: Kit, pass: KitPass, memory: KitMemory): boolean {
   const taken = new Set<Limb>();
   let conflicted = false;
   // The most constrained voice picks first: a kick only the right foot
   // reaches must not lose it to a snare that either hand could have taken.
   const members = [...pass.members].sort((a, b) => {
-    const left = reachOf(profile, state.notes[a]?.pitch);
-    const right = reachOf(profile, state.notes[b]?.pitch);
+    const left = limbsFor(kit, state.notes[a]?.pitch);
+    const right = limbsFor(kit, state.notes[b]?.pitch);
     return left.length - right.length || a - b;
   });
   for (const index of members) {
@@ -513,7 +560,7 @@ function placePass(
     if (!note || !placement) {
       continue;
     }
-    const candidates = reachOf(profile, note.pitch);
+    const candidates = limbsFor(kit, note.pitch);
     if (candidates.length === 0) {
       continue;
     }
@@ -544,7 +591,7 @@ function placePass(
         // The limb had to travel across the kit rather than repeat a voice.
         state.movement += 1;
       }
-      checkStrokeSpeed(state, profile, previousIndex, index, chosen);
+      checkStrokeSpeed(state, kit.profile, previousIndex, index, chosen);
     }
     memory.lastStroke.set(strokeKey, index);
   }
@@ -552,13 +599,13 @@ function placePass(
 }
 
 /** Layers 2 and 3 for a kit, and the limb assignment that goes with them. */
-function placeOnKit(state: Analysis, profile: InstrumentProfile & { kind: 'percussion' }): void {
+function placeOnKit(state: Analysis, kit: Kit): void {
   const memory: KitMemory = { limbForVoice: new Map(), lastStroke: new Map() };
 
   for (const group of onsetGroups(state)) {
     let conflicted = false;
-    for (const pass of passesAt(state, profile, group.members)) {
-      if (!placePass(state, profile, pass, memory)) {
+    for (const pass of passesAt(state, kit, group.members)) {
+      if (!placePass(state, kit, pass, memory)) {
         continue;
       }
       conflicted = true;
@@ -568,11 +615,11 @@ function placeOnKit(state: Analysis, profile: InstrumentProfile & { kind: 'percu
         notes: [...pass.members].sort((a, b) => a - b),
         startBeat: group.startBeat,
         impossible: true,
-        message: `${pass.members.length} simultaneous strokes cannot be shared among the limbs of ${profile.name}`,
+        message: `${pass.members.length} simultaneous strokes cannot be shared among the limbs of ${kit.profile.name}`,
       });
     }
     if (!conflicted) {
-      checkPolyphony(state, profile, group);
+      checkPolyphony(state, kit.profile, group);
     }
   }
 }
@@ -580,7 +627,7 @@ function placeOnKit(state: Analysis, profile: InstrumentProfile & { kind: 'percu
 /** Layer 3: one limb cannot strike twice that close together. */
 function checkStrokeSpeed(
   state: Analysis,
-  profile: InstrumentProfile,
+  profile: ValidatedProfile,
   fromIndex: number,
   toIndex: number,
   limb: Limb,
