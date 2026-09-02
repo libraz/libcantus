@@ -1,6 +1,7 @@
 import { type ParseResult, unwrapParse } from '../../core/errors/index.js';
 import type { Note, NoteNameOptions } from '../../core/pitch/index.js';
 import { noteToPitchClass, tryParseKeyName, tryParseNote } from '../../core/pitch/index.js';
+import { assertOptions } from '../../core/validation/index.js';
 import type { ResolvedKey } from './kinds.js';
 import {
   NAMED_SCALES,
@@ -132,13 +133,14 @@ function tryNamedScaleKey(text: string): ResolvedKey | null {
  * @category Scales
  */
 export function tryResolveKeyName(text: string, opts?: NoteNameOptions): ParseResult<ResolvedKey> {
-  if (typeof text === 'string' && (opts?.system === undefined || opts.system === 'english')) {
+  const asked = assertOptions(opts, 'opts');
+  if (typeof text === 'string' && (asked.system === undefined || asked.system === 'english')) {
     const named = tryNamedScaleKey(text);
     if (named !== null) {
       return { ok: true, value: named };
     }
   }
-  const parsed = tryParseKeyName(text, opts);
+  const parsed = tryParseKeyName(text, asked);
   if (!parsed.ok) {
     return parsed;
   }

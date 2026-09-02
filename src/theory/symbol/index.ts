@@ -29,7 +29,11 @@ import {
   transposeByInterval,
   transposeNote,
 } from '../../core/pitch/index.js';
-import { assertFiniteSemitones, describeRejected } from '../../core/validation/index.js';
+import {
+  assertFiniteSemitones,
+  assertOptions,
+  describeRejected,
+} from '../../core/validation/index.js';
 import type { Chord, PitchSpelling } from '../chord/index.js';
 import { chordPitchClasses, chordSpecOf, degreeOfInterval } from '../chord/index.js';
 import { type ChordLike, toChordData } from './coerce.js';
@@ -128,11 +132,14 @@ export function parseChordSymbol(text: string, opts?: NoteNameOptions): Chord {
  * @category Chords
  */
 export function tryParseChordSymbol(text: string, opts?: NoteNameOptions): ParseResult<Chord> {
+  // Read before the try: the options are the caller's own configuration, so a
+  // malformed bag is a fault to raise rather than a symbol that failed to parse.
+  const asked = assertOptions(opts, 'opts');
   try {
     if (typeof text !== 'string') {
       throw new InvalidInputError(`chord symbol must be a string; received ${typeof text}`);
     }
-    const system = opts?.system ?? DEFAULT_SYSTEM;
+    const system = asked.system ?? DEFAULT_SYSTEM;
     const trimmed = text
       .trim()
       .replaceAll('♯', '#')
@@ -220,8 +227,9 @@ export function formatChordSymbol(chord: ChordLike, opts?: ChordSymbolOptions): 
   if (!Object.hasOwn(CANONICAL_SUFFIX, data.quality)) {
     throw new InvalidInputError(`Unknown chord quality: ${String(data.quality)}`);
   }
-  const system = opts?.system ?? DEFAULT_SYSTEM;
-  const flats = opts?.flats;
+  const asked = assertOptions(opts, 'opts');
+  const system = asked.system ?? DEFAULT_SYSTEM;
+  const flats = asked.flats;
   const rootPc = pitchClass(data.rootPc);
   const rootHint = hintFor(data.rootSpelling, rootPc);
   const rootSpelling = rootSpellingFor(rootPc, rootHint, flats);
