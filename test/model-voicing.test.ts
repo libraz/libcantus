@@ -66,6 +66,16 @@ describe('plain data', () => {
     // is a fault the part-writing check reports rather than one the class hides.
     expect(Voicing.of([64, 60]).pitches).toEqual([64, 60]);
     expect(Voicing.of([64, 60]).equals(Voicing.of([60, 64]))).toBe(false);
+    // Every way the pitches leave the class keeps that order, so a caller
+    // reading the lowest sounding voice takes the minimum rather than the first
+    // entry — which is what the documented order used to invite.
+    expect(Voicing.of([67, 60, 64]).toJSON()).toEqual([67, 60, 64]);
+    expect(`${Voicing.of([67, 60, 64])}`).toBe('67 60 64');
+    expect(
+      Voicing.of([67, 60, 64])
+        .spell('C major')
+        .map((note) => note.name),
+    ).toEqual(['G4', 'C4', 'E4']);
   });
 
   it('reports the compass it sounds, crossed voices included', () => {

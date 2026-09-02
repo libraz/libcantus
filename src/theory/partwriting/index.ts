@@ -70,8 +70,11 @@ import { intervalWord, violation } from './internal.js';
  * The rest are raised by {@link checkSpecies} alone, since they describe faults
  * only a species exercise can commit:
  *
- * - `wrongRhythmicRatio`: the counterpoint does not present the number of notes
- *   per cantus-firmus note its species requires.
+ * - `wrongRhythmicRatio`: the counterpoint's rhythm does not read against the
+ *   cantus firmus as its species requires — the wrong number of notes per
+ *   cantus-firmus note, and, in the fifth species, note values the style does
+ *   not write or a `durations` array that does not describe the counterpoint it
+ *   was given.
  * - `unpreparedDissonance`: a dissonance falls where the species allows none, or
  *   is reached or left by leap where it must be passed through by step.
  * - `unresolvedSuspension`: a fourth-species suspension that does not fall by

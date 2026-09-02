@@ -30,8 +30,9 @@ import { hasDominantSonority, isDiatonicChord, mod12, soundsDominantSeventh } fr
  *
  * The derivation belongs to the theory layer, since it needs nothing but the
  * key: the part-writing checker asks it too, and cannot import this layer. It
- * is re-exported here because that is where the numeral and function layers
- * reach it, and where the package surface has always exposed it from.
+ * is re-exported here for the layers above — the numerals, the harmonizer and
+ * the progression generator reach it through this module — rather than for the
+ * package surface, which has never carried it.
  */
 export type { TonicizableDegree };
 /**

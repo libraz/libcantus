@@ -47,8 +47,9 @@ export type ProgressionPreset = {
   id: string;
   name: string;
   /**
-   * The chord roots, in order, as {@link ProgressionDegree} codes: 0..6 for the
-   * key's own scale degrees and {@link BORROWED_DEGREES} for the borrowed ones.
+   * The chord roots, in order, as {@link ProgressionDegree} codes: 1..7 for the
+   * key's own scale degrees, counted as a musician counts them, and
+   * {@link BORROWED_DEGREES} for the borrowed ones.
    */
   degrees: ProgressionDegree[];
   functional: ProgFunction;

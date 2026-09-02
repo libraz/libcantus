@@ -33,7 +33,11 @@ export type LickNote = GridEvent & {
   degree: number;
   /** Chromatic alteration in semitones, for a flattened or raised degree. */
   alter?: number;
-  /** Sounding length in sixteenths; one step when absent. */
+  /**
+   * Sounding length in sixteenths. Absent, the note sounds to the next onset,
+   * as a line written by {@link generateBassLine} does: the built-in figures
+   * name no length, so a figure is legato unless it says otherwise.
+   */
   lengthSteps?: number;
   /** How the note is played, when it is more than a plain note. */
   articulation?: Articulation;

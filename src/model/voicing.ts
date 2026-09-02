@@ -42,7 +42,13 @@ import { Note } from './note.js';
 import { assertDataArray, assertKeyArgument } from './shared.js';
 
 /**
- * The plain form of a {@link Voicing}: the sounding MIDI pitches, ascending.
+ * The plain form of a {@link Voicing}: the sounding MIDI pitches in voice
+ * order, lowest voice first.
+ *
+ * Voice order, not sorted order. A voicing is normally ascending, and one that
+ * is not is exactly what a voice crossing is — the class keeps the order it was
+ * built with so the crossing survives to be reported, so a caller reading the
+ * lowest sounding pitch takes the minimum rather than the first entry.
  *
  * The voicing functions all speak this array, so the class hands out exactly
  * what they take rather than a wrapper of its own.
@@ -330,7 +336,7 @@ export class Voicing {
    * @param key A key name, a plain key/scale, or a {@link Key}.
    * @param chord The chord sounding, supplying the enharmonic evidence; without
    *   it the key alone decides.
-   * @returns One spelled note per pitch, ascending.
+   * @returns One spelled note per pitch, in voice order.
    * @throws If the value names no key or no chord.
    * @example
    * ```ts
@@ -625,7 +631,7 @@ export class Voicing {
    * Private class fields do not serialize, so an explicit `toJSON` keeps
    * `JSON.stringify(voicing)` from collapsing to `{}`.
    *
-   * @returns A copy of the sounding MIDI pitches, ascending.
+   * @returns A copy of the sounding MIDI pitches, in voice order.
    */
   toJSON(): VoicingData {
     return [...this.#pitches];
@@ -635,7 +641,7 @@ export class Voicing {
    * The pitches separated by spaces, so a template literal or a log line reads
    * as the voicing.
    *
-   * @returns The pitches ascending, e.g. `'60 64 67'`.
+   * @returns The pitches in voice order, e.g. `'60 64 67'`.
    */
   toString(): string {
     return this.#pitches.join(' ');
