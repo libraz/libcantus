@@ -416,7 +416,12 @@ describe('a tempo map is bounded and read once', () => {
     expect(convert(rewritten, true)).toBeGreaterThan(0);
     const revalidated = performance.now() - again;
     expect(revalidated / Math.max(recognised, 1)).toBeGreaterThan(3);
-  }, 30_000);
+    // Ten thousand entries converted ten thousand times, twice: seconds on a
+    // machine to itself and a minute or more with the rest of the suite running
+    // beside it. The budget is for catching a hang, as the suite-wide one is —
+    // a run that took long enough to reach it is not slow, it is quadratic
+    // again, which is the very thing the comparison above is about.
+  }, 180_000);
 
   it('re-validates a map the caller has written to since', () => {
     // The map is remembered by identity, so what makes the memo safe is that a

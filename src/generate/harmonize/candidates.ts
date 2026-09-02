@@ -247,7 +247,19 @@ export function buildCandidates(key: KeyScale, harmonic: number): Candidate[] {
       rootPc: chord.rootPc,
       quality: chord.quality,
       secondaryDominant: false,
-      base: BORROWED_BASE,
+      // A diminished or augmented triad is charged for what it is wherever it
+      // comes from: priced at the flat borrowing rate, the ii dim borrowed from
+      // the parallel minor came out cheaper than the key's own vii dim, and
+      // which of the two a phrase took was decided by the tie-break jitter
+      // rather than by the melody.
+      // A diminished or augmented triad is charged for what it is wherever it
+      // comes from: priced at the flat borrowing rate, the ii dim borrowed from
+      // the parallel minor came out cheaper than the key's own vii dim, and
+      // which of the two a phrase took was decided by the tie-break jitter
+      // rather than by the melody.
+      base: UNSTABLE_QUALITIES.has(chord.quality)
+        ? Math.max(BORROWED_BASE, UNSTABLE_TRIAD)
+        : BORROWED_BASE,
       pcs: chordPitchClasses(chord),
     });
   }

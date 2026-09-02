@@ -354,11 +354,18 @@ describe('what a chord of the key costs to use', () => {
   });
 
   it('charges every diminished triad what an unstable sonority costs', () => {
-    for (let tonic = 0; tonic < 12; tonic += 1) {
-      for (const key of [majorKey(tonic), minorKey(tonic)]) {
-        for (const candidate of buildCandidates(key, 0)) {
-          if (candidate.quality === 'dim') {
-            expect(candidate.base).toBe(0.9);
+    // At every position of the harmonic dial, so the borrowed tier is priced by
+    // the same reading as the key's own: a ii dim borrowed from the parallel
+    // minor was charged the flat borrowing rate and came out cheaper than the
+    // vii dim of the key it was borrowed into, which left the seed's tie-break
+    // to choose between two chords a melody should be choosing between.
+    for (const harmonic of [0, 0.4, 0.7, 1]) {
+      for (let tonic = 0; tonic < 12; tonic += 1) {
+        for (const key of [majorKey(tonic), minorKey(tonic)]) {
+          for (const candidate of buildCandidates(key, harmonic)) {
+            if (candidate.quality === 'dim') {
+              expect(candidate.base, `${tonic} at ${harmonic}`).toBe(0.9);
+            }
           }
         }
       }
