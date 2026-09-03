@@ -1,8 +1,12 @@
 name: CI
 
+# Work lands on develop and reaches main only as a release, so develop is where
+# a regression is still cheap to find. Gating main alone let a release cycle's
+# worth of commits accumulate unverified, and the whole of it surfaced at once
+# on the release itself.
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
     branches: [main]
 
