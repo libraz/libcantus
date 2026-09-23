@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-24
+
 ### Added
 
 - **A pairwise reason names the voice it came from.** `VerticalDissonance`,
@@ -2317,7 +2319,8 @@ Initial public release.
 - Fluent immutable class API (`Note`, `Chord`, `Key`, ...) layered over the tree-shakeable functional core.
 - Dual ESM/CJS builds with bundled type declarations.
 
-[Unreleased]: https://github.com/libraz/libcantus/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/libraz/libcantus/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/libraz/libcantus/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/libraz/libcantus/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/libraz/libcantus/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/libraz/libcantus/compare/v0.9.5...v1.0.0
