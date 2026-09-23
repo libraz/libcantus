@@ -359,27 +359,23 @@ describe('tensionCurve', () => {
     expect(tensionCurveFrom(tracks, analysis)).toEqual(tensionCurve(tracks));
   });
 
-  it('weighs a doubled voice against the texture less its own one occurrence', () => {
-    // The verdict on a pitch is asked of the voices around it, and a voice
-    // doubled at the unison is one of those voices. The texture is written down
-    // once per sample and the candidate's own occurrence lifted out of it, so
-    // what has to hold is that exactly one comes out: taking every occurrence
-    // out would let a doubled dissonance judge itself against a texture that no
-    // longer holds it, and taking none out would have it judge itself.
+  it('reads a fourth by whether it stands on the bass, however the voices are doubled', () => {
     const at = (pitches: number[]): NoteEvent[] =>
       pitches.map((pitch) => ({ pitch, startBeat: 0, durationBeat: 4 }));
-    const curve = (pitches: number[]): number =>
-      tensionCurve([{ role: 'harmony', notes: at(pitches) }], { key: majorKey(0), step: 4 })[0]
-        ?.tension ?? -1;
-    // A bare fourth is a dissonance between two voices and a consonance among
-    // more, so doubling the upper voice is exactly the case that tells the two
-    // readings apart: with one occurrence of its own pitch taken out, the upper
-    // C still hears the other one and is a third voice; with all of them taken
-    // out it hears only the G and reads as half of a two-part texture.
+    const curve = (pitches: number[], profile: 'pop' | 'strict' = 'strict'): number =>
+      tensionCurve([{ role: 'harmony', notes: at(pitches) }], {
+        key: majorKey(0),
+        step: 4,
+        profile,
+      })[0]?.tension ?? -1;
+    // A fourth over the bass is the six-four strict counterpoint treats as a
+    // dissonance, and doubling its upper voice leaves it one.
     expect(curve([55, 60])).toBeGreaterThan(0.3);
-    // Nothing in the doubled texture is dissonant, so what is left of the
-    // reading is its registral span — a fifth of the span that saturates it.
-    expect(curve([55, 60, 60])).toBeLessThan(0.05);
+    expect(curve([55, 60, 60])).toBeCloseTo(curve([55, 60]), 12);
+    // Between upper voices the same fourth is consonant: C–G–C reads as C–E–C.
+    expect(curve([48, 55, 60])).toBeCloseTo(curve([48, 52, 60]), 12);
+    // Pop hears two chord tones a fourth apart as the chord in inversion.
+    expect(curve([55, 60], 'pop')).toBeLessThan(0.05);
     // A unison doubling of a consonance is still a consonance: the second C is
     // weighed against a texture that holds the first, and vice versa.
     const unison = tensionCurve([{ role: 'harmony', notes: at([60, 60, 64, 67]) }], {

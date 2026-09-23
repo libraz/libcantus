@@ -23,6 +23,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   changes and analysing each span on its own loses every voice move and key
   region that crosses a change.
 
+### Fixed
+
+- **A fourth is judged by whether it stands on the bass.** `evaluateSafety`
+  read every perfect fourth as dissonant with one other voice and as consonant
+  with more, so a fourth over the bass of a three-part texture passed and the
+  same interval between upper voices of a duet did not. The fourth is now
+  dissonant exactly when one of the two is the lowest sounding voice. Under
+  `pop` a fourth between two chord tones is the chord in inversion and is not
+  flagged; `strict` keeps the six-four a dissonance.
+- **A hidden fifth or octave is judged between the outer voices only**, as the
+  part-writing check already judged it. `evaluateSafety` flagged the approach
+  against every other voice, so an arrangement reported hidden perfects between
+  inner parts that common practice leaves alone.
+
 ## [1.1.0] - 2026-09-02
 
 ### Added

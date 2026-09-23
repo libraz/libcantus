@@ -192,6 +192,53 @@ it('flags anti-parallel perfect intervals reached by contrary motion', () => {
   expect(r.reasons & ReasonFlag.ParallelPerfect).toBeTruthy();
 });
 
+describe('voice pairs are weighed by where they stand in the texture', () => {
+  const vertical = (profile: 'pop' | 'strict', chord: Chord | null, others: number[]) =>
+    evaluateSafety(
+      query({
+        profile,
+        chord,
+        candidatePitch: 60,
+        strongBeat: true,
+        otherVoices: others.map((pitch) => ({ pitch })),
+      }),
+    ).reasons & ReasonFlag.VerticalDissonance;
+
+  it('hears a fourth over the bass as a dissonance however many voices sound', () => {
+    // C4 a fourth over the G3 bass, with E4 above.
+    expect(vertical('strict', null, [55, 64])).toBeTruthy();
+    expect(vertical('strict', null, [55])).toBeTruthy();
+  });
+
+  it('hears a fourth between upper voices as a consonance', () => {
+    // C4 a fourth under F4, both over the C3 bass.
+    expect(vertical('strict', null, [48, 65])).toBeFalsy();
+  });
+
+  it('lets pop read a fourth between chord tones as the chord in inversion', () => {
+    // C/G: strict keeps the six-four a dissonance, pop does not.
+    expect(vertical('strict', cMaj, [55, 64])).toBeTruthy();
+    expect(vertical('pop', cMaj, [55, 64])).toBeFalsy();
+    expect(vertical('pop', cMaj, [55])).toBeFalsy();
+  });
+
+  it('judges a hidden perfect between the outer voices only', () => {
+    // The candidate leaps C4 -> G4 into a fifth over a voice rising G3 -> C4.
+    const inner = { pitch: 60, prevPitch: 55 };
+    const hidden = (others: { pitch: number; prevPitch: number }[]) =>
+      evaluateSafety(
+        query({ profile: 'strict', candidatePitch: 67, prevPitch: 60, otherVoices: others }),
+      ).reasons & ReasonFlag.HiddenParallel;
+    expect(hidden([inner])).toBeTruthy();
+    // A held bass and soprano make the same pair an inner one.
+    const bass = { pitch: 48, prevPitch: 48 };
+    const soprano = { pitch: 76, prevPitch: 76 };
+    expect(hidden([bass, inner, soprano])).toBeFalsy();
+    // With the soprano gone the candidate is the top voice, but its partner is not the bass.
+    expect(hidden([bass, inner])).toBeFalsy();
+  });
+});
+
 describe('chord tones are never rejected for the chord they belong to', () => {
   it('does not flag a chord tone for a tritone its own chord spells', () => {
     // Diminished, half-diminished, diminished-seventh and minor-sixth chords all

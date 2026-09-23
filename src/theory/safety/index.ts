@@ -222,12 +222,17 @@ export enum ReasonFlag {
   MajorSeventh = 1 << 9,
   /**
    * On a strong beat, the candidate is dissonant against at least one of
-   * `otherVoices`, apart from the tritone or seventh two chord tones spell.
+   * `otherVoices`, apart from the tritone or seventh two chord tones spell. A
+   * perfect fourth counts only when one of the two is the lowest sounding voice,
+   * and under `pop` not when both are chord tones — an inverted chord.
    */
   VerticalDissonance = 1 << 10,
   /** The candidate moves in parallel perfect intervals with at least one of `otherVoices`. */
   ParallelPerfect = 1 << 11,
-  /** The candidate reaches a perfect interval with another voice by similar motion. */
+  /**
+   * The candidate and another voice, the two outer voices of the texture, reach
+   * a perfect interval by similar motion with the upper one leaping.
+   */
   HiddenParallel = 1 << 12,
   /** The candidate crosses at least one of `otherVoices` since the previous step. */
   VoiceCrossing = 1 << 13,
@@ -543,14 +548,35 @@ function evaluateInternal(q: SafetyQuery, collectSuggestions: boolean): SafetyRe
     }
   }
 
+  // The texture's outer voices, as sounding now. With one other voice both
+  // voices are outer, which is the two-voice reading.
+  let bass = pitch;
+  let top = pitch;
+  for (const ov of q.otherVoices) {
+    bass = Math.min(bass, ov.pitch);
+    top = Math.max(top, ov.pitch);
+  }
+
   if (q.strongBeat) {
-    const twoVoice = q.otherVoices.length === 1;
     const prev = q.prevPitch;
     for (const ov of q.otherVoices) {
-      if (!createsVerticalDissonance(pitch, ov.pitch, twoVoice)) {
+      // A fourth is dissonant against the bass and consonant between upper voices.
+      const againstBass = pitch === bass || ov.pitch === bass;
+      if (!createsVerticalDissonance(pitch, ov.pitch, againstBass)) {
         continue;
       }
       if (chord && isStructuralChordDissonance(pitch, ov.pitch, chord)) {
+        continue;
+      }
+      // Pop reads a fourth between two chord tones as the chord in inversion;
+      // strict keeps the six-four a dissonance.
+      if (
+        chord &&
+        q.profile === 'pop' &&
+        pitchClass(Math.abs(pitch - ov.pitch)) === 5 &&
+        isChordMember(pitch, chord) &&
+        isChordMember(ov.pitch, chord)
+      ) {
         continue;
       }
       reasons |= ReasonFlag.VerticalDissonance;
@@ -561,7 +587,7 @@ function evaluateInternal(q: SafetyQuery, collectSuggestions: boolean): SafetyRe
         prev !== undefined &&
         pitch === prev &&
         ov.prevPitch !== undefined &&
-        !createsVerticalDissonance(prev, ov.prevPitch, twoVoice)
+        !createsVerticalDissonance(prev, ov.prevPitch, againstBass)
       ) {
         reasons |= ReasonFlag.Suspension;
       }
@@ -580,7 +606,11 @@ function evaluateInternal(q: SafetyQuery, collectSuggestions: boolean): SafetyRe
         reasons |= ReasonFlag.ParallelPerfect;
         raise(parallelSeverity);
       }
-      if (createsHiddenParallelPerfect(prev, pitch, ov.prevPitch, ov.pitch)) {
+      // A hidden perfect is exposed only between the outer voices; between
+      // inner ones the others cover it, as the part-writing check reads it.
+      const outerPair =
+        (pitch === top && ov.pitch === bass) || (pitch === bass && ov.pitch === top);
+      if (outerPair && createsHiddenParallelPerfect(prev, pitch, ov.prevPitch, ov.pitch)) {
         reasons |= ReasonFlag.HiddenParallel;
         raise(parallelSeverity);
       }
