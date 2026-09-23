@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A pairwise reason names the voice it came from.** `VerticalDissonance`,
+  `Suspension`, `ParallelPerfect`, `HiddenParallel` and `VoiceCrossing` are
+  judged one voice pair at a time but reported as bits on the candidate, so a
+  caller with several `otherVoices` could not tell which voice caused them, and
+  re-running the pairwise predicates itself did not reproduce the verdict — the
+  exemption for intervals a chord is built from is not public. `evaluateSafety`
+  now returns `partners`, one `SafetyPartner` per voice that raised a flag, when
+  asked with `{ partners: true }`; `Voicing.safetyOf` passes the option through.
+  Every `Conflict` from `analyzeArrangement` carries the same breakdown as
+  `ConflictPartner`s naming the other note by `trackIndex`, `noteId` and
+  `originalIndex`, so a warning panel can draw the line between the two notes.
+
 ### Changed
 
 - **`LargeLeap` is explained as what it is.** The flag is set exactly when

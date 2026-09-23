@@ -46,6 +46,7 @@ export type {
   ChordTimelineOptions,
   ChordTimelineResult,
   Conflict,
+  ConflictPartner,
   ContourDirection,
   ExtractMotifsOptions,
   FormSection,
@@ -214,6 +215,7 @@ export type {
 } from '../theory/partwriting/index.js';
 export type {
   EvaluateSafetyOptions,
+  SafetyPartner,
   SafetyProfile,
   SafetyQuery,
   SafetyResult,

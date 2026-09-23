@@ -41,6 +41,7 @@ export type {
   ArrangementSession,
   ArrangementTrack,
   Conflict,
+  ConflictPartner,
   TensionPoint,
   TrackAnalysis,
   TrackEdit,

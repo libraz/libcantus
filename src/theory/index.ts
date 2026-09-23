@@ -116,6 +116,7 @@ export { checkPartWriting, checkSpecies, spellVoicing } from './partwriting/inde
 export type {
   EvaluateSafetyOptions,
   ProfileWeights,
+  SafetyPartner,
   SafetyProfile,
   SafetyQuery,
   SafetyResult,

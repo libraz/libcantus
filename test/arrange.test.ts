@@ -739,6 +739,48 @@ describe('conflict traceability', () => {
     }
   });
 
+  it('names the note a pairwise conflict was raised against', () => {
+    // Two parts moving G/C -> A/D in parallel fifths.
+    const tracks: ArrangementTrack[] = [
+      {
+        name: 'upper',
+        notes: [
+          { pitch: 67, startBeat: 0, durationBeat: 2 },
+          { pitch: 69, startBeat: 2, durationBeat: 2 },
+        ],
+      },
+      {
+        name: 'lower',
+        notes: [
+          { pitch: 62, startBeat: 2, durationBeat: 2 },
+          { pitch: 60, startBeat: 0, durationBeat: 2 },
+        ],
+      },
+    ];
+    const analysis = analyzeArrangement(tracks, { key: majorKey(0), profile: 'strict' });
+    const upper = analysis.conflicts.find(
+      (c) => c.trackIndex === 0 && c.reasons & ReasonFlag.ParallelPerfect,
+    );
+    const partner = upper?.partners?.find((p) => p.reasons & ReasonFlag.ParallelPerfect);
+    expect(partner?.trackIndex).toBe(1);
+    expect(partner?.originalIndex).toBe(0);
+    expect(tracks[1]?.notes[partner?.originalIndex ?? -1]?.pitch).toBe(62);
+    const analyzed = analysis.tracks[1]?.notes.find((note) => note.noteId === partner?.noteId);
+    expect(analyzed?.pitch).toBe(62);
+    // A conflict with no pairwise flag names no partner.
+    for (const conflict of analysis.conflicts) {
+      const union = (conflict.partners ?? []).reduce((acc, p) => acc | p.reasons, 0);
+      expect(union).toBe(
+        conflict.reasons &
+          (ReasonFlag.VerticalDissonance |
+            ReasonFlag.Suspension |
+            ReasonFlag.ParallelPerfect |
+            ReasonFlag.HiddenParallel |
+            ReasonFlag.VoiceCrossing),
+      );
+    }
+  });
+
   it('carries pitch and onset on every annotation', () => {
     const tracks = baseArrangement();
     const analysis = analyzeArrangement(tracks);

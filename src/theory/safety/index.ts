@@ -277,6 +277,21 @@ export type SafetyQuery = {
 };
 
 /**
+ * The reasons one of `otherVoices` contributes to a verdict.
+ *
+ * @category Arrangement & Analysis
+ */
+export type SafetyPartner = {
+  /** The voice's index in {@link SafetyQuery.otherVoices}. */
+  index: number;
+  /**
+   * The pairwise flags this voice raises: `VerticalDissonance`, `Suspension`,
+   * `ParallelPerfect`, `HiddenParallel` and `VoiceCrossing`.
+   */
+  reasons: number;
+};
+
+/**
  * The verdict, reason flags, and optional resolution guidance.
  *
  * @category Arrangement & Analysis
@@ -286,6 +301,12 @@ export type SafetyResult = {
   reasons: number;
   resolveTo?: number;
   suggestions?: number[];
+  /**
+   * The voices behind the pairwise flags in `reasons`, in `otherVoices` order,
+   * when {@link EvaluateSafetyOptions.partners} asked for them and any voice
+   * raised one. Their `reasons` together are exactly the pairwise flags set.
+   */
+  partners?: SafetyPartner[];
   rationale?: string;
 };
 
@@ -397,7 +418,8 @@ function stepResolution(pitch: number, chord: Chord): number | undefined {
 export function evaluateSafety(q: SafetyQuery, opts: EvaluateSafetyOptions = {}): SafetyResult {
   assertSafetyContext(q);
   assertMidiPitch(q.candidatePitch, 'candidatePitch');
-  return evaluateInternal(q, assertOptions(opts, 'opts').suggestions ?? true);
+  const options = assertOptions(opts, 'opts');
+  return evaluateInternal(q, options.suggestions ?? true, options.partners ?? false);
 }
 
 /**
@@ -414,6 +436,14 @@ export type EvaluateSafetyOptions = {
    * @defaultValue true
    */
   suggestions?: boolean;
+  /**
+   * Whether to report which of `otherVoices` raised each pairwise flag, as
+   * {@link SafetyResult.partners}. The bitmask alone says a parallel fifth is
+   * there; this says against which voice.
+   *
+   * @defaultValue false
+   */
+  partners?: boolean;
 };
 
 /**
@@ -453,9 +483,14 @@ function assertSafetyContext(q: Omit<SafetyQuery, 'candidatePitch'>): void {
  * @param q The candidate and its harmonic/voice-leading context.
  * @param collectSuggestions Whether to search for safe alternatives on a
  *   non-Safe verdict. Set false during that search itself to bound recursion.
+ * @param collectPartners Whether to record the pairwise flags per other voice.
  * @returns The verdict, reason bitmask, and optional guidance.
  */
-function evaluateInternal(q: SafetyQuery, collectSuggestions: boolean): SafetyResult {
+function evaluateInternal(
+  q: SafetyQuery,
+  collectSuggestions: boolean,
+  collectPartners: boolean,
+): SafetyResult {
   let reasons = 0;
   let level = NoteSafety.Safe;
   let resolveTo: number | undefined;
@@ -557,9 +592,19 @@ function evaluateInternal(q: SafetyQuery, collectSuggestions: boolean): SafetyRe
     top = Math.max(top, ov.pitch);
   }
 
+  const pairReasons: number[] | undefined = collectPartners
+    ? new Array(q.otherVoices.length).fill(0)
+    : undefined;
+  const flagPair = (index: number, flag: ReasonFlag) => {
+    reasons |= flag;
+    if (pairReasons !== undefined) {
+      pairReasons[index] = (pairReasons[index] ?? 0) | flag;
+    }
+  };
+
   if (q.strongBeat) {
     const prev = q.prevPitch;
-    for (const ov of q.otherVoices) {
+    for (const [index, ov] of q.otherVoices.entries()) {
       // A fourth is dissonant against the bass and consonant between upper voices.
       const againstBass = pitch === bass || ov.pitch === bass;
       if (!createsVerticalDissonance(pitch, ov.pitch, againstBass)) {
@@ -579,7 +624,7 @@ function evaluateInternal(q: SafetyQuery, collectSuggestions: boolean): SafetyRe
       ) {
         continue;
       }
-      reasons |= ReasonFlag.VerticalDissonance;
+      flagPair(index, ReasonFlag.VerticalDissonance);
       raise(NoteSafety.Dissonant);
       // A held pitch that was consonant on the previous step and is now
       // dissonant against the same voice is a prepared suspension.
@@ -589,21 +634,21 @@ function evaluateInternal(q: SafetyQuery, collectSuggestions: boolean): SafetyRe
         ov.prevPitch !== undefined &&
         !createsVerticalDissonance(prev, ov.prevPitch, againstBass)
       ) {
-        reasons |= ReasonFlag.Suspension;
+        flagPair(index, ReasonFlag.Suspension);
       }
     }
   }
 
   if (q.prevPitch !== undefined) {
     const prev = q.prevPitch;
-    for (const ov of q.otherVoices) {
+    for (const [index, ov] of q.otherVoices.entries()) {
       if (ov.prevPitch === undefined) {
         continue;
       }
       // createsParallelPerfect covers every perfect class (unison/octave and
       // fifth), so no separate octave check is needed.
       if (createsParallelPerfect(prev, pitch, ov.prevPitch, ov.pitch)) {
-        reasons |= ReasonFlag.ParallelPerfect;
+        flagPair(index, ReasonFlag.ParallelPerfect);
         raise(parallelSeverity);
       }
       // A hidden perfect is exposed only between the outer voices; between
@@ -611,13 +656,13 @@ function evaluateInternal(q: SafetyQuery, collectSuggestions: boolean): SafetyRe
       const outerPair =
         (pitch === top && ov.pitch === bass) || (pitch === bass && ov.pitch === top);
       if (outerPair && createsHiddenParallelPerfect(prev, pitch, ov.prevPitch, ov.pitch)) {
-        reasons |= ReasonFlag.HiddenParallel;
+        flagPair(index, ReasonFlag.HiddenParallel);
         raise(parallelSeverity);
       }
       const crossedNow = pitch - ov.pitch;
       const crossedPrev = prev - ov.prevPitch;
       if (crossedNow !== 0 && crossedPrev !== 0 && crossedNow > 0 !== crossedPrev > 0) {
-        reasons |= ReasonFlag.VoiceCrossing;
+        flagPair(index, ReasonFlag.VoiceCrossing);
         raise(parallelSeverity);
       }
     }
@@ -637,6 +682,17 @@ function evaluateInternal(q: SafetyQuery, collectSuggestions: boolean): SafetyRe
     const suggestions = findSafeNearby(q, pitch);
     if (suggestions.length > 0) {
       result.suggestions = suggestions;
+    }
+  }
+  if (pairReasons !== undefined) {
+    const partners: SafetyPartner[] = [];
+    pairReasons.forEach((pair, index) => {
+      if (pair !== 0) {
+        partners.push({ index, reasons: pair });
+      }
+    });
+    if (partners.length > 0) {
+      result.partners = partners;
     }
   }
   return result;
@@ -660,7 +716,7 @@ function findSafeNearby(q: SafetyQuery, candidate: number): number[] {
       if (p < 0 || p > 127) {
         continue;
       }
-      if (evaluateInternal({ ...q, candidatePitch: p }, false).safety === NoteSafety.Safe) {
+      if (evaluateInternal({ ...q, candidatePitch: p }, false, false).safety === NoteSafety.Safe) {
         out.push(p);
         if (out.length >= MAX_SUGGESTIONS) {
           return out;
@@ -778,7 +834,7 @@ export function enumerateSafePitches(
   const low = Math.max(pitchLow, q.vocalLow ?? pitchLow);
   const high = Math.min(pitchHigh, q.vocalHigh ?? pitchHigh);
   for (let pitch = high; pitch >= low; pitch -= 1) {
-    const result = evaluateInternal({ ...q, candidatePitch: pitch }, false);
+    const result = evaluateInternal({ ...q, candidatePitch: pitch }, false, false);
     if (result.safety === NoteSafety.Dissonant) {
       continue;
     }

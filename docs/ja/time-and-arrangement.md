@@ -284,6 +284,8 @@ analyzeArrangement(tracks, { harmonyTracks: [1] }).timeline.segments[0]?.chord.q
 
 `conflicts` は、下で鳴っている和声と食い違う音符を報告します。アレンジの警告パネルが表示するのはこの情報です。`Arrangement` ではプロパティ、レポートではフィールドとして得られます。どこまで拾うかを決めるのが `minSeverity` です。既定値は `NoteSafety.Warning` なので、返る時点ですでに絞り込まれており、採点されたすべての音符が必要なら `NoteSafety.Safe` を指定します。`profile` は採点の基準を選ぶもので、既定は `'pop'`、より厳しい読みが `'strict'` です。
 
+他のパートとの関係で生じた衝突（縦の不協和、連続・隠伏の完全音程、声部交差）には `partners` が付きます。相手の音符ごとに `trackIndex` と `noteId`、その音符が寄与した声部間の `reasons` を持つので、警告パネルは片方の音符に印を付けるだけでなく、2つの音符を線で結べます。`evaluateSafety` も `{ partners: true }` を渡すと、同じ内訳を `otherVoices` の添字で返します。
+
 `tensionCurve` はトラックそのものから時間軸上の曲線を読み、`tensionCurveFrom` はトラックとすでに作られた `ArrangementAnalysis` の両方から読みます。`Arrangement.tension` が呼ぶのは後者です。
 
 残りのオプションは、解析を行う枠組みを決めます。拍子は `ts` または `meters`、コードのスロット長（拍数、既定は冒頭の小節1つ分）は `harmonicRhythm`、弱起（アウフタクト）の長さは `pickupBeats` で指定します。弱起は指定しなくても負の拍で鳴りますが、その長さを名指しすることで、弱起より前から始まる音符を拒否できます。`budget` は計算量の上限です。音符数、窓、候補数のそれぞれが確保前にこの値と照合されるため、暴走する入力はスレッドを塞ぐ代わりに早く失敗します。

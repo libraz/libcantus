@@ -31,6 +31,10 @@ const MAX_LANE_LEAP = 24;
 
 /** A note with the pitch that immediately preceded it in the same sub-voice. */
 export type PreparedNote = {
+  /** The id the note carries in the analysis. */
+  id: number;
+  /** The note's index in its track's own note array. */
+  originalIndex?: number;
   pitch: number;
   prevPitch?: number;
   startBeat: number;
@@ -516,6 +520,8 @@ export function prepareTracks(tracks: ArrangementTrack[]): PreparedTrack[] {
         const prevEnd = prev === undefined ? undefined : prev.startBeat + prev.durationBeat;
         const contiguous = prevEnd !== undefined && adjacent(prevEnd, note.startBeat);
         return {
+          id: note.id,
+          originalIndex: note.originalIndex,
           pitch: note.pitch,
           prevPitch: contiguous ? prev?.pitch : undefined,
           startBeat: note.startBeat,

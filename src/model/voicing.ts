@@ -527,7 +527,8 @@ export class Voicing {
    * @param pitch The candidate MIDI pitch.
    * @param query The candidate's harmonic and voice-leading context.
    * @param opts Set `suggestions: false` to skip the search for safe
-   *   replacements when the verdict is not safe.
+   *   replacements when the verdict is not safe, and `partners: true` to learn
+   *   which voice of this voicing, by index, raised each pairwise flag.
    * @returns The verdict, reason bitmask, and optional resolution guidance.
    * @throws If the profile is unknown, a value names no chord or key, or a
    *   pitch is not a MIDI pitch in 0..127.

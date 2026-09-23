@@ -239,6 +239,54 @@ describe('voice pairs are weighed by where they stand in the texture', () => {
   });
 });
 
+describe('partners', () => {
+  const PAIRWISE =
+    ReasonFlag.VerticalDissonance |
+    ReasonFlag.Suspension |
+    ReasonFlag.ParallelPerfect |
+    ReasonFlag.HiddenParallel |
+    ReasonFlag.VoiceCrossing;
+  // G4 -> A4 moves in fifths with C4 -> D4, while the bass holds C3.
+  const fifths = query({
+    profile: 'strict',
+    candidatePitch: 69,
+    prevPitch: 67,
+    otherVoices: [
+      { pitch: 48, prevPitch: 48 },
+      { pitch: 62, prevPitch: 60 },
+    ],
+  });
+
+  it('names the voice a pairwise flag was raised against', () => {
+    const r = evaluateSafety(fifths, { partners: true });
+    expect(r.partners).toEqual([{ index: 1, reasons: ReasonFlag.ParallelPerfect }]);
+  });
+
+  it('accounts for exactly the pairwise flags in the bitmask', () => {
+    const r = evaluateSafety(
+      query({
+        profile: 'strict',
+        candidatePitch: 61,
+        prevPitch: 67,
+        strongBeat: true,
+        otherVoices: [{ pitch: 60, prevPitch: 55 }, { pitch: 62, prevPitch: 64 }, { pitch: 72 }],
+      }),
+      { partners: true },
+    );
+    const union = (r.partners ?? []).reduce((acc, p) => acc | p.reasons, 0);
+    expect(union).toBe(r.reasons & PAIRWISE);
+    expect(union).not.toBe(0);
+  });
+
+  it('is absent unless asked for, and when no voice raised anything', () => {
+    expect(evaluateSafety(fifths).partners).toBeUndefined();
+    const quiet = evaluateSafety(query({ candidatePitch: 64, otherVoices: [{ pitch: 48 }] }), {
+      partners: true,
+    });
+    expect(quiet.partners).toBeUndefined();
+  });
+});
+
 describe('chord tones are never rejected for the chord they belong to', () => {
   it('does not flag a chord tone for a tritone its own chord spells', () => {
     // Diminished, half-diminished, diminished-seventh and minor-sixth chords all

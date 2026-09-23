@@ -58,6 +58,7 @@ import {
   assertTrackNotes,
   harmonyTrackSet,
   isPercussion,
+  type PreparedNote,
   type PreparedTrack,
   poolNotes,
   prepareTracks,
@@ -103,6 +104,22 @@ export type TrackAnalysis = {
 };
 
 /**
+ * A note sounding with a {@link Conflict} that raises a pairwise flag against it.
+ *
+ * @category Arrangement & Analysis
+ */
+export type ConflictPartner = {
+  /** The partner's track index in the caller's input array. */
+  trackIndex: number;
+  /** The partner note's index in that track's own note array. */
+  originalIndex?: number;
+  /** The id the partner note carries in {@link TrackAnalysis.notes}. */
+  noteId: number;
+  /** The pairwise flags this note raises, as {@link SafetyPartner.reasons}. */
+  reasons: number;
+};
+
+/**
  * A note that clashes with the harmony sounding beneath it.
  *
  * @category Arrangement & Analysis
@@ -131,6 +148,11 @@ export type Conflict = {
   resolveTo?: number;
   /** Nearby fully safe replacement pitches, nearest first. */
   suggestions?: number[];
+  /**
+   * The notes behind the pairwise flags in `reasons` — a parallel fifth, a
+   * crossing, a vertical clash — when any are set.
+   */
+  partners?: ConflictPartner[];
   rationale?: string;
 };
 
@@ -339,6 +361,9 @@ export type ArrangementOptions = {
 type SoundingVoice = {
   track: number;
   voice: number;
+  /** The track's index in the caller's input array. */
+  trackIndex: number;
+  note: PreparedNote;
   snapshot: VoiceSnapshot;
 };
 
@@ -365,7 +390,7 @@ function soundingVoicesAt(prepared: PreparedTrack[], beat: number): SoundingVoic
       if (previous !== undefined) {
         snap.prevPitch = previous;
       }
-      out.push({ track: t, voice: v, snapshot: snap });
+      out.push({ track: t, voice: v, trackIndex: track.trackIndex, note, snapshot: snap });
     }
   }
   return out;
@@ -378,12 +403,28 @@ function otherVoicesSounding(
   excludeVoice: number,
   beat: number,
   cache: Map<number, SoundingVoice[]>,
-): VoiceSnapshot[] {
+): SoundingVoice[] {
   const sounding = cache.get(beat) ?? soundingVoicesAt(prepared, beat);
   cache.set(beat, sounding);
-  return sounding
-    .filter(({ track, voice }) => track !== excludeTrack || voice !== excludeVoice)
-    .map(({ snapshot }) => snapshot);
+  return sounding.filter(({ track, voice }) => track !== excludeTrack || voice !== excludeVoice);
+}
+
+/** Name a sounding voice the way a {@link Conflict} names its own note. */
+function conflictPartner(sounding: SoundingVoice, reasons: number): ConflictPartner {
+  const partner: ConflictPartner = {
+    trackIndex: sounding.trackIndex,
+    noteId: sounding.note.id,
+    reasons,
+  };
+  if (sounding.note.originalIndex !== undefined) {
+    partner.originalIndex = sounding.note.originalIndex;
+  }
+  return partner;
+}
+
+/** The snapshots {@link evaluateSafety} reads, in the order partners index them. */
+function snapshotsOf(voices: SoundingVoice[]): VoiceSnapshot[] {
+  return voices.map(({ snapshot }) => snapshot);
 }
 
 /**
@@ -435,7 +476,7 @@ export function analyzePolyphony(
       continue;
     }
     const analyzed = analyzeVoice(subVoice.voice, chordAtBeat, key, (beat) =>
-      otherVoicesSounding(prepared, 0, v, beat, soundingCache),
+      snapshotsOf(otherVoicesSounding(prepared, 0, v, beat, soundingCache)),
     );
     for (const note of analyzed) {
       if (note.originalIndex !== undefined) {
@@ -683,7 +724,7 @@ export function analyzeArrangementWith(
         continue;
       }
       const analyzed = analyzeVoice(subVoice.voice, timeline.at, scaleAt, (beat) =>
-        otherVoicesSounding(prepared, t, v, beat, soundingCache),
+        snapshotsOf(otherVoicesSounding(prepared, t, v, beat, soundingCache)),
       );
       // Appended one at a time: a spread of a long sub-voice passes every note
       // as an argument, which overflows the call stack on a track the budget
@@ -701,13 +742,14 @@ export function analyzeArrangementWith(
         }
         for (const beat of evaluationBeats(note, timeline)) {
           const atOnset = sameInstant(beat, note.startBeat);
+          const others = otherVoicesSounding(prepared, t, v, beat, soundingCache);
           const safetyQuery = {
             profile,
             candidatePitch: note.pitch,
             prevPitch: atOnset ? preparedNote.prevPitch : note.pitch,
             chord: timeline.at(beat),
             key: scaleAt(beat),
-            otherVoices: otherVoicesSounding(prepared, t, v, beat, soundingCache),
+            otherVoices: snapshotsOf(others),
             strongBeat: isStrongBeat(beat, meters),
           };
           // Most evaluations become no reportable conflict. Avoid their
@@ -715,7 +757,7 @@ export function analyzeArrangementWith(
           // collect suggestions only for the conflicts we will retain.
           let result = evaluateSafety(safetyQuery, { suggestions: false });
           if (result.safety !== NoteSafety.Safe && result.safety >= minSeverity) {
-            result = evaluateSafety(safetyQuery);
+            result = evaluateSafety(safetyQuery, { partners: true });
             const conflict: Conflict = {
               beat,
               trackName: track.name,
@@ -737,6 +779,11 @@ export function analyzeArrangementWith(
             }
             if (result.suggestions !== undefined) {
               conflict.suggestions = [...result.suggestions];
+            }
+            if (result.partners !== undefined) {
+              conflict.partners = result.partners.map(({ index, reasons }) =>
+                conflictPartner(others[index] as SoundingVoice, reasons),
+              );
             }
             conflicts.push(conflict);
           }

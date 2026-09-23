@@ -20,6 +20,7 @@ export type {
   ArrangementOptions,
   ArrangementTrack,
   Conflict,
+  ConflictPartner,
   TrackAnalysis,
   TrackRole,
 } from './tracks.js';
