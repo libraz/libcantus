@@ -177,25 +177,68 @@ Object.freeze(NoteSafety);
 /**
  * Bit flags describing why a pitch received its verdict.
  *
+ * Several flags can describe one pitch, so test the combination rather than a
+ * flag alone: an avoid eleventh carries `Tension` as well as `AvoidNote`, and a
+ * usable tension is `Tension` without `AvoidNote`. `ChordTone`, `MinorSecond`
+ * and `MajorSeventh` are informational and never lower the verdict on their
+ * own; every other flag sets at least a warning, and the profile decides how
+ * far past that it goes.
+ *
  * @category Arrangement & Analysis
  */
 export enum ReasonFlag {
+  /** The candidate is a member of the chord. Informational. */
   ChordTone = 1 << 0,
+  /**
+   * The candidate is a ninth, eleventh or thirteenth above the root, not a chord
+   * tone. Also set alongside `AvoidNote` when the avoid note is the eleventh.
+   */
   Tension = 1 << 1,
+  /**
+   * The eleventh over a chord with a major third and no fourth, or the major
+   * seventh over a dominant. Always set with `NeedsResolution`, and with
+   * `Tension` for the eleventh.
+   */
   AvoidNote = 1 << 2,
+  /** The candidate is in the key but neither a chord tone nor a tension. */
   ScaleTone = 1 << 3,
+  /** The candidate is outside the key and not a chord tone. */
   NonScale = 1 << 4,
+  /** The candidate lies outside `vocalLow`..`vocalHigh`. */
   OutOfRange = 1 << 5,
+  /** The candidate, not itself a chord tone, is a tritone from one. */
   Tritone = 1 << 6,
+  /**
+   * The move from `prevPitch` is a forbidden melodic leap as
+   * {@link isForbiddenMelodicLeap} defines it: a tritone, either seventh, or
+   * anything wider than an octave. An octave itself is not. The profile sets
+   * the severity, not the set of leaps. Set with `MelodicTritone` on a tritone
+   * and with `MajorSeventh` on a major seventh.
+   */
   LargeLeap = 1 << 7,
+  /** The move from `prevPitch` reduces to a semitone, the minor ninth included. Informational. */
   MinorSecond = 1 << 8,
+  /** The move from `prevPitch` reduces to a major seventh; always with `LargeLeap`. Informational. */
   MajorSeventh = 1 << 9,
+  /**
+   * On a strong beat, the candidate is dissonant against at least one of
+   * `otherVoices`, apart from the tritone or seventh two chord tones spell.
+   */
   VerticalDissonance = 1 << 10,
+  /** The candidate moves in parallel perfect intervals with at least one of `otherVoices`. */
   ParallelPerfect = 1 << 11,
+  /** The candidate reaches a perfect interval with another voice by similar motion. */
   HiddenParallel = 1 << 12,
+  /** The candidate crosses at least one of `otherVoices` since the previous step. */
   VoiceCrossing = 1 << 13,
+  /**
+   * A held pitch, consonant with a voice on the previous step, now dissonant
+   * against it. Always with `VerticalDissonance`.
+   */
   Suspension = 1 << 14,
+  /** The candidate should move by step to `resolveTo`. Set with `AvoidNote`. */
   NeedsResolution = 1 << 15,
+  /** The move from `prevPitch` reduces to a tritone; always with `LargeLeap`. */
   MelodicTritone = 1 << 16,
 }
 
@@ -620,7 +663,7 @@ const REASON_TEXT: ReadonlyArray<readonly [ReasonFlag, string]> = [
   [ReasonFlag.ParallelPerfect, 'Parallel perfect interval with another voice'],
   [ReasonFlag.HiddenParallel, 'Hidden perfect interval by similar motion'],
   [ReasonFlag.VoiceCrossing, 'Crosses another voice'],
-  [ReasonFlag.LargeLeap, 'Leap wider than the profile allows'],
+  [ReasonFlag.LargeLeap, 'Forbidden melodic leap — a seventh or wider than an octave'],
   [ReasonFlag.NeedsResolution, 'Dissonance awaiting a stepwise resolution'],
   [ReasonFlag.Tension, 'Chord tension'],
   [ReasonFlag.ScaleTone, 'Scale tone, not in the chord'],

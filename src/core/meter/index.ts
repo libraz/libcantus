@@ -99,6 +99,9 @@ export type MeterChange = {
  * a map opening at the pickup it covers numbers its bars exactly as the bare
  * signature does. Every later entry starts a bar at the beat it takes effect.
  *
+ * Pass the whole piece with its map rather than one call per meter span: a
+ * split call cannot see a voice move or a key region that crosses the change.
+ *
  * @category Rhythm & Meter
  */
 export type MeterMap = MeterChange[];

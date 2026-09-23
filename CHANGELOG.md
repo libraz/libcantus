@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`LargeLeap` is explained as what it is.** The flag is set exactly when
+  `isForbiddenMelodicLeap` holds — a tritone, either seventh, or anything wider
+  than an octave — and the profile chooses only its severity. Its rationale read
+  "Leap wider than the profile allows", which described a width threshold that
+  varies by profile and does not exist; it now reads "Forbidden melodic leap — a
+  seventh or wider than an octave".
+- **Every `ReasonFlag` member says when it is set** and which flags it arrives
+  with, so a caller mapping flags to its own verdicts no longer reads the source
+  to learn that an avoid eleventh also carries `Tension`, or that a major
+  seventh trips `LargeLeap` while an octave does not.
+- **`MeterMap` says to pass the whole piece.** Splitting a piece at its meter
+  changes and analysing each span on its own loses every voice move and key
+  region that crosses a change.
+
 ## [1.1.0] - 2026-09-02
 
 ### Added

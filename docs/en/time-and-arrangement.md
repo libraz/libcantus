@@ -17,7 +17,7 @@ fourFour.isStrongBeat(1); // false
 fourFour.formatPosition(-1); // '0.4'
 ```
 
-A piece that changes meter is described by a `MeterMap`, an array of `{ startBeat, ts }` changes, which is what every time-dependent analysis accepts. Passing one `TimeSignature` is shorthand for a map with one entry. Beat 0 is the downbeat; a pickup can begin at a negative beat. A `Score` carries its own map and reads positions through it:
+A piece that changes meter is described by a `MeterMap`, an array of `{ startBeat, ts }` changes, which is what every time-dependent analysis accepts. Passing one `TimeSignature` is shorthand for a map with one entry. Beat 0 is the downbeat; a pickup can begin at a negative beat. Pass a piece that changes meter whole, with its map, rather than one call per meter span: split calls cannot see a voice move or a key region that crosses the change. A `Score` carries its own map and reads positions through it:
 
 ```ts
 import { Meter, Score } from '@libraz/libcantus';
