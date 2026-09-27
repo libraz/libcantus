@@ -9,6 +9,7 @@
  */
 
 import { BEAT_EPS } from '../adjacency.js';
+import { distanceToSimilarity, gradedEditDistance } from '../sequence.js';
 import type { MelodicPhrase } from './internal.js';
 import {
   intervalsOf,
@@ -48,40 +49,6 @@ export type MelodicComparison = {
   /** Why the lines scored what they did. */
   rationale: string;
 };
-/**
- * Edit distance between two sequences under a graded substitution cost.
- *
- * A flat cost would make a third answered by a fourth as wrong as a third
- * answered by a ninth; `cost` grades that, while an insertion or a deletion — a
- * note added or dropped — always costs one whole step.
- */
-function gradedEditDistance(
-  a: readonly number[],
-  b: readonly number[],
-  cost: (x: number, y: number) => number,
-): number {
-  let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= a.length; i += 1) {
-    const row = new Array<number>(b.length + 1);
-    row[0] = i;
-    for (let j = 1; j <= b.length; j += 1) {
-      const substitution = (previous[j - 1] ?? 0) + cost(a[i - 1] ?? 0, b[j - 1] ?? 0);
-      const deletion = (previous[j] ?? 0) + 1;
-      const insertion = (row[j - 1] ?? 0) + 1;
-      row[j] = Math.min(substitution, deletion, insertion);
-    }
-    previous = row;
-  }
-  return previous[b.length] ?? 0;
-}
-/** Turn an edit distance into a likeness in [0, 1]. */
-function distanceToSimilarity(distance: number, a: number, b: number): number {
-  const longest = Math.max(a, b);
-  if (longest === 0) {
-    return 1;
-  }
-  return Math.min(1, Math.max(0, 1 - distance / longest));
-}
 /** Cost of hearing one interval where another was expected. */
 function intervalCost(x: number, y: number): number {
   return Math.min(1, Math.abs(x - y) / INTERVAL_TOLERANCE);
