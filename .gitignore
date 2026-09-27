@@ -16,3 +16,4 @@ backup/
 test/generated/
 
 .claude/
+.serena/
