@@ -46,6 +46,12 @@ import type { KeyContext } from '../voice/index.js';
 import { keyScaleAt } from '../voice/index.js';
 
 /**
+ * The places a chord can hold in a progression.
+ *
+ * @category Arrangement & Analysis
+ */
+export const REDUCTION_LEVELS = Object.freeze(['structural', 'passing', 'neighbor'] as const);
+/**
  * The place a chord holds in a progression.
  *
  * `'structural'` is the frame; `'passing'` and `'neighbor'` are the two
@@ -54,7 +60,7 @@ import { keyScaleAt } from '../voice/index.js';
  *
  * @category Arrangement & Analysis
  */
-export type ReductionLevel = 'structural' | 'passing' | 'neighbor';
+export type ReductionLevel = (typeof REDUCTION_LEVELS)[number];
 
 /**
  * A chord with the place it holds, the beats it holds it for, and a short

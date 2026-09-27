@@ -31,6 +31,22 @@ import {
 import type { MotifData } from './motifs.js';
 
 /**
+ * The named transformations {@link relateMotifs} can report between two motif
+ * statements.
+ *
+ * @category Arrangement & Analysis
+ */
+export const MOTIF_RELATION_KINDS = Object.freeze([
+  'repetition',
+  'transposition',
+  'tonalTransposition',
+  'inversion',
+  'retrograde',
+  'retrogradeInversion',
+  'augmentation',
+  'diminution',
+] as const);
+/**
  * How one statement of a motif stands to another.
  *
  * `'transposition'` is the literal one — every interval preserved, which is what
@@ -44,15 +60,7 @@ import type { MotifData } from './motifs.js';
  *
  * @category Arrangement & Analysis
  */
-export type MotifRelationKind =
-  | 'repetition'
-  | 'transposition'
-  | 'tonalTransposition'
-  | 'inversion'
-  | 'retrograde'
-  | 'retrogradeInversion'
-  | 'augmentation'
-  | 'diminution';
+export type MotifRelationKind = (typeof MOTIF_RELATION_KINDS)[number];
 /**
  * The transformation that turns one motif into another.
  *
@@ -86,6 +94,16 @@ export type MotifRelation = {
   /** Why the pair was given that name. */
   rationale: string;
 };
+/**
+ * The part of a {@link MotifRelation} that names the transformation itself,
+ * without the rationale prose that explains it.
+ *
+ * @category Arrangement & Analysis
+ */
+export type MotifRelationSummary = Pick<
+  MotifRelation,
+  'kind' | 'sequence' | 'semitones' | 'degrees' | 'timeRatio'
+>;
 /** Whether a key writes its accidentals as flats. */
 function spellingOf(key?: ResolvedKey): 'sharp' | 'flat' {
   if (key === undefined) {

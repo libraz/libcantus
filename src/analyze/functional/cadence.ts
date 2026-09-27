@@ -176,20 +176,38 @@ function bassPcOf(chord: Chord, voicedBass: number | undefined): number {
 }
 
 /**
+ * The named cadence types {@link detectCadence} classifies a chord pair as.
+ *
+ * @category Functional Harmony
+ */
+export const CADENCE_TYPES = Object.freeze([
+  'authentic',
+  'plagal',
+  'half',
+  'deceptive',
+  'phrygian',
+  'modal',
+] as const);
+/**
+ * The cadence a chord pair forms.
+ *
+ * `'phrygian'` and `'modal'` are the two named species: the first is a
+ * specific half cadence and is reported in place of `'half'`, the second is
+ * the bVII-to-I arrival that no common-practice type covers. Code counting
+ * half cadences has to count `'phrygian'` alongside `'half'`.
+ *
+ * @category Functional Harmony
+ */
+export type CadenceType = (typeof CADENCE_TYPES)[number];
+
+/**
  * A recognized cadence, with the voice-leading facts its reading rests on.
  *
  * @category Functional Harmony
  */
 export type CadenceResult = {
-  /**
-   * The cadence the chord pair forms, or null when it forms none.
-   *
-   * `'phrygian'` and `'modal'` are the two named species: the first is a
-   * specific half cadence and is reported in place of `'half'`, the second is
-   * the bVII-to-I arrival that no common-practice type covers. Code counting
-   * half cadences has to count `'phrygian'` alongside `'half'`.
-   */
-  type: 'authentic' | 'plagal' | 'half' | 'deceptive' | 'phrygian' | 'modal' | null;
+  /** The cadence the chord pair forms, or null when it forms none. */
+  type: CadenceType | null;
   /**
    * How conclusive an authentic cadence is: `'perfect'` when it is a PAC,
    * `'imperfect'` when it is an IAC.

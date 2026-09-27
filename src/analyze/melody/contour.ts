@@ -27,6 +27,18 @@ const DIRECTIONAL_SHARE = 0.75;
  */
 export type ContourDirection = 'up' | 'down' | 'same';
 /**
+ * The overall shapes a line can be read as.
+ *
+ * @category Arrangement & Analysis
+ */
+export const MELODIC_CONTOUR_SHAPES = Object.freeze([
+  'arch',
+  'ascending',
+  'descending',
+  'wave',
+  'static',
+] as const);
+/**
  * The overall shape of a line.
  *
  * The first four names are the vocabulary the motif generator's contours are
@@ -42,7 +54,7 @@ export type ContourDirection = 'up' | 'down' | 'same';
  *
  * @category Arrangement & Analysis
  */
-export type MelodicContourShape = 'arch' | 'ascending' | 'descending' | 'wave' | 'static';
+export type MelodicContourShape = (typeof MELODIC_CONTOUR_SHAPES)[number];
 /**
  * The abstract shape of a line: its step directions and what they add up to.
  *

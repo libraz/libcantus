@@ -30,11 +30,17 @@ import { type ChordToRomanOptions, renderRoman, romanAlternatives } from './roma
 import { isAppliedDominant, pointsAtTonicizableDegree } from './tonicization.js';
 
 /**
+ * The harmonic functions {@link functionOf} can assign.
+ *
+ * @category Functional Harmony
+ */
+export const HARMONIC_FUNCTIONS = Object.freeze(['tonic', 'subdominant', 'dominant'] as const);
+/**
  * The three broad harmonic functions of tonal music.
  *
  * @category Functional Harmony
  */
-export type HarmonicFunction = 'tonic' | 'subdominant' | 'dominant';
+export type HarmonicFunction = (typeof HARMONIC_FUNCTIONS)[number];
 
 /** Harmonic function of each semitone offset above the tonic (major context). */
 const FUNCTION_BY_OFFSET: readonly HarmonicFunction[] = [
