@@ -144,14 +144,14 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
     "@libraz/typedoc-theme": "^0.1.1",
-    "@types/node": "^26.6.2",
-    "@vitest/coverage-v8": "5.0.1",
+    "@types/node": "^26.6.3",
+    "@vitest/coverage-v8": "5.0.2",
     "tsup": "8.5.1",
     "typedoc": "0.28.20",
     "typedoc-plugin-extras": "4.0.1",
     "typedoc-plugin-mdn-links": "5.1.1",
     "typescript": "6.0.3",
-    "vite": "8.3.0",
-    "vitest": "5.0.1"
+    "vite": "8.3.1",
+    "vitest": "5.0.2"
   }
 }
