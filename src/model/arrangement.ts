@@ -14,6 +14,8 @@ import {
   trackRoleOf,
 } from '../analyze/arrange/index.js';
 import type { KeyRegion } from '../analyze/keys/index.js';
+import type { ReferenceProfile, ReferenceProfileOptions } from '../analyze/reference/index.js';
+import { referenceFromReadings } from '../analyze/reference/index.js';
 import type { ChordTimeline } from '../analyze/timeline/index.js';
 import type { MeterLike } from '../core/meter/index.js';
 import { resolveMeters, toMeterData } from '../core/meter/index.js';
@@ -563,6 +565,79 @@ export class Arrangement {
       // span it ran over, so the span is read back off them.
       totalBeats: spanEnd(timeline.segments, keys),
       keys: [...keys],
+    });
+  }
+
+  /**
+   * The arrangement's structural fingerprint: form, phrase shape, harmonic
+   * function and rhythm, and how its melody's motifs derive from one another.
+   *
+   * The harmony reads the arrangement's own session analysis directly — the
+   * tracks `settings.harmonyTracks` names, or else every track but the
+   * percussion ones — so the harmony is never inferred a second time. The
+   * melody is the notes of the tracks played with `role: 'melody'`, joined in
+   * the order the tracks were given; an arrangement naming none reads the top
+   * line of the harmony notes instead, as {@link analyzeReference} does
+   * without a `melody` option. Meter, key, harmony and melody are the
+   * arrangement's own and are not on offer here: a caller wanting others calls
+   * {@link analyzeReference} directly, with the same notes {@link
+   * Arrangement.tracks} hands out.
+   *
+   * @param opts The budget; see {@link ReferenceProfileOptions}.
+   * @returns The profile.
+   * @example
+   * ```ts
+   * import { Arrangement } from '@libraz/libcantus';
+   * const triad = (pitches: number[], startBeat: number) =>
+   *   pitches.map((pitch) => ({ pitch, startBeat, durationBeat: 4 }));
+   * const arrangement = Arrangement.of(
+   *   [
+   *     {
+   *       name: 'lead',
+   *       role: 'melody',
+   *       notes: [
+   *         ...triad([60, 64, 67], 0),
+   *         ...triad([65, 69, 72], 4),
+   *         ...triad([67, 71, 74], 8),
+   *         ...triad([60, 64, 67], 12),
+   *       ],
+   *     },
+   *   ],
+   *   { key: 'C major' },
+   * );
+   * arrangement.reference().harmony.chords.map((chord) => chord.roman); // ['I', 'IV', 'V', 'I']
+   * ```
+   */
+  reference(
+    opts?: Omit<
+      ReferenceProfileOptions,
+      'ts' | 'meters' | 'key' | 'melody' | 'timeline' | 'totalBeats'
+    >,
+  ): ReferenceProfile {
+    const tracks = this.#data.tracks;
+    const harmonyTracks = this.#data.settings?.harmonyTracks;
+    const harmony: NoteEvent[] = [];
+    const melody: NoteEvent[] = [];
+    for (let index = 0; index < tracks.length; index += 1) {
+      const track = tracks[index];
+      if (track === undefined) {
+        continue;
+      }
+      if (
+        track.role !== 'drums' &&
+        (harmonyTracks === undefined || harmonyTracks.includes(index))
+      ) {
+        harmony.push(...track.notes);
+      }
+      if (track.role === 'melody') {
+        melody.push(...track.notes);
+      }
+    }
+    return referenceFromReadings(harmony, this.#session().analysis, {
+      meters: this.#data.settings?.meters,
+      totalBeats: this.timeline().totalBeats,
+      ...(melody.length === 0 ? {} : { melody }),
+      ...opts,
     });
   }
 

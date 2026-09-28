@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeArrangement, createArrangementSession } from '../src/analyze/arrange/index.js';
+import { analyzeReference } from '../src/analyze/reference/index.js';
 import { chordTimelineFromChords } from '../src/analyze/timeline/index.js';
 import { createNoteEventIndex } from '../src/core/event-index/index.js';
 import { createPositionalRng, createRng } from '../src/core/random/index.js';
@@ -28,6 +29,14 @@ describe('results are plain data', () => {
     expect(roundTrip(drums)).toEqual(drums);
     const humanized = humanize(notes, { ctx: 7 });
     expect(roundTrip(humanized)).toEqual(humanized);
+  });
+
+  it('serializes a reference profile and reads it back unchanged', () => {
+    // The profile carries no notes, no function and no class instance — every
+    // field named types.ts declares is plain data, so the whole thing survives
+    // a round trip rather than only the fields another test happens to check.
+    const profile = analyzeReference(notes, { key: 'C major' });
+    expect(roundTrip(profile)).toEqual(profile);
   });
 
   it('serializes every reported field of an analysis and reads it back unchanged', () => {

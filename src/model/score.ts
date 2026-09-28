@@ -18,8 +18,14 @@ import {
 } from '../analyze/form/index.js';
 import type { KeyRegion, KeyTimelineOptions } from '../analyze/keys/index.js';
 import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../analyze/keys/index.js';
+import type { MotifGraph, MotifGraphOptions } from '../analyze/melody/graph.js';
+import { motifGraph } from '../analyze/melody/graph.js';
 import type { ExtractMotifsOptions, MelodicContour, MotifData } from '../analyze/melody/index.js';
 import { extractMotifs, melodicContour } from '../analyze/melody/index.js';
+import type { ReferenceProfile, ReferenceProfileOptions } from '../analyze/reference/index.js';
+import { analyzeReference, referenceFromReadings } from '../analyze/reference/index.js';
+import type { RhythmAnalysis, RhythmAnalysisOptions } from '../analyze/rhythm/index.js';
+import { analyzeRhythm } from '../analyze/rhythm/index.js';
 import type {
   ChordTimeline,
   ChordTimelineOptions,
@@ -66,6 +72,7 @@ import {
   assertKeyArgument,
   assertNoteEventArray,
   copyNoteEvent,
+  copyPlain,
   STATED_KEY_CONFIDENCE,
   withoutNegativeZero,
 } from './shared.js';
@@ -259,6 +266,8 @@ export class Score {
   #chords: ChordTimelineResult | undefined;
   /** The key regions, made on the first member that needs them. */
   #regions: KeyRegion[] | undefined;
+  /** The reference profile asked for with no options, made on first read. */
+  #profile: ReferenceProfile | undefined;
 
   /**
    * Wrap plain score data.
@@ -795,6 +804,130 @@ export class Score {
    */
   contour(): MelodicContour {
     return melodicContour(this.#data.notes);
+  }
+
+  /**
+   * The score's structural fingerprint: form, phrase shape, harmonic function
+   * and rhythm, and how its motifs derive from one another.
+   *
+   * The harmony is the score's own kept chord analysis, read once whether this
+   * is asked before or after {@link Score.timeline} — unless `opts.timeline`
+   * gives the harmony directly, in which case the reading runs fresh through
+   * {@link analyzeReference} rather than the harmony this score already holds.
+   * The meter, the key and the span are the score's own and are not on offer
+   * here: a caller wanting another meter reads through {@link
+   * Score.withMeters}, and one wanting another key or span calls {@link
+   * analyzeReference} directly.
+   *
+   * Asked with no options, the answer is kept and a copy of it handed back, as
+   * {@link Score.timeline} keeps its own reading; asked with options, the
+   * answer is read afresh and not kept.
+   *
+   * @param opts The harmony, the melody, and the budget; see {@link
+   *   ReferenceProfileOptions}. Meter, key and span are the score's own.
+   * @returns The profile.
+   * @example
+   * ```ts
+   * import { Score } from '@libraz/libcantus';
+   * const triad = (pitches: number[], startBeat: number) =>
+   *   pitches.map((pitch) => ({ pitch, startBeat, durationBeat: 4 }));
+   * const score = Score.of(
+   *   [
+   *     ...triad([60, 64, 67], 0),
+   *     ...triad([65, 69, 72], 4),
+   *     ...triad([67, 71, 74], 8),
+   *     ...triad([60, 64, 67], 12),
+   *   ],
+   *   { key: 'C major' },
+   * );
+   * score.reference().harmony.chords.map((chord) => chord.roman); // ['I', 'IV', 'V', 'I']
+   * ```
+   */
+  reference(
+    opts?: Omit<ReferenceProfileOptions, 'ts' | 'meters' | 'key' | 'totalBeats'>,
+  ): ReferenceProfile {
+    if (opts === undefined && this.#profile !== undefined) {
+      return copyPlain(this.#profile, 'reference profile');
+    }
+    const keyed = this.#key === undefined ? {} : { key: keyIdentity(this.#key) };
+    const asked: ReferenceProfileOptions = {
+      meters: this.#data.meters,
+      totalBeats: this.totalBeats,
+      ...keyed,
+      ...opts,
+    };
+    const profile =
+      opts?.timeline === undefined
+        ? referenceFromReadings(this.#data.notes, this.#chordAnalysis(), asked)
+        : analyzeReference(this.#data.notes, asked);
+    if (opts === undefined) {
+      this.#profile = profile;
+      return copyPlain(profile, 'reference profile');
+    }
+    return profile;
+  }
+
+  /**
+   * The onset placement of the score's melodic line.
+   *
+   * A melody is one line, so a score holding several is read as its top voice,
+   * as {@link Score.motifs} and {@link Score.contour} are.
+   *
+   * @param opts The span's end and the budget; see {@link
+   *   RhythmAnalysisOptions}. The meter is the score's own.
+   * @returns The rhythm reading.
+   * @example
+   * ```ts
+   * import { Score } from '@libraz/libcantus';
+   * const score = Score.of([
+   *   { pitch: 60, startBeat: 0, durationBeat: 1 },
+   *   { pitch: 62, startBeat: 1, durationBeat: 1 },
+   *   { pitch: 64, startBeat: 2, durationBeat: 1 },
+   *   { pitch: 65, startBeat: 3, durationBeat: 1 },
+   * ]);
+   * score.rhythm().onsetDensity; // 4
+   * ```
+   */
+  rhythm(opts?: Omit<RhythmAnalysisOptions, 'ts' | 'meters'>): RhythmAnalysis {
+    return analyzeRhythm(this.#data.notes, {
+      meters: this.#data.meters,
+      totalBeats: this.totalBeats,
+      ...opts,
+    });
+  }
+
+  /**
+   * How the score's motifs derive from one another: which statement grew out
+   * of which, and by what transformation.
+   *
+   * {@link Score.motifs} finds the cells; this reads across their occurrences
+   * and names, for every statement after the first, the earlier one it most
+   * plausibly grew out of. A melody is one line, so a score holding several is
+   * read as its top voice, as {@link Score.motifs} is.
+   *
+   * @param opts Cell-length bounds and the recurrence threshold {@link
+   *   Score.motifs} takes, plus the variation threshold and the budget; see
+   *   {@link MotifGraphOptions} and {@link ExtractMotifsOptions}.
+   * @returns The derivation forest.
+   * @example
+   * ```ts
+   * import { Score } from '@libraz/libcantus';
+   * const score = Score.of([
+   *   { pitch: 60, startBeat: 0, durationBeat: 1 },
+   *   { pitch: 62, startBeat: 1, durationBeat: 1 },
+   *   { pitch: 64, startBeat: 2, durationBeat: 1 },
+   *   { pitch: 60, startBeat: 3, durationBeat: 1 },
+   *   { pitch: 62, startBeat: 4, durationBeat: 1 },
+   *   { pitch: 64, startBeat: 5, durationBeat: 1 },
+   * ]);
+   * score.motifGraph().edges.length; // 1
+   * ```
+   */
+  motifGraph(opts?: MotifGraphOptions & ExtractMotifsOptions): MotifGraph {
+    return motifGraph(this.#data.notes, extractMotifs(this.#data.notes, opts), {
+      key: this.key(),
+      ...opts,
+    });
   }
 
   /**

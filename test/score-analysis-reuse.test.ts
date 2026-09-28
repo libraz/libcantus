@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { hypermeter } from '../src/analyze/form/hypermeter.js';
 import { keyTimelineFromNotes } from '../src/analyze/keys/index.js';
+import { extractMotifs } from '../src/analyze/melody/motifs.js';
 import { chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
 import type { NoteEvent } from '../src/core/types.js';
 import { Score } from '../src/model/score.js';
@@ -18,6 +20,16 @@ vi.mock('../src/analyze/keys/index.js', async (importOriginal) => {
 vi.mock('../src/analyze/timeline/index.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/analyze/timeline/index.js')>();
   return { ...actual, chordTimelineFromNotes: vi.fn(actual.chordTimelineFromNotes) };
+});
+
+vi.mock('../src/analyze/form/hypermeter.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/analyze/form/hypermeter.js')>();
+  return { ...actual, hypermeter: vi.fn(actual.hypermeter) };
+});
+
+vi.mock('../src/analyze/melody/motifs.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/analyze/melody/motifs.js')>();
+  return { ...actual, extractMotifs: vi.fn(actual.extractMotifs) };
 });
 
 /** Two bars of a cadence, enough for phrases and voices to have something to read. */
@@ -110,5 +122,46 @@ describe('weighing the notes', () => {
     const silent = Score.of(CADENTIAL).detectKeys();
     const loud = Score.of(CADENTIAL.map((note) => ({ ...note, velocity: 127 }))).detectKeys();
     expect(silent.map((match) => match.score)).toEqual(loud.map((match) => match.score));
+  });
+});
+
+describe('reading a reference profile once', () => {
+  it('makes each expensive reading once, and does not repeat them for a kept answer', () => {
+    const chordCalls = vi.mocked(chordTimelineFromNotes);
+    const keyCalls = vi.mocked(keyTimelineFromNotes);
+    const hypermeterCalls = vi.mocked(hypermeter);
+    const motifCalls = vi.mocked(extractMotifs);
+    chordCalls.mockClear();
+    keyCalls.mockClear();
+    hypermeterCalls.mockClear();
+    motifCalls.mockClear();
+    const score = Score.of(CADENTIAL);
+    score.reference();
+    expect(chordCalls).toHaveBeenCalledTimes(1);
+    // The key search is the one chord inference runs inside itself; reference
+    // does not run a second one of its own.
+    expect(keyCalls).toHaveBeenCalledTimes(1);
+    expect(hypermeterCalls).toHaveBeenCalledTimes(1);
+    expect(motifCalls).toHaveBeenCalledTimes(1);
+    // Reading the score's own timeline afterward answers from the same kept
+    // chord analysis reference() already made.
+    score.timeline();
+    expect(chordCalls).toHaveBeenCalledTimes(1);
+    // Asked again with no options, the kept profile answers without reading
+    // anything a second time.
+    score.reference();
+    expect(chordCalls).toHaveBeenCalledTimes(1);
+    expect(keyCalls).toHaveBeenCalledTimes(1);
+    expect(hypermeterCalls).toHaveBeenCalledTimes(1);
+    expect(motifCalls).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands out a profile a caller can write to without changing the one it kept', () => {
+    const score = Score.of(CADENTIAL);
+    const first = score.reference();
+    first.span.startBeat = -999;
+    first.form.sections.length = 0;
+    expect(score.reference().span.startBeat).not.toBe(-999);
+    expect(score.reference().form.sections.length).toBeGreaterThan(0);
   });
 });

@@ -7,7 +7,11 @@ import { tensionCurve } from '../src/analyze/arrange/tension.js';
 import { hypermeter } from '../src/analyze/form/hypermeter.js';
 import { phrasesFromTimeline } from '../src/analyze/form/phrase.js';
 import { sectionsFromNotes } from '../src/analyze/form/section.js';
-import { extractMotifs } from '../src/analyze/melody/index.js';
+import { motifGraph } from '../src/analyze/melody/graph.js';
+import { extractMotifs, motifFromNotes } from '../src/analyze/melody/index.js';
+import { compareReferences } from '../src/analyze/reference/compare.js';
+import { analyzeReference } from '../src/analyze/reference/profile.js';
+import { analyzeRhythm } from '../src/analyze/rhythm/index.js';
 import { spellLine } from '../src/analyze/spelling/index.js';
 import type { ChordTimeline } from '../src/analyze/timeline/index.js';
 import { chordTimelineFromChords, chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
@@ -31,6 +35,7 @@ import type { SafetyQuery } from '../src/theory/safety/index.js';
 import { evaluateSafety } from '../src/theory/safety/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
 import { voiceChord, voiceProgression } from '../src/theory/voicing/satb.js';
+import { SOURCE_SONG } from './support/reference-fixtures.js';
 import { filesUnder, SRC, TESTS } from './support/source-files.js';
 
 /**
@@ -413,6 +418,45 @@ const REACHES: readonly { label: string; run: () => unknown }[] = [
   {
     label: 'tie chain length',
     run: () => beatsToTiedDurations(8_000_000),
+  },
+  {
+    label: 'rhythm analysis slots',
+    // A million-beat span at 48 slots a bar, against a budget of ten.
+    run: () =>
+      analyzeRhythm([{ pitch: 60, startBeat: 0, durationBeat: 1 }], {
+        totalBeats: 1_000_000,
+        budget: 10,
+      }),
+  },
+  {
+    label: 'motif graph comparisons',
+    // Fifty statements of the same three-note cell: cheap to read as notes,
+    // but the 50x50 comparisons the graph builds from them are not.
+    run: () => {
+      const melody = Array.from({ length: 50 }, (_, i) =>
+        [60, 62, 67].map((pitch, j) => ({ pitch, startBeat: i * 4 + j, durationBeat: 1 })),
+      ).flat();
+      const motifs = Array.from({ length: 50 }, (_, i) => {
+        const data = motifFromNotes(
+          [60, 62, 67].map((pitch, j) => ({ pitch, startBeat: i * 4 + j, durationBeat: 1 })),
+        );
+        return { ...data, occurrences: data.occurrences.map((o) => ({ ...o, noteIndex: i * 3 })) };
+      });
+      return motifGraph(melody, motifs, { budget: 500 });
+    },
+  },
+  {
+    label: 'reference progression alignment',
+    // The source song's structural chords against themselves; a budget of one
+    // cell admits none of the alignment.
+    run: () => {
+      const profile = analyzeReference(SOURCE_SONG.notes, {
+        meters: SOURCE_SONG.meters,
+        key: SOURCE_SONG.key,
+        melody: SOURCE_SONG.melody,
+      });
+      return compareReferences(profile, profile, { budget: 1 });
+    },
   },
 ];
 

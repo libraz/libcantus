@@ -599,6 +599,39 @@ describe('methods offer the options their delegate accepts', () => {
     expect(delegations.length).toBeGreaterThan(5);
   });
 
+  /**
+   * `label.property` pairs a delegate accepts that the method deliberately
+   * leaves out, with the reason each stays out.
+   *
+   * An entry is a claim that the receiver already fixes the value — the
+   * score's own meter, key or span, an arrangement's already-known harmony and
+   * melody — rather than a note that coverage is incomplete.
+   */
+  const NOT_OFFERED: Readonly<Record<string, string>> = {
+    'Score.reference.ts':
+      "the score's own meter; a caller wanting another reads through Score.withMeters",
+    'Score.reference.meters':
+      "the score's own meter; a caller wanting another reads through Score.withMeters",
+    'Score.reference.key':
+      "the score's own key; a caller wanting another calls analyzeReference directly",
+    'Score.reference.totalBeats':
+      "the score's own length names the span; a caller wanting another calls analyzeReference directly",
+    'Score.rhythm.ts':
+      "the score's own meter; a caller wanting another reads through Score.withMeters",
+    'Score.rhythm.meters':
+      "the score's own meter; a caller wanting another reads through Score.withMeters",
+    'Arrangement.reference.ts':
+      "the arrangement's own meter; a caller wanting another calls analyzeReference directly",
+    'Arrangement.reference.meters':
+      "the arrangement's own meter; a caller wanting another calls analyzeReference directly",
+    'Arrangement.reference.key': "the arrangement's own key, carried by its session analysis",
+    'Arrangement.reference.melody': 'read from the melody-role tracks, not from an option',
+    'Arrangement.reference.timeline':
+      "the harmony is the arrangement's own session analysis, never inferred a second time",
+    'Arrangement.reference.totalBeats':
+      "the arrangement's own span; a caller wanting another calls analyzeReference directly",
+  };
+
   it.each(delegations)(
     '$label accepts what $delegate does',
     ({ label, delegate, declaration, parameter }) => {
@@ -613,12 +646,43 @@ describe('methods offer the options their delegate accepts', () => {
         }
       }
       for (const [name, optional] of optionProperties(parameter)) {
+        if (`${label}.${name}` in NOT_OFFERED) {
+          continue;
+        }
         const message = `${label} must accept '${name}' from ${delegate}`;
         expect(exposed.has(name), message).toBe(true);
         expect(exposed.get(name), `${message} with the same optionality`).toBe(optional);
       }
     },
   );
+
+  it('lists nothing in NOT_OFFERED that a method now offers or no longer delegates', () => {
+    const stale = Object.keys(NOT_OFFERED).filter((key) => {
+      const lastDot = key.lastIndexOf('.');
+      const label = key.slice(0, lastDot);
+      const name = key.slice(lastDot + 1);
+      const matches = delegations.filter((entry) => entry.label === label);
+      if (matches.length === 0) {
+        return true;
+      }
+      return matches.every((entry) => {
+        if (!optionProperties(entry.parameter).has(name)) {
+          return true;
+        }
+        const exposed = new Set<string>();
+        for (const own of entry.declaration.parameters) {
+          const type = typeOfParameter(own);
+          if (isOptionsType(type)) {
+            for (const property of type.getProperties()) {
+              exposed.add(property.getName());
+            }
+          }
+        }
+        return exposed.has(name);
+      });
+    });
+    expect(stale).toEqual([]);
+  });
 
   /**
    * Delegating methods the equivalence suite does not drive with options, with

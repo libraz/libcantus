@@ -89,6 +89,9 @@ export {
   sectionsFromNotes,
   structuralCadences,
 } from './form/index.js';
+export type { CadenceType } from './functional/cadence.js';
+export { CADENCE_TYPES } from './functional/cadence.js';
+export { HARMONIC_FUNCTIONS } from './functional/function.js';
 export type {
   AnalyzeChordOptions,
   AugmentedSixthKind,
@@ -124,6 +127,14 @@ export {
 } from './functional/index.js';
 export type { KeyRegion, KeyTimelineOptions } from './keys/index.js';
 export { detectModulations, keyTimelineFromNotes, prevailingKeyOf } from './keys/index.js';
+export { MELODIC_CONTOUR_SHAPES } from './melody/contour.js';
+export type {
+  MotifGraph,
+  MotifGraphEdge,
+  MotifGraphNode,
+  MotifGraphOptions,
+} from './melody/graph.js';
+export { motifGraph } from './melody/graph.js';
 export type {
   ContourDirection,
   ExtractMotifsOptions,
@@ -144,13 +155,42 @@ export {
   motifFromNotes,
   relateMotifs,
 } from './melody/index.js';
+export type { MotifRelationSummary } from './melody/relation.js';
+export { MOTIF_RELATION_KINDS } from './melody/relation.js';
 export type {
   ReducedChord,
   ReduceProgressionOptions,
   ReductionBasis,
   ReductionLevel,
 } from './reduction/index.js';
-export { reduceProgression } from './reduction/index.js';
+export { REDUCTION_LEVELS, reduceProgression } from './reduction/index.js';
+export type {
+  ReferenceCadence,
+  ReferenceChord,
+  ReferenceComparison,
+  ReferenceComparisonOptions,
+  ReferenceForm,
+  ReferenceHarmony,
+  ReferenceKeyRegion,
+  ReferenceMelody,
+  ReferenceMotif,
+  ReferencePhrase,
+  ReferencePhraseMelody,
+  ReferenceProfile,
+  ReferenceProfileOptions,
+} from './reference/index.js';
+export {
+  analyzeReference,
+  assertReferenceProfile,
+  compareReferences,
+  REFERENCE_PROFILE_VERSION,
+} from './reference/index.js';
+export type {
+  BarPositionProfile,
+  RhythmAnalysis,
+  RhythmAnalysisOptions,
+} from './rhythm/index.js';
+export { analyzeRhythm, RHYTHM_IOI_BINS } from './rhythm/index.js';
 export type { SpellLineOptions } from './spelling/index.js';
 export { spellLine } from './spelling/index.js';
 export type {

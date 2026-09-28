@@ -93,7 +93,7 @@ export type RhythmAnalysis = {
   endBeat: number;
   /** The span's length in bars, counted across any meter changes it crosses. */
   bars: number;
-  /** Onsets read, folding onsets within {@link HUMANIZE_ADJACENCY} into one. */
+  /** Onsets read, folding onsets within 0.05 beat of one another into one. */
   onsets: number;
   /** Onsets per bar; 0 for a span with no bars. */
   onsetDensity: number;
@@ -365,7 +365,7 @@ function ioiBinIndex(ioi: number): number {
  * How a line places its onsets against the meter: density, metric placement,
  * interval spacing, rest, and Longuet-Higgins & Lee syncopation.
  *
- * Onsets within {@link HUMANIZE_ADJACENCY} of one another read as one, and an
+ * Onsets within 0.05 beat of one another read as one, and an
  * onset further than 1/32 beat from the nearest twelfth-of-a-beat slot is read
  * as off grid; every onset is moved to its nearest slot for everything
  * downstream of it, so an unquantized line reads a real but reduced
@@ -376,6 +376,19 @@ function ioiBinIndex(ioi: number): number {
  *   (`durationBeat <= 0`) are dropped.
  * @param opts Analysis options; see {@link RhythmAnalysisOptions}.
  * @returns The rhythm reading; see {@link RhythmAnalysis}.
+ * @example
+ * ```ts
+ * import { analyzeRhythm } from '@libraz/libcantus';
+ * const rhythm = analyzeRhythm(
+ *   [
+ *     { pitch: 60, startBeat: 0, durationBeat: 1.5 },
+ *     { pitch: 62, startBeat: 1.5, durationBeat: 2.5 },
+ *   ],
+ *   { ts: '4/4' },
+ * );
+ * rhythm.onsets; // 2
+ * rhythm.syncopation > 0; // true
+ * ```
  * @category Arrangement & Analysis
  */
 export function analyzeRhythm(

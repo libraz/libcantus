@@ -5,6 +5,8 @@ import {
   Arrangement,
   analyzeArrangement,
   analyzeChord,
+  analyzeReference,
+  analyzeRhythm,
   analyzeVoice,
   availableTensions,
   avoidNotes,
@@ -100,6 +102,7 @@ import {
   midiToNote,
   modalInterchangePalette,
   motifFromNotes,
+  motifGraph,
   motifToNoteEvents,
   Note,
   type NoteEvent,
@@ -318,6 +321,15 @@ describe('Arrangement', () => {
     // are the ones the arrangement is read under.
     expect(lead?.meterAt(0)).toEqual({ numerator: 3, denominator: 4 });
     expect(lead?.key()?.scale).toEqual(toKeyScale('C major'));
+  });
+
+  it('reads its structural profile the way analyzeReference reads the same harmony and melody', () => {
+    const arrangement = Arrangement.of(PARTS);
+    const harmony = PARTS.flatMap((track) => track.notes);
+    const melody = PARTS.filter((track) => track.role === 'melody').flatMap((track) => track.notes);
+    expect(arrangement.reference()).toEqual(
+      analyzeReference(harmony, { melody, totalBeats: arrangement.timeline().totalBeats }),
+    );
   });
 });
 
@@ -1101,6 +1113,40 @@ describe('Score', () => {
       ),
     );
     expect(chromatic.voices('G major')).not.toEqual(chromatic.voices('C major'));
+  });
+
+  it('reads its structural profile the way analyzeReference reads the same harmony', () => {
+    expect(score.reference()).toEqual(
+      analyzeReference(score.notes, { meters: score.meters, totalBeats: score.totalBeats }),
+    );
+    const melodyOpts = { melody: score.notes.filter((note) => note.pitch >= 64) };
+    expect(score.reference(melodyOpts)).toEqual(
+      analyzeReference(score.notes, {
+        meters: score.meters,
+        totalBeats: score.totalBeats,
+        ...melodyOpts,
+      }),
+    );
+    expect(score.reference(melodyOpts)).not.toEqual(score.reference());
+  });
+
+  it('reads its onset placement the way analyzeRhythm reads the same notes', () => {
+    expect(score.rhythm()).toEqual(
+      analyzeRhythm(score.notes, { meters: score.meters, totalBeats: score.totalBeats }),
+    );
+    const rhythmOpts = { totalBeats: score.totalBeats + 4 };
+    expect(score.rhythm(rhythmOpts)).toEqual(
+      analyzeRhythm(score.notes, { meters: score.meters, ...rhythmOpts }),
+    );
+    expect(score.rhythm(rhythmOpts)).not.toEqual(score.rhythm());
+  });
+
+  it('reads its motif derivations the way motifGraph reads the same motifs', () => {
+    const opts = { minNotes: 2, maxNotes: 2 };
+    expect(score.motifGraph(opts)).toEqual(
+      motifGraph(score.notes, extractMotifs(score.notes, opts), { key: score.key(), ...opts }),
+    );
+    expect(score.motifGraph(opts)).not.toEqual(score.motifGraph());
   });
 
   it('performs the notes the way the generators perform them, under one seed', () => {

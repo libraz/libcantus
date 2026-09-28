@@ -33,8 +33,9 @@
  * Every row is checked for (a) the validator accepting the profile, (b) the
  * profile surviving a JSON round trip unchanged, (c) the class entry agreeing
  * with the function it wraps, and (d) the phrases tiling
- * [span.startBeat, span.endBeat] with no gap. Rows are listed by entry; a row
- * runs through the runner its `entry` names.
+ * [span.startBeat, span.endBeat] with no gap; (c) applies only to a class
+ * entry, an analyzeReference row being the function itself. Rows are listed
+ * by id; a row runs through the runner its `entry` names.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -52,6 +53,7 @@ import { chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
 import { BudgetExceededError, InvalidInputError } from '../src/core/errors/index.js';
 import type { MeterLike } from '../src/core/meter/index.js';
 import type { NoteEvent } from '../src/core/types.js';
+import { Arrangement, Score } from '../src/model/index.js';
 import type { KeyLike } from '../src/theory/scale/index.js';
 import {
   type ReferenceFixture,
@@ -73,6 +75,22 @@ function modulated(notes: readonly NoteEvent[]): NoteEvent[] {
   return notes.map((note) => (note.startBeat >= 64 ? { ...note, pitch: note.pitch + 7 } : note));
 }
 
+/**
+ * A score's own canonical note order: by onset, then pitch, then length.
+ *
+ * `Score` keeps its notes sorted this way, so a check (c) row feeds
+ * `analyzeReference` the notes in the same order `Score.reference` reads them
+ * in — otherwise a chord voicing carrying two notes of the same pitch and
+ * onset but different lengths could pick a different one as the top voice, or
+ * a confidence built by summing over the notes could round a last decimal
+ * place differently, on nothing more than which order the array arrived in.
+ */
+function scoreOrder(notes: readonly NoteEvent[]): NoteEvent[] {
+  return [...notes].sort(
+    (a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch || a.durationBeat - b.durationBeat,
+  );
+}
+
 /** 4/4 for the first sixteen bars, 3/4 from there on. */
 const CHANGING_METER: MeterLike = [
   { startBeat: 0, ts: { numerator: 4, denominator: 4 } },
@@ -80,7 +98,7 @@ const CHANGING_METER: MeterLike = [
 ];
 
 type Texture = 'melodyOnly' | 'polyphonic' | 'polyphonicWithMelodyOption';
-type Entry = 'analyzeReference';
+type Entry = 'analyzeReference' | 'Score.reference' | 'Arrangement.reference';
 
 type Row = {
   id: number;
@@ -90,8 +108,17 @@ type Row = {
   pickup: boolean;
   modulation: boolean;
   entry: Entry;
+  /**
+   * The harmony notes, and the options `analyzeReference` needs to reproduce
+   * the entry's answer — the check (c) below runs for a class entry.
+   */
   notes: readonly NoteEvent[];
   opts: ReferenceProfileOptions;
+  /**
+   * Builds the profile through {@link Score.reference} or {@link
+   * Arrangement.reference}; set only when `entry` names one of them.
+   */
+  classProfile?: () => ReferenceProfile;
   /** The first beat the span must open on: the pickup's onset, or 0. */
   startBeat: number;
   /** The beat the span must close on: the end of the last note. */
@@ -101,6 +128,8 @@ type Row = {
 /** How each entry turns a row's input into a profile. */
 const RUN: Record<Entry, (row: Row) => ReferenceProfile> = {
   analyzeReference: (row) => analyzeReference(row.notes, row.opts),
+  'Score.reference': (row) => (row.classProfile as () => ReferenceProfile)(),
+  'Arrangement.reference': (row) => (row.classProfile as () => ReferenceProfile)(),
 };
 
 const C_MAJOR: KeyLike = 'C major';
@@ -122,6 +151,81 @@ const ROWS: Row[] = [
     opts: { meters: '6/8', key: C_MAJOR },
     startBeat: -1.5,
     endBeat: 24,
+  },
+  {
+    id: 2,
+    texture: 'polyphonicWithMelodyOption',
+    key: 'inferred',
+    meter: 'changing',
+    pickup: true,
+    modulation: true,
+    entry: 'Arrangement.reference',
+    // The melody-role track is not percussion, so it pools into the harmony
+    // reading too, alongside the harmony track.
+    notes: [
+      ...withPickup(modulated(SOURCE_SONG.notes), 1),
+      ...withPickup(modulated(SOURCE_SONG.melody), 1),
+    ],
+    opts: { meters: CHANGING_METER, melody: withPickup(modulated(SOURCE_SONG.melody), 1) },
+    classProfile: () =>
+      Arrangement.of(
+        [
+          { name: 'harmony', notes: withPickup(modulated(SOURCE_SONG.notes), 1) },
+          { name: 'lead', role: 'melody', notes: withPickup(modulated(SOURCE_SONG.melody), 1) },
+        ],
+        { meters: CHANGING_METER },
+      ).reference(),
+    startBeat: -1,
+    endBeat: 128,
+  },
+  {
+    id: 3,
+    texture: 'melodyOnly',
+    key: 'inferred',
+    meter: '3/4',
+    pickup: false,
+    modulation: true,
+    entry: 'Score.reference',
+    notes: scoreOrder(modulated(SOURCE_SONG.melody)),
+    opts: { meters: '3/4' },
+    classProfile: () =>
+      Score.of(scoreOrder(modulated(SOURCE_SONG.melody)), { meters: '3/4' }).reference(),
+    startBeat: 0,
+    endBeat: 128,
+  },
+  {
+    id: 4,
+    texture: 'polyphonicWithMelodyOption',
+    key: 'stated',
+    meter: '3/4',
+    pickup: true,
+    modulation: false,
+    entry: 'Score.reference',
+    notes: scoreOrder(withPickup(UNRELATED_SONG.notes, 1)),
+    opts: { meters: '3/4', key: C_MAJOR, melody: withPickup(UNRELATED_SONG.melody, 1) },
+    classProfile: () =>
+      Score.of(scoreOrder(withPickup(UNRELATED_SONG.notes, 1)), {
+        meters: '3/4',
+        key: C_MAJOR,
+      }).reference({
+        melody: withPickup(UNRELATED_SONG.melody, 1),
+      }),
+    startBeat: -1,
+    endBeat: 24,
+  },
+  {
+    id: 5,
+    texture: 'polyphonic',
+    key: 'inferred',
+    meter: '4/4',
+    pickup: false,
+    modulation: false,
+    entry: 'Arrangement.reference',
+    notes: SOURCE_SONG.notes,
+    opts: {},
+    classProfile: () => Arrangement.of([{ name: 'harmony', notes: SOURCE_SONG.notes }]).reference(),
+    startBeat: 0,
+    endBeat: 128,
   },
   {
     id: 6,
@@ -150,6 +254,59 @@ const ROWS: Row[] = [
     endBeat: 128,
   },
   {
+    id: 8,
+    texture: 'polyphonic',
+    key: 'inferred',
+    meter: '6/8',
+    pickup: true,
+    modulation: true,
+    entry: 'Score.reference',
+    notes: scoreOrder(withPickup(modulated(SOURCE_SONG.notes), 1.5)),
+    opts: { meters: '6/8' },
+    classProfile: () =>
+      Score.of(scoreOrder(withPickup(modulated(SOURCE_SONG.notes), 1.5)), {
+        meters: '6/8',
+      }).reference(),
+    startBeat: -1.5,
+    endBeat: 128,
+  },
+  {
+    id: 9,
+    texture: 'melodyOnly',
+    key: 'stated',
+    meter: '4/4',
+    pickup: true,
+    modulation: false,
+    entry: 'Score.reference',
+    notes: scoreOrder(withPickup(SOURCE_SONG.melody, 1)),
+    opts: { meters: '4/4', key: C_MAJOR },
+    classProfile: () =>
+      Score.of(scoreOrder(withPickup(SOURCE_SONG.melody, 1)), {
+        meters: '4/4',
+        key: C_MAJOR,
+      }).reference(),
+    startBeat: -1,
+    endBeat: 128,
+  },
+  {
+    id: 10,
+    texture: 'polyphonic',
+    key: 'stated',
+    meter: '3/4',
+    pickup: true,
+    modulation: false,
+    entry: 'Arrangement.reference',
+    notes: withPickup(UNRELATED_SONG.notes, 1),
+    opts: { meters: '3/4', key: C_MAJOR },
+    classProfile: () =>
+      Arrangement.of([{ name: 'harmony', notes: withPickup(UNRELATED_SONG.notes, 1) }], {
+        meters: '3/4',
+        key: C_MAJOR,
+      }).reference(),
+    startBeat: -1,
+    endBeat: 24,
+  },
+  {
     id: 11,
     texture: 'polyphonic',
     key: 'stated',
@@ -163,6 +320,21 @@ const ROWS: Row[] = [
     endBeat: 24,
   },
   {
+    id: 12,
+    texture: 'melodyOnly',
+    key: 'inferred',
+    meter: 'changing',
+    pickup: false,
+    modulation: true,
+    entry: 'Score.reference',
+    notes: scoreOrder(modulated(SOURCE_SONG.melody)),
+    opts: { meters: CHANGING_METER },
+    classProfile: () =>
+      Score.of(scoreOrder(modulated(SOURCE_SONG.melody)), { meters: CHANGING_METER }).reference(),
+    startBeat: 0,
+    endBeat: 128,
+  },
+  {
     id: 13,
     texture: 'polyphonicWithMelodyOption',
     key: 'inferred',
@@ -172,6 +344,46 @@ const ROWS: Row[] = [
     entry: 'analyzeReference',
     notes: withPickup(modulated(SOURCE_SONG.notes), 1),
     opts: { meters: '4/4', melody: withPickup(modulated(SOURCE_SONG.melody), 1) },
+    startBeat: -1,
+    endBeat: 128,
+  },
+  {
+    id: 14,
+    texture: 'polyphonicWithMelodyOption',
+    key: 'inferred',
+    meter: '6/8',
+    pickup: true,
+    modulation: false,
+    entry: 'Arrangement.reference',
+    // The melody-role track is not percussion, so it pools into the harmony
+    // reading too, alongside the harmony track.
+    notes: [...withPickup(UNRELATED_SONG.notes, 1.5), ...withPickup(UNRELATED_SONG.melody, 1.5)],
+    opts: { meters: '6/8', melody: withPickup(UNRELATED_SONG.melody, 1.5) },
+    classProfile: () =>
+      Arrangement.of(
+        [
+          { name: 'harmony', notes: withPickup(UNRELATED_SONG.notes, 1.5) },
+          { name: 'lead', role: 'melody', notes: withPickup(UNRELATED_SONG.melody, 1.5) },
+        ],
+        { meters: '6/8' },
+      ).reference(),
+    startBeat: -1.5,
+    endBeat: 24,
+  },
+  {
+    id: 15,
+    texture: 'polyphonic',
+    key: 'inferred',
+    meter: 'changing',
+    pickup: true,
+    modulation: true,
+    entry: 'Score.reference',
+    notes: scoreOrder(withPickup(modulated(SOURCE_SONG.notes), 1)),
+    opts: { meters: CHANGING_METER },
+    classProfile: () =>
+      Score.of(scoreOrder(withPickup(modulated(SOURCE_SONG.notes), 1)), {
+        meters: CHANGING_METER,
+      }).reference(),
     startBeat: -1,
     endBeat: 128,
   },
@@ -245,6 +457,12 @@ describe('analyzeReference across the pairwise input model', () => {
       expect(restored).toEqual(profile);
       expect(assertReferenceProfile(restored)).toEqual(profile);
     });
+
+    if (row.entry !== 'analyzeReference') {
+      it(`${title} — (c) the class result equals the function result`, () => {
+        expect(RUN[row.entry](row)).toEqual(analyzeReference(row.notes, row.opts));
+      });
+    }
 
     it(`${title} — (d) the phrases tile the span`, () => {
       const profile = RUN[row.entry](row);

@@ -24,6 +24,7 @@ const NOT_A_CLASS_METHOD: Readonly<Record<string, string>> = {
   assertModeMask: 'validator for a caller boundary',
   assertNoteEvent: 'validator for a caller boundary',
   assertVocabulary: 'validator for a caller boundary',
+  assertReferenceProfile: 'validator for a caller boundary',
   clampToMidi: 'repairs a raw number at a caller boundary',
   dropSilentNotes: 'repairs an imported event array before it is material',
   soundingNotesOnly: 'the other name of dropSilentNotes',
@@ -167,6 +168,11 @@ const NOT_A_CLASS_METHOD: Readonly<Record<string, string>> = {
   chordFromSpec: 'undecided: Chord.spec goes out, and no factory takes one back in',
   secondaryDominant: 'undecided: Chord.secondaryDominant tonicizes a chord, not a degree of a key',
   shiftByScaleDegrees: 'undecided: no receiver-side spelling of a diatonic shift',
+
+  // Compares two plain records rather than reading one against a receiver, as
+  // compareMelodies does; a reference profile carries no class of its own for
+  // either side to hang off.
+  compareReferences: 'compares two plain records; no receiver on either side',
 };
 
 /**
