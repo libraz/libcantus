@@ -1,0 +1,189 @@
+/**
+ * A composition plan: what a piece is going to be, before any note is chosen.
+ *
+ * Where a {@link ReferenceProfile} records what an existing piece did, a plan
+ * records what a new one will do — the same structural dimensions (form,
+ * harmony, motif derivation, rhythm), stated as targets a generator can hit
+ * exactly rather than as a reading to approximate. A plan is plain data,
+ * JSON-serializable end to end, and it carries the seed and algorithm version
+ * a generator needs to reproduce the piece it describes: the plan is the
+ * recipe, not a cache of one run of it.
+ */
+
+import type { CadenceType } from '../../analyze/functional/cadence.js';
+import { romanToChord } from '../../analyze/functional/roman.js';
+import type { MelodicContourShape } from '../../analyze/melody/contour.js';
+import type { MotifRelationSummary } from '../../analyze/melody/relation.js';
+import { type ChordTimeline, chordTimelineFromChords } from '../../analyze/timeline/index.js';
+import type { MeterMap } from '../../core/meter/index.js';
+import { spanFromChord } from '../../theory/chord/index.js';
+import type { ResolvedKey } from '../../theory/scale/index.js';
+
+/**
+ * Schema version {@link CompositionPlan} is written at.
+ *
+ * {@link assertCompositionPlan} rejects any other value outright rather than
+ * guess at an older shape a caller's stored JSON might be in.
+ *
+ * @category Composition
+ */
+export const COMPOSITION_PLAN_VERSION = 1;
+
+/**
+ * What a new piece is going to be: its keys, meter and span, the sections and
+ * phrases it is built from, the harmony and motif derivations a generator
+ * fills those phrases with, and the rhythmic target it aims for.
+ *
+ * @category Composition
+ */
+export type CompositionPlan = {
+  /** Schema version this record is written at; see {@link COMPOSITION_PLAN_VERSION}. */
+  planVersion: number;
+  /** The project seed a generator following this plan draws from. */
+  seed: number;
+  /** The algorithm version a generator following this plan runs under. */
+  algorithmVersion: number;
+  /** Keys the piece passes through; index 0 is the home key harmony is read against by default. */
+  keys: ResolvedKey[];
+  /** The piece's meter across the planned span. */
+  meters: MeterMap;
+  /** The planned span. */
+  span: { startBeat: number; endBeat: number; bars: number };
+  /** Sections, in time order. */
+  sections: PlannedSection[];
+  /** Phrases, in time order. */
+  phrases: PlannedPhrase[];
+  /** The harmonic progression, as a partition of the span. */
+  harmony: PlannedChord[];
+  /** Motifs and how they derive from one another. */
+  motifs: PlannedMotif[];
+  /** The rhythmic target a generator's onset placement aims for. */
+  rhythm: PlannedRhythm;
+};
+
+/**
+ * One planned section: a labelled span of the piece.
+ *
+ * @category Composition
+ */
+export type PlannedSection = {
+  /** The section's label. */
+  label: string;
+  /** First beat of the section. */
+  startBeat: number;
+  /** End of the section, exclusive. */
+  endBeat: number;
+};
+
+/**
+ * One planned phrase: its span, the section it opens in, the cadence and
+ * melodic shape it targets, and the motifs it carries.
+ *
+ * @category Composition
+ */
+export type PlannedPhrase = {
+  /** First beat of the phrase. */
+  startBeat: number;
+  /** End of the phrase, exclusive. */
+  endBeat: number;
+  /** Index into `plan.sections` of the section this phrase's start beat falls in. */
+  section: number | null;
+  /** The cadence the phrase is to end on, or null for none. */
+  cadence: CadenceType | null;
+  /** The phrase's targeted melodic shape. */
+  shape: MelodicContourShape;
+  /** Onset of the phrase's targeted peak, as a fraction of the phrase's length, in [0, 1]. */
+  peakPosition: number;
+  /** The phrase's targeted pitch range and mean, as absolute MIDI pitches. */
+  register: { low: number; high: number; mean: number };
+  /** Targeted onsets per bar within the phrase; see {@link RhythmAnalysis.onsetDensity}. */
+  onsetDensity: number;
+  /** Indices into `plan.motifs` of every motif statement placed in this phrase. */
+  motifs: number[];
+};
+
+/**
+ * One planned chord, placed against one of the plan's keys.
+ *
+ * @category Composition
+ */
+export type PlannedChord = {
+  /** First beat of the chord. */
+  startBeat: number;
+  /** End of the chord, exclusive. */
+  endBeat: number;
+  /** Index into `plan.keys` of the key this chord is named against. */
+  key: number;
+  /** The chord, as a Roman numeral in that key. */
+  roman: string;
+};
+
+/**
+ * One planned motif statement: a root the generator writes new notes for, or a
+ * derivation the generator obtains from an earlier statement by a named
+ * transformation.
+ *
+ * @category Composition
+ */
+export type PlannedMotif = {
+  /** Index into `plan.phrases` of the phrase this statement is placed in. */
+  phrase: number;
+  /** First beat of the statement. */
+  startBeat: number;
+  /** End of the statement, exclusive. */
+  endBeat: number;
+  /** How many notes the statement carries; a root's generated length, a derivation's inherited from its source. */
+  notes: number;
+  /** Index into `plan.motifs` of the statement this one derives from; null for a root. Always less than this statement's own index. */
+  from: number | null;
+  /** The named transformation from `from`, or null for a root, or for a derivation with no named transformation (a variation). */
+  relation: MotifRelationSummary | null;
+};
+
+/**
+ * The rhythmic target a generator's onset placement aims for.
+ *
+ * @category Composition
+ */
+export type PlannedRhythm = {
+  /** Targeted distribution of onsets across metric levels; see {@link RhythmAnalysis.onsetLevels}. */
+  onsetLevels: number[];
+  /** Targeted distribution of inter-onset intervals; see {@link RhythmAnalysis.interOnsetShares}. */
+  interOnsetShares: number[];
+  /** Targeted syncopation, in [0, 1]; see {@link RhythmAnalysis.syncopation}. */
+  syncopation: number;
+};
+
+/**
+ * Read a plan's harmony as a chord timeline.
+ *
+ * The one way a generator or an evaluator reads chords out of a plan: each
+ * entry in `plan.harmony` is resolved against its key and placed at its own
+ * beat, so the timeline this returns always agrees with the plan it was built
+ * from.
+ *
+ * @param plan The plan to read harmony from.
+ * @returns A chord timeline spanning `plan.span`.
+ * @throws If a chord's key index is out of range, or its numeral cannot be
+ *   read against that key.
+ * @example
+ * ```ts
+ * import { planTimeline, resolveKey } from '@libraz/libcantus';
+ * const plan = {
+ *   planVersion: 1, seed: 0, algorithmVersion: 1,
+ *   keys: [resolveKey('C major')], meters: [{ startBeat: 0, ts: { numerator: 4, denominator: 4 } }],
+ *   span: { startBeat: 0, endBeat: 4, bars: 1 }, sections: [], phrases: [],
+ *   harmony: [{ startBeat: 0, endBeat: 4, key: 0, roman: 'I' }], motifs: [],
+ *   rhythm: { onsetLevels: [1, 0, 0, 0, 0, 0], interOnsetShares: new Array(17).fill(0), syncopation: 0 },
+ * };
+ * planTimeline(plan).at(0); // the I chord in C major
+ * ```
+ * @category Composition
+ */
+export function planTimeline(plan: CompositionPlan): ChordTimeline {
+  const spans = plan.harmony.map((chord) => {
+    const key = plan.keys[chord.key] as ResolvedKey;
+    return spanFromChord(romanToChord(chord.roman, key), chord.startBeat);
+  });
+  return chordTimelineFromChords(spans, plan.span.endBeat);
+}
