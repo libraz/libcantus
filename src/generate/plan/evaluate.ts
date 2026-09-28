@@ -15,6 +15,7 @@ import { barSpanOf } from '../../analyze/form/internal.js';
 import { DEFAULT_VARIATION_THRESHOLD } from '../../analyze/melody/graph.js';
 import type { MotifRelationSummary } from '../../analyze/melody/relation.js';
 import { melodicSimilarity } from '../../analyze/melody/similarity.js';
+import { phraseMelody } from '../../analyze/reference/internal.js';
 import {
   type ContourPhrase,
   contourSimilarity,
@@ -26,7 +27,6 @@ import {
   registerSimilarity,
   syncopationSimilarity,
 } from '../../analyze/reference/measures.js';
-import { phraseMelody } from '../../analyze/reference/profile.js';
 import type { ReferencePhraseMelody } from '../../analyze/reference/types.js';
 import { analyzeRhythm, type BarPositionProfile } from '../../analyze/rhythm/index.js';
 import type { ChordTimeline } from '../../analyze/timeline/index.js';
@@ -37,7 +37,8 @@ import { assertNoteEvents, assertOptions } from '../../core/validation/index.js'
 import { scaleOf } from '../../theory/scale/index.js';
 import { clipStatement, relationLevels, replayAt } from '../melody/derive.js';
 import type { MotifNote } from '../motif/index.js';
-import { cadencePitchClasses, planHarmonyMisfits, planKeyAt, positionClass } from './harmony.js';
+import { cadencePitchClasses, planHarmonyMisfits, planKeyAt } from './harmony.js';
+import { positionClass } from './internal.js';
 import { planChordTimeline } from './timeline.js';
 import {
   type CompositionPlan,
@@ -644,7 +645,8 @@ function planDensity(plan: CompositionPlan): { onsets: number; onsetDensity: num
  * @example
  * ```ts
  * import { evaluateComposition, planTimeline, resolveKey } from '@libraz/libcantus';
- * const plan = {
+ * import type { CompositionPlan } from '@libraz/libcantus';
+ * const plan: CompositionPlan = {
  *   planVersion: 1, seed: 0, algorithmVersion: 1,
  *   keys: [resolveKey('C major')],
  *   meters: [{ startBeat: 0, ts: { numerator: 4, denominator: 4 } }],

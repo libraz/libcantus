@@ -19,7 +19,7 @@
  */
 
 import { barSpanOf } from '../../analyze/form/internal.js';
-import { ioiBinIndex, rhythmLevel } from '../../analyze/rhythm/index.js';
+import { ioiBinIndex, rhythmLevel } from '../../analyze/rhythm/internal.js';
 import type { ChordTimeline } from '../../analyze/timeline/index.js';
 import { InvalidInputError, NoSolutionError } from '../../core/errors/index.js';
 import { BEAT_EPS, barStartBeat, beatsPerBarAt } from '../../core/meter/index.js';
@@ -40,7 +40,8 @@ import {
   resolveContext,
 } from '../context/index.js';
 import { type MotifNote, motifToNoteEvents } from '../motif/index.js';
-import { cadencePitchClasses, planHarmonyMisfits, positionClass } from '../plan/harmony.js';
+import { cadencePitchClasses, planHarmonyMisfits } from '../plan/harmony.js';
+import { positionClass } from '../plan/internal.js';
 import { planChordTimeline } from '../plan/timeline.js';
 import type { CompositionPlan, PlannedChord, PlannedMotif, PlannedPhrase } from '../plan/types.js';
 import { plannedContourAt } from '../plan/types.js';
@@ -647,7 +648,8 @@ function chargePitchSearch(scene: Scene): void {
  * @example
  * ```ts
  * import { generateMelody, resolveKey } from '@libraz/libcantus';
- * const plan = {
+ * import type { CompositionPlan } from '@libraz/libcantus';
+ * const plan: CompositionPlan = {
  *   planVersion: 1, seed: 7, algorithmVersion: 1,
  *   keys: [resolveKey('C major')], meters: [{ startBeat: 0, ts: { numerator: 4, denominator: 4 } }],
  *   span: { startBeat: 0, endBeat: 8, bars: 2 },

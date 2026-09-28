@@ -15,7 +15,6 @@ import type { CadenceType } from '../../analyze/functional/cadence.js';
 import { keyLookup } from '../../analyze/keys/index.js';
 import type { ChordTimeline } from '../../analyze/timeline/index.js';
 import { analyzeVoice } from '../../analyze/voice/index.js';
-import { type MeterMap, metricWeight } from '../../core/meter/index.js';
 import { chordPitchClasses } from '../../theory/chord/index.js';
 import {
   isScaleTone,
@@ -23,6 +22,7 @@ import {
   scaleOf,
   scaleTonesInDegreeOrder,
 } from '../../theory/scale/index.js';
+import { positionClass } from './internal.js';
 import { planChordTimeline } from './timeline.js';
 import type { CompositionPlan } from './types.js';
 
@@ -37,9 +37,6 @@ const HARMONY_OK_KINDS = new Set([
   'neighbor',
 ]);
 
-/** Metric weight from which a pulse counts as strong. */
-const STRONG_WEIGHT = 2;
-
 /** Scale degrees a phrase's closing note may take, by cadence type. */
 const CADENCE_DEGREES = {
   authentic: [1, 3],
@@ -51,21 +48,6 @@ const CADENCE_DEGREES = {
 
 /** A note as the harmony reading sees it. */
 type LineNote = { pitch: number; startBeat: number; durationBeat: number };
-
-/** How a position stands in the bar: a strong pulse, a weak pulse, or off the pulses. */
-export type PositionClass = 'strong' | 'weak' | 'off';
-
-/**
- * The class of a position under a meter map.
- *
- * @param beat The position, in quarter-note beats.
- * @param meters The meter map.
- * @returns `'strong'` from metric weight 2, `'weak'` at weight 1, `'off'` at 0.
- */
-export function positionClass(beat: number, meters: MeterMap): PositionClass {
-  const weight = metricWeight(beat, meters);
-  return weight >= STRONG_WEIGHT ? 'strong' : weight > 0 ? 'weak' : 'off';
-}
 
 /**
  * The key in force at a beat, read from the plan's own harmony rather than a
