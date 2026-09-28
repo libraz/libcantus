@@ -27,7 +27,7 @@ import {
   assertRange,
 } from '../../core/validation/index.js';
 import { BEAT_EPS, HUMANIZE_ADJACENCY } from '../adjacency.js';
-import { lastBarOf } from '../form/internal.js';
+import { barSpanOf, lastBarOf } from '../form/internal.js';
 import { barGridStart } from '../grid.js';
 
 /**
@@ -243,22 +243,6 @@ function tsKey(ts: TimeSignature): string {
     : `${ts.numerator}/${ts.denominator}:${ts.grouping.join('+')}`;
 }
 
-/**
- * The span's real length in bars: whole bars between the two ends plus the
- * fraction of beats each end bar actually holds, so a span cut mid-bar counts
- * that bar as a fraction rather than a whole one.
- */
-function realBars(startBeat: number, endBeat: number, meters: MeterMap): number {
-  const firstBar = barIndexAt(startBeat, meters);
-  const lastBar = barIndexAt(endBeat, meters);
-  const fractionOf = (beat: number, bar: number): number => {
-    const barStart = barPositionToBeat({ bar, beat: 0 }, meters);
-    const barLength = beatsPerBarAt(barStart, meters);
-    return barLength > 0 ? (beat - barStart) / barLength : 0;
-  };
-  return lastBar - firstBar + fractionOf(endBeat, lastBar) - fractionOf(startBeat, firstBar);
-}
-
 /** The pulse and first-subdivision beats of one bar, in bar order. */
 function barGridBeats(bar: number, meters: MeterMap): number[] {
   const barStart = barPositionToBeat({ bar, beat: 0 }, meters);
@@ -414,7 +398,7 @@ export function analyzeRhythm(
   const endBeat = Math.max(startBeat, opts.totalBeats ?? lastEnd);
   assertRange(endBeat, 0, Number.MAX_SAFE_INTEGER, 'rhythm totalBeats');
 
-  const bars = realBars(startBeat, endBeat, meters);
+  const bars = barSpanOf(startBeat, endBeat, meters);
   assertGenerationBudget(Math.ceil(bars) * 48, 'rhythm analysis slots', opts.budget);
 
   const onsets = foldOnsets(sounding);

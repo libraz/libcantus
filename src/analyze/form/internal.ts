@@ -9,11 +9,35 @@
  */
 
 import type { MeterLike } from '../../core/meter/index.js';
-import { barIndexAt, barPositionToBeat } from '../../core/meter/index.js';
+import { barIndexAt, barPositionToBeat, beatsPerBarAt } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import { assertGenerationBudget } from '../../core/validation/index.js';
 import { BEAT_EPS } from '../adjacency.js';
 import { windowWeights } from '../histogram.js';
+
+/**
+ * How many bars a span covers, in the meters in force across it.
+ *
+ * Counted bar line by bar line rather than by dividing the length by one bar,
+ * so a span inside a 3/4 stretch is six beats of two bars and not of one and a
+ * half. The whole bars between the two ends, plus the part of each end bar the
+ * span actually holds.
+ *
+ * @param startBeat First beat of the span.
+ * @param endBeat End of the span, exclusive.
+ * @param meter A single signature, or the piece's meter map.
+ * @returns The span's length in bars, fractional where an end falls mid-bar.
+ */
+export function barSpanOf(startBeat: number, endBeat: number, meter: MeterLike): number {
+  const firstBar = barIndexAt(startBeat, meter);
+  const lastBar = barIndexAt(endBeat, meter);
+  const partOf = (beat: number, bar: number): number => {
+    const barStart = barPositionToBeat({ bar, beat: 0 }, meter);
+    const barLength = beatsPerBarAt(barStart, meter);
+    return barLength > 0 ? (beat - barStart) / barLength : 0;
+  };
+  return lastBar - firstBar + partOf(endBeat, lastBar) - partOf(startBeat, firstBar);
+}
 
 /** Hold a score inside the [0, 1] range every confidence in this module reports. */
 export function clamp01(value: number): number {

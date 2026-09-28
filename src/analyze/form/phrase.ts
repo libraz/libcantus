@@ -42,7 +42,7 @@ import { assertChordTimeline, detectCadences, segmentStartingAt } from '../timel
 import type { KeyContext } from '../voice/index.js';
 import type { Hypermeter } from './hypermeter.js';
 import { hypermeter } from './hypermeter.js';
-import { clamp01, combineEvidence, sliceBars } from './internal.js';
+import { barSpanOf, clamp01, combineEvidence, sliceBars } from './internal.js';
 
 /**
  * A reason a phrase boundary was placed where it was.
@@ -422,26 +422,6 @@ function arrivalEnd(timeline: ChordTimeline, atBeat: number): number {
   return segmentStartingAt(timeline.segments, atBeat)?.endBeat ?? atBeat;
 }
 
-/**
- * How many bars a span covers, in the meters in force across it.
- *
- * Counted bar line by bar line rather than by dividing the length by one bar,
- * so a span inside a 3/4 stretch is six beats of two bars and not of one and a
- * half. The whole bars between the two ends, plus the part of each end bar the
- * span actually holds.
- */
-function barSpanOf(startBeat: number, endBeat: number, meters: MeterMap): number {
-  const firstBar = barIndexAt(startBeat, meters);
-  const lastBar = barIndexAt(endBeat, meters);
-  const partOf = (beat: number, bar: number): number => {
-    const barStart = barPositionToBeat({ bar, beat: 0 }, meters);
-    const barLength = beatsPerBarAt(barStart, meters);
-    return barLength > 0 ? (beat - barStart) / barLength : 0;
-  };
-  const bars = lastBar - firstBar + partOf(endBeat, lastBar) - partOf(startBeat, firstBar);
-  return Math.round(bars * 100) / 100;
-}
-
 /** The key context cadence detection is to be read against. */
 function keyContextFor(
   opts: PhraseOptions,
@@ -805,7 +785,7 @@ export function phrasesFromTimeline(
     // both halves of one fact and contradicts itself.
     const signals =
       cadence === null ? reading.signals.filter((signal) => signal !== 'cadence') : reading.signals;
-    const bars = barSpanOf(startBeat, endBeat, meters);
+    const bars = Math.round(barSpanOf(startBeat, endBeat, meters) * 100) / 100;
     phrases.push({
       startBeat,
       endBeat,
