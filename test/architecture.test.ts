@@ -315,6 +315,7 @@ const BEAT_TOLERANCE_HOMES = [
  * says what the quantity is.
  */
 const NOT_A_BEAT_TOLERANCE: Readonly<Record<string, string>> = {
+  MASS_TOLERANCE: 'the sum of a share distribution, not a position on the beat axis',
   SCORE_EPS: 'a sum of weighted preferences, not a position on the beat axis',
 };
 
