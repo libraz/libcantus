@@ -15,16 +15,20 @@
  * what they sound like.
  */
 
+import { HUMANIZE_ADJACENCY } from '../../analyze/adjacency.js';
 import type { CadenceType } from '../../analyze/functional/cadence.js';
 import type { HarmonicFunction } from '../../analyze/functional/function.js';
 import { chordToRoman } from '../../analyze/functional/roman.js';
 import type { MelodicContourShape } from '../../analyze/melody/contour.js';
+import type { MotifGraph, MotifGraphEdge } from '../../analyze/melody/graph.js';
+import type { MotifRelationSummary } from '../../analyze/melody/relation.js';
 import type { ReferenceProfile } from '../../analyze/reference/types.js';
 import { assertReferenceProfile } from '../../analyze/reference/validate.js';
 import { InvalidInputError } from '../../core/errors/index.js';
 import { BEAT_EPS, barStartBeat, beatsPerBarAt, type MeterMap } from '../../core/meter/index.js';
 import { spelledInterval, transposeByInterval } from '../../core/pitch/index.js';
 import {
+  assertGenerationBudget,
   assertMidiPitch,
   assertOptions,
   assertRange,
@@ -378,21 +382,113 @@ function sectionAt(sections: readonly PlannedSection[], beat: number): number | 
   return index < 0 ? null : index;
 }
 
-/** Index of the phrase holding a beat, else the last one starting before it, else 0. */
-function phraseAt(phrases: readonly PlannedPhrase[], beat: number): number {
-  const holding = phrases.findIndex(
-    (phrase) => beat >= phrase.startBeat - BEAT_EPS && beat < phrase.endBeat - BEAT_EPS,
+/** Index of the phrase that holds `[startBeat, endBeat)` whole, or -1. */
+function phraseHolding(
+  phrases: readonly PlannedPhrase[],
+  startBeat: number,
+  endBeat: number,
+): number {
+  return phrases.findIndex(
+    (phrase) => startBeat >= phrase.startBeat - BEAT_EPS && endBeat <= phrase.endBeat + BEAT_EPS,
   );
-  if (holding >= 0) {
-    return holding;
-  }
-  let before = 0;
-  phrases.forEach((phrase, index) => {
-    if (phrase.startBeat <= beat + BEAT_EPS) {
-      before = index;
+}
+
+/** A motif graph node that fits inside one plan phrase. */
+type MotifCandidate = {
+  node: number;
+  phrase: number;
+  startBeat: number;
+  endBeat: number;
+  notes: number;
+};
+
+/**
+ * The non-overlapping candidates that cover the most notes, by weighted
+ * interval scheduling. Among equal covers the one taking the earlier start,
+ * then the lower node index, at the first place they differ wins. Returned in
+ * node order.
+ */
+function scheduleMotifs(candidates: readonly MotifCandidate[]): MotifCandidate[] {
+  const order = [...candidates].sort((a, b) => a.startBeat - b.startBeat || a.node - b.node);
+  const count = order.length;
+  // First candidate at or after position `from` starting no earlier than `beat`.
+  const firstFrom = (from: number, beat: number): number => {
+    let low = from;
+    let high = count;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if ((order[mid] as MotifCandidate).startBeat < beat - BEAT_EPS) low = mid + 1;
+      else high = mid;
     }
-  });
-  return before;
+    return low;
+  };
+  const next = order.map((candidate, index) => firstFrom(index + 1, candidate.endBeat));
+  // best[k]: the most notes candidates k.. can cover.
+  const best = new Array<number>(count + 1).fill(0);
+  for (let index = count - 1; index >= 0; index -= 1) {
+    const taken = (order[index] as MotifCandidate).notes + (best[next[index] as number] as number);
+    best[index] = Math.max(best[index + 1] as number, taken);
+  }
+  const chosen: MotifCandidate[] = [];
+  let index = 0;
+  while (index < count) {
+    const candidate = order[index] as MotifCandidate;
+    if (candidate.notes + (best[next[index] as number] as number) === best[index]) {
+      chosen.push(candidate);
+      index = next[index] as number;
+    } else {
+      index += 1;
+    }
+  }
+  return chosen.sort((a, b) => a.node - b.node);
+}
+
+/**
+ * The derivation a selected node takes from its nearest selected ancestor. The
+ * parent's edge is used as is; across skipped nodes a path of repetitions and
+ * unstretched transpositions composes into one, any other path is a variation
+ * when the ancestor's motif has as many notes, and a root otherwise.
+ */
+function selectedDerivation(
+  graph: MotifGraph,
+  parentEdge: ReadonlyMap<number, MotifGraphEdge>,
+  selectedAt: ReadonlyMap<number, number>,
+  noteCount: (node: number) => number,
+  node: number,
+): { from: number | null; relation: MotifRelationSummary | null } {
+  let plain = true;
+  let semitones = 0;
+  let steps = 0;
+  for (let edge = parentEdge.get(node); edge !== undefined; edge = parentEdge.get(edge.from)) {
+    const relation = edge.relation;
+    steps += 1;
+    plain &&=
+      relation !== null &&
+      (relation.kind === 'repetition' ||
+        (relation.kind === 'transposition' && Math.abs(relation.timeRatio - 1) <= BEAT_EPS));
+    semitones += relation?.semitones ?? 0;
+    const from = selectedAt.get(edge.from);
+    if (from === undefined) continue;
+    if (steps === 1) {
+      return { from, relation: relation === null ? null : { ...relation } };
+    }
+    if (plain) {
+      const gap = (graph.nodes[node]?.startBeat ?? 0) - (graph.nodes[edge.from]?.endBeat ?? 0);
+      return {
+        from,
+        relation: {
+          kind: semitones === 0 ? 'repetition' : 'transposition',
+          sequence: gap >= -HUMANIZE_ADJACENCY && gap <= HUMANIZE_ADJACENCY,
+          semitones,
+          timeRatio: 1,
+        },
+      };
+    }
+    return noteCount(edge.from) === noteCount(node)
+      ? { from, relation: null }
+      : { from: null, relation: null };
+  }
+  return { from: null, relation: null };
 }
 
 /**
@@ -557,27 +653,44 @@ export function deriveCompositionPlan(
     },
   );
 
-  const { nodes, edges } = profile.melody.graph;
-  const parentEdge = new Map(edges.map((edge) => [edge.to, edge]));
-  const motifs: PlannedMotif[] = [];
-  nodes.forEach((node, index) => {
-    const edge = parentEdge.get(index);
-    const from = edge ? edge.from : null;
-    const cell = profile.melody.motifs[node.motif];
-    const notes =
-      from === null ? (cell?.intervals.length ?? 0) + 1 : (motifs[from] as PlannedMotif).notes;
+  const graph = profile.melody.graph;
+  const noteCount = (node: number) =>
+    (profile.melody.motifs[graph.nodes[node]?.motif ?? -1]?.intervals.length ?? 0) + 1;
+  assertGenerationBudget(graph.nodes.length * phrases.length, 'plan motif selection');
+  const candidates: MotifCandidate[] = [];
+  graph.nodes.forEach((node, index) => {
+    const phrase = phraseHolding(phrases, node.startBeat, node.endBeat);
+    if (phrase >= 0) {
+      candidates.push({
+        node: index,
+        phrase,
+        startBeat: node.startBeat,
+        endBeat: node.endBeat,
+        notes: noteCount(index),
+      });
+    }
+  });
+  const selected = scheduleMotifs(candidates);
+  const selectedAt = new Map(selected.map((candidate, index) => [candidate.node, index]));
+  const parentEdge = new Map(graph.edges.map((edge) => [edge.to, edge]));
+  const motifs: PlannedMotif[] = selected.map((candidate, index) => {
+    const { from, relation } = selectedDerivation(
+      graph,
+      parentEdge,
+      selectedAt,
+      noteCount,
+      candidate.node,
+    );
     const keepRelation = draw.prob(preserve.motifRelations, 'motifRelations', index);
-    const relation = edge?.relation && keepRelation ? { ...edge.relation } : null;
-    const phrase = phraseAt(phrases, node.startBeat);
-    phrases[phrase]?.motifs.push(index);
-    motifs.push({
-      phrase,
-      startBeat: node.startBeat,
-      endBeat: node.endBeat,
-      notes,
+    phrases[candidate.phrase]?.motifs.push(index);
+    return {
+      phrase: candidate.phrase,
+      startBeat: candidate.startBeat,
+      endBeat: candidate.endBeat,
+      notes: candidate.notes,
       from,
-      relation,
-    });
+      relation: keepRelation ? relation : null,
+    };
   });
 
   return {

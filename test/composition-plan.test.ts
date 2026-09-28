@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import type { MotifRelationSummary } from '../src/analyze/melody/relation.js';
 import {
   analyzeReference,
   assertReferenceProfile,
   type ReferenceProfile,
 } from '../src/analyze/reference/index.js';
-import { InvalidInputError } from '../src/core/errors/index.js';
+import { BudgetExceededError, InvalidInputError } from '../src/core/errors/index.js';
 import { createPositionalRng } from '../src/core/random/index.js';
 import { ALGORITHM_VERSION } from '../src/core/random/version.js';
 import { resolveContext } from '../src/generate/context/index.js';
@@ -68,6 +69,72 @@ const MAJOR_CANDIDATES: Record<string, string[]> = {
 };
 
 const NEUTRAL_ONSET_LEVELS = [0, 1 / 15, 2 / 15, 3 / 15, 4 / 15, 5 / 15];
+
+/** The motif graph node each plan statement was selected from, matched by span and note count. */
+function nodesOf(reference: ReferenceProfile, plan: CompositionPlan): number[] {
+  const { nodes } = reference.melody.graph;
+  return plan.motifs.map((motif) => {
+    const matches = nodes
+      .map((node, index) => ({ node, index }))
+      .filter(
+        ({ node }) =>
+          node.startBeat === motif.startBeat &&
+          node.endBeat === motif.endBeat &&
+          (reference.melody.motifs[node.motif]?.intervals.length ?? -1) + 1 === motif.notes,
+      );
+    expect(matches).toHaveLength(1);
+    return matches[0]?.index ?? -1;
+  });
+}
+
+/**
+ * The derivation a selected node should carry: the nearest selected ancestor,
+ * with the edge's own relation when that ancestor is the parent, a composed
+ * repetition or transposition when only those lie between, a variation when
+ * the ancestor's motif has as many notes, and a root otherwise.
+ */
+function expectedDerivation(
+  reference: ReferenceProfile,
+  selected: readonly number[],
+  node: number,
+): { from: number | null; relation: MotifRelationSummary | null } {
+  const { nodes, edges } = reference.melody.graph;
+  const parent = (index: number) => edges.find((edge) => edge.to === index);
+  const path: (MotifRelationSummary | null)[] = [];
+  let edge = parent(node);
+  while (edge !== undefined) {
+    path.push(edge.relation);
+    const at = selected.indexOf(edge.from);
+    if (at >= 0) {
+      if (path.length === 1) return { from: at, relation: edge.relation };
+      const plain = path.every(
+        (r) =>
+          r !== null &&
+          (r.kind === 'repetition' || (r.kind === 'transposition' && r.timeRatio === 1)),
+      );
+      if (plain) {
+        const semitones = path.reduce((sum, r) => sum + (r?.semitones ?? 0), 0);
+        const gap = (nodes[node]?.startBeat ?? 0) - (nodes[edge.from]?.endBeat ?? 0);
+        return {
+          from: at,
+          relation: {
+            kind: semitones === 0 ? 'repetition' : 'transposition',
+            sequence: Math.abs(gap) <= 0.05,
+            semitones,
+            timeRatio: 1,
+          },
+        };
+      }
+      const size = (index: number) =>
+        reference.melody.motifs[nodes[index]?.motif ?? -1]?.intervals.length;
+      return size(edge.from) === size(node)
+        ? { from: at, relation: null }
+        : { from: null, relation: null };
+    }
+    edge = parent(edge.from);
+  }
+  return { from: null, relation: null };
+}
 
 describe('deriveCompositionPlan: determinism and serialization', () => {
   it('returns deep-equal plans for the same reference, seed and options', () => {
@@ -170,20 +237,8 @@ describe('deriveCompositionPlan: preserve all 1', () => {
           roman: c.roman,
         })),
       );
-      const { nodes, edges } = reference.melody.graph;
-      expect(plan.motifs).toHaveLength(nodes.length);
-      plan.motifs.forEach((motif, index) => {
-        const node = nodes[index];
-        const edge = edges.find((e) => e.to === index);
-        expect(motif.startBeat).toBe(node?.startBeat);
-        expect(motif.endBeat).toBe(node?.endBeat);
-        expect(motif.from).toBe(edge ? edge.from : null);
-        expect(motif.relation).toEqual(edge ? edge.relation : null);
-        const phrase = plan.phrases[motif.phrase];
-        expect(phrase?.motifs).toContain(index);
-        expect(motif.startBeat).toBeGreaterThanOrEqual(phrase?.startBeat ?? Number.NaN);
-        expect(motif.startBeat).toBeLessThan(phrase?.endBeat ?? Number.NaN);
-      });
+      // Which graph nodes become statements is covered under motif selection.
+      expect(plan.motifs.length).toBeGreaterThan(0);
       expect(plan.rhythm).toEqual({
         onsetLevels: reference.melody.rhythm.onsetLevels,
         interOnsetShares: reference.melody.rhythm.interOnsetShares,
@@ -192,16 +247,12 @@ describe('deriveCompositionPlan: preserve all 1', () => {
     });
   }
 
-  it('gives a derived motif the note count of its root', () => {
+  it('gives every statement the note count of its own motif', () => {
     const plan = deriveCompositionPlan(SOURCE);
+    const nodes = nodesOf(SOURCE, plan);
     plan.motifs.forEach((motif, index) => {
-      const node = SOURCE.melody.graph.nodes[index];
-      if (motif.from === null) {
-        const cell = SOURCE.melody.motifs[node?.motif ?? -1];
-        expect(motif.notes).toBe((cell?.intervals.length ?? Number.NaN) + 1);
-      } else {
-        expect(motif.notes).toBe(plan.motifs[motif.from]?.notes);
-      }
+      const cell = SOURCE.melody.motifs[SOURCE.melody.graph.nodes[nodes[index] ?? -1]?.motif ?? -1];
+      expect(motif.notes).toBe((cell?.intervals.length ?? Number.NaN) + 1);
     });
   });
 });
@@ -339,13 +390,14 @@ describe('deriveCompositionPlan: discrete replacement rules', () => {
   it('phraseLengths: cuts a phrase straddling a section boundary before rounding', () => {
     const plan = deriveCompositionPlan(UNRELATED, { preserve: onlyReplacing('phraseLengths') });
     // Parts [0, 9) 3 bars, [9, 12) 1 bar, [12, 24) 4 bars: the first rounds to
-    // 4 bars and fills section A, which leaves no room for the second.
+    // 4 bars and fills section A, which leaves no room for the second. The
+    // statement at beats 9-15 crosses the cut at 12 and is not selected.
     expect(plan.phrases.map((p) => [p.startBeat, p.endBeat, p.section, p.cadence])).toEqual([
       [0, 12, 0, 'authentic'],
       [12, 24, 1, 'authentic'],
     ]);
-    expect(plan.motifs.map((m) => m.phrase)).toEqual([0, 0]);
-    expect(plan.phrases.map((p) => p.motifs)).toEqual([[0, 1], []]);
+    expect(plan.motifs.map((m) => m.phrase)).toEqual([0]);
+    expect(plan.phrases.map((p) => p.motifs)).toEqual([[0], []]);
   });
 
   it('harmonicFunction: replaces structural numerals only, by the positional pick', () => {
@@ -411,6 +463,102 @@ describe('deriveCompositionPlan: discrete replacement rules', () => {
       }
     });
     expect({ ...plan, motifs: kept.motifs, seed: 2 }).toEqual(kept);
+  });
+});
+
+describe('deriveCompositionPlan: motif selection', () => {
+  const references = [
+    ['source', SOURCE],
+    ['same structure', SAME_STRUCTURE],
+    ['transposed', TRANSPOSED],
+    ['unrelated', UNRELATED],
+  ] as const;
+  for (const [name, reference] of references) {
+    it(`selects non-overlapping statements inside one phrase each (${name})`, () => {
+      const plan = deriveCompositionPlan(reference, { ctx: 1 });
+      const nodes = nodesOf(reference, plan);
+      expect(plan.motifs.length).toBeGreaterThan(0);
+      plan.motifs.forEach((motif, index) => {
+        const phrase = plan.phrases[motif.phrase];
+        expect(motif.startBeat).toBeGreaterThanOrEqual(phrase?.startBeat ?? Number.NaN);
+        expect(motif.endBeat).toBeLessThanOrEqual(phrase?.endBeat ?? Number.NaN);
+        const next = plan.motifs[index + 1];
+        if (next) expect(next.startBeat).toBeGreaterThanOrEqual(motif.endBeat);
+        const derivation = expectedDerivation(reference, nodes, nodes[index] ?? -1);
+        expect({ from: motif.from, relation: motif.relation }, `motif ${index}`).toEqual(
+          derivation,
+        );
+        if (motif.from !== null) expect(motif.from).toBeLessThan(index);
+      });
+      plan.phrases.forEach((phrase, index) => {
+        expect(phrase.motifs).toEqual(
+          plan.motifs.flatMap((motif, at) => (motif.phrase === index ? [at] : [])),
+        );
+      });
+    });
+  }
+
+  it('covers SOURCE with the hook statements derived from earlier ones', () => {
+    const plan = deriveCompositionPlan(SOURCE, { ctx: 1 });
+    // Each A unit is covered by two eight-note cells around the four-note hook
+    // at bar five and one more cell; the bridge by its three- and four-note
+    // figures. The hook at bar five of the first unit is a root: its only
+    // ancestor, the hook at beat 0, lies inside the selected cell 0-8.
+    const summary = plan.motifs.map((m) => [
+      m.startBeat,
+      m.endBeat,
+      m.notes,
+      m.from,
+      m.relation?.kind ?? null,
+      m.relation?.semitones ?? null,
+    ]);
+    expect(summary).toEqual([
+      [0, 8, 8, null, null, null],
+      [8, 16, 8, 0, null, null],
+      [16, 20, 4, null, null, null],
+      [20, 28, 8, 0, null, null],
+      [32, 40, 8, 0, null, null],
+      [40, 48, 8, 1, 'repetition', 0],
+      // Hook down a fourth, through the unselected hook at beat 32.
+      [48, 52, 4, 2, 'transposition', -5],
+      [52, 60, 8, 3, 'repetition', 0],
+      // The bridge inverts the transposed hook around its top note.
+      [64, 68, 4, 6, 'inversion', 5],
+      [69, 73, 4, 8, null, null],
+      [73, 76, 3, null, null, null],
+      [76, 79, 3, null, null, null],
+      [80, 84, 4, 8, 'repetition', 0],
+      [85, 89, 4, 9, 'transposition', -2],
+      [90, 96, 3, null, null, null],
+      [96, 104, 8, 0, 'repetition', 0],
+      [104, 112, 8, 5, 'repetition', 0],
+      [112, 116, 4, 6, 'transposition', 5],
+      [116, 124, 8, 7, 'repetition', 0],
+    ]);
+    expect(plan.motifs.every((m) => m.relation?.sequence !== true)).toBe(true);
+    expect(plan.phrases.map((p) => p.motifs)).toEqual([
+      [0, 1, 2, 3],
+      [4, 5, 6, 7],
+      [8, 9, 10, 11, 12, 13, 14],
+      [15, 16, 17, 18],
+    ]);
+  });
+
+  it('keeps no statement that crosses a phrase boundary', () => {
+    // UNRELATED's second statement (beats 9-15) crosses the section cut at 12.
+    const plan = deriveCompositionPlan(UNRELATED, { ctx: 1 });
+    expect(plan.motifs.map((m) => [m.startBeat, m.endBeat])).toEqual([[0, 5]]);
+    expect(plan.motifs[0]?.from).toBeNull();
+  });
+
+  it('refuses a containment check over the budget', () => {
+    const node = SOURCE.melody.graph.nodes[0];
+    const crowded = edited(SOURCE, (p) => {
+      p.melody.graph.edges = [];
+      p.melody.graph.nodes = Array.from({ length: 250_001 }, () => ({ ...(node as never) }));
+    });
+    expect(() => deriveCompositionPlan(crowded)).toThrow(BudgetExceededError);
+    expect(() => deriveCompositionPlan(crowded)).toThrow(/plan motif selection/);
   });
 });
 
