@@ -66,20 +66,46 @@ function eightBarHarmony(at: number): NoteEvent[] {
 }
 
 /**
- * Eight bars of melody over {@link eightBarHarmony}: `hook` stated and
- * restated in bars one and five, connecting figures in between, closing on a
- * held tonic in the last bar.
+ * The figures an eight-bar melody fills around its hook with: one for each
+ * bar the hook does not take (bar six restates bar two's), and the held pitch
+ * of the closing bar.
  */
-function eightBarMelody(at: number, hook: readonly number[]): NoteEvent[] {
+type EightBarFillers = {
+  readonly second: readonly number[];
+  readonly third: readonly number[];
+  readonly fourth: readonly number[];
+  readonly seventh: readonly number[];
+  readonly close: number;
+};
+
+/** The source song's fillers: stepwise figures closing on a held tonic. */
+const SOURCE_FILLERS: EightBarFillers = {
+  second: [79, 77, 76, 74],
+  third: [72, 76, 79, 77],
+  fourth: [76, 74, 72, 74],
+  seventh: [72, 74, 76, 79],
+  close: 72,
+};
+
+/**
+ * Eight bars of melody over {@link eightBarHarmony}: `hook` stated and
+ * restated in bars one and five, the fillers in between, closing on a held
+ * pitch in the last bar.
+ */
+function eightBarMelody(
+  at: number,
+  hook: readonly number[],
+  fillers: EightBarFillers = SOURCE_FILLERS,
+): NoteEvent[] {
   return [
     ...run(hook, at),
-    ...run([79, 77, 76, 74], at + 4),
-    ...run([72, 76, 79, 77], at + 8),
-    ...run([76, 74, 72, 74], at + 12),
+    ...run(fillers.second, at + 4),
+    ...run(fillers.third, at + 8),
+    ...run(fillers.fourth, at + 12),
     ...run(hook, at + 16),
-    ...run([79, 77, 76, 74], at + 20),
-    ...run([72, 74, 76, 79], at + 24),
-    note(72, at + 28, 4),
+    ...run(fillers.second, at + 20),
+    ...run(fillers.seventh, at + 24),
+    note(fillers.close, at + 28, 4),
   ];
 }
 
@@ -90,9 +116,9 @@ const HOOK_A_TRANSPOSED = HOOK_A.map((pitch) => pitch - 5);
 /** `A` inverted around its own first note. */
 const HOOK_A_INVERTED = HOOK_A.map((pitch) => 2 * (HOOK_A[0] ?? 0) - pitch);
 
-/** One eight-bar unit: harmony plus a melody built on the given hook. */
-function unit(at: number, hook: readonly number[]): NoteEvent[] {
-  return [...eightBarHarmony(at), ...eightBarMelody(at, hook)];
+/** One eight-bar unit: harmony plus a melody built on the given hook and fillers. */
+function unit(at: number, hook: readonly number[], fillers?: EightBarFillers): NoteEvent[] {
+  return [...eightBarHarmony(at), ...eightBarMelody(at, hook, fillers)];
 }
 
 /**
@@ -114,61 +140,98 @@ function bridgeHarmony(at: number): NoteEvent[] {
 }
 
 /**
- * Eight bars of melody for the bridge: the inverted hook stated in bars one
- * and five, each followed by its own filler rather than a shared one, so the
- * two statements never extend into a matching longer cell; a lower, falling
- * contour contrasts with {@link eightBarMelody}'s register; the close holds a
- * tone of the bridge's closing `V`.
+ * The figures a bridge melody fills around its inverted hook with, one for
+ * each bar the hook does not take, and the held pitch of the closing bar.
  */
-function bridgeMelody(at: number, invertedHook: readonly number[]): NoteEvent[] {
+type BridgeFillers = {
+  readonly second: readonly number[];
+  readonly third: readonly number[];
+  readonly fourth: readonly number[];
+  readonly sixth: readonly number[];
+  readonly seventh: readonly number[];
+  readonly close: number;
+};
+
+/**
+ * The source song's bridge fillers: each hook statement is followed by its own
+ * filler rather than a shared one, so the two statements never extend into a
+ * matching longer cell; a lower, falling contour contrasts with the A units'
+ * register; the close holds a tone of the bridge's closing `V`.
+ */
+const SOURCE_BRIDGE_FILLERS: BridgeFillers = {
+  second: [65, 62, 59, 55],
+  third: [57, 60, 64, 67],
+  fourth: [64, 67, 71, 69],
+  sixth: [64, 60, 57, 53],
+  seventh: [55, 59, 62, 65],
+  close: 62,
+};
+
+/** Eight bars of melody for the bridge: the inverted hook stated in bars one and five. */
+function bridgeMelody(
+  at: number,
+  invertedHook: readonly number[],
+  fillers: BridgeFillers = SOURCE_BRIDGE_FILLERS,
+): NoteEvent[] {
   return [
     ...run(invertedHook, at),
-    ...run([65, 62, 59, 55], at + 4),
-    ...run([57, 60, 64, 67], at + 8),
-    ...run([64, 67, 71, 69], at + 12),
+    ...run(fillers.second, at + 4),
+    ...run(fillers.third, at + 8),
+    ...run(fillers.fourth, at + 12),
     ...run(invertedHook, at + 16),
-    ...run([64, 60, 57, 53], at + 20),
-    ...run([55, 59, 62, 65], at + 24),
-    note(62, at + 28, 4),
+    ...run(fillers.sixth, at + 20),
+    ...run(fillers.seventh, at + 24),
+    note(fillers.close, at + 28, 4),
   ];
 }
 
 /** One eight-bar bridge unit: contrasting harmony plus a melody on the inverted hook. */
-function bridgeUnit(at: number, invertedHook: readonly number[]): NoteEvent[] {
-  return [...bridgeHarmony(at), ...bridgeMelody(at, invertedHook)];
+function bridgeUnit(
+  at: number,
+  invertedHook: readonly number[],
+  fillers?: BridgeFillers,
+): NoteEvent[] {
+  return [...bridgeHarmony(at), ...bridgeMelody(at, invertedHook, fillers)];
 }
+
+/** Everything an AABA song is built from: the hook in its three forms and both units' fillers. */
+type AabaMaterial = {
+  readonly hook: readonly number[];
+  readonly transposedHook: readonly number[];
+  readonly invertedHook: readonly number[];
+  readonly fillers?: EightBarFillers;
+  readonly bridgeFillers?: BridgeFillers;
+};
 
 /**
  * The notes of an AABA song built from a hook: the first two eight-bar units
  * state it plain, then transposed; the third is the contrasting bridge, which
  * states it inverted; the fourth returns to it plain.
  */
-function aabaNotes(
-  hook: readonly number[],
-  transposedHook: readonly number[],
-  invertedHook: readonly number[],
-): NoteEvent[] {
+function aabaNotes(m: AabaMaterial): NoteEvent[] {
   return [
-    ...unit(0, hook),
-    ...unit(32, transposedHook),
-    ...bridgeUnit(64, invertedHook),
-    ...unit(96, hook),
+    ...unit(0, m.hook, m.fillers),
+    ...unit(32, m.transposedHook, m.fillers),
+    ...bridgeUnit(64, m.invertedHook, m.bridgeFillers),
+    ...unit(96, m.hook, m.fillers),
   ];
 }
 
 /** The melody alone of {@link aabaNotes}. */
-function aabaMelody(
-  hook: readonly number[],
-  transposedHook: readonly number[],
-  invertedHook: readonly number[],
-): NoteEvent[] {
+function aabaMelody(m: AabaMaterial): NoteEvent[] {
   return [
-    ...eightBarMelody(0, hook),
-    ...eightBarMelody(32, transposedHook),
-    ...bridgeMelody(64, invertedHook),
-    ...eightBarMelody(96, hook),
+    ...eightBarMelody(0, m.hook, m.fillers),
+    ...eightBarMelody(32, m.transposedHook, m.fillers),
+    ...bridgeMelody(64, m.invertedHook, m.bridgeFillers),
+    ...eightBarMelody(96, m.hook, m.fillers),
   ];
 }
+
+const SOURCE_MATERIAL: AabaMaterial = {
+  hook: HOOK_A,
+  transposedHook: HOOK_A_TRANSPOSED,
+  invertedHook: HOOK_A_INVERTED,
+};
 
 /**
  * The "source song": four eight-bar phrases in AABA form, 4/4. The A units
@@ -179,31 +242,54 @@ function aabaMelody(
  */
 export const SOURCE_SONG: ReferenceFixture = {
   name: 'source song (AABA, C major)',
-  notes: aabaNotes(HOOK_A, HOOK_A_TRANSPOSED, HOOK_A_INVERTED),
-  melody: aabaMelody(HOOK_A, HOOK_A_TRANSPOSED, HOOK_A_INVERTED),
+  notes: aabaNotes(SOURCE_MATERIAL),
+  melody: aabaMelody(SOURCE_MATERIAL),
   meters: '4/4',
   key: 'C major',
   phraseBoundaries: [0, 32, 64, 96, 128],
 };
 
 /**
- * The hook of {@link SAME_STRUCTURE_SONG}: the same rhythm as `HOOK_A`, an
- * unrelated interval sequence (a rising third and a falling second, where
- * `HOOK_A` is a stepwise rise).
+ * The material of {@link SAME_STRUCTURE_SONG}. Every figure, the hook
+ * included, has the source figure's rhythm and place in the song but its own
+ * intervals: where the source moves by step, this one leaps, mostly the other
+ * way. Each source interval is answered by the same replacement wherever it
+ * occurs within a unit, so a figure recurs exactly where its source figure
+ * does and nowhere else, and the hook's transposition and inversion stand in
+ * the same relation to it as in the source song.
  */
-const HOOK_C = [72, 76, 79, 77];
-const HOOK_C_TRANSPOSED = HOOK_C.map((pitch) => pitch - 5);
-const HOOK_C_INVERTED = HOOK_C.map((pitch) => 2 * (HOOK_C[0] ?? 0) - pitch);
+const HOOK_C = [79, 74, 69, 77];
+const SAME_STRUCTURE_MATERIAL: AabaMaterial = {
+  hook: HOOK_C,
+  transposedHook: HOOK_C.map((pitch) => pitch - 5),
+  // Inverted around its first note, then set two octaves down into the bridge's register.
+  invertedHook: HOOK_C.map((pitch) => 2 * (HOOK_C[0] ?? 0) - pitch - 24),
+  fillers: {
+    second: [72, 77, 69, 74],
+    third: [79, 75, 72, 77],
+    fourth: [69, 74, 79, 74],
+    seventh: [79, 74, 69, 66],
+    close: 72,
+  },
+  bridgeFillers: {
+    second: [62, 65, 68, 72],
+    third: [67, 64, 60, 57],
+    fourth: [60, 57, 53, 58],
+    sixth: [60, 64, 67, 71],
+    seventh: [66, 62, 59, 56],
+    close: 59,
+  },
+};
 
 /**
  * "Same structure, different song": the identical form, rhythm, harmony and
- * motif relations as {@link SOURCE_SONG} — only the hook's own intervals
- * differ.
+ * motif relations as {@link SOURCE_SONG} — only the motifs' intervals differ,
+ * the hook's and the fillers' alike.
  */
 export const SAME_STRUCTURE_SONG: ReferenceFixture = {
-  name: 'same-structure song (AABA, C major, a different hook)',
-  notes: aabaNotes(HOOK_C, HOOK_C_TRANSPOSED, HOOK_C_INVERTED),
-  melody: aabaMelody(HOOK_C, HOOK_C_TRANSPOSED, HOOK_C_INVERTED),
+  name: 'same-structure song (AABA, C major, different motif intervals)',
+  notes: aabaNotes(SAME_STRUCTURE_MATERIAL),
+  melody: aabaMelody(SAME_STRUCTURE_MATERIAL),
   meters: '4/4',
   key: 'C major',
   phraseBoundaries: [0, 32, 64, 96, 128],
