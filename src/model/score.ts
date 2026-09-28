@@ -54,9 +54,17 @@ import {
 } from '../core/tempo/index.js';
 import type { NoteEvent } from '../core/types.js';
 import { assertFiniteNumber, assertRange } from '../core/validation/index.js';
-import type { GrooveTemplate, HumanizeOptions, OrnamentOptions } from '../generate/index.js';
+import type {
+  CompositionEvaluation,
+  CompositionPlan,
+  EvaluateCompositionOptions,
+  GrooveTemplate,
+  HumanizeOptions,
+  OrnamentOptions,
+} from '../generate/index.js';
 import {
   applyGrooveTemplate,
+  evaluateComposition,
   extractGrooveTemplate,
   humanize,
   ornament,
@@ -928,6 +936,28 @@ export class Score {
       key: this.key(),
       ...opts,
     });
+  }
+
+  /**
+   * How this score, read as a melody, keeps to a composition plan.
+   *
+   * @param plan The plan the melody was written for.
+   * @param opts The budget; see {@link EvaluateCompositionOptions}.
+   * @returns The violations found and the fit reading; see {@link
+   *   evaluateComposition}.
+   * @example
+   * ```ts
+   * import { Composer, Score } from '@libraz/libcantus';
+   * const notes = [60, 62, 64, 65, 67, 65, 64, 62, 60, 62, 64, 65, 67, 65, 64, 60].map(
+   *   (pitch, startBeat) => ({ pitch, startBeat, durationBeat: 1 }),
+   * );
+   * const composer = Composer.of({ key: 'C major', seed: 5 });
+   * const plan = composer.plan(Score.of(notes, { key: 'C major' }).reference());
+   * composer.melody(plan).evaluate(plan).violations.some((v) => v.severity === 'error'); // false
+   * ```
+   */
+  evaluate(plan: CompositionPlan, opts?: EvaluateCompositionOptions): CompositionEvaluation {
+    return evaluateComposition(this.#data.notes, plan, opts);
   }
 
   /**

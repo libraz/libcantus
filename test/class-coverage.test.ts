@@ -25,6 +25,7 @@ const NOT_A_CLASS_METHOD: Readonly<Record<string, string>> = {
   assertNoteEvent: 'validator for a caller boundary',
   assertVocabulary: 'validator for a caller boundary',
   assertReferenceProfile: 'validator for a caller boundary',
+  assertCompositionPlan: 'validator for a caller boundary',
   clampToMidi: 'repairs a raw number at a caller boundary',
   dropSilentNotes: 'repairs an imported event array before it is material',
   soundingNotesOnly: 'the other name of dropSilentNotes',
@@ -173,6 +174,8 @@ const NOT_A_CLASS_METHOD: Readonly<Record<string, string>> = {
   // compareMelodies does; a reference profile carries no class of its own for
   // either side to hang off.
   compareReferences: 'compares two plain records; no receiver on either side',
+  // A composition plan is a plain record with no value class to hang off.
+  planTimeline: 'reads a plain plan record; no value class holds a plan',
 };
 
 /**

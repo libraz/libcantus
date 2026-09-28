@@ -630,6 +630,9 @@ describe('methods offer the options their delegate accepts', () => {
       "the harmony is the arrangement's own session analysis, never inferred a second time",
     'Arrangement.reference.totalBeats':
       "the arrangement's own span; a caller wanting another calls analyzeReference directly",
+    'Composer.plan.ctx':
+      "the composer's own seed and algorithm version are the context the plan records",
+    'Composer.melody.ctx': "the plan's own seed and algorithm version are its reproduction recipe",
   };
 
   it.each(delegations)(

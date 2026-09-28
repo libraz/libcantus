@@ -10,6 +10,7 @@ import {
   analyzeVoice,
   availableTensions,
   avoidNotes,
+  BudgetExceededError,
   beatsPerBar,
   beatsToDuration,
   beatsToSeconds,
@@ -35,7 +36,9 @@ import {
   chordToneRole,
   chordToRoman,
   createNoteEventIndex,
+  createPositionalRng,
   Duration,
+  deriveCompositionPlan,
   detectCadence,
   detectCadences,
   detectChord,
@@ -53,6 +56,7 @@ import {
   edo,
   enharmonicKeyOf,
   enumerateSafePitches,
+  evaluateComposition,
   evaluateSafety,
   explainRoman,
   extractMotifs,
@@ -70,6 +74,7 @@ import {
   generateBassLine,
   generateCounterMelody,
   generateDrums,
+  generateMelody,
   generateMotif,
   generateProgression,
   generateRhythm,
@@ -78,6 +83,7 @@ import {
   hypermeter,
   Instrument,
   Interval,
+  InvalidInputError,
   instrumentRange,
   intervalSemitones,
   isBorrowedChord,
@@ -203,6 +209,11 @@ const PHRASE: NoteEvent[] = [
   { pitch: 62, startBeat: 8, durationBeat: 4, velocity: 90 },
   { pitch: 60, startBeat: 12, durationBeat: 4, velocity: 100 },
 ];
+
+/** A melody with one repeated figure, for the composition-plan cases. */
+const PLAN_LINE = [60, 62, 64, 65, 67, 65, 64, 62, 60, 62, 64, 65, 67, 65, 64, 60].map(
+  (pitch, startBeat) => ({ pitch, startBeat, durationBeat: 1 }),
+);
 
 /** Two parts that sound together, for the arrangement cases. */
 const PARTS = [
@@ -565,6 +576,33 @@ describe('Composer', () => {
     // The chord grid is the caller's: at one chord per bar there are fewer of
     // them than the default half-bar grid gives.
     expect(harmonized.chords.length).toBeLessThan(composer.harmonize(melody).chords.length);
+  });
+
+  it('derives the plan the planner derives, in its own key and under its own seed', () => {
+    const reference = Score.of(PLAN_LINE, { key: KEY }).reference();
+    const opts = { preserve: { rhythm: 0 }, budget: 10_000 };
+    const plan = composer.plan(reference, opts);
+    expect(plan).toEqual(deriveCompositionPlan(reference, { ...opts, key: KEY, ctx: CTX }));
+    expect(plan).not.toEqual(composer.plan(reference));
+    expect(composer.plan(reference, { key: 'D major' })).toEqual(
+      deriveCompositionPlan(reference, { key: 'D major', ctx: CTX }),
+    );
+    expect(() => composer.plan(reference, { budget: 1 })).toThrow(BudgetExceededError);
+    expect(() => composer.with({ rng: createPositionalRng(1) }).plan(reference)).toThrow(
+      InvalidInputError,
+    );
+  });
+
+  it('writes the melody the generator writes to the same plan', () => {
+    const plan = composer.plan(Score.of(PLAN_LINE, { key: KEY }).reference());
+    const opts = { budget: 1_000_000 };
+    const written = composer.melody(plan, opts);
+    expect(written.notes).toEqual(inScoreOrder(generateMelody(plan, opts)));
+    expect(written.meters).toEqual(plan.meters);
+    expect(written.key()?.data).toEqual(plan.keys[0]);
+    // The plan's seed is the recipe; the composer's does not reach the melody.
+    expect(composer.withSeed(SEED + 1).melody(plan).notes).toEqual(written.notes);
+    expect(() => composer.melody(plan, { budget: 1 })).toThrow(BudgetExceededError);
   });
 });
 
@@ -1147,6 +1185,13 @@ describe('Score', () => {
       motifGraph(score.notes, extractMotifs(score.notes, opts), { key: score.key(), ...opts }),
     );
     expect(score.motifGraph(opts)).not.toEqual(score.motifGraph());
+  });
+
+  it('measures itself against a plan the way evaluateComposition measures its notes', () => {
+    const plan = deriveCompositionPlan(Score.of(PLAN_LINE, { key: 'C major' }).reference());
+    const opts = { budget: 1_000_000 };
+    expect(score.evaluate(plan, opts)).toEqual(evaluateComposition(score.notes, plan, opts));
+    expect(() => score.evaluate(plan, { budget: 1 })).toThrow(BudgetExceededError);
   });
 
   it('performs the notes the way the generators perform them, under one seed', () => {

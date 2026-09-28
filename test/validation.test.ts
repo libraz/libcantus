@@ -76,13 +76,14 @@ import {
   transformMotif,
 } from '../src/generate/motif/index.js';
 import { ornament } from '../src/generate/ornament/index.js';
+import { type CompositionPlan, evaluateComposition } from '../src/generate/plan/index.js';
 import { generateProgression } from '../src/generate/progression/index.js';
 import { generateRhythm } from '../src/generate/rhythm/index.js';
 import * as api from '../src/index.js';
 import { Arrangement, Motif, Note, Score } from '../src/model/index.js';
 import { makeChord } from '../src/theory/chord/index.js';
 import { NoteSafety, ReasonFlag } from '../src/theory/safety/index.js';
-import { majorKey, scaleByName } from '../src/theory/scale/index.js';
+import { majorKey, resolveKey, scaleByName } from '../src/theory/scale/index.js';
 import { parseChordSymbol } from '../src/theory/symbol/index.js';
 import { filesUnder, ROOT, SRC } from './support/source-files.js';
 
@@ -428,6 +429,7 @@ const NOTE_EVENT_VALIDATION_COVERAGE: Readonly<Record<string, readonly string[]>
     'transformMotif',
   ],
   'src/generate/ornament/index.ts:ornament': ['ornament'],
+  'src/generate/plan/evaluate.ts:evaluateComposition': ['evaluateComposition'],
   // One reader for the three class paths that keep a caller's array as what a
   // class is made of, so all three are measured by the entrances below.
   'src/model/shared.ts:assertNoteEventArray': ['arrangementOf', 'motifOf', 'scoreOf'],
@@ -448,6 +450,35 @@ function noteEventEntries(events: NoteEvent[]): Record<string, () => unknown> {
   const timeline = chordTimelineFromNotes(valid).timeline;
   const chord = makeChord(0, 'maj');
   const key = majorKey(0);
+  const plan: CompositionPlan = {
+    planVersion: 1,
+    seed: 0,
+    algorithmVersion: 1,
+    keys: [resolveKey('C major')],
+    meters: [{ startBeat: 0, ts: fourFour }],
+    span: { startBeat: 0, endBeat: 4, bars: 1 },
+    sections: [{ label: 'A', startBeat: 0, endBeat: 4 }],
+    phrases: [
+      {
+        startBeat: 0,
+        endBeat: 4,
+        section: 0,
+        cadence: null,
+        shape: 'arch',
+        peakPosition: 0.5,
+        register: { low: 48, high: 84, mean: 66 },
+        onsetDensity: 1,
+        motifs: [],
+      },
+    ],
+    harmony: [{ startBeat: 0, endBeat: 4, key: 0, roman: 'I' }],
+    motifs: [],
+    rhythm: {
+      onsetLevels: [0, 0, 0, 0, 0, 1],
+      interOnsetShares: new Array(17).fill(1 / 17),
+      syncopation: 0,
+    },
+  };
   return {
     analyzeArrangement: () => analyzeArrangement([{ notes: events }]),
     analyzeReference: () => analyzeReference(events),
@@ -462,6 +493,7 @@ function noteEventEntries(events: NoteEvent[]): Record<string, () => unknown> {
     classifyMelodyTones: () => classifyMelodyTones(events, fourFour),
     createNoteEventIndex: () => createNoteEventIndex(events),
     detectKeyFromNotes: () => detectKeyFromNotes(events),
+    evaluateComposition: () => evaluateComposition(events, plan),
     developMotif: () => developMotif({ notes: events }, analysis.timeline, key, 1, '4/4'),
     extractGrooveTemplate: () => extractGrooveTemplate(events, fourFour),
     generateCounterMelody: () =>

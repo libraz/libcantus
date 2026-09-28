@@ -1,3 +1,4 @@
+import type { ReferenceProfile } from '../analyze/reference/index.js';
 import type { ChordTimeline } from '../analyze/timeline/index.js';
 import { InvalidInputError } from '../core/errors/index.js';
 import type { InstrumentProfile, InstrumentProfileLike } from '../core/instrument/profile.js';
@@ -16,6 +17,10 @@ import type { DrumsOptions } from '../generate/drums/index.js';
 import { generateDrums } from '../generate/drums/index.js';
 import type { HarmonizeOptions } from '../generate/harmonize/index.js';
 import { harmonizeMelody } from '../generate/harmonize/index.js';
+import type { MelodyOptions } from '../generate/melody/index.js';
+import { generateMelody } from '../generate/melody/index.js';
+import type { CompositionPlan, CompositionPlanOptions } from '../generate/plan/index.js';
+import { deriveCompositionPlan } from '../generate/plan/index.js';
 import type { ProgressionOptions } from '../generate/progression/index.js';
 import { generateProgression } from '../generate/progression/index.js';
 import type { Vocabulary } from '../generate/vocabulary/types.js';
@@ -535,6 +540,76 @@ export class Composer {
       melody: Score.of(moved.notes, this.#scoreOptions(result.key)),
       transposeSemitones: result.transposeSemitones,
     };
+  }
+
+  /**
+   * A composition plan derived from a reference profile.
+   *
+   * The composer's key is the plan's home key unless `opts.key` names another,
+   * and its seed and algorithm version are the ones the plan records, so the
+   * plan is written under the same recipe as the composer's other parts.
+   *
+   * @param reference The reference profile to derive from.
+   * @param opts Everything {@link deriveCompositionPlan} takes but the context,
+   *   which is the composer's.
+   * @returns The plan.
+   * @throws If the composer draws from a caller-held `rng`: a plan records its
+   *   seed, and a source cannot be written into it.
+   * @example
+   * ```ts
+   * import { Composer, Score } from '@libraz/libcantus';
+   * const notes = [60, 62, 64, 65, 67, 65, 64, 62, 60, 62, 64, 65, 67, 65, 64, 60].map(
+   *   (pitch, startBeat) => ({ pitch, startBeat, durationBeat: 1 }),
+   * );
+   * const reference = Score.of(notes, { key: 'C major' }).reference();
+   * const plan = Composer.of({ key: 'D major', seed: 5 }).plan(reference);
+   * plan.seed; // 5
+   * plan.keys[0].scale.rootPc; // 2
+   * ```
+   */
+  plan(reference: ReferenceProfile, opts?: Omit<CompositionPlanOptions, 'ctx'>): CompositionPlan {
+    const ctx = this.context;
+    if (ctx.rng !== undefined) {
+      throw new InvalidInputError(
+        'composer plan cannot record a caller-held rng; give the composer a seed instead',
+      );
+    }
+    return deriveCompositionPlan(reference, {
+      ...(this.#key === undefined ? {} : { key: this.#key }),
+      ...opts,
+      ctx,
+    });
+  }
+
+  /**
+   * A melody written to a composition plan.
+   *
+   * The plan is the reproduction recipe, so its seed and algorithm version are
+   * the ones the melody is drawn under, not the composer's. The score is read
+   * in the plan's meter and home key, at the composer's tempo.
+   *
+   * @param plan The plan to follow.
+   * @param opts The budget; see {@link MelodyOptions}.
+   * @returns The melody, as a score.
+   * @example
+   * ```ts
+   * import { Composer, Score } from '@libraz/libcantus';
+   * const notes = [60, 62, 64, 65, 67, 65, 64, 62, 60, 62, 64, 65, 67, 65, 64, 60].map(
+   *   (pitch, startBeat) => ({ pitch, startBeat, durationBeat: 1 }),
+   * );
+   * const composer = Composer.of({ key: 'C major', seed: 5 });
+   * const plan = composer.plan(Score.of(notes, { key: 'C major' }).reference());
+   * composer.melody(plan).notes.length > 0; // true
+   * ```
+   */
+  melody(plan: CompositionPlan, opts?: Omit<MelodyOptions, 'ctx'>): Score {
+    // Generated first: the generator is what validates the plan read below.
+    const notes = generateMelody(plan, opts);
+    const score: ScoreOptions = { meters: plan.meters, key: plan.keys[0] as ResolvedKey };
+    if (this.#options.bpm !== undefined) {
+      score.tempo = this.#options.bpm;
+    }
+    return Score.of(notes, score);
   }
 
   /**

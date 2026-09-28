@@ -26,14 +26,17 @@ import { generateDrums } from '../src/generate/drums/index.js';
 import { placeDrumPattern } from '../src/generate/drums/vocabulary.js';
 import { applyGrooveTemplate } from '../src/generate/groove/index.js';
 import { harmonizeMelody } from '../src/generate/harmonize/index.js';
+import { generateMelody } from '../src/generate/melody/index.js';
 import { developMotif, generateMotif } from '../src/generate/motif/index.js';
+import type { CompositionPlan } from '../src/generate/plan/index.js';
+import { deriveCompositionPlan, evaluateComposition } from '../src/generate/plan/index.js';
 import { generateRhythm } from '../src/generate/rhythm/index.js';
 import { Score } from '../src/model/index.js';
 import { makeChord } from '../src/theory/chord/index.js';
 import { scalesForChanges } from '../src/theory/chordscale/index.js';
 import type { SafetyQuery } from '../src/theory/safety/index.js';
 import { evaluateSafety } from '../src/theory/safety/index.js';
-import { majorKey } from '../src/theory/scale/index.js';
+import { majorKey, resolveKey } from '../src/theory/scale/index.js';
 import { voiceChord, voiceProgression } from '../src/theory/voicing/satb.js';
 import { SOURCE_SONG } from './support/reference-fixtures.js';
 import { filesUnder, SRC, TESTS } from './support/source-files.js';
@@ -191,6 +194,48 @@ function safetyQuery(otherVoices: { pitch: number }[]): SafetyQuery {
     key: C_MAJOR,
     otherVoices,
     strongBeat: true,
+  };
+}
+
+/** The source song's reference profile, as the plan guards read it. */
+function sourceReference(): ReturnType<typeof analyzeReference> {
+  return analyzeReference(SOURCE_SONG.notes, {
+    meters: SOURCE_SONG.meters,
+    key: SOURCE_SONG.key,
+    melody: SOURCE_SONG.melody,
+  });
+}
+
+/** A one-phrase, motif-free plan over eight bars of C major in the given register. */
+function freePlan(register: { low: number; high: number }, onsetDensity: number): CompositionPlan {
+  return {
+    planVersion: 1,
+    seed: 0,
+    algorithmVersion: 1,
+    keys: [resolveKey('C major')],
+    meters: [{ startBeat: 0, ts: { numerator: 4, denominator: 4 } }],
+    span: { startBeat: 0, endBeat: 32, bars: 8 },
+    sections: [{ label: 'A', startBeat: 0, endBeat: 32 }],
+    phrases: [
+      {
+        startBeat: 0,
+        endBeat: 32,
+        section: 0,
+        cadence: null,
+        shape: 'arch',
+        peakPosition: 0.6,
+        register: { ...register, mean: (register.low + register.high) / 2 },
+        onsetDensity,
+        motifs: [],
+      },
+    ],
+    harmony: [{ startBeat: 0, endBeat: 32, key: 0, roman: 'I' }],
+    motifs: [],
+    rhythm: {
+      onsetLevels: [0, 1, 2, 3, 4, 5].map((level) => level / 15),
+      interOnsetShares: new Array(17).fill(1 / 17),
+      syncopation: 0,
+    },
   };
 }
 
@@ -450,13 +495,30 @@ const REACHES: readonly { label: string; run: () => unknown }[] = [
     // The source song's structural chords against themselves; a budget of one
     // cell admits none of the alignment.
     run: () => {
-      const profile = analyzeReference(SOURCE_SONG.notes, {
-        meters: SOURCE_SONG.meters,
-        key: SOURCE_SONG.key,
-        melody: SOURCE_SONG.melody,
-      });
+      const profile = sourceReference();
       return compareReferences(profile, profile, { budget: 1 });
     },
+  },
+  {
+    label: 'plan motif selection',
+    // The source song's graph nodes against its phrases; a budget of one pair
+    // admits none of them.
+    run: () => deriveCompositionPlan(sourceReference(), { budget: 1 }),
+  },
+  {
+    label: 'melody pitch search',
+    // Thirty-two searched notes over a three-octave register.
+    run: () => generateMelody(freePlan({ low: 48, high: 84 }, 4), { budget: 100 }),
+  },
+  {
+    label: 'melody onset slots',
+    // One searched note on one pitch (9 states) but 128 sixteenth slots to draw from.
+    run: () => generateMelody(freePlan({ low: 60, high: 60 }, 0.1), { budget: 100 }),
+  },
+  {
+    label: 'evaluated melody count',
+    // Two notes against a budget of one: the melody is refused before it is read.
+    run: () => evaluateComposition(run(2), freePlan({ low: 60, high: 72 }, 1), { budget: 1 }),
   },
 ];
 

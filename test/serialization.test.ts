@@ -8,6 +8,8 @@ import type { NoteEvent } from '../src/core/types.js';
 import { resolveContext } from '../src/generate/context/index.js';
 import { generateDrums } from '../src/generate/drums/index.js';
 import { humanize } from '../src/generate/groove/index.js';
+import { assertCompositionPlan, deriveCompositionPlan } from '../src/generate/plan/index.js';
+import { SOURCE_SONG } from './support/reference-fixtures.js';
 
 /** What a host does to a value on its way into a project file and back out. */
 function roundTrip<T>(value: T): T {
@@ -37,6 +39,22 @@ describe('results are plain data', () => {
     // a round trip rather than only the fields another test happens to check.
     const profile = analyzeReference(notes, { key: 'C major' });
     expect(roundTrip(profile)).toEqual(profile);
+  });
+
+  it('serializes a composition plan and reads it back as a valid plan', () => {
+    const reference = analyzeReference(SOURCE_SONG.notes, {
+      meters: SOURCE_SONG.meters,
+      key: SOURCE_SONG.key,
+      melody: SOURCE_SONG.melody,
+    });
+    const plan = deriveCompositionPlan(reference, { ctx: { seed: 1 } });
+    // A root keeps its onset gaps, so the round trip covers them too.
+    expect(plan.motifs.some((motif) => motif.rhythm !== null && motif.rhythm.length > 0)).toBe(
+      true,
+    );
+    const restored = roundTrip(plan);
+    expect(restored).toEqual(plan);
+    expect(assertCompositionPlan(restored)).toEqual(plan);
   });
 
   it('serializes every reported field of an analysis and reads it back unchanged', () => {

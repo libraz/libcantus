@@ -36,6 +36,7 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { isLibcantusError } from '../src/core/errors/index.js';
 import * as api from '../src/index.js';
+import { SOURCE_SONG } from './support/reference-fixtures.js';
 
 const ROOT = resolve(__dirname, '..');
 const ENTRY = resolve(ROOT, 'src/index.ts');
@@ -65,6 +66,20 @@ const UNFILLABLE = Symbol('unfillable');
  */
 const SEEDS = ['C', '4/4', 'M3', 'I', '6'] as const;
 
+/** The source song's plan, with root onset gaps, derived once and copied per use. */
+let cachedPlan: api.CompositionPlan | undefined;
+function sourcePlan(): api.CompositionPlan {
+  cachedPlan ??= api.deriveCompositionPlan(
+    api.analyzeReference(SOURCE_SONG.notes, {
+      meters: SOURCE_SONG.meters,
+      key: SOURCE_SONG.key,
+      melody: SOURCE_SONG.melody,
+    }),
+    { ctx: { seed: 1 } },
+  );
+  return cachedPlan;
+}
+
 /**
  * Shapes the package is asked to build, for positions whose fields have to
  * agree with one another.
@@ -87,6 +102,7 @@ const SEEDS = ['C', '4/4', 'M3', 'I', '6'] as const;
  * correctly. One that rescues nothing is a stale entry, and is asserted against.
  */
 const TYPED_SEEDS: Readonly<Record<string, () => unknown>> = {
+  deriveCompositionPlan: () => structuredClone(sourcePlan()),
   majorKey: () => api.majorKey(0),
   resolveKey: () => api.resolveKey('C'),
   parseInterval: () => api.parseInterval('M3'),

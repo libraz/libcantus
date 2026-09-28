@@ -5,7 +5,26 @@
 
 // Types from the layers below that this layer's own signatures name, so a
 // consumer importing only `@libraz/libcantus/generate` can still spell them.
+export type { FormSection } from '../analyze/form/index.js';
+export type { CadenceType } from '../analyze/functional/cadence.js';
 export type { BorrowedSource, HarmonicFunction } from '../analyze/functional/index.js';
+export type { MotifGraph, MotifGraphEdge, MotifGraphNode } from '../analyze/melody/graph.js';
+export type { MelodicContourShape } from '../analyze/melody/index.js';
+export type { MotifRelationSummary } from '../analyze/melody/relation.js';
+export type { ReductionLevel } from '../analyze/reduction/index.js';
+export type {
+  ReferenceCadence,
+  ReferenceChord,
+  ReferenceForm,
+  ReferenceHarmony,
+  ReferenceKeyRegion,
+  ReferenceMelody,
+  ReferenceMotif,
+  ReferencePhrase,
+  ReferencePhraseMelody,
+  ReferenceProfile,
+} from '../analyze/reference/index.js';
+export type { BarPositionProfile, RhythmAnalysis } from '../analyze/rhythm/index.js';
 export type { ChordSegment, ChordTimeline } from '../analyze/timeline/index.js';
 export type {
   Articulation,
@@ -132,6 +151,8 @@ export type {
   MelodyToneRole,
 } from './harmonize/index.js';
 export { classifyMelodyTones, harmonizeMelody } from './harmonize/index.js';
+export type { MelodyOptions } from './melody/index.js';
+export { generateMelody } from './melody/index.js';
 export type {
   MotifCell,
   MotifContour,
@@ -147,6 +168,26 @@ export {
 } from './motif/index.js';
 export type { OrnamentOptions, OrnamentStyle } from './ornament/index.js';
 export { ORNAMENT_STYLES, ornament } from './ornament/index.js';
+export type {
+  CompositionEvaluation,
+  CompositionPlan,
+  CompositionPlanOptions,
+  CompositionViolation,
+  EvaluateCompositionOptions,
+  PlannedChord,
+  PlannedMotif,
+  PlannedPhrase,
+  PlannedRhythm,
+  PlannedSection,
+  PreserveWeights,
+} from './plan/index.js';
+export {
+  assertCompositionPlan,
+  COMPOSITION_PLAN_VERSION,
+  deriveCompositionPlan,
+  evaluateComposition,
+  planTimeline,
+} from './plan/index.js';
 export type {
   ProgFunction,
   ProgressionDegree,
