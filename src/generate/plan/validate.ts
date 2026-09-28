@@ -12,7 +12,7 @@ import { MELODIC_CONTOUR_SHAPES } from '../../analyze/melody/contour.js';
 import { MOTIF_RELATION_KINDS, type MotifRelationSummary } from '../../analyze/melody/relation.js';
 import { RHYTHM_IOI_BINS } from '../../analyze/rhythm/index.js';
 import { InvalidInputError } from '../../core/errors/index.js';
-import type { MeterMap } from '../../core/meter/index.js';
+import { BEAT_EPS, type MeterMap } from '../../core/meter/index.js';
 import { ALGORITHM_VERSION, MIN_ALGORITHM_VERSION } from '../../core/random/version.js';
 import {
   assertArray,
@@ -247,6 +247,30 @@ function assertPlannedMotif(
     throw new InvalidInputError(
       `${name}.relation must be null for a root motif (from = null); received a relation`,
     );
+  }
+  const rhythm = assertNullable(read.rhythm, `${name}.rhythm`, (v, n) => assertArray<number>(v, n));
+  if (rhythm !== null) {
+    if (from !== null) {
+      throw new InvalidInputError(`${name}.rhythm must be null for a derived statement`);
+    }
+    if (rhythm.length !== read.notes - 1) {
+      throw new InvalidInputError(
+        `${name}.rhythm must hold notes - 1 (${read.notes - 1}) gaps; received ${rhythm.length}`,
+      );
+    }
+    let total = 0;
+    for (let index = 0; index < rhythm.length; index += 1) {
+      const gap = assertFiniteNumber(rhythm[index] as number, `${name}.rhythm[${index}]`);
+      if (gap <= 0) {
+        throw new InvalidInputError(`${name}.rhythm[${index}] must be positive; received ${gap}`);
+      }
+      total += gap;
+    }
+    if (total >= endBeat - startBeat - BEAT_EPS) {
+      throw new InvalidInputError(
+        `${name}.rhythm must sum to less than the statement's length (${endBeat - startBeat}); received ${total}`,
+      );
+    }
   }
   return read;
 }

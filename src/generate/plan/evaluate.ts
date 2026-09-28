@@ -1,47 +1,43 @@
 /**
  * Checking a candidate melody against the plan it was written for.
  *
- * The candidate is read with the plan's own harmony injected — a monophonic
- * line cannot be re-analyzed into the chords that judge it, so `planTimeline`
- * stands in for inference the way an arrangement's `timeline` option does. What
- * comes back is never one score: a list of concrete violations (which are
- * errors and which are only warnings), and a fit reading per structural
- * dimension, each measured the way {@link compareReferences} measures two
+ * The candidate is read against the plan itself, never re-analyzed: its
+ * phrases are the plan's phrases, its harmony is the plan's through
+ * `planTimeline`, and its derivations are replayed from the candidate's own
+ * source statements. What comes back is never one score: a list of concrete
+ * violations (which are errors and which are only warnings), and a fit reading
+ * per dimension, each measured the way {@link compareReferences} measures two
  * profiles against each other. Whether the piece is any good is left to the ear.
  */
 
 import { BEAT_EPS } from '../../analyze/adjacency.js';
 import { barSpanOf } from '../../analyze/form/internal.js';
-import { functionOf } from '../../analyze/functional/function.js';
-import { romanToChord } from '../../analyze/functional/roman.js';
-import type { MotifGraph, MotifGraphEdge, MotifGraphNode } from '../../analyze/melody/graph.js';
+import { DEFAULT_VARIATION_THRESHOLD } from '../../analyze/melody/graph.js';
+import type { MotifRelationSummary } from '../../analyze/melody/relation.js';
 import { melodicSimilarity } from '../../analyze/melody/similarity.js';
 import {
-  analyzeReference,
   type ContourPhrase,
-  cadenceSimilarity,
   contourSimilarity,
+  densitySimilarity,
   durationSimilarity,
-  motifStructureSimilarity,
   onsetSimilarity,
-  type ProgressionChord,
-  phraseLengthSimilarity,
-  progressionSimilarity,
-  type ReferencePhrase,
   type RegisterPhrase,
   type RegisterPlan,
   registerSimilarity,
-  sectionSequenceSimilarity,
   syncopationSimilarity,
-} from '../../analyze/reference/index.js';
-import type { BarPositionProfile } from '../../analyze/rhythm/index.js';
+} from '../../analyze/reference/measures.js';
+import { phraseMelody } from '../../analyze/reference/profile.js';
+import type { ReferencePhraseMelody } from '../../analyze/reference/types.js';
+import { analyzeRhythm, type BarPositionProfile } from '../../analyze/rhythm/index.js';
+import type { ChordTimeline } from '../../analyze/timeline/index.js';
 import { meterAt, pulseBeats } from '../../core/meter/index.js';
-import type { NoteEvent } from '../../core/types.js';
-import { assertOptions } from '../../core/validation/index.js';
-import { type ResolvedKey, scaleOf } from '../../theory/scale/index.js';
-import { deriveStatement } from '../melody/derive.js';
+import { pitchClassOf } from '../../core/pitch/index.js';
+import type { KeyScale, NoteEvent } from '../../core/types.js';
+import { assertNoteEvents, assertOptions } from '../../core/validation/index.js';
+import { scaleOf } from '../../theory/scale/index.js';
+import { clipStatement, relationLevels, replayAt } from '../melody/derive.js';
 import type { MotifNote } from '../motif/index.js';
-import { planHarmonyMisfits, planKeyAt } from './harmony.js';
+import { cadencePitchClasses, planHarmonyMisfits, planKeyAt, positionClass } from './harmony.js';
 import {
   type CompositionPlan,
   type PlannedMotif,
@@ -51,14 +47,6 @@ import {
 } from './types.js';
 import { assertCompositionPlan } from './validate.js';
 
-/**
- * `melodicSimilarity` a derivation with no named transformation must clear to
- * count as a variation rather than a broken derivation; matches
- * {@link motifGraph}'s own default.
- */
-const VARIATION_THRESHOLD = 0.75;
-/** Share of pitches a named derivation must keep once harmony repair has had its say. */
-const DERIVED_PITCH_THRESHOLD = 0.75;
 /** How far a phrase's actual peak position may drift from the planned one before it warns. */
 const PEAK_POSITION_TOLERANCE = 0.2;
 /** Sample points an outline is read at, matching {@link ReferencePhraseMelody.outline}. */
@@ -79,7 +67,7 @@ export type CompositionViolation = {
     | 'cadence'
     | 'harmony'
     | 'motifDerivation'
-    | 'motifRepaired'
+    | 'motifDisplaced'
     | 'register'
     | 'peakPosition';
   /** Whether this rules the candidate out, or only flags it. */
@@ -106,21 +94,11 @@ export type CompositionViolation = {
 export type CompositionEvaluation = {
   /** Concrete departures from the plan, error and warning alike. */
   violations: CompositionViolation[];
-  /** Likeness of the candidate to the plan, one field per structural dimension. */
+  /** Likeness of the candidate to the plan, one field per dimension, each phrase read over its planned span. */
   fit: {
-    /** Likeness of the section-label sequences. */
-    sectionSequence: number | null;
-    /** Likeness of the phrase-length sequences. */
-    phraseLength: number | null;
-    /** Likeness of the structural Roman-numeral progressions. */
-    progression: number | null;
-    /** Likeness of the phrase-by-phrase cadence sequences. */
-    cadence: number | null;
-    /** Likeness of how the motifs derive from one another. */
-    motifStructure: number | null;
-    /** Likeness of the phrases' melodic outlines. */
+    /** Likeness of the phrases' melodic outlines to their planned shapes. */
     contour: number | null;
-    /** Likeness of the phrases' registers. */
+    /** Likeness of the phrases' registers to the planned ones. */
     register: number | null;
     /** Likeness of where the melody's onsets fall. */
     onset: number | null;
@@ -128,6 +106,8 @@ export type CompositionEvaluation = {
     duration: number | null;
     /** Likeness of the melody's syncopation. */
     syncopation: number | null;
+    /** Likeness of the melody's onsets per bar to the phrases' planned densities. */
+    density: number | null;
   };
 };
 
@@ -211,86 +191,6 @@ function phraseBoundaryViolations(
   return violations;
 }
 
-/** The candidate phrase whose end lands within `tolerance` of a planned phrase's end, if any. */
-function matchingPhrase(
-  phrase: PlannedPhrase,
-  candidatePhrases: readonly ReferencePhrase[],
-  tolerance: number,
-): ReferencePhrase | undefined {
-  let best: ReferencePhrase | undefined;
-  let bestDistance = Number.POSITIVE_INFINITY;
-  for (const candidate of candidatePhrases) {
-    const distance = Math.abs(candidate.endBeat - phrase.endBeat);
-    if (distance < bestDistance) {
-      best = candidate;
-      bestDistance = distance;
-    }
-  }
-  return best !== undefined && bestDistance <= tolerance ? best : undefined;
-}
-
-/**
- * Every planned cadence a matched candidate phrase closes on differently.
- *
- * A plan phrase the candidate's own phrasing has no matching phrase for has
- * no candidate cadence to compare, and is skipped.
- */
-function cadenceViolations(
-  plan: CompositionPlan,
-  candidatePhrases: readonly ReferencePhrase[],
-): CompositionViolation[] {
-  const violations: CompositionViolation[] = [];
-  for (const phrase of plan.phrases) {
-    if (phrase.cadence === null) {
-      continue;
-    }
-    const tolerance = pulseBeats(meterAt(phrase.endBeat, plan.meters));
-    const match = matchingPhrase(phrase, candidatePhrases, tolerance);
-    if (match === undefined) {
-      continue;
-    }
-    const actual = match.cadence?.type ?? null;
-    if (actual !== phrase.cadence) {
-      violations.push({
-        kind: 'cadence',
-        severity: 'error',
-        atBeat: phrase.endBeat,
-        expected: phrase.cadence,
-        actual: actual ?? 'none',
-        rationale: `the phrase ending at beat ${phrase.endBeat} is planned to close on a ${phrase.cadence} cadence`,
-      });
-    }
-  }
-  return violations;
-}
-
-/** Every planned peak position a matched candidate phrase drifts from by more than the tolerance. */
-function peakPositionWarnings(
-  plan: CompositionPlan,
-  candidatePhrases: readonly ReferencePhrase[],
-): CompositionViolation[] {
-  const violations: CompositionViolation[] = [];
-  for (const phrase of plan.phrases) {
-    const tolerance = pulseBeats(meterAt(phrase.endBeat, plan.meters));
-    const match = matchingPhrase(phrase, candidatePhrases, tolerance);
-    if (match?.melody == null) {
-      continue;
-    }
-    const drift = Math.abs(match.melody.peakPosition - phrase.peakPosition);
-    if (drift > PEAK_POSITION_TOLERANCE) {
-      violations.push({
-        kind: 'peakPosition',
-        severity: 'warning',
-        atBeat: phrase.startBeat,
-        expected: `a peak position within ${PEAK_POSITION_TOLERANCE} of ${phrase.peakPosition}`,
-        actual: `${match.melody.peakPosition}`,
-        rationale: `the phrase starting at beat ${phrase.startBeat} places its melodic peak further from the planned position than the tolerance allows`,
-      });
-    }
-  }
-  return violations;
-}
-
 /** Whether the candidate's last note runs past the plan's span. */
 function spanViolation(
   melody: readonly NoteEvent[],
@@ -312,27 +212,93 @@ function spanViolation(
   ];
 }
 
-/** Every pulse-level note that does not fit the planned harmony, read by {@link planHarmonyMisfits}. */
+/** A phrase's notes, as indices into the time-ordered candidate, one list per planned phrase. */
+function phraseLines(melody: readonly NoteEvent[], plan: CompositionPlan): number[][] {
+  return plan.phrases.map((phrase) =>
+    melody.flatMap((note, index) =>
+      note.startBeat >= phrase.startBeat - BEAT_EPS && note.startBeat < phrase.endBeat - BEAT_EPS
+        ? [index]
+        : [],
+    ),
+  );
+}
+
+/**
+ * Every planned cadence whose phrase does not close on a tone the cadence
+ * allows: the closing note is the phrase's latest onset, read against the
+ * cadence's degrees in the key of the chord sounding there.
+ */
+function cadenceViolations(
+  melody: readonly NoteEvent[],
+  plan: CompositionPlan,
+  timeline: ChordTimeline,
+  lines: readonly number[][],
+): CompositionViolation[] {
+  const violations: CompositionViolation[] = [];
+  plan.phrases.forEach((phrase, index) => {
+    if (phrase.cadence === null) {
+      return;
+    }
+    const last = lines[index]?.at(-1);
+    const note = last === undefined ? undefined : melody[last];
+    const allowed =
+      note === undefined ? [] : cadencePitchClasses(plan, timeline, phrase.cadence, note.startBeat);
+    if (note !== undefined && (allowed === null || allowed.includes(pitchClassOf(note.pitch)))) {
+      return;
+    }
+    violations.push({
+      kind: 'cadence',
+      severity: 'error',
+      atBeat: phrase.endBeat,
+      expected: `a closing note on pitch class ${(allowed ?? []).join(' or ')} for a ${phrase.cadence} cadence`,
+      actual: note === undefined ? 'no note' : `pitch ${note.pitch}`,
+      rationale: `the phrase ending at beat ${phrase.endBeat} is planned to close on a ${phrase.cadence} cadence`,
+    });
+  });
+  return violations;
+}
+
+/**
+ * Every note that does not fit the planned harmony, read phrase by phrase by
+ * {@link planHarmonyMisfits}. A misfit inside a derived statement is only a
+ * warning: the transformation takes precedence over the harmony there.
+ */
 function harmonyViolations(
   melody: readonly NoteEvent[],
   plan: CompositionPlan,
+  timeline: ChordTimeline,
+  lines: readonly number[][],
 ): CompositionViolation[] {
-  const misfits = planHarmonyMisfits(plan)(melody);
+  const misfits = planHarmonyMisfits(plan, timeline);
   const violations: CompositionViolation[] = [];
-  misfits.forEach((kinds, index) => {
-    if (kinds === null) {
-      return;
-    }
-    const note = melody[index] as NoteEvent;
-    violations.push({
-      kind: 'harmony',
-      severity: 'error',
-      atBeat: note.startBeat,
-      expected: 'a chord tone, suspension, appoggiatura, or anticipation',
-      actual: kinds.length === 0 ? 'no harmonic label' : kinds.join(', '),
-      rationale: `the note at beat ${note.startBeat} does not fit the planned harmony`,
+  for (const line of lines) {
+    const read = misfits(line.map((index) => melody[index] as NoteEvent));
+    read.forEach((kinds, at) => {
+      if (kinds === null) {
+        return;
+      }
+      const note = melody[line[at] as number] as NoteEvent;
+      const derived = plan.motifs.some(
+        (motif) =>
+          motif.from !== null &&
+          note.startBeat >= motif.startBeat - BEAT_EPS &&
+          note.startBeat < motif.endBeat - BEAT_EPS,
+      );
+      const strong = positionClass(note.startBeat, plan.meters) === 'strong';
+      violations.push({
+        kind: 'harmony',
+        severity: derived ? 'warning' : 'error',
+        atBeat: note.startBeat,
+        expected: strong
+          ? 'a chord tone or an ornamental tone'
+          : 'a chord tone, an ornamental tone, or a scale tone',
+        actual: kinds.length === 0 ? 'no harmonic label' : kinds.join(', '),
+        rationale: derived
+          ? `the note at beat ${note.startBeat} sits in a derived statement, whose transformation takes precedence over the harmony`
+          : `the note at beat ${note.startBeat} does not fit the planned harmony`,
+      });
     });
-  });
+  }
   return violations;
 }
 
@@ -347,49 +313,101 @@ function notesInRange(
   );
 }
 
-/** Notes as a statement cut at `endBeat`: nothing sounds past the span it was taken from. */
-function cutStatement(notes: readonly MotifNote[], endBeat: number): MotifNote[] {
-  return notes.map((note) => ({
-    pitch: note.pitch,
-    startBeat: note.startBeat,
-    durationBeat: Math.min(note.durationBeat, endBeat - note.startBeat),
-  }));
-}
+/** A pitch level a derived statement replays its source at, and how many of its notes that leaves excused. */
+type Replay = { level: number; forced: number };
 
-/** How a derived statement compares with its expected notes: rhythm identical, and the share of pitches kept. */
-function compareStatements(
-  expected: readonly MotifNote[],
-  actual: readonly MotifNote[],
-): { rhythm: boolean; pitchShare: number } {
-  if (expected.length !== actual.length) {
-    return { rhythm: false, pitchShare: 0 };
-  }
-  let rhythm = true;
-  let kept = 0;
-  expected.forEach((want, index) => {
-    const got = actual[index] as MotifNote;
-    rhythm &&=
-      Math.abs(got.startBeat - want.startBeat) <= BEAT_EPS &&
-      Math.abs(got.durationBeat - want.durationBeat) <= BEAT_EPS;
-    kept += got.pitch === want.pitch ? 1 : 0;
+/**
+ * The pitch level nearest the planned one at which a derived statement's own
+ * notes replay its source, or null when none does. At a level, the replay must
+ * have as many notes and the same onset intervals, and every pitch must match
+ * unless it is excused: the derived phrase's closing note, a note replaying the
+ * source phrase's closing note, or — at a level leaving the fewest replayed
+ * pitches outside the derived phrase's register, the only levels a generator
+ * falls back to — a replayed pitch outside that register. Durations are not
+ * compared.
+ */
+function replayLevel(
+  source: readonly NoteEvent[],
+  derived: readonly NoteEvent[],
+  statement: PlannedMotif,
+  sourceEnd: number,
+  plan: CompositionPlan,
+  key: KeyScale,
+  closing: ReadonlySet<NoteEvent>,
+): Replay | null {
+  const relation = statement.relation as MotifRelationSummary;
+  const planned =
+    relation.kind === 'tonalTransposition' ? (relation.degrees ?? 0) : relation.semitones;
+  const { low, high } = (plan.phrases[statement.phrase] as PlannedPhrase).register;
+  const outside = (pitch: number) => pitch < low || pitch > high;
+  const backward = relation.kind === 'retrograde' || relation.kind === 'retrogradeInversion';
+  const cell = clipStatement(
+    source.map((note) => ({
+      pitch: note.pitch,
+      startBeat: note.startBeat,
+      durationBeat: note.durationBeat,
+    })),
+    sourceEnd,
+  );
+  const replays = relationLevels(relation.kind).map((level) => {
+    const notes = clipStatement(
+      replayAt(cell, relation, level, statement.startBeat, key),
+      statement.endBeat,
+    );
+    return { level, notes, outside: notes.filter((note) => outside(note.pitch)).length };
   });
-  return { rhythm, pitchShare: kept / expected.length };
+  const fewestOutside = Math.min(...replays.map((replay) => replay.outside));
+  let best: Replay | null = null;
+  for (const { level, notes: expected, outside: away } of replays) {
+    if (expected.length !== derived.length) {
+      continue;
+    }
+    let forced = 0;
+    let holds = true;
+    for (let i = 0; holds && i < expected.length; i += 1) {
+      const want = expected[i] as MotifNote;
+      const got = derived[i] as NoteEvent;
+      if (i > 0) {
+        const gap = got.startBeat - (derived[i - 1] as NoteEvent).startBeat;
+        holds =
+          Math.abs(gap - (want.startBeat - (expected[i - 1] as MotifNote).startBeat)) <= BEAT_EPS;
+      }
+      if (!holds || got.pitch === want.pitch) {
+        continue;
+      }
+      const origin = source[backward ? cell.length - 1 - i : i];
+      forced += 1;
+      holds =
+        closing.has(got) ||
+        (origin !== undefined && closing.has(origin)) ||
+        (away === fewestOutside && outside(want.pitch));
+    }
+    const distance = Math.abs(level - planned);
+    const nearer =
+      best === null ||
+      distance < Math.abs(best.level - planned) ||
+      (distance === Math.abs(best.level - planned) && level < best.level);
+    if (holds && nearer) {
+      best = { level, forced };
+    }
+  }
+  return best;
 }
 
 /**
- * Every planned derivation the candidate's own notes do not carry out. A named
- * relation is replayed on the candidate's source notes, the way generation
- * replays it: the derived notes must keep every onset and duration and at least
- * {@link DERIVED_PITCH_THRESHOLD} of the pitches, and a derivation that keeps
- * fewer than all of them warns that harmony repair bent it. A variation must be
- * alike enough to its source to count as one.
+ * Every planned derivation the candidate's own notes do not carry out, as an
+ * error, and every one carried out at another pitch level than planned or with
+ * excused notes, as a `motifDisplaced` warning. A variation must be alike
+ * enough to its source to count as one.
  */
 function motifDerivationViolations(
   melody: readonly NoteEvent[],
   plan: CompositionPlan,
-): CompositionViolation[] {
+  closing: ReadonlySet<NoteEvent>,
+): { errors: CompositionViolation[]; warnings: CompositionViolation[] } {
   const keyAt = planKeyAt(plan);
-  const violations: CompositionViolation[] = [];
+  const errors: CompositionViolation[] = [];
+  const warnings: CompositionViolation[] = [];
   for (const statement of plan.motifs) {
     if (statement.from === null) {
       continue;
@@ -398,62 +416,64 @@ function motifDerivationViolations(
     const sourceNotes = notesInRange(melody, source.startBeat, source.endBeat);
     const derivedNotes = notesInRange(melody, statement.startBeat, statement.endBeat);
     const relation = statement.relation;
-    let severity: CompositionViolation['severity'] | null = null;
-    let actual: string;
+    const rationale = `the statement at beat ${statement.startBeat} does not derive from its source the way the plan names`;
     if (sourceNotes.length === 0 || derivedNotes.length === 0) {
-      severity = 'error';
-      actual = 'no notes to compare';
-    } else if (relation === null) {
-      const similarity = melodicSimilarity(sourceNotes, derivedNotes);
-      severity = similarity < VARIATION_THRESHOLD ? 'error' : null;
-      actual = `melodicSimilarity ${similarity.toFixed(3)}`;
-    } else {
-      const expected = cutStatement(
-        deriveStatement(
-          cutStatement(sourceNotes, source.endBeat),
-          relation,
-          statement.startBeat,
-          scaleOf(keyAt(statement.startBeat)),
-        ),
-        statement.endBeat,
-      );
-      const { rhythm, pitchShare } = compareStatements(
-        expected,
-        cutStatement(derivedNotes, statement.endBeat),
-      );
-      if (!rhythm || pitchShare < DERIVED_PITCH_THRESHOLD) {
-        severity = 'error';
-      } else if (pitchShare < 1) {
-        severity = 'warning';
-      }
-      actual = rhythm
-        ? `${(pitchShare * 100).toFixed(0)}% of pitches kept`
-        : 'onsets or durations differ';
-    }
-    if (severity === 'error') {
-      violations.push({
+      errors.push({
         kind: 'motifDerivation',
-        severity,
+        severity: 'error',
         atBeat: statement.startBeat,
-        expected:
-          relation === null
-            ? `a variation (melodicSimilarity >= ${VARIATION_THRESHOLD})`
-            : relation.kind,
-        actual,
-        rationale: `the statement at beat ${statement.startBeat} does not derive from its source the way the plan names`,
+        expected: relation === null ? 'a variation' : relation.kind,
+        actual: 'no notes to compare',
+        rationale,
       });
-    } else if (severity === 'warning') {
-      violations.push({
-        kind: 'motifRepaired',
-        severity,
+      continue;
+    }
+    if (relation === null) {
+      const similarity = melodicSimilarity(sourceNotes, derivedNotes);
+      if (similarity < DEFAULT_VARIATION_THRESHOLD) {
+        errors.push({
+          kind: 'motifDerivation',
+          severity: 'error',
+          atBeat: statement.startBeat,
+          expected: `a variation (melodicSimilarity >= ${DEFAULT_VARIATION_THRESHOLD})`,
+          actual: `melodicSimilarity ${similarity.toFixed(3)}`,
+          rationale,
+        });
+      }
+      continue;
+    }
+    const replay = replayLevel(
+      sourceNotes,
+      derivedNotes,
+      statement,
+      source.endBeat,
+      plan,
+      scaleOf(keyAt(statement.startBeat)),
+      closing,
+    );
+    const planned =
+      relation.kind === 'tonalTransposition' ? (relation.degrees ?? 0) : relation.semitones;
+    if (replay === null) {
+      errors.push({
+        kind: 'motifDerivation',
+        severity: 'error',
         atBeat: statement.startBeat,
-        expected: `${relation?.kind} with every pitch kept`,
-        actual,
-        rationale: `the statement at beat ${statement.startBeat} keeps its planned derivation, with some pitches moved to fit the harmony or register`,
+        expected: relation.kind,
+        actual: 'no pitch level replays the source',
+        rationale,
+      });
+    } else if (replay.level !== planned || replay.forced > 0) {
+      warnings.push({
+        kind: 'motifDisplaced',
+        severity: 'warning',
+        atBeat: statement.startBeat,
+        expected: `${relation.kind} at level ${planned} with every pitch replayed`,
+        actual: `level ${replay.level}, ${replay.forced} excused note(s)`,
+        rationale: `the statement at beat ${statement.startBeat} carries out its planned derivation at another pitch level or with notes excused`,
       });
     }
   }
-  return violations;
+  return { errors, warnings };
 }
 
 /** The planned phrase a beat falls in, if any. */
@@ -529,30 +549,6 @@ function planRegisterPlan(plan: CompositionPlan): RegisterPlan {
   return { phrases, mean: weight > 0 ? weighted / weight : null };
 }
 
-/** A plan's harmony, read as the progression measure reads a reduced chord. */
-function planProgressionChords(plan: CompositionPlan): ProgressionChord[] {
-  return plan.harmony.map((planned) => {
-    const key = plan.keys[planned.key] as ResolvedKey;
-    return { roman: planned.roman, function: functionOf(romanToChord(planned.roman, key), key) };
-  });
-}
-
-/** A plan's motif statements, read as one graph node each with the derivation edges the plan names. */
-function planMotifGraph(plan: CompositionPlan): MotifGraph {
-  const nodes: MotifGraphNode[] = plan.motifs.map((motif, index) => ({
-    motif: index,
-    occurrence: 0,
-    startBeat: motif.startBeat,
-    endBeat: motif.endBeat,
-  }));
-  const edges: MotifGraphEdge[] = plan.motifs.flatMap((motif, index) =>
-    motif.from === null
-      ? []
-      : [{ from: motif.from, to: index, relation: motif.relation, similarity: 1 }],
-  );
-  return { nodes, edges };
-}
-
 /** A plan's rhythmic target, read as the onset/duration/syncopation measures read a reading with no bar-position detail. */
 function planRhythmReading(plan: CompositionPlan): {
   onsets: number;
@@ -571,22 +567,75 @@ function planRhythmReading(plan: CompositionPlan): {
   };
 }
 
+/** Every planned peak position the candidate's phrase drifts from by more than the tolerance. */
+function peakPositionWarnings(
+  plan: CompositionPlan,
+  readings: readonly (ReferencePhraseMelody | null)[],
+): CompositionViolation[] {
+  const violations: CompositionViolation[] = [];
+  plan.phrases.forEach((phrase, index) => {
+    const reading = readings[index];
+    if (reading == null) {
+      return;
+    }
+    const drift = Math.abs(reading.peakPosition - phrase.peakPosition);
+    if (drift > PEAK_POSITION_TOLERANCE) {
+      violations.push({
+        kind: 'peakPosition',
+        severity: 'warning',
+        atBeat: phrase.startBeat,
+        expected: `a peak position within ${PEAK_POSITION_TOLERANCE} of ${phrase.peakPosition}`,
+        actual: `${reading.peakPosition}`,
+        rationale: `the phrase starting at beat ${phrase.startBeat} places its melodic peak further from the planned position than the tolerance allows`,
+      });
+    }
+  });
+  return violations;
+}
+
+/** The candidate's duration-weighted mean pitch, or null when nothing sounds. */
+function lineMeanOf(melody: readonly NoteEvent[]): number | null {
+  let weighted = 0;
+  let total = 0;
+  for (const note of melody) {
+    weighted += note.pitch * note.durationBeat;
+    total += note.durationBeat;
+  }
+  return total > 0 ? weighted / total : null;
+}
+
+/** A plan's onset density, the phrases' targets weighted by their bar counts. */
+function planDensity(plan: CompositionPlan): { onsets: number; onsetDensity: number } {
+  let weighted = 0;
+  let bars = 0;
+  for (const phrase of plan.phrases) {
+    const span = barSpanOf(phrase.startBeat, phrase.endBeat, plan.meters);
+    weighted += phrase.onsetDensity * span;
+    bars += span;
+  }
+  return { onsets: 1, onsetDensity: bars > 0 ? weighted / bars : 0 };
+}
+
 /**
  * Check a candidate melody against the plan it was written for.
  *
- * The candidate is analyzed with the plan's own harmony injected —
- * `planTimeline(plan)` stands in for the chord inference a monophonic line
- * cannot support on its own — so every violation and fit reading below judges
- * the melody against the harmony the plan actually calls for, not a guess an
- * analyzer would make from the notes alone.
+ * The candidate is read against the plan itself — its phrases, its harmony
+ * through {@link planTimeline}, its derivations — rather than re-analyzed into
+ * a profile, so every violation and fit reading judges the melody against what
+ * the plan actually calls for.
  *
- * Violations name concrete departures at a beat: `span` and `harmony` and
- * `register` and `cadence` and `phraseBoundary` and `motifDerivation` are
- * errors, `peakPosition` and `motifRepaired` are warnings. The fit fields, one per structural
- * dimension, are measured the way {@link compareReferences} measures two
- * profiles — never folded into one score.
+ * Violations name concrete departures at a beat. `span`, `phraseBoundary`,
+ * `cadence`, `register` and `motifDerivation` are errors. `harmony` is an
+ * error, or a warning for a note inside a derived statement, where the
+ * transformation takes precedence. A derived statement passes at any pitch
+ * level its relation admits, with its durations free and its closing and
+ * out-of-register notes excused; `motifDisplaced` warns when that level is not
+ * the planned one or a note was excused. `peakPosition` is a warning. The fit
+ * fields, one per dimension, read each planned phrase of the candidate the way
+ * a reference profile reads its phrases and measure it as
+ * {@link compareReferences} would — never folded into one score.
  *
- * @param melody The candidate melody, in time order.
+ * @param melody The candidate melody.
  * @param plan The plan it was written for.
  * @param opts The work budget.
  * @returns The violations found and the fit reading.
@@ -604,7 +653,7 @@ function planRhythmReading(plan: CompositionPlan): {
  *   phrases: [
  *     {
  *       startBeat: 0, endBeat: 4, section: 0, cadence: null, shape: 'ascending',
- *       peakPosition: 1, register: { low: 60, high: 67, mean: 64 }, onsetDensity: 4, motifs: [],
+ *       peakPosition: 0.5, register: { low: 60, high: 67, mean: 64 }, onsetDensity: 4, motifs: [],
  *     },
  *   ],
  *   harmony: [{ startBeat: 0, endBeat: 4, key: 0, roman: 'I' }],
@@ -628,59 +677,44 @@ export function evaluateComposition(
 ): CompositionEvaluation {
   assertCompositionPlan(plan, 'evaluated plan');
   const { budget } = assertOptions(opts, 'evaluate options');
-  const candidate = analyzeReference(melody, {
+  const notes = [...assertNoteEvents(melody, 'evaluated melody', { budget })].sort(
+    (a, b) => a.startBeat - b.startBeat,
+  );
+  const timeline = planTimeline(plan);
+  const lines = phraseLines(notes, plan);
+  const closing = new Set(
+    lines.flatMap((line) => (line.length === 0 ? [] : [notes[line.at(-1) as number] as NoteEvent])),
+  );
+  const derivations = motifDerivationViolations(notes, plan, closing);
+
+  const lineMean = lineMeanOf(notes);
+  const readings = plan.phrases.map((phrase) =>
+    phraseMelody(notes, phrase.startBeat, phrase.endBeat, lineMean ?? 0, plan.meters, budget),
+  );
+  const violations: CompositionViolation[] = [
+    ...spanViolation(notes, plan),
+    ...phraseBoundaryViolations(notes, plan),
+    ...cadenceViolations(notes, plan, timeline, lines),
+    ...harmonyViolations(notes, plan, timeline, lines),
+    ...registerViolations(notes, plan),
+    ...derivations.errors,
+    ...derivations.warnings,
+    ...peakPositionWarnings(plan, readings),
+  ];
+
+  const rhythm = analyzeRhythm(notes, {
     meters: plan.meters,
-    key: plan.keys[0],
-    timeline: planTimeline(plan),
     totalBeats: plan.span.endBeat,
     budget,
   });
-
-  const violations: CompositionViolation[] = [
-    ...spanViolation(melody, plan),
-    ...phraseBoundaryViolations(melody, plan),
-    ...cadenceViolations(plan, candidate.form.phrases),
-    ...harmonyViolations(melody, plan),
-    ...motifDerivationViolations(melody, plan),
-    ...registerViolations(melody, plan),
-    ...peakPositionWarnings(plan, candidate.form.phrases),
-  ];
-
-  const candidateStructural = candidate.harmony.chords.filter(
-    (chord) => chord.level === 'structural',
-  );
+  const target = planRhythmReading(plan);
   const fit: CompositionEvaluation['fit'] = {
-    sectionSequence: sectionSequenceSimilarity(
-      plan.sections.map((section) => section.label),
-      candidate.form.sections.map((section) => section.label),
-    ),
-    phraseLength: phraseLengthSimilarity(
-      plan.phrases.map((phrase) => barSpanOf(phrase.startBeat, phrase.endBeat, plan.meters)),
-      candidate.form.phrases.map((phrase) => phrase.bars),
-    ),
-    progression: progressionSimilarity(planProgressionChords(plan), candidateStructural, budget),
-    cadence: cadenceSimilarity(
-      plan.phrases.map((phrase) => phrase.cadence),
-      candidate.form.phrases.map((phrase) => phrase.cadence?.type ?? null),
-    ),
-    motifStructure: motifStructureSimilarity(
-      { graph: planMotifGraph(plan), spanBeats: plan.span.endBeat - plan.span.startBeat },
-      {
-        graph: candidate.melody.graph,
-        spanBeats: candidate.span.endBeat - candidate.span.startBeat,
-      },
-    ),
-    contour: contourSimilarity(
-      plan.phrases.map(planContourPhrase),
-      candidate.form.phrases.map((phrase) => phrase.melody),
-    ),
-    register: registerSimilarity(planRegisterPlan(plan), {
-      phrases: candidate.form.phrases.map((phrase) => phrase.melody),
-      mean: candidate.melody.register?.mean ?? null,
-    }),
-    onset: onsetSimilarity(planRhythmReading(plan), candidate.melody.rhythm),
-    duration: durationSimilarity(planRhythmReading(plan), candidate.melody.rhythm),
-    syncopation: syncopationSimilarity(planRhythmReading(plan), candidate.melody.rhythm),
+    contour: contourSimilarity(plan.phrases.map(planContourPhrase), readings),
+    register: registerSimilarity(planRegisterPlan(plan), { phrases: readings, mean: lineMean }),
+    onset: onsetSimilarity(target, rhythm),
+    duration: durationSimilarity(target, rhythm),
+    syncopation: syncopationSimilarity(target, rhythm),
+    density: densitySimilarity(planDensity(plan), rhythm),
   };
 
   return { violations, fit };

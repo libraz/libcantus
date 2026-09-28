@@ -66,7 +66,12 @@ function plan(over: Partial<CompositionPlan> & { phrases: PlannedPhrase[] }): Co
     sections: [{ label: 'A', startBeat: 0, endBeat }],
     harmony,
     motifs: [],
-    rhythm: { onsetLevels: [0, 0, 0, 0, 0, 1], interOnsetShares: ioiShares(), syncopation: 0 },
+    // Quarter notes: every pulse, one beat apart.
+    rhythm: {
+      onsetLevels: [0, 0, 0, 0.5, 0.25, 0.25],
+      interOnsetShares: ioiShares(),
+      syncopation: 0,
+    },
     ...over,
   };
   return assertCompositionPlan(built);
@@ -97,12 +102,13 @@ function mixedPlan(): CompositionPlan {
       { startBeat: 28, endBeat: 32, key: 0, roman: 'I' },
     ],
     motifs: [
-      { phrase: 0, startBeat: 0, endBeat: 4, notes: 5, from: null, relation: null },
+      { phrase: 0, startBeat: 0, endBeat: 4, notes: 5, rhythm: null, from: null, relation: null },
       {
         phrase: 0,
         startBeat: 4,
         endBeat: 8,
         notes: 5,
+        rhythm: null,
         from: 0,
         relation: { kind: 'transposition', sequence: true, semitones: 5, timeRatio: 1 },
       },
@@ -111,6 +117,7 @@ function mixedPlan(): CompositionPlan {
         startBeat: 16,
         endBeat: 20,
         notes: 5,
+        rhythm: null,
         from: 0,
         relation: { kind: 'repetition', sequence: false, semitones: 0, timeRatio: 1 },
       },
@@ -135,42 +142,9 @@ function chordTonesAt(p: CompositionPlan, beat: number): number[] | null {
 
 type Cell = { pitch: number; startBeat: number; durationBeat: number }[];
 
-const outside = (reg: { low: number; high: number }, pitch: number) =>
-  pitch < reg.low || pitch > reg.high;
-
-/**
- * Which notes of a statement local repair may replace: out of register, or
- * failing the plan's harmony reading in the context of the line before it.
- */
-function repairFlags(
-  p: CompositionPlan,
-  reg: { low: number; high: number },
-  context: Cell,
-  statement: Cell,
-): boolean[] {
-  const misfits = planHarmonyMisfits(p)([...context, ...statement]).slice(context.length);
-  return statement.map((n, i) => outside(reg, n.pitch) || misfits[i] !== null);
-}
-
-/**
- * A statement as local repair first places it: moved a whole octave toward the
- * register (else away) when that brings every note inside, as it is otherwise.
- */
-function octavePlaced(reg: { low: number; high: number }, statement: Cell): Cell {
-  if (!statement.some((n) => outside(reg, n.pitch))) return statement;
-  const toward = statement.some((n) => n.pitch > reg.high) ? -12 : 12;
-  for (const shift of [toward, -toward]) {
-    const moved = statement.map((n) => ({ ...n, pitch: n.pitch + shift }));
-    if (!moved.some((n) => outside(reg, n.pitch))) return moved;
-  }
-  return statement;
-}
-
-function anchor(cell: Cell, firstPitch: number, startBeat: number): Cell {
-  const sorted = [...cell].sort((a, b) => a.startBeat - b.startBeat);
-  const shift = firstPitch - (sorted[0]?.pitch ?? 0);
-  const offset = startBeat - (sorted[0]?.startBeat ?? 0);
-  return sorted.map((n) => ({ ...n, pitch: n.pitch + shift, startBeat: n.startBeat + offset }));
+/** Whether a line's notes, read as one phrase, all fit the plan's harmony. */
+function misfitsOf(p: CompositionPlan, line: Cell): boolean[] {
+  return planHarmonyMisfits(p)(line).map((kinds) => kinds !== null);
 }
 
 function scaleTime(cell: Cell, factor: number): Cell {
@@ -195,27 +169,34 @@ function retrograde(cell: Cell): Cell {
 
 type Relation = NonNullable<PlannedMotif['relation']>;
 
-/** The doc's mapping of a relation onto the source cell, anchored at the planned start. */
+/**
+ * A relation's shape on the source cell, placed at `level` (the first note
+ * that many semitones from the source's, or every note that many scale
+ * degrees away for a tonal transposition) and at the planned start.
+ */
 function expectedDerivation(
   source: Cell,
   relation: Relation,
   startBeat: number,
   key: ResolvedKey,
+  level: number,
 ): Cell {
   let cell: Cell = source.map((n) => ({ ...n }));
   switch (relation.kind) {
     case 'repetition':
       break;
     case 'transposition':
-      cell = cell.map((n) => ({ ...n, pitch: n.pitch + relation.semitones }));
       if (relation.timeRatio !== 1) cell = scaleTime(cell, relation.timeRatio);
       break;
-    case 'tonalTransposition':
-      cell = cell.map((n) => ({
+    case 'tonalTransposition': {
+      const sorted = [...cell].sort((a, b) => a.startBeat - b.startBeat);
+      const offset = startBeat - (sorted[0]?.startBeat ?? 0);
+      return sorted.map((n) => ({
         ...n,
-        pitch: shiftByScaleDegrees(n.pitch, relation.degrees ?? 0, key),
+        pitch: shiftByScaleDegrees(n.pitch, level, key),
+        startBeat: n.startBeat + offset,
       }));
-      break;
+    }
     case 'inversion':
       cell = invert(cell);
       if (relation.timeRatio !== 1) cell = scaleTime(cell, relation.timeRatio);
@@ -231,7 +212,28 @@ function expectedDerivation(
       cell = scaleTime(cell, relation.timeRatio);
       break;
   }
-  return anchor(cell, (source[0]?.pitch ?? 0) + relation.semitones, startBeat);
+  const sorted = [...cell].sort((a, b) => a.startBeat - b.startBeat);
+  const shift = (source[0]?.pitch ?? 0) + level - (sorted[0]?.pitch ?? 0);
+  const offset = startBeat - (sorted[0]?.startBeat ?? 0);
+  return sorted.map((n) => ({ ...n, pitch: n.pitch + shift, startBeat: n.startBeat + offset }));
+}
+
+/** The levels a relation may be placed at, as the generator's families name them. */
+function levelFamily(relation: Relation): number[] {
+  const range = (from: number, to: number) =>
+    Array.from({ length: to - from + 1 }, (_, i) => from + i);
+  switch (relation.kind) {
+    case 'repetition':
+    case 'augmentation':
+    case 'diminution':
+      return [-12, 0, 12];
+    case 'transposition':
+      return range(-24, 24).filter((level) => level !== 0);
+    case 'tonalTransposition':
+      return range(-14, 14).filter((level) => level !== 0);
+    default:
+      return range(-24, 24);
+  }
 }
 
 /**
@@ -249,8 +251,16 @@ function derivationPlan(relation: Relation, derivedSpan: number): CompositionPla
       }),
     ],
     motifs: [
-      { phrase: 0, startBeat: 0, endBeat: 4, notes: 4, from: null, relation: null },
-      { phrase: 0, startBeat: 8, endBeat: 8 + derivedSpan, notes: 4, from: 0, relation },
+      { phrase: 0, startBeat: 0, endBeat: 4, notes: 4, rhythm: null, from: null, relation: null },
+      {
+        phrase: 0,
+        startBeat: 8,
+        endBeat: 8 + derivedSpan,
+        notes: 4,
+        rhythm: null,
+        from: 0,
+        relation,
+      },
     ],
   });
 }
@@ -307,7 +317,9 @@ describe('generateMelody', () => {
           motifs: [0],
         }),
       ],
-      motifs: [{ phrase: 0, startBeat: 0, endBeat: 4, notes: 3, from: null, relation: null }],
+      motifs: [
+        { phrase: 0, startBeat: 0, endBeat: 4, notes: 3, rhythm: null, from: null, relation: null },
+      ],
     });
     expect(generateMelody(p).every((n) => n.pitch === 60)).toBe(true);
   });
@@ -326,7 +338,17 @@ describe('generateMelody', () => {
             motifs: [0],
           }),
         ],
-        motifs: [{ phrase: 0, startBeat: 0, endBeat: 16, notes: 16, from: null, relation: null }],
+        motifs: [
+          {
+            phrase: 0,
+            startBeat: 0,
+            endBeat: 16,
+            notes: 16,
+            rhythm: null,
+            from: null,
+            relation: null,
+          },
+        ],
       });
     }
 
@@ -385,7 +407,17 @@ describe('generateMelody', () => {
       // The phrase runs a bar past the motif, so the phrase-end hold leaves the motif whole.
       const p = plan({
         phrases: [phrase({ startBeat: 0, endBeat: 8, onsetDensity: 4, motifs: [0] })],
-        motifs: [{ phrase: 0, startBeat: 0, endBeat: 4, notes: count, from: null, relation: null }],
+        motifs: [
+          {
+            phrase: 0,
+            startBeat: 0,
+            endBeat: 4,
+            notes: count,
+            rhythm: null,
+            from: null,
+            relation: null,
+          },
+        ],
       });
       const notes = inSpan(generateMelody(p), 0, 4);
       expect(notes).toHaveLength(count);
@@ -416,27 +448,67 @@ describe('generateMelody', () => {
       [{ kind: 'diminution', sequence: false, semitones: 0, timeRatio: 0.5 }, 2],
     ];
 
-    it.each(cases)('maps $kind onto its source at the planned start beat', (relation, span) => {
+    it.each(cases)('replays $kind on its source at a level of its family', (relation, span) => {
       for (const seed of [1, 2, 3]) {
         const p = { ...derivationPlan(relation, span), seed };
-        const reg = p.phrases[0]?.register as PlannedPhrase['register'];
         const notes = generateMelody(p);
         const source = inSpan(notes, 0, 4);
         expect(source).toHaveLength(4);
         const derived = inSpan(notes, 8, 8 + span);
-        const context = inSpan(notes, 0, 8);
-        const expected = octavePlaced(reg, expectedDerivation(source, relation, 8, C_MAJOR));
-        const flags = repairFlags(p, reg, context, expected);
-        expect(derived).toHaveLength(expected.length);
         expect(derived[0]?.startBeat).toBeCloseTo(8, 9);
+        // The register is wide enough for some level to hold the replay whole, so no note is replaced.
+        const level = levelFamily(relation).find((l) => {
+          const want = expectedDerivation(source, relation, 8, C_MAJOR, l);
+          return (
+            want.length === derived.length && want.every((n, i) => n.pitch === derived[i]?.pitch)
+          );
+        });
+        expect(level, `${relation.kind} seed ${seed}`).toBeDefined();
+        const expected = expectedDerivation(source, relation, 8, C_MAJOR, level ?? 0);
         for (let i = 0; i < expected.length; i += 1) {
           const want = expected[i] as Cell[number];
           const got = derived[i] as NoteEvent;
           expect(got.startBeat).toBeCloseTo(want.startBeat, 9);
-          expect(got.durationBeat).toBeCloseTo(want.durationBeat, 9);
-          if (!flags[i]) expect(got.pitch).toBe(want.pitch);
+          expect(got.durationBeat).toBeCloseTo(
+            Math.min(want.durationBeat, 8 + span - want.startBeat),
+            9,
+          );
         }
-        expect(repairFlags(p, reg, context, derived)).not.toContain(true);
+      }
+    });
+
+    it('never places a transposition at level 0, which would be a repetition', () => {
+      for (const seed of [1, 2, 3, 4, 5]) {
+        const relation: Relation = {
+          kind: 'transposition',
+          sequence: false,
+          semitones: 1,
+          timeRatio: 1,
+        };
+        const p = { ...derivationPlan(relation, 4), seed };
+        const notes = generateMelody(p);
+        const source = inSpan(notes, 0, 4).map((n) => n.pitch);
+        const derived = inSpan(notes, 8, 12).map((n) => n.pitch);
+        expect(derived).not.toEqual(source);
+        const shift = (derived[0] ?? 0) - (source[0] ?? 0);
+        expect(derived).toEqual(source.map((pitch) => pitch + shift));
+      }
+    });
+
+    it('keeps a repetition at its own pitch or an octave away', () => {
+      for (const seed of [1, 2, 3]) {
+        const relation: Relation = {
+          kind: 'repetition',
+          sequence: false,
+          semitones: 0,
+          timeRatio: 1,
+        };
+        const notes = generateMelody({ ...derivationPlan(relation, 4), seed });
+        const source = inSpan(notes, 0, 4).map((n) => n.pitch);
+        const derived = inSpan(notes, 8, 12).map((n) => n.pitch);
+        const shift = (derived[0] ?? 0) - (source[0] ?? 0);
+        expect([-12, 0, 12]).toContain(shift);
+        expect(derived).toEqual(source.map((pitch) => pitch + shift));
       }
     });
 
@@ -462,43 +534,87 @@ describe('generateMelody', () => {
           expect(d.pitch).toBeLessThanOrEqual(reg.high);
         }
         for (const i of [0, source.length - 1]) {
-          const s = source[i] as NoteEvent;
-          const d = derived[i] as NoteEvent;
-          const flags = repairFlags(
-            q,
-            reg,
-            inSpan(notes, 0, 8),
-            octavePlaced(
-              reg,
-              source.map((n) => ({ ...n, startBeat: n.startBeat + 8 })),
-            ),
-          );
-          if (!flags[i]) expect(d.pitch).toBe(s.pitch);
+          expect(derived[i]?.pitch).toBe(source[i]?.pitch);
         }
       }
     });
 
-    it('moves a statement that leaves the register a whole octave before repairing notes', () => {
+    it('places a derivation at the level nearest the plan that keeps it inside the register', () => {
       for (const seed of [1, 2, 3, 4, 5]) {
-        const base = derivationPlan(
-          { kind: 'transposition', sequence: false, semitones: 12, timeRatio: 1 },
-          4,
-        );
+        const relation: Relation = {
+          kind: 'transposition',
+          sequence: false,
+          semitones: 12,
+          timeRatio: 1,
+        };
+        const base = derivationPlan(relation, 4);
         const phrases = base.phrases.map((ph) => ({
           ...ph,
           register: { low: 60, high: 72, mean: 66 },
         }));
         const p = assertCompositionPlan({ ...base, phrases, seed });
-        const reg = { low: 60, high: 72 };
+        const notes = generateMelody(p);
+        const source = inSpan(notes, 0, 4).map((n) => n.pitch);
+        const derived = inSpan(notes, 8, 12).map((n) => n.pitch);
+        const shift = (derived[0] ?? 0) - (source[0] ?? 0);
+        expect(derived).toEqual(source.map((pitch) => pitch + shift));
+        expect(shift).not.toBe(0);
+        for (const pitch of derived) {
+          expect(pitch).toBeGreaterThanOrEqual(60);
+          expect(pitch).toBeLessThanOrEqual(72);
+        }
+      }
+    });
+
+    it('replaces only the notes no level brings inside the register', () => {
+      for (const seed of [1, 2, 3]) {
+        const p = plan({
+          seed,
+          phrases: [
+            phrase({
+              startBeat: 0,
+              endBeat: 12,
+              register: { low: 48, high: 50, mean: 49 },
+              motifs: [0],
+            }),
+            phrase({
+              startBeat: 12,
+              endBeat: 24,
+              register: { low: 60, high: 61, mean: 60.5 },
+              motifs: [1],
+            }),
+          ],
+          motifs: [
+            {
+              phrase: 0,
+              startBeat: 0,
+              endBeat: 4,
+              notes: 4,
+              rhythm: [1, 1, 1],
+              from: null,
+              relation: null,
+            },
+            {
+              phrase: 1,
+              startBeat: 12,
+              endBeat: 16,
+              notes: 4,
+              rhythm: null,
+              from: 0,
+              relation: { kind: 'repetition', sequence: false, semitones: 0, timeRatio: 1 },
+            },
+          ],
+        });
         const notes = generateMelody(p);
         const source = inSpan(notes, 0, 4);
-        const derived = inSpan(notes, 8, 12);
-        // Up an octave leaves the register; down an octave again is the source itself.
-        const expected = source.map((n) => ({ ...n, startBeat: n.startBeat + 8 }));
-        const flags = repairFlags(p, reg, inSpan(notes, 0, 8), expected);
-        expect(derived).toHaveLength(expected.length);
-        derived.forEach((got, i) => {
-          if (!flags[i]) expect(got.pitch).toBe(expected[i]?.pitch);
+        const derived = inSpan(notes, 12, 16);
+        expect(derived.map((n) => n.startBeat - 12)).toEqual(source.map((n) => n.startBeat));
+        // An octave up leaves the fewest notes outside [60, 61]; the notes it lands inside stay.
+        derived.forEach((n, i) => {
+          const up = (source[i]?.pitch ?? 0) + 12;
+          expect(n.pitch).toBeGreaterThanOrEqual(60);
+          expect(n.pitch).toBeLessThanOrEqual(61);
+          if (up <= 61) expect(n.pitch).toBe(up);
         });
       }
     });
@@ -525,7 +641,17 @@ describe('generateMelody', () => {
           { startBeat: 0, endBeat: 4, key: 0, roman: 'IV' },
           { startBeat: 4, endBeat: 8, key: keyIndex, roman: lastRoman },
         ],
-        motifs: [{ phrase: 0, startBeat: 0, endBeat: 8, notes: 8, from: null, relation: null }],
+        motifs: [
+          {
+            phrase: 0,
+            startBeat: 0,
+            endBeat: 8,
+            notes: 8,
+            rhythm: null,
+            from: null,
+            relation: null,
+          },
+        ],
       });
     }
 
@@ -593,7 +719,17 @@ describe('generateMelody', () => {
           { startBeat: 0, endBeat: 4, key: 0, roman: 'V' },
           { startBeat: 4, endBeat: 8, key: 0, roman: 'I' },
         ],
-        motifs: [{ phrase: 0, startBeat: 0, endBeat: 8, notes: 8, from: null, relation: null }],
+        motifs: [
+          {
+            phrase: 0,
+            startBeat: 0,
+            endBeat: 8,
+            notes: 8,
+            rhythm: null,
+            from: null,
+            relation: null,
+          },
+        ],
       });
     }
 
@@ -625,7 +761,17 @@ describe('generateMelody', () => {
         const p = plan({
           seed,
           phrases: [phrase({ startBeat: 0, endBeat: 8, cadence: 'authentic', motifs: [0] })],
-          motifs: [{ phrase: 0, startBeat: 2, endBeat: 6, notes: 1, from: null, relation: null }],
+          motifs: [
+            {
+              phrase: 0,
+              startBeat: 2,
+              endBeat: 6,
+              notes: 1,
+              rhythm: null,
+              from: null,
+              relation: null,
+            },
+          ],
         });
         const notes = generateMelody(p);
         const cut = notes.find((n) => Math.abs(n.startBeat - 2) < EPS) as NoteEvent;
@@ -634,6 +780,71 @@ describe('generateMelody', () => {
         expect(held.startBeat).toBeCloseTo(4, 9);
         expect(held.durationBeat).toBeCloseTo(4, 9);
         expect(tonicTriad).toContain(((held.pitch % 12) + 12) % 12);
+      }
+    });
+
+    it('re-chooses a cut onset outside every derived statement from the pitches its downbeat admits', () => {
+      for (const seed of [1, 2, 3, 4, 5]) {
+        const p = plan({
+          seed,
+          phrases: [phrase({ startBeat: 0, endBeat: 8, motifs: [0] })],
+          harmony: [
+            { startBeat: 0, endBeat: 4, key: 0, roman: 'I' },
+            { startBeat: 4, endBeat: 8, key: 0, roman: 'V' },
+          ],
+          motifs: [
+            {
+              phrase: 0,
+              startBeat: 2,
+              endBeat: 6,
+              notes: 1,
+              rhythm: null,
+              from: null,
+              relation: null,
+            },
+          ],
+        });
+        const held = generateMelody(p).at(-1) as NoteEvent;
+        expect(held.startBeat).toBeCloseTo(4, 9);
+        expect(chordTonesAt(p, 4)).toContain(((held.pitch % 12) + 12) % 12);
+      }
+    });
+
+    it('leaves a cut onset inside a derived statement at the pitch its transformation gave', () => {
+      for (const seed of [1, 2, 3]) {
+        const p = plan({
+          seed,
+          phrases: [phrase({ startBeat: 0, endBeat: 8, motifs: [0, 1] })],
+          harmony: [
+            { startBeat: 0, endBeat: 4, key: 0, roman: 'I' },
+            { startBeat: 4, endBeat: 8, key: 0, roman: 'V' },
+          ],
+          motifs: [
+            {
+              phrase: 0,
+              startBeat: 0,
+              endBeat: 2,
+              notes: 1,
+              rhythm: [],
+              from: null,
+              relation: null,
+            },
+            {
+              phrase: 0,
+              startBeat: 2,
+              endBeat: 6,
+              notes: 1,
+              rhythm: null,
+              from: 0,
+              relation: { kind: 'augmentation', sequence: true, semitones: 0, timeRatio: 2 },
+            },
+          ],
+        });
+        const notes = generateMelody(p);
+        const cut = notes.find((n) => Math.abs(n.startBeat - 2) < EPS) as NoteEvent;
+        const held = notes.at(-1) as NoteEvent;
+        expect(held.startBeat).toBeCloseTo(4, 9);
+        expect(held.pitch).toBe(cut.pitch);
       }
     });
 
@@ -648,43 +859,226 @@ describe('generateMelody', () => {
     });
   });
 
-  describe('development fill', () => {
-    it('covers every span no motif covers, starting from the root rhythm', () => {
-      const p = mixedPlan();
-      const notes = generateMelody(p);
-      for (const ph of p.phrases) {
-        const inside = inSpan(notes, ph.startBeat, ph.endBeat);
-        let reach = ph.startBeat;
-        for (const n of inside) {
-          expect(n.startBeat).toBeLessThanOrEqual(reach + EPS);
-          reach = Math.max(reach, n.startBeat + n.durationBeat);
+  describe('free spans', () => {
+    it('covers every span no motif covers', () => {
+      for (const seed of [1, 2, 3]) {
+        const p = { ...mixedPlan(), seed };
+        const notes = generateMelody(p);
+        for (const ph of p.phrases) {
+          const inside = inSpan(notes, ph.startBeat, ph.endBeat);
+          let reach = ph.startBeat;
+          for (const n of inside) {
+            expect(n.startBeat).toBeLessThanOrEqual(reach + EPS);
+            reach = Math.max(reach, n.startBeat + n.durationBeat);
+          }
+          expect(reach).toBeCloseTo(ph.endBeat, 9);
         }
-        expect(reach).toBeCloseTo(ph.endBeat, 9);
       }
-      const root = inSpan(notes, 0, 4);
-      const fill = inSpan(notes, 8, 12);
-      expect(fill.slice(0, root.length).map((n) => n.startBeat - 8)).toEqual(
-        root.map((n) => n.startBeat),
-      );
     });
 
-    it('fills a phrase with no root motif from the root its derivations lead back to', () => {
-      const p = mixedPlan();
-      const notes = generateMelody(p);
-      const root = inSpan(notes, 0, 4);
-      const fill = inSpan(notes, 20, 24);
-      expect(fill.slice(0, root.length).map((n) => n.startBeat - 20)).toEqual(
-        root.map((n) => n.startBeat),
-      );
+    it("draws as many onsets as the phrase's density asks for over the span's bars", () => {
+      for (const seed of [1, 2, 3]) {
+        const p = plan({
+          seed,
+          phrases: [phrase({ startBeat: 0, endBeat: 12, onsetDensity: 3, motifs: [0, 1] })],
+          motifs: [
+            {
+              phrase: 0,
+              startBeat: 0,
+              endBeat: 4,
+              notes: 4,
+              rhythm: [1, 1, 1],
+              from: null,
+              relation: null,
+            },
+            {
+              phrase: 0,
+              startBeat: 8,
+              endBeat: 12,
+              notes: 4,
+              rhythm: [1, 1, 1],
+              from: null,
+              relation: null,
+            },
+          ],
+        });
+        // Beats 4-8 are the one free span: a bar at three onsets a bar.
+        const free = inSpan(generateMelody(p), 4, 8);
+        expect(free).toHaveLength(3);
+        expect(free[0]?.startBeat).toBe(4);
+      }
     });
 
-    it('treats a phrase with no motifs as one root span', () => {
+    it('treats a phrase with no motifs as one free span', () => {
       const p = plan({ phrases: [phrase({ startBeat: 0, endBeat: 8, motifs: [] })] });
       const notes = generateMelody(p);
       expect(notes.length).toBeGreaterThan(0);
       expect(notes[0]?.startBeat).toBe(0);
       const last = notes[notes.length - 1] as NoteEvent;
       expect(last.startBeat + last.durationBeat).toBeCloseTo(8, 9);
+    });
+  });
+
+  describe('root rhythm', () => {
+    it('lays the planned onset gaps from the start, the last note lasting to the end', () => {
+      const p = plan({
+        phrases: [phrase({ startBeat: 0, endBeat: 12, motifs: [0, 1] })],
+        motifs: [
+          {
+            phrase: 0,
+            startBeat: 0,
+            endBeat: 4,
+            notes: 3,
+            rhythm: [0.5, 1.5],
+            from: null,
+            relation: null,
+          },
+          { phrase: 0, startBeat: 4, endBeat: 6, notes: 1, rhythm: [], from: null, relation: null },
+        ],
+      });
+      const notes = generateMelody(p);
+      const cell = inSpan(notes, 0, 4);
+      // The gaps accumulate from the start; the last note runs to the statement's end.
+      [0, 0.5, 2].forEach((beat, i) => {
+        expect(cell[i]?.startBeat).toBeCloseTo(beat, 9);
+      });
+      [0.5, 1.5, 2].forEach((beats, i) => {
+        expect(cell[i]?.durationBeat).toBeCloseTo(beats, 9);
+      });
+      const single = inSpan(notes, 4, 6);
+      expect(single).toHaveLength(1);
+      expect(single[0]?.durationBeat).toBeCloseTo(2, 9);
+    });
+
+    it("draws a root's onsets toward the plan's onset levels", () => {
+      for (const seed of [1, 2, 3, 4, 5]) {
+        const p = plan({
+          seed,
+          phrases: [phrase({ startBeat: 0, endBeat: 8, motifs: [0] })],
+          motifs: [
+            {
+              phrase: 0,
+              startBeat: 0,
+              endBeat: 4,
+              notes: 4,
+              rhythm: null,
+              from: null,
+              relation: null,
+            },
+          ],
+          // All the mass on the pulses after the downbeat: beats 1 and 3, and beat 2.
+          rhythm: {
+            onsetLevels: [0, 0, 0, 0.5, 0.5, 0],
+            interOnsetShares: ioiShares(),
+            syncopation: 0,
+          },
+        });
+        expect(inSpan(generateMelody(p), 0, 4).map((n) => n.startBeat)).toEqual([0, 1, 2, 3]);
+      }
+    });
+
+    it("draws every gap the plan's inter-onset shares put all their mass on", () => {
+      const halfBeat = new Array<number>(17).fill(0);
+      // Bin 6 of RHYTHM_IOI_BINS is half a beat.
+      halfBeat[6] = 1;
+      for (const seed of [1, 2, 3, 4, 5]) {
+        const p = plan({
+          seed,
+          phrases: [phrase({ startBeat: 0, endBeat: 8, motifs: [0] })],
+          motifs: [
+            {
+              phrase: 0,
+              startBeat: 0,
+              endBeat: 4,
+              notes: 6,
+              rhythm: null,
+              from: null,
+              relation: null,
+            },
+          ],
+          rhythm: {
+            onsetLevels: [0.2, 0.2, 0, 0.2, 0.2, 0.2],
+            interOnsetShares: halfBeat,
+            syncopation: 0,
+          },
+        });
+        const onsets = inSpan(generateMelody(p), 0, 4).map((n) => n.startBeat);
+        expect(onsets).toEqual([0, 0.5, 1, 1.5, 2, 2.5]);
+      }
+    });
+
+    it('fails when a span holds fewer sixteenth slots than onsets', () => {
+      const p = plan({
+        phrases: [phrase({ startBeat: 0, endBeat: 8, motifs: [0] })],
+        motifs: [
+          {
+            phrase: 0,
+            startBeat: 0,
+            endBeat: 1,
+            notes: 6,
+            rhythm: null,
+            from: null,
+            relation: null,
+          },
+        ],
+      });
+      expect(() => generateMelody(p)).toThrow(NoSolutionError);
+    });
+  });
+
+  describe('position classes', () => {
+    function rootsPlan(seed: number): CompositionPlan {
+      return plan({
+        seed,
+        phrases: [phrase({ startBeat: 0, endBeat: 16, motifs: [0] })],
+        harmony: [
+          { startBeat: 0, endBeat: 4, key: 0, roman: 'I' },
+          { startBeat: 4, endBeat: 8, key: 0, roman: 'IV' },
+          { startBeat: 8, endBeat: 12, key: 0, roman: 'V' },
+          { startBeat: 12, endBeat: 16, key: 0, roman: 'I' },
+        ],
+        motifs: [
+          {
+            phrase: 0,
+            startBeat: 0,
+            endBeat: 8,
+            notes: 16,
+            rhythm: null,
+            from: null,
+            relation: null,
+          },
+        ],
+        rhythm: {
+          onsetLevels: [0.2, 0.2, 0, 0.2, 0.2, 0.2],
+          interOnsetShares: ioiShares(),
+          syncopation: 0,
+        },
+      });
+    }
+
+    it('writes a chord tone on a strong pulse and a scale tone on a weak one', () => {
+      for (const seed of [1, 2, 3]) {
+        const p = rootsPlan(seed);
+        const scale = scaleTonesInDegreeOrder(C_MAJOR);
+        // Everything before the final bar is chosen freely; the held note is not re-chosen.
+        for (const n of inSpan(generateMelody(p), 0, 12)) {
+          const beat = n.startBeat - Math.floor(n.startBeat / 4) * 4;
+          const pc = ((n.pitch % 12) + 12) % 12;
+          if (Math.abs(beat) < EPS || Math.abs(beat - 2) < EPS) {
+            expect(chordTonesAt(p, n.startBeat)).toContain(pc);
+          } else if (onPulse(n.startBeat)) {
+            expect(scale).toContain(pc);
+          }
+        }
+      }
+    });
+
+    it('leaves no harmony misfit in what it chooses freely', () => {
+      for (const seed of [1, 2, 3]) {
+        const p = rootsPlan(seed);
+        const line = inSpan(generateMelody(p), 0, 12);
+        expect(misfitsOf(p, line)).not.toContain(true);
+      }
     });
   });
 
@@ -698,6 +1092,46 @@ describe('generateMelody', () => {
     expect(after).toEqual(before);
   });
 
+  it('opens a phrase without reading the notes of the phrase before it', () => {
+    const build = (shape: PlannedPhrase['shape'], low: number) =>
+      plan({
+        phrases: [
+          phrase({
+            startBeat: 0,
+            endBeat: 8,
+            shape,
+            register: { low, high: 79, mean: 70 },
+            motifs: [0],
+          }),
+          phrase({ startBeat: 8, endBeat: 16, motifs: [1] }),
+        ],
+        motifs: [
+          {
+            phrase: 0,
+            startBeat: 0,
+            endBeat: 4,
+            notes: 4,
+            rhythm: null,
+            from: null,
+            relation: null,
+          },
+          {
+            phrase: 1,
+            startBeat: 8,
+            endBeat: 12,
+            notes: 4,
+            rhythm: null,
+            from: null,
+            relation: null,
+          },
+        ],
+      });
+    const a = generateMelody(build('arch', 60));
+    const b = generateMelody(build('descending', 65));
+    expect(inSpan(a, 0, 8)).not.toEqual(inSpan(b, 0, 8));
+    expect(inSpan(a, 8, 16)).toEqual(inSpan(b, 8, 16));
+  });
+
   it('throws NoSolutionError at the phrase start for an impossible register', () => {
     const p = plan({
       phrases: [
@@ -709,7 +1143,9 @@ describe('generateMelody', () => {
           motifs: [0],
         }),
       ],
-      motifs: [{ phrase: 1, startBeat: 4, endBeat: 8, notes: 4, from: null, relation: null }],
+      motifs: [
+        { phrase: 1, startBeat: 4, endBeat: 8, notes: 4, rhythm: null, from: null, relation: null },
+      ],
     });
     let caught: unknown;
     try {
@@ -727,22 +1163,21 @@ describe('generateMelody', () => {
       expect(() => generateMelody(mixedPlan(), { budget: 10 })).toThrow(/melody pitch search/);
     });
 
-    it('rejects a development over the budget', () => {
+    it('rejects an onset grid over the budget', () => {
       const p = plan({
         phrases: [
           phrase({
             startBeat: 0,
             endBeat: 32,
             register: { low: 60, high: 60, mean: 60 },
-            motifs: [0],
+            onsetDensity: 0.1,
           }),
         ],
-        motifs: [{ phrase: 0, startBeat: 0, endBeat: 1, notes: 2, from: null, relation: null }],
       });
-      // Pitch search: 2 notes · 9 · 1² = 18; development: 32 tiles · 2 notes = 64.
-      expect(() => generateMelody(p, { budget: 30 })).toThrow(/melody development notes/);
-      expect(() => generateMelody(p, { budget: 30 })).toThrow(BudgetExceededError);
-      expect(() => generateMelody(p, { budget: 64 })).not.toThrow();
+      // Pitch search: 1 note · 9 · 1² = 9; onset grid: 8 bars · 16 slots = 128.
+      expect(() => generateMelody(p, { budget: 100 })).toThrow(/melody onset slots/);
+      expect(() => generateMelody(p, { budget: 100 })).toThrow(BudgetExceededError);
+      expect(() => generateMelody(p, { budget: 128 })).not.toThrow();
     });
 
     it('rejects a malformed budget', () => {

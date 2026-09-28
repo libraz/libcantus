@@ -57,12 +57,21 @@ function validPlan(): CompositionPlan {
       { startBeat: 4, endBeat: 8, key: 0, roman: 'V7' },
     ],
     motifs: [
-      { phrase: 0, startBeat: 0, endBeat: 1, notes: 3, from: null, relation: null },
+      {
+        phrase: 0,
+        startBeat: 0,
+        endBeat: 1,
+        notes: 3,
+        rhythm: [0.25, 0.25],
+        from: null,
+        relation: null,
+      },
       {
         phrase: 1,
         startBeat: 4,
         endBeat: 5,
         notes: 3,
+        rhythm: null,
         from: 0,
         relation: {
           kind: 'tonalTransposition',
@@ -267,6 +276,43 @@ describe('assertCompositionPlan: rejection', () => {
     ).degrees;
     expect(() => assertCompositionPlan(plan)).toThrow(InvalidInputError);
     expect(() => assertCompositionPlan(plan)).toThrow(/motifs\[1\]\.relation\.degrees/);
+  });
+
+  it('rejects a root rhythm whose length is not notes - 1', () => {
+    const plan = validPlan();
+    (plan.motifs[0] as (typeof plan.motifs)[number]).rhythm = [0.25, 0.25, 0.25];
+    expect(() => assertCompositionPlan(plan)).toThrow(InvalidInputError);
+    expect(() => assertCompositionPlan(plan)).toThrow(/motifs\[0\]\.rhythm/);
+  });
+
+  it('rejects a root rhythm with a ratio that is not positive', () => {
+    const plan = validPlan();
+    (plan.motifs[0] as (typeof plan.motifs)[number]).rhythm = [0.25, 0];
+    expect(() => assertCompositionPlan(plan)).toThrow(InvalidInputError);
+    expect(() => assertCompositionPlan(plan)).toThrow(/motifs\[0\]\.rhythm\[1\]/);
+  });
+
+  it('rejects root gaps that leave the last onset no room inside the statement', () => {
+    const plan = validPlan();
+    (plan.motifs[0] as (typeof plan.motifs)[number]).rhythm = [0.5, 0.5];
+    expect(() => assertCompositionPlan(plan)).toThrow(InvalidInputError);
+    expect(() => assertCompositionPlan(plan)).toThrow(/motifs\[0\]\.rhythm must sum to less/);
+  });
+
+  it('rejects a rhythm on a derived statement', () => {
+    const plan = validPlan();
+    (plan.motifs[1] as (typeof plan.motifs)[number]).rhythm = [0.25, 0.25];
+    expect(() => assertCompositionPlan(plan)).toThrow(InvalidInputError);
+    expect(() => assertCompositionPlan(plan)).toThrow(
+      /motifs\[1\]\.rhythm must be null for a derived statement/,
+    );
+  });
+
+  it('rejects a motif with no rhythm key', () => {
+    const plan = validPlan();
+    delete (plan.motifs[0] as unknown as Record<string, unknown>).rhythm;
+    expect(() => assertCompositionPlan(plan)).toThrow(InvalidInputError);
+    expect(() => assertCompositionPlan(plan)).toThrow(/motifs\[0\]\.rhythm/);
   });
 
   it('rejects a rhythm onsetLevels distribution of the wrong length', () => {

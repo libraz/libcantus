@@ -90,8 +90,7 @@ function nodesOf(reference: ReferenceProfile, plan: CompositionPlan): number[] {
 /**
  * The derivation a selected node should carry: the nearest selected ancestor,
  * with the edge's own relation when that ancestor is the parent, a composed
- * repetition or transposition when only those lie between, a variation when
- * the ancestor's motif has as many notes, and a root otherwise.
+ * repetition or transposition when only those lie between, and a root otherwise.
  */
 function expectedDerivation(
   reference: ReferenceProfile,
@@ -125,11 +124,7 @@ function expectedDerivation(
           },
         };
       }
-      const size = (index: number) =>
-        reference.melody.motifs[nodes[index]?.motif ?? -1]?.intervals.length;
-      return size(edge.from) === size(node)
-        ? { from: at, relation: null }
-        : { from: null, relation: null };
+      return { from: null, relation: null };
     }
     edge = parent(edge.from);
   }
@@ -308,7 +303,8 @@ describe('deriveCompositionPlan: preserve all 0', () => {
     });
   });
 
-  it('uses the neutral rhythm and keeps the reference IOI shares', () => {
+  it('uses the neutral rhythm, keeps the reference IOI shares and draws every root rhythm', () => {
+    expect(plan.motifs.every((m) => m.rhythm === null)).toBe(true);
     plan.rhythm.onsetLevels.forEach((share, index) => {
       expect(share).toBeCloseTo(NEUTRAL_ONSET_LEVELS[index] ?? Number.NaN, 12);
     });
@@ -521,10 +517,11 @@ describe('deriveCompositionPlan: motif selection', () => {
 
   it('covers SOURCE with the hook statements derived from earlier ones', () => {
     const plan = deriveCompositionPlan(SOURCE, { ctx: 1 });
-    // Each A unit is covered by two eight-note cells around the four-note hook
-    // at bar five and one more cell; the bridge by its three- and four-note
-    // figures. The hook at bar five of the first unit is a root: its only
-    // ancestor, the hook at beat 0, lies inside the selected cell 0-8.
+    // Equal covers prefer statements opening on strong beats, then more of
+    // them: each A unit splits into the four-note hook, the four-note second
+    // figure and the eight-note cells around them rather than one eight-note
+    // cell over hook and figure. The hook lineage stays whole: down a fourth
+    // at bar nine, repeated, inverted in the bridge and back up a fourth.
     const summary = plan.motifs.map((m) => [
       m.startBeat,
       m.endBeat,
@@ -534,34 +531,37 @@ describe('deriveCompositionPlan: motif selection', () => {
       m.relation?.semitones ?? null,
     ]);
     expect(summary).toEqual([
-      [0, 8, 8, null, null, null],
-      [8, 16, 8, 0, null, null],
-      [16, 20, 4, null, null, null],
-      [20, 28, 8, 0, null, null],
-      [32, 40, 8, 0, null, null],
-      [40, 48, 8, 1, 'repetition', 0],
-      // Hook down a fourth, through the unselected hook at beat 32.
-      [48, 52, 4, 2, 'transposition', -5],
-      [52, 60, 8, 3, 'repetition', 0],
-      // The bridge inverts the transposed hook around its top note.
-      [64, 68, 4, 6, 'inversion', 5],
-      [69, 73, 4, 8, null, null],
+      [0, 4, 4, null, null, null],
+      [4, 8, 4, null, null, null],
+      [8, 16, 8, null, null, null],
+      [16, 20, 4, 0, 'repetition', 0],
+      [20, 28, 8, null, null, null],
+      [32, 36, 4, 3, 'transposition', -5],
+      [36, 40, 4, 1, 'repetition', 0],
+      [40, 48, 8, 2, 'repetition', 0],
+      [48, 52, 4, 5, 'repetition', 0],
+      [52, 60, 8, 4, 'repetition', 0],
+      [64, 68, 4, 8, 'inversion', 5],
+      // The one variation the reference graph itself names.
+      [69, 73, 4, 10, null, null],
       [73, 76, 3, null, null, null],
       [76, 79, 3, null, null, null],
-      [80, 84, 4, 8, 'repetition', 0],
-      [85, 89, 4, 9, 'transposition', -2],
+      [80, 84, 4, 10, 'repetition', 0],
+      [85, 89, 4, 11, 'transposition', -2],
       [90, 96, 3, null, null, null],
-      [96, 104, 8, 0, 'repetition', 0],
-      [104, 112, 8, 5, 'repetition', 0],
-      [112, 116, 4, 6, 'transposition', 5],
-      [116, 124, 8, 7, 'repetition', 0],
+      [96, 100, 4, 8, 'transposition', 5],
+      [100, 104, 4, 6, 'repetition', 0],
+      [104, 112, 8, 7, 'repetition', 0],
+      [112, 116, 4, 17, 'repetition', 0],
+      [116, 124, 8, 9, 'repetition', 0],
     ]);
+    expect(plan.motifs.reduce((sum, m) => sum + m.notes, 0)).toBe(109);
     expect(plan.motifs.every((m) => m.relation?.sequence !== true)).toBe(true);
     expect(plan.phrases.map((p) => p.motifs)).toEqual([
-      [0, 1, 2, 3],
-      [4, 5, 6, 7],
-      [8, 9, 10, 11, 12, 13, 14],
-      [15, 16, 17, 18],
+      [0, 1, 2, 3, 4],
+      [5, 6, 7, 8, 9],
+      [10, 11, 12, 13, 14, 15, 16],
+      [17, 18, 19, 20, 21],
     ]);
   });
 
@@ -584,7 +584,9 @@ describe('deriveCompositionPlan: motif selection', () => {
     const node = SOURCE.melody.graph.nodes[0];
     const crowded = edited(SOURCE, (p) => {
       p.melody.graph.edges = [];
-      p.melody.graph.nodes = Array.from({ length: 250_001 }, () => ({ ...(node as never) }));
+      p.melody.graph.nodes = Array.from({ length: 250_001 }, () => ({
+        ...(node as NonNullable<typeof node>),
+      }));
     });
     expect(() => deriveCompositionPlan(crowded)).toThrow(BudgetExceededError);
     expect(() => deriveCompositionPlan(crowded)).toThrow(/plan motif selection/);
@@ -683,6 +685,32 @@ describe('deriveCompositionPlan: continuous items', () => {
     });
     expect(plan.rhythm.syncopation).toBeCloseTo(0.5 * reference.syncopation, 12);
     expect(plan.rhythm.interOnsetShares).toEqual(reference.interOnsetShares);
+  });
+
+  it('rhythm: keeps each root its motif onset gaps by the positional draw, derivations none', () => {
+    const seed = 6;
+    const p = 0.5;
+    const plan = deriveCompositionPlan(SOURCE, { preserve: onlyReplacing('rhythm', p), ctx: seed });
+    const nodes = nodesOf(SOURCE, plan);
+    const draw = planDraw(seed);
+    let kept = 0;
+    plan.motifs.forEach((motif, index) => {
+      if (motif.from !== null) {
+        expect(motif.rhythm).toBeNull();
+        return;
+      }
+      if (draw.prob(p, 'rhythm', index)) {
+        const cell =
+          SOURCE.melody.motifs[SOURCE.melody.graph.nodes[nodes[index] ?? -1]?.motif ?? -1];
+        expect(motif.rhythm).toEqual(cell?.rhythm.map((ratio) => ratio * cell.unitBeats));
+        expect(motif.rhythm).toHaveLength(motif.notes - 1);
+        kept += 1;
+      } else {
+        expect(motif.rhythm).toBeNull();
+      }
+    });
+    expect(kept).toBeGreaterThan(0);
+    expect(kept).toBeLessThan(plan.motifs.filter((m) => m.from === null).length);
   });
 
   it('harmonicRhythm: every change either stays or moves to its bar start', () => {
@@ -849,7 +877,7 @@ describe('deriveCompositionPlan: the melodic surface is not carried', () => {
     );
     for (const motif of plan.motifs) {
       expect(Object.keys(motif).sort()).toEqual(
-        ['endBeat', 'from', 'notes', 'phrase', 'relation', 'startBeat'].sort(),
+        ['endBeat', 'from', 'notes', 'phrase', 'relation', 'rhythm', 'startBeat'].sort(),
       );
     }
     const text = JSON.stringify(plan);
@@ -869,5 +897,18 @@ describe('deriveCompositionPlan: the melodic surface is not carried', () => {
     for (const array of arrays) {
       expect(cells).not.toContain(array);
     }
+  });
+
+  it('carries each root its onset gaps in beats, which are structure, not surface', () => {
+    const plan = deriveCompositionPlan(SOURCE);
+    const nodes = nodesOf(SOURCE, plan);
+    const roots = plan.motifs.filter((m) => m.from === null);
+    expect(roots.length).toBeGreaterThan(0);
+    plan.motifs.forEach((motif, index) => {
+      const cell = SOURCE.melody.motifs[SOURCE.melody.graph.nodes[nodes[index] ?? -1]?.motif ?? -1];
+      expect(motif.rhythm).toEqual(
+        motif.from === null ? cell?.rhythm.map((ratio) => ratio * cell.unitBeats) : null,
+      );
+    });
   });
 });

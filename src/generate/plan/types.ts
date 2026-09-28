@@ -134,9 +134,23 @@ export type PlannedMotif = {
   endBeat: number;
   /** How many notes the statement carries; a root's generated length, a derivation's inherited from its source. */
   notes: number;
+  /**
+   * A root's onset-to-onset gaps in beats, `notes - 1` of them, summing to
+   * less than the statement's length: its reference motif's ratios times
+   * {@link ReferenceMotif.unitBeats}. The first note sounds at `startBeat`
+   * and the last lasts to `endBeat`. Null for a root whose onsets a generator
+   * draws from `plan.rhythm`; always null for a derivation, whose rhythm is
+   * its source's under the named transformation.
+   */
+  rhythm: number[] | null;
   /** Index into `plan.motifs` of the statement this one derives from; null for a root. Always less than this statement's own index. */
   from: number | null;
-  /** The named transformation from `from`, or null for a root, or for a derivation with no named transformation (a variation). */
+  /**
+   * The named transformation from `from`, or null for a root, or for a
+   * derivation with no named transformation (a variation). Its `semitones`
+   * and `degrees` are the preferred pitch level: a generator may place the
+   * derivation at another level to keep it inside the register and the harmony.
+   */
   relation: MotifRelationSummary | null;
 };
 

@@ -11,8 +11,8 @@
  * reference's value and a neutral one.
  *
  * The reference's melodic surface — its motif intervals and phrase outlines —
- * never reaches the plan: a plan says how motifs derive from one another, not
- * what they sound like.
+ * never reaches the plan: a plan says how motifs derive from one another and
+ * carries a root's onset gaps, not the pitches it sounds.
  */
 
 import { HUMANIZE_ADJACENCY } from '../../analyze/adjacency.js';
@@ -25,7 +25,13 @@ import type { MotifRelationSummary } from '../../analyze/melody/relation.js';
 import type { ReferenceProfile } from '../../analyze/reference/types.js';
 import { assertReferenceProfile } from '../../analyze/reference/validate.js';
 import { InvalidInputError } from '../../core/errors/index.js';
-import { BEAT_EPS, barStartBeat, beatsPerBarAt, type MeterMap } from '../../core/meter/index.js';
+import {
+  BEAT_EPS,
+  barStartBeat,
+  beatsPerBarAt,
+  type MeterMap,
+  metricWeight,
+} from '../../core/meter/index.js';
 import { spelledInterval, transposeByInterval } from '../../core/pitch/index.js';
 import {
   assertGenerationBudget,
@@ -71,7 +77,11 @@ export type PreserveWeights = {
   motifRelations?: number;
   /** Phrase contour, peak and register, interpolated toward a neutral arch. */
   registerShape?: number;
-  /** Onset placement, interpolated toward a level-proportional distribution without syncopation. */
+  /**
+   * Each root's onset gaps, kept per root by a positional draw, and the
+   * onset placement, interpolated toward a level-proportional distribution
+   * without syncopation.
+   */
   rhythm?: number;
 };
 
@@ -130,6 +140,9 @@ const FUNCTION_DEGREES: Readonly<Record<HarmonicFunction, readonly number[]>> = 
   subdominant: [4, 2],
   dominant: [5, 7],
 };
+
+/** Metric weight from which a beat counts as strong: the downbeat and a bar's secondary accent. */
+const STRONG_WEIGHT = 2;
 
 /** Degree count of a scale whose degrees stack into diatonic triads. */
 const HEPTATONIC_DEGREES = 7;
@@ -421,13 +434,25 @@ type MotifCandidate = {
   notes: number;
 };
 
+/** A schedule's standing: notes covered, statements opening off a strong beat (negated), statements. */
+type Cover = [notes: number, weakStarts: number, count: number];
+
+/** Whether cover `a` ranks above cover `b`, comparing field by field. */
+function better(a: Cover, b: Cover): boolean {
+  for (let field = 0; field < a.length; field += 1) {
+    if (a[field] !== b[field]) return (a[field] as number) > (b[field] as number);
+  }
+  return false;
+}
+
 /**
- * The non-overlapping candidates that cover the most notes, by weighted
- * interval scheduling. Among equal covers the one taking the earlier start,
- * then the lower node index, at the first place they differ wins. Returned in
- * node order.
+ * The non-overlapping candidates chosen by weighted interval scheduling, ranked
+ * first by notes covered, then by fewest statements opening on a weak beat or
+ * off the pulse, then by most statements. Among equal schedules the one taking
+ * the earlier start, then the lower node index, at the first place they differ
+ * wins. Returned in node order.
  */
-function scheduleMotifs(candidates: readonly MotifCandidate[]): MotifCandidate[] {
+function scheduleMotifs(candidates: readonly MotifCandidate[], meters: MeterMap): MotifCandidate[] {
   const order = [...candidates].sort((a, b) => a.startBeat - b.startBeat || a.node - b.node);
   const count = order.length;
   // First candidate at or after position `from` starting no earlier than `beat`.
@@ -442,18 +467,30 @@ function scheduleMotifs(candidates: readonly MotifCandidate[]): MotifCandidate[]
     return low;
   };
   const next = order.map((candidate, index) => firstFrom(index + 1, candidate.endBeat));
-  // best[k]: the most notes candidates k.. can cover.
-  const best = new Array<number>(count + 1).fill(0);
+  const own = order.map(
+    (candidate): Cover => [
+      candidate.notes,
+      metricWeight(candidate.startBeat, meters) < STRONG_WEIGHT ? -1 : 0,
+      1,
+    ],
+  );
+  const taking = (index: number): Cover => {
+    const rest = best[next[index] as number] as Cover;
+    const mine = own[index] as Cover;
+    return [mine[0] + rest[0], mine[1] + rest[1], mine[2] + rest[2]];
+  };
+  // best[k]: the highest-ranked cover candidates k.. can reach.
+  const best: Cover[] = new Array<Cover>(count + 1).fill([0, 0, 0]);
   for (let index = count - 1; index >= 0; index -= 1) {
-    const taken = (order[index] as MotifCandidate).notes + (best[next[index] as number] as number);
-    best[index] = Math.max(best[index + 1] as number, taken);
+    const taken = taking(index);
+    const skipped = best[index + 1] as Cover;
+    best[index] = better(taken, skipped) ? taken : skipped;
   }
   const chosen: MotifCandidate[] = [];
   let index = 0;
   while (index < count) {
-    const candidate = order[index] as MotifCandidate;
-    if (candidate.notes + (best[next[index] as number] as number) === best[index]) {
-      chosen.push(candidate);
+    if (!better(best[index] as Cover, taking(index))) {
+      chosen.push(order[index] as MotifCandidate);
       index = next[index] as number;
     } else {
       index += 1;
@@ -464,15 +501,14 @@ function scheduleMotifs(candidates: readonly MotifCandidate[]): MotifCandidate[]
 
 /**
  * The derivation a selected node takes from its nearest selected ancestor. The
- * parent's edge is used as is; across skipped nodes a path of repetitions and
- * unstretched transpositions composes into one, any other path is a variation
- * when the ancestor's motif has as many notes, and a root otherwise.
+ * parent's edge is used as is, a null relation there being the graph's own
+ * variation; across skipped nodes a path of repetitions and unstretched
+ * transpositions composes into one, and any other path leaves the node a root.
  */
 function selectedDerivation(
   graph: MotifGraph,
   parentEdge: ReadonlyMap<number, MotifGraphEdge>,
   selectedAt: ReadonlyMap<number, number>,
-  noteCount: (node: number) => number,
   node: number,
 ): { from: number | null; relation: MotifRelationSummary | null } {
   let plain = true;
@@ -491,21 +527,19 @@ function selectedDerivation(
     if (steps === 1) {
       return { from, relation: relation === null ? null : { ...relation } };
     }
-    if (plain) {
-      const gap = (graph.nodes[node]?.startBeat ?? 0) - (graph.nodes[edge.from]?.endBeat ?? 0);
-      return {
-        from,
-        relation: {
-          kind: semitones === 0 ? 'repetition' : 'transposition',
-          sequence: gap >= -HUMANIZE_ADJACENCY && gap <= HUMANIZE_ADJACENCY,
-          semitones,
-          timeRatio: 1,
-        },
-      };
+    if (!plain) {
+      return { from: null, relation: null };
     }
-    return noteCount(edge.from) === noteCount(node)
-      ? { from, relation: null }
-      : { from: null, relation: null };
+    const gap = (graph.nodes[node]?.startBeat ?? 0) - (graph.nodes[edge.from]?.endBeat ?? 0);
+    return {
+      from,
+      relation: {
+        kind: semitones === 0 ? 'repetition' : 'transposition',
+        sequence: gap >= -HUMANIZE_ADJACENCY && gap <= HUMANIZE_ADJACENCY,
+        semitones,
+        timeRatio: 1,
+      },
+    };
   }
   return { from: null, relation: null };
 }
@@ -688,24 +722,24 @@ export function deriveCompositionPlan(
       });
     }
   });
-  const selected = scheduleMotifs(candidates);
+  const selected = scheduleMotifs(candidates, profile.meters);
   const selectedAt = new Map(selected.map((candidate, index) => [candidate.node, index]));
   const parentEdge = new Map(graph.edges.map((edge) => [edge.to, edge]));
   const motifs: PlannedMotif[] = selected.map((candidate, index) => {
-    const { from, relation } = selectedDerivation(
-      graph,
-      parentEdge,
-      selectedAt,
-      noteCount,
-      candidate.node,
-    );
+    const { from, relation } = selectedDerivation(graph, parentEdge, selectedAt, candidate.node);
     const keepRelation = draw.prob(preserve.motifRelations, 'motifRelations', index);
+    const keepRhythm = from === null && draw.prob(preserve.rhythm, 'rhythm', index);
+    const cell = profile.melody.motifs[graph.nodes[candidate.node]?.motif ?? -1];
     phrases[candidate.phrase]?.motifs.push(index);
     return {
       phrase: candidate.phrase,
       startBeat: candidate.startBeat,
       endBeat: candidate.endBeat,
       notes: candidate.notes,
+      rhythm:
+        keepRhythm && cell !== undefined
+          ? cell.rhythm.map((ratio) => ratio * cell.unitBeats)
+          : null,
       from,
       relation: keepRelation ? relation : null,
     };

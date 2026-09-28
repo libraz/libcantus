@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest';
+import { analyzeReference } from '../src/analyze/reference/index.js';
 import { InvalidInputError } from '../src/core/errors/index.js';
 import { ALGORITHM_VERSION } from '../src/core/random/version.js';
+import { deriveCompositionPlan } from '../src/generate/plan/derive.js';
 import { evaluateComposition } from '../src/generate/plan/evaluate.js';
 import { COMPOSITION_PLAN_VERSION, type CompositionPlan } from '../src/generate/plan/types.js';
 import { resolveKey } from '../src/theory/scale/index.js';
+import {
+  type ReferenceFixture,
+  SAME_STRUCTURE_SONG,
+  SOURCE_SONG,
+  TRANSPOSED_SONG,
+  UNRELATED_SONG,
+} from './support/reference-fixtures.js';
 
 const METERS = [{ startBeat: 0, ts: { numerator: 4, denominator: 4 } }];
 const C_MAJOR = resolveKey('C major');
@@ -23,7 +32,7 @@ function zeroRhythm(): CompositionPlan['rhythm'] {
  * The plan an eight-note, two-bar melody satisfies exactly: I then V, a root
  * motif of four chord tones and its literal transposition up a fifth, one
  * phrase the reference analysis reads as `wave`-shaped with a half cadence.
- * Every number below is read off `analyzeReference` of `baseMelody()` with
+ * The phrase figures are read off `analyzeReference` of `baseMelody()` with
  * this plan's own harmony injected, not guessed.
  */
 function basePlan(): CompositionPlan {
@@ -53,12 +62,21 @@ function basePlan(): CompositionPlan {
       { startBeat: 4, endBeat: 8, key: 0, roman: 'V' },
     ],
     motifs: [
-      { phrase: 0, startBeat: 0, endBeat: 4, notes: 4, from: null, relation: null },
+      {
+        phrase: 0,
+        startBeat: 0,
+        endBeat: 4,
+        notes: 4,
+        rhythm: [1, 1, 1],
+        from: null,
+        relation: null,
+      },
       {
         phrase: 0,
         startBeat: 4,
         endBeat: 8,
         notes: 4,
+        rhythm: null,
         from: 0,
         relation: { kind: 'transposition', sequence: true, semitones: 7, timeRatio: 1 },
       },
@@ -109,18 +127,7 @@ describe('evaluateComposition: a melody that satisfies its plan', () => {
     expect(fit).not.toHaveProperty('score');
     expect(fit).not.toHaveProperty('overall');
     expect(Object.keys(fit).sort()).toEqual(
-      [
-        'cadence',
-        'contour',
-        'duration',
-        'motifStructure',
-        'onset',
-        'phraseLength',
-        'progression',
-        'register',
-        'sectionSequence',
-        'syncopation',
-      ].sort(),
+      ['contour', 'density', 'duration', 'onset', 'register', 'syncopation'].sort(),
     );
   });
 });
@@ -206,18 +213,47 @@ describe('evaluateComposition: one violation kind at a time', () => {
     ]);
   });
 
-  it('flags cadence: the candidate closes on a different cadence than planned', () => {
+  it('flags cadence: the closing note is not a tone the planned cadence allows', () => {
     const plan = basePlan();
     (plan.phrases[0] as (typeof plan.phrases)[number]).cadence = 'authentic';
     const result = evaluateComposition(baseMelody(), plan);
+    // The closing G is a degree of the half cadence, not of the authentic one.
     expect(result.violations).toEqual([
       expect.objectContaining({
         kind: 'cadence',
         severity: 'error',
         atBeat: 8,
-        expected: 'authentic',
-        actual: 'half',
+        expected: 'a closing note on pitch class 0 or 4 for a authentic cadence',
+        actual: 'pitch 79',
       }),
+    ]);
+  });
+
+  it('judges a cadence by its closing note alone, which a derivation may bend', () => {
+    const plan = basePlan();
+    (plan.phrases[0] as (typeof plan.phrases)[number]).cadence = 'authentic';
+    const melody = baseMelody();
+    melody[7] = { pitch: 72, startBeat: 7, durationBeat: 1 };
+    const result = evaluateComposition(melody, plan);
+    expect(result.violations).toEqual([
+      expect.objectContaining({
+        kind: 'motifDisplaced',
+        severity: 'warning',
+        atBeat: 4,
+        actual: 'level 7, 1 excused note(s)',
+      }),
+    ]);
+  });
+
+  it('flags cadence when the phrase has no note to close on', () => {
+    const plan = splitPlan();
+    (plan.phrases[1] as (typeof plan.phrases)[number]).cadence = 'half';
+    const melody = baseMelody().slice(0, 4);
+    const cadences = evaluateComposition(melody, plan).violations.filter(
+      (v) => v.kind === 'cadence',
+    );
+    expect(cadences).toEqual([
+      expect.objectContaining({ kind: 'cadence', severity: 'error', atBeat: 8, actual: 'no note' }),
     ]);
   });
 
@@ -259,6 +295,82 @@ describe('evaluateComposition: one violation kind at a time', () => {
     ]);
   });
 
+  /** One phrase over I, four quarters, no motifs. */
+  function onePhrasePlan(): CompositionPlan {
+    return {
+      planVersion: COMPOSITION_PLAN_VERSION,
+      seed: 1,
+      algorithmVersion: ALGORITHM_VERSION,
+      keys: [C_MAJOR],
+      meters: METERS,
+      span: { startBeat: 0, endBeat: 4, bars: 1 },
+      sections: [{ label: 'A', startBeat: 0, endBeat: 4 }],
+      phrases: [
+        {
+          startBeat: 0,
+          endBeat: 4,
+          section: 0,
+          cadence: null,
+          shape: 'ascending',
+          peakPosition: 0.75,
+          register: { low: 60, high: 72, mean: 65 },
+          onsetDensity: 4,
+          motifs: [],
+        },
+      ],
+      harmony: [{ startBeat: 0, endBeat: 4, key: 0, roman: 'I' }],
+      motifs: [],
+      rhythm: zeroRhythm(),
+    };
+  }
+
+  it('accepts any scale tone on a weak pulse', () => {
+    const melody = [
+      { pitch: 60, startBeat: 0, durationBeat: 1 },
+      { pitch: 62, startBeat: 1, durationBeat: 1 },
+      { pitch: 67, startBeat: 2, durationBeat: 1 },
+      { pitch: 72, startBeat: 3, durationBeat: 1 },
+    ];
+    const harmony = evaluateComposition(melody, onePhrasePlan()).violations.filter(
+      (v) => v.kind === 'harmony',
+    );
+    expect(harmony).toEqual([]);
+  });
+
+  it('flags harmony on a strong pulse a scale tone does not rescue', () => {
+    const melody = [
+      { pitch: 60, startBeat: 0, durationBeat: 1 },
+      { pitch: 64, startBeat: 1, durationBeat: 1 },
+      { pitch: 66, startBeat: 2, durationBeat: 1 },
+      { pitch: 72, startBeat: 3, durationBeat: 1 },
+    ];
+    expect(evaluateComposition(melody, onePhrasePlan()).violations).toEqual([
+      expect.objectContaining({
+        kind: 'harmony',
+        severity: 'error',
+        atBeat: 2,
+        expected: 'a chord tone or an ornamental tone',
+      }),
+    ]);
+  });
+
+  it('only warns of a harmony misfit inside a derived statement', () => {
+    const plan = basePlan();
+    const derived = plan.motifs[1] as (typeof plan.motifs)[number];
+    derived.relation = { kind: 'transposition', sequence: true, semitones: 1, timeRatio: 1 };
+    const melody = baseMelody().map((note, index) =>
+      index < 4 ? note : { ...note, pitch: (baseMelody()[index - 4]?.pitch ?? 0) + 1 },
+    );
+    const harmony = evaluateComposition(melody, plan).violations.filter(
+      (v) => v.kind === 'harmony',
+    );
+    expect(harmony.length).toBeGreaterThan(0);
+    for (const violation of harmony) {
+      expect(violation.atBeat).toBeGreaterThanOrEqual(4);
+      expect(violation.severity).toBe('warning');
+    }
+  });
+
   it('flags motifDerivation: the named transformation does not hold on the candidate', () => {
     const plan = basePlan();
     const melody = baseMelody();
@@ -277,39 +389,85 @@ describe('evaluateComposition: one violation kind at a time', () => {
     ]);
   });
 
-  it('warns motifRepaired when a named transformation keeps its rhythm and most pitches', () => {
+  const derivationViolations = (result: ReturnType<typeof evaluateComposition>) =>
+    result.violations.filter((v) => v.kind === 'motifDerivation' || v.kind === 'motifDisplaced');
+
+  it('accepts a named transformation at another pitch level, warning motifDisplaced', () => {
     const plan = basePlan();
-    const melody = baseMelody();
-    // One of four transposed pitches moved to another tone of V: three of four still match.
-    melody[5] = { pitch: 74, startBeat: 5, durationBeat: 1 };
-    const result = evaluateComposition(melody, plan);
-    expect(result.violations).toEqual([
+    const derived = plan.motifs[1] as (typeof plan.motifs)[number];
+    derived.relation = { kind: 'transposition', sequence: true, semitones: 5, timeRatio: 1 };
+    expect(derivationViolations(evaluateComposition(baseMelody(), plan))).toEqual([
       expect.objectContaining({
-        kind: 'motifRepaired',
+        kind: 'motifDisplaced',
         severity: 'warning',
         atBeat: 4,
-        expected: 'transposition with every pitch kept',
-        actual: '75% of pitches kept',
+        expected: 'transposition at level 5 with every pitch replayed',
+        actual: 'level 7, 0 excused note(s)',
       }),
     ]);
   });
 
-  it('flags motifDerivation when a named transformation changes its rhythm, pitches intact', () => {
+  it('never accepts a transposition at level 0, which is a repetition', () => {
+    const plan = basePlan();
+    const derived = plan.motifs[1] as (typeof plan.motifs)[number];
+    derived.relation = { kind: 'transposition', sequence: true, semitones: 7, timeRatio: 1 };
+    const melody = baseMelody().map((note, index) =>
+      index < 4 ? note : { ...note, pitch: baseMelody()[index - 4]?.pitch ?? 0 },
+    );
+    expect(derivationViolations(evaluateComposition(melody, plan))).toEqual([
+      expect.objectContaining({ kind: 'motifDerivation', severity: 'error', atBeat: 4 }),
+    ]);
+  });
+
+  it('excuses a replayed pitch outside a register too narrow for the statement', () => {
+    const plan = basePlan();
+    const phrase = plan.phrases[0] as (typeof plan.phrases)[number];
+    // Ten semitones cannot hold the twelve-semitone arpeggio at any level.
+    phrase.register = { low: 60, high: 70, mean: 65 };
+    const melody = baseMelody();
+    // Two semitones down replays 58 62 65 70; the candidate holds 60 in place of the 58.
+    [60, 62, 65, 70].forEach((pitch, index) => {
+      melody[4 + index] = { pitch, startBeat: 4 + index, durationBeat: 1 };
+    });
+    expect(derivationViolations(evaluateComposition(melody, plan))).toEqual([
+      expect.objectContaining({ kind: 'motifDisplaced', actual: 'level -2, 1 excused note(s)' }),
+    ]);
+  });
+
+  it('does not excuse a replayed pitch outside the register when another level fits it whole', () => {
+    const plan = basePlan();
+    const phrase = plan.phrases[0] as (typeof plan.phrases)[number];
+    phrase.register = { low: 60, high: 73, mean: 66.5 };
+    const melody = baseMelody();
+    // At the planned level 74 and 79 leave the register, but other levels fit all four notes.
+    melody[6] = { pitch: 72, startBeat: 6, durationBeat: 1 };
+    melody[7] = { pitch: 72, startBeat: 7, durationBeat: 1 };
+    const derivation = derivationViolations(evaluateComposition(melody, plan));
+    expect(derivation).toEqual([
+      expect.objectContaining({ kind: 'motifDerivation', severity: 'error', atBeat: 4 }),
+    ]);
+  });
+
+  it('flags motifDerivation when a named transformation changes its onsets, pitches intact', () => {
     const plan = basePlan();
     const melody = baseMelody();
     melody[5] = { pitch: 71, startBeat: 5, durationBeat: 1.5 };
     melody[6] = { pitch: 74, startBeat: 6.5, durationBeat: 0.5 };
-    const derivation = evaluateComposition(melody, plan).violations.filter(
-      (v) => v.kind === 'motifDerivation' || v.kind === 'motifRepaired',
-    );
-    expect(derivation).toEqual([
+    expect(derivationViolations(evaluateComposition(melody, plan))).toEqual([
       expect.objectContaining({
         kind: 'motifDerivation',
         severity: 'error',
         atBeat: 4,
-        actual: 'onsets or durations differ',
+        actual: 'no pitch level replays the source',
       }),
     ]);
+  });
+
+  it('does not compare durations, only onsets and pitches', () => {
+    const plan = basePlan();
+    const melody = baseMelody();
+    melody[5] = { pitch: 71, startBeat: 5, durationBeat: 0.5 };
+    expect(derivationViolations(evaluateComposition(melody, plan))).toEqual([]);
   });
 
   it('judges a variation by melodic similarity alone', () => {
@@ -317,10 +475,7 @@ describe('evaluateComposition: one violation kind at a time', () => {
     (plan.motifs[1] as (typeof plan.motifs)[number]).relation = null;
     const melody = baseMelody();
     melody[5] = { pitch: 74, startBeat: 5, durationBeat: 1 };
-    const derivation = evaluateComposition(melody, plan).violations.filter(
-      (v) => v.kind === 'motifDerivation' || v.kind === 'motifRepaired',
-    );
-    expect(derivation).toEqual([]);
+    expect(derivationViolations(evaluateComposition(melody, plan))).toEqual([]);
   });
 
   it("flags register: a note outside its phrase's planned range", () => {
@@ -412,8 +567,9 @@ describe('evaluateComposition: the plan harmony is the one actually used', () =>
     const underIi = evaluateComposition(melody, planWithChord('ii'));
     const harmonyCount = (result: ReturnType<typeof evaluateComposition>) =>
       result.violations.filter((v) => v.kind === 'harmony').length;
+    // Under I only the out-of-key weak Eb misfits; under ii the strong C is left unresolved too.
     expect(harmonyCount(underI)).toBe(1);
-    expect(harmonyCount(underIi)).toBe(4);
+    expect(harmonyCount(underIi)).toBe(2);
     expect(harmonyCount(underI)).not.toBe(harmonyCount(underIi));
   });
 });
@@ -438,5 +594,50 @@ describe('evaluateComposition: determinism', () => {
     const first = evaluateComposition(baseMelody(), basePlan());
     const second = evaluateComposition(baseMelody(), basePlan());
     expect(second).toEqual(first);
+  });
+});
+
+describe('evaluateComposition: a reference melody against its own plan', () => {
+  const fixtures: [string, ReferenceFixture, number][] = [
+    ['source', SOURCE_SONG, 22],
+    ['same structure', SAME_STRUCTURE_SONG, 22],
+    ['transposed', TRANSPOSED_SONG, 22],
+    ['unrelated', UNRELATED_SONG, 2],
+  ];
+  const keepAll = {
+    form: 1,
+    phraseLengths: 1,
+    harmonicFunction: 1,
+    harmonicRhythm: 1,
+    motifRelations: 1,
+    registerShape: 1,
+    rhythm: 1,
+  };
+
+  it.each(fixtures)('fails only on harmony (%s)', (_, fixture, statements) => {
+    const reference = analyzeReference(fixture.notes, {
+      meters: fixture.meters,
+      key: fixture.key,
+      melody: fixture.melody,
+    });
+    const plan = deriveCompositionPlan(reference, { preserve: keepAll, ctx: { seed: 1 } });
+    expect(plan.motifs).toHaveLength(statements);
+    const errors = evaluateComposition(fixture.melody, plan).violations.filter(
+      (v) => v.severity === 'error',
+    );
+    expect(errors.filter((v) => v.kind !== 'harmony')).toEqual([]);
+  });
+
+  it('selects 22 statements of 109 notes from 7 roots for the AABA fixtures', () => {
+    for (const fixture of [SOURCE_SONG, SAME_STRUCTURE_SONG, TRANSPOSED_SONG]) {
+      const reference = analyzeReference(fixture.notes, {
+        meters: fixture.meters,
+        key: fixture.key,
+        melody: fixture.melody,
+      });
+      const plan = deriveCompositionPlan(reference, { preserve: keepAll, ctx: { seed: 1 } });
+      expect(plan.motifs.reduce((sum, m) => sum + m.notes, 0)).toBe(109);
+      expect(plan.motifs.filter((m) => m.from === null)).toHaveLength(7);
+    }
   });
 });
