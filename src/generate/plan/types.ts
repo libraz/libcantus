@@ -187,3 +187,41 @@ export function planTimeline(plan: CompositionPlan): ChordTimeline {
   });
   return chordTimelineFromChords(spans, plan.span.endBeat);
 }
+
+/** A tent over [0, 1] rising from -1 to +1 at `apex` and falling back. */
+function tent(t: number, apex: number): number {
+  if (t <= apex) {
+    return apex === 0 ? 1 : -1 + (2 * t) / apex;
+  }
+  return apex === 1 ? 1 : 1 - (2 * (t - apex)) / (1 - apex);
+}
+
+/**
+ * The contour a planned phrase asks for at relative position `t` in [0, 1], in
+ * [-1, 1] around its register mean: a tent peaking at `peakPosition` for
+ * `'arch'`, a line for `'ascending'` and `'descending'`, two tents peaking at
+ * 0.25 and 0.75 for `'wave'`, and flat for `'static'`.
+ *
+ * @param shape The phrase's planned shape.
+ * @param peakPosition Where an arch peaks, as a share of the phrase.
+ * @param t Position within the phrase, as a share of its length.
+ * @returns The target, from -1 at the register floor to +1 at its ceiling.
+ */
+export function plannedContourAt(
+  shape: PlannedPhrase['shape'],
+  peakPosition: number,
+  t: number,
+): number {
+  switch (shape) {
+    case 'arch':
+      return tent(t, peakPosition);
+    case 'ascending':
+      return -1 + 2 * t;
+    case 'descending':
+      return 1 - 2 * t;
+    case 'wave':
+      return t < 0.5 ? tent(2 * t, 0.5) : tent(2 * t - 1, 0.5);
+    case 'static':
+      return 0;
+  }
+}

@@ -43,7 +43,7 @@ import {
 } from '../context/index.js';
 import { cellSpan, developMotif, type MotifNote, motifToNoteEvents } from '../motif/index.js';
 import type { CompositionPlan, PlannedChord, PlannedPhrase } from '../plan/types.js';
-import { planTimeline } from '../plan/types.js';
+import { plannedContourAt, planTimeline } from '../plan/types.js';
 import { assertCompositionPlan } from '../plan/validate.js';
 import { generateRhythm, onsetWeightCurve } from '../rhythm/index.js';
 import { deriveStatement, type PhraseFrame, repairStatement, varyStatement } from './derive.js';
@@ -149,36 +149,12 @@ function onPulse(scene: Scene, beat: number): boolean {
   return metricWeight(beat, scene.plan.meters) > 0;
 }
 
-/** A tent over [0, 1] rising from -1 to +1 at `apex` and falling back. */
-function tent(t: number, apex: number): number {
-  if (t <= apex) {
-    return apex === 0 ? 1 : -1 + (2 * t) / apex;
-  }
-  return apex === 1 ? 1 : 1 - (2 * (t - apex)) / (1 - apex);
-}
-
-/** The target curve of a shape at relative position `t`, in [-1, 1]. */
-function contourAt(shape: PlannedPhrase['shape'], peakPosition: number, t: number): number {
-  switch (shape) {
-    case 'arch':
-      return tent(t, peakPosition);
-    case 'ascending':
-      return -1 + 2 * t;
-    case 'descending':
-      return 1 - 2 * t;
-    case 'wave':
-      return t < 0.5 ? tent(2 * t, 0.5) : tent(2 * t - 1, 0.5);
-    case 'static':
-      return 0;
-  }
-}
-
 /** The pitch a phrase's target curve asks for at a beat. */
 function targetPitch(phrase: PlannedPhrase, beat: number): number {
   const length = phrase.endBeat - phrase.startBeat;
   const t = length > 0 ? Math.min(Math.max((beat - phrase.startBeat) / length, 0), 1) : 0;
   const { low, high, mean } = phrase.register;
-  return mean + ((high - low) / 2) * contourAt(phrase.shape, phrase.peakPosition, t);
+  return mean + ((high - low) / 2) * plannedContourAt(phrase.shape, phrase.peakPosition, t);
 }
 
 /** The search and repair view of one phrase. */
