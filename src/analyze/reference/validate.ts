@@ -427,12 +427,37 @@ function assertMotifGraph(
 function assertReferenceMotif(value: unknown, name: string): ReferenceMotif {
   const read = assertRecord<ReferenceMotif>(value, name);
   const intervals = assertArray<number>(read.intervals, `${name}.intervals`);
+  // The cell has to be writable as MIDI notes: whole semitones spanning at most 127.
+  let pitch = 0;
+  let low = 0;
+  let high = 0;
   for (let index = 0; index < intervals.length; index += 1) {
-    assertFiniteNumber(intervals[index] as number, `${name}.intervals[${index}]`);
+    const interval = assertFiniteNumber(intervals[index] as number, `${name}.intervals[${index}]`);
+    if (!Number.isInteger(interval)) {
+      throw new InvalidInputError(
+        `${name}.intervals[${index}] must be a whole number of semitones; received ${interval}`,
+      );
+    }
+    pitch += interval;
+    low = Math.min(low, pitch);
+    high = Math.max(high, pitch);
+  }
+  if (high - low > 127) {
+    throw new InvalidInputError(
+      `${name}.intervals must span at most 127 semitones; received ${high - low}`,
+    );
   }
   const rhythm = assertArray<number>(read.rhythm, `${name}.rhythm`);
+  if (rhythm.length !== intervals.length) {
+    throw new InvalidInputError(
+      `${name}.rhythm must hold one ratio per interval (${intervals.length}); received ${rhythm.length}`,
+    );
+  }
   for (let index = 0; index < rhythm.length; index += 1) {
-    assertFiniteNumber(rhythm[index] as number, `${name}.rhythm[${index}]`);
+    const ratio = assertFiniteNumber(rhythm[index] as number, `${name}.rhythm[${index}]`);
+    if (!(ratio > 0)) {
+      throw new InvalidInputError(`${name}.rhythm[${index}] must be positive; received ${ratio}`);
+    }
   }
   assertRange(read.spanBeats, 0, Number.MAX_SAFE_INTEGER, `${name}.spanBeats`);
   assertPositiveInt(read.occurrences, `${name}.occurrences`);

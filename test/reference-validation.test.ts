@@ -264,6 +264,19 @@ describe('assertReferenceProfile: rejection', () => {
     expect(() => assertReferenceProfile(profile)).toThrow(/harmony\.chords\[0\]\.roman/);
   });
 
+  it.each([
+    ['a fractional interval', { intervals: [2, 1.5], rhythm: [1, 1] }, /intervals\[1\]/],
+    ['an interval run wider than MIDI', { intervals: [100, 100], rhythm: [1, 1] }, /intervals/],
+    ['a rhythm of the wrong length', { intervals: [2, 2], rhythm: [1] }, /rhythm/],
+    ['a non-positive rhythm ratio', { intervals: [2, 2], rhythm: [1, 0] }, /rhythm\[1\]/],
+  ])('rejects a motif with %s', (_, cell, path) => {
+    const profile = validProfile();
+    expect(profile.melody.motifs.length).toBeGreaterThan(0);
+    Object.assign(profile.melody.motifs[0] as ReferenceMotif, cell);
+    expect(() => assertReferenceProfile(profile)).toThrow(InvalidInputError);
+    expect(() => assertReferenceProfile(profile)).toThrow(path);
+  });
+
   it('rejects an unknown profileVersion', () => {
     const profile = validProfile();
     (profile as unknown as Record<string, unknown>).profileVersion = REFERENCE_PROFILE_VERSION + 1;
