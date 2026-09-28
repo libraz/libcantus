@@ -290,12 +290,12 @@ describe('analyzeReference on the reference fixtures', () => {
     expect(profile.form.phrases.map((phrase) => phrase.bars)).toEqual([8, 8, 8, 8]);
   });
 
-  it('closes every source-song phrase on the authentic cadence written into its last bars', () => {
+  it('closes every source-song phrase on the cadence written into its last bars', () => {
     const { phrases } = fixtureProfile(SOURCE_SONG).form;
     expect(phrases.map((phrase) => phrase.cadence?.type)).toEqual([
       'authentic',
       'authentic',
-      'authentic',
+      'half',
       'authentic',
     ]);
     expect(phrases.map((phrase) => phrase.cadence?.atBeat)).toEqual([28, 60, 92, 124]);
@@ -311,13 +311,27 @@ describe('analyzeReference on the reference fixtures', () => {
       expect(section?.startBeat).toBeLessThanOrEqual(phrase.startBeat);
       expect(section?.endBeat).toBeGreaterThan(phrase.startBeat);
     }
+    const labels = profile.form.phrases.map(
+      (phrase) => profile.form.sections[phrase.section ?? -1]?.label,
+    );
+    expect(labels).toEqual(['A', 'A', 'B', 'A']);
   });
 
-  it('reads the hook and its restatement at depth 0 and its transposition at depth 1', () => {
+  it('cuts the same-structure song into the same AABA sections as the source song', () => {
+    const profile = fixtureProfile(SAME_STRUCTURE_SONG);
+    const labels = profile.form.phrases.map(
+      (phrase) => profile.form.sections[phrase.section ?? -1]?.label,
+    );
+    expect(labels).toEqual(['A', 'A', 'B', 'A']);
+  });
+
+  it('reads the hook at depth 0, its transposition at depth 1 and its inversion at depth 2', () => {
     const profile = fixtureProfile(SOURCE_SONG);
     const { motifs, graph } = profile.melody;
     const hook = motifs.findIndex((motif) => motif.intervals.join() === '2,2,1');
+    const invertedHook = motifs.findIndex((motif) => motif.intervals.join() === '-2,-2,-1');
     expect(hook).toBeGreaterThanOrEqual(0);
+    expect(invertedHook).toBeGreaterThanOrEqual(0);
     const depths = derivationDepths(graph);
     const depthOf = (motif: number, beat: number): number | undefined => {
       const node = graph.nodes.findIndex((n) => n.motif === motif && n.startBeat === beat);
@@ -326,6 +340,7 @@ describe('analyzeReference on the reference fixtures', () => {
     expect(depthOf(hook, 0)).toBe(0);
     expect(depthOf(hook, 16)).toBe(0);
     expect(depthOf(hook, 32)).toBe(1);
+    expect(depthOf(invertedHook, 64)).toBe(2);
   });
 
   it('assigns every graph node to the phrase its statement starts in', () => {
@@ -346,13 +361,15 @@ describe('analyzeReference on the reference fixtures', () => {
   it('reads the source melody register and phrase outlines', () => {
     const profile = fixtureProfile(SOURCE_SONG);
     const register = profile.melody.register;
-    expect(register?.low).toBe(67);
+    // The bridge dips to the lowest note of the piece; the three A phrases keep
+    // the register the hook and its fillers state everywhere else.
+    expect(register?.low).toBe(53);
     expect(register?.high).toBe(79);
     for (const phrase of profile.form.phrases) {
       expect(phrase.melody).not.toBeNull();
       expect(phrase.melody?.outline).toHaveLength(8);
-      expect(phrase.melody?.high).toBe(79);
     }
+    expect(profile.form.phrases.map((phrase) => phrase.melody?.high)).toEqual([79, 79, 72, 79]);
     // The first sample point of an eight-bar phrase is beat 2, where the hook's E (76) sounds.
     expect(profile.form.phrases[0]?.melody?.outline[0]).toBeCloseTo(76 - (register?.mean ?? 0), 9);
   });
@@ -403,7 +420,7 @@ describe('analyzeReference options', () => {
     const profile = analyzeReference(SOURCE_SONG.melody, { meters: '4/4', key: C_MAJOR });
     assertReferenceProfile(profile);
     expectPhrasesTileSpan(profile);
-    expect(profile.melody.register?.low).toBe(67);
+    expect(profile.melody.register?.low).toBe(53);
     expect(profile.melody.register?.high).toBe(79);
   });
 

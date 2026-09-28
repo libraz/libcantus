@@ -95,25 +95,92 @@ function unit(at: number, hook: readonly number[]): NoteEvent[] {
   return [...eightBarHarmony(at), ...eightBarMelody(at, hook)];
 }
 
-/** The melody of four eight-bar units, one hook per unit. */
-function unitMelodies(hooks: readonly (readonly number[])[]): NoteEvent[] {
-  return hooks.flatMap((hook, i) => eightBarMelody(i * 32, hook));
+/**
+ * Eight bars of harmony for the bridge: `vi-IV-ii` twice, then `IV-V`. `I`
+ * never sounds, so nothing before the closing bar rests on the tonic, and the
+ * only cadence in the unit is the half cadence its last bar arrives on.
+ */
+function bridgeHarmony(at: number): NoteEvent[] {
+  return [
+    ...chord(vi, at, 4),
+    ...chord(IV, at + 4, 4),
+    ...chord(ii, at + 8, 4),
+    ...chord(vi, at + 12, 4),
+    ...chord(IV, at + 16, 4),
+    ...chord(ii, at + 20, 4),
+    ...chord(IV, at + 24, 4),
+    ...chord(V, at + 28, 4),
+  ];
 }
 
 /**
- * The "source song": four eight-bar phrases in AABA form, 4/4, on
- * `I-V6-vi-IV` moving to `ii-IV-V-I`. The second A restates the hook
- * transposed, the bridge inverts it, and the last A returns to it plain.
+ * Eight bars of melody for the bridge: the inverted hook stated in bars one
+ * and five, each followed by its own filler rather than a shared one, so the
+ * two statements never extend into a matching longer cell; a lower, falling
+ * contour contrasts with {@link eightBarMelody}'s register; the close holds a
+ * tone of the bridge's closing `V`.
+ */
+function bridgeMelody(at: number, invertedHook: readonly number[]): NoteEvent[] {
+  return [
+    ...run(invertedHook, at),
+    ...run([65, 62, 59, 55], at + 4),
+    ...run([57, 60, 64, 67], at + 8),
+    ...run([64, 67, 71, 69], at + 12),
+    ...run(invertedHook, at + 16),
+    ...run([64, 60, 57, 53], at + 20),
+    ...run([55, 59, 62, 65], at + 24),
+    note(62, at + 28, 4),
+  ];
+}
+
+/** One eight-bar bridge unit: contrasting harmony plus a melody on the inverted hook. */
+function bridgeUnit(at: number, invertedHook: readonly number[]): NoteEvent[] {
+  return [...bridgeHarmony(at), ...bridgeMelody(at, invertedHook)];
+}
+
+/**
+ * The notes of an AABA song built from a hook: the first two eight-bar units
+ * state it plain, then transposed; the third is the contrasting bridge, which
+ * states it inverted; the fourth returns to it plain.
+ */
+function aabaNotes(
+  hook: readonly number[],
+  transposedHook: readonly number[],
+  invertedHook: readonly number[],
+): NoteEvent[] {
+  return [
+    ...unit(0, hook),
+    ...unit(32, transposedHook),
+    ...bridgeUnit(64, invertedHook),
+    ...unit(96, hook),
+  ];
+}
+
+/** The melody alone of {@link aabaNotes}. */
+function aabaMelody(
+  hook: readonly number[],
+  transposedHook: readonly number[],
+  invertedHook: readonly number[],
+): NoteEvent[] {
+  return [
+    ...eightBarMelody(0, hook),
+    ...eightBarMelody(32, transposedHook),
+    ...bridgeMelody(64, invertedHook),
+    ...eightBarMelody(96, hook),
+  ];
+}
+
+/**
+ * The "source song": four eight-bar phrases in AABA form, 4/4. The A units
+ * are on `I-V6-vi-IV` moving to `ii-IV-V-I`; the second A restates the hook
+ * transposed, the last A returns to it plain. The bridge contrasts them on a
+ * `vi-IV-ii` progression that never touches the tonic, closing on a half
+ * cadence, with the hook inverted over a lower, falling filler.
  */
 export const SOURCE_SONG: ReferenceFixture = {
   name: 'source song (AABA, C major)',
-  notes: [
-    ...unit(0, HOOK_A),
-    ...unit(32, HOOK_A_TRANSPOSED),
-    ...unit(64, HOOK_A_INVERTED),
-    ...unit(96, HOOK_A),
-  ],
-  melody: unitMelodies([HOOK_A, HOOK_A_TRANSPOSED, HOOK_A_INVERTED, HOOK_A]),
+  notes: aabaNotes(HOOK_A, HOOK_A_TRANSPOSED, HOOK_A_INVERTED),
+  melody: aabaMelody(HOOK_A, HOOK_A_TRANSPOSED, HOOK_A_INVERTED),
   meters: '4/4',
   key: 'C major',
   phraseBoundaries: [0, 32, 64, 96, 128],
@@ -135,13 +202,8 @@ const HOOK_C_INVERTED = HOOK_C.map((pitch) => 2 * (HOOK_C[0] ?? 0) - pitch);
  */
 export const SAME_STRUCTURE_SONG: ReferenceFixture = {
   name: 'same-structure song (AABA, C major, a different hook)',
-  notes: [
-    ...unit(0, HOOK_C),
-    ...unit(32, HOOK_C_TRANSPOSED),
-    ...unit(64, HOOK_C_INVERTED),
-    ...unit(96, HOOK_C),
-  ],
-  melody: unitMelodies([HOOK_C, HOOK_C_TRANSPOSED, HOOK_C_INVERTED, HOOK_C]),
+  notes: aabaNotes(HOOK_C, HOOK_C_TRANSPOSED, HOOK_C_INVERTED),
+  melody: aabaMelody(HOOK_C, HOOK_C_TRANSPOSED, HOOK_C_INVERTED),
   meters: '4/4',
   key: 'C major',
   phraseBoundaries: [0, 32, 64, 96, 128],
