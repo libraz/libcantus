@@ -216,13 +216,16 @@ function expectedDerivation(
   return anchor(cell, (source[0]?.pitch ?? 0) + relation.semitones, startBeat);
 }
 
-/** One phrase over a single I chord: a root motif at 0..4 and one derivation of it at 8. */
+/**
+ * One phrase over a single I chord: a root motif at 0..4 and one derivation of
+ * it at 8, clear of the final bar the phrase-end hold rewrites.
+ */
 function derivationPlan(relation: Relation, derivedSpan: number): CompositionPlan {
   return plan({
     phrases: [
       phrase({
         startBeat: 0,
-        endBeat: 16,
+        endBeat: 20,
         register: { low: 48, high: 84, mean: 66 },
         motifs: [0, 1],
       }),
@@ -318,7 +321,6 @@ describe('generateMelody', () => {
     it.each([0.25, 0.75])('places an arch peak within 0.2 of peakPosition %s', (peak) => {
       for (const seed of [1, 2, 3]) {
         const notes = generateMelody({ ...contourPlan('arch', peak), seed });
-        expect(notes).toHaveLength(16);
         expect(Math.abs(peakFraction(notes) - peak)).toBeLessThanOrEqual(0.2);
       }
     });
@@ -362,11 +364,12 @@ describe('generateMelody', () => {
 
   describe('root motif length', () => {
     it.each([1, 3, 7, 12])('honours notes = %s', (count) => {
+      // The phrase runs a bar past the motif, so the phrase-end hold leaves the motif whole.
       const p = plan({
-        phrases: [phrase({ startBeat: 0, endBeat: 4, onsetDensity: 4, motifs: [0] })],
+        phrases: [phrase({ startBeat: 0, endBeat: 8, onsetDensity: 4, motifs: [0] })],
         motifs: [{ phrase: 0, startBeat: 0, endBeat: 4, notes: count, from: null, relation: null }],
       });
-      const notes = generateMelody(p);
+      const notes = inSpan(generateMelody(p), 0, 4);
       expect(notes).toHaveLength(count);
       expect(notes[0]?.startBeat).toBe(0);
       const last = notes[notes.length - 1] as NoteEvent;
@@ -522,6 +525,59 @@ describe('generateMelody', () => {
         register: { low: 61, high: 62, mean: 61.5 },
       }));
       expect(() => generateMelody({ ...p, phrases })).toThrow(NoSolutionError);
+    });
+  });
+
+  describe('phrase-final hold', () => {
+    const plans: [string, () => CompositionPlan][] = [
+      ['motifs and free spans', mixedPlan],
+      ['a root motif filling the phrase', () => cadenceHoldPlan('authentic')],
+      ['no motifs', () => plan({ phrases: [phrase({ startBeat: 0, endBeat: 8 })] })],
+    ];
+
+    function cadenceHoldPlan(cadence: PlannedPhrase['cadence']): CompositionPlan {
+      return plan({
+        phrases: [phrase({ startBeat: 0, endBeat: 8, cadence, motifs: [0] })],
+        harmony: [
+          { startBeat: 0, endBeat: 4, key: 0, roman: 'V' },
+          { startBeat: 4, endBeat: 8, key: 0, roman: 'I' },
+        ],
+        motifs: [{ phrase: 0, startBeat: 0, endBeat: 8, notes: 8, from: null, relation: null }],
+      });
+    }
+
+    it.each(plans)(
+      'holds one note from the final bar to the phrase end, with nothing after it (%s)',
+      (_, build) => {
+        for (const seed of [1, 2, 3, 4, 5]) {
+          const p = { ...build(), seed };
+          const notes = generateMelody(p);
+          for (const ph of p.phrases) {
+            const downbeat = ph.endBeat - 4;
+            const inside = inSpan(notes, ph.startBeat, ph.endBeat);
+            const held = inside[inside.length - 1] as NoteEvent;
+            expect(held.startBeat + held.durationBeat).toBeCloseTo(ph.endBeat, 9);
+            const before = inside.slice(0, -1);
+            if (held.startBeat > downbeat + EPS) {
+              for (const n of before) {
+                expect(n.startBeat + n.durationBeat).toBeLessThanOrEqual(downbeat + EPS);
+              }
+            } else {
+              expect(before.every((n) => n.startBeat < held.startBeat)).toBe(true);
+            }
+          }
+        }
+      },
+    );
+
+    it('bends the held note onto the cadence', () => {
+      const tonicTriad = [0, 4];
+      for (const seed of [1, 2, 3, 4, 5]) {
+        const notes = generateMelody({ ...cadenceHoldPlan('authentic'), seed });
+        const held = notes[notes.length - 1] as NoteEvent;
+        expect(held.startBeat + held.durationBeat).toBeCloseTo(8, 9);
+        expect(tonicTriad).toContain(((held.pitch % 12) + 12) % 12);
+      }
     });
   });
 

@@ -6,8 +6,8 @@
  * replayed through the named relation. Each root motif gets a rhythm from
  * {@link generateRhythm} and pitches from a chain search toward the phrase's
  * target curve; derived motifs are transformed and locally repaired; the spans
- * no motif covers are developed from a root motif; and each phrase's last
- * pulse note is bent onto its cadence.
+ * no motif covers are developed from a root motif; and each phrase closes on a
+ * note held from its final bar to its end, bent onto its cadence.
  *
  * Every draw is addressed by phrase index and position, and a phrase reads
  * only its own plan entries and the motifs its derivations lead back to, so
@@ -19,7 +19,9 @@ import { type ChordTimeline, chordTimelineFromChords } from '../../analyze/timel
 import { InvalidInputError, NoSolutionError } from '../../core/errors/index.js';
 import {
   BEAT_EPS,
+  barStartBeat,
   beatsPerBar,
+  beatsPerBarAt,
   meterAt,
   metricWeight,
   type TimeSignature,
@@ -442,20 +444,45 @@ function developedSpan(scene: Scene, index: number, segment: Segment): MotifNote
 }
 
 /**
- * Bend a phrase's last pulse note onto its cadence, holding every other note.
- * Mutates the note in place, so a statement shared with a later derivation
- * carries the repaired pitch into it.
+ * The note a phrase closes on: the one sounding at its final bar's downbeat,
+ * else the first onset after that downbeat; -1 when the final bar is silent.
  */
-function repairCadence(scene: Scene, index: number, line: MotifNote[]): void {
+function heldNoteIndex(scene: Scene, index: number, line: readonly MotifNote[]): number {
+  const phrase = scene.plan.phrases[index] as PlannedPhrase;
+  const { meters } = scene.plan;
+  let downbeat = barStartBeat(phrase.startBeat, meters);
+  while (downbeat + beatsPerBarAt(downbeat, meters) < phrase.endBeat - BEAT_EPS) {
+    downbeat += beatsPerBarAt(downbeat, meters);
+  }
+  downbeat = Math.max(downbeat, phrase.startBeat);
+  const sounding = line.findIndex(
+    (note) =>
+      note.startBeat <= downbeat + BEAT_EPS &&
+      note.startBeat + note.durationBeat > downbeat + BEAT_EPS,
+  );
+  return sounding >= 0
+    ? sounding
+    : line.findIndex(
+        (note) =>
+          note.startBeat >= downbeat - BEAT_EPS && note.startBeat < phrase.endBeat - BEAT_EPS,
+      );
+}
+
+/**
+ * Bend a phrase's closing note onto its cadence, holding every other note: the
+ * note at `held`, or the last pulse note when that is -1. Mutates the note
+ * in place, so a statement shared with a later derivation carries the repaired
+ * pitch into it.
+ */
+function repairCadence(scene: Scene, index: number, line: MotifNote[], held: number): void {
   const phrase = scene.plan.phrases[index] as PlannedPhrase;
   if (phrase.cadence === null) {
     return;
   }
-  let target = -1;
-  for (let i = line.length - 1; i >= 0; i -= 1) {
+  let target = held;
+  for (let i = line.length - 1; target < 0 && i >= 0; i -= 1) {
     if (onPulse(scene, (line[i] as MotifNote).startBeat)) {
       target = i;
-      break;
     }
   }
   if (target < 0) {
@@ -547,8 +574,10 @@ function chargePitchSearch(scene: Scene): void {
  * derive from, starting on their planned beat; a variation keeps its source's
  * rhythm and outer pitches. Notes a derivation carries off the register, or
  * onto a non-chord tone on a pulse, are replaced with the rest held. The spans
- * no motif covers are developed from a root motif, and each phrase's last
- * pulse note is bent onto the tones its cadence asks for.
+ * no motif covers are developed from a root motif. In each phrase's final
+ * bar, the note sounding at the downbeat (or the first onset after it) is held
+ * to the phrase's end, later onsets are dropped, and that note is bent onto the
+ * tones the phrase's cadence asks for.
  *
  * Harmony is read from the plan alone, through {@link planTimeline}.
  *
@@ -603,7 +632,17 @@ export function generateMelody(plan: CompositionPlan, opts?: MelodyOptions): Not
   const melody: MotifNote[] = [];
   plan.phrases.forEach((_, index) => {
     const line = phraseLine(scene, index);
-    repairCadence(scene, index, line);
+    const held = heldNoteIndex(scene, index, line);
+    if (held >= 0) {
+      line.length = held + 1;
+    }
+    repairCadence(scene, index, line, held);
+    if (held >= 0) {
+      // A copy, so the statements later derivations replay keep their own length.
+      const note = line[held] as MotifNote;
+      const phraseEnd = (plan.phrases[index] as PlannedPhrase).endBeat;
+      line[held] = { ...note, durationBeat: phraseEnd - note.startBeat };
+    }
     melody.push(...line);
   });
   melody.sort((a, b) => a.startBeat - b.startBeat);

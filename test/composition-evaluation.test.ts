@@ -238,6 +238,52 @@ describe('evaluateComposition: one violation kind at a time', () => {
     ]);
   });
 
+  it('warns motifRepaired when a named transformation keeps its rhythm and most pitches', () => {
+    const plan = basePlan();
+    const melody = baseMelody();
+    // One of four transposed pitches moved to another tone of V: three of four still match.
+    melody[5] = { pitch: 74, startBeat: 5, durationBeat: 1 };
+    const result = evaluateComposition(melody, plan);
+    expect(result.violations).toEqual([
+      expect.objectContaining({
+        kind: 'motifRepaired',
+        severity: 'warning',
+        atBeat: 4,
+        expected: 'transposition with every pitch kept',
+        actual: '75% of pitches kept',
+      }),
+    ]);
+  });
+
+  it('flags motifDerivation when a named transformation changes its rhythm, pitches intact', () => {
+    const plan = basePlan();
+    const melody = baseMelody();
+    melody[5] = { pitch: 71, startBeat: 5, durationBeat: 1.5 };
+    melody[6] = { pitch: 74, startBeat: 6.5, durationBeat: 0.5 };
+    const derivation = evaluateComposition(melody, plan).violations.filter(
+      (v) => v.kind === 'motifDerivation' || v.kind === 'motifRepaired',
+    );
+    expect(derivation).toEqual([
+      expect.objectContaining({
+        kind: 'motifDerivation',
+        severity: 'error',
+        atBeat: 4,
+        actual: 'onsets or durations differ',
+      }),
+    ]);
+  });
+
+  it('judges a variation by melodic similarity alone', () => {
+    const plan = basePlan();
+    (plan.motifs[1] as (typeof plan.motifs)[number]).relation = null;
+    const melody = baseMelody();
+    melody[5] = { pitch: 74, startBeat: 5, durationBeat: 1 };
+    const derivation = evaluateComposition(melody, plan).violations.filter(
+      (v) => v.kind === 'motifDerivation' || v.kind === 'motifRepaired',
+    );
+    expect(derivation).toEqual([]);
+  });
+
   it("flags register: a note outside its phrase's planned range", () => {
     const plan: CompositionPlan = {
       planVersion: COMPOSITION_PLAN_VERSION,
