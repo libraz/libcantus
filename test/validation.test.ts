@@ -13,6 +13,8 @@ import { detectKeyFromNotes } from '../src/analyze/detect/index.js';
 import { hypermeter, phrasesFromTimeline, sectionsFromNotes } from '../src/analyze/form/index.js';
 import { keyTimelineFromNotes } from '../src/analyze/keys/index.js';
 import { motifFromNotes } from '../src/analyze/melody/index.js';
+import { analyzeReference } from '../src/analyze/reference/index.js';
+import { analyzeRhythm } from '../src/analyze/rhythm/index.js';
 import { spellLine } from '../src/analyze/spelling/index.js';
 import { chordTimelineFromNotes } from '../src/analyze/timeline/index.js';
 import { analyzeVoice, toVoiceNotes } from '../src/analyze/voice/index.js';
@@ -402,6 +404,9 @@ const NOTE_EVENT_VALIDATION_COVERAGE: Readonly<Record<string, readonly string[]>
   'src/analyze/form/section.ts:sectionsFromNotes': ['sectionsFromNotes'],
   'src/analyze/keys/index.ts:keyTimelineFromNotes': ['keyTimelineFromNotes'],
   'src/analyze/melody/internal.ts:orderedNotes': ['motifFromNotes'],
+  'src/analyze/reference/profile.ts:readingsFor': ['analyzeReference'],
+  'src/analyze/reference/profile.ts:referenceFromReadings': ['analyzeReference'],
+  'src/analyze/rhythm/index.ts:analyzeRhythm': ['analyzeRhythm'],
   'src/analyze/spelling/index.ts:spellLine': ['spellLine'],
   'src/analyze/timeline/index.ts:analyzeTimeline': ['chordTimelineFromNotes'],
   'src/analyze/voice/index.ts:analyzeVoice': ['analyzeVoice'],
@@ -445,6 +450,8 @@ function noteEventEntries(events: NoteEvent[]): Record<string, () => unknown> {
   const key = majorKey(0);
   return {
     analyzeArrangement: () => analyzeArrangement([{ notes: events }]),
+    analyzeReference: () => analyzeReference(events),
+    analyzeRhythm: () => analyzeRhythm(events),
     arrangementOf: () => Arrangement.of([{ notes: events }]),
     analyzePolyphony: () => analyzePolyphony(events, () => chord, key),
     analyzeVoice: () => analyzeVoice(events, () => chord, key),

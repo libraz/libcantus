@@ -432,7 +432,6 @@ const comparison = compareReferences(
 
 comparison.melody.motifStructureSimilarity; // 1
 comparison.melody.surfaceSimilarity; // 0.25
-comparison.melody.surfaceSimilarity < comparison.melody.motifStructureSimilarity; // true
 ```
 
 Both themes state a three-note cell and restate it once, so their derivation forests agree exactly — the same relation kind, the same family size, the same coverage — while the cells themselves share no interval in common, which is what pulls `surfaceSimilarity` down without touching `motifStructureSimilarity`.

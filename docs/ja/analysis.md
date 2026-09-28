@@ -432,7 +432,6 @@ const comparison = compareReferences(
 
 comparison.melody.motifStructureSimilarity; // 1
 comparison.melody.surfaceSimilarity; // 0.25
-comparison.melody.surfaceSimilarity < comparison.melody.motifStructureSimilarity; // true
 ```
 
 どちらのテーマも3音のセルを1回反復するだけなので、派生の森はそっくり一致します——同じ関係の種類、同じ族のサイズ、同じ被覆率です。一方でセル自身は共通の音程を1つも持たないため、`motifStructureSimilarity` には触れずに `surfaceSimilarity` だけが下がります。
