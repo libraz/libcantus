@@ -38,12 +38,12 @@ import { scaleOf } from '../../theory/scale/index.js';
 import { clipStatement, relationLevels, replayAt } from '../melody/derive.js';
 import type { MotifNote } from '../motif/index.js';
 import { cadencePitchClasses, planHarmonyMisfits, planKeyAt, positionClass } from './harmony.js';
+import { planChordTimeline } from './timeline.js';
 import {
   type CompositionPlan,
   type PlannedMotif,
   type PlannedPhrase,
   plannedContourAt,
-  planTimeline,
 } from './types.js';
 import { assertCompositionPlan } from './validate.js';
 
@@ -658,7 +658,7 @@ function planDensity(plan: CompositionPlan): { onsets: number; onsetDensity: num
  *   ],
  *   harmony: [{ startBeat: 0, endBeat: 4, key: 0, roman: 'I' }],
  *   motifs: [],
- *   rhythm: { onsetLevels: [0, 0, 0, 1, 0, 0], interOnsetShares: new Array(17).fill(0), syncopation: 0 },
+ *   rhythm: { onsetLevels: [0, 0, 0, 1, 0, 0], interOnsetShares: new Array(17).fill(0).fill(1, 8, 9), syncopation: 0 },
  * };
  * const melody = [
  *   { pitch: 60, startBeat: 0, durationBeat: 1 },
@@ -677,10 +677,10 @@ export function evaluateComposition(
 ): CompositionEvaluation {
   assertCompositionPlan(plan, 'evaluated plan');
   const { budget } = assertOptions(opts, 'evaluate options');
-  const notes = [...assertNoteEvents(melody, 'evaluated melody', { budget })].sort(
-    (a, b) => a.startBeat - b.startBeat,
-  );
-  const timeline = planTimeline(plan);
+  const notes = [
+    ...assertNoteEvents(melody, 'evaluated melody', { budget, allowNonPositiveDuration: true }),
+  ].sort((a, b) => a.startBeat - b.startBeat);
+  const timeline = planChordTimeline(plan);
   const lines = phraseLines(notes, plan);
   const closing = new Set(
     lines.flatMap((line) => (line.length === 0 ? [] : [notes[line.at(-1) as number] as NoteEvent])),

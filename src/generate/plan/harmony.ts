@@ -23,7 +23,8 @@ import {
   scaleOf,
   scaleTonesInDegreeOrder,
 } from '../../theory/scale/index.js';
-import { type CompositionPlan, planTimeline } from './types.js';
+import { planChordTimeline } from './timeline.js';
+import type { CompositionPlan } from './types.js';
 
 /** Labels {@link analyzeVoice} gives a pulse note that count as fitting the planned harmony. */
 const HARMONY_OK_KINDS = new Set([
@@ -124,7 +125,7 @@ export function cadencePitchClasses(
  */
 export function planHarmonyMisfits(
   plan: CompositionPlan,
-  timeline: ChordTimeline = planTimeline(plan),
+  timeline: ChordTimeline = planChordTimeline(plan),
 ): (line: readonly LineNote[]) => (string[] | null)[] {
   const keyAt = planKeyAt(plan);
   const scaleAt = (beat: number) => scaleOf(keyAt(beat));

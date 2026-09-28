@@ -41,8 +41,9 @@ import {
 } from '../context/index.js';
 import { type MotifNote, motifToNoteEvents } from '../motif/index.js';
 import { cadencePitchClasses, planHarmonyMisfits, positionClass } from '../plan/harmony.js';
+import { planChordTimeline } from '../plan/timeline.js';
 import type { CompositionPlan, PlannedChord, PlannedMotif, PlannedPhrase } from '../plan/types.js';
-import { plannedContourAt, planTimeline } from '../plan/types.js';
+import { plannedContourAt } from '../plan/types.js';
 import { assertCompositionPlan } from '../plan/validate.js';
 import { type PhraseFrame, placeDerived, relationLevels, varyStatement } from './derive.js';
 import { type PitchSlot, searchPitches } from './pitch-dp.js';
@@ -669,7 +670,7 @@ export function generateMelody(plan: CompositionPlan, opts?: MelodyOptions): Not
   if (asked.budget !== undefined) {
     assertPositiveInt(asked.budget, 'budget', Number.MAX_SAFE_INTEGER);
   }
-  const timeline = planTimeline(plan);
+  const timeline = planChordTimeline(plan);
   const scene: Scene = {
     plan,
     ctx: melodyContext(plan, asked.ctx),

@@ -109,6 +109,8 @@ export type CompositionPlanOptions = {
    * is rejected: a plan has to carry its source as a seed to be reproducible.
    */
   ctx?: GenerationContextInput;
+  /** Upper bound on the motif selection. */
+  budget?: number;
 };
 
 /** Every preserve dimension, in declaration order. */
@@ -631,12 +633,13 @@ function plannedRhythm(profile: ReferenceProfile, weight: number): PlannedRhythm
  * seed and algorithm version are recorded in the plan.
  *
  * @param reference The reference profile to derive from.
- * @param opts The key, register, preserve weights and generation context.
+ * @param opts The key, register, preserve weights, generation context and budget.
  * @returns A plan that passes {@link assertCompositionPlan}.
  * @throws {InvalidInputError} If the reference is not a valid profile or has
  *   no melody onsets, an option is out of range, `opts.key` is of another
  *   variant than the reference's home key, `opts.ctx` carries an `rng`, or the
  *   default register moved to the new key leaves the MIDI range.
+ * @throws {BudgetExceededError} If the motif selection would exceed the budget.
  * @category Composition
  */
 export function deriveCompositionPlan(
@@ -708,7 +711,7 @@ export function deriveCompositionPlan(
   const graph = profile.melody.graph;
   const noteCount = (node: number) =>
     (profile.melody.motifs[graph.nodes[node]?.motif ?? -1]?.intervals.length ?? 0) + 1;
-  assertGenerationBudget(graph.nodes.length * phrases.length, 'plan motif selection');
+  assertGenerationBudget(graph.nodes.length * phrases.length, 'plan motif selection', asked.budget);
   const candidates: MotifCandidate[] = [];
   graph.nodes.forEach((node, index) => {
     const phrase = phraseHolding(phrases, node.startBeat, node.endBeat);

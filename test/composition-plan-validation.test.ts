@@ -3,11 +3,8 @@ import { romanToChord } from '../src/analyze/functional/roman.js';
 import { assertChordTimeline } from '../src/analyze/timeline/index.js';
 import { InvalidInputError } from '../src/core/errors/index.js';
 import { ALGORITHM_VERSION } from '../src/core/random/version.js';
-import {
-  COMPOSITION_PLAN_VERSION,
-  type CompositionPlan,
-  planTimeline,
-} from '../src/generate/plan/types.js';
+import { planTimeline } from '../src/generate/plan/timeline.js';
+import { COMPOSITION_PLAN_VERSION, type CompositionPlan } from '../src/generate/plan/types.js';
 import { assertCompositionPlan } from '../src/generate/plan/validate.js';
 import { resolveKey } from '../src/theory/scale/index.js';
 

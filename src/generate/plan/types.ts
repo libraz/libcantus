@@ -11,12 +11,9 @@
  */
 
 import type { CadenceType } from '../../analyze/functional/cadence.js';
-import { romanToChord } from '../../analyze/functional/roman.js';
 import type { MelodicContourShape } from '../../analyze/melody/contour.js';
 import type { MotifRelationSummary } from '../../analyze/melody/relation.js';
-import { type ChordTimeline, chordTimelineFromChords } from '../../analyze/timeline/index.js';
 import type { MeterMap } from '../../core/meter/index.js';
-import { spanFromChord } from '../../theory/chord/index.js';
 import type { ResolvedKey } from '../../theory/scale/index.js';
 
 /**
@@ -167,40 +164,6 @@ export type PlannedRhythm = {
   /** Targeted syncopation, in [0, 1]; see {@link RhythmAnalysis.syncopation}. */
   syncopation: number;
 };
-
-/**
- * Read a plan's harmony as a chord timeline.
- *
- * The one way a generator or an evaluator reads chords out of a plan: each
- * entry in `plan.harmony` is resolved against its key and placed at its own
- * beat, so the timeline this returns always agrees with the plan it was built
- * from.
- *
- * @param plan The plan to read harmony from.
- * @returns A chord timeline spanning `plan.span`.
- * @throws If a chord's key index is out of range, or its numeral cannot be
- *   read against that key.
- * @example
- * ```ts
- * import { planTimeline, resolveKey } from '@libraz/libcantus';
- * const plan = {
- *   planVersion: 1, seed: 0, algorithmVersion: 1,
- *   keys: [resolveKey('C major')], meters: [{ startBeat: 0, ts: { numerator: 4, denominator: 4 } }],
- *   span: { startBeat: 0, endBeat: 4, bars: 1 }, sections: [], phrases: [],
- *   harmony: [{ startBeat: 0, endBeat: 4, key: 0, roman: 'I' }], motifs: [],
- *   rhythm: { onsetLevels: [1, 0, 0, 0, 0, 0], interOnsetShares: new Array(17).fill(0), syncopation: 0 },
- * };
- * planTimeline(plan).at(0); // the I chord in C major
- * ```
- * @category Composition
- */
-export function planTimeline(plan: CompositionPlan): ChordTimeline {
-  const spans = plan.harmony.map((chord) => {
-    const key = plan.keys[chord.key] as ResolvedKey;
-    return spanFromChord(romanToChord(chord.roman, key), chord.startBeat);
-  });
-  return chordTimelineFromChords(spans, plan.span.endBeat);
-}
 
 /** A tent over [0, 1] rising from -1 to +1 at `apex` and falling back. */
 function tent(t: number, apex: number): number {

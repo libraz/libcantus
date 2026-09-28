@@ -9,13 +9,13 @@ import { ALGORITHM_VERSION } from '../src/core/random/version.js';
 import type { NoteEvent } from '../src/core/types.js';
 import { generateMelody } from '../src/generate/melody/index.js';
 import { planHarmonyMisfits } from '../src/generate/plan/harmony.js';
+import { planTimeline } from '../src/generate/plan/timeline.js';
 import {
   COMPOSITION_PLAN_VERSION,
   type CompositionPlan,
   type PlannedChord,
   type PlannedMotif,
   type PlannedPhrase,
-  planTimeline,
 } from '../src/generate/plan/types.js';
 import { assertCompositionPlan } from '../src/generate/plan/validate.js';
 import { chordPitchClasses } from '../src/theory/chord/index.js';

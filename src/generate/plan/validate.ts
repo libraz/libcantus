@@ -311,7 +311,7 @@ function assertPlannedRhythm(value: unknown, name: string): PlannedRhythm {
  *   phrases: [],
  *   harmony: [{ startBeat: 0, endBeat: 4, key: 0, roman: 'I' }],
  *   motifs: [],
- *   rhythm: { onsetLevels: [1, 0, 0, 0, 0, 0], interOnsetShares: new Array(17).fill(0), syncopation: 0 },
+ *   rhythm: { onsetLevels: [1, 0, 0, 0, 0, 0], interOnsetShares: new Array(17).fill(0).fill(1, 8, 9), syncopation: 0 },
  * };
  * assertCompositionPlan(plan); // the plan, unchanged
  * ```
