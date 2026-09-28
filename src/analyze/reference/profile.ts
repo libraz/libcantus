@@ -188,7 +188,7 @@ function weightedMean(notes: readonly NoteEvent[]): number {
  * How the line reads within one phrase, from the line's notes whose onsets
  * fall in it, each cut off at the phrase's end; null when fewer than two do.
  */
-function phraseMelody(
+export function phraseMelody(
   line: readonly NoteEvent[],
   startBeat: number,
   endBeat: number,
@@ -414,6 +414,10 @@ export function referenceFromReadings(
     return {
       intervals: motif.intervals,
       rhythm: motif.rhythm,
+      unitBeats:
+        motif.notes.length < 2
+          ? 0
+          : (motif.notes[1] as NoteEvent).startBeat - (motif.notes[0] as NoteEvent).startBeat,
       spanBeats: first === undefined ? 0 : first.endBeat - first.startBeat,
       occurrences: motif.occurrences.length,
     };

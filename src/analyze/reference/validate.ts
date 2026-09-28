@@ -459,6 +459,12 @@ function assertReferenceMotif(value: unknown, name: string): ReferenceMotif {
       throw new InvalidInputError(`${name}.rhythm[${index}] must be positive; received ${ratio}`);
     }
   }
+  const unitBeats = assertRange(read.unitBeats, 0, Number.MAX_SAFE_INTEGER, `${name}.unitBeats`);
+  if (unitBeats > 0 !== rhythm.length > 0) {
+    throw new InvalidInputError(
+      `${name}.unitBeats must be positive exactly when rhythm is non-empty; received ${unitBeats} with ${rhythm.length} ratio(s)`,
+    );
+  }
   assertRange(read.spanBeats, 0, Number.MAX_SAFE_INTEGER, `${name}.spanBeats`);
   assertPositiveInt(read.occurrences, `${name}.occurrences`);
   return read;

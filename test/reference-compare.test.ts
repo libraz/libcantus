@@ -133,7 +133,15 @@ function withGraph(
   out.melody.motifs =
     starts.length === 0
       ? []
-      : [{ intervals: [2, 2], rhythm: [1, 1], spanBeats: 3, occurrences: starts.length }];
+      : [
+          {
+            intervals: [2, 2],
+            rhythm: [1, 1],
+            unitBeats: 1,
+            spanBeats: 3,
+            occurrences: starts.length,
+          },
+        ];
   const nodes: MotifGraphNode[] = starts.map((startBeat, occurrence) => ({
     motif: 0,
     occurrence,

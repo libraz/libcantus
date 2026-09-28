@@ -35,7 +35,7 @@ import { melodicSimilarity } from './similarity.js';
  * has to agree almost everywhere before it counts as a derivation rather than
  * two unrelated cells.
  */
-const DEFAULT_VARIATION_THRESHOLD = 0.75;
+export const DEFAULT_VARIATION_THRESHOLD = 0.75;
 
 /**
  * Options controlling {@link motifGraph}.

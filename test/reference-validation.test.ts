@@ -51,6 +51,7 @@ function validProfile(): ReferenceProfile {
     return {
       intervals: motif.intervals,
       rhythm: motif.rhythm,
+      unitBeats: (motif.notes[1]?.startBeat ?? 0) - (first?.startBeat ?? 0),
       spanBeats: (last?.startBeat ?? 0) + (last?.durationBeat ?? 0) - (first?.startBeat ?? 0),
       occurrences: motif.occurrences.length,
     };
@@ -269,12 +270,40 @@ describe('assertReferenceProfile: rejection', () => {
     ['an interval run wider than MIDI', { intervals: [100, 100], rhythm: [1, 1] }, /intervals/],
     ['a rhythm of the wrong length', { intervals: [2, 2], rhythm: [1] }, /rhythm/],
     ['a non-positive rhythm ratio', { intervals: [2, 2], rhythm: [1, 0] }, /rhythm\[1\]/],
+    ['a negative unitBeats', { intervals: [2, 2], rhythm: [1, 1], unitBeats: -1 }, /unitBeats/],
+    [
+      'a non-finite unitBeats',
+      { intervals: [2, 2], rhythm: [1, 1], unitBeats: Number.NaN },
+      /unitBeats/,
+    ],
+    [
+      'a zero unitBeats with a rhythm',
+      { intervals: [2, 2], rhythm: [1, 1], unitBeats: 0 },
+      /unitBeats/,
+    ],
+    ['a unitBeats with no rhythm', { intervals: [], rhythm: [], unitBeats: 1 }, /unitBeats/],
   ])('rejects a motif with %s', (_, cell, path) => {
     const profile = validProfile();
     expect(profile.melody.motifs.length).toBeGreaterThan(0);
     Object.assign(profile.melody.motifs[0] as ReferenceMotif, cell);
     expect(() => assertReferenceProfile(profile)).toThrow(InvalidInputError);
     expect(() => assertReferenceProfile(profile)).toThrow(path);
+  });
+
+  it('accepts a one-note motif with a zero unitBeats', () => {
+    const profile = validProfile();
+    Object.assign(profile.melody.motifs[0] as ReferenceMotif, {
+      intervals: [],
+      rhythm: [],
+      unitBeats: 0,
+    });
+    expect(() => assertReferenceProfile(profile)).not.toThrow();
+  });
+
+  it('rejects a motif with no unitBeats', () => {
+    const profile = validProfile();
+    delete (profile.melody.motifs[0] as unknown as Record<string, unknown>).unitBeats;
+    expect(() => assertReferenceProfile(profile)).toThrow(/unitBeats/);
   });
 
   it('rejects an unknown profileVersion', () => {

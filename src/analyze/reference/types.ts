@@ -213,8 +213,13 @@ export type ReferenceMelody = {
 export type ReferenceMotif = {
   /** Semitones between consecutive notes of the first statement (`MotifData.intervals`). */
   intervals: number[];
-  /** Onset-to-onset ratios of the first statement (`MotifData.rhythm`). */
+  /** Onset-to-onset ratios of the first statement (`MotifData.rhythm`), each gap over the first. */
   rhythm: number[];
+  /**
+   * Onset gap between the first two notes of the first statement, in beats:
+   * the unit `rhythm` is measured in. 0 for a one-note motif.
+   */
+  unitBeats: number;
   /** Length of the first statement, in beats. */
   spanBeats: number;
   /** How many statements of this motif were found. */

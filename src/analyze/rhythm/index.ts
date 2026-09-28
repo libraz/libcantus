@@ -175,7 +175,7 @@ function isMultipleOf(value: number, unit: number): boolean {
  * on the pulse's first subdivision (half a pulse in a simple meter, a third in
  * a compound one), 0 elsewhere.
  */
-function rhythmLevel(beatInQuarters: number, meters: MeterMap): number {
+export function rhythmLevel(beatInQuarters: number, meters: MeterMap): number {
   const ts = meterAt(beatInQuarters, meters);
   const offset = beatInQuarters - barStartBeat(beatInQuarters, meters);
   const pulse = pulseBeats(ts);
@@ -356,7 +356,7 @@ function syncopationOf(
 }
 
 /** Bin an inter-onset interval to {@link RHYTHM_IOI_BINS}, clamped to its ends. */
-function ioiBinIndex(ioi: number): number {
+export function ioiBinIndex(ioi: number): number {
   const exponent = Math.min(4, Math.max(-4, Math.round(2 * Math.log2(ioi)) / 2));
   return Math.round((exponent + 4) / 0.5);
 }
