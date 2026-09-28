@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Form, harmonic function and rhythm, and how a melody's motifs derive from one
   another come back as a `ReferenceProfile` — a plain, JSON-serializable record
   that carries none of the piece's own notes: a motif is kept as the interval
-  and rhythm ratios it repeats, a phrase's melody as an 8-point outline.
+  and rhythm ratios it repeats, together with the onset gap those ratios are
+  measured against, a phrase's melody as an 8-point outline.
   `Score#reference` and `Arrangement#reference` build the same profile from a
   score's or an arrangement's own analysis, without inferring the harmony a
   second time. `assertReferenceProfile` validates a profile arriving as untrusted
@@ -48,6 +49,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the list by hand. `CadenceResult.type` is now typed as `CadenceType | null`,
   a named alias for the same union it already carried, so the change is
   type-compatible.
+- **`deriveCompositionPlan` turns a reference profile into a `CompositionPlan`.**
+  Form, harmony, a motif derivation forest and a rhythmic target come back as
+  instructions a generator can follow exactly rather than a reading to
+  approximate, each kept, replaced or interpolated toward a neutral value by a
+  `PreserveWeights` record. The plan carries a root motif's own onset gaps and
+  a project seed and algorithm version, but never the reference's melodic
+  intervals: a derivation names a transformation, not a pitch sequence.
+  `assertCompositionPlan` validates a plan the way `assertReferenceProfile`
+  validates a profile; `planTimeline` reads a plan's harmony as a
+  `ChordTimeline`; `COMPOSITION_PLAN_VERSION` gates the schema.
+- **`generateMelody` writes a melody that follows a `CompositionPlan`.** Each
+  phrase's register is the hardest constraint, a derived motif statement's
+  named transformation the next, and the planned harmony the last: a
+  derivation is replayed at whichever pitch level inside the register fits the
+  harmony and the phrase's target curve best, and a harmony misfit that level
+  leaves behind is left rather than repaired. A root motif's rhythm comes from
+  its plan's own onset gaps, or is drawn toward the plan's onset-level and
+  inter-onset-interval distributions when the plan carries none. Onsets fall
+  on a sixteenth-note grid, so a drawn rhythm never produces a triplet.
+- **`evaluateComposition` checks a candidate melody against the plan it was
+  written for, without re-analyzing it into a profile.** Violations name a
+  concrete departure at a beat — `span`, `phraseBoundary`, `cadence`,
+  `register` and `motifDerivation` are errors; `harmony` is an error, or a
+  warning for a note inside a derived statement, where the transformation took
+  precedence; `motifDisplaced` and `peakPosition` are warnings — and a `fit`
+  reading measures `contour`, `register`, `onset`, `duration`, `syncopation`
+  and `density` the way `compareReferences` measures two profiles, with no
+  aggregate.
+- **`Composer#plan`, `Composer#melody` and `Score#evaluate` are the class-side
+  path through the same pipeline.** `Composer#plan` derives a plan under the
+  composer's own key and generation context; `Composer#melody` writes the
+  melody the plan calls for, in the plan's own meter and home key rather than
+  the composer's; `Score#evaluate` reads a score's notes against a plan the
+  way `evaluateComposition` does.
 
 ## [1.2.0] - 2026-09-24
 

@@ -225,6 +225,73 @@ playability([{ pitch: 27, startBeat: 0, durationBeat: 1 }], BASS_4_STRING).issue
 
 Naming a profile in the context — `Composer.of({ instruments: { bass: BASS_4_STRING } })`, or `ctx.instruments` at the call — is itself the request that the part be playable, so the range and physical limits apply whatever the difficulty ceiling says. The generators read two part names, `bass` and `drums`; a profile filed under any other name is not consulted, so a lead or a keys profile is carried by the context without reaching a generator. See [Instruments and playability](instruments-and-playability.md).
 
+## Generating from a reference
+
+A profile from [Reference profiles](analysis.md) doubles as a target for new material. `deriveCompositionPlan` turns a `ReferenceProfile` into a `CompositionPlan` — form, harmony, a motif derivation forest and a rhythmic target, stated as instructions a generator can follow exactly rather than a reading to approximate — and `generateMelody` writes a melody to it. `evaluateComposition` reads the result back against the same plan.
+
+```ts
+import {
+  analyzeReference,
+  deriveCompositionPlan,
+  evaluateComposition,
+  generateMelody,
+} from '@libraz/libcantus';
+
+const notes = [60, 62, 64, 65, 67, 65, 64, 62, 60, 62, 64, 65, 67, 65, 64, 60].map(
+  (pitch, startBeat) => ({ pitch, startBeat, durationBeat: 1 }),
+);
+const reference = analyzeReference(notes, { key: 'C major' });
+const plan = deriveCompositionPlan(reference, { ctx: { seed: 5 } });
+const melody = generateMelody(plan);
+const evaluation = evaluateComposition(melody, plan);
+
+melody.length; // 10
+evaluation.violations.some((violation) => violation.severity === 'error'); // false
+```
+
+`deriveCompositionPlan`'s options: `key` names the plan's home key, defaulting to the reference's own; `register` is the melody range its phrases are mapped onto; `preserve` is a `PreserveWeights` record — `form`, `phraseLengths`, `harmonicFunction`, `harmonicRhythm`, `motifRelations`, `registerShape` and `rhythm`, each in [0, 1] and defaulting to 1 — the weight each structural dimension is kept at rather than replaced or interpolated toward a neutral value; `ctx` is the seed and algorithm version the plan records, and a caller-held `rng` is rejected, since a plan has to carry a seed to be reproducible on its own; and `budget` bounds the motif selection.
+
+A `CompositionPlan` carries the piece's keys, meter and span; its sections and phrases; a harmonic progression (`PlannedChord[]`, Roman numerals against the plan's keys); a motif derivation forest (`PlannedMotif[]`, each a root or a named transformation of an earlier statement — the same kinds `relateMotifs` names; see [Melody and motifs](melody-and-motifs.md)); and a rhythmic target (`PlannedRhythm`: onset-level and inter-onset-interval distributions, and a syncopation figure). A root motif carries its own onset-to-onset gaps in beats — `PlannedMotif.rhythm` — or `null` for a generator to draw toward the rhythmic target instead. What it never carries is the reference's own melodic intervals: a derivation names a transformation, not a pitch sequence.
+
+```ts
+import { analyzeReference, deriveCompositionPlan } from '@libraz/libcantus';
+
+const notes = [60, 62, 64, 65, 67, 65, 64, 62, 60, 62, 64, 65, 67, 65, 64, 60].map(
+  (pitch, startBeat) => ({ pitch, startBeat, durationBeat: 1 }),
+);
+const plan = deriveCompositionPlan(analyzeReference(notes, { key: 'C major' }), { ctx: { seed: 5 } });
+
+plan.motifs[0]; // { phrase: 0, startBeat: 0, endBeat: 7, notes: 7, rhythm: [1, 1, 1, 1, 1, 1], from: null, relation: null }
+plan.motifs[1]?.from; // 0
+plan.motifs.some((motif) => 'intervals' in motif); // false
+```
+
+`assertCompositionPlan` is the boundary check a plan restored from storage, a config file or a plugin host is read through before a generator or an evaluator trusts it — every field and every cross-reference among sections, phrases, motifs and keys, checked the way `assertReferenceProfile` checks a profile. `COMPOSITION_PLAN_VERSION` gates the schema it is written at. `planTimeline` reads a plan's harmony as a `ChordTimeline`, the one place a generator or an evaluator turns `plan.harmony` into chords.
+
+Inside a phrase, three constraints rank against each other: **register outranks motif derivation, which outranks harmony.** A derived motif statement replays its source's named transformation at whichever pitch level inside the phrase's register fits the harmony and the target curve best; the level the plan's relation names (`semitones`, or `degrees` for a diatonic transformation) is a preference weighed against those costs, not a fixed instruction, and a harmony misfit the chosen level leaves behind is reported rather than repaired. Only a note a transformation puts outside the register is replaced.
+
+`evaluateComposition(melody, plan)` reads a candidate melody against the plan it was written for — its phrases, its harmony through `planTimeline`, its derivations replayed from the candidate's own notes — without re-analyzing the melody into a fresh profile. Violations name a concrete departure at a beat: `span`, `phraseBoundary`, `cadence`, `register` and `motifDerivation` are errors; `harmony` is an error, or a warning for a note inside a derived statement, where the transformation took precedence; `motifDisplaced` and `peakPosition` are warnings. The `fit` reading covers `contour`, `register`, `onset`, `duration`, `syncopation` and `density`, each measured the way `compareReferences` measures two profiles against each other, with no aggregate.
+
+```ts
+import { Composer, Score } from '@libraz/libcantus';
+
+const notes = [60, 62, 64, 65, 67, 65, 64, 62, 60, 62, 64, 65, 67, 65, 64, 60].map(
+  (pitch, startBeat) => ({ pitch, startBeat, durationBeat: 1 }),
+);
+const composer = Composer.of({ key: 'C major', seed: 5 });
+const plan = composer.plan(Score.of(notes, { key: 'C major' }).reference());
+const score = composer.melody(plan);
+
+score.notes.length; // 10
+score.evaluate(plan).violations.some((violation) => violation.severity === 'error'); // false
+```
+
+`Composer#plan` derives a plan under the composer's own key and generation context. `Composer#melody` writes the melody the plan calls for, read in the plan's own meter and home key rather than the composer's. `Score#evaluate` reads a score's own notes against a plan the way `evaluateComposition` does. Once a plan exists it is the reproduction recipe: its seed and algorithm version, not the composer's, are what the melody is drawn under.
+
+Generation is deterministic and local to each phrase. The same plan and the same `opts.ctx` write the same melody every time, and every draw is addressed by phrase index and beat rather than by call order — changing one phrase's entries in the plan leaves every phrase that does not derive from it sounding exactly as it did.
+
+Two limits follow from how onsets are placed. Onsets fall on a sixteenth-note grid, so a root with no stored rhythm, and a span no motif covers, never produce a triplet even against a reference that used one. In both of those cases the generator draws onsets toward the plan's onset-level and inter-onset-interval distributions rather than reproducing the reference's exact placement, so the result approximates that target and is not guaranteed to match it beat for beat.
+
 ## What generation does not claim
 
 A generated part is material, not a decision. Generation does not write a file, choose a sound, or establish that a result is stylistically appropriate — those belong to the host and its user. Keep the generated part and any user edit of it as separate objects, so regenerating never overwrites work someone did by hand.

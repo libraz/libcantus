@@ -37,6 +37,8 @@ Composer.of({ key: chords.key, bpm: 120, seed: 1 }).bass(chords, { style: 'walki
 
 もう1曲も同じように読み取り、フォーム・和声・モチーフの派生・リズムを次元ごとに比較できます。単一のスコアにまとめることはありません。`analyzeReference` が曲を持ち運び可能なプロファイルに圧縮し、`compareReferences` がその2つを突き合わせます。
 
+そのプロファイルは、新しい素材を書くための目標にもなります。`deriveCompositionPlan` はプロファイルを `CompositionPlan` に変換します。フォーム・和声・モチーフの派生の森を、ジェネレータがそのまま辿れる指示として持つ値です。`generateMelody` はその計画に沿って旋律を書き、`evaluateComposition` は結果を計画に照らして読み返します。[リファレンスからの生成](https://github.com/libraz/libcantus/blob/main/docs/ja/generation.md#リファレンスからの生成)を参照してください。
+
 ## ユースケース
 
 | ユースケース | 内容 | 実例のガイド |

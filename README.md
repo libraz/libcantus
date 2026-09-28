@@ -37,6 +37,8 @@ Chord boundaries are searched for rather than assumed, and so is the key, so a p
 
 Another piece is read the same way and measured against the first dimension by dimension — form, harmony, motif derivation, rhythm — never folded into one score: `analyzeReference` compresses a piece into a portable profile, and `compareReferences` reads two of them against each other.
 
+That same profile doubles as a target for new material: `deriveCompositionPlan` turns it into a `CompositionPlan` — form, harmony and a motif derivation forest stated as instructions a generator can follow exactly — and `generateMelody` writes a melody to it, with `evaluateComposition` reading the result back against the plan. See [Generating from a reference](https://github.com/libraz/libcantus/blob/main/docs/en/generation.md#generating-from-a-reference).
+
 ## Use cases
 
 | Use case | What it does | Worked guide |

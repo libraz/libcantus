@@ -225,6 +225,73 @@ playability([{ pitch: 27, startBeat: 0, durationBeat: 1 }], BASS_4_STRING).issue
 
 コンテキストでプロファイルを指定すること、すなわち `Composer.of({ instruments: { bass: BASS_4_STRING } })` や呼び出し時の `ctx.instruments` は、そのパートを演奏可能にするという要求そのものです。難易度の上限が何を指していても、音域と物理的な制限は適用されます。ジェネレータが読むパート名は `bass` と `drums` の2つだけで、それ以外の名前で登録したプロファイルは参照されません。リードや鍵盤のプロファイルはコンテキストに載って運ばれるだけで、ジェネレータには届きません。[楽器と演奏可能性](instruments-and-playability.md)を参照してください。
 
+## リファレンスからの生成
+
+[リファレンスプロファイル](analysis.md)は、新しい素材を書くための目標にもなります。`deriveCompositionPlan` は `ReferenceProfile` を `CompositionPlan` に変換します。フォーム・和声・モチーフの派生の森・リズムの目標を、近似すべき読みとしてではなく、ジェネレータがそのまま辿れる指示として持つ値です。`generateMelody` はその計画に沿って旋律を書き、`evaluateComposition` は書かれた結果を同じ計画に照らして読み返します。
+
+```ts
+import {
+  analyzeReference,
+  deriveCompositionPlan,
+  evaluateComposition,
+  generateMelody,
+} from '@libraz/libcantus';
+
+const notes = [60, 62, 64, 65, 67, 65, 64, 62, 60, 62, 64, 65, 67, 65, 64, 60].map(
+  (pitch, startBeat) => ({ pitch, startBeat, durationBeat: 1 }),
+);
+const reference = analyzeReference(notes, { key: 'C major' });
+const plan = deriveCompositionPlan(reference, { ctx: { seed: 5 } });
+const melody = generateMelody(plan);
+const evaluation = evaluateComposition(melody, plan);
+
+melody.length; // 10
+evaluation.violations.some((violation) => violation.severity === 'error'); // false
+```
+
+`deriveCompositionPlan` のオプションです。`key` は計画のホームキーを指定し、既定はリファレンス自身のキーです。`register` は、フレーズを写し取る先の旋律音域です。`preserve` は `PreserveWeights` レコードで、`form`・`phraseLengths`・`harmonicFunction`・`harmonicRhythm`・`motifRelations`・`registerShape`・`rhythm` を、それぞれ [0, 1] の範囲、既定1で持ちます。各次元をどれだけ保つか、あるいは中立値へどれだけ置き換える・補間するかを表す重みです。`ctx` は計画に記録するシードとアルゴリズムバージョンで、呼び出し側が持つ `rng` は拒否されます。計画が単独で再現可能であるためにはシードを持つ必要があるためです。`budget` はモチーフ選別の上限です。
+
+`CompositionPlan` が持つのは、曲のキー・拍子・スパン、セクションとフレーズ、和声進行（`PlannedChord[]`、計画のキーに対するローマ数字）、モチーフの派生の森（`PlannedMotif[]`、それぞれが根か、それより前の statement への名前付き変換です。`relateMotifs` が名指すのと同じ種類です。[旋律とモチーフ](melody-and-motifs.md)を参照してください）、そしてリズムの目標（`PlannedRhythm`：発音位置レベルと音間隔の分布、シンコペーションの値）です。根モチーフは、自分自身の拍単位のオンセット間隔——`PlannedMotif.rhythm`——を持つか、`null` を持ってジェネレータがリズムの目標に向けて抽選するのに任せます。決して持たないのは、リファレンス自身の旋律の音程です。派生が名指すのは変換であって、音高列ではありません。
+
+```ts
+import { analyzeReference, deriveCompositionPlan } from '@libraz/libcantus';
+
+const notes = [60, 62, 64, 65, 67, 65, 64, 62, 60, 62, 64, 65, 67, 65, 64, 60].map(
+  (pitch, startBeat) => ({ pitch, startBeat, durationBeat: 1 }),
+);
+const plan = deriveCompositionPlan(analyzeReference(notes, { key: 'C major' }), { ctx: { seed: 5 } });
+
+plan.motifs[0]; // { phrase: 0, startBeat: 0, endBeat: 7, notes: 7, rhythm: [1, 1, 1, 1, 1, 1], from: null, relation: null }
+plan.motifs[1]?.from; // 0
+plan.motifs.some((motif) => 'intervals' in motif); // false
+```
+
+`assertCompositionPlan` は、保存先から復元した、設定ファイルから読んだ、プラグインのホストから渡された計画が、ジェネレータや評価器に信頼される前に通す境界チェックです。フィールドと、セクション・フレーズ・モチーフ・キーの間のすべての相互参照を、`assertReferenceProfile` がプロファイルを検査するのと同じやり方で検査します。`COMPOSITION_PLAN_VERSION` は、それが書かれているスキーマを区切ります。`planTimeline` は計画の和声を `ChordTimeline` として読みます。ジェネレータや評価器が `plan.harmony` を和音に変える唯一の場所です。
+
+フレーズの内側では、3つの制約が互いに順位を持ちます。**音域がモチーフの派生に優先し、モチーフの派生が和声に優先します**。派生されたモチーフの statement は、フレーズの音域に収まる範囲で、和声とターゲットカーブの両方に最も合う音高レベルで、自分の元になった statement の名前付き変換を再生します。計画の relation が名指す値（`semitones`、あるいは全音階的な変換では `degrees`）は、これらのコストと引き比べられる優先値であって固定の指示ではなく、選ばれたレベルが残す和声の不適合は修復されず報告されるだけです。変換が音域の外に出した音だけが置き換えられます。
+
+`evaluateComposition(melody, plan)` は、候補となる旋律を新しくプロファイルへ解析し直すのではなく、それが書かれた計画そのもの——そのフレーズ、`planTimeline` を通した和声、候補自身の音符から再生した派生——に照らして読みます。違反は拍の位置で具体的な逸脱を名指します。`span`・`phraseBoundary`・`cadence`・`register`・`motifDerivation` はエラーです。`harmony` はエラーですが、派生された statement の内側にある音では警告になります。そこでは変換が優先されるためです。`motifDisplaced` と `peakPosition` は警告です。`fit` の読みは `contour`・`register`・`onset`・`duration`・`syncopation`・`density` を持ち、それぞれ `compareReferences` が2つのプロファイルを突き合わせるのと同じやり方で測られ、集約値はありません。
+
+```ts
+import { Composer, Score } from '@libraz/libcantus';
+
+const notes = [60, 62, 64, 65, 67, 65, 64, 62, 60, 62, 64, 65, 67, 65, 64, 60].map(
+  (pitch, startBeat) => ({ pitch, startBeat, durationBeat: 1 }),
+);
+const composer = Composer.of({ key: 'C major', seed: 5 });
+const plan = composer.plan(Score.of(notes, { key: 'C major' }).reference());
+const score = composer.melody(plan);
+
+score.notes.length; // 10
+score.evaluate(plan).violations.some((violation) => violation.severity === 'error'); // false
+```
+
+`Composer#plan` は、composer 自身のキーと生成コンテキストのもとで計画を導出します。`Composer#melody` は、composer のではなく計画自身の拍子とホームキーで読んだ、計画が求める旋律を書きます。`Score#evaluate` は、スコア自身の音符を `evaluateComposition` と同じやり方で計画に照らして読みます。計画が一度できあがれば、それが再現のレシピです。旋律がその下で書かれるシードとアルゴリズムバージョンは、composer のものではなく計画のものになります。
+
+生成は決定的で、各フレーズに局所的です。同じ計画と同じ `opts.ctx` は、毎回同じ旋律を書きます。すべての抽選は呼び出し順ではなくフレーズの添字と拍で宛名付けされているため、計画のあるフレーズの項目を変えても、そこから派生していない他のフレーズの音はそれまでと変わりません。
+
+オンセットの置き方に由来する制約が2つあります。オンセットは16分音符の格子にしか乗らないため、保存されたリズムを持たない根や、モチーフの掛からない区間は、リファレンスが三連符を使っていたとしても三連符を作りません。そのどちらの場合も、ジェネレータはリファレンスの発音位置をそのまま再現するのではなく、計画の発音位置レベルと音間隔の分布へ向けてオンセットを抽選します。結果はその目標分布に近づきますが、拍単位で一致する保証はありません。
+
 ## 生成が主張しないこと
 
 生成されたパートは素材であって、判断ではありません。生成はファイルを書かず、音色を選ばず、その結果がスタイル上適切であることを保証しません。それらはホストとそのユーザーの領分です。生成されたパートと、ユーザーがそれを編集したものは別のオブジェクトとして保持してください。再生成が手作業を上書きすることを防げます。
