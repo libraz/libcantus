@@ -8,6 +8,7 @@ import { createPositionalRng } from '../src/core/random/index.js';
 import { ALGORITHM_VERSION } from '../src/core/random/version.js';
 import type { NoteEvent } from '../src/core/types.js';
 import { generateMelody } from '../src/generate/melody/index.js';
+import { planHarmonyMisfits } from '../src/generate/plan/harmony.js';
 import {
   COMPOSITION_PLAN_VERSION,
   type CompositionPlan,
@@ -132,21 +133,38 @@ function chordTonesAt(p: CompositionPlan, beat: number): number[] | null {
   return chord ? chordPitchClasses(chord) : null;
 }
 
-/** Whether local repair is allowed to replace a transformed note (on-pulse non-chord tone or out of register). */
-function repairable(
+type Cell = { pitch: number; startBeat: number; durationBeat: number }[];
+
+const outside = (reg: { low: number; high: number }, pitch: number) =>
+  pitch < reg.low || pitch > reg.high;
+
+/**
+ * Which notes of a statement local repair may replace: out of register, or
+ * failing the plan's harmony reading in the context of the line before it.
+ */
+function repairFlags(
   p: CompositionPlan,
   reg: { low: number; high: number },
-  pitch: number,
-  beat: number,
-): boolean {
-  if (pitch < reg.low || pitch > reg.high) {
-    return true;
-  }
-  const tones = chordTonesAt(p, beat);
-  return onPulse(beat) && tones !== null && !tones.includes(((pitch % 12) + 12) % 12);
+  context: Cell,
+  statement: Cell,
+): boolean[] {
+  const misfits = planHarmonyMisfits(p)([...context, ...statement]).slice(context.length);
+  return statement.map((n, i) => outside(reg, n.pitch) || misfits[i] !== null);
 }
 
-type Cell = { pitch: number; startBeat: number; durationBeat: number }[];
+/**
+ * A statement as local repair first places it: moved a whole octave toward the
+ * register (else away) when that brings every note inside, as it is otherwise.
+ */
+function octavePlaced(reg: { low: number; high: number }, statement: Cell): Cell {
+  if (!statement.some((n) => outside(reg, n.pitch))) return statement;
+  const toward = statement.some((n) => n.pitch > reg.high) ? -12 : 12;
+  for (const shift of [toward, -toward]) {
+    const moved = statement.map((n) => ({ ...n, pitch: n.pitch + shift }));
+    if (!moved.some((n) => outside(reg, n.pitch))) return moved;
+  }
+  return statement;
+}
 
 function anchor(cell: Cell, firstPitch: number, startBeat: number): Cell {
   const sorted = [...cell].sort((a, b) => a.startBeat - b.startBeat);
@@ -406,7 +424,9 @@ describe('generateMelody', () => {
         const source = inSpan(notes, 0, 4);
         expect(source).toHaveLength(4);
         const derived = inSpan(notes, 8, 8 + span);
-        const expected = expectedDerivation(source, relation, 8, C_MAJOR);
+        const context = inSpan(notes, 0, 8);
+        const expected = octavePlaced(reg, expectedDerivation(source, relation, 8, C_MAJOR));
+        const flags = repairFlags(p, reg, context, expected);
         expect(derived).toHaveLength(expected.length);
         expect(derived[0]?.startBeat).toBeCloseTo(8, 9);
         for (let i = 0; i < expected.length; i += 1) {
@@ -414,12 +434,9 @@ describe('generateMelody', () => {
           const got = derived[i] as NoteEvent;
           expect(got.startBeat).toBeCloseTo(want.startBeat, 9);
           expect(got.durationBeat).toBeCloseTo(want.durationBeat, 9);
-          if (!repairable(p, reg, want.pitch, want.startBeat)) {
-            expect(got.pitch).toBe(want.pitch);
-          } else {
-            expect(repairable(p, reg, got.pitch, got.startBeat)).toBe(false);
-          }
+          if (!flags[i]) expect(got.pitch).toBe(want.pitch);
         }
+        expect(repairFlags(p, reg, context, derived)).not.toContain(true);
       }
     });
 
@@ -447,8 +464,42 @@ describe('generateMelody', () => {
         for (const i of [0, source.length - 1]) {
           const s = source[i] as NoteEvent;
           const d = derived[i] as NoteEvent;
-          if (!repairable(q, reg, s.pitch, d.startBeat)) expect(d.pitch).toBe(s.pitch);
+          const flags = repairFlags(
+            q,
+            reg,
+            inSpan(notes, 0, 8),
+            octavePlaced(
+              reg,
+              source.map((n) => ({ ...n, startBeat: n.startBeat + 8 })),
+            ),
+          );
+          if (!flags[i]) expect(d.pitch).toBe(s.pitch);
         }
+      }
+    });
+
+    it('moves a statement that leaves the register a whole octave before repairing notes', () => {
+      for (const seed of [1, 2, 3, 4, 5]) {
+        const base = derivationPlan(
+          { kind: 'transposition', sequence: false, semitones: 12, timeRatio: 1 },
+          4,
+        );
+        const phrases = base.phrases.map((ph) => ({
+          ...ph,
+          register: { low: 60, high: 72, mean: 66 },
+        }));
+        const p = assertCompositionPlan({ ...base, phrases, seed });
+        const reg = { low: 60, high: 72 };
+        const notes = generateMelody(p);
+        const source = inSpan(notes, 0, 4);
+        const derived = inSpan(notes, 8, 12);
+        // Up an octave leaves the register; down an octave again is the source itself.
+        const expected = source.map((n) => ({ ...n, startBeat: n.startBeat + 8 }));
+        const flags = repairFlags(p, reg, inSpan(notes, 0, 8), expected);
+        expect(derived).toHaveLength(expected.length);
+        derived.forEach((got, i) => {
+          if (!flags[i]) expect(got.pitch).toBe(expected[i]?.pitch);
+        });
       }
     });
 
@@ -557,18 +608,34 @@ describe('generateMelody', () => {
             const inside = inSpan(notes, ph.startBeat, ph.endBeat);
             const held = inside[inside.length - 1] as NoteEvent;
             expect(held.startBeat + held.durationBeat).toBeCloseTo(ph.endBeat, 9);
-            const before = inside.slice(0, -1);
-            if (held.startBeat > downbeat + EPS) {
-              for (const n of before) {
-                expect(n.startBeat + n.durationBeat).toBeLessThanOrEqual(downbeat + EPS);
-              }
-            } else {
-              expect(before.every((n) => n.startBeat < held.startBeat)).toBe(true);
+            // A note sounding across the downbeat is cut there and the downbeat held.
+            expect(held.startBeat).toBeGreaterThanOrEqual(downbeat - EPS);
+            for (const n of inside.slice(0, -1)) {
+              expect(n.startBeat + n.durationBeat).toBeLessThanOrEqual(held.startBeat + EPS);
             }
           }
         }
       },
     );
+
+    it('cuts a note sounding across the final downbeat and holds from the downbeat', () => {
+      const tonicTriad = [0, 4];
+      for (const seed of [1, 2, 3]) {
+        // A one-note root motif over beats 2-6 sounds across the downbeat at 4.
+        const p = plan({
+          seed,
+          phrases: [phrase({ startBeat: 0, endBeat: 8, cadence: 'authentic', motifs: [0] })],
+          motifs: [{ phrase: 0, startBeat: 2, endBeat: 6, notes: 1, from: null, relation: null }],
+        });
+        const notes = generateMelody(p);
+        const cut = notes.find((n) => Math.abs(n.startBeat - 2) < EPS) as NoteEvent;
+        expect(cut.durationBeat).toBeCloseTo(2, 9);
+        const held = notes[notes.length - 1] as NoteEvent;
+        expect(held.startBeat).toBeCloseTo(4, 9);
+        expect(held.durationBeat).toBeCloseTo(4, 9);
+        expect(tonicTriad).toContain(((held.pitch % 12) + 12) % 12);
+      }
+    });
 
     it('bends the held note onto the cadence', () => {
       const tonicTriad = [0, 4];

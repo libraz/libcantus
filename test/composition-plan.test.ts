@@ -181,11 +181,12 @@ describe('deriveCompositionPlan: determinism and serialization', () => {
 });
 
 describe('deriveCompositionPlan: preserve all 1', () => {
-  // A phrase straddling a section boundary is cut there, its cadence kept by
-  // the later part; SOURCE has none, UNRELATED's second phrase straddles beat 12.
+  // A section boundary moves to the nearest reference phrase boundary; SOURCE's
+  // already sit on one, UNRELATED's at beat 12 moves to its phrase boundary at 9.
   const cases = [
     {
       reference: SOURCE,
+      sections: SOURCE.form.sections.map((s) => [s.label, s.startBeat, s.endBeat]),
       phrases: SOURCE.form.phrases.map((p) => [
         p.startBeat,
         p.endBeat,
@@ -196,27 +197,24 @@ describe('deriveCompositionPlan: preserve all 1', () => {
     },
     {
       reference: UNRELATED,
+      sections: [
+        ['A', 0, 9],
+        ['B', 9, 24],
+      ],
       phrases: [
         [0, 9, 0, 'authentic'],
-        [9, 12, 0, null],
-        [12, 24, 1, 'authentic'],
+        [9, 24, 1, 'authentic'],
       ],
-      sources: [0, 1, 1],
+      sources: [0, 1],
     },
   ];
-  for (const { reference, phrases, sources } of cases) {
+  for (const { reference, sections, phrases, sources } of cases) {
     it(`carries every structural item of the reference (${reference.meters[0]?.ts.numerator}/4)`, () => {
       const plan = deriveCompositionPlan(reference, { ctx: 9 });
       expect(plan.keys).toEqual(reference.harmony.keys.map((region) => region.key));
       expect(plan.meters).toEqual(reference.meters);
       expect(plan.span).toEqual(reference.span);
-      expect(plan.sections).toEqual(
-        reference.form.sections.map((s) => ({
-          label: s.label,
-          startBeat: s.startBeat,
-          endBeat: s.endBeat,
-        })),
-      );
+      expect(plan.sections.map((s) => [s.label, s.startBeat, s.endBeat])).toEqual(sections);
       expect(plan.phrases.map((p) => [p.startBeat, p.endBeat, p.section, p.cadence])).toEqual(
         phrases,
       );
@@ -387,17 +385,40 @@ describe('deriveCompositionPlan: discrete replacement rules', () => {
     expect(plan.phrases.flatMap((p) => p.motifs)).toEqual(plan.motifs.map((_, index) => index));
   });
 
-  it('phraseLengths: cuts a phrase straddling a section boundary before rounding', () => {
+  it('phraseLengths: lays rounded lengths inside each section moved onto a phrase boundary', () => {
     const plan = deriveCompositionPlan(UNRELATED, { preserve: onlyReplacing('phraseLengths') });
-    // Parts [0, 9) 3 bars, [9, 12) 1 bar, [12, 24) 4 bars: the first rounds to
-    // 4 bars and fills section A, which leaves no room for the second. The
-    // statement at beats 9-15 crosses the cut at 12 and is not selected.
+    // Sections [0, 9) and [9, 24). The 3-bar phrase rounds to 4 bars, overflows
+    // its section and halves, the second half cut at 9; the 5-bar phrase rounds
+    // to 4 bars and the last phrase runs to its section's end.
     expect(plan.phrases.map((p) => [p.startBeat, p.endBeat, p.section, p.cadence])).toEqual([
-      [0, 12, 0, 'authentic'],
-      [12, 24, 1, 'authentic'],
+      [0, 6, 0, null],
+      [6, 9, 0, 'authentic'],
+      [9, 24, 1, 'authentic'],
     ]);
-    expect(plan.motifs.map((m) => m.phrase)).toEqual([0]);
-    expect(plan.phrases.map((p) => p.motifs)).toEqual([[0], []]);
+  });
+
+  it('moves each section boundary to the nearest phrase boundary, the earlier on a tie', () => {
+    const shifted = edited(SOURCE, (p) => {
+      const [a, b, c] = p.form.sections;
+      if (!a || !b || !c) throw new Error('fixture has three sections');
+      a.endBeat = 50;
+      b.startBeat = 50;
+      b.endBeat = 80;
+      c.startBeat = 80;
+    });
+    const plan = deriveCompositionPlan(shifted);
+    // 50 is nearer 64 than 32; 80 is as near 64 as 96 and takes 64, which
+    // leaves the middle section with no length.
+    expect(plan.sections.map((s) => [s.label, s.startBeat, s.endBeat])).toEqual([
+      ['A', 0, 64],
+      ['A', 64, 128],
+    ]);
+    expect(plan.phrases.map((p) => [p.startBeat, p.endBeat, p.section])).toEqual([
+      [0, 32, 0],
+      [32, 64, 0],
+      [64, 96, 1],
+      [96, 128, 1],
+    ]);
   });
 
   it('harmonicFunction: replaces structural numerals only, by the positional pick', () => {
@@ -545,10 +566,18 @@ describe('deriveCompositionPlan: motif selection', () => {
   });
 
   it('keeps no statement that crosses a phrase boundary', () => {
-    // UNRELATED's second statement (beats 9-15) crosses the section cut at 12.
+    // UNRELATED's second statement (beats 9-15) lies inside its second phrase.
     const plan = deriveCompositionPlan(UNRELATED, { ctx: 1 });
-    expect(plan.motifs.map((m) => [m.startBeat, m.endBeat])).toEqual([[0, 5]]);
-    expect(plan.motifs[0]?.from).toBeNull();
+    expect(plan.motifs.map((m) => [m.startBeat, m.endBeat, m.phrase, m.from])).toEqual([
+      [0, 5, 0, null],
+      [9, 15, 1, 0],
+    ]);
+    const cut = deriveCompositionPlan(UNRELATED, { preserve: onlyReplacing('phraseLengths') });
+    // With the first phrase halved at beat 6, the statement at 0-5 still fits.
+    expect(cut.motifs.map((m) => [m.startBeat, m.endBeat, m.phrase])).toEqual([
+      [0, 5, 0],
+      [9, 15, 2],
+    ]);
   });
 
   it('refuses a containment check over the budget', () => {

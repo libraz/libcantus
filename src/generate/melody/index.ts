@@ -44,6 +44,7 @@ import {
   resolveContext,
 } from '../context/index.js';
 import { cellSpan, developMotif, type MotifNote, motifToNoteEvents } from '../motif/index.js';
+import { planHarmonyMisfits } from '../plan/harmony.js';
 import type { CompositionPlan, PlannedChord, PlannedPhrase } from '../plan/types.js';
 import { plannedContourAt, planTimeline } from '../plan/types.js';
 import { assertCompositionPlan } from '../plan/validate.js';
@@ -101,10 +102,13 @@ type Scene = {
   ctx: ResolvedContext;
   budget: number | undefined;
   timeline: ChordTimeline;
+  harmonyMisfits: (line: readonly MotifNote[]) => (string[] | null)[];
   scales: KeyScale[];
   members: number[][];
   frames: PhraseFrame[];
   statements: Map<number, MotifNote[]>;
+  developed: Map<string, MotifNote[]>;
+  inProgress: Set<number>;
   fallbacks: Map<number, MotifNote[]>;
 };
 
@@ -195,16 +199,17 @@ function frameOf(scene: Scene, index: number): PhraseFrame {
         return cost + draw.float(0, TIE_BREAK, index, 'tie', beat, pitch);
       };
     },
-    needsRepair: (pitch, beat) => {
-      if (pitch < low || pitch > high) {
-        return true;
-      }
-      if (!onPulse(scene, beat)) {
-        return false;
-      }
-      const tones = chordTonesAt(beat);
-      return tones !== null && !tones.includes(pitchClassOf(pitch));
+    needsRepair: (notes, before) => {
+      const read = scene.harmonyMisfits([...before, ...notes]);
+      return notes.map(
+        (n, i) => n.pitch < low || n.pitch > high || read[before.length + i] !== null,
+      );
     },
+    fits: (pitch, beat) =>
+      pitch >= low &&
+      pitch <= high &&
+      (!onPulse(scene, beat) ||
+        scene.harmonyMisfits([{ pitch, startBeat: beat, durationBeat: 1 }])[0] === null),
   };
 }
 
@@ -367,6 +372,7 @@ function statementOf(scene: Scene, m: number): MotifNote[] {
   if (known !== undefined) {
     return known;
   }
+  scene.inProgress.add(m);
   const { plan } = scene;
   const motif = plan.motifs[m] as CompositionPlan['motifs'][number];
   const frame = scene.frames[motif.phrase] as PhraseFrame;
@@ -386,8 +392,9 @@ function statementOf(scene: Scene, m: number): MotifNote[] {
       motif.relation === null
         ? varyStatement(source, motif.startBeat, frame)
         : deriveStatement(source, motif.relation, motif.startBeat, scaleAt(scene, motif.startBeat));
-    notes = repairStatement(derived, frame);
+    notes = repairStatement(derived, frame, lineBefore(scene, motif.phrase, motif.startBeat));
   }
+  scene.inProgress.delete(m);
   scene.statements.set(m, notes);
   return notes;
 }
@@ -406,8 +413,33 @@ function clippedTimeline(
   return chordTimelineFromChords(spans, endBeat - startBeat);
 }
 
+/**
+ * A phrase's notes in the segments that end by `beat`: the line a statement
+ * starting there is read after. A statement still being derived is left out,
+ * as it cannot be the context of its own source.
+ */
+function lineBefore(scene: Scene, index: number, beat: number): MotifNote[] {
+  const line: MotifNote[] = [];
+  for (const segment of segmentsOf(scene, index)) {
+    if (segment.endBeat > beat + BEAT_EPS) {
+      break;
+    }
+    if (segment.motif === null) {
+      line.push(...developedSpan(scene, index, segment));
+    } else if (!scene.inProgress.has(segment.motif)) {
+      line.push(...statementOf(scene, segment.motif));
+    }
+  }
+  return line.sort((a, b) => a.startBeat - b.startBeat);
+}
+
 /** Fill a span no motif covers by developing a root motif across it. */
 function developedSpan(scene: Scene, index: number, segment: Segment): MotifNote[] {
+  const key = `${index}:${segment.startBeat}`;
+  const known = scene.developed.get(key);
+  if (known !== undefined) {
+    return known;
+  }
   const { plan } = scene;
   const members = scene.members[index] as number[];
   const before = members.filter(
@@ -440,21 +472,37 @@ function developedSpan(scene: Scene, index: number, segment: Segment): MotifNote
       startBeat: segment.startBeat + note.startBeat,
       durationBeat: Math.min(note.durationBeat, spanBeats - note.startBeat),
     }));
-  return repairStatement(placed, scene.frames[index] as PhraseFrame);
+  const notes = repairStatement(
+    placed,
+    scene.frames[index] as PhraseFrame,
+    lineBefore(scene, index, segment.startBeat),
+  );
+  scene.developed.set(key, notes);
+  return notes;
 }
 
-/**
- * The note a phrase closes on: the one sounding at its final bar's downbeat,
- * else the first onset after that downbeat; -1 when the final bar is silent.
- */
-function heldNoteIndex(scene: Scene, index: number, line: readonly MotifNote[]): number {
+/** The downbeat of a phrase's final bar, or the phrase start when that comes later. */
+function finalDownbeat(scene: Scene, index: number): number {
   const phrase = scene.plan.phrases[index] as PlannedPhrase;
   const { meters } = scene.plan;
   let downbeat = barStartBeat(phrase.startBeat, meters);
   while (downbeat + beatsPerBarAt(downbeat, meters) < phrase.endBeat - BEAT_EPS) {
     downbeat += beatsPerBarAt(downbeat, meters);
   }
-  downbeat = Math.max(downbeat, phrase.startBeat);
+  return Math.max(downbeat, phrase.startBeat);
+}
+
+/**
+ * The note a phrase closes on: the one sounding at its final bar's downbeat,
+ * else the first onset after that downbeat; -1 when the final bar is silent.
+ */
+function heldNoteIndex(
+  scene: Scene,
+  index: number,
+  line: readonly MotifNote[],
+  downbeat: number,
+): number {
+  const phrase = scene.plan.phrases[index] as PlannedPhrase;
   const sounding = line.findIndex(
     (note) =>
       note.startBeat <= downbeat + BEAT_EPS &&
@@ -572,12 +620,15 @@ function chargePitchSearch(scene: Scene): void {
  * them, moves by step, recovers from leaps and follows the phrase's target
  * shape. Derived motifs replay their planned relation on the statement they
  * derive from, starting on their planned beat; a variation keeps its source's
- * rhythm and outer pitches. Notes a derivation carries off the register, or
- * onto a non-chord tone on a pulse, are replaced with the rest held. The spans
- * no motif covers are developed from a root motif. In each phrase's final
- * bar, the note sounding at the downbeat (or the first onset after it) is held
- * to the phrase's end, later onsets are dropped, and that note is bent onto the
- * tones the phrase's cadence asks for.
+ * rhythm and outer pitches. A derivation carried off the register is first
+ * moved a whole octave when that brings it inside; then the notes still off
+ * the register, and the pulse notes {@link evaluateComposition} would reject
+ * as not fitting the harmony, are replaced with the rest held. The spans no
+ * motif covers are developed from a root motif. In each phrase's final bar,
+ * the note sounding at the downbeat (or the first onset after it) is held to
+ * the phrase's end, later onsets are dropped, and that note is bent onto the
+ * tones the phrase's cadence asks for; a note sounding across the downbeat is
+ * cut there, and the downbeat becomes the held onset.
  *
  * Harmony is read from the plan alone, through {@link planTimeline}.
  *
@@ -616,15 +667,19 @@ export function generateMelody(plan: CompositionPlan, opts?: MelodyOptions): Not
   if (asked.budget !== undefined) {
     assertPositiveInt(asked.budget, 'budget', Number.MAX_SAFE_INTEGER);
   }
+  const timeline = planTimeline(plan);
   const scene: Scene = {
     plan,
     ctx: melodyContext(plan, asked.ctx),
     budget: asked.budget,
-    timeline: planTimeline(plan),
+    timeline,
+    harmonyMisfits: planHarmonyMisfits(plan, timeline),
     scales: plan.keys.map((key) => scaleOf(key)),
     members: membersOf(plan),
     frames: [],
     statements: new Map(),
+    developed: new Map(),
+    inProgress: new Set(),
     fallbacks: new Map(),
   };
   scene.frames = plan.phrases.map((_, index) => frameOf(scene, index));
@@ -632,9 +687,18 @@ export function generateMelody(plan: CompositionPlan, opts?: MelodyOptions): Not
   const melody: MotifNote[] = [];
   plan.phrases.forEach((_, index) => {
     const line = phraseLine(scene, index);
-    const held = heldNoteIndex(scene, index, line);
+    const downbeat = finalDownbeat(scene, index);
+    let held = heldNoteIndex(scene, index, line, downbeat);
     if (held >= 0) {
       line.length = held + 1;
+      const note = line[held] as MotifNote;
+      if (note.startBeat < downbeat - BEAT_EPS) {
+        // Cut at the downbeat, which becomes the onset the phrase is held on.
+        const cut = downbeat - note.startBeat;
+        line[held] = { ...note, durationBeat: cut };
+        line.push({ ...note, startBeat: downbeat, durationBeat: note.durationBeat - cut });
+        held += 1;
+      }
     }
     repairCadence(scene, index, line, held);
     if (held >= 0) {

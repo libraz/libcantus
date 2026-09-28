@@ -224,18 +224,47 @@ function plannedKeys(profile: ReferenceProfile, requested: KeyLike | undefined):
   return moved;
 }
 
-/** Section labels, each replaced one taking its neighbour's original label. */
+/** The beat of `boundaries` nearest to `beat`, the earlier on a tie; `beat` itself when there are none. */
+function nearestBoundary(beat: number, boundaries: readonly number[]): number {
+  let best = beat;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const boundary of boundaries) {
+    const distance = Math.abs(boundary - beat);
+    if (distance < bestDistance - BEAT_EPS) {
+      best = boundary;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+/**
+ * Section labels, each replaced one taking its neighbour's original label, and
+ * each section boundary moved to the nearest reference phrase boundary (the
+ * span's ends count as boundaries). A section left with no length is dropped.
+ */
 function plannedSections(profile: ReferenceProfile, weight: number, draw: Draw): PlannedSection[] {
   const sections = profile.form.sections;
-  return sections.map((section, index) => {
+  const boundaries = [profile.span.startBeat, profile.span.endBeat];
+  for (const phrase of profile.form.phrases) {
+    boundaries.push(phrase.startBeat, phrase.endBeat);
+  }
+  boundaries.sort((a, b) => a - b);
+  const planned: PlannedSection[] = [];
+  sections.forEach((section, index) => {
     const keep = sections.length < 2 || draw.prob(weight, 'form', index);
     const neighbour = index + 1 < sections.length ? index + 1 : index - 1;
-    return {
-      label: keep ? section.label : (sections[neighbour]?.label ?? section.label),
-      startBeat: section.startBeat,
-      endBeat: section.endBeat,
-    };
+    const startBeat = nearestBoundary(section.startBeat, boundaries);
+    const endBeat = nearestBoundary(section.endBeat, boundaries);
+    if (endBeat - startBeat > BEAT_EPS) {
+      planned.push({
+        label: keep ? section.label : (sections[neighbour]?.label ?? section.label),
+        startBeat,
+        endBeat,
+      });
+    }
   });
+  return planned;
 }
 
 /** The beat reached by advancing `bars` bars from `startBeat`, bar by bar under the meter map. */
@@ -267,10 +296,13 @@ function barsBetween(startBeat: number, endBeat: number, meters: MeterMap): numb
  * The span cut at every section boundary: each section, and each stretch no
  * section covers, is one segment.
  */
-function spanSegments(profile: ReferenceProfile): [number, number][] {
+function spanSegments(
+  profile: ReferenceProfile,
+  sections: readonly PlannedSection[],
+): [number, number][] {
   const { startBeat, endBeat } = profile.span;
   const cuts = [startBeat, endBeat];
-  for (const section of profile.form.sections) {
+  for (const section of sections) {
     for (const beat of [section.startBeat, section.endBeat]) {
       if (beat > startBeat + BEAT_EPS && beat < endBeat - BEAT_EPS) cuts.push(beat);
     }
@@ -286,40 +318,27 @@ function spanSegments(profile: ReferenceProfile): [number, number][] {
 }
 
 /**
- * The reference phrases cut at segment boundaries. A cut phrase's cadence
- * stays with its last part.
- */
-function phrasePieces(
-  profile: ReferenceProfile,
-  segments: readonly [number, number][],
-): PhraseSpan[] {
-  const pieces: PhraseSpan[] = [];
-  profile.form.phrases.forEach((phrase, source) => {
-    const parts: PhraseSpan[] = [];
-    for (const [from, to] of segments) {
-      const startBeat = Math.max(phrase.startBeat, from);
-      const endBeat = Math.min(phrase.endBeat, to);
-      if (endBeat - startBeat > BEAT_EPS) parts.push({ startBeat, endBeat, source, cadence: null });
-    }
-    const last = parts.at(-1);
-    if (last) last.cadence = phrase.cadence?.type ?? null;
-    pieces.push(...parts);
-  });
-  return pieces;
-}
-
-/**
  * Lay out phrase spans so they tile the span with every section opening at
- * least one phrase. The reference phrases are cut at section boundaries, and
- * within each segment the parts are laid end to end from its start: a kept
- * part at its own length, a replaced one rounded to a power-of-two bar count
- * and halved when it overflows the segment. The last phrase ends at the
- * segment's end; a segment no reference phrase reaches gets one phrase read
- * from the phrase before it.
+ * least one phrase. Each reference phrase belongs to the segment its start
+ * falls in, and within each segment the phrases are laid end to end from its
+ * start: a kept phrase at its own length, a replaced one rounded to a
+ * power-of-two bar count and halved when it overflows the segment, its cadence
+ * kept by the last half. The last phrase ends at the segment's end; a segment
+ * no reference phrase starts in gets one phrase read from the phrase before it.
  */
-function plannedPhraseSpans(profile: ReferenceProfile, weight: number, draw: Draw): PhraseSpan[] {
-  const segments = spanSegments(profile);
-  const pieces = phrasePieces(profile, segments);
+function plannedPhraseSpans(
+  profile: ReferenceProfile,
+  sections: readonly PlannedSection[],
+  weight: number,
+  draw: Draw,
+): PhraseSpan[] {
+  const segments = spanSegments(profile, sections);
+  const pieces: PhraseSpan[] = profile.form.phrases.map((phrase, source) => ({
+    startBeat: phrase.startBeat,
+    endBeat: phrase.endBeat,
+    source,
+    cadence: phrase.cadence?.type ?? null,
+  }));
   const replaced = pieces.map((_, index) => !draw.prob(weight, 'phraseLengths', index));
   const spans: PhraseSpan[] = [];
   for (const [segmentStart, segmentEnd] of segments) {
@@ -627,31 +646,30 @@ export function deriveCompositionPlan(
 
   const sections = plannedSections(profile, preserve.form, draw);
   const shapeWeight = preserve.registerShape;
-  const phrases: PlannedPhrase[] = plannedPhraseSpans(profile, preserve.phraseLengths, draw).map(
-    (span) => {
-      const melody = profile.form.phrases[span.source]?.melody ?? null;
-      const register = melody
-        ? {
-            low: Math.round(lerp(shapeWeight, mapPitch(melody.low), neutralRegister.low)),
-            high: Math.round(lerp(shapeWeight, mapPitch(melody.high), neutralRegister.high)),
-            mean: lerp(shapeWeight, mapPitch(melody.mean), neutralRegister.mean),
-          }
-        : { ...neutralRegister };
-      return {
-        startBeat: span.startBeat,
-        endBeat: span.endBeat,
-        section: sectionAt(sections, span.startBeat),
-        cadence: span.cadence,
-        shape: melody && shapeWeight >= SHAPE_KEEP_THRESHOLD ? melody.shape : NEUTRAL_SHAPE,
-        peakPosition: melody
-          ? lerp(shapeWeight, melody.peakPosition, NEUTRAL_PEAK_POSITION)
-          : NEUTRAL_PEAK_POSITION,
-        register,
-        onsetDensity: melody ? melody.onsetDensity : profile.melody.rhythm.onsetDensity,
-        motifs: [],
-      };
-    },
-  );
+  const spans = plannedPhraseSpans(profile, sections, preserve.phraseLengths, draw);
+  const phrases: PlannedPhrase[] = spans.map((span) => {
+    const melody = profile.form.phrases[span.source]?.melody ?? null;
+    const register = melody
+      ? {
+          low: Math.round(lerp(shapeWeight, mapPitch(melody.low), neutralRegister.low)),
+          high: Math.round(lerp(shapeWeight, mapPitch(melody.high), neutralRegister.high)),
+          mean: lerp(shapeWeight, mapPitch(melody.mean), neutralRegister.mean),
+        }
+      : { ...neutralRegister };
+    return {
+      startBeat: span.startBeat,
+      endBeat: span.endBeat,
+      section: sectionAt(sections, span.startBeat),
+      cadence: span.cadence,
+      shape: melody && shapeWeight >= SHAPE_KEEP_THRESHOLD ? melody.shape : NEUTRAL_SHAPE,
+      peakPosition: melody
+        ? lerp(shapeWeight, melody.peakPosition, NEUTRAL_PEAK_POSITION)
+        : NEUTRAL_PEAK_POSITION,
+      register,
+      onsetDensity: melody ? melody.onsetDensity : profile.melody.rhythm.onsetDensity,
+      motifs: [],
+    };
+  });
 
   const graph = profile.melody.graph;
   const noteCount = (node: number) =>

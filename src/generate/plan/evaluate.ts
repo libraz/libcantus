@@ -14,7 +14,6 @@ import { BEAT_EPS } from '../../analyze/adjacency.js';
 import { barSpanOf } from '../../analyze/form/internal.js';
 import { functionOf } from '../../analyze/functional/function.js';
 import { romanToChord } from '../../analyze/functional/roman.js';
-import { keyLookup } from '../../analyze/keys/index.js';
 import type { MotifGraph, MotifGraphEdge, MotifGraphNode } from '../../analyze/melody/graph.js';
 import { melodicSimilarity } from '../../analyze/melody/similarity.js';
 import {
@@ -36,13 +35,13 @@ import {
   syncopationSimilarity,
 } from '../../analyze/reference/index.js';
 import type { BarPositionProfile } from '../../analyze/rhythm/index.js';
-import { analyzeVoice } from '../../analyze/voice/index.js';
-import { meterAt, metricWeight, pulseBeats } from '../../core/meter/index.js';
+import { meterAt, pulseBeats } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import { assertOptions } from '../../core/validation/index.js';
 import { type ResolvedKey, scaleOf } from '../../theory/scale/index.js';
 import { deriveStatement } from '../melody/derive.js';
 import type { MotifNote } from '../motif/index.js';
+import { planHarmonyMisfits, planKeyAt } from './harmony.js';
 import {
   type CompositionPlan,
   type PlannedMotif,
@@ -64,8 +63,8 @@ const DERIVED_PITCH_THRESHOLD = 0.75;
 const PEAK_POSITION_TOLERANCE = 0.2;
 /** Sample points an outline is read at, matching {@link ReferencePhraseMelody.outline}. */
 const OUTLINE_POINTS = 8;
-/** Labels {@link analyzeVoice} gives a note that counts as fitting the planned harmony. */
-const HARMONY_OK_KINDS = new Set(['chordTone', 'suspension', 'appoggiatura', 'anticipation']);
+/** Shortest note, in beats, whose end marks a phrase boundary. */
+const HELD_NOTE_BEATS = 1;
 
 /**
  * One way a candidate melody departs from its plan.
@@ -142,46 +141,70 @@ export type EvaluateCompositionOptions = {
   budget?: number;
 };
 
-/** Distinct start and end beats of a set of spans, ascending. */
-function boundaryBeats(spans: readonly { startBeat: number; endBeat: number }[]): number[] {
+/** The plan's phrase boundaries strictly inside its span, ascending. */
+function interiorBoundaries(plan: CompositionPlan): number[] {
   const beats = new Set<number>();
-  for (const span of spans) {
-    beats.add(span.startBeat);
-    beats.add(span.endBeat);
+  for (const phrase of plan.phrases) {
+    for (const beat of [phrase.startBeat, phrase.endBeat]) {
+      if (beat > plan.span.startBeat + BEAT_EPS && beat < plan.span.endBeat - BEAT_EPS) {
+        beats.add(beat);
+      }
+    }
   }
   return [...beats].sort((a, b) => a - b);
 }
 
-/** Smallest distance from `beat` to any of `others`, or infinite if there are none. */
-function nearestDistance(beat: number, others: readonly number[]): number {
-  let best = Number.POSITIVE_INFINITY;
-  for (const other of others) {
-    best = Math.min(best, Math.abs(other - beat));
+/** Every stretch of silence in the candidate, from its span start to its span end. */
+function restsOf(
+  melody: readonly NoteEvent[],
+  plan: CompositionPlan,
+): { startBeat: number; endBeat: number }[] {
+  const rests: { startBeat: number; endBeat: number }[] = [];
+  let reach = plan.span.startBeat;
+  for (const note of [...melody].sort((a, b) => a.startBeat - b.startBeat)) {
+    if (note.startBeat > reach + BEAT_EPS) {
+      rests.push({ startBeat: reach, endBeat: note.startBeat });
+    }
+    reach = Math.max(reach, note.startBeat + note.durationBeat);
   }
-  return best;
+  if (plan.span.endBeat > reach + BEAT_EPS) {
+    rests.push({ startBeat: reach, endBeat: plan.span.endBeat });
+  }
+  return rests;
 }
 
-/** Every planned phrase boundary the candidate's own phrasing does not confirm within one pulse. */
+/**
+ * Every planned phrase boundary inside the span that the candidate gives no
+ * boundary signal for: within one pulse of it, neither a note of at least
+ * {@link HELD_NOTE_BEATS} ends nor a rest of at least a pulse sounds.
+ */
 function phraseBoundaryViolations(
+  melody: readonly NoteEvent[],
   plan: CompositionPlan,
-  candidatePhrases: readonly ReferencePhrase[],
 ): CompositionViolation[] {
-  const candidateBoundaries = boundaryBeats(candidatePhrases);
+  const rests = restsOf(melody, plan);
   const violations: CompositionViolation[] = [];
-  for (const beat of boundaryBeats(plan.phrases)) {
-    const tolerance = pulseBeats(meterAt(beat, plan.meters));
-    const distance = nearestDistance(beat, candidateBoundaries);
-    if (distance > tolerance) {
+  for (const beat of interiorBoundaries(plan)) {
+    const pulse = pulseBeats(meterAt(beat, plan.meters));
+    const held = melody.some(
+      (note) =>
+        note.durationBeat >= HELD_NOTE_BEATS - BEAT_EPS &&
+        Math.abs(note.startBeat + note.durationBeat - beat) <= pulse + BEAT_EPS,
+    );
+    const rested = rests.some(
+      (rest) =>
+        rest.endBeat - rest.startBeat >= pulse - BEAT_EPS &&
+        rest.startBeat <= beat + pulse + BEAT_EPS &&
+        rest.endBeat >= beat - pulse - BEAT_EPS,
+    );
+    if (!held && !rested) {
       violations.push({
         kind: 'phraseBoundary',
         severity: 'error',
         atBeat: beat,
-        expected: `a phrase boundary within ${tolerance} beat(s)`,
-        actual:
-          candidateBoundaries.length === 0
-            ? 'no phrase boundaries in the candidate'
-            : `nearest candidate boundary ${distance.toFixed(3)} beat(s) away`,
-        rationale: `the plan places a phrase boundary at beat ${beat}, which the candidate's phrasing does not confirm`,
+        expected: `a note of at least ${HELD_NOTE_BEATS} beat(s) ending, or a rest of at least ${pulse} beat(s), within ${pulse} beat(s)`,
+        actual: 'neither',
+        rationale: `the plan places a phrase boundary at beat ${beat}, which the candidate does not mark`,
       });
     }
   }
@@ -209,8 +232,8 @@ function matchingPhrase(
 /**
  * Every planned cadence a matched candidate phrase closes on differently.
  *
- * A plan phrase with no matching candidate phrase is left to
- * {@link phraseBoundaryViolations}, which already reports the missing boundary.
+ * A plan phrase the candidate's own phrasing has no matching phrase for has
+ * no candidate cadence to compare, and is skipped.
  */
 function cadenceViolations(
   plan: CompositionPlan,
@@ -289,37 +312,18 @@ function spanViolation(
   ];
 }
 
-/** The key in force at a beat, read from the plan's own harmony rather than a single home key. */
-function harmonyKeyAt(plan: CompositionPlan): (beat: number) => ResolvedKey {
-  const regions = [...plan.harmony]
-    .sort((a, b) => a.startBeat - b.startBeat)
-    .map((chord) => ({
-      startBeat: chord.startBeat,
-      endBeat: chord.endBeat,
-      key: plan.keys[chord.key] as ResolvedKey,
-      confidence: 1,
-    }));
-  return keyLookup(regions, plan.keys[0] as ResolvedKey);
-}
-
-/** Every pulse-level note {@link analyzeVoice} cannot read as fitting the planned harmony. */
+/** Every pulse-level note that does not fit the planned harmony, read by {@link planHarmonyMisfits}. */
 function harmonyViolations(
   melody: readonly NoteEvent[],
   plan: CompositionPlan,
 ): CompositionViolation[] {
-  const timeline = planTimeline(plan);
-  const keyAt = harmonyKeyAt(plan);
-  const analyzed = analyzeVoice(melody, timeline.at, (beat) => scaleOf(keyAt(beat)));
+  const misfits = planHarmonyMisfits(plan)(melody);
   const violations: CompositionViolation[] = [];
-  for (let index = 0; index < melody.length; index += 1) {
+  misfits.forEach((kinds, index) => {
+    if (kinds === null) {
+      return;
+    }
     const note = melody[index] as NoteEvent;
-    if (metricWeight(note.startBeat, plan.meters) <= 0) {
-      continue;
-    }
-    const kinds = (analyzed[index]?.labels ?? []).map((label) => label.kind);
-    if (kinds.some((kind) => HARMONY_OK_KINDS.has(kind))) {
-      continue;
-    }
     violations.push({
       kind: 'harmony',
       severity: 'error',
@@ -328,7 +332,7 @@ function harmonyViolations(
       actual: kinds.length === 0 ? 'no harmonic label' : kinds.join(', '),
       rationale: `the note at beat ${note.startBeat} does not fit the planned harmony`,
     });
-  }
+  });
   return violations;
 }
 
@@ -384,7 +388,7 @@ function motifDerivationViolations(
   melody: readonly NoteEvent[],
   plan: CompositionPlan,
 ): CompositionViolation[] {
-  const keyAt = harmonyKeyAt(plan);
+  const keyAt = planKeyAt(plan);
   const violations: CompositionViolation[] = [];
   for (const statement of plan.motifs) {
     if (statement.from === null) {
@@ -634,7 +638,7 @@ export function evaluateComposition(
 
   const violations: CompositionViolation[] = [
     ...spanViolation(melody, plan),
-    ...phraseBoundaryViolations(plan, candidate.form.phrases),
+    ...phraseBoundaryViolations(melody, plan),
     ...cadenceViolations(plan, candidate.form.phrases),
     ...harmonyViolations(melody, plan),
     ...motifDerivationViolations(melody, plan),

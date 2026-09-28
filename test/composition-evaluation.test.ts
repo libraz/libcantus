@@ -135,7 +135,8 @@ describe('evaluateComposition: one violation kind at a time', () => {
     ]);
   });
 
-  it('flags phraseBoundary: a planned split the candidate does not confirm', () => {
+  /** `basePlan()` split into two phrases at beat 4. */
+  function splitPlan(): CompositionPlan {
     const plan = basePlan();
     plan.phrases = [
       {
@@ -161,9 +162,47 @@ describe('evaluateComposition: one violation kind at a time', () => {
         motifs: [1],
       },
     ];
-    const result = evaluateComposition(baseMelody(), plan);
-    expect(result.violations).toEqual([
+    return plan;
+  }
+
+  /** Quarters on beats 0-1 and 6-7, eighths between, with `gaps` onsets left silent. */
+  function eighthsMelody(gaps: readonly number[] = []) {
+    const melody = [
+      { pitch: 60, startBeat: 0, durationBeat: 1 },
+      { pitch: 64, startBeat: 1, durationBeat: 1 },
+    ];
+    for (let beat = 2; beat < 6; beat += 0.5) {
+      if (!gaps.includes(beat)) melody.push({ pitch: 67, startBeat: beat, durationBeat: 0.5 });
+    }
+    melody.push(
+      { pitch: 67, startBeat: 6, durationBeat: 1 },
+      { pitch: 71, startBeat: 7, durationBeat: 1 },
+    );
+    return melody;
+  }
+
+  const boundaryViolations = (result: ReturnType<typeof evaluateComposition>) =>
+    result.violations.filter((v) => v.kind === 'phraseBoundary');
+
+  it('flags phraseBoundary: no held note or rest marks a planned split', () => {
+    expect(boundaryViolations(evaluateComposition(eighthsMelody(), splitPlan()))).toEqual([
       expect.objectContaining({ kind: 'phraseBoundary', severity: 'error', atBeat: 4 }),
+    ]);
+  });
+
+  it('accepts a planned split marked by a note of at least a beat ending within a pulse', () => {
+    expect(boundaryViolations(evaluateComposition(baseMelody(), splitPlan()))).toEqual([]);
+  });
+
+  it('accepts a planned split marked by a rest of at least a pulse', () => {
+    const melody = eighthsMelody([4, 4.5]);
+    expect(boundaryViolations(evaluateComposition(melody, splitPlan()))).toEqual([]);
+  });
+
+  it('does not count a rest shorter than a pulse as marking a split', () => {
+    const melody = eighthsMelody([4]);
+    expect(boundaryViolations(evaluateComposition(melody, splitPlan()))).toEqual([
+      expect.objectContaining({ kind: 'phraseBoundary', atBeat: 4 }),
     ]);
   });
 
