@@ -347,3 +347,5 @@ halved.length > 0; // true
 ## 関連ページ
 
 拍節強度、小節内位置、連符は[時間とアレンジ](time-and-arrangement.md)に、つまみと再現性の保証は[決定性とシード](determinism-and-seeding.md)にあります。
+
+既存のラインが発音位置をどう置いているか（密度、拍節上の位置、シンコペーション）を読むのは `analyzeRhythm` で、[解析](analysis.md)で扱います。

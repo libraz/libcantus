@@ -112,6 +112,36 @@ The relation also records whether the second statement begins where the first en
 
 `Motif.similarityTo` — `melodicSimilarity` as a function, with `compareMelodies` beside it — answers the looser question of how alike two phrases are, for cases where no named transformation applies.
 
+## Reading how motifs derive from one another
+
+`motifGraph` reads a melody's motif statements as a derivation forest: every statement after the first is checked against every statement that precedes it, and the one it most plausibly grew out of becomes its parent. A statement that grew out of nothing already heard — new material, not a restatement — is a root, with no parent at all.
+
+```ts
+import { extractMotifs, motifGraph } from '@libraz/libcantus';
+
+const notes = [
+  { pitch: 60, startBeat: 0, durationBeat: 1 },
+  { pitch: 62, startBeat: 1, durationBeat: 1 },
+  { pitch: 64, startBeat: 2, durationBeat: 1 },
+  { pitch: 67, startBeat: 4, durationBeat: 1 },
+  { pitch: 69, startBeat: 5, durationBeat: 1 },
+  { pitch: 71, startBeat: 6, durationBeat: 1 },
+];
+
+const graph = motifGraph(notes, extractMotifs(notes));
+
+graph.nodes.length; // 2
+graph.edges[0]?.relation?.kind; // 'transposition'
+```
+
+A node is one statement — one `occurrence` of one motif in `extractMotifs`'s own numbering — rather than a motif itself, so two occurrences of the same repeated hook are two nodes with an edge between them. `motifGraph` reads each occurrence back off `line` rather than off the motif's first statement, since an occurrence's duration can differ from that first statement in ways a retrograde reading depends on.
+
+A parent is chosen among every earlier statement by three tests in order: a pair `relateMotifs` can name — repetition, transposition, inversion, and the rest — always outranks a pair it cannot; among candidates that agree on that, the one with the higher `melodicSimilarity` wins; and a tie beyond that goes to the more recent statement, then to the earliest index, only to make an otherwise exact tie deterministic. A statement whose best candidate is neither named nor close enough is left as a root: `variationThreshold` (0.75 by default) sets how close "close enough" is, so raising it demands a tighter melodic match before an unnamed pair counts as a variation rather than new material, and an edge drawn below that bar carries `relation: null` alongside the `similarity` that earned it.
+
+Because every node has at most one parent, the result is a forest rather than a graph proper: `edges` names, for every node but the roots, the single earlier statement it derives from.
+
+**Derivation depth** is not a field the graph stores — it is a reading taken off it. A root is depth 0. Following an edge whose relation leaves the pitches themselves unchanged — `repetition`, `augmentation`, `diminution` — keeps the child at its parent's depth; every other relation, an unnamed variation included, adds one. A hook repeated eight times over a piece stays at depth 0 throughout; a subject restated once transposed and once more inverted reaches depth 2. Reading the depths across a graph is one of the distributions [Analysis](analysis.md) uses, under comparing reference profiles, to say whether two pieces build their material the same way.
+
 ## Generating a motif
 
 ```ts

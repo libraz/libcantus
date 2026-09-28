@@ -35,6 +35,8 @@ Composer.of({ key: chords.key, bpm: 120, seed: 1 }).bass(chords, { style: 'walki
 
 Chord boundaries are searched for rather than assumed, and so is the key, so a piece that modulates is not read against the key it started in. Answers carry their evidence: a chord analysis, a cadence and a Roman numeral each come with a `rationale` and the readings they turned down, and where the input cannot settle a question the field comes back `null` rather than a plausible guess.
 
+Another piece is read the same way and measured against the first dimension by dimension — form, harmony, motif derivation, rhythm — never folded into one score: `analyzeReference` compresses a piece into a portable profile, and `compareReferences` reads two of them against each other.
+
 ## Use cases
 
 | Use case | What it does | Worked guide |

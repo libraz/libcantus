@@ -112,6 +112,36 @@ relateMotifs(subject, answer, majorKey(0))?.kind; // 'transposition'
 
 `Motif.similarityTo`、関数としては `melodicSimilarity`、その隣に `compareMelodies` があり、名前の付く変形が当てはまらない場合に、2つのフレーズがどれだけ似ているかというより緩い問いに答えます。
 
+## モチーフの派生関係を読む
+
+`motifGraph` は、旋律のモチーフの提示を派生の森として読みます。2つ目以降のすべての提示を、それより前のすべての提示と照らし合わせ、もっともらしくそこから育ったと言えるものを親とします。すでに鳴った何からも育っていない提示——再提示ではなく新しい素材——は、親を持たない根になります。
+
+```ts
+import { extractMotifs, motifGraph } from '@libraz/libcantus';
+
+const notes = [
+  { pitch: 60, startBeat: 0, durationBeat: 1 },
+  { pitch: 62, startBeat: 1, durationBeat: 1 },
+  { pitch: 64, startBeat: 2, durationBeat: 1 },
+  { pitch: 67, startBeat: 4, durationBeat: 1 },
+  { pitch: 69, startBeat: 5, durationBeat: 1 },
+  { pitch: 71, startBeat: 6, durationBeat: 1 },
+];
+
+const graph = motifGraph(notes, extractMotifs(notes));
+
+graph.nodes.length; // 2
+graph.edges[0]?.relation?.kind; // 'transposition'
+```
+
+ノード1つはモチーフそのものではなく1つの提示——`extractMotifs` 自身の番号付けにおける1つのモチーフの `occurrence`——です。だから同じフックの繰り返しである2つの出現は、辺で結ばれた2つのノードになります。`motifGraph` は各出現を、そのモチーフの最初の提示からではなく `line` から読み直します。出現の持続は最初の提示と異なることがあり、逆行の判定はそこに依存するからです。
+
+親は、それより前のすべての提示の中から、順に3つの基準で選ばれます。`relateMotifs` が名前を付けられる対——反復、移高、反行など——は、名前を付けられない対に常に勝ります。その点で並ぶ候補の間では `melodicSimilarity` が高いほうが勝ちます。それでも並ぶ場合はより新しい提示が勝ち、それでもなお並ぶ場合にかぎり、決定的にするためだけに添字の若いほうが勝ちます。最良の候補が名前も付かず十分に近くもない提示は、根のまま残ります。`variationThreshold`（既定 0.75）が「十分に近い」の基準で、これを上げると、名前の付かない対を新しい素材ではなく変奏とみなすのに、より近い旋律的一致を要求するようになります。この基準に届かず引かれた辺は、それを支えた `similarity` と並んで `relation: null` を持ちます。
+
+どのノードも親を高々1つしか持たないため、結果はグラフというより森です。`edges` は、根を除くすべてのノードについて、そこが派生した唯一の先行提示を名指します。
+
+**派生の深さ**はグラフが保持するフィールドではなく、グラフから読み取る値です。根は深さ0です。音高そのものを変えない関係——`repetition`、`augmentation`、`diminution`——の辺をたどるときは、子は親と同じ深さにとどまります。それ以外の関係は、名前の付かない変奏も含めて深さを1つ増やします。曲を通じて8回繰り返されるフックは深さ0のままですが、一度移高されて再提示され、さらに反行された主題は深さ2に達します。深さの分布は、[解析](analysis.md)で説明するリファレンスプロファイルの比較で、2曲の素材の作り方が同じかどうかを測る分布の1つとして使われます。
+
 ## モチーフを生成する
 
 ```ts

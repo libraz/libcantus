@@ -254,7 +254,45 @@ regions[0]?.endBeat; // 12
 
 ## 旋律の解析
 
-繰り返しや変形を伴う旋律素材は `Score.motifs()` と `Score.contour()` が扱い、`Motif` は `relateTo` と `similarityTo` で別のモチーフと自身を比較します。関数としては `melodicContour`、`extractMotifs`、`relateMotifs`、`melodicSimilarity` です。[旋律とモチーフ](melody-and-motifs.md)を参照してください。
+繰り返しや変形を伴う旋律素材は `Score.motifs()` と `Score.contour()` が扱い、`Motif` は `relateTo` と `similarityTo` で別のモチーフと自身を比較します。`Score.motifGraph()` はさらに踏み込み、それぞれの出現がどの出現から生まれたかを読み取ります。関数としては `melodicContour`、`extractMotifs`、`relateMotifs`、`melodicSimilarity`、`motifGraph` です。[旋律とモチーフ](melody-and-motifs.md)を参照してください。
+
+## リズムの解析
+
+`analyzeRhythm` は、旋律であってもコードタイムラインの和音交代をオンセットに読み替えたものであっても同じやり方で、ラインが拍子に対してオンセットをどう置くか——どれだけ密に鳴るか、どの拍節位置を好むか、拍からどれだけ食い込むか——を読み取ります。
+
+```ts
+import { analyzeRhythm } from '@libraz/libcantus';
+
+const rhythm = analyzeRhythm(
+  [
+    { pitch: 60, startBeat: 0, durationBeat: 1.5 },
+    { pitch: 62, startBeat: 1.5, durationBeat: 2.5 },
+  ],
+  { ts: '4/4' },
+);
+
+rhythm.onsets; // 2
+rhythm.syncopation > 0; // true
+```
+
+`Score.rhythm()` は、スコア自身の音符を、自身の拍子とスパンに対して読む同じ解析です。
+
+```ts
+import { Score } from '@libraz/libcantus';
+
+const score = Score.of([
+  { pitch: 60, startBeat: 0, durationBeat: 1 },
+  { pitch: 62, startBeat: 1, durationBeat: 1 },
+  { pitch: 64, startBeat: 2, durationBeat: 1 },
+  { pitch: 65, startBeat: 3, durationBeat: 1 },
+]);
+
+score.rhythm().onsetDensity; // 4
+```
+
+0.05拍以内で隣接するオンセットは1つに畳まれるので、手弾きのロールが数を水増しすることはありません。オンセットはすべて拍の12分の1のグリッドに対して読まれます。これは16分音符・8分三連符・16分三連符のいずれも置ける細かさです。`offGridRatio` は、そのグリッドから1/32拍を超えて外れたオンセットの割合です。それ以外の値は、すべてのオンセットを最寄りのスロットに寄せてから読むので、量子化されていないラインでもずれが偽のシンコペーションを生まず、実際の食いが少し弱めに読まれます。
+
+`onsetLevels` は6段階のリズムレベル別にオンセットの質量を集計します——0が最初の拍分割の外、1がその上、2から5がメインのパルス上（拍子自身の `metricWeight` に2を足したもの）——`barPositions` は同じ配置を小節内の位置ごとに、そのスパンが読まれる拍子1つにつき1プロファイルで分解します。`interOnsetShares` はオンセット間の間隔を `RHYTHM_IOI_BINS`——半オクターブ刻みで16分の1拍から16拍までの17段階——に畳んだものです。全音符の保持と走る16分音符を同じ分布の上に置けるだけの広さがあります。`restRatio` はスパンのうち何も鳴っていない割合、`syncopation` は Longuet-Higgins & Lee 型です。次のオンセットが来るまでの間、あるオンセットがより強い拍節位置を持続で越えて占有すると、その強さの差分が課され、[0, 1] に正規化されます。
 
 ## アレンジのレポート
 
@@ -301,3 +339,102 @@ Array.isArray(report.conflicts); // true
 アレンジ全体の結果が不要な場合は、`tensionCurve` と `analyzeVoice` がその一部を返します。`toVoiceNotes` は単一トラックを声部レベルの解析向けに整えます。クラス側では、前者にあたるのが `Arrangement.tension` です。後者にあたる `Score.voices` は曲全体を読みます。スコアは多声なので、音符を声部に分け、各音をその声部の中で、同時に鳴っている他のすべてに対して分類します。掛留を報告するにはこれが要ります（不協和は何かに対して不協和だからです）。ある声部の音が別の声部の経過音として聞かれることも防げます。同じ声部レベルの読みを、1つのパッセージをフラットな配列として受け取って行うのが `analyzePolyphony` です。音符を声部に分け、各音をその下で同時に鳴っている他のすべてに対して分類し、渡された順に1音1件の注釈を返します。各注釈は、その配列上の位置を `noteId` として持ちます。長さのない音は鳴らないため所属する声部を持ちませんが、注釈自体は残り、コードに対してだけ読まれます。編集をまたいで解析を保持する `createArrangementSession`（`Arrangement.update` が使っているのもこれです）については[パフォーマンス](performance.md)を参照してください。
 
 `analyzeVoice` が名指す装飾音の図形——経過音・刺繍音・掛留・倚音・先取音・逸音——は、同じ音に対して `classifyMelodyTones` が使う語と同一です。1つの旋律を解析から読んでもハーモナイザから読んでも、返る語彙は1つに揃います。ただし、読む証拠は異なり、どちらの結果も他方の部分集合ではありません。`analyzeVoice` は下で鳴っているコードに対して音を読むので、そのコードが含む音はどんな旋律形を通っていてもコードトーンになりますが、`classifyMelodyTones` は旋律と拍節から同じ音を経過音と呼ぶことがあります。逆に拍節を重視するのは `classifyMelodyTones` の側なので、跳躍のあとに順次で解決する音が、一方では倚音、他方では構造音になります。両方で音に色を付けるホストは同じ小節に2つの凡例を得ますが、それは食い違いではなく、それぞれが答えている問いの違いです。
+
+## リファレンスプロファイル
+
+`analyzeReference` は、曲の作曲上の構造——フォーム、和声的な機能とリズム、モチーフどうしの派生関係——を `ReferenceProfile` に圧縮します。プレーンな JSON にシリアライズできる記録で、曲自身の音符は一切持ちません。
+
+```ts
+import { analyzeReference } from '@libraz/libcantus';
+
+const triad = (pitches: number[], startBeat: number) =>
+  pitches.map((pitch) => ({ pitch, startBeat, durationBeat: 4 }));
+const notes = [
+  ...triad([60, 64, 67], 0),
+  ...triad([65, 69, 72], 4),
+  ...triad([67, 71, 74], 8),
+  ...triad([60, 64, 67], 12),
+];
+const profile = analyzeReference(notes, { key: 'C major' });
+
+profile.harmony.chords.map((chord) => chord.roman); // ['I', 'IV', 'V', 'I']
+profile.span.bars; // 4
+```
+
+`Score.reference()` と `Arrangement.reference()` は、スコアやアレンジ自身の音符・拍子・キー・和声から同じプロファイルを組み立てます。スコアのコード分析やアレンジのセッションがすでに持っているものを、あらためて推定し直すことはありません。
+
+モチーフは、個々の出現の音符ではなく、変換を通じて保たれる音程列とリズム比として保持されます——これらの派生がどう読まれるかは[旋律とモチーフ](melody-and-motifs.md)を参照してください。フレーズの旋律は、それを生んだ音符としてではなく、スパン全体からサンプリングした8点のアウトラインと、動く音域として保持されます。`ReferenceProfile` の中に音符イベント、クラスのインスタンス、関数は1つもありません。呼び出し側が保存し、差分を取り、JSON として別のプロセスに渡してそのまま読み戻せるデータです。
+
+```ts
+import { analyzeReference, assertReferenceProfile, REFERENCE_PROFILE_VERSION } from '@libraz/libcantus';
+
+const triad = (pitches: number[], startBeat: number) =>
+  pitches.map((pitch) => ({ pitch, startBeat, durationBeat: 4 }));
+const notes = [
+  ...triad([60, 64, 67], 0),
+  ...triad([65, 69, 72], 4),
+  ...triad([67, 71, 74], 8),
+  ...triad([60, 64, 67], 12),
+];
+const profile = analyzeReference(notes, { key: 'C major' });
+const restored = assertReferenceProfile(JSON.parse(JSON.stringify(profile)));
+
+restored.profileVersion === REFERENCE_PROFILE_VERSION; // true
+JSON.stringify(restored) === JSON.stringify(profile); // true
+```
+
+`assertReferenceProfile` は、信頼できないデータとして届くプロファイル——保存先から復元した、設定ファイルから読んだ、プラグインのホストから渡された——のための境界チェックです。存在・型・範囲・相互参照（フレーズの `section` 添字、モチーフグラフの辺の `from`/`to`、和音の `roman` がその和音の指すキーで読めるか）を、後続の何かがそれを読む前にすべて検査し、破損した文書は `reference profile.form.phrases[3].bars` のように壊れたフィールドそのものを名指して `InvalidInputError` で拒否します。`profileVersion` はこのファイルが宣言するスキーマを区切るもので、レコードの形が変わったときだけ上がります。終止の検出、ハイパーメーター、モチーフ抽出といった、プロファイルが依拠する解析が同じ曲を違う読みに変えただけでは上がりません。
+
+`opts.timeline` は和声を推定せずすでに分かっているものとして読み、`opts.melody` は音符自身のトップラインを読む代わりに旋律線を指定し、`opts.key` は曲が通過する調を探す代わりに、スパン全体を1つのキーとして読みます——いずれも `chordTimelineFromNotes` や `Arrangement` がすでに持つオプションと同じです。
+
+## リファレンスプロファイルの比較
+
+`compareReferences` は、プロファイル化された2曲を、フォーム・和声・旋律・リズムという観点ごとに測り、集約値は返しません。どの観点が一致するかが答えであって、それらをまとめた1つの数値ではありません。
+
+```ts
+import { analyzeReference, compareReferences } from '@libraz/libcantus';
+
+const triad = (pitches: number[], startBeat: number) =>
+  pitches.map((pitch) => ({ pitch, startBeat, durationBeat: 4 }));
+const notes = [
+  ...triad([60, 64, 67], 0),
+  ...triad([65, 69, 72], 4),
+  ...triad([67, 71, 74], 8),
+  ...triad([60, 64, 67], 12),
+];
+const profile = analyzeReference(notes, { key: 'C major' });
+const cmp = compareReferences(profile, profile);
+
+cmp.form.sectionSequenceSimilarity; // 1
+cmp.melody.surfaceSimilarity; // null
+cmp.melody.motifStructureSimilarity; // null
+```
+
+すべての値は [0, 1] の範囲で2つのプロファイルに対して対称か、さもなければ `null` です。`null` が意味するのは、その項目を測る材料がどちらのプロファイルにも無いということです——上のコード進行4つには旋律のモチーフがそもそも無いので、その派生については自分自身と比べてすら何も比較できません——一方0は、片方にだけ材料がある場合です。`null` を低いスコアとして読んでしまうと、「比較しようがない」と「比較した結果似ていない」を取り違えることになるので、両者を混同しません。
+
+`melody.surfaceSimilarity` だけがモチーフの実際の音程を読みます。それ以外のすべての項目は、移調・テンポ・モチーフの素材そのものの変更に対して不変です。この切り分けによって、「同じ作り方をした別の曲」という答えが可能になります。構造側の項目が高い一方で、表層側の項目だけが低くなるからです。
+
+```ts
+import { analyzeReference, compareReferences } from '@libraz/libcantus';
+
+const themeA = [
+  ...[60, 62, 64].map((pitch, i) => ({ pitch, startBeat: i, durationBeat: 1 })),
+  ...[67, 69, 71].map((pitch, i) => ({ pitch, startBeat: i + 4, durationBeat: 1 })),
+];
+const themeB = [
+  ...[72, 69, 67].map((pitch, i) => ({ pitch, startBeat: i, durationBeat: 1 })),
+  ...[65, 62, 60].map((pitch, i) => ({ pitch, startBeat: i + 4, durationBeat: 1 })),
+];
+const comparison = compareReferences(
+  analyzeReference(themeA, { key: 'C major' }),
+  analyzeReference(themeB, { key: 'C major' }),
+);
+
+comparison.melody.motifStructureSimilarity; // 1
+comparison.melody.surfaceSimilarity; // 0.25
+comparison.melody.surfaceSimilarity < comparison.melody.motifStructureSimilarity; // true
+```
+
+どちらのテーマも3音のセルを1回反復するだけなので、派生の森はそっくり一致します——同じ関係の種類、同じ族のサイズ、同じ被覆率です。一方でセル自身は共通の音程を1つも持たないため、`motifStructureSimilarity` には触れずに `surfaceSimilarity` だけが下がります。
+
+セクション、フレーズ長、終止、キープラン、構造和音、フレーズのアウトラインとレジスタといった列は段階的な編集距離で揃え、和声機能・オンセットの配置・オンセット間隔・モチーフの派生種別といった分布はヒストグラムの交差で比べます。`rationale` は、最も似ている2項目と最も似ていない2項目の名前を挙げるだけで、それらをまとめた1つのスコアにはしません。

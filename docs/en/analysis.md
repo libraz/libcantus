@@ -254,7 +254,45 @@ regions[0]?.endBeat; // 12
 
 ## Melodic analysis
 
-`Score.motifs()` and `Score.contour()` cover repeated and transformed melodic material, and a `Motif` compares itself with another through `relateTo` and `similarityTo`. As functions: `melodicContour`, `extractMotifs`, `relateMotifs`, and `melodicSimilarity`. See [Melody and motifs](melody-and-motifs.md).
+`Score.motifs()` and `Score.contour()` cover repeated and transformed melodic material, and a `Motif` compares itself with another through `relateTo` and `similarityTo`. `Score.motifGraph()` goes a step further and reads which statement each one grew out of. As functions: `melodicContour`, `extractMotifs`, `relateMotifs`, `melodicSimilarity`, and `motifGraph`. See [Melody and motifs](melody-and-motifs.md).
+
+## Rhythm analysis
+
+`analyzeRhythm` reads how a line places its onsets against the meter — how densely they fall, which metric positions they favour, and how far they push against the beat — the same way whether the line is a melody or a chord timeline's changes turned into onsets of their own:
+
+```ts
+import { analyzeRhythm } from '@libraz/libcantus';
+
+const rhythm = analyzeRhythm(
+  [
+    { pitch: 60, startBeat: 0, durationBeat: 1.5 },
+    { pitch: 62, startBeat: 1.5, durationBeat: 2.5 },
+  ],
+  { ts: '4/4' },
+);
+
+rhythm.onsets; // 2
+rhythm.syncopation > 0; // true
+```
+
+`Score.rhythm()` is the same reading over a score's own notes, against its own meter and span:
+
+```ts
+import { Score } from '@libraz/libcantus';
+
+const score = Score.of([
+  { pitch: 60, startBeat: 0, durationBeat: 1 },
+  { pitch: 62, startBeat: 1, durationBeat: 1 },
+  { pitch: 64, startBeat: 2, durationBeat: 1 },
+  { pitch: 65, startBeat: 3, durationBeat: 1 },
+]);
+
+score.rhythm().onsetDensity; // 4
+```
+
+Onsets within 0.05 beat of one another fold into one, so a hand-played roll does not inflate the count, and every onset is read against a grid at a twelfth of a beat — fine enough to place sixteenths, eighth-note triplets and sixteenth-note triplets on it. `offGridRatio` is the share that misses that grid by more than 1/32 beat; every onset is still snapped to its nearest slot for everything else the reading reports, so an unquantized line comes back with a real but reduced syncopation rather than a spurious one.
+
+`onsetLevels` sums onset mass across six rhythmic-level bins — 0 off the first pulse subdivision, 1 on it, 2 to 5 on a main pulse (the meter's own `metricWeight` plus 2) — and `barPositions` breaks the same placement down by bar slot, one profile per time signature the span reads under. `interOnsetShares` bins the gaps between onsets against `RHYTHM_IOI_BINS`, seventeen half-octave steps from a sixteenth of a beat to sixteen beats, wide enough to place a held whole note and a running sixteenth on the same distribution. `restRatio` is the share of the span nothing sounds in, and `syncopation` follows Longuet-Higgins & Lee: an onset that holds through a metrically stronger position before the next one arrives is charged the difference in strength, normalized into [0, 1].
 
 ## Arrangement reports
 
@@ -301,3 +339,102 @@ Array.isArray(report.conflicts); // true
 `tensionCurve` and `analyzeVoice` expose parts of that report when a complete arrangement result is unnecessary, and `toVoiceNotes` prepares a single track for voice-level analysis; `Arrangement.tension` is the first of those from the class side. `Score.voices` is the second, read over a whole piece: a score is polyphony, so its notes are separated into voices and each note is classified in its own voice against everything else sounding under it. That is what a suspension needs — a dissonance is dissonant against something — and it keeps a note of one voice from being heard as the passing tone of another. `analyzePolyphony` is that same voice-level reading over one passage handed in as a flat array: it separates the notes into voices, classifies each against everything else sounding under it, and answers with one annotation per note in the order the notes arrived, each carrying its index in that array as its `noteId`. A note of no length never sounds and so has no voice to be dissonant in; it keeps its entry and is read against the chord alone. `createArrangementSession` keeps an analysis open across edits, which is what `Arrangement.update` uses; see [Performance](performance.md).
 
 The ornament figures `analyzeVoice` names — passing, neighbor, suspension, appoggiatura, anticipation, escape — are the words `classifyMelodyTones` uses for the same notes, so one melody read through the analysis and through the harmonizer comes back under one vocabulary. The two read different evidence, though, and neither answer is a subset of the other: `analyzeVoice` reads a note against the chord sounding under it, so a note the chord contains is a chord tone there whatever shape it passes through, while `classifyMelodyTones` reads the melody and the metre and may call that same note a passing tone; and `classifyMelodyTones` weighs the metre where `analyzeVoice` does not, so a leap answered by a step lands as an appoggiatura in one reading and as structural in the other. A host that colours notes from both will see two legends over one bar, and that is what each is for rather than a disagreement to resolve.
+
+## Reference profiles
+
+`analyzeReference` compresses a piece's compositional structure — its form, its harmonic function and rhythm, and how its motifs derive from one another — into a `ReferenceProfile`: a plain, JSON-serializable record that carries none of the piece's own notes.
+
+```ts
+import { analyzeReference } from '@libraz/libcantus';
+
+const triad = (pitches: number[], startBeat: number) =>
+  pitches.map((pitch) => ({ pitch, startBeat, durationBeat: 4 }));
+const notes = [
+  ...triad([60, 64, 67], 0),
+  ...triad([65, 69, 72], 4),
+  ...triad([67, 71, 74], 8),
+  ...triad([60, 64, 67], 12),
+];
+const profile = analyzeReference(notes, { key: 'C major' });
+
+profile.harmony.chords.map((chord) => chord.roman); // ['I', 'IV', 'V', 'I']
+profile.span.bars; // 4
+```
+
+`Score.reference()` and `Arrangement.reference()` build the same profile from a score's or an arrangement's own notes, meter, key and harmony, without inferring anything a score's chord analysis or an arrangement's session already holds.
+
+A motif is kept as the interval and rhythm ratios it repeats under transformation, not as the notes of any statement — see [Melody and motifs](melody-and-motifs.md) for how those derivations are read. A phrase's melody is kept as an 8-point outline sampled across its span, together with the register it moves in, not as the notes that produced it. Nothing in a `ReferenceProfile` is a note event, a class instance, or a function: it is data a caller can store, diff, or hand to another process as JSON and read back unchanged.
+
+```ts
+import { analyzeReference, assertReferenceProfile, REFERENCE_PROFILE_VERSION } from '@libraz/libcantus';
+
+const triad = (pitches: number[], startBeat: number) =>
+  pitches.map((pitch) => ({ pitch, startBeat, durationBeat: 4 }));
+const notes = [
+  ...triad([60, 64, 67], 0),
+  ...triad([65, 69, 72], 4),
+  ...triad([67, 71, 74], 8),
+  ...triad([60, 64, 67], 12),
+];
+const profile = analyzeReference(notes, { key: 'C major' });
+const restored = assertReferenceProfile(JSON.parse(JSON.stringify(profile)));
+
+restored.profileVersion === REFERENCE_PROFILE_VERSION; // true
+JSON.stringify(restored) === JSON.stringify(profile); // true
+```
+
+`assertReferenceProfile` is the boundary check for a profile arriving as untrusted data — restored from storage, read from a config file, handed over by a plugin host. It checks every field's presence, type, range and cross-reference (a phrase's `section` index, a motif-graph edge's `from`/`to`, a chord's `roman` against the key it names) before anything downstream reads it, and rejects a malformed document with `InvalidInputError` naming the exact field that failed, such as `reference profile.form.phrases[3].bars`. `profileVersion` gates the schema this file declares: it rises only when the shape of the record changes, never because an analysis it draws on — cadence detection, hypermeter, motif extraction — starts reading the same piece differently.
+
+`opts.timeline` reads a harmony already known instead of inferring one, `opts.melody` names the line instead of reading the notes' own top voice, and `opts.key` reads the piece in one key across the whole span instead of searching for the keys it passes through — the same options `chordTimelineFromNotes` and `Arrangement` already take.
+
+## Comparing reference profiles
+
+`compareReferences` measures two profiled pieces against each other one aspect at a time — form, harmony, melody, rhythm — and returns no aggregate: which aspects agree is the answer, not a single number standing in for all of them.
+
+```ts
+import { analyzeReference, compareReferences } from '@libraz/libcantus';
+
+const triad = (pitches: number[], startBeat: number) =>
+  pitches.map((pitch) => ({ pitch, startBeat, durationBeat: 4 }));
+const notes = [
+  ...triad([60, 64, 67], 0),
+  ...triad([65, 69, 72], 4),
+  ...triad([67, 71, 74], 8),
+  ...triad([60, 64, 67], 12),
+];
+const profile = analyzeReference(notes, { key: 'C major' });
+const cmp = compareReferences(profile, profile);
+
+cmp.form.sectionSequenceSimilarity; // 1
+cmp.melody.surfaceSimilarity; // null
+cmp.melody.motifStructureSimilarity; // null
+```
+
+Every field is in [0, 1] and symmetric in the two profiles, or `null`. `null` means neither profile has material to measure that field on — the four-chord progression above has no melodic motifs at all, so nothing about their derivation can be compared, even against itself — while 0 means only one side does. Reading `null` as a low score would mistake "nothing to compare" for "compared and found unlike," which is why the two are never conflated.
+
+Only `melody.surfaceSimilarity` reads a motif's actual intervals; every other field is invariant under transposition, tempo, and a change of the motif material itself. That split is what lets a comparison answer "a different tune, built the same way": high structural fields sit beside a low surface one.
+
+```ts
+import { analyzeReference, compareReferences } from '@libraz/libcantus';
+
+const themeA = [
+  ...[60, 62, 64].map((pitch, i) => ({ pitch, startBeat: i, durationBeat: 1 })),
+  ...[67, 69, 71].map((pitch, i) => ({ pitch, startBeat: i + 4, durationBeat: 1 })),
+];
+const themeB = [
+  ...[72, 69, 67].map((pitch, i) => ({ pitch, startBeat: i, durationBeat: 1 })),
+  ...[65, 62, 60].map((pitch, i) => ({ pitch, startBeat: i + 4, durationBeat: 1 })),
+];
+const comparison = compareReferences(
+  analyzeReference(themeA, { key: 'C major' }),
+  analyzeReference(themeB, { key: 'C major' }),
+);
+
+comparison.melody.motifStructureSimilarity; // 1
+comparison.melody.surfaceSimilarity; // 0.25
+comparison.melody.surfaceSimilarity < comparison.melody.motifStructureSimilarity; // true
+```
+
+Both themes state a three-note cell and restate it once, so their derivation forests agree exactly — the same relation kind, the same family size, the same coverage — while the cells themselves share no interval in common, which is what pulls `surfaceSimilarity` down without touching `motifStructureSimilarity`.
+
+Sequence-shaped fields — sections, phrase lengths, cadences, key plans, structural chords, phrase outlines and registers — are aligned by a graded edit distance; distribution-shaped fields — harmonic function, onset placement, inter-onset intervals, motif-derivation kinds — by histogram intersection. `rationale` names the two most and two least alike fields, never a score standing in for the rest.

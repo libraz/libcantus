@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`analyzeReference` compresses a piece's structure into a portable profile.**
+  Form, harmonic function and rhythm, and how a melody's motifs derive from one
+  another come back as a `ReferenceProfile` — a plain, JSON-serializable record
+  that carries none of the piece's own notes: a motif is kept as the interval
+  and rhythm ratios it repeats, a phrase's melody as an 8-point outline.
+  `Score#reference` and `Arrangement#reference` build the same profile from a
+  score's or an arrangement's own analysis, without inferring the harmony a
+  second time. `assertReferenceProfile` validates a profile arriving as untrusted
+  data, checking every field and rejecting a malformed one with
+  `InvalidInputError` naming the field that failed; `REFERENCE_PROFILE_VERSION`
+  gates the schema, and only rises when the record's shape changes.
+- **`compareReferences` measures two reference profiles dimension by
+  dimension.** Form, harmony, melody and rhythm are each scored in [0, 1],
+  `null` where neither profile has material to measure a field on and 0 where
+  only one does, with no aggregate returned — which aspects agree is the
+  answer, not a single number standing in for all of them. Only
+  `melody.surfaceSimilarity` reads a motif's actual intervals; every other
+  field is invariant under transposition, tempo and a change of the motif
+  material, so a comparison can say "a different tune, built the same way."
+- **`analyzeRhythm` reads how a line places its onsets against the meter.**
+  Density, metric placement, inter-onset spacing, rest and
+  Longuet-Higgins & Lee syncopation come back as one reading, read the same way
+  whether the onsets are a melody's or a chord timeline's changes turned into
+  onsets of their own. `RHYTHM_IOI_BINS` names the half-octave steps its
+  `interOnsetShares` are binned against, and `Score#rhythm` is the same reading
+  over a score's own notes.
+- **`motifGraph` reads how a melody's motif statements derive from one
+  another.** Every statement after the first is matched against every earlier
+  one, and the pair `relateMotifs` can name, or otherwise the closest-scoring
+  match past a variation threshold, becomes its parent — leaving a derivation
+  forest rather than a graph proper, since a statement only ever grew out of
+  one source. `Score#motifGraph` is the class-side reading.
+- **The analysis enums are runtime tables, not just types.**
+  `MELODIC_CONTOUR_SHAPES`, `CADENCE_TYPES`, `HARMONIC_FUNCTIONS`,
+  `REDUCTION_LEVELS` and `MOTIF_RELATION_KINDS` list the values each of their
+  types allows, so a caller validating stored data no longer has to duplicate
+  the list by hand. `CadenceResult.type` is now typed as `CadenceType | null`,
+  a named alias for the same union it already carried, so the change is
+  type-compatible.
+
 ## [1.2.0] - 2026-09-24
 
 ### Added

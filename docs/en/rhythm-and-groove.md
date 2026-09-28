@@ -347,3 +347,5 @@ Over a pattern a host already holds, `Rhythm.deform({ rate })` asks the note-val
 ## Where this connects
 
 Metric weight, bar positions, and tuplets are in [Time and arrangement](time-and-arrangement.md); the dials and their reproducibility guarantees are in [Determinism and seeding](determinism-and-seeding.md).
+
+Reading how an existing line places its onsets — density, metric placement, syncopation — is `analyzeRhythm`, in [Analysis](analysis.md).
