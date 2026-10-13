@@ -2,4 +2,23 @@
 #ifndef CANTUS_SRC_ANALYZE_DETECT_LIMITS_GEN_H_
 #define CANTUS_SRC_ANALYZE_DETECT_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** PROFILE_LENGTH of ts/src/analyze/detect/profiles.ts. */
+inline constexpr int PROFILE_LENGTH = 12;
+
+/** SCORE_QUANTUM of ts/src/analyze/detect/profiles.ts. */
+inline constexpr double SCORE_QUANTUM = 1000000000000;
+
+/** EXPLAINED_RIVALS of ts/src/analyze/detect/index.ts. */
+inline constexpr int EXPLAINED_RIVALS = 3;
+
+/** SCORE_DIGITS of ts/src/analyze/detect/index.ts. */
+inline constexpr int SCORE_DIGITS = 2;
+
+/** MAX_SCORE_DIGITS of ts/src/analyze/detect/index.ts. */
+inline constexpr int MAX_SCORE_DIGITS = 6;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_ANALYZE_DETECT_LIMITS_GEN_H_

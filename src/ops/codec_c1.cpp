@@ -277,4 +277,28 @@ InstrumentProfile read_instrument_profile(const json::Value& value, std::string_
   return read_percussion(data, std::move(pname), std::move(articulations), polyphony);
 }
 
+MeterMap resolve_wire_meters(const json::Value& opts, std::string_view name) {
+  std::string label(name);
+  const json::Value& bag = assert_record(opts, label + " options");
+  const json::Value* ts = opt_strict(bag, "ts");
+  const json::Value* meters = opt_strict(bag, "meters");
+  if (ts != nullptr && meters != nullptr) {
+    throw InvalidInputError(label + " and ts name the same thing; give one or the other, not both");
+  }
+  // A null is refused rather than defaulted, meters first.
+  if (meters != nullptr && meters->is_null()) {
+    throw InvalidInputError(label + " must name a meter, not null");
+  }
+  if (ts != nullptr && ts->is_null()) {
+    throw InvalidInputError("ts must name a meter, not null");
+  }
+  ResolveMetersOptions resolved;
+  if (meters != nullptr) {
+    resolved.meters = MeterArg(read_meter_like(*meters, label));
+  } else if (ts != nullptr) {
+    resolved.ts = MeterArg(read_meter_like(*ts, "ts"));
+  }
+  return resolve_meters(resolved, label);
+}
+
 }  // namespace cantus::ops

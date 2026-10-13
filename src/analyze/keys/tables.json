@@ -1,0 +1,80 @@
+{
+  "tables": [
+    {
+      "module": "analyze/keys/index.ts",
+      "export": "THIRD_SEMITONES",
+      "cxx_type": "int",
+      "cxx_name": "kThirdSemitones",
+      "fields": []
+    },
+    {
+      "module": "analyze/keys/index.ts",
+      "export": "FIFTH_SEMITONES",
+      "cxx_type": "int",
+      "cxx_name": "kFifthSemitones",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "analyze/keys/index.ts",
+      "export": "PITCH_CLASSES",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/keys/index.ts",
+      "export": "MAX_METRIC_WEIGHT",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/keys/index.ts",
+      "export": "MODULATION_COST",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/keys/index.ts",
+      "export": "PAST_CONTEXT_SHARE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/keys/index.ts",
+      "export": "FUTURE_CONTEXT_SHARE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/keys/index.ts",
+      "export": "STRONG_BEAT_DISCOUNT",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/keys/index.ts",
+      "export": "FIFTHS_DISTANCE_COST",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/keys/index.ts",
+      "export": "CHORD_TONE_CREDIT",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/keys/index.ts",
+      "export": "DOMINANT_CREDIT",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/keys/index.ts",
+      "export": "TONIC_CREDIT",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/keys/index.ts",
+      "export": "CADENCE_CREDIT",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/keys/index.ts",
+      "export": "CHORD_MODULATION_COST",
+      "cxx_type": "double"
+    }
+  ]
+}

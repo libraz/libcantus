@@ -400,14 +400,14 @@ export function detectChordBest(
  * most input weight. Natural minor comes first so it wins a tie as the most
  * diatonic reading.
  */
-const MINOR_VARIANTS = [
+export const MINOR_VARIANTS = [
   { variant: 'natural', mask: NATURAL_MINOR_MASK, scaleName: 'naturalMinor' },
   { variant: 'harmonic', mask: HARMONIC_MINOR_MASK, scaleName: 'harmonicMinor' },
   { variant: 'melodic', mask: MELODIC_MINOR_MASK, scaleName: 'melodicMinor' },
 ] as const satisfies readonly { variant: KeyVariant; mask: number; scaleName: ScaleName }[];
 
 /** The single major form, kept in the same shape as the minor variants. */
-const MAJOR_VARIANTS = [
+export const MAJOR_VARIANTS = [
   { variant: 'major', mask: MAJOR_MASK, scaleName: 'major' },
 ] as const satisfies readonly { variant: KeyVariant; mask: number; scaleName: ScaleName }[];
 
@@ -418,7 +418,7 @@ const MAJOR_VARIANTS = [
  * input alone decides. Major before the minor forms reproduces the order the 24
  * keys have always ranked in; the modes follow, in candidate order.
  */
-const SCALE_NAME_ORDER: readonly ScaleName[] = [
+export const SCALE_NAME_ORDER: readonly ScaleName[] = [
   'major',
   'naturalMinor',
   'harmonicMinor',
@@ -443,10 +443,10 @@ function scaleNameRank(name: ScaleName): number {
  * relative, the parallel and the neighbouring fifth — and the caller holding
  * the full ranking can read further itself.
  */
-const EXPLAINED_RIVALS = 3;
+export const EXPLAINED_RIVALS = 3;
 
 /** Decimal places a correlation is quoted to in a rationale. */
-const SCORE_DIGITS = 2;
+export const SCORE_DIGITS = 2;
 
 /**
  * Decimal places a comparison of two correlations may grow to.
@@ -456,7 +456,7 @@ const SCORE_DIGITS = 2;
  * rationale exists to prevent. The comparison quotes further digits until the
  * two differ, up to the point where the difference stops being a musical fact.
  */
-const MAX_SCORE_DIGITS = 6;
+export const MAX_SCORE_DIGITS = 6;
 
 /** Two correlations, quoted to enough digits to tell them apart. */
 function quoteScores(rival: number, winner: number): string {

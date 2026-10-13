@@ -1,0 +1,84 @@
+/**
+ * @file keys.h
+ * @brief Internal helpers of ts/src/analyze/keys/index.ts beside the public API in
+ *        cantus/analyze/keys.h: the modulation search over chord beats whose chords are read on
+ *        demand, the key lookup over a run of regions, and the choice of the prevailing key.
+ */
+#ifndef CANTUS_SRC_ANALYZE_KEYS_KEYS_H_
+#define CANTUS_SRC_ANALYZE_KEYS_KEYS_H_
+
+#include <cstddef>
+#include <functional>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "analyze/detect/profiles.h"
+#include "cantus/analyze/keys.h"
+
+namespace cantus {
+
+/** The beats of one chord segment, as the modulation search reads them. */
+struct SegmentBeats {
+  double startBeat = 0;
+  double endBeat = 0;
+  /** Whether the segment sounds (`endBeat > startBeat` as the caller wrote the beats). */
+  bool sounds = false;
+  /**
+   * Throws if the start beat is not a number; run when the search reads the beat of a segment that
+   * follows another. Empty for a start written as a number.
+   */
+  std::function<void()> assert_start;
+};
+
+/** The chord of the segment at an index; called only for the segments the search keeps. */
+using ChordSource = std::function<const Chord&(std::size_t)>;
+
+/**
+ * key_timeline_from_notes() with the profile resolved by `profile_source` at the point the
+ * analysis first needs it (`opts.profile` is not read).
+ */
+std::vector<KeyRegion> key_timeline_over(const std::vector<NoteEvent>& notes,
+                                         const KeyTimelineOptions& opts,
+                                         const ProfileSource& profile_source);
+
+/**
+ * detect_modulations() over segment beats, reading each chord when the search first needs it, so a
+ * caller holding chords in another form can read them lazily and in the order TS does; the
+ * profile is resolved by `profile_source` (`opts.profile` is not read). When `first_segments` is
+ * given, it receives for each region the index of the segment the region starts on.
+ */
+std::vector<KeyRegion> detect_modulations_over(const std::vector<SegmentBeats>& segments,
+                                               const ChordSource& chord_at,
+                                               const KeyTimelineOptions& opts,
+                                               const ProfileSource& profile_source,
+                                               std::vector<std::size_t>* first_segments = nullptr);
+
+/**
+ * The index of the key held longest, given the identity and held length of each region in order
+ * (ties keep the earlier key, as `prevailingKeyOf` does).
+ */
+std::optional<std::size_t> prevailing_key_index(
+    const std::vector<std::pair<std::string, double>>& regions);
+
+/**
+ * The key in force at a beat over a run of regions in beat order, or `fallback` outside every
+ * region (`keyLookup`). It refers to `regions`, which must outlive it.
+ */
+class KeyLookup {
+ public:
+  KeyLookup(const std::vector<KeyRegion>& regions, ResolvedKey fallback)
+      : regions_(&regions), fallback_(std::move(fallback)) {}
+
+  /** The key at `beat`. */
+  const ResolvedKey& operator()(double beat) const;
+
+ private:
+  const std::vector<KeyRegion>* regions_;
+  ResolvedKey fallback_;
+};
+
+}  // namespace cantus
+
+#endif  // CANTUS_SRC_ANALYZE_KEYS_KEYS_H_

@@ -42,7 +42,7 @@ import type { WindowWeights } from '../histogram.js';
 import { bucketNotesBySlot, windowWeights } from '../histogram.js';
 
 /** How many pitch classes a histogram is indexed by. */
-const PITCH_CLASSES = 12;
+export const PITCH_CLASSES = 12;
 
 /** The histogram a slot outside the grid contributes: nothing at all. */
 const EMPTY_WEIGHTS: WindowWeights = {
@@ -53,7 +53,7 @@ const EMPTY_WEIGHTS: WindowWeights = {
 };
 
 /** The largest value {@link metricWeight} returns (a downbeat). */
-const MAX_METRIC_WEIGHT = 3;
+export const MAX_METRIC_WEIGHT = 3;
 
 /**
  * A span of the piece over which one key is in force.
@@ -190,7 +190,7 @@ export type KeyTimelineOptions = {
  * modulation between related keys ever worth reporting, which is precisely the
  * modulation tonal music spends most of its time making.
  */
-const MODULATION_COST = 0.15;
+export const MODULATION_COST = 0.15;
 
 /**
  * How loudly a slot hears the slot before it when the key is read.
@@ -199,7 +199,7 @@ const MODULATION_COST = 0.15;
  * one. Below 1 the bar still speaks for itself, which is what keeps a boundary
  * on the bar the music turns on rather than a bar either side of it.
  */
-const PAST_CONTEXT_SHARE = 0.5;
+export const PAST_CONTEXT_SHARE = 0.5;
 
 /**
  * How loudly a slot hears the slot after it.
@@ -210,10 +210,10 @@ const PAST_CONTEXT_SHARE = 0.5;
  * which reads a cadence's own resolution as the first bar of the key it was
  * cadencing away from.
  */
-const FUTURE_CONTEXT_SHARE = 0.25;
+export const FUTURE_CONTEXT_SHARE = 0.25;
 
 /** How much of the modulation cost a maximally strong beat waives. */
-const STRONG_BEAT_DISCOUNT = 0.4;
+export const STRONG_BEAT_DISCOUNT = 0.4;
 
 /**
  * How much each step around the circle of fifths adds to the modulation cost.
@@ -222,7 +222,7 @@ const STRONG_BEAT_DISCOUNT = 0.4;
  * move to the tritone is what it mostly does not. Charging by distance is what
  * stops a passing chromatic bar from being read as a remote modulation.
  */
-const FIFTHS_DISTANCE_COST = 0.18;
+export const FIFTHS_DISTANCE_COST = 0.18;
 
 /** The 24 major and minor keys, in the order the search indexes them. */
 const KEY_CANDIDATES: readonly { key: KeyScale; rootPc: number; minor: boolean }[] = (() => {
@@ -840,16 +840,16 @@ export function keyTimelineFromNotes(
 }
 
 /** How much of a chord's weight a key must explain before it counts as fitting. */
-const CHORD_TONE_CREDIT = 1;
+export const CHORD_TONE_CREDIT = 1;
 
 /** Extra credit for a chord that is the key's dominant — the strongest signal. */
-const DOMINANT_CREDIT = 0.7;
+export const DOMINANT_CREDIT = 0.7;
 
 /** Extra credit for a chord that is the key's tonic. */
-const TONIC_CREDIT = 0.4;
+export const TONIC_CREDIT = 0.4;
 
 /** Extra credit for a tonic that its own dominant resolved onto. */
-const CADENCE_CREDIT = 0.6;
+export const CADENCE_CREDIT = 0.6;
 
 /**
  * Cost of one modulation on the chord path, in beats of chord evidence.
@@ -861,7 +861,7 @@ const CADENCE_CREDIT = 0.6;
  * — C F G C is I IV V I in C and V I II V in F — so without a cost of this size
  * the search reports a modulation every time the harmony touches IV.
  */
-const CHORD_MODULATION_COST = 0.6;
+export const CHORD_MODULATION_COST = 0.6;
 
 /** Score how strongly one chord argues for one key. */
 function chordFitsKey(chord: Chord, candidate: { key: KeyScale; rootPc: number }): number {
@@ -1080,10 +1080,10 @@ export function detectModulations(
 }
 
 /** Semitones above the root a third may sit at: minor, then major. */
-const THIRD_SEMITONES = [3, 4];
+export const THIRD_SEMITONES = [3, 4];
 
 /** Semitones above the root a fifth may sit at: diminished, perfect, augmented. */
-const FIFTH_SEMITONES = [6, 7, 8];
+export const FIFTH_SEMITONES = [6, 7, 8];
 
 /**
  * The triad a chord is heard as, or null when it is heard as none.

@@ -102,7 +102,7 @@ export const FLAT_SCALE_PROFILE: KeyProfilePair = {
 };
 
 /** Number of entries every key profile must have, one per chromatic degree. */
-const PROFILE_LENGTH = 12;
+export const PROFILE_LENGTH = 12;
 
 /**
  * Reciprocal of the quantum {@link profileScore} rounds to.
@@ -116,10 +116,10 @@ const PROFILE_LENGTH = 12;
  * meaningful difference, makes equal candidates compare equal so the documented
  * tie-break can do its job.
  */
-const SCORE_QUANTUM = 1e12;
+export const SCORE_QUANTUM = 1e12;
 
 /** Built-in profiles addressable by name. */
-const NAMED_PROFILES: Record<KeyProfileName, KeyProfilePair> = {
+export const NAMED_PROFILES: Record<KeyProfileName, KeyProfilePair> = {
   krumhansl: KRUMHANSL_KESSLER_PROFILE,
   temperley: TEMPERLEY_KOSTKA_PAYNE_PROFILE,
   flat: FLAT_SCALE_PROFILE,

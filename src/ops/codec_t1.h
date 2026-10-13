@@ -14,10 +14,12 @@
 #include "cantus/theory/chord.h"
 #include "cantus/theory/scale.h"
 #include "cantus/theory/spelling.h"
+#include "js/value.h"
 #include "json/json.h"
 #include "ops/codec.h"
 #include "ops/codec_c1.h"
 #include "ops/codec_c2.h"
+#include "ops/validate.h"
 
 namespace cantus {
 
@@ -84,6 +86,25 @@ const json::Value& assert_chord(const json::Value& value, std::string_view name 
  * makes are the adapter's; a quality TS never reads may be unknown and reads as `fallback`.
  */
 Chord read_chord_fields(const json::Value& value, ChordQuality fallback = ChordQuality::kMaj);
+
+/**
+ * What `chordPcMask` checks of a wire chord before it reads the tones: a record whose intervals
+ * are an array, each of which sums with the root to a finite pitch (a string interval makes the
+ * sum text), and a finite bass.
+ * @throws InvalidInputError with the TS message.
+ */
+inline void assert_chord_mask_inputs(const json::Value& chord) {
+  assert_record(chord, "chord");
+  const json::Array& intervals = assert_array(get(chord, "intervals"), "chord intervals");
+  double root = js::to_number(get(chord, "rootPc"));
+  for (const json::Value& interval : intervals) {
+    assert_finite_number(js::add_number(root, interval), "pitch");
+  }
+  const json::Value& bass = get(chord, "bassPc");
+  if (!is_undefined(bass)) {
+    assert_finite_number(bass, "pitch");
+  }
+}
 
 /** `assertChordSpec` over a wire value. */
 ChordSpec read_chord_spec(const json::Value& value);

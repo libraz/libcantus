@@ -230,27 +230,7 @@ void register_meter() {
   });
   def("resolveMeters", [](Args& a) -> json::Value {
     std::string name = name_arg(a, 1, "meters");
-    const json::Value& opts = assert_record(a[0], name + " options");
-    const json::Value* ts = opt_strict(opts, "ts");
-    const json::Value* meters = opt_strict(opts, "meters");
-    if (ts != nullptr && meters != nullptr) {
-      throw InvalidInputError(name +
-                              " and ts name the same thing; give one or the other, not both");
-    }
-    // A null is refused rather than defaulted, meters first.
-    if (meters != nullptr && meters->is_null()) {
-      throw InvalidInputError(name + " must name a meter, not null");
-    }
-    if (ts != nullptr && ts->is_null()) {
-      throw InvalidInputError("ts must name a meter, not null");
-    }
-    ResolveMetersOptions resolved;
-    if (meters != nullptr) {
-      resolved.meters = MeterArg(read_meter_like(*meters, name));
-    } else if (ts != nullptr) {
-      resolved.ts = MeterArg(read_meter_like(*ts, "ts"));
-    }
-    return to_json(resolve_meters(resolved, name));
+    return to_json(resolve_wire_meters(a[0], name));
   });
   def("tuplet", [](Args& a) -> json::Value {
     double total = assert_range(a[0], 0, kMaxSafeInteger, "tuplet total beats");

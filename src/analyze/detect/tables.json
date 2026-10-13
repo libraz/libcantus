@@ -1,0 +1,107 @@
+{
+  "tables": [
+    {
+      "module": "analyze/detect/profiles.ts",
+      "export": "KRUMHANSL_KESSLER_PROFILE",
+      "cxx_type": "KeyProfileRow",
+      "cxx_name": "kKrumhanslKesslerProfile",
+      "fields": [
+        {
+          "name": "major",
+          "fields": []
+        },
+        {
+          "name": "minor",
+          "fields": []
+        }
+      ],
+      "form": "record"
+    },
+    {
+      "module": "analyze/detect/profiles.ts",
+      "export": "NAMED_PROFILES",
+      "cxx_type": "NamedKeyProfile",
+      "cxx_name": "kNamedProfiles",
+      "fields": [
+        {
+          "name": "major",
+          "fields": []
+        },
+        {
+          "name": "minor",
+          "fields": []
+        }
+      ]
+    },
+    {
+      "module": "analyze/detect/modes.ts",
+      "export": "MODAL_CANDIDATES",
+      "cxx_type": "ModalCandidateRow",
+      "cxx_name": "kModalCandidates",
+      "fields": [
+        "scaleName",
+        "mode",
+        "mask",
+        {
+          "name": "substitutions",
+          "fields": []
+        }
+      ]
+    },
+    {
+      "module": "analyze/detect/modes.ts",
+      "export": "MODAL_SCALE_NAMES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kModalScaleNames",
+      "fields": []
+    },
+    {
+      "module": "analyze/detect/index.ts",
+      "export": "MINOR_VARIANTS",
+      "cxx_type": "VariantRow",
+      "cxx_name": "kMinorVariants",
+      "fields": ["variant", "mask", "scaleName"]
+    },
+    {
+      "module": "analyze/detect/index.ts",
+      "export": "MAJOR_VARIANTS",
+      "cxx_type": "VariantRow",
+      "cxx_name": "kMajorVariants",
+      "fields": ["variant", "mask", "scaleName"]
+    },
+    {
+      "module": "analyze/detect/index.ts",
+      "export": "SCALE_NAME_ORDER",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kScaleNameOrder",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "analyze/detect/profiles.ts",
+      "export": "PROFILE_LENGTH",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/detect/profiles.ts",
+      "export": "SCORE_QUANTUM",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/detect/index.ts",
+      "export": "EXPLAINED_RIVALS",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/detect/index.ts",
+      "export": "SCORE_DIGITS",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/detect/index.ts",
+      "export": "MAX_SCORE_DIGITS",
+      "cxx_type": "int"
+    }
+  ]
+}

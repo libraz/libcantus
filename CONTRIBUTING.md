@@ -43,6 +43,8 @@ The C++ code uses the helpers in `src/js/` wherever JavaScript semantics differ 
 | `describeRejected` / `JSON.stringify(s)` | `js::describe_rejected` / `js::quote` | — | Same |
 | `n.toFixed(d)` | `js::to_fixed` | printf `%.Nf` | `(0.125).toFixed(2)` is `"0.13"` |
 | `Number(s)` / `Number.parseInt` | `js::number` / `js::parse_int` | `std::stod`, `atoi` and relatives | Accepted syntax differs |
+| `n + v` for a number and a wire value of unknown kind | `js::add_number` | `+` between a number and a wire value | A string or object operand turns the sum into text |
+| `a > b` for two wire values of unknown kind | `js::greater_than` | A relational comparison between wire values | Text against text compares by code unit, so `"10" > "9"` is false |
 | string `length` / `slice` / comparison / hashing | `js::utf16_*` | `std::string::size` as an observable length | JS counts UTF-16 code units |
 | `Object.freeze` | `const` and value semantics | — | |
 

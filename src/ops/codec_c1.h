@@ -76,6 +76,12 @@ json::Value like_data(json::Value value);
 /** `readMeterData(value, name)` over a wire MeterLike. */
 MeterData read_meter_like(const json::Value& value, std::string_view name = "meter");
 
+/**
+ * `resolveMeters(opts, name)` over a wire options bag: the meter as `meters`, or as `ts`, or 4/4.
+ * @throws InvalidInputError if the bag is not a record, names both, or a meter is malformed.
+ */
+MeterMap resolve_wire_meters(const json::Value& opts, std::string_view name);
+
 /** `toInstrumentProfile(value, name)` over a wire InstrumentProfileLike. */
 InstrumentProfile read_instrument_profile(const json::Value& value,
                                           std::string_view name = "instrument");

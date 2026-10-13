@@ -925,3 +925,82 @@ describe('a dominant seventh names its key whatever it is written as', () => {
     expect(keyNames(detectModulations(toD('maj')))).toHaveLength(1);
   });
 });
+
+describe('region searches over input the readings cannot take', () => {
+  const tonic = makeChord(0, 'maj');
+
+  it('reads the profile only once there is something to score', () => {
+    expect(keyTimelineFromNotes([], { profile: 'nonsense' as never })).toEqual([]);
+    expect(() =>
+      keyTimelineFromNotes([{ pitch: 60, startBeat: 0, durationBeat: 4 }], {
+        profile: 'nonsense' as never,
+      }),
+    ).toThrow(/unknown key profile 'nonsense'/);
+    expect(detectModulations([], { profile: 'nonsense' as never })).toEqual([]);
+  });
+
+  it('reads the chord of a segment only when the segment is kept', () => {
+    expect(detectModulations([{ startBeat: 4, endBeat: 2, chord: 'junk' }] as never)).toEqual([]);
+    expect(() =>
+      detectModulations([
+        { startBeat: 0, endBeat: 4, chord: { rootPc: 0, quality: 'maj' } },
+      ] as never),
+    ).toThrow(/chord intervals must be an array; received undefined/);
+    expect(() =>
+      detectModulations([
+        { startBeat: 0, endBeat: 4, chord: { rootPc: 0, quality: 'maj', intervals: [0, 4, 'x'] } },
+      ] as never),
+    ).toThrow(/pitch must be finite; received 0x/);
+  });
+
+  it('starts a region at the beat its first segment wrote', () => {
+    const [region] = detectModulations([{ startBeat: null, endBeat: 4, chord: tonic }] as never);
+    expect(region?.startBeat).toBeNull();
+    expect(region?.endBeat).toBe(4);
+  });
+
+  it('compares the beats of a segment as JS does, text against text by code unit', () => {
+    const end = (startBeat: unknown, endBeat: unknown) =>
+      detectModulations([
+        { startBeat: 0, endBeat: 4, chord: tonic },
+        { startBeat, endBeat, chord: tonic },
+      ] as never).at(-1)?.endBeat;
+    // A segment that sounds sets how far the piece runs, even if clipping then drops it.
+    expect(end('10', '9')).toBe(9);
+    expect(end('9', '10')).toBe(4);
+    expect(end([10], [9])).toBe(9);
+    expect(end([9], [10])).toBe(4);
+    expect(end(9, '10')).toBe(10);
+  });
+
+  it('refuses a start beat that is not a number once another segment precedes it', () => {
+    const later = (startBeat: unknown) =>
+      [
+        { startBeat: 0, endBeat: 4, chord: tonic },
+        { startBeat, endBeat: 8, chord: tonic },
+      ] as never;
+    for (const startBeat of ['4', '4.5', true, '', ' 4', '0x4']) {
+      expect(() => detectModulations(later(startBeat))).toThrow(
+        new RegExp(`beat must be finite; received ${String(startBeat)}$`),
+      );
+    }
+    expect(detectModulations([{ startBeat: '0', endBeat: 4, chord: tonic }] as never)).toHaveLength(
+      1,
+    );
+  });
+
+  it('answers with the very key of the region that held longest, as it was written', () => {
+    const home = { ...resolveKey('C major'), label: 'home' };
+    expect(prevailingKeyOf([{ startBeat: 0, endBeat: 4, key: home }] as never)).toEqual(home);
+  });
+
+  it('tells keys apart by what their text says, so a mask written as text is the same key', () => {
+    const written = (rootPc: number, modeMask12: unknown, length: number) => ({
+      startBeat: 0,
+      endBeat: length,
+      key: { scale: { rootPc, modeMask12 } },
+    });
+    const regions = [written(0, 2741, 4), written(7, 2741, 5), written(0, '2741', 3)];
+    expect(prevailingKeyOf(regions as never)).toEqual({ scale: { rootPc: 0, modeMask12: 2741 } });
+  });
+});

@@ -2,4 +2,44 @@
 #ifndef CANTUS_SRC_ANALYZE_KEYS_LIMITS_GEN_H_
 #define CANTUS_SRC_ANALYZE_KEYS_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** PITCH_CLASSES of ts/src/analyze/keys/index.ts. */
+inline constexpr int PITCH_CLASSES = 12;
+
+/** MAX_METRIC_WEIGHT of ts/src/analyze/keys/index.ts. */
+inline constexpr double MAX_METRIC_WEIGHT = 3;
+
+/** MODULATION_COST of ts/src/analyze/keys/index.ts. */
+inline constexpr double MODULATION_COST = 0.15;
+
+/** PAST_CONTEXT_SHARE of ts/src/analyze/keys/index.ts. */
+inline constexpr double PAST_CONTEXT_SHARE = 0.5;
+
+/** FUTURE_CONTEXT_SHARE of ts/src/analyze/keys/index.ts. */
+inline constexpr double FUTURE_CONTEXT_SHARE = 0.25;
+
+/** STRONG_BEAT_DISCOUNT of ts/src/analyze/keys/index.ts. */
+inline constexpr double STRONG_BEAT_DISCOUNT = 0.4;
+
+/** FIFTHS_DISTANCE_COST of ts/src/analyze/keys/index.ts. */
+inline constexpr double FIFTHS_DISTANCE_COST = 0.18;
+
+/** CHORD_TONE_CREDIT of ts/src/analyze/keys/index.ts. */
+inline constexpr double CHORD_TONE_CREDIT = 1;
+
+/** DOMINANT_CREDIT of ts/src/analyze/keys/index.ts. */
+inline constexpr double DOMINANT_CREDIT = 0.7;
+
+/** TONIC_CREDIT of ts/src/analyze/keys/index.ts. */
+inline constexpr double TONIC_CREDIT = 0.4;
+
+/** CADENCE_CREDIT of ts/src/analyze/keys/index.ts. */
+inline constexpr double CADENCE_CREDIT = 0.6;
+
+/** CHORD_MODULATION_COST of ts/src/analyze/keys/index.ts. */
+inline constexpr double CHORD_MODULATION_COST = 0.6;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_ANALYZE_KEYS_LIMITS_GEN_H_

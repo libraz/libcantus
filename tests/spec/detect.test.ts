@@ -233,3 +233,20 @@ describe('detectKey', () => {
     expect(detectKeyFromNotes(notes, { budget: 2 })).toHaveLength(24);
   });
 });
+
+describe('detectChord input kinds', () => {
+  const triad = [60, 64, 67];
+
+  it('reads any input kind it does not know as an unordered pitch-class set', () => {
+    const unordered = detectChord(triad, { input: 'pitchClass' });
+    expect(unordered[0]?.inversion).toBeNull();
+    expect(detectChord(triad, { input: 'other' as never })).toEqual(unordered);
+    expect(detectChord(triad, { input: null as never })).toEqual(unordered);
+    expect(detectChord(triad, { input: 'auto' })).toEqual(detectChord(triad));
+  });
+
+  it('refuses a bass pitch that is not a number even when the input is empty', () => {
+    expect(() => detectChord([], { bassPc: null as never })).toThrow(/bassPc must be finite/);
+    expect(detectChordBest([], {})).toBeNull();
+  });
+});

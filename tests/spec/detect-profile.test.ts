@@ -330,3 +330,46 @@ describe('fit under profile correlation', () => {
     expect(dbMajor?.score).toBeLessThan(matches[0]?.score ?? 0);
   });
 });
+
+describe('options the detector reads the way JavaScript does', () => {
+  it('finds nothing to rank in an empty input before it looks at a profile name that is no profile', () => {
+    expect(detectKey([], { profile: 'toString' as never })).toEqual([]);
+    expect(detectKey([], { profile: 'constructor' as never })).toEqual([]);
+    expect(() => detectKey([60], { profile: 'toString' as never })).toThrow();
+    expect(() => detectKey([], { profile: 'nonsense' as never })).toThrow(
+      /unknown key profile 'nonsense'/,
+    );
+  });
+
+  it('reads a missing weight as none and a weight that is no number as an error', () => {
+    const pitches = [60, 64, 67];
+    expect(detectKey(pitches, { weights: [1, null, 1] as never })).toEqual(
+      detectKey(pitches, { weights: [1, 0, 1] }),
+    );
+    expect(() => detectKey(pitches, { weights: [1, 'x', 1] as never })).toThrow(
+      /weights\[1\] must be finite/,
+    );
+  });
+
+  it('takes the weights of anything with a length and indexed entries', () => {
+    expect(detectKey([60], { weights: { length: 1, 0: 2 } as never })).toEqual(
+      detectKey([60], { weights: [2] }),
+    );
+    expect(() => detectKey([60], { weights: '1' as never })).toThrow(/weights\[0\] must be finite/);
+    expect(() => detectKey([60, 62], { weights: '1' as never })).toThrow(
+      /weights must have one entry per pitch/,
+    );
+    expect(() => detectKey([60], { weights: 5 as never })).toThrow(
+      /weights must have one entry per pitch/,
+    );
+  });
+
+  it('reads a pitch that is missing as NaN', () => {
+    expect(() => detectKey([60, null] as never)).toThrow(
+      /pitches\[1\] must be finite; received NaN/,
+    );
+    expect(() =>
+      detectKeyFromNotes([{ pitch: 60, startBeat: 0, durationBeat: 1 }], { modes: 'x' as never }),
+    ).toThrow(/modes must be a boolean or an array of mode names/);
+  });
+});

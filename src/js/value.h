@@ -27,6 +27,20 @@ bool truthy(const json::Value& v);
  */
 double to_number(const json::Value& v);
 
+/**
+ * `lhs + rhs` for a number on the left: a number for a number, boolean, null or undefined on the
+ * right, and the concatenated text for a string, array or object.
+ * @throws TypeError for a Symbol or a bigint on the right.
+ */
+json::Value add_number(double lhs, const json::Value& rhs);
+
+/**
+ * `lhs > rhs` for wire values: text against text (strings, arrays, plain objects) compares by
+ * UTF-16 code units, anything else compares as numbers.
+ * @throws TypeError for a Symbol.
+ */
+bool greater_than(const json::Value& lhs, const json::Value& rhs);
+
 }  // namespace cantus::js
 
 #endif  // CANTUS_JS_VALUE_H_
