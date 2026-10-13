@@ -99,6 +99,16 @@ describe('createArrangementSession', () => {
     expect(shape(session.analysis)).toBe(shape(analyzeArrangement(tracks)));
   });
 
+  it('leaves the analysis untouched when an edit changes nothing', () => {
+    const tracks = piece(6, 23);
+    const session = createArrangementSession(tracks);
+    // The same notes in the same places: nothing the analysis reads has moved,
+    // so the previous answer stands.
+    const same = [...(tracks[1]?.notes ?? [])];
+    const next = session.update([{ trackIndex: 1, notes: same }]);
+    expect(next.analysis).toBe(session.analysis);
+  });
+
   it('matches a full re-analysis after a re-ordering, down to originalIndex', () => {
     // Reversing a track's array moves no note, but `originalIndex` reports a
     // note's position in the caller's array, so every annotation and conflict
@@ -121,6 +131,40 @@ describe('createArrangementSession', () => {
   it('rejects an edit naming a track the session does not have', () => {
     const session = createArrangementSession(piece(2, 5));
     expect(() => session.update([{ trackIndex: 7, notes: [] }])).toThrow();
+  });
+
+  it('re-splices a segment when a single note is moved inside one bar', () => {
+    // C, F, G, C; the third bar's third is dropped a semitone, which turns G
+    // major into G minor. Only that bar's chord may change, and the bars the
+    // edit cannot reach must come back untouched.
+    const bars: number[][] = [
+      [60, 64, 67],
+      [65, 69, 72],
+      [67, 71, 74],
+      [60, 64, 67],
+    ];
+    const harmony: NoteEvent[] = bars.flatMap((pitches, bar) =>
+      pitches.map((pitch) => ({ pitch, startBeat: bar * 4, durationBeat: 4 })),
+    );
+    const tracks: ArrangementTrack[] = [{ role: 'harmony', notes: harmony }];
+    const session = createArrangementSession(tracks, { key: C_MAJOR });
+    expect(session.analysis.timeline.segments[2]?.chord.quality).toBe('maj');
+
+    const edited = harmony.map((note, index) =>
+      index === 7 ? { ...note, pitch: 70 } : { ...note },
+    );
+    const next = session.update([{ trackIndex: 0, notes: edited }]);
+    expect(next.analysis.timeline.segments[2]?.chord.quality).toBe('min');
+    expect(next.analysis.timeline.segments[0]).toEqual(session.analysis.timeline.segments[0]);
+    // Chord inference builds a fresh chord per span, so the untouched bar
+    // carrying the very same object is what proves the update spliced rather
+    // than quietly re-ran the whole piece and happened to agree.
+    expect(next.analysis.timeline.segments[0]?.chord).toBe(
+      session.analysis.timeline.segments[0]?.chord,
+    );
+    expect(shape(next.analysis)).toBe(
+      shape(analyzeArrangement([{ role: 'harmony', notes: edited }], { key: C_MAJOR })),
+    );
   });
 
   it('carries over every segment an edit cannot reach in a long piece', () => {

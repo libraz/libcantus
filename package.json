@@ -12,7 +12,7 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "spec": "vitest run -c tests/spec/vitest.config.ts",
-    "spec:ready": "node tools/corpus/select.mjs | xargs vitest run -c tests/spec/vitest.config.ts",
+    "spec:ready": "make spec-ready",
     "corpus": "CANTUS_IMPL=facade-ts CANTUS_RECORD=1 vitest run -c tests/spec/vitest.config.ts && node tools/corpus/merge.mjs"
   },
   "devDependencies": {

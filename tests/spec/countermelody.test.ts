@@ -369,12 +369,6 @@ describe('ranking weight overrides', () => {
     });
   }
 
-  it('rejects a weight written as an explicit undefined', () => {
-    expect(() => generate({ weights: { chordTone: undefined as unknown as number } })).toThrow(
-      InvalidInputError,
-    );
-  });
-
   it('rejects it before any candidate is scored, whatever the melody is', () => {
     // The empty melody returns early and a small register bounds the search, so
     // neither path may be the one that decides whether the option is checked.

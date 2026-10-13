@@ -13,7 +13,10 @@
  *      `support/{source-files,signatures,doc-examples,generate-doc-examples}`;
  *   3. replaces library internals with `vi.mock` / `vi.spyOn`;
  *   4. asserts identity (`toBe` / `not.toBe`) on an object-typed value, unless
- *      `api/annotations.json` lists the assertion as an identity exception.
+ *      `api/annotations.json` lists the assertion as an identity exception;
+ *   5. is listed in `api/annotations.json` `ts_only_units` (file, test title,
+ *      reason): it depends on a property of the JSON boundary that no static
+ *      check can see.
  *
  * Input is read from a git ref (`--from`, default: the `base` recorded in
  * `tests/spec/manifest.json`, else HEAD) so the split is reproducible after the
@@ -1072,6 +1075,13 @@ function readIdentityExceptions() {
   return { present: true, list: new Set(raw.map((e) => (typeof e === 'string' ? e : e.at))) };
 }
 
+/** `ts_only_units` entries keyed by `file\0title`, each with the reason it records. */
+function readTsOnlyUnits() {
+  if (!existsSync(ANNOTATIONS)) return new Map();
+  const data = JSON.parse(readFileSync(ANNOTATIONS, 'utf8'));
+  return new Map((data.ts_only_units ?? []).map((e) => [`${e.file}\0${e.test}`, e.reason]));
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const tree = loadTree(args.from);
@@ -1079,6 +1089,8 @@ function main() {
   const checker = program.getTypeChecker();
   const surface = publicSurface(program, checker);
   const exceptions = readIdentityExceptions();
+  const tsOnlyUnits = readTsOnlyUnits();
+  const matchedTsOnly = new Set();
   const relTest = (file) => path.relative(PKG, file).split(path.sep).join('/');
 
   const files = new Map();
@@ -1123,6 +1135,11 @@ function main() {
       const identity = result.identity.filter((i) => !exceptions.list.has(i.at));
       if (identity.length > 0)
         reasons.push(`identity:${uniq(identity.map((i) => i.at)).join(',')}`);
+      const boundaryKey = `${file.rel}\0${testTitle(unit.node, file.sf)}`;
+      if (tsOnlyUnits.has(boundaryKey)) {
+        matchedTsOnly.add(boundaryKey);
+        reasons.push(`boundary:${tsOnlyUnits.get(boundaryKey)}`);
+      }
       unit.reasons = reasons;
       unit.expects = analyzer.factsOf(unit).expects;
       sideOf.set(unit, reasons.length > 0 ? 'ts' : 'spec');
@@ -1133,6 +1150,13 @@ function main() {
           ...i,
           onlyReason: reasons.length === 1 && reasons[0].startsWith('identity:'),
         });
+    }
+  }
+
+  for (const key of tsOnlyUnits.keys()) {
+    if (!matchedTsOnly.has(key)) {
+      const [file, test] = key.split('\0');
+      throw new Error(`api/annotations.json ts_only_units: no unit "${test}" in ${file}`);
     }
   }
 

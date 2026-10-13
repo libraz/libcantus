@@ -1,8 +1,8 @@
 {
   "base": "902c32d0f8e823d09a6066b7e361df9181c8b2b7",
   "identityExceptions": {
-    "source": "none",
-    "entries": [],
+    "source": "api/annotations.json",
+    "entries": ["test/incremental.test.ts:106", "test/incremental.test.ts:159"],
     "candidates": [
       "test/articulation.test.ts:94",
       "test/chordscale.test.ts:525",
@@ -12,8 +12,6 @@
       "test/coerce.test.ts:181",
       "test/coerce.test.ts:56",
       "test/gaps-score-arrangement.test.ts:207",
-      "test/incremental.test.ts:106",
-      "test/incremental.test.ts:159",
       "test/key-regions.test.ts:945",
       "test/key-regions.test.ts:958",
       "test/key-spelling.test.ts:119",
@@ -84,10 +82,10 @@
     "specUnits": 3721,
     "tsUnits": 295,
     "expects": 9693,
-    "tsExpects": 704,
-    "tsExpectRatio": 0.0726,
+    "tsExpects": 702,
+    "tsExpectRatio": 0.0724,
     "specFiles": 181,
-    "tsFiles": 86
+    "tsFiles": 87
   },
   "files": {
     "architecture.test.ts": {
@@ -733,12 +731,22 @@
     "countermelody.test.ts": {
       "units": 21,
       "expects": 38,
-      "specUnits": 21,
-      "specExpects": 38,
-      "tsUnits": 0,
-      "tsExpects": 0,
-      "tsReasons": {},
-      "tsOnly": []
+      "specUnits": 20,
+      "specExpects": 37,
+      "tsUnits": 1,
+      "tsExpects": 1,
+      "tsReasons": {
+        "boundary": 1
+      },
+      "tsOnly": [
+        {
+          "line": 365,
+          "title": "rejects a weight written as an explicit undefined",
+          "reasons": [
+            "boundary:The wire drops an undefined field, so the check cannot tell it from an absent one (explicit-undefined-field)."
+          ]
+        }
+      ]
     },
     "counterpoint-extra.test.ts": {
       "units": 21,
@@ -1733,25 +1741,12 @@
     "incremental.test.ts": {
       "units": 15,
       "expects": 22,
-      "specUnits": 13,
-      "specExpects": 16,
-      "tsUnits": 2,
-      "tsExpects": 6,
-      "tsReasons": {
-        "identity": 2
-      },
-      "tsOnly": [
-        {
-          "line": 99,
-          "title": "leaves the analysis untouched when an edit changes nothing",
-          "reasons": ["identity:test/incremental.test.ts:106"]
-        },
-        {
-          "line": 133,
-          "title": "re-splices a segment when a single note is moved inside one bar",
-          "reasons": ["identity:test/incremental.test.ts:159"]
-        }
-      ]
+      "specUnits": 15,
+      "specExpects": 22,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
     },
     "instrument-coerce.test.ts": {
       "units": 11,
@@ -3647,12 +3642,22 @@
     "tempo.test.ts": {
       "units": 40,
       "expects": 103,
-      "specUnits": 40,
-      "specExpects": 103,
-      "tsUnits": 0,
-      "tsExpects": 0,
-      "tsReasons": {},
-      "tsOnly": []
+      "specUnits": 39,
+      "specExpects": 100,
+      "tsUnits": 1,
+      "tsExpects": 3,
+      "tsReasons": {
+        "boundary": 1
+      },
+      "tsOnly": [
+        {
+          "line": 396,
+          "title": "validates a map once however many positions are converted against it",
+          "reasons": [
+            "boundary:Times the WeakMap cache of one tempo-map object; each call over the wire receives a fresh copy (identity-cache)."
+          ]
+        }
+      ]
     },
     "tendency-resolution-agreement.test.ts": {
       "units": 2,
