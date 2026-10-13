@@ -109,10 +109,10 @@ export type VoicingOptions = {
 };
 
 /** Overall pitch floor/ceiling used when deriving ranges for arbitrary voice counts. */
-const DERIVED_LOW = 40;
-const DERIVED_HIGH = 79;
+export const DERIVED_LOW = 40;
+export const DERIVED_HIGH = 79;
 /** Span of each derived per-voice range in semitones. */
-const DERIVED_SPAN = 19;
+export const DERIVED_SPAN = 19;
 
 /**
  * Resolve the per-voice ranges implied by the options: explicit `ranges` win,

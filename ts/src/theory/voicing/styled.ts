@@ -58,7 +58,7 @@ export type StyledVoicingOptions = {
 };
 
 /** Default base octave for a styled close-position stack. */
-const DEFAULT_STYLE_OCTAVE = 4;
+export const DEFAULT_STYLE_OCTAVE = 4;
 
 /**
  * Which voice of the close stack, counted from the top, a style lowers an

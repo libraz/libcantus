@@ -15,7 +15,7 @@ import type { PartWritingViolation, PartWritingViolationKind } from './index.js'
  * saying: the fallback was the bare noun `interval`, which named nothing and
  * read as `The leap of a interval` where the sentence supplies the article.
  */
-const INTERVAL_WORDS = [
+export const INTERVAL_WORDS = [
   'unison',
   'second',
   'third',

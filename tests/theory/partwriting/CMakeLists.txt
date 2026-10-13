@@ -1,0 +1,1 @@
+cantus_add_test(theory_partwriting test_partwriting.cpp)

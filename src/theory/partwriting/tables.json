@@ -1,0 +1,52 @@
+{
+  "tables": [
+    {
+      "module": "theory/partwriting/internal.ts",
+      "export": "INTERVAL_WORDS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kIntervalWords",
+      "fields": []
+    },
+    {
+      "module": "theory/partwriting/species.ts",
+      "export": "SPECIES_NUMBERS",
+      "cxx_type": "int",
+      "cxx_name": "kSpeciesNumbers",
+      "fields": []
+    },
+    {
+      "module": "theory/partwriting/species.ts",
+      "export": "SPECIES_RATIO",
+      "cxx_type": "SpeciesRatio",
+      "cxx_name": "kSpeciesRatio",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "theory/partwriting/species.ts",
+      "export": "MIN_FLORID_VALUE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "theory/partwriting/species.ts",
+      "export": "MAX_LEAPS_IN_ONE_DIRECTION",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/partwriting/species.ts",
+      "export": "MAX_LEAP_CHAIN_SPAN",
+      "cxx_type": "double"
+    },
+    {
+      "module": "theory/partwriting/species.ts",
+      "export": "LEAP_NEEDING_ANSWER",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/partwriting/species.ts",
+      "export": "TRITONE_SEMITONES",
+      "cxx_type": "double"
+    }
+  ]
+}

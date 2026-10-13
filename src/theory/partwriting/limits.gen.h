@@ -2,4 +2,23 @@
 #ifndef CANTUS_SRC_THEORY_PARTWRITING_LIMITS_GEN_H_
 #define CANTUS_SRC_THEORY_PARTWRITING_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** MIN_FLORID_VALUE of ts/src/theory/partwriting/species.ts. */
+inline constexpr double MIN_FLORID_VALUE = 0.125;
+
+/** MAX_LEAPS_IN_ONE_DIRECTION of ts/src/theory/partwriting/species.ts. */
+inline constexpr int MAX_LEAPS_IN_ONE_DIRECTION = 2;
+
+/** MAX_LEAP_CHAIN_SPAN of ts/src/theory/partwriting/species.ts. */
+inline constexpr double MAX_LEAP_CHAIN_SPAN = 12;
+
+/** LEAP_NEEDING_ANSWER of ts/src/theory/partwriting/species.ts. */
+inline constexpr int LEAP_NEEDING_ANSWER = 6;
+
+/** TRITONE_SEMITONES of ts/src/theory/partwriting/species.ts. */
+inline constexpr double TRITONE_SEMITONES = 6;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_THEORY_PARTWRITING_LIMITS_GEN_H_

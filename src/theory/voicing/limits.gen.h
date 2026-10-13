@@ -2,4 +2,62 @@
 #ifndef CANTUS_SRC_THEORY_VOICING_LIMITS_GEN_H_
 #define CANTUS_SRC_THEORY_VOICING_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** DEFAULT_MAX_SPACING of ts/src/theory/voicing/internal.ts. */
+inline constexpr double DEFAULT_MAX_SPACING = 12;
+
+/** VIOLATION_PENALTY of ts/src/theory/voicing/internal.ts. */
+inline constexpr double VIOLATION_PENALTY = 1000;
+
+/** MISSING_TONE_PENALTY of ts/src/theory/voicing/internal.ts. */
+inline constexpr double MISSING_TONE_PENALTY = 500;
+
+/** MISSING_FIFTH_PENALTY of ts/src/theory/voicing/internal.ts. */
+inline constexpr double MISSING_FIFTH_PENALTY = 20;
+
+/** POOR_DOUBLING_PENALTY of ts/src/theory/voicing/internal.ts. */
+inline constexpr double POOR_DOUBLING_PENALTY = 4;
+
+/** UNISON_PENALTY of ts/src/theory/voicing/internal.ts. */
+inline constexpr double UNISON_PENALTY = 100;
+
+/** LEADING_TONE_DOUBLING_PENALTY of ts/src/theory/voicing/internal.ts. */
+inline constexpr double LEADING_TONE_DOUBLING_PENALTY = 200;
+
+/** RESOLUTION_PENALTY of ts/src/theory/voicing/internal.ts. */
+inline constexpr double RESOLUTION_PENALTY = 200;
+
+/** DEFAULT_MAX_CANDIDATES of ts/src/theory/voicing/internal.ts. */
+inline constexpr double DEFAULT_MAX_CANDIDATES = 4000;
+
+/** MAX_LOOKAHEAD_PAIRS of ts/src/theory/voicing/internal.ts. */
+inline constexpr double MAX_LOOKAHEAD_PAIRS = 1000000;
+
+/** SEARCH_NODES_PER_CANDIDATE of ts/src/theory/voicing/internal.ts. */
+inline constexpr double SEARCH_NODES_PER_CANDIDATE = 16;
+
+/** HIDDEN_PERFECT_PENALTY of ts/src/theory/voicing/internal.ts. */
+inline constexpr double HIDDEN_PERFECT_PENALTY = 100;
+
+/** CROSS_RELATION_PENALTY of ts/src/theory/voicing/internal.ts. */
+inline constexpr double CROSS_RELATION_PENALTY = 100;
+
+/** AUGMENTED_MELODIC_PENALTY of ts/src/theory/voicing/internal.ts. */
+inline constexpr double AUGMENTED_MELODIC_PENALTY = 1000;
+
+/** DERIVED_LOW of ts/src/theory/voicing/satb.ts. */
+inline constexpr double DERIVED_LOW = 40;
+
+/** DERIVED_HIGH of ts/src/theory/voicing/satb.ts. */
+inline constexpr double DERIVED_HIGH = 79;
+
+/** DERIVED_SPAN of ts/src/theory/voicing/satb.ts. */
+inline constexpr double DERIVED_SPAN = 19;
+
+/** DEFAULT_STYLE_OCTAVE of ts/src/theory/voicing/styled.ts. */
+inline constexpr double DEFAULT_STYLE_OCTAVE = 4;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_THEORY_VOICING_LIMITS_GEN_H_

@@ -70,13 +70,13 @@ export type SpeciesOptions = {
 };
 
 /** Notes of counterpoint per cantus-firmus note, by species. */
-const SPECIES_RATIO: Readonly<Record<Species, number>> = { 1: 1, 2: 2, 3: 4, 4: 2, 5: 0 };
+export const SPECIES_RATIO: Readonly<Record<Species, number>> = { 1: 1, 2: 2, 3: 4, 4: 2, 5: 0 };
 
 /** The species there are, read from the ratio table rather than listed twice. */
-const SPECIES_NUMBERS: readonly number[] = Object.keys(SPECIES_RATIO).map(Number);
+export const SPECIES_NUMBERS: readonly number[] = Object.keys(SPECIES_RATIO).map(Number);
 
 /** The smallest note value the fifth species may write, in cantus-firmus notes. */
-const MIN_FLORID_VALUE = 0.125;
+export const MIN_FLORID_VALUE = 0.125;
 
 /**
  * One counterpoint note against one cantus-firmus note. A note that is still
@@ -455,16 +455,16 @@ function melodicViolations(from: Entry, to: Entry): PartWritingViolation[] {
 }
 
 /** How many leaps in a row may carry the line the same way. */
-const MAX_LEAPS_IN_ONE_DIRECTION = 2;
+export const MAX_LEAPS_IN_ONE_DIRECTION = 2;
 
 /** How far leaps in one direction may carry the line in total, in semitones. */
-const MAX_LEAP_CHAIN_SPAN = 12;
+export const MAX_LEAP_CHAIN_SPAN = 12;
 
 /** The smallest leap that must be answered by a step the other way. */
-const LEAP_NEEDING_ANSWER = 6;
+export const LEAP_NEEDING_ANSWER = 6;
 
 /** The tritone, in semitones, whichever way it is spelled. */
-const TRITONE_SEMITONES = 6;
+export const TRITONE_SEMITONES = 6;
 
 /** One melodic move of the counterpoint, as the shape rules read it. */
 type Move = {

@@ -1,0 +1,1 @@
+cantus_add_test(theory_voicing test_voicing.cpp)

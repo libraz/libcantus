@@ -1,0 +1,103 @@
+{
+  "tables": [
+    {
+      "module": "theory/voicing/satb.ts",
+      "export": "SATB_RANGES",
+      "cxx_type": "VoiceRange",
+      "cxx_name": "kSatbRanges",
+      "fields": ["min", "max"]
+    }
+  ],
+  "limits": [
+    {
+      "module": "theory/voicing/internal.ts",
+      "export": "DEFAULT_MAX_SPACING",
+      "cxx_type": "double"
+    },
+    {
+      "module": "theory/voicing/internal.ts",
+      "export": "VIOLATION_PENALTY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "theory/voicing/internal.ts",
+      "export": "MISSING_TONE_PENALTY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "theory/voicing/internal.ts",
+      "export": "MISSING_FIFTH_PENALTY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "theory/voicing/internal.ts",
+      "export": "POOR_DOUBLING_PENALTY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "theory/voicing/internal.ts",
+      "export": "UNISON_PENALTY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "theory/voicing/internal.ts",
+      "export": "LEADING_TONE_DOUBLING_PENALTY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "theory/voicing/internal.ts",
+      "export": "RESOLUTION_PENALTY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "theory/voicing/internal.ts",
+      "export": "DEFAULT_MAX_CANDIDATES",
+      "cxx_type": "double"
+    },
+    {
+      "module": "theory/voicing/internal.ts",
+      "export": "MAX_LOOKAHEAD_PAIRS",
+      "cxx_type": "double"
+    },
+    {
+      "module": "theory/voicing/internal.ts",
+      "export": "SEARCH_NODES_PER_CANDIDATE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "theory/voicing/internal.ts",
+      "export": "HIDDEN_PERFECT_PENALTY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "theory/voicing/internal.ts",
+      "export": "CROSS_RELATION_PENALTY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "theory/voicing/internal.ts",
+      "export": "AUGMENTED_MELODIC_PENALTY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "theory/voicing/satb.ts",
+      "export": "DERIVED_LOW",
+      "cxx_type": "double"
+    },
+    {
+      "module": "theory/voicing/satb.ts",
+      "export": "DERIVED_HIGH",
+      "cxx_type": "double"
+    },
+    {
+      "module": "theory/voicing/satb.ts",
+      "export": "DERIVED_SPAN",
+      "cxx_type": "double"
+    },
+    {
+      "module": "theory/voicing/styled.ts",
+      "export": "DEFAULT_STYLE_OCTAVE",
+      "cxx_type": "double"
+    }
+  ]
+}

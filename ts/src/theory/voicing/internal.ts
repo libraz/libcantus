@@ -36,7 +36,7 @@ export const DEFAULT_MAX_SPACING = 12;
 /** Score penalty per counterpoint violation between consecutive voicings. */
 export const VIOLATION_PENALTY = 1000;
 /** Score penalty per chord tone absent from a voicing. */
-const MISSING_TONE_PENALTY = 500;
+export const MISSING_TONE_PENALTY = 500;
 /**
  * Score penalty for omitting the chord's fifth. Far milder than any other
  * missing tone: the fifth carries no identity, and the textbook resolution of a
@@ -45,18 +45,18 @@ const MISSING_TONE_PENALTY = 500;
  * {@link RESOLUTION_PENALTY} so a resolution can buy the omission, and above
  * {@link POOR_DOUBLING_PENALTY} so nothing else can.
  */
-const MISSING_FIFTH_PENALTY = 20;
+export const MISSING_FIFTH_PENALTY = 20;
 /** Score penalty per doubled tone that is neither the root nor the fifth. */
-const POOR_DOUBLING_PENALTY = 4;
+export const POOR_DOUBLING_PENALTY = 4;
 /** Penalty for adjacent voices sharing exactly the same MIDI pitch. */
-const UNISON_PENALTY = 100;
+export const UNISON_PENALTY = 100;
 /**
  * Score penalty for doubling the key's leading tone. Doubling it guarantees
  * parallel octaves on its resolution, so it is a rule violation rather than a
  * matter of taste — weighted far above {@link POOR_DOUBLING_PENALTY}, but below
  * a missing chord tone, which damages the chord itself.
  */
-const LEADING_TONE_DOUBLING_PENALTY = 200;
+export const LEADING_TONE_DOUBLING_PENALTY = 200;
 /**
  * Score penalty per tendency tone that fails to resolve. Well above the few
  * semitones of extra motion a correct resolution usually costs, so smoothness
@@ -65,7 +65,7 @@ const LEADING_TONE_DOUBLING_PENALTY = 200;
  */
 export const RESOLUTION_PENALTY = 200;
 /** Hard cap on candidate voicings evaluated per chord, keeping the search bounded. */
-const DEFAULT_MAX_CANDIDATES = 4000;
+export const DEFAULT_MAX_CANDIDATES = 4000;
 /**
  * Hard cap on the candidate pairs one chord's lookahead may weigh. A lookahead
  * reads every candidate of the chord against every candidate of the chord after
@@ -80,7 +80,7 @@ export const MAX_LOOKAHEAD_PAIRS = 1_000_000;
  * counts completed voicings, so a search whose upper voices admit no chord tone
  * would expand the whole cartesian product without ever reaching a leaf.
  */
-const SEARCH_NODES_PER_CANDIDATE = 16;
+export const SEARCH_NODES_PER_CANDIDATE = 16;
 
 /**
  * Score penalty for a hidden/direct perfect fifth or octave reached on the
