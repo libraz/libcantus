@@ -337,7 +337,7 @@ TEST_CASE("cantus_list_ops lists the builtin ops sorted, with their needs", "[c_
   }
   std::vector<std::string> builtins;
   for (const std::string& n : names) {
-    if (!n.empty() && n[0] == '$') {
+    if (!n.empty() && n[0] == '$' && n.rfind("$const:", 0) != 0) {
       builtins.push_back(n);
     }
   }

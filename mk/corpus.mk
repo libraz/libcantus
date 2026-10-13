@@ -21,5 +21,5 @@ corpus-check: build
 
 spec-ready: build $$(SPEC_READY_BUILD)
 	files="$$($(NODE) tools/corpus/select.mjs --build-dir $(BUILD_DIR) $(if $(UNIT),--unit $(UNIT)))" && \
-	  CANTUS_IMPL=$(IMPL) $(NICE) $(VITEST) run -c tests/spec/vitest.config.ts \
-	    --maxWorkers=$(JOBS) $$files
+	  CANTUS_SPEC_FILES="$$(echo $$files | tr ' ' ',')" CANTUS_IMPL=$(IMPL) $(NICE) $(VITEST) run \
+	    -c tests/spec/vitest.config.ts --maxWorkers=$(JOBS)

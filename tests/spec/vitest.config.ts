@@ -29,6 +29,11 @@ const IMPLS: Record<string, { root: string; layer: (name: string) => string }> =
   },
 };
 
+// An exact file list (repo-relative, comma-separated); CLI filters match substrings instead.
+const specFiles = process.env.CANTUS_SPEC_FILES?.split(',')
+  .filter(Boolean)
+  .map((file) => file.replace(/^tests\/spec\//, ''));
+
 const implName = process.env.CANTUS_IMPL ?? 'ts';
 const impl = IMPLS[implName];
 if (!impl) {
@@ -51,7 +56,7 @@ export default defineConfig({
   },
   test: {
     root: fileURLToPath(new URL('.', import.meta.url)),
-    include: ['**/*.test.ts'],
+    include: specFiles ?? ['**/*.test.ts'],
     // Several suites sweep a space exhaustively and take seconds of real work;
     // the budget is for catching a hang, not for timing the sweeps.
     testTimeout: 120_000,
