@@ -2,4 +2,23 @@
 #ifndef CANTUS_SRC_ANALYZE_FUNCTIONAL_LIMITS_GEN_H_
 #define CANTUS_SRC_ANALYZE_FUNCTIONAL_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** SUBDOMINANT_DEGREE of ts/src/analyze/functional/cadence.ts. */
+inline constexpr int CADENCE_SUBDOMINANT_DEGREE = 4;
+
+/** DOMINANT_DEGREE of ts/src/analyze/functional/cadence.ts. */
+inline constexpr int CADENCE_DOMINANT_DEGREE = 5;
+
+/** SUBMEDIANT_DEGREE of ts/src/analyze/functional/cadence.ts. */
+inline constexpr int CADENCE_SUBMEDIANT_DEGREE = 6;
+
+/** BASS_ABOVE_TONIC of ts/src/analyze/functional/augmented-sixth.ts. */
+inline constexpr int BASS_ABOVE_TONIC = 8;
+
+/** HEPTATONIC_DEGREES of ts/src/analyze/functional/pivot.ts. */
+inline constexpr int HEPTATONIC_DEGREES = 7;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_ANALYZE_FUNCTIONAL_LIMITS_GEN_H_

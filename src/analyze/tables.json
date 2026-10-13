@@ -1,0 +1,19 @@
+{
+  "limits": [
+    {
+      "module": "analyze/adjacency.ts",
+      "export": "HUMANIZE_ADJACENCY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/histogram.ts",
+      "export": "MAX_VELOCITY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/histogram.ts",
+      "export": "ACCENT_DIVISOR",
+      "cxx_type": "double"
+    }
+  ]
+}

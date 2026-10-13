@@ -153,3 +153,28 @@ describe('the seventh degree of a key that lowers it', () => {
     expect(romanToChord('vii7', aMinor).rootPc).toBe(7);
   });
 });
+
+describe('numerals as text', () => {
+  const cMajor = majorKey(0);
+
+  it('reads the white space around a numeral the way String.prototype.trim does', () => {
+    expect(romanToChord('\u00a0V7\u2003', cMajor)).toEqual(romanToChord('V7', cMajor));
+    expect(romanToChord('\ufeffV', cMajor)).toEqual(romanToChord('V', cMajor));
+  });
+
+  it('refuses a line break inside a numeral, which the grammar does not match', () => {
+    expect(() => romanToChord('V\n7', cMajor)).toThrow(/Invalid Roman numeral/);
+    expect(() => romanToChord('V7\u2028b', cMajor)).toThrow(/Invalid Roman numeral/);
+  });
+
+  it('writes the figures of a six-four with a slash between digits', () => {
+    expect(romanToChord('V6/4', cMajor)).toEqual(romanToChord('V64', cMajor));
+    expect(romanToChord('V6/5', cMajor)).toEqual(romanToChord('V65', cMajor));
+    expect(() => romanToChord('V6/4/5', cMajor)).toThrow(/Unsupported suffix "645"/);
+  });
+
+  it('keeps the case of the numeral and its glyphs apart', () => {
+    expect(() => romanToChord('iV', cMajor)).toThrow(/Roman numeral must use one case/);
+    expect(() => romanToChord('IIII', cMajor)).toThrow(/Invalid Roman numeral: IIII/);
+  });
+});

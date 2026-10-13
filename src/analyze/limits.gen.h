@@ -2,4 +2,17 @@
 #ifndef CANTUS_SRC_ANALYZE_LIMITS_GEN_H_
 #define CANTUS_SRC_ANALYZE_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** HUMANIZE_ADJACENCY of ts/src/analyze/adjacency.ts. */
+inline constexpr double HUMANIZE_ADJACENCY = 0.05;
+
+/** MAX_VELOCITY of ts/src/analyze/histogram.ts. */
+inline constexpr double MAX_VELOCITY = 127;
+
+/** ACCENT_DIVISOR of ts/src/analyze/histogram.ts. */
+inline constexpr double ACCENT_DIVISOR = 3;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_ANALYZE_LIMITS_GEN_H_

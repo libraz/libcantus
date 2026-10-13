@@ -226,3 +226,32 @@ describe('one reading of what the dominant is', () => {
     expect(detectCadence(makeChord(2, 'min'), makeChord(9, 'min'), dDorian).type).toBe('half');
   });
 });
+
+describe('cadences read from data the readings cannot take', () => {
+  const unnamed = { rootPc: 0, quality: 'unnamed', intervals: [0, 4, 7] } as never;
+  const dominant = makeChord(7, 'maj');
+
+  it('never asks for the quality, so a final chord it has no name for still cadences', () => {
+    expect(detectCadence(dominant, unnamed, cMajor).type).toBe('authentic');
+    const voiced = detectCadence(dominant, unnamed, cMajor, {
+      voicing: [dominantVoicing, [48, 64, 72]],
+    });
+    expect(voiced.soprano).toBe('root');
+    expect(voiced.strength).toBe('perfect');
+  });
+
+  it('reads the voicing the way a destructuring reads it', () => {
+    const plain = detectCadence(dominant, makeChord(0, 'maj'), cMajor);
+    for (const voicing of [null, 'ab', [], [null], [[Number.NaN, 'x', null], undefined]]) {
+      expect(detectCadence(dominant, makeChord(0, 'maj'), cMajor, { voicing } as never)).toEqual(
+        plain,
+      );
+    }
+    expect(() =>
+      detectCadence(dominant, makeChord(0, 'maj'), cMajor, { voicing: 5 } as never),
+    ).toThrow();
+    expect(() =>
+      detectCadence(dominant, makeChord(0, 'maj'), cMajor, { voicing: [[60], 7] } as never),
+    ).toThrow();
+  });
+});

@@ -24,9 +24,9 @@ import {
 import type { RejectedCandidate } from './rationale.js';
 
 /** The scale degrees the cadence rules are stated in. */
-const SUBDOMINANT_DEGREE = 4;
-const DOMINANT_DEGREE = 5;
-const SUBMEDIANT_DEGREE = 6;
+export const SUBDOMINANT_DEGREE = 4;
+export const DOMINANT_DEGREE = 5;
+export const SUBMEDIANT_DEGREE = 6;
 
 /**
  * How far above the tonic a scale degree lies, read in the heptatonic frame the

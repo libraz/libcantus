@@ -50,13 +50,13 @@ import { mod12 } from './internal.js';
 export type AugmentedSixthKind = 'italian' | 'french' | 'german';
 
 /** Every kind, in the order a sounding chord is matched against them. */
-const KINDS: readonly AugmentedSixthKind[] = ['italian', 'french', 'german'];
+export const KINDS: readonly AugmentedSixthKind[] = ['italian', 'french', 'german'];
 
 /** Semitones from the tonic up to the lowered submediant, the family's bass. */
-const BASS_ABOVE_TONIC = 8;
+export const BASS_ABOVE_TONIC = 8;
 
 /** Semitone offsets above the bass for each kind's tones. */
-const TONES_ABOVE_BASS: Record<AugmentedSixthKind, readonly number[]> = {
+export const TONES_ABOVE_BASS: Record<AugmentedSixthKind, readonly number[]> = {
   italian: [0, 4, 10],
   french: [0, 4, 6, 10],
   german: [0, 4, 7, 10],
@@ -71,14 +71,14 @@ const TONES_ABOVE_BASS: Record<AugmentedSixthKind, readonly number[]> = {
  * that true in every key, at the cost of the double flats a far flat-side key
  * genuinely needs (the German sixth of Db major is Bbb Db Fb G).
  */
-const SPELLED_ABOVE_BASS: Record<AugmentedSixthKind, readonly SpelledInterval[]> = {
+export const SPELLED_ABOVE_BASS: Record<AugmentedSixthKind, readonly SpelledInterval[]> = {
   italian: ['P1', 'M3', 'A6'].map((name) => parseInterval(name)),
   french: ['P1', 'M3', 'A4', 'A6'].map((name) => parseInterval(name)),
   german: ['P1', 'M3', 'P5', 'A6'].map((name) => parseInterval(name)),
 };
 
 /** The minor sixth from the tonic up to the bass every kind stands on. */
-const BASS_INTERVAL = parseInterval('m6');
+export const BASS_INTERVAL = parseInterval('m6');
 
 /**
  * How each kind is carried by the pitch-class {@link Chord} type: the root it
@@ -95,7 +95,7 @@ const BASS_INTERVAL = parseInterval('m6');
  * The interval template always names the tones that actually sound, so the
  * pitch classes are exact whatever the quality label says.
  */
-const CHORD_SHAPE: Record<
+export const CHORD_SHAPE: Record<
   AugmentedSixthKind,
   { rootAboveBass: number; quality: ChordQuality; intervals: readonly number[] }
 > = {
@@ -105,16 +105,19 @@ const CHORD_SHAPE: Record<
 };
 
 /** Roman-numeral symbol accepted for each kind, including the figured variant. */
-const KIND_BY_SYMBOL: ReadonlyMap<string, AugmentedSixthKind> = new Map([
+export const KIND_SYMBOLS: readonly (readonly [string, AugmentedSixthKind])[] = [
   ['It6', 'italian'],
   ['Fr6', 'french'],
   ['Ger6', 'german'],
   // The German sixth's figures over its bass are 6/5; both spellings are in use.
   ['Ger65', 'german'],
-]);
+];
+
+/** {@link KIND_SYMBOLS} by symbol. */
+const KIND_BY_SYMBOL: ReadonlyMap<string, AugmentedSixthKind> = new Map(KIND_SYMBOLS);
 
 /** The symbol emitted for each kind, one per kind so rendering is canonical. */
-const SYMBOL_BY_KIND: Record<AugmentedSixthKind, string> = {
+export const SYMBOL_BY_KIND: Record<AugmentedSixthKind, string> = {
   italian: 'It6',
   french: 'Fr6',
   german: 'Ger6',

@@ -41,10 +41,10 @@ import {
 } from './tonicization.js';
 
 /** Roman numeral glyphs indexed by degree number - 1. */
-const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'] as const;
+export const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'] as const;
 
 /** Roman glyph -> degree number (1..7). */
-const ROMAN_TO_DEGREE: Record<string, number> = {
+export const ROMAN_TO_DEGREE: Record<string, number> = {
   I: 1,
   II: 2,
   III: 3,
@@ -55,7 +55,7 @@ const ROMAN_TO_DEGREE: Record<string, number> = {
 };
 
 /** Major-key Roman spelling for each semitone offset above the tonic. */
-const OFFSET_SPELLING: readonly [number, string][] = [
+export const OFFSET_SPELLING: readonly [number, string][] = [
   [1, ''],
   [2, 'b'],
   [2, ''],
@@ -85,7 +85,10 @@ function seventhQuality(base: 'maj' | 'min' | 'dim' | 'aug', halfDim: boolean): 
 }
 
 /** Figure strings that denote a recognized figured-bass inversion. */
-const INVERSION_FIGURES = new Set(['6', '64', '65', '43', '42', '2', '7']);
+export const INVERSION_FIGURE_LIST: readonly string[] = ['6', '64', '65', '43', '42', '2', '7'];
+
+/** {@link INVERSION_FIGURE_LIST} as a set. */
+const INVERSION_FIGURES: ReadonlySet<string> = new Set(INVERSION_FIGURE_LIST);
 
 /**
  * Canonical Roman-numeral rendering (numeral case and quality suffix) for every
@@ -97,7 +100,7 @@ const INVERSION_FIGURES = new Set(['6', '64', '65', '43', '42', '2', '7']);
  * sixth is `add6`, the six-nine chord is `69` — and each (case, suffix) pair is
  * unique.
  */
-const ROMAN_STYLE: Record<ChordQuality, { lower: boolean; suffix: string }> = {
+export const ROMAN_STYLE: Record<ChordQuality, { lower: boolean; suffix: string }> = {
   maj: { lower: false, suffix: '' },
   min: { lower: true, suffix: '' },
   dim: { lower: true, suffix: 'o' },
@@ -537,11 +540,14 @@ function baseMarker(quality: ChordQuality): string {
   return '';
 }
 
-const TRIAD_FIGURES: Record<number, string> = { 1: '6', 2: '64' };
-const SEVENTH_FIGURES: Record<number, string> = { 1: '65', 2: '43', 3: '42' };
+export const TRIAD_FIGURES: Record<number, string> = { 1: '6', 2: '64' };
+export const SEVENTH_FIGURES: Record<number, string> = { 1: '65', 2: '43', 3: '42' };
 
 /** Qualities whose inversions render as lossless triad figures (6, 64). */
-const TRIAD_FIGURE_QUALITIES: ReadonlySet<ChordQuality> = new Set(['maj', 'min', 'dim', 'aug']);
+export const TRIAD_FIGURE_QUALITY_NAMES: readonly ChordQuality[] = ['maj', 'min', 'dim', 'aug'];
+
+/** {@link TRIAD_FIGURE_QUALITY_NAMES} as a set. */
+const TRIAD_FIGURE_QUALITIES: ReadonlySet<ChordQuality> = new Set(TRIAD_FIGURE_QUALITY_NAMES);
 
 /**
  * Qualities carrying a chordal seventh, whose inversions render as seventh
@@ -549,7 +555,7 @@ const TRIAD_FIGURE_QUALITIES: ReadonlySet<ChordQuality> = new Set(['maj', 'min',
  * above the root (10 or 11 semitones, or the diminished 7th of `dim7`) — never
  * by interval count, which would turn added-tone chords into false sevenths.
  */
-const SEVENTH_FIGURE_QUALITIES: ReadonlySet<ChordQuality> = new Set([
+export const SEVENTH_FIGURE_QUALITY_NAMES: readonly ChordQuality[] = [
   'maj7',
   'min7',
   'dom7',
@@ -558,7 +564,10 @@ const SEVENTH_FIGURE_QUALITIES: ReadonlySet<ChordQuality> = new Set([
   'minMaj7',
   'aug7',
   'augMaj7',
-]);
+];
+
+/** {@link SEVENTH_FIGURE_QUALITY_NAMES} as a set. */
+const SEVENTH_FIGURE_QUALITIES: ReadonlySet<ChordQuality> = new Set(SEVENTH_FIGURE_QUALITY_NAMES);
 
 /**
  * The numeral glyph for a degree number, cased for the chord quality.
@@ -809,7 +818,15 @@ export function renderRoman(
 }
 
 /** Ordinal names of the seven scale degrees, indexed by degree number - 1. */
-const DEGREE_NAMES = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'] as const;
+export const DEGREE_NAMES = [
+  'first',
+  'second',
+  'third',
+  'fourth',
+  'fifth',
+  'sixth',
+  'seventh',
+] as const;
 
 /**
  * The phrase naming where a numeral's root came from.

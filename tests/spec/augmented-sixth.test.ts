@@ -12,6 +12,7 @@ import {
   spellAugmentedSixth,
 } from '@libraz/libcantus/analyze';
 import {
+  InvalidInputError,
   type NoteEvent,
   noteToPitchClass,
   parseNote,
@@ -658,5 +659,32 @@ describe('a timeline spells its augmented sixths in the key it was given', () =>
 
   it('tells the two apart, which is the whole of the guarantee', () => {
     expect(spelledUnder('Ab minor')).not.toEqual(spelledUnder('G# minor'));
+  });
+});
+
+describe('augmented sixths asked of data the readings cannot take', () => {
+  // The lowered submediant of C is Ab, the bass every kind stands on.
+  const onBass = { rootPc: 8, quality: 'unnamed', intervals: [0, 4, 10], bassPc: 8 } as never;
+  const offBass = { rootPc: 0, quality: 'unnamed', intervals: [0, 4, 7] } as never;
+
+  it('reads the tones, and so refuses the quality, only for a chord on the family bass', () => {
+    expect(() => augmentedSixthKind(onBass, cMajor)).toThrow(/Unknown chord quality: unnamed/);
+    expect(augmentedSixthKind(offBass, cMajor)).toBeNull();
+  });
+
+  it('answers null for a bass that is not the lowered submediant without reading the pitches', () => {
+    expect(augmentedSixthFromPitchClasses(['x'] as never, 0, cMajor)).toBeNull();
+    expect(() => augmentedSixthFromPitchClasses(['x'] as never, 8, cMajor)).toThrow(
+      /pitch must be finite/,
+    );
+  });
+
+  it('refuses a bass pitch that is not a number, and a key that names none', () => {
+    expect(() => augmentedSixthFromPitchClasses([8, 0, 3, 6], 'x' as never, cMajor)).toThrow(
+      /pitch must be finite/,
+    );
+    expect(() => augmentedSixthFromPitchClasses([8, 0, 3, 6], 8, 'nonsense' as never)).toThrow(
+      InvalidInputError,
+    );
   });
 });

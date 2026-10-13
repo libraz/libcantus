@@ -15,10 +15,10 @@ import { assertGenerationBudget } from '../core/validation/index.js';
 import { BEAT_EPS } from './adjacency.js';
 
 /** Loudest a MIDI velocity goes, which is what a velocity is read against. */
-const MAX_VELOCITY = 127;
+export const MAX_VELOCITY = 127;
 
 /** How much a metric accent may add to a note's weight, as a divisor of it. */
-const ACCENT_DIVISOR = 3;
+export const ACCENT_DIVISOR = 3;
 
 /**
  * How much one note counts towards a pitch-class histogram.

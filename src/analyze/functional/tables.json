@@ -1,0 +1,203 @@
+{
+  "tables": [
+    {
+      "module": "analyze/functional/function.ts",
+      "export": "HARMONIC_FUNCTIONS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kHarmonicFunctionNames",
+      "fields": []
+    },
+    {
+      "module": "analyze/functional/function.ts",
+      "export": "FUNCTION_BY_OFFSET",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kFunctionByOffset",
+      "fields": []
+    },
+    {
+      "module": "analyze/functional/function.ts",
+      "export": "MINOR_FUNCTION_BY_OFFSET",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kMinorFunctionByOffset",
+      "fields": []
+    },
+    {
+      "module": "analyze/functional/function.ts",
+      "export": "FUNCTION_REASON_PHRASE",
+      "cxx_type": "NamedText",
+      "cxx_name": "kFunctionReasonPhrase",
+      "fields": []
+    },
+    {
+      "module": "analyze/functional/function.ts",
+      "export": "BORROWED_SOURCE_PHRASE",
+      "cxx_type": "NamedText",
+      "cxx_name": "kBorrowedSourcePhrase",
+      "fields": []
+    },
+    {
+      "module": "analyze/functional/cadence.ts",
+      "export": "CADENCE_TYPES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kCadenceTypeNames",
+      "fields": []
+    },
+    {
+      "module": "analyze/functional/augmented-sixth.ts",
+      "export": "KINDS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kAugmentedSixthKindNames",
+      "fields": []
+    },
+    {
+      "module": "analyze/functional/augmented-sixth.ts",
+      "export": "TONES_ABOVE_BASS",
+      "cxx_type": "KindTones",
+      "cxx_name": "kTonesAboveBass",
+      "fields": []
+    },
+    {
+      "module": "analyze/functional/augmented-sixth.ts",
+      "export": "SPELLED_ABOVE_BASS",
+      "cxx_type": "KindIntervals",
+      "cxx_name": "kSpelledAboveBass",
+      "fields": ["number", "quality", "semitones", "descending"]
+    },
+    {
+      "module": "analyze/functional/augmented-sixth.ts",
+      "export": "CHORD_SHAPE",
+      "cxx_type": "KindShape",
+      "cxx_name": "kChordShape",
+      "fields": [
+        "rootAboveBass",
+        "quality",
+        {
+          "name": "intervals",
+          "fields": []
+        }
+      ]
+    },
+    {
+      "module": "analyze/functional/augmented-sixth.ts",
+      "export": "KIND_SYMBOLS",
+      "cxx_type": "NamedText",
+      "cxx_name": "kKindSymbols",
+      "fields": []
+    },
+    {
+      "module": "analyze/functional/augmented-sixth.ts",
+      "export": "SYMBOL_BY_KIND",
+      "cxx_type": "NamedText",
+      "cxx_name": "kSymbolByKind",
+      "fields": []
+    },
+    {
+      "module": "analyze/functional/augmented-sixth.ts",
+      "export": "BASS_INTERVAL",
+      "cxx_type": "SpelledIntervalRow",
+      "cxx_name": "kBassInterval",
+      "fields": ["number", "quality", "semitones", "descending"],
+      "form": "record"
+    },
+    {
+      "module": "analyze/functional/roman.ts",
+      "export": "ROMAN",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kRoman",
+      "fields": []
+    },
+    {
+      "module": "analyze/functional/roman.ts",
+      "export": "ROMAN_TO_DEGREE",
+      "cxx_type": "NamedInt",
+      "cxx_name": "kRomanToDegree",
+      "fields": []
+    },
+    {
+      "module": "analyze/functional/roman.ts",
+      "export": "OFFSET_SPELLING",
+      "cxx_type": "OffsetSpelling",
+      "cxx_name": "kOffsetSpelling",
+      "fields": []
+    },
+    {
+      "module": "analyze/functional/roman.ts",
+      "export": "INVERSION_FIGURE_LIST",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kInversionFigures",
+      "fields": []
+    },
+    {
+      "module": "analyze/functional/roman.ts",
+      "export": "ROMAN_STYLE",
+      "cxx_type": "NamedRomanStyle",
+      "cxx_name": "kRomanStyle",
+      "fields": ["lower", "suffix"]
+    },
+    {
+      "module": "analyze/functional/roman.ts",
+      "export": "TRIAD_FIGURES",
+      "cxx_type": "NamedText",
+      "cxx_name": "kTriadFigures",
+      "fields": []
+    },
+    {
+      "module": "analyze/functional/roman.ts",
+      "export": "SEVENTH_FIGURES",
+      "cxx_type": "NamedText",
+      "cxx_name": "kSeventhFigures",
+      "fields": []
+    },
+    {
+      "module": "analyze/functional/roman.ts",
+      "export": "TRIAD_FIGURE_QUALITY_NAMES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kTriadFigureQualities",
+      "fields": []
+    },
+    {
+      "module": "analyze/functional/roman.ts",
+      "export": "SEVENTH_FIGURE_QUALITY_NAMES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kSeventhFigureQualities",
+      "fields": []
+    },
+    {
+      "module": "analyze/functional/roman.ts",
+      "export": "DEGREE_NAMES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kDegreeNames",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "analyze/functional/cadence.ts",
+      "export": "SUBDOMINANT_DEGREE",
+      "cxx_type": "int",
+      "cxx_name": "CADENCE_SUBDOMINANT_DEGREE"
+    },
+    {
+      "module": "analyze/functional/cadence.ts",
+      "export": "DOMINANT_DEGREE",
+      "cxx_type": "int",
+      "cxx_name": "CADENCE_DOMINANT_DEGREE"
+    },
+    {
+      "module": "analyze/functional/cadence.ts",
+      "export": "SUBMEDIANT_DEGREE",
+      "cxx_type": "int",
+      "cxx_name": "CADENCE_SUBMEDIANT_DEGREE"
+    },
+    {
+      "module": "analyze/functional/augmented-sixth.ts",
+      "export": "BASS_ABOVE_TONIC",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/functional/pivot.ts",
+      "export": "HEPTATONIC_DEGREES",
+      "cxx_type": "int"
+    }
+  ]
+}

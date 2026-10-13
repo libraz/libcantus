@@ -43,7 +43,7 @@ export const HARMONIC_FUNCTIONS = Object.freeze(['tonic', 'subdominant', 'domina
 export type HarmonicFunction = (typeof HARMONIC_FUNCTIONS)[number];
 
 /** Harmonic function of each semitone offset above the tonic (major context). */
-const FUNCTION_BY_OFFSET: readonly HarmonicFunction[] = [
+export const FUNCTION_BY_OFFSET: readonly HarmonicFunction[] = [
   'tonic', // 0  I
   'subdominant', // 1  bII (Neapolitan)
   'subdominant', // 2  ii
@@ -67,7 +67,7 @@ const FUNCTION_BY_OFFSET: readonly HarmonicFunction[] = [
  * carries neither a dominant sonority nor a dominant resolution, so as a
  * chromatic mediant it prolongs the tonic through the tones it shares with it.
  */
-const MINOR_FUNCTION_BY_OFFSET: readonly HarmonicFunction[] = [
+export const MINOR_FUNCTION_BY_OFFSET: readonly HarmonicFunction[] = [
   'tonic', // 0  i
   'subdominant', // 1  bII (Neapolitan)
   'subdominant', // 2  iio
@@ -225,7 +225,7 @@ export type AnalyzeChordOptions = ChordToRomanOptions & {
 };
 
 /** What a rule overriding the degree table found, phrased for a rationale. */
-const FUNCTION_REASON_PHRASE: Record<Exclude<FunctionReason, 'degree'>, string> = {
+export const FUNCTION_REASON_PHRASE: Record<Exclude<FunctionReason, 'degree'>, string> = {
   neapolitan: 'the Neapolitan, an altered predominant on the lowered second degree',
   augmentedSixth: 'an augmented sixth, an altered predominant resolving outward onto the dominant',
   applied: 'an applied dominant sonority resolving onto a diatonic degree',
@@ -233,7 +233,7 @@ const FUNCTION_REASON_PHRASE: Record<Exclude<FunctionReason, 'degree'>, string> 
 };
 
 /** Where a borrowed chord came from, phrased for a rationale. */
-const BORROWED_SOURCE_PHRASE: Record<Exclude<BorrowedSource, null>, string> = {
+export const BORROWED_SOURCE_PHRASE: Record<Exclude<BorrowedSource, null>, string> = {
   parallelMinor: 'borrowed from the parallel minor',
   parallelMajor: 'borrowed from the parallel major',
   neapolitan: 'belonging to neither parallel mode',

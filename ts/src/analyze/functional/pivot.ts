@@ -15,7 +15,7 @@ import { isDiatonicChord } from './internal.js';
 import { renderRoman } from './roman.js';
 
 /** Degree count of a scale that stacks thirds into triads. */
-const HEPTATONIC_DEGREES = 7;
+export const HEPTATONIC_DEGREES = 7;
 
 /**
  * A chord that is diatonic to two keys at once, with its reading in each.

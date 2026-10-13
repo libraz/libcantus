@@ -3,6 +3,7 @@ import {
   chordToRoman,
   detectCadence,
   functionOf,
+  isDiatonic,
   romanToChord,
   secondaryDominant,
   secondaryDominantOf,
@@ -684,5 +685,45 @@ describe('a sonority is what a chord sounds, not what it is called', () => {
     expect(analyzeChord(makeChord(4, 'maj7'), cMajor).function).not.toBe(
       analyzeChord(plainThird, cMajor).function,
     );
+  });
+});
+
+describe('chord data the readings cannot take', () => {
+  const unnamed = { rootPc: 0, quality: 'unnamed', intervals: [0, 4, 7] } as never;
+
+  it('refuses a quality no table has, whichever reading asks', () => {
+    expect(() => functionOf(unnamed, cMajor)).toThrow(/Unknown chord quality: unnamed/);
+    expect(() => isDiatonic(unnamed, cMajor)).toThrow(/Unknown chord quality: unnamed/);
+    expect(() => analyzeChord(unnamed, cMajor)).toThrow(/Unknown chord quality: unnamed/);
+    expect(() => chordToRoman(unnamed, cMajor, { applied: true })).toThrow(
+      /Unknown chord quality: unnamed/,
+    );
+  });
+
+  it('refuses a missing quality the same way', () => {
+    expect(() => functionOf({ rootPc: 0, intervals: [0, 4, 7] } as never, cMajor)).toThrow(
+      /Unknown chord quality: undefined/,
+    );
+  });
+
+  it('moves a spelling hint that carries an octave as it moves one that does not', () => {
+    const flat = { rootPc: 3, quality: 'maj', intervals: [0, 4, 7] };
+    const bare = secondaryDominantOf({ ...flat, rootSpelling: { letter: 2, alter: -1 } });
+    const placed = secondaryDominantOf({
+      ...flat,
+      rootSpelling: { letter: 2, alter: -1, octave: 4 },
+    });
+    expect(bare.rootSpelling).toEqual({ letter: 6, alter: -1 });
+    expect(placed.rootSpelling).toEqual(bare.rootSpelling);
+  });
+
+  it('refuses a spelling hint that is no note when it is moved', () => {
+    const flat = { rootPc: 3, quality: 'maj', intervals: [0, 4, 7] };
+    expect(() => secondaryDominantOf({ ...flat, rootSpelling: null } as never)).toThrow(
+      /note must be an object; received null/,
+    );
+    expect(() =>
+      secondaryDominantOf({ ...flat, rootSpelling: { letter: 2.5, alter: 0 } } as never),
+    ).toThrow(/note\.letter/);
   });
 });

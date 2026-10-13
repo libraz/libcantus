@@ -215,3 +215,12 @@ describe('a mode that lowers its own second sounds no Neapolitan', () => {
     expect(borrowedSource(makeChord(10, 'maj'), aMinor)).toBe('neapolitan');
   });
 });
+
+describe('borrowing asked of chord data the readings cannot take', () => {
+  const unnamed = { rootPc: 0, quality: 'unnamed', intervals: [0, 4, 7] } as never;
+
+  it('refuses a quality no table has before it classes the chord', () => {
+    expect(() => isBorrowedChord(unnamed, cMajor)).toThrow(/Unknown chord quality: unnamed/);
+    expect(() => borrowedSource(unnamed, cMajor)).toThrow(/Unknown chord quality: unnamed/);
+  });
+});
