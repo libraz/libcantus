@@ -9,6 +9,14 @@
     },
     {
       "module": "core/sample/index.ts",
+      "export": "DEFAULT_SHAPE",
+      "form": "record",
+      "cxx_type": "Shape",
+      "cxx_name": "kDefaultShape",
+      "fields": ["name", "size", { "name": "tones", "fields": ["degree", "optional"] }]
+    },
+    {
+      "module": "core/sample/index.ts",
       "export": "WEIGHTS",
       "cxx_type": "Weights",
       "cxx_name": "kWeights",

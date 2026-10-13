@@ -16,6 +16,12 @@ export const SHAPES: { name: string; size: number; tones: Tone[] }[] = [
   { name: 'é"\\', size: 2, tones: [] },
 ];
 
+export const DEFAULT_SHAPE: { name: string; size: number; tones: Tone[] } = Object.freeze({
+  name: 'unit',
+  size: 1,
+  tones: [{ degree: 1 }],
+});
+
 export const WEIGHTS: Record<string, number[]> = {
   major: [1, -0, Number.NaN],
   minor: [Number.POSITIVE_INFINITY, 0.1],

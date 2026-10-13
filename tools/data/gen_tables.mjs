@@ -16,7 +16,9 @@
  *                  "cxx_type": "std::uint32_t" }]
  *   }
  * `module` is relative to ts/src. An array export gives one row per element; an object export
- * gives one `{"key", value}` row per entry. Absent values become std::nullopt.
+ * gives one `{"key", value}` row per entry; with `"form": "record"` the object export is one
+ * record, written as a single braced initializer of its `fields`. Absent values become
+ * std::nullopt.
  *
  * Usage:
  *   node tools/data/gen_tables.mjs              write every generated file
@@ -205,6 +207,20 @@ async function tableFile(loader, dir, spec) {
     }
   }
   const value = await exportOf(loader, spec, where);
+  if (spec.form === 'record') {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      throw new GenError(`${where}: a record export must be a plain object`);
+    }
+    return [
+      HEADER,
+      `// ${spec.export} (ts/src/${spec.module}): initializer of ${spec.cxx_type} ${spec.cxx_name}.`,
+      initializer(value, spec.fields, spec.export),
+      '',
+    ].join('\n');
+  }
+  if (spec.form !== undefined) {
+    throw new GenError(`${where}: unknown "form" ${JSON.stringify(spec.form)}`);
+  }
   let rows;
   if (Array.isArray(value)) {
     rows = value.map((e, i) => initializer(e, spec.fields, `${spec.export}[${i}]`));
@@ -365,7 +381,7 @@ async function selfTest() {
     const { files, stats } = await plan(root, loader);
     record(
       'fixture counts',
-      stats.dirs === 3 && stats.specs === 1 && stats.tables === 2 && stats.limits === 4,
+      stats.dirs === 3 && stats.specs === 1 && stats.tables === 3 && stats.limits === 4,
       summary(stats),
     );
     const contains = (file, text) =>
@@ -385,6 +401,7 @@ async function selfTest() {
       `${sample}/weights.gen.inc`,
       '{"minor", {std::numeric_limits<double>::infinity(), 0.1}},',
     );
+    contains(`${sample}/default_shape.gen.inc`, '{"unit", 1, {{1, std::nullopt}}}\n');
     contains('src/theory/limits.gen.h', '#define CANTUS_SRC_THEORY_LIMITS_GEN_H_\n\n#endif');
     const clean = drift(root, files);
     record('fixture tree matches the generator', clean.length === 0, clean.join('; '));
@@ -460,6 +477,32 @@ async function selfTest() {
           fields: [],
         }),
       /cannot write a function/,
+    );
+    await rejects(
+      'record of an array',
+      () =>
+        tableFile(loader, dir, {
+          ...base,
+          export: 'SHAPES',
+          cxx_type: 'S',
+          cxx_name: 'kS',
+          form: 'record',
+          fields: ['name'],
+        }),
+      /must be a plain object/,
+    );
+    await rejects(
+      'unknown form',
+      () =>
+        tableFile(loader, dir, {
+          ...base,
+          export: 'SHAPES',
+          cxx_type: 'S',
+          cxx_name: 'kS',
+          form: 'row',
+          fields: ['name'],
+        }),
+      /unknown "form"/,
     );
     await rejects(
       'scalar table',
