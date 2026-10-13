@@ -13,8 +13,8 @@
 
 #include "cantus/core/instrument.h"
 #include "cantus/core/validation.h"
-#include "core/instrument/profile.h"
 #include "core/instrument/limits.gen.h"
+#include "core/instrument/profile.h"
 #include "core/meter/limits.gen.h"
 #include "js/math.h"
 #include "js/number.h"

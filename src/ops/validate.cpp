@@ -128,16 +128,14 @@ json::Value drop_silent_notes(json::Value events) {
 
 const json::Array& assert_array(const json::Value& value, std::string_view name) {
   if (!value.is_array()) {
-    throw InvalidInputError(str(name) + " must be an array; received " +
-                            describe_rejected(value));
+    throw InvalidInputError(str(name) + " must be an array; received " + describe_rejected(value));
   }
   return value.as_array();
 }
 
 const json::Value& assert_record(const json::Value& value, std::string_view name) {
   if (!is_js_object(value) || value.is_array()) {
-    throw InvalidInputError(str(name) + " must be an object; received " +
-                            describe_rejected(value));
+    throw InvalidInputError(str(name) + " must be an object; received " + describe_rejected(value));
   }
   return value;
 }
@@ -149,8 +147,7 @@ const json::Value& assert_options(const json::Value& value, std::string_view nam
 
 bool assert_flag(const json::Value& value, std::string_view name) {
   if (!value.is_bool()) {
-    throw InvalidInputError(str(name) + " must be a boolean; received " +
-                            describe_rejected(value));
+    throw InvalidInputError(str(name) + " must be a boolean; received " + describe_rejected(value));
   }
   return value.as_bool();
 }
@@ -314,8 +311,7 @@ MeterMap assert_meter_map(const json::Value& meters, std::string_view name) {
     const json::Value& entry = entries[i];
     // A hole, a null and a number are refused here rather than at the first field read.
     if (!is_js_object(entry)) {
-      throw InvalidInputError(at + " must be a meter change; received " +
-                              describe_rejected(entry));
+      throw InvalidInputError(at + " must be a meter change; received " + describe_rejected(entry));
     }
     double start_beat = assert_finite_number(get(entry, "startBeat"), at + ".startBeat");
     if (i > 0 && start_beat <= previous) {

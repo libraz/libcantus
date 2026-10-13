@@ -245,8 +245,8 @@ void register_keys() {
     for (const json::Value& segment : chords) {
       const json::Value& start = get(segment, "startBeat");
       const json::Value& end = get(segment, "endBeat");
-      SegmentBeats written{js::to_number(start), js::to_number(end), js::greater_than(end, start),
-                           {}};
+      SegmentBeats written{
+          js::to_number(start), js::to_number(end), js::greater_than(end, start), {}};
       if (start.kind() != json::Kind::kNumber) {
         // A start that is not a number is refused where the search measures its beat.
         written.assert_start = [&start] { assert_finite_number(start, "beat"); };

@@ -133,7 +133,8 @@ class Value {
   friend bool operator!=(const Value& a, const Value& b) { return !(a == b); }
 
  private:
-  /** Move the nested arrays and objects out of this value, leaving it with no container children. */
+  /** Move the nested arrays and objects out of this value, leaving it with no container children.
+   */
   void detach_children(std::vector<Value>& out);
 
   std::variant<std::nullptr_t, bool, double, std::string, Array, Object> data_;

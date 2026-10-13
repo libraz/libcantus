@@ -840,8 +840,8 @@ std::vector<KeyRegion> detect_modulations(const std::vector<ChordSegment>& chord
                                           const KeyTimelineOptions& opts) {
   std::vector<SegmentBeats> beats;
   for (const ChordSegment& segment : chords) {
-    beats.push_back(SegmentBeats{segment.startBeat, segment.endBeat,
-                                 segment.endBeat > segment.startBeat, {}});
+    beats.push_back(
+        SegmentBeats{segment.startBeat, segment.endBeat, segment.endBeat > segment.startBeat, {}});
   }
   return detect_modulations_over(
       beats, [&](std::size_t index) -> const Chord& { return chords[index].chord; }, opts,

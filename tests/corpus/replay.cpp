@@ -63,8 +63,8 @@ Reply call(std::string_view op, std::string_view args) {
   CallbackBuffers buffers;
   char* out = nullptr;
   size_t len = 0;
-  CantusStatus status = cantus_call(op.data(), op.size(), args.data(), args.size(),
-                                    echo_arguments, &buffers, &out, &len);
+  CantusStatus status = cantus_call(op.data(), op.size(), args.data(), args.size(), echo_arguments,
+                                    &buffers, &out, &len);
   Reply reply{status, out == nullptr ? std::string() : std::string(out, len)};
   cantus_free(out);
   return reply;
@@ -231,8 +231,8 @@ std::string replay_line(const Object& record, IdMap& ids, Totals& totals) {
       return "expected error has no known \"code\"";
     }
     if (reply.status != *want) {
-      return "expected status " + std::to_string(*want) + ", got " +
-             std::to_string(reply.status) + ": " + excerpt(reply.json);
+      return "expected status " + std::to_string(*want) + ", got " + std::to_string(reply.status) +
+             ": " + excerpt(reply.json);
     }
   }
   if (!ids.bind(expected, actual)) {

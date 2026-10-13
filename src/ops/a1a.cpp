@@ -67,8 +67,7 @@ std::optional<InheritedQuality> settle_numeral_quality(ChordData& data,
   if (options.applied == true || pitch_class_of(bass) == augmented_sixth_bass_pc(key.scale)) {
     assert_chord_quality(data.wire);
   }
-  if (js::type_of(quality) != "symbol" &&
-      inherits_object_member(js::template_string(quality))) {
+  if (js::type_of(quality) != "symbol" && inherits_object_member(js::template_string(quality))) {
     // Outside every set of qualities a numeral looks a quality up in.
     data.chord.quality = ChordQuality::kSus2;
     return InheritedQuality{js::template_string(quality)};
