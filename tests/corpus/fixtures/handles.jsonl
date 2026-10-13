@@ -1,0 +1,14 @@
+{"op":"$counter","args":[5],"result":{"$h":1,"$type":"$counter"}}
+{"op":"$counter#next","args":[{"$h":1,"$type":"$counter"}],"result":6}
+{"op":"$counter#value","args":[{"$h":1,"$type":"$counter"}],"result":{"$id":1,"count":6}}
+{"op":"$counter#value","args":[{"$h":1,"$type":"$counter"}],"result":{"$id":1,"count":6}}
+{"op":"$counter#next","args":[{"$h":1,"$type":"$counter"}],"result":7}
+{"op":"$counter#value","args":[{"$h":1,"$type":"$counter"}],"result":{"$id":2,"count":7}}
+{"op":"$counter","args":[],"result":{"$h":2,"$type":"$counter"}}
+{"op":"$counter#next","args":[{"$h":2,"$type":"$counter"}],"result":1}
+{"op":"$counter#value","args":[{"$h":2,"$type":"$counter"}],"result":{"$id":3,"count":1}}
+{"op":"$counter","args":[{"$n":"-0"}],"result":{"$h":3,"$type":"$counter"}}
+{"op":"$counter#value","args":[{"$h":3,"$type":"$counter"}],"result":{"$id":4,"count":{"$n":"-0"}}}
+{"op":"$counter","args":[{"$u":1}],"result":{"$h":4,"$type":"$counter"}}
+{"op":"$counter#value","args":[{"$h":4,"$type":"$counter"}],"result":{"$id":5,"count":0}}
+{"op":"$counter#value","args":[{"$h":1,"$type":"$counter"}],"result":{"$id":2,"count":7}}

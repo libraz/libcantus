@@ -1,0 +1,44 @@
+{"op":"$throw","args":[{"code":"INVALID_INPUT","message":"pitch must be an integer in [0, 127]; received 128"}],"error":{"code":"INVALID_INPUT","name":"InvalidInputError","message":"pitch must be an integer in [0, 127]; received 128"}}
+{"op":"$throw","args":[{"code":"NO_SOLUTION","message":"no voicing","at":3}],"error":{"code":"NO_SOLUTION","name":"NoSolutionError","message":"no voicing","at":3}}
+{"op":"$throw","args":[{"code":"NO_SOLUTION","message":"no voicing"}],"error":{"code":"NO_SOLUTION","name":"NoSolutionError","message":"no voicing"}}
+{"op":"$throw","args":[{"code":"NO_SOLUTION","message":"at zero","at":0}],"error":{"code":"NO_SOLUTION","name":"NoSolutionError","message":"at zero","at":0}}
+{"op":"$throw","args":[{"code":"BUDGET_EXCEEDED","message":"too big"}],"error":{"code":"BUDGET_EXCEEDED","name":"BudgetExceededError","message":"too big"}}
+{"op":"$throw","args":[{"code":"HOST_TYPE_ERROR","message":"Cannot convert a Symbol value to a string"}],"error":{"code":"HOST_TYPE_ERROR","name":"TypeError","message":"Cannot convert a Symbol value to a string"}}
+{"op":"$throw","args":[{"code":"UNKNOWN_OP","message":"m \ud800 \u00e9"}],"error":{"code":"UNKNOWN_OP","name":"Error","message":"m \ud800 \u00e9"}}
+{"op":"$throw","args":[{"code":"BAD_REQUEST","message":"m \ud800 \u00e9"}],"error":{"code":"BAD_REQUEST","name":"Error","message":"m \ud800 \u00e9"}}
+{"op":"$throw","args":[{"code":"CALLBACK_FAILED","message":"m \ud800 \u00e9"}],"error":{"code":"CALLBACK_FAILED","name":"Error","message":"m \ud800 \u00e9"}}
+{"op":"$throw","args":[{"code":"RELEASED_HANDLE","message":"m \ud800 \u00e9"}],"error":{"code":"RELEASED_HANDLE","name":"Error","message":"m \ud800 \u00e9"}}
+{"op":"$throw","args":[{"code":"INTERNAL","message":"m \ud800 \u00e9"}],"error":{"code":"INTERNAL","name":"Error","message":"m \ud800 \u00e9"}}
+{"op":"$throw","args":[{"code":"NOPE","message":"x"}],"error":{"code":"BAD_REQUEST","name":"Error","message":"$throw: unknown error code \"NOPE\""}}
+{"op":"$throw","args":[{"code":"OK","message":"x"}],"error":{"code":"BAD_REQUEST","name":"Error","message":"$throw: unknown error code \"OK\""}}
+{"op":"$throw","args":[{"code":"INVALID_INPUT","message":"x","at":1}],"error":{"code":"BAD_REQUEST","name":"Error","message":"$throw: only NO_SOLUTION carries \"at\""}}
+{"op":"$throw","args":[{"code":"NO_SOLUTION","message":"x","at":-1}],"error":{"code":"BAD_REQUEST","name":"Error","message":"$throw: \"at\" must be a non-negative integer"}}
+{"op":"$throw","args":[{"code":"NO_SOLUTION","message":"x","at":1.5}],"error":{"code":"BAD_REQUEST","name":"Error","message":"$throw: \"at\" must be a non-negative integer"}}
+{"op":"$throw","args":[{"code":"INVALID_INPUT"}],"error":{"code":"BAD_REQUEST","name":"Error","message":"$throw needs a string \"message\""}}
+{"op":"$throw","args":[{"message":"x"}],"error":{"code":"BAD_REQUEST","name":"Error","message":"$throw needs a string \"code\""}}
+{"op":"$throw","args":[[1]],"error":{"code":"BAD_REQUEST","name":"Error","message":"$throw needs {code, message, at?}"}}
+{"op":"nope","args":[],"error":{"code":"UNKNOWN_OP","name":"Error","message":"unknown op \"nope\""}}
+{"op":"$echo\u0000x","args":[1],"error":{"code":"UNKNOWN_OP","name":"Error","message":"unknown op \"$echo\\u0000x\""}}
+{"op":"","args":[],"error":{"code":"UNKNOWN_OP","name":"Error","message":"unknown op \"\""}}
+{"op":"$echo","error":{"code":"BAD_REQUEST","name":"Error","message":"unknown wire tag \"$zz\""},"args":[{"$zz":1}]}
+{"op":"$echo","error":{"code":"BAD_REQUEST","name":"Error","message":"malformed \"$n\" tag"},"args":[{"$n":"1"}]}
+{"op":"$echo","error":{"code":"BAD_REQUEST","name":"Error","message":"malformed \"$n\" tag"},"args":[{"$n":"NaN","x":1}]}
+{"op":"$echo","error":{"code":"BAD_REQUEST","name":"Error","message":"malformed \"$u\" tag"},"args":[{"$u":2}]}
+{"op":"$echo","error":{"code":"BAD_REQUEST","name":"Error","message":"\"$u\" is only valid as an array element"},"args":[{"a":{"$u":1}}]}
+{"op":"$echo","error":{"code":"BAD_REQUEST","name":"Error","message":"malformed \"$big\" tag"},"args":[{"$big":"01"}]}
+{"op":"$echo","error":{"code":"BAD_REQUEST","name":"Error","message":"malformed \"$big\" tag"},"args":[{"$big":"1.5"}]}
+{"op":"$echo","error":{"code":"BAD_REQUEST","name":"Error","message":"malformed \"$sym\" tag"},"args":[{"$sym":1}]}
+{"op":"$echo","error":{"code":"BAD_REQUEST","name":"Error","message":"malformed \"$tojson\" tag"},"args":[{"$tojson":1}]}
+{"op":"$echo","error":{"code":"BAD_REQUEST","name":"Error","message":"malformed \"$class\" tag"},"args":[{"$class":1}]}
+{"op":"$echo","error":{"code":"BAD_REQUEST","name":"Error","message":"malformed \"$class\" tag"},"args":[{"$class":"A","$hy":"B"}]}
+{"op":"$echo","error":{"code":"BAD_REQUEST","name":"Error","message":"malformed \"$hy\" tag"},"args":[{"$hy":"A","$zz":1}]}
+{"op":"$echo","error":{"code":"BAD_REQUEST","name":"Error","message":"malformed \"$h\" tag"},"args":[{"$h":0,"$type":"$counter"}]}
+{"op":"$echo","error":{"code":"BAD_REQUEST","name":"Error","message":"malformed \"$h\" tag"},"args":[{"$h":1}]}
+{"op":"$echo","error":{"code":"BAD_REQUEST","name":"Error","message":"malformed \"$cb\" tag"},"args":[{"$cb":-1}]}
+{"op":"$echo","error":{"code":"BAD_REQUEST","name":"Error","message":"malformed \"$id\" tag"},"args":[{"$id":-1}]}
+{"op":"$echo","error":{"code":"BAD_REQUEST","name":"Error","message":"unknown wire tag \"$zz\""},"args":[[{"$zz":1}]]}
+{"op":"$echo","error":{"code":"BAD_REQUEST","name":"Error","message":"args must be a JSON array"},"args_raw":"{}"}
+{"op":"$echo","error":{"code":"BAD_REQUEST","name":"Error","message":"args must be a JSON array"},"args_raw":"1"}
+{"op":"$counter","args":["5"],"error":{"code":"BAD_REQUEST","name":"Error","message":"$counter: start must be a number"}}
+{"op":"$counter#next","args":[1],"error":{"code":"BAD_REQUEST","name":"Error","message":"expected a \"$counter\" handle"}}
+{"op":"$call","args":[1],"error":{"code":"BAD_REQUEST","name":"Error","message":"expected a callback"}}

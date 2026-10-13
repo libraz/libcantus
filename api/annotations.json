@@ -1,0 +1,220 @@
+{
+  "classification": {
+    "hybrid": {
+      "ChordTimeline": {
+        "payload": ["segments"]
+      },
+      "PositionalRng": {
+        "payload": ["seed"]
+      },
+      "Draw": {
+        "payload": ["rng", "path"]
+      },
+      "ResolvedContext": {
+        "payload": [
+          "seed",
+          "rhythmic",
+          "harmonic",
+          "ornament",
+          "difficulty",
+          "bpm",
+          "algorithmVersion",
+          "vocabulary",
+          "instruments",
+          "rng"
+        ]
+      }
+    },
+    "handle": {
+      "Rng": {},
+      "NoteEventIndex": {},
+      "ArrangementSession": {}
+    }
+  },
+  "class_wire": {
+    "description": "Model classes whose wire form is not `{\"$class\", ...toJSON()}`. Each maps a wire field to the getter (dotted path) it is read from. `extra`: written beside the toJSON fields when defined and left in the data fromData reads. `context`: written beside the toJSON fields when defined, and passed to the constructor after the data. `fields`: replace the toJSON fields; the constructor takes them in this order. `array`: toJSON is an array, carried under this field.",
+    "Chord": {
+      "context": {
+        "key": "key"
+      }
+    },
+    "Composer": {
+      "extra": {
+        "rng": "context.rng"
+      }
+    },
+    "Progression": {
+      "fields": {
+        "chords": "chords",
+        "key": "key"
+      }
+    },
+    "Voicing": {
+      "array": "pitches"
+    }
+  },
+  "facade_local": [
+    {
+      "id": "isLibcantusError",
+      "reason": "Classifies a caught JS value; every surface implements it beside its error classes."
+    }
+  ],
+  "unrecordable": [
+    {
+      "op": "ArrangementSession#analysis",
+      "reason": "A handle op: its arguments carry a `$h`, which names state held in one process."
+    },
+    {
+      "op": "ArrangementSession#tracks",
+      "reason": "A handle op: its arguments carry a `$h`, which names state held in one process."
+    },
+    {
+      "op": "ArrangementSession#update",
+      "reason": "A handle op: its arguments carry a `$h`, which names state held in one process."
+    },
+    {
+      "op": "NoteEventIndex#at",
+      "reason": "A handle op: its arguments carry a `$h`, which names state held in one process."
+    },
+    {
+      "op": "NoteEventIndex#attacksAt",
+      "reason": "A handle op: its arguments carry a `$h`, which names state held in one process."
+    },
+    {
+      "op": "NoteEventIndex#notes",
+      "reason": "A handle op: its arguments carry a `$h`, which names state held in one process."
+    },
+    {
+      "op": "NoteEventIndex#onsetsBetween",
+      "reason": "A handle op: its arguments carry a `$h`, which names state held in one process."
+    },
+    {
+      "op": "Rng#float",
+      "reason": "A handle op: its arguments carry a `$h`, which names state held in one process."
+    },
+    {
+      "op": "Rng#next",
+      "reason": "A handle op: its arguments carry a `$h`, which names state held in one process."
+    },
+    {
+      "op": "Rng#prob",
+      "reason": "A handle op: its arguments carry a `$h`, which names state held in one process."
+    },
+    {
+      "op": "Rng#range",
+      "reason": "A handle op: its arguments carry a `$h`, which names state held in one process."
+    },
+    {
+      "op": "Score#index",
+      "reason": "Returns a NoteEventIndex handle, and fails on no input the suite gives it."
+    },
+    {
+      "op": "Progression#filter",
+      "reason": "Takes a callback; a `$cb` argument cannot be replayed."
+    },
+    {
+      "op": "Progression#map",
+      "reason": "Takes a callback; a `$cb` argument cannot be replayed."
+    },
+    {
+      "op": "Rhythm#ornamentBy",
+      "reason": "Takes a callback; a `$cb` argument cannot be replayed."
+    },
+    {
+      "op": "Score#filter",
+      "reason": "Takes a callback; a `$cb` argument cannot be replayed."
+    },
+    {
+      "op": "Score#map",
+      "reason": "Takes a callback; a `$cb` argument cannot be replayed."
+    }
+  ],
+  "unexercised": [
+    {
+      "op": "Chord.constructor",
+      "reason": "The shared suite builds this class through its static factories only; `new` is not called."
+    },
+    {
+      "op": "Motif.constructor",
+      "reason": "The shared suite builds this class through its static factories only; `new` is not called."
+    },
+    {
+      "op": "Rhythm.constructor",
+      "reason": "The shared suite builds this class through its static factories only; `new` is not called."
+    },
+    {
+      "op": "Score.constructor",
+      "reason": "The shared suite builds this class through its static factories only; `new` is not called."
+    },
+    {
+      "op": "Voicing.constructor",
+      "reason": "The shared suite builds this class through its static factories only; `new` is not called."
+    },
+    {
+      "op": "ResolvedContext#instrument",
+      "reason": "The shared suite reads instrument profiles through the generators, never through a resolved context."
+    }
+  ],
+  "surface_differences": [
+    {
+      "id": "cpp-implicit-conversion",
+      "surface": "cpp",
+      "description": "Numeric arguments of the typed C++ API convert under C++ rules before any check runs (-1 to uint32_t, 63.7 to int), so a value TS rejects can arrive in range. The JSON surfaces receive doubles and validate them as TS does."
+    },
+    {
+      "id": "python-unknown-keyword",
+      "surface": "python",
+      "description": "An unknown keyword argument is a TypeError raised by Python itself; TS ignores unknown option keys."
+    },
+    {
+      "id": "explicit-undefined-field",
+      "surface": "wire",
+      "description": "A field holding an explicit undefined is omitted on the wire, so a check that tells it apart from an absent field sees it absent. The `'numerator' in data` test of ts/src/core/meter/index.ts (MeterLike) is the documented case; a check that rejects an explicit undefined (countermelody weights) accepts the omitted field instead. That test is listed in ts_only_units."
+    },
+    {
+      "id": "cyclic-argument",
+      "surface": "facade",
+      "description": "JSON holds no cycle: an argument that contains itself crosses with each repeat cut to an empty object or array. Where TS reports the cycle, the facade reports what the cut value fails."
+    },
+    {
+      "id": "identity-cache",
+      "surface": "wire",
+      "description": "Each call receives a fresh copy of its arguments, so TS's per-object caches (the tempo-map and meter WeakMaps) never see a repeat; results are unchanged, only the saving is lost."
+    },
+    {
+      "id": "result-identity",
+      "surface": "facade",
+      "description": "A result is a fresh decoded value per call. Identity survives only for `$id` results of handle getters (and the objects they share), handles by id, and a hybrid returned unchanged from an argument."
+    }
+  ],
+  "ts_only_units": [
+    {
+      "file": "countermelody.test.ts",
+      "test": "rejects a weight written as an explicit undefined",
+      "reason": "The wire drops an undefined field, so the check cannot tell it from an absent one (explicit-undefined-field)."
+    },
+    {
+      "file": "tempo.test.ts",
+      "test": "validates a map once however many positions are converted against it",
+      "reason": "Times the WeakMap cache of one tempo-map object; each call over the wire receives a fresh copy (identity-cache)."
+    }
+  ],
+  "file_map_exceptions": [
+    {
+      "ts": "ts/src/analyze/form/internal.ts#firstSoundingBeat",
+      "cpp": "src/analyze/grid.cpp",
+      "unit": "A1a",
+      "reason": "grid.ts and reference/profile.ts import it from form/internal.ts; C++ places it with the grid so A1a owns it and A3 (form) and A5 (reference) use it from there."
+    }
+  ],
+  "identity_exceptions": [
+    {
+      "at": "test/incremental.test.ts:106",
+      "reason": "ArrangementSession#analysis is a handle getter; `$id` keeps the unchanged analysis the same object across update()."
+    },
+    {
+      "at": "test/incremental.test.ts:159",
+      "reason": "Chords an update carries over are tagged `$id` inside ArrangementSession#analysis, so they stay the same objects."
+    }
+  ]
+}

@@ -1,0 +1,275 @@
+{
+  "description": "The module-to-unit table of the C++ port plan, serialized. Keys are paths under ts/src: a directory module (core/pitch) covers every file below it, a file key (core/types.ts, model/note.ts) covers that file. A unit's ops are the manifest ops whose module maps to it. `expected` holds the replay count and the number of spec files the unit makes ready, filled in from tools/corpus/select.mjs --expected once the corpus is recorded; null means not set.",
+  "units": [
+    {
+      "id": "U3b",
+      "depends": [],
+      "modules": ["core/errors"],
+      "root_files": [
+        "index.ts",
+        "core/index.ts",
+        "theory/index.ts",
+        "analyze/index.ts",
+        "generate/index.ts",
+        "model/index.ts"
+      ],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    },
+    {
+      "id": "C1",
+      "depends": ["U4", "U6"],
+      "modules": ["core/validation", "core/instrument", "core/meter"],
+      "root_files": ["core/types.ts"],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    },
+    {
+      "id": "C2",
+      "depends": ["C1"],
+      "modules": [
+        "core/pitch",
+        "core/interval",
+        "core/random",
+        "core/duration",
+        "core/tempo",
+        "core/tuning",
+        "core/event-index"
+      ],
+      "root_files": [],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    },
+    {
+      "id": "T1",
+      "depends": ["C2"],
+      "modules": ["theory/chord", "theory/scale", "theory/spelling"],
+      "root_files": [],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    },
+    {
+      "id": "T2",
+      "depends": ["T1"],
+      "modules": [
+        "theory/symbol",
+        "theory/tendency",
+        "theory/counterpoint",
+        "theory/transposition",
+        "theory/harmony",
+        "theory/chordscale",
+        "theory/figured-bass"
+      ],
+      "root_files": [],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    },
+    {
+      "id": "T3",
+      "depends": ["T2"],
+      "modules": ["theory/partwriting", "theory/voicing"],
+      "root_files": [],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    },
+    {
+      "id": "T4",
+      "depends": ["T2"],
+      "modules": ["theory/safety"],
+      "root_files": [],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    },
+    {
+      "id": "A1a",
+      "depends": ["T3", "T4"],
+      "modules": ["analyze/functional"],
+      "root_files": [
+        "analyze/adjacency.ts",
+        "analyze/grid.ts",
+        "analyze/histogram.ts",
+        "analyze/sequence.ts"
+      ],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    },
+    {
+      "id": "A1b",
+      "depends": ["A1a"],
+      "modules": ["analyze/detect", "analyze/keys"],
+      "root_files": [],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    },
+    {
+      "id": "A1c",
+      "depends": ["A1a"],
+      "modules": ["analyze/voice", "analyze/melody"],
+      "root_files": [],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    },
+    {
+      "id": "A2",
+      "depends": ["A1b", "A1c"],
+      "modules": ["analyze/timeline", "analyze/spelling", "analyze/reduction"],
+      "root_files": [],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    },
+    {
+      "id": "A3",
+      "depends": ["A2"],
+      "modules": ["analyze/form", "analyze/rhythm"],
+      "root_files": [],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    },
+    {
+      "id": "A4",
+      "depends": ["A2"],
+      "modules": ["analyze/arrange"],
+      "root_files": [],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    },
+    {
+      "id": "A5",
+      "depends": ["A3", "A4"],
+      "modules": ["analyze/reference"],
+      "root_files": [],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    },
+    {
+      "id": "G1",
+      "depends": ["A5"],
+      "modules": ["generate/context", "generate/vocabulary", "generate/drums"],
+      "root_files": [],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    },
+    {
+      "id": "G2a",
+      "depends": ["G1"],
+      "modules": ["generate/bass", "generate/countermelody"],
+      "root_files": [],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    },
+    {
+      "id": "G2b",
+      "depends": ["G1"],
+      "modules": [
+        "generate/motif",
+        "generate/ornament",
+        "generate/groove",
+        "generate/rhythm",
+        "generate/progression"
+      ],
+      "root_files": [],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    },
+    {
+      "id": "G3",
+      "depends": ["G2b"],
+      "modules": ["generate/melody", "generate/plan"],
+      "root_files": [],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    },
+    {
+      "id": "G4",
+      "depends": ["G2b"],
+      "modules": ["generate/harmonize", "generate/reharmony"],
+      "root_files": [],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    },
+    {
+      "id": "M1",
+      "depends": ["G2a", "G3", "G4"],
+      "modules": [
+        "model/shared.ts",
+        "model/note.ts",
+        "model/interval.ts",
+        "model/duration.ts",
+        "model/meter.ts",
+        "model/tempo.ts",
+        "model/tuning.ts",
+        "model/instrument.ts",
+        "model/voicing.ts"
+      ],
+      "root_files": [],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    },
+    {
+      "id": "M2",
+      "depends": ["M1"],
+      "modules": [
+        "model/key.ts",
+        "model/chord.ts",
+        "model/progression.ts",
+        "model/timeline.ts",
+        "model/score.ts"
+      ],
+      "root_files": [],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    },
+    {
+      "id": "M3",
+      "depends": ["M2"],
+      "modules": ["model/motif.ts", "model/rhythm.ts", "model/arrangement.ts", "model/composer.ts"],
+      "root_files": [],
+      "expected": {
+        "replay": null,
+        "spec_files": null
+      }
+    }
+  ]
+}

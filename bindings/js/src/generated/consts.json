@@ -1,0 +1,3314 @@
+{
+  "ALGORITHM_VERSION": {
+    "frozen": true,
+    "wire": 1
+  },
+  "ALTERED_MASK": {
+    "frozen": true,
+    "wire": 1371
+  },
+  "ARTICULATIONS": {
+    "frozen": true,
+    "wire": [
+      "accent",
+      "ghost",
+      "staccato",
+      "legato",
+      "slide",
+      "hammer",
+      "mute",
+      "flam",
+      "drag",
+      "roll",
+      "choke",
+      "open"
+    ]
+  },
+  "BAR_STEPS": {
+    "frozen": true,
+    "wire": 16
+  },
+  "BASS_4_STRING": {
+    "frozen": true,
+    "wire": {
+      "kind": "stringed",
+      "name": "4-string bass",
+      "tuning": [28, 33, 38, 43],
+      "frets": 24,
+      "maxStretch": 4,
+      "articulations": ["accent", "ghost", "staccato", "legato", "slide", "hammer", "mute", "open"],
+      "polyphony": 4
+    }
+  },
+  "BASS_5_STRING": {
+    "frozen": true,
+    "wire": {
+      "kind": "stringed",
+      "name": "5-string bass",
+      "tuning": [23, 28, 33, 38, 43],
+      "frets": 24,
+      "maxStretch": 4,
+      "articulations": ["accent", "ghost", "staccato", "legato", "slide", "hammer", "mute", "open"],
+      "polyphony": 5
+    }
+  },
+  "BASS_LICKS": {
+    "frozen": true,
+    "wire": [
+      {
+        "id": "motownWalkDown",
+        "genre": "motown",
+        "difficulty": 3,
+        "articulations": [],
+        "ts": {
+          "numerator": 4,
+          "denominator": 4
+        },
+        "fitsOver": ["maj", "maj7", "6", "dom7"],
+        "tempoRange": [88, 136],
+        "material": {
+          "lengthSteps": 16,
+          "notes": [
+            {
+              "degree": 1,
+              "step": 0,
+              "velocity": 1
+            },
+            {
+              "degree": 8,
+              "step": 4,
+              "velocity": 0.85
+            },
+            {
+              "degree": 7,
+              "step": 8,
+              "velocity": 0.85
+            },
+            {
+              "degree": 6,
+              "step": 10,
+              "velocity": 0.8
+            },
+            {
+              "degree": 5,
+              "step": 12,
+              "velocity": 0.9
+            },
+            {
+              "degree": 3,
+              "step": 14,
+              "velocity": 0.8
+            }
+          ]
+        },
+        "provenance": {
+          "basis": "idiom",
+          "note": "the stepwise walk down from the octave that every player of the style plays"
+        }
+      },
+      {
+        "id": "soulOctavePush",
+        "genre": "soul",
+        "difficulty": 2,
+        "articulations": [],
+        "ts": {
+          "numerator": 4,
+          "denominator": 4
+        },
+        "tempoRange": [72, 120],
+        "material": {
+          "lengthSteps": 16,
+          "notes": [
+            {
+              "degree": 1,
+              "step": 0,
+              "velocity": 1
+            },
+            {
+              "degree": 8,
+              "step": 6,
+              "velocity": 0.8
+            },
+            {
+              "degree": 1,
+              "step": 8,
+              "velocity": 0.9
+            },
+            {
+              "degree": 5,
+              "step": 14,
+              "velocity": 0.8
+            }
+          ]
+        },
+        "provenance": {
+          "basis": "idiom",
+          "note": "root and octave answering each other across the bar, with a push into the next chord"
+        }
+      },
+      {
+        "id": "funkSixteenthPop",
+        "genre": "funk",
+        "difficulty": 4,
+        "articulations": ["mute"],
+        "ts": {
+          "numerator": 4,
+          "denominator": 4
+        },
+        "tempoRange": [84, 124],
+        "material": {
+          "lengthSteps": 16,
+          "notes": [
+            {
+              "degree": 1,
+              "step": 0,
+              "velocity": 1
+            },
+            {
+              "degree": 1,
+              "step": 2,
+              "velocity": 0.4,
+              "articulation": "mute"
+            },
+            {
+              "degree": 8,
+              "step": 3,
+              "velocity": 0.9
+            },
+            {
+              "degree": 1,
+              "step": 6,
+              "velocity": 0.5,
+              "articulation": "mute"
+            },
+            {
+              "degree": 5,
+              "step": 8,
+              "velocity": 0.85
+            },
+            {
+              "degree": 1,
+              "step": 11,
+              "velocity": 0.4,
+              "articulation": "mute"
+            },
+            {
+              "degree": 8,
+              "step": 12,
+              "velocity": 0.9
+            },
+            {
+              "degree": 7,
+              "step": 15,
+              "velocity": 0.7,
+              "alter": -1
+            }
+          ]
+        },
+        "provenance": {
+          "basis": "idiom",
+          "note": "the octave-and-ghost sixteenth figure that defines the style, with a flat seventh on the way out"
+        }
+      },
+      {
+        "id": "bluesBoogie",
+        "genre": "blues",
+        "difficulty": 2,
+        "articulations": [],
+        "ts": {
+          "numerator": 4,
+          "denominator": 4
+        },
+        "fitsOver": ["maj", "dom7"],
+        "tempoRange": [76, 168],
+        "material": {
+          "lengthSteps": 16,
+          "notes": [
+            {
+              "degree": 1,
+              "step": 0,
+              "velocity": 1
+            },
+            {
+              "degree": 5,
+              "step": 2,
+              "velocity": 0.85
+            },
+            {
+              "degree": 6,
+              "step": 4,
+              "velocity": 0.85
+            },
+            {
+              "degree": 7,
+              "step": 6,
+              "velocity": 0.85,
+              "alter": -1
+            },
+            {
+              "degree": 6,
+              "step": 8,
+              "velocity": 0.85
+            },
+            {
+              "degree": 5,
+              "step": 10,
+              "velocity": 0.85
+            },
+            {
+              "degree": 1,
+              "step": 12,
+              "velocity": 0.9
+            },
+            {
+              "degree": 5,
+              "step": 14,
+              "velocity": 0.8
+            }
+          ]
+        },
+        "provenance": {
+          "basis": "traditional",
+          "note": "the boogie figure of the twelve-bar tradition: root, fifth, sixth, flat seventh and back"
+        }
+      },
+      {
+        "id": "jazzWalkingApproach",
+        "genre": "jazz",
+        "difficulty": 3,
+        "articulations": [],
+        "ts": {
+          "numerator": 4,
+          "denominator": 4
+        },
+        "tempoRange": [100, 240],
+        "material": {
+          "lengthSteps": 16,
+          "notes": [
+            {
+              "degree": 1,
+              "step": 0,
+              "velocity": 1
+            },
+            {
+              "degree": 3,
+              "step": 4,
+              "velocity": 0.85
+            },
+            {
+              "degree": 5,
+              "step": 8,
+              "velocity": 0.85
+            },
+            {
+              "degree": 6,
+              "step": 12,
+              "velocity": 0.85
+            }
+          ]
+        },
+        "provenance": {
+          "basis": "idiom",
+          "note": "the quarter-note walk through the chord that ends a step from wherever it is going"
+        }
+      },
+      {
+        "id": "bossaTwoFeel",
+        "genre": "bossa",
+        "difficulty": 2,
+        "articulations": [],
+        "ts": {
+          "numerator": 4,
+          "denominator": 4
+        },
+        "tempoRange": [104, 168],
+        "material": {
+          "lengthSteps": 16,
+          "notes": [
+            {
+              "degree": 1,
+              "step": 0,
+              "velocity": 1
+            },
+            {
+              "degree": 5,
+              "step": 6,
+              "velocity": 0.85
+            },
+            {
+              "degree": 1,
+              "step": 8,
+              "velocity": 0.95
+            },
+            {
+              "degree": 5,
+              "step": 14,
+              "velocity": 0.8
+            }
+          ]
+        },
+        "provenance": {
+          "basis": "traditional",
+          "note": "the two-beat root-and-fifth of the Brazilian dance form, anticipated across the bar line"
+        }
+      },
+      {
+        "id": "gospelPassing",
+        "genre": "gospel",
+        "difficulty": 4,
+        "articulations": [],
+        "ts": {
+          "numerator": 4,
+          "denominator": 4
+        },
+        "tempoRange": [60, 108],
+        "material": {
+          "lengthSteps": 16,
+          "notes": [
+            {
+              "degree": 1,
+              "step": 0,
+              "velocity": 1
+            },
+            {
+              "degree": 2,
+              "step": 3,
+              "velocity": 0.7
+            },
+            {
+              "degree": 3,
+              "step": 4,
+              "velocity": 0.9
+            },
+            {
+              "degree": 5,
+              "step": 7,
+              "velocity": 0.8
+            },
+            {
+              "degree": 6,
+              "step": 8,
+              "velocity": 0.85
+            },
+            {
+              "degree": 5,
+              "step": 11,
+              "velocity": 0.75
+            },
+            {
+              "degree": 3,
+              "step": 12,
+              "velocity": 0.85
+            },
+            {
+              "degree": 2,
+              "step": 15,
+              "velocity": 0.7
+            }
+          ]
+        },
+        "provenance": {
+          "basis": "idiom",
+          "note": "the busy stepwise motion between chord tones that the church style fills its bars with"
+        }
+      },
+      {
+        "id": "countryAlternating",
+        "genre": "country",
+        "difficulty": 1,
+        "articulations": [],
+        "ts": {
+          "numerator": 4,
+          "denominator": 4
+        },
+        "tempoRange": [80, 180],
+        "material": {
+          "lengthSteps": 16,
+          "notes": [
+            {
+              "degree": 1,
+              "step": 0,
+              "velocity": 1
+            },
+            {
+              "degree": 5,
+              "step": 4,
+              "velocity": 0.85
+            },
+            {
+              "degree": 1,
+              "step": 8,
+              "velocity": 0.95
+            },
+            {
+              "degree": 5,
+              "step": 12,
+              "velocity": 0.85
+            }
+          ]
+        },
+        "provenance": {
+          "basis": "traditional",
+          "note": "the alternating root and fifth of the dance-band bass, older than any recording of it"
+        }
+      },
+      {
+        "id": "reggaeOffbeatDrop",
+        "genre": "reggae",
+        "difficulty": 3,
+        "articulations": [],
+        "ts": {
+          "numerator": 4,
+          "denominator": 4
+        },
+        "tempoRange": [64, 104],
+        "material": {
+          "lengthSteps": 16,
+          "notes": [
+            {
+              "degree": 1,
+              "step": 2,
+              "velocity": 0.9
+            },
+            {
+              "degree": 3,
+              "step": 4,
+              "velocity": 0.85
+            },
+            {
+              "degree": 5,
+              "step": 6,
+              "velocity": 0.85
+            },
+            {
+              "degree": 1,
+              "step": 10,
+              "velocity": 0.95
+            },
+            {
+              "degree": 7,
+              "step": 14,
+              "velocity": 0.8,
+              "alter": -1
+            }
+          ]
+        },
+        "provenance": {
+          "basis": "idiom",
+          "note": "the figure that leaves the downbeat empty and lands after it"
+        }
+      }
+    ]
+  },
+  "BASS_STYLES": {
+    "frozen": true,
+    "wire": ["root", "rootFifth", "pop", "walking", "arpeggio"]
+  },
+  "BEAT_STEPS": {
+    "frozen": true,
+    "wire": 4
+  },
+  "BLUES_MASK": {
+    "frozen": true,
+    "wire": 1257
+  },
+  "BORROWED_DEGREES": {
+    "frozen": true,
+    "wire": {
+      "bVI": 8,
+      "bVII": 10,
+      "bIII": 11,
+      "iv": 12,
+      "bII": 13,
+      "sharpIV": 14
+    }
+  },
+  "CADENCE_TYPES": {
+    "frozen": true,
+    "wire": ["authentic", "plagal", "half", "deceptive", "phrygian", "modal"]
+  },
+  "CHROMATIC_MASK": {
+    "frozen": true,
+    "wire": 4095
+  },
+  "COMPOSITION_PLAN_VERSION": {
+    "frozen": true,
+    "wire": 1
+  },
+  "ConsonanceClass": {
+    "frozen": true,
+    "wire": {
+      "0": "PerfectConsonance",
+      "1": "ImperfectConsonance",
+      "2": "Dissonance",
+      "PerfectConsonance": 0,
+      "ImperfectConsonance": 1,
+      "Dissonance": 2
+    }
+  },
+  "DEFAULT_GENERATION_BUDGET": {
+    "frozen": true,
+    "wire": 1000000
+  },
+  "DORIAN_MASK": {
+    "frozen": true,
+    "wire": 1709
+  },
+  "DOUBLE_HARMONIC_MASK": {
+    "frozen": true,
+    "wire": 2483
+  },
+  "DRUM_KIT": {
+    "frozen": true,
+    "wire": {
+      "kind": "percussion",
+      "name": "drum kit",
+      "limbs": ["rightHand", "leftHand", "rightFoot", "leftFoot"],
+      "reach": {
+        "36": ["rightFoot"],
+        "37": ["leftHand", "rightHand"],
+        "38": ["leftHand", "rightHand"],
+        "39": ["leftHand", "rightHand"],
+        "42": ["rightHand", "leftHand"],
+        "44": ["leftFoot"],
+        "45": ["rightHand", "leftHand"],
+        "46": ["rightHand", "leftHand"],
+        "47": ["rightHand", "leftHand"],
+        "49": ["rightHand", "leftHand"],
+        "50": ["rightHand", "leftHand"],
+        "51": ["rightHand", "leftHand"],
+        "54": ["leftHand", "rightHand"],
+        "82": ["rightHand", "leftHand"]
+      },
+      "overdub": [39, 54, 82],
+      "articulations": [
+        "accent",
+        "ghost",
+        "staccato",
+        "mute",
+        "flam",
+        "drag",
+        "roll",
+        "choke",
+        "open"
+      ],
+      "polyphony": 7
+    }
+  },
+  "DRUM_NOTES": {
+    "frozen": true,
+    "wire": {
+      "kick": 36,
+      "snare": 38,
+      "sideStick": 37,
+      "handClap": 39,
+      "closedHiHat": 42,
+      "pedalHiHat": 44,
+      "openHiHat": 46,
+      "crash": 49,
+      "ride": 51,
+      "tambourine": 54,
+      "highTom": 50,
+      "midTom": 47,
+      "lowTom": 45,
+      "shaker": 82
+    }
+  },
+  "DRUM_PATTERNS": {
+    "frozen": true,
+    "wire": [
+      {
+        "id": "motownBackbeat",
+        "genre": "motown",
+        "difficulty": 2,
+        "articulations": [],
+        "ts": {
+          "numerator": 4,
+          "denominator": 4
+        },
+        "tempoRange": [96, 136],
+        "material": {
+          "steps": 16,
+          "strokes": [
+            {
+              "voice": "kick",
+              "step": 0,
+              "velocity": 1
+            },
+            {
+              "voice": "kick",
+              "step": 6,
+              "velocity": 0.85
+            },
+            {
+              "voice": "kick",
+              "step": 8,
+              "velocity": 0.9
+            },
+            {
+              "voice": "kick",
+              "step": 14,
+              "velocity": 0.8
+            },
+            {
+              "voice": "snare",
+              "step": 4,
+              "velocity": 1
+            },
+            {
+              "voice": "snare",
+              "step": 12,
+              "velocity": 1
+            },
+            {
+              "voice": "tambourine",
+              "step": 0,
+              "velocity": 0.5
+            },
+            {
+              "voice": "tambourine",
+              "step": 2,
+              "velocity": 0.5
+            },
+            {
+              "voice": "tambourine",
+              "step": 4,
+              "velocity": 0.5
+            },
+            {
+              "voice": "tambourine",
+              "step": 6,
+              "velocity": 0.5
+            },
+            {
+              "voice": "tambourine",
+              "step": 8,
+              "velocity": 0.5
+            },
+            {
+              "voice": "tambourine",
+              "step": 10,
+              "velocity": 0.5
+            },
+            {
+              "voice": "tambourine",
+              "step": 12,
+              "velocity": 0.5
+            },
+            {
+              "voice": "tambourine",
+              "step": 14,
+              "velocity": 0.5
+            }
+          ]
+        },
+        "provenance": {
+          "basis": "idiom",
+          "note": "the label sound of a four-square backbeat under a tambourine on every eighth"
+        }
+      },
+      {
+        "id": "funkSixteenth",
+        "genre": "funk",
+        "difficulty": 4,
+        "articulations": ["ghost"],
+        "ts": {
+          "numerator": 4,
+          "denominator": 4
+        },
+        "tempoRange": [84, 120],
+        "material": {
+          "steps": 16,
+          "strokes": [
+            {
+              "voice": "kick",
+              "step": 0,
+              "velocity": 1
+            },
+            {
+              "voice": "kick",
+              "step": 3,
+              "velocity": 0.8
+            },
+            {
+              "voice": "kick",
+              "step": 6,
+              "velocity": 0.85
+            },
+            {
+              "voice": "kick",
+              "step": 10,
+              "velocity": 0.8
+            },
+            {
+              "voice": "snare",
+              "step": 4,
+              "velocity": 1
+            },
+            {
+              "voice": "snare",
+              "step": 12,
+              "velocity": 1
+            },
+            {
+              "voice": "snare",
+              "step": 2,
+              "velocity": 0.32,
+              "articulation": "ghost"
+            },
+            {
+              "voice": "snare",
+              "step": 7,
+              "velocity": 0.32,
+              "articulation": "ghost"
+            },
+            {
+              "voice": "snare",
+              "step": 9,
+              "velocity": 0.32,
+              "articulation": "ghost"
+            },
+            {
+              "voice": "snare",
+              "step": 15,
+              "velocity": 0.32,
+              "articulation": "ghost"
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 0,
+              "velocity": 0.55
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 1,
+              "velocity": 0.55
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 2,
+              "velocity": 0.55
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 3,
+              "velocity": 0.55
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 4,
+              "velocity": 0.55
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 5,
+              "velocity": 0.55
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 6,
+              "velocity": 0.55
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 7,
+              "velocity": 0.55
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 8,
+              "velocity": 0.55
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 9,
+              "velocity": 0.55
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 10,
+              "velocity": 0.55
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 11,
+              "velocity": 0.55
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 12,
+              "velocity": 0.55
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 13,
+              "velocity": 0.55
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 14,
+              "velocity": 0.55
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 15,
+              "velocity": 0.55
+            }
+          ]
+        },
+        "provenance": {
+          "basis": "idiom",
+          "note": "the genre-defining sixteenth-note hi-hat with ghosted snares around the backbeat"
+        }
+      },
+      {
+        "id": "halfTimeShuffle",
+        "genre": "blues",
+        "difficulty": 5,
+        "articulations": ["ghost"],
+        "ts": {
+          "numerator": 4,
+          "denominator": 4
+        },
+        "tempoRange": [72, 104],
+        "material": {
+          "steps": 16,
+          "strokes": [
+            {
+              "voice": "kick",
+              "step": 0,
+              "velocity": 1
+            },
+            {
+              "voice": "kick",
+              "step": 10,
+              "velocity": 0.85
+            },
+            {
+              "voice": "snare",
+              "step": 8,
+              "velocity": 1
+            },
+            {
+              "voice": "snare",
+              "step": 3,
+              "velocity": 0.32,
+              "articulation": "ghost"
+            },
+            {
+              "voice": "snare",
+              "step": 7,
+              "velocity": 0.32,
+              "articulation": "ghost"
+            },
+            {
+              "voice": "snare",
+              "step": 11,
+              "velocity": 0.32,
+              "articulation": "ghost"
+            },
+            {
+              "voice": "snare",
+              "step": 15,
+              "velocity": 0.32,
+              "articulation": "ghost"
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 0,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 2,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 4,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 6,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 8,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 10,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 12,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 14,
+              "velocity": 0.5
+            }
+          ]
+        },
+        "provenance": {
+          "basis": "idiom",
+          "note": "the shuffle with its backbeat displaced to beat three; the triplet feel is the groove feel applied at render, not written into the grid"
+        }
+      },
+      {
+        "id": "bossaNova",
+        "genre": "bossa",
+        "difficulty": 3,
+        "articulations": [],
+        "ts": {
+          "numerator": 4,
+          "denominator": 4
+        },
+        "tempoRange": [110, 160],
+        "material": {
+          "steps": 16,
+          "strokes": [
+            {
+              "voice": "kick",
+              "step": 0,
+              "velocity": 0.9
+            },
+            {
+              "voice": "kick",
+              "step": 6,
+              "velocity": 0.8
+            },
+            {
+              "voice": "kick",
+              "step": 8,
+              "velocity": 0.9
+            },
+            {
+              "voice": "kick",
+              "step": 14,
+              "velocity": 0.8
+            },
+            {
+              "voice": "sideStick",
+              "step": 0,
+              "velocity": 0.7
+            },
+            {
+              "voice": "sideStick",
+              "step": 3,
+              "velocity": 0.7
+            },
+            {
+              "voice": "sideStick",
+              "step": 6,
+              "velocity": 0.7
+            },
+            {
+              "voice": "sideStick",
+              "step": 10,
+              "velocity": 0.7
+            },
+            {
+              "voice": "sideStick",
+              "step": 12,
+              "velocity": 0.7
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 0,
+              "velocity": 0.45
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 2,
+              "velocity": 0.45
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 4,
+              "velocity": 0.45
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 6,
+              "velocity": 0.45
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 8,
+              "velocity": 0.45
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 10,
+              "velocity": 0.45
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 12,
+              "velocity": 0.45
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 14,
+              "velocity": 0.45
+            }
+          ]
+        },
+        "provenance": {
+          "basis": "traditional",
+          "note": "the Brazilian dance pattern: a rim-click clave over a two-beat bass figure"
+        }
+      },
+      {
+        "id": "samba",
+        "genre": "samba",
+        "difficulty": 4,
+        "articulations": [],
+        "ts": {
+          "numerator": 4,
+          "denominator": 4
+        },
+        "tempoRange": [92, 140],
+        "material": {
+          "steps": 16,
+          "strokes": [
+            {
+              "voice": "kick",
+              "step": 0,
+              "velocity": 0.85
+            },
+            {
+              "voice": "kick",
+              "step": 3,
+              "velocity": 0.7
+            },
+            {
+              "voice": "kick",
+              "step": 4,
+              "velocity": 1
+            },
+            {
+              "voice": "kick",
+              "step": 7,
+              "velocity": 0.7
+            },
+            {
+              "voice": "kick",
+              "step": 8,
+              "velocity": 0.85
+            },
+            {
+              "voice": "kick",
+              "step": 11,
+              "velocity": 0.7
+            },
+            {
+              "voice": "kick",
+              "step": 12,
+              "velocity": 1
+            },
+            {
+              "voice": "kick",
+              "step": 15,
+              "velocity": 0.7
+            },
+            {
+              "voice": "sideStick",
+              "step": 4,
+              "velocity": 0.75
+            },
+            {
+              "voice": "sideStick",
+              "step": 12,
+              "velocity": 0.75
+            },
+            {
+              "voice": "shaker",
+              "step": 0,
+              "velocity": 0.4
+            },
+            {
+              "voice": "shaker",
+              "step": 1,
+              "velocity": 0.4
+            },
+            {
+              "voice": "shaker",
+              "step": 2,
+              "velocity": 0.4
+            },
+            {
+              "voice": "shaker",
+              "step": 3,
+              "velocity": 0.4
+            },
+            {
+              "voice": "shaker",
+              "step": 4,
+              "velocity": 0.4
+            },
+            {
+              "voice": "shaker",
+              "step": 5,
+              "velocity": 0.4
+            },
+            {
+              "voice": "shaker",
+              "step": 6,
+              "velocity": 0.4
+            },
+            {
+              "voice": "shaker",
+              "step": 7,
+              "velocity": 0.4
+            },
+            {
+              "voice": "shaker",
+              "step": 8,
+              "velocity": 0.4
+            },
+            {
+              "voice": "shaker",
+              "step": 9,
+              "velocity": 0.4
+            },
+            {
+              "voice": "shaker",
+              "step": 10,
+              "velocity": 0.4
+            },
+            {
+              "voice": "shaker",
+              "step": 11,
+              "velocity": 0.4
+            },
+            {
+              "voice": "shaker",
+              "step": 12,
+              "velocity": 0.4
+            },
+            {
+              "voice": "shaker",
+              "step": 13,
+              "velocity": 0.4
+            },
+            {
+              "voice": "shaker",
+              "step": 14,
+              "velocity": 0.4
+            },
+            {
+              "voice": "shaker",
+              "step": 15,
+              "velocity": 0.4
+            }
+          ]
+        },
+        "provenance": {
+          "basis": "traditional",
+          "note": "the surdo accent on the second beat of each pair, under a continuous shaker"
+        }
+      },
+      {
+        "id": "gospelPocket",
+        "genre": "gospel",
+        "difficulty": 4,
+        "articulations": ["ghost"],
+        "ts": {
+          "numerator": 4,
+          "denominator": 4
+        },
+        "tempoRange": [64, 104],
+        "material": {
+          "steps": 16,
+          "strokes": [
+            {
+              "voice": "kick",
+              "step": 0,
+              "velocity": 1
+            },
+            {
+              "voice": "kick",
+              "step": 6,
+              "velocity": 0.8
+            },
+            {
+              "voice": "kick",
+              "step": 10,
+              "velocity": 0.85
+            },
+            {
+              "voice": "kick",
+              "step": 14,
+              "velocity": 0.75
+            },
+            {
+              "voice": "snare",
+              "step": 4,
+              "velocity": 1
+            },
+            {
+              "voice": "snare",
+              "step": 12,
+              "velocity": 1
+            },
+            {
+              "voice": "snare",
+              "step": 2,
+              "velocity": 0.32,
+              "articulation": "ghost"
+            },
+            {
+              "voice": "snare",
+              "step": 6,
+              "velocity": 0.32,
+              "articulation": "ghost"
+            },
+            {
+              "voice": "snare",
+              "step": 11,
+              "velocity": 0.32,
+              "articulation": "ghost"
+            },
+            {
+              "voice": "snare",
+              "step": 14,
+              "velocity": 0.32,
+              "articulation": "ghost"
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 0,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 1,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 2,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 3,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 4,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 5,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 6,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 7,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 8,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 9,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 10,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 11,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 12,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 13,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 14,
+              "velocity": 0.5
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 15,
+              "velocity": 0.5
+            }
+          ]
+        },
+        "provenance": {
+          "basis": "idiom",
+          "note": "the deep pocket of the church backbeat, ghosted between the accents"
+        }
+      },
+      {
+        "id": "drumAndBassBreak",
+        "genre": "dnb",
+        "difficulty": 4,
+        "articulations": ["ghost"],
+        "ts": {
+          "numerator": 4,
+          "denominator": 4
+        },
+        "tempoRange": [160, 180],
+        "material": {
+          "steps": 16,
+          "strokes": [
+            {
+              "voice": "kick",
+              "step": 0,
+              "velocity": 1
+            },
+            {
+              "voice": "kick",
+              "step": 10,
+              "velocity": 0.9
+            },
+            {
+              "voice": "snare",
+              "step": 4,
+              "velocity": 1
+            },
+            {
+              "voice": "snare",
+              "step": 11,
+              "velocity": 0.85
+            },
+            {
+              "voice": "snare",
+              "step": 12,
+              "velocity": 1
+            },
+            {
+              "voice": "snare",
+              "step": 7,
+              "velocity": 0.32,
+              "articulation": "ghost"
+            },
+            {
+              "voice": "snare",
+              "step": 15,
+              "velocity": 0.32,
+              "articulation": "ghost"
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 0,
+              "velocity": 0.45
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 2,
+              "velocity": 0.45
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 4,
+              "velocity": 0.45
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 6,
+              "velocity": 0.45
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 8,
+              "velocity": 0.45
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 10,
+              "velocity": 0.45
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 12,
+              "velocity": 0.45
+            },
+            {
+              "voice": "closedHiHat",
+              "step": 14,
+              "velocity": 0.45
+            }
+          ]
+        },
+        "provenance": {
+          "basis": "construction",
+          "note": "the two-bar break skeleton of the genre, written out from its rhythmic grid"
+        }
+      }
+    ]
+  },
+  "FILL_ARCHETYPES": {
+    "frozen": true,
+    "wire": {
+      "snareRoll": {
+        "atBeat": [
+          [
+            {
+              "voice": 36,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -5
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 50,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -3
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "scale": 0.6
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.25,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "scale": 0.7
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.5,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "scale": 0.8
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.75,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "scale": 0.9
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "scale": 1
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.25,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "scale": 1.1
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.5,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "scale": 1.2
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.75,
+              "duration": 0.25,
+              "velocity": {
+                "base": "accent"
+              }
+            }
+          ]
+        ]
+      },
+      "tomDescend": {
+        "atBeat": [
+          [
+            {
+              "voice": 36,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -5
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 50,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -3
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 50,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -5
+              }
+            }
+          ],
+          [
+            {
+              "voice": 50,
+              "offset": 0,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 47,
+              "offset": 0.25,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "offset": -3
+              }
+            },
+            {
+              "voice": 47,
+              "offset": 0.5,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "offset": -5
+              }
+            },
+            {
+              "voice": 45,
+              "offset": 0.75,
+              "duration": 0.25,
+              "velocity": {
+                "base": "accent"
+              }
+            }
+          ]
+        ]
+      },
+      "tomAscend": {
+        "atBeat": [
+          [
+            {
+              "voice": 36,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -5
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 50,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -3
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 45,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -5
+              }
+            }
+          ],
+          [
+            {
+              "voice": 45,
+              "offset": 0,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 47,
+              "offset": 0.25,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "offset": 3
+              }
+            },
+            {
+              "voice": 47,
+              "offset": 0.5,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "offset": 5
+              }
+            },
+            {
+              "voice": 50,
+              "offset": 0.75,
+              "duration": 0.25,
+              "velocity": {
+                "base": "accent"
+              }
+            }
+          ]
+        ]
+      },
+      "snareTomCombo": {
+        "atBeat": [
+          [
+            {
+              "voice": 36,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -5
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 50,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -3
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.5,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "offset": -5
+              }
+            },
+            {
+              "voice": 50,
+              "offset": 0.75,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill"
+              }
+            }
+          ],
+          [
+            {
+              "voice": 47,
+              "offset": 0,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.25,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "offset": -3
+              }
+            },
+            {
+              "voice": 45,
+              "offset": 0.5,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "offset": 2
+              }
+            },
+            {
+              "voice": 36,
+              "offset": 0.75,
+              "duration": 0.25,
+              "velocity": {
+                "base": "accent"
+              }
+            }
+          ]
+        ]
+      },
+      "simpleCrash": {
+        "atBeat": [
+          [
+            {
+              "voice": 36,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -5
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 50,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -3
+              }
+            }
+          ],
+          [],
+          [
+            {
+              "voice": 36,
+              "offset": 0.75,
+              "duration": 0.25,
+              "velocity": {
+                "base": "accent"
+              }
+            },
+            {
+              "voice": 49,
+              "offset": 0.75,
+              "duration": 0.5,
+              "velocity": {
+                "base": "accent"
+              }
+            }
+          ]
+        ]
+      },
+      "linearFill": {
+        "atBeat": [
+          [
+            {
+              "voice": 36,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -5
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 50,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -3
+              }
+            }
+          ],
+          [
+            {
+              "voice": 36,
+              "offset": 0,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.25,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 50,
+              "offset": 0.5,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 47,
+              "offset": 0.75,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill"
+              }
+            }
+          ],
+          [
+            {
+              "voice": 45,
+              "offset": 0,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "offset": 3
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.25,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "offset": 5
+              }
+            },
+            {
+              "voice": 36,
+              "offset": 0.5,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "offset": 7
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.75,
+              "duration": 0.25,
+              "velocity": {
+                "base": "accent"
+              }
+            }
+          ]
+        ]
+      },
+      "ghostToAccent": {
+        "atBeat": [
+          [
+            {
+              "voice": 36,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -5
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 50,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -3
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "scale": 0.4,
+                "offset": 0
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.25,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "scale": 0.4,
+                "offset": 10
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.5,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "scale": 0.4,
+                "offset": 20
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.75,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "scale": 0.4,
+                "offset": 30
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "accent"
+              }
+            }
+          ]
+        ]
+      },
+      "bdSnareAlternate": {
+        "atBeat": [
+          [
+            {
+              "voice": 36,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -5
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 50,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -3
+              }
+            }
+          ],
+          [
+            {
+              "voice": 36,
+              "offset": 0,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.25,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 36,
+              "offset": 0.5,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "offset": 3
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.75,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "offset": 3
+              }
+            }
+          ],
+          [
+            {
+              "voice": 36,
+              "offset": 0,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "offset": 5
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.25,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "offset": 5
+              }
+            },
+            {
+              "voice": 36,
+              "offset": 0.5,
+              "duration": 0.25,
+              "velocity": {
+                "base": "accent"
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.75,
+              "duration": 0.25,
+              "velocity": {
+                "base": "accent"
+              }
+            }
+          ]
+        ]
+      },
+      "hiHatChoke": {
+        "atBeat": [
+          [
+            {
+              "voice": 36,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -5
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 50,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -3
+              }
+            }
+          ],
+          [
+            {
+              "voice": 46,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 46,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": 5
+              }
+            }
+          ],
+          [
+            {
+              "voice": 46,
+              "offset": 0,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "offset": 8
+              }
+            },
+            {
+              "voice": 42,
+              "offset": 0.25,
+              "duration": 0.25,
+              "velocity": {
+                "base": "accent"
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "accent"
+              }
+            }
+          ]
+        ]
+      },
+      "tomShuffle": {
+        "atBeat": [
+          [
+            {
+              "voice": 36,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -5
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 50,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -3
+              }
+            }
+          ],
+          [
+            {
+              "voice": 50,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 47,
+              "offset": 0.625,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "offset": -5
+              }
+            }
+          ],
+          [
+            {
+              "voice": 47,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 45,
+              "offset": 0.625,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "offset": 5
+              }
+            }
+          ]
+        ]
+      },
+      "breakdownFill": {
+        "atBeat": [
+          [
+            {
+              "voice": 36,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -5
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 50,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -3
+              }
+            }
+          ],
+          [],
+          [
+            {
+              "voice": 38,
+              "offset": 0.5,
+              "duration": 0.25,
+              "velocity": {
+                "base": "accent"
+              }
+            }
+          ]
+        ]
+      },
+      "flamsAndDrags": {
+        "atBeat": [
+          [
+            {
+              "voice": 36,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -5
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 50,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -3
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              },
+              "articulation": "flam"
+            },
+            {
+              "voice": 38,
+              "offset": 0.75,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              },
+              "articulation": "drag"
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 1,
+              "velocity": {
+                "base": "accent"
+              },
+              "articulation": "flam"
+            }
+          ]
+        ]
+      },
+      "halfTimeFill": {
+        "atBeat": [
+          [
+            {
+              "voice": 36,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -5
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill"
+              }
+            },
+            {
+              "voice": 50,
+              "offset": 0.5,
+              "duration": 0.5,
+              "velocity": {
+                "base": "fill",
+                "offset": -3
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 1,
+              "velocity": {
+                "base": "accent"
+              }
+            },
+            {
+              "voice": 36,
+              "offset": 0,
+              "duration": 1,
+              "velocity": {
+                "base": "fill"
+              }
+            }
+          ],
+          [
+            {
+              "voice": 38,
+              "offset": 0,
+              "duration": 0.5,
+              "velocity": {
+                "base": "accent"
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.5,
+              "duration": 0.25,
+              "velocity": {
+                "base": "fill",
+                "scale": 0.6
+              }
+            },
+            {
+              "voice": 38,
+              "offset": 0.75,
+              "duration": 0.25,
+              "velocity": {
+                "base": "accent"
+              }
+            }
+          ]
+        ],
+        "boundToBar": true
+      }
+    }
+  },
+  "FILL_TYPES": {
+    "frozen": true,
+    "wire": [
+      "snareRoll",
+      "tomDescend",
+      "tomAscend",
+      "snareTomCombo",
+      "simpleCrash",
+      "linearFill",
+      "ghostToAccent",
+      "bdSnareAlternate",
+      "hiHatChoke",
+      "tomShuffle",
+      "breakdownFill",
+      "flamsAndDrags",
+      "halfTimeFill"
+    ]
+  },
+  "GENRES": {
+    "frozen": true,
+    "wire": [
+      "pop",
+      "rock",
+      "motown",
+      "funk",
+      "soul",
+      "gospel",
+      "jazz",
+      "blues",
+      "bossa",
+      "samba",
+      "reggae",
+      "country",
+      "hiphop",
+      "house",
+      "dnb"
+    ]
+  },
+  "GUITAR_DROP_D": {
+    "frozen": true,
+    "wire": {
+      "kind": "stringed",
+      "name": "guitar (drop D)",
+      "tuning": [38, 45, 50, 55, 59, 64],
+      "frets": 24,
+      "maxStretch": 5,
+      "articulations": ["accent", "ghost", "staccato", "legato", "slide", "hammer", "mute", "open"],
+      "polyphony": 6
+    }
+  },
+  "GUITAR_STANDARD": {
+    "frozen": true,
+    "wire": {
+      "kind": "stringed",
+      "name": "guitar",
+      "tuning": [40, 45, 50, 55, 59, 64],
+      "frets": 24,
+      "maxStretch": 5,
+      "articulations": ["accent", "ghost", "staccato", "legato", "slide", "hammer", "mute", "open"],
+      "polyphony": 6
+    }
+  },
+  "HARMONIC_FUNCTIONS": {
+    "frozen": true,
+    "wire": ["tonic", "subdominant", "dominant"]
+  },
+  "HARMONIC_MINOR_MASK": {
+    "frozen": true,
+    "wire": 2477
+  },
+  "JUST_RATIOS": {
+    "frozen": true,
+    "wire": {
+      "0": [1, 1],
+      "1": [16, 15],
+      "2": [9, 8],
+      "3": [6, 5],
+      "4": [5, 4],
+      "5": [4, 3],
+      "6": [45, 32],
+      "7": [3, 2],
+      "8": [8, 5],
+      "9": [5, 3],
+      "10": [9, 5],
+      "11": [15, 8],
+      "12": [2, 1]
+    }
+  },
+  "KICK_FIGURES": {
+    "frozen": true,
+    "wire": {
+      "sparse": [
+        {
+          "step": 0
+        },
+        {
+          "step": 8,
+          "sections": ["chorus"],
+          "barParity": 1
+        }
+      ],
+      "fourOnFloor": [
+        {
+          "step": 0
+        },
+        {
+          "step": 4
+        },
+        {
+          "step": 8
+        },
+        {
+          "step": 12
+        },
+        {
+          "step": 6,
+          "probability": 0.2,
+          "slot": "beat2and",
+          "sections": ["chorus"]
+        }
+      ],
+      "upbeat": [
+        {
+          "step": 0
+        },
+        {
+          "step": 8
+        },
+        {
+          "step": 6,
+          "probability": 0.7,
+          "slot": "beat2and",
+          "sections": ["prechorus", "chorus"]
+        },
+        {
+          "step": 14,
+          "probability": 0.6,
+          "slot": "beat4and",
+          "sections": ["chorus"]
+        }
+      ],
+      "rock": [
+        {
+          "step": 0
+        },
+        {
+          "step": 8
+        },
+        {
+          "step": 6
+        },
+        {
+          "step": 11
+        },
+        {
+          "step": 14,
+          "probability": 0.4,
+          "slot": "beat4and",
+          "sections": ["chorus"]
+        }
+      ],
+      "synth": [
+        {
+          "step": 0
+        },
+        {
+          "step": 8
+        },
+        {
+          "step": 6,
+          "probability": 0.75,
+          "slot": "beat2and",
+          "sections": ["prechorus", "chorus"]
+        },
+        {
+          "step": 14,
+          "probability": 0.65,
+          "slot": "beat4and",
+          "sections": ["chorus"]
+        }
+      ],
+      "trap": [
+        {
+          "step": 0
+        },
+        {
+          "step": 6,
+          "probability": 0.8,
+          "slot": "beat2and"
+        },
+        {
+          "step": 8,
+          "probability": 0.3,
+          "slot": "beat3"
+        },
+        {
+          "step": 14,
+          "probability": 0.7,
+          "slot": "beat4and"
+        }
+      ],
+      "latin": [
+        {
+          "step": 0
+        },
+        {
+          "step": 6
+        },
+        {
+          "step": 8
+        },
+        {
+          "step": 14,
+          "probability": 0.5,
+          "slot": "beat4and"
+        }
+      ],
+      "standard": [
+        {
+          "step": 0
+        },
+        {
+          "step": 8
+        },
+        {
+          "step": 6,
+          "probability": 0.5,
+          "slot": "beat2and",
+          "sections": ["prechorus"]
+        },
+        {
+          "step": 6,
+          "probability": 0.55,
+          "slot": "beat2and",
+          "sections": ["chorus"]
+        },
+        {
+          "step": 14,
+          "probability": 0.35,
+          "slot": "beat4and",
+          "sections": ["chorus"]
+        }
+      ]
+    }
+  },
+  "KICK_STEPS": {
+    "frozen": true,
+    "wire": 16
+  },
+  "LIMBS": {
+    "frozen": true,
+    "wire": ["rightHand", "leftHand", "rightFoot", "leftFoot"]
+  },
+  "LOCRIAN_MASK": {
+    "frozen": true,
+    "wire": 1387
+  },
+  "LOCRIAN_NATURAL2_MASK": {
+    "frozen": true,
+    "wire": 1389
+  },
+  "LYDIAN_DOMINANT_MASK": {
+    "frozen": true,
+    "wire": 1749
+  },
+  "LYDIAN_MASK": {
+    "frozen": true,
+    "wire": 2773
+  },
+  "MAJOR_MASK": {
+    "frozen": true,
+    "wire": 2741
+  },
+  "MAJOR_PENTATONIC_MASK": {
+    "frozen": true,
+    "wire": 661
+  },
+  "MARWA_MASK": {
+    "frozen": true,
+    "wire": 2771
+  },
+  "MAX_DIFFICULTY": {
+    "frozen": true,
+    "wire": 5
+  },
+  "MELODIC_CONTOUR_SHAPES": {
+    "frozen": true,
+    "wire": ["arch", "ascending", "descending", "wave", "static"]
+  },
+  "MELODIC_MINOR_MASK": {
+    "frozen": true,
+    "wire": 2733
+  },
+  "MINOR_PENTATONIC_MASK": {
+    "frozen": true,
+    "wire": 1193
+  },
+  "MIN_ALGORITHM_VERSION": {
+    "frozen": true,
+    "wire": 1
+  },
+  "MIN_DIFFICULTY": {
+    "frozen": true,
+    "wire": 1
+  },
+  "MIXOLYDIAN_B13_MASK": {
+    "frozen": true,
+    "wire": 1461
+  },
+  "MIXOLYDIAN_MASK": {
+    "frozen": true,
+    "wire": 1717
+  },
+  "MIYAKO_BUSHI_MASK": {
+    "frozen": true,
+    "wire": 419
+  },
+  "MODAL_SCALE_NAMES": {
+    "frozen": true,
+    "wire": ["dorian", "phrygian", "lydian", "mixolydian", "locrian"]
+  },
+  "MOTIF_RELATION_KINDS": {
+    "frozen": true,
+    "wire": [
+      "repetition",
+      "transposition",
+      "tonalTransposition",
+      "inversion",
+      "retrograde",
+      "retrogradeInversion",
+      "augmentation",
+      "diminution"
+    ]
+  },
+  "NAMED_SCALES": {
+    "frozen": true,
+    "wire": {
+      "major": 2741,
+      "ionian": 2741,
+      "naturalMinor": 1453,
+      "aeolian": 1453,
+      "harmonicMinor": 2477,
+      "melodicMinor": 2733,
+      "dorian": 1709,
+      "phrygian": 1451,
+      "lydian": 2773,
+      "mixolydian": 1717,
+      "locrian": 1387,
+      "lydianDominant": 1749,
+      "mixolydianB13": 1461,
+      "locrianNatural2": 1389,
+      "altered": 1371,
+      "phrygianDominant": 1459,
+      "majorPentatonic": 661,
+      "minorPentatonic": 1193,
+      "blues": 1257,
+      "wholeTone": 1365,
+      "octatonicHalfWhole": 1755,
+      "octatonicWholeHalf": 2925,
+      "chromatic": 4095
+    }
+  },
+  "NATURAL_MINOR_MASK": {
+    "frozen": true,
+    "wire": 1453
+  },
+  "NOTE_VALUES": {
+    "frozen": true,
+    "wire": ["whole", "half", "quarter", "eighth", "sixteenth", "thirtySecond", "sixtyFourth"]
+  },
+  "NoteSafety": {
+    "frozen": true,
+    "wire": {
+      "0": "Safe",
+      "1": "Warning",
+      "2": "Dissonant",
+      "Safe": 0,
+      "Warning": 1,
+      "Dissonant": 2
+    }
+  },
+  "OCTATONIC_HALF_WHOLE_MASK": {
+    "frozen": true,
+    "wire": 1755
+  },
+  "OCTATONIC_WHOLE_HALF_MASK": {
+    "frozen": true,
+    "wire": 2925
+  },
+  "ORNAMENT_STYLES": {
+    "frozen": true,
+    "wire": ["ghost", "flam", "drag", "slide", "accent"]
+  },
+  "PHRYGIAN_DOMINANT_MASK": {
+    "frozen": true,
+    "wire": 1459
+  },
+  "PHRYGIAN_MASK": {
+    "frozen": true,
+    "wire": 1451
+  },
+  "PROFILE_WEIGHTS": {
+    "frozen": true,
+    "wire": {
+      "strict": {
+        "imperfectConsonance": 2,
+        "perfectConsonance": 0.5,
+        "dissonance": -2,
+        "chordTone": 1,
+        "contraryMotion": 2,
+        "obliqueMotion": 1,
+        "similarMotion": -1,
+        "parallelImperfect": 0,
+        "stepwise": 1,
+        "melodicDistance": -0.3,
+        "forbiddenLeap": -6,
+        "registerDrift": -0.02
+      },
+      "pop": {
+        "imperfectConsonance": 2.5,
+        "perfectConsonance": 1,
+        "dissonance": -2,
+        "chordTone": 1.5,
+        "contraryMotion": 1.5,
+        "obliqueMotion": 1.25,
+        "similarMotion": 0,
+        "parallelImperfect": 2,
+        "stepwise": 0.75,
+        "melodicDistance": -0.2,
+        "forbiddenLeap": -6,
+        "registerDrift": -0.02
+      }
+    }
+  },
+  "PROVENANCE_BASES": {
+    "frozen": true,
+    "wire": ["idiom", "construction", "traditional"]
+  },
+  "PURVI_MASK": {
+    "frozen": true,
+    "wire": 2515
+  },
+  "REDUCTION_LEVELS": {
+    "frozen": true,
+    "wire": ["structural", "passing", "neighbor"]
+  },
+  "REFERENCE_PROFILE_VERSION": {
+    "frozen": true,
+    "wire": 1
+  },
+  "RHYTHM_IOI_BINS": {
+    "frozen": true,
+    "wire": [
+      0.0625, 0.08838834764831843, 0.125, 0.17677669529663687, 0.25, 0.35355339059327373, 0.5,
+      0.7071067811865475, 1, 1.4142135623730951, 2, 2.82842712474619, 4, 5.65685424949238, 8,
+      11.31370849898476, 16
+    ]
+  },
+  "RITSU_MASK": {
+    "frozen": true,
+    "wire": 677
+  },
+  "RYUKYU_MASK": {
+    "frozen": true,
+    "wire": 2225
+  },
+  "ReasonFlag": {
+    "frozen": true,
+    "wire": {
+      "1": "ChordTone",
+      "2": "Tension",
+      "4": "AvoidNote",
+      "8": "ScaleTone",
+      "16": "NonScale",
+      "32": "OutOfRange",
+      "64": "Tritone",
+      "128": "LargeLeap",
+      "256": "MinorSecond",
+      "512": "MajorSeventh",
+      "1024": "VerticalDissonance",
+      "2048": "ParallelPerfect",
+      "4096": "HiddenParallel",
+      "8192": "VoiceCrossing",
+      "16384": "Suspension",
+      "32768": "NeedsResolution",
+      "65536": "MelodicTritone",
+      "ChordTone": 1,
+      "Tension": 2,
+      "AvoidNote": 4,
+      "ScaleTone": 8,
+      "NonScale": 16,
+      "OutOfRange": 32,
+      "Tritone": 64,
+      "LargeLeap": 128,
+      "MinorSecond": 256,
+      "MajorSeventh": 512,
+      "VerticalDissonance": 1024,
+      "ParallelPerfect": 2048,
+      "HiddenParallel": 4096,
+      "VoiceCrossing": 8192,
+      "Suspension": 16384,
+      "NeedsResolution": 32768,
+      "MelodicTritone": 65536
+    }
+  },
+  "SATB_RANGES": {
+    "frozen": true,
+    "wire": [
+      {
+        "min": 40,
+        "max": 60
+      },
+      {
+        "min": 48,
+        "max": 67
+      },
+      {
+        "min": 55,
+        "max": 74
+      },
+      {
+        "min": 60,
+        "max": 79
+      }
+    ]
+  },
+  "SCALE_ALIASES": {
+    "frozen": true,
+    "wire": {
+      "inakaBushi": "minyo",
+      "okinawan": "ryukyu",
+      "hicaz": "hijaz",
+      "doubleHarmonic": "hijazkar",
+      "bilawal": "bilaval",
+      "marva": "marwa",
+      "poorvi": "purvi"
+    }
+  },
+  "SCALE_SYSTEMS": {
+    "frozen": true,
+    "wire": {
+      "major": "common-practice",
+      "ionian": "common-practice",
+      "naturalMinor": "common-practice",
+      "aeolian": "common-practice",
+      "harmonicMinor": "common-practice",
+      "melodicMinor": "common-practice",
+      "dorian": "modal",
+      "phrygian": "modal",
+      "lydian": "modal",
+      "mixolydian": "modal",
+      "locrian": "modal",
+      "lydianDominant": "modal",
+      "mixolydianB13": "modal",
+      "locrianNatural2": "modal",
+      "altered": "modal",
+      "phrygianDominant": "modal",
+      "majorPentatonic": "non-functional",
+      "minorPentatonic": "non-functional",
+      "blues": "non-functional",
+      "wholeTone": "non-functional",
+      "octatonicHalfWhole": "non-functional",
+      "octatonicWholeHalf": "non-functional",
+      "chromatic": "non-functional",
+      "miyakoBushi": "non-functional",
+      "ritsu": "non-functional",
+      "minyo": "non-functional",
+      "ryukyu": "non-functional",
+      "ajam": "non-functional",
+      "nahawand": "non-functional",
+      "kurd": "non-functional",
+      "hijaz": "non-functional",
+      "hijazkar": "non-functional",
+      "bilaval": "non-functional",
+      "khamaj": "non-functional",
+      "kafi": "non-functional",
+      "asavari": "non-functional",
+      "bhairavi": "non-functional",
+      "bhairav": "non-functional",
+      "kalyan": "non-functional",
+      "marwa": "non-functional",
+      "purvi": "non-functional",
+      "todi": "non-functional"
+    }
+  },
+  "STEP_BEATS": {
+    "frozen": true,
+    "wire": 0.25
+  },
+  "TODI_MASK": {
+    "frozen": true,
+    "wire": 2507
+  },
+  "TRANSPOSING_INSTRUMENTS": {
+    "frozen": true,
+    "wire": {
+      "clarinetBb": "-M2",
+      "trumpetBb": "-M2",
+      "sopranoSax": "-M2",
+      "tenorSax": "-M9",
+      "bassClarinet": "-M9",
+      "clarinetA": "-m3",
+      "hornF": "-P5",
+      "englishHorn": "-P5",
+      "clarinetEb": "m3",
+      "altoSax": "-M6",
+      "baritoneSax": "-M13",
+      "trumpetD": "M2",
+      "piccolo": "P8",
+      "doubleBass": "-P8",
+      "contrabassoon": "-P8",
+      "guitar": "-P8"
+    }
+  },
+  "TWELVE_TET": {
+    "frozen": true,
+    "wire": {
+      "refStep": 69,
+      "refFreq": 440,
+      "divisions": 12
+    }
+  },
+  "WHOLE_TONE_MASK": {
+    "frozen": true,
+    "wire": 1365
+  },
+  "WORLD_SCALES": {
+    "frozen": true,
+    "wire": {
+      "miyakoBushi": 419,
+      "ritsu": 677,
+      "minyo": 1193,
+      "ryukyu": 2225,
+      "ajam": 2741,
+      "nahawand": 1453,
+      "kurd": 1451,
+      "hijaz": 1459,
+      "hijazkar": 2483,
+      "bilaval": 2741,
+      "khamaj": 1717,
+      "kafi": 1709,
+      "asavari": 1453,
+      "bhairavi": 1451,
+      "bhairav": 2483,
+      "kalyan": 2773,
+      "marwa": 2771,
+      "purvi": 2515,
+      "todi": 2507
+    }
+  }
+}

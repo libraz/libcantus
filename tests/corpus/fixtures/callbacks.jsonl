@@ -1,0 +1,3 @@
+{"op":"$call","args":[{"$cb":0},1,"a"],"result":[1,"a"]}
+{"op":"$call","args":[{"$cb":0}],"result":[]}
+{"op":"$call","args":[{"$cb":7},{"$n":"NaN"},{"$$k":[{"$u":1}]}],"result":[{"$n":"NaN"},{"$$k":[{"$u":1}]}]}
