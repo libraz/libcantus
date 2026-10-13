@@ -114,7 +114,7 @@ function coreQuality(spec: ChordSpec): ChordQuality | undefined {
 }
 
 /** How each base opens a suffix that no quality name covers. */
-const BASE_SUFFIX: Record<ChordBase, string> = {
+export const BASE_SUFFIX: Record<ChordBase, string> = {
   maj: '',
   min: 'm',
   dim: 'dim',
@@ -125,7 +125,11 @@ const BASE_SUFFIX: Record<ChordBase, string> = {
 };
 
 /** How each seventh is written where it opens a suffix of its own. */
-const SEVENTH_SUFFIX: Record<ChordSeventh, string> = { maj7: 'maj7', min7: '7', dim7: 'dim7' };
+export const SEVENTH_SUFFIX: Record<ChordSeventh, string> = {
+  maj7: 'maj7',
+  min7: '7',
+  dim7: 'dim7',
+};
 
 /**
  * The major seventh written after a base letter, which has taken the word's

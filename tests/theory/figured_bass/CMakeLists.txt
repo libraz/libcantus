@@ -1,0 +1,1 @@
+cantus_add_test(theory_figured_bass test_figured_bass.cpp)

@@ -1,0 +1,44 @@
+{
+  "tables": [
+    {
+      "module": "theory/chordscale/index.ts",
+      "export": "ALIASED_SCALE_NAME_LIST",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kAliasedScaleNames",
+      "fields": []
+    },
+    {
+      "module": "theory/chordscale/index.ts",
+      "export": "SCALE_PREFERENCE",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kScalePreference",
+      "fields": []
+    },
+    {
+      "module": "theory/chordscale/index.ts",
+      "export": "IDIOMATIC_SCALES",
+      "cxx_type": "IdiomaticRow",
+      "cxx_name": "kIdiomaticScales",
+      "fields": []
+    },
+    {
+      "module": "theory/chordscale/index.ts",
+      "export": "MINOR_RESOLUTION_TENSIONS",
+      "cxx_type": "int",
+      "cxx_name": "kMinorResolutionTensions",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "theory/chordscale/index.ts",
+      "export": "HEPTATONIC_SIZE",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/chordscale/index.ts",
+      "export": "RANK_PENALTY",
+      "cxx_type": "double"
+    }
+  ]
+}

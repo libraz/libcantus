@@ -49,7 +49,7 @@ export const DEFAULT_SYSTEM: NoteNameSystem = 'english';
 const SYSTEM_PROBE: Note = { letter: 0, alter: 0 };
 
 /** Recognized quality suffixes, keyed by their exact lead-sheet spelling. */
-const QUALITY_MAP: Record<string, ChordQuality> = {
+export const QUALITY_MAP: Record<string, ChordQuality> = {
   '': 'maj',
   maj: 'maj',
   m: 'min',
@@ -160,7 +160,7 @@ function knownQuality(suffix: string): ChordQuality | undefined {
 }
 
 /** How a base is written where a symbol opens with one. */
-const BASE_TOKENS: readonly (readonly [string, ChordBase | 'major'])[] = [
+export const BASE_TOKENS: readonly (readonly [string, ChordBase | 'major'])[] = [
   ['sus2', 'sus2'],
   ['sus4', 'sus4'],
   ['sus', 'sus4'],
@@ -187,11 +187,13 @@ const BASE_TOKENS: readonly (readonly [string, ChordBase | 'major'])[] = [
  * plain diminished base would let `Cø9` stack the diminished seventh the base
  * implies and print a chord the glyph does not name.
  */
-const COMPOUND_TOKENS: readonly (readonly [string, { base: ChordBase; seventh: ChordSeventh }])[] =
-  [
-    ['ø', { base: 'dim', seventh: 'min7' }],
-    ['h', { base: 'dim', seventh: 'min7' }],
-  ];
+export const COMPOUND_TOKENS: readonly (readonly [
+  string,
+  { base: ChordBase; seventh: ChordSeventh },
+])[] = [
+  ['ø', { base: 'dim', seventh: 'min7' }],
+  ['h', { base: 'dim', seventh: 'min7' }],
+];
 
 /**
  * The markers that say a seventh is major.
@@ -200,7 +202,7 @@ const COMPOUND_TOKENS: readonly (readonly [string, { base: ChordBase; seventh: C
  * not: `Cmaj` is the plain triad, and `CmMaj` only reads as a major seventh
  * because the base already took the letter before it.
  */
-const MAJOR_MARKERS: readonly (readonly [string, 'word' | 'glyph'])[] = [
+export const MAJOR_MARKERS: readonly (readonly [string, 'word' | 'glyph'])[] = [
   ['maj', 'word'],
   ['Maj', 'word'],
   ['M', 'word'],
@@ -209,10 +211,10 @@ const MAJOR_MARKERS: readonly (readonly [string, 'word' | 'glyph'])[] = [
 ];
 
 /** The extension numbers a symbol stacks a chord up to. */
-const EXTENSION_NUMBERS = [13, 11, 9, 7, 6] as const;
+export const EXTENSION_NUMBERS = [13, 11, 9, 7, 6] as const;
 
 /** The degree each `add` figure names, so `add2` and `add9` are one tone. */
-const ADDED_DEGREES: Record<string, number> = {
+export const ADDED_DEGREES: Record<string, number> = {
   '2': 9,
   '4': 11,
   '6': 6,
@@ -222,10 +224,29 @@ const ADDED_DEGREES: Record<string, number> = {
 };
 
 /** The degrees a symbol can write an accidental against. */
-const ALTERABLE: Record<string, AlteredDegree> = { '5': 5, '9': 9, '11': 11, '13': 13 };
+export const ALTERABLE: Record<string, AlteredDegree> = { '5': 5, '9': 9, '11': 11, '13': 13 };
 
 /** The degrees a symbol can ask a chord to leave out. */
-const OMITTABLE: Record<string, number> = { '1': 1, '3': 3, '5': 5 };
+export const OMITTABLE: Record<string, number> = { '1': 1, '3': 3, '5': 5 };
+
+/** How a suspension is written as a figure. */
+export const SUSPENSION_TOKENS: readonly (readonly [string, ChordBase])[] = [
+  ['sus2', 'sus2'],
+  ['sus4', 'sus4'],
+  ['sus', 'sus4'],
+];
+
+/** The words that leave a degree out, with the length of each. */
+export const OMISSION_TOKENS: readonly (readonly [string, number])[] = [
+  ['omit', 4],
+  ['no', 2],
+];
+
+/** The accidentals a figure is written with, and the alteration each names. */
+export const ACCIDENTAL_TOKENS: readonly (readonly [string, -1 | 1])[] = [
+  ['b', -1],
+  ['#', 1],
+];
 
 /** A chord read token by token, before it settles into a {@link ChordSpec}. */
 type SpecDraft = {
@@ -361,11 +382,7 @@ function stackTo(draft: SpecDraft, top: number): void {
  * drift apart.
  */
 function applyFigure(draft: SpecDraft, text: string, at: number): number | undefined {
-  const base = matchToken(text, at, [
-    ['sus2', 'sus2'],
-    ['sus4', 'sus4'],
-    ['sus', 'sus4'],
-  ] as const);
+  const base = matchToken(text, at, SUSPENSION_TOKENS);
   if (base !== undefined) {
     draft.base = base.value;
     return base.next;
@@ -386,10 +403,7 @@ function applyFigure(draft: SpecDraft, text: string, at: number): number | undef
     draft.additions.add(degree.value);
     return degree.next;
   }
-  const omitted = matchToken(text, at, [
-    ['omit', 4],
-    ['no', 2],
-  ] as const);
+  const omitted = matchToken(text, at, OMISSION_TOKENS);
   if (omitted !== undefined) {
     const degree = matchNumberToken(text, omitted.next, OMITTABLE);
     if (degree === undefined) {
@@ -398,10 +412,7 @@ function applyFigure(draft: SpecDraft, text: string, at: number): number | undef
     draft.omissions.add(degree.value);
     return degree.next;
   }
-  const accidental = matchToken(text, at, [
-    ['b', -1],
-    ['#', 1],
-  ] as const);
+  const accidental = matchToken(text, at, ACCIDENTAL_TOKENS);
   const from = accidental?.next ?? at;
   const degree = matchNumberToken(text, from, ALTERABLE);
   if (degree === undefined) {

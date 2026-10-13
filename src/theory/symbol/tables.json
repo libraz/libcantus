@@ -1,0 +1,102 @@
+{
+  "tables": [
+    {
+      "module": "theory/symbol/grammar.ts",
+      "export": "QUALITY_MAP",
+      "cxx_type": "NamedName",
+      "cxx_name": "kQualityMap",
+      "fields": []
+    },
+    {
+      "module": "theory/symbol/grammar.ts",
+      "export": "BASE_TOKENS",
+      "cxx_type": "TokenName",
+      "cxx_name": "kBaseTokens",
+      "fields": []
+    },
+    {
+      "module": "theory/symbol/grammar.ts",
+      "export": "COMPOUND_TOKENS",
+      "cxx_type": "CompoundToken",
+      "cxx_name": "kCompoundTokens",
+      "fields": ["base", "seventh"]
+    },
+    {
+      "module": "theory/symbol/grammar.ts",
+      "export": "MAJOR_MARKERS",
+      "cxx_type": "TokenName",
+      "cxx_name": "kMajorMarkers",
+      "fields": []
+    },
+    {
+      "module": "theory/symbol/grammar.ts",
+      "export": "EXTENSION_NUMBERS",
+      "cxx_type": "int",
+      "cxx_name": "kExtensionNumbers",
+      "fields": []
+    },
+    {
+      "module": "theory/symbol/grammar.ts",
+      "export": "ADDED_DEGREES",
+      "cxx_type": "NamedInt",
+      "cxx_name": "kAddedDegrees",
+      "fields": []
+    },
+    {
+      "module": "theory/symbol/grammar.ts",
+      "export": "ALTERABLE",
+      "cxx_type": "NamedInt",
+      "cxx_name": "kAlterable",
+      "fields": []
+    },
+    {
+      "module": "theory/symbol/grammar.ts",
+      "export": "OMITTABLE",
+      "cxx_type": "NamedInt",
+      "cxx_name": "kOmittable",
+      "fields": []
+    },
+    {
+      "module": "theory/symbol/grammar.ts",
+      "export": "SUSPENSION_TOKENS",
+      "cxx_type": "TokenName",
+      "cxx_name": "kSuspensionTokens",
+      "fields": []
+    },
+    {
+      "module": "theory/symbol/grammar.ts",
+      "export": "OMISSION_TOKENS",
+      "cxx_type": "TokenInt",
+      "cxx_name": "kOmissionTokens",
+      "fields": []
+    },
+    {
+      "module": "theory/symbol/grammar.ts",
+      "export": "ACCIDENTAL_TOKENS",
+      "cxx_type": "TokenInt",
+      "cxx_name": "kAccidentalTokens",
+      "fields": []
+    },
+    {
+      "module": "theory/symbol/suffix.ts",
+      "export": "CANONICAL_SUFFIX",
+      "cxx_type": "NamedName",
+      "cxx_name": "kCanonicalSuffix",
+      "fields": []
+    },
+    {
+      "module": "theory/symbol/suffix.ts",
+      "export": "BASE_SUFFIX",
+      "cxx_type": "NamedName",
+      "cxx_name": "kBaseSuffix",
+      "fields": []
+    },
+    {
+      "module": "theory/symbol/suffix.ts",
+      "export": "SEVENTH_SUFFIX",
+      "cxx_type": "NamedName",
+      "cxx_name": "kSeventhSuffix",
+      "fields": []
+    }
+  ]
+}

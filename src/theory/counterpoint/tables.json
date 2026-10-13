@@ -1,0 +1,11 @@
+{
+  "tables": [
+    {
+      "module": "theory/counterpoint/index.ts",
+      "export": "HIDDEN_PARALLEL_READINGS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kHiddenParallelReadings",
+      "fields": []
+    }
+  ]
+}

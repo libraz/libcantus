@@ -83,9 +83,10 @@ export const TRANSPOSING_INSTRUMENTS = Object.freeze({
  * from its own name, rather than one of them alone needing a transposition
  * spelled out.
  */
-const PROFILE_NAME_ALIASES: Readonly<Record<string, TransposingInstrumentName>> = Object.freeze({
-  'guitar (drop D)': 'guitar',
-});
+export const PROFILE_NAME_ALIASES: Readonly<Record<string, TransposingInstrumentName>> =
+  Object.freeze({
+    'guitar (drop D)': 'guitar',
+  });
 
 /**
  * The name of a built-in transposing instrument, as

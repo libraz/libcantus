@@ -1,0 +1,1 @@
+cantus_add_test(theory_transposition test_transposition.cpp)

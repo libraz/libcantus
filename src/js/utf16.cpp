@@ -26,6 +26,19 @@ bool is_space(char16_t c) noexcept {
          c == 0x3000 || c == 0xFEFF;
 }
 
+std::string trim(std::string_view s) {
+  std::u16string units = to_utf16(s);
+  std::size_t begin = 0;
+  std::size_t end = units.size();
+  while (begin < end && is_space(units[begin])) {
+    ++begin;
+  }
+  while (end > begin && is_space(units[end - 1])) {
+    --end;
+  }
+  return from_utf16(std::u16string_view(units).substr(begin, end - begin));
+}
+
 void append_wtf8(std::string& out, std::uint32_t cp) {
   if (cp >= 0xDC00 && cp <= 0xDFFF && out.size() >= 3) {
     auto b0 = static_cast<unsigned char>(out[out.size() - 3]);

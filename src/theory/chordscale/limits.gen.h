@@ -2,4 +2,14 @@
 #ifndef CANTUS_SRC_THEORY_CHORDSCALE_LIMITS_GEN_H_
 #define CANTUS_SRC_THEORY_CHORDSCALE_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** HEPTATONIC_SIZE of ts/src/theory/chordscale/index.ts. */
+inline constexpr int HEPTATONIC_SIZE = 7;
+
+/** RANK_PENALTY of ts/src/theory/chordscale/index.ts. */
+inline constexpr double RANK_PENALTY = 0.01;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_THEORY_CHORDSCALE_LIMITS_GEN_H_

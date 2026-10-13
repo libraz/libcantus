@@ -1,1 +1,2 @@
-# ts/src/theory/harmony: target_sources(cantus PRIVATE ...)
+# ts/src/theory/harmony
+target_sources(cantus PRIVATE harmony.cpp)

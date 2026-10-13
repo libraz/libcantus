@@ -32,7 +32,7 @@ import { classifySpelledInterval, pitchOf, simpleIntervalNumber } from './intern
  * the implementation — cannot fall out of step with the check that a caller's
  * value is one of them.
  */
-const HIDDEN_PARALLEL_READINGS = Object.freeze(['fourPart', 'twoVoice'] as const);
+export const HIDDEN_PARALLEL_READINGS = Object.freeze(['fourPart', 'twoVoice'] as const);
 
 /**
  * Which reading of hidden parallels an approach is judged by.

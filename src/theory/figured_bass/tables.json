@@ -1,0 +1,75 @@
+{
+  "tables": [
+    {
+      "module": "theory/figured-bass/index.ts",
+      "export": "DOUBLE_ACCIDENTALS",
+      "cxx_type": "NamedName",
+      "cxx_name": "kDoubleAccidentals",
+      "fields": []
+    },
+    {
+      "module": "theory/figured-bass/index.ts",
+      "export": "SINGLE_ACCIDENTALS",
+      "cxx_type": "NamedName",
+      "cxx_name": "kSingleAccidentals",
+      "fields": []
+    },
+    {
+      "module": "theory/figured-bass/index.ts",
+      "export": "FIGURE_SEPARATOR_LIST",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kFigureSeparators",
+      "fields": []
+    },
+    {
+      "module": "theory/figured-bass/index.ts",
+      "export": "MOTION_MARK_LIST",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kMotionMarks",
+      "fields": []
+    },
+    {
+      "module": "theory/figured-bass/index.ts",
+      "export": "PRINTED_ACCIDENTALS",
+      "cxx_type": "PrintedAccidental",
+      "cxx_name": "kPrintedAccidentals",
+      "fields": []
+    },
+    {
+      "module": "theory/figured-bass/index.ts",
+      "export": "FIGURE_SET_ENTRIES",
+      "cxx_type": "FigureSetRow",
+      "cxx_name": "kFigureSets",
+      "fields": ["intervals", "rootInterval"]
+    },
+    {
+      "module": "theory/figured-bass/index.ts",
+      "export": "FIGURE_ABBREVIATION_ENTRIES",
+      "cxx_type": "FigureAbbreviationRow",
+      "cxx_name": "kFigureAbbreviations",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "theory/figured-bass/index.ts",
+      "export": "MIN_FIGURE_NUMBER",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/figured-bass/index.ts",
+      "export": "MAX_FIGURE_NUMBER",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/figured-bass/index.ts",
+      "export": "OCTAVE_FIGURE",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/figured-bass/index.ts",
+      "export": "MAX_STACK_SIZE",
+      "cxx_type": "int"
+    }
+  ]
+}

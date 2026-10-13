@@ -147,7 +147,7 @@ export type TonicizableDegree = {
 };
 
 /** The degree whose triad the leading-tone convention makes major in a minor key. */
-const DOMINANT_DEGREE = 5;
+export const DOMINANT_DEGREE = 5;
 
 /**
  * The seven-degree frame a key's degrees are counted in.
@@ -243,6 +243,9 @@ export function leadingTonePcOf(key: KeyScale): number {
   return pitchClassOf(key.rootPc - 1);
 }
 
+/** The qualities of {@link LEADING_TONE_QUALITIES}, in declaration order. */
+export const LEADING_TONE_QUALITY_NAMES: readonly ChordQuality[] = ['dim', 'dim7', 'm7b5'];
+
 /**
  * The qualities a leading-tone chord takes.
  *
@@ -250,7 +253,9 @@ export function leadingTonePcOf(key: KeyScale): number {
  * the half-diminished stand on the same raised leading tone and differ only in
  * the colour of the sixth degree above it.
  */
-export const LEADING_TONE_QUALITIES: ReadonlySet<ChordQuality> = new Set(['dim', 'dim7', 'm7b5']);
+export const LEADING_TONE_QUALITIES: ReadonlySet<ChordQuality> = new Set(
+  LEADING_TONE_QUALITY_NAMES,
+);
 
 /**
  * Whether a chord sounds the diminished triad a leading-tone chord is built on.
@@ -349,7 +354,7 @@ export function isDescendingStep(interval: SpelledInterval): boolean {
 }
 
 /** The two thirds a frustrated leading tone may fall by, in semitones. */
-const THIRD_SEMITONES: readonly number[] = [3, 4];
+export const THIRD_SEMITONES: readonly number[] = [3, 4];
 
 /**
  * Whether a leading tone that does not rise is nevertheless left the way the

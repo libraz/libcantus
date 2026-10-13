@@ -1,0 +1,18 @@
+{
+  "tables": [
+    {
+      "module": "theory/transposition/index.ts",
+      "export": "TRANSPOSING_INSTRUMENTS",
+      "cxx_type": "NamedName",
+      "cxx_name": "kTransposingInstruments",
+      "fields": []
+    },
+    {
+      "module": "theory/transposition/index.ts",
+      "export": "PROFILE_NAME_ALIASES",
+      "cxx_type": "NamedName",
+      "cxx_name": "kProfileNameAliases",
+      "fields": []
+    }
+  ]
+}

@@ -2,4 +2,20 @@
 #ifndef CANTUS_SRC_THEORY_FIGURED_BASS_LIMITS_GEN_H_
 #define CANTUS_SRC_THEORY_FIGURED_BASS_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** MIN_FIGURE_NUMBER of ts/src/theory/figured-bass/index.ts. */
+inline constexpr int MIN_FIGURE_NUMBER = 2;
+
+/** MAX_FIGURE_NUMBER of ts/src/theory/figured-bass/index.ts. */
+inline constexpr int MAX_FIGURE_NUMBER = 9;
+
+/** OCTAVE_FIGURE of ts/src/theory/figured-bass/index.ts. */
+inline constexpr int OCTAVE_FIGURE = 8;
+
+/** MAX_STACK_SIZE of ts/src/theory/figured-bass/index.ts. */
+inline constexpr int MAX_STACK_SIZE = 4;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_THEORY_FIGURED_BASS_LIMITS_GEN_H_

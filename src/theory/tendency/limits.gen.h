@@ -2,4 +2,11 @@
 #ifndef CANTUS_SRC_THEORY_TENDENCY_LIMITS_GEN_H_
 #define CANTUS_SRC_THEORY_TENDENCY_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** DOMINANT_DEGREE of ts/src/theory/tendency/index.ts. */
+inline constexpr int DOMINANT_DEGREE = 5;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_THEORY_TENDENCY_LIMITS_GEN_H_

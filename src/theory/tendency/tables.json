@@ -1,0 +1,25 @@
+{
+  "tables": [
+    {
+      "module": "theory/tendency/index.ts",
+      "export": "LEADING_TONE_QUALITY_NAMES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kLeadingToneQualityNames",
+      "fields": []
+    },
+    {
+      "module": "theory/tendency/index.ts",
+      "export": "THIRD_SEMITONES",
+      "cxx_type": "int",
+      "cxx_name": "kThirdSemitones",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "theory/tendency/index.ts",
+      "export": "DOMINANT_DEGREE",
+      "cxx_type": "int"
+    }
+  ]
+}

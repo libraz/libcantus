@@ -81,6 +81,9 @@ int utf16_compare(std::string_view a, std::string_view b);
 /** Whether a code unit is white space to `String.prototype.trim` and the regex class `\s`. */
 bool is_space(char16_t unit) noexcept;
 
+/** `s.trim()`. */
+std::string trim(std::string_view s);
+
 /** Append the WTF-8 encoding of a code point or lone surrogate, merging a completed pair. */
 void append_wtf8(std::string& out, std::uint32_t cp);
 

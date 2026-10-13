@@ -104,10 +104,12 @@ export type ChordScaleMatch = {
  * speaks in mode names, so these aliases are skipped and only the modal name
  * is reported.
  */
-const ALIASED_SCALE_NAMES = new Set(['major', 'naturalMinor']);
+export const ALIASED_SCALE_NAME_LIST: readonly string[] = ['major', 'naturalMinor'];
+
+const ALIASED_SCALE_NAMES = new Set(ALIASED_SCALE_NAME_LIST);
 
 /** Number of tones in a heptatonic (seven-note) scale. */
-const HEPTATONIC_SIZE = 7;
+export const HEPTATONIC_SIZE = 7;
 
 /**
  * Conventional preference among equally-fitting scales, brightest first.
@@ -116,7 +118,7 @@ const HEPTATONIC_SIZE = 7;
  * suspension — equally well. Alphabetical order made `aeolian` the answer for
  * those, naming a minor mode as the best fit for a mode-neutral chord.
  */
-const SCALE_PREFERENCE = [
+export const SCALE_PREFERENCE = [
   'ionian',
   'major',
   'mixolydian',
@@ -129,7 +131,7 @@ const SCALE_PREFERENCE = [
 ] as const;
 
 /** Conventional first choices that pure set-fit ranking cannot express. */
-const IDIOMATIC_SCALES: Partial<Record<Chord['quality'], readonly string[]>> = {
+export const IDIOMATIC_SCALES: Partial<Record<Chord['quality'], readonly string[]>> = {
   aug: ['wholeTone'],
   m7b5: ['locrian'],
   // The diminished scale played over a diminished seventh is the whole-half
@@ -371,7 +373,7 @@ export function avoidNotes(
  * key's own tones, and standard practice, so the function the chord serves is
  * what decides.
  */
-const MINOR_RESOLUTION_TENSIONS = [1, 3, 8] as const;
+export const MINOR_RESOLUTION_TENSIONS = [1, 3, 8] as const;
 
 /** Whether this chord is a dominant seventh resolving down a fifth to minor. */
 function resolvesToMinorTonic(
@@ -544,7 +546,7 @@ export type ScaleChoice = {
  * Small per-candidate penalty added in {@link scalesForChanges} so that, among
  * choices of otherwise-equal transition cost, the tighter best-fit scale wins.
  */
-const RANK_PENALTY = 0.01;
+export const RANK_PENALTY = 0.01;
 
 /** Build the pitch-class set of a named scale rooted on `rootPc`. */
 function scalePitchClassSet(name: string, rootPc: number): Set<number> {

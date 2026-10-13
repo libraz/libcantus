@@ -38,16 +38,16 @@ import { noteNames, spellChord, spellScale } from '../spelling/index.js';
 import { type ChordLike, toChordData } from '../symbol/index.js';
 
 /** Smallest interval a figure may name above the bass: a second. */
-const MIN_FIGURE_NUMBER = 2;
+export const MIN_FIGURE_NUMBER = 2;
 
 /** Largest interval a figure may name above the bass: a ninth. */
-const MAX_FIGURE_NUMBER = 9;
+export const MAX_FIGURE_NUMBER = 9;
 
 /** The octave figure, which names the bass itself and so adds no chord tone. */
-const OCTAVE_FIGURE = 8;
+export const OCTAVE_FIGURE = 8;
 
 /** Number of tones in the largest stack a figure can name: a seventh chord. */
-const MAX_STACK_SIZE = 4;
+export const MAX_STACK_SIZE = 4;
 
 /** The accidental written on a figure, or the absence of one. */
 type FigureAccidental =
@@ -69,7 +69,7 @@ type FigureMotion = { from: Figure; to: Figure };
 type ParsedFigures = { figures: Figure[]; motions: FigureMotion[] };
 
 /** Two-character accidental prefixes, matched before the single-character ones. */
-const DOUBLE_ACCIDENTALS: Record<string, FigureAccidental> = {
+export const DOUBLE_ACCIDENTALS: Record<string, FigureAccidental> = {
   '##': 'doubleSharp',
   '♯♯': 'doubleSharp',
   bb: 'doubleFlat',
@@ -80,7 +80,7 @@ const DOUBLE_ACCIDENTALS: Record<string, FigureAccidental> = {
  * Single-character accidental prefixes. `+` is the typed form of the slashed or
  * crossed figure, which is the one sign that raises rather than names.
  */
-const SINGLE_ACCIDENTALS: Record<string, FigureAccidental> = {
+export const SINGLE_ACCIDENTALS: Record<string, FigureAccidental> = {
   '#': 'sharp',
   '♯': 'sharp',
   '+': 'raised',
@@ -91,10 +91,14 @@ const SINGLE_ACCIDENTALS: Record<string, FigureAccidental> = {
 };
 
 /** Characters that merely separate stacked figures, as the slash in `6/4` does. */
-const FIGURE_SEPARATORS = new Set([' ', '\t', ',', '/']);
+export const FIGURE_SEPARATOR_LIST: readonly string[] = [' ', '\t', ',', '/'];
+
+const FIGURE_SEPARATORS = new Set(FIGURE_SEPARATOR_LIST);
 
 /** Characters that link a figure to the figure it moves to, as in `4-3`. */
-const MOTION_MARKS = new Set(['-', '–']);
+export const MOTION_MARK_LIST: readonly string[] = ['-', '–'];
+
+const MOTION_MARKS = new Set(MOTION_MARK_LIST);
 
 /**
  * The one convention the accidentals of this notation are read and written
@@ -108,7 +112,7 @@ const MOTION_MARKS = new Set(['-', '–']);
  * a distance from the key — and the slashed or crossed figure, whose whole
  * function is to raise, would be a second spelling of `♯`.
  */
-const PRINTED_ACCIDENTALS: readonly (readonly [FigureAccidental, string, number])[] = [
+export const PRINTED_ACCIDENTALS: readonly (readonly [FigureAccidental, string, number])[] = [
   ['natural', 'n', 0],
   ['sharp', '#', 1],
   ['doubleSharp', '##', 2],
@@ -223,7 +227,7 @@ function parseFigures(text: string): ParsedFigures {
 }
 
 /** What a figure set sounds, and where the chord root sits above the bass. */
-type FiguredSonority = { intervals: readonly number[]; rootInterval: number };
+export type FiguredSonority = { intervals: readonly number[]; rootInterval: number };
 
 /** The root-position triad, which every unfigured bass note carries. */
 const TRIAD: FiguredSonority = { intervals: [3, 5], rootInterval: 1 };
@@ -252,7 +256,7 @@ const SEVENTH_THIRD: FiguredSonority = { intervals: [2, 4, 6], rootInterval: 2 }
  * full stack it stands for are listed, so `6` and `63` name one sonority and
  * `2`, `42` and `642` another.
  */
-const FIGURE_SETS: ReadonlyMap<string, FiguredSonority> = new Map([
+export const FIGURE_SET_ENTRIES: readonly (readonly [string, FiguredSonority])[] = [
   ['', TRIAD],
   ['3', TRIAD],
   ['5', TRIAD],
@@ -271,14 +275,16 @@ const FIGURE_SETS: ReadonlyMap<string, FiguredSonority> = new Map([
   ['2', SEVENTH_THIRD],
   ['2,4', SEVENTH_THIRD],
   ['2,4,6', SEVENTH_THIRD],
-]);
+];
+
+const FIGURE_SETS: ReadonlyMap<string, FiguredSonority> = new Map(FIGURE_SET_ENTRIES);
 
 /**
  * The digits a realized sonority is conventionally written with, keyed by its
  * full interval stack. The inverse of the abbreviations in {@link FIGURE_SETS},
  * and the reason {@link figuredBassOf} emits `6` rather than `63`.
  */
-const FIGURE_ABBREVIATIONS: ReadonlyMap<string, readonly number[]> = new Map([
+export const FIGURE_ABBREVIATION_ENTRIES: readonly (readonly [string, readonly number[]])[] = [
   [TRIAD.intervals.join(','), []],
   [TRIAD_FIRST.intervals.join(','), [6]],
   [TRIAD_SECOND.intervals.join(','), [6, 4]],
@@ -286,7 +292,11 @@ const FIGURE_ABBREVIATIONS: ReadonlyMap<string, readonly number[]> = new Map([
   [SEVENTH_FIRST.intervals.join(','), [6, 5]],
   [SEVENTH_SECOND.intervals.join(','), [4, 3]],
   [SEVENTH_THIRD.intervals.join(','), [4, 2]],
-]);
+];
+
+const FIGURE_ABBREVIATIONS: ReadonlyMap<string, readonly number[]> = new Map(
+  FIGURE_ABBREVIATION_ENTRIES,
+);
 
 /**
  * Index the chord vocabulary by interval template, for the triads and seventh
