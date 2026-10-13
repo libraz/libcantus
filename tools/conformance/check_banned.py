@@ -9,11 +9,11 @@ Source scan (src/** and include/**, except src/js and src/json, which implement 
   - fmax / fmin                       -> js::max / js::min
   - log / log2 / log10 / log1p / exp / exp2 / expm1 / pow  -> js::log2 / js::exp / js::pow
   - std::to_string                    -> js::to_string
-  - printf conversions %f %e %g %a    -> js::to_string / js::to_fixed
+  - printf family, std::format        -> js::to_string / js::to_fixed
   - std::sto* / ato* / strto*         -> js::number / js::parse_int
   - float, long double                -> double
   - FP contraction or fast-math pragmas
-Comments are ignored; string literals are only searched for printf conversions.
+Comments and string literals are ignored.
 
 compile_commands.json: every translation unit must end up with -ffp-contract=off, must not
 enable fast-math, and on x86-64 must use -msse2 -mfpmath=sse.
@@ -58,6 +58,10 @@ CODE_BANS = [
         re.compile(_FN + r"(?:ato[ifl]|atoll|strto(?:d|f|ld|l|ll|ul|ull))\s*\("),
         "ato*/strto*: use js::number/parse_int",
     ),
+    (
+        re.compile(_FN + r"v?(?:s|sn|f|as)?printf\s*\(|\bstd::v?format(?:_to)?\s*\("),
+        "printf/std::format: use js::to_string/to_fixed",
+    ),
     (re.compile(r"\bfloat\b"), "float: use double"),
     (re.compile(r"\blong\s+double\b"), "long double: use double"),
     (
@@ -67,7 +71,6 @@ CODE_BANS = [
         "floating-point pragma",
     ),
 ]
-PRINTF_FLOAT = re.compile(r"%[-+ #0']*(?:\d+|\*)?(?:\.(?:\d+|\*))?(?:L|l|ll)?[fFeEgGaA]")
 FAST_MATH_FLAGS = {
     "-ffast-math",
     "-Ofast",
@@ -84,22 +87,16 @@ _TOKEN = re.compile(
 )
 
 
-def split_code(text: str) -> tuple[str, list[tuple[int, str]]]:
-    """Code with comments and literals blanked (lines kept), and the string literals by line."""
-    strings: list[tuple[int, str]] = []
+def split_code(text: str) -> str:
+    """Code with comments and literals blanked, line numbers kept."""
     out: list[str] = []
     last = 0
     for m in _TOKEN.finditer(text):
         out.append(text[last : m.start()])
-        token = m.group(0)
-        line = text.count("\n", 0, m.start()) + 1
-        content = m.group("raw") if m.group("raw") is not None else m.group("str")
-        if content is not None:
-            strings.append((line, content))
-        out.append(re.sub(r"[^\n]", " ", token))
+        out.append(re.sub(r"[^\n]", " ", m.group(0)))
         last = m.end()
     out.append(text[last:])
-    return "".join(out), strings
+    return "".join(out)
 
 
 def scan_sources() -> tuple[int, list[str]]:
@@ -115,16 +112,11 @@ def scan_sources() -> tuple[int, list[str]]:
                 files.append((rel, p))
     problems = []
     for rel, path in files:
-        code, strings = split_code(path.read_text(encoding="utf-8", errors="surrogateescape"))
+        code = split_code(path.read_text(encoding="utf-8", errors="surrogateescape"))
         for number, line in enumerate(code.splitlines(), 1):
             for pattern, message in CODE_BANS:
                 if pattern.search(line):
                     problems.append(f"{rel}:{number}: {message}")
-        for number, literal in strings:
-            if PRINTF_FLOAT.search(literal):
-                problems.append(
-                    f"{rel}:{number}: printf float conversion: use js::to_string/to_fixed"
-                )
     return len(files), problems
 
 
