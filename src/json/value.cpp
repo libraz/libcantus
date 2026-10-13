@@ -1,4 +1,6 @@
 #include <cstdint>
+#include <utility>
+#include <vector>
 
 #include "json/json.h"
 
@@ -131,12 +133,149 @@ Value::Value(std::string s) : data_(std::move(s)) {}
 Value::Value(std::string_view s) : data_(std::string(s)) {}
 Value::Value(Array a) : data_(std::move(a)) {}
 Value::Value(Object o) : data_(std::move(o)) {}
-Value::Value(const Value& other) = default;
+Value::Value(const Value& other) : data_(nullptr) {
+  if (!other.is_array() && !other.is_object()) {
+    data_ = other.data_;
+    return;
+  }
+  // Containers are built level by level from an explicit work list; element addresses stay
+  // valid because every child vector is sized once, before its own children are queued.
+  std::vector<std::pair<const Value*, Value*>> work;
+  work.emplace_back(&other, this);
+  while (!work.empty()) {
+    auto [src, dst] = work.back();
+    work.pop_back();
+    if (src->is_array()) {
+      const Array& from = src->as_array();
+      dst->data_ = Array(from.size());
+      Array& to = dst->as_array();
+      for (std::size_t i = 0; i < from.size(); ++i) {
+        if (from[i].is_array() || from[i].is_object()) {
+          work.emplace_back(&from[i], &to[i]);
+        } else {
+          to[i].data_ = from[i].data_;
+        }
+      }
+    } else {
+      const Object& from = src->as_object();
+      Object shell;
+      shell.members_.reserve(from.size());
+      for (const Member& m : from) {
+        shell.members_.push_back(Member{m.key, Value()});
+      }
+      dst->data_ = std::move(shell);
+      Object& to = dst->as_object();
+      std::size_t i = 0;
+      for (const Member& m : from) {
+        Value& slot = to.members_[i++].value;
+        if (m.value.is_array() || m.value.is_object()) {
+          work.emplace_back(&m.value, &slot);
+        } else {
+          slot.data_ = m.value.data_;
+        }
+      }
+    }
+  }
+}
 Value::Value(Value&& other) noexcept = default;
-Value& Value::operator=(const Value& other) = default;
+Value& Value::operator=(const Value& other) {
+  if (this != &other) {
+    *this = Value(other);
+  }
+  return *this;
+}
 Value& Value::operator=(Value&& other) noexcept = default;
-Value::~Value() = default;
 
-bool operator==(const Value& a, const Value& b) { return a.data_ == b.data_; }
+void Value::detach_children(std::vector<Value>& out) {
+  if (is_array()) {
+    Array& items = as_array();
+    for (Value& item : items) {
+      if (item.is_array() || item.is_object()) {
+        out.push_back(std::move(item));
+      }
+    }
+    items.clear();
+  } else if (is_object()) {
+    Object& obj = as_object();
+    for (Member& m : obj.members_) {
+      if (m.value.is_array() || m.value.is_object()) {
+        out.push_back(std::move(m.value));
+      }
+    }
+    obj.members_.clear();
+    obj.index_.reset();
+  }
+}
+
+Value::~Value() {
+  if (!is_array() && !is_object()) {
+    return;
+  }
+  // Tear nested containers down from an explicit list so depth never reaches the native stack.
+  std::vector<Value> pending;
+  detach_children(pending);
+  while (!pending.empty()) {
+    Value next = std::move(pending.back());
+    pending.pop_back();
+    next.detach_children(pending);
+  }
+}
+
+bool operator==(const Value& a, const Value& b) {
+  std::vector<std::pair<const Value*, const Value*>> work;
+  work.emplace_back(&a, &b);
+  while (!work.empty()) {
+    auto [x, y] = work.back();
+    work.pop_back();
+    if (x->kind() != y->kind()) {
+      return false;
+    }
+    switch (x->kind()) {
+      case Kind::kNull:
+        break;
+      case Kind::kBool:
+        if (x->as_bool() != y->as_bool()) {
+          return false;
+        }
+        break;
+      case Kind::kNumber:
+        if (!(x->as_number() == y->as_number())) {
+          return false;
+        }
+        break;
+      case Kind::kString:
+        if (x->as_string() != y->as_string()) {
+          return false;
+        }
+        break;
+      case Kind::kArray: {
+        const Array& l = x->as_array();
+        const Array& r = y->as_array();
+        if (l.size() != r.size()) {
+          return false;
+        }
+        for (std::size_t i = 0; i < l.size(); ++i) {
+          work.emplace_back(&l[i], &r[i]);
+        }
+        break;
+      }
+      case Kind::kObject: {
+        const Object& l = x->as_object();
+        const Object& r = y->as_object();
+        if (l.size() != r.size()) {
+          return false;
+        }
+        for (const Member *p = l.begin(), *q = r.begin(); p != l.end(); ++p, ++q) {
+          if (p->key != q->key) {
+            return false;
+          }
+          work.emplace_back(&p->value, &q->value);
+        }
+        break;
+      }
+    }
+  }
+  return true;
+}
 
 }  // namespace cantus::json

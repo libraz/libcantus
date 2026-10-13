@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "js/decimal.h"
 #include "js/utf16.h"
@@ -15,7 +16,7 @@ class Parser {
 
   Value parse_document() {
     skip_space();
-    Value v = parse_value(0);
+    Value v = parse_value();
     skip_space();
     if (pos_ != text_.size()) {
       fail("unexpected trailing content");
@@ -44,15 +45,15 @@ class Parser {
     pos_ += word.size();
   }
 
-  Value parse_value(std::size_t depth) {
-    if (at_end()) {
-      fail("unexpected end of input");
-    }
+  /** An array or object whose members are still being read; `key` is the member being parsed. */
+  struct Frame {
+    Value value;
+    std::string key;
+  };
+
+  /** A non-container value at the current position. */
+  Value parse_scalar() {
     switch (peek()) {
-      case '{':
-        return parse_object(depth + 1);
-      case '[':
-        return parse_array(depth + 1);
       case '"':
         return Value(parse_string());
       case 't':
@@ -78,66 +79,80 @@ class Parser {
     }
   }
 
-  Value parse_array(std::size_t depth) {
-    check_depth(depth);
-    ++pos_;
-    Array items;
+  /** An object key and its `:`, leaving the position at the member value. */
+  std::string parse_key() {
+    if (at_end() || peek() != '"') {
+      fail("expected a string key");
+    }
+    std::string key = parse_string();
     skip_space();
-    if (!at_end() && peek() == ']') {
-      ++pos_;
-      return Value(std::move(items));
+    if (at_end() || peek() != ':') {
+      fail("expected ':'");
     }
-    while (true) {
-      skip_space();
-      items.push_back(parse_value(depth));
-      skip_space();
-      if (at_end()) {
-        fail("unterminated array");
-      }
-      if (peek() == ',') {
-        ++pos_;
-      } else if (peek() == ']') {
-        ++pos_;
-        return Value(std::move(items));
-      } else {
-        fail("expected ',' or ']'");
-      }
-    }
+    ++pos_;
+    skip_space();
+    return key;
   }
 
-  Value parse_object(std::size_t depth) {
-    check_depth(depth);
-    ++pos_;
-    Object members;
-    skip_space();
-    if (!at_end() && peek() == '}') {
-      ++pos_;
-      return Value(std::move(members));
-    }
+  /** Nesting is tracked on an explicit stack so depth costs heap, not native stack. */
+  Value parse_value() {
+    std::vector<Frame> stack;
     while (true) {
-      skip_space();
-      if (at_end() || peek() != '"') {
-        fail("expected a string key");
-      }
-      std::string key = parse_string();
-      skip_space();
-      if (at_end() || peek() != ':') {
-        fail("expected ':'");
-      }
-      ++pos_;
-      skip_space();
-      members.set(std::move(key), parse_value(depth));
-      skip_space();
       if (at_end()) {
-        fail("unterminated object");
+        fail("unexpected end of input");
       }
-      if (peek() == ',') {
+      Value done;
+      const char open = peek();
+      if (open == '{' || open == '[') {
+        check_depth(stack.size() + 1);
         ++pos_;
-      } else if (peek() == '}') {
-        ++pos_;
-        return Value(std::move(members));
+        skip_space();
+        const bool is_object = open == '{';
+        const bool empty = !at_end() && peek() == (is_object ? '}' : ']');
+        Value container = is_object ? Value(Object()) : Value(Array());
+        if (empty) {
+          ++pos_;
+          done = std::move(container);
+        } else {
+          stack.push_back(Frame{std::move(container), std::string()});
+          if (is_object) {
+            stack.back().key = parse_key();
+          }
+          continue;
+        }
       } else {
-        fail("expected ',' or '}'");
+        done = parse_scalar();
+      }
+      // Attach the finished value to its parent, closing parents that end here.
+      while (true) {
+        if (stack.empty()) {
+          return done;
+        }
+        Frame& frame = stack.back();
+        const bool is_object = frame.value.is_object();
+        if (is_object) {
+          frame.value.as_object().set(std::move(frame.key), std::move(done));
+        } else {
+          frame.value.as_array().push_back(std::move(done));
+        }
+        skip_space();
+        if (at_end()) {
+          fail(is_object ? "unterminated object" : "unterminated array");
+        }
+        if (peek() == ',') {
+          ++pos_;
+          skip_space();
+          if (is_object) {
+            frame.key = parse_key();
+          }
+          break;
+        }
+        if (peek() != (is_object ? '}' : ']')) {
+          fail(is_object ? "expected ',' or '}'" : "expected ',' or ']'");
+        }
+        ++pos_;
+        done = std::move(frame.value);
+        stack.pop_back();
       }
     }
   }

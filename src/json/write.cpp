@@ -1,4 +1,5 @@
 #include <cmath>
+#include <vector>
 
 #include "js/format.h"
 #include "js/number.h"
@@ -7,48 +8,65 @@
 namespace cantus::json {
 
 void stringify_to(const Value& value, std::string& out) {
-  switch (value.kind()) {
-    case Kind::kNull:
-      out += "null";
-      return;
-    case Kind::kBool:
-      out += value.as_bool() ? "true" : "false";
-      return;
-    case Kind::kNumber: {
-      double n = value.as_number();
-      out += std::isfinite(n) ? js::to_string(n) : "null";
-      return;
-    }
-    case Kind::kString:
-      js::quote_to(value.as_string(), out);
-      return;
-    case Kind::kArray: {
-      out.push_back('[');
-      bool first = true;
-      for (const Value& item : value.as_array()) {
-        if (!first) {
-          out.push_back(',');
-        }
-        first = false;
-        stringify_to(item, out);
+  // One frame per open container, so nesting depth costs heap, not native stack.
+  struct Frame {
+    const Value* container;
+    std::size_t next;
+  };
+  std::vector<Frame> stack;
+  const Value* current = &value;
+  while (true) {
+    switch (current->kind()) {
+      case Kind::kNull:
+        out += "null";
+        break;
+      case Kind::kBool:
+        out += current->as_bool() ? "true" : "false";
+        break;
+      case Kind::kNumber: {
+        double n = current->as_number();
+        out += std::isfinite(n) ? js::to_string(n) : "null";
+        break;
       }
-      out.push_back(']');
-      return;
+      case Kind::kString:
+        js::quote_to(current->as_string(), out);
+        break;
+      case Kind::kArray:
+        out.push_back('[');
+        stack.push_back(Frame{current, 0});
+        break;
+      case Kind::kObject:
+        out.push_back('{');
+        stack.push_back(Frame{current, 0});
+        break;
     }
-    case Kind::kObject: {
-      out.push_back('{');
-      bool first = true;
-      for (const Member& member : value.as_object()) {
-        if (!first) {
-          out.push_back(',');
-        }
-        first = false;
+    // Advance to the next value to write, closing containers that are exhausted.
+    while (true) {
+      if (stack.empty()) {
+        return;
+      }
+      Frame& frame = stack.back();
+      const bool is_array = frame.container->is_array();
+      const std::size_t size =
+          is_array ? frame.container->as_array().size() : frame.container->as_object().size();
+      if (frame.next == size) {
+        out.push_back(is_array ? ']' : '}');
+        stack.pop_back();
+        continue;
+      }
+      if (frame.next > 0) {
+        out.push_back(',');
+      }
+      if (is_array) {
+        current = &frame.container->as_array()[frame.next];
+      } else {
+        const Member& member = frame.container->as_object().begin()[frame.next];
         js::quote_to(member.key, out);
         out.push_back(':');
-        stringify_to(member.value, out);
+        current = &member.value;
       }
-      out.push_back('}');
-      return;
+      ++frame.next;
+      break;
     }
   }
 }

@@ -79,6 +79,8 @@ class Object {
   friend bool operator!=(const Object& a, const Object& b) { return !(a == b); }
 
  private:
+  friend class Value;
+
   std::ptrdiff_t index_of(std::string_view key) const;
 
   std::vector<Member> members_;
@@ -102,6 +104,7 @@ class Value {
   Value(std::string_view s);  // NOLINT(google-explicit-constructor)
   Value(Array a);             // NOLINT(google-explicit-constructor)
   Value(Object o);            // NOLINT(google-explicit-constructor)
+  /** Deep copy; nesting depth costs heap, not native stack. */
   Value(const Value& other);
   Value(Value&& other) noexcept;
   Value& operator=(const Value& other);
@@ -125,11 +128,14 @@ class Value {
   const Object& as_object() const { return std::get<Object>(data_); }
   Object& as_object() { return std::get<Object>(data_); }
 
-  /** Deep equality; numbers compare with `==`. */
+  /** Deep equality; numbers compare with `==`. Iterative, like copy and destruction. */
   friend bool operator==(const Value& a, const Value& b);
   friend bool operator!=(const Value& a, const Value& b) { return !(a == b); }
 
  private:
+  /** Move the nested arrays and objects out of this value, leaving it with no container children. */
+  void detach_children(std::vector<Value>& out);
+
   std::variant<std::nullptr_t, bool, double, std::string, Array, Object> data_;
 };
 

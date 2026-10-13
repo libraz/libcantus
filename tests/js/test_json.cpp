@@ -1,10 +1,15 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <functional>
 #include <string>
 #include <vector>
 
 #include "js/utf16.h"
 #include "json/json.h"
+
+#ifndef _WIN32
+#include <pthread.h>
+#endif
 
 namespace json = cantus::json;
 
@@ -162,3 +167,111 @@ TEST_CASE("non-finite numbers are written as null", "[json]") {
   json::Array a{json::Value(NAN), json::Value(INFINITY), json::Value(-0.0), json::Value(1.5)};
   CHECK(json::stringify(json::Value(a)) == "[null,null,0,1.5]");
 }
+
+#ifndef _WIN32
+
+namespace {
+
+/** Run `fn` on a thread with a 256 KB stack; false when the thread could not be started. */
+bool run_on_small_stack(const std::function<void()>& fn) {
+  pthread_attr_t attr;
+  pthread_attr_init(&attr);
+  pthread_attr_setstacksize(&attr, 256 * 1024);
+  pthread_t thread;
+  bool started = pthread_create(
+                     &thread, &attr,
+                     [](void* arg) -> void* {
+                       (*static_cast<const std::function<void()>*>(arg))();
+                       return nullptr;
+                     },
+                     const_cast<std::function<void()>*>(&fn)) == 0;
+  pthread_attr_destroy(&attr);
+  if (started) {
+    pthread_join(thread, nullptr);
+  }
+  return started;
+}
+
+/** Text nesting `depth` containers, alternating array and object. */
+std::string nested_text(std::size_t depth) {
+  std::string open;
+  std::string close;
+  for (std::size_t i = 0; i < depth; ++i) {
+    if (i % 2 == 0) {
+      open += "[";
+      close.insert(close.begin(), ']');
+    } else {
+      open += "{\"k\":";
+      close.insert(close.begin(), '}');
+    }
+  }
+  return open + "1" + close;
+}
+
+}  // namespace
+
+TEST_CASE("kMaxDepth nesting is parsed, copied, compared, written and destroyed on a small stack",
+          "[json][stack]") {
+  const std::string text = nested_text(json::kMaxDepth);
+  bool parsed = false;
+  bool copied_equal = false;
+  bool differs_after_edit = false;
+  bool written_back = false;
+  bool assigned_equal = false;
+  bool started = run_on_small_stack([&] {
+    json::Value v = json::parse(text);
+    parsed = true;
+    json::Value copy = v;
+    copied_equal = copy == v;
+    json::Value assigned;
+    assigned = v;
+    assigned_equal = assigned == v;
+    // Change the innermost scalar of the copy; the outermost value is an array.
+    json::Value* node = &copy;
+    while (node->is_array() || node->is_object()) {
+      node = node->is_array() ? &node->as_array()[0] : node->as_object().find("k");
+    }
+    *node = json::Value(2);
+    differs_after_edit = copy != v;
+    written_back = json::stringify(v) == text;
+  });
+  REQUIRE(started);
+  CHECK(parsed);
+  CHECK(copied_equal);
+  CHECK(assigned_equal);
+  CHECK(differs_after_edit);
+  CHECK(written_back);
+}
+
+TEST_CASE("nesting beyond kMaxDepth is rejected on a small stack", "[json][stack]") {
+  const std::string text = nested_text(json::kMaxDepth + 1);
+  bool rejected = false;
+  bool started = run_on_small_stack([&] {
+    try {
+      json::parse(text);
+    } catch (const json::ParseError&) {
+      rejected = true;
+    }
+  });
+  REQUIRE(started);
+  CHECK(rejected);
+}
+
+TEST_CASE("a deep value built by hand is destroyed on a small stack", "[json][stack]") {
+  bool done = false;
+  bool started = run_on_small_stack([&] {
+    json::Value v(1);
+    for (std::size_t i = 0; i < json::kMaxDepth; ++i) {
+      json::Object o;
+      o.set("k", std::move(v));
+      json::Array a;
+      a.push_back(json::Value(std::move(o)));
+      v = json::Value(std::move(a));
+    }
+    done = true;
+  });
+  REQUIRE(started);
+  CHECK(done);
+}
+
+#endif
