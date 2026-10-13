@@ -4,13 +4,11 @@
 
 #include "js/number.h"
 #include "js/utf16.h"
+#include "js/value.h"
 
 namespace cantus::js {
 
 namespace {
-
-/** Longest echo of a rejected string, in UTF-16 code units (MAX_ECHOED_LENGTH in TS). */
-constexpr std::size_t kMaxEchoedLength = 64;
 
 constexpr char kHex[] = "0123456789abcdef";
 
@@ -83,30 +81,6 @@ void append_template(const json::Value& v, std::string& out) {
   }
 }
 
-/** `typeof` of the JS value `v` stands for. */
-const char* type_of(const json::Value& v) {
-  switch (v.kind()) {
-    case json::Kind::kNull:
-    case json::Kind::kArray:
-      return "object";
-    case json::Kind::kBool:
-      return "boolean";
-    case json::Kind::kNumber:
-      return "number";
-    case json::Kind::kString:
-      return "string";
-    case json::Kind::kObject:
-      break;
-  }
-  const json::Object& o = v.as_object();
-  if (o.contains("$n")) return "number";
-  if (o.contains("$u")) return "undefined";
-  if (o.contains("$big")) return "bigint";
-  if (o.contains("$sym")) return "symbol";
-  if (o.contains("$cb")) return "function";
-  return "object";
-}
-
 }  // namespace
 
 void quote_to(std::string_view s, std::string& out) {
@@ -159,22 +133,6 @@ std::string template_string(const json::Value& v) {
   std::string out;
   append_template(v, out);
   return out;
-}
-
-std::string describe_rejected(const json::Value& v) {
-  if (v.is_null()) {
-    return "null";
-  }
-  if (!v.is_string()) {
-    return type_of(v);
-  }
-  const std::string& s = v.as_string();
-  std::size_t length = utf16_length(s);
-  if (length <= kMaxEchoedLength) {
-    return quote(s);
-  }
-  return quote(utf16_slice(s, 0, static_cast<double>(kMaxEchoedLength))) + " (truncated from " +
-         std::to_string(length) + " characters)";
 }
 
 }  // namespace cantus::js

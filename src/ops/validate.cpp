@@ -9,6 +9,7 @@
 #include "core/validation/validation.h"
 #include "js/format.h"
 #include "js/number.h"
+#include "js/value.h"
 #include "ops/accessors.h"
 #include "ops/codec.h"
 
@@ -36,7 +37,7 @@ bool is_finite_number(const json::Value& v) {
 void assert_bounds(const json::Value& min, const json::Value& max, std::string_view name) {
   if (!is_finite_number(min) || !is_finite_number(max)) {
     throw InvalidInputError(str(name) + " must be bounded by finite numbers; received [" +
-                            js::describe_rejected(min) + ", " + js::describe_rejected(max) + "]");
+                            describe_rejected(min) + ", " + describe_rejected(max) + "]");
   }
 }
 
@@ -70,73 +71,7 @@ std::string join_names(const json::Array& names) {
 
 }  // namespace
 
-std::string type_of(const json::Value& v) {
-  if (v.is_string()) {
-    return "string";
-  }
-  // describeRejected names every non-string by its typeof, except null.
-  return v.is_null() ? "object" : js::describe_rejected(v);
-}
-
-bool is_js_object(const json::Value& v) { return !v.is_null() && type_of(v) == "object"; }
-
-bool truthy(const json::Value& v) {
-  switch (v.kind()) {
-    case json::Kind::kNull:
-      return false;
-    case json::Kind::kBool:
-      return v.as_bool();
-    case json::Kind::kNumber:
-      return v.as_number() != 0 && !std::isnan(v.as_number());
-    case json::Kind::kString:
-      return !v.as_string().empty();
-    case json::Kind::kArray:
-      return true;
-    case json::Kind::kObject:
-      break;
-  }
-  switch (tag_of(v)) {
-    case Tag::kNumber: {
-      double n = *number_of(v);
-      return n != 0 && !std::isnan(n);
-    }
-    case Tag::kUndefined:
-      return false;
-    case Tag::kBigInt:
-      return v.as_object().find("$big")->as_string() != "0";
-    default:
-      return true;
-  }
-}
-
-double to_number(const json::Value& v) {
-  switch (v.kind()) {
-    case json::Kind::kNull:
-      return 0;
-    case json::Kind::kBool:
-      return v.as_bool() ? 1 : 0;
-    case json::Kind::kNumber:
-      return v.as_number();
-    case json::Kind::kString:
-      return js::number(v.as_string());
-    case json::Kind::kArray:
-      return js::number(js::template_string(v));
-    case json::Kind::kObject:
-      break;
-  }
-  switch (tag_of(v)) {
-    case Tag::kNumber:
-      return *number_of(v);
-    case Tag::kBigInt:
-      return js::number(v.as_object().find("$big")->as_string());
-    case Tag::kSymbol:
-      throw js::TypeError("Cannot convert a Symbol value to a number");
-    case Tag::kToJson:
-      return js::number(v.as_object().find("$repr")->as_string());
-    default:
-      return std::nan("");
-  }
-}
+bool is_js_object(const json::Value& v) { return !v.is_null() && js::type_of(v) == "object"; }
 
 const json::Value& get(const json::Value& v, std::string_view key) {
   const json::Value* f = field(v, key);
@@ -184,7 +119,7 @@ json::Value drop_silent_notes(json::Value events) {
   for (json::Value& event : events.as_array()) {
     // `event.durationBeat > 0`: a primitive has no such property, and the comparison coerces.
     const json::Value* duration = field(event, "durationBeat");
-    if (duration != nullptr && to_number(*duration) > 0) {
+    if (duration != nullptr && js::to_number(*duration) > 0) {
       kept.push_back(std::move(event));
     }
   }
@@ -194,7 +129,7 @@ json::Value drop_silent_notes(json::Value events) {
 const json::Array& assert_array(const json::Value& value, std::string_view name) {
   if (!value.is_array()) {
     throw InvalidInputError(str(name) + " must be an array; received " +
-                            js::describe_rejected(value));
+                            describe_rejected(value));
   }
   return value.as_array();
 }
@@ -202,7 +137,7 @@ const json::Array& assert_array(const json::Value& value, std::string_view name)
 const json::Value& assert_record(const json::Value& value, std::string_view name) {
   if (!is_js_object(value) || value.is_array()) {
     throw InvalidInputError(str(name) + " must be an object; received " +
-                            js::describe_rejected(value));
+                            describe_rejected(value));
   }
   return value;
 }
@@ -215,15 +150,15 @@ const json::Value& assert_options(const json::Value& value, std::string_view nam
 bool assert_flag(const json::Value& value, std::string_view name) {
   if (!value.is_bool()) {
     throw InvalidInputError(str(name) + " must be a boolean; received " +
-                            js::describe_rejected(value));
+                            describe_rejected(value));
   }
   return value.as_bool();
 }
 
 const json::Value& assert_function(const json::Value& value, std::string_view name) {
-  if (type_of(value) != "function") {
+  if (js::type_of(value) != "function") {
     throw InvalidInputError(str(name) + " must be a function; received " +
-                            js::describe_rejected(value));
+                            describe_rejected(value));
   }
   return value;
 }
@@ -240,7 +175,7 @@ std::string assert_one_of(const json::Value& value, const json::Value& allowed,
     }
   }
   throw InvalidInputError(str(name) + " must be one of " + join_names(names) + "; received " +
-                          js::describe_rejected(value));
+                          describe_rejected(value));
 }
 
 std::string assert_one_of(const json::Value& value, const std::vector<std::string_view>& allowed,
@@ -251,7 +186,7 @@ std::string assert_one_of(const json::Value& value, const std::vector<std::strin
       names.emplace_back(n);
     }
     throw InvalidInputError(str(name) + " must be one of " + join_names(names) + "; received " +
-                            js::describe_rejected(value));
+                            describe_rejected(value));
   }
   return std::string(cantus::assert_one_of(value.as_string(), allowed, name));
 }
@@ -324,7 +259,7 @@ TimeSignature assert_time_signature(const json::Value& ts, std::string_view name
   // The shape is checked before any field is read.
   if (!is_js_object(ts)) {
     throw InvalidInputError(str(name) + " must be a time signature; received " +
-                            js::describe_rejected(ts));
+                            describe_rejected(ts));
   }
   double numerator = assert_positive_int(get(ts, "numerator"), join_name(name, ".numerator"));
   double denominator = assert_positive_int(get(ts, "denominator"), join_name(name, ".denominator"));
@@ -333,7 +268,7 @@ TimeSignature assert_time_signature(const json::Value& ts, std::string_view name
   if (!is_undefined(grouping)) {
     if (!grouping.is_array()) {
       throw InvalidInputError(str(name) + ".grouping must be an array of group lengths; received " +
-                              js::describe_rejected(grouping));
+                              describe_rejected(grouping));
     }
     const json::Array& groups = grouping.as_array();
     if (groups.empty()) {
@@ -357,7 +292,7 @@ TimeSignature assert_time_signature(const json::Value& ts, std::string_view name
 
 MeterMap assert_meter_map(const json::Value& meters, std::string_view name) {
   if (!meters.is_array()) {
-    throw InvalidInputError(str(name) + " must be an array; received " + type_of(meters));
+    throw InvalidInputError(str(name) + " must be an array; received " + js::type_of(meters));
   }
   const json::Array& entries = meters.as_array();
   if (entries.empty()) {
@@ -374,7 +309,7 @@ MeterMap assert_meter_map(const json::Value& meters, std::string_view name) {
     // A hole, a null and a number are refused here rather than at the first field read.
     if (!is_js_object(entry)) {
       throw InvalidInputError(at + " must be a meter change; received " +
-                              js::describe_rejected(entry));
+                              describe_rejected(entry));
     }
     double start_beat = assert_finite_number(get(entry, "startBeat"), at + ".startBeat");
     if (i > 0 && start_beat <= previous) {
@@ -392,7 +327,7 @@ NoteEvent assert_note_event(const json::Value& event, std::string_view name,
   const json::Value& asked = assert_options(options, join_name(name, " options"));
   if (!is_js_object(event)) {
     throw InvalidInputError(str(name) + " must be a note event; received " +
-                            js::describe_rejected(event));
+                            describe_rejected(event));
   }
   NoteEvent out;
   out.pitch = static_cast<int>(assert_midi_pitch(get(event, "pitch"), join_name(name, ".pitch")));
@@ -404,7 +339,7 @@ NoteEvent assert_note_event(const json::Value& event, std::string_view name,
                                join_name(name, ".startBeat"));
   std::string duration_name = join_name(name, ".durationBeat");
   out.durationBeat = assert_finite_number(get(event, "durationBeat"), duration_name);
-  if (!truthy(get(asked, "allowNonPositiveDuration")) && out.durationBeat <= 0) {
+  if (!js::truthy(get(asked, "allowNonPositiveDuration")) && out.durationBeat <= 0) {
     throw InvalidInputError(duration_name + " must be positive; received " +
                             js::to_string(out.durationBeat));
   }
@@ -429,7 +364,7 @@ std::vector<NoteEvent> assert_note_events(const json::Value& events, std::string
                                           const json::Value& options) {
   const json::Value& asked = assert_options(options, join_name(name, " options"));
   if (!events.is_array()) {
-    throw InvalidInputError(str(name) + " must be an array; received " + type_of(events));
+    throw InvalidInputError(str(name) + " must be an array; received " + js::type_of(events));
   }
   const json::Array& entries = events.as_array();
   assert_generation_budget(json::Value(static_cast<double>(entries.size())),
@@ -441,7 +376,7 @@ std::vector<NoteEvent> assert_note_events(const json::Value& events, std::string
     // A hole, an explicit undefined and a null are all refused here.
     if (!is_js_object(entries[i])) {
       throw InvalidInputError(at + " must be a note event; received " +
-                              js::describe_rejected(entries[i]));
+                              describe_rejected(entries[i]));
     }
     out.push_back(assert_note_event(entries[i], at, asked));
   }

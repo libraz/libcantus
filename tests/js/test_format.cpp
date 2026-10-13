@@ -38,32 +38,6 @@ TEST_CASE("template_string matches a template literal", "[format]") {
   }
 }
 
-TEST_CASE("describe_rejected matches describeRejected", "[format]") {
-  CHECK(js::describe_rejected(json::Value(nullptr)) == "null");
-  CHECK(js::describe_rejected(json::Value("x")) == "\"x\"");
-  CHECK(js::describe_rejected(json::Value(true)) == "boolean");
-  CHECK(js::describe_rejected(json::Value(7)) == "number");
-  CHECK(js::describe_rejected(json::parse("[]")) == "object");
-  CHECK(js::describe_rejected(json::parse("{}")) == "object");
-  CHECK(js::describe_rejected(json::parse(R"({"$n":"NaN"})")) == "number");
-  CHECK(js::describe_rejected(json::parse(R"({"$u":1})")) == "undefined");
-  CHECK(js::describe_rejected(json::parse(R"({"$big":"1"})")) == "bigint");
-  CHECK(js::describe_rejected(json::parse(R"({"$sym":"s"})")) == "symbol");
-  CHECK(js::describe_rejected(json::parse(R"({"$cb":1})")) == "function");
-  CHECK(js::describe_rejected(json::parse(R"({"$class":"Chord"})")) == "object");
-
-  std::string exact(64, 'a');
-  CHECK(js::describe_rejected(json::Value(exact)) == "\"" + exact + "\"");
-  CHECK(js::describe_rejected(json::Value(std::string(65, 'b'))) ==
-        "\"" + std::string(64, 'b') + "\" (truncated from 65 characters)");
-  // 63 'a' + U+1F600 + 'b' is 66 code units; the cut at 64 leaves a lone high surrogate.
-  CHECK(js::describe_rejected(json::Value(std::string(63, 'a') + "\xF0\x9F\x98\x80" + "b")) ==
-        "\"" + std::string(63, 'a') + "\\ud83d\" (truncated from 66 characters)");
-  // 64 code units including a pair is not truncated.
-  CHECK(js::describe_rejected(json::Value(std::string(62, 'a') + "\xF0\x9F\x98\x80")) ==
-        "\"" + std::string(62, 'a') + "\xF0\x9F\x98\x80\"");
-}
-
 TEST_CASE("utf16 helpers count and order by code unit", "[utf16]") {
   const std::string emoji = "\xF0\x9F\x98\x80";
   const std::string halfwidth = "\xEF\xBD\xA1";  // U+FF61

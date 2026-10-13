@@ -25,7 +25,7 @@ export const DEFAULT_GENERATION_BUDGET = 1_000_000;
  * pass. The bound is far above any notated piece — a change on every bar of a
  * hundred thousand bars — and rejects the map rather than the work built on it.
  */
-const MAX_METER_CHANGES = 100_000;
+export const MAX_METER_CHANGES = 100_000;
 
 /**
  * Longest echo of a rejected value an error message carries.
@@ -34,7 +34,7 @@ const MAX_METER_CHANGES = 100_000;
  * given without reprinting it: a validated field can hold a pasted document,
  * and repeating that back turns one bad keystroke into a megabyte of log.
  */
-const MAX_ECHOED_LENGTH = 64;
+export const MAX_ECHOED_LENGTH = 64;
 
 /**
  * Describe a rejected value for an error message, without ever throwing.

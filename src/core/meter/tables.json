@@ -1,8 +1,23 @@
 {
+  "tables": [
+    {
+      "module": "core/meter/index.ts",
+      "export": "DEFAULT_TS",
+      "form": "record",
+      "cxx_type": "TimeSignature",
+      "cxx_name": "kDefaultTs",
+      "fields": ["numerator", "denominator", "grouping"]
+    }
+  ],
   "limits": [
     {
       "module": "core/meter/internal.ts",
       "export": "BEAT_EPS",
+      "cxx_type": "double"
+    },
+    {
+      "module": "core/meter/index.ts",
+      "export": "MAX_CHANGE_DIVISIONS",
       "cxx_type": "double"
     }
   ]

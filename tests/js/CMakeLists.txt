@@ -36,6 +36,7 @@ set(CANTUS_JS_JSON_SOURCES
     ${CANTUS_SRC_DIR}/js/math.cpp
     ${CANTUS_SRC_DIR}/js/number.cpp
     ${CANTUS_SRC_DIR}/js/utf16.cpp
+    ${CANTUS_SRC_DIR}/js/value.cpp
     ${CANTUS_SRC_DIR}/json/parse.cpp
     ${CANTUS_SRC_DIR}/json/value.cpp
     ${CANTUS_SRC_DIR}/json/write.cpp)
@@ -60,7 +61,7 @@ set_source_files_properties(ieee754_fused.cpp PROPERTIES COMPILE_OPTIONS "${CANT
 
 add_executable(cantus_js_tests
     ieee754_fused.cpp test_format.cpp test_json.cpp test_math.cpp test_number.cpp
-    test_vectors.cpp)
+    test_value.cpp test_vectors.cpp)
 target_link_libraries(cantus_js_tests PRIVATE cantus_js_test_lib Catch2::Catch2WithMain)
 target_compile_definitions(cantus_js_tests
                            PRIVATE CANTUS_JS_VECTOR_DIR="${CMAKE_CURRENT_SOURCE_DIR}/vectors")

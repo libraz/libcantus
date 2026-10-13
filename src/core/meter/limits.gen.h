@@ -7,6 +7,9 @@ namespace cantus {
 /** BEAT_EPS of ts/src/core/meter/internal.ts. */
 inline constexpr double BEAT_EPS = 1e-9;
 
+/** MAX_CHANGE_DIVISIONS of ts/src/core/meter/index.ts. */
+inline constexpr double MAX_CHANGE_DIVISIONS = 16;
+
 }  // namespace cantus
 
 #endif  // CANTUS_SRC_CORE_METER_LIMITS_GEN_H_

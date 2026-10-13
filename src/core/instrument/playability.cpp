@@ -14,6 +14,7 @@
 #include "cantus/core/instrument.h"
 #include "cantus/core/validation.h"
 #include "core/instrument/profile.h"
+#include "core/instrument/limits.gen.h"
 #include "core/meter/limits.gen.h"
 #include "js/math.h"
 #include "js/number.h"
@@ -21,23 +22,6 @@
 namespace cantus {
 
 namespace {
-
-// The constants of ts/src/core/instrument/playability.ts, which does not export them; the corpus
-// replay of playability pins every one through the difficulty and the issues it reports.
-/** Tempo the difficulty is measured at when the caller gives none. */
-constexpr double REFERENCE_BPM = 120;
-/** Fastest the fretting hand shifts along the neck, in frets per second. */
-constexpr double MAX_FRET_SHIFT_PER_SECOND = 100;
-/** Shortest gap between two strokes of one limb, in seconds. */
-constexpr double MIN_LIMB_STROKE_SECONDS = 0.06;
-/** Movement rate, in units per second, that reads as a demanding passage. */
-constexpr double DIFFICULTY_SCALE = 12;
-constexpr double MIN_DIFFICULTY = 1;
-constexpr double MAX_DIFFICULTY = 5;
-/** Cost of crossing one string, relative to moving one fret. */
-constexpr double STRING_CROSSING_COST = 2;
-/** Onsets no further apart than this many beats count as simultaneous. */
-constexpr double SIMULTANEITY_BEATS = 1.0 / 128;
 
 /** Working state shared by both instrument families. */
 struct Analysis {

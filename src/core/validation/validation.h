@@ -13,17 +13,13 @@
 #include <vector>
 
 #include "cantus/core/validation.h"
+#include "core/validation/limits.gen.h"
+#include "json/json.h"
 
 namespace cantus {
 
 /** `Number.MAX_SAFE_INTEGER`. */
 inline constexpr double kMaxSafeInteger = 9007199254740991.0;
-
-/**
- * MAX_METER_CHANGES of ts/src/core/validation/index.ts, which does not export it; the corpus
- * replay of assertMeterMap pins the value.
- */
-inline constexpr double MAX_METER_CHANGES = 100000;
 
 /** `Number.isSafeInteger(value)`. */
 bool is_safe_integer(double value) noexcept;
@@ -53,6 +49,12 @@ inline std::string join_name(std::string_view name, std::string_view suffix) {
 }
 
 /** The decimal text of an index, as `${index}` writes it. */
+/**
+ * `describeRejected(v)`: "null", a quoted string (its first MAX_ECHOED_LENGTH code units, then
+ * " (truncated from N characters)"), or the `typeof` name.
+ */
+std::string describe_rejected(const json::Value& v);
+
 std::string index_text(std::size_t index);
 
 }  // namespace cantus

@@ -237,7 +237,7 @@ export type StringFingering = {
  * is what keeps every routine that walks the instrument by octaves — the range,
  * the fingerings, the folding — finite for every profile the library accepts.
  */
-const MAX_FRETS = 127;
+export const MAX_FRETS = 127;
 
 /**
  * Greatest number of notes one instrument may sound at once.
@@ -246,7 +246,7 @@ const MAX_FRETS = 127;
  * one instant is sounding one of them twice — which is a voicing question
  * rather than a property of the instrument.
  */
-const MAX_POLYPHONY = 128;
+export const MAX_POLYPHONY = 128;
 
 /**
  * Reject a profile whose own description is contradictory.

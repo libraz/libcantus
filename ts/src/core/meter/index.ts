@@ -243,7 +243,7 @@ export type BarPosition = {
  * meter back: a shared default that a caller can write to is a default the
  * whole process then reads differently.
  */
-const DEFAULT_TS: TimeSignature = Object.freeze({ numerator: 4, denominator: 4 });
+export const DEFAULT_TS: TimeSignature = Object.freeze({ numerator: 4, denominator: 4 });
 
 /**
  * How far {@link metricGridUnit} divides a pulse to land on a meter change.
@@ -251,7 +251,7 @@ const DEFAULT_TS: TimeSignature = Object.freeze({ numerator: 4, denominator: 4 }
  * The finest subdivision a bar is written in, which is what separates a change
  * placed inside a bar from one placed a floating hair off a beat.
  */
-const MAX_CHANGE_DIVISIONS = 16;
+export const MAX_CHANGE_DIVISIONS = 16;
 
 /** Whether `value` is an integer multiple of `unit` (within a float tolerance). */
 function isMultiple(value: number, unit: number): boolean {

@@ -100,19 +100,19 @@ export type PlayabilityReport = {
 };
 
 /** Tempo the difficulty is measured at when the caller gives none. */
-const REFERENCE_BPM = 120;
+export const REFERENCE_BPM = 120;
 /** Fastest the fretting hand shifts along the neck, in frets per second. */
-const MAX_FRET_SHIFT_PER_SECOND = 100;
+export const MAX_FRET_SHIFT_PER_SECOND = 100;
 /** Shortest gap between two strokes of one limb, in seconds. */
-const MIN_LIMB_STROKE_SECONDS = 0.06;
+export const MIN_LIMB_STROKE_SECONDS = 0.06;
 /** Movement rate, in units per second, that reads as a demanding passage. */
-const DIFFICULTY_SCALE = 12;
-const MIN_DIFFICULTY = 1;
-const MAX_DIFFICULTY = 5;
+export const DIFFICULTY_SCALE = 12;
+export const MIN_DIFFICULTY = 1;
+export const MAX_DIFFICULTY = 5;
 /** Cost of crossing one string, relative to moving one fret. */
-const STRING_CROSSING_COST = 2;
+export const STRING_CROSSING_COST = 2;
 /** Onsets no further apart than this many beats count as simultaneous. */
-const SIMULTANEITY_BEATS = 1 / 128;
+export const SIMULTANEITY_BEATS = 1 / 128;
 
 /** Working state shared by both instrument families. */
 type Analysis = {

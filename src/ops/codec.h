@@ -3,7 +3,7 @@
  * @brief Wire format of the op boundary: value tags, `$$` key escaping, and the output codec.
  *
  * Inside the ops layer a value stays in wire form: tags are kept as tagged objects, and a user key
- * beginning with `$` stays escaped as `$$...`, so js::template_string and js::describe_rejected
+ * beginning with `$` stays escaped as `$$...`, so js::template_string and describe_rejected
  * read the same json::Value the host sent. validate() rejects an unknown or malformed tag before
  * any op runs, and stringify() writes the non-JSON numbers (NaN, ±Infinity, -0) as `$n` tags.
  *

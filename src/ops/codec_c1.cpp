@@ -12,6 +12,7 @@
 #include "js/format.h"
 #include "js/number.h"
 #include "js/utf16.h"
+#include "js/value.h"
 #include "ops/accessors.h"
 #include "ops/validate.h"
 
@@ -64,7 +65,7 @@ std::vector<Articulation> read_articulations(const json::Value& data, const std:
   const json::Value& list = get(data, "articulations");
   if (!list.is_array()) {
     throw InvalidInputError(name + " articulations must be an array; received " +
-                            js::describe_rejected(list));
+                            describe_rejected(list));
   }
   std::vector<Articulation> out;
   const json::Array& entries = list.as_array();
@@ -134,7 +135,7 @@ PercussionProfile read_percussion(const json::Value& data, std::string name,
   const json::Value& reach = get(data, "reach");
   if (!is_js_object(reach)) {
     throw InvalidInputError(name + " reach must be a table of limbs by voice; received " +
-                            js::describe_rejected(reach));
+                            describe_rejected(reach));
   }
   std::vector<std::pair<std::string, const json::Value*>> voices = own_entries(reach);
   for (const auto& [key, entry] : voices) {
@@ -244,13 +245,13 @@ MeterData read_meter_like(const json::Value& value, std::string_view name) {
   }
   throw InvalidInputError(str(name) +
                           " must be a time signature, a meter map, or a signature name; received " +
-                          js::describe_rejected(value));
+                          describe_rejected(value));
 }
 
 InstrumentProfile read_instrument_profile(const json::Value& value, std::string_view name) {
   if (!is_js_object(value)) {
     throw InvalidInputError(str(name) + " must be an instrument profile; received " +
-                            type_of(value));
+                            js::type_of(value));
   }
   const json::Value& data = like_target(value);
   const json::Value& kind = get(data, "kind");
@@ -264,7 +265,7 @@ InstrumentProfile read_instrument_profile(const json::Value& value, std::string_
   const json::Value& profile_name = get(data, "name");
   if (!profile_name.is_string() || profile_name.as_string().empty()) {
     throw InvalidInputError("instrument name must be a non-empty string; received " +
-                            js::describe_rejected(profile_name));
+                            describe_rejected(profile_name));
   }
   std::string pname = profile_name.as_string();
   std::vector<Articulation> articulations = read_articulations(data, pname);

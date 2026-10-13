@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "cantus/core/instrument.h"
+#include "core/instrument/limits.gen.h"
 
 namespace cantus {
 
@@ -22,13 +23,6 @@ static_assert(!kLimbNames.back().empty(), "LIMBS and Limb disagree");
 
 /** The names of LIMBS, for assert_one_of(). */
 std::vector<std::string_view> limb_names();
-
-/**
- * MAX_FRETS and MAX_POLYPHONY of ts/src/core/instrument/profile.ts, which does not export them;
- * the corpus replay of the profile checks pins the values.
- */
-inline constexpr double MAX_FRETS = 127;
-inline constexpr double MAX_POLYPHONY = 128;
 
 /** Whether the kit plays this voice as an overdub (`isOverdub`). */
 bool is_overdub(const PercussionProfile& profile, int pitch);

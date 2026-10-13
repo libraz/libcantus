@@ -20,10 +20,9 @@ namespace cantus {
 namespace {
 
 /** The meter assumed when a caller names none (`DEFAULT_TS`). */
-const TimeSignature kDefaultTs{4, 4, std::nullopt};
-
-/** How far metric_grid_unit() divides a pulse to land on a change (`MAX_CHANGE_DIVISIONS`). */
-constexpr double MAX_CHANGE_DIVISIONS = 16;
+const TimeSignature kDefaultTs =
+#include "core/meter/default_ts.gen.inc"
+    ;
 
 std::string num(double x) { return js::to_string(x); }
 

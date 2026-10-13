@@ -1,0 +1,1 @@
+cantus_add_test(core_validation test_describe_rejected.cpp)

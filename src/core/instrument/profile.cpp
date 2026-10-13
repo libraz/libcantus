@@ -10,6 +10,7 @@
 
 #include "cantus/core/validation.h"
 #include "core/instrument/articulation.h"
+#include "core/validation/validation.h"
 #include "js/format.h"
 #include "js/math.h"
 #include "js/number.h"
@@ -29,7 +30,7 @@ void assert_profile(const InstrumentProfile& profile) {
       std::visit([](const auto& p) -> const std::string& { return p.name; }, profile);
   if (name.empty()) {
     throw InvalidInputError("instrument name must be a non-empty string; received " +
-                            js::describe_rejected(json::Value(name)));
+                            describe_rejected(json::Value(name)));
   }
   int polyphony = std::visit([](const auto& p) { return p.polyphony; }, profile);
   assert_positive_int(polyphony, name + " polyphony", MAX_POLYPHONY);

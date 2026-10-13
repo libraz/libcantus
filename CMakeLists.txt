@@ -80,6 +80,7 @@ target_sources(cantus PRIVATE
   src/js/math.cpp
   src/js/number.cpp
   src/js/utf16.cpp
+  src/js/value.cpp
   src/json/parse.cpp
   src/json/value.cpp
   src/json/write.cpp)

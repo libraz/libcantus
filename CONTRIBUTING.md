@@ -60,34 +60,34 @@ TS reads a nullable option field in one of three ways, and each adapter keeps th
 | `opts.x === undefined ? fallback : check(opts.x)` | `ops::opt_strict` | fallback | rejected by the validator |
 | `assertNullable(...)` | `ops::opt_nullable` | absent | null |
 
-Each validation helper of `ts/src/core/validation` has two C++ twins: a typed one in `src/core/validation/` (range, finiteness, integrality, emptiness) and a loose one in `src/ops/validate.{h,cpp}`, which checks the kind of the wire value and rejects it with the TS message before converting it and calling the typed twin.
+Each validation helper of `ts/src/core/validation` has two C++ twins: a typed one in `src/core/validation/` (range, finiteness, integrality, emptiness) and a loose one in `src/ops/validate.{h,cpp}`, which checks the kind of the wire value and rejects it with the TS message before converting it and calling the typed twin. A helper that only checks the kind of a value (`assertArray`, `assertRecord`, `assertOptions`, `assertFlag`, `assertFunction`) has no typed twin: a typed argument already has the kind. `soundingNotesOnly`, the alias of `dropSilentNotes`, is `cantus::sounding_notes_only`; its op calls the loose `ops::drop_silent_notes`. The JS-semantics helpers the loose twins share (`type_of`, `truthy`, `to_number`, `template_string`) live in `src/js/`.
 
 | TS helper | Typed twin (`src/core/validation`) | Loose twin (`src/ops/validate`) |
 |---|---|---|
-| `describeRejected` | `js::describe_rejected` | `js::describe_rejected` |
-| `assertFiniteNumber` | | |
-| `assertInteger` | | |
-| `assertMidiPitch` | | |
-| `assertPitchClass` | | |
-| `clampToMidi` | | |
-| `assertDegree` | | |
-| `assertFiniteSemitones` | | |
-| `dropSilentNotes` | | |
-| `assertArray` | | |
-| `assertRecord` | | |
-| `assertOptions` | | |
-| `assertFlag` | | |
-| `assertFunction` | | |
-| `assertOneOf` | | |
-| `assertPositiveInt` | | |
-| `assertRange` | | |
-| `assertGenerationBudget` | | |
-| `allocateCandidateTable` | | |
-| `allocateChoiceTable` | | |
-| `assertTimeSignature` | | |
-| `assertMeterMap` | | |
-| `assertNoteEvent` | | |
-| `assertNoteEvents` | | |
+| `describeRejected` | `js::describe_rejected` | `js::describe_rejected` (shared; `src/js/format.h`) |
+| `assertFiniteNumber` | `cantus::assert_finite_number` | `ops::assert_finite_number` |
+| `assertInteger` | `cantus::assert_integer` | `ops::assert_integer` |
+| `assertMidiPitch` | `cantus::assert_midi_pitch` | `ops::assert_midi_pitch` |
+| `assertPitchClass` | `cantus::assert_pitch_class` | `ops::assert_pitch_class` |
+| `clampToMidi` | `cantus::clamp_to_midi` | `ops::clamp_to_midi` |
+| `assertDegree` | `cantus::assert_degree` | `ops::assert_degree` |
+| `assertFiniteSemitones` | `cantus::assert_finite_semitones` | `ops::assert_finite_semitones` |
+| `dropSilentNotes` | `cantus::drop_silent_notes` | `ops::drop_silent_notes` |
+| `assertArray` | none | `ops::assert_array` |
+| `assertRecord` | none | `ops::assert_record` |
+| `assertOptions` | none | `ops::assert_options` |
+| `assertFlag` | none | `ops::assert_flag` |
+| `assertFunction` | none | `ops::assert_function` |
+| `assertOneOf` | `cantus::assert_one_of` | `ops::assert_one_of` |
+| `assertPositiveInt` | `cantus::assert_positive_int` | `ops::assert_positive_int` |
+| `assertRange` | `cantus::assert_range` | `ops::assert_range` |
+| `assertGenerationBudget` | `cantus::assert_generation_budget` | `ops::assert_generation_budget` |
+| `allocateCandidateTable` | `cantus::allocate_candidate_table` | `ops::allocate_candidate_table` |
+| `allocateChoiceTable` | `cantus::allocate_choice_table` | `ops::allocate_choice_table` |
+| `assertTimeSignature` | `cantus::assert_time_signature` | `ops::assert_time_signature` |
+| `assertMeterMap` | `cantus::assert_meter_map` | `ops::assert_meter_map` |
+| `assertNoteEvent` | `cantus::assert_note_event` | `ops::assert_note_event` |
+| `assertNoteEvents` | `cantus::assert_note_events` | `ops::assert_note_events` |
 
 ## Errors
 

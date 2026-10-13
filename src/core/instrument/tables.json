@@ -13,6 +13,90 @@
       "cxx_type": "std::string_view",
       "cxx_name": "kLimbNames",
       "fields": []
+    },
+    {
+      "module": "core/instrument/profiles.ts",
+      "export": "BASS_4_STRING",
+      "form": "record",
+      "cxx_type": "StringedRecord",
+      "cxx_name": "kBass4String",
+      "fields": ["name", "tuning", "frets", "maxStretch", "articulations", "polyphony", "fretless"]
+    },
+    {
+      "module": "core/instrument/profiles.ts",
+      "export": "BASS_5_STRING",
+      "form": "record",
+      "cxx_type": "StringedRecord",
+      "cxx_name": "kBass5String",
+      "fields": ["name", "tuning", "frets", "maxStretch", "articulations", "polyphony", "fretless"]
+    },
+    {
+      "module": "core/instrument/profiles.ts",
+      "export": "GUITAR_STANDARD",
+      "form": "record",
+      "cxx_type": "StringedRecord",
+      "cxx_name": "kGuitarStandard",
+      "fields": ["name", "tuning", "frets", "maxStretch", "articulations", "polyphony", "fretless"]
+    },
+    {
+      "module": "core/instrument/profiles.ts",
+      "export": "GUITAR_DROP_D",
+      "form": "record",
+      "cxx_type": "StringedRecord",
+      "cxx_name": "kGuitarDropD",
+      "fields": ["name", "tuning", "frets", "maxStretch", "articulations", "polyphony", "fretless"]
+    }
+  ],
+  "limits": [
+    {
+      "module": "core/instrument/profile.ts",
+      "export": "MAX_FRETS",
+      "cxx_type": "double"
+    },
+    {
+      "module": "core/instrument/profile.ts",
+      "export": "MAX_POLYPHONY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "core/instrument/playability.ts",
+      "export": "REFERENCE_BPM",
+      "cxx_type": "double"
+    },
+    {
+      "module": "core/instrument/playability.ts",
+      "export": "MAX_FRET_SHIFT_PER_SECOND",
+      "cxx_type": "double"
+    },
+    {
+      "module": "core/instrument/playability.ts",
+      "export": "MIN_LIMB_STROKE_SECONDS",
+      "cxx_type": "double"
+    },
+    {
+      "module": "core/instrument/playability.ts",
+      "export": "DIFFICULTY_SCALE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "core/instrument/playability.ts",
+      "export": "MIN_DIFFICULTY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "core/instrument/playability.ts",
+      "export": "MAX_DIFFICULTY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "core/instrument/playability.ts",
+      "export": "STRING_CROSSING_COST",
+      "cxx_type": "double"
+    },
+    {
+      "module": "core/instrument/playability.ts",
+      "export": "SIMULTANEITY_BEATS",
+      "cxx_type": "double"
     }
   ]
 }

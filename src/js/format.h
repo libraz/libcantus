@@ -37,12 +37,6 @@ void quote_to(std::string_view s, std::string& out);
  */
 std::string template_string(const json::Value& v);
 
-/**
- * `describeRejected(v)` from ts/src/core/validation: "null", a quoted string (its first 64
- * code units, then " (truncated from N characters)"), or the `typeof` name.
- */
-std::string describe_rejected(const json::Value& v);
-
 }  // namespace cantus::js
 
 #endif  // CANTUS_JS_FORMAT_H_

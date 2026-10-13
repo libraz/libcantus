@@ -11,6 +11,8 @@
 #include "js/format.h"
 #include "js/math.h"
 #include "js/number.h"
+#include "js/utf16.h"
+#include "js/value.h"
 #include "json/json.h"
 
 namespace cantus {
@@ -20,7 +22,7 @@ namespace {
 std::string num(double x) { return js::to_string(x); }
 
 /** `describeRejected` of a number: always its `typeof`. */
-std::string describe_number(double x) { return js::describe_rejected(json::Value(x)); }
+std::string describe_number(double x) { return describe_rejected(json::Value(x)); }
 
 std::size_t table_length(double rows, double columns, std::string_view name,
                          std::optional<double> budget) {
@@ -116,7 +118,7 @@ std::string_view assert_one_of(std::string_view value, const std::vector<std::st
     names += allowed[i];
   }
   throw InvalidInputError(std::string(name) + " must be one of " + names + "; received " +
-                          js::describe_rejected(json::Value(value)));
+                          describe_rejected(json::Value(value)));
 }
 
 double assert_positive_int(double value, std::string_view name, double max) {
@@ -239,6 +241,22 @@ const std::vector<NoteEvent>& assert_note_events(const std::vector<NoteEvent>& e
     assert_note_event(events[i], std::string(name) + "[" + index_text(i) + "]", options);
   }
   return events;
+}
+
+std::string describe_rejected(const json::Value& v) {
+  if (v.is_null()) {
+    return "null";
+  }
+  if (!v.is_string()) {
+    return js::type_of(v);
+  }
+  const std::string& s = v.as_string();
+  std::size_t length = js::utf16_length(s);
+  if (length <= MAX_ECHOED_LENGTH) {
+    return js::quote(s);
+  }
+  return js::quote(js::utf16_slice(s, 0, static_cast<double>(MAX_ECHOED_LENGTH))) +
+         " (truncated from " + js::to_string(static_cast<double>(length)) + " characters)";
 }
 
 }  // namespace cantus

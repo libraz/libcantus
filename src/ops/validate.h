@@ -28,20 +28,8 @@
 
 namespace cantus::ops {
 
-/** `typeof v` of the JS value a wire value stands for. */
-std::string type_of(const json::Value& v);
-
 /** Whether a wire value is an object to JS (`typeof v === 'object' && v !== null`). */
 bool is_js_object(const json::Value& v);
-
-/** JS truthiness of a wire value. */
-bool truthy(const json::Value& v);
-
-/**
- * `ToNumber(v)` as a relational comparison applies it.
- * @throws js::TypeError for a Symbol.
- */
-double to_number(const json::Value& v);
 
 /** Property `key` of a wire value (`v.key`): the field, or the undefined tag. */
 const json::Value& get(const json::Value& v, std::string_view key);

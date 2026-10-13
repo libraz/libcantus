@@ -4,6 +4,16 @@
       "module": "core/validation/index.ts",
       "export": "DEFAULT_GENERATION_BUDGET",
       "cxx_type": "std::int64_t"
+    },
+    {
+      "module": "core/validation/index.ts",
+      "export": "MAX_METER_CHANGES",
+      "cxx_type": "double"
+    },
+    {
+      "module": "core/validation/index.ts",
+      "export": "MAX_ECHOED_LENGTH",
+      "cxx_type": "std::size_t"
     }
   ]
 }

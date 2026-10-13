@@ -3,11 +3,18 @@
 #define CANTUS_SRC_CORE_VALIDATION_LIMITS_GEN_H_
 
 #include <cstdint>
+#include <cstddef>
 
 namespace cantus {
 
 /** DEFAULT_GENERATION_BUDGET of ts/src/core/validation/index.ts. */
 inline constexpr std::int64_t DEFAULT_GENERATION_BUDGET = 1000000;
+
+/** MAX_METER_CHANGES of ts/src/core/validation/index.ts. */
+inline constexpr double MAX_METER_CHANGES = 100000;
+
+/** MAX_ECHOED_LENGTH of ts/src/core/validation/index.ts. */
+inline constexpr std::size_t MAX_ECHOED_LENGTH = 64;
 
 }  // namespace cantus
 

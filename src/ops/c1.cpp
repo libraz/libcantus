@@ -15,6 +15,7 @@
 #include "cantus/core/validation.h"
 #include "core/validation/validation.h"
 #include "js/format.h"
+#include "js/value.h"
 #include "ops/accessors.h"
 #include "ops/codec_c1.h"
 #include "ops/register_all.h"
@@ -166,14 +167,14 @@ void register_instrument() {
 void register_meter() {
   def("parseTimeSignature", [](Args& a) -> json::Value {
     if (!a[0].is_string()) {
-      throw InvalidInputError("time signature must be a string; received " + type_of(a[0]));
+      throw InvalidInputError("time signature must be a string; received " + js::type_of(a[0]));
     }
     return to_json(parse_time_signature(a[0].as_string()));
   });
   def("tryParseTimeSignature", [](Args& a) -> json::Value {
     if (!a[0].is_string()) {
       return to_json(ParseResult<TimeSignature>::failure(
-          InvalidInputError("time signature must be a string; received " + type_of(a[0]))));
+          InvalidInputError("time signature must be a string; received " + js::type_of(a[0]))));
     }
     return to_json(try_parse_time_signature(a[0].as_string()));
   });

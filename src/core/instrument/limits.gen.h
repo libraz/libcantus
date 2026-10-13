@@ -2,4 +2,38 @@
 #ifndef CANTUS_SRC_CORE_INSTRUMENT_LIMITS_GEN_H_
 #define CANTUS_SRC_CORE_INSTRUMENT_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** MAX_FRETS of ts/src/core/instrument/profile.ts. */
+inline constexpr double MAX_FRETS = 127;
+
+/** MAX_POLYPHONY of ts/src/core/instrument/profile.ts. */
+inline constexpr double MAX_POLYPHONY = 128;
+
+/** REFERENCE_BPM of ts/src/core/instrument/playability.ts. */
+inline constexpr double REFERENCE_BPM = 120;
+
+/** MAX_FRET_SHIFT_PER_SECOND of ts/src/core/instrument/playability.ts. */
+inline constexpr double MAX_FRET_SHIFT_PER_SECOND = 100;
+
+/** MIN_LIMB_STROKE_SECONDS of ts/src/core/instrument/playability.ts. */
+inline constexpr double MIN_LIMB_STROKE_SECONDS = 0.06;
+
+/** DIFFICULTY_SCALE of ts/src/core/instrument/playability.ts. */
+inline constexpr double DIFFICULTY_SCALE = 12;
+
+/** MIN_DIFFICULTY of ts/src/core/instrument/playability.ts. */
+inline constexpr double MIN_DIFFICULTY = 1;
+
+/** MAX_DIFFICULTY of ts/src/core/instrument/playability.ts. */
+inline constexpr double MAX_DIFFICULTY = 5;
+
+/** STRING_CROSSING_COST of ts/src/core/instrument/playability.ts. */
+inline constexpr double STRING_CROSSING_COST = 2;
+
+/** SIMULTANEITY_BEATS of ts/src/core/instrument/playability.ts. */
+inline constexpr double SIMULTANEITY_BEATS = 0.0078125;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_CORE_INSTRUMENT_LIMITS_GEN_H_
