@@ -952,3 +952,59 @@ describe('phrases over a metre change', () => {
     expect(read(6)).not.toEqual(read(8));
   });
 });
+
+describe('form analyses that read their options late', () => {
+  const notes = quarters([60, 62, 64, 65, 67, 69, 71, 72], 0);
+
+  it('reads the cadence beats of hypermeter only for a span long enough to group', () => {
+    expect(hypermeter(quarters([60], 0), '4/4', { cadenceBeats: 5 as never }).groupBars).toBe(1);
+    expect(() =>
+      hypermeter(notes.concat(quarters([60, 62, 64, 65, 67, 69, 71, 72], 8)), '4/4', {
+        cadenceBeats: 5 as never,
+      }),
+    ).toThrow(new TypeError('(asked.cadenceBeats ?? []).map is not a function'));
+  });
+
+  it('answers an empty span before it reads the options that follow', () => {
+    const empty = chordTimelineFromChords([], 0);
+    expect(phrasesFromTimeline(empty, [], { restBeats: 'x' as never })).toEqual([]);
+    expect(phrasesFromTimeline(empty, [], { key: 'not a key' as never })).toEqual([]);
+    expect(sectionsFromNotes([], { totalBeats: 'x' as never })).toEqual([]);
+  });
+
+  it('refuses a bigint end of span in sections and phrases', () => {
+    const timeline = chordTimelineFromNotes(notes).timeline;
+    const refusal = new TypeError('Cannot convert a BigInt value to a number');
+    expect(() => sectionsFromNotes(notes, { totalBeats: 10n as never })).toThrow(refusal);
+    expect(() => phrasesFromTimeline(timeline, notes, { totalBeats: 10n as never })).toThrow(
+      refusal,
+    );
+  });
+
+  it('keeps a hypermeter downbeat that is no number from marking a boundary', () => {
+    const timeline = chordTimelineFromNotes(notes).timeline;
+    const given = { groupBars: 4, confidence: 0.5, rationale: '' };
+    expect(
+      phrasesFromTimeline(timeline, notes, { hypermeter: { ...given, downbeats: [Number.NaN] } }),
+    ).toEqual(phrasesFromTimeline(timeline, notes, { hypermeter: { ...given, downbeats: [] } }));
+  });
+
+  it('reads a ranked cadence out of the phrase it is handed, as written', () => {
+    const phrase = {
+      startBeat: 0,
+      endBeat: 4,
+      cadence: { atBeat: 3, cadence: { type: 'half' }, from: {}, to: {} },
+      signals: [],
+      confidence: 0.5,
+      structuralWeight: 0.25,
+      rationale: '',
+    };
+    const [ranked] = structuralCadences([phrase] as never);
+    expect(ranked?.rationale).toBe(
+      'Closes a undefined half cadence at beat 3 on a phrase of confidence 0.5',
+    );
+    expect(() => structuralCadences([{ ...phrase, cadence: { atBeat: 3 } }] as never)).toThrow(
+      new TypeError("Cannot read properties of undefined (reading 'type')"),
+    );
+  });
+});

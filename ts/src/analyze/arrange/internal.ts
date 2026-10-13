@@ -27,7 +27,7 @@ import type { ArrangementTrack, TrackRole } from './tracks.js';
  * notes. Beyond two octaves the connection is not a melodic step or leap but an
  * artefact of lane packing, so a new sub-voice is opened instead.
  */
-const MAX_LANE_LEAP = 24;
+export const MAX_LANE_LEAP = 24;
 
 /** A note with the pitch that immediately preceded it in the same sub-voice. */
 export type PreparedNote = {
@@ -94,7 +94,7 @@ const TRACK_ROLE_TABLE: Readonly<Record<TrackRole, true>> = {
 };
 
 /** The roles that exist, read off the table rather than listed again here. */
-const TRACK_ROLES = Object.keys(TRACK_ROLE_TABLE) as TrackRole[];
+export const TRACK_ROLES = Object.keys(TRACK_ROLE_TABLE) as TrackRole[];
 
 /**
  * The role a track plays, checked against the roles that exist.
@@ -116,6 +116,9 @@ export function trackRoleOf(role: TrackRole | undefined, name: string): TrackRol
 
 /** The safety profile an arrangement is judged under when the caller names none. */
 const DEFAULT_PROFILE: SafetyProfile = 'pop';
+
+/** {@link DEFAULT_PROFILE} as a one-entry list, the form the generated tables read. */
+export const DEFAULT_PROFILE_NAMES: readonly SafetyProfile[] = [DEFAULT_PROFILE];
 
 /** The profiles that exist, read off the table rather than listed again here. */
 const SAFETY_PROFILES = Object.keys(PROFILE_WEIGHTS) as SafetyProfile[];

@@ -95,6 +95,13 @@ double to_number(const json::Value& v) {
   return std::nan("");
 }
 
+double to_math_number(const json::Value& v) {
+  if (type_of(v) == "bigint") {
+    throw TypeError("Cannot convert a BigInt value to a number");
+  }
+  return to_number(v);
+}
+
 namespace {
 
 bool is_text(const json::Value& v) {

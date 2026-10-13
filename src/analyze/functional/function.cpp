@@ -143,6 +143,14 @@ std::optional<HarmonicFunction> parse_harmonic_function(std::string_view name) {
   return std::nullopt;
 }
 
+std::vector<HarmonicFunction> harmonic_functions() {
+  std::vector<HarmonicFunction> functions;
+  for (std::size_t i = 0; i < kHarmonicFunctionNames.size(); ++i) {
+    functions.push_back(static_cast<HarmonicFunction>(i));
+  }
+  return functions;
+}
+
 std::string_view to_string(BorrowedSource source) {
   return kBorrowedSourcePhrase[static_cast<std::size_t>(source)].name;
 }

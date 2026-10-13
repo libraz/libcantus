@@ -1,0 +1,48 @@
+{
+  "tables": [
+    {
+      "module": "analyze/rhythm/index.ts",
+      "export": "RHYTHM_IOI_BINS",
+      "cxx_type": "double",
+      "cxx_name": "kRhythmIoiBins",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "analyze/rhythm/index.ts",
+      "export": "RHYTHM_SLOTS_PER_BEAT",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/rhythm/index.ts",
+      "export": "RHYTHM_OFF_GRID_TOLERANCE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/rhythm/index.ts",
+      "export": "RHYTHM_LEVEL_COUNT",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/rhythm/internal.ts",
+      "export": "IOI_MIN_EXPONENT",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/rhythm/internal.ts",
+      "export": "IOI_MAX_EXPONENT",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/rhythm/internal.ts",
+      "export": "IOI_EXPONENT_STEP",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/rhythm/index.ts",
+      "export": "BUDGET_SLOTS_PER_BAR",
+      "cxx_type": "int"
+    }
+  ]
+}

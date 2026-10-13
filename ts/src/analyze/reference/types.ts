@@ -30,6 +30,12 @@ import type { RhythmAnalysis } from '../rhythm/index.js';
  */
 export const REFERENCE_PROFILE_VERSION = 1;
 
+/** Points a phrase's melodic outline is sampled at. */
+export const PHRASE_OUTLINE_POINTS = 8;
+
+/** The highest value a MIDI pitch or velocity takes. */
+export const MIDI_MAX = 127;
+
 /**
  * A structural fingerprint of a piece, recovered from its notes and held
  * without the notes themselves.

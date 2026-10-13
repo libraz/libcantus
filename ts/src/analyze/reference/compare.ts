@@ -101,7 +101,7 @@ export type ReferenceComparison = {
 };
 
 /** How many fields the rationale names at each end. */
-const RATIONALE_FIELDS = 2;
+export const RATIONALE_FIELDS = 2;
 
 /** A sentence naming the most and least alike of the measured fields. */
 function rationaleOf(comparison: Omit<ReferenceComparison, 'rationale'>): string {

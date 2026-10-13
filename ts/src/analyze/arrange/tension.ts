@@ -50,20 +50,22 @@ export type TensionPoint = {
 };
 
 /** Tension contributed by the sounding chord's harmonic function. */
-const FUNCTION_TENSION: Record<'tonic' | 'subdominant' | 'dominant', number> = {
+export const FUNCTION_TENSION: Record<'tonic' | 'subdominant' | 'dominant', number> = {
   tonic: 0,
   subdominant: 0.5,
   dominant: 1,
 };
 
 /** Weight of the harmonic-function term in the combined tension score. */
-const FUNCTION_WEIGHT = 0.5;
+export const FUNCTION_WEIGHT = 0.5;
 /** Weight of the non-chord-tone / dissonance term. */
-const DISSONANCE_WEIGHT = 0.35;
+export const DISSONANCE_WEIGHT = 0.35;
 /** Weight of the registral-span term. */
-const SPAN_WEIGHT = 0.15;
+export const SPAN_WEIGHT = 0.15;
 /** Pitch span, in semitones, that saturates the span term. */
-const SPAN_SATURATION = 24;
+export const SPAN_SATURATION = 24;
+/** Distinct MIDI pitches a sample can hold, which bounds the safety evaluations it makes. */
+export const MAX_DISTINCT_PITCHES = 128;
 
 /** Clamp a value into [0, 1]. */
 function clamp01(value: number): number {
@@ -191,7 +193,7 @@ export function tensionCurve(
   // not either dimension alone — that has to stay inside the budget.
   const voiceCount = prepared.reduce((sum, track) => sum + track.voices.length, 0);
   assertGenerationBudget(
-    sampleCount * Math.min(128, voiceCount) * voiceCount,
+    sampleCount * Math.min(MAX_DISTINCT_PITCHES, voiceCount) * voiceCount,
     'tension sample-voice comparisons',
     budget,
   );

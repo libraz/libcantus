@@ -386,3 +386,71 @@ describe('a chord on the tonic that tonicizes something else is not the tonic', 
     expect(reduceProgression(timeline, cMajor)[0]?.rationale).toContain('the tonic of the key');
   });
 });
+
+describe('reduceProgression over a hand-made timeline with a malformed chord', () => {
+  const placed = progression([
+    { rootPc: 0, quality: 'maj' },
+    { rootPc: 7, quality: 'dom7' },
+    { rootPc: 0, quality: 'maj' },
+  ]);
+
+  /** The timeline with its middle chord replaced by `chord`. */
+  function withMiddle(chord: unknown): ChordTimeline {
+    const [first, middle, last] = placed.segments;
+    return { at: placed.at, segments: [first, { ...middle, chord }, last] } as ChordTimeline;
+  }
+
+  it('names a root that is no number as the caller wrote it, under the salience reading', () => {
+    const timeline = withMiddle({ rootPc: 'x', quality: 'dom7', intervals: [0, 4, 7, 10] });
+    expect(() => reduceProgression(timeline, cMajor, { basis: 'duration' })).toThrow(
+      /pitch must be finite; received x/,
+    );
+  });
+
+  it('fails on the missing interval template of a chord standing on the dominant', () => {
+    const timeline = withMiddle({ rootPc: 7, quality: 'dom7' });
+    expect(() => reduceProgression(timeline, cMajor)).toThrow(
+      new TypeError("Cannot read properties of undefined (reading 'some')"),
+    );
+  });
+
+  it('names an interval that is no number as the caller wrote it', () => {
+    const timeline = withMiddle({ rootPc: 7, quality: 'dom7', intervals: [0, 'x', 7] });
+    expect(() => reduceProgression(timeline, cMajor)).toThrow(/pitch must be finite; received x/);
+  });
+
+  it('stops scanning the intervals of a dominant at the major third', () => {
+    const timeline = withMiddle({ rootPc: 7, quality: 'dom7', intervals: [0, 4, 'x'] });
+    expect(reduceProgression(timeline, cMajor)).toHaveLength(3);
+  });
+
+  /** The timeline with its first chord, which stands on the tonic, replaced by `chord`. */
+  function withFirst(chord: unknown): ChordTimeline {
+    const [first, ...rest] = placed.segments;
+    return { at: placed.at, segments: [{ ...first, chord }, ...rest] } as ChordTimeline;
+  }
+
+  it('refuses a tonic chord with no quality', () => {
+    const timeline = withFirst({ rootPc: 0, intervals: [0, 4, 7] });
+    expect(() => reduceProgression(timeline, cMajor)).toThrow(/Unknown chord quality: undefined/);
+  });
+
+  it('refuses a tonic chord whose interval template is not an array', () => {
+    const timeline = withFirst({ rootPc: 0, quality: 'maj', intervals: null });
+    expect(() => reduceProgression(timeline, cMajor)).toThrow(
+      /chord intervals must be an array; received null/,
+    );
+  });
+
+  it('names a tonic chord interval that is no number as the root and it joined as text', () => {
+    const timeline = withFirst({ rootPc: 0, quality: 'maj', intervals: [0, 'x', 7] });
+    expect(() => reduceProgression(timeline, cMajor)).toThrow(/pitch must be finite; received 0x/);
+  });
+
+  it('reads the length of a tonic chord with a bass before anything else of it', () => {
+    const timeline = withFirst({ rootPc: 0, quality: 'maj', bassPc: 7 });
+    expect(() => reduceProgression(timeline, cMajor)).toThrow(
+      new TypeError("Cannot read properties of undefined (reading 'length')"),
+    );
+  });
+});

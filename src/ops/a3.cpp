@@ -1,9 +1,315 @@
 // Op adapters of analyze/form, analyze/rhythm.
+//
+// Each adapter replays the TS validation prologue over the wire arguments with the loose twins
+// (ops/validate.h, ops/codec_a3.h), in the TS order and with the TS names, then calls the typed
+// function. Values a result carries over from its input (a cadence's chords, the fields of a
+// phrase) are the input's own wire values.
 
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "analyze/form/hypermeter.h"
+#include "analyze/form/phrase.h"
+#include "analyze/grid.h"
+#include "cantus/core/errors.h"
+#include "cantus/core/limits.h"
+#include "core/validation/validation.h"
+#include "js/format.h"
+#include "js/math.h"
+#include "js/number.h"
+#include "js/value.h"
+#include "ops/accessors.h"
+#include "ops/codec_a1c.h"
+#include "ops/codec_a2.h"
+#include "ops/codec_a3.h"
 #include "ops/register_all.h"
+#include "ops/registry.h"
+#include "ops/validate.h"
 
 namespace cantus::ops {
 
-void register_a3() {}
+namespace {
+
+/** `Number.MIN_VALUE`. */
+constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
+
+/** The notes that sound. */
+std::vector<NoteEvent> sounding_of(const std::vector<NoteEvent>& notes) {
+  std::vector<NoteEvent> out;
+  for (const NoteEvent& note : notes) {
+    if (note.durationBeat > 0) {
+      out.push_back(note);
+    }
+  }
+  return out;
+}
+
+/** `Cannot read properties of null (reading 'x')` for a value that has no properties. */
+[[noreturn]] void no_properties(const json::Value& value, std::string_view property) {
+  throw js::TypeError(std::string("Cannot read properties of ") +
+                      (value.is_null() ? "null" : "undefined") + " (reading '" +
+                      std::string(property) + "')");
+}
+
+/** `.budget` of an options bag, as the typed options carry it. */
+std::optional<double> budget_of(const json::Value& opts) {
+  const json::Value* budget = field(opts, "budget");
+  return budget != nullptr ? number_of(*budget) : std::nullopt;
+}
+
+//--------------------------------------------------------------------------------------------
+// analyze/rhythm
+
+void register_rhythm() {
+  def("$const:RHYTHM_IOI_BINS", [](Args&) -> json::Value { return to_json(rhythm_ioi_bins()); });
+  def("analyzeRhythm", [](Args& a) -> json::Value {
+    json::Value bag = arg_or(a, 1, json::Object());
+    const json::Value& opts = bag;
+    MeterMap meters = resolve_wire_meters(opts, "rhythm meters");
+    std::vector<NoteEvent> notes =
+        assert_note_events(a[0], "rhythm notes", line_options(get(opts, "budget")));
+    RhythmAnalysisOptions typed;
+    typed.meters = MeterArg(meters);
+    typed.budget = budget_of(opts);
+    // The span's end is read once something sounds.
+    if (!sounding_of(notes).empty()) {
+      if (const json::Value* total = opt_null_default(opts, "totalBeats")) {
+        typed.totalBeats = js::to_math_number(*total);
+      }
+    }
+    return to_json(analyze_rhythm(notes, typed));
+  });
+}
+
+//--------------------------------------------------------------------------------------------
+// analyze/form
+
+/** The meters `resolveMeters({ meters: meter }, 'meter')` settles on. */
+MeterMap meter_argument(const Args& a, std::size_t i) {
+  json::Object bag;
+  if (!a.undefined(i)) {
+    bag.set("meters", a[i]);
+  }
+  return resolve_wire_meters(json::Value(std::move(bag)), "meter");
+}
+
+void register_hypermeter() {
+  def("hypermeter", [](Args& a) -> json::Value {
+    json::Value bag = arg_or(a, 2, json::Object());
+    const json::Value& asked = assert_options(bag, "opts");
+    MeterMap meters = meter_argument(a, 1);
+    std::vector<NoteEvent> notes =
+        assert_note_events(a[0], "hypermeter notes", line_options(get(asked, "budget")));
+    double last_end = 0;
+    for (const NoteEvent& note : notes) {
+      if (note.durationBeat > 0) {
+        last_end = js::max(last_end, note.startBeat + note.durationBeat);
+      }
+    }
+    HypermeterOptions typed;
+    typed.totalBeats = assert_range_option(asked, "totalBeats", last_end, 0, kMaxSafeInteger,
+                                           "hypermeter totalBeats");
+    typed.budget = budget_of(asked);
+    // The cadence beats are read once the span is long enough to hold a grouping.
+    CadenceBars cadence_bars = [&asked](const MeterArg& resolved) {
+      std::vector<double> bars;
+      const json::Value* beats = opt_null_default(asked, "cadenceBeats");
+      if (beats == nullptr) {
+        return bars;
+      }
+      if (!beats->is_array()) {
+        throw js::TypeError("(asked.cadenceBeats ?? []).map is not a function");
+      }
+      for (const json::Value& beat : beats->as_array()) {
+        bars.push_back(bar_index_at(assert_finite_number(beat, "beat"), resolved));
+      }
+      return bars;
+    };
+    return to_json(hypermeter_with(notes, MeterArg(meters), typed, cadence_bars));
+  });
+}
+
+void register_sections() {
+  def("sectionsFromNotes", [](Args& a) -> json::Value {
+    json::Value bag = arg_or(a, 1, json::Object());
+    const json::Value& opts = bag;
+    MeterMap meters = resolve_wire_meters(opts, "section meters");
+    std::vector<NoteEvent> notes =
+        assert_note_events(a[0], "section notes", line_options(get(opts, "budget")));
+    std::vector<NoteEvent> sounding = sounding_of(notes);
+    if (sounding.empty()) {
+      return json::Value(json::Array());
+    }
+    FormSectionOptions typed;
+    typed.meters = MeterArg(meters);
+    typed.budget = budget_of(opts);
+    double first_onset = bar_grid_start(first_sounding_beat(sounding), MeterArg(meters));
+    double last_end = 0;
+    for (const NoteEvent& note : sounding) {
+      last_end = js::max(last_end, note.startBeat + note.durationBeat);
+    }
+    // `Math.max(firstOnset, opts.totalBeats ?? lastEnd)`.
+    const json::Value* total = opt_null_default(opts, "totalBeats");
+    double span_end =
+        js::max(first_onset, total != nullptr ? js::to_math_number(*total) : last_end);
+    typed.totalBeats =
+        assert_range(json::Value(span_end), 0, kMaxSafeInteger, "section totalBeats");
+    typed.threshold = assert_range_option(opts, "threshold", SECTION_DEFAULT_THRESHOLD, 0, 1,
+                                          "section threshold");
+    // Without `unitBars` the grouping is inferred first, and the typed analysis checks the result.
+    if (const json::Value* unit_bars = opt_null_default(opts, "unitBars")) {
+      typed.unitBars = assert_positive_int(*unit_bars, "section unitBars");
+    }
+    return to_json(sections_from_notes(notes, typed));
+  });
+}
+
+void register_phrases() {
+  def("phrasesFromTimeline", [](Args& a) -> json::Value {
+    const json::Array& segments = assert_wire_timeline(a[0]);
+    json::Value bag = arg_or(a, 2, json::Object());
+    const json::Value& opts = bag;
+    MeterMap meters = resolve_wire_meters(opts, "phrase meters");
+    std::vector<NoteEvent> notes =
+        assert_note_events(a[1], "phrase notes", line_options(get(opts, "budget")));
+    PhraseOptions typed;
+    typed.meters = MeterArg(meters);
+    typed.budget = budget_of(opts);
+    const json::Value* given = field(opts, "hypermeter");
+    if (given != nullptr) {
+      // The one structured option, held to the contract its own type states.
+      if (given->is_null()) {
+        no_properties(*given, "confidence");
+      }
+      Hypermeter grouping;
+      grouping.confidence =
+          assert_range(get(*given, "confidence"), 0, 1, "phrase hypermeter confidence");
+      grouping.groupBars = static_cast<int>(
+          assert_positive_int(get(*given, "groupBars"), "phrase hypermeter groupBars"));
+      typed.hypermeter = std::move(grouping);
+    }
+    WireSegments wire(segments);
+    PhraseSource source;
+    source.segments = wire.spans();
+    source.chords = wire.reads();
+    source.total_beats = [&opts](double notes_end) {
+      const json::Value* total = opt_null_default(opts, "totalBeats");
+      return total != nullptr ? js::to_math_number(*total) : notes_end;
+    };
+    auto beats = [&opts](std::string_view key, std::string_view name) -> BeatsOption {
+      return [&opts, key, name](double fallback) {
+        return assert_range_option(opts, key, fallback, kMinValue, kMaxSafeInteger, name);
+      };
+    };
+    source.rest_beats = beats("restBeats", "phrase restBeats");
+    source.long_note_beats = beats("longNoteBeats", "phrase longNoteBeats");
+    source.min_phrase_beats = beats("minPhraseBeats", "phrase minPhraseBeats");
+    source.expected_phrase_beats = beats("expectedPhraseBeats", "phrase expectedPhraseBeats");
+    if (const json::Value* key = field(opts, "key")) {
+      source.key = [&a, key] { return read_key_context(a, *key); };
+    }
+    if (given != nullptr) {
+      source.given_downbeats = [given] {
+        const json::Value& downbeats = get(*given, "downbeats");
+        if (!downbeats.is_array()) {
+          throw js::TypeError("grouping.downbeats is not iterable");
+        }
+        std::vector<double> out;
+        for (const json::Value& downbeat : downbeats.as_array()) {
+          out.push_back(js::to_number(downbeat));
+        }
+        return out;
+      };
+    }
+    PhraseReading reading = phrases_over(source, notes, typed);
+    json::Value out = to_json(reading.phrases);
+    // A closing cadence names the chords of the segments it was found between as they were
+    // written.
+    for (std::size_t i = 0; i < reading.phrases.size(); ++i) {
+      if (reading.phrases[i].cadence && reading.arrivals[i]) {
+        json::Value* hit = out.as_array()[i].as_object().find("cadence");
+        hit->as_object().set("from", wire.chord_value(*reading.arrivals[i] - 1));
+        hit->as_object().set("to", wire.chord_value(*reading.arrivals[i]));
+      }
+    }
+    return out;
+  });
+  def("structuralCadences", [](Args& a) -> json::Value {
+    const json::Array& phrases = assert_array(a[0], "phrases");
+    struct Ranked {
+      std::size_t index;
+      const json::Value* phrase;
+      const json::Value* hit;
+      double weight;
+      double at_beat;
+      std::string rationale;
+    };
+    std::vector<Ranked> ranked;
+    for (std::size_t index = 0; index < phrases.size(); ++index) {
+      const json::Value& phrase =
+          assert_record(phrases[index], "phrases[" + index_text(index) + "]");
+      const json::Value& hit = get(phrase, "cadence");
+      if (hit.is_null() || is_undefined(hit)) {
+        continue;
+      }
+      const json::Value& result = get(hit, "cadence");
+      if (result.is_null() || is_undefined(result)) {
+        no_properties(result, "type");
+      }
+      const json::Value& type = get(result, "type");
+      if (type.is_null()) {
+        continue;
+      }
+      // `describeCadence(hit)`, then the phrase's confidence to two places.
+      const json::Value& strength = get(result, "strength");
+      std::optional<std::string> graded_strength;
+      if (!strength.is_null()) {
+        graded_strength = js::template_string(strength);
+      }
+      std::string described = describe_cadence_text(js::template_string(type), graded_strength,
+                                                    js::template_string(get(hit, "atBeat")));
+      double confidence = js::to_number(get(phrase, "confidence"));
+      ranked.push_back(Ranked{index, &phrase, &hit, js::to_number(get(phrase, "structuralWeight")),
+                              js::to_number(get(hit, "atBeat")),
+                              "Closes " + described + " on a phrase of confidence " +
+                                  js::to_string(js::round(confidence * 100) / 100)});
+    }
+    std::stable_sort(ranked.begin(), ranked.end(), [](const Ranked& x, const Ranked& y) {
+      double by_weight = y.weight - x.weight;
+      return (by_weight != 0 && !std::isnan(by_weight) ? by_weight : x.at_beat - y.at_beat) < 0;
+    });
+    json::Array out;
+    for (const Ranked& entry : ranked) {
+      json::Object cadence;
+      cadence.set("phraseIndex", static_cast<double>(entry.index));
+      auto carry = [&cadence](const char* name, const json::Value& value) {
+        if (!is_undefined(value)) {
+          cadence.set(name, value);
+        }
+      };
+      carry("atBeat", get(*entry.hit, "atBeat"));
+      carry("endBeat", get(*entry.phrase, "endBeat"));
+      carry("cadence", get(*entry.hit, "cadence"));
+      carry("weight", get(*entry.phrase, "structuralWeight"));
+      cadence.set("rationale", entry.rationale);
+      out.push_back(json::Value(std::move(cadence)));
+    }
+    return json::Value(std::move(out));
+  });
+}
+
+}  // namespace
+
+void register_a3() {
+  register_rhythm();
+  register_hypermeter();
+  register_sections();
+  register_phrases();
+}
 
 }  // namespace cantus::ops

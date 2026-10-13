@@ -31,8 +31,15 @@ import { MELODIC_CONTOUR_SHAPES } from '../melody/contour.js';
 import type { MotifGraph, MotifGraphEdge, MotifGraphNode } from '../melody/graph.js';
 import { MOTIF_RELATION_KINDS, type MotifRelationSummary } from '../melody/relation.js';
 import { REDUCTION_LEVELS } from '../reduction/index.js';
-import { type BarPositionProfile, RHYTHM_IOI_BINS, type RhythmAnalysis } from '../rhythm/index.js';
 import {
+  type BarPositionProfile,
+  RHYTHM_IOI_BINS,
+  RHYTHM_LEVEL_COUNT,
+  type RhythmAnalysis,
+} from '../rhythm/index.js';
+import {
+  MIDI_MAX,
+  PHRASE_OUTLINE_POINTS,
   REFERENCE_PROFILE_VERSION,
   type ReferenceCadence,
   type ReferenceChord,
@@ -47,7 +54,7 @@ import {
 } from './types.js';
 
 /** Tolerance a mass distribution's shares may sum away from 1 by. */
-const MASS_TOLERANCE = 1e-9;
+export const MASS_TOLERANCE = 1e-9;
 
 /** Require a string, before it is read as one. */
 function assertString(value: unknown, name: string): string {
@@ -148,7 +155,7 @@ function assertRhythmAnalysis(value: unknown, name: string): RhythmAnalysis {
       `${name}.barOnsets[${index}]`,
     );
   }
-  assertMassDistribution(read.onsetLevels, 6, `${name}.onsetLevels`, onsets === 0);
+  assertMassDistribution(read.onsetLevels, RHYTHM_LEVEL_COUNT, `${name}.onsetLevels`, onsets === 0);
   const barPositions = assertArray<BarPositionProfile>(read.barPositions, `${name}.barPositions`);
   for (let index = 0; index < barPositions.length; index += 1) {
     assertBarPositionProfile(barPositions[index], `${name}.barPositions[${index}]`);
@@ -195,12 +202,14 @@ function assertReferencePhraseMelody(value: unknown, name: string): ReferencePhr
   assertOneOf(read.shape, MELODIC_CONTOUR_SHAPES, `${name}.shape`);
   assertMidiPitch(read.low, `${name}.low`);
   assertMidiPitch(read.high, `${name}.high`);
-  assertRange(read.mean, 0, 127, `${name}.mean`);
-  assertRange(read.peakPitch, 0, 127, `${name}.peakPitch`);
+  assertRange(read.mean, 0, MIDI_MAX, `${name}.mean`);
+  assertRange(read.peakPitch, 0, MIDI_MAX, `${name}.peakPitch`);
   assertRange(read.peakPosition, 0, 1, `${name}.peakPosition`);
   const outline = assertArray<number>(read.outline, `${name}.outline`);
-  if (outline.length !== 8) {
-    throw new InvalidInputError(`${name}.outline must have length 8; received ${outline.length}`);
+  if (outline.length !== PHRASE_OUTLINE_POINTS) {
+    throw new InvalidInputError(
+      `${name}.outline must have length ${PHRASE_OUTLINE_POINTS}; received ${outline.length}`,
+    );
   }
   for (let index = 0; index < outline.length; index += 1) {
     assertFiniteNumber(outline[index] as number, `${name}.outline[${index}]`);
@@ -427,7 +436,7 @@ function assertMotifGraph(
 function assertReferenceMotif(value: unknown, name: string): ReferenceMotif {
   const read = assertRecord<ReferenceMotif>(value, name);
   const intervals = assertArray<number>(read.intervals, `${name}.intervals`);
-  // The cell has to be writable as MIDI notes: whole semitones spanning at most 127.
+  // The cell has to be writable as MIDI notes: whole semitones spanning at most MIDI_MAX.
   let pitch = 0;
   let low = 0;
   let high = 0;
@@ -442,9 +451,9 @@ function assertReferenceMotif(value: unknown, name: string): ReferenceMotif {
     low = Math.min(low, pitch);
     high = Math.max(high, pitch);
   }
-  if (high - low > 127) {
+  if (high - low > MIDI_MAX) {
     throw new InvalidInputError(
-      `${name}.intervals must span at most 127 semitones; received ${high - low}`,
+      `${name}.intervals must span at most ${MIDI_MAX} semitones; received ${high - low}`,
     );
   }
   const rhythm = assertArray<number>(read.rhythm, `${name}.rhythm`);
@@ -477,7 +486,7 @@ function assertReferenceMelody(value: unknown, name: string): ReferenceMelody {
     const register = assertRecord<{ low: number; high: number; mean: number }>(v, n);
     assertMidiPitch(register.low, `${n}.low`);
     assertMidiPitch(register.high, `${n}.high`);
-    assertRange(register.mean, 0, 127, `${n}.mean`);
+    assertRange(register.mean, 0, MIDI_MAX, `${n}.mean`);
     return register;
   });
   assertNullable(read.shape, `${name}.shape`, (v, n) => assertOneOf(v, MELODIC_CONTOUR_SHAPES, n));

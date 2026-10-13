@@ -99,6 +99,10 @@ double assert_positive_int(const json::Value& value, std::string_view name, cons
 /** `assertRange` with bounds the library supplies. */
 double assert_range(const json::Value& value, double min, double max, std::string_view name);
 
+/** `assertRange(opts.key ?? fallback, min, max, name)`: an option read with `??`, then checked. */
+double assert_range_option(const json::Value& opts, std::string_view key, double fallback,
+                           double min, double max, std::string_view name);
+
 /** `assertRange` with bounds from the wire. */
 double assert_range(const json::Value& value, const json::Value& min, const json::Value& max,
                     std::string_view name);

@@ -2,4 +2,56 @@
 #ifndef CANTUS_SRC_ANALYZE_REFERENCE_LIMITS_GEN_H_
 #define CANTUS_SRC_ANALYZE_REFERENCE_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** PROGRESSION_GAP of ts/src/analyze/reference/measures.ts. */
+inline constexpr double PROGRESSION_GAP = 0.75;
+
+/** SAME_DEGREE_COST of ts/src/analyze/reference/measures.ts. */
+inline constexpr double SAME_DEGREE_COST = 0.25;
+
+/** SAME_FUNCTION_COST of ts/src/analyze/reference/measures.ts. */
+inline constexpr double SAME_FUNCTION_COST = 0.5;
+
+/** HALF_PHRYGIAN_COST of ts/src/analyze/reference/measures.ts. */
+inline constexpr double HALF_PHRYGIAN_COST = 0.5;
+
+/** MODE_CHANGE_COST of ts/src/analyze/reference/measures.ts. */
+inline constexpr double MODE_CHANGE_COST = 0.5;
+
+/** SHAPE_MISMATCH_COST of ts/src/analyze/reference/measures.ts. */
+inline constexpr double SHAPE_MISMATCH_COST = 0.25;
+
+/** REGISTER_SPAN of ts/src/analyze/reference/measures.ts. */
+inline constexpr double REGISTER_SPAN = 24;
+
+/** PEAK_POSITION_WEIGHT of ts/src/analyze/reference/measures.ts. */
+inline constexpr double PEAK_POSITION_WEIGHT = 0.5;
+
+/** FAMILY_SIZE_BINS of ts/src/analyze/reference/measures.ts. */
+inline constexpr int FAMILY_SIZE_BINS = 5;
+
+/** DEPTH_BINS of ts/src/analyze/reference/measures.ts. */
+inline constexpr int DEPTH_BINS = 4;
+
+/** CELL_START_PITCH of ts/src/analyze/reference/measures.ts. */
+inline constexpr int CELL_START_PITCH = 60;
+
+/** RATIONALE_FIELDS of ts/src/analyze/reference/compare.ts. */
+inline constexpr int RATIONALE_FIELDS = 2;
+
+/** MASS_TOLERANCE of ts/src/analyze/reference/validate.ts. */
+inline constexpr double MASS_TOLERANCE = 1e-9;
+
+/** REFERENCE_PROFILE_VERSION of ts/src/analyze/reference/types.ts. */
+inline constexpr int REFERENCE_PROFILE_VERSION = 1;
+
+/** PHRASE_OUTLINE_POINTS of ts/src/analyze/reference/types.ts. */
+inline constexpr int PHRASE_OUTLINE_POINTS = 8;
+
+/** MIDI_MAX of ts/src/analyze/reference/types.ts. */
+inline constexpr int MIDI_MAX = 127;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_ANALYZE_REFERENCE_LIMITS_GEN_H_

@@ -38,8 +38,16 @@ export function rhythmLevel(beatInQuarters: number, meters: MeterMap): number {
   return isMultipleOf(offset, subUnit) ? 1 : 0;
 }
 
+/** Lowest and highest power of two (in beats) {@link RHYTHM_IOI_BINS} reaches, and the step between bins. */
+export const IOI_MIN_EXPONENT = -4;
+export const IOI_MAX_EXPONENT = 4;
+export const IOI_EXPONENT_STEP = 0.5;
+
 /** Bin an inter-onset interval to {@link RHYTHM_IOI_BINS}, clamped to its ends. */
 export function ioiBinIndex(ioi: number): number {
-  const exponent = Math.min(4, Math.max(-4, Math.round(2 * Math.log2(ioi)) / 2));
-  return Math.round((exponent + 4) / 0.5);
+  const exponent = Math.min(
+    IOI_MAX_EXPONENT,
+    Math.max(IOI_MIN_EXPONENT, Math.round(2 * Math.log2(ioi)) / 2),
+  );
+  return Math.round((exponent - IOI_MIN_EXPONENT) / IOI_EXPONENT_STEP);
 }

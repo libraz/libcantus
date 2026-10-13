@@ -204,6 +204,12 @@ double assert_range(const json::Value& value, double min, double max, std::strin
   return cantus::assert_range(assert_finite_number(value, name), min, max, name);
 }
 
+double assert_range_option(const json::Value& opts, std::string_view key, double fallback,
+                           double min, double max, std::string_view name) {
+  const json::Value* given = opt_null_default(opts, key);
+  return assert_range(given != nullptr ? *given : json::Value(fallback), min, max, name);
+}
+
 double assert_range(const json::Value& value, const json::Value& min, const json::Value& max,
                     std::string_view name) {
   double v = assert_finite_number(value, name);

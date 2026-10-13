@@ -259,3 +259,28 @@ describe('spellLine contract', () => {
     expect(() => spellLine(line([60, 61, 62]), null, majorKey(0), { budget: 2 })).toThrow();
   });
 });
+
+describe('spellLine over a timeline argument that is a list or a text', () => {
+  const notes = line([61, 65]);
+
+  it('asks a list for its element at the beat, which is a segment and no chord', () => {
+    const segments = [
+      { startBeat: 0, endBeat: 4, chord: { rootPc: 1, quality: 'dom7', intervals: [0, 4, 7, 10] } },
+    ];
+    expect(() => spellLine(notes, segments as never, majorKey(0))).toThrow(
+      /chord\.rootPc must be finite; received undefined/,
+    );
+  });
+
+  it('asks a text for its character at the beat', () => {
+    expect(() => spellLine(notes, 'Db7' as never, majorKey(0))).toThrow(
+      /chord must be an object; received "D"/,
+    );
+  });
+
+  it('reads an empty text and a list of nulls as no chord at all', () => {
+    const alone = noteNames(spellLine(notes, null, majorKey(0)));
+    expect(noteNames(spellLine(notes, '' as never, majorKey(0)))).toEqual(alone);
+    expect(noteNames(spellLine(notes, [null] as never, majorKey(0)))).toEqual(alone);
+  });
+});

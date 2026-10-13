@@ -29,7 +29,7 @@ import { clamp01, firstSoundingBeat, floorMod, harmonicNovelty, sliceBars } from
  * triple-hypermetre alternatives. Anything else is better described as an
  * irregular succession of these than as a grouping of its own.
  */
-const GROUP_CANDIDATES: readonly number[] = [2, 3, 4, 6, 8];
+export const GROUP_CANDIDATES: readonly number[] = [2, 3, 4, 6, 8];
 
 /**
  * How readily each grouping is believed before the music is consulted.
@@ -39,22 +39,25 @@ const GROUP_CANDIDATES: readonly number[] = [2, 3, 4, 6, 8];
  * ambiguous case, where two-bar and four-bar readings explain the accents
  * equally well.
  */
-const GROUP_PRIOR: ReadonlyMap<number, number> = new Map([
+export const GROUP_PRIOR_LIST: readonly (readonly [number, number])[] = [
   [2, 0.9],
   [3, 0.75],
   [4, 1],
   [6, 0.7],
   [8, 0.85],
-]);
+];
+
+/** {@link GROUP_PRIOR_LIST} by grouping. */
+const GROUP_PRIOR: ReadonlyMap<number, number> = new Map(GROUP_PRIOR_LIST);
 
 /** Share of the evidence carried by harmonic change landing on group heads. */
-const CONTRAST_SHARE = 0.65;
+export const CONTRAST_SHARE = 0.65;
 
 /** Share of the evidence carried by cadences landing at group ends. */
-const CADENCE_SHARE = 0.35;
+export const CADENCE_SHARE = 0.35;
 
 /** How much of a group end's fit a cadence arriving in it earns. */
-const GROUP_FINAL_FIT = 1;
+export const GROUP_FINAL_FIT = 1;
 
 /**
  * How much of a group end's fit an arrival on the next group's head earns.
@@ -63,7 +66,7 @@ const GROUP_FINAL_FIT = 1;
  * reading is real; it is weaker evidence than a group-final arrival only
  * because a chord on a hypermetric downbeat is unremarkable on its own.
  */
-const ELIDED_FIT = 0.5;
+export const ELIDED_FIT = 0.5;
 
 /**
  * How many hyperbars the span must hold before a grouping is considered.
@@ -71,10 +74,10 @@ const ELIDED_FIT = 0.5;
  * One statement of a grouping is not evidence of a grouping: any span is
  * trivially one group of its own length.
  */
-const MIN_GROUPS = 2;
+export const MIN_GROUPS = 2;
 
 /** Share of the confidence that survives a rival grouping scoring just as well. */
-const MARGIN_FLOOR = 0.7;
+export const MARGIN_FLOOR = 0.7;
 
 /**
  * A bar grouping inferred from the music.

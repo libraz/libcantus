@@ -112,13 +112,13 @@ export type FormSectionOptions = {
 };
 
 /** Share of a unit's likeness carried by its melodic line. */
-const MELODY_SHARE = 0.6;
+export const MELODY_SHARE = 0.6;
 
 /** Share of a unit's likeness carried by its harmonic content. */
-const HARMONY_SHARE = 0.4;
+export const HARMONY_SHARE = 0.4;
 
 /** How alike two units must be before one is called a restatement of the other. */
-const DEFAULT_THRESHOLD = 0.8;
+export const DEFAULT_THRESHOLD = 0.8;
 
 /** One unit of comparison: a fixed run of bars and what sounds in it. */
 type Unit = {

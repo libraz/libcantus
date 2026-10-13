@@ -297,3 +297,19 @@ describe('analyzeRhythm option rejection', () => {
     expect(call).toThrow(InvalidInputError);
   });
 });
+
+describe('analyzeRhythm reads the options an empty span never reaches only when it has notes', () => {
+  it('answers a span with nothing sounding without looking at totalBeats', () => {
+    const silent = analyzeRhythm([], { totalBeats: 'x' as never });
+    expect(silent.onsets).toBe(0);
+    expect(
+      analyzeRhythm([{ pitch: 60, startBeat: 0, durationBeat: 0 }], { totalBeats: 'x' as never }),
+    ).toEqual(silent);
+  });
+
+  it('refuses a bigint end of span as the number conversion does', () => {
+    expect(() => analyzeRhythm(quarters(4), { totalBeats: 10n as never })).toThrow(
+      new TypeError('Cannot convert a BigInt value to a number'),
+    );
+  });
+});

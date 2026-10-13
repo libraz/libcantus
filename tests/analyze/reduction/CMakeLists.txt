@@ -1,0 +1,1 @@
+cantus_add_test(analyze_reduction test_reduction.cpp)

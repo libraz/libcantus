@@ -2,4 +2,59 @@
 #ifndef CANTUS_SRC_ANALYZE_TIMELINE_LIMITS_GEN_H_
 #define CANTUS_SRC_ANALYZE_TIMELINE_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** NOISE_THRESHOLD_RATIO of ts/src/analyze/timeline/index.ts. */
+inline constexpr double NOISE_THRESHOLD_RATIO = 0.2;
+
+/** MAX_DETECTION_PCS of ts/src/analyze/timeline/index.ts. */
+inline constexpr int MAX_DETECTION_PCS = 6;
+
+/** INEXACT_CONFIDENCE_FACTOR of ts/src/analyze/timeline/index.ts. */
+inline constexpr double INEXACT_CONFIDENCE_FACTOR = 0.85;
+
+/** DIATONIC_BONUS of ts/src/analyze/timeline/index.ts. */
+inline constexpr double DIATONIC_BONUS = 0.5;
+
+/** EXACT_BONUS of ts/src/analyze/timeline/index.ts. */
+inline constexpr double EXACT_BONUS = 0.5;
+
+/** EXTRA_TONE_PENALTY of ts/src/analyze/timeline/index.ts. */
+inline constexpr double EXTRA_TONE_PENALTY = 0.6;
+
+/** OMITTED_TONE_PENALTY of ts/src/analyze/timeline/index.ts. */
+inline constexpr double OMITTED_TONE_PENALTY = 0.15;
+
+/** BASS_ROOT_STANDING of ts/src/analyze/timeline/index.ts. */
+inline constexpr double BASS_ROOT_STANDING = 0.95;
+
+/** OCTAVE of ts/src/analyze/timeline/index.ts. */
+inline constexpr int EXTENSION_OCTAVE = 12;
+
+/** DOMINANT_ABOVE_TONIC of ts/src/analyze/timeline/index.ts. */
+inline constexpr int DOMINANT_ABOVE_TONIC = 7;
+
+/** OUTSIDE_TONE_PENALTY of ts/src/analyze/timeline/index.ts. */
+inline constexpr double OUTSIDE_TONE_PENALTY = 1;
+
+/** MISSING_TONE_PENALTY of ts/src/analyze/timeline/index.ts. */
+inline constexpr double TIMELINE_MISSING_TONE_PENALTY = 0.5;
+
+/** ROOT_PRESENCE_BONUS of ts/src/analyze/timeline/index.ts. */
+inline constexpr double ROOT_PRESENCE_BONUS = 0.3;
+
+/** CHANGE_COST of ts/src/analyze/timeline/index.ts. */
+inline constexpr double CHANGE_COST = 0.35;
+
+/** STRONG_BEAT_DISCOUNT of ts/src/analyze/timeline/index.ts. */
+inline constexpr double TIMELINE_STRONG_BEAT_DISCOUNT = 0.5;
+
+/** MAX_METRIC_WEIGHT of ts/src/analyze/timeline/index.ts. */
+inline constexpr int TIMELINE_MAX_METRIC_WEIGHT = 3;
+
+/** DIRTY_SLOT_MARGIN of ts/src/analyze/timeline/index.ts. */
+inline constexpr int DIRTY_SLOT_MARGIN = 1;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_ANALYZE_TIMELINE_LIMITS_GEN_H_

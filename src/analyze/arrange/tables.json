@@ -1,0 +1,57 @@
+{
+  "tables": [
+    {
+      "module": "analyze/arrange/internal.ts",
+      "export": "TRACK_ROLES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kTrackRoleNames",
+      "fields": []
+    },
+    {
+      "module": "analyze/arrange/internal.ts",
+      "export": "DEFAULT_PROFILE_NAMES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kDefaultProfileNames",
+      "fields": []
+    },
+    {
+      "module": "analyze/arrange/tension.ts",
+      "export": "FUNCTION_TENSION",
+      "cxx_type": "NamedDouble",
+      "cxx_name": "kFunctionTension",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "analyze/arrange/internal.ts",
+      "export": "MAX_LANE_LEAP",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/arrange/tension.ts",
+      "export": "FUNCTION_WEIGHT",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/arrange/tension.ts",
+      "export": "DISSONANCE_WEIGHT",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/arrange/tension.ts",
+      "export": "SPAN_WEIGHT",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/arrange/tension.ts",
+      "export": "SPAN_SATURATION",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/arrange/tension.ts",
+      "export": "MAX_DISTINCT_PITCHES",
+      "cxx_type": "int"
+    }
+  ]
+}

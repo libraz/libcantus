@@ -1,0 +1,64 @@
+{
+  "tables": [
+    {
+      "module": "analyze/spelling/index.ts",
+      "export": "CONVENTIONAL_LETTER_STEPS",
+      "cxx_type": "std::vector<int>",
+      "cxx_name": "kConventionalLetterSteps",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "analyze/spelling/index.ts",
+      "export": "CHORD_MISMATCH",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/spelling/index.ts",
+      "export": "SCALE_TONE_MISMATCH",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/spelling/index.ts",
+      "export": "LETTER_STEP_DEVIATION",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/spelling/index.ts",
+      "export": "MAX_COUNTED_DEVIATION",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/spelling/index.ts",
+      "export": "AGAINST_DIRECTION",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/spelling/index.ts",
+      "export": "KEY_MISMATCH",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/spelling/index.ts",
+      "export": "ACCIDENTAL",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/spelling/index.ts",
+      "export": "MAX_STEP",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/spelling/index.ts",
+      "export": "MAX_ALTER",
+      "cxx_type": "int",
+      "cxx_name": "SPELLING_MAX_ALTER"
+    },
+    {
+      "module": "analyze/spelling/index.ts",
+      "export": "SPELLINGS_PER_PITCH",
+      "cxx_type": "int"
+    }
+  ]
+}

@@ -34,6 +34,9 @@ std::string_view to_string(HarmonicFunction function);
 /** The function named `name`, or nullopt. */
 std::optional<HarmonicFunction> parse_harmonic_function(std::string_view name);
 
+/** Every function, in the order of HARMONIC_FUNCTIONS. */
+std::vector<HarmonicFunction> harmonic_functions();
+
 /** The origin of a recognized non-diatonic chord (`BorrowedSource`, without its null). */
 enum class BorrowedSource : std::uint8_t { kParallelMinor, kParallelMajor, kNeapolitan };
 
@@ -60,6 +63,9 @@ std::string_view to_string(CadenceType type);
 
 /** The type named `name`, or nullopt. */
 std::optional<CadenceType> parse_cadence_type(std::string_view name);
+
+/** Every cadence type, in the order of CADENCE_TYPES. */
+std::vector<CadenceType> cadence_types();
 
 /** How conclusive an authentic cadence is (`CadenceResult['strength']`, without its null). */
 enum class CadenceStrength : std::uint8_t { kPerfect, kImperfect };

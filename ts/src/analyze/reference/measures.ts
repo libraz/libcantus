@@ -24,37 +24,40 @@ import { compareMelodies } from '../melody/similarity.js';
 import type { RhythmAnalysis } from '../rhythm/index.js';
 import { distanceToSimilarity, gradedEditDistance } from '../sequence.js';
 import type { ReferenceChord, ReferenceMotif, ReferencePhraseMelody } from './types.js';
+import { MIDI_MAX } from './types.js';
 
 /** Gap cost of the progression alignment: skipping a chord is cheaper than a wrong one. */
-const PROGRESSION_GAP = 0.75;
+export const PROGRESSION_GAP = 0.75;
 /** Substitution cost between two chords on the same degree that differ in quality or inversion. */
-const SAME_DEGREE_COST = 0.25;
+export const SAME_DEGREE_COST = 0.25;
 /** Substitution cost between two chords on different degrees that share a function. */
-const SAME_FUNCTION_COST = 0.5;
+export const SAME_FUNCTION_COST = 0.5;
 /** Substitution cost between a half and a Phrygian cadence, the latter being a kind of the former. */
-const HALF_PHRYGIAN_COST = 0.5;
+export const HALF_PHRYGIAN_COST = 0.5;
 /** Substitution cost between two keys a matching tonic distance apart but in different modes. */
-const MODE_CHANGE_COST = 0.5;
+export const MODE_CHANGE_COST = 0.5;
 /** Added to a contour substitution when the two phrases' overall shapes differ. */
-const SHAPE_MISMATCH_COST = 0.25;
+export const SHAPE_MISMATCH_COST = 0.25;
 /** Semitones of register offset plus range difference that cost a whole register substitution. */
-const REGISTER_SPAN = 24;
+export const REGISTER_SPAN = 24;
 /** Weight of the peak-position difference in a register substitution. */
-const PEAK_POSITION_WEIGHT = 0.5;
+export const PEAK_POSITION_WEIGHT = 0.5;
 /** Family sizes are binned 1, 2, 3, 4, and 5 or more. */
-const FAMILY_SIZE_BINS = 5;
+export const FAMILY_SIZE_BINS = 5;
 /** Derivation depths are binned 0, 1, 2, and 3 or more. */
-const DEPTH_BINS = 4;
+export const DEPTH_BINS = 4;
 /** Names the Neapolitan and augmented sixths are written with; each is its own degree token. */
-const NAMED_CHORDS = ['Ger', 'It', 'Fr', 'N'] as const;
+export const NAMED_CHORDS = ['Ger', 'It', 'Fr', 'N'] as const;
 /** Relation kinds that leave pitch unchanged, and so do not deepen a derivation. */
-const PITCH_PRESERVING: ReadonlySet<MotifRelationKind> = new Set([
+export const PITCH_PRESERVING_KINDS: readonly MotifRelationKind[] = [
   'repetition',
   'augmentation',
   'diminution',
-]);
+];
+/** {@link PITCH_PRESERVING_KINDS} as a set. */
+const PITCH_PRESERVING: ReadonlySet<MotifRelationKind> = new Set(PITCH_PRESERVING_KINDS);
 /** Pitch a synthesised motif cell starts on. */
-const CELL_START_PITCH = 60;
+export const CELL_START_PITCH = 60;
 
 /**
  * Apply the null rule: `null` when neither side has material, 0 when only one
@@ -392,7 +395,7 @@ function cellNotes(motif: SurfaceMotif): NoteEvent[] {
     low = Math.min(low, offset);
     high = Math.max(high, offset);
   }
-  let pitch = Math.min(127 - high, Math.max(-low, CELL_START_PITCH));
+  let pitch = Math.min(MIDI_MAX - high, Math.max(-low, CELL_START_PITCH));
   let beat = 0;
   for (let i = 0; i <= motif.intervals.length; i += 1) {
     const step = motif.rhythm[i] ?? 1;

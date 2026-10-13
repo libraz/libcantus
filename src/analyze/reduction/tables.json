@@ -1,0 +1,26 @@
+{
+  "tables": [
+    {
+      "module": "analyze/reduction/index.ts",
+      "export": "REDUCTION_LEVELS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kReductionLevelNames",
+      "fields": []
+    },
+    {
+      "module": "analyze/reduction/index.ts",
+      "export": "REDUCTION_BASES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kReductionBasisNames",
+      "fields": []
+    },
+    {
+      "module": "analyze/reduction/index.ts",
+      "export": "TONIC_ARRIVING_CADENCES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kTonicArrivingCadenceNames",
+      "fields": []
+    }
+  ],
+  "limits": []
+}

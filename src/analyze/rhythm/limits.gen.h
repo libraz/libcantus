@@ -2,4 +2,29 @@
 #ifndef CANTUS_SRC_ANALYZE_RHYTHM_LIMITS_GEN_H_
 #define CANTUS_SRC_ANALYZE_RHYTHM_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** RHYTHM_SLOTS_PER_BEAT of ts/src/analyze/rhythm/index.ts. */
+inline constexpr int RHYTHM_SLOTS_PER_BEAT = 12;
+
+/** RHYTHM_OFF_GRID_TOLERANCE of ts/src/analyze/rhythm/index.ts. */
+inline constexpr double RHYTHM_OFF_GRID_TOLERANCE = 0.03125;
+
+/** RHYTHM_LEVEL_COUNT of ts/src/analyze/rhythm/index.ts. */
+inline constexpr int RHYTHM_LEVEL_COUNT = 6;
+
+/** IOI_MIN_EXPONENT of ts/src/analyze/rhythm/internal.ts. */
+inline constexpr int IOI_MIN_EXPONENT = -4;
+
+/** IOI_MAX_EXPONENT of ts/src/analyze/rhythm/internal.ts. */
+inline constexpr int IOI_MAX_EXPONENT = 4;
+
+/** IOI_EXPONENT_STEP of ts/src/analyze/rhythm/internal.ts. */
+inline constexpr double IOI_EXPONENT_STEP = 0.5;
+
+/** BUDGET_SLOTS_PER_BAR of ts/src/analyze/rhythm/index.ts. */
+inline constexpr int BUDGET_SLOTS_PER_BAR = 48;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_ANALYZE_RHYTHM_LIMITS_GEN_H_

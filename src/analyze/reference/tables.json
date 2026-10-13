@@ -1,0 +1,100 @@
+{
+  "tables": [
+    {
+      "module": "analyze/reference/measures.ts",
+      "export": "NAMED_CHORDS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kNamedChordTokens",
+      "fields": []
+    },
+    {
+      "module": "analyze/reference/measures.ts",
+      "export": "PITCH_PRESERVING_KINDS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kPitchPreservingKinds",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "analyze/reference/measures.ts",
+      "export": "PROGRESSION_GAP",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/reference/measures.ts",
+      "export": "SAME_DEGREE_COST",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/reference/measures.ts",
+      "export": "SAME_FUNCTION_COST",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/reference/measures.ts",
+      "export": "HALF_PHRYGIAN_COST",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/reference/measures.ts",
+      "export": "MODE_CHANGE_COST",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/reference/measures.ts",
+      "export": "SHAPE_MISMATCH_COST",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/reference/measures.ts",
+      "export": "REGISTER_SPAN",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/reference/measures.ts",
+      "export": "PEAK_POSITION_WEIGHT",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/reference/measures.ts",
+      "export": "FAMILY_SIZE_BINS",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/reference/measures.ts",
+      "export": "DEPTH_BINS",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/reference/measures.ts",
+      "export": "CELL_START_PITCH",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/reference/compare.ts",
+      "export": "RATIONALE_FIELDS",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/reference/validate.ts",
+      "export": "MASS_TOLERANCE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/reference/types.ts",
+      "export": "REFERENCE_PROFILE_VERSION",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/reference/types.ts",
+      "export": "PHRASE_OUTLINE_POINTS",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/reference/types.ts",
+      "export": "MIDI_MAX",
+      "cxx_type": "int"
+    }
+  ]
+}

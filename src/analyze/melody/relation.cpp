@@ -159,6 +159,14 @@ std::optional<MotifRelationKind> parse_motif_relation_kind(std::string_view name
   return std::nullopt;
 }
 
+std::vector<MotifRelationKind> motif_relation_kinds() {
+  std::vector<MotifRelationKind> kinds;
+  for (std::size_t i = 0; i < kKindNames.size(); ++i) {
+    kinds.push_back(static_cast<MotifRelationKind>(i));
+  }
+  return kinds;
+}
+
 Nullable<MotifRelation> relate_lines(const std::vector<LineNote>& model,
                                      const std::vector<LineNote>& answer,
                                      const KeySource* key_source) {

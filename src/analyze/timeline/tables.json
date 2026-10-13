@@ -1,0 +1,109 @@
+{
+  "tables": [
+    {
+      "module": "analyze/timeline/index.ts",
+      "export": "SEGMENTATION_QUALITIES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kSegmentationQualityNames",
+      "fields": []
+    },
+    {
+      "module": "analyze/timeline/index.ts",
+      "export": "SLASH_UPPER_QUALITY_LIST",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kSlashUpperQualityNames",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "analyze/timeline/index.ts",
+      "export": "NOISE_THRESHOLD_RATIO",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/timeline/index.ts",
+      "export": "MAX_DETECTION_PCS",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/timeline/index.ts",
+      "export": "INEXACT_CONFIDENCE_FACTOR",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/timeline/index.ts",
+      "export": "DIATONIC_BONUS",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/timeline/index.ts",
+      "export": "EXACT_BONUS",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/timeline/index.ts",
+      "export": "EXTRA_TONE_PENALTY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/timeline/index.ts",
+      "export": "OMITTED_TONE_PENALTY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/timeline/index.ts",
+      "export": "BASS_ROOT_STANDING",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/timeline/index.ts",
+      "export": "OCTAVE",
+      "cxx_type": "int",
+      "cxx_name": "EXTENSION_OCTAVE"
+    },
+    {
+      "module": "analyze/timeline/index.ts",
+      "export": "DOMINANT_ABOVE_TONIC",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/timeline/index.ts",
+      "export": "OUTSIDE_TONE_PENALTY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/timeline/index.ts",
+      "export": "MISSING_TONE_PENALTY",
+      "cxx_type": "double",
+      "cxx_name": "TIMELINE_MISSING_TONE_PENALTY"
+    },
+    {
+      "module": "analyze/timeline/index.ts",
+      "export": "ROOT_PRESENCE_BONUS",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/timeline/index.ts",
+      "export": "CHANGE_COST",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/timeline/index.ts",
+      "export": "STRONG_BEAT_DISCOUNT",
+      "cxx_type": "double",
+      "cxx_name": "TIMELINE_STRONG_BEAT_DISCOUNT"
+    },
+    {
+      "module": "analyze/timeline/index.ts",
+      "export": "MAX_METRIC_WEIGHT",
+      "cxx_type": "int",
+      "cxx_name": "TIMELINE_MAX_METRIC_WEIGHT"
+    },
+    {
+      "module": "analyze/timeline/index.ts",
+      "export": "DIRTY_SLOT_MARGIN",
+      "cxx_type": "int"
+    }
+  ]
+}

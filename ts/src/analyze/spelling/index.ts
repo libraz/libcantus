@@ -61,13 +61,13 @@ import type { ChordTimeline } from '../timeline/index.js';
  */
 
 /** Emission cost for a spelling the chord sounding under the note does not name. */
-const CHORD_MISMATCH = 64;
+export const CHORD_MISMATCH = 64;
 
 /** Emission cost for respelling a tone the key's own scale already names. */
-const SCALE_TONE_MISMATCH = 32;
+export const SCALE_TONE_MISMATCH = 32;
 
 /** Transition cost per diatonic step an interval's letters miss its written size by. */
-const LETTER_STEP_DEVIATION = 4;
+export const LETTER_STEP_DEVIATION = 4;
 
 /**
  * How many steps of deviation are counted before the cost stops growing.
@@ -76,22 +76,22 @@ const LETTER_STEP_DEVIATION = 4;
  * keeps the whole melodic term below {@link SCALE_TONE_MISMATCH}, so a badly
  * shaped line can never argue a scale tone out of its key spelling.
  */
-const MAX_COUNTED_DEVIATION = 2;
+export const MAX_COUNTED_DEVIATION = 2;
 
 /** Transition cost for an accidental leaning against the direction of a stepwise line. */
-const AGAINST_DIRECTION = 3;
+export const AGAINST_DIRECTION = 3;
 
 /** Emission cost for a chromatic spelling the key alone would not choose. */
-const KEY_MISMATCH = 4;
+export const KEY_MISMATCH = 4;
 
 /** Emission cost per semitone of alteration: what minimises accidentals overall. */
-const ACCIDENTAL = 1;
+export const ACCIDENTAL = 1;
 
 /** Widest melodic interval still counted as a step, where the direction rule applies. */
-const MAX_STEP = 2;
+export const MAX_STEP = 2;
 
 /** Widest alteration a spelling may carry: a double accidental. */
-const MAX_ALTER = 2;
+export const MAX_ALTER = 2;
 
 /**
  * Spellings each pitch class has within a double accidental.
@@ -100,7 +100,7 @@ const MAX_ALTER = 2;
  * letter below (C is C, B# and Dbb) — which is what bounds the work the dynamic
  * program is allowed to do.
  */
-const SPELLINGS_PER_PITCH = 3;
+export const SPELLINGS_PER_PITCH = 3;
 
 /**
  * The diatonic letter distances a melodic interval of a given size is
@@ -112,7 +112,7 @@ const SPELLINGS_PER_PITCH = 3;
  * (F to F#) or a diatonic step (E to F), and the tritone is either an augmented
  * fourth or a diminished fifth. Direction chooses between those.
  */
-const CONVENTIONAL_LETTER_STEPS: readonly (readonly number[])[] = [
+export const CONVENTIONAL_LETTER_STEPS: readonly (readonly number[])[] = [
   [0], // unison
   [0, 1], // chromatic semitone or diatonic semitone
   [1], // second

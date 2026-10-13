@@ -1,6 +1,8 @@
 import {
   type ArrangementTrack,
   analyzeArrangement,
+  analyzePolyphony,
+  type ChordTimeline,
   chordTimelineFromChords,
   createArrangementSession,
   tensionCurve,
@@ -830,5 +832,60 @@ describe('sub-voice assignment', () => {
     for (const conflict of analysis.conflicts) {
       expect(conflict.reasons & ReasonFlag.LargeLeap, `beat ${conflict.beat}`).toBeFalsy();
     }
+  });
+});
+
+describe('arrangement entry points that read an argument late or as a text', () => {
+  const lead: ArrangementTrack[] = [
+    { role: 'melody', notes: [{ pitch: 60, startBeat: 0, durationBeat: 2 }] },
+  ];
+
+  it('walks harmonyTracks given as a text by its characters, none of which is a track', () => {
+    expect(() => analyzeArrangement(lead, { harmonyTracks: 'x' as never })).toThrow(
+      /harmonyTracks\[0\] must be a track index; received x/,
+    );
+    expect(() => tensionCurve(lead, { harmonyTracks: 'x' as never })).toThrow(
+      /harmonyTracks\[0\] must be a track index; received x/,
+    );
+  });
+
+  it('reads edits given as a text or as nothing the way an array of them is read', () => {
+    const session = createArrangementSession(lead);
+    expect(() => session.update('ab' as never)).toThrow(
+      /edits\[0\]\.trackIndex undefined is outside the session's 1 tracks/,
+    );
+    expect(() => session.update(null as never)).toThrow(
+      new TypeError("Cannot read properties of null (reading 'length')"),
+    );
+    expect(session.update('' as never).analysis).toBe(session.analysis);
+  });
+
+  it('refuses a key region whose key is a bare name where the prevailing key is read', () => {
+    const regions = [{ startBeat: 0, endBeat: 4, key: 'C major', confidence: 1 }];
+    expect(() => analyzeArrangement(lead, { keys: regions as never })).toThrow(
+      /key regions\[0\]\.key must be an object; received "C major"/,
+    );
+  });
+
+  it('refuses a chord a supplied timeline answers with where the tension reads its function', () => {
+    const answering = (chord: unknown) =>
+      ({ at: () => chord, segments: [] }) as unknown as ChordTimeline;
+    expect(() =>
+      tensionCurve(lead, { timeline: answering({ rootPc: 0, quality: 'zzz', intervals: [0] }) }),
+    ).toThrow(/Unknown chord quality: zzz/);
+    expect(() => tensionCurve(lead, { timeline: answering('C') })).toThrow(
+      /chord must be an object; received "C"/,
+    );
+  });
+
+  it('reads the key of a polyphonic passage only once there is a note to read it for', () => {
+    expect(analyzePolyphony([], () => null, 'not a key' as never)).toEqual([]);
+    expect(() =>
+      analyzePolyphony(
+        [{ pitch: 60, startBeat: 0, durationBeat: 1 }],
+        () => null,
+        'no key' as never,
+      ),
+    ).toThrow(InvalidInputError);
   });
 });

@@ -1,4 +1,8 @@
-import { type ChordTimelineResult, chordTimelineFromNotes } from '@libraz/libcantus/analyze';
+import {
+  assertChordTimeline,
+  type ChordTimelineResult,
+  chordTimelineFromNotes,
+} from '@libraz/libcantus/analyze';
 import { type NoteEvent, parseTimeSignature } from '@libraz/libcantus/core';
 import { majorKey } from '@libraz/libcantus/theory';
 import { describe, expect, it } from 'vitest';
@@ -374,4 +378,32 @@ describe('chordTimelineFromNotes dynamic segmentation on degenerate input', () =
       }
     });
   }
+});
+
+describe('chordTimelineFromNotes with a segmentation that names neither mode', () => {
+  it('keeps each sounding run as one span, as an unsearched grid would', () => {
+    const notes = [
+      ...blockChord([60, 64, 67], 0, 2), // C E G
+      ...blockChord([62, 65, 69], 2, 2), // D F A
+    ];
+    const result = chordTimelineFromNotes(notes, { segmentation: 'bogus' as never });
+    expect(bounds(result)).toEqual([[0, 4]]);
+    expect(roots(result)).toEqual([5]);
+    expect(result.timeline.segments[0]?.chord.quality).toBe('maj13');
+  });
+});
+
+describe('assertChordTimeline names the timeline only in a message', () => {
+  const placed = chordTimelineFromNotes([{ pitch: 60, startBeat: 0, durationBeat: 4 }]).timeline;
+
+  it('accepts a valid timeline whatever the name is', () => {
+    const name = (() => 'unused') as unknown as string;
+    expect(assertChordTimeline(placed, name).segments).toEqual(placed.segments);
+  });
+
+  it('uses the name in the message of a timeline that fails', () => {
+    expect(() => assertChordTimeline({ segments: 3 } as never, 'mine')).toThrow(
+      /^mine\.at must be a function|^mine\.segments must be an array/,
+    );
+  });
 });

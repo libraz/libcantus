@@ -9,6 +9,7 @@ import { BEAT_EPS } from '../adjacency.js';
 import { melodicContour } from '../melody/contour.js';
 import { analyzeRhythm } from '../rhythm/index.js';
 import type { ReferencePhraseMelody } from './types.js';
+import { PHRASE_OUTLINE_POINTS } from './types.js';
 
 /** Duration-weighted mean pitch of notes that all sound for a positive length. */
 export function weightedMean(notes: readonly NoteEvent[]): number {
@@ -53,8 +54,8 @@ export function phraseMelody(
   }
   const length = endBeat - startBeat;
   const outline: number[] = [];
-  for (let k = 0; k < 8; k += 1) {
-    const at = startBeat + ((k + 0.5) * length) / 8;
+  for (let k = 0; k < PHRASE_OUTLINE_POINTS; k += 1) {
+    const at = startBeat + ((k + 0.5) * length) / PHRASE_OUTLINE_POINTS;
     // The note sounding at the sample point, or the last one before it: a rest holds.
     let held = first;
     for (const note of inside) {

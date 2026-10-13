@@ -73,6 +73,14 @@ std::optional<MelodicContourShape> parse_melodic_contour_shape(std::string_view 
   return std::nullopt;
 }
 
+std::vector<MelodicContourShape> melodic_contour_shapes() {
+  std::vector<MelodicContourShape> shapes;
+  for (std::size_t i = 0; i < kShapeNames.size(); ++i) {
+    shapes.push_back(static_cast<MelodicContourShape>(i));
+  }
+  return shapes;
+}
+
 MelodicContour contour_of(const std::vector<NoteEvent>& ordered) {
   std::vector<LineNote> line = line_of(ordered);
   std::vector<double> intervals = intervals_of(line);

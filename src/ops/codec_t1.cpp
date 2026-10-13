@@ -88,6 +88,51 @@ json::Value scale_first(const ResolvedKey& key) {
   return json::Value(std::move(o));
 }
 
+/** `copySpanIntervals`'s checks over a wire template. */
+std::vector<double> read_span_intervals(const json::Value& intervals) {
+  const std::string name = "chord span intervals";
+  if (!intervals.is_array()) {
+    throw InvalidInputError(name + " must be an array; received " + js::type_of(intervals));
+  }
+  const json::Array& list = intervals.as_array();
+  if (list.empty()) {
+    throw InvalidInputError(name + " must name at least one interval");
+  }
+  std::vector<double> out;
+  for (std::size_t index = 0; index < list.size(); ++index) {
+    std::string at = name + "[" + index_text(index) + "]";
+    if (is_undefined(list[index])) {
+      throw InvalidInputError(at + " must be a semitone offset; received undefined");
+    }
+    out.push_back(assert_integer(list[index], at, -MAX_CHORD_INTERVAL, MAX_CHORD_INTERVAL));
+  }
+  return out;
+}
+
+/** `makeChord`'s prologue over wire arguments: the root, the bass when given, the quality. */
+Chord make_chord_from_wire(const json::Value& root, const json::Value& quality,
+                           const json::Value& bass) {
+  double root_pc = assert_finite_number(root, "chord rootPc");
+  std::optional<double> bass_pc;
+  if (!is_undefined(bass)) {
+    bass_pc = assert_finite_number(bass, "chord bassPc");
+  }
+  return make_chord(root_pc, read_chord_quality(quality), bass_pc);
+}
+
+ChordSpan read_chord_span(const json::Value& span) {
+  assert_record(span, "chord span");
+  Chord chord =
+      make_chord_from_wire(get(span, "rootPc"), get(span, "quality"), get(span, "bassPc"));
+  ChordSpan out{chord.rootPc, chord.quality, 0,           chord.bassPc,
+                std::nullopt, std::nullopt,  std::nullopt};
+  const json::Value& intervals = get(span, "intervals");
+  if (!is_undefined(intervals)) {
+    out.intervals = read_span_intervals(intervals);
+  }
+  return out;
+}
+
 std::vector<std::string_view> key_variant_names() {
   std::vector<std::string_view> names;
   for (KeyVariant variant : {KeyVariant::kMajor, KeyVariant::kNatural, KeyVariant::kHarmonic,
@@ -158,6 +203,11 @@ const json::Value& assert_chord(const json::Value& value, std::string_view name)
   assert_finite_number(get(chord, "rootPc"), join_name(name, ".rootPc"));
   read_chord_quality(get(chord, "quality"));
   return chord;
+}
+
+void assert_mask_inputs(const json::Value& chord) {
+  assert_record(chord, "chord");
+  assert_array(get(chord, "intervals"), "chord intervals");
 }
 
 Chord read_chord_fields(const json::Value& value, ChordQuality fallback) {

@@ -848,6 +848,24 @@ std::vector<KeyRegion> detect_modulations(const std::vector<ChordSegment>& chord
       typed_profile_source(opts.profile));
 }
 
+void attach_pivots_over(std::vector<KeyRegion>& regions, const std::vector<SegmentSpan>& chords,
+                        const ChordSource& chord_at) {
+  std::vector<OrderedSegment> ordered;
+  for (std::size_t i = 0; i < chords.size(); ++i) {
+    ordered.push_back(OrderedSegment{i, chords[i].startBeat, chords[i].endBeat});
+  }
+  attach_pivots(regions, ordered, chord_at);
+}
+
+void attach_pivots(std::vector<KeyRegion>& regions, const std::vector<ChordSegment>& chords) {
+  std::vector<SegmentSpan> spans;
+  for (const ChordSegment& segment : chords) {
+    spans.push_back(SegmentSpan{segment.startBeat, segment.endBeat});
+  }
+  attach_pivots_over(regions, spans,
+                     [&](std::size_t index) -> const Chord& { return chords[index].chord; });
+}
+
 std::optional<std::size_t> prevailing_key_index(
     const std::vector<std::pair<std::string, double>>& regions) {
   // Held time is summed per key, not per region: a key returned to after a digression prevails

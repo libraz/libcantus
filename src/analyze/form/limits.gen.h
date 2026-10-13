@@ -2,4 +2,71 @@
 #ifndef CANTUS_SRC_ANALYZE_FORM_LIMITS_GEN_H_
 #define CANTUS_SRC_ANALYZE_FORM_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** CONTRAST_SHARE of ts/src/analyze/form/hypermeter.ts. */
+inline constexpr double CONTRAST_SHARE = 0.65;
+
+/** CADENCE_SHARE of ts/src/analyze/form/hypermeter.ts. */
+inline constexpr double CADENCE_SHARE = 0.35;
+
+/** GROUP_FINAL_FIT of ts/src/analyze/form/hypermeter.ts. */
+inline constexpr double GROUP_FINAL_FIT = 1;
+
+/** ELIDED_FIT of ts/src/analyze/form/hypermeter.ts. */
+inline constexpr double ELIDED_FIT = 0.5;
+
+/** MIN_GROUPS of ts/src/analyze/form/hypermeter.ts. */
+inline constexpr int MIN_GROUPS = 2;
+
+/** MARGIN_FLOOR of ts/src/analyze/form/hypermeter.ts. */
+inline constexpr double MARGIN_FLOOR = 0.7;
+
+/** MELODY_SHARE of ts/src/analyze/form/section.ts. */
+inline constexpr double MELODY_SHARE = 0.6;
+
+/** HARMONY_SHARE of ts/src/analyze/form/section.ts. */
+inline constexpr double HARMONY_SHARE = 0.4;
+
+/** DEFAULT_THRESHOLD of ts/src/analyze/form/section.ts. */
+inline constexpr double SECTION_DEFAULT_THRESHOLD = 0.8;
+
+/** REST_STRENGTH of ts/src/analyze/form/phrase.ts. */
+inline constexpr double REST_STRENGTH = 0.6;
+
+/** LONG_NOTE_STRENGTH of ts/src/analyze/form/phrase.ts. */
+inline constexpr double LONG_NOTE_STRENGTH = 0.4;
+
+/** REPETITION_STRENGTH of ts/src/analyze/form/phrase.ts. */
+inline constexpr double REPETITION_STRENGTH = 0.5;
+
+/** REPETITION_THRESHOLD of ts/src/analyze/form/phrase.ts. */
+inline constexpr double REPETITION_THRESHOLD = 0.75;
+
+/** HYPERMETER_STRENGTH of ts/src/analyze/form/phrase.ts. */
+inline constexpr double HYPERMETER_STRENGTH = 0.25;
+
+/** PIECE_END_STRENGTH of ts/src/analyze/form/phrase.ts. */
+inline constexpr double PIECE_END_STRENGTH = 0.5;
+
+/** PHRASE_CUT_COST of ts/src/analyze/form/phrase.ts. */
+inline constexpr double PHRASE_CUT_COST = 1.3;
+
+/** CLOSING_SHARE of ts/src/analyze/form/phrase.ts. */
+inline constexpr double CLOSING_SHARE = 0.65;
+
+/** FINAL_PHRASE_BONUS of ts/src/analyze/form/phrase.ts. */
+inline constexpr double FINAL_PHRASE_BONUS = 0.15;
+
+/** HYPERMETRIC_CLOSE_BONUS of ts/src/analyze/form/phrase.ts. */
+inline constexpr double HYPERMETRIC_CLOSE_BONUS = 0.1;
+
+/** EVADED_FACTOR of ts/src/analyze/form/phrase.ts. */
+inline constexpr double EVADED_FACTOR = 0.6;
+
+/** IMPERFECT_CLOSURE_FACTOR of ts/src/analyze/form/phrase.ts. */
+inline constexpr double IMPERFECT_CLOSURE_FACTOR = 0.8;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_ANALYZE_FORM_LIMITS_GEN_H_

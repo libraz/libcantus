@@ -10,6 +10,7 @@
 #define CANTUS_SRC_OPS_CODEC_T1_H_
 
 #include <string_view>
+#include <vector>
 
 #include "cantus/theory/chord.h"
 #include "cantus/theory/scale.h"
@@ -66,6 +67,9 @@ KeyScale read_key_like(const json::Value& value);
  */
 KeyArg read_key_arg(const json::Value& value);
 
+/** `assertRecord(chord)` and `assertArray(chord.intervals)` of chordPcMask. */
+void assert_mask_inputs(const json::Value& chord);
+
 /** `assertModeMask` over a wire value. */
 int read_mode_mask(const json::Value& value, std::string_view name);
 
@@ -105,6 +109,19 @@ inline void assert_chord_mask_inputs(const json::Value& chord) {
     assert_finite_number(bass, "pitch");
   }
 }
+
+/** `copySpanIntervals`'s checks over a wire template. */
+std::vector<double> read_span_intervals(const json::Value& intervals);
+
+/** `makeChord`'s prologue over wire arguments: the root, the bass when given, the quality. */
+Chord make_chord_from_wire(const json::Value& root, const json::Value& quality,
+                           const json::Value& bass);
+
+/**
+ * `chordFromSpan`'s checks over a wire span: the root, the bass when given, the quality and the
+ * interval template. The span's start beat is left at 0.
+ */
+ChordSpan read_chord_span(const json::Value& span);
 
 /** `assertChordSpec` over a wire value. */
 ChordSpec read_chord_spec(const json::Value& value);

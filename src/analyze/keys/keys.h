@@ -32,6 +32,12 @@ struct SegmentBeats {
   std::function<void()> assert_start;
 };
 
+/** The beats of one chord segment an analysis of a timeline reads. */
+struct SegmentSpan {
+  double startBeat = 0;
+  double endBeat = 0;
+};
+
 /** The chord of the segment at an index; called only for the segments the search keeps. */
 using ChordSource = std::function<const Chord&(std::size_t)>;
 
@@ -54,6 +60,19 @@ std::vector<KeyRegion> detect_modulations_over(const std::vector<SegmentBeats>& 
                                                const KeyTimelineOptions& opts,
                                                const ProfileSource& profile_source,
                                                std::vector<std::size_t>* first_segments = nullptr);
+
+/**
+ * attach_pivots() over segment beats, reading each chord when the search first needs it, so a
+ * caller holding chords in another form can read them lazily and in the order TS does.
+ */
+void attach_pivots_over(std::vector<KeyRegion>& regions, const std::vector<SegmentSpan>& chords,
+                        const ChordSource& chord_at);
+
+/**
+ * Name the chord each modulation between regions turned on, where the chords support one
+ * (`attachPivots`); `chords` are every chord that sounded, in the order they were given.
+ */
+void attach_pivots(std::vector<KeyRegion>& regions, const std::vector<ChordSegment>& chords);
 
 /**
  * The index of the key held longest, given the identity and held length of each region in order

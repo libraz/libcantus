@@ -39,6 +39,9 @@ std::string_view to_string(MelodicContourShape shape);
 /** The shape named `name`, or nullopt. */
 std::optional<MelodicContourShape> parse_melodic_contour_shape(std::string_view name);
 
+/** Every shape, in the order of MELODIC_CONTOUR_SHAPES. */
+std::vector<MelodicContourShape> melodic_contour_shapes();
+
 /** The named transformations relate_motifs() can report (`MotifRelationKind`). */
 enum class MotifRelationKind : std::uint8_t {
   kRepetition,
@@ -56,6 +59,9 @@ std::string_view to_string(MotifRelationKind kind);
 
 /** The kind named `name`, or nullopt. */
 std::optional<MotifRelationKind> parse_motif_relation_kind(std::string_view name);
+
+/** Every kind, in the order of MOTIF_RELATION_KINDS. */
+std::vector<MotifRelationKind> motif_relation_kinds();
 
 /** The abstract shape of a line: its step directions and what they add up to (`MelodicContour`). */
 struct MelodicContour {

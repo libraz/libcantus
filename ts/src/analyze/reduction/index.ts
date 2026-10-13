@@ -110,7 +110,15 @@ export type ReduceProgressionOptions = {
 };
 
 /** Cadences whose arrival is the tonic or the substitute standing in for it. */
-const TONIC_ARRIVING: ReadonlySet<string> = new Set(['authentic', 'plagal', 'modal', 'deceptive']);
+export const TONIC_ARRIVING_CADENCES: readonly string[] = [
+  'authentic',
+  'plagal',
+  'modal',
+  'deceptive',
+];
+
+/** {@link TONIC_ARRIVING_CADENCES} as a set. */
+const TONIC_ARRIVING: ReadonlySet<string> = new Set(TONIC_ARRIVING_CADENCES);
 
 /** Why a chord was kept in the frame, or which figure demoted it. */
 type ReductionReason =
@@ -314,7 +322,7 @@ const BASIS_READINGS: Record<ReductionBasis, (context: FrameContext) => Reductio
 };
 
 /** Every reading's name, read from the table so the two cannot drift apart. */
-const REDUCTION_BASES = Object.keys(BASIS_READINGS) as ReductionBasis[];
+export const REDUCTION_BASES = Object.keys(BASIS_READINGS) as ReductionBasis[];
 
 /** The level a reason places a chord at. */
 function levelOf(reason: ReductionReason): ReductionLevel {

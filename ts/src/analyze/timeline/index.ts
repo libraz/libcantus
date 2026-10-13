@@ -219,19 +219,19 @@ function segmentLookup(segments: ChordSegment[]): (beat: number) => Chord | null
 }
 
 /** Fraction of the strongest pitch-class weight below which a pc is noise. */
-const NOISE_THRESHOLD_RATIO = 0.2;
+export const NOISE_THRESHOLD_RATIO = 0.2;
 
 /** Maximum number of pitch classes fed to chord detection per window. */
-const MAX_DETECTION_PCS = 6;
+export const MAX_DETECTION_PCS = 6;
 
 /** Confidence multiplier applied when the chosen chord match is inexact. */
-const INEXACT_CONFIDENCE_FACTOR = 0.85;
+export const INEXACT_CONFIDENCE_FACTOR = 0.85;
 
 /** Score bonus for a match whose tones are all in the key. */
-const DIATONIC_BONUS = 0.5;
+export const DIATONIC_BONUS = 0.5;
 
 /** Score bonus for an exact match (no extra and no missing tones). */
-const EXACT_BONUS = 0.5;
+export const EXACT_BONUS = 0.5;
 
 /**
  * Score penalty per sounding pitch class a match leaves unexplained.
@@ -243,7 +243,7 @@ const EXACT_BONUS = 0.5;
  * C E Bb in C major as `C`, which drops the tritone the chord exists for and
  * asserts a G nobody played.
  */
-const EXTRA_TONE_PENALTY = 0.6;
+export const EXTRA_TONE_PENALTY = 0.6;
 
 /**
  * Score penalty per chord tone the voicing omits.
@@ -253,7 +253,7 @@ const EXTRA_TONE_PENALTY = 0.6;
  * dropping the fifth is ordinary practice, and non-zero, so a complete voicing
  * still outranks an incomplete reading of the same notes.
  */
-const OMITTED_TONE_PENALTY = 0.15;
+export const OMITTED_TONE_PENALTY = 0.15;
 
 /**
  * Standing a match's root earns from being the sounding bass, on the 0..1 scale
@@ -270,13 +270,13 @@ const OMITTED_TONE_PENALTY = 0.15;
  * which is what keeps a chord voiced in inversion from being re-rooted onto its
  * own bass note.
  */
-const BASS_ROOT_STANDING = 0.95;
+export const BASS_ROOT_STANDING = 0.95;
 
 /**
  * Semitones in an octave, as the boundary between a chord's core tones and the
  * extensions written above them: a ninth is a second an octave up.
  */
-const OCTAVE = 12;
+export const OCTAVE = 12;
 
 /**
  * How {@link chordTimelineFromNotes} decides where one chord ends and the next
@@ -476,7 +476,12 @@ function scoreMatch(
  * tones spell, they are read as a chord of their own rather than as a triad
  * standing on someone else's bass.
  */
-const SLASH_UPPER_QUALITIES: ReadonlySet<ChordQuality> = new Set<ChordQuality>(['maj', 'min']);
+export const SLASH_UPPER_QUALITY_LIST: readonly ChordQuality[] = ['maj', 'min'];
+
+/** {@link SLASH_UPPER_QUALITY_LIST} as a set. */
+const SLASH_UPPER_QUALITIES: ReadonlySet<ChordQuality> = new Set<ChordQuality>(
+  SLASH_UPPER_QUALITY_LIST,
+);
 
 /**
  * Whether a candidate reads the window as a triad standing on a foreign bass.
@@ -704,7 +709,7 @@ function shared(chord: Chord): Chord {
 }
 
 /** Semitones from a tonic up to its dominant. */
-const DOMINANT_ABOVE_TONIC = 7;
+export const DOMINANT_ABOVE_TONIC = 7;
 
 /**
  * Whether the augmented-sixth reading offered at `index` is the one the music
@@ -766,7 +771,7 @@ function sameChord(a: Chord, b: Chord): boolean {
  * table. Adding rarer qualities here would slow every slot down without
  * changing where the boundaries land.
  */
-const SEGMENTATION_QUALITIES: readonly ChordQuality[] = [
+export const SEGMENTATION_QUALITIES: readonly ChordQuality[] = [
   'maj',
   'min',
   'dim',
@@ -809,13 +814,13 @@ const LEXICON_TONES: Int32Array = (() => {
 })();
 
 /** Weight of a slot's non-chord tones, relative to its chord tones. */
-const OUTSIDE_TONE_PENALTY = 1;
+export const OUTSIDE_TONE_PENALTY = 1;
 
 /** Penalty per absent chord tone, in units of the candidate's average tone weight. */
-const MISSING_TONE_PENALTY = 0.5;
+export const MISSING_TONE_PENALTY = 0.5;
 
 /** Extra credit for the candidate's root carrying weight of its own. */
-const ROOT_PRESENCE_BONUS = 0.3;
+export const ROOT_PRESENCE_BONUS = 0.3;
 
 /**
  * Cost of one chord change, as a fraction of the evidence an expected-length
@@ -823,13 +828,13 @@ const ROOT_PRESENCE_BONUS = 0.3;
  * worth making, which is what keeps passing tones and appoggiaturas from
  * splitting a segment.
  */
-const CHANGE_COST = 0.35;
+export const CHANGE_COST = 0.35;
 
 /** How much of the change cost a maximally strong beat waives. */
-const STRONG_BEAT_DISCOUNT = 0.5;
+export const STRONG_BEAT_DISCOUNT = 0.5;
 
 /** The largest value {@link metricWeight} returns (a downbeat). */
-const MAX_METRIC_WEIGHT = 3;
+export const MAX_METRIC_WEIGHT = 3;
 
 /**
  * Score how well one lexicon candidate explains a slot's weights.
@@ -1271,7 +1276,7 @@ export type DirtySlots = { from: number; to: number };
  * floating-point hair either side of a slot boundary cannot leave a stale row
  * behind, which would be wrong output rather than merely slow output.
  */
-const DIRTY_SLOT_MARGIN = 1;
+export const DIRTY_SLOT_MARGIN = 1;
 
 /**
  * The slots an edit over `[startBeat, endBeat)` may have changed.

@@ -353,44 +353,6 @@ void register_systems() {
 //--------------------------------------------------------------------------------------------
 // theory/chord
 
-/** `copySpanIntervals`'s checks over a wire template. */
-std::vector<double> read_span_intervals(const json::Value& intervals) {
-  const std::string name = "chord span intervals";
-  if (!intervals.is_array()) {
-    throw InvalidInputError(name + " must be an array; received " + js::type_of(intervals));
-  }
-  const json::Array& list = intervals.as_array();
-  if (list.empty()) {
-    throw InvalidInputError(name + " must name at least one interval");
-  }
-  std::vector<double> out;
-  for (std::size_t index = 0; index < list.size(); ++index) {
-    std::string at = name + "[" + index_text(index) + "]";
-    if (is_undefined(list[index])) {
-      throw InvalidInputError(at + " must be a semitone offset; received undefined");
-    }
-    out.push_back(assert_integer(list[index], at, -MAX_CHORD_INTERVAL, MAX_CHORD_INTERVAL));
-  }
-  return out;
-}
-
-/** `makeChord`'s prologue over wire arguments: the root, the bass when given, the quality. */
-Chord make_chord_from_wire(const json::Value& root, const json::Value& quality,
-                           const json::Value& bass) {
-  double root_pc = assert_finite_number(root, "chord rootPc");
-  std::optional<double> bass_pc;
-  if (!is_undefined(bass)) {
-    bass_pc = assert_finite_number(bass, "chord bassPc");
-  }
-  return make_chord(root_pc, read_chord_quality(quality), bass_pc);
-}
-
-/** `assertRecord(chord)` and `assertArray(chord.intervals)` of chordPcMask. */
-void assert_mask_inputs(const json::Value& chord) {
-  assert_record(chord, "chord");
-  assert_array(get(chord, "intervals"), "chord intervals");
-}
-
 void register_chords() {
   def("chordQualities", [](Args&) -> json::Value { return to_json(chord_qualities()); });
   def("chordSpecIntervals",
@@ -424,18 +386,8 @@ void register_chords() {
     }
     return to_json(chord_spec_of(chord));
   });
-  def("chordFromSpan", [](Args& a) -> json::Value {
-    const json::Value& span = assert_record(a[0], "chord span");
-    Chord chord =
-        make_chord_from_wire(get(span, "rootPc"), get(span, "quality"), get(span, "bassPc"));
-    ChordSpan read{chord.rootPc, chord.quality, 0,           chord.bassPc,
-                   std::nullopt, std::nullopt,  std::nullopt};
-    const json::Value& intervals = get(span, "intervals");
-    if (!is_undefined(intervals)) {
-      read.intervals = read_span_intervals(intervals);
-    }
-    return to_json(chord_from_span(read));
-  });
+  def("chordFromSpan",
+      [](Args& a) -> json::Value { return to_json(chord_from_span(read_chord_span(a[0]))); });
   def("spanFromChord", [](Args& a) -> json::Value {
     double start = assert_finite_number(a[1], "chord span startBeat");
     const json::Value& value = assert_chord(a[0]);

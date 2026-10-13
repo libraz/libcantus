@@ -184,13 +184,6 @@ void register_detect() {
 //--------------------------------------------------------------------------------------------
 // analyze/keys
 
-/** `opts.x ?? fallback` run through `assertRange`; the value is the number checked. */
-double read_range(const json::Value& opts, std::string_view key, double fallback, double min,
-                  double max, std::string_view name) {
-  const json::Value* given = opt_null_default(opts, key);
-  return assert_range(given != nullptr ? *given : json::Value(fallback), min, max, name);
-}
-
 KeyTimelineOptions read_timeline_options(const json::Value& opts, const MeterMap& meters,
                                          double expected, double minimum) {
   KeyTimelineOptions typed;
@@ -208,10 +201,10 @@ void register_keys() {
     json::Value opts = options_or_empty(a, 1);
     MeterMap meters = resolve_wire_meters(opts, "key timeline meters");
     double bar = beats_per_bar_at(0, MeterArg(meters));
-    double expected = read_range(opts, "expectedKeyBeats", bar * 4, kMinValue, kMaxSafeInteger,
-                                 "expectedKeyBeats");
+    double expected = assert_range_option(opts, "expectedKeyBeats", bar * 4, kMinValue,
+                                          kMaxSafeInteger, "expectedKeyBeats");
     double minimum =
-        read_range(opts, "minKeyBeats", bar, kMinValue, kMaxSafeInteger, "minKeyBeats");
+        assert_range_option(opts, "minKeyBeats", bar, kMinValue, kMaxSafeInteger, "minKeyBeats");
     json::Object note_bag;
     note_bag.set("allowNonPositiveDuration", true);
     note_bag.set("budget", get(opts, "budget"));
@@ -223,8 +216,8 @@ void register_keys() {
         last_end = js::max(last_end, note.startBeat + note.durationBeat);
       }
     }
-    double total =
-        read_range(opts, "totalBeats", last_end, 0, kMaxSafeInteger, "key timeline totalBeats");
+    double total = assert_range_option(opts, "totalBeats", last_end, 0, kMaxSafeInteger,
+                                       "key timeline totalBeats");
     KeyTimelineOptions typed = read_timeline_options(opts, meters, expected, minimum);
     typed.totalBeats = total;
     return to_json(key_timeline_over(notes, typed, wire_profile_source(field(opts, "profile"))));
@@ -237,10 +230,10 @@ void register_keys() {
     }
     MeterMap meters = resolve_wire_meters(opts, "modulation meters");
     double bar = beats_per_bar_at(0, MeterArg(meters));
-    double expected = read_range(opts, "expectedKeyBeats", bar * 4, kMinValue, kMaxSafeInteger,
-                                 "expectedKeyBeats");
+    double expected = assert_range_option(opts, "expectedKeyBeats", bar * 4, kMinValue,
+                                          kMaxSafeInteger, "expectedKeyBeats");
     double minimum =
-        read_range(opts, "minKeyBeats", bar, kMinValue, kMaxSafeInteger, "minKeyBeats");
+        assert_range_option(opts, "minKeyBeats", bar, kMinValue, kMaxSafeInteger, "minKeyBeats");
     assert_generation_budget(json::Value(static_cast<double>(chords.size() * 24)),
                              "modulation chord segments", get(opts, "budget"));
     KeyTimelineOptions typed = read_timeline_options(opts, meters, expected, minimum);

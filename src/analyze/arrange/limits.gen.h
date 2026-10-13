@@ -2,4 +2,26 @@
 #ifndef CANTUS_SRC_ANALYZE_ARRANGE_LIMITS_GEN_H_
 #define CANTUS_SRC_ANALYZE_ARRANGE_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** MAX_LANE_LEAP of ts/src/analyze/arrange/internal.ts. */
+inline constexpr int MAX_LANE_LEAP = 24;
+
+/** FUNCTION_WEIGHT of ts/src/analyze/arrange/tension.ts. */
+inline constexpr double FUNCTION_WEIGHT = 0.5;
+
+/** DISSONANCE_WEIGHT of ts/src/analyze/arrange/tension.ts. */
+inline constexpr double DISSONANCE_WEIGHT = 0.35;
+
+/** SPAN_WEIGHT of ts/src/analyze/arrange/tension.ts. */
+inline constexpr double SPAN_WEIGHT = 0.15;
+
+/** SPAN_SATURATION of ts/src/analyze/arrange/tension.ts. */
+inline constexpr double SPAN_SATURATION = 24;
+
+/** MAX_DISTINCT_PITCHES of ts/src/analyze/arrange/tension.ts. */
+inline constexpr int MAX_DISTINCT_PITCHES = 128;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_ANALYZE_ARRANGE_LIMITS_GEN_H_

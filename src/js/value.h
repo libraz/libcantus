@@ -28,6 +28,13 @@ bool truthy(const json::Value& v);
 double to_number(const json::Value& v);
 
 /**
+ * `ToNumber(v)` as `Math.max`, `Math.min` and the other `Math` functions apply it: as to_number(),
+ * but a bigint is refused.
+ * @throws TypeError for a Symbol or a bigint.
+ */
+double to_math_number(const json::Value& v);
+
+/**
  * `lhs + rhs` for a number on the left: a number for a number, boolean, null or undefined on the
  * right, and the concatenated text for a string, array or object.
  * @throws TypeError for a Symbol or a bigint on the right.

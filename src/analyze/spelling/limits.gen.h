@@ -2,4 +2,38 @@
 #ifndef CANTUS_SRC_ANALYZE_SPELLING_LIMITS_GEN_H_
 #define CANTUS_SRC_ANALYZE_SPELLING_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** CHORD_MISMATCH of ts/src/analyze/spelling/index.ts. */
+inline constexpr double CHORD_MISMATCH = 64;
+
+/** SCALE_TONE_MISMATCH of ts/src/analyze/spelling/index.ts. */
+inline constexpr double SCALE_TONE_MISMATCH = 32;
+
+/** LETTER_STEP_DEVIATION of ts/src/analyze/spelling/index.ts. */
+inline constexpr double LETTER_STEP_DEVIATION = 4;
+
+/** MAX_COUNTED_DEVIATION of ts/src/analyze/spelling/index.ts. */
+inline constexpr int MAX_COUNTED_DEVIATION = 2;
+
+/** AGAINST_DIRECTION of ts/src/analyze/spelling/index.ts. */
+inline constexpr double AGAINST_DIRECTION = 3;
+
+/** KEY_MISMATCH of ts/src/analyze/spelling/index.ts. */
+inline constexpr double KEY_MISMATCH = 4;
+
+/** ACCIDENTAL of ts/src/analyze/spelling/index.ts. */
+inline constexpr double ACCIDENTAL = 1;
+
+/** MAX_STEP of ts/src/analyze/spelling/index.ts. */
+inline constexpr int MAX_STEP = 2;
+
+/** MAX_ALTER of ts/src/analyze/spelling/index.ts. */
+inline constexpr int SPELLING_MAX_ALTER = 2;
+
+/** SPELLINGS_PER_PITCH of ts/src/analyze/spelling/index.ts. */
+inline constexpr int SPELLINGS_PER_PITCH = 3;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_ANALYZE_SPELLING_LIMITS_GEN_H_

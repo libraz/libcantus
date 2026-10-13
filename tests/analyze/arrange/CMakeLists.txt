@@ -1,0 +1,1 @@
+cantus_add_test(analyze_arrange test_arrange.cpp)

@@ -1,0 +1,1 @@
+cantus_add_test(analyze_spelling test_spelling.cpp)

@@ -321,6 +321,14 @@ std::optional<CadenceType> parse_cadence_type(std::string_view name) {
   return std::nullopt;
 }
 
+std::vector<CadenceType> cadence_types() {
+  std::vector<CadenceType> types;
+  for (std::size_t i = 0; i < kCadenceTypeNames.size(); ++i) {
+    types.push_back(static_cast<CadenceType>(i));
+  }
+  return types;
+}
+
 std::string_view to_string(CadenceStrength strength) {
   return kStrengthNames[static_cast<std::size_t>(strength)];
 }

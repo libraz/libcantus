@@ -1,0 +1,1 @@
+cantus_add_test(analyze_reference test_reference.cpp)

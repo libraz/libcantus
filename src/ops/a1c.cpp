@@ -30,6 +30,7 @@
 #include "ops/accessors.h"
 #include "ops/codec_a1a.h"
 #include "ops/codec_a1c.h"
+#include "ops/codec_a2.h"
 #include "ops/codec_t2.h"
 #include "ops/register_all.h"
 #include "ops/registry.h"
@@ -38,14 +39,6 @@
 namespace cantus::ops {
 
 namespace {
-
-/** The options an ordered line is read with: notes that never sound are allowed. */
-json::Value line_options(const json::Value& budget) {
-  json::Object bag;
-  bag.set("allowNonPositiveDuration", true);
-  bag.set("budget", budget);
-  return json::Value(std::move(bag));
-}
 
 /** A copy of the wire notes of an ordered line, in the order the line reads them. */
 json::Array wire_line(const json::Array& wire, const std::vector<NoteEvent>& typed) {
@@ -248,64 +241,6 @@ void register_melody() {
 //--------------------------------------------------------------------------------------------
 // analyze/voice
 
-/** Whether a wire value is a function to the voice analysis: a callback, or a chord timeline. */
-bool is_chord_function(const json::Value& value) {
-  if (js::type_of(value) == "function") {
-    return true;
-  }
-  const json::Value* type = value.is_object() ? value.as_object().find("$hy") : nullptr;
-  return type != nullptr && type->is_string() && type->as_string() == "ChordTimeline";
-}
-
-/** `firstAfter`: the index of the first segment beginning after `beat`, by binary search. */
-std::size_t first_after(const json::Array& segments, double beat) {
-  std::size_t low = 0;
-  std::size_t high = segments.size();
-  while (low < high) {
-    std::size_t middle = (low + high) / 2;
-    const json::Value& start = get(segments[middle], "startBeat");
-    double at =
-        is_undefined(start) ? std::numeric_limits<double>::infinity() : js::to_number(start);
-    if (at <= beat) {
-      low = middle + 1;
-    } else {
-      high = middle;
-    }
-  }
-  return low;
-}
-
-/** `chordAtBeat(segments, beat)` of a chord timeline: the covering segment's chord, or null. */
-json::Value timeline_chord_at(const json::Array& segments, double beat) {
-  assert_finite_number(json::Value(beat), "timeline query beat");
-  std::size_t after = first_after(segments, beat);
-  if (after == 0) {
-    return json::Value(nullptr);
-  }
-  const json::Value& candidate = segments[after - 1];
-  if (beat >= js::to_number(get(candidate, "startBeat")) &&
-      beat < js::to_number(get(candidate, "endBeat"))) {
-    return get(candidate, "chord");
-  }
-  return json::Value(nullptr);
-}
-
-/** A chord a host supplied, checked as the first read of it checks it. */
-std::optional<VoiceChord> read_host_chord(const json::Value& wire) {
-  if (wire.is_null()) {
-    return std::nullopt;
-  }
-  assert_chord_mask_inputs(wire);
-  VoiceChord out;
-  const json::Value& quality = get(wire, "quality");
-  std::optional<ChordQuality> known = table_quality(quality);
-  out.chord = read_chord_fields(wire, known.value_or(ChordQuality::kMaj));
-  if (!known) {
-    out.unknown_quality = "Unknown chord quality: " + js::template_string(quality);
-  }
-  return out;
-}
-
 void register_voice() {
   def("toVoiceNotes", [](Args& a) -> json::Value {
     NoteEventAssertOptions options;
@@ -332,16 +267,7 @@ void register_voice() {
       assert_function(a[3], "otherVoicesAtBeat");
     }
     // The key is read once, here, unless it is the function that answers per beat.
-    KeyAtBeat key_at;
-    if (js::type_of(a[2]) == "function") {
-      Callback callback = a.callback(2);
-      key_at = [callback](double beat) {
-        return read_key_like(callback(json::Array{json::Value(beat)}));
-      };
-    } else {
-      KeyScale scale = read_key_like(a[2]);
-      key_at = [scale](double) { return scale; };
-    }
+    KeyAtBeat key_at = read_key_context(a, 2);
     VoiceHost host;
     host.key_at = key_at;
     if (js::type_of(a[1]) == "function") {

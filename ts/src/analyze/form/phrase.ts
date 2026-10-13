@@ -216,7 +216,7 @@ export type StructuralCadence = {
  * deceptive cadence scores lowest of all because its whole effect is to
  * withhold the ending it prepared, so the phrase usually runs on past it.
  */
-const CADENCE_BOUNDARY_STRENGTH: Record<NonNullable<CadenceResult['type']>, number> = {
+export const CADENCE_BOUNDARY_STRENGTH: Record<NonNullable<CadenceResult['type']>, number> = {
   authentic: 0.9,
   modal: 0.75,
   plagal: 0.7,
@@ -232,7 +232,7 @@ const CADENCE_BOUNDARY_STRENGTH: Record<NonNullable<CadenceResult['type']>, numb
  * everything else leaves the music open to some degree, and the half cadence
  * most of all — it ends a phrase by pointing at the next one.
  */
-const CADENCE_CLOSURE: Record<NonNullable<CadenceResult['type']>, number> = {
+export const CADENCE_CLOSURE: Record<NonNullable<CadenceResult['type']>, number> = {
   authentic: 0.85,
   modal: 0.6,
   plagal: 0.55,
@@ -242,22 +242,22 @@ const CADENCE_CLOSURE: Record<NonNullable<CadenceResult['type']>, number> = {
 };
 
 /** Weight of a full-bar rest as a boundary signal. */
-const REST_STRENGTH = 0.6;
+export const REST_STRENGTH = 0.6;
 
 /** Weight of a held note as a boundary signal. */
-const LONG_NOTE_STRENGTH = 0.4;
+export const LONG_NOTE_STRENGTH = 0.4;
 
 /** Weight of immediate repetition as a boundary signal. */
-const REPETITION_STRENGTH = 0.5;
+export const REPETITION_STRENGTH = 0.5;
 
 /** How alike two adjacent spans must be before the second is heard as a restart. */
-const REPETITION_THRESHOLD = 0.75;
+export const REPETITION_THRESHOLD = 0.75;
 
 /** Weight of a hypermetric downbeat as a boundary signal. */
-const HYPERMETER_STRENGTH = 0.25;
+export const HYPERMETER_STRENGTH = 0.25;
 
 /** Weight of the end of the music as a boundary signal. */
-const PIECE_END_STRENGTH = 0.5;
+export const PIECE_END_STRENGTH = 0.5;
 
 /**
  * What a phrase boundary has to be worth before one is placed.
@@ -275,19 +275,22 @@ const PIECE_END_STRENGTH = 0.5;
 export const PHRASE_CUT_COST = 1.3;
 
 /** Share of a phrase's confidence carried by its closing boundary. */
-const CLOSING_SHARE = 0.65;
+export const CLOSING_SHARE = 0.65;
 
 /** Bonus for a cadence that closes the last phrase of the piece. */
-const FINAL_PHRASE_BONUS = 0.15;
+export const FINAL_PHRASE_BONUS = 0.15;
 
 /** Bonus for a cadence whose phrase ends on a hypermetric boundary. */
-const HYPERMETRIC_CLOSE_BONUS = 0.1;
+export const HYPERMETRIC_CLOSE_BONUS = 0.1;
+
+/** How much of an authentic cadence's closure survives an imperfect grading. */
+export const IMPERFECT_CLOSURE_FACTOR = 0.8;
 
 /** How much of a cadence's weight survives resolving onto an inverted tonic. */
-const EVADED_FACTOR = 0.6;
+export const EVADED_FACTOR = 0.6;
 
 /** Order the boundary signals are reported in when they are equally strong. */
-const SIGNAL_ORDER: readonly PhraseSignal[] = [
+export const SIGNAL_ORDER: readonly PhraseSignal[] = [
   'cadence',
   'rest',
   'repetition',
@@ -526,7 +529,7 @@ function structuralWeightOf(
     if (result.strength === 'perfect') {
       base = 1;
     } else if (result.strength === 'imperfect') {
-      base *= 0.8;
+      base *= IMPERFECT_CLOSURE_FACTOR;
     }
   }
   if (result.evaded) {

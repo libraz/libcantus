@@ -1,0 +1,147 @@
+{
+  "tables": [
+    {
+      "module": "analyze/form/hypermeter.ts",
+      "export": "GROUP_CANDIDATES",
+      "cxx_type": "int",
+      "cxx_name": "kGroupCandidates",
+      "fields": []
+    },
+    {
+      "module": "analyze/form/hypermeter.ts",
+      "export": "GROUP_PRIOR_LIST",
+      "cxx_type": "GroupPrior",
+      "cxx_name": "kGroupPriors",
+      "fields": []
+    },
+    {
+      "module": "analyze/form/phrase.ts",
+      "export": "CADENCE_BOUNDARY_STRENGTH",
+      "cxx_type": "NamedDouble",
+      "cxx_name": "kCadenceBoundaryStrength",
+      "fields": []
+    },
+    {
+      "module": "analyze/form/phrase.ts",
+      "export": "CADENCE_CLOSURE",
+      "cxx_type": "NamedDouble",
+      "cxx_name": "kCadenceClosure",
+      "fields": []
+    },
+    {
+      "module": "analyze/form/phrase.ts",
+      "export": "SIGNAL_ORDER",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kSignalOrder",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "analyze/form/hypermeter.ts",
+      "export": "CONTRAST_SHARE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/form/hypermeter.ts",
+      "export": "CADENCE_SHARE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/form/hypermeter.ts",
+      "export": "GROUP_FINAL_FIT",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/form/hypermeter.ts",
+      "export": "ELIDED_FIT",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/form/hypermeter.ts",
+      "export": "MIN_GROUPS",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/form/hypermeter.ts",
+      "export": "MARGIN_FLOOR",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/form/section.ts",
+      "export": "MELODY_SHARE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/form/section.ts",
+      "export": "HARMONY_SHARE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/form/section.ts",
+      "export": "DEFAULT_THRESHOLD",
+      "cxx_type": "double",
+      "cxx_name": "SECTION_DEFAULT_THRESHOLD"
+    },
+    {
+      "module": "analyze/form/phrase.ts",
+      "export": "REST_STRENGTH",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/form/phrase.ts",
+      "export": "LONG_NOTE_STRENGTH",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/form/phrase.ts",
+      "export": "REPETITION_STRENGTH",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/form/phrase.ts",
+      "export": "REPETITION_THRESHOLD",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/form/phrase.ts",
+      "export": "HYPERMETER_STRENGTH",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/form/phrase.ts",
+      "export": "PIECE_END_STRENGTH",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/form/phrase.ts",
+      "export": "PHRASE_CUT_COST",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/form/phrase.ts",
+      "export": "CLOSING_SHARE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/form/phrase.ts",
+      "export": "FINAL_PHRASE_BONUS",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/form/phrase.ts",
+      "export": "HYPERMETRIC_CLOSE_BONUS",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/form/phrase.ts",
+      "export": "EVADED_FACTOR",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/form/phrase.ts",
+      "export": "IMPERFECT_CLOSURE_FACTOR",
+      "cxx_type": "double"
+    }
+  ]
+}

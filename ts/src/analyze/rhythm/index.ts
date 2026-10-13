@@ -119,7 +119,7 @@ export type RhythmAnalysis = {
 };
 
 /** Slots per quarter-note beat the onset grid is read against. */
-const RHYTHM_SLOTS_PER_BEAT = 12;
+export const RHYTHM_SLOTS_PER_BEAT = 12;
 
 /** Width of one grid slot, in quarter-note beats. */
 const SLOT_WIDTH = 1 / RHYTHM_SLOTS_PER_BEAT;
@@ -130,7 +130,7 @@ const SLOT_WIDTH = 1 / RHYTHM_SLOTS_PER_BEAT;
  * It has to sit under half a slot (1/24 beat), or no onset could ever miss the
  * grid: a performed ±0.03 beat stays on it, a thirty-second note does not.
  */
-const RHYTHM_OFF_GRID_TOLERANCE = 1 / 32;
+export const RHYTHM_OFF_GRID_TOLERANCE = 1 / 32;
 
 /**
  * Inter-onset intervals, in quarter-note beats, at half-octave steps from a
@@ -142,6 +142,12 @@ export const RHYTHM_IOI_BINS: readonly number[] = Object.freeze(
   Array.from({ length: 17 }, (_, i) => 2 ** (-4 + i * 0.5)),
 );
 
+/** Slots a bar is charged for against the work budget, whatever its length. */
+export const BUDGET_SLOTS_PER_BAR = 48;
+
+/** Rhythmic levels an onset can sit on, 0-5: see {@link RhythmAnalysis.onsetLevels}. */
+export const RHYTHM_LEVEL_COUNT = 6;
+
 /** The record {@link analyzeRhythm} returns for a span with nothing sounding in it. */
 function emptyAnalysis(): RhythmAnalysis {
   return {
@@ -151,7 +157,7 @@ function emptyAnalysis(): RhythmAnalysis {
     onsets: 0,
     onsetDensity: 0,
     barOnsets: [],
-    onsetLevels: new Array(6).fill(0),
+    onsetLevels: new Array(RHYTHM_LEVEL_COUNT).fill(0),
     barPositions: [],
     interOnsetShares: new Array(RHYTHM_IOI_BINS.length).fill(0),
     restRatio: 0,
@@ -381,7 +387,11 @@ export function analyzeRhythm(
   assertRange(endBeat, 0, Number.MAX_SAFE_INTEGER, 'rhythm totalBeats');
 
   const bars = barSpanOf(startBeat, endBeat, meters);
-  assertGenerationBudget(Math.ceil(bars) * 48, 'rhythm analysis slots', opts.budget);
+  assertGenerationBudget(
+    Math.ceil(bars) * BUDGET_SLOTS_PER_BAR,
+    'rhythm analysis slots',
+    opts.budget,
+  );
 
   const onsets = foldOnsets(sounding);
   const snapped = onsets.map((onset) => snapOnset(onset, meters));
@@ -397,7 +407,7 @@ export function analyzeRhythm(
     }
   }
 
-  const onsetLevels = new Array<number>(6).fill(0);
+  const onsetLevels = new Array<number>(RHYTHM_LEVEL_COUNT).fill(0);
   let offGridCount = 0;
   for (const onset of snapped) {
     onsetLevels[onset.level] = (onsetLevels[onset.level] ?? 0) + 1;

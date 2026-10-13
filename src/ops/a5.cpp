@@ -1,9 +1,137 @@
 // Op adapters of analyze/reference.
+//
+// Each adapter replays the TS validation prologue over the wire arguments with the loose twins
+// (ops/validate.h, ops/codec_a5.h), in the TS order and with the TS names, then calls the typed
+// function. A profile is read and checked in one pass by read_reference_profile().
 
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "analyze/reference/profile.h"
+#include "cantus/analyze/reference.h"
+#include "cantus/core/limits.h"
+#include "core/validation/validation.h"
+#include "js/math.h"
+#include "ops/accessors.h"
+#include "ops/codec_a1c.h"
+#include "ops/codec_a2.h"
+#include "ops/codec_a5.h"
+#include "ops/codec_t1.h"
 #include "ops/register_all.h"
+#include "ops/registry.h"
+#include "ops/validate.h"
 
 namespace cantus::ops {
 
-void register_a5() {}
+namespace {
+
+/** `.budget` of an options bag, as the typed options carry it. */
+std::optional<double> budget_of(const json::Value& opts) {
+  const json::Value* budget = field(opts, "budget");
+  return budget != nullptr ? number_of(*budget) : std::nullopt;
+}
+
+/** The end of the last note that sounds, or 0. */
+double last_sounding_end(const std::vector<NoteEvent>& notes) {
+  double end = 0;
+  for (const NoteEvent& note : notes) {
+    if (note.durationBeat > 0) {
+      end = js::max(end, note.startBeat + note.durationBeat);
+    }
+  }
+  return end;
+}
+
+/** The segments of a wire timeline with each chord read as `toChordData` reads it. */
+ChordTimeline read_timeline(const json::Array& segments) {
+  WireSegments wire(segments);
+  std::vector<SegmentSpan> spans = wire.spans();
+  ChordTimeline out;
+  for (std::size_t i = 0; i < wire.size(); ++i) {
+    out.segments.push_back(ChordSegment{spans[i].startBeat, spans[i].endBeat, wire.checked(i)});
+  }
+  return out;
+}
+
+ReferenceProfile analyze_wire(Args& a) {
+  json::Value bag = arg_or(a, 1, json::Object());
+  const json::Value& asked = assert_options(bag, "reference options");
+  MeterMap meters = resolve_wire_meters(asked, "reference meters");
+  const json::Value& budget = get(asked, "budget");
+  ReferenceProfileOptions typed;
+  typed.meters = MeterArg(meters);
+  typed.budget = budget_of(asked);
+  const json::Value* key = field(asked, "key");
+  const json::Value* total = opt_null_default(asked, "totalBeats");
+  std::vector<NoteEvent> notes;
+  if (is_undefined(get(asked, "timeline"))) {
+    // chordTimelineFromNotes reads the notes, then the span's end, then the key.
+    notes = assert_note_events(a[0], "timeline notes", line_options(budget));
+    assert_range_option(asked, "totalBeats", last_sounding_end(notes), 0, kMaxSafeInteger,
+                        "timeline totalBeats");
+    if (key != nullptr) {
+      typed.key = read_key_arg(*key);
+    }
+  } else {
+    const json::Array& segments =
+        assert_wire_timeline(get(asked, "timeline"), "reference timeline");
+    notes = assert_note_events(a[0], key == nullptr ? "key timeline notes" : "reference notes",
+                               line_options(budget));
+    if (key == nullptr) {
+      assert_range_option(asked, "totalBeats", last_sounding_end(notes), 0, kMaxSafeInteger,
+                          "key timeline totalBeats");
+    } else {
+      typed.key = read_key_arg(*key);
+    }
+    typed.timeline = read_timeline(segments);
+  }
+  if (total != nullptr) {
+    typed.totalBeats = js::to_number(*total);
+  }
+  // The profile itself checks the span's end once the harmony is read.
+  const json::Value& span_end = get(asked, "totalBeats");
+  ReferenceReadings readings = readings_for(notes, typed);
+  if (!is_undefined(span_end)) {
+    assert_range(span_end, 0, kMaxSafeInteger, "reference totalBeats");
+  }
+  if (const json::Value* melody = opt_null_default(asked, "melody")) {
+    typed.melody = assert_note_events(*melody, "reference melody", line_options(budget));
+  }
+  return reference_from_readings(notes, readings, typed);
+}
+
+}  // namespace
+
+void register_a5() {
+  def("$const:REFERENCE_PROFILE_VERSION",
+      [](Args&) -> json::Value { return to_json(REFERENCE_PROFILE_VERSION); });
+  def("analyzeReference", [](Args& a) -> json::Value { return to_json(analyze_wire(a)); });
+  def("assertReferenceProfile", [](Args& a) -> json::Value {
+    std::string name = name_arg(a, 1, "reference profile");
+    read_reference_profile(a[0], name);
+    return a[0];
+  });
+  def("compareReferences", [](Args& a) -> json::Value {
+    ReferenceProfile first = read_reference_profile(a[0], "reference profile a");
+    ReferenceProfile second = read_reference_profile(a[1], "reference profile b");
+    json::Value bag = arg_or(a, 2, json::Object());
+    const json::Value& asked = assert_options(bag, "compare options");
+    // The progression alignment checks its cell count against the budget as the caller wrote it.
+    auto structural_count = [](const ReferenceProfile& profile) {
+      std::size_t count = 0;
+      for (const ReferenceChord& chord : profile.harmony.chords) {
+        count += chord.level == ReductionLevel::kStructural ? 1 : 0;
+      }
+      return static_cast<double>(count);
+    };
+    assert_generation_budget(json::Value(structural_count(first) * structural_count(second)),
+                             "reference progression alignment", get(asked, "budget"));
+    ReferenceComparisonOptions typed;
+    typed.budget = budget_of(asked);
+    return to_json(compare_references(first, second, typed));
+  });
+}
 
 }  // namespace cantus::ops
