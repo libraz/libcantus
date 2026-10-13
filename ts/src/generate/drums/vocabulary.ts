@@ -158,7 +158,7 @@ function bar(strokes: DrumStroke[]): DrumPattern {
   return { steps: BAR_STEPS, strokes };
 }
 
-const FOUR_FOUR: TimeSignature = { numerator: 4, denominator: 4 };
+export const FOUR_FOUR: TimeSignature = { numerator: 4, denominator: 4 };
 
 /**
  * The built-in drum patterns, in declaration order.
@@ -392,13 +392,13 @@ export type DrumPatternOptions = {
 };
 
 /** Base velocity a pattern's factors are read against when none is given. */
-const DEFAULT_VELOCITY = 100;
+export const DEFAULT_VELOCITY = 100;
 
 /** Tempo assumed when neither the context nor the options name one. */
-const DEFAULT_BPM = 120;
+export const DEFAULT_BPM = 120;
 
 /** Generous upper bound on onsets one bar of a pattern emits. */
-const MAX_STROKES_PER_BAR = 64;
+export const MAX_STROKES_PER_BAR = 64;
 
 /**
  * Generate a genre-characteristic groove from the pattern dictionary.

@@ -76,7 +76,7 @@ const A_OF_3 = beatStep(2) + 3;
  * slots the dials may fill are left out, which is what keeps the phrase end
  * from building.
  */
-const OUTRO_FIGURE: KickFigure = [{ step: BEAT_1 }, { step: BEAT_3 }];
+export const OUTRO_FIGURE: KickFigure = [{ step: BEAT_1 }, { step: BEAT_3 }];
 
 /** The onsets a figure states outright, with none of the slots a dial fills. */
 function statedSlots(figure: KickFigure): KickSlot[] {
@@ -87,7 +87,7 @@ function statedSlots(figure: KickFigure): KickSlot[] {
 }
 
 /** The figure a style with no entry of its own plays. */
-const DEFAULT_FIGURE: KickFigure = [
+export const DEFAULT_FIGURE: KickFigure = [
   { step: BEAT_1 },
   { step: BEAT_3 },
   { step: AND_2, probability: 0.5, slot: 'beat2and', sections: ['prechorus'] },

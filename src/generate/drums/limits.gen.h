@@ -2,4 +2,70 @@
 #ifndef CANTUS_SRC_GENERATE_DRUMS_LIMITS_GEN_H_
 #define CANTUS_SRC_GENERATE_DRUMS_LIMITS_GEN_H_
 
+#include <cstdint>
+
+namespace cantus {
+
+/** QUARTER of ts/src/generate/drums/internal.ts. */
+inline constexpr double DRUM_QUARTER = 1;
+
+/** EIGHTH of ts/src/generate/drums/internal.ts. */
+inline constexpr double DRUM_EIGHTH = 0.5;
+
+/** SIXTEENTH of ts/src/generate/drums/internal.ts. */
+inline constexpr double DRUM_SIXTEENTH = 0.25;
+
+/** DEFAULT_RHYTHMIC of ts/src/generate/drums/internal.ts. */
+inline constexpr double DRUM_DEFAULT_RHYTHMIC = 0.5;
+
+/** BACKING_SCALE_FLOOR of ts/src/generate/drums/internal.ts. */
+inline constexpr double BACKING_SCALE_FLOOR = 0.75;
+
+/** BACKING_SCALE_CEILING of ts/src/generate/drums/internal.ts. */
+inline constexpr double BACKING_SCALE_CEILING = 1.15;
+
+/** BACKBEAT_LIFT of ts/src/generate/drums/internal.ts. */
+inline constexpr double BACKBEAT_LIFT = 16;
+
+/** FILL_ACCENT_LIFT of ts/src/generate/drums/internal.ts. */
+inline constexpr double FILL_ACCENT_LIFT = 4;
+
+/** ONSET_KEY_SCALE of ts/src/generate/drums/hit.ts. */
+inline constexpr double ONSET_KEY_SCALE = 128;
+
+/** DEFAULT_VELOCITY of ts/src/generate/drums/vocabulary.ts. */
+inline constexpr double DRUM_PATTERN_DEFAULT_VELOCITY = 100;
+
+/** DEFAULT_BPM of ts/src/generate/drums/vocabulary.ts. */
+inline constexpr double DRUM_PATTERN_DEFAULT_BPM = 120;
+
+/** MAX_STROKES_PER_BAR of ts/src/generate/drums/vocabulary.ts. */
+inline constexpr double MAX_STROKES_PER_BAR = 64;
+
+/** DEFAULT_BPM of ts/src/generate/drums/index.ts. */
+inline constexpr double DRUMS_DEFAULT_BPM = 120;
+
+/** MAX_HITS_PER_BAR of ts/src/generate/drums/index.ts. */
+inline constexpr double MAX_HITS_PER_BAR = 128;
+
+/** KICK_STEPS of ts/src/generate/drums/kick.ts. */
+inline constexpr int KICK_STEPS = 16;
+
+/** HH_16TH_BPM_THRESHOLD of ts/src/generate/drums/hihat.ts. */
+inline constexpr double HH_16TH_BPM_THRESHOLD = 150;
+
+/** OHH_VEL_BOOST of ts/src/generate/drums/hihat.ts. */
+inline constexpr double OHH_VEL_BOOST = 7;
+
+/** FHH_VEL_MIN of ts/src/generate/drums/hihat.ts. */
+inline constexpr std::int64_t FHH_VEL_MIN = 45;
+
+/** FHH_VEL_MAX of ts/src/generate/drums/hihat.ts. */
+inline constexpr std::int64_t FHH_VEL_MAX = 60;
+
+/** FOUR_FOUR_BEATS of ts/src/generate/drums/beat.ts. */
+inline constexpr int FOUR_FOUR_BEATS = 4;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_GENERATE_DRUMS_LIMITS_GEN_H_

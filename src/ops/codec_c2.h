@@ -76,6 +76,18 @@ TuningTable read_tuning(const json::Value& value);
  */
 SeedPath read_seed_path(const Args& args, std::size_t from);
 
+/** The wire form of a PositionalRng: `{"$hy": "PositionalRng", "seed"}`. */
+json::Value positional_rng_hybrid(std::uint32_t seed);
+
+/** Whether a wire value is a PositionalRng hybrid. */
+bool is_positional_rng_hybrid(const json::Value& value);
+
+/**
+ * The source behind a PositionalRng hybrid.
+ * @throws RequestError when the hybrid carries no numeric seed.
+ */
+PositionalRng read_positional_rng(const json::Value& hybrid);
+
 }  // namespace cantus::ops
 
 #endif  // CANTUS_SRC_OPS_CODEC_C2_H_

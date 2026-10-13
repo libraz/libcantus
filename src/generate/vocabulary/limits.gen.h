@@ -2,4 +2,23 @@
 #ifndef CANTUS_SRC_GENERATE_VOCABULARY_LIMITS_GEN_H_
 #define CANTUS_SRC_GENERATE_VOCABULARY_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** BAR_STEPS of ts/src/generate/vocabulary/transform.ts. */
+inline constexpr int BAR_STEPS = 16;
+
+/** BEAT_STEPS of ts/src/generate/vocabulary/transform.ts. */
+inline constexpr int BEAT_STEPS = 4;
+
+/** STEP_BEATS of ts/src/generate/vocabulary/transform.ts. */
+inline constexpr double STEP_BEATS = 0.25;
+
+/** ADDED_NOTE_VELOCITY of ts/src/generate/vocabulary/transform.ts. */
+inline constexpr double ADDED_NOTE_VELOCITY = 0.75;
+
+/** NEUTRAL_RHYTHMIC of ts/src/generate/vocabulary/transform.ts. */
+inline constexpr double NEUTRAL_RHYTHMIC = 0.5;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_GENERATE_VOCABULARY_LIMITS_GEN_H_

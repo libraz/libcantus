@@ -34,21 +34,22 @@ export function effectiveSwing(feel: Feel, swingAmount: number): number {
  * single DELTA_16 delay off the straight position, so the "a" never overshoots
  * the downbeat and needs no clamp.
  */
-const SWING_NODES: Readonly<Record<SwingResolution, readonly (readonly [number, number])[]>> =
-  Object.freeze({
-    eighth: [
-      [0, 0],
-      [EIGHTH, DELTA_8],
-      [1, 0],
-    ],
-    sixteenth: [
-      [0, 0],
-      [SIXTEENTH, DELTA_16],
-      [EIGHTH, DELTA_8],
-      [3 * SIXTEENTH, DELTA_16],
-      [1, 0],
-    ],
-  });
+export const SWING_NODES: Readonly<
+  Record<SwingResolution, readonly (readonly [number, number])[]>
+> = Object.freeze({
+  eighth: [
+    [0, 0],
+    [EIGHTH, DELTA_8],
+    [1, 0],
+  ],
+  sixteenth: [
+    [0, 0],
+    [SIXTEENTH, DELTA_16],
+    [EIGHTH, DELTA_8],
+    [3 * SIXTEENTH, DELTA_16],
+    [1, 0],
+  ],
+});
 
 /**
  * Push an off-beat position toward its triplet placement.

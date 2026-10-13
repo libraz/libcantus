@@ -157,7 +157,7 @@ export type StyleMapping = {
   snareBeat3: boolean;
 };
 
-const STYLE_MAP: Record<GrooveStyle, StyleMapping> = {
+export const STYLE_MAP: Record<GrooveStyle, StyleMapping> = {
   // Standard pop pulse: kick on beats 1 and 3, backbeat snare on 2 and 4.
   standard: { style: 'standard', feel: 'straight', ghostBoost: false, snareBeat3: false },
   funk: { style: 'upbeat', feel: 'straight', ghostBoost: true, snareBeat3: false },
@@ -207,8 +207,8 @@ export function backingScale(rhythmic: number): number {
 }
 
 /** Backing weight at the bottom and the top of the rhythmic dial. */
-const BACKING_SCALE_FLOOR = 0.75;
-const BACKING_SCALE_CEILING = 1.15;
+export const BACKING_SCALE_FLOOR = 0.75;
+export const BACKING_SCALE_CEILING = 1.15;
 
 /**
  * A probability leaned on by the rhythmic dial: unchanged at the middle

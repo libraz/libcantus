@@ -6,7 +6,6 @@
 // input's own wire values.
 
 #include <algorithm>
-#include <cmath>
 #include <limits>
 #include <numeric>
 #include <optional>
@@ -23,7 +22,6 @@
 #include "core/validation/validation.h"
 #include "js/format.h"
 #include "js/math.h"
-#include "js/utf16.h"
 #include "js/value.h"
 #include "ops/accessors.h"
 #include "ops/codec_a1c.h"
@@ -52,21 +50,6 @@ json::Value span_start(const json::Value& chord) {
     }
   }
   return json::Value(std::numeric_limits<double>::quiet_NaN());
-}
-
-/** `text.at(index)` or `list.at(index)`: the element at a position counted from either end. */
-json::Value indexed_at(const json::Value& held, double index) {
-  double position = std::isnan(index) ? 0 : std::trunc(index);
-  double length = held.is_string() ? static_cast<double>(js::utf16_length(held.as_string()))
-                                   : static_cast<double>(held.as_array().size());
-  double at = position >= 0 ? position : length + position;
-  if (at < 0 || at >= length) {
-    return undefined_value();
-  }
-  if (held.is_string()) {
-    return json::Value(js::utf16_slice(held.as_string(), at, at + 1));
-  }
-  return held.as_array()[static_cast<std::size_t>(at)];
 }
 
 /** The mode a wire `segmentation` selects (`opts.segmentation ?? 'dynamic'`). */

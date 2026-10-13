@@ -1,6 +1,5 @@
 #include "ops/codec_a1a.h"
 
-#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <string>
@@ -99,13 +98,6 @@ ChordQuality assert_chord_quality(const json::Value& chord) {
 
 void settle_chord_quality(ChordData& data) { data.chord.quality = assert_chord_quality(data.wire); }
 
-bool inherits_object_member(std::string_view name) {
-  static constexpr std::string_view kNames[] = {
-      "__defineGetter__", "__defineSetter__", "__lookupGetter__",
-      "__lookupSetter__", "__proto__",        "constructor",
-      "hasOwnProperty",   "isPrototypeOf",    "propertyIsEnumerable",
-      "toLocaleString",   "toString",         "valueOf"};
-  return std::find(std::begin(kNames), std::end(kNames), name) != std::end(kNames);
-}
+bool inherits_object_member(std::string_view name) { return js::inherits_object_member(name); }
 
 }  // namespace cantus::ops

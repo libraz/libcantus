@@ -6,7 +6,15 @@
  * caller without touching a generator. The generator's part is to look one up.
  */
 
-import type { Articulation } from '../../core/instrument/index.js';
+import { ARTICULATIONS, type Articulation } from '../../core/instrument/index.js';
+import {
+  assertArray,
+  assertFiniteNumber,
+  assertMidiPitch,
+  assertOneOf,
+  assertRange,
+  assertRecord,
+} from '../../core/validation/index.js';
 import { type Draw, sustainsStrokes } from '../context/index.js';
 import { deepFreeze } from '../vocabulary/freeze.js';
 import type { HitList } from './hit.js';
@@ -33,6 +41,9 @@ export const FILL_TYPES = Object.freeze([
 /** The thirteen fill archetypes for section transitions. */
 export type FillType = (typeof FILL_TYPES)[number];
 
+/** The bases a fill stroke's velocity is read against, in declaration order. */
+export const FILL_VELOCITY_BASES = Object.freeze(['fill', 'accent'] as const);
+
 /**
  * How loud one stroke of a fill is.
  *
@@ -43,7 +54,7 @@ export type FillType = (typeof FILL_TYPES)[number];
  * arithmetic at every beat line falls back in the middle of itself.
  */
 export type FillVelocity = {
-  base: 'fill' | 'accent';
+  base: (typeof FILL_VELOCITY_BASES)[number];
   /** Factor on the base, for a crescendo or a ghosted stroke. */
   scale?: number;
   /** Fixed offset in MIDI velocity, for a stroke a little above or below. */
@@ -258,6 +269,41 @@ export function isFillArchetype(material: unknown): material is FillArchetype {
 }
 
 /**
+ * Reject a caller's fill whose strokes are not strokes the generator can write.
+ *
+ * A fill is recognised by its shape and then read stroke by stroke, so an entry
+ * meant for another generator stays invisible while one written for this one
+ * with a voice that is no note, or an articulation no instrument has, is refused
+ * by name instead of reaching the output as written.
+ *
+ * @param material The caller's archetype.
+ * @param label Name used in the error message.
+ */
+export function assertFillArchetype(material: FillArchetype, label: string): void {
+  material.atBeat.forEach((beat, beatIndex) => {
+    const strokes = assertArray<FillStroke>(beat, `${label} atBeat[${beatIndex}]`);
+    strokes.forEach((given, strokeIndex) => {
+      const name = `${label} atBeat[${beatIndex}][${strokeIndex}]`;
+      const stroke = assertRecord<FillStroke>(given, name);
+      assertMidiPitch(stroke.voice, `${name}.voice`);
+      assertFiniteNumber(stroke.offset, `${name}.offset`);
+      assertFiniteNumber(stroke.duration, `${name}.duration`);
+      const velocity = assertRecord<FillVelocity>(stroke.velocity, `${name}.velocity`);
+      assertOneOf(velocity.base, FILL_VELOCITY_BASES, `${name}.velocity.base`);
+      if (velocity.scale !== undefined) {
+        assertFiniteNumber(velocity.scale, `${name}.velocity.scale`);
+      }
+      if (velocity.offset !== undefined) {
+        assertRange(velocity.offset, -127, 127, `${name}.velocity.offset`);
+      }
+      if (stroke.articulation !== undefined) {
+        assertOneOf(stroke.articulation, ARTICULATIONS, `${name}.articulation`);
+      }
+    });
+  });
+}
+
+/**
  * The archetype an id names.
  *
  * @param id Archetype name, built-in or supplied.
@@ -301,13 +347,13 @@ export function getFillStartBeat(energy: SectionEnergy): number {
 type FillTable = readonly FillType[];
 
 /** Sparse styles keep the phrase end small whatever the transition. */
-const SPARSE_FILLS: FillTable = ['simpleCrash', 'breakdownFill'];
+export const SPARSE_FILLS: FillTable = ['simpleCrash', 'breakdownFill'];
 
 /** Dropping into a low-energy section: keep the phrase end gentle. */
-const LOW_ENERGY_FILLS: FillTable = ['simpleCrash', 'breakdownFill', 'halfTimeFill'];
+export const LOW_ENERGY_FILLS: FillTable = ['simpleCrash', 'breakdownFill', 'halfTimeFill'];
 
 /** Big lead-ins to a chorus, from a high-energy style. */
-const TO_CHORUS_HIGH_FILLS: FillTable = [
+export const TO_CHORUS_HIGH_FILLS: FillTable = [
   'tomDescend',
   'tomDescend',
   'snareRoll',
@@ -319,7 +365,7 @@ const TO_CHORUS_HIGH_FILLS: FillTable = [
 ];
 
 /** Lead-ins to a chorus from the remaining styles. */
-const TO_CHORUS_FILLS: FillTable = [
+export const TO_CHORUS_FILLS: FillTable = [
   'snareTomCombo',
   'snareTomCombo',
   'tomDescend',
@@ -331,7 +377,7 @@ const TO_CHORUS_FILLS: FillTable = [
 ];
 
 /** Leaving the intro: lighter, building character. */
-const FROM_INTRO_FILLS: FillTable = [
+export const FROM_INTRO_FILLS: FillTable = [
   'snareRoll',
   'snareRoll',
   'simpleCrash',
@@ -341,7 +387,7 @@ const FROM_INTRO_FILLS: FillTable = [
 ];
 
 /** Generic medium/high/peak fills for a high-energy style. */
-const GENERIC_HIGH_FILLS: FillTable = [
+export const GENERIC_HIGH_FILLS: FillTable = [
   'tomDescend',
   'snareRoll',
   'tomAscend',
@@ -353,7 +399,7 @@ const GENERIC_HIGH_FILLS: FillTable = [
 ];
 
 /** Generic medium/high/peak fills for the remaining styles. */
-const GENERIC_FILLS: FillTable = [
+export const GENERIC_FILLS: FillTable = [
   'snareRoll',
   'snareRoll',
   'snareTomCombo',

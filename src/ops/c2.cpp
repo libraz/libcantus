@@ -47,25 +47,13 @@ std::uint32_t read_seed(const json::Value& value, std::string_view name) {
   return static_cast<std::uint32_t>(assert_integer(value, name, 0, kSeedMax));
 }
 
-/** The wire form of a typed result written as plain data. */
-json::Value hybrid_positional_rng(std::uint32_t seed) {
-  json::Object o;
-  o.set("$hy", "PositionalRng");
-  o.set("seed", static_cast<double>(seed));
-  return json::Value(std::move(o));
-}
-
 //--------------------------------------------------------------------------------------------
 // core/random
 
 /** The source behind a `PositionalRng` hybrid argument. */
 PositionalRng positional_rng_of(const Args& a, std::size_t i) {
-  const json::Object& self = a.hybrid(i, "PositionalRng");
-  std::optional<double> seed = number_of(*self.find("seed"));
-  if (!seed) {
-    throw RequestError("a PositionalRng hybrid needs a numeric seed");
-  }
-  return PositionalRng(static_cast<std::uint32_t>(*seed));
+  a.hybrid(i, "PositionalRng");
+  return read_positional_rng(a[i]);
 }
 
 /** The generator behind an `Rng` handle. */
@@ -116,7 +104,7 @@ void register_random() {
     return to_json(derive_seed(root, read_seed_path(a, 1)));
   });
   def("createPositionalRng",
-      [](Args& a) -> json::Value { return hybrid_positional_rng(read_seed(a[0], "seed")); });
+      [](Args& a) -> json::Value { return positional_rng_hybrid(read_seed(a[0], "seed")); });
   def("PositionalRng#at",
       [](Args& a) -> json::Value { return positional_rng_of(a, 0).at(read_seed_path(a, 1)); });
   // The callback form is optional (a PositionalRng hybrid is the usual source), so the op carries

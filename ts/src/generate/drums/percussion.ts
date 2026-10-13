@@ -26,7 +26,7 @@ type PercActivation = [tambourine: boolean, shaker: boolean, handclap: boolean];
 // Percussion activation per [mood category][section index]. Columns:
 // intro, a, b, chorus, bridge, interlude, outro, chant, mixbreak.
 const F: PercActivation = [false, false, false];
-const PERC_TABLE: PercActivation[][] = [
+export const PERC_TABLE: PercActivation[][] = [
   /* calm */ [F, F, F, F, F, F, F, F, F],
   /* std  */ [F, F, [false, true, false], [true, false, true], F, F, F, F, [true, false, true]],
   /* ener */ [
@@ -53,6 +53,12 @@ const PERC_TABLE: PercActivation[][] = [
   ],
   /* rock */ [F, F, F, [false, false, true], F, F, F, F, [false, false, true]],
 ];
+
+/** Shaker velocity factors across the four sixteenths of a beat. */
+export const SHAKER_SIXTEENTH_CURVE: readonly number[] = [0.75, 0.45, 0.6, 0.45];
+
+/** Shaker velocity factors across the two eighths of a beat. */
+export const SHAKER_EIGHTH_CURVE: readonly number[] = [0.75, 0.55];
 
 /** Resolve which auxiliary percussion voices play for a section. */
 export function getPercussionConfig(
@@ -114,7 +120,7 @@ export function generateAuxPercussionForBar(
       bpm < HH_16TH_BPM_THRESHOLD &&
       sustainsStrokes(SIXTEENTH, bpm, sec.difficulty);
     if (use16th) {
-      const velCurve = [0.75, 0.45, 0.6, 0.45];
+      const velCurve = SHAKER_SIXTEENTH_CURVE;
       for (let beat = 0; beat < barBeats; beat += 1) {
         for (let sub = 0; sub < 4; sub += 1) {
           // The on-beat and mid-beat shakes carry the pattern; the two between
@@ -136,7 +142,7 @@ export function generateAuxPercussionForBar(
         }
       }
     } else {
-      const velCurve = [0.75, 0.55];
+      const velCurve = SHAKER_EIGHTH_CURVE;
       for (let beat = 0; beat < barBeats; beat += 1) {
         for (let sub = 0; sub < 2; sub += 1) {
           const raw =

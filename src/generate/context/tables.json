@@ -1,0 +1,45 @@
+{
+  "tables": [
+    {
+      "module": "generate/context/draw.ts",
+      "export": "DRAW_METHODS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kDrawMethods",
+      "fields": []
+    },
+    {
+      "module": "generate/context/difficulty.ts",
+      "export": "STROKES_PER_SECOND",
+      "cxx_type": "double",
+      "cxx_name": "kStrokesPerSecond",
+      "fields": []
+    },
+    {
+      "module": "generate/context/difficulty.ts",
+      "export": "FRETS_PER_SECOND",
+      "cxx_type": "double",
+      "cxx_name": "kFretsPerSecond",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "generate/context/difficulty.ts",
+      "export": "MIN_DIFFICULTY",
+      "cxx_name": "CEILING_MIN_DIFFICULTY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/context/difficulty.ts",
+      "export": "MAX_DIFFICULTY",
+      "cxx_name": "CEILING_MAX_DIFFICULTY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/context/index.ts",
+      "export": "DEFAULT_SEED",
+      "cxx_name": "CONTEXT_DEFAULT_SEED",
+      "cxx_type": "std::uint32_t"
+    }
+  ]
+}

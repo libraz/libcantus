@@ -640,3 +640,96 @@ describe('a fill is written on the grid the bar is swung on', () => {
     }
   });
 });
+
+describe('a caller fill is read stroke by stroke', () => {
+  const stroke = {
+    voice: 50,
+    offset: 0.5,
+    duration: 0.25,
+    velocity: { base: 'accent' },
+    articulation: 'flam',
+  };
+  const entry = (id: string, atBeat: unknown[]) => ({
+    id,
+    genre: 'rock',
+    difficulty: 1,
+    articulations: [],
+    provenance: { basis: 'idiom', note: 'a caller fill' },
+    material: { atBeat, boundToBar: true },
+  });
+  // The sparse style draws its phrase end from simpleCrash and breakdownFill alone, so
+  // replacing both makes the caller's fill the one played.
+  const play = (atBeat: unknown[]) =>
+    generateDrums({
+      bars: 1,
+      style: 'halftime',
+      section: 'verse',
+      fills: true,
+      ctx: {
+        seed: 3,
+        vocabulary: [entry('simpleCrash', atBeat), entry('breakdownFill', atBeat)],
+      } as DrumsOptions['ctx'],
+    });
+
+  it('writes a valid custom stroke as given', () => {
+    const hit = play([[], [], [stroke]]).find((h) => h.pitch === 50);
+    expect(hit).toMatchObject({ startBeat: 2.5, durationBeat: 0.25, articulation: 'flam' });
+  });
+
+  it.each([
+    ['a beat that is not a list', [[], 5], 'drum fill vocabulary[0] atBeat[1] must be an array'],
+    [
+      'a stroke that is not a record',
+      [[null]],
+      'drum fill vocabulary[0] atBeat[0][0] must be an object',
+    ],
+    [
+      'a voice that is no note',
+      [[{ ...stroke, voice: '38' }]],
+      'atBeat[0][0].voice must be finite',
+    ],
+    [
+      'a voice outside MIDI',
+      [[{ ...stroke, voice: 128 }]],
+      'atBeat[0][0].voice must be an integer in [0, 127]',
+    ],
+    [
+      'an offset that is not a number',
+      [[{ ...stroke, offset: 'x' }]],
+      'atBeat[0][0].offset must be finite',
+    ],
+    [
+      'a duration that is not a number',
+      [[{ ...stroke, duration: null }]],
+      'atBeat[0][0].duration must be finite',
+    ],
+    [
+      'a missing velocity',
+      [[{ ...stroke, velocity: undefined }]],
+      'atBeat[0][0].velocity must be an object',
+    ],
+    [
+      'an unknown velocity base',
+      [[{ ...stroke, velocity: { base: 'loud' } }]],
+      'atBeat[0][0].velocity.base must be one of fill, accent',
+    ],
+    [
+      'a scale that is not a number',
+      [[{ ...stroke, velocity: { base: 'fill', scale: 'x' } }]],
+      'atBeat[0][0].velocity.scale must be finite',
+    ],
+    [
+      'an offset beyond MIDI velocity',
+      [[{ ...stroke, velocity: { base: 'fill', offset: 200 } }]],
+      'atBeat[0][0].velocity.offset must be in [-127, 127]',
+    ],
+    [
+      'an unknown articulation',
+      [[{ ...stroke, articulation: 'rimshot' }]],
+      'atBeat[0][0].articulation must be one of',
+    ],
+  ])('refuses %s', (_label, atBeat, message) => {
+    expect(() => play(atBeat)).toThrow(InvalidInputError);
+    expect(() => play(atBeat)).toThrow(message);
+  });
+});

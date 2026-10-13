@@ -149,4 +149,94 @@ json::Value add_number(double lhs, const json::Value& rhs) {
   return json::Value(to_string(lhs) + template_string(rhs));
 }
 
+namespace {
+
+/** The decimal text of a `$big` tag, or nullptr for any other value. */
+const std::string* big_text(const json::Value& v) {
+  if (!v.is_object()) return nullptr;
+  const json::Value* big = v.as_object().find("$big");
+  return big != nullptr && big->is_string() ? &big->as_string() : nullptr;
+}
+
+/** Whether `v` is a number to JS: a JSON number or a `$n` tag. */
+bool number_value(const json::Value& v, double& out) {
+  if (v.is_number()) {
+    out = v.as_number();
+    return true;
+  }
+  if (v.is_object() && v.as_object().contains("$n")) {
+    out = tag_number(v.as_object());
+    return true;
+  }
+  return false;
+}
+
+bool equals(const json::Value& a, const json::Value& b, bool nan_equal) {
+  if (&a == &b) {
+    double self = 0;
+    return !number_value(a, self) || nan_equal || !std::isnan(self);
+  }
+  double x = 0;
+  double y = 0;
+  bool a_number = number_value(a, x);
+  bool b_number = number_value(b, y);
+  if (a_number || b_number) {
+    return a_number && b_number && (x == y || (nan_equal && std::isnan(x) && std::isnan(y)));
+  }
+  if (a.kind() != b.kind()) return false;
+  switch (a.kind()) {
+    case json::Kind::kNull:
+      return true;
+    case json::Kind::kBool:
+      return a.as_bool() == b.as_bool();
+    case json::Kind::kString:
+      return a.as_string() == b.as_string();
+    case json::Kind::kNumber:
+    case json::Kind::kArray:
+      return false;
+    case json::Kind::kObject:
+      break;
+  }
+  if (type_of(a) == "undefined" && type_of(b) == "undefined") return true;
+  const std::string* big_a = big_text(a);
+  const std::string* big_b = big_text(b);
+  return big_a != nullptr && big_b != nullptr && *big_a == *big_b;
+}
+
+}  // namespace
+
+bool strict_equals(const json::Value& a, const json::Value& b) { return equals(a, b, false); }
+
+bool same_value_zero(const json::Value& a, const json::Value& b) { return equals(a, b, true); }
+
+bool less_than(const json::Value& lhs, const json::Value& rhs) { return greater_than(rhs, lhs); }
+
+bool less_equal(const json::Value& lhs, const json::Value& rhs) {
+  if (is_text(lhs) && is_text(rhs)) {
+    std::string a = lhs.kind() == json::Kind::kString ? lhs.as_string() : template_string(lhs);
+    std::string b = rhs.kind() == json::Kind::kString ? rhs.as_string() : template_string(rhs);
+    return utf16_compare(a, b) <= 0;
+  }
+  return to_number(lhs) <= to_number(rhs);
+}
+
+double multiply(const json::Value& v, double factor) {
+  if (type_of(v) == "bigint") {
+    throw TypeError("Cannot mix BigInt and other types, use explicit conversions");
+  }
+  return to_number(v) * factor;
+}
+
+bool inherits_object_member(std::string_view name) {
+  static constexpr std::string_view kNames[] = {
+      "__defineGetter__", "__defineSetter__", "__lookupGetter__",
+      "__lookupSetter__", "__proto__",        "constructor",
+      "hasOwnProperty",   "isPrototypeOf",    "propertyIsEnumerable",
+      "toLocaleString",   "toString",         "valueOf"};
+  for (std::string_view known : kNames) {
+    if (known == name) return true;
+  }
+  return false;
+}
+
 }  // namespace cantus::js

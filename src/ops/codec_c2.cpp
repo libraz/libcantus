@@ -207,4 +207,25 @@ SeedPath read_seed_path(const Args& args, std::size_t from) {
   return path;
 }
 
+json::Value positional_rng_hybrid(std::uint32_t seed) {
+  json::Object o;
+  o.set("$hy", "PositionalRng");
+  o.set("seed", static_cast<double>(seed));
+  return json::Value(std::move(o));
+}
+
+bool is_positional_rng_hybrid(const json::Value& value) {
+  const json::Value* type = value.is_object() ? value.as_object().find("$hy") : nullptr;
+  return type != nullptr && type->is_string() && type->as_string() == "PositionalRng";
+}
+
+PositionalRng read_positional_rng(const json::Value& hybrid) {
+  const json::Value* given = hybrid.is_object() ? hybrid.as_object().find("seed") : nullptr;
+  std::optional<double> seed = given == nullptr ? std::nullopt : number_of(*given);
+  if (!seed) {
+    throw RequestError("a PositionalRng hybrid needs a numeric seed");
+  }
+  return PositionalRng(static_cast<std::uint32_t>(*seed));
+}
+
 }  // namespace cantus::ops

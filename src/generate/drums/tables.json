@@ -1,0 +1,382 @@
+{
+  "tables": [
+    {
+      "module": "generate/drums/internal.ts",
+      "export": "GM",
+      "form": "record",
+      "cxx_type": "GeneralMidiNotes",
+      "cxx_name": "kGm",
+      "fields": [
+        "BD",
+        "SD",
+        "SIDESTICK",
+        "HANDCLAP",
+        "CHH",
+        "FHH",
+        "OHH",
+        "CRASH",
+        "RIDE",
+        "TAMBOURINE",
+        "TOM_H",
+        "TOM_M",
+        "TOM_L",
+        "SHAKER"
+      ]
+    },
+    {
+      "module": "generate/drums/internal.ts",
+      "export": "DRUM_FEELS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kFeelNames",
+      "fields": []
+    },
+    {
+      "module": "generate/drums/internal.ts",
+      "export": "GROOVE_STYLES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kGrooveStyleNames",
+      "fields": []
+    },
+    {
+      "module": "generate/drums/internal.ts",
+      "export": "DRUM_ROLES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kDrumRoleNames",
+      "fields": []
+    },
+    {
+      "module": "generate/drums/internal.ts",
+      "export": "PUBLIC_SECTIONS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kSectionNames",
+      "fields": []
+    },
+    {
+      "module": "generate/drums/internal.ts",
+      "export": "STYLE_MAP",
+      "cxx_type": "StyleMapRow",
+      "cxx_name": "kStyleMap",
+      "fields": ["style", "feel", "ghostBoost", "snareBeat3"]
+    },
+    {
+      "module": "generate/drums/hit.ts",
+      "export": "DRUM_NOTES",
+      "cxx_type": "DrumNoteRow",
+      "cxx_name": "kDrumNotes",
+      "fields": []
+    },
+    {
+      "module": "generate/drums/kit.ts",
+      "export": "REACH_BY_VOICE",
+      "cxx_type": "ReachRow",
+      "cxx_name": "kReachByVoice",
+      "fields": []
+    },
+    {
+      "module": "generate/drums/kit.ts",
+      "export": "DRUM_KIT",
+      "form": "record",
+      "cxx_type": "KitRecord",
+      "cxx_name": "kDrumKit",
+      "fields": ["kind", "name", "limbs", "overdub", "articulations", "polyphony"]
+    },
+    {
+      "module": "generate/drums/vocabulary.ts",
+      "export": "DRUM_PATTERNS",
+      "cxx_type": "PatternRecord",
+      "cxx_name": "kDrumPatterns",
+      "fields": [
+        "id",
+        "genre",
+        "difficulty",
+        "articulations",
+        {
+          "name": "ts",
+          "fields": ["numerator", "denominator"]
+        },
+        "tempoRange",
+        {
+          "name": "material",
+          "fields": [
+            "steps",
+            {
+              "name": "strokes",
+              "fields": ["voice", "step", "velocity", "duration", "articulation", "limb"]
+            }
+          ]
+        },
+        {
+          "name": "provenance",
+          "fields": ["basis", "note"]
+        },
+        "sections",
+        "fitsOver"
+      ]
+    },
+    {
+      "module": "generate/drums/vocabulary.ts",
+      "export": "FOUR_FOUR",
+      "form": "record",
+      "cxx_type": "TimeSignature",
+      "cxx_name": "kFourFour",
+      "fields": ["numerator", "denominator", "grouping"]
+    },
+    {
+      "module": "generate/drums/fills.ts",
+      "export": "FILL_TYPES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kFillTypeNames",
+      "fields": []
+    },
+    {
+      "module": "generate/drums/fills.ts",
+      "export": "FILL_VELOCITY_BASES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kFillVelocityBaseNames",
+      "fields": []
+    },
+    {
+      "module": "generate/drums/fills.ts",
+      "export": "FILL_ARCHETYPES",
+      "cxx_type": "FillArchetypeRow",
+      "cxx_name": "kFillArchetypes",
+      "fields": [
+        {
+          "name": "atBeat",
+          "fields": [
+            "voice",
+            "offset",
+            "duration",
+            {
+              "name": "velocity",
+              "fields": ["base", "scale", "offset"]
+            },
+            "articulation"
+          ]
+        },
+        "boundToBar"
+      ]
+    },
+    {
+      "module": "generate/drums/fills.ts",
+      "export": "SPARSE_FILLS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kSparseFills",
+      "fields": []
+    },
+    {
+      "module": "generate/drums/fills.ts",
+      "export": "LOW_ENERGY_FILLS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kLowEnergyFills",
+      "fields": []
+    },
+    {
+      "module": "generate/drums/fills.ts",
+      "export": "TO_CHORUS_HIGH_FILLS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kToChorusHighFills",
+      "fields": []
+    },
+    {
+      "module": "generate/drums/fills.ts",
+      "export": "TO_CHORUS_FILLS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kToChorusFills",
+      "fields": []
+    },
+    {
+      "module": "generate/drums/fills.ts",
+      "export": "FROM_INTRO_FILLS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kFromIntroFills",
+      "fields": []
+    },
+    {
+      "module": "generate/drums/fills.ts",
+      "export": "GENERIC_HIGH_FILLS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kGenericHighFills",
+      "fields": []
+    },
+    {
+      "module": "generate/drums/fills.ts",
+      "export": "GENERIC_FILLS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kGenericFills",
+      "fields": []
+    },
+    {
+      "module": "generate/drums/kick.ts",
+      "export": "KICK_FIGURES",
+      "cxx_type": "KickFigureRow",
+      "cxx_name": "kKickFigures",
+      "fields": ["step", "probability", "slot", "barParity", "sections"]
+    },
+    {
+      "module": "generate/drums/kick.ts",
+      "export": "OUTRO_FIGURE",
+      "cxx_type": "KickSlotRecord",
+      "cxx_name": "kOutroFigure",
+      "fields": ["step", "probability", "slot", "barParity", "sections"]
+    },
+    {
+      "module": "generate/drums/kick.ts",
+      "export": "DEFAULT_FIGURE",
+      "cxx_type": "KickSlotRecord",
+      "cxx_name": "kDefaultFigure",
+      "fields": ["step", "probability", "slot", "barParity", "sections"]
+    },
+    {
+      "module": "generate/drums/ghost.ts",
+      "export": "GHOST_DENSITY_TABLE",
+      "cxx_type": "GhostDensityRow",
+      "cxx_name": "kGhostDensityTable",
+      "fields": []
+    },
+    {
+      "module": "generate/drums/ghost.ts",
+      "export": "GHOST_LEVEL_PROBABILITY",
+      "cxx_type": "double",
+      "cxx_name": "kGhostLevelProbability",
+      "fields": []
+    },
+    {
+      "module": "generate/drums/percussion.ts",
+      "export": "PERC_TABLE",
+      "cxx_type": "std::vector<PercActivation>",
+      "cxx_name": "kPercTable",
+      "fields": []
+    },
+    {
+      "module": "generate/drums/percussion.ts",
+      "export": "SHAKER_SIXTEENTH_CURVE",
+      "cxx_type": "double",
+      "cxx_name": "kShakerSixteenthCurve",
+      "fields": []
+    },
+    {
+      "module": "generate/drums/percussion.ts",
+      "export": "SHAKER_EIGHTH_CURVE",
+      "cxx_type": "double",
+      "cxx_name": "kShakerEighthCurve",
+      "fields": []
+    },
+    {
+      "module": "generate/drums/swing.ts",
+      "export": "SWING_NODES",
+      "cxx_type": "SwingNodesRow",
+      "cxx_name": "kSwingNodes",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "generate/drums/internal.ts",
+      "export": "QUARTER",
+      "cxx_name": "DRUM_QUARTER",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/drums/internal.ts",
+      "export": "EIGHTH",
+      "cxx_name": "DRUM_EIGHTH",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/drums/internal.ts",
+      "export": "SIXTEENTH",
+      "cxx_name": "DRUM_SIXTEENTH",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/drums/internal.ts",
+      "export": "DEFAULT_RHYTHMIC",
+      "cxx_name": "DRUM_DEFAULT_RHYTHMIC",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/drums/internal.ts",
+      "export": "BACKING_SCALE_FLOOR",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/drums/internal.ts",
+      "export": "BACKING_SCALE_CEILING",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/drums/internal.ts",
+      "export": "BACKBEAT_LIFT",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/drums/internal.ts",
+      "export": "FILL_ACCENT_LIFT",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/drums/hit.ts",
+      "export": "ONSET_KEY_SCALE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/drums/vocabulary.ts",
+      "export": "DEFAULT_VELOCITY",
+      "cxx_name": "DRUM_PATTERN_DEFAULT_VELOCITY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/drums/vocabulary.ts",
+      "export": "DEFAULT_BPM",
+      "cxx_name": "DRUM_PATTERN_DEFAULT_BPM",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/drums/vocabulary.ts",
+      "export": "MAX_STROKES_PER_BAR",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/drums/index.ts",
+      "export": "DEFAULT_BPM",
+      "cxx_name": "DRUMS_DEFAULT_BPM",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/drums/index.ts",
+      "export": "MAX_HITS_PER_BAR",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/drums/kick.ts",
+      "export": "KICK_STEPS",
+      "cxx_type": "int"
+    },
+    {
+      "module": "generate/drums/hihat.ts",
+      "export": "HH_16TH_BPM_THRESHOLD",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/drums/hihat.ts",
+      "export": "OHH_VEL_BOOST",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/drums/hihat.ts",
+      "export": "FHH_VEL_MIN",
+      "cxx_type": "std::int64_t"
+    },
+    {
+      "module": "generate/drums/hihat.ts",
+      "export": "FHH_VEL_MAX",
+      "cxx_type": "std::int64_t"
+    },
+    {
+      "module": "generate/drums/beat.ts",
+      "export": "FOUR_FOUR_BEATS",
+      "cxx_type": "int"
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "tables": [
+    {
+      "module": "generate/vocabulary/types.ts",
+      "export": "GENRES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kGenreNames",
+      "fields": []
+    },
+    {
+      "module": "generate/vocabulary/types.ts",
+      "export": "PROVENANCE_BASES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kProvenanceBasisNames",
+      "fields": []
+    },
+    {
+      "module": "generate/vocabulary/transform.ts",
+      "export": "FIGURE_TS",
+      "form": "record",
+      "cxx_type": "TimeSignature",
+      "cxx_name": "kFigureTs",
+      "fields": ["numerator", "denominator", "grouping"]
+    }
+  ],
+  "limits": [
+    {
+      "module": "generate/vocabulary/transform.ts",
+      "export": "BAR_STEPS",
+      "cxx_type": "int"
+    },
+    {
+      "module": "generate/vocabulary/transform.ts",
+      "export": "BEAT_STEPS",
+      "cxx_type": "int"
+    },
+    {
+      "module": "generate/vocabulary/transform.ts",
+      "export": "STEP_BEATS",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/vocabulary/transform.ts",
+      "export": "ADDED_NOTE_VELOCITY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/vocabulary/transform.ts",
+      "export": "NEUTRAL_RHYTHMIC",
+      "cxx_type": "double"
+    }
+  ]
+}

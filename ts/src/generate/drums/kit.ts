@@ -4,7 +4,7 @@ import { deepFreeze } from '../vocabulary/freeze.js';
 import { DRUM_NOTES, type DrumVoice } from './hit.js';
 
 /** Which limbs reach each voice, in the order a player would take them. */
-const REACH_BY_VOICE: Readonly<Record<DrumVoice, readonly Limb[]>> = {
+export const REACH_BY_VOICE: Readonly<Record<DrumVoice, readonly Limb[]>> = {
   kick: ['rightFoot'],
   pedalHiHat: ['leftFoot'],
   // The left hand rests on the snare and the right on the timekeeping voices;
@@ -32,7 +32,7 @@ const REACH_BY_VOICE: Readonly<Record<DrumVoice, readonly Limb[]>> = {
  * a record, and why keeping them means overdubbing rather than thinning the
  * groove that carries them.
  */
-const OVERDUB_VOICES: readonly DrumVoice[] = Object.freeze([
+export const OVERDUB_VOICES: readonly DrumVoice[] = Object.freeze([
   'handClap',
   'tambourine',
   'shaker',
@@ -48,7 +48,7 @@ function reachByNote(): Record<number, readonly Limb[]> {
 }
 
 /** Ornaments a kit produces; the string techniques are not among them. */
-const KIT_ARTICULATIONS: readonly Articulation[] = Object.freeze([
+export const KIT_ARTICULATIONS: readonly Articulation[] = Object.freeze([
   'accent',
   'ghost',
   'staccato',

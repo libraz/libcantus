@@ -12,8 +12,8 @@ export type HiHatType = 'closed' | 'pedal' | 'open' | 'halfOpen' | 'ride';
 /** BPM at or above which 16th-note hi-hats become 8ths for playability. */
 export const HH_16TH_BPM_THRESHOLD = 150;
 
-const FHH_VEL_MIN = 45;
-const FHH_VEL_MAX = 60;
+export const FHH_VEL_MIN = 45;
+export const FHH_VEL_MAX = 60;
 /** Velocity boost applied to dynamic open hi-hat accents. */
 export const OHH_VEL_BOOST = 7;
 

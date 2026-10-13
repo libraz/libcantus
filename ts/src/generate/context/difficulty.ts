@@ -25,13 +25,13 @@ export const MAX_DIFFICULTY = 5;
  * Strokes per second one limb sustains at each level, from a beginner's plain
  * eighths to the wrist speed a rudimental player keeps up.
  */
-const STROKES_PER_SECOND = [3, 5, 8, 12, 16] as const;
+export const STROKES_PER_SECOND = [3, 5, 8, 12, 16] as const;
 
 /**
  * Frets per second the fretting hand travels at each level. A shift is a
  * displacement, so the figure is a rate rather than a count of notes.
  */
-const FRETS_PER_SECOND = [6, 12, 20, 32, 50] as const;
+export const FRETS_PER_SECOND = [6, 12, 20, 32, 50] as const;
 
 /** Seconds one quarter-note beat lasts at a tempo. */
 function secondsPerBeat(bpm: number): number {

@@ -24,7 +24,7 @@ export const GHOST_DENSITY_TABLE: Readonly<Record<SectionType, readonly GhostDen
   });
 
 /** Trigger probability at each density level. */
-const GHOST_LEVEL_PROBABILITY = Object.freeze([0, 0.15, 0.3, 0.45] as const);
+export const GHOST_LEVEL_PROBABILITY = Object.freeze([0, 0.15, 0.3, 0.45] as const);
 
 function levelToProbability(level: GhostDensityLevel): number {
   return GHOST_LEVEL_PROBABILITY[level];

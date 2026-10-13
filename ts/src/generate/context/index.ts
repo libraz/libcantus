@@ -148,7 +148,7 @@ export type ResolvedContext = {
 };
 
 /** The seed a generator uses when the caller names none. */
-const DEFAULT_SEED = 0;
+export const DEFAULT_SEED = 0;
 
 /** Path segment separating one algorithm version's draws from another's. */
 const VERSION_SEGMENT = 'v';

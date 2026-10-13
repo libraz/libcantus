@@ -121,6 +121,12 @@ class WireSegments {
   std::vector<std::optional<ChordData>> checked_;
 };
 
+/**
+ * `text.at(index)` or `list.at(index)` of a wire string or array: the element at a position
+ * counted from either end, or undefined.
+ */
+json::Value indexed_at(const json::Value& held, double index);
+
 }  // namespace cantus::ops
 
 #endif  // CANTUS_SRC_OPS_CODEC_A2_H_

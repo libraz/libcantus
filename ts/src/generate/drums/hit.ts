@@ -102,7 +102,7 @@ export type DrumHit = {
 };
 
 /** Rounding used to key onsets by beat: a 128th note, finer than any grid used. */
-const ONSET_KEY_SCALE = 128;
+export const ONSET_KEY_SCALE = 128;
 
 /**
  * Accumulator for drum onsets with velocity clamping and simple lookups.

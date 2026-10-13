@@ -45,6 +45,10 @@ The C++ code uses the helpers in `src/js/` wherever JavaScript semantics differ 
 | `Number(s)` / `Number.parseInt` | `js::number` / `js::parse_int` | `std::stod`, `atoi` and relatives | Accepted syntax differs |
 | `n + v` for a number and a wire value of unknown kind | `js::add_number` | `+` between a number and a wire value | A string or object operand turns the sum into text |
 | `a > b` for two wire values of unknown kind | `js::greater_than` | A relational comparison between wire values | Text against text compares by code unit, so `"10" > "9"` is false |
+| `a < b` / `a <= b` for wire values of unknown kind | `js::less_than` / `js::less_equal` | A relational comparison between wire values | The rules of `>`; `<=` is false where either side is NaN |
+| `a === b` / `includes`, Map and Set keys over wire values | `js::strict_equals` / `js::same_value_zero` | `==` between wire values | A container equals only itself; SameValueZero matches NaN with NaN |
+| `v * n` for a wire value of unknown kind | `js::multiply` | Multiplying the converted value directly | A bigint operand is a TypeError |
+| `table[name]` of a plain object for any name | own keys, then `js::inherits_object_member` | Reading own keys only | `toString` and the other `Object.prototype` members are found as well |
 | string `length` / `slice` / comparison / hashing | `js::utf16_*` | `std::string::size` as an observable length | JS counts UTF-16 code units |
 | `Object.freeze` | `const` and value semantics | — | |
 

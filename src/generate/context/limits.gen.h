@@ -2,4 +2,19 @@
 #ifndef CANTUS_SRC_GENERATE_CONTEXT_LIMITS_GEN_H_
 #define CANTUS_SRC_GENERATE_CONTEXT_LIMITS_GEN_H_
 
+#include <cstdint>
+
+namespace cantus {
+
+/** MIN_DIFFICULTY of ts/src/generate/context/difficulty.ts. */
+inline constexpr double CEILING_MIN_DIFFICULTY = 1;
+
+/** MAX_DIFFICULTY of ts/src/generate/context/difficulty.ts. */
+inline constexpr double CEILING_MAX_DIFFICULTY = 5;
+
+/** DEFAULT_SEED of ts/src/generate/context/index.ts. */
+inline constexpr std::uint32_t CONTEXT_DEFAULT_SEED = 0;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_GENERATE_CONTEXT_LIMITS_GEN_H_

@@ -22,6 +22,7 @@ import {
 } from './beat.js';
 import { euclideanRhythm } from './euclid.js';
 import {
+  assertFillArchetype,
   FILL_ARCHETYPES,
   type FillArchetype,
   fillArchetypeFor,
@@ -218,10 +219,10 @@ export type DrumsOptions = {
 };
 
 /** Generous upper bound on onsets emitted for a single bar, used for budgeting. */
-const MAX_HITS_PER_BAR = 128;
+export const MAX_HITS_PER_BAR = 128;
 
 /** Tempo assumed when neither the context nor the options name one. */
-const DEFAULT_BPM = 120;
+export const DEFAULT_BPM = 120;
 
 /**
  * Generate a drum performance as a flat list of onsets.
@@ -350,10 +351,17 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
   // Fills a caller brought for this piece. They are filtered by the conditions
   // they state — section, tempo, and the difficulty ceiling — and then offered
   // after the built-in table, so the built-in choices keep the draws they had.
-  const callerFillEntries = selectVocabulary(
-    vocabularyOfKind(resolved.vocabulary, isFillArchetype),
-    { section: publicSection, bpm, difficulty },
-  );
+  const suppliedFills = vocabularyOfKind(resolved.vocabulary, isFillArchetype);
+  // Read for its strokes here, as a caller's drum pattern is: an entry the
+  // section or the ceiling filters out is as wrong as one that is played.
+  suppliedFills.forEach((entry, index) => {
+    assertFillArchetype(entry.material, `drum fill vocabulary[${index}]`);
+  });
+  const callerFillEntries = selectVocabulary(suppliedFills, {
+    section: publicSection,
+    bpm,
+    difficulty,
+  });
   const callerFills = new Map(callerFillEntries.map((entry) => [entry.id, entry.material]));
   const callerFillIds = callerFillEntries.map((entry) => entry.id);
 

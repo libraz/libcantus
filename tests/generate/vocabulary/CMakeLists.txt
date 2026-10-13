@@ -1,0 +1,1 @@
+cantus_add_test(generate_vocabulary test_vocabulary.cpp)

@@ -234,7 +234,7 @@ export function backbeatStroke(sec: SectionCtx, velocity: number): BackbeatStrok
  * is called once per beat of a four-four bar, and a groove in another metre is
  * placed by the vocabulary path rather than by these processors.
  */
-const FOUR_FOUR_BEATS = 4;
+export const FOUR_FOUR_BEATS = 4;
 
 /** Emit the backbeat snare (or side-stick) for one beat. */
 export function generateSnareForBeat(ctx: BeatCtx, sec: SectionCtx, isIntroFirst: boolean): void {

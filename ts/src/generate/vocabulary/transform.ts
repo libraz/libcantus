@@ -109,7 +109,7 @@ function streamOf(event: GridEvent): string {
 }
 
 /** The bar the figures are written on when the caller names no meter. */
-const FIGURE_TS: TimeSignature = { numerator: 4, denominator: 4 };
+export const FIGURE_TS: TimeSignature = { numerator: 4, denominator: 4 };
 
 /**
  * The first subdivision of a pulse: half of it in a simple meter, a third in a
@@ -239,7 +239,7 @@ export function double<T extends GridEvent>(events: readonly T[], spanSteps = BA
 }
 
 /** How loud a note added by a transform is, relative to the one it follows. */
-const ADDED_NOTE_VELOCITY = 0.75;
+export const ADDED_NOTE_VELOCITY = 0.75;
 
 /**
  * Stretch a figure to twice its length: everything falls half as often.
@@ -456,7 +456,7 @@ export type DeformOptions = {
 };
 
 /** The rhythmic setting at which a figure is left as written. */
-const NEUTRAL_RHYTHMIC = 0.5;
+export const NEUTRAL_RHYTHMIC = 0.5;
 
 /**
  * Apply the complexity dials to a figure.
