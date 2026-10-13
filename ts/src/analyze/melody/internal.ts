@@ -24,7 +24,7 @@ import type { MotifData } from './motifs.js';
  * expected to be quantised — a humanized MIDI take should be quantised before it
  * is searched for motifs.
  */
-const RHYTHM_GRID = 64;
+export const RHYTHM_GRID = 64;
 /**
  * Anything that can be read as a melodic line: a motif, or plain note events.
  *

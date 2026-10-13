@@ -19,7 +19,7 @@ import { intervalsOf, orderedNotes, phraseNotes } from './internal.js';
  * one. Below this share the line is reported as a wave, which is the honest
  * answer for something that changes direction repeatedly.
  */
-const DIRECTIONAL_SHARE = 0.75;
+export const DIRECTIONAL_SHARE = 0.75;
 /**
  * Step direction between two consecutive notes.
  *

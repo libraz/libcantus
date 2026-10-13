@@ -2,4 +2,17 @@
 #ifndef CANTUS_SRC_ANALYZE_VOICE_LIMITS_GEN_H_
 #define CANTUS_SRC_ANALYZE_VOICE_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** LEAP_SEMITONES of ts/src/analyze/voice/index.ts. */
+inline constexpr int LEAP_SEMITONES = 3;
+
+/** STEP_RESOLUTION of ts/src/analyze/voice/index.ts. */
+inline constexpr int STEP_RESOLUTION = 2;
+
+/** NEAREST_CHORD_TONE_REACH of ts/src/analyze/voice/index.ts. */
+inline constexpr int NEAREST_CHORD_TONE_REACH = 12;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_ANALYZE_VOICE_LIMITS_GEN_H_

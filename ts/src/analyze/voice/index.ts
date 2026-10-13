@@ -169,7 +169,7 @@ function intervalAboveBass(pitch: number, others: VoiceSnapshot[], chord: Chord)
  * The interval classes left out are the ones a chord states as its own root,
  * third, fifth and seventh, which {@link chordToneRole} names instead.
  */
-const TENSION_DEGREE_BY_INTERVAL: Readonly<Record<number, 9 | 11 | 13>> = {
+export const TENSION_DEGREE_BY_INTERVAL: Readonly<Record<number, 9 | 11 | 13>> = {
   1: 9,
   2: 9,
   3: 9,
@@ -187,7 +187,10 @@ const TENSION_DEGREE_BY_INTERVAL: Readonly<Record<number, 9 | 11 | 13>> = {
  * seventh chord's upper structure and are heard as such only where the chord
  * states a seventh.
  */
-const NATURAL_TENSION_INTERVALS: ReadonlySet<number> = new Set([2, 5, 9]);
+export const NATURAL_TENSION_INTERVAL_LIST: readonly number[] = [2, 5, 9];
+
+/** {@link NATURAL_TENSION_INTERVAL_LIST} as a set. */
+const NATURAL_TENSION_INTERVALS: ReadonlySet<number> = new Set(NATURAL_TENSION_INTERVAL_LIST);
 
 /**
  * The extension an interval class above the root names, or undefined when it
@@ -222,7 +225,7 @@ function isStep(a: number, b: number): boolean {
 }
 
 /** Narrowest interval heard as a leap: anything wider than a step. */
-const LEAP_SEMITONES = 3;
+export const LEAP_SEMITONES = 3;
 
 /**
  * Classify a suspension figure from the interval class above the sounding bass
@@ -254,13 +257,13 @@ function suspensionType(ic: number, delta: number): SuspensionFigure | null {
 }
 
 /** Widest interval, in semitones, a resolution by step may cover. */
-const STEP_RESOLUTION = 2;
+export const STEP_RESOLUTION = 2;
 
 /**
  * How far the fallback search for a resolution target reaches, in semitones.
  * A chord sounds its root, so a member is always found inside an octave.
  */
-const NEAREST_CHORD_TONE_REACH = 12;
+export const NEAREST_CHORD_TONE_REACH = 12;
 
 /**
  * The nearest chord member to a pitch, searched outward from it and downward

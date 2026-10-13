@@ -607,3 +607,43 @@ describe('the transform / relation correspondence the guide tabulates', () => {
     );
   });
 });
+
+describe('melodies as callers write them', () => {
+  const tagged = (pitch: number, startBeat: number, tag: string) => ({
+    pitch,
+    startBeat,
+    durationBeat: 1,
+    tag,
+  });
+  const melody = [
+    tagged(60, 0, 'a'),
+    tagged(62, 1, 'b'),
+    tagged(64, 2, 'c'),
+    tagged(67, 4, 'd'),
+    tagged(69, 5, 'e'),
+    tagged(71, 6, 'f'),
+  ];
+
+  it('keeps the fields a caller put on the notes of a motif it found', () => {
+    const [motif] = extractMotifs(melody);
+    expect(motif?.notes).toEqual(melody.slice(0, 3));
+  });
+
+  it('keeps them in a motif read from notes, in the order the line is read', () => {
+    const motif = motifFromNotes([tagged(64, 2, 'c'), tagged(60, 0, 'a'), tagged(62, 1, 'b')]);
+    expect(motif.notes).toEqual(melody.slice(0, 3));
+  });
+
+  it('reads a motif whose notes lack fields as a motif of notes with none', () => {
+    const empty = { notes: [{}] } as never;
+    expect(relateMotifs(empty, empty)).toMatchObject({ kind: 'repetition', sequence: false });
+    expect(relateMotifs({ notes: [] } as never, empty)).toBeNull();
+  });
+
+  it('refuses a motif that is no record, and a key before it', () => {
+    expect(() => relateMotifs(null as never, null as never)).toThrow(/a must be an object/);
+    expect(() => relateMotifs(null as never, null as never, 'nonsense' as never)).toThrow(
+      /Invalid key name/,
+    );
+  });
+});

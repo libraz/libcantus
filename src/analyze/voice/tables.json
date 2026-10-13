@@ -1,0 +1,35 @@
+{
+  "tables": [
+    {
+      "module": "analyze/voice/index.ts",
+      "export": "TENSION_DEGREE_BY_INTERVAL",
+      "cxx_type": "NamedInt",
+      "cxx_name": "kTensionDegreeByInterval",
+      "fields": []
+    },
+    {
+      "module": "analyze/voice/index.ts",
+      "export": "NATURAL_TENSION_INTERVAL_LIST",
+      "cxx_type": "int",
+      "cxx_name": "kNaturalTensionIntervals",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "analyze/voice/index.ts",
+      "export": "LEAP_SEMITONES",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/voice/index.ts",
+      "export": "STEP_RESOLUTION",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/voice/index.ts",
+      "export": "NEAREST_CHORD_TONE_REACH",
+      "cxx_type": "int"
+    }
+  ]
+}

@@ -287,3 +287,40 @@ describe('determinism', () => {
     expect(motifGraph(melody, motifs)).toEqual(motifGraph(melody, motifs));
   });
 });
+
+describe('motifGraph over occurrences as callers write them', () => {
+  const melody = line(0, [60, 62, 64, 67, 69, 71], 1).map((note, i) => ({
+    ...note,
+    startBeat: i < 3 ? i : i + 1,
+  }));
+  const motifs = (): MotifData[] => JSON.parse(JSON.stringify(extractMotifs(melody)));
+
+  it('reports the beats an occurrence wrote as it wrote them', () => {
+    const written = motifs();
+    const [first, second] = written[0]?.occurrences ?? [];
+    expect(first).toBeDefined();
+    if (second) {
+      delete (second as { endBeat?: number }).endBeat;
+      (first as { startBeat: unknown }).startBeat = '0';
+    }
+    const graph = motifGraph(melody, written);
+    expect(graph.nodes[0]?.startBeat).toBe('0');
+    expect(graph.nodes[1]?.endBeat).toBeUndefined();
+  });
+
+  it('refuses an occurrence off the line before it reads the motifs after it', () => {
+    const written = motifs();
+    (written[0]?.occurrences[0] as { noteIndex: number }).noteIndex = 0.5;
+    expect(() => motifGraph(melody, [written[0] as MotifData, null as never])).toThrow(
+      /motifs\[0\]\.occurrences\[0\] does not lie on the line/,
+    );
+    expect(() => motifGraph(melody, [null as never])).toThrow(/motifs\[0\] must be an object/);
+  });
+
+  it('resolves the key only when a pair is drawn', () => {
+    expect(motifGraph(melody, [], { key: 'nonsense' as never })).toEqual({ nodes: [], edges: [] });
+    expect(() => motifGraph(melody, motifs(), { key: 'nonsense' as never })).toThrow(
+      /Invalid key name/,
+    );
+  });
+});

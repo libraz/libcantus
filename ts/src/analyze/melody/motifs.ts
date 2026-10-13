@@ -34,7 +34,7 @@ import {
  * any melody without naming anything. Three notes are the shortest cell with a
  * shape: two intervals, so it can turn.
  */
-const MIN_CELL_NOTES = 3;
+export const MIN_CELL_NOTES = 3;
 /**
  * Longest cell the search reports, in notes.
  *
@@ -43,14 +43,14 @@ const MIN_CELL_NOTES = 3;
  * phrase-level reading; the bound also keeps the number of windows examined
  * linear in the length of the melody.
  */
-const MAX_CELL_NOTES = 8;
+export const MAX_CELL_NOTES = 8;
 /**
  * How many statements make a cell a motif.
  *
  * A motif is by definition restated, so two is the floor. Raising it is how a
  * caller asks for only the material the piece is actually built from.
  */
-const MIN_OCCURRENCES = 2;
+export const MIN_OCCURRENCES = 2;
 /**
  * One statement of a motif, addressed in the melody it was found in.
  *

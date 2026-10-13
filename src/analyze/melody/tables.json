@@ -1,0 +1,65 @@
+{
+  "tables": [
+    {
+      "module": "analyze/melody/contour.ts",
+      "export": "MELODIC_CONTOUR_SHAPES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kMelodicContourShapeNames",
+      "fields": []
+    },
+    {
+      "module": "analyze/melody/relation.ts",
+      "export": "MOTIF_RELATION_KINDS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kMotifRelationKindNames",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "analyze/melody/internal.ts",
+      "export": "RHYTHM_GRID",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/melody/contour.ts",
+      "export": "DIRECTIONAL_SHARE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/melody/motifs.ts",
+      "export": "MIN_CELL_NOTES",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/melody/motifs.ts",
+      "export": "MAX_CELL_NOTES",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/melody/motifs.ts",
+      "export": "MIN_OCCURRENCES",
+      "cxx_type": "int"
+    },
+    {
+      "module": "analyze/melody/similarity.ts",
+      "export": "INTERVAL_TOLERANCE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/melody/similarity.ts",
+      "export": "PITCH_WEIGHT",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/melody/similarity.ts",
+      "export": "RHYTHM_WEIGHT",
+      "cxx_type": "double"
+    },
+    {
+      "module": "analyze/melody/graph.ts",
+      "export": "DEFAULT_VARIATION_THRESHOLD",
+      "cxx_type": "double"
+    }
+  ]
+}

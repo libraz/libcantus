@@ -29,11 +29,11 @@ import {
  * anything wider than half an octave apart costs the same as an outright
  * mismatch.
  */
-const INTERVAL_TOLERANCE = 6;
+export const INTERVAL_TOLERANCE = 6;
 /** Share of {@link melodicSimilarity} carried by the interval sequence. */
-const PITCH_WEIGHT = 0.75;
+export const PITCH_WEIGHT = 0.75;
 /** Share of {@link melodicSimilarity} carried by the rhythmic profile. */
-const RHYTHM_WEIGHT = 0.25;
+export const RHYTHM_WEIGHT = 0.25;
 /**
  * How alike two lines are, and how the answer was reached.
  *

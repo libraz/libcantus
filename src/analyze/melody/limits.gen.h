@@ -2,4 +2,35 @@
 #ifndef CANTUS_SRC_ANALYZE_MELODY_LIMITS_GEN_H_
 #define CANTUS_SRC_ANALYZE_MELODY_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** RHYTHM_GRID of ts/src/analyze/melody/internal.ts. */
+inline constexpr double RHYTHM_GRID = 64;
+
+/** DIRECTIONAL_SHARE of ts/src/analyze/melody/contour.ts. */
+inline constexpr double DIRECTIONAL_SHARE = 0.75;
+
+/** MIN_CELL_NOTES of ts/src/analyze/melody/motifs.ts. */
+inline constexpr int MIN_CELL_NOTES = 3;
+
+/** MAX_CELL_NOTES of ts/src/analyze/melody/motifs.ts. */
+inline constexpr int MAX_CELL_NOTES = 8;
+
+/** MIN_OCCURRENCES of ts/src/analyze/melody/motifs.ts. */
+inline constexpr int MIN_OCCURRENCES = 2;
+
+/** INTERVAL_TOLERANCE of ts/src/analyze/melody/similarity.ts. */
+inline constexpr double INTERVAL_TOLERANCE = 6;
+
+/** PITCH_WEIGHT of ts/src/analyze/melody/similarity.ts. */
+inline constexpr double PITCH_WEIGHT = 0.75;
+
+/** RHYTHM_WEIGHT of ts/src/analyze/melody/similarity.ts. */
+inline constexpr double RHYTHM_WEIGHT = 0.25;
+
+/** DEFAULT_VARIATION_THRESHOLD of ts/src/analyze/melody/graph.ts. */
+inline constexpr double DEFAULT_VARIATION_THRESHOLD = 0.75;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_ANALYZE_MELODY_LIMITS_GEN_H_

@@ -235,3 +235,51 @@ describe('analyzeVoice', () => {
     expect(analyzed[0]?.labels).toEqual([]);
   });
 });
+
+describe('analyzeVoice with hosts as callers write them', () => {
+  const note = { pitch: 60, startBeat: 0, durationBeat: 1 };
+  const at = (chord: unknown) => () => chord as Chord;
+
+  it('reports the id and the original index as the caller wrote them', () => {
+    const [labelled] = analyzeVoice(
+      [{ ...note, id: 'a', originalIndex: null }] as never,
+      at(cMaj),
+      cMajor,
+    );
+    expect(labelled?.noteId).toBe('a');
+    expect(labelled?.originalIndex).toBeNull();
+    const [defaulted] = analyzeVoice([{ ...note, id: null }] as never, at(cMaj), cMajor);
+    expect(defaulted?.noteId).toBe(0);
+    expect(defaulted).not.toHaveProperty('originalIndex');
+  });
+
+  it('asks a chord for its quality only where it needs the interval class', () => {
+    const unnamed = { rootPc: 0, quality: 'unnamed', intervals: [0, 4, 7] };
+    const [member] = analyzeVoice([note], at(unnamed), cMajor);
+    expect(member?.labels).toEqual([{ kind: 'chordTone', role: 'root' }]);
+    expect(() =>
+      analyzeVoice([{ pitch: 61, startBeat: 0, durationBeat: 1 }], at(unnamed), cMajor),
+    ).toThrow(/Unknown chord quality: unnamed/);
+  });
+
+  it('refuses a chord it cannot read the tones of, for every note', () => {
+    expect(() => analyzeVoice([note], at({ rootPc: 0, quality: 'maj' }), cMajor)).toThrow(
+      /chord intervals must be an array; received undefined/,
+    );
+    expect(() => analyzeVoice([note], at(undefined), cMajor)).toThrow(/chord must be an object/);
+    expect(() => analyzeVoice([note], at(5), cMajor)).toThrow(/chord must be an object/);
+  });
+
+  it('reads the pitches of the other voices as pitches only where the rules do', () => {
+    const voice: VoiceNote[] = [
+      { pitch: 65, startBeat: 0, durationBeat: 1 },
+      { pitch: 65, startBeat: 1, durationBeat: 1 },
+      { pitch: 64, startBeat: 2, durationBeat: 1 },
+    ];
+    const chords = (beat: number): Chord | null => (beat < 1 ? fMaj : cMaj);
+    expect(() => analyzeVoice(voice, chords, cMajor, () => [{}] as never)).toThrow(
+      /note must be an object; received undefined/,
+    );
+    expect(() => analyzeVoice(voice, chords, cMajor, () => null as never)).toThrow();
+  });
+});
