@@ -9,6 +9,43 @@
       "module": "core/random/version.ts",
       "export": "MIN_ALGORITHM_VERSION",
       "cxx_type": "std::uint32_t"
+    },
+    {
+      "module": "core/random/internal.ts",
+      "export": "UINT32_RANGE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "core/random/internal.ts",
+      "export": "FNV_OFFSET_BASIS",
+      "cxx_type": "std::uint32_t"
+    },
+    {
+      "module": "core/random/internal.ts",
+      "export": "FNV_PRIME",
+      "cxx_type": "std::uint32_t"
+    },
+    {
+      "module": "core/random/internal.ts",
+      "export": "DOMAIN_SEED",
+      "cxx_type": "std::uint32_t"
+    },
+    {
+      "module": "core/random/internal.ts",
+      "export": "DOMAIN_POSITION",
+      "cxx_type": "std::uint32_t"
+    },
+    {
+      "module": "core/random/internal.ts",
+      "export": "TAG_STRING",
+      "cxx_type": "std::uint32_t",
+      "cxx_name": "SEED_TAG_STRING"
+    },
+    {
+      "module": "core/random/internal.ts",
+      "export": "TAG_NUMBER",
+      "cxx_type": "std::uint32_t",
+      "cxx_name": "SEED_TAG_NUMBER"
     }
   ]
 }

@@ -20,6 +20,12 @@ std::size_t relative_index(double v, std::size_t length) {
 
 }  // namespace
 
+bool is_space(char16_t c) noexcept {
+  return (c >= 0x09 && c <= 0x0D) || c == 0x20 || c == 0xA0 || c == 0x1680 ||
+         (c >= 0x2000 && c <= 0x200A) || c == 0x2028 || c == 0x2029 || c == 0x202F || c == 0x205F ||
+         c == 0x3000 || c == 0xFEFF;
+}
+
 void append_wtf8(std::string& out, std::uint32_t cp) {
   if (cp >= 0xDC00 && cp <= 0xDFFF && out.size() >= 3) {
     auto b0 = static_cast<unsigned char>(out[out.size() - 3]);

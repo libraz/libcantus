@@ -19,12 +19,15 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "cantus/core/meter.h"
 #include "cantus/core/types.h"
 #include "cantus/core/validation.h"
+#include "js/format.h"
 #include "json/json.h"
+#include "ops/args.h"
 
 namespace cantus::ops {
 
@@ -135,6 +138,19 @@ std::vector<NoteEvent> assert_note_events(const json::Value& events, std::string
 std::vector<NoteEvent> assert_note_events(const json::Value& events,
                                           std::string_view name = "note events",
                                           const NoteEventAssertOptions& options = {});
+
+/** `${name}` of argument `i`, where TS declares no default. */
+inline std::string name_arg(const Args& a, std::size_t i) { return js::template_string(a[i]); }
+
+/** `${name}` of argument `i`, or the TS default when it is undefined. */
+inline std::string name_arg(const Args& a, std::size_t i, std::string_view fallback) {
+  return a.undefined(i) ? std::string(fallback) : js::template_string(a[i]);
+}
+
+/** Argument `i`, or the TS default when it is undefined. */
+inline json::Value arg_or(const Args& a, std::size_t i, json::Value fallback) {
+  return a.undefined(i) ? std::move(fallback) : a[i];
+}
 
 }  // namespace cantus::ops
 

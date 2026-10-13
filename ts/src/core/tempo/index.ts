@@ -24,6 +24,7 @@ import {
   elapsedSecondsIn,
   isValidatedTempoMap,
   rememberValidatedTempoMap,
+  SECONDS_PER_MINUTE,
   tempoIndexOf,
   tempoSegmentAt,
 } from './internal.js';
@@ -56,13 +57,11 @@ export type TempoEvent = {
  */
 export type TempoMap = readonly TempoEvent[];
 
-const SECONDS_PER_MINUTE = 60;
-
 /**
  * Upper bound on a tempo, matching the bound the generators accept. A faster
  * marking is a notation of a slower pulse, not a distinct tempo.
  */
-const MAX_BPM = 1000;
+export const MAX_BPM = 1000;
 
 /**
  * Lower bound on a tempo. One beat lasts ten minutes here; anything slower is a
@@ -70,7 +69,7 @@ const MAX_BPM = 1000;
  * would make the conversions overflow to infinity while still reporting a
  * validated tempo.
  */
-const MIN_BPM = 0.1;
+export const MIN_BPM = 0.1;
 
 /**
  * Upper bound on the number of changes one tempo map may declare.
@@ -82,7 +81,7 @@ const MIN_BPM = 0.1;
  * and it rejects the map rather than the work built on it. A recorded
  * accelerando reaches it, which is exactly the import the bound is for.
  */
-const MAX_TEMPO_CHANGES = 100_000;
+export const MAX_TEMPO_CHANGES = 100_000;
 
 /**
  * Validate a tempo map: non-empty, strictly ascending, finite onsets, and

@@ -1,0 +1,26 @@
+{
+  "limits": [
+    {
+      "module": "core/tempo/internal.ts",
+      "export": "SECONDS_PER_MINUTE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "core/tempo/index.ts",
+      "export": "MAX_BPM",
+      "cxx_type": "double",
+      "cxx_name": "MAX_TEMPO_BPM"
+    },
+    {
+      "module": "core/tempo/index.ts",
+      "export": "MIN_BPM",
+      "cxx_type": "double",
+      "cxx_name": "MIN_TEMPO_BPM"
+    },
+    {
+      "module": "core/tempo/index.ts",
+      "export": "MAX_TEMPO_CHANGES",
+      "cxx_type": "double"
+    }
+  ]
+}

@@ -91,7 +91,7 @@ export type SpelledDuration = {
 };
 
 /** Length of each base value in quarter notes. */
-const NOTE_VALUE_QUARTERS: Readonly<Record<NoteValue, number>> = Object.freeze({
+export const NOTE_VALUE_QUARTERS: Readonly<Record<NoteValue, number>> = Object.freeze({
   whole: 4,
   half: 2,
   quarter: 1,
@@ -107,23 +107,23 @@ const NOTE_VALUE_QUARTERS: Readonly<Record<NoteValue, number>> = Object.freeze({
  * PPQ 960 (≈ 0.00104 beats), so no two spellings a sequencer can distinguish
  * collapse into one.
  */
-const EPS = 1e-6;
+export const EPS = 1e-6;
 
 /** Most dots {@link beatsToDuration} will spell; more is never the reading. */
-const MAX_SPELLED_DOTS = 2;
+export const MAX_SPELLED_DOTS = 2;
 
 /** Most dots {@link durationToBeats} will read; triple dots occur, four is the ceiling. */
-const MAX_DOTS = 4;
+export const MAX_DOTS = 4;
 
 /** Upper bound on either side of a tuplet ratio. */
-const MAX_TUPLET = 64;
+export const MAX_TUPLET = 64;
 
 /**
  * The tuplet families {@link beatsToDuration} spells, in preference order, with
  * the plain (non-tuplet) reading first. Quintuplets and septuplets are taken in
  * the time of four, the reading that fills one beat of their base value.
  */
-const SPELLED_TUPLETS: readonly (Tuplet | undefined)[] = Object.freeze([
+export const SPELLED_TUPLETS: readonly (Tuplet | undefined)[] = Object.freeze([
   undefined,
   { actual: 3, normal: 2 },
   { actual: 5, normal: 4 },

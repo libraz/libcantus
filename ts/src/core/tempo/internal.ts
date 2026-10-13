@@ -30,7 +30,7 @@ export type TempoIndex = {
   validated: boolean;
 };
 
-const SECONDS_PER_MINUTE = 60;
+export const SECONDS_PER_MINUTE = 60;
 
 /**
  * Indexes held against the identity of the map they describe.

@@ -1,0 +1,1 @@
+cantus_add_test(core_event_index test_event_index.cpp)

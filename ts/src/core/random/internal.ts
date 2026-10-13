@@ -21,10 +21,10 @@ import { assertFiniteNumber } from '../validation/index.js';
 export const UINT32_RANGE = 4294967296;
 
 /** FNV-1a 32-bit offset basis. */
-const FNV_OFFSET_BASIS = 0x811c9dc5;
+export const FNV_OFFSET_BASIS = 0x811c9dc5;
 
 /** FNV-1a 32-bit prime. */
-const FNV_PRIME = 0x01000193;
+export const FNV_PRIME = 0x01000193;
 
 /**
  * Keyspace a hash belongs to.
@@ -38,8 +38,8 @@ export const DOMAIN_SEED = 0x01;
 export const DOMAIN_POSITION = 0x02;
 
 /** Segment tags, so `'3'` and `3` never encode to the same bytes. */
-const TAG_STRING = 0x01;
-const TAG_NUMBER = 0x02;
+export const TAG_STRING = 0x01;
+export const TAG_NUMBER = 0x02;
 
 /**
  * Scratch view for the IEEE 754 encoding of a numeric segment.

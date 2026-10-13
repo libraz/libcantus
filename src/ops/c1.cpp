@@ -26,19 +26,6 @@ namespace cantus::ops {
 
 namespace {
 
-/** `${name}` of argument `i`, where TS declares no default. */
-std::string name_arg(const Args& a, std::size_t i) { return js::template_string(a[i]); }
-
-/** `${name}` of argument `i`, or the TS default when it is undefined. */
-std::string name_arg(const Args& a, std::size_t i, std::string_view fallback) {
-  return a.undefined(i) ? std::string(fallback) : js::template_string(a[i]);
-}
-
-/** Argument `i`, or the TS default when it is undefined. */
-json::Value arg_or(const Args& a, std::size_t i, json::Value fallback) {
-  return a.undefined(i) ? std::move(fallback) : a[i];
-}
-
 /** A `{bar, beat}` position read as barPositionToPulse / barPositionToBeat read it. */
 BarPosition read_bar_position(const json::Value& pos, std::string_view name,
                               std::string_view bar_name, std::string_view beat_name) {

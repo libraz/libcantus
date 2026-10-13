@@ -34,7 +34,7 @@ import type { Note } from './index.js';
 export type NoteNameSystem = 'english' | 'german' | 'japanese' | 'italian' | 'fixedDo';
 
 /** Every system name, for validating a caller-supplied one. */
-const NOTE_NAME_SYSTEMS = [
+export const NOTE_NAME_SYSTEMS = [
   'english',
   'german',
   'japanese',
@@ -77,7 +77,7 @@ export type KeyName = {
  * a B natural in English and a B flat in German, so a name that either system
  * could read is read as English unless it carries a German-only cue.
  */
-const DETECTION_ORDER = ['english', 'german', 'japanese', 'italian'] as const;
+export const DETECTION_ORDER = ['english', 'german', 'japanese', 'italian'] as const;
 
 /** A system with a table of its own; `fixedDo` shares the Italian one. */
 type NamingTable = (typeof DETECTION_ORDER)[number];
@@ -88,28 +88,28 @@ function tableOf(system: NoteNameSystem): NamingTable {
 }
 
 /** English letter glyphs, indexed by letter number (0 = C .. 6 = B). */
-const ENGLISH_LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
+export const ENGLISH_LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
 
 /** German letter glyphs; the seventh letter is H, since B is the B flat. */
-const GERMAN_LETTERS = ['c', 'd', 'e', 'f', 'g', 'a', 'h'] as const;
+export const GERMAN_LETTERS = ['c', 'd', 'e', 'f', 'g', 'a', 'h'] as const;
 
 /** Japanese 音名, written in katakana in the イロハ order. */
-const JAPANESE_LETTERS = ['ハ', 'ニ', 'ホ', 'ヘ', 'ト', 'イ', 'ロ'] as const;
+export const JAPANESE_LETTERS = ['ハ', 'ニ', 'ホ', 'ヘ', 'ト', 'イ', 'ロ'] as const;
 
 /** Italian and fixed-do solfège syllables. */
-const ITALIAN_LETTERS = ['do', 're', 'mi', 'fa', 'sol', 'la', 'si'] as const;
+export const ITALIAN_LETTERS = ['do', 're', 'mi', 'fa', 'sol', 'la', 'si'] as const;
 
 /** Letter numbers whose German flat elides to a bare `s`: E -> es, A -> as. */
-const GERMAN_ELIDING_LETTERS = [2, 5];
+export const GERMAN_ELIDING_LETTERS = [2, 5];
 
 /** Letter number of A, the letter that also writes its double flat as `asas`. */
-const A_LETTER = 5;
+export const A_LETTER = 5;
 
 /** Letter number of B, the one letter German and English disagree about. */
-const B_LETTER = 6;
+export const B_LETTER = 6;
 
 /** The mode words each system writes, keyed by mode. */
-const MODE_WORDS: Record<NamingTable, Record<'major' | 'minor', string>> = {
+export const MODE_WORDS: Record<NamingTable, Record<'major' | 'minor', string>> = {
   english: { major: 'major', minor: 'minor' },
   german: { major: 'dur', minor: 'moll' },
   japanese: { major: '長調', minor: '短調' },
@@ -126,6 +126,12 @@ const ITALIAN_SHARP = 'diesis';
 const ITALIAN_FLAT = 'bemolle';
 const ITALIAN_DOUBLE = 'doppio';
 
+/** The accidental marks and words above, grouped for the tables generated from them. */
+export const ACCIDENTAL_WORDS = {
+  japanese: { sharp: JAPANESE_SHARP, flat: JAPANESE_FLAT, double: JAPANESE_DOUBLE },
+  italian: { sharp: ITALIAN_SHARP, flat: ITALIAN_FLAT, double: ITALIAN_DOUBLE },
+} as const;
+
 /**
  * The most accidentals a written name carries.
  *
@@ -140,7 +146,7 @@ function longestGlyph(glyphs: readonly string[]): number {
 }
 
 /** Longest letter each table writes. */
-const MAX_LETTER_LENGTH: Record<NamingTable, number> = {
+export const MAX_LETTER_LENGTH: Record<NamingTable, number> = {
   english: longestGlyph(ENGLISH_LETTERS),
   german: longestGlyph(GERMAN_LETTERS),
   japanese: longestGlyph(JAPANESE_LETTERS),
@@ -148,7 +154,7 @@ const MAX_LETTER_LENGTH: Record<NamingTable, number> = {
 };
 
 /** Longest one accidental takes in each table, its separator included. */
-const MAX_ACCIDENTAL_LENGTH: Record<NamingTable, number> = {
+export const MAX_ACCIDENTAL_LENGTH: Record<NamingTable, number> = {
   /** `#`, `x` and `b`. */
   english: 1,
   /** The `-is` and `-es` affixes, whose first mark may elide to a bare `s`. */

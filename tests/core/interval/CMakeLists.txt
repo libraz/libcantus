@@ -1,0 +1,1 @@
+cantus_add_test(core_interval test_interval.cpp)

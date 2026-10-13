@@ -1,0 +1,19 @@
+{
+  "tables": [
+    {
+      "module": "core/tuning/index.ts",
+      "export": "TWELVE_TET",
+      "form": "record",
+      "cxx_type": "TuningTable",
+      "cxx_name": "TWELVE_TET",
+      "fields": ["refStep", "refFreq", "divisions"]
+    },
+    {
+      "module": "core/tuning/index.ts",
+      "export": "JUST_RATIOS",
+      "cxx_type": "JustRatioRow",
+      "cxx_name": "kJustRatios",
+      "fields": []
+    }
+  ]
+}

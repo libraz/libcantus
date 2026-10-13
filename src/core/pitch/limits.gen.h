@@ -2,4 +2,26 @@
 #ifndef CANTUS_SRC_CORE_PITCH_LIMITS_GEN_H_
 #define CANTUS_SRC_CORE_PITCH_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** MAX_ALTER of ts/src/core/pitch/index.ts. */
+inline constexpr int MAX_NOTE_ALTER = 6;
+
+/** MAX_OCTAVE of ts/src/core/pitch/index.ts. */
+inline constexpr int MAX_OCTAVE = 100;
+
+/** MAX_INTERVAL_NUMBER of ts/src/core/pitch/index.ts. */
+inline constexpr int MAX_INTERVAL_NUMBER = 1407;
+
+/** A_LETTER of ts/src/core/pitch/naming.ts. */
+inline constexpr int A_LETTER = 5;
+
+/** B_LETTER of ts/src/core/pitch/naming.ts. */
+inline constexpr int B_LETTER = 6;
+
+/** MAX_NAME_ACCIDENTALS of ts/src/core/pitch/naming.ts. */
+inline constexpr int MAX_NAME_ACCIDENTALS = 2;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_CORE_PITCH_LIMITS_GEN_H_

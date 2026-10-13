@@ -1,0 +1,1 @@
+cantus_add_test(core_duration test_duration.cpp)

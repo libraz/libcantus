@@ -1,0 +1,48 @@
+{
+  "tables": [
+    {
+      "module": "core/duration/index.ts",
+      "export": "NOTE_VALUES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kNoteValueNames",
+      "fields": []
+    },
+    {
+      "module": "core/duration/index.ts",
+      "export": "NOTE_VALUE_QUARTERS",
+      "cxx_type": "NamedQuarters",
+      "cxx_name": "kNoteValueQuarters",
+      "fields": []
+    },
+    {
+      "module": "core/duration/index.ts",
+      "export": "SPELLED_TUPLETS",
+      "cxx_type": "TupletSlot",
+      "cxx_name": "kSpelledTuplets",
+      "fields": ["actual", "normal"]
+    }
+  ],
+  "limits": [
+    {
+      "module": "core/duration/index.ts",
+      "export": "EPS",
+      "cxx_type": "double",
+      "cxx_name": "DURATION_EPS"
+    },
+    {
+      "module": "core/duration/index.ts",
+      "export": "MAX_SPELLED_DOTS",
+      "cxx_type": "int"
+    },
+    {
+      "module": "core/duration/index.ts",
+      "export": "MAX_DOTS",
+      "cxx_type": "int"
+    },
+    {
+      "module": "core/duration/index.ts",
+      "export": "MAX_TUPLET",
+      "cxx_type": "int"
+    }
+  ]
+}

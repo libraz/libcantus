@@ -1,0 +1,12 @@
+{
+  "tables": [
+    {
+      "module": "core/interval/index.ts",
+      "export": "ConsonanceClass",
+      "form": "record",
+      "cxx_type": "ConsonanceClassValues",
+      "cxx_name": "kConsonanceClassValues",
+      "fields": ["PerfectConsonance", "ImperfectConsonance", "Dissonance"]
+    }
+  ]
+}

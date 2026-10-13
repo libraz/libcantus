@@ -12,6 +12,27 @@ inline constexpr std::uint32_t ALGORITHM_VERSION = 1;
 /** MIN_ALGORITHM_VERSION of ts/src/core/random/version.ts. */
 inline constexpr std::uint32_t MIN_ALGORITHM_VERSION = 1;
 
+/** UINT32_RANGE of ts/src/core/random/internal.ts. */
+inline constexpr double UINT32_RANGE = 4294967296;
+
+/** FNV_OFFSET_BASIS of ts/src/core/random/internal.ts. */
+inline constexpr std::uint32_t FNV_OFFSET_BASIS = 2166136261;
+
+/** FNV_PRIME of ts/src/core/random/internal.ts. */
+inline constexpr std::uint32_t FNV_PRIME = 16777619;
+
+/** DOMAIN_SEED of ts/src/core/random/internal.ts. */
+inline constexpr std::uint32_t DOMAIN_SEED = 1;
+
+/** DOMAIN_POSITION of ts/src/core/random/internal.ts. */
+inline constexpr std::uint32_t DOMAIN_POSITION = 2;
+
+/** TAG_STRING of ts/src/core/random/internal.ts. */
+inline constexpr std::uint32_t SEED_TAG_STRING = 1;
+
+/** TAG_NUMBER of ts/src/core/random/internal.ts. */
+inline constexpr std::uint32_t SEED_TAG_NUMBER = 2;
+
 }  // namespace cantus
 
 #endif  // CANTUS_SRC_CORE_RANDOM_LIMITS_GEN_H_

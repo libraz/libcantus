@@ -2,4 +2,20 @@
 #ifndef CANTUS_SRC_CORE_DURATION_LIMITS_GEN_H_
 #define CANTUS_SRC_CORE_DURATION_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** EPS of ts/src/core/duration/index.ts. */
+inline constexpr double DURATION_EPS = 0.000001;
+
+/** MAX_SPELLED_DOTS of ts/src/core/duration/index.ts. */
+inline constexpr int MAX_SPELLED_DOTS = 2;
+
+/** MAX_DOTS of ts/src/core/duration/index.ts. */
+inline constexpr int MAX_DOTS = 4;
+
+/** MAX_TUPLET of ts/src/core/duration/index.ts. */
+inline constexpr int MAX_TUPLET = 64;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_CORE_DURATION_LIMITS_GEN_H_

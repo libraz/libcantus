@@ -26,7 +26,7 @@ export type { KeyName, NoteNameOptions, NoteNameSystem } from './naming.js';
 export { detectNoteNameSystem } from './naming.js';
 
 /** Semitone offset of each natural letter above C: C D E F G A B. */
-const LETTER_SEMITONES = [0, 2, 4, 5, 7, 9, 11] as const;
+export const LETTER_SEMITONES = [0, 2, 4, 5, 7, 9, 11] as const;
 
 /**
  * Widest alteration a note may carry.
@@ -34,7 +34,7 @@ const LETTER_SEMITONES = [0, 2, 4, 5, 7, 9, 11] as const;
  * Six accidentals already exceeds anything common practice writes, and the
  * bound is what keeps an unvalidated number from reaching `String.repeat`.
  */
-const MAX_ALTER = 6;
+export const MAX_ALTER = 6;
 
 /**
  * Widest octave a spelled note may carry, in either direction.
@@ -43,7 +43,7 @@ const MAX_ALTER = 6;
  * pitch, so scores that hold their material an octave or two outside the
  * sounding range stay expressible.
  */
-const MAX_OCTAVE = 100;
+export const MAX_OCTAVE = 100;
 
 /**
  * Validate the fields of a spelled note once, at a public entry point.
@@ -418,7 +418,7 @@ export function noteToMidi(note: Note): number {
  * Letter and alteration of each pitch class, by the side a black key is named
  * from when a bare MIDI number carries no spelling of its own.
  */
-const SPELLINGS = {
+export const SPELLINGS = {
   sharp: [
     [0, 0],
     [0, 1],
@@ -486,7 +486,7 @@ export function midiToNote(midi: number, spelling: 'sharp' | 'flat' = 'sharp'): 
  * Diatonic letter distance of the conventional ascending interval for each
  * semitone step within an octave: P1, m2, M2, m3, M3, P4, A4, P5, m6, M6, m7, M7.
  */
-const LETTER_STEPS_BY_SEMITONE = [0, 1, 1, 2, 2, 3, 3, 4, 5, 5, 6, 6] as const;
+export const LETTER_STEPS_BY_SEMITONE = [0, 1, 1, 2, 2, 3, 3, 4, 5, 5, 6, 6] as const;
 
 /**
  * Transpose a note by a signed number of semitones, keeping its spelling.
@@ -569,7 +569,7 @@ function alterFor(natural: number, pc: number): number {
 }
 
 /** Reference semitone span of a perfect/major simple interval by diatonic number. */
-const SIMPLE_REFERENCE = [0, 0, 2, 4, 5, 7, 9, 11] as const;
+export const SIMPLE_REFERENCE = [0, 0, 2, 4, 5, 7, 9, 11] as const;
 
 /** Whether a simple diatonic number (1..7 within an octave) is a perfect kind. */
 function isPerfectNumber(simpleNumber: number): boolean {
@@ -608,7 +608,7 @@ function qualityFromSpan(numberValue: number, semitones: number): IntervalQualit
  * the six letters within the top octave. Rejecting anything narrower would make
  * a value one public function returns impossible to hand to another.
  */
-const MAX_INTERVAL_NUMBER = 7 * (2 * MAX_OCTAVE) + 6 + 1;
+export const MAX_INTERVAL_NUMBER = 7 * (2 * MAX_OCTAVE) + 6 + 1;
 
 /**
  * The semitone span of the interval named by a diatonic number and a quality.

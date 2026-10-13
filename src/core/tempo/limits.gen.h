@@ -2,4 +2,20 @@
 #ifndef CANTUS_SRC_CORE_TEMPO_LIMITS_GEN_H_
 #define CANTUS_SRC_CORE_TEMPO_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** SECONDS_PER_MINUTE of ts/src/core/tempo/internal.ts. */
+inline constexpr double SECONDS_PER_MINUTE = 60;
+
+/** MAX_BPM of ts/src/core/tempo/index.ts. */
+inline constexpr double MAX_TEMPO_BPM = 1000;
+
+/** MIN_BPM of ts/src/core/tempo/index.ts. */
+inline constexpr double MIN_TEMPO_BPM = 0.1;
+
+/** MAX_TEMPO_CHANGES of ts/src/core/tempo/index.ts. */
+inline constexpr double MAX_TEMPO_CHANGES = 100000;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_CORE_TEMPO_LIMITS_GEN_H_

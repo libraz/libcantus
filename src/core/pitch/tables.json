@@ -1,0 +1,146 @@
+{
+  "tables": [
+    {
+      "module": "core/pitch/index.ts",
+      "export": "LETTER_SEMITONES",
+      "cxx_type": "int",
+      "cxx_name": "kLetterSemitones",
+      "fields": []
+    },
+    {
+      "module": "core/pitch/index.ts",
+      "export": "SPELLINGS",
+      "cxx_type": "SpellingRow",
+      "cxx_name": "kSpellings",
+      "fields": []
+    },
+    {
+      "module": "core/pitch/index.ts",
+      "export": "LETTER_STEPS_BY_SEMITONE",
+      "cxx_type": "int",
+      "cxx_name": "kLetterStepsBySemitone",
+      "fields": []
+    },
+    {
+      "module": "core/pitch/index.ts",
+      "export": "SIMPLE_REFERENCE",
+      "cxx_type": "int",
+      "cxx_name": "kSimpleReference",
+      "fields": []
+    },
+    {
+      "module": "core/pitch/naming.ts",
+      "export": "NOTE_NAME_SYSTEMS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kNoteNameSystemNames",
+      "fields": []
+    },
+    {
+      "module": "core/pitch/naming.ts",
+      "export": "DETECTION_ORDER",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kDetectionOrderNames",
+      "fields": []
+    },
+    {
+      "module": "core/pitch/naming.ts",
+      "export": "ENGLISH_LETTERS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kEnglishLetters",
+      "fields": []
+    },
+    {
+      "module": "core/pitch/naming.ts",
+      "export": "GERMAN_LETTERS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kGermanLetters",
+      "fields": []
+    },
+    {
+      "module": "core/pitch/naming.ts",
+      "export": "JAPANESE_LETTERS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kJapaneseLetters",
+      "fields": []
+    },
+    {
+      "module": "core/pitch/naming.ts",
+      "export": "ITALIAN_LETTERS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kItalianLetters",
+      "fields": []
+    },
+    {
+      "module": "core/pitch/naming.ts",
+      "export": "GERMAN_ELIDING_LETTERS",
+      "cxx_type": "int",
+      "cxx_name": "kGermanElidingLetters",
+      "fields": []
+    },
+    {
+      "module": "core/pitch/naming.ts",
+      "export": "MODE_WORDS",
+      "cxx_type": "ModeWordsRow",
+      "cxx_name": "kModeWords",
+      "fields": ["major", "minor"]
+    },
+    {
+      "module": "core/pitch/naming.ts",
+      "export": "MAX_LETTER_LENGTH",
+      "cxx_type": "NamedLength",
+      "cxx_name": "kMaxLetterLength",
+      "fields": []
+    },
+    {
+      "module": "core/pitch/naming.ts",
+      "export": "MAX_ACCIDENTAL_LENGTH",
+      "cxx_type": "NamedLength",
+      "cxx_name": "kMaxAccidentalLength",
+      "fields": []
+    },
+    {
+      "module": "core/pitch/naming.ts",
+      "export": "ACCIDENTAL_WORDS",
+      "form": "record",
+      "cxx_type": "AccidentalWords",
+      "cxx_name": "kAccidentalWords",
+      "fields": [
+        { "name": "japanese", "fields": ["sharp", "flat", "double"] },
+        { "name": "italian", "fields": ["sharp", "flat", "double"] }
+      ]
+    }
+  ],
+  "limits": [
+    {
+      "module": "core/pitch/index.ts",
+      "export": "MAX_ALTER",
+      "cxx_type": "int",
+      "cxx_name": "MAX_NOTE_ALTER"
+    },
+    {
+      "module": "core/pitch/index.ts",
+      "export": "MAX_OCTAVE",
+      "cxx_type": "int"
+    },
+    {
+      "module": "core/pitch/index.ts",
+      "export": "MAX_INTERVAL_NUMBER",
+      "cxx_type": "int"
+    },
+    {
+      "module": "core/pitch/naming.ts",
+      "export": "A_LETTER",
+      "cxx_type": "int"
+    },
+    {
+      "module": "core/pitch/naming.ts",
+      "export": "B_LETTER",
+      "cxx_type": "int"
+    },
+    {
+      "module": "core/pitch/naming.ts",
+      "export": "MAX_NAME_ACCIDENTALS",
+      "cxx_type": "int"
+    }
+  ]
+}

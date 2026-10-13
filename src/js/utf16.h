@@ -78,6 +78,9 @@ std::string utf16_slice(std::string_view s, double start, std::optional<double> 
 /** Sign of `a < b` / `a > b` as JS compares strings: by UTF-16 code unit. */
 int utf16_compare(std::string_view a, std::string_view b);
 
+/** Whether a code unit is white space to `String.prototype.trim` and the regex class `\s`. */
+bool is_space(char16_t unit) noexcept;
+
 /** Append the WTF-8 encoding of a code point or lone surrogate, merging a completed pair. */
 void append_wtf8(std::string& out, std::uint32_t cp);
 
