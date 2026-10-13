@@ -2,4 +2,17 @@
 #ifndef CANTUS_SRC_THEORY_SPELLING_LIMITS_GEN_H_
 #define CANTUS_SRC_THEORY_SPELLING_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** DIATONIC_LETTER_COUNT of ts/src/theory/spelling/index.ts. */
+inline constexpr int DIATONIC_LETTER_COUNT = 7;
+
+/** MAX_JOINT_TONE_COUNT of ts/src/theory/spelling/index.ts. */
+inline constexpr int MAX_JOINT_TONE_COUNT = 8;
+
+/** MAX_CONTEXT_ALTER of ts/src/theory/spelling/index.ts. */
+inline constexpr int MAX_CONTEXT_ALTER = 2;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_THEORY_SPELLING_LIMITS_GEN_H_

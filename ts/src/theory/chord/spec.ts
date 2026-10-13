@@ -132,7 +132,7 @@ export type ChordSpec = {
 };
 
 /** The tones each base names, as `[chord degree, semitones above the root]`. */
-const BASE_TONES: Record<ChordBase, readonly (readonly [number, number])[]> = {
+export const BASE_TONES: Record<ChordBase, readonly (readonly [number, number])[]> = {
   maj: [
     [1, 0],
     [3, 4],
@@ -170,22 +170,22 @@ const BASE_TONES: Record<ChordBase, readonly (readonly [number, number])[]> = {
 };
 
 /** Semitones above the root of each seventh. */
-const SEVENTH_SEMITONES: Record<ChordSeventh, number> = { maj7: 11, min7: 10, dim7: 9 };
+export const SEVENTH_SEMITONES: Record<ChordSeventh, number> = { maj7: 11, min7: 10, dim7: 9 };
 
 /** Semitones above the root of each addable/alterable degree, unaltered. */
-const DEGREE_SEMITONES: Record<number, number> = { 6: 9, 9: 14, 11: 17, 13: 21 };
+export const DEGREE_SEMITONES: Record<number, number> = { 6: 9, 9: 14, 11: 17, 13: 21 };
 
 /** Semitones above the root of an unaltered fifth, the tone alterations move. */
-const PERFECT_FIFTH = 7;
+export const PERFECT_FIFTH = 7;
 
 /** The identity every alteration of the fifth shares, since a chord has one. */
 const FIFTH_KEY = '5';
 
 /** Chord degrees a chord may omit: root, third, fifth. */
-const OMITTABLE_DEGREES = [1, 3, 5];
+export const OMITTABLE_DEGREES = [1, 3, 5];
 
 /** The quality naming each base on its own, when nothing closer fits. */
-const BASE_QUALITY: Record<ChordBase, ChordQuality> = {
+export const BASE_QUALITY: Record<ChordBase, ChordQuality> = {
   maj: 'maj',
   min: 'min',
   dim: 'dim',
@@ -228,7 +228,7 @@ function parts(base: ChordBase, spec: SpecParts = {}): ChordSpec {
  * chord detection uses it as a final tie-break, so it is part of the observable
  * behaviour and does not get reshuffled casually.
  */
-const QUALITY_SPECS: readonly (readonly [ChordQuality, ChordSpec])[] = [
+export const QUALITY_SPECS: readonly (readonly [ChordQuality, ChordSpec])[] = [
   ['maj', parts('maj')],
   ['min', parts('min')],
   ['dim', parts('dim')],
@@ -628,17 +628,20 @@ export function chordSpecQuality(spec: ChordSpec): ChordQuality {
 }
 
 /** The degree and alteration each compound semitone offset names. */
-const EXTENSION_BY_SEMITONE: ReadonlyMap<number, Alteration> = new Map([
-  [13, { degree: 9, alter: -1 } as Alteration],
-  [14, { degree: 9, alter: 0 } as Alteration],
-  [15, { degree: 9, alter: 1 } as Alteration],
-  [16, { degree: 11, alter: -1 } as Alteration],
-  [17, { degree: 11, alter: 0 } as Alteration],
-  [18, { degree: 11, alter: 1 } as Alteration],
-  [20, { degree: 13, alter: -1 } as Alteration],
-  [21, { degree: 13, alter: 0 } as Alteration],
-  [22, { degree: 13, alter: 1 } as Alteration],
-]);
+export const EXTENSION_ENTRIES: readonly (readonly [number, Alteration])[] = [
+  [13, { degree: 9, alter: -1 }],
+  [14, { degree: 9, alter: 0 }],
+  [15, { degree: 9, alter: 1 }],
+  [16, { degree: 11, alter: -1 }],
+  [17, { degree: 11, alter: 0 }],
+  [18, { degree: 11, alter: 1 }],
+  [20, { degree: 13, alter: -1 }],
+  [21, { degree: 13, alter: 0 }],
+  [22, { degree: 13, alter: 1 }],
+];
+
+/** {@link EXTENSION_ENTRIES} by semitone offset. */
+const EXTENSION_BY_SEMITONE: ReadonlyMap<number, Alteration> = new Map(EXTENSION_ENTRIES);
 
 /** Whether two ascending offset lists name the same tones. */
 function sameOffsets(a: readonly number[], b: readonly number[]): boolean {
@@ -725,6 +728,15 @@ export function chordSpecFromIntervals(intervals: readonly number[]): ChordSpec 
   return sameOffsets(specIntervals(normalized), offsets) ? normalized : undefined;
 }
 
+/** The degrees an alteration may name. */
+export const ALTERABLE_DEGREES: readonly number[] = [5, 9, 11, 13];
+
+/** The steps an alteration may move its degree by. */
+export const ALTERATION_STEPS: readonly number[] = [-1, 0, 1];
+
+/** The degrees a spec may add without a seventh. */
+export const ADDABLE_DEGREES: readonly number[] = [6, 9, 11, 13];
+
 /** Reject a value that is not one of a fixed set of spec parts. */
 function assertPart<T extends string>(value: T, allowed: readonly T[], name: string): T {
   if (!allowed.includes(value)) {
@@ -796,10 +808,10 @@ export function assertChordSpec(spec: ChordSpec): ChordSpec {
     throw new InvalidInputError('chord spec alterations must be an array');
   }
   for (const alteration of spec.alterations) {
-    assertDegreeIn(alteration?.degree, [5, 9, 11, 13], 'chord spec alteration degree');
-    assertDegreeIn(alteration.alter, [-1, 0, 1], 'chord spec alteration');
+    assertDegreeIn(alteration?.degree, ALTERABLE_DEGREES, 'chord spec alteration degree');
+    assertDegreeIn(alteration.alter, ALTERATION_STEPS, 'chord spec alteration');
   }
-  assertDegreeList(spec.additions, [6, 9, 11, 13], 'chord spec additions');
+  assertDegreeList(spec.additions, ADDABLE_DEGREES, 'chord spec additions');
   assertDegreeList(spec.omissions, OMITTABLE_DEGREES, 'chord spec omissions');
   return normalizeChordSpec(spec);
 }

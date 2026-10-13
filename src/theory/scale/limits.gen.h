@@ -2,4 +2,116 @@
 #ifndef CANTUS_SRC_THEORY_SCALE_LIMITS_GEN_H_
 #define CANTUS_SRC_THEORY_SCALE_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** MAJOR_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int MAJOR_MASK = 2741;
+
+/** NATURAL_MINOR_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int NATURAL_MINOR_MASK = 1453;
+
+/** HARMONIC_MINOR_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int HARMONIC_MINOR_MASK = 2477;
+
+/** MELODIC_MINOR_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int MELODIC_MINOR_MASK = 2733;
+
+/** DORIAN_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int DORIAN_MASK = 1709;
+
+/** PHRYGIAN_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int PHRYGIAN_MASK = 1451;
+
+/** LYDIAN_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int LYDIAN_MASK = 2773;
+
+/** MIXOLYDIAN_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int MIXOLYDIAN_MASK = 1717;
+
+/** LOCRIAN_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int LOCRIAN_MASK = 1387;
+
+/** MAJOR_PENTATONIC_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int MAJOR_PENTATONIC_MASK = 661;
+
+/** MINOR_PENTATONIC_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int MINOR_PENTATONIC_MASK = 1193;
+
+/** BLUES_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int BLUES_MASK = 1257;
+
+/** WHOLE_TONE_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int WHOLE_TONE_MASK = 1365;
+
+/** OCTATONIC_HALF_WHOLE_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int OCTATONIC_HALF_WHOLE_MASK = 1755;
+
+/** OCTATONIC_WHOLE_HALF_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int OCTATONIC_WHOLE_HALF_MASK = 2925;
+
+/** CHROMATIC_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int CHROMATIC_MASK = 4095;
+
+/** LYDIAN_DOMINANT_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int LYDIAN_DOMINANT_MASK = 1749;
+
+/** MIXOLYDIAN_B13_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int MIXOLYDIAN_B13_MASK = 1461;
+
+/** LOCRIAN_NATURAL2_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int LOCRIAN_NATURAL2_MASK = 1389;
+
+/** ALTERED_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int ALTERED_MASK = 1371;
+
+/** PHRYGIAN_DOMINANT_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int PHRYGIAN_DOMINANT_MASK = 1459;
+
+/** MIYAKO_BUSHI_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int MIYAKO_BUSHI_MASK = 419;
+
+/** RITSU_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int RITSU_MASK = 677;
+
+/** RYUKYU_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int RYUKYU_MASK = 2225;
+
+/** DOUBLE_HARMONIC_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int DOUBLE_HARMONIC_MASK = 2483;
+
+/** TODI_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int TODI_MASK = 2507;
+
+/** MARWA_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int MARWA_MASK = 2771;
+
+/** PURVI_MASK of ts/src/theory/scale/masks.ts. */
+inline constexpr int PURVI_MASK = 2515;
+
+/** MAX_FIFTHS of ts/src/theory/scale/signature.ts. */
+inline constexpr int MAX_FIFTHS = 12;
+
+/** FIFTHS_PER_ALTERATION of ts/src/theory/scale/signature.ts. */
+inline constexpr int FIFTHS_PER_ALTERATION = 7;
+
+/** MINOR_MODE_OFFSET of ts/src/theory/scale/signature.ts. */
+inline constexpr int MINOR_MODE_OFFSET = -3;
+
+/** ENHARMONIC_FIFTHS of ts/src/theory/scale/relations.ts. */
+inline constexpr int ENHARMONIC_FIFTHS = 12;
+
+/** MAX_CONVENTIONAL_FIFTHS of ts/src/theory/scale/relations.ts. */
+inline constexpr int MAX_CONVENTIONAL_FIFTHS = 7;
+
+/** MINOR_TONIC_FIFTHS of ts/src/theory/scale/relations.ts. */
+inline constexpr int MINOR_TONIC_FIFTHS = 3;
+
+/** FLATTEST_TONIC_FIFTHS of ts/src/theory/scale/relations.ts. */
+inline constexpr int FLATTEST_TONIC_FIFTHS = -7;
+
+/** SHARPEST_TONIC_FIFTHS of ts/src/theory/scale/relations.ts. */
+inline constexpr int SHARPEST_TONIC_FIFTHS = 10;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_THEORY_SCALE_LIMITS_GEN_H_

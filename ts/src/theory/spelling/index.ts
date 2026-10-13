@@ -51,7 +51,7 @@ import { isScaleTone, type KeyLike, scaleTonesInDegreeOrder, toKeyScale } from '
  * minor keys spelling their raised degrees with the key-correct letter (e.g. F#
  * minor spells its leading tone E#, not F).
  */
-const CHROMATIC_SPELLING: Record<number, number> = {
+export const CHROMATIC_SPELLING: Record<number, number> = {
   1: 1, // b2
   2: 1, // M2
   3: 2, // b3
@@ -72,7 +72,7 @@ const CHROMATIC_SPELLING: Record<number, number> = {
  * flat-side scale spells as a diminished fifth rather than the augmented fourth
  * a lydian mode wants: C blues spells C Eb F Gb G Bb.
  */
-const CHROMATIC_SPELLING_FLAT: Record<number, number> = {
+export const CHROMATIC_SPELLING_FLAT: Record<number, number> = {
   ...CHROMATIC_SPELLING,
   6: 4, // b5
 };
@@ -81,7 +81,7 @@ const CHROMATIC_SPELLING_FLAT: Record<number, number> = {
  * Sharp-side counterpart, used for scales that are not heptatonic and lean
  * sharp: C whole-tone spells C D E F# G# A#.
  */
-const CHROMATIC_SPELLING_SHARP: Record<number, number> = {
+export const CHROMATIC_SPELLING_SHARP: Record<number, number> = {
   1: 0, // #1
   2: 1, // M2
   3: 1, // #2
@@ -181,19 +181,22 @@ function capChromaticAccidentals(preferred: Note, alternative: Note | undefined)
  * with more tones than one letter over — the chromatic set — is spelled tone by
  * tone instead.
  */
-const DIATONIC_LETTER_COUNT = 7;
+export const DIATONIC_LETTER_COUNT = 7;
 
 /**
  * The most tones a scale may have and still be spelled jointly: one letter over
  * the seven, which the eight-note scales write twice.
  */
-const MAX_JOINT_TONE_COUNT = DIATONIC_LETTER_COUNT + 1;
+export const MAX_JOINT_TONE_COUNT = DIATONIC_LETTER_COUNT + 1;
 
 /** Semitones above its tonic each degree of the major scale sounds. */
-const MAJOR_SEMITONES = [0, 2, 4, 5, 7, 9, 11];
+export const MAJOR_SEMITONES = [0, 2, 4, 5, 7, 9, 11];
 
 /** The degrees whose plain readings are major or minor rather than perfect. */
-const IMPERFECT_DEGREES = new Set([1, 2, 5, 6]);
+export const IMPERFECT_DEGREE_LIST: readonly number[] = [1, 2, 5, 6];
+
+/** {@link IMPERFECT_DEGREE_LIST} as a set. */
+const IMPERFECT_DEGREES = new Set(IMPERFECT_DEGREE_LIST);
 
 /**
  * The offsets above the tonic of every diatonic mode, mode by mode and in
@@ -204,7 +207,7 @@ const IMPERFECT_DEGREES = new Set([1, 2, 5, 6]);
  * subset of the dorian, phrygian and aeolian modes, and all three agree that
  * the tone three semitones above the tonic is its third.
  */
-const DIATONIC_MODE_OFFSETS: number[][] = MAJOR_SEMITONES.map((tonic, mode) =>
+export const DIATONIC_MODE_OFFSETS: number[][] = MAJOR_SEMITONES.map((tonic, mode) =>
   MAJOR_SEMITONES.map((_, degree) => mod12((MAJOR_SEMITONES[(mode + degree) % 7] ?? 0) - tonic)),
 );
 
@@ -560,9 +563,12 @@ function spellByKey(pc: number, tonic: Note, key: KeyScale): Note {
 
   // Unreachable for a pitch class, since both tables cover offsets 1..11 and
   // offset 0 returns above; kept so a non-integral input still names something.
-  const belowLetter = mod7([0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6][mod12(pc)] ?? 0);
+  const belowLetter = mod7(LETTER_BELOW_PITCH_CLASS[mod12(pc)] ?? 0);
   return { letter: belowLetter, alter: alterFor(belowLetter, pc) };
 }
+
+/** The natural letter at or below each pitch class, the fallback of {@link spellByKey}. */
+export const LETTER_BELOW_PITCH_CLASS: readonly number[] = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
 
 /**
  * The musical evidence around a pitch, used to refine an enharmonic choice the
@@ -610,7 +616,7 @@ export type SpellingContext = {
  * holding nothing but a root pitch class, and for a tone the sounding chord
  * gives no degree of its own.
  */
-const CHORD_TONE_LETTER_STEPS: Record<number, number> = {
+export const CHORD_TONE_LETTER_STEPS: Record<number, number> = {
   0: 0, // root
   3: 2, // minor third
   4: 2, // major third
@@ -627,7 +633,7 @@ const CHORD_TONE_LETTER_STEPS: Record<number, number> = {
  * semitones or nine, so a diminished seventh over C is a B double-flat and never
  * the A its nine semitones would suggest on their own.
  */
-const LETTER_STEP_BY_ROLE: Record<ChordToneRole, number> = {
+export const LETTER_STEP_BY_ROLE: Record<ChordToneRole, number> = {
   root: 0,
   third: 2,
   fifth: 4,
@@ -636,7 +642,7 @@ const LETTER_STEP_BY_ROLE: Record<ChordToneRole, number> = {
 };
 
 /** Widest alteration a context-derived spelling may carry: a double accidental. */
-const MAX_CONTEXT_ALTER = 2;
+export const MAX_CONTEXT_ALTER = 2;
 
 /**
  * The letter distance above its root a sounding chord gives a pitch class, or
@@ -904,6 +910,9 @@ export function spellPitchClasses(pcs: number[], tonic: NoteLike, key: KeyLike):
   );
 }
 
+/** Letter distance above the root of each simple interval, for interval data no case names. */
+export const SIMPLE_LETTER_OFFSETS: readonly number[] = [0, 1, 1, 2, 2, 3, 4, 4, 4, 5, 6, 6];
+
 /**
  * Diatonic letter distance implied by a chord interval.
  *
@@ -962,7 +971,7 @@ function chordLetterOffset(interval: number, chord: Chord): number {
       // distance. Public builders use the explicit cases above.
       const octaves = Math.floor(Math.max(0, interval) / 12);
       const simple = mod12(interval);
-      const simpleOffset = [0, 1, 1, 2, 2, 3, 4, 4, 4, 5, 6, 6][simple] ?? 0;
+      const simpleOffset = SIMPLE_LETTER_OFFSETS[simple] ?? 0;
       return octaves * 7 + simpleOffset;
     }
   }

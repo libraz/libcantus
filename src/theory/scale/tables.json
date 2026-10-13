@@ -1,0 +1,249 @@
+{
+  "tables": [
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "NAMED_SCALES",
+      "cxx_type": "NamedScaleMask",
+      "cxx_name": "kNamedScales",
+      "fields": []
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "WORLD_SCALES",
+      "cxx_type": "NamedScaleMask",
+      "cxx_name": "kWorldScales",
+      "fields": []
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "SCALE_ALIASES",
+      "cxx_type": "ScaleAlias",
+      "cxx_name": "kScaleAliases",
+      "fields": []
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "VARIANT_MASKS",
+      "cxx_type": "NamedScaleMask",
+      "cxx_name": "kVariantMasks",
+      "fields": []
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "KEY_VARIANTS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kKeyVariantNames",
+      "fields": []
+    },
+    {
+      "module": "theory/scale/system.ts",
+      "export": "SCALE_SYSTEMS",
+      "cxx_type": "ScaleSystemRow",
+      "cxx_name": "kScaleSystems",
+      "fields": []
+    },
+    {
+      "module": "theory/scale/signature.ts",
+      "export": "LETTER_FIFTHS",
+      "cxx_type": "int",
+      "cxx_name": "kLetterFifths",
+      "fields": []
+    },
+    {
+      "module": "theory/scale/signature.ts",
+      "export": "FIFTHS_LETTERS",
+      "cxx_type": "int",
+      "cxx_name": "kFifthsLetters",
+      "fields": []
+    },
+    {
+      "module": "theory/scale/signature.ts",
+      "export": "DIATONIC_MODE_OFFSET_ENTRIES",
+      "cxx_type": "ModeOffset",
+      "cxx_name": "kSignatureModeOffsets",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "MAJOR_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "NATURAL_MINOR_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "HARMONIC_MINOR_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "MELODIC_MINOR_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "DORIAN_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "PHRYGIAN_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "LYDIAN_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "MIXOLYDIAN_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "LOCRIAN_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "MAJOR_PENTATONIC_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "MINOR_PENTATONIC_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "BLUES_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "WHOLE_TONE_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "OCTATONIC_HALF_WHOLE_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "OCTATONIC_WHOLE_HALF_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "CHROMATIC_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "LYDIAN_DOMINANT_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "MIXOLYDIAN_B13_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "LOCRIAN_NATURAL2_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "ALTERED_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "PHRYGIAN_DOMINANT_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "MIYAKO_BUSHI_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "RITSU_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "RYUKYU_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "DOUBLE_HARMONIC_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "TODI_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "MARWA_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/masks.ts",
+      "export": "PURVI_MASK",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/signature.ts",
+      "export": "MAX_FIFTHS",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/signature.ts",
+      "export": "FIFTHS_PER_ALTERATION",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/signature.ts",
+      "export": "MINOR_MODE_OFFSET",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/relations.ts",
+      "export": "ENHARMONIC_FIFTHS",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/relations.ts",
+      "export": "MAX_CONVENTIONAL_FIFTHS",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/relations.ts",
+      "export": "MINOR_TONIC_FIFTHS",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/relations.ts",
+      "export": "FLATTEST_TONIC_FIFTHS",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/scale/relations.ts",
+      "export": "SHARPEST_TONIC_FIFTHS",
+      "cxx_type": "int"
+    }
+  ]
+}

@@ -138,7 +138,7 @@ export type ChordSegment = {
 };
 
 /** Widest semitone offset a custom interval template may name: one MIDI range. */
-const MAX_CHORD_INTERVAL = 127;
+export const MAX_CHORD_INTERVAL = 127;
 
 /**
  * All chord qualities the builder understands, in declaration order.
@@ -557,7 +557,7 @@ export function chordToneLetterOffsets(chord: Chord): number[] | undefined {
  * letters above the root is its third and one written five its sixth, whatever
  * the semitones would say on their own.
  */
-const ROLE_BY_LETTER_OFFSET: Record<number, ChordToneRole> = {
+export const ROLE_BY_LETTER_OFFSET: Record<number, ChordToneRole> = {
   0: 'root',
   2: 'third',
   4: 'fifth',
@@ -747,7 +747,7 @@ export function chordToneRole(pitch: number, chord: Chord): ChordToneRole | null
 }
 
 /** The degree a chord tone names, once the chord has said which tone it is. */
-const DEGREE_BY_ROLE: Readonly<Record<ChordToneRole, number>> = {
+export const DEGREE_BY_ROLE: Readonly<Record<ChordToneRole, number>> = {
   root: 1,
   third: 3,
   fifth: 5,
@@ -764,7 +764,7 @@ const DEGREE_BY_ROLE: Readonly<Record<ChordToneRole, number>> = {
  * the eight beside a perfect fifth are the sharp eleventh and the flat
  * thirteenth, not a second fifth and a sixth.
  */
-const TENSION_DEGREE: readonly number[] = [1, 2, 2, 2, 3, 4, 4, 5, 6, 6, 7, 7];
+export const TENSION_DEGREE: readonly number[] = [1, 2, 2, 2, 3, 4, 4, 5, 6, 6, 7, 7];
 
 /**
  * Which chord degree one of a chord's own intervals spells.

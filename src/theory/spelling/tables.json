@@ -1,0 +1,91 @@
+{
+  "tables": [
+    {
+      "module": "theory/spelling/index.ts",
+      "export": "CHROMATIC_SPELLING",
+      "cxx_type": "NamedInt",
+      "cxx_name": "kChromaticSpelling",
+      "fields": []
+    },
+    {
+      "module": "theory/spelling/index.ts",
+      "export": "CHROMATIC_SPELLING_FLAT",
+      "cxx_type": "NamedInt",
+      "cxx_name": "kChromaticSpellingFlat",
+      "fields": []
+    },
+    {
+      "module": "theory/spelling/index.ts",
+      "export": "CHROMATIC_SPELLING_SHARP",
+      "cxx_type": "NamedInt",
+      "cxx_name": "kChromaticSpellingSharp",
+      "fields": []
+    },
+    {
+      "module": "theory/spelling/index.ts",
+      "export": "MAJOR_SEMITONES",
+      "cxx_type": "int",
+      "cxx_name": "kMajorSemitones",
+      "fields": []
+    },
+    {
+      "module": "theory/spelling/index.ts",
+      "export": "IMPERFECT_DEGREE_LIST",
+      "cxx_type": "int",
+      "cxx_name": "kImperfectDegrees",
+      "fields": []
+    },
+    {
+      "module": "theory/spelling/index.ts",
+      "export": "DIATONIC_MODE_OFFSETS",
+      "cxx_type": "std::array<int, 7>",
+      "cxx_name": "kDiatonicModeOffsets",
+      "fields": []
+    },
+    {
+      "module": "theory/spelling/index.ts",
+      "export": "CHORD_TONE_LETTER_STEPS",
+      "cxx_type": "NamedInt",
+      "cxx_name": "kChordToneLetterSteps",
+      "fields": []
+    },
+    {
+      "module": "theory/spelling/index.ts",
+      "export": "LETTER_STEP_BY_ROLE",
+      "cxx_type": "NamedInt",
+      "cxx_name": "kLetterStepByRole",
+      "fields": []
+    },
+    {
+      "module": "theory/spelling/index.ts",
+      "export": "LETTER_BELOW_PITCH_CLASS",
+      "cxx_type": "int",
+      "cxx_name": "kLetterBelowPitchClass",
+      "fields": []
+    },
+    {
+      "module": "theory/spelling/index.ts",
+      "export": "SIMPLE_LETTER_OFFSETS",
+      "cxx_type": "int",
+      "cxx_name": "kSimpleLetterOffsets",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "theory/spelling/index.ts",
+      "export": "DIATONIC_LETTER_COUNT",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/spelling/index.ts",
+      "export": "MAX_JOINT_TONE_COUNT",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/spelling/index.ts",
+      "export": "MAX_CONTEXT_ALTER",
+      "cxx_type": "int"
+    }
+  ]
+}

@@ -570,7 +570,7 @@ export function requireScaleMask(name: ScaleNameInput, label = 'scale'): number 
 }
 
 /** The mask each named form stands for, and the only place that pairing is written. */
-const VARIANT_MASKS: Readonly<Record<Exclude<KeyVariant, 'modal'>, number>> = {
+export const VARIANT_MASKS: Readonly<Record<Exclude<KeyVariant, 'modal'>, number>> = {
   major: MAJOR_MASK,
   natural: NATURAL_MINOR_MASK,
   harmonic: HARMONIC_MINOR_MASK,
@@ -614,7 +614,7 @@ export function variantOfMask(modeMask12: number): KeyVariant {
 }
 
 /** Every value a key's variant may hold, in a fixed order. */
-const KEY_VARIANTS: readonly KeyVariant[] = [
+export const KEY_VARIANTS: readonly KeyVariant[] = [
   ...(Object.keys(VARIANT_MASKS) as Exclude<KeyVariant, 'modal'>[]),
   'modal',
 ];

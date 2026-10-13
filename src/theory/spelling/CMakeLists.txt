@@ -1,1 +1,2 @@
-# ts/src/theory/spelling: target_sources(cantus PRIVATE ...)
+# ts/src/theory/spelling
+target_sources(cantus PRIVATE spelling.cpp)

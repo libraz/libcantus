@@ -2,4 +2,14 @@
 #ifndef CANTUS_SRC_THEORY_CHORD_LIMITS_GEN_H_
 #define CANTUS_SRC_THEORY_CHORD_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** PERFECT_FIFTH of ts/src/theory/chord/spec.ts. */
+inline constexpr int PERFECT_FIFTH = 7;
+
+/** MAX_CHORD_INTERVAL of ts/src/theory/chord/index.ts. */
+inline constexpr int MAX_CHORD_INTERVAL = 127;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_THEORY_CHORD_LIMITS_GEN_H_

@@ -36,16 +36,16 @@ import { majorScale, minorScale } from './scales.js';
 export type KeyMode = 'major' | 'minor';
 
 /** Position of each natural letter on the circle of fifths: F=-1, C=0, ... B=5. */
-const LETTER_FIFTHS = [0, 2, 4, -1, 1, 3, 5] as const;
+export const LETTER_FIFTHS = [0, 2, 4, -1, 1, 3, 5] as const;
 
 /** The letters of the circle of fifths from F upward, as letter numbers. */
-const FIFTHS_LETTERS = [3, 0, 4, 1, 5, 2, 6] as const;
+export const FIFTHS_LETTERS = [3, 0, 4, 1, 5, 2, 6] as const;
 
 /** How many fifths a sharp or a flat on the tonic moves its signature. */
-const FIFTHS_PER_ALTERATION = 7;
+export const FIFTHS_PER_ALTERATION = 7;
 
 /** Signature offset of the natural-minor mode: three fifths below its parallel major. */
-const MINOR_MODE_OFFSET = -3;
+export const MINOR_MODE_OFFSET = -3;
 
 /** Widest signature this module builds a key for, including theoretical ones. */
 export const MAX_FIFTHS = 12;
@@ -63,7 +63,7 @@ function rotateMask(mask: number, semitones: number): number {
  * the same tonic, which is exactly the mode's own position in the circle: D
  * dorian is two fifths flatter than D major, and so carries no accidentals.
  */
-const DIATONIC_MODE_OFFSETS = new Map<number, number>([
+export const DIATONIC_MODE_OFFSET_ENTRIES: readonly (readonly [number, number])[] = [
   [rotateMask(MAJOR_MASK, 5), 1], // lydian
   [MAJOR_MASK, 0], // ionian / major
   [rotateMask(MAJOR_MASK, 7), -1], // mixolydian
@@ -71,7 +71,10 @@ const DIATONIC_MODE_OFFSETS = new Map<number, number>([
   [rotateMask(MAJOR_MASK, 9), MINOR_MODE_OFFSET], // aeolian / natural minor
   [rotateMask(MAJOR_MASK, 4), -4], // phrygian
   [rotateMask(MAJOR_MASK, 11), -5], // locrian
-]);
+];
+
+/** {@link DIATONIC_MODE_OFFSET_ENTRIES} by mask. */
+const DIATONIC_MODE_OFFSETS = new Map<number, number>(DIATONIC_MODE_OFFSET_ENTRIES);
 
 /**
  * How many fifths a key's signature sits from the major key on the same tonic.

@@ -40,13 +40,13 @@ import type { KeyMode } from './signature.js';
 import { isSignatureKey, keyFromFifths, keySignatureFifths, MAX_FIFTHS } from './signature.js';
 
 /** How many fifths apart the two spellings of one sounding key sit. */
-const ENHARMONIC_FIFTHS = 12;
+export const ENHARMONIC_FIFTHS = 12;
 
 /** Widest signature a key is actually written with. */
-const MAX_CONVENTIONAL_FIFTHS = 7;
+export const MAX_CONVENTIONAL_FIFTHS = 7;
 
 /** How many fifths a minor key's tonic stands above its signature: A minor is +3. */
-const MINOR_TONIC_FIFTHS = 3;
+export const MINOR_TONIC_FIFTHS = 3;
 
 /**
  * The flattest and sharpest points on the circle a tonic is ever written at.
@@ -57,8 +57,8 @@ const MINOR_TONIC_FIFTHS = 3;
  * span, and those names are the only ones a key is spelled on: F# and Gb are
  * both there, E# and Fb are not.
  */
-const FLATTEST_TONIC_FIFTHS = -MAX_CONVENTIONAL_FIFTHS;
-const SHARPEST_TONIC_FIFTHS = MAX_CONVENTIONAL_FIFTHS + MINOR_TONIC_FIFTHS;
+export const FLATTEST_TONIC_FIFTHS = -MAX_CONVENTIONAL_FIFTHS;
+export const SHARPEST_TONIC_FIFTHS = MAX_CONVENTIONAL_FIFTHS + MINOR_TONIC_FIFTHS;
 
 /**
  * Which of the two modes a key leans to.

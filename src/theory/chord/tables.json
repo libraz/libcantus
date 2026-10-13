@@ -1,0 +1,118 @@
+{
+  "tables": [
+    {
+      "module": "theory/chord/spec.ts",
+      "export": "BASE_TONES",
+      "cxx_type": "BaseTonesRow",
+      "cxx_name": "kBaseTones",
+      "fields": ["degree", "semitones"]
+    },
+    {
+      "module": "theory/chord/spec.ts",
+      "export": "SEVENTH_SEMITONES",
+      "cxx_type": "NamedInt",
+      "cxx_name": "kSeventhSemitones",
+      "fields": []
+    },
+    {
+      "module": "theory/chord/spec.ts",
+      "export": "DEGREE_SEMITONES",
+      "cxx_type": "NamedInt",
+      "cxx_name": "kDegreeSemitones",
+      "fields": []
+    },
+    {
+      "module": "theory/chord/spec.ts",
+      "export": "OMITTABLE_DEGREES",
+      "cxx_type": "int",
+      "cxx_name": "kOmittableDegrees",
+      "fields": []
+    },
+    {
+      "module": "theory/chord/spec.ts",
+      "export": "ALTERABLE_DEGREES",
+      "cxx_type": "int",
+      "cxx_name": "kAlterableDegrees",
+      "fields": []
+    },
+    {
+      "module": "theory/chord/spec.ts",
+      "export": "ALTERATION_STEPS",
+      "cxx_type": "int",
+      "cxx_name": "kAlterationSteps",
+      "fields": []
+    },
+    {
+      "module": "theory/chord/spec.ts",
+      "export": "ADDABLE_DEGREES",
+      "cxx_type": "int",
+      "cxx_name": "kAddableDegrees",
+      "fields": []
+    },
+    {
+      "module": "theory/chord/spec.ts",
+      "export": "BASE_QUALITY",
+      "cxx_type": "NamedName",
+      "cxx_name": "kBaseQuality",
+      "fields": []
+    },
+    {
+      "module": "theory/chord/spec.ts",
+      "export": "QUALITY_SPECS",
+      "cxx_type": "QualitySpecRow",
+      "cxx_name": "kQualitySpecs",
+      "fields": [
+        "rootPc",
+        "base",
+        "seventh",
+        {
+          "name": "alterations",
+          "fields": ["degree", "alter"]
+        },
+        "additions",
+        "omissions",
+        "bassPc"
+      ]
+    },
+    {
+      "module": "theory/chord/spec.ts",
+      "export": "EXTENSION_ENTRIES",
+      "cxx_type": "ExtensionRow",
+      "cxx_name": "kExtensions",
+      "fields": ["degree", "alter"]
+    },
+    {
+      "module": "theory/chord/index.ts",
+      "export": "ROLE_BY_LETTER_OFFSET",
+      "cxx_type": "NamedName",
+      "cxx_name": "kRoleByLetterOffset",
+      "fields": []
+    },
+    {
+      "module": "theory/chord/index.ts",
+      "export": "DEGREE_BY_ROLE",
+      "cxx_type": "NamedInt",
+      "cxx_name": "kDegreeByRole",
+      "fields": []
+    },
+    {
+      "module": "theory/chord/index.ts",
+      "export": "TENSION_DEGREE",
+      "cxx_type": "int",
+      "cxx_name": "kTensionDegree",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "theory/chord/spec.ts",
+      "export": "PERFECT_FIFTH",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/chord/index.ts",
+      "export": "MAX_CHORD_INTERVAL",
+      "cxx_type": "int"
+    }
+  ]
+}
