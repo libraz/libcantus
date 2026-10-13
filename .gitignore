@@ -25,6 +25,8 @@ bindings/*/dist/
 bindings/python/.venv/
 bindings/wasm/dist/*.wasm
 compile_commands.json
+.cache/
+.ruff_cache/
 
 .claude/
 AGENT.md
