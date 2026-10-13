@@ -1,0 +1,50 @@
+{
+  "tables": [
+    {
+      "module": "theory/safety/index.ts",
+      "export": "PROFILE_WEIGHTS",
+      "cxx_type": "NamedProfileWeights",
+      "cxx_name": "kProfileWeights",
+      "fields": [
+        "imperfectConsonance",
+        "perfectConsonance",
+        "dissonance",
+        "chordTone",
+        "contraryMotion",
+        "obliqueMotion",
+        "similarMotion",
+        "parallelImperfect",
+        "stepwise",
+        "melodicDistance",
+        "forbiddenLeap",
+        "registerDrift"
+      ]
+    },
+    {
+      "module": "theory/safety/index.ts",
+      "export": "REASON_SEVERITY",
+      "cxx_type": "ReasonSeverity",
+      "cxx_name": "kReasonSeverity",
+      "fields": []
+    },
+    {
+      "module": "theory/safety/index.ts",
+      "export": "REASON_TEXT",
+      "cxx_type": "ReasonText",
+      "cxx_name": "kReasonText",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "theory/safety/index.ts",
+      "export": "SUGGESTION_WINDOW",
+      "cxx_type": "int"
+    },
+    {
+      "module": "theory/safety/index.ts",
+      "export": "MAX_SUGGESTIONS",
+      "cxx_type": "int"
+    }
+  ]
+}

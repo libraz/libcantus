@@ -311,12 +311,12 @@ export type SafetyResult = {
 };
 
 /** Semitone radius searched around a rejected candidate for safe alternatives. */
-const SUGGESTION_WINDOW = 12;
+export const SUGGESTION_WINDOW = 12;
 /** Maximum number of alternative pitches returned in `SafetyResult.suggestions`. */
-const MAX_SUGGESTIONS = 3;
+export const MAX_SUGGESTIONS = 3;
 
 /** Canonical minimum verdict contributed by each non-informational reason. */
-const REASON_SEVERITY: ReadonlyArray<
+export const REASON_SEVERITY: ReadonlyArray<
   readonly [flag: ReasonFlag, pop: NoteSafety, strict: NoteSafety]
 > = [
   [ReasonFlag.Tension, NoteSafety.Warning, NoteSafety.Warning],
@@ -735,7 +735,7 @@ function findSafeNearby(q: SafetyQuery, candidate: number): number[] {
  * explained by a milder reason — the seventh of a dominant reading as a plain
  * "Chord tone" while its verdict says dissonant.
  */
-const REASON_TEXT: ReadonlyArray<readonly [ReasonFlag, string]> = [
+export const REASON_TEXT: ReadonlyArray<readonly [ReasonFlag, string]> = [
   [ReasonFlag.OutOfRange, 'Outside the target vocal range'],
   [
     ReasonFlag.Suspension,

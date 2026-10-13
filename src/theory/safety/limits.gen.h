@@ -2,4 +2,14 @@
 #ifndef CANTUS_SRC_THEORY_SAFETY_LIMITS_GEN_H_
 #define CANTUS_SRC_THEORY_SAFETY_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** SUGGESTION_WINDOW of ts/src/theory/safety/index.ts. */
+inline constexpr int SUGGESTION_WINDOW = 12;
+
+/** MAX_SUGGESTIONS of ts/src/theory/safety/index.ts. */
+inline constexpr int MAX_SUGGESTIONS = 3;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_THEORY_SAFETY_LIMITS_GEN_H_
