@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noUncheckedIndexedAccess": false
+  },
+  // `generated` is written by the spec vitest config as it loads, so run
+  // `vitest list -c tests/spec/vitest.config.ts` before checking this project.
+  // The generator is named alongside what it writes so the project always has
+  // at least one input.
+  "include": ["generated", "support/generate-doc-examples.ts"],
+  "exclude": []
+}

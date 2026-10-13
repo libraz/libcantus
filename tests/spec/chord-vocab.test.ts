@@ -1,0 +1,126 @@
+import {
+  chordPitchClasses,
+  chordQualities,
+  chordToneRole,
+  diatonicSeventh,
+  diatonicTriad,
+  isChordMember,
+  majorKey,
+  makeChord,
+  maskFromOffsets,
+  scaleByName,
+} from '@libraz/libcantus/theory';
+import { describe, expect, it } from 'vitest';
+
+describe('extended chord vocabulary', () => {
+  it('builds a half-diminished seventh', () => {
+    expect(chordPitchClasses(makeChord(11, 'm7b5'))).toEqual([2, 5, 9, 11]);
+  });
+
+  it('builds a fully diminished seventh', () => {
+    expect(chordPitchClasses(makeChord(0, 'dim7'))).toEqual([0, 3, 6, 9]);
+  });
+
+  it('builds a sixth chord', () => {
+    expect(chordPitchClasses(makeChord(0, '6'))).toEqual([0, 4, 7, 9]);
+  });
+
+  it('builds a power chord', () => {
+    expect(chordPitchClasses(makeChord(0, '5'))).toEqual([0, 7]);
+  });
+});
+
+describe('chordToneRole with sixths and diminished sevenths', () => {
+  it('names the sixth of a sixth chord', () => {
+    expect(chordToneRole(9, makeChord(0, '6'))).toBe('sixth');
+  });
+
+  it('names the diminished seventh, not a sixth', () => {
+    expect(chordToneRole(9, makeChord(0, 'dim7'))).toBe('seventh');
+  });
+
+  it('treats the #11 of a 7#11 chord as a tension, not the fifth', () => {
+    const chord = makeChord(0, '7#11');
+    expect(chordToneRole(6, chord)).toBeNull();
+    expect(chordToneRole(7, chord)).toBe('fifth');
+  });
+
+  it('treats the b13 of a 7b13 chord as a tension, not the fifth', () => {
+    const chord = makeChord(0, '7b13');
+    expect(chordToneRole(8, chord)).toBeNull();
+    expect(chordToneRole(7, chord)).toBe('fifth');
+  });
+
+  it('does not report a seventh for a plain triad without one', () => {
+    expect(chordToneRole(10, makeChord(0, 'maj'))).toBeNull();
+    expect(chordToneRole(11, makeChord(0, 'maj'))).toBeNull();
+  });
+
+  it('never assigns a basic role to a non-member or altered duplicate', () => {
+    for (const quality of chordQualities()) {
+      const chord = makeChord(0, quality);
+      for (let interval = 0; interval < 12; interval += 1) {
+        if (chordToneRole(interval, chord) !== null) {
+          expect(isChordMember(interval, chord), `${quality} at ${interval}`).toBe(true);
+        }
+      }
+    }
+    expect(chordToneRole(3, makeChord(0, '7alt'))).toBeNull();
+    expect(chordToneRole(9, makeChord(0, 'dim'))).toBeNull();
+  });
+});
+
+describe('diatonic stacking', () => {
+  const cMajor = majorKey(0);
+
+  it('stacks the correct diatonic triad qualities in C major', () => {
+    expect(diatonicTriad(1, cMajor).quality).toBe('maj');
+    expect(diatonicTriad(2, cMajor).quality).toBe('min');
+    expect(diatonicTriad(7, cMajor).quality).toBe('dim');
+  });
+
+  it('stacks diatonic seventh chords in C major', () => {
+    expect(diatonicSeventh(1, cMajor).quality).toBe('maj7');
+    expect(diatonicSeventh(5, cMajor).quality).toBe('dom7');
+    expect(diatonicSeventh(7, cMajor).quality).toBe('m7b5');
+  });
+
+  it('handles harmonic-minor sevenths', () => {
+    const aHarmonic = scaleByName('harmonicMinor', 9);
+    expect(diatonicSeventh(1, aHarmonic).quality).toBe('minMaj7');
+    expect(diatonicSeventh(7, aHarmonic).quality).toBe('dim7');
+  });
+
+  it('labels the harmonic-minor mediant seventh as augMaj7 with matching intervals', () => {
+    const aHarmonic = scaleByName('harmonicMinor', 9);
+    const chord = diatonicSeventh(3, aHarmonic);
+    expect(chord.intervals).toEqual([0, 4, 8, 11]);
+    expect(chord.quality).toBe('augMaj7');
+    // The reported quality must rebuild the same intervals.
+    expect(makeChord(chord.rootPc, chord.quality).intervals).toEqual(chord.intervals);
+  });
+
+  it('labels a flattened-fifth dominant with its matching template', () => {
+    const doubleHarmonic = { rootPc: 0, modeMask12: maskFromOffsets([0, 1, 4, 5, 7, 8, 11]) };
+    const chord = diatonicSeventh(5, doubleHarmonic);
+    expect(chord.quality).toBe('7b5');
+    expect(chord.intervals).toEqual([0, 4, 6, 10]);
+    expect(makeChord(chord.rootPc, chord.quality).intervals).toEqual(chord.intervals);
+  });
+
+  it('rejects non-heptatonic scales instead of returning a mismatched quality template', () => {
+    for (const name of ['majorPentatonic', 'wholeTone', 'octatonicHalfWhole', 'chromatic']) {
+      const scale = scaleByName(name, 0);
+      expect(() => diatonicTriad(1, scale), name).toThrow(/heptatonic/);
+      expect(() => diatonicSeventh(1, scale), name).toThrow(/heptatonic/);
+    }
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, 1.5, 0, -1])(
+    'rejects an invalid stacking degree %s',
+    (degree) => {
+      expect(() => diatonicTriad(degree, cMajor)).toThrow(RangeError);
+      expect(() => diatonicSeventh(degree, cMajor)).toThrow(RangeError);
+    },
+  );
+});

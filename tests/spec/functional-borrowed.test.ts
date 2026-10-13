@@ -1,0 +1,217 @@
+import {
+  analyzeChord,
+  borrowedSource,
+  chordToRoman,
+  functionOf,
+  isBorrowedChord,
+  isDiatonic,
+} from '@libraz/libcantus/analyze';
+import { majorKey, makeChord, minorKey, scaleByName } from '@libraz/libcantus/theory';
+import { describe, expect, it } from 'vitest';
+
+const cMajor = majorKey(0);
+const aMinor = minorKey(9);
+
+describe('isDiatonic', () => {
+  it('accepts diatonic chords and rejects chromatic ones', () => {
+    expect(isDiatonic(makeChord(0, 'maj'), cMajor)).toBe(true);
+    expect(isDiatonic(makeChord(7, 'dom7'), cMajor)).toBe(true);
+    expect(isDiatonic(makeChord(5, 'min'), cMajor)).toBe(false);
+    expect(isDiatonic(makeChord(8, 'maj'), cMajor)).toBe(false);
+  });
+});
+
+describe('modal interchange in C major', () => {
+  it('detects the minor subdominant iv as borrowed from the parallel minor', () => {
+    const iv = makeChord(5, 'min');
+    expect(isBorrowedChord(iv, cMajor)).toBe(true);
+    expect(borrowedSource(iv, cMajor)).toBe('parallelMinor');
+    expect(analyzeChord(iv, cMajor)).toEqual({
+      function: 'subdominant',
+      borrowed: true,
+      source: 'parallelMinor',
+      roman: 'iv',
+      rationale: expect.any(String),
+      alternatives: [],
+    });
+  });
+
+  it('detects bVI as borrowed subdominant harmony', () => {
+    const flatSix = makeChord(8, 'maj');
+    expect(isBorrowedChord(flatSix, cMajor)).toBe(true);
+    expect(analyzeChord(flatSix, cMajor)).toEqual({
+      function: 'subdominant',
+      borrowed: true,
+      source: 'parallelMinor',
+      roman: 'bVI',
+      rationale: expect.any(String),
+      alternatives: [],
+    });
+  });
+
+  it('detects bVII as borrowed subdominant harmony', () => {
+    const flatSeven = makeChord(10, 'maj');
+    expect(isBorrowedChord(flatSeven, cMajor)).toBe(true);
+    expect(analyzeChord(flatSeven, cMajor)).toEqual({
+      function: 'subdominant',
+      borrowed: true,
+      source: 'parallelMinor',
+      roman: 'bVII',
+      rationale: expect.any(String),
+      alternatives: [],
+    });
+  });
+
+  it('recognizes the Neapolitan as its own source with subdominant function', () => {
+    const neapolitan = makeChord(1, 'maj');
+    // `isBorrowedChord` and the richer analysis now agree on the recognized
+    // Neapolitan family.
+    expect(isBorrowedChord(neapolitan, cMajor)).toBe(true);
+    expect(borrowedSource(neapolitan, cMajor)).toBe('neapolitan');
+    expect(analyzeChord(neapolitan, cMajor)).toEqual({
+      function: 'subdominant',
+      borrowed: true,
+      source: 'neapolitan',
+      roman: 'bII',
+      rationale: expect.any(String),
+      alternatives: [],
+    });
+  });
+
+  it('does not flag diatonic ii, IV, and V as borrowed', () => {
+    for (const chord of [makeChord(2, 'min'), makeChord(5, 'maj'), makeChord(7, 'dom7')]) {
+      expect(isBorrowedChord(chord, cMajor)).toBe(false);
+      expect(borrowedSource(chord, cMajor)).toBeNull();
+      expect(analyzeChord(chord, cMajor).borrowed).toBe(false);
+    }
+  });
+
+  it('treats a chord diatonic to neither mode as chromatic, not borrowed', () => {
+    // D major (V/V) fits neither C major nor C natural minor.
+    const two = makeChord(2, 'maj');
+    expect(isBorrowedChord(two, cMajor)).toBe(false);
+    expect(borrowedSource(two, cMajor)).toBeNull();
+  });
+
+  it('gives dominant function to diminished chords on vii and #iv', () => {
+    expect(analyzeChord(makeChord(11, 'dim'), cMajor).function).toBe('dominant');
+    expect(analyzeChord(makeChord(11, 'dim7'), cMajor).function).toBe('dominant');
+    expect(analyzeChord(makeChord(6, 'dim7'), cMajor).function).toBe('dominant');
+  });
+});
+
+describe('modal interchange in A minor', () => {
+  it('detects the major IV as borrowed from the parallel major', () => {
+    const majorFour = makeChord(2, 'maj');
+    expect(isDiatonic(majorFour, aMinor)).toBe(false);
+    expect(isBorrowedChord(majorFour, aMinor)).toBe(true);
+    expect(borrowedSource(majorFour, aMinor)).toBe('parallelMajor');
+    expect(analyzeChord(majorFour, aMinor)).toMatchObject({
+      borrowed: true,
+      source: 'parallelMajor',
+      roman: 'IV',
+    });
+  });
+
+  it('detects the Picardy tonic as borrowed from the parallel major', () => {
+    expect(borrowedSource(makeChord(9, 'maj'), aMinor)).toBe('parallelMajor');
+  });
+
+  it('treats the raised dominant as a harmonic-minor alteration, not interchange', () => {
+    // isDiatonic tests strictly against the natural-minor mask, so E major is
+    // not diatonic; but its raised leading tone comes from harmonic minor, an
+    // in-key alteration, so it is neither borrowed nor sourced.
+    const dominant = makeChord(4, 'maj');
+    expect(isDiatonic(dominant, aMinor)).toBe(false);
+    expect(isBorrowedChord(dominant, aMinor)).toBe(false);
+    expect(borrowedSource(dominant, aMinor)).toBeNull();
+    expect(analyzeChord(dominant, aMinor)).toMatchObject({
+      function: 'dominant',
+      borrowed: false,
+      source: null,
+    });
+  });
+
+  it('treats the raised-leading-tone diminished seventh the same way', () => {
+    const leadingTone = makeChord(8, 'dim7');
+    expect(isBorrowedChord(leadingTone, aMinor)).toBe(false);
+    expect(borrowedSource(leadingTone, aMinor)).toBeNull();
+    expect(analyzeChord(leadingTone, aMinor).function).toBe('dominant');
+  });
+
+  it('does not mistake melodic-minor leading-tone harmony for interchange', () => {
+    const melodicLeadingTone = makeChord(8, 'm7b5'); // G#ø7 in A melodic minor
+    expect(isBorrowedChord(melodicLeadingTone, aMinor)).toBe(false);
+    expect(borrowedSource(melodicLeadingTone, aMinor)).toBeNull();
+  });
+
+  it('does not flag diatonic minor-key chords as borrowed', () => {
+    for (const chord of [makeChord(9, 'min'), makeChord(2, 'min'), makeChord(5, 'maj')]) {
+      expect(isBorrowedChord(chord, aMinor)).toBe(false);
+      expect(borrowedSource(chord, aMinor)).toBeNull();
+    }
+  });
+});
+
+describe('a mode whose second degree is already lowered', () => {
+  // E phrygian and E locrian both have F natural as their second degree, so the
+  // major triad on it is the key's own II rather than an altered predominant.
+  const nativeSecond = [
+    { name: 'phrygian', key: scaleByName('phrygian', 4) },
+    { name: 'locrian', key: scaleByName('locrian', 4) },
+  ];
+
+  it.each(nativeSecond)('reads the II of a $name key as its own degree', ({ key }) => {
+    const two = makeChord(5, 'maj');
+    expect(isDiatonic(two, key)).toBe(true);
+    expect(isBorrowedChord(two, key)).toBe(false);
+    expect(borrowedSource(two, key)).toBeNull();
+    const analysis = analyzeChord(two, key);
+    expect(analysis).toMatchObject({ borrowed: false, source: null, roman: 'II' });
+    // A chord the analysis calls neither borrowed nor sourced cannot be
+    // explained as an alteration of a degree the key does not have.
+    expect(analysis.rationale).not.toContain('Neapolitan');
+    expect(analysis.rationale).not.toContain('lowered second degree');
+    expect(functionOf(two, key)).toBe('subdominant');
+  });
+
+  it.each(nativeSecond)('never renders that chord as N6 in a $name key', ({ key }) => {
+    const two = makeChord(5, 'maj', 9); // F major over A, the first inversion.
+    expect(chordToRoman(two, key, { neapolitan: true })).toBe('II6');
+    // The figured name is never offered as the rival spelling either, since the
+    // chord it names is not the one sounding.
+    expect(
+      analyzeChord(two, key, { alternatives: true }).alternatives.map((rival) => rival.label),
+    ).not.toContain('N6');
+  });
+
+  it('keeps the Neapolitan of the modes that do alter their second degree', () => {
+    for (const key of [cMajor, aMinor, scaleByName('dorian', 2), scaleByName('harmonicMinor', 9)]) {
+      const neapolitan = makeChord((key.rootPc + 1) % 12, 'maj');
+      expect(borrowedSource(neapolitan, key), `bII of ${key.rootPc}`).toBe('neapolitan');
+      expect(isBorrowedChord(neapolitan, key)).toBe(true);
+      expect(analyzeChord(neapolitan, key).function).toBe('subdominant');
+      const sixth = makeChord((key.rootPc + 1) % 12, 'maj', (key.rootPc + 5) % 12);
+      expect(chordToRoman(sixth, key, { neapolitan: true }), `N6 of ${key.rootPc}`).toBe('N6');
+    }
+  });
+});
+
+describe('a mode that lowers its own second sounds no Neapolitan', () => {
+  it("reads the major II of E phrygian as the mode's own degree", () => {
+    const ePhrygian = scaleByName('phrygian', 4);
+    const fMajor = makeChord(5, 'maj');
+    const analysis = analyzeChord(fMajor, ePhrygian);
+    expect(isDiatonic(fMajor, ePhrygian)).toBe(true);
+    expect(analysis.borrowed).toBe(false);
+    expect(analysis.source).toBeNull();
+    expect(analysis.rationale).not.toContain('Neapolitan');
+    expect(borrowedSource(fMajor, ePhrygian)).toBeNull();
+  });
+
+  it('still reads the Neapolitan of a key that does not have that degree', () => {
+    expect(borrowedSource(makeChord(1, 'maj'), cMajor)).toBe('neapolitan');
+    expect(analyzeChord(makeChord(10, 'maj'), aMinor).rationale).toContain('Neapolitan');
+    expect(borrowedSource(makeChord(10, 'maj'), aMinor)).toBe('neapolitan');
+  });
+});

@@ -1,12 +1,19 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { filesUnder, PACKAGE_ROOT, REPO_ROOT, SRC, TESTS } from './support/source-files.js';
+import {
+  filesUnder,
+  PACKAGE_ROOT,
+  REPO_ROOT,
+  SPEC_TESTS,
+  SRC,
+  TESTS,
+} from './support/source-files.js';
 
 /** Where the generated documentation examples land. */
-const GENERATED = path.join(TESTS, 'generated');
+const GENERATED = path.join(SPEC_TESTS, 'generated');
 
 /** The hand-authored guides, in both languages. */
 const GUIDES = [path.join(REPO_ROOT, 'docs/en'), path.join(REPO_ROOT, 'docs/ja')];
@@ -22,15 +29,23 @@ const GUIDES = [path.join(REPO_ROOT, 'docs/en'), path.join(REPO_ROOT, 'docs/ja')
  */
 function repositoryTestFiles(): string[] {
   try {
-    return execFileSync('git', ['ls-files', '-z', '--', 'test'], {
-      cwd: PACKAGE_ROOT,
-      encoding: 'utf8',
-    })
-      .split('\0')
-      .filter((file) => file.endsWith('.test.ts'))
-      .map((file) => path.join(PACKAGE_ROOT, file));
+    return (
+      execFileSync(
+        'git',
+        ['ls-files', '-z', '--', 'test', path.relative(PACKAGE_ROOT, SPEC_TESTS)],
+        {
+          cwd: PACKAGE_ROOT,
+          encoding: 'utf8',
+        },
+      )
+        .split('\0')
+        .filter((file) => file.endsWith('.test.ts'))
+        .map((file) => path.join(PACKAGE_ROOT, file))
+        // A file deleted from the checkout is no longer carried, committed or not.
+        .filter((file) => existsSync(file))
+    );
   } catch {
-    return filesUnder(TESTS, '.test.ts');
+    return [TESTS, SPEC_TESTS].flatMap((dir) => filesUnder(dir, '.test.ts'));
   }
 }
 
@@ -50,9 +65,9 @@ function publicArtifacts(): string[] {
   const self = fileURLToPath(import.meta.url);
   return [
     ...filesUnder(SRC, '.ts'),
-    ...filesUnder(TESTS, '.test.ts').filter(
-      (file) => file !== self && !file.startsWith(`${GENERATED}${path.sep}`),
-    ),
+    ...[TESTS, SPEC_TESTS]
+      .flatMap((dir) => filesUnder(dir, '.test.ts'))
+      .filter((file) => file !== self && !file.startsWith(`${GENERATED}${path.sep}`)),
     ...GUIDES.flatMap((dir) => filesUnder(dir, '.md')),
     path.join(PACKAGE_ROOT, 'README.md'),
     path.join(PACKAGE_ROOT, 'README_ja.md'),

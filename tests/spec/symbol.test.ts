@@ -1,0 +1,606 @@
+import {
+  formatNote,
+  InvalidInputError,
+  pitchClassOf as mod12,
+  type NoteData as Note,
+} from '@libraz/libcantus/core';
+import { Chord, Progression, Timeline } from '@libraz/libcantus/model';
+import {
+  chordPitchClasses,
+  chordQualities,
+  formatChordSymbol,
+  makeChord,
+  parseChordSymbol,
+  spellChordFromRoot,
+  transposeChordSymbol,
+  tryParseChordSymbol,
+} from '@libraz/libcantus/theory';
+import { describe, expect, it } from 'vitest';
+
+describe('parseChordSymbol', () => {
+  it('accepts the common explicit major suffix', () => {
+    expect(parseChordSymbol('Cmaj')).toMatchObject({ rootPc: 0, quality: 'maj' });
+  });
+
+  it('normalizes Unicode and double-sharp root and bass accidentals', () => {
+    expect(parseChordSymbol('C♯m7')).toEqual(parseChordSymbol('C#m7'));
+    expect(parseChordSymbol('D♭/A♭')).toEqual(parseChordSymbol('Db/Ab'));
+    expect(parseChordSymbol('Cxm7')).toMatchObject({ rootPc: 2, quality: 'min7' });
+    expect(parseChordSymbol('C/F𝄪')).toMatchObject({ bassPc: 7 });
+  });
+
+  it('parses minor-major extensions through thirteen', () => {
+    expect(parseChordSymbol('BbmMaj9')).toMatchObject({ rootPc: 10, quality: 'minMaj9' });
+    expect(parseChordSymbol('BbmMaj11')).toMatchObject({ rootPc: 10, quality: 'minMaj11' });
+    expect(parseChordSymbol('BbmMaj13')).toMatchObject({ rootPc: 10, quality: 'minMaj13' });
+  });
+
+  it('parses a maj7 chord', () => {
+    const chord = parseChordSymbol('Cmaj7');
+    expect(chord.rootPc).toBe(0);
+    expect(chord.quality).toBe('maj7');
+    expect(chord.bassPc).toBeUndefined();
+  });
+
+  it('parses a sharp root half-diminished chord', () => {
+    const chord = parseChordSymbol('F#m7b5');
+    expect(chord.rootPc).toBe(6);
+    expect(chord.quality).toBe('m7b5');
+  });
+
+  it('parses a flat root dominant seventh', () => {
+    const chord = parseChordSymbol('Bb7');
+    expect(chord.rootPc).toBe(10);
+    expect(chord.quality).toBe('dom7');
+  });
+
+  it('parses a slash bass', () => {
+    const chord = parseChordSymbol('C/G');
+    expect(chord.rootPc).toBe(0);
+    expect(chord.quality).toBe('maj');
+    expect(chord.bassPc).toBe(7);
+  });
+
+  it('parses the 6/9 quality without a bass', () => {
+    const chord = parseChordSymbol('C6/9');
+    expect(chord.rootPc).toBe(0);
+    expect(chord.quality).toBe('6/9');
+    expect(chord.bassPc).toBeUndefined();
+  });
+
+  it('parses the dash minor spelling', () => {
+    const chord = parseChordSymbol('A-');
+    expect(chord.rootPc).toBe(9);
+    expect(chord.quality).toBe('min');
+  });
+
+  it('parses a sharp-11 dominant', () => {
+    const chord = parseChordSymbol('G7#11');
+    expect(chord.rootPc).toBe(7);
+    expect(chord.quality).toBe('7#11');
+  });
+
+  it('parses the 6/9 quality with a slash bass', () => {
+    const chord = parseChordSymbol('C6/9/E');
+    expect(chord.rootPc).toBe(0);
+    expect(chord.quality).toBe('6/9');
+    expect(chord.bassPc).toBe(4);
+  });
+
+  it('accepts lowercase roots like parseNote does', () => {
+    expect(parseChordSymbol('cmaj7')).toEqual(parseChordSymbol('Cmaj7'));
+    expect(parseChordSymbol('f#m7b5')).toEqual(parseChordSymbol('F#m7b5'));
+    expect(parseChordSymbol('bb7')).toEqual(parseChordSymbol('Bb7'));
+  });
+
+  it('accepts a lowercase slash bass', () => {
+    const chord = parseChordSymbol('c/g');
+    expect(chord.rootPc).toBe(0);
+    expect(chord.quality).toBe('maj');
+    expect(chord.bassPc).toBe(7);
+  });
+
+  it('records the parsed root and bass spellings', () => {
+    const chord = parseChordSymbol('Ab/C');
+    expect(chord.rootSpelling).toEqual({ letter: 5, alter: -1 });
+    expect(chord.bassSpelling).toEqual({ letter: 0, alter: 0 });
+  });
+
+  it('throws on an unrecognized root', () => {
+    expect(() => parseChordSymbol('H7')).toThrow();
+  });
+
+  it('throws on an unrecognized quality', () => {
+    expect(() => parseChordSymbol('Cfoo')).toThrow();
+  });
+});
+
+describe('lead-sheet vocabulary', () => {
+  it('parses the suspended and altered dominants a chart actually uses', () => {
+    expect(parseChordSymbol('G7sus4')).toMatchObject({ rootPc: 7, quality: '7sus4' });
+    expect(parseChordSymbol('G7sus')).toMatchObject({ rootPc: 7, quality: '7sus4' });
+    // A 9sus4 is the same pitch-class set as the 11 chord and reads as one.
+    expect(parseChordSymbol('G9sus4').quality).toBe('11');
+    expect(parseChordSymbol('C7b5')).toMatchObject({ rootPc: 0, quality: '7b5' });
+    expect(parseChordSymbol('G7alt')).toMatchObject({ rootPc: 7, quality: '7alt' });
+    expect(parseChordSymbol('Galt')).toMatchObject({ rootPc: 7, quality: '7alt' });
+    expect(parseChordSymbol('G13b9')).toMatchObject({ rootPc: 7, quality: '13b9' });
+  });
+
+  it('parses the minor and major extensions beyond the ninth', () => {
+    expect(parseChordSymbol('Am11')).toMatchObject({ rootPc: 9, quality: 'min11' });
+    expect(parseChordSymbol('Am13')).toMatchObject({ rootPc: 9, quality: 'min13' });
+    expect(parseChordSymbol('Cmaj13')).toMatchObject({ rootPc: 0, quality: 'maj13' });
+    expect(parseChordSymbol('Cmaj7#11')).toMatchObject({ rootPc: 0, quality: 'maj7#11' });
+    expect(parseChordSymbol('Cmadd9')).toMatchObject({ rootPc: 0, quality: 'minAdd9' });
+    expect(parseChordSymbol('Cm6/9')).toMatchObject({ rootPc: 0, quality: 'min6/9' });
+    expect(parseChordSymbol('C6add9').quality).toBe('6/9');
+  });
+
+  it('accepts the ASCII stand-ins for the degree and half-diminished glyphs', () => {
+    expect(parseChordSymbol('Ao')).toMatchObject({ rootPc: 9, quality: 'dim' });
+    expect(parseChordSymbol('Ao7')).toMatchObject({ rootPc: 9, quality: 'dim7' });
+    expect(parseChordSymbol('Ah7')).toMatchObject({ rootPc: 9, quality: 'm7b5' });
+    expect(parseChordSymbol('Ao7')).toEqual(parseChordSymbol('A°7'));
+    expect(parseChordSymbol('Ah7')).toEqual(parseChordSymbol('Aø7'));
+  });
+
+  it('reads the capitalized major-seventh marker wherever the lowercase one reads', () => {
+    expect(parseChordSymbol('CMaj7')).toEqual(parseChordSymbol('Cmaj7'));
+    expect(parseChordSymbol('CMaj7')).toEqual(parseChordSymbol('CM7'));
+    expect(parseChordSymbol('FMaj9')).toEqual(parseChordSymbol('Fmaj9'));
+    expect(parseChordSymbol('CMaj13')).toEqual(parseChordSymbol('Cmaj13'));
+    expect(parseChordSymbol('CMaj7#11')).toEqual(parseChordSymbol('Cmaj7#11'));
+    expect(parseChordSymbol('AbMaj7')).toEqual(parseChordSymbol('Abmaj7'));
+    // The bare marker is the triad, as the lowercase spelling of it is.
+    expect(parseChordSymbol('CMaj')).toEqual(parseChordSymbol('Cmaj'));
+  });
+
+  it('reads an omission written from the first character of the suffix', () => {
+    expect(parseChordSymbol('Comit3')).toEqual(parseChordSymbol('Cno3'));
+    expect(parseChordSymbol('Comit5')).toEqual(parseChordSymbol('Cno5'));
+    expect(parseChordSymbol('Comit1')).toEqual(parseChordSymbol('Cno1'));
+    expect(parseChordSymbol('Comit3')).toEqual(parseChordSymbol('C(omit3)'));
+    // The same character opens a diminished triad where nothing else claims it.
+    expect(parseChordSymbol('Co').quality).toBe('dim');
+    expect(parseChordSymbol('Co7').quality).toBe('dim7');
+    expect(parseChordSymbol('Co9').intervals).toEqual([0, 3, 6, 9, 14]);
+  });
+
+  it('carries tensions over the half-diminished glyphs as over the names', () => {
+    expect(parseChordSymbol('Cø9').intervals).toEqual([0, 3, 6, 10, 14]);
+    expect(parseChordSymbol('Ch9')).toEqual(parseChordSymbol('Cø9'));
+    expect(parseChordSymbol('Cø9').intervals).toEqual(parseChordSymbol('Cm7b5(9)').intervals);
+    expect(parseChordSymbol('Cø11').intervals).toEqual([0, 3, 6, 10, 14, 17]);
+    // The glyph is a minor seventh over a diminished triad, never a diminished
+    // seventh: an extension over it must not stack the seventh the triad implies.
+    expect(parseChordSymbol('Cø7(b9)').intervals).toEqual([0, 3, 6, 10, 13]);
+    expect(parseChordSymbol('Cøadd9').intervals).toEqual([0, 3, 6, 10, 14]);
+  });
+
+  it('spells every quality with distinct letters', () => {
+    for (const quality of ['7sus4', '7b5', '7alt', '13b9', 'maj13', 'min11'] as const) {
+      const chord = makeChord(0, quality);
+      expect(chordPitchClasses(chord).length, quality).toBe(chord.intervals.length);
+    }
+  });
+});
+
+describe('formatChordSymbol', () => {
+  const cases: [string, string][] = [
+    ['Cmaj7', 'Cmaj7'],
+    ['Cm7', 'Cm7'],
+    ['C7', 'C7'],
+    ['Cdim7', 'Cdim7'],
+    ['Cm7b5', 'Cm7b5'],
+    ['Csus4', 'Csus4'],
+    ['C6/9', 'C6/9'],
+    ['Caug', 'Caug'],
+  ];
+
+  for (const [input, expected] of cases) {
+    it(`round-trips ${input}`, () => {
+      expect(formatChordSymbol(parseChordSymbol(input))).toBe(expected);
+    });
+  }
+
+  it('appends a slash bass when present', () => {
+    expect(formatChordSymbol(parseChordSymbol('C/G'))).toBe('C/G');
+  });
+
+  it('omits the bass when it equals the root', () => {
+    const chord = parseChordSymbol('Cmaj7');
+    chord.bassPc = chord.rootPc;
+    expect(formatChordSymbol(chord)).toBe('Cmaj7');
+  });
+
+  it('prefers flat spellings when requested', () => {
+    const chord = parseChordSymbol('F#m7');
+    expect(formatChordSymbol(chord, { flats: true })).toBe('Gbm7');
+  });
+
+  it('respells with sharps when flats is explicitly false', () => {
+    const chord = parseChordSymbol('Bb7');
+    expect(formatChordSymbol(chord, { flats: false })).toBe('A#7');
+  });
+
+  it('uppercases a lowercase input root', () => {
+    expect(formatChordSymbol(parseChordSymbol('bbm7'))).toBe('Bbm7');
+  });
+
+  it('formats the 6/9 quality with a slash bass', () => {
+    expect(formatChordSymbol(makeChord(0, '6/9', 4))).toBe('C6/9/E');
+  });
+});
+
+describe('transposeChordSymbol', () => {
+  it('transposes the root up by semitones', () => {
+    expect(transposeChordSymbol('Cmaj7', 2)).toBe('Dmaj7');
+  });
+
+  it('transposes both root and bass, honoring flat spelling', () => {
+    expect(transposeChordSymbol('C/G', 5, { flats: true })).toBe('F/C');
+  });
+
+  it('wraps the root around the octave', () => {
+    expect(transposeChordSymbol('Bb7', 3)).toBe('Db7');
+  });
+
+  it('keeps the original spelling on an identity transpose', () => {
+    expect(transposeChordSymbol('Bbmaj7', 0)).toBe('Bbmaj7');
+    expect(transposeChordSymbol('Eb/Bb', 12)).toBe('Eb/Bb');
+  });
+
+  it('rejects a non-finite transposition before formatting', () => {
+    expect(() => transposeChordSymbol('C7', Number.NaN)).toThrow(RangeError);
+  });
+
+  it('writes a root a chart writes rather than the letter-transposed one', () => {
+    // Raising a flat chart a semitone used to walk the letters into names no
+    // one writes: Cbmaj7, Fb7, Ebb, Bbb/Fb.
+    expect(transposeChordSymbol('Bbmaj7', 1)).toBe('Bmaj7');
+    expect(transposeChordSymbol('Eb7', 1)).toBe('E7');
+    expect(transposeChordSymbol('Db', 1)).toBe('D');
+    expect(transposeChordSymbol('Ab/Eb', 1)).toBe('A/E');
+    expect(transposeChordSymbol('C#', 11)).toBe('C');
+  });
+
+  it('keeps the written vocabulary across every root, bass and offset', () => {
+    const written = new Set([
+      'C',
+      'C#',
+      'Db',
+      'D',
+      'D#',
+      'Eb',
+      'E',
+      'F',
+      'F#',
+      'Gb',
+      'G',
+      'G#',
+      'Ab',
+      'A',
+      'A#',
+      'Bb',
+      'B',
+    ]);
+    const roots = ['C', 'C#', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+    for (const suffix of ['maj7', 'm7', '7']) {
+      for (const root of roots) {
+        for (const bass of roots) {
+          const text = root === bass ? `${root}${suffix}` : `${root}${suffix}/${bass}`;
+          const source = parseChordSymbol(text);
+          for (let semitones = -11; semitones <= 11; semitones += 1) {
+            const label = `${text} ${semitones}`;
+            const moved = parseChordSymbol(transposeChordSymbol(text, semitones));
+            const rootName = formatNote(moved.rootSpelling as Note);
+            expect(written.has(rootName), `${label} root ${rootName}`).toBe(true);
+            expect(moved.rootPc, label).toBe(mod12(source.rootPc + semitones));
+            if (moved.bassSpelling === undefined) {
+              continue;
+            }
+            const bassName = formatNote(moved.bassSpelling as Note);
+            expect(written.has(bassName), `${label} bass ${bassName}`).toBe(true);
+            expect(moved.bassPc, label).toBe(mod12((source.bassPc ?? source.rootPc) + semitones));
+          }
+        }
+      }
+    }
+  });
+
+  it('moves the slash bass by the same step as the chord over it', () => {
+    // The printed bass is a note the transposed chord contains: B7 is B D# F#,
+    // so its third in the bass is D#, never the E flat that names the same key.
+    expect(transposeChordSymbol('Bb7/D', 1)).toBe('B7/D#');
+    expect(transposeChordSymbol('Ab/C', 1)).toBe('A/C#');
+    expect(transposeChordSymbol('D/F#', -1)).toBe('Db/F');
+    expect(transposeChordSymbol('Cmaj7/B', 6)).toBe('Gbmaj7/F');
+  });
+
+  it('keeps a respelled root and its bass on one side of the staff', () => {
+    // Where the fallback picks a name, it picks it for the whole symbol: a
+    // sharp root over a flat bass is not a chart anyone writes.
+    expect(transposeChordSymbol('Ab/Eb', 1)).toBe('A/E');
+    expect(transposeChordSymbol('Db/Ab', 1)).toBe('D/A');
+    expect(transposeChordSymbol('Bb/F', 1)).toBe('B/F#');
+    expect(transposeChordSymbol('C/Fb', 1)).toBe('Db/F');
+    expect(transposeChordSymbol('C#/Fb', 1)).toBe('D/F');
+  });
+
+  it('leaves a whole-octave transposition spelled as it was written', () => {
+    for (const text of ['Cbmaj7', 'Fb7', 'E#m7', 'B#', 'Ebb', 'Ab/Eb']) {
+      for (const semitones of [-24, -12, 0, 12, 24]) {
+        expect(transposeChordSymbol(text, semitones), `${text} ${semitones}`).toBe(text);
+      }
+    }
+  });
+
+  it('writes the whole symbol on the side the caller asks for', () => {
+    expect(transposeChordSymbol('Bbmaj7', 1, { flats: true })).toBe('Bmaj7');
+    expect(transposeChordSymbol('Bbmaj7', 2, { flats: false })).toBe('Cmaj7');
+    // The flat side of this chord is Cb major, whose fifth is Gb; asking for
+    // flats and being handed a sharp bass under the root is not one symbol.
+    expect(transposeChordSymbol('Bb/F', 1, { flats: true })).toBe('Cb/Gb');
+    expect(transposeChordSymbol('Bb/F', 1, { flats: false })).toBe('B/F#');
+  });
+
+  it('never prints a bass the transposed chord does not contain', () => {
+    const roots = ['C', 'C#', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+    for (const suffix of ['maj7', 'm7', '7', '']) {
+      for (const root of roots) {
+        for (const bass of roots) {
+          if (root === bass) {
+            continue;
+          }
+          const text = `${root}${suffix}/${bass}`;
+          const source = parseChordSymbol(text);
+          const rootHint = source.rootSpelling;
+          const bassHint = source.bassSpelling;
+          if (rootHint === undefined || bassHint === undefined) {
+            continue;
+          }
+          // Only a slash bass the chord itself spells is a test of this: a bass
+          // outside the chord is outside it before the transposition too.
+          const spelled = spellChordFromRoot(source, rootHint).map((tone) =>
+            formatNote(tone as Note),
+          );
+          if (!spelled.includes(formatNote(bassHint as Note))) {
+            continue;
+          }
+          for (const flats of [undefined, true, false]) {
+            for (let semitones = -11; semitones <= 11; semitones += 1) {
+              const label = `${text} ${semitones} ${String(flats)}`;
+              const symbol = transposeChordSymbol(text, semitones, { flats });
+              const moved = parseChordSymbol(symbol);
+              const movedRoot = moved.rootSpelling;
+              const movedBass = moved.bassSpelling;
+              expect(movedRoot, label).toBeDefined();
+              expect(movedBass, label).toBeDefined();
+              if (movedRoot === undefined || movedBass === undefined) {
+                continue;
+              }
+              const tones = spellChordFromRoot(moved, movedRoot).map((tone) =>
+                formatNote(tone as Note),
+              );
+              expect(tones, `${label} => ${symbol}`).toContain(formatNote(movedBass as Note));
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it('still reads every symbol it used to read', () => {
+    for (const text of ['Cbmaj7', 'Fb7', 'B#m', 'E#dim', 'Db/Fb', 'C/G']) {
+      expect(() => transposeChordSymbol(text, 1)).not.toThrow();
+    }
+    expect(transposeChordSymbol('H7', 1, { system: 'german' })).toBe('C7');
+  });
+});
+
+describe('a transposed slash chord', () => {
+  it('names a bass the chord contains on every surface that transposes', () => {
+    expect(Chord.parse('Bb7/D').transpose(1).symbol()).toBe('B7/D#');
+    expect(Chord.parse('Ab/C').transpose(1).symbol()).toBe('A/C#');
+    expect(
+      new Progression([Chord.parse('Bb7/D'), Chord.parse('Ab/C')]).transpose(1).toString(),
+    ).toBe('B7/D# A/C#');
+    const timeline = Timeline.fromProgression(new Progression([Chord.parse('Bb7/D')]), 4);
+    expect(timeline.transpose(1).at(0)?.symbol()).toBe('B7/D#');
+  });
+
+  it('reads the same as the spelled-interval and inversion siblings', () => {
+    const source = Chord.parse('Bb7/D');
+    expect(source.transpose(1).symbol()).toBe(source.transposeBy('A1').symbol());
+    expect(Chord.parse('B7').invert(1).symbol()).toBe(source.transpose(1).symbol());
+  });
+});
+
+describe('symbol round-trip', () => {
+  it('formats then re-parses every chord quality without drift', () => {
+    for (const quality of chordQualities()) {
+      const formatted = formatChordSymbol(makeChord(0, quality));
+      const reparsed = parseChordSymbol(formatted);
+      expect(reparsed.rootPc).toBe(0);
+      expect(reparsed.quality).toBe(quality);
+      expect(reparsed.bassPc).toBeUndefined();
+    }
+  });
+
+  it('formats then re-parses every chord quality with a slash bass', () => {
+    for (const quality of chordQualities()) {
+      const formatted = formatChordSymbol(makeChord(0, quality, 4));
+      const reparsed = parseChordSymbol(formatted);
+      expect(reparsed.rootPc).toBe(0);
+      expect(reparsed.quality).toBe(quality);
+      expect(reparsed.bassPc).toBe(4);
+    }
+  });
+
+  const stableSymbols = [
+    // Qualities shown in the README examples.
+    'Cmaj7',
+    'F#m7b5',
+    'G7',
+    'Dm7b5',
+    'C/G',
+    // Flat roots that previously respelled to sharps.
+    'Bbmaj7',
+    'Ebm7',
+    'Ab7',
+    'Dbm7b5',
+    'Gbmaj7',
+    // Slash chords, including flat basses and the 6/9 quality with a bass.
+    'Ab/C',
+    'Eb7/Db',
+    'Bbm7/Ab',
+    'C6/9',
+    'C6/9/E',
+    'Bb6/9/D',
+  ];
+
+  for (const symbol of stableSymbols) {
+    it(`round-trips ${symbol} exactly`, () => {
+      const chord = parseChordSymbol(symbol);
+      const formatted = formatChordSymbol(chord);
+      expect(formatted).toBe(symbol);
+      // parse -> format -> parse must be stable, not merely non-throwing.
+      expect(parseChordSymbol(formatted)).toEqual(chord);
+    });
+  }
+});
+
+describe('the fifth a symbol spells', () => {
+  /** Suffixes that name a fifth twice, or name one with no accidental at all. */
+  const contradictoryFifths = [
+    'Cdim5',
+    'Cdim(5)',
+    'Caug5',
+    'C-5',
+    'Cm5',
+    'Cm7b5(5)',
+    'C7b5(5)',
+    'C7#5#5',
+    'Cdimb5',
+    'Caug#5',
+  ];
+
+  for (const symbol of contradictoryFifths) {
+    it(`rejects ${symbol} instead of returning a perfect fifth`, () => {
+      // A bare degree token carries no accidental, so reading it as a request
+      // would state a perfect fifth over a chord whose fifth the text has
+      // already altered — returning a chord the symbol does not spell.
+      expect(() => parseChordSymbol(symbol)).toThrow(InvalidInputError);
+      expect(tryParseChordSymbol(symbol).ok).toBe(false);
+    });
+  }
+
+  it('still reads every fifth a symbol does spell', () => {
+    const spelled: readonly (readonly [string, number])[] = [
+      ['Cdim', 6],
+      ['Cm7b5', 6],
+      ['C7b5', 6],
+      ['Caug', 8],
+      ['C7#5', 8],
+      ['Csus4b5', 6],
+      ['C5', 7],
+      ['C', 7],
+    ];
+    for (const [symbol, fifth] of spelled) {
+      expect(chordPitchClasses(parseChordSymbol(symbol))).toContain(fifth);
+    }
+  });
+
+  it('gives a parsed chord the fifth its text names', () => {
+    // The whole point of the rule: whatever a symbol is read as, the fifth it
+    // writes is the fifth the chord has.
+    const corpus: readonly (readonly [string, number])[] = [
+      ['Cdim7', 6],
+      ['Cm7b5', 6],
+      ['C9b5', 6],
+      ['C7#5b9', 8],
+      ['Caug7', 8],
+      ['CmMaj7', 7],
+      ['C7sus4', 7],
+      ['C13#11', 7],
+    ];
+    for (const [symbol, fifth] of corpus) {
+      const chord = parseChordSymbol(symbol);
+      expect(chordPitchClasses(chord)).toContain(fifth);
+      // The reading survives being written back out and read again.
+      expect(chordPitchClasses(parseChordSymbol(formatChordSymbol(chord)))).toContain(fifth);
+    }
+  });
+});
+
+/**
+ * A slash bass is written the way a chart writes one, whichever side of the
+ * staff the symbol is asked for.
+ *
+ * Respelling a symbol carries the bass by the step the root moved, which is
+ * what keeps a bass that belongs to the chord inside it. Carried far enough
+ * that step lands on a name no chart writes: `C#7/D` asked for on the flat side
+ * came out `Db7/Ebb`, and `Db7/E` on the sharp side came out `C#7/D##`. The
+ * step is still taken, and the answer is still checked against what a chart
+ * writes — with the one exception that the chord's own tones keep the chord's
+ * spelling, because the augmented fifth of a G sharp is a D double sharp and
+ * writing that inversion over an E would name a note the chord does not hold.
+ */
+describe('formatChordSymbol writes a bass a chart would write', () => {
+  /** Roots a chart writes on either side of the staff. */
+  const ROOTS = ['C#', 'Db', 'D#', 'Eb', 'F#', 'Gb', 'G#', 'Ab', 'A#', 'Bb'];
+
+  /** Basses spelled plainly, which is how a caller writes a slash bass. */
+  const BASSES = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+
+  it('never writes a double accidental for a bass the chord does not contain', () => {
+    const offenders: string[] = [];
+    for (const root of ROOTS) {
+      for (const bass of BASSES) {
+        for (const quality of ['7', 'maj7', 'm7']) {
+          const text = `${root}${quality}/${bass}`;
+          const source = parseChordSymbol(text);
+          for (const flats of [true, false, undefined]) {
+            const symbol = formatChordSymbol(source, { flats });
+            const printed = parseChordSymbol(symbol);
+            const printedBass = printed.bassSpelling;
+            if (printedBass === undefined) {
+              continue;
+            }
+            // The pitch class is never allowed to move, whichever spelling wins.
+            expect(mod12(printed.bassPc ?? printed.rootPc), `${text} ${String(flats)}`).toBe(
+              mod12(source.bassPc ?? source.rootPc),
+            );
+            const tones = new Set(chordPitchClasses(printed, { includeBass: false }));
+            if (tones.has(mod12(printed.bassPc ?? printed.rootPc))) {
+              continue;
+            }
+            if (Math.abs(printedBass.alter) > 1) {
+              offenders.push(`${text} {flats:${String(flats)}} => ${symbol}`);
+            }
+          }
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('keeps the chord own spelling for a bass that is one of its tones', () => {
+    // The augmented fifth of G sharp is a D double sharp; the first inversion of
+    // that chord is written over it and not over the E it sounds like.
+    expect(formatChordSymbol(parseChordSymbol('G#aug/D##'))).toBe('G#aug/D##');
+  });
+
+  it('writes the reported cases the way a chart writes them', () => {
+    expect(formatChordSymbol(parseChordSymbol('C#7/D'), { flats: true })).toBe('Db7/D');
+    expect(formatChordSymbol(parseChordSymbol('Db7/E'), { flats: false })).toBe('C#7/E');
+  });
+
+  it('reads a subject the sweep supplies rather than a list', () => {
+    // Without this the sweep above could pass by looking at nothing: the count
+    // is the roots and basses it actually walks, times the three sides.
+    expect(ROOTS.length * BASSES.length * 3).toBeGreaterThan(200);
+  });
+});

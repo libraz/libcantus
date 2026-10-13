@@ -1,0 +1,3969 @@
+{
+  "base": "902c32d0f8e823d09a6066b7e361df9181c8b2b7",
+  "identityExceptions": {
+    "source": "none",
+    "entries": [],
+    "candidates": [
+      "test/articulation.test.ts:94",
+      "test/chordscale.test.ts:525",
+      "test/class-consistency.test.ts:200",
+      "test/coerce.test.ts:120",
+      "test/coerce.test.ts:180",
+      "test/coerce.test.ts:181",
+      "test/coerce.test.ts:56",
+      "test/gaps-score-arrangement.test.ts:207",
+      "test/incremental.test.ts:106",
+      "test/incremental.test.ts:159",
+      "test/key-regions.test.ts:945",
+      "test/key-regions.test.ts:958",
+      "test/key-spelling.test.ts:119",
+      "test/meter-immutability.test.ts:12",
+      "test/meter-immutability.test.ts:13",
+      "test/meter-immutability.test.ts:30",
+      "test/meter-immutability.test.ts:31",
+      "test/meter-immutability.test.ts:43",
+      "test/meter-immutability.test.ts:44",
+      "test/meter-immutability.test.ts:45",
+      "test/meter-immutability.test.ts:46",
+      "test/meter-immutability.test.ts:61",
+      "test/meter-immutability.test.ts:62",
+      "test/meter-immutability.test.ts:63",
+      "test/meter-immutability.test.ts:73",
+      "test/meter-immutability.test.ts:74",
+      "test/meter-immutability.test.ts:79",
+      "test/meter-immutability.test.ts:83",
+      "test/meter-immutability.test.ts:90",
+      "test/model-arrangement.test.ts:196",
+      "test/model-arrangement.test.ts:198",
+      "test/model-arrangement.test.ts:199",
+      "test/model-arrangement.test.ts:363",
+      "test/model-arrangement.test.ts:464",
+      "test/model-composer.test.ts:135",
+      "test/model-composer.test.ts:177",
+      "test/model-composer.test.ts:415",
+      "test/model-composer.test.ts:504",
+      "test/model-composer.test.ts:508",
+      "test/model-duration.test.ts:111",
+      "test/model-duration.test.ts:120",
+      "test/model-instrument.test.ts:74",
+      "test/model-meter.test.ts:101",
+      "test/model-meter.test.ts:94",
+      "test/model-motif.test.ts:103",
+      "test/model-motif.test.ts:105",
+      "test/model-motif.test.ts:106",
+      "test/model-rhythm.test.ts:126",
+      "test/model-rhythm.test.ts:128",
+      "test/model-rhythm.test.ts:129",
+      "test/model-rhythm.test.ts:130",
+      "test/model-score.test.ts:159",
+      "test/model-score.test.ts:161",
+      "test/model-score.test.ts:162",
+      "test/model-score.test.ts:549",
+      "test/model-tempo.test.ts:80",
+      "test/model-timeline.test.ts:206",
+      "test/model-timeline.test.ts:208",
+      "test/model-timeline.test.ts:209",
+      "test/model-tuning.test.ts:42",
+      "test/model-voicing.test.ts:193",
+      "test/model-voicing.test.ts:48",
+      "test/model-voicing.test.ts:50",
+      "test/model.test.ts:1024",
+      "test/model.test.ts:156",
+      "test/model.test.ts:167",
+      "test/model.test.ts:220",
+      "test/model.test.ts:778",
+      "test/model.test.ts:781",
+      "test/pickup.test.ts:68",
+      "test/reference-profile.test.ts:450"
+    ]
+  },
+  "expectCounting": "expect() calls written inside each unit; helper and hook bodies are not attributed",
+  "totals": {
+    "files": 194,
+    "units": 4016,
+    "specUnits": 3721,
+    "tsUnits": 295,
+    "expects": 9693,
+    "tsExpects": 704,
+    "tsExpectRatio": 0.0726,
+    "specFiles": 181,
+    "tsFiles": 86
+  },
+  "files": {
+    "architecture.test.ts": {
+      "units": 15,
+      "expects": 31,
+      "specUnits": 0,
+      "specExpects": 0,
+      "tsUnits": 15,
+      "tsExpects": 31,
+      "tsReasons": {
+        "source-text": 15
+      },
+      "tsOnly": [
+        {
+          "line": 33,
+          "title": "never imports from a higher layer",
+          "reasons": ["source-text:node:fs:readFileSync,node:fs:readdirSync,node:fs:statSync"]
+        },
+        {
+          "line": 131,
+          "title": "finds the units to check",
+          "reasons": ["source-text:node:fs:readdirSync,node:fs:statSync"]
+        },
+        {
+          "line": 140,
+          "title": "keeps one definition of a body, in the module the siblings import",
+          "reasons": ["source-text:node:fs:readFileSync,node:fs:readdirSync,node:fs:statSync"]
+        },
+        {
+          "line": 170,
+          "title": "routes the shared predicates through the internal module",
+          "reasons": ["source-text:node:fs:readFileSync,node:fs:readdirSync"]
+        },
+        {
+          "line": 214,
+          "title": "asks the sonority questions through the theory layer",
+          "reasons": ["source-text:node:fs:readFileSync,node:fs:readdirSync,node:fs:statSync"]
+        },
+        {
+          "line": 262,
+          "title": "is answered in one place, which every other module imports",
+          "reasons": ["source-text:node:fs:readFileSync,node:fs:readdirSync,node:fs:statSync"]
+        },
+        {
+          "line": 349,
+          "title": "finds the tree to check",
+          "reasons": ["source-text:node:fs:readdirSync,node:fs:statSync"]
+        },
+        {
+          "line": 358,
+          "title": "is declared nowhere but the two modules that own it",
+          "reasons": ["source-text:node:fs:readFileSync,node:fs:readdirSync,node:fs:statSync"]
+        },
+        {
+          "line": 366,
+          "title": "lists nothing as exempt that no longer exists",
+          "reasons": ["source-text:node:fs:readFileSync,node:fs:readdirSync,node:fs:statSync"]
+        },
+        {
+          "line": 429,
+          "title": "finds the allocations to check",
+          "reasons": ["source-text:node:fs:readFileSync,node:fs:readdirSync,node:fs:statSync"]
+        },
+        {
+          "line": 441,
+          "title": "allocates every table through the charging helpers",
+          "reasons": ["source-text:node:fs:readFileSync,node:fs:readdirSync,node:fs:statSync"]
+        },
+        {
+          "line": 445,
+          "title": "lists nothing as self-bounded that no longer allocates one",
+          "reasons": ["source-text:node:fs:readFileSync"]
+        },
+        {
+          "line": 453,
+          "title": "has more than one search reaching for the helpers",
+          "reasons": ["source-text:node:fs:readFileSync,node:fs:readdirSync,node:fs:statSync"]
+        },
+        {
+          "line": 523,
+          "title": "finds the exports to check",
+          "reasons": ["source-text:node:fs:readFileSync,node:fs:readdirSync,node:fs:statSync"]
+        },
+        {
+          "line": 532,
+          "title": "is reached by the library itself wherever a test reaches it",
+          "reasons": ["source-text:node:fs:readFileSync,node:fs:readdirSync,node:fs:statSync"]
+        }
+      ]
+    },
+    "arrange-seams.test.ts": {
+      "units": 19,
+      "expects": 49,
+      "specUnits": 19,
+      "specExpects": 49,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "arrange.test.ts": {
+      "units": 41,
+      "expects": 117,
+      "specUnits": 41,
+      "specExpects": 117,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "articulation.test.ts": {
+      "units": 10,
+      "expects": 22,
+      "specUnits": 5,
+      "specExpects": 11,
+      "tsUnits": 5,
+      "tsExpects": 11,
+      "tsReasons": {
+        "private": 4,
+        "private-type": 4,
+        "identity": 1
+      },
+      "tsOnly": [
+        {
+          "line": 52,
+          "title": "round-trips through generation",
+          "reasons": ["private:HitList,generateFill", "private-type:HitList,generateFill"]
+        },
+        {
+          "line": 83,
+          "title": "is absent, not undefined, on a plain stroke",
+          "reasons": ["private:HitList,generateFill", "private-type:HitList,generateFill"]
+        },
+        {
+          "line": 89,
+          "title": "is ignored by a reader that does not know it",
+          "reasons": ["identity:test/articulation.test.ts:94"]
+        },
+        {
+          "line": 140,
+          "title": "carries its ornaments as attributes rather than as extra onsets",
+          "reasons": ["private:HitList,generateFill", "private-type:HitList,generateFill"]
+        },
+        {
+          "line": 152,
+          "title": "never writes a grace note before the beat it ornaments",
+          "reasons": ["private:HitList,generateFill", "private-type:HitList,generateFill"]
+        }
+      ]
+    },
+    "augmented-sixth.test.ts": {
+      "units": 55,
+      "expects": 102,
+      "specUnits": 55,
+      "specExpects": 102,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "bass.test.ts": {
+      "units": 26,
+      "expects": 48,
+      "specUnits": 23,
+      "specExpects": 42,
+      "tsUnits": 3,
+      "tsExpects": 6,
+      "tsReasons": {
+        "private": 3
+      },
+      "tsOnly": [
+        {
+          "line": 523,
+          "title": "sounds no tone of the chord under the bass the chord names",
+          "reasons": ["private:bandFloor,placeRoot"]
+        },
+        {
+          "line": 563,
+          "title": "is never the note already sounding under it, on any instrument or register",
+          "reasons": ["private:bandFloor,placeRoot"]
+        },
+        {
+          "line": 626,
+          "title": "sounds instead of the fallback root on a segment with no strong beat",
+          "reasons": ["private:bandFloor,placeRoot"]
+        }
+      ]
+    },
+    "budget-allocation.test.ts": {
+      "units": 28,
+      "expects": 58,
+      "specUnits": 21,
+      "specExpects": 45,
+      "tsUnits": 7,
+      "tsExpects": 13,
+      "tsReasons": {
+        "private": 6,
+        "source-text": 1
+      },
+      "tsOnly": [
+        {
+          "line": 77,
+          "title": "keeps an accepted analysis inside a few megabytes of tables",
+          "reasons": ["private:analyzeTimeline"]
+        },
+        {
+          "line": 84,
+          "title": "reuses the carried-over table rather than allocating one per edit",
+          "reasons": ["private:analyzeTimeline"]
+        },
+        {
+          "line": 96,
+          "title": "gives the answer a full analysis gives when the table was already lent",
+          "reasons": ["private:analyzeTimeline"]
+        },
+        {
+          "line": 116,
+          "title": "analyses twenty thousand slots without a search table",
+          "reasons": ["private:analyzeTimeline"]
+        },
+        {
+          "line": 126,
+          "title": "holds a grid analysis under a few megabytes",
+          "reasons": ["private:analyzeTimeline"]
+        },
+        {
+          "line": 150,
+          "title": "reads its notes in order rather than through an event index",
+          "reasons": ["source-text:node:fs:readFileSync"]
+        },
+        {
+          "line": 164,
+          "title": "analyses two hundred thousand notes",
+          "reasons": ["private:analyzeTimeline"]
+        }
+      ]
+    },
+    "budget-coverage.test.ts": {
+      "units": 4,
+      "expects": 6,
+      "specUnits": 1,
+      "specExpects": 2,
+      "tsUnits": 3,
+      "tsExpects": 4,
+      "tsReasons": {
+        "source-text": 3
+      },
+      "tsOnly": [
+        {
+          "line": 103,
+          "title": "finds the guards to check",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/source-files.ts:SRC,support/source-files.ts:filesUnder"
+          ]
+        },
+        {
+          "line": 110,
+          "title": "names every label somewhere in the suite",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/source-files.ts:SRC,support/source-files.ts:TESTS,support/source-files.ts:filesUnder"
+          ]
+        },
+        {
+          "line": 118,
+          "title": "lists nothing as unreachable that no guard names any more",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/source-files.ts:SRC,support/source-files.ts:filesUnder"
+          ]
+        }
+      ]
+    },
+    "cadence-modal.test.ts": {
+      "units": 12,
+      "expects": 19,
+      "specUnits": 12,
+      "specExpects": 19,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "cadence-six-four.test.ts": {
+      "units": 16,
+      "expects": 31,
+      "specUnits": 12,
+      "specExpects": 23,
+      "tsUnits": 4,
+      "tsExpects": 8,
+      "tsReasons": {
+        "private": 4
+      },
+      "tsOnly": [
+        {
+          "line": 16,
+          "title": "holds for the tonic six-four standing on the dominant it resolves to",
+          "reasons": ["private:isCadentialSixFour"]
+        },
+        {
+          "line": 23,
+          "title": "refuses a six-four the bass leaves",
+          "reasons": ["private:isCadentialSixFour"]
+        },
+        {
+          "line": 30,
+          "title": "refuses a tonic that is not standing on the dominant bass",
+          "reasons": ["private:isCadentialSixFour"]
+        },
+        {
+          "line": 35,
+          "title": "refuses a six-four on any degree but the tonic",
+          "reasons": ["private:isCadentialSixFour"]
+        }
+      ]
+    },
+    "cadence.test.ts": {
+      "units": 22,
+      "expects": 27,
+      "specUnits": 22,
+      "specExpects": 27,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "chord-identity.test.ts": {
+      "units": 26,
+      "expects": 45,
+      "specUnits": 26,
+      "specExpects": 45,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "chord-spec.test.ts": {
+      "units": 25,
+      "expects": 54,
+      "specUnits": 24,
+      "specExpects": 53,
+      "tsUnits": 1,
+      "tsExpects": 1,
+      "tsReasons": {
+        "source-text": 1
+      },
+      "tsOnly": [
+        {
+          "line": 176,
+          "title": "discovers the spec-reading entry points from the package surface",
+          "reasons": ["source-text:node:fs:readFileSync"]
+        }
+      ]
+    },
+    "chord-symbol-naming.test.ts": {
+      "units": 25,
+      "expects": 79,
+      "specUnits": 25,
+      "specExpects": 79,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "chord-vocab.test.ts": {
+      "units": 17,
+      "expects": 33,
+      "specUnits": 17,
+      "specExpects": 33,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "chord.test.ts": {
+      "units": 17,
+      "expects": 32,
+      "specUnits": 17,
+      "specExpects": 32,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "chordscale.test.ts": {
+      "units": 51,
+      "expects": 100,
+      "specUnits": 48,
+      "specExpects": 91,
+      "tsUnits": 3,
+      "tsExpects": 9,
+      "tsReasons": {
+        "private": 2,
+        "identity": 1
+      },
+      "tsOnly": [
+        {
+          "line": 379,
+          "title": "reports the displaced third the same way for every suspension in the vocabulary",
+          "reasons": ["private:displacedThirds"]
+        },
+        {
+          "line": 424,
+          "title": "leaves a chord that states its own third alone",
+          "reasons": ["private:displacedThirds"]
+        },
+        {
+          "line": 520,
+          "title": "returns one choice per chord, rooted on each chord root",
+          "reasons": ["identity:test/chordscale.test.ts:525"]
+        }
+      ]
+    },
+    "class-consistency.test.ts": {
+      "units": 28,
+      "expects": 58,
+      "specUnits": 27,
+      "specExpects": 56,
+      "tsUnits": 1,
+      "tsExpects": 2,
+      "tsReasons": {
+        "identity": 1
+      },
+      "tsOnly": [
+        {
+          "line": 198,
+          "title": "hands out a copy rather than its own list",
+          "reasons": ["identity:test/class-consistency.test.ts:200"]
+        }
+      ]
+    },
+    "class-coverage.test.ts": {
+      "units": 6,
+      "expects": 6,
+      "specUnits": 6,
+      "specExpects": 6,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "class-equivalence.test.ts": {
+      "units": 90,
+      "expects": 335,
+      "specUnits": 89,
+      "specExpects": 331,
+      "tsUnits": 1,
+      "tsExpects": 4,
+      "tsReasons": {
+        "private": 1
+      },
+      "tsOnly": [
+        {
+          "line": 1071,
+          "title": "infers the harmony and the keys the analyses infer from the same notes",
+          "reasons": ["private:keyIdentity"]
+        }
+      ]
+    },
+    "coerce.test.ts": {
+      "units": 25,
+      "expects": 61,
+      "specUnits": 22,
+      "specExpects": 57,
+      "tsUnits": 3,
+      "tsExpects": 4,
+      "tsReasons": {
+        "identity": 3
+      },
+      "tsOnly": [
+        {
+          "line": 53,
+          "title": "hands back a value the caller cannot mutate into library state",
+          "reasons": ["identity:test/coerce.test.ts:56"]
+        },
+        {
+          "line": 118,
+          "title": "hands back a value the caller cannot mutate into library state",
+          "reasons": ["identity:test/coerce.test.ts:120"]
+        },
+        {
+          "line": 177,
+          "title": "hands back a value the caller cannot mutate into library state",
+          "reasons": ["identity:test/coerce.test.ts:180,test/coerce.test.ts:181"]
+        }
+      ]
+    },
+    "complexity.test.ts": {
+      "units": 15,
+      "expects": 14,
+      "specUnits": 15,
+      "specExpects": 14,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "composer-contract.test.ts": {
+      "units": 15,
+      "expects": 29,
+      "specUnits": 14,
+      "specExpects": 27,
+      "tsUnits": 1,
+      "tsExpects": 2,
+      "tsReasons": {
+        "source-text": 1
+      },
+      "tsOnly": [
+        {
+          "line": 84,
+          "title": "import from the package rather than from the source tree",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/doc-examples.ts:tsdocExamples,support/source-files.ts:PACKAGE_ROOT"
+          ]
+        }
+      ]
+    },
+    "composer-settings.test.ts": {
+      "units": 5,
+      "expects": 10,
+      "specUnits": 0,
+      "specExpects": 0,
+      "tsUnits": 5,
+      "tsExpects": 10,
+      "tsReasons": {
+        "private-type": 5,
+        "mock": 5
+      },
+      "tsOnly": [
+        {
+          "line": 29,
+          "title": "records the resolved version where the caller pinned none",
+          "reasons": [
+            "private-type:import(../src/core/random/version.js)",
+            "mock:vi.mock(../src/core/random/version.js)"
+          ]
+        },
+        {
+          "line": 36,
+          "title": "records a seed the caller left out",
+          "reasons": [
+            "private-type:import(../src/core/random/version.js)",
+            "mock:vi.mock(../src/core/random/version.js)"
+          ]
+        },
+        {
+          "line": 40,
+          "title": "keeps a pinned version through the round trip",
+          "reasons": [
+            "private-type:import(../src/core/random/version.js)",
+            "mock:vi.mock(../src/core/random/version.js)"
+          ]
+        },
+        {
+          "line": 48,
+          "title": "reopens a saved project as the piece it was after the build default moves",
+          "reasons": [
+            "private-type:import(../src/core/random/version.js)",
+            "mock:vi.mock(../src/core/random/version.js)"
+          ]
+        },
+        {
+          "line": 61,
+          "title": "draws the pinned version of a progression, preset included",
+          "reasons": [
+            "private-type:import(../src/core/random/version.js)",
+            "mock:vi.mock(../src/core/random/version.js)"
+          ]
+        }
+      ]
+    },
+    "composition-evaluation.test.ts": {
+      "units": 32,
+      "expects": 41,
+      "specUnits": 32,
+      "specExpects": 41,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "composition-plan-validation.test.ts": {
+      "units": 36,
+      "expects": 76,
+      "specUnits": 36,
+      "specExpects": 76,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "composition-plan.test.ts": {
+      "units": 41,
+      "expects": 134,
+      "specUnits": 41,
+      "specExpects": 134,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "compound-meter-grid.test.ts": {
+      "units": 12,
+      "expects": 20,
+      "specUnits": 6,
+      "specExpects": 12,
+      "tsUnits": 6,
+      "tsExpects": 8,
+      "tsReasons": {
+        "private": 6
+      },
+      "tsOnly": [
+        {
+          "line": 35,
+          "title": "steps by one main pulse, whatever the pulse is",
+          "reasons": ["private:metricGridUnit"]
+        },
+        {
+          "line": 41,
+          "title": "steps by a whole division of every signature a map names",
+          "reasons": ["private:metricGridUnit"]
+        },
+        {
+          "line": 50,
+          "title": "steps onto a change that does not fall on a bar line",
+          "reasons": ["private:metricGridUnit"]
+        },
+        {
+          "line": 72,
+          "title": "reads an onset written a hair off a beat as unmeasured",
+          "reasons": ["private:metricGridUnit"]
+        },
+        {
+          "line": 184,
+          "title": "reports the default 4/4 grid at one quarter",
+          "reasons": ["private:metricGridUnit"]
+        },
+        {
+          "line": 198,
+          "title": "weighs the pulses of a compound bar where the grid steps",
+          "reasons": ["private:metricGridUnit"]
+        }
+      ]
+    },
+    "countermelody.test.ts": {
+      "units": 21,
+      "expects": 38,
+      "specUnits": 21,
+      "specExpects": 38,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "counterpoint-extra.test.ts": {
+      "units": 21,
+      "expects": 38,
+      "specUnits": 21,
+      "specExpects": 38,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "counterpoint.test.ts": {
+      "units": 16,
+      "expects": 48,
+      "specUnits": 15,
+      "specExpects": 46,
+      "tsUnits": 1,
+      "tsExpects": 2,
+      "tsReasons": {
+        "source-text": 1
+      },
+      "tsOnly": [
+        {
+          "line": 185,
+          "title": "$lang lists exactly the predicates that take MIDI numbers",
+          "reasons": ["source-text:node:fs:readFileSync,support/source-files.ts:REPO_ROOT"]
+        }
+      ]
+    },
+    "cross-layer-vocabulary.test.ts": {
+      "units": 12,
+      "expects": 28,
+      "specUnits": 10,
+      "specExpects": 24,
+      "tsUnits": 2,
+      "tsExpects": 4,
+      "tsReasons": {
+        "private": 2
+      },
+      "tsOnly": [
+        {
+          "line": 131,
+          "title": "reads a note a millibeat early as the downbeat it is playing",
+          "reasons": ["private:gridOriginOf"]
+        },
+        {
+          "line": 181,
+          "title": "agrees on the pitch classes, whatever the representation",
+          "reasons": ["private:parallelKey"]
+        }
+      ]
+    },
+    "degree-base.test.ts": {
+      "units": 8,
+      "expects": 26,
+      "specUnits": 8,
+      "specExpects": 26,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "derived-determinism.test.ts": {
+      "units": 3,
+      "expects": 4,
+      "specUnits": 3,
+      "specExpects": 4,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "derived-entry-contract.test.ts": {
+      "units": 5,
+      "expects": 5,
+      "specUnits": 0,
+      "specExpects": 0,
+      "tsUnits": 5,
+      "tsExpects": 5,
+      "tsReasons": {
+        "source-text": 5
+      },
+      "tsOnly": [
+        {
+          "line": 138,
+          "title": "asks for a concept, not for one of its carriers",
+          "reasons": [
+            "source-text:support/signatures.ts:ParamInfo,support/signatures.ts:functionParams"
+          ]
+        },
+        {
+          "line": 151,
+          "title": "gives no concept parameter a default",
+          "reasons": [
+            "source-text:support/signatures.ts:ParamInfo,support/signatures.ts:functionParams"
+          ]
+        },
+        {
+          "line": 166,
+          "title": "holds no allowance for a site that no longer offends",
+          "reasons": [
+            "source-text:support/signatures.ts:ParamInfo,support/signatures.ts:functionParams"
+          ]
+        },
+        {
+          "line": 180,
+          "title": "reads a subject the tree supplies rather than a list",
+          "reasons": ["source-text:support/signatures.ts:functionParams"]
+        },
+        {
+          "line": 186,
+          "title": "reads the class API as well as the free functions",
+          "reasons": ["source-text:support/signatures.ts:functionParams"]
+        }
+      ]
+    },
+    "derived-freeze.test.ts": {
+      "units": 3,
+      "expects": 3,
+      "specUnits": 3,
+      "specExpects": 3,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "derived-ownership.test.ts": {
+      "units": 5,
+      "expects": 5,
+      "specUnits": 0,
+      "specExpects": 0,
+      "tsUnits": 5,
+      "tsExpects": 5,
+      "tsReasons": {
+        "source-text": 5
+      },
+      "tsOnly": [
+        {
+          "line": 23,
+          "title": "keeps %s to its owner",
+          "reasons": ["source-text:support/signatures.ts:declarations"]
+        },
+        {
+          "line": 38,
+          "title": "derives %s in the module that owns it",
+          "reasons": ["source-text:support/signatures.ts:declarations"]
+        },
+        {
+          "line": 51,
+          "title": "keeps the raw tables behind %s to its owner",
+          "reasons": [
+            "source-text:support/signatures.ts:importsOf,support/signatures.ts:relativeTo,support/signatures.ts:resolveSpecifier,support/source-files.ts:PACKAGE_ROOT,support/source-files.ts:SRC"
+          ]
+        },
+        {
+          "line": 76,
+          "title": "holds no allowance for a copy that is already gone",
+          "reasons": ["source-text:support/signatures.ts:declarations"]
+        },
+        {
+          "line": 85,
+          "title": "reads a subject the tree supplies rather than a list",
+          "reasons": ["source-text:support/signatures.ts:declarations"]
+        }
+      ]
+    },
+    "detect-modal.test.ts": {
+      "units": 15,
+      "expects": 39,
+      "specUnits": 12,
+      "specExpects": 35,
+      "tsUnits": 3,
+      "tsExpects": 4,
+      "tsReasons": {
+        "private": 2,
+        "source-text": 1
+      },
+      "tsOnly": [
+        {
+          "line": 184,
+          "title": "substitutes the same degrees in the profile as in the scale",
+          "reasons": ["private:MODAL_CANDIDATES"]
+        },
+        {
+          "line": 199,
+          "title": "derives every modal profile as a permutation of its parent",
+          "reasons": ["private:KRUMHANSL_KESSLER_PROFILE,MODAL_CANDIDATES,modalProfileVector"]
+        },
+        {
+          "line": 267,
+          "title": "carries every name of its public block up to the analyze barrel",
+          "reasons": ["source-text:node:fs:readFileSync"]
+        }
+      ]
+    },
+    "detect-profile.test.ts": {
+      "units": 21,
+      "expects": 58,
+      "specUnits": 21,
+      "specExpects": 58,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "detect.test.ts": {
+      "units": 28,
+      "expects": 52,
+      "specUnits": 28,
+      "specExpects": 52,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "doc-example-imports.test.ts": {
+      "units": 3,
+      "expects": 4,
+      "specUnits": 0,
+      "specExpects": 0,
+      "tsUnits": 3,
+      "tsExpects": 4,
+      "tsReasons": {
+        "source-text": 3
+      },
+      "tsOnly": [
+        {
+          "line": 75,
+          "title": "calls nothing it did not import",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/doc-examples.ts:tsdocExamples,support/signatures.ts:relativeTo,support/source-files.ts:SRC"
+          ]
+        },
+        {
+          "line": 86,
+          "title": "imports nothing it does not use",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/doc-examples.ts:tsdocExamples,support/signatures.ts:relativeTo,support/source-files.ts:SRC"
+          ]
+        },
+        {
+          "line": 98,
+          "title": "reads every block the module publishes rather than a list of them",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/doc-examples.ts:tsdocExamples,support/signatures.ts:relativeTo,support/source-files.ts:SRC"
+          ]
+        }
+      ]
+    },
+    "docs.test.ts": {
+      "units": 9,
+      "expects": 10,
+      "specUnits": 0,
+      "specExpects": 0,
+      "tsUnits": 9,
+      "tsExpects": 10,
+      "tsReasons": {
+        "source-text": 9
+      },
+      "tsOnly": [
+        {
+          "line": 29,
+          "title": "mirrors the English page set",
+          "reasons": [
+            "source-text:support/doc-examples.ts:markdownFiles,support/generate-doc-examples.ts:DOCS_EN,support/generate-doc-examples.ts:DOCS_JA"
+          ]
+        },
+        {
+          "line": 33,
+          "title": "%s shares its code blocks with the Japanese page",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/doc-examples.ts:codeBlocks,support/doc-examples.ts:markdownFiles,support/generate-doc-examples.ts:DOCS_EN,support/generate-doc-examples.ts:DOCS_JA"
+          ]
+        },
+        {
+          "line": 42,
+          "title": "README.md and README_ja.md carry the same examples",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/doc-examples.ts:codeBlocks,support/doc-examples.ts:withoutComments,support/generate-doc-examples.ts:PACKAGE_ROOT"
+          ]
+        },
+        {
+          "line": 67,
+          "title": "$lang/$file resolves its relative links",
+          "reasons": [
+            "source-text:node:fs:existsSync,node:fs:readFileSync,support/doc-examples.ts:markdownFiles,support/generate-doc-examples.ts:DOCS_EN,support/generate-doc-examples.ts:DOCS_JA,support/generate-doc-examples.ts:PACKAGE_ROOT,support/source-files.ts:REPO_ROOT"
+          ]
+        },
+        {
+          "line": 75,
+          "title": "$lang/$file does not link across languages",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/doc-examples.ts:markdownFiles,support/generate-doc-examples.ts:DOCS_EN,support/generate-doc-examples.ts:DOCS_JA,support/generate-doc-examples.ts:PACKAGE_ROOT,support/source-files.ts:REPO_ROOT"
+          ]
+        },
+        {
+          "line": 89,
+          "title": "collects the examples the API reference prints",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/doc-examples.ts:tsdocExamples,support/generate-doc-examples.ts:PENDING_EXAMPLE_SOURCES,support/generate-doc-examples.ts:SRC,support/generate-doc-examples.ts:sourceFiles"
+          ]
+        },
+        {
+          "line": 120,
+          "title": "compares every example against the value it prints",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/doc-examples.ts:codeBlocks,support/doc-examples.ts:expectedValue,support/doc-examples.ts:markdownFiles,support/doc-examples.ts:namesValue,support/doc-examples.ts:splitComment,support/doc-examples.ts:tsdocExamples,support/generate-doc-examples.ts:DOCS_EN,support/generate-doc-examples.ts:SRC,support/generate-doc-examples.ts:sourceFiles"
+          ]
+        },
+        {
+          "line": 152,
+          "title": "imports the package by name in every example, never the source tree",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/doc-examples.ts:tsdocExamples,support/generate-doc-examples.ts:PACKAGE_ROOT,support/generate-doc-examples.ts:SRC,support/generate-doc-examples.ts:sourceFiles"
+          ]
+        },
+        {
+          "line": 164,
+          "title": "lists no source as pending that has no example to run",
+          "reasons": [
+            "source-text:node:fs:existsSync,node:fs:readFileSync,support/doc-examples.ts:tsdocExamples,support/generate-doc-examples.ts:PENDING_EXAMPLE_SOURCES,support/generate-doc-examples.ts:SRC"
+          ]
+        }
+      ]
+    },
+    "drum-vocabulary.test.ts": {
+      "units": 36,
+      "expects": 89,
+      "specUnits": 32,
+      "specExpects": 82,
+      "tsUnits": 4,
+      "tsExpects": 7,
+      "tsReasons": {
+        "private": 4,
+        "private-type": 1
+      },
+      "tsOnly": [
+        {
+          "line": 147,
+          "title": "leaves every fill selection exactly as it was",
+          "reasons": ["private:selectFillType", "private-type:selectFillType"]
+        },
+        {
+          "line": 174,
+          "title": "is sixteen steps wide",
+          "reasons": ["private:getKickPattern"]
+        },
+        {
+          "line": 178,
+          "title": "puts the eighth-note patterns on the even steps",
+          "reasons": ["private:getKickPattern"]
+        },
+        {
+          "line": 467,
+          "title": "gives a caller fill that reuses a built-in id the built-in weight, not both",
+          "reasons": ["private:selectFillType"]
+        }
+      ]
+    },
+    "drums-backbeat.test.ts": {
+      "units": 13,
+      "expects": 26,
+      "specUnits": 13,
+      "specExpects": 26,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "drums-coverage.test.ts": {
+      "units": 20,
+      "expects": 54,
+      "specUnits": 9,
+      "specExpects": 21,
+      "tsUnits": 11,
+      "tsExpects": 33,
+      "tsReasons": {
+        "private": 11,
+        "private-type": 2
+      },
+      "tsOnly": [
+        {
+          "line": 103,
+          "title": "distributes pulses evenly",
+          "reasons": ["private:euclideanRhythm"]
+        },
+        {
+          "line": 110,
+          "title": "names the pattern of the standard euclidean rhythms",
+          "reasons": ["private:euclideanRhythm"]
+        },
+        {
+          "line": 117,
+          "title": "rotates onsets forward by the given number of steps",
+          "reasons": ["private:euclideanRhythm"]
+        },
+        {
+          "line": 202,
+          "title": "renders every fill archetype into valid, non-empty hits",
+          "reasons": ["private:HitList,generateFill"]
+        },
+        {
+          "line": 228,
+          "title": "emits a phrase-end fill at beat 3 for every low-energy archetype",
+          "reasons": ["private:HitList,generateFill"]
+        },
+        {
+          "line": 242,
+          "title": "sizes fills by energy, one beat per step",
+          "reasons": ["private:getFillStartBeat"]
+        },
+        {
+          "line": 249,
+          "title": "plays the pickup beats every archetype is written with",
+          "reasons": ["private:HitList,generateFill"]
+        },
+        {
+          "line": 272,
+          "title": "selects fills from the expected set for each transition context",
+          "reasons": ["private:selectFillType", "private-type:selectFillType"]
+        },
+        {
+          "line": 373,
+          "title": "reaches every fill archetype across transition contexts",
+          "reasons": ["private:selectFillType", "private-type:selectFillType"]
+        },
+        {
+          "line": 489,
+          "title": "holds its last beat over the rest of the bar",
+          "reasons": ["private:HitList,generateFill"]
+        },
+        {
+          "line": 502,
+          "title": "stops where it was written when it is bound to the bar",
+          "reasons": ["private:HitList,generateFill"]
+        }
+      ]
+    },
+    "drums-open-hihat.test.ts": {
+      "units": 4,
+      "expects": 6,
+      "specUnits": 4,
+      "specExpects": 6,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "drums.test.ts": {
+      "units": 42,
+      "expects": 86,
+      "specUnits": 33,
+      "specExpects": 66,
+      "tsUnits": 9,
+      "tsExpects": 20,
+      "tsReasons": {
+        "private": 9
+      },
+      "tsOnly": [
+        {
+          "line": 159,
+          "title": "puts Euclidean kicks, shakers, and pre-chorus snare lifts on the shared shuffle grid",
+          "reasons": ["private:quantizeSwing"]
+        },
+        {
+          "line": 366,
+          "title": "crescendos across the whole roll rather than restarting each beat",
+          "reasons": ["private:HitList,generateFill"]
+        },
+        {
+          "line": 392,
+          "title": "delays the \"e\" off-beat 16th under full swing",
+          "reasons": ["private:quantizeSwing"]
+        },
+        {
+          "line": 396,
+          "title": "delays the \"a\" off-beat 16th under full swing",
+          "reasons": ["private:quantizeSwing"]
+        },
+        {
+          "line": 400,
+          "title": "places the shuffle \"a\" 16th near 0.8125 without over-swinging",
+          "reasons": ["private:quantizeSwing"]
+        },
+        {
+          "line": 411,
+          "title": "never moves an onset earlier than it was written",
+          "reasons": ["private:quantizeSwing"]
+        },
+        {
+          "line": 529,
+          "title": "sees a crash on either side of the beat it is asked about",
+          "reasons": ["private:HitList"]
+        },
+        {
+          "line": 540,
+          "title": "ignores a crash a 16th or more away, equally in both directions",
+          "reasons": ["private:HitList"]
+        },
+        {
+          "line": 548,
+          "title": "answers for the crash voice alone",
+          "reasons": ["private:HitList"]
+        }
+      ]
+    },
+    "duration.test.ts": {
+      "units": 24,
+      "expects": 81,
+      "specUnits": 24,
+      "specExpects": 81,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "dx.test.ts": {
+      "units": 13,
+      "expects": 44,
+      "specUnits": 13,
+      "specExpects": 44,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "entry-domain-contract.test.ts": {
+      "units": 3,
+      "expects": 4,
+      "specUnits": 3,
+      "specExpects": 4,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "entry-positional-contract.test.ts": {
+      "units": 4,
+      "expects": 7,
+      "specUnits": 4,
+      "specExpects": 7,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "entry-rejection-contract.test.ts": {
+      "units": 3,
+      "expects": 4,
+      "specUnits": 3,
+      "specExpects": 4,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "enum-tables.test.ts": {
+      "units": 1,
+      "expects": 2,
+      "specUnits": 0,
+      "specExpects": 0,
+      "tsUnits": 1,
+      "tsExpects": 2,
+      "tsReasons": {
+        "source-text": 1
+      },
+      "tsOnly": [
+        {
+          "line": 45,
+          "title": "`${name} lists exactly the members of ${type}`",
+          "reasons": ["source-text:support/signatures.ts:unionMembers"]
+        }
+      ]
+    },
+    "errors.test.ts": {
+      "units": 13,
+      "expects": 46,
+      "specUnits": 12,
+      "specExpects": 38,
+      "tsUnits": 1,
+      "tsExpects": 8,
+      "tsReasons": {
+        "private": 1,
+        "private-type": 1
+      },
+      "tsOnly": [
+        {
+          "line": 181,
+          "title": "recognizes the coded error contract across a second module copy",
+          "reasons": [
+            "private:import(../src/core/errors/index.js)",
+            "private-type:* from ../src/core/errors/index.js"
+          ]
+        }
+      ]
+    },
+    "event-index.test.ts": {
+      "units": 9,
+      "expects": 52,
+      "specUnits": 8,
+      "specExpects": 47,
+      "tsUnits": 1,
+      "tsExpects": 5,
+      "tsReasons": {
+        "private": 1,
+        "identity": 1
+      },
+      "tsOnly": [
+        {
+          "line": 80,
+          "title": "orders notes for a reader that asks the index nothing",
+          "reasons": [
+            "private:sortedNoteEvents",
+            "identity:test/event-index.test.ts:94,test/event-index.test.ts:99"
+          ]
+        }
+      ]
+    },
+    "figured-bass.test.ts": {
+      "units": 28,
+      "expects": 82,
+      "specUnits": 28,
+      "specExpects": 82,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "form.test.ts": {
+      "units": 59,
+      "expects": 152,
+      "specUnits": 55,
+      "specExpects": 148,
+      "tsUnits": 4,
+      "tsExpects": 4,
+      "tsReasons": {
+        "private": 4
+      },
+      "tsOnly": [
+        {
+          "line": 487,
+          "title": "leaves a boundary that exactly pays for itself uncut",
+          "reasons": ["private:PHRASE_CUT_COST,choosePhrasePath"]
+        },
+        {
+          "line": 495,
+          "title": "takes the boundary as soon as it is worth more than the cut",
+          "reasons": ["private:PHRASE_CUT_COST,choosePhrasePath"]
+        },
+        {
+          "line": 501,
+          "title": "does not depend on how many equally scored readings there are",
+          "reasons": ["private:PHRASE_CUT_COST,choosePhrasePath"]
+        },
+        {
+          "line": 510,
+          "title": "still reports the whole span when no reading reaches the end",
+          "reasons": ["private:choosePhrasePath"]
+        }
+      ]
+    },
+    "functional-borrowed.test.ts": {
+      "units": 20,
+      "expects": 61,
+      "specUnits": 19,
+      "specExpects": 59,
+      "tsUnits": 1,
+      "tsExpects": 2,
+      "tsReasons": {
+        "private": 1
+      },
+      "tsOnly": [
+        {
+          "line": 33,
+          "title": "mirrors major to natural minor and back on the same tonic",
+          "reasons": ["private:parallelKey"]
+        }
+      ]
+    },
+    "functional-minor.test.ts": {
+      "units": 11,
+      "expects": 21,
+      "specUnits": 11,
+      "specExpects": 21,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "functional-roman-round-trip.test.ts": {
+      "units": 10,
+      "expects": 27,
+      "specUnits": 8,
+      "specExpects": 21,
+      "tsUnits": 2,
+      "tsExpects": 6,
+      "tsReasons": {
+        "source-text": 2,
+        "private": 1
+      },
+      "tsOnly": [
+        {
+          "line": 76,
+          "title": "round-trips every augmented sixth in %s",
+          "reasons": ["source-text:support/signatures.ts:unionMembers,support/source-files.ts:SRC"]
+        },
+        {
+          "line": 96,
+          "title": "round-trips an applied augmented sixth in %s",
+          "reasons": [
+            "private:tonicizableDegrees",
+            "source-text:support/signatures.ts:unionMembers,support/source-files.ts:SRC"
+          ]
+        }
+      ]
+    },
+    "functional-tonicization.test.ts": {
+      "units": 33,
+      "expects": 74,
+      "specUnits": 32,
+      "specExpects": 70,
+      "tsUnits": 1,
+      "tsExpects": 4,
+      "tsReasons": {
+        "private": 1
+      },
+      "tsOnly": [
+        {
+          "line": 117,
+          "title": "exempts the chromatic tone exactly where a degree can be tonicized",
+          "reasons": ["private:appliedTarget,crossRelations"]
+        }
+      ]
+    },
+    "functional.test.ts": {
+      "units": 66,
+      "expects": 165,
+      "specUnits": 66,
+      "specExpects": 165,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "gapped-scale-spelling.test.ts": {
+      "units": 19,
+      "expects": 27,
+      "specUnits": 19,
+      "specExpects": 27,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "gaps-key-chord.test.ts": {
+      "units": 26,
+      "expects": 53,
+      "specUnits": 26,
+      "specExpects": 53,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "gaps-score-arrangement.test.ts": {
+      "units": 23,
+      "expects": 50,
+      "specUnits": 22,
+      "specExpects": 47,
+      "tsUnits": 1,
+      "tsExpects": 3,
+      "tsReasons": {
+        "identity": 1
+      },
+      "tsOnly": [
+        {
+          "line": 201,
+          "title": "ids the notes in the score own time order",
+          "reasons": ["identity:test/gaps-score-arrangement.test.ts:207"]
+        }
+      ]
+    },
+    "generation-context.test.ts": {
+      "units": 31,
+      "expects": 57,
+      "specUnits": 29,
+      "specExpects": 53,
+      "tsUnits": 2,
+      "tsExpects": 4,
+      "tsReasons": {
+        "private": 2,
+        "identity": 1
+      },
+      "tsOnly": [
+        {
+          "line": 526,
+          "title": "names every sampler a draw carries",
+          "reasons": ["private:DRAW_METHODS"]
+        },
+        {
+          "line": 535,
+          "title": "refuses a sampler set that is missing one",
+          "reasons": [
+            "private:DRAW_METHODS,assertDraw",
+            "identity:test/generation-context.test.ts:542"
+          ]
+        }
+      ]
+    },
+    "generation-golden.test.ts": {
+      "units": 5,
+      "expects": 8,
+      "specUnits": 5,
+      "specExpects": 8,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "groove.test.ts": {
+      "units": 31,
+      "expects": 55,
+      "specUnits": 31,
+      "specExpects": 55,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "harmonize-cost-table.test.ts": {
+      "units": 22,
+      "expects": 30,
+      "specUnits": 14,
+      "specExpects": 18,
+      "tsUnits": 8,
+      "tsExpects": 12,
+      "tsReasons": {
+        "private": 8,
+        "private-type": 5
+      },
+      "tsOnly": [
+        {
+          "line": 64,
+          "title": "builds the same major-key candidates at every dial position",
+          "reasons": ["private:buildCandidates", "private-type:Candidate"]
+        },
+        {
+          "line": 119,
+          "title": "gives every major key the same vocabulary, transposed",
+          "reasons": ["private:buildCandidates", "private-type:Candidate"]
+        },
+        {
+          "line": 137,
+          "title": "gives a minor key a dominant that can act as one, at every dial position",
+          "reasons": ["private:buildCandidates"]
+        },
+        {
+          "line": 345,
+          "title": "prices the same triad the same in a major key and in a minor key",
+          "reasons": ["private:buildCandidates", "private-type:buildCandidates"]
+        },
+        {
+          "line": 352,
+          "title": "prices a dominant triad the same in the major and the parallel minor",
+          "reasons": ["private:buildCandidates", "private-type:buildCandidates"]
+        },
+        {
+          "line": 356,
+          "title": "charges every diminished triad what an unstable sonority costs",
+          "reasons": ["private:buildCandidates"]
+        },
+        {
+          "line": 375,
+          "title": "charges a subdominant and a dominant what their function is worth in either mode",
+          "reasons": ["private:buildCandidates", "private-type:Candidate"]
+        },
+        {
+          "line": 389,
+          "title": "reads the price from what a chord is, not from where it sits in the list",
+          "reasons": ["private:buildCandidates"]
+        }
+      ]
+    },
+    "harmonize-nct.test.ts": {
+      "units": 16,
+      "expects": 20,
+      "specUnits": 16,
+      "specExpects": 20,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "harmonize-phrases.test.ts": {
+      "units": 14,
+      "expects": 21,
+      "specUnits": 14,
+      "specExpects": 21,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "harmonize.test.ts": {
+      "units": 48,
+      "expects": 111,
+      "specUnits": 37,
+      "specExpects": 88,
+      "tsUnits": 11,
+      "tsExpects": 23,
+      "tsReasons": {
+        "private": 11
+      },
+      "tsOnly": [
+        {
+          "line": 449,
+          "title": "opens the vocabulary a chord at a time rather than a family at a time",
+          "reasons": ["private:buildCandidates"]
+        },
+        {
+          "line": 689,
+          "title": "maps every named strength to a dial position the vocabulary grows with",
+          "reasons": ["private:buildCandidates"]
+        },
+        {
+          "line": 819,
+          "title": "uses only the scale tones of $name",
+          "reasons": ["private:buildCandidates"]
+        },
+        {
+          "line": 848,
+          "title": "still lets a minor key cadence through its raised seventh",
+          "reasons": ["private:buildCandidates"]
+        },
+        {
+          "line": 866,
+          "title": "offers no dominant of a diminished degree in $name",
+          "reasons": ["private:buildCandidates"]
+        },
+        {
+          "line": 876,
+          "title": "puts no F#7 in front of the diminished supertonic of A minor",
+          "reasons": ["private:buildCandidates"]
+        },
+        {
+          "line": 882,
+          "title": "leaves the diminished fourth degree of lydian alone",
+          "reasons": ["private:buildCandidates"]
+        },
+        {
+          "line": 891,
+          "title": "keeps the whole family a major key has",
+          "reasons": ["private:buildCandidates"]
+        },
+        {
+          "line": 917,
+          "title": "opens bVII before the minor tonic and the diminished supertonic",
+          "reasons": ["private:buildCandidates"]
+        },
+        {
+          "line": 926,
+          "title": "has the useful borrowings and none of the rare ones part way up",
+          "reasons": ["private:buildCandidates"]
+        },
+        {
+          "line": 934,
+          "title": "still opens every one of them at the top of the dial",
+          "reasons": ["private:buildCandidates"]
+        }
+      ]
+    },
+    "harmony.test.ts": {
+      "units": 12,
+      "expects": 17,
+      "specUnits": 12,
+      "specExpects": 17,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "imitation.test.ts": {
+      "units": 27,
+      "expects": 38,
+      "specUnits": 27,
+      "specExpects": 38,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "incremental.test.ts": {
+      "units": 15,
+      "expects": 22,
+      "specUnits": 13,
+      "specExpects": 16,
+      "tsUnits": 2,
+      "tsExpects": 6,
+      "tsReasons": {
+        "identity": 2
+      },
+      "tsOnly": [
+        {
+          "line": 99,
+          "title": "leaves the analysis untouched when an edit changes nothing",
+          "reasons": ["identity:test/incremental.test.ts:106"]
+        },
+        {
+          "line": 133,
+          "title": "re-splices a segment when a single note is moved inside one bar",
+          "reasons": ["identity:test/incremental.test.ts:159"]
+        }
+      ]
+    },
+    "instrument-coerce.test.ts": {
+      "units": 11,
+      "expects": 22,
+      "specUnits": 11,
+      "specExpects": 22,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "interval-like.test.ts": {
+      "units": 25,
+      "expects": 48,
+      "specUnits": 25,
+      "specExpects": 48,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "interval.test.ts": {
+      "units": 10,
+      "expects": 22,
+      "specUnits": 10,
+      "specExpects": 22,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "inversions.test.ts": {
+      "units": 9,
+      "expects": 14,
+      "specUnits": 9,
+      "specExpects": 14,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "key-argument-contract.test.ts": {
+      "units": 17,
+      "expects": 39,
+      "specUnits": 9,
+      "specExpects": 29,
+      "tsUnits": 8,
+      "tsExpects": 10,
+      "tsReasons": {
+        "source-text": 8
+      },
+      "tsOnly": [
+        {
+          "line": 164,
+          "title": "finds the key-taking methods to check",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/source-files.ts:SRC,support/source-files.ts:filesUnder"
+          ]
+        },
+        {
+          "line": 168,
+          "title": "has a call written for each one",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/source-files.ts:SRC,support/source-files.ts:filesUnder"
+          ]
+        },
+        {
+          "line": 175,
+          "title": "`reads a name, a key/scale and a Key alike in ${name}`",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/source-files.ts:SRC,support/source-files.ts:filesUnder"
+          ]
+        },
+        {
+          "line": 231,
+          "title": "reads a subject the tree supplies rather than a list",
+          "reasons": ["source-text:support/signatures.ts:recordFields"]
+        },
+        {
+          "line": 235,
+          "title": "declares it in the wide form",
+          "reasons": ["source-text:support/signatures.ts:recordFields"]
+        },
+        {
+          "line": 245,
+          "title": "holds no allowance for a field that no longer offends",
+          "reasons": ["source-text:support/signatures.ts:recordFields"]
+        },
+        {
+          "line": 374,
+          "title": "re-exports every scale symbol from the theory barrel",
+          "reasons": ["source-text:node:fs:readFileSync,support/source-files.ts:SRC"]
+        },
+        {
+          "line": 380,
+          "title": "reaches every scale value from the package root",
+          "reasons": ["source-text:node:fs:readFileSync,support/source-files.ts:SRC"]
+        }
+      ]
+    },
+    "key-argument-forms.test.ts": {
+      "units": 7,
+      "expects": 8,
+      "specUnits": 7,
+      "specExpects": 8,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "key-class-relations.test.ts": {
+      "units": 57,
+      "expects": 143,
+      "specUnits": 57,
+      "specExpects": 143,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "key-identity.test.ts": {
+      "units": 17,
+      "expects": 74,
+      "specUnits": 17,
+      "specExpects": 74,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "key-regions.test.ts": {
+      "units": 48,
+      "expects": 122,
+      "specUnits": 43,
+      "specExpects": 110,
+      "tsUnits": 5,
+      "tsExpects": 12,
+      "tsReasons": {
+        "private": 3,
+        "identity": 2
+      },
+      "tsOnly": [
+        {
+          "line": 727,
+          "title": "attaches a pivot to exactly the chords sounding the candidate triad",
+          "reasons": ["private:attachPivots"]
+        },
+        {
+          "line": 910,
+          "title": "accepts a readonly array without a copy or a cast",
+          "reasons": ["private:analyzeTimeline"]
+        },
+        {
+          "line": 938,
+          "title": "gives the note path a key per region that no later call shares",
+          "reasons": ["identity:test/key-regions.test.ts:945"]
+        },
+        {
+          "line": 955,
+          "title": "gives the chord path the same",
+          "reasons": ["identity:test/key-regions.test.ts:958"]
+        },
+        {
+          "line": 967,
+          "title": "keeps the keys a timeline analysis ran against out of the candidate table",
+          "reasons": ["private:analyzeTimeline"]
+        }
+      ]
+    },
+    "key-relations-modal.test.ts": {
+      "units": 6,
+      "expects": 13,
+      "specUnits": 6,
+      "specExpects": 13,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "key-relations.test.ts": {
+      "units": 29,
+      "expects": 83,
+      "specUnits": 29,
+      "specExpects": 83,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "key-resolution.test.ts": {
+      "units": 19,
+      "expects": 38,
+      "specUnits": 19,
+      "specExpects": 38,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "key-signature.test.ts": {
+      "units": 13,
+      "expects": 52,
+      "specUnits": 13,
+      "specExpects": 52,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "key-spelling-entry-points.test.ts": {
+      "units": 14,
+      "expects": 27,
+      "specUnits": 12,
+      "specExpects": 24,
+      "tsUnits": 2,
+      "tsExpects": 3,
+      "tsReasons": {
+        "source-text": 2
+      },
+      "tsOnly": [
+        {
+          "line": 161,
+          "title": "names a numeral for every kind the family declares",
+          "reasons": ["source-text:support/signatures.ts:unionMembers,support/source-files.ts:SRC"]
+        },
+        {
+          "line": 167,
+          "title": "builds the same chord from the numeral as from the family",
+          "reasons": ["source-text:support/signatures.ts:unionMembers,support/source-files.ts:SRC"]
+        }
+      ]
+    },
+    "key-spelling-seam.test.ts": {
+      "units": 25,
+      "expects": 34,
+      "specUnits": 11,
+      "specExpects": 16,
+      "tsUnits": 14,
+      "tsExpects": 18,
+      "tsReasons": {
+        "source-text": 14
+      },
+      "tsOnly": [
+        {
+          "line": 220,
+          "title": "derives a tonic in one place only",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/signatures.ts:sourceFiles,support/source-files.ts:SRC"
+          ]
+        },
+        {
+          "line": 229,
+          "title": "holds no allowance for a module that no longer spells its own tonic",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/signatures.ts:sourceFiles,support/source-files.ts:SRC"
+          ]
+        },
+        {
+          "line": 237,
+          "title": "never derives a tonic inside an entry point that was handed a key",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/signatures.ts:ParamInfo,support/signatures.ts:functionParams,support/signatures.ts:sourceFiles,support/source-files.ts:SRC"
+          ]
+        },
+        {
+          "line": 249,
+          "title": "reads a subject the tree supplies rather than a list",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/signatures.ts:ParamInfo,support/signatures.ts:functionParams,support/signatures.ts:sourceFiles,support/source-files.ts:SRC"
+          ]
+        },
+        {
+          "line": 442,
+          "title": "answers the two spellings of one sound differently",
+          "reasons": [
+            "source-text:support/signatures.ts:ParamInfo,support/signatures.ts:functionParams"
+          ]
+        },
+        {
+          "line": 457,
+          "title": "names exactly the entry points the recipes cannot call",
+          "reasons": [
+            "source-text:support/signatures.ts:ParamInfo,support/signatures.ts:functionParams"
+          ]
+        },
+        {
+          "line": 466,
+          "title": "reads a subject the tree supplies rather than a list",
+          "reasons": [
+            "source-text:support/signatures.ts:ParamInfo,support/signatures.ts:functionParams"
+          ]
+        },
+        {
+          "line": 606,
+          "title": "reduces a key only where the reduction is named and reasoned",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/source-files.ts:SRC,support/source-files.ts:filesUnder"
+          ]
+        },
+        {
+          "line": 617,
+          "title": "holds no allowance for a reduction that is no longer there",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/source-files.ts:SRC,support/source-files.ts:filesUnder"
+          ]
+        },
+        {
+          "line": 624,
+          "title": "reads a subject the tree supplies rather than a list",
+          "reasons": ["source-text:support/source-files.ts:SRC,support/source-files.ts:filesUnder"]
+        },
+        {
+          "line": 744,
+          "title": "narrows every entry point whose answer follows the key it was handed",
+          "reasons": [
+            "source-text:support/signatures.ts:ParamInfo,support/signatures.ts:functionParams"
+          ]
+        },
+        {
+          "line": 757,
+          "title": "leaves the wide type on every entry point whose answer does not",
+          "reasons": [
+            "source-text:support/signatures.ts:ParamInfo,support/signatures.ts:functionParams"
+          ]
+        },
+        {
+          "line": 770,
+          "title": "holds no allowance for an entry point that no longer needs one",
+          "reasons": [
+            "source-text:support/signatures.ts:ParamInfo,support/signatures.ts:functionParams"
+          ]
+        },
+        {
+          "line": 778,
+          "title": "reads a subject the tree supplies rather than a list",
+          "reasons": [
+            "source-text:support/signatures.ts:ParamInfo,support/signatures.ts:functionParams"
+          ]
+        }
+      ]
+    },
+    "key-spelling.test.ts": {
+      "units": 13,
+      "expects": 37,
+      "specUnits": 11,
+      "specExpects": 30,
+      "tsUnits": 2,
+      "tsExpects": 7,
+      "tsReasons": {
+        "identity": 1,
+        "private": 1
+      },
+      "tsOnly": [
+        {
+          "line": 111,
+          "title": "spells gis moll on G# and keeps the scale it was given",
+          "reasons": ["identity:test/key-spelling.test.ts:119"]
+        },
+        {
+          "line": 155,
+          "title": "is reachable from the theory and scale barrels",
+          "reasons": ["private:* from ../src/theory/scale/index.js"]
+        }
+      ]
+    },
+    "licks.test.ts": {
+      "units": 40,
+      "expects": 92,
+      "specUnits": 38,
+      "specExpects": 87,
+      "tsUnits": 2,
+      "tsExpects": 5,
+      "tsReasons": {
+        "private": 2
+      },
+      "tsOnly": [
+        {
+          "line": 181,
+          "title": "leads into a chord change from the figure's own last note",
+          "reasons": ["private:bandFloor,placeRoot"]
+        },
+        {
+          "line": 214,
+          "title": "takes the figure's final sixteenth as the connecting tone, not the beat before it",
+          "reasons": ["private:bandFloor,placeRoot"]
+        }
+      ]
+    },
+    "like-analyze.test.ts": {
+      "units": 15,
+      "expects": 34,
+      "specUnits": 15,
+      "specExpects": 34,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "like-generate.test.ts": {
+      "units": 17,
+      "expects": 26,
+      "specUnits": 17,
+      "specExpects": 26,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "like-meter.test.ts": {
+      "units": 11,
+      "expects": 39,
+      "specUnits": 11,
+      "specExpects": 39,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "like-theory.test.ts": {
+      "units": 15,
+      "expects": 41,
+      "specUnits": 15,
+      "specExpects": 41,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "low-sweep.test.ts": {
+      "units": 9,
+      "expects": 28,
+      "specUnits": 9,
+      "specExpects": 28,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "melody-analysis.test.ts": {
+      "units": 55,
+      "expects": 117,
+      "specUnits": 50,
+      "specExpects": 112,
+      "tsUnits": 5,
+      "tsExpects": 5,
+      "tsReasons": {
+        "source-text": 5
+      },
+      "tsOnly": [
+        {
+          "line": 572,
+          "title": "$lang tabulates every transform, in the order they are declared",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/signatures.ts:unionMembers,support/source-files.ts:REPO_ROOT"
+          ]
+        },
+        {
+          "line": 581,
+          "title": "$lang names only real relations opposite them",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/signatures.ts:unionMembers,support/source-files.ts:REPO_ROOT"
+          ]
+        },
+        {
+          "line": 586,
+          "title": "$lang accounts for every relation somewhere on the page",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/signatures.ts:unionMembers,support/source-files.ts:REPO_ROOT"
+          ]
+        },
+        {
+          "line": 627,
+          "title": "answers for every transform the generator declares",
+          "reasons": ["source-text:support/signatures.ts:unionMembers"]
+        },
+        {
+          "line": 637,
+          "title": "accounts for every relation the analysis can report",
+          "reasons": ["source-text:support/signatures.ts:unionMembers"]
+        }
+      ]
+    },
+    "melody-generation.test.ts": {
+      "units": 48,
+      "expects": 105,
+      "specUnits": 47,
+      "specExpects": 104,
+      "tsUnits": 1,
+      "tsExpects": 1,
+      "tsReasons": {
+        "private": 1
+      },
+      "tsOnly": [
+        {
+          "line": 1076,
+          "title": "leaves no harmony misfit in what it chooses freely",
+          "reasons": ["private:planHarmonyMisfits"]
+        }
+      ]
+    },
+    "meter-argument-contract.test.ts": {
+      "units": 20,
+      "expects": 46,
+      "specUnits": 18,
+      "specExpects": 43,
+      "tsUnits": 2,
+      "tsExpects": 3,
+      "tsReasons": {
+        "source-text": 2
+      },
+      "tsOnly": [
+        {
+          "line": 86,
+          "title": "declares every meter a caller names as MeterLike",
+          "reasons": [
+            "source-text:support/signatures.ts:functionParams,support/signatures.ts:recordFields,support/source-files.ts:SRC,support/source-files.ts:filesUnder"
+          ]
+        },
+        {
+          "line": 286,
+          "title": "holds no private meter mapping in the model layer",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/source-files.ts:SRC,support/source-files.ts:filesUnder"
+          ]
+        }
+      ]
+    },
+    "meter-coverage.test.ts": {
+      "units": 5,
+      "expects": 14,
+      "specUnits": 5,
+      "specExpects": 14,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "meter-format-claims.test.ts": {
+      "units": 6,
+      "expects": 15,
+      "specUnits": 4,
+      "specExpects": 11,
+      "tsUnits": 2,
+      "tsExpects": 4,
+      "tsReasons": {
+        "source-text": 2
+      },
+      "tsOnly": [
+        {
+          "line": 38,
+          "title": "is described the same way in both guides",
+          "reasons": ["source-text:node:fs:readFileSync,support/source-files.ts:REPO_ROOT"]
+        },
+        {
+          "line": 71,
+          "title": "shows both forms in both guides",
+          "reasons": ["source-text:node:fs:readFileSync,support/source-files.ts:REPO_ROOT"]
+        }
+      ]
+    },
+    "meter-immutability.test.ts": {
+      "units": 8,
+      "expects": 29,
+      "specUnits": 1,
+      "specExpects": 2,
+      "tsUnits": 7,
+      "tsExpects": 27,
+      "tsReasons": {
+        "identity": 7
+      },
+      "tsOnly": [
+        {
+          "line": 8,
+          "title": "is a new signature on every call, never the shared default",
+          "reasons": [
+            "identity:test/meter-immutability.test.ts:12,test/meter-immutability.test.ts:13"
+          ]
+        },
+        {
+          "line": 26,
+          "title": "does not alias the signature the caller passed in",
+          "reasons": [
+            "identity:test/meter-immutability.test.ts:30,test/meter-immutability.test.ts:31"
+          ]
+        },
+        {
+          "line": 36,
+          "title": "does not alias the map the caller passed in",
+          "reasons": [
+            "identity:test/meter-immutability.test.ts:43,test/meter-immutability.test.ts:44,test/meter-immutability.test.ts:45,test/meter-immutability.test.ts:46"
+          ]
+        },
+        {
+          "line": 56,
+          "title": "hands out a fresh signature on every call",
+          "reasons": [
+            "identity:test/meter-immutability.test.ts:61,test/meter-immutability.test.ts:62,test/meter-immutability.test.ts:63"
+          ]
+        },
+        {
+          "line": 68,
+          "title": "hands out a fresh map on every call",
+          "reasons": [
+            "identity:test/meter-immutability.test.ts:73,test/meter-immutability.test.ts:74"
+          ]
+        },
+        {
+          "line": 77,
+          "title": "hands out a fresh signature from a name and from a wrapper",
+          "reasons": [
+            "identity:test/meter-immutability.test.ts:79,test/meter-immutability.test.ts:83"
+          ]
+        },
+        {
+          "line": 86,
+          "title": "does not hand out the signature a map entry holds",
+          "reasons": ["identity:test/meter-immutability.test.ts:90"]
+        }
+      ]
+    },
+    "meter-map.test.ts": {
+      "units": 26,
+      "expects": 99,
+      "specUnits": 26,
+      "specExpects": 99,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "meter.test.ts": {
+      "units": 31,
+      "expects": 122,
+      "specUnits": 31,
+      "specExpects": 122,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "model-arrangement.test.ts": {
+      "units": 29,
+      "expects": 78,
+      "specUnits": 26,
+      "specExpects": 65,
+      "tsUnits": 3,
+      "tsExpects": 13,
+      "tsReasons": {
+        "identity": 3
+      },
+      "tsOnly": [
+        {
+          "line": 194,
+          "title": "hands out a fresh copy on every read",
+          "reasons": [
+            "identity:test/model-arrangement.test.ts:196,test/model-arrangement.test.ts:198,test/model-arrangement.test.ts:199"
+          ]
+        },
+        {
+          "line": 359,
+          "title": "reports the conflicts the analysis found",
+          "reasons": ["identity:test/model-arrangement.test.ts:363"]
+        },
+        {
+          "line": 456,
+          "title": "leaves the arrangement it was asked of unchanged",
+          "reasons": ["identity:test/model-arrangement.test.ts:464"]
+        }
+      ]
+    },
+    "model-composer.test.ts": {
+      "units": 32,
+      "expects": 90,
+      "specUnits": 28,
+      "specExpects": 77,
+      "tsUnits": 4,
+      "tsExpects": 13,
+      "tsReasons": {
+        "identity": 4
+      },
+      "tsOnly": [
+        {
+          "line": 133,
+          "title": "hands out a fresh copy on every read",
+          "reasons": ["identity:test/model-composer.test.ts:135"]
+        },
+        {
+          "line": 175,
+          "title": "exposes the context the generators are handed",
+          "reasons": ["identity:test/model-composer.test.ts:177"]
+        },
+        {
+          "line": 411,
+          "title": "returns a new composer and leaves the original writing what it wrote",
+          "reasons": ["identity:test/model-composer.test.ts:415"]
+        },
+        {
+          "line": 499,
+          "title": "draws from a source it was handed, keeping it out of the plain data",
+          "reasons": ["identity:test/model-composer.test.ts:504,test/model-composer.test.ts:508"]
+        }
+      ]
+    },
+    "model-contracts.test.ts": {
+      "units": 31,
+      "expects": 106,
+      "specUnits": 30,
+      "specExpects": 105,
+      "tsUnits": 1,
+      "tsExpects": 1,
+      "tsReasons": {
+        "source-text": 1
+      },
+      "tsOnly": [
+        {
+          "line": 712,
+          "title": "drives every delegating method with options where the equivalence is claimed",
+          "reasons": ["source-text:node:fs:readFileSync"]
+        }
+      ]
+    },
+    "model-duration.test.ts": {
+      "units": 11,
+      "expects": 46,
+      "specUnits": 10,
+      "specExpects": 41,
+      "tsUnits": 1,
+      "tsExpects": 5,
+      "tsReasons": {
+        "identity": 1
+      },
+      "tsOnly": [
+        {
+          "line": 109,
+          "title": "hands out its plain data as a fresh copy",
+          "reasons": ["identity:test/model-duration.test.ts:111,test/model-duration.test.ts:120"]
+        }
+      ]
+    },
+    "model-instrument.test.ts": {
+      "units": 19,
+      "expects": 64,
+      "specUnits": 18,
+      "specExpects": 59,
+      "tsUnits": 1,
+      "tsExpects": 5,
+      "tsReasons": {
+        "identity": 1
+      },
+      "tsOnly": [
+        {
+          "line": 73,
+          "title": "%s hands out its profile as a fresh copy",
+          "reasons": ["identity:test/model-instrument.test.ts:74"]
+        }
+      ]
+    },
+    "model-meter.test.ts": {
+      "units": 10,
+      "expects": 55,
+      "specUnits": 9,
+      "specExpects": 50,
+      "tsUnits": 1,
+      "tsExpects": 5,
+      "tsReasons": {
+        "identity": 1
+      },
+      "tsOnly": [
+        {
+          "line": 92,
+          "title": "hands out its plain data as a fresh copy",
+          "reasons": ["identity:test/model-meter.test.ts:101,test/model-meter.test.ts:94"]
+        }
+      ]
+    },
+    "model-motif.test.ts": {
+      "units": 24,
+      "expects": 62,
+      "specUnits": 23,
+      "specExpects": 58,
+      "tsUnits": 1,
+      "tsExpects": 4,
+      "tsReasons": {
+        "identity": 1
+      },
+      "tsOnly": [
+        {
+          "line": 101,
+          "title": "hands out a fresh copy on every read",
+          "reasons": [
+            "identity:test/model-motif.test.ts:103,test/model-motif.test.ts:105,test/model-motif.test.ts:106"
+          ]
+        }
+      ]
+    },
+    "model-rhythm.test.ts": {
+      "units": 29,
+      "expects": 66,
+      "specUnits": 28,
+      "specExpects": 61,
+      "tsUnits": 1,
+      "tsExpects": 5,
+      "tsReasons": {
+        "identity": 1
+      },
+      "tsOnly": [
+        {
+          "line": 124,
+          "title": "hands out a fresh copy on every read",
+          "reasons": [
+            "identity:test/model-rhythm.test.ts:126,test/model-rhythm.test.ts:128,test/model-rhythm.test.ts:129,test/model-rhythm.test.ts:130"
+          ]
+        }
+      ]
+    },
+    "model-score.test.ts": {
+      "units": 40,
+      "expects": 128,
+      "specUnits": 35,
+      "specExpects": 109,
+      "tsUnits": 5,
+      "tsExpects": 19,
+      "tsReasons": {
+        "identity": 2,
+        "private": 3
+      },
+      "tsOnly": [
+        {
+          "line": 157,
+          "title": "hands out a fresh copy on every read",
+          "reasons": [
+            "identity:test/model-score.test.ts:159,test/model-score.test.ts:161,test/model-score.test.ts:162"
+          ]
+        },
+        {
+          "line": 335,
+          "title": "names the key held longest, not the one the score opens on",
+          "reasons": ["private:keyIdentity"]
+        },
+        {
+          "line": 365,
+          "title": "reads the hypermeter the hypermeter reader reads, on the score own cadences",
+          "reasons": ["private:keyIdentity,keyLookup"]
+        },
+        {
+          "line": 402,
+          "title": "reads each note against the harmony and the key under it",
+          "reasons": ["private:keyIdentity,keyLookup"]
+        },
+        {
+          "line": 529,
+          "title": "leaves the original untouched and returns a new instance",
+          "reasons": ["identity:test/model-score.test.ts:549"]
+        }
+      ]
+    },
+    "model-shape-guards.test.ts": {
+      "units": 11,
+      "expects": 14,
+      "specUnits": 11,
+      "specExpects": 14,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "model-tempo.test.ts": {
+      "units": 7,
+      "expects": 33,
+      "specUnits": 6,
+      "specExpects": 30,
+      "tsUnits": 1,
+      "tsExpects": 3,
+      "tsReasons": {
+        "identity": 1
+      },
+      "tsOnly": [
+        {
+          "line": 78,
+          "title": "hands out its plain data as a fresh copy",
+          "reasons": ["identity:test/model-tempo.test.ts:80"]
+        }
+      ]
+    },
+    "model-timeline.test.ts": {
+      "units": 34,
+      "expects": 102,
+      "specUnits": 29,
+      "specExpects": 88,
+      "tsUnits": 5,
+      "tsExpects": 14,
+      "tsReasons": {
+        "private": 4,
+        "identity": 1
+      },
+      "tsOnly": [
+        {
+          "line": 149,
+          "title": "infers from notes exactly what the inference function returns",
+          "reasons": ["private:keyIdentity"]
+        },
+        {
+          "line": 183,
+          "title": "carries the key of the progression as it is written",
+          "reasons": ["private:keyIdentity"]
+        },
+        {
+          "line": 204,
+          "title": "hands out a fresh copy on every read",
+          "reasons": [
+            "identity:test/model-timeline.test.ts:206,test/model-timeline.test.ts:208,test/model-timeline.test.ts:209"
+          ]
+        },
+        {
+          "line": 366,
+          "title": "reads every chord in the key in force where the piece modulates",
+          "reasons": ["private:keyIdentity"]
+        },
+        {
+          "line": 418,
+          "title": "reports the prevailing key the key module reports",
+          "reasons": ["private:keyIdentity"]
+        }
+      ]
+    },
+    "model-tuning.test.ts": {
+      "units": 15,
+      "expects": 49,
+      "specUnits": 14,
+      "specExpects": 46,
+      "tsUnits": 1,
+      "tsExpects": 3,
+      "tsReasons": {
+        "identity": 1
+      },
+      "tsOnly": [
+        {
+          "line": 40,
+          "title": "hands out its table as a fresh copy",
+          "reasons": ["identity:test/model-tuning.test.ts:42"]
+        }
+      ]
+    },
+    "model-voicing.test.ts": {
+      "units": 41,
+      "expects": 107,
+      "specUnits": 39,
+      "specExpects": 100,
+      "tsUnits": 2,
+      "tsExpects": 7,
+      "tsReasons": {
+        "identity": 2
+      },
+      "tsOnly": [
+        {
+          "line": 46,
+          "title": "hands out its pitches as a copy, not its own state",
+          "reasons": ["identity:test/model-voicing.test.ts:48,test/model-voicing.test.ts:50"]
+        },
+        {
+          "line": 191,
+          "title": "hands out the SATB ranges as a copy of the shared table",
+          "reasons": ["identity:test/model-voicing.test.ts:193"]
+        }
+      ]
+    },
+    "model.test.ts": {
+      "units": 134,
+      "expects": 452,
+      "specUnits": 129,
+      "specExpects": 431,
+      "tsUnits": 5,
+      "tsExpects": 21,
+      "tsReasons": {
+        "identity": 5
+      },
+      "tsOnly": [
+        {
+          "line": 153,
+          "title": "is immutable: transpose returns a new instance",
+          "reasons": ["identity:test/model.test.ts:156"]
+        },
+        {
+          "line": 160,
+          "title": "transposes by zero as the identity, preserving the exact spelling",
+          "reasons": ["identity:test/model.test.ts:167"]
+        },
+        {
+          "line": 212,
+          "title": "indexes and iterates a progression without copying it each time",
+          "reasons": ["identity:test/model.test.ts:220"]
+        },
+        {
+          "line": 775,
+          "title": "is immutable: withKey and invert return new instances",
+          "reasons": ["identity:test/model.test.ts:778,test/model.test.ts:781"]
+        },
+        {
+          "line": 1020,
+          "title": "is immutable: add returns a new progression",
+          "reasons": ["identity:test/model.test.ts:1024"]
+        }
+      ]
+    },
+    "motif-graph.test.ts": {
+      "units": 16,
+      "expects": 35,
+      "specUnits": 16,
+      "specExpects": 35,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "motif-identity.test.ts": {
+      "units": 15,
+      "expects": 22,
+      "specUnits": 15,
+      "specExpects": 22,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "motif.test.ts": {
+      "units": 32,
+      "expects": 59,
+      "specUnits": 32,
+      "specExpects": 59,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "non-heptatonic-generation.test.ts": {
+      "units": 6,
+      "expects": 10,
+      "specUnits": 2,
+      "specExpects": 3,
+      "tsUnits": 4,
+      "tsExpects": 7,
+      "tsReasons": {
+        "private": 4
+      },
+      "tsOnly": [
+        {
+          "line": 35,
+          "title": "answers with chords instead of refusing the key",
+          "reasons": ["private:heptatonicFrameOf"]
+        },
+        {
+          "line": 43,
+          "title": "numbers a chord degree in the frame its root was read from",
+          "reasons": ["private:heptatonicFrameOf"]
+        },
+        {
+          "line": 82,
+          "title": "reads every preset degree in the heptatonic frame",
+          "reasons": ["private:heptatonicFrameOf"]
+        },
+        {
+          "line": 93,
+          "title": "writes the same chords as the major the degrees are read in",
+          "reasons": ["private:heptatonicFrameOf"]
+        }
+      ]
+    },
+    "note-naming.test.ts": {
+      "units": 38,
+      "expects": 145,
+      "specUnits": 38,
+      "specExpects": 145,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "ornament.test.ts": {
+      "units": 22,
+      "expects": 42,
+      "specUnits": 22,
+      "specExpects": 42,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "package-consumer.test.ts": {
+      "units": 2,
+      "expects": 8,
+      "specUnits": 0,
+      "specExpects": 0,
+      "tsUnits": 2,
+      "tsExpects": 8,
+      "tsReasons": {
+        "private": 1,
+        "source-text": 2
+      },
+      "tsOnly": [
+        {
+          "line": 183,
+          "title": "ships the directory a plain build writes to",
+          "reasons": [
+            "private:import(../tsup.config.js)",
+            "source-text:node:fs:mkdtempSync,node:fs:readFileSync,node:fs:rmSync"
+          ]
+        },
+        {
+          "line": 199,
+          "title": "typechecks and executes root/subpaths through ESM and CJS NodeNext conditions",
+          "reasons": [
+            "source-text:node:fs:copyFileSync,node:fs:mkdirSync,node:fs:mkdtempSync,node:fs:readFileSync,node:fs:readdirSync,node:fs:rmSync,node:fs:writeFileSync"
+          ]
+        }
+      ]
+    },
+    "parser-complexity.test.ts": {
+      "units": 18,
+      "expects": 43,
+      "specUnits": 16,
+      "specExpects": 23,
+      "tsUnits": 2,
+      "tsExpects": 20,
+      "tsReasons": {
+        "private": 2
+      },
+      "tsOnly": [
+        {
+          "line": 309,
+          "title": "folds a pitch far outside the instrument without walking to it",
+          "reasons": ["private:bandFloor,foldIntoBand,placePc"]
+        },
+        {
+          "line": 327,
+          "title": "folds and places exactly where it always did",
+          "reasons": ["private:bandFloor,foldIntoBand,placePc"]
+        }
+      ]
+    },
+    "part-writing.test.ts": {
+      "units": 45,
+      "expects": 81,
+      "specUnits": 42,
+      "specExpects": 74,
+      "tsUnits": 3,
+      "tsExpects": 7,
+      "tsReasons": {
+        "private": 3
+      },
+      "tsOnly": [
+        {
+          "line": 781,
+          "title": "asks no downward step of the augmented sixth of a %s sixth",
+          "reasons": ["private:seventhPcOf"]
+        },
+        {
+          "line": 799,
+          "title": "keeps the true seventh of a French sixth falling by step",
+          "reasons": ["private:seventhPcOf"]
+        },
+        {
+          "line": 822,
+          "title": "reads a German sixth built through %s the same way",
+          "reasons": ["private:seventhPcOf"]
+        }
+      ]
+    },
+    "phrase-path-property.test.ts": {
+      "units": 4,
+      "expects": 7,
+      "specUnits": 0,
+      "specExpects": 0,
+      "tsUnits": 4,
+      "tsExpects": 7,
+      "tsReasons": {
+        "private": 4
+      },
+      "tsOnly": [
+        {
+          "line": 59,
+          "title": "scores the two readings identically, to the bit",
+          "reasons": ["private:PHRASE_CUT_COST"]
+        },
+        {
+          "line": 65,
+          "title": "returns the reading without the boundary",
+          "reasons": ["private:PHRASE_CUT_COST,choosePhrasePath"]
+        },
+        {
+          "line": 69,
+          "title": "takes the boundary as soon as the evidence prefers it",
+          "reasons": ["private:PHRASE_CUT_COST,choosePhrasePath"]
+        },
+        {
+          "line": 85,
+          "title": "holds over a battery of readings, ties included",
+          "reasons": ["private:PHRASE_CUT_COST,choosePhrasePath"]
+        }
+      ]
+    },
+    "pickup-bar-origin.test.ts": {
+      "units": 5,
+      "expects": 10,
+      "specUnits": 5,
+      "specExpects": 10,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "pickup.test.ts": {
+      "units": 13,
+      "expects": 60,
+      "specUnits": 11,
+      "specExpects": 48,
+      "tsUnits": 2,
+      "tsExpects": 12,
+      "tsReasons": {
+        "source-text": 1,
+        "identity": 1
+      },
+      "tsOnly": [
+        {
+          "line": 53,
+          "title": "states the negative-beat convention where a reader hovers the field",
+          "reasons": ["source-text:node:fs:readFileSync"]
+        },
+        {
+          "line": 64,
+          "title": "is enforced the same way by every entry that reads an onset",
+          "reasons": ["identity:test/pickup.test.ts:68"]
+        }
+      ]
+    },
+    "pitch.test.ts": {
+      "units": 43,
+      "expects": 111,
+      "specUnits": 43,
+      "specExpects": 111,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "pivot-chords.test.ts": {
+      "units": 11,
+      "expects": 16,
+      "specUnits": 11,
+      "specExpects": 16,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "plan-integration.test.ts": {
+      "units": 2,
+      "expects": 21,
+      "specUnits": 2,
+      "specExpects": 21,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "playability.test.ts": {
+      "units": 52,
+      "expects": 147,
+      "specUnits": 50,
+      "specExpects": 145,
+      "tsUnits": 2,
+      "tsExpects": 2,
+      "tsReasons": {
+        "source-text": 1,
+        "private": 1
+      },
+      "tsOnly": [
+        {
+          "line": 210,
+          "title": "asks the reach table in one place, so no entrance can answer alone",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/source-files.ts:PACKAGE_ROOT,support/source-files.ts:SRC,support/source-files.ts:filesUnder"
+          ]
+        },
+        {
+          "line": 430,
+          "title": "writes nothing impossible in any style, section or density",
+          "reasons": ["private:GROOVE_STYLES,PUBLIC_SECTIONS"]
+        }
+      ]
+    },
+    "positional-rng.test.ts": {
+      "units": 14,
+      "expects": 32,
+      "specUnits": 14,
+      "specExpects": 32,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "progression-cadence-agreement.test.ts": {
+      "units": 12,
+      "expects": 18,
+      "specUnits": 12,
+      "specExpects": 18,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "progression-reharm.test.ts": {
+      "units": 6,
+      "expects": 7,
+      "specUnits": 6,
+      "specExpects": 7,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "progression.test.ts": {
+      "units": 25,
+      "expects": 54,
+      "specUnits": 25,
+      "specExpects": 54,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "public-api.test.ts": {
+      "units": 4,
+      "expects": 8,
+      "specUnits": 4,
+      "specExpects": 8,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "publish-workflow.test.ts": {
+      "units": 2,
+      "expects": 11,
+      "specUnits": 0,
+      "specExpects": 0,
+      "tsUnits": 2,
+      "tsExpects": 11,
+      "tsReasons": {
+        "source-text": 2
+      },
+      "tsOnly": [
+        {
+          "line": 11,
+          "title": "builds read-only and publishes the exact uploaded artifact",
+          "reasons": ["source-text:node:fs:readFileSync"]
+        },
+        {
+          "line": 27,
+          "title": "makes retries idempotent and creates the release only after npm publication",
+          "reasons": ["source-text:node:fs:readFileSync"]
+        }
+      ]
+    },
+    "random.test.ts": {
+      "units": 2,
+      "expects": 2,
+      "specUnits": 2,
+      "specExpects": 2,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "rationale.test.ts": {
+      "units": 36,
+      "expects": 50,
+      "specUnits": 36,
+      "specExpects": 50,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "reduction.test.ts": {
+      "units": 23,
+      "expects": 42,
+      "specUnits": 23,
+      "specExpects": 42,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "reference-compare.test.ts": {
+      "units": 29,
+      "expects": 89,
+      "specUnits": 26,
+      "specExpects": 72,
+      "tsUnits": 3,
+      "tsExpects": 17,
+      "tsReasons": {
+        "private": 3
+      },
+      "tsOnly": [
+        {
+          "line": 435,
+          "title": "reads the degree token as accidental plus numeral, ignoring case, quality and inversion",
+          "reasons": ["private:romanDegreeToken"]
+        },
+        {
+          "line": 445,
+          "title": "reads an applied chord as one token distinct from its numeral",
+          "reasons": ["private:romanDegreeToken"]
+        },
+        {
+          "line": 451,
+          "title": "reads the Neapolitan and augmented sixths as tokens equal only to themselves",
+          "reasons": ["private:romanDegreeToken"]
+        }
+      ]
+    },
+    "reference-fixtures.test.ts": {
+      "units": 1,
+      "expects": 3,
+      "specUnits": 1,
+      "specExpects": 3,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "reference-profile.test.ts": {
+      "units": 22,
+      "expects": 82,
+      "specUnits": 20,
+      "specExpects": 67,
+      "tsUnits": 2,
+      "tsExpects": 15,
+      "tsReasons": {
+        "identity": 1,
+        "private": 1
+      },
+      "tsOnly": [
+        {
+          "line": 443,
+          "title": "`${title} — (a) the validator accepts the profile`",
+          "reasons": ["identity:test/reference-profile.test.ts:450"]
+        },
+        {
+          "line": 701,
+          "title": "is the readings it is built from, whichever way they arrive",
+          "reasons": ["private:readingsFor,referenceFromReadings"]
+        }
+      ]
+    },
+    "reference-validation.test.ts": {
+      "units": 21,
+      "expects": 37,
+      "specUnits": 21,
+      "specExpects": 37,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "reharmony-spelling.test.ts": {
+      "units": 11,
+      "expects": 22,
+      "specUnits": 11,
+      "specExpects": 22,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "reharmony.test.ts": {
+      "units": 19,
+      "expects": 46,
+      "specUnits": 18,
+      "specExpects": 44,
+      "tsUnits": 1,
+      "tsExpects": 2,
+      "tsReasons": {
+        "source-text": 1
+      },
+      "tsOnly": [
+        {
+          "line": 148,
+          "title": "lists the same relationships in the source doc and both guides",
+          "reasons": ["source-text:node:fs:readFileSync,support/source-files.ts:REPO_ROOT"]
+        }
+      ]
+    },
+    "related-keys-rationale.test.ts": {
+      "units": 3,
+      "expects": 5,
+      "specUnits": 3,
+      "specExpects": 5,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "rhythm-analysis.test.ts": {
+      "units": 29,
+      "expects": 71,
+      "specUnits": 29,
+      "specExpects": 71,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "rhythm.test.ts": {
+      "units": 17,
+      "expects": 31,
+      "specUnits": 17,
+      "specExpects": 31,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "safety.test.ts": {
+      "units": 46,
+      "expects": 102,
+      "specUnits": 45,
+      "specExpects": 101,
+      "tsUnits": 1,
+      "tsExpects": 1,
+      "tsReasons": {
+        "source-text": 1
+      },
+      "tsOnly": [
+        {
+          "line": 620,
+          "title": "discovers the public entry points from the module surface",
+          "reasons": ["source-text:node:fs:readFileSync"]
+        }
+      ]
+    },
+    "scale-vocab.test.ts": {
+      "units": 7,
+      "expects": 17,
+      "specUnits": 7,
+      "specExpects": 17,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "scale.test.ts": {
+      "units": 12,
+      "expects": 20,
+      "specUnits": 12,
+      "specExpects": 20,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "score-analysis-reuse.test.ts": {
+      "units": 7,
+      "expects": 25,
+      "specUnits": 0,
+      "specExpects": 0,
+      "tsUnits": 7,
+      "tsExpects": 25,
+      "tsReasons": {
+        "private-type": 7,
+        "mock": 7
+      },
+      "tsOnly": [
+        {
+          "line": 57,
+          "title": "infers the chords once across the analyses that read them",
+          "reasons": [
+            "private-type:import(../src/analyze/form/hypermeter.js),import(../src/analyze/keys/index.js),import(../src/analyze/melody/motifs.js),import(../src/analyze/timeline/index.js)",
+            "mock:vi.mock(../src/analyze/form/hypermeter.js),vi.mock(../src/analyze/keys/index.js),vi.mock(../src/analyze/melody/motifs.js),vi.mock(../src/analyze/timeline/index.js)"
+          ]
+        },
+        {
+          "line": 84,
+          "title": "searches for the key regions once across the members that read them",
+          "reasons": [
+            "private-type:import(../src/analyze/form/hypermeter.js),import(../src/analyze/keys/index.js),import(../src/analyze/melody/motifs.js),import(../src/analyze/timeline/index.js)",
+            "mock:vi.mock(../src/analyze/form/hypermeter.js),vi.mock(../src/analyze/keys/index.js),vi.mock(../src/analyze/melody/motifs.js),vi.mock(../src/analyze/timeline/index.js)"
+          ]
+        },
+        {
+          "line": 97,
+          "title": "hands out regions a caller can write to without changing the score",
+          "reasons": [
+            "private-type:import(../src/analyze/form/hypermeter.js),import(../src/analyze/keys/index.js),import(../src/analyze/melody/motifs.js),import(../src/analyze/timeline/index.js)",
+            "mock:vi.mock(../src/analyze/form/hypermeter.js),vi.mock(../src/analyze/keys/index.js),vi.mock(../src/analyze/melody/motifs.js),vi.mock(../src/analyze/timeline/index.js)"
+          ]
+        },
+        {
+          "line": 112,
+          "title": "names the same key from the ranking and from the chord timeline",
+          "reasons": [
+            "private-type:import(../src/analyze/form/hypermeter.js),import(../src/analyze/keys/index.js),import(../src/analyze/melody/motifs.js),import(../src/analyze/timeline/index.js)",
+            "mock:vi.mock(../src/analyze/form/hypermeter.js),vi.mock(../src/analyze/keys/index.js),vi.mock(../src/analyze/melody/motifs.js),vi.mock(../src/analyze/timeline/index.js)"
+          ]
+        },
+        {
+          "line": 121,
+          "title": "counts a note carrying no velocity at full weight",
+          "reasons": [
+            "private-type:import(../src/analyze/form/hypermeter.js),import(../src/analyze/keys/index.js),import(../src/analyze/melody/motifs.js),import(../src/analyze/timeline/index.js)",
+            "mock:vi.mock(../src/analyze/form/hypermeter.js),vi.mock(../src/analyze/keys/index.js),vi.mock(../src/analyze/melody/motifs.js),vi.mock(../src/analyze/timeline/index.js)"
+          ]
+        },
+        {
+          "line": 129,
+          "title": "makes each expensive reading once, and does not repeat them for a kept answer",
+          "reasons": [
+            "private-type:import(../src/analyze/form/hypermeter.js),import(../src/analyze/keys/index.js),import(../src/analyze/melody/motifs.js),import(../src/analyze/timeline/index.js)",
+            "mock:vi.mock(../src/analyze/form/hypermeter.js),vi.mock(../src/analyze/keys/index.js),vi.mock(../src/analyze/melody/motifs.js),vi.mock(../src/analyze/timeline/index.js)"
+          ]
+        },
+        {
+          "line": 159,
+          "title": "hands out a profile a caller can write to without changing the one it kept",
+          "reasons": [
+            "private-type:import(../src/analyze/form/hypermeter.js),import(../src/analyze/keys/index.js),import(../src/analyze/melody/motifs.js),import(../src/analyze/timeline/index.js)",
+            "mock:vi.mock(../src/analyze/form/hypermeter.js),vi.mock(../src/analyze/keys/index.js),vi.mock(../src/analyze/melody/motifs.js),vi.mock(../src/analyze/timeline/index.js)"
+          ]
+        }
+      ]
+    },
+    "score-polyphony.test.ts": {
+      "units": 5,
+      "expects": 11,
+      "specUnits": 5,
+      "specExpects": 11,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "score-tempo-map.test.ts": {
+      "units": 4,
+      "expects": 13,
+      "specUnits": 4,
+      "specExpects": 13,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "secondary-dominant.test.ts": {
+      "units": 5,
+      "expects": 9,
+      "specUnits": 5,
+      "specExpects": 9,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "seed-derivation.test.ts": {
+      "units": 16,
+      "expects": 44,
+      "specUnits": 16,
+      "specExpects": 44,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "sequence.test.ts": {
+      "units": 10,
+      "expects": 16,
+      "specUnits": 0,
+      "specExpects": 0,
+      "tsUnits": 10,
+      "tsExpects": 16,
+      "tsReasons": {
+        "private": 10
+      },
+      "tsOnly": [
+        {
+          "line": 11,
+          "title": "is 0 for identical sequences, whatever the gap",
+          "reasons": ["private:gradedEditDistance"]
+        },
+        {
+          "line": 16,
+          "title": "is 0 for two empty sequences",
+          "reasons": ["private:gradedEditDistance"]
+        },
+        {
+          "line": 20,
+          "title": "charges one gap per element against an empty sequence",
+          "reasons": ["private:gradedEditDistance"]
+        },
+        {
+          "line": 25,
+          "title": "defaults the gap to 1, matching the cost the old hardcoded step used",
+          "reasons": ["private:gradedEditDistance"]
+        },
+        {
+          "line": 32,
+          "title": "charges a deletion at the gap cost when it is cheaper than the trailing match",
+          "reasons": ["private:gradedEditDistance"]
+        },
+        {
+          "line": 38,
+          "title": "trades a costly substitution for two gaps once the gap is cheap enough",
+          "reasons": ["private:gradedEditDistance"]
+        },
+        {
+          "line": 51,
+          "title": "is 1 when both sequences are empty",
+          "reasons": ["private:distanceToSimilarity"]
+        },
+        {
+          "line": 55,
+          "title": "is 1 for a zero distance between non-empty sequences",
+          "reasons": ["private:distanceToSimilarity"]
+        },
+        {
+          "line": 59,
+          "title": "normalises by the longer sequence",
+          "reasons": ["private:distanceToSimilarity"]
+        },
+        {
+          "line": 64,
+          "title": "clamps to [0, 1]",
+          "reasons": ["private:distanceToSimilarity"]
+        }
+      ]
+    },
+    "serialization.test.ts": {
+      "units": 8,
+      "expects": 17,
+      "specUnits": 8,
+      "specExpects": 17,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "smoke.test.ts": {
+      "units": 1,
+      "expects": 3,
+      "specUnits": 1,
+      "specExpects": 3,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "species.test.ts": {
+      "units": 61,
+      "expects": 78,
+      "specUnits": 61,
+      "specExpects": 78,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "spell-line.test.ts": {
+      "units": 19,
+      "expects": 21,
+      "specUnits": 19,
+      "specExpects": 21,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "spelling-tonic.test.ts": {
+      "units": 4,
+      "expects": 5,
+      "specUnits": 1,
+      "specExpects": 2,
+      "tsUnits": 3,
+      "tsExpects": 3,
+      "tsReasons": {
+        "private": 3,
+        "source-text": 1
+      },
+      "tsOnly": [
+        {
+          "line": 121,
+          "title": "is checked by every export that takes one",
+          "reasons": ["private:assertTonicOf", "source-text:node:fs:readFileSync"]
+        },
+        {
+          "line": 130,
+          "title": "$name rejects a tonic that is not the key root",
+          "reasons": ["private:assertTonicOf"]
+        },
+        {
+          "line": 134,
+          "title": "$name spells a matching pair as before",
+          "reasons": ["private:assertTonicOf"]
+        }
+      ]
+    },
+    "spelling.test.ts": {
+      "units": 60,
+      "expects": 114,
+      "specUnits": 60,
+      "specExpects": 114,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "suite-hygiene.test.ts": {
+      "units": 4,
+      "expects": 5,
+      "specUnits": 0,
+      "specExpects": 0,
+      "tsUnits": 4,
+      "tsExpects": 5,
+      "tsReasons": {
+        "source-text": 4
+      },
+      "tsOnly": [
+        {
+          "line": 86,
+          "title": "cites no planning document",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/source-files.ts:PACKAGE_ROOT,support/source-files.ts:REPO_ROOT,support/source-files.ts:SRC,support/source-files.ts:TESTS,support/source-files.ts:filesUnder"
+          ]
+        },
+        {
+          "line": 91,
+          "title": "carries no finding identifier",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/source-files.ts:PACKAGE_ROOT,support/source-files.ts:REPO_ROOT,support/source-files.ts:SRC,support/source-files.ts:TESTS,support/source-files.ts:filesUnder"
+          ]
+        },
+        {
+          "line": 98,
+          "title": "states what the library does rather than what it did",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/source-files.ts:PACKAGE_ROOT,support/source-files.ts:REPO_ROOT,support/source-files.ts:SRC,support/source-files.ts:TESTS,support/source-files.ts:filesUnder"
+          ]
+        },
+        {
+          "line": 113,
+          "title": "carries no test file that asserts nothing",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/source-files.ts:PACKAGE_ROOT,support/source-files.ts:TESTS,support/source-files.ts:filesUnder"
+          ]
+        }
+      ]
+    },
+    "symbol-round-trip.test.ts": {
+      "units": 13,
+      "expects": 24,
+      "specUnits": 12,
+      "specExpects": 22,
+      "tsUnits": 1,
+      "tsExpects": 2,
+      "tsReasons": {
+        "private": 1
+      },
+      "tsOnly": [
+        {
+          "line": 281,
+          "title": "writes a chord read on one side of the fence on the other",
+          "reasons": ["private:degreeOfInterval,isWrittenSpelling"]
+        }
+      ]
+    },
+    "symbol.test.ts": {
+      "units": 55,
+      "expects": 144,
+      "specUnits": 55,
+      "specExpects": 144,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "tempo-bounds.test.ts": {
+      "units": 3,
+      "expects": 12,
+      "specUnits": 3,
+      "specExpects": 12,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "tempo.test.ts": {
+      "units": 40,
+      "expects": 103,
+      "specUnits": 40,
+      "specExpects": 103,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "tendency-resolution-agreement.test.ts": {
+      "units": 2,
+      "expects": 5,
+      "specUnits": 1,
+      "specExpects": 3,
+      "tsUnits": 1,
+      "tsExpects": 2,
+      "tsReasons": {
+        "private": 1
+      },
+      "tsOnly": [
+        {
+          "line": 77,
+          "title": "leaves no tendency tone unresolved in any chord the vocabulary names",
+          "reasons": ["private:LEADING_TONE_QUALITIES,seventhPcOf"]
+        }
+      ]
+    },
+    "timeline-lookup-equivalence.test.ts": {
+      "units": 3,
+      "expects": 8,
+      "specUnits": 3,
+      "specExpects": 8,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "timeline-segmentation.test.ts": {
+      "units": 16,
+      "expects": 50,
+      "specUnits": 16,
+      "specExpects": 50,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "timeline.test.ts": {
+      "units": 34,
+      "expects": 89,
+      "specUnits": 32,
+      "specExpects": 80,
+      "tsUnits": 2,
+      "tsExpects": 9,
+      "tsReasons": {
+        "private": 2
+      },
+      "tsOnly": [
+        {
+          "line": 273,
+          "title": "tells what is sounding from what arrives",
+          "reasons": ["private:chordAtBeat,segmentStartingAt"]
+        },
+        {
+          "line": 287,
+          "title": "reads a beat named a hair off the boundary as the boundary",
+          "reasons": ["private:segmentStartingAt"]
+        }
+      ]
+    },
+    "transpose-by-interval.test.ts": {
+      "units": 16,
+      "expects": 35,
+      "specUnits": 16,
+      "specExpects": 35,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "transposing-instruments.test.ts": {
+      "units": 19,
+      "expects": 52,
+      "specUnits": 19,
+      "specExpects": 52,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "try-parse.test.ts": {
+      "units": 20,
+      "expects": 52,
+      "specUnits": 20,
+      "specExpects": 52,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "tuning-input-contracts.test.ts": {
+      "units": 15,
+      "expects": 44,
+      "specUnits": 10,
+      "specExpects": 30,
+      "tsUnits": 5,
+      "tsExpects": 14,
+      "tsReasons": {
+        "source-text": 5
+      },
+      "tsOnly": [
+        {
+          "line": 132,
+          "title": "says so where the throws are documented",
+          "reasons": ["source-text:node:fs:readFileSync,support/source-files.ts:SRC"]
+        },
+        {
+          "line": 143,
+          "title": "types an index outside 0..12 as an error",
+          "reasons": [
+            "source-text:support/source-files.ts:PACKAGE_ROOT,support/source-files.ts:SRC"
+          ]
+        },
+        {
+          "line": 151,
+          "title": "resolves its own lookup without a suppression",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/source-files.ts:PACKAGE_ROOT,support/source-files.ts:SRC"
+          ]
+        },
+        {
+          "line": 219,
+          "title": "imports the package rather than the source tree in every example",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/doc-examples.ts:tsdocExamples,support/source-files.ts:SRC"
+          ]
+        },
+        {
+          "line": 231,
+          "title": "describes the two-argument ratio factory above it",
+          "reasons": ["source-text:node:fs:readFileSync,support/source-files.ts:SRC"]
+        }
+      ]
+    },
+    "tuning.test.ts": {
+      "units": 10,
+      "expects": 22,
+      "specUnits": 10,
+      "specExpects": 22,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "type-surface.test.ts": {
+      "units": 4,
+      "expects": 10,
+      "specUnits": 3,
+      "specExpects": 3,
+      "tsUnits": 1,
+      "tsExpects": 7,
+      "tsReasons": {
+        "source-text": 1
+      },
+      "tsOnly": [
+        {
+          "line": 164,
+          "title": "declares a build output for every subpath the exports map advertises",
+          "reasons": ["source-text:node:fs:readFileSync"]
+        }
+      ]
+    },
+    "validation.test.ts": {
+      "units": 34,
+      "expects": 106,
+      "specUnits": 33,
+      "specExpects": 105,
+      "tsUnits": 1,
+      "tsExpects": 1,
+      "tsReasons": {
+        "source-text": 1
+      },
+      "tsOnly": [
+        {
+          "line": 528,
+          "title": "discovers every assertNoteEvents call site by walking src",
+          "reasons": [
+            "source-text:node:fs:readFileSync,support/source-files.ts:PACKAGE_ROOT,support/source-files.ts:SRC,support/source-files.ts:filesUnder"
+          ]
+        }
+      ]
+    },
+    "vocabulary.test.ts": {
+      "units": 32,
+      "expects": 96,
+      "specUnits": 32,
+      "specExpects": 96,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "voice-figures.test.ts": {
+      "units": 8,
+      "expects": 14,
+      "specUnits": 8,
+      "specExpects": 14,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "voice-independence.test.ts": {
+      "units": 22,
+      "expects": 33,
+      "specUnits": 21,
+      "specExpects": 29,
+      "tsUnits": 1,
+      "tsExpects": 4,
+      "tsReasons": {
+        "source-text": 1
+      },
+      "tsOnly": [
+        {
+          "line": 147,
+          "title": "is named by the interval the library reports for it, in every artifact",
+          "reasons": ["source-text:node:fs:readFileSync,support/source-files.ts:REPO_ROOT"]
+        }
+      ]
+    },
+    "voice-key-context.test.ts": {
+      "units": 4,
+      "expects": 13,
+      "specUnits": 4,
+      "specExpects": 13,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "voice.test.ts": {
+      "units": 21,
+      "expects": 27,
+      "specUnits": 21,
+      "specExpects": 27,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "voicing-roundtrip.test.ts": {
+      "units": 9,
+      "expects": 16,
+      "specUnits": 6,
+      "specExpects": 10,
+      "tsUnits": 3,
+      "tsExpects": 6,
+      "tsReasons": {
+        "private": 3,
+        "private-type": 2
+      },
+      "tsOnly": [
+        {
+          "line": 264,
+          "title": "`breaks no rule its own checker reports in ${name}`",
+          "reasons": [
+            "private:DEFAULT_MAX_SPACING,augmentedMelodicCount,crossRelationCount,enumerateVoicings,moveScoring,structuralPenalty,structuralTables,violationCount",
+            "private-type:MoveScoring"
+          ]
+        },
+        {
+          "line": 372,
+          "title": "counts a seventh falling a diminished third as unresolved, as the checker does",
+          "reasons": ["private:moveScoring,resolutionViolations", "private-type:MoveScoring"]
+        },
+        {
+          "line": 402,
+          "title": "weighs a cross relation the checker would report",
+          "reasons": ["private:CROSS_RELATION_PENALTY,moveScoring,violationWeight"]
+        }
+      ]
+    },
+    "voicing-rules.test.ts": {
+      "units": 9,
+      "expects": 21,
+      "specUnits": 9,
+      "specExpects": 21,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    },
+    "voicing.test.ts": {
+      "units": 56,
+      "expects": 107,
+      "specUnits": 55,
+      "specExpects": 105,
+      "tsUnits": 1,
+      "tsExpects": 2,
+      "tsReasons": {
+        "private": 1
+      },
+      "tsOnly": [
+        {
+          "line": 677,
+          "title": "`treats ${name} the same way in the search and in the check`",
+          "reasons": ["private:isFunctioningLeadingTone"]
+        }
+      ]
+    },
+    "world-scales.test.ts": {
+      "units": 24,
+      "expects": 61,
+      "specUnits": 24,
+      "specExpects": 61,
+      "tsUnits": 0,
+      "tsExpects": 0,
+      "tsReasons": {},
+      "tsOnly": []
+    }
+  }
+}

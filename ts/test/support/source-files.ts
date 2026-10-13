@@ -11,8 +11,11 @@ export const REPO_ROOT = path.resolve(PACKAGE_ROOT, '..');
 /** The library sources. */
 export const SRC = path.join(PACKAGE_ROOT, 'src');
 
-/** The test suite. */
+/** The TS-only half of the test suite. */
 export const TESTS = path.join(PACKAGE_ROOT, 'test');
+
+/** The shared half of the test suite, which every implementation runs. */
+export const SPEC_TESTS = path.join(REPO_ROOT, 'tests', 'spec');
 
 /**
  * Every file under `dir` carrying the given extension, recursively, sorted.

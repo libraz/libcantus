@@ -134,11 +134,4 @@ describe('the tonic a spelling function is given', () => {
   it.each(ENTRY_POINTS)('$name spells a matching pair as before', ({ matching }) => {
     expect(matching).not.toThrow();
   });
-
-  it('answers the way the class API answers', () => {
-    // `new Key(scale, tonic)` has always refused the pair; the functional API
-    // silently accepted it, so the two surfaces disagreed about the same input.
-    expect(() => spellScale(parseNote('B'), majorKey(6))).toThrow(InvalidInputError);
-    expect(() => spellScale(parseNote('Gb'), majorKey(6))).not.toThrow();
-  });
 });

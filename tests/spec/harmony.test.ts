@@ -1,0 +1,91 @@
+import {
+  type ChordData as Chord,
+  chordQualities,
+  makeChord,
+  roleOf,
+} from '@libraz/libcantus/theory';
+import { describe, expect, it } from 'vitest';
+
+const cMaj: Chord = { rootPc: 0, quality: 'maj', intervals: [0, 4, 7] };
+const cSus4: Chord = { rootPc: 0, quality: 'sus4', intervals: [0, 5, 7] };
+const cSus2: Chord = { rootPc: 0, quality: 'sus2', intervals: [0, 2, 7] };
+
+describe('roleOf', () => {
+  it('locks the root to chord identity', () => {
+    expect(roleOf(0, cMaj)).toEqual({ role: 'root', lock: 'identity', belongsToChordId: 0 });
+  });
+
+  it('locks the third to chord quality', () => {
+    expect(roleOf(4, cMaj)).toEqual({ role: 'third', lock: 'quality', belongsToChordId: 0 });
+  });
+
+  it('leaves the fifth as free voicing', () => {
+    expect(roleOf(7, cMaj)).toEqual({ role: 'fifth', lock: 'voicing', belongsToChordId: 0 });
+  });
+
+  it('classifies sevenths and tensions as voicing', () => {
+    expect(roleOf(10, cMaj).role).toBe('tension');
+    expect(roleOf(2, cMaj)).toEqual({ role: 'tension', lock: 'voicing', belongsToChordId: 0 });
+  });
+
+  it('classifies altered extensions by membership instead of pitch-class shape', () => {
+    const sharpEleven: Chord = {
+      rootPc: 0,
+      quality: '7#11',
+      intervals: [0, 4, 7, 10, 18],
+    };
+    const flatThirteen: Chord = {
+      rootPc: 0,
+      quality: '7b13',
+      intervals: [0, 4, 7, 10, 20],
+    };
+    expect(roleOf(6, sharpEleven).role).toBe('tension');
+    expect(roleOf(8, flatThirteen).role).toBe('tension');
+    expect(roleOf(7, sharpEleven).role).toBe('fifth');
+  });
+
+  it('locks the suspended tone of a sus4 chord to quality', () => {
+    // The fourth defines the sus4 chord; moving it changes the chord identity.
+    expect(roleOf(5, cSus4)).toEqual({ role: 'third', lock: 'quality', belongsToChordId: 0 });
+  });
+
+  it('locks the suspended tone of a sus2 chord to quality', () => {
+    expect(roleOf(2, cSus2)).toEqual({ role: 'third', lock: 'quality', belongsToChordId: 0 });
+  });
+
+  it('leaves a ninth over a chord with a third as free tension', () => {
+    const add9: Chord = { rootPc: 0, quality: 'add9', intervals: [0, 4, 7, 14] };
+    expect(roleOf(2, add9)).toEqual({ role: 'tension', lock: 'voicing', belongsToChordId: 0 });
+  });
+
+  it('carries the chord id through', () => {
+    expect(roleOf(0, cMaj, 42).belongsToChordId).toBe(42);
+  });
+
+  it('gives an eleventh chord one quality-defining tone, not two', () => {
+    // C11 sounds no third: the eleventh takes its place, while the ninth beside
+    // it is a tension. Folded into pitch classes the two are indistinguishable,
+    // which is what once made both of them answer as the third.
+    const eleventh = makeChord(0, '11');
+    expect(roleOf(5, eleventh)).toEqual({ role: 'third', lock: 'quality', belongsToChordId: 0 });
+    expect(roleOf(2, eleventh)).toEqual({ role: 'tension', lock: 'voicing', belongsToChordId: 0 });
+  });
+
+  it('names at most one interval class the third of any one chord', () => {
+    for (const quality of chordQualities()) {
+      for (const rootPc of [0, 5, 11]) {
+        const chord = makeChord(rootPc, quality);
+        const thirds = [...new Array(12).keys()].filter(
+          (pitchClass) => roleOf(rootPc + pitchClass, chord).role === 'third',
+        );
+        expect(thirds.length, `${quality}/${rootPc}`).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('uses the shared rounded pitch-class contract', () => {
+    // 65.6 rounds to F#, so it is not the F suspended fourth.
+    expect(roleOf(65.6, cSus4).role).toBe('tension');
+    expect(() => roleOf(Number.NaN, cMaj)).toThrow(RangeError);
+  });
+});

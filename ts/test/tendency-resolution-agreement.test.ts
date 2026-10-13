@@ -20,7 +20,7 @@ import { chordQualities, makeChord } from '../src/theory/chord/index.js';
 import type { PartWritingViolationKind } from '../src/theory/partwriting/index.js';
 import { checkPartWriting, spellVoicing } from '../src/theory/partwriting/index.js';
 import { majorKey, spelledKeyOf } from '../src/theory/scale/index.js';
-import { noteNames, spellChord } from '../src/theory/spelling/index.js';
+import { spellChord } from '../src/theory/spelling/index.js';
 import { LEADING_TONE_QUALITIES, seventhPcOf } from '../src/theory/tendency/index.js';
 import { voiceProgression } from '../src/theory/voicing/index.js';
 
@@ -112,29 +112,4 @@ describe('the search and the checker judge a resolution by the same written inte
     // for catching a hang, as the suite-wide one is: a sweep that took long
     // enough to reach this is not slow, it is not finishing.
   }, 600_000);
-});
-
-describe('an applied leading-tone seventh on the flat side', () => {
-  it.each([
-    ['Db', 1, 0, 'Bbb'],
-    ['Gb', 6, 5, 'Ebb'],
-  ])(
-    'spells and resolves its diminished seventh in %s major',
-    (_tonicName, tonicPc, rootPc, seventh) => {
-      const key = majorKey(tonicPc);
-      const dim7 = makeChord(rootPc, 'dim7');
-      const chords = [dim7, makeChord(tonicPc, 'maj')];
-      // Nine semitones above the root are the chord's seventh, six letters up,
-      // so the tone is written as a double flat and can fall the diatonic step
-      // the rule asks of a seventh.
-      expect(noteNames(spellChord(dim7, spelledKeyOf(key).tonic, key))).toContain(seventh);
-      const voiced = voiceProgression(chords, { key });
-      const spelled = chords.map((chord, index) => spellVoicing(voiced[index] ?? [], chord, key));
-      const written = noteNames(spelled[0] ?? []);
-      expect(written.some((name) => name.startsWith(seventh))).toBe(true);
-      expect(
-        checkPartWriting(spelled, chords, key).map((violation) => violation.kind),
-      ).not.toContain('unresolvedSeventh');
-    },
-  );
 });
