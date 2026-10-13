@@ -1,0 +1,7 @@
+{"op":"$echo","args":[1],"result":1}
+{"op":"$echo","args":[{"a":[1,2,{"b":null}]}],"result":{"a":[1,2,{"b":null}]}}
+{"op":"$echo","args":[{"$n":"NaN"}],"result":{"$n":"NaN"}}
+{"op":"$echo","args":[{"$$k":"v"}],"result":{"$$k":"v"}}
+{"op":"$throw","args":[{"code":"INVALID_INPUT","message":"bad"}],"error":{"code":"INVALID_INPUT","name":"InvalidInputError","message":"bad"}}
+{"op":"$throw","args":[{"code":"NO_SOLUTION","message":"none","at":2}],"error":{"code":"NO_SOLUTION","name":"NoSolutionError","message":"none","at":2}}
+{"op":"$nope","args":[],"error":{"code":"UNKNOWN_OP","name":"Error","message":"unknown op \"$nope\""}}
