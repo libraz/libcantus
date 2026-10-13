@@ -7,12 +7,7 @@ CANTUS_TARGETS += build-node test-node
 NODE_PKG := bindings/node
 NODE_BIN = $(CURDIR)/node_modules/.bin
 # dist/ copies its declarations from the pure package's build.
-PURE_DTS := ts/dist/index.d.ts
-PURE_SOURCES = $(shell find ts/src -name '*.ts') ts/tsup.config.ts ts/package.json
 NODE_CORPUS_FIXTURES = $(sort $(wildcard tests/corpus/fixtures/*.jsonl))
-
-$(PURE_DTS): $(PURE_SOURCES)
-	cd ts && $(NICE) $(NODE_BIN)/tsup
 
 build-node: $(PURE_DTS)
 	cd $(NODE_PKG) && $(NICE) $(NODE_BIN)/cmake-js build --out build --parallel $(JOBS) --log-level warn

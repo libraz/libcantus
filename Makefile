@@ -6,6 +6,7 @@ CMAKE ?= cmake
 CTEST ?= ctest
 PYTHON ?= python3
 NODE ?= node
+YARN ?= yarn
 CLANG_FORMAT ?= clang-format
 CLANG_TIDY ?= clang-tidy
 
@@ -21,6 +22,9 @@ RELEASE_DIR ?= build-release
 INSTALL_BUILD_DIR ?= build-install
 
 CANTUS_TARGETS :=
+
+# Pure TS typings that the wasm and node packages copy; the rule is in mk/ts.mk.
+PURE_DTS := ts/dist/index.d.ts
 
 .DEFAULT_GOAL := build
 .SECONDEXPANSION:

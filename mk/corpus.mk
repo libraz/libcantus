@@ -7,7 +7,6 @@ CANTUS_TARGETS += corpus corpus-check spec-ready
 
 UNIT ?=
 IMPL ?= node
-YARN ?= yarn
 VITEST ?= node_modules/.bin/vitest
 
 # The surface build a spec-ready run needs, once the fragment defining it exists.
