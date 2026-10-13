@@ -11,9 +11,9 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
-    "spec": "vitest run -c tests/spec/vitest.config.ts",
+    "spec": "nice -n 10 vitest run -c tests/spec/vitest.config.ts --maxWorkers=2",
     "spec:ready": "make spec-ready",
-    "corpus": "CANTUS_IMPL=facade-ts CANTUS_RECORD=1 vitest run -c tests/spec/vitest.config.ts && node tools/corpus/merge.mjs"
+    "corpus": "CANTUS_IMPL=facade-ts CANTUS_RECORD=1 nice -n 10 vitest run -c tests/spec/vitest.config.ts --maxWorkers=2 && node tools/corpus/merge.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
