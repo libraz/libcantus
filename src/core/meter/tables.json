@@ -1,0 +1,9 @@
+{
+  "limits": [
+    {
+      "module": "core/meter/internal.ts",
+      "export": "BEAT_EPS",
+      "cxx_type": "double"
+    }
+  ]
+}

@@ -2,4 +2,11 @@
 #ifndef CANTUS_SRC_CORE_METER_LIMITS_GEN_H_
 #define CANTUS_SRC_CORE_METER_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** BEAT_EPS of ts/src/core/meter/internal.ts. */
+inline constexpr double BEAT_EPS = 1e-9;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_CORE_METER_LIMITS_GEN_H_

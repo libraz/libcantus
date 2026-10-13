@@ -1,0 +1,18 @@
+{
+  "tables": [
+    {
+      "module": "core/instrument/articulation.ts",
+      "export": "ARTICULATIONS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kArticulationNames",
+      "fields": []
+    },
+    {
+      "module": "core/instrument/profile.ts",
+      "export": "LIMBS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kLimbNames",
+      "fields": []
+    }
+  ]
+}

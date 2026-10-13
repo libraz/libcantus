@@ -2,4 +2,13 @@
 #ifndef CANTUS_SRC_CORE_VALIDATION_LIMITS_GEN_H_
 #define CANTUS_SRC_CORE_VALIDATION_LIMITS_GEN_H_
 
+#include <cstdint>
+
+namespace cantus {
+
+/** DEFAULT_GENERATION_BUDGET of ts/src/core/validation/index.ts. */
+inline constexpr std::int64_t DEFAULT_GENERATION_BUDGET = 1000000;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_CORE_VALIDATION_LIMITS_GEN_H_

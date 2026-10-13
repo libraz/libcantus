@@ -1,0 +1,9 @@
+{
+  "limits": [
+    {
+      "module": "core/validation/index.ts",
+      "export": "DEFAULT_GENERATION_BUDGET",
+      "cxx_type": "std::int64_t"
+    }
+  ]
+}
