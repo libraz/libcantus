@@ -4,13 +4,13 @@ import { describe, expect, it } from 'vitest';
 import { InvalidInputError } from '../src/core/errors/index.js';
 import { formatBarPosition, formatTimeSignature } from '../src/core/meter/index.js';
 import { Meter } from '../src/model/meter.js';
-import { ROOT } from './support/source-files.js';
+import { REPO_ROOT } from './support/source-files.js';
 
 /** The guides that describe the meter formatters, in both languages. */
 const GUIDES = ['docs/en/time-and-arrangement.md', 'docs/ja/time-and-arrangement.md'].map(
   (file) => ({
     file,
-    text: readFileSync(path.join(ROOT, file), 'utf8'),
+    text: readFileSync(path.join(REPO_ROOT, file), 'utf8'),
   }),
 );
 

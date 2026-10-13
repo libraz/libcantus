@@ -2,7 +2,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CONCEPT_OWNERS } from './support/concept-owners.js';
 import { declarations, importsOf, relativeTo, resolveSpecifier } from './support/signatures.js';
-import { ROOT, SRC } from './support/source-files.js';
+import { PACKAGE_ROOT, SRC } from './support/source-files.js';
 
 /**
  * The ownership check: one concept, one derivation.
@@ -60,7 +60,7 @@ describe('a musical concept has one derivation', () => {
       .filter((imported) => imported.file !== owner.owner)
       .filter((imported) => imported.names.some((name) => hidden.has(name)))
       .filter((imported) => {
-        const target = resolveSpecifier(path.join(ROOT, imported.file), imported.spec);
+        const target = resolveSpecifier(path.join(PACKAGE_ROOT, imported.file), imported.spec);
         return target !== null && relativeTo(path.dirname(SRC), target) === owner.owner;
       })
       .map(

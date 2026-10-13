@@ -42,12 +42,12 @@ jobs:
         run: yarn install --immutable
 
       - name: Generate API reference
-        run: yarn docs
+        run: yarn workspace @libraz/libcantus docs
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: docs/api
+          path: ts/docs/api
 
   deploy:
     needs: build

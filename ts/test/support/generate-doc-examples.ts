@@ -8,13 +8,13 @@ import {
   renderTestSuite,
   tsdocExamples,
 } from './doc-examples.js';
-import { filesUnder, ROOT, SRC } from './source-files.js';
+import { filesUnder, PACKAGE_ROOT, REPO_ROOT, SRC } from './source-files.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-export { ROOT, SRC };
-export const DOCS_EN = path.join(ROOT, 'docs/en');
-export const DOCS_JA = path.join(ROOT, 'docs/ja');
+export { PACKAGE_ROOT, SRC };
+export const DOCS_EN = path.join(REPO_ROOT, 'docs/en');
+export const DOCS_JA = path.join(REPO_ROOT, 'docs/ja');
 const OUT = path.resolve(here, '../generated');
 
 /**
@@ -36,7 +36,7 @@ export function sourceFiles(): string[] {
 function sources(): { label: string; file: string }[] {
   const pending = new Set(PENDING_EXAMPLE_SOURCES);
   return [
-    { label: 'README.md', file: path.join(ROOT, 'README.md') },
+    { label: 'README.md', file: path.join(PACKAGE_ROOT, 'README.md') },
     ...markdownFiles(DOCS_EN).map((file) => ({
       label: `docs/en/${file}`,
       file: path.join(DOCS_EN, file),

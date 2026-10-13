@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { Note } from '../src/core/pitch/index.js';
 import { parseNote, spelledInterval } from '../src/core/pitch/index.js';
 import { voiceIndependence } from '../src/theory/counterpoint/index.js';
+import { REPO_ROOT } from './support/source-files.js';
 
 /** Spell one slot per beat; a dash is a rest. */
 function slots(names: string): (Note | null)[] {
@@ -156,7 +157,7 @@ describe('the worked example the guide and the TSDoc carry', () => {
 
     const paragraph = (lang: string, marker: string) => {
       const found = readFileSync(
-        path.join(ROOT, 'docs', lang, 'counterpoint-and-part-writing.md'),
+        path.join(REPO_ROOT, 'docs', lang, 'counterpoint-and-part-writing.md'),
         'utf8',
       )
         .replace(/^```[\s\S]*?^```/gm, '')

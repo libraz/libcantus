@@ -1,156 +1,24 @@
 {
-  "name": "@libraz/libcantus",
+  "name": "libcantus-workspace",
+  "private": true,
   "version": "1.3.0",
-  "description": "Pure-TypeScript music theory engine: harmonic analysis, chord and scale vocabulary, voicing, reharmonization, and seeded part generation over MIDI note events.",
-  "type": "module",
-  "license": "Apache-2.0",
-  "author": "libraz",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/libraz/libcantus.git"
-  },
-  "homepage": "https://github.com/libraz/libcantus#readme",
-  "bugs": {
-    "url": "https://github.com/libraz/libcantus/issues"
-  },
-  "keywords": [
-    "music-theory",
-    "music",
-    "chords",
-    "scales",
-    "intervals",
-    "harmony",
-    "composition",
-    "midi",
-    "chord-detection",
-    "voicing",
-    "reharmonization",
-    "arrangement",
-    "generative-music"
-  ],
-  "engines": {
-    "node": ">=22"
-  },
   "packageManager": "yarn@4.18.0",
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
-    },
-    "./core": {
-      "import": {
-        "types": "./dist/core/index.d.ts",
-        "default": "./dist/core/index.js"
-      },
-      "require": {
-        "types": "./dist/core/index.d.cts",
-        "default": "./dist/core/index.cjs"
-      }
-    },
-    "./theory": {
-      "import": {
-        "types": "./dist/theory/index.d.ts",
-        "default": "./dist/theory/index.js"
-      },
-      "require": {
-        "types": "./dist/theory/index.d.cts",
-        "default": "./dist/theory/index.cjs"
-      }
-    },
-    "./analyze": {
-      "import": {
-        "types": "./dist/analyze/index.d.ts",
-        "default": "./dist/analyze/index.js"
-      },
-      "require": {
-        "types": "./dist/analyze/index.d.cts",
-        "default": "./dist/analyze/index.cjs"
-      }
-    },
-    "./generate": {
-      "import": {
-        "types": "./dist/generate/index.d.ts",
-        "default": "./dist/generate/index.js"
-      },
-      "require": {
-        "types": "./dist/generate/index.d.cts",
-        "default": "./dist/generate/index.cjs"
-      }
-    },
-    "./model": {
-      "import": {
-        "types": "./dist/model/index.d.ts",
-        "default": "./dist/model/index.js"
-      },
-      "require": {
-        "types": "./dist/model/index.d.cts",
-        "default": "./dist/model/index.cjs"
-      }
-    },
-    "./package.json": "./package.json"
-  },
-  "typesVersions": {
-    "*": {
-      "core": [
-        "./dist/core/index.d.ts"
-      ],
-      "theory": [
-        "./dist/theory/index.d.ts"
-      ],
-      "analyze": [
-        "./dist/analyze/index.d.ts"
-      ],
-      "generate": [
-        "./dist/generate/index.d.ts"
-      ],
-      "model": [
-        "./dist/model/index.d.ts"
-      ]
-    }
-  },
-  "files": [
-    "dist",
-    "README.md",
-    "README_ja.md",
-    "LICENSE"
+  "workspaces": [
+    "ts",
+    "bindings/*"
   ],
-  "sideEffects": false,
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
-    "examples": "vitest list >/dev/null",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json && yarn examples && tsc -p tsconfig.examples.json",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "bench:timeline": "yarn build && node --expose-gc benchmark/timeline-index.mjs",
-    "docs": "typedoc",
-    "figures": "node scripts/figures/build.mjs",
-    "prepare": "[ -d node_modules/typescript ] && tsup || true",
-    "prepublishOnly": "yarn build"
+    "spec": "vitest run -c tests/spec/vitest.config.ts",
+    "spec:ready": "node tools/corpus/select.mjs | xargs vitest run -c tests/spec/vitest.config.ts",
+    "corpus": "CANTUS_IMPL=facade-ts CANTUS_RECORD=1 vitest run -c tests/spec/vitest.config.ts && node tools/corpus/merge.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
-    "@libraz/typedoc-theme": "^0.1.1",
-    "@types/node": "^26.6.3",
-    "@vitest/coverage-v8": "5.0.2",
-    "tsup": "8.5.1",
-    "typedoc": "0.28.20",
-    "typedoc-plugin-extras": "4.0.1",
-    "typedoc-plugin-mdn-links": "5.1.1",
-    "typescript": "6.0.3",
+    "cmake-js": "^8.0.0",
+    "node-addon-api": "^8.9.2",
     "vite": "8.3.1",
     "vitest": "5.0.2"
   }

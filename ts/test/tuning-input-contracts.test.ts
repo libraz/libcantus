@@ -20,7 +20,7 @@ import {
 } from '../src/core/tuning/index.js';
 import { Tuning } from '../src/model/tuning.js';
 import { tsdocExamples } from './support/doc-examples.js';
-import { ROOT, SRC } from './support/source-files.js';
+import { PACKAGE_ROOT, SRC } from './support/source-files.js';
 
 /** A table written out field by field, so a missing field is a real hole. */
 const BAROQUE: TuningTable = { refStep: 69, refFreq: 415, divisions: 12 };
@@ -267,12 +267,12 @@ function docAbove(source: string, marker: string): string {
  * @returns The diagnostic messages, empty when the snippet type-checks.
  */
 function probe(body: string, wholeProgram = false): string[] {
-  const config = ts.readConfigFile(resolve(ROOT, 'tsconfig.json'), ts.sys.readFile);
-  const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, ROOT);
+  const config = ts.readConfigFile(resolve(PACKAGE_ROOT, 'tsconfig.json'), ts.sys.readFile);
+  const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, PACKAGE_ROOT);
   // `rootDir` is dropped because the snippet lives beside the sources rather
   // than under them, and nothing is emitted here anyway.
   const options: ts.CompilerOptions = { ...parsed.options, rootDir: undefined, noEmit: true };
-  const file = resolve(ROOT, 'test/tuning-index-probe.ts');
+  const file = resolve(PACKAGE_ROOT, 'test/tuning-index-probe.ts');
   const code = [
     "import { JUST_RATIOS, justDeviationCents } from '../src/core/tuning/index.js';",
     body,

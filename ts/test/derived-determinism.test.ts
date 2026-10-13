@@ -18,7 +18,7 @@ import { generateRhythm } from '../src/generate/rhythm/index.js';
 import type { Chord } from '../src/theory/chord/index.js';
 import { makeChord } from '../src/theory/chord/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
-import { ROOT } from './support/source-files.js';
+import { PACKAGE_ROOT } from './support/source-files.js';
 
 /**
  * The determinism check: the same seed writes the same part, run after run.
@@ -41,7 +41,7 @@ import { ROOT } from './support/source-files.js';
  * ```
  */
 
-const GOLDEN = path.join(ROOT, 'test', 'golden', 'determinism.json');
+const GOLDEN = path.join(PACKAGE_ROOT, 'test', 'golden', 'determinism.json');
 
 const cMajor = majorKey(0);
 const ts = parseTimeSignature('4/4');

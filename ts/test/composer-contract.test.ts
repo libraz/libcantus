@@ -7,7 +7,7 @@ import { createPositionalRng } from '../src/core/random/index.js';
 import { Composer } from '../src/model/composer.js';
 import { Score } from '../src/model/score.js';
 import { tsdocExamples } from './support/doc-examples.js';
-import { ROOT } from './support/source-files.js';
+import { PACKAGE_ROOT } from './support/source-files.js';
 
 /** A drawn part, for comparing what two composers would generate. */
 const part = (composer: Composer) =>
@@ -82,7 +82,7 @@ describe('a drum part needs one meter for the whole part', () => {
 
 describe('the examples on the composer', () => {
   it('import from the package rather than from the source tree', () => {
-    const source = readFileSync(path.join(ROOT, 'src', 'model', 'composer.ts'), 'utf8');
+    const source = readFileSync(path.join(PACKAGE_ROOT, 'src', 'model', 'composer.ts'), 'utf8');
     const specifiers = tsdocExamples(source)
       .flatMap((block) => block.code.split('\n'))
       .map((line) => line.match(/^import\s.*\sfrom\s+'([^']+)';?$/)?.[1])

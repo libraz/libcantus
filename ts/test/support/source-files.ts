@@ -2,14 +2,17 @@ import { readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** The repository root, as an absolute path. */
-export const ROOT = path.resolve(fileURLToPath(new URL('.', import.meta.url)), '../..');
+/** The npm package root (`ts/`), as an absolute path. */
+export const PACKAGE_ROOT = path.resolve(fileURLToPath(new URL('.', import.meta.url)), '../..');
+
+/** The repository root, which holds the guides under `docs/`. */
+export const REPO_ROOT = path.resolve(PACKAGE_ROOT, '..');
 
 /** The library sources. */
-export const SRC = path.join(ROOT, 'src');
+export const SRC = path.join(PACKAGE_ROOT, 'src');
 
 /** The test suite. */
-export const TESTS = path.join(ROOT, 'test');
+export const TESTS = path.join(PACKAGE_ROOT, 'test');
 
 /**
  * Every file under `dir` carrying the given extension, recursively, sorted.

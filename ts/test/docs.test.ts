@@ -13,11 +13,12 @@ import {
 import {
   DOCS_EN,
   DOCS_JA,
+  PACKAGE_ROOT,
   PENDING_EXAMPLE_SOURCES,
-  ROOT,
   SRC,
   sourceFiles,
 } from './support/generate-doc-examples.js';
+import { REPO_ROOT } from './support/source-files.js';
 
 const english = markdownFiles(DOCS_EN);
 
@@ -40,17 +41,22 @@ describe('bilingual guides', () => {
   // showing an API that no longer exists.
   it('README.md and README_ja.md carry the same examples', () => {
     const code = (file: string) =>
-      blocksOf(path.join(ROOT, file)).map((block) => [block.lang, withoutComments(block.code)]);
+      blocksOf(path.join(PACKAGE_ROOT, file)).map((block) => [
+        block.lang,
+        withoutComments(block.code),
+      ]);
     expect(code('README_ja.md')).toEqual(code('README.md'));
   });
 });
 
 describe('links', () => {
   const pages = [
-    { file: 'README.md', dir: ROOT, lang: 'en' },
-    { file: 'README_ja.md', dir: ROOT, lang: 'ja' },
-    ...english.map((file) => ({ file, dir: DOCS_EN, lang: 'en' })),
-    ...markdownFiles(DOCS_JA).map((file) => ({ file, dir: DOCS_JA, lang: 'ja' })),
+    // The READMEs are the repository's front page as well as the package's, so
+    // their relative links are resolved from the repository root.
+    { file: 'README.md', dir: PACKAGE_ROOT, base: REPO_ROOT, lang: 'en' },
+    { file: 'README_ja.md', dir: PACKAGE_ROOT, base: REPO_ROOT, lang: 'ja' },
+    ...english.map((file) => ({ file, dir: DOCS_EN, base: DOCS_EN, lang: 'en' })),
+    ...markdownFiles(DOCS_JA).map((file) => ({ file, dir: DOCS_JA, base: DOCS_JA, lang: 'ja' })),
   ];
 
   const targets = (source: string): string[] =>
@@ -58,10 +64,10 @@ describe('links', () => {
       .map((match) => (match[1] as string).split('#')[0] as string)
       .filter((target) => target !== '' && !/^[a-z]+:/.test(target));
 
-  it.each(pages)('$lang/$file resolves its relative links', ({ file, dir }) => {
+  it.each(pages)('$lang/$file resolves its relative links', ({ file, dir, base }) => {
     const source = readFileSync(path.join(dir, file), 'utf8');
     const broken = targets(source).filter(
-      (target) => !existsSync(path.resolve(dir, path.dirname(file), target)),
+      (target) => !existsSync(path.resolve(base, path.dirname(file), target)),
     );
     expect(broken).toEqual([]);
   });
@@ -102,7 +108,7 @@ describe('TSDoc examples', () => {
   const IMPORT_SPECIFIER = /\bfrom\s+['"]([^'"]+)['"]/g;
   const subpaths = Object.keys(
     (
-      JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as {
+      JSON.parse(readFileSync(path.join(PACKAGE_ROOT, 'package.json'), 'utf8')) as {
         exports: Record<string, unknown>;
       }
     ).exports,

@@ -23,7 +23,7 @@ import { GROOVE_STYLES, PUBLIC_SECTIONS } from '../src/generate/drums/internal.j
 import { Instrument } from '../src/model/instrument.js';
 import { makeChord } from '../src/theory/chord/index.js';
 import { majorKey } from '../src/theory/scale/index.js';
-import { filesUnder, ROOT, SRC } from './support/source-files.js';
+import { filesUnder, PACKAGE_ROOT, SRC } from './support/source-files.js';
 
 const cMajor = majorKey(0);
 
@@ -215,7 +215,7 @@ describe('a kit is bounded by the limbs the player has', () => {
     const readers = filesUnder(SRC, '.ts').filter((file) =>
       readFileSync(file, 'utf8').includes('.reach['),
     );
-    expect(readers.map((file) => relative(ROOT, file).split(sep).join('/'))).toEqual([
+    expect(readers.map((file) => relative(PACKAGE_ROOT, file).split(sep).join('/'))).toEqual([
       'src/core/instrument/profile.ts',
     ]);
   });

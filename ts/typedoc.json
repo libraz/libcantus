@@ -2,7 +2,7 @@
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": ["src/index.ts"],
   "out": "docs/api",
-  "readme": "README.md",
+  "readme": "../README.md",
   "name": "@libraz/libcantus",
   "includeVersion": true,
   "excludeInternal": true,

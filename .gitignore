@@ -13,7 +13,18 @@ backup/
 !.yarn/sdks
 !.yarn/versions
 .pnp.*
-test/generated/
+
+ts/dist/
+ts/docs/api/
+ts/coverage/
+ts/test/generated/
+build*/
+tests/spec/generated/
+tests/corpus/out/
+bindings/*/dist/
+bindings/python/.venv/
+bindings/wasm/dist/*.wasm
+compile_commands.json
 
 .claude/
 .serena/

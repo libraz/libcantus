@@ -20,7 +20,7 @@ import voiceLeading from './voice-leading.mjs';
 
 const FIGURES = [interval, chords, scaleDegrees, romanFunction, cadence, voiceLeading];
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const outDir = resolve(root, process.argv[2] ?? 'docs/images');
 mkdirSync(outDir, { recursive: true });
 

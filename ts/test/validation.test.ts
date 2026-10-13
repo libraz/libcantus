@@ -85,7 +85,7 @@ import { makeChord } from '../src/theory/chord/index.js';
 import { NoteSafety, ReasonFlag } from '../src/theory/safety/index.js';
 import { majorKey, resolveKey, scaleByName } from '../src/theory/scale/index.js';
 import { parseChordSymbol } from '../src/theory/symbol/index.js';
-import { filesUnder, ROOT, SRC } from './support/source-files.js';
+import { filesUnder, PACKAGE_ROOT, SRC } from './support/source-files.js';
 
 describe('shared numeric input contracts', () => {
   it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
@@ -371,7 +371,9 @@ function noteEventCallSites(): string[] {
         ts.isIdentifier(node.expression) &&
         node.expression.text === 'assertNoteEvents'
       ) {
-        found.push(`${relative(ROOT, file).split(sep).join('/')}:${enclosingFunction(node)}`);
+        found.push(
+          `${relative(PACKAGE_ROOT, file).split(sep).join('/')}:${enclosingFunction(node)}`,
+        );
       }
       ts.forEachChild(node, visit);
     };

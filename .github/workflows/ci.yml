@@ -57,8 +57,8 @@ jobs:
         run: yarn install --immutable
 
       - run: yarn lint
-      - run: yarn typecheck
-      - run: yarn test:coverage
+      - run: yarn workspace @libraz/libcantus typecheck
+      - run: yarn workspace @libraz/libcantus test:coverage
 
       # The reference build validates every link and every required doc comment
       # and treats those warnings as errors, so it fails on a symbol that lost
@@ -66,15 +66,15 @@ jobs:
       # Run before merge rather than only on the pages deploy.
       - name: Build the API reference
         if: matrix.os == 'ubuntu-latest' && matrix.node == 22
-        run: yarn docs
+        run: yarn workspace @libraz/libcantus docs
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.node == 22
         uses: codecov/codecov-action@v7
         with:
-          files: ./coverage/lcov.info
+          files: ./ts/coverage/lcov.info
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-      - run: yarn build
+      - run: yarn workspace @libraz/libcantus build

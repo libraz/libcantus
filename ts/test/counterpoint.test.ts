@@ -19,6 +19,7 @@ import {
   isLeadingToneResolution,
 } from '../src/theory/counterpoint/index.js';
 import { MAJOR_MASK } from '../src/theory/scale/index.js';
+import { REPO_ROOT } from './support/source-files.js';
 
 const cMajor: KeyScale = { rootPc: 0, modeMask12: MAJOR_MASK };
 
@@ -130,7 +131,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MODULE = path.join(ROOT, 'src/theory/counterpoint/index.ts');
 const GUIDES = ['en', 'ja'].map((lang) => ({
   lang,
-  file: path.join(ROOT, 'docs', lang, 'counterpoint-and-part-writing.md'),
+  file: path.join(REPO_ROOT, 'docs', lang, 'counterpoint-and-part-writing.md'),
 }));
 
 /**

@@ -43,13 +43,13 @@ jobs:
         run: yarn install --immutable
 
       - run: yarn lint
-      - run: yarn typecheck
-      - run: yarn test
-      - run: yarn build
+      - run: yarn workspace @libraz/libcantus typecheck
+      - run: yarn workspace @libraz/libcantus test
+      - run: yarn workspace @libraz/libcantus build
 
       - name: Verify tag matches package.json version
         run: |
-          pkg_version="$(node -p "require('./package.json').version")"
+          pkg_version="$(node -p "require('./ts/package.json').version")"
           tag_version="${GITHUB_REF_NAME#v}"
           if [ "$pkg_version" != "$tag_version" ]; then
             echo "Tag $GITHUB_REF_NAME does not match package.json version $pkg_version" >&2
@@ -57,13 +57,14 @@ jobs:
           fi
 
       - name: Build the exact package artifact
+        working-directory: ts
         run: npm pack --ignore-scripts
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v7
         with:
           name: npm-package
-          path: '*.tgz'
+          path: 'ts/*.tgz'
           if-no-files-found: error
           retention-days: 1
 

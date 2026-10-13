@@ -18,6 +18,7 @@ import { generateMotif, motifToNoteEvents, transformMotif } from '../src/generat
 import { majorKey } from '../src/theory/scale/index.js';
 import { growthFactor } from './support/growth.js';
 import { unionMembers } from './support/signatures.js';
+import { REPO_ROOT } from './support/source-files.js';
 
 const cMajor = majorKey(0);
 
@@ -565,7 +566,7 @@ describe('the transform / relation correspondence the guide tabulates', () => {
   );
   const guides = ['en', 'ja'].map((lang) => ({
     lang,
-    file: path.join(ROOT, 'docs', lang, 'melody-and-motifs.md'),
+    file: path.join(REPO_ROOT, 'docs', lang, 'melody-and-motifs.md'),
   }));
 
   it.each(guides)('$lang tabulates every transform, in the order they are declared', ({ file }) => {

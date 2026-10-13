@@ -3,13 +3,13 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { filesUnder, ROOT, SRC, TESTS } from './support/source-files.js';
+import { filesUnder, PACKAGE_ROOT, REPO_ROOT, SRC, TESTS } from './support/source-files.js';
 
 /** Where the generated documentation examples land. */
 const GENERATED = path.join(TESTS, 'generated');
 
 /** The hand-authored guides, in both languages. */
-const GUIDES = [path.join(ROOT, 'docs/en'), path.join(ROOT, 'docs/ja')];
+const GUIDES = [path.join(REPO_ROOT, 'docs/en'), path.join(REPO_ROOT, 'docs/ja')];
 
 /**
  * The test files the repository carries, as absolute paths.
@@ -22,10 +22,13 @@ const GUIDES = [path.join(ROOT, 'docs/en'), path.join(ROOT, 'docs/ja')];
  */
 function repositoryTestFiles(): string[] {
   try {
-    return execFileSync('git', ['ls-files', '-z', '--', 'test'], { cwd: ROOT, encoding: 'utf8' })
+    return execFileSync('git', ['ls-files', '-z', '--', 'test'], {
+      cwd: PACKAGE_ROOT,
+      encoding: 'utf8',
+    })
       .split('\0')
       .filter((file) => file.endsWith('.test.ts'))
-      .map((file) => path.join(ROOT, file));
+      .map((file) => path.join(PACKAGE_ROOT, file));
   } catch {
     return filesUnder(TESTS, '.test.ts');
   }
@@ -51,8 +54,8 @@ function publicArtifacts(): string[] {
       (file) => file !== self && !file.startsWith(`${GENERATED}${path.sep}`),
     ),
     ...GUIDES.flatMap((dir) => filesUnder(dir, '.md')),
-    path.join(ROOT, 'README.md'),
-    path.join(ROOT, 'README_ja.md'),
+    path.join(PACKAGE_ROOT, 'README.md'),
+    path.join(PACKAGE_ROOT, 'README_ja.md'),
   ];
 }
 
@@ -60,7 +63,7 @@ function publicArtifacts(): string[] {
 function offences(files: readonly string[], pattern: RegExp): string[] {
   const found: string[] = [];
   for (const file of files) {
-    const relative = path.relative(ROOT, file).split(path.sep).join('/');
+    const relative = path.relative(PACKAGE_ROOT, file).split(path.sep).join('/');
     readFileSync(file, 'utf8')
       .split('\n')
       .forEach((line, index) => {
@@ -114,7 +117,7 @@ describe('the suite itself', () => {
     const silent = repositoryTestFiles()
       .filter((file) => !file.startsWith(`${GENERATED}${path.sep}`))
       .filter((file) => !statesAnExpectation(readFileSync(file, 'utf8')))
-      .map((file) => path.relative(ROOT, file).split(path.sep).join('/'));
+      .map((file) => path.relative(PACKAGE_ROOT, file).split(path.sep).join('/'));
     expect(silent).toEqual([]);
   });
 });

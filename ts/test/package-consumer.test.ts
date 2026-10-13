@@ -8,6 +8,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -309,7 +310,11 @@ describe('packed package consumer matrix', () => {
       }),
     );
 
-    const tsc = path.join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
+    const tsc = path.join(
+      path.dirname(createRequire(import.meta.url).resolve('typescript/package.json')),
+      'bin',
+      'tsc',
+    );
     run(process.execPath, [tsc, '-p', path.join(esm, 'tsconfig.json')], consumer);
     run(process.execPath, [tsc, '-p', path.join(cjs, 'tsconfig.json')], consumer);
     run(process.execPath, [tsc, '-p', path.join(classic, 'tsconfig.json')], consumer);

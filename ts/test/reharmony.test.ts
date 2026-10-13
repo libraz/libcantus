@@ -10,6 +10,7 @@ import {
 import { chordPitchClasses, makeChord } from '../src/theory/chord/index.js';
 import { majorKey, minorKey, scaleByName } from '../src/theory/scale/index.js';
 import { formatChordSymbol } from '../src/theory/symbol/index.js';
+import { REPO_ROOT } from './support/source-files.js';
 
 describe('substituteChord', () => {
   it('tritone-substitutes G7 in C major with Db7', () => {
@@ -145,7 +146,13 @@ describe('the substitution vocabulary is one list', () => {
   });
 
   it('lists the same relationships in the source doc and both guides', () => {
-    const read = (file: string) => readFileSync(path.join(import.meta.dirname, '..', file), 'utf8');
+    const read = (file: string) =>
+      readFileSync(
+        file.startsWith('docs/')
+          ? path.join(REPO_ROOT, file)
+          : path.join(import.meta.dirname, '..', file),
+        'utf8',
+      );
 
     // The bullets of the `substituteChord` TSDoc.
     const documented = [...read('src/generate/reharmony/index.ts').matchAll(/^ \* - `(\w+)`:/gm)]

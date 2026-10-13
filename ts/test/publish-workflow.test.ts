@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const workflow = readFileSync(
-  fileURLToPath(new URL('../.github/workflows/publish.yml', import.meta.url)),
+  fileURLToPath(new URL('../../.github/workflows/publish.yml', import.meta.url)),
   'utf8',
 );
 
