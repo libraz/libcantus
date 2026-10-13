@@ -1,0 +1,18 @@
+# Fail when the link command of TARGET in BUILD_DIR names cantus_ops, or names no cantus archive.
+# Reads link.txt (Makefile generators) or build.ninja (Ninja).
+set(_link_txt ${BUILD_DIR}/CMakeFiles/${TARGET}.dir/link.txt)
+if(EXISTS ${_link_txt})
+  file(READ ${_link_txt} _line)
+elseif(EXISTS ${BUILD_DIR}/build.ninja)
+  file(STRINGS ${BUILD_DIR}/build.ninja _lines REGEX "^build ${TARGET}:|LINK_LIBRARIES")
+  string(JOIN "\n" _line ${_lines})
+else()
+  message(FATAL_ERROR "no link command found for ${TARGET} in ${BUILD_DIR}")
+endif()
+if(_line MATCHES "cantus_ops")
+  message(FATAL_ERROR "${TARGET} links cantus_ops:\n${_line}")
+endif()
+if(NOT _line MATCHES "libcantus\\.a")
+  message(FATAL_ERROR "${TARGET} does not link libcantus.a:\n${_line}")
+endif()
+message(STATUS "${TARGET} links libcantus.a and not cantus_ops")

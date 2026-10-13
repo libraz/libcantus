@@ -1,0 +1,8 @@
+/**
+ * @file reference.h
+ * @brief Public C++ API of ts/src/analyze/reference.
+ */
+#ifndef CANTUS_ANALYZE_REFERENCE_H_
+#define CANTUS_ANALYZE_REFERENCE_H_
+
+#endif  // CANTUS_ANALYZE_REFERENCE_H_

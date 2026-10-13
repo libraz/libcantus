@@ -1,0 +1,67 @@
+/**
+ * @file limits.h
+ * @brief Every limit constant of the library, generated from ts/src by tools/data/gen_tables.mjs.
+ *
+ * Each module's constants live in its own src/<layer>/<module>/limits.gen.h; this header only
+ * collects them. The installed copy has them inlined, so it needs nothing beyond include/.
+ */
+#ifndef CANTUS_CORE_LIMITS_H_
+#define CANTUS_CORE_LIMITS_H_
+
+#include "../../../src/analyze/arrange/limits.gen.h"
+#include "../../../src/analyze/detect/limits.gen.h"
+#include "../../../src/analyze/form/limits.gen.h"
+#include "../../../src/analyze/functional/limits.gen.h"
+#include "../../../src/analyze/keys/limits.gen.h"
+#include "../../../src/analyze/limits.gen.h"
+#include "../../../src/analyze/melody/limits.gen.h"
+#include "../../../src/analyze/reduction/limits.gen.h"
+#include "../../../src/analyze/reference/limits.gen.h"
+#include "../../../src/analyze/rhythm/limits.gen.h"
+#include "../../../src/analyze/spelling/limits.gen.h"
+#include "../../../src/analyze/timeline/limits.gen.h"
+#include "../../../src/analyze/voice/limits.gen.h"
+#include "../../../src/core/duration/limits.gen.h"
+#include "../../../src/core/errors/limits.gen.h"
+#include "../../../src/core/event_index/limits.gen.h"
+#include "../../../src/core/instrument/limits.gen.h"
+#include "../../../src/core/interval/limits.gen.h"
+#include "../../../src/core/limits.gen.h"
+#include "../../../src/core/meter/limits.gen.h"
+#include "../../../src/core/pitch/limits.gen.h"
+#include "../../../src/core/random/limits.gen.h"
+#include "../../../src/core/tempo/limits.gen.h"
+#include "../../../src/core/tuning/limits.gen.h"
+#include "../../../src/core/validation/limits.gen.h"
+#include "../../../src/generate/bass/limits.gen.h"
+#include "../../../src/generate/context/limits.gen.h"
+#include "../../../src/generate/countermelody/limits.gen.h"
+#include "../../../src/generate/drums/limits.gen.h"
+#include "../../../src/generate/groove/limits.gen.h"
+#include "../../../src/generate/harmonize/limits.gen.h"
+#include "../../../src/generate/limits.gen.h"
+#include "../../../src/generate/melody/limits.gen.h"
+#include "../../../src/generate/motif/limits.gen.h"
+#include "../../../src/generate/ornament/limits.gen.h"
+#include "../../../src/generate/plan/limits.gen.h"
+#include "../../../src/generate/progression/limits.gen.h"
+#include "../../../src/generate/reharmony/limits.gen.h"
+#include "../../../src/generate/rhythm/limits.gen.h"
+#include "../../../src/generate/vocabulary/limits.gen.h"
+#include "../../../src/model/limits.gen.h"
+#include "../../../src/theory/chord/limits.gen.h"
+#include "../../../src/theory/chordscale/limits.gen.h"
+#include "../../../src/theory/counterpoint/limits.gen.h"
+#include "../../../src/theory/figured_bass/limits.gen.h"
+#include "../../../src/theory/harmony/limits.gen.h"
+#include "../../../src/theory/limits.gen.h"
+#include "../../../src/theory/partwriting/limits.gen.h"
+#include "../../../src/theory/safety/limits.gen.h"
+#include "../../../src/theory/scale/limits.gen.h"
+#include "../../../src/theory/spelling/limits.gen.h"
+#include "../../../src/theory/symbol/limits.gen.h"
+#include "../../../src/theory/tendency/limits.gen.h"
+#include "../../../src/theory/transposition/limits.gen.h"
+#include "../../../src/theory/voicing/limits.gen.h"
+
+#endif  // CANTUS_CORE_LIMITS_H_

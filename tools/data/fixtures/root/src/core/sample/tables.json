@@ -1,0 +1,29 @@
+{
+  "tables": [
+    {
+      "module": "core/sample/index.ts",
+      "export": "SHAPES",
+      "cxx_type": "Shape",
+      "cxx_name": "kShapes",
+      "fields": ["name", "size", { "name": "tones", "fields": ["degree", "optional"] }]
+    },
+    {
+      "module": "core/sample/index.ts",
+      "export": "WEIGHTS",
+      "cxx_type": "Weights",
+      "cxx_name": "kWeights",
+      "fields": []
+    }
+  ],
+  "limits": [
+    { "module": "core/sample/index.ts", "export": "MAX_ITEMS", "cxx_type": "int" },
+    {
+      "module": "core/sample/index.ts",
+      "export": "RATIO",
+      "cxx_type": "double",
+      "cxx_name": "kRatio"
+    },
+    { "module": "core/sample/index.ts", "export": "EPS", "cxx_type": "double" },
+    { "module": "core/sample/index.ts", "export": "ENABLED", "cxx_type": "bool" }
+  ]
+}

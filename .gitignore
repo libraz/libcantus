@@ -27,4 +27,6 @@ bindings/wasm/dist/*.wasm
 compile_commands.json
 
 .claude/
+AGENT.md
+CLAUDE.md
 .serena/

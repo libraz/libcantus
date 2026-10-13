@@ -1,0 +1,18 @@
+# Static analysis for `make lint`. The list is narrow on purpose; checks are added once the tree
+# is clean of the ones already here.
+Checks: >
+  -*,
+  bugprone-dangling-handle,
+  bugprone-integer-division,
+  bugprone-signed-char-misuse,
+  bugprone-unused-raii,
+  bugprone-use-after-move,
+  misc-unused-using-decls,
+  performance-for-range-copy,
+  performance-unnecessary-value-param
+
+WarningsAsErrors: '*'
+
+HeaderFilterRegex: '(^|/)(src|include)/.*\.h$'
+
+FormatStyle: file

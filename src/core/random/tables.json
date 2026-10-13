@@ -1,0 +1,14 @@
+{
+  "limits": [
+    {
+      "module": "core/random/version.ts",
+      "export": "ALGORITHM_VERSION",
+      "cxx_type": "std::uint32_t"
+    },
+    {
+      "module": "core/random/version.ts",
+      "export": "MIN_ALGORITHM_VERSION",
+      "cxx_type": "std::uint32_t"
+    }
+  ]
+}

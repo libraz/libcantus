@@ -1,0 +1,23 @@
+@PACKAGE_INIT@
+
+# libcantus package configuration.
+#
+#   find_package(cantus REQUIRED)
+#   target_link_libraries(app PRIVATE cantus::cantus)   # typed C++ API
+#   target_link_libraries(host PRIVATE cantus::ops)     # JSON op layer and C ABI
+#
+# cantus::shared (the C ABI as a shared library) exists when CANTUS_WITH_SHARED is true.
+
+set(CANTUS_WITH_SHARED @CANTUS_CONFIG_WITH_SHARED@)
+
+include("${CMAKE_CURRENT_LIST_DIR}/cantusTargets.cmake")
+
+foreach(_cantus_component IN LISTS cantus_FIND_COMPONENTS)
+  if(TARGET cantus::${_cantus_component})
+    set(cantus_${_cantus_component}_FOUND TRUE)
+  else()
+    set(cantus_${_cantus_component}_FOUND FALSE)
+  endif()
+endforeach()
+
+check_required_components(cantus)

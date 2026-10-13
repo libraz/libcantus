@@ -1,0 +1,333 @@
+#include "ops/codec.h"
+
+#include <cmath>
+#include <limits>
+
+#include "js/format.h"
+#include "ops/error_map.h"
+
+namespace cantus::ops {
+
+namespace {
+
+/** 2^53 - 1: the largest id a JS number holds exactly. */
+constexpr double kMaxSafeInteger = 9007199254740991.0;
+
+[[noreturn]] void reject(const std::string& message) { throw RequestError(message); }
+
+bool is_tag_key(std::string_view key) {
+  return key.size() >= 1 && key[0] == '$' && !(key.size() >= 2 && key[1] == '$');
+}
+
+bool is_integer_in(const json::Value& v, double lo, double hi) {
+  if (!v.is_number()) {
+    return false;
+  }
+  double x = v.as_number();
+  return x >= lo && x <= hi && std::floor(x) == x;
+}
+
+bool is_decimal_integer(const std::string& s) {
+  std::size_t i = s.size() > 0 && s[0] == '-' ? 1 : 0;
+  if (i == s.size()) {
+    return false;
+  }
+  if (s[i] == '0') {
+    return i + 1 == s.size();
+  }
+  for (; i < s.size(); ++i) {
+    if (s[i] < '0' || s[i] > '9') {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Number of tag keys of `o`, with `primary` set to the first one. */
+std::size_t tag_keys(const json::Object& o, std::string_view& primary) {
+  std::size_t n = 0;
+  for (const json::Member& m : o) {
+    if (is_tag_key(m.key)) {
+      if (n == 0) {
+        primary = m.key;
+      }
+      ++n;
+    }
+  }
+  return n;
+}
+
+std::string quoted(std::string_view s) { return js::quote(s); }
+
+void expect_only(const json::Object& o, std::size_t keys, std::string_view tag) {
+  if (o.size() != keys) {
+    reject("malformed " + quoted(tag) + " tag");
+  }
+}
+
+void validate_value(const json::Value& v, bool undefined_allowed, ValidateStats& stats);
+
+void validate_members(const json::Object& o, ValidateStats& stats) {
+  for (const json::Member& m : o) {
+    if (!is_tag_key(m.key)) {
+      validate_value(m.value, false, stats);
+    }
+  }
+}
+
+/** A tag that carries user data beside it: `$class`, `$hy`, and `$id` on a getter result. */
+void validate_data_tag(const json::Object& o, std::string_view tag, ValidateStats& stats) {
+  for (const json::Member& m : o) {
+    if (!is_tag_key(m.key)) {
+      continue;
+    }
+    if (m.key == "$class" || m.key == "$hy") {
+      if (!m.value.is_string()) {
+        reject("malformed " + quoted(m.key) + " tag");
+      }
+    } else if (m.key == "$id") {
+      if (!is_integer_in(m.value, 0, kMaxSafeInteger)) {
+        reject("malformed \"$id\" tag");
+      }
+    } else {
+      reject("malformed " + quoted(tag) + " tag");
+    }
+  }
+  if (o.contains("$class") && o.contains("$hy")) {
+    reject("malformed \"$class\" tag");
+  }
+  validate_members(o, stats);
+}
+
+void validate_object(const json::Object& o, bool undefined_allowed, ValidateStats& stats) {
+  std::string_view tag;
+  std::size_t n = tag_keys(o, tag);
+  if (n == 0) {
+    validate_members(o, stats);
+    return;
+  }
+  if (const json::Value* x = o.find("$n")) {
+    expect_only(o, 1, "$n");
+    const std::string* s = x->is_string() ? &x->as_string() : nullptr;
+    if (s == nullptr || (*s != "-0" && *s != "NaN" && *s != "Infinity" && *s != "-Infinity")) {
+      reject("malformed \"$n\" tag");
+    }
+    return;
+  }
+  if (const json::Value* x = o.find("$u")) {
+    expect_only(o, 1, "$u");
+    if (!x->is_number() || x->as_number() != 1) {
+      reject("malformed \"$u\" tag");
+    }
+    if (!undefined_allowed) {
+      reject("\"$u\" is only valid as an array element");
+    }
+    return;
+  }
+  if (const json::Value* x = o.find("$big")) {
+    expect_only(o, 1, "$big");
+    if (!x->is_string() || !is_decimal_integer(x->as_string())) {
+      reject("malformed \"$big\" tag");
+    }
+    return;
+  }
+  if (const json::Value* x = o.find("$sym")) {
+    expect_only(o, 1, "$sym");
+    if (!x->is_string()) {
+      reject("malformed \"$sym\" tag");
+    }
+    return;
+  }
+  if (o.contains("$tojson") || o.contains("$repr")) {
+    const json::Value* payload = o.find("$tojson");
+    const json::Value* repr = o.find("$repr");
+    if (payload == nullptr || repr == nullptr || o.size() != 2 || !repr->is_string()) {
+      reject("malformed \"$tojson\" tag");
+    }
+    validate_value(*payload, true, stats);
+    return;
+  }
+  if (o.contains("$class") || o.contains("$hy")) {
+    validate_data_tag(o, o.contains("$class") ? "$class" : "$hy", stats);
+    return;
+  }
+  if (const json::Value* x = o.find("$h")) {
+    const json::Value* type = o.find("$type");
+    if (o.size() != 2 || type == nullptr || !type->is_string() ||
+        !is_integer_in(*x, 1, kMaxSafeInteger)) {
+      reject("malformed \"$h\" tag");
+    }
+    return;
+  }
+  if (const json::Value* x = o.find("$cb")) {
+    expect_only(o, 1, "$cb");
+    if (!is_integer_in(*x, 0, std::numeric_limits<std::uint32_t>::max())) {
+      reject("malformed \"$cb\" tag");
+    }
+    ++stats.callbacks;
+    return;
+  }
+  if (o.contains("$id")) {
+    validate_data_tag(o, "$id", stats);
+    return;
+  }
+  reject("unknown wire tag " + quoted(tag));
+}
+
+void validate_value(const json::Value& v, bool undefined_allowed, ValidateStats& stats) {
+  switch (v.kind()) {
+    case json::Kind::kArray:
+      for (const json::Value& e : v.as_array()) {
+        validate_value(e, true, stats);
+      }
+      return;
+    case json::Kind::kObject:
+      validate_object(v.as_object(), undefined_allowed, stats);
+      return;
+    case json::Kind::kNull:
+    case json::Kind::kBool:
+    case json::Kind::kNumber:
+    case json::Kind::kString:
+      return;
+  }
+}
+
+}  // namespace
+
+Tag tag_of(const json::Value& v) noexcept {
+  if (!v.is_object()) {
+    return Tag::kNone;
+  }
+  const json::Object& o = v.as_object();
+  if (o.contains("$n")) return Tag::kNumber;
+  if (o.contains("$u")) return Tag::kUndefined;
+  if (o.contains("$big")) return Tag::kBigInt;
+  if (o.contains("$sym")) return Tag::kSymbol;
+  if (o.contains("$tojson")) return Tag::kToJson;
+  if (o.contains("$class")) return Tag::kClass;
+  if (o.contains("$hy")) return Tag::kHybrid;
+  if (o.contains("$h")) return Tag::kHandle;
+  if (o.contains("$cb")) return Tag::kCallback;
+  if (o.contains("$id")) return Tag::kIdentity;
+  return Tag::kNone;
+}
+
+ValidateStats validate(const json::Value& v, bool allow_top_level_undefined) {
+  ValidateStats stats;
+  validate_value(v, allow_top_level_undefined, stats);
+  return stats;
+}
+
+void stringify_to(const json::Value& v, std::string& out) {
+  switch (v.kind()) {
+    case json::Kind::kNumber: {
+      double x = v.as_number();
+      if (std::isnan(x)) {
+        out += R"({"$n":"NaN"})";
+      } else if (std::isinf(x)) {
+        out += x > 0 ? R"({"$n":"Infinity"})" : R"({"$n":"-Infinity"})";
+      } else if (x == 0 && std::signbit(x)) {
+        out += R"({"$n":"-0"})";
+      } else {
+        json::stringify_to(v, out);
+      }
+      return;
+    }
+    case json::Kind::kArray: {
+      out.push_back('[');
+      bool first = true;
+      for (const json::Value& e : v.as_array()) {
+        if (!first) {
+          out.push_back(',');
+        }
+        first = false;
+        ops::stringify_to(e, out);
+      }
+      out.push_back(']');
+      return;
+    }
+    case json::Kind::kObject: {
+      out.push_back('{');
+      bool first = true;
+      for (const json::Member& m : v.as_object()) {
+        if (!first) {
+          out.push_back(',');
+        }
+        first = false;
+        js::quote_to(m.key, out);
+        out.push_back(':');
+        ops::stringify_to(m.value, out);
+      }
+      out.push_back('}');
+      return;
+    }
+    case json::Kind::kNull:
+    case json::Kind::kBool:
+    case json::Kind::kString:
+      json::stringify_to(v, out);
+      return;
+  }
+}
+
+std::string stringify(const json::Value& v) {
+  std::string out;
+  ops::stringify_to(v, out);
+  return out;
+}
+
+const json::Value& undefined_value() {
+  static const json::Value* const kUndefined = [] {
+    json::Object o;
+    o.set("$u", 1);
+    return new json::Value(std::move(o));
+  }();
+  return *kUndefined;
+}
+
+bool is_undefined(const json::Value& v) noexcept {
+  return v.is_object() && v.as_object().size() == 1 && v.as_object().contains("$u");
+}
+
+std::optional<double> number_of(const json::Value& v) noexcept {
+  if (v.is_number()) {
+    return v.as_number();
+  }
+  if (!v.is_object()) {
+    return std::nullopt;
+  }
+  const json::Value* n = v.as_object().find("$n");
+  if (n == nullptr || !n->is_string()) {
+    return std::nullopt;
+  }
+  const std::string& s = n->as_string();
+  if (s == "NaN") return std::numeric_limits<double>::quiet_NaN();
+  if (s == "Infinity") return std::numeric_limits<double>::infinity();
+  if (s == "-Infinity") return -std::numeric_limits<double>::infinity();
+  if (s == "-0") return -0.0;
+  return std::nullopt;
+}
+
+std::string escape_key(std::string_view key) {
+  if (!key.empty() && key[0] == '$') {
+    std::string out = "$";
+    out += key;
+    return out;
+  }
+  return std::string(key);
+}
+
+std::string unescape_key(std::string_view wire_key) {
+  if (wire_key.size() >= 2 && wire_key[0] == '$' && wire_key[1] == '$') {
+    return std::string(wire_key.substr(1));
+  }
+  return std::string(wire_key);
+}
+
+json::Value to_json(const json::Value& v) { return v; }
+json::Value to_json(bool b) { return json::Value(b); }
+json::Value to_json(double d) { return json::Value(d); }
+json::Value to_json(const std::string& s) { return json::Value(s); }
+json::Value to_json(std::string_view s) { return json::Value(s); }
+json::Value to_json(const char* s) { return json::Value(s); }
+
+}  // namespace cantus::ops

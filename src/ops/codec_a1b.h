@@ -1,0 +1,10 @@
+/**
+ * @file codec_a1b.h
+ * @brief CANTUS_JSON_FIELDS declarations for the types of analyze/detect, analyze/keys.
+ */
+#ifndef CANTUS_SRC_OPS_CODEC_A1B_H_
+#define CANTUS_SRC_OPS_CODEC_A1B_H_
+
+#include "ops/codec.h"
+
+#endif  // CANTUS_SRC_OPS_CODEC_A1B_H_
