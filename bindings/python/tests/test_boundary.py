@@ -1,0 +1,415 @@
+"""The op boundary through the builtin ops: tags, errors, callbacks, handles."""
+
+from __future__ import annotations
+
+import gc
+import json
+import math
+import threading
+from collections.abc import Callable
+from typing import Any
+
+import pytest
+
+import libcantus
+from libcantus import _codec, _ffi
+from libcantus._errors import ErrorCode, error_from_reply
+
+runtime = _codec.runtime
+
+
+def echo(value: Any) -> Any:
+    return runtime.call("$echo", [value])
+
+
+def echo_wire(text: str) -> Any:
+    """Send raw wire JSON (tags included) through ``$echo`` and decode the reply."""
+    status, body = _ffi.call(b"$echo", f"[{text}]".encode("ascii"))
+    assert status == 0, body
+    return runtime._decode(json.loads(body))
+
+
+def live() -> int:
+    count = runtime.call("$live", [])
+    assert isinstance(count, int)
+    return count
+
+
+class TestValues:
+    @pytest.mark.parametrize(
+        "value", [None, True, False, 0, -1, 7, 2**31, 1.5, -2.25, 1e21, 5e-324]
+    )
+    def test_roundtrip(self, value: Any) -> None:
+        result = echo(value)
+        assert result == value
+        assert type(result) is type(value)
+
+    def test_bool_stays_bool(self, sent: Callable[..., str]) -> None:
+        assert sent("$echo", [True]) == "[true]"
+        assert sent("$echo", [False]) == "[false]"
+
+    def test_ints_above_2_53_are_sent_as_decimal(self, sent: Callable[..., str]) -> None:
+        assert sent("$echo", [2**53 + 1]) == "[9007199254740993]"
+        assert sent("$echo", [-(10**20)]) == "[-100000000000000000000]"
+
+    def test_ints_above_2_53_meet_the_double_of_the_core(self) -> None:
+        assert echo(2**53 + 1) == 2**53
+        assert echo(10**20) == 10**20
+        assert echo(2**53 - 1) == 2**53 - 1
+
+    def test_nan_and_infinities_are_tagged(self, sent: Callable[..., str]) -> None:
+        assert sent("$echo", [math.nan]) == '[{"$n":"NaN"}]'
+        assert sent("$echo", [math.inf]) == '[{"$n":"Infinity"}]'
+        assert sent("$echo", [-math.inf]) == '[{"$n":"-Infinity"}]'
+        assert sent("$echo", [-0.0]) == '[{"$n":"-0"}]'
+
+    def test_nan_and_infinities_come_back(self) -> None:
+        assert math.isnan(echo(math.nan))
+        assert echo(math.inf) == math.inf
+        assert echo(-math.inf) == -math.inf
+        negative_zero = echo(-0.0)
+        assert negative_zero == 0.0
+        assert math.copysign(1.0, negative_zero) < 0
+
+    def test_nan_inside_containers(self) -> None:
+        result = echo([1, {"x": math.nan}])
+        assert result[0] == 1
+        assert math.isnan(result[1]["x"])
+
+    def test_tuples_are_lists(self) -> None:
+        assert echo((1, (2, 3))) == [1, [2, 3]]
+
+    def test_unsupported_values_raise_type_error(self) -> None:
+        with pytest.raises(TypeError):
+            echo({1: "a"})
+        with pytest.raises(TypeError):
+            echo(object())
+
+    def test_self_reference_is_cut(self) -> None:
+        looped: list[Any] = [1]
+        looped.append(looped)
+        assert echo(looped) == [1, []]
+
+    def test_big_tag_and_other_result_tags(self) -> None:
+        assert echo_wire('{"$big":"-12345678901234567890"}') == -12345678901234567890
+        assert echo_wire('{"$sym":"tag"}') == "tag"
+        assert echo_wire('{"$tojson":{"a":[1,2]},"$repr":"[object Object]"}') == {"a": [1, 2]}
+        assert echo_wire('{"$n":"NaN"}') != echo_wire('{"$n":"NaN"}')
+
+
+class TestAbsentAndNull:
+    def test_positional_none_is_null(self, sent: Callable[..., str]) -> None:
+        assert sent("$echo", [None]) == "[null]"
+
+    def test_none_inside_containers_is_null(self, sent: Callable[..., str]) -> None:
+        assert sent("$echo", [[1, None], {"a": None}]) == '[[1,null],{"a":null}]'
+
+    def test_none_option_is_absent(self, sent: Callable[..., str]) -> None:
+        assert sent("$echo", [], {"a": None, "b": None}) == "[]"
+        assert sent("$echo", [], {"a": None, "b": 2}) == '[{"b":2}]'
+        assert sent("$echo", [1], {"a": None}) == "[1]"
+
+    def test_unset_positional(self, sent: Callable[..., str]) -> None:
+        unset = libcantus.UNSET
+        assert sent("$echo", [1, unset]) == "[1]"
+        assert sent("$echo", [1, unset, unset]) == "[1]"
+        assert sent("$echo", [1, unset], {"k": 2}) == '[1,{"$u":1},{"k":2}]'
+        assert sent("$echo", [[1, unset, 3]]) == '[[1,{"$u":1},3]]'
+        assert sent("$echo", [{"a": unset, "b": 1}]) == '[{"b":1}]'
+
+    def test_undefined_comes_back_as_none(self) -> None:
+        assert echo_wire('[1,{"$u":1},3]') == [1, None, 3]
+        assert runtime.call("$echo", []) is None
+
+    def test_none_and_absent_differ_in_the_core(self) -> None:
+        absent = runtime.call("$counter", [])
+        assert absent.value["count"] == 0
+        absent.close()
+        with pytest.raises(libcantus.CantusError, match="start must be a number"):
+            runtime.call("$counter", [None])
+
+
+class TestStrings:
+    @pytest.mark.parametrize(
+        "text",
+        ["", "café ♫ \U0001f3b5", "\ud800", "x\udfffy", '\x00\x01\x1f\x7f"\\/', "\u2028"],
+    )
+    def test_roundtrip_including_lone_surrogates(self, text: str) -> None:
+        assert echo(text) == text
+
+    def test_lone_surrogate_travels_escaped(self, sent: Callable[..., str]) -> None:
+        assert sent("$echo", ["a\ud800b"]) == '["a\\ud800b"]'
+
+    def test_embedded_nul_in_op_name(self) -> None:
+        with pytest.raises(libcantus.CantusError) as info:
+            runtime.call("$echo\x00x", [1])
+        assert info.value.code is ErrorCode.UNKNOWN_OP
+        assert "\\u0000" in str(info.value)
+
+    def test_lone_surrogate_in_error_message(self) -> None:
+        with pytest.raises(libcantus.CantusError) as info:
+            runtime.call("$throw", [{"code": "UNKNOWN_OP", "message": "m \ud800 é"}])
+        assert str(info.value) == "m \ud800 é"
+
+
+class TestDollarKeys:
+    def test_user_keys_are_escaped(self, sent: Callable[..., str]) -> None:
+        assert sent("$echo", [{"$a": 1, "$$b": 2, "c": 3}]) == '[{"$$a":1,"$$$b":2,"c":3}]'
+
+    def test_roundtrip(self) -> None:
+        value = {"$a": 1, "$$b": {"$c": [{"$": 2}]}, "__proto__": {"x": 1}}
+        assert echo(value) == value
+
+    def test_key_order_is_kept(self) -> None:
+        assert list(echo({"b": 1, "a": 2})) == ["b", "a"]
+
+    def test_unknown_tag_is_a_bad_request(self) -> None:
+        status, body = _ffi.call(b"$echo", b'[{"$zz":1}]')
+        assert status == ErrorCode.BAD_REQUEST
+        assert "unknown wire tag" in str(error_from_reply(status, body))
+
+    def test_unknown_tag_in_a_result(self) -> None:
+        with pytest.raises(libcantus.CantusError) as info:
+            runtime._decode({"$zz": 1})
+        assert info.value.code is ErrorCode.BAD_REQUEST
+
+
+class TestTaggedObjects:
+    def test_class_instance_roundtrips_its_wire(self) -> None:
+        chord = echo_wire('{"$class":"Chord","root":0,"quality":"maj"}')
+        assert isinstance(chord, libcantus.Chord)
+        assert chord._wire == {"$class": "Chord", "root": 0, "quality": "maj"}
+        assert echo(chord) is not chord
+        assert echo(chord)._wire == chord._wire
+
+    def test_unknown_class_is_a_bad_request(self) -> None:
+        with pytest.raises(libcantus.CantusError) as info:
+            echo_wire('{"$class":"Nope","x":1}')
+        assert info.value.code is ErrorCode.BAD_REQUEST
+
+    def test_hybrid_has_fields_and_resends_them(self, sent: Callable[..., str]) -> None:
+        timeline = echo_wire('{"$hy":"ChordTimeline","segments":[1,2]}')
+        assert isinstance(timeline, libcantus.ChordTimeline)
+        assert timeline.segments == [1, 2]
+        assert sent("$echo", [timeline]) == '[{"$hy":"ChordTimeline","segments":[1,2]}]'
+        timeline.segments = [3]
+        assert sent("$echo", [timeline]) == '[{"$hy":"ChordTimeline","segments":[3]}]'
+
+    def test_hybrid_method_goes_over_as_its_hybrid(self, sent: Callable[..., str]) -> None:
+        timeline = echo_wire('{"$hy":"ChordTimeline","segments":[]}')
+        assert sent("$echo", [timeline.at]) == '[{"$hy":"ChordTimeline","segments":[]}]'
+
+    def test_callback_tag(self, sent: Callable[..., str]) -> None:
+        assert sent("$echo", [lambda: 1]) == '[{"$cb":0}]'
+        assert sent("$echo", [lambda: 1, lambda: 2]) == '[{"$cb":0},{"$cb":1}]'
+
+
+class TestErrors:
+    CASES: tuple[tuple[str, type[Exception]], ...] = (
+        ("INVALID_INPUT", libcantus.InvalidInputError),
+        ("NO_SOLUTION", libcantus.NoSolutionError),
+        ("BUDGET_EXCEEDED", libcantus.BudgetExceededError),
+        ("HOST_TYPE_ERROR", libcantus.CantusError),
+        ("UNKNOWN_OP", libcantus.CantusError),
+        ("BAD_REQUEST", libcantus.CantusError),
+        ("CALLBACK_FAILED", libcantus.CantusError),
+        ("RELEASED_HANDLE", libcantus.CantusError),
+        ("INTERNAL", libcantus.CantusError),
+    )
+
+    @pytest.mark.parametrize(("name", "cls"), CASES)
+    def test_every_code(self, name: str, cls: type[Exception]) -> None:
+        with pytest.raises(libcantus.CantusError) as info:
+            runtime.call("$throw", [{"code": name, "message": "boom"}])
+        error = info.value
+        assert type(error) is cls
+        assert error.code is ErrorCode[name]
+        assert error.code.name == name
+        assert str(error) == "boom"
+
+    def test_statuses_match_the_c_abi(self) -> None:
+        for name, _ in self.CASES:
+            status, body = _ffi.call(
+                b"$throw", json.dumps([{"code": name, "message": "m"}]).encode()
+            )
+            assert status == ErrorCode[name].value
+            assert json.loads(body)["code"] == name
+
+    def test_value_error_ancestry(self) -> None:
+        assert issubclass(libcantus.InvalidInputError, ValueError)
+        assert issubclass(libcantus.BudgetExceededError, ValueError)
+        assert not issubclass(libcantus.NoSolutionError, ValueError)
+        assert issubclass(libcantus.NoSolutionError, libcantus.CantusError)
+
+    def test_no_solution_at(self) -> None:
+        with pytest.raises(libcantus.NoSolutionError) as info:
+            runtime.call("$throw", [{"code": "NO_SOLUTION", "message": "m", "at": 3}])
+        assert info.value.at == 3
+        with pytest.raises(libcantus.NoSolutionError) as zero:
+            runtime.call("$throw", [{"code": "NO_SOLUTION", "message": "m", "at": 0}])
+        assert zero.value.at == 0
+        with pytest.raises(libcantus.NoSolutionError) as none:
+            runtime.call("$throw", [{"code": "NO_SOLUTION", "message": "m"}])
+        assert none.value.at is None
+
+    def test_is_libcantus_error(self) -> None:
+        assert libcantus.is_libcantus_error(libcantus.InvalidInputError("x"))
+        assert libcantus.is_libcantus_error(libcantus.NoSolutionError("x"))
+        assert libcantus.is_libcantus_error(libcantus.BudgetExceededError("x"))
+        assert not libcantus.is_libcantus_error(libcantus.CantusError("x"))
+        assert not libcantus.is_libcantus_error(ValueError("x"))
+
+    def test_error_class_in_a_result_decodes_to_an_instance(self) -> None:
+        error = echo_wire('{"$class":"NoSolutionError","message":"m","at":2}')
+        assert isinstance(error, libcantus.NoSolutionError)
+        assert error.at == 2
+
+
+class TestCallbacks:
+    def test_arguments_and_result(self) -> None:
+        assert runtime.call("$call", [lambda *a: list(a), 1, "a"]) == [1, "a"]
+        assert runtime.call("$call", [lambda *a: list(a)]) == []
+
+    def test_values_cross_both_ways(self) -> None:
+        seen: list[Any] = []
+
+        def callback(*args: Any) -> Any:
+            seen.extend(args)
+            return args[0]
+
+        result = runtime.call("$call", [callback, math.nan, {"$k": [None]}])
+        assert math.isnan(seen[0])
+        assert seen[1] == {"$k": [None]}
+        assert math.isnan(result)
+
+    def test_original_exception_is_reraised(self) -> None:
+        class Boom(Exception):
+            pass
+
+        failure = Boom("original")
+
+        def callback(*_: Any) -> Any:
+            raise failure
+
+        with pytest.raises(Boom) as info:
+            runtime.call("$call", [callback, 1])
+        assert info.value is failure
+
+    def test_library_error_from_a_callback_keeps_its_class(self) -> None:
+        def callback(*_: Any) -> Any:
+            raise libcantus.NoSolutionError("from the callback", 9)
+
+        with pytest.raises(libcantus.NoSolutionError) as info:
+            runtime.call("$call", [callback])
+        assert info.value.at == 9
+
+    def test_unencodable_result_is_reraised(self) -> None:
+        with pytest.raises(TypeError):
+            runtime.call("$call", [lambda *_: object()])
+
+    def test_reentrant_call(self) -> None:
+        def callback(*args: Any) -> Any:
+            return runtime.call("$echo", [{"inner": args}])
+
+        assert runtime.call("$call", [callback, 5]) == {"inner": [5]}
+
+    def test_error_inside_a_reentrant_call(self) -> None:
+        def callback(*_: Any) -> Any:
+            return runtime.call("$throw", [{"code": "BUDGET_EXCEEDED", "message": "inner"}])
+
+        with pytest.raises(libcantus.BudgetExceededError, match="inner"):
+            runtime.call("$call", [callback])
+
+    def test_callback_argument_is_required(self) -> None:
+        with pytest.raises(libcantus.CantusError) as info:
+            runtime.call("$call", [1])
+        assert info.value.code is ErrorCode.BAD_REQUEST
+
+
+class TestHandles:
+    def test_methods_and_identity_tokens(self) -> None:
+        with runtime.call("$counter", [5]) as counter:
+            assert counter.next() == 6
+            first = counter.value
+            assert first == {"count": 6}
+            assert counter.value is first
+            assert counter.next() == 7
+            assert counter.value is not first
+            assert counter.value == {"count": 7}
+
+    def test_live_count_follows_close(self) -> None:
+        before = live()
+        counter = runtime.call("$counter", [])
+        assert live() == before + 1
+        assert not counter.closed
+        counter.close()
+        assert counter.closed
+        assert live() == before
+        counter.close()
+        assert live() == before
+
+    def test_context_manager_releases(self) -> None:
+        before = live()
+        with runtime.call("$counter", []) as counter:
+            assert live() == before + 1
+        assert counter.closed
+        assert live() == before
+
+    def test_released_handle_raises(self) -> None:
+        counter = runtime.call("$counter", [])
+        counter.close()
+        with pytest.raises(libcantus.CantusError) as info:
+            counter.next()
+        assert info.value.code is ErrorCode.RELEASED_HANDLE
+
+    def test_dropping_a_handle_releases_it(self) -> None:
+        before = live()
+        counter = runtime.call("$counter", [])
+        assert live() == before + 1
+        del counter
+        gc.collect()
+        assert live() == before
+
+    def test_handle_goes_back_as_its_tag(self, sent: Callable[..., str]) -> None:
+        counter = runtime.call("$counter", [])
+        try:
+            assert sent("$echo", [counter]) == f'[{{"$h":{counter._id},"$type":"$counter"}}]'
+        finally:
+            counter.close()
+
+    def test_calls_from_threads_are_serialized(self) -> None:
+        with runtime.call("$counter", []) as counter:
+            errors: list[BaseException] = []
+
+            def work() -> None:
+                try:
+                    for _ in range(200):
+                        counter.next()
+                except BaseException as error:
+                    errors.append(error)
+
+            threads = [threading.Thread(target=work) for _ in range(8)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+            assert errors == []
+            assert counter.value == {"count": 1600}
+
+    def test_unknown_handle_type_is_a_bad_request(self) -> None:
+        with pytest.raises(libcantus.CantusError) as info:
+            runtime._decode({"$h": 99, "$type": "Nope"})
+        assert info.value.code is ErrorCode.BAD_REQUEST
+
+
+class TestLibrary:
+    def test_version_and_abi(self) -> None:
+        assert libcantus.version() == _ffi.version()
+        assert _ffi.library().cantus_abi_version() == _ffi.ABI_VERSION
+        assert libcantus.algorithm_version() >= 1
+
+    def test_list_ops_has_the_builtins(self) -> None:
+        names = {entry["name"] for entry in libcantus.list_ops()}
+        assert {"$echo", "$throw", "$counter", "$call", "$live", "$version"} <= names
+        call = next(e for e in libcantus.list_ops() if e["name"] == "$call")
+        assert call["callbacks"] is True
