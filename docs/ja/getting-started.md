@@ -154,9 +154,39 @@ import { Note, Key } from '@libraz/libcantus/model';
 
 ルートの入り口はこれらのシンボルを再エクスポートするため、サブパスは別の API ではなくパッケージングの選択です。
 
+## ほかのランタイムから使う
+
+純 TypeScript 以外でも、同じ API が同じ結果で使えます。面の選び方は[パッケージ構成](packages.md)を参照してください。
+
+```js
+import { detectChordBest } from '@libraz/libcantus-wasm';
+
+detectChordBest([60, 64, 67]);
+// { rootPc: 0, quality: 'maj', intervals: [0, 4, 7] }
+```
+
+```python
+import libcantus
+
+libcantus.detect_chord_best([60, 64, 67])
+```
+
+```sh
+cantus detectChordBest '[[60, 64, 67]]'
+```
+
+```cpp
+#include <cantus/cantus.h>
+
+auto matches = cantus::detect_chord({60, 64, 67});
+```
+
+WebAssembly パッケージは `yarn add @libraz/libcantus-wasm` でインストールし、ESM のみである点を除けば TypeScript パッケージと同じように使えます。Python は `pip install libcantus`（[Python](python.md)）、コマンドラインツールは[コマンドライン](cli.md)、C++ ライブラリは[C++ コアと面ごとの差](cpp.md)で説明しています。
+
 ## 次のステップ
 
 - [入門](primer/index.md)は、API の名前のもとになっている音楽の考え方を、音楽の知識がない読者向けに扱います: [音高と音程](primer/pitch-and-intervals.md)、[音階と調](primer/scales-and-keys.md)、[和音](primer/chords.md)、[和声](primer/harmony.md)、[声部](primer/voices.md)、[リズムと拍子](primer/rhythm-and-meter.md)。
 - [ユースケース](use-cases/index.md)には、DAW アシスタント、和声課題チェッカー、楽曲解析、生成アレンジの一連の流れがあります。
+- [パッケージ構成](packages.md)では、同じ API を呼ぶ WebAssembly、Python、コマンドライン、C++ の各手段を一覧できます。
 - [はじめに](introduction.md)ではデータモデルとエンジンの前提を説明します。
 - 生成された TypeDoc リファレンスが全シンボルを網羅します。[API リファレンス](api-reference.md)を参照してください。

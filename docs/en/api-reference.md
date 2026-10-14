@@ -54,6 +54,7 @@ Both CommonJS and ESM builds are published, and TypeScript declarations accompan
 | Error taxonomy, parsers, assertions | [Errors and validation](errors-and-validation.md) |
 | Indexing, sessions, budgets | [Performance](performance.md) |
 | MIDI, ticks, note-name systems | [Interoperability](interoperability.md) |
+| WebAssembly, Python, command line, C++ | [Packages and surfaces](packages.md) |
 | End-to-end flows for one application | [Use cases](use-cases/index.md) |
 | Terms and the API that implements them | [Glossary](glossary.md) |
 | Scope, limitations, design decisions | [Questions and limitations](faq.md) |

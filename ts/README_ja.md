@@ -10,7 +10,7 @@ MIDI ノートイベントのための、TypeScript 製の音楽理論ライブ�
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![docs](https://img.shields.io/badge/docs-API%20reference-b5892e)](https://libraz.github.io/libcantus/)
 
-![ノートイベントからパートへ、そして再びノートイベントへ](docs/images/pipeline-ja.svg)
+![ノートイベントからパートへ、そして再びノートイベントへ](https://raw.githubusercontent.com/libraz/libcantus/main/docs/images/pipeline-ja.svg)
 
 このライブラリは、すでにノートやコード記号を持っているソフトウェア（DAW のプロジェクト、MIDI パーサー、練習支援ツールなど）と、その音が和声的に何を意味するかとの間を埋めます。ノートイベントを渡すと和声が求まり、ジェネレーターはいま読み取ったその和声に沿ってパートを書きます。
 
@@ -43,13 +43,13 @@ Composer.of({ key: chords.key, bpm: 120, seed: 1 }).bass(chords, { style: 'walki
 
 | ユースケース | 内容 | 実例のガイド |
 |---|---|---|
-| DAW のアシスタント | トラックから和声を読み取り、それに沿ってベースラインを書く。 | [DAW ワークフロー](docs/ja/use-cases/daw-workflow.md) |
-| 楽曲アナライザー | 1 つのスコアから調区間、終止形、和声的な還元、フレーズ、セクション、モチーフを得る。 | [楽曲の解析](docs/ja/use-cases/piece-analysis.md) |
-| 転調レポート | 転調を、軸和音・確信度・調同士の関係とともに提示する。 | [転調レポート](docs/ja/use-cases/modulation-report.md) |
-| 和声課題のチェッカー | 声部書法と種目対位法の違反を、違反した声部と破った規則つきで報告する。 | [和声課題のチェック](docs/ja/use-cases/harmony-exercise-checker.md) |
-| 自動生成アレンジ | シードを固定した 1 つのコンポーザーがコード進行・各パート・ドラムを書き、演奏可能性を確認する。 | [生成によるアレンジ](docs/ja/use-cases/generative-arrangement.md) |
-| コード譜の取り込み | 打ち込んだコード記号をタイムライン、ヴォイシング、ベースラインに変換する。 | [コード譜の取り込み](docs/ja/use-cases/chord-chart-import.md) |
-| パート譜の準備 | パートを楽器に合わせ、その奏者が読む音高で書き出す。 | [パート譜の準備](docs/ja/use-cases/part-preparation.md) |
+| DAW のアシスタント | トラックから和声を読み取り、それに沿ってベースラインを書く。 | [DAW ワークフロー](https://github.com/libraz/libcantus/blob/main/docs/ja/use-cases/daw-workflow.md) |
+| 楽曲アナライザー | 1 つのスコアから調区間、終止形、和声的な還元、フレーズ、セクション、モチーフを得る。 | [楽曲の解析](https://github.com/libraz/libcantus/blob/main/docs/ja/use-cases/piece-analysis.md) |
+| 転調レポート | 転調を、軸和音・確信度・調同士の関係とともに提示する。 | [転調レポート](https://github.com/libraz/libcantus/blob/main/docs/ja/use-cases/modulation-report.md) |
+| 和声課題のチェッカー | 声部書法と種目対位法の違反を、違反した声部と破った規則つきで報告する。 | [和声課題のチェック](https://github.com/libraz/libcantus/blob/main/docs/ja/use-cases/harmony-exercise-checker.md) |
+| 自動生成アレンジ | シードを固定した 1 つのコンポーザーがコード進行・各パート・ドラムを書き、演奏可能性を確認する。 | [生成によるアレンジ](https://github.com/libraz/libcantus/blob/main/docs/ja/use-cases/generative-arrangement.md) |
+| コード譜の取り込み | 打ち込んだコード記号をタイムライン、ヴォイシング、ベースラインに変換する。 | [コード譜の取り込み](https://github.com/libraz/libcantus/blob/main/docs/ja/use-cases/chord-chart-import.md) |
+| パート譜の準備 | パートを楽器に合わせ、その奏者が読む音高で書き出す。 | [パート譜の準備](https://github.com/libraz/libcantus/blob/main/docs/ja/use-cases/part-preparation.md) |
 
 ## インストール
 
@@ -61,11 +61,13 @@ yarn add @libraz/libcantus
 
 パッケージのルートから API 全体を公開しています。`@libraz/libcantus/core`、`/theory`、`/analyze`、`/generate`、`/model` は同じシンボル群に対する、より狭い読み込み境界です。いずれのパスも ESM と CommonJS の両方のビルドを同梱しています。
 
+このパッケージは TypeScript によるリファレンス実装で、同期 API であり、依存パッケージはありません。同じ API は C++ コアを使う WebAssembly、Python、コマンドラインツールからも使えます。詳しくは[リポジトリ](https://github.com/libraz/libcantus)と[パッケージ構成](https://github.com/libraz/libcantus/blob/main/docs/ja/packages.md)を参照してください。
+
 ## ドキュメント
 
-音楽理論にはじめて触れる場合は、[入門ガイド](docs/ja/primer/index.md)から始めてください。この API が土台にしている考え方 — 音高と音程、音階と調、和音、和声、声部、リズムと拍子 — を、楽譜ではなく TypeScript を書く読者に向けて説明しています。
+音楽理論にはじめて触れる場合は、[入門ガイド](https://github.com/libraz/libcantus/blob/main/docs/ja/primer/index.md)から始めてください。この API が土台にしている考え方 — 音高と音程、音階と調、和音、和声、声部、リズムと拍子 — を、楽譜ではなく TypeScript を書く読者に向けて説明しています。
 
-そうでなければ、[はじめに](docs/ja/introduction.md)と[使いはじめる](docs/ja/getting-started.md)から読んでください。各分野のガイドとリファレンスはそこから辿れます。ガイド中の `ts` の例はすべてテストスイートで実行され、行末コメントがリテラルを名指していれば（em ダッシュに続けて理由が書かれていてもかまいません）実際の戻り値と照合されます。
+そうでなければ、[はじめに](https://github.com/libraz/libcantus/blob/main/docs/ja/introduction.md)と[使いはじめる](https://github.com/libraz/libcantus/blob/main/docs/ja/getting-started.md)から読んでください。各分野のガイドとリファレンスはそこから辿れます。ガイド中の `ts` の例はすべてテストスイートで実行され、行末コメントがリテラルを名指していれば（em ダッシュに続けて理由が書かれていてもかまいません）実際の戻り値と照合されます。
 
 ## できないこと
 
@@ -74,7 +76,7 @@ yarn add @libraz/libcantus
 - **旋法体系そのものは扱いません。** `WORLD_SCALES` が記録するのは、その伝統が名前を与えている音の素材 — ターット、マカームの音組織、日本の五音音階 — であって、その上に築かれた語法ではありません。
 - **コーパスは同梱しません。** 統計を取るためのデータは含みません。
 
-残りは[疑問と制限](docs/ja/faq.md)にまとめています。機能和声の読みが適用できない場合や、エンジンが推測しないことについてもそこで扱います。
+残りは[疑問と制限](https://github.com/libraz/libcantus/blob/main/docs/ja/faq.md)にまとめています。機能和声の読みが適用できない場合や、エンジンが推測しないことについてもそこで扱います。
 
 ## ライセンス
 

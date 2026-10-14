@@ -1,81 +1,142 @@
-# @libraz/libcantus
-
-MIDI ノートイベントのための、TypeScript 製の音楽理論ライブラリです。ノートから和声を読み取り、その読み取り結果に沿って新しいパートを書けます。実行時依存はありません。
+# libcantus
 
 [![CI](https://img.shields.io/github/actions/workflow/status/libraz/libcantus/ci.yml?branch=main&label=CI)](https://github.com/libraz/libcantus/actions)
 [![npm](https://img.shields.io/npm/v/@libraz/libcantus)](https://www.npmjs.com/package/@libraz/libcantus)
+[![PyPI](https://img.shields.io/pypi/v/libcantus)](https://pypi.org/project/libcantus/)
 [![codecov](https://codecov.io/gh/libraz/libcantus/branch/main/graph/badge.svg)](https://codecov.io/gh/libraz/libcantus)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libcantus/blob/main/LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![C++](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=c%2B%2B&logoColor=white)](https://isocpp.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/libcantus)
 [![docs](https://img.shields.io/badge/docs-API%20reference-b5892e)](https://libraz.github.io/libcantus/)
+
+**MIDI のノートイベントのための音楽理論ライブラリです。ノートから和声を読み取り、その読みに沿って新しいパートを書きます。**
+
+仕様は 1 つで、リファレンス実装の純 TypeScript と、その下にある C++17 のコアを、C++、WebAssembly、Node、Python、コマンドラインから呼び出せます。どの面でも、結果、エラー、浮動小数のビット列が同じになります。
+
+**[ドキュメント](docs/ja/introduction.md)** · **[使いはじめる](docs/ja/getting-started.md)** · **[パッケージ構成](docs/ja/packages.md)**
 
 ![ノートイベントからパートへ、そして再びノートイベントへ](docs/images/pipeline-ja.svg)
 
-このライブラリは、すでにノートやコード記号を持っているソフトウェア（DAW のプロジェクト、MIDI パーサー、練習支援ツールなど）と、その音が和声的に何を意味するかとの間を埋めます。ノートイベントを渡すと和声が求まり、ジェネレーターはいま読み取ったその和声に沿ってパートを書きます。
+## 主な機能
 
-## できること
+- **ノートから和声を読む。** コードと調の検出、ローマ数字、終止形、転調、形式。[解析](docs/ja/analysis.md)
+- **和声に沿ってパートを書く。** コード進行、ベース、カウンターメロディ、ドラム、モチーフ。シードを固定すれば再現できます。[生成](docs/ja/generation.md)
+- **理論の語彙。** 音、音程、スケール、コード、ヴォイシング、声部書法と対位法のチェック。[和声](docs/ja/harmony.md)
+- **演奏可能性。** 楽器プロファイル、移調、音域のチェック。[楽器と演奏可能性](docs/ja/instruments-and-playability.md)
+- **答えに根拠が付く。** 読みごとに根拠と、退けた読みが付きます。決められない問いには `null` が返ります。
 
-```ts
-import { Composer, Score } from '@libraz/libcantus';
+## 面
 
-// DAW から渡ってくる形の、4 小節のブロックコード:
-const harmony = [[48, 60, 64, 67], [41, 60, 65, 69], [43, 59, 62, 65], [48, 60, 64, 67]].flatMap(
-  (pitches, bar) => pitches.map((pitch) => ({ pitch, startBeat: bar * 4, durationBeat: 4 })),
-);
+| 面 | パッケージ | ページ |
+| --- | --- | --- |
+| TypeScript（リファレンス） | `@libraz/libcantus` | [`ts/`](ts/README_ja.md) |
+| C++ | CMake パッケージ `cantus` | [C++ コア](docs/ja/cpp.md) |
+| WebAssembly | `@libraz/libcantus-wasm` | [`bindings/wasm/`](bindings/wasm/README.md) |
+| Node ネイティブ | `@libraz/libcantus-node`（ソースからビルド） | [`bindings/node/`](bindings/node/README.md) |
+| Python | `libcantus` | [`bindings/python/`](bindings/python/README.md) |
+| コマンドライン | `cantus` | [コマンドライン](docs/ja/cli.md) |
 
-const chords = Score.of(harmony).timeline();
-chords.roman().map((entry) => entry.roman); // ['I', 'IV', 'V7', 'I']
-chords.cadences().at(-1)?.cadence.type; // 'authentic'
+TypeScript パッケージは同期 API で、依存がなく、ツリーシェイキングできます。ほかの面は C++ コアを呼び出し、小さな差が文書化されているだけで、挙動は同じです（[C++ コアと面ごとの差](docs/ja/cpp.md)）。
 
-// 求まった和声の上に、ウォーキングベースを書く:
-Composer.of({ key: chords.key, bpm: 120, seed: 1 }).bass(chords, { style: 'walking' }).notes;
-// 16 音: [{ pitch: 36, startBeat: 0, durationBeat: 1, velocity: 100 }, ...]
-```
+## インストールと最小の例
 
-コードの境界は決め打ちせずに探索し、キーも同様に探します。転調する曲を、冒頭のキーのまま読み続けることはありません。答えには根拠が伴います。コード分析・終止・ローマ数字はいずれも `rationale` と、退けた候補を併せて返し、入力だけでは決まらない項目は、もっともらしい推測ではなく `null` を返します。
+どの例も、C・E・G の和音を読みます。
 
-もう1曲も同じように読み取り、フォーム・和声・モチーフの派生・リズムを次元ごとに比較できます。単一のスコアにまとめることはありません。`analyzeReference` が曲を持ち運び可能なプロファイルに圧縮し、`compareReferences` がその2つを突き合わせます。
-
-そのプロファイルは、新しい素材を書くための目標にもなります。`deriveCompositionPlan` はプロファイルを `CompositionPlan` に変換します。フォーム・和声・モチーフの派生の森を、ジェネレータがそのまま辿れる指示として持つ値です。`generateMelody` はその計画に沿って旋律を書き、`evaluateComposition` は結果を計画に照らして読み返します。[リファレンスからの生成](https://github.com/libraz/libcantus/blob/main/docs/ja/generation.md#リファレンスからの生成)を参照してください。
-
-## ユースケース
-
-| ユースケース | 内容 | 実例のガイド |
-|---|---|---|
-| DAW のアシスタント | トラックから和声を読み取り、それに沿ってベースラインを書く。 | [DAW ワークフロー](docs/ja/use-cases/daw-workflow.md) |
-| 楽曲アナライザー | 1 つのスコアから調区間、終止形、和声的な還元、フレーズ、セクション、モチーフを得る。 | [楽曲の解析](docs/ja/use-cases/piece-analysis.md) |
-| 転調レポート | 転調を、軸和音・確信度・調同士の関係とともに提示する。 | [転調レポート](docs/ja/use-cases/modulation-report.md) |
-| 和声課題のチェッカー | 声部書法と種目対位法の違反を、違反した声部と破った規則つきで報告する。 | [和声課題のチェック](docs/ja/use-cases/harmony-exercise-checker.md) |
-| 自動生成アレンジ | シードを固定した 1 つのコンポーザーがコード進行・各パート・ドラムを書き、演奏可能性を確認する。 | [生成によるアレンジ](docs/ja/use-cases/generative-arrangement.md) |
-| コード譜の取り込み | 打ち込んだコード記号をタイムライン、ヴォイシング、ベースラインに変換する。 | [コード譜の取り込み](docs/ja/use-cases/chord-chart-import.md) |
-| パート譜の準備 | パートを楽器に合わせ、その奏者が読む音高で書き出す。 | [パート譜の準備](docs/ja/use-cases/part-preparation.md) |
-
-## インストール
-
-Node.js 22 以降が必要です。
+**TypeScript**（Node.js 22 以降）:
 
 ```sh
 yarn add @libraz/libcantus
 ```
 
-パッケージのルートから API 全体を公開しています。`@libraz/libcantus/core`、`/theory`、`/analyze`、`/generate`、`/model` は同じシンボル群に対する、より狭い読み込み境界です。いずれのパスも ESM と CommonJS の両方のビルドを同梱しています。
+```ts
+import { detectChordBest } from '@libraz/libcantus';
+
+detectChordBest([60, 64, 67]); // { rootPc: 0, quality: 'maj', intervals: [0, 4, 7] }
+```
+
+**WebAssembly**（ESM のみ。API と型は同じです）:
+
+```sh
+yarn add @libraz/libcantus-wasm
+```
+
+```js
+import { detectChordBest } from '@libraz/libcantus-wasm';
+
+detectChordBest([60, 64, 67]);
+```
+
+**Node ネイティブ**（チェックアウトから。`make build-node`）:
+
+```js
+import { detectChordBest } from '@libraz/libcantus-node';
+
+detectChordBest([60, 64, 67]);
+```
+
+**Python**（3.10 以降）:
+
+```sh
+pip install libcantus
+```
+
+```python
+import libcantus
+
+libcantus.detect_chord_best([60, 64, 67])
+```
+
+**コマンドライン**（GitHub のリリース資産）:
+
+```sh
+cantus detectChordBest '[[60, 64, 67]]'
+```
+
+**C++**（CMake 3.24 と C++17 のコンパイラ）:
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(cantus GIT_REPOSITORY https://github.com/libraz/libcantus.git GIT_TAG main)
+FetchContent_MakeAvailable(cantus)
+target_link_libraries(app PRIVATE cantus::cantus)
+```
+
+```cpp
+#include <cantus/cantus.h>
+
+auto matches = cantus::detect_chord({60, 64, 67});
+```
+
+インストール済みのプレフィックスに対する `find_package(cantus)` や `add_subdirectory` でも同じように使えます。これらの例を実行できる形にしたものが [`examples/`](examples) にあり、`make examples` で実行できます。
+
+## ソースからのビルド
+
+```sh
+make build         # C++ コア、コマンドラインツール、テストを build/ に作る
+make test-cxx      # C++ テストを実行する
+make wasm          # WebAssembly パッケージ（Emscripten が必要）
+make build-node    # Node-API アドオン
+make build-shared  # Python バインディング用の共有ライブラリ
+make examples      # examples/ 以下をすべてビルドして実行する
+```
 
 ## ドキュメント
 
-音楽理論にはじめて触れる場合は、[入門ガイド](docs/ja/primer/index.md)から始めてください。この API が土台にしている考え方 — 音高と音程、音階と調、和音、和声、声部、リズムと拍子 — を、楽譜ではなく TypeScript を書く読者に向けて説明しています。
+- **学ぶ:** 音楽理論は[入門](docs/ja/primer/index.md)、全体像は[はじめに](docs/ja/introduction.md)と[使いはじめる](docs/ja/getting-started.md)、一連の流れは[ユースケース](docs/ja/use-cases/index.md)。
+- **ガイド:** [解析](docs/ja/analysis.md)、[生成](docs/ja/generation.md)、[和声](docs/ja/harmony.md)、[ヴォイシング](docs/ja/voicing.md)、[リズムとグルーヴ](docs/ja/rhythm-and-groove.md)。そのほかの分野別ページは [API リファレンス](docs/ja/api-reference.md)に一覧があります。
+- **各面:** [パッケージ構成](docs/ja/packages.md)、[C++ コア](docs/ja/cpp.md)、[Python](docs/ja/python.md)、[コマンドライン](docs/ja/cli.md)。
+- **リファレンス:** [エラーと検証](docs/ja/errors-and-validation.md)、[用語集](docs/ja/glossary.md)、[疑問と制限](docs/ja/faq.md)。
 
-そうでなければ、[はじめに](docs/ja/introduction.md)と[使いはじめる](docs/ja/getting-started.md)から読んでください。各分野のガイドとリファレンスはそこから辿れます。ガイド中の `ts` の例はすべてテストスイートで実行され、行末コメントがリテラルを名指していれば（em ダッシュに続けて理由が書かれていてもかまいません）実際の戻り値と照合されます。
+ページは英語版も [`docs/en/`](docs/en/introduction.md) にあります。コントリビューター向けの規則は [CONTRIBUTING.md](CONTRIBUTING.md) にあります。
 
 ## できないこと
 
-- **入出力・記譜・音声は扱いません。** MIDI ファイルの読み書き、楽譜の描画、音声解析、再生はいずれも対象外です。パーサーは呼び出し側で用意し、ノートイベントを渡してください。その下の層が必要な場合、[libsonare](https://github.com/libraz/libsonare) が音声解析・マスタリング・合成・SMF の入出力を扱います。両者はコードを共有せず、どちらも他方を必要としません。
-- **微分音の解析は行いません。** 周波数、セント、オクターブの等分割、純正律の比は `core` にありますが、音高より上の層はすべて 12 のピッチクラスで動きます。
-- **旋法体系そのものは扱いません。** `WORLD_SCALES` が記録するのは、その伝統が名前を与えている音の素材 — ターット、マカームの音組織、日本の五音音階 — であって、その上に築かれた語法ではありません。
-- **コーパスは同梱しません。** 統計を取るためのデータは含みません。
-
-残りは[疑問と制限](docs/ja/faq.md)にまとめています。機能和声の読みが適用できない場合や、エンジンが推測しないことについてもそこで扱います。
+- **入出力、記譜、音声は扱いません。** MIDI ファイルの読み書き、楽譜の描画、音声解析、再生はありません。パーサは各自で用意し、ノートイベントを渡してください。その下の層は [libsonare](https://github.com/libraz/libsonare) が、音声解析、マスタリング、合成、SMF の入出力を担当します。両者はコードを共有せず、どちらも相手を必要としません。
+- **微分音の解析はしません。** 周波数、セント、純正律の比率は `core` にありますが、ピッチ層より上は 12 ピッチクラスで動きます。
+- **旋法体系は扱いません。** `WORLD_SCALES` が記録するのは各伝統が名指す音高の素材で、その上に築かれた文法ではありません。
+- **コーパスは含みません。** 統計を取るためのデータは同梱していません。
 
 ## ライセンス
 
-[@libraz/libcantus](https://github.com/libraz/libcantus) は [Apache License 2.0](LICENSE) で公開しています。
+[Apache License 2.0](LICENSE) で公開しています。

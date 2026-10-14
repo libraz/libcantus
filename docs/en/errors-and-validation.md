@@ -1,6 +1,6 @@
 # Errors and validation
 
-Every failure the library raises falls into one of three kinds, and the kind decides what the caller can do about it. A message string is not a contract, so the kind travels as a `code` on the error.
+Every failure the library raises falls into one of three kinds, and the kind decides what the caller can do about it. A message string is not a contract, so the kind travels as a `code` on the error. The surfaces built on the C++ core add a few codes for the boundary between a host language and the core; see [Status codes across surfaces](#status-codes-across-surfaces).
 
 ## The three kinds
 
@@ -152,3 +152,82 @@ Entry points that search — `voiceProgression`, the drum and bass generators �
 ## Choosing where to validate
 
 The engine validates its own arguments, so a caller does not have to pre-check everything. The `assert*` helpers are for the boundary where untyped data enters the application — a file being opened, a request body, a plugin parameter. An error naming the offending field at that boundary is more useful than one raised three calls later.
+
+## Status codes across surfaces
+
+The C++ core, the WebAssembly and Node packages, Python and the command line share one error table. The three kinds above are the only errors the library itself raises. The boundary between a host language and the core adds codes for failures that are not about the musical input: a language-level type error, an unknown op, a malformed request, a released handle and an internal fault. Each code has a fixed status number, which is also the exit code of the command-line tool where it applies.
+
+| Code | Status | Raised when | C++ typed API | JavaScript | Python | CLI exit |
+| --- | --- | --- | --- | --- | --- | --- |
+| `INVALID_INPUT` | 1 | An argument is rejected | `InvalidInputError` | `InvalidInputError` (a `RangeError`) | `InvalidInputError` (a `ValueError`) | 1 |
+| `NO_SOLUTION` | 2 | Valid input, no answer | `NoSolutionError` with `at()` | `NoSolutionError` with `at` | `NoSolutionError` with `at` | 2 |
+| `BUDGET_EXCEEDED` | 3 | The request exceeds the budget | `BudgetExceededError` | `BudgetExceededError` (a `RangeError`) | `BudgetExceededError` (a `ValueError`) | 3 |
+| `HOST_TYPE_ERROR` | 4 | The language itself rejects a value, such as a `Symbol` in a message | Not raised | `TypeError`, with the message pure TypeScript gives | `CantusError` | 4 |
+| `UNKNOWN_OP` | 10 | The op name is not registered | Not raised | `Error` with `code` | `CantusError` | 10 |
+| `BAD_REQUEST` | 11 | The request is malformed, such as an unknown `$` tag or JSON nested too deeply | Not raised | `Error` with `code` | `CantusError` | 11 |
+| `CALLBACK_FAILED` | 12 | A callback you passed raised | The exception propagates unchanged | The original exception is rethrown | The original exception is re-raised | Not raised |
+| `RELEASED_HANDLE` | 13 | A released handle was used | Not raised | `Error` with `code` | `CantusError` | Not raised |
+| `INTERNAL` | 99 | Any other failure inside the core | The `std::exception` | `Error` with `code` | `CantusError` | 99 |
+
+The class of an error follows the TypeScript classification: a wrong type and an out-of-range value are both `InvalidInputError`. The message is the same word for word on every surface, so a message you match on in TypeScript matches on the others. `isLibcantusError` narrows to the three library classes in JavaScript, `is_libcantus_error` does the same in Python, and `cantus::is_libcantus_error` in C++. The command line prints the error object `{ "code", "name", "message", "at"? }` on standard error.
+
+```js
+import { InvalidInputError, detectChord, isLibcantusError } from '@libraz/libcantus-wasm';
+
+try {
+  detectChord([128]);
+} catch (error) {
+  if (!isLibcantusError(error)) throw error;
+  error.code === 'INVALID_INPUT' && error instanceof InvalidInputError;
+}
+```
+
+```python
+import libcantus
+
+try:
+    libcantus.detect_chord([128])
+except libcantus.CantusError as error:
+    error.code == libcantus.ErrorCode.INVALID_INPUT
+```
+
+```cpp
+#include <cantus/cantus.h>
+
+try {
+  cantus::detect_chord({128});
+} catch (const cantus::Error& error) {
+  bool invalid = error.code() == cantus::ErrorCode::kInvalidInput;
+}
+```
+
+## Edge values across surfaces
+
+Each row is the behaviour of pure TypeScript, and every surface returns the same result or the same error unless its column says otherwise. The command line and Python can only send what JSON can hold, so the rows for values JSON lacks (`undefined`, bigint, `Symbol`) apply to the JavaScript surfaces only.
+
+| Input | Behaviour | C++ typed API | Python and JSON surfaces |
+| --- | --- | --- | --- |
+| Zero | A value in range is used as it is. Zero bars of generation are rejected: `rhythm bars must be an integer in [1, 1000000]; received 0`. | Same | Same |
+| Negative zero | Validation keeps `-0`, and some results are `-0`. A few places normalise it to `+0`. `String(-0)` is `"0"`. | `double` keeps `-0` | `{"$n": "-0"}` on the wire; `-0.0` in Python |
+| `NaN` | Rejected: `midi must be finite; received NaN`. A hole in an array and a `null` element report the same message where the code reads them as `NaN`. | Same | `{"$n": "NaN"}`; `float("nan")` in Python |
+| `Infinity`, `-Infinity` | Rejected: `received Infinity`. A tuning result is checked against `[5e-324, 1.7976931348623157e+308]`. | Same | `{"$n": "Infinity"}`; `1e400` in JSON reads as `Infinity` |
+| `null` as an argument | Rejected by validation: `opts must be an object; received null`. | Not possible; the type excludes it | The same message. A positional `None` is sent as `null`. |
+| `null` as an option value | Treated as the default by most options and rejected by some; only options that distinguish absent from `null` keep the difference. | Not possible | The same per option. A keyword left as `None` is not sent. |
+| `null` inside a list or dict | The element's own check rejects it, or reads it as `NaN`. | Not possible | Sent as `null`, so the same check applies |
+| Missing or `undefined` | An omitted option bag is `{}`, and an omitted argument takes its default. | `std::optional` | The key is absent; `undefined` inside an array is `{"$u": 1}` |
+| A field set to `undefined` | Counts as present in the two checks that test with `in` or reject an explicit `undefined`. | Not possible | Omitted on the wire, so it counts as absent (see [C++ core and surface differences](cpp.md)) |
+| Empty list or text | `detectChord([])` is `[]`, `detectChordBest([])` is `null`, and `parseChordSymbol('')` fails with `Invalid chord symbol: ""`. Empty meter and tempo maps are rejected. | Same | Same |
+| Limits | Ranges are closed: pitch and velocity `0..127`, seed `0..0xffffffff`, tempo `0.1..1000` (context tempo from `Number.MIN_VALUE`), ppq up to `1e6`, a budget up to `1e6`. | Same constants | Same |
+| One past a limit | Rejected: `must be an integer in [0, 127]; received 128`. `midiToNote` and `pitchClassOf` take any finite number and round it. | Same | Same |
+| Beyond 2^31, 2^32, 2^53 | A safe-integer check rejects what is out of range. | The value is checked, then narrowed; a caller's implicit conversion comes first (see below) | A `double` is checked on the wire; a Python `int` is sent in decimal |
+| A fraction where an integer is required | Rejected: a velocity of `63.7`. | Converted by C++ before the check, so it can arrive as `63` | Rejected |
+| A boolean or string where a number is required | Rejected: `received true`, `received 5`. | Not possible | Rejected |
+| An object with `toJSON` where a number is required | Rejected: `received [object Object]`, or the result of its `toString`. | Not possible | Tagged `{"$tojson": …, "$repr": …}` by the JavaScript facade |
+| An object with `toJSON` where plain data is read | The `toJSON` result is used. | A type with `.data()` is accepted | Used by the JavaScript facade; a dict in Python |
+| `Symbol` | A `TypeError` from the language. | Not possible | `HOST_TYPE_ERROR`: a `TypeError` in JavaScript, a `CantusError` in Python |
+| `bigint` | Rejected: `received 10`. | Not possible | `{"$big": "10"}` in JavaScript; an `int` in Python |
+| An unknown option key | Ignored. | Not possible | Ignored on the wire; a `TypeError` for a Python keyword argument |
+| Non-ASCII text and lone surrogates | Lengths and truncation count UTF-16 code units. | Stored as WTF-8 and counted in UTF-16 code units | Read as WTF-8, written as `\udXXX` escapes; Python uses `surrogatepass` |
+| Floating-point output | Beats, seconds, hertz, cents and scores. | Bit-identical to TypeScript | Shortest round-trip text; a Python `float` |
+
+A C++ call that passes `-1` where an unsigned integer is declared, or `63.7` where an `int` is declared, converts the number before any validation runs. This is the C++ type system rather than a different rule, and the JSON surfaces, which receive doubles, reject the same values. Validate at the boundary if the value comes from elsewhere.

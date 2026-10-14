@@ -54,6 +54,7 @@ CommonJS と ESM の両方のビルドを配布し、それぞれに TypeScript 
 | エラー分類、パーサ、表明 | [エラーと検証](errors-and-validation.md) |
 | インデックス、セッション、予算 | [パフォーマンス](performance.md) |
 | MIDI、ティック、各国語の音名 | [相互運用](interoperability.md) |
+| WebAssembly、Python、コマンドライン、C++ | [パッケージ構成](packages.md) |
 | 1つのアプリケーションを通した流れ | [ユースケース](use-cases/index.md) |
 | 用語と、それを実装する API | [用語集](glossary.md) |
 | 適用範囲、制限、設計上の判断 | [FAQ と制限](faq.md) |

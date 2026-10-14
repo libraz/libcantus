@@ -154,9 +154,39 @@ import { Note, Key } from '@libraz/libcantus/model';
 
 The root entry point re-exports these symbols, so subpaths are a packaging choice rather than a different API.
 
+## Use it from another runtime
+
+The same API is available outside pure TypeScript, with the same results. Pick a surface from [Packages and surfaces](packages.md).
+
+```js
+import { detectChordBest } from '@libraz/libcantus-wasm';
+
+detectChordBest([60, 64, 67]);
+// { rootPc: 0, quality: 'maj', intervals: [0, 4, 7] }
+```
+
+```python
+import libcantus
+
+libcantus.detect_chord_best([60, 64, 67])
+```
+
+```sh
+cantus detectChordBest '[[60, 64, 67]]'
+```
+
+```cpp
+#include <cantus/cantus.h>
+
+auto matches = cantus::detect_chord({60, 64, 67});
+```
+
+The WebAssembly package is installed with `yarn add @libraz/libcantus-wasm` and used the same way as the TypeScript package, apart from being ESM only. Python is `pip install libcantus` ([Python](python.md)), the command-line tool is described in [Command line](cli.md), and the C++ library in [C++ core and surface differences](cpp.md).
+
 ## Next steps
 
 - [Primer](primer/index.md) covers the musical ideas the API is named after, for a reader with no musical training: [pitch and intervals](primer/pitch-and-intervals.md), [scales and keys](primer/scales-and-keys.md), [chords](primer/chords.md), [harmony](primer/harmony.md), [voices](primer/voices.md), [rhythm and meter](primer/rhythm-and-meter.md).
 - [Use cases](use-cases/index.md) shows complete flows for a DAW assistant, a harmony exercise checker, a piece analyzer, and a generative arrangement.
+- [Packages and surfaces](packages.md) lists the WebAssembly, Python, command-line and C++ ways to call the same API.
 - [Introduction](introduction.md) explains the data model and what the engine assumes.
 - The generated TypeDoc reference covers every symbol; see [API reference](api-reference.md).

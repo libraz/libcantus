@@ -12,7 +12,7 @@ No. It supplies the information a notation renderer needs — spelled notes, not
 No. Pitch detection from audio and playback both belong to the host. `nearestStep` converts a detected frequency into a MIDI pitch the rest of the library can read.
 
 **Does it have runtime dependencies?**
-No. The package is pure TypeScript with no dependencies, and every entry point is synchronous.
+No. The TypeScript package has no dependencies, and every entry point is synchronous. The Python wheel bundles its native library.
 
 **Can it run in a browser or a worker?**
 Yes. There is no Node-specific API in the library, and every input and output is plain JSON-compatible data apart from a chord timeline's `at`, which is a function: post `timeline.segments` in place of the timeline itself and rebuild the lookup on the far side with `Timeline.fromJSON`. Everything else crosses a worker boundary with a structured clone and no revival step.
@@ -97,6 +97,26 @@ Because a cross relation and an augmented second are invisible in semitone count
 
 **Why is `B` read as English rather than as the German B-flat?**
 A lone `B` from an unknown source is far more often English. Pass `system` explicitly when the source is known.
+
+## Surfaces
+
+**Which surface should I use?**
+Pure TypeScript for a web application or anything that bundles its dependencies or needs `require()`. WebAssembly when a JavaScript application should run the C++ core. Python for scripts and notebooks, the command line for shell pipelines, and C++ for a native application. [Packages and surfaces](packages.md) compares them.
+
+**Do the surfaces give the same results?**
+Yes. Results, errors and error messages are the same, and floating-point output is bit-identical across platforms. The differences are small and listed in [C++ core and surface differences](cpp.md): object identity, C++ implicit conversions, unknown keyword arguments in Python, and the module format.
+
+**Is the C++ core faster than pure TypeScript?**
+Speed is not what it is for. It exists so that one implementation serves JavaScript, Python, the shell and native code, and so that a native application can link the library without a JavaScript runtime.
+
+**Can I `require()` the WebAssembly package?**
+No. It instantiates with top-level await, so it is ESM only, and `require()` of it fails with `ERR_REQUIRE_ASYNC_MODULE`. A CommonJS application uses the pure TypeScript package.
+
+**Why is the Node native package not on npm?**
+A native addon has to be built for each platform and Node version. The WebAssembly package covers the same need without a build step, and the addon can be built from a checkout with `make build-node`.
+
+**Why does Python return dicts instead of classes?**
+Results are plain data, the same shape as the TypeScript objects. Model classes such as `Score` and `Chord` are available where a value carries methods.
 
 ## Design decisions
 

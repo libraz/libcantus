@@ -1,81 +1,142 @@
-# @libraz/libcantus
-
-Pure-TypeScript music theory for MIDI note events. Recover the harmony from notes, and write new parts against that same reading. No runtime dependencies.
+# libcantus
 
 [![CI](https://img.shields.io/github/actions/workflow/status/libraz/libcantus/ci.yml?branch=main&label=CI)](https://github.com/libraz/libcantus/actions)
 [![npm](https://img.shields.io/npm/v/@libraz/libcantus)](https://www.npmjs.com/package/@libraz/libcantus)
+[![PyPI](https://img.shields.io/pypi/v/libcantus)](https://pypi.org/project/libcantus/)
 [![codecov](https://codecov.io/gh/libraz/libcantus/branch/main/graph/badge.svg)](https://codecov.io/gh/libraz/libcantus)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libcantus/blob/main/LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![C++](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=c%2B%2B&logoColor=white)](https://isocpp.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/libcantus)
 [![docs](https://img.shields.io/badge/docs-API%20reference-b5892e)](https://libraz.github.io/libcantus/)
+
+**Music theory for MIDI note events: recover the harmony from notes, and write new parts against that same reading.**
+
+One specification, a pure TypeScript reference implementation and a C++17 core under it, reachable from C++, WebAssembly, Node, Python and the command line. Every surface gives the same results, the same errors and the same floating-point bits.
+
+**[Documentation](docs/en/introduction.md)** · **[Getting started](docs/en/getting-started.md)** · **[Packages and surfaces](docs/en/packages.md)**
 
 ![From note events to parts, and back](docs/images/pipeline.svg)
 
-The library sits between software that already holds notes or chord symbols — a DAW project, a MIDI parser, a practice tool — and what those notes mean harmonically. Note events go in, the harmony comes out, and the generators write against the harmony that was just read.
+## What's inside
 
-## What it does
+- **Harmony from notes.** Chord and key detection, Roman numerals, cadences, modulation, form. [Analysis](docs/en/analysis.md)
+- **Parts against the harmony.** Progressions, bass, counter-melody, drums, motifs, seeded and reproducible. [Generation](docs/en/generation.md)
+- **Theory vocabulary.** Notes, intervals, scales, chords, voicing, part-writing and counterpoint checks. [Harmony](docs/en/harmony.md)
+- **Playability.** Instrument profiles, transposition and range checks. [Instruments](docs/en/instruments-and-playability.md)
+- **Evidence in answers.** Each reading carries its rationale and the readings it turned down; an undecidable question comes back `null`.
 
-```ts
-import { Composer, Score } from '@libraz/libcantus';
+## Surfaces
 
-// Four bars of block chords, as a DAW would hand them over:
-const harmony = [[48, 60, 64, 67], [41, 60, 65, 69], [43, 59, 62, 65], [48, 60, 64, 67]].flatMap(
-  (pitches, bar) => pitches.map((pitch) => ({ pitch, startBeat: bar * 4, durationBeat: 4 })),
-);
+| Surface | Package | Page |
+| --- | --- | --- |
+| TypeScript (reference) | `@libraz/libcantus` | [`ts/`](ts/README.md) |
+| C++ | CMake package `cantus` | [C++ core](docs/en/cpp.md) |
+| WebAssembly | `@libraz/libcantus-wasm` | [`bindings/wasm/`](bindings/wasm/README.md) |
+| Node native | `@libraz/libcantus-node` (built from source) | [`bindings/node/`](bindings/node/README.md) |
+| Python | `libcantus` | [`bindings/python/`](bindings/python/README.md) |
+| Command line | `cantus` | [Command line](docs/en/cli.md) |
 
-const chords = Score.of(harmony).timeline();
-chords.roman().map((entry) => entry.roman); // ['I', 'IV', 'V7', 'I']
-chords.cadences().at(-1)?.cadence.type; // 'authentic'
+The TypeScript package is synchronous, dependency-free and tree-shakeable. The other surfaces call the C++ core and differ from it only in small, documented ways ([C++ core and surface differences](docs/en/cpp.md)).
 
-// A walking bass over the harmony that was just recovered:
-Composer.of({ key: chords.key, bpm: 120, seed: 1 }).bass(chords, { style: 'walking' }).notes;
-// 16 notes: [{ pitch: 36, startBeat: 0, durationBeat: 1, velocity: 100 }, ...]
-```
+## Installation and quick start
 
-Chord boundaries are searched for rather than assumed, and so is the key, so a piece that modulates is not read against the key it started in. Answers carry their evidence: a chord analysis, a cadence and a Roman numeral each come with a `rationale` and the readings they turned down, and where the input cannot settle a question the field comes back `null` rather than a plausible guess.
+Each example reads the chord of C, E and G.
 
-Another piece is read the same way and measured against the first dimension by dimension — form, harmony, motif derivation, rhythm — never folded into one score: `analyzeReference` compresses a piece into a portable profile, and `compareReferences` reads two of them against each other.
-
-That same profile doubles as a target for new material: `deriveCompositionPlan` turns it into a `CompositionPlan` — form, harmony and a motif derivation forest stated as instructions a generator can follow exactly — and `generateMelody` writes a melody to it, with `evaluateComposition` reading the result back against the plan. See [Generating from a reference](https://github.com/libraz/libcantus/blob/main/docs/en/generation.md#generating-from-a-reference).
-
-## Use cases
-
-| Use case | What it does | Worked guide |
-|---|---|---|
-| A DAW assistant | Infers the harmony from tracks, then writes a bass line against it. | [DAW workflow](https://github.com/libraz/libcantus/blob/main/docs/en/use-cases/daw-workflow.md) |
-| A piece analyzer | Key regions, cadences, harmonic reduction, phrases, sections and motifs from one score. | [Piece analysis](https://github.com/libraz/libcantus/blob/main/docs/en/use-cases/piece-analysis.md) |
-| A modulation report | Key changes with their pivot chords, confidences and relations. | [Modulation report](https://github.com/libraz/libcantus/blob/main/docs/en/use-cases/modulation-report.md) |
-| A harmony exercise checker | Part-writing and species-counterpoint violations, each with the voice it happened in and the rule it broke. | [Harmony exercise checker](https://github.com/libraz/libcantus/blob/main/docs/en/use-cases/harmony-exercise-checker.md) |
-| A generative arrangement | One seeded composer writing a progression, its parts and its drums, then a playability check. | [Generative arrangement](https://github.com/libraz/libcantus/blob/main/docs/en/use-cases/generative-arrangement.md) |
-| A chord chart importer | Typed chord symbols turned into a timeline, voicings and a bass line. | [Chord chart import](https://github.com/libraz/libcantus/blob/main/docs/en/use-cases/chord-chart-import.md) |
-| Part preparation | A part fitted to an instrument and written at the pitch its player reads. | [Part preparation](https://github.com/libraz/libcantus/blob/main/docs/en/use-cases/part-preparation.md) |
-
-## Install
-
-Node.js 22 or later.
+**TypeScript**, Node.js 22 or later:
 
 ```sh
 yarn add @libraz/libcantus
 ```
 
-The package root exports the whole API. `@libraz/libcantus/core`, `/theory`, `/analyze`, `/generate` and `/model` are narrower import boundaries onto the same symbols, and every path ships an ESM and a CommonJS build.
+```ts
+import { detectChordBest } from '@libraz/libcantus';
+
+detectChordBest([60, 64, 67]); // { rootPc: 0, quality: 'maj', intervals: [0, 4, 7] }
+```
+
+**WebAssembly**, ESM only; the same API and types:
+
+```sh
+yarn add @libraz/libcantus-wasm
+```
+
+```js
+import { detectChordBest } from '@libraz/libcantus-wasm';
+
+detectChordBest([60, 64, 67]);
+```
+
+**Node native**, from a checkout (`make build-node`):
+
+```js
+import { detectChordBest } from '@libraz/libcantus-node';
+
+detectChordBest([60, 64, 67]);
+```
+
+**Python**, 3.10 or later:
+
+```sh
+pip install libcantus
+```
+
+```python
+import libcantus
+
+libcantus.detect_chord_best([60, 64, 67])
+```
+
+**Command line**, a release asset from GitHub:
+
+```sh
+cantus detectChordBest '[[60, 64, 67]]'
+```
+
+**C++**, CMake 3.24 and a C++17 compiler:
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(cantus GIT_REPOSITORY https://github.com/libraz/libcantus.git GIT_TAG main)
+FetchContent_MakeAvailable(cantus)
+target_link_libraries(app PRIVATE cantus::cantus)
+```
+
+```cpp
+#include <cantus/cantus.h>
+
+auto matches = cantus::detect_chord({60, 64, 67});
+```
+
+`find_package(cantus)` against an installed prefix and `add_subdirectory` work the same way. Runnable versions of these examples are in [`examples/`](examples) and run with `make examples`.
+
+## Building from source
+
+```sh
+make build         # C++ core, command-line tool and tests in build/
+make test-cxx      # run the C++ tests
+make wasm          # WebAssembly package (needs Emscripten)
+make build-node    # Node-API addon
+make build-shared  # shared library for the Python binding
+make examples      # build and run everything in examples/
+```
 
 ## Documentation
 
-New to music theory? [The primer](https://github.com/libraz/libcantus/blob/main/docs/en/primer/index.md) teaches the concepts this API is built on — pitch and intervals, scales and keys, chords, harmony, voices, rhythm and meter — for a reader who writes TypeScript rather than scores.
+- **Learn:** [Primer](docs/en/primer/index.md) for the music theory, [Introduction](docs/en/introduction.md), [Getting started](docs/en/getting-started.md), and [Use cases](docs/en/use-cases/index.md) for complete flows.
+- **Guides:** [Analysis](docs/en/analysis.md), [Generation](docs/en/generation.md), [Harmony](docs/en/harmony.md), [Voicing](docs/en/voicing.md), [Rhythm and groove](docs/en/rhythm-and-groove.md) and the other domain pages listed in [API reference](docs/en/api-reference.md).
+- **Surfaces:** [Packages and surfaces](docs/en/packages.md), [C++ core](docs/en/cpp.md), [Python](docs/en/python.md), [Command line](docs/en/cli.md).
+- **Reference:** [Errors and validation](docs/en/errors-and-validation.md), [Glossary](docs/en/glossary.md), [Questions and limitations](docs/en/faq.md).
 
-Otherwise start at [Introduction](https://github.com/libraz/libcantus/blob/main/docs/en/introduction.md) and [Getting started](https://github.com/libraz/libcantus/blob/main/docs/en/getting-started.md), which index the domain guides and the reference pages. Every `ts` example in the guides is executed by the test suite, and a trailing comment that names a literal — with or without the reason for it after an em dash — is checked against what the call returns.
+The pages are also in Japanese under [`docs/ja/`](docs/ja/introduction.md). Contributor rules are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## What it doesn't do
 
 - **No I/O, notation or audio.** No MIDI file reader or writer, no score rendering, no audio analysis, no playback. Bring your own parser and hand it note events. For the layer below, [libsonare](https://github.com/libraz/libsonare) covers audio analysis, mastering, synthesis and SMF I/O; the two share no code and neither requires the other.
-- **No microtonal analysis.** Frequencies, cents, equal divisions of the octave and just-intonation ratios live in `core`, but everything above the pitch layer runs on twelve pitch classes.
-- **No modal systems.** `WORLD_SCALES` records the pitch material a tradition names — a thāt, a maqām's set, a Japanese pentatonic — and not the grammar built on it.
+- **No microtonal analysis.** Frequencies, cents and just-intonation ratios live in `core`, but everything above the pitch layer runs on twelve pitch classes.
+- **No modal systems.** `WORLD_SCALES` records the pitch material a tradition names, not the grammar built on it.
 - **No corpus.** Nothing is bundled to run statistics over.
-
-[Questions and limitations](https://github.com/libraz/libcantus/blob/main/docs/en/faq.md) covers the rest, including where a functional reading does not apply and what the engine will not guess.
 
 ## License
 
-[@libraz/libcantus](https://github.com/libraz/libcantus) is released under the [Apache License 2.0](LICENSE).
+[Apache License 2.0](LICENSE).

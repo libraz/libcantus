@@ -10,7 +10,7 @@ Pure-TypeScript music theory for MIDI note events. Recover the harmony from note
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![docs](https://img.shields.io/badge/docs-API%20reference-b5892e)](https://libraz.github.io/libcantus/)
 
-![From note events to parts, and back](docs/images/pipeline.svg)
+![From note events to parts, and back](https://raw.githubusercontent.com/libraz/libcantus/main/docs/images/pipeline.svg)
 
 The library sits between software that already holds notes or chord symbols — a DAW project, a MIDI parser, a practice tool — and what those notes mean harmonically. Note events go in, the harmony comes out, and the generators write against the harmony that was just read.
 
@@ -60,6 +60,8 @@ yarn add @libraz/libcantus
 ```
 
 The package root exports the whole API. `@libraz/libcantus/core`, `/theory`, `/analyze`, `/generate` and `/model` are narrower import boundaries onto the same symbols, and every path ships an ESM and a CommonJS build.
+
+This package is the TypeScript reference implementation, synchronous and dependency-free. The same API is also available from a C++ core through WebAssembly, Python and a command-line tool; see [the repository](https://github.com/libraz/libcantus) and [Packages](https://github.com/libraz/libcantus/blob/main/docs/en/packages.md).
 
 ## Documentation
 

@@ -1,6 +1,6 @@
 # エラーと検証
 
-このライブラリが投げる失敗は3種類のいずれかに分類され、種類によって呼び出し側の対処が決まります。メッセージ文字列は契約にならないため、種類は `code` としてエラーに載ります。
+このライブラリが投げる失敗は3種類のいずれかに分類され、種類によって呼び出し側の対処が決まります。メッセージ文字列は契約にならないため、種類は `code` としてエラーに載ります。C++ コアの上に載る面では、ホスト言語とコアの境界で使うコードがいくつか加わります。[面ごとのステータスコード](#面ごとのステータスコード)を参照してください。
 
 ## 3種類の失敗
 
@@ -152,3 +152,82 @@ code; // 'BUDGET_EXCEEDED'
 ## どこで検証するか
 
 エンジンは自身の引数を検証するため、呼び出し側がすべてを事前に確認する必要はありません。`assert*` を置く場所は、型のないデータがアプリケーションに入る境界 — 開いたファイル、リクエストボディ、プラグインのパラメータ — です。その境界で問題のあるフィールド名を示すエラーは、3段先の呼び出しで投げられるエラーより有用です。
+
+## 面ごとのステータスコード
+
+C++ コア、WebAssembly と Node のパッケージ、Python、コマンドラインは、1 つのエラー表を共有しています。ライブラリ自身が投げるのは、前述の 3 種類だけです。ホスト言語とコアの境界では、音楽的な入力とは関係のない失敗のためのコードが加わります。言語レベルの型エラー、未知の op、不正な要求、解放済みのハンドル、内部の障害です。各コードには固定のステータス番号があり、コマンドラインツールでは該当するものがそのまま終了コードになります。
+
+| コード | ステータス | 発生する場面 | C++ 型付き API | JavaScript | Python | CLI 終了コード |
+| --- | --- | --- | --- | --- | --- | --- |
+| `INVALID_INPUT` | 1 | 引数が拒否された | `InvalidInputError` | `InvalidInputError`（`RangeError`） | `InvalidInputError`（`ValueError`） | 1 |
+| `NO_SOLUTION` | 2 | 入力は妥当だが解がない | `at()` を持つ `NoSolutionError` | `at` を持つ `NoSolutionError` | `at` を持つ `NoSolutionError` | 2 |
+| `BUDGET_EXCEEDED` | 3 | 要求が予算を超えた | `BudgetExceededError` | `BudgetExceededError`（`RangeError`） | `BudgetExceededError`（`ValueError`） | 3 |
+| `HOST_TYPE_ERROR` | 4 | メッセージに `Symbol` を埋め込むなど、言語自身が値を拒否した | 発生しない | `TypeError`。メッセージは純 TypeScript と同じ | `CantusError` | 4 |
+| `UNKNOWN_OP` | 10 | op 名が登録されていない | 発生しない | `code` を持つ `Error` | `CantusError` | 10 |
+| `BAD_REQUEST` | 11 | 要求の形式が不正（未知の `$` タグ、深すぎる JSON の入れ子など） | 発生しない | `code` を持つ `Error` | `CantusError` | 11 |
+| `CALLBACK_FAILED` | 12 | 渡したコールバックが例外を投げた | 例外がそのまま伝わる | 元の例外を再送出する | 元の例外を再送出する | 発生しない |
+| `RELEASED_HANDLE` | 13 | 解放済みのハンドルを使った | 発生しない | `code` を持つ `Error` | `CantusError` | 発生しない |
+| `INTERNAL` | 99 | コア内部のそれ以外の失敗 | `std::exception` | `code` を持つ `Error` | `CantusError` | 99 |
+
+エラーのクラスは TypeScript の分類に従います。型の誤りも値域の誤りも `InvalidInputError` です。メッセージはどの面でも一語一句同じなので、TypeScript で照合しているメッセージは他の面でもそのまま一致します。3 つのライブラリのクラスへの絞り込みには、JavaScript では `isLibcantusError`、Python では `is_libcantus_error`、C++ では `cantus::is_libcantus_error` を使います。コマンドラインは、エラーオブジェクト `{ "code", "name", "message", "at"? }` を標準エラー出力に出します。
+
+```js
+import { InvalidInputError, detectChord, isLibcantusError } from '@libraz/libcantus-wasm';
+
+try {
+  detectChord([128]);
+} catch (error) {
+  if (!isLibcantusError(error)) throw error;
+  error.code === 'INVALID_INPUT' && error instanceof InvalidInputError;
+}
+```
+
+```python
+import libcantus
+
+try:
+    libcantus.detect_chord([128])
+except libcantus.CantusError as error:
+    error.code == libcantus.ErrorCode.INVALID_INPUT
+```
+
+```cpp
+#include <cantus/cantus.h>
+
+try {
+  cantus::detect_chord({128});
+} catch (const cantus::Error& error) {
+  bool invalid = error.code() == cantus::ErrorCode::kInvalidInput;
+}
+```
+
+## 面ごとの端の値
+
+各行は純 TypeScript の挙動で、列に断りがない限り、どの面も同じ結果か同じエラーを返します。コマンドラインと Python が送れるのは JSON で表せる値だけなので、JSON にない値（`undefined`、bigint、`Symbol`）の行は JavaScript の面にだけ当てはまります。
+
+| 入力 | 挙動 | C++ 型付き API | Python と JSON の面 |
+| --- | --- | --- | --- |
+| 0 | 範囲内の値はそのまま使われます。0 小節の生成は拒否されます: `rhythm bars must be an integer in [1, 1000000]; received 0`。 | 同じ | 同じ |
+| 負のゼロ | 検証は `-0` をそのまま返し、結果が `-0` になるものもあります。`+0` に正規化する箇所も一部にあります。`String(-0)` は `"0"` です。 | `double` が `-0` を保持する | ワイヤ上は `{"$n": "-0"}`。Python では `-0.0` |
+| `NaN` | 拒否されます: `midi must be finite; received NaN`。配列の穴や `null` の要素も、コードが `NaN` として読む箇所では同じメッセージになります。 | 同じ | `{"$n": "NaN"}`。Python では `float("nan")` |
+| `Infinity`、`-Infinity` | 拒否されます: `received Infinity`。音律の結果は `[5e-324, 1.7976931348623157e+308]` の範囲で検査されます。 | 同じ | `{"$n": "Infinity"}`。JSON の `1e400` は `Infinity` として読まれる |
+| 引数としての `null` | 検証で拒否されます: `opts must be an object; received null`。 | 起きない。型が排除する | 同じメッセージ。位置引数の `None` は `null` として送られる |
+| オプション値としての `null` | 多くのオプションでは既定値として扱われ、一部では拒否されます。省略と `null` を区別するオプションだけが違いを保ちます。 | 起きない | オプションごとに同じ。`None` のままのキーワードは送られない |
+| list や dict の中の `null` | その要素の検査で拒否されるか、`NaN` として読まれます。 | 起きない | `null` として送られるので、同じ検査が働く |
+| 欠落、または `undefined` | 省略したオプションは `{}` になり、省略した引数は既定値になります。 | `std::optional` | キーが無い。配列の中の `undefined` は `{"$u": 1}` |
+| `undefined` を入れたフィールド | `in` で調べる検査と、明示的な `undefined` を拒否する検査の 2 か所では「ある」と数えられます。 | 起きない | ワイヤ上で省略され、「無い」と数えられる（[C++ コアと面ごとの差](cpp.md)を参照） |
+| 空の list や文字列 | `detectChord([])` は `[]`、`detectChordBest([])` は `null`、`parseChordSymbol('')` は `Invalid chord symbol: ""` で失敗します。空の meter map と tempo map は拒否されます。 | 同じ | 同じ |
+| 限界値 | 範囲はすべて閉区間です。pitch と velocity は `0..127`、seed は `0..0xffffffff`、テンポは `0.1..1000`（context のテンポは `Number.MIN_VALUE` から）、ppq は `1e6` 以下、予算は `1e6` 以下です。 | 同じ定数 | 同じ |
+| 限界の 1 つ外 | 拒否されます: `must be an integer in [0, 127]; received 128`。`midiToNote` と `pitchClassOf` は有限の任意の数を受け取り、丸めて使います。 | 同じ | 同じ |
+| 2^31、2^32、2^53 を超える値 | safe integer の検査で、範囲外が拒否されます。 | 検査してから狭めます。ただし呼び出し側の暗黙変換が先に起きます（下記参照） | double はワイヤ上で検査される。Python の `int` は 10 進で送られる |
+| 整数の位置の小数 | 拒否されます: velocity の `63.7`。 | 検査の前に C++ が変換するので、`63` として届くことがある | 拒否される |
+| 数値の位置の真偽値や文字列 | 拒否されます: `received true`、`received 5`。 | 起きない | 拒否される |
+| 数値の位置の `toJSON` を持つオブジェクト | 拒否されます: `received [object Object]`、または利用者の `toString` の結果。 | 起きない | JavaScript のファサードが `{"$tojson": …, "$repr": …}` のタグで送る |
+| データとして読む位置の `toJSON` を持つオブジェクト | `toJSON` の結果が使われます。 | `.data()` を持つ型を受け付ける | JavaScript のファサードでは使われ、Python では dict |
+| `Symbol` | 言語自身の `TypeError` になります。 | 起きない | `HOST_TYPE_ERROR`。JavaScript では `TypeError`、Python では `CantusError` |
+| `bigint` | 拒否されます: `received 10`。 | 起きない | JavaScript では `{"$big": "10"}`。Python では `int` |
+| 未知のオプションキー | 無視されます。 | 起きない | ワイヤ上では無視される。Python のキーワード引数では `TypeError` |
+| 非 ASCII の文字列と孤立サロゲート | 長さと切り詰めは UTF-16 コードユニットで数えます。 | WTF-8 で保持し、UTF-16 コードユニットで数える | WTF-8 で読み、`\udXXX` のエスケープで書く。Python は `surrogatepass` |
+| 浮動小数の出力 | beats、seconds、Hz、cents、スコア。 | TypeScript とビット単位で一致 | 往復可能な最短の表記。Python では `float` |
+
+符号なし整数として宣言された位置に `-1` を、`int` として宣言された位置に `63.7` を渡す C++ の呼び出しでは、検証の前に数値が変換されます。これは規則が違うのではなく C++ の型システムによるもので、double を受け取る JSON の面では、同じ値が拒否されます。値が外部から来る場合は、境界で検証してください。
