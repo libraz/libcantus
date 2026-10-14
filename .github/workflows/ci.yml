@@ -8,7 +8,6 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -18,7 +17,7 @@ permissions:
   contents: read
 
 jobs:
-  ci:
+  ts:
     # The published `engines` range is `>=22`, so every supported major is
     # exercised. Coverage is uploaded once, from the ubuntu/22 combination that
     # matches mise.toml.
@@ -78,3 +77,163 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
       - run: yarn workspace @libraz/libcantus build
+
+  # The C++ core and every native surface, on the three native environments. Spec runs against the
+  # Node addon, and the recorded call corpus is replayed through the C ABI in Debug and Release.
+  native:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      JOBS: 4
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            gate: true
+          - os: ubuntu-24.04-arm
+          - os: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js (major matches mise.toml)
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Enable Corepack and pin Yarn
+        run: |
+          corepack enable
+          corepack prepare yarn@4.18.0 --activate
+          yarn --version
+
+      - name: Restore Yarn cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            .yarn/cache
+            .yarn/install-state.gz
+          key: ${{ runner.os }}-${{ runner.arch }}-yarn-${{ hashFiles('yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-yarn-
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Setup Python (version from bindings/python/.python-version)
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: bindings/python/.python-version
+
+      - name: Install the C++ format and lint tools
+        if: matrix.gate
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format clang-tidy
+
+      - name: Core, Debug
+        run: make test-cxx
+
+      - name: Core, Release
+        run: make test-cxx BUILD_DIR=build-release BUILD_TYPE=Release
+
+      - name: Conformance gates and install check
+        run: make conformance-fast
+
+      - run: python3 tools/conformance/check_error_tables.py
+
+      - name: Generators, manifest, file map and cross-implementation parity
+        run: make parity
+
+      - name: Corpus replay through the C ABI, Debug
+        run: make corpus-check UNIT=all
+
+      - name: Corpus replay through the C ABI, Release
+        run: make corpus-check UNIT=all BUILD_DIR=build-release BUILD_TYPE=Release
+
+      - run: node tools/corpus/coverage.mjs
+
+      - run: make test-cli
+
+      - run: make test-python
+
+      - run: make test-node
+
+      - name: Spec against the Node addon
+        run: make spec-ready IMPL=node
+
+      - name: Spec counts match pure TS
+        run: node tools/spec/count.mjs --compare node
+
+      - name: Format and lint
+        if: matrix.gate
+        run: |
+          make format-check
+          make lint
+
+  # The WebAssembly build with the pinned Emscripten SDK.
+  wasm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      JOBS: 4
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js (major matches mise.toml)
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Enable Corepack and pin Yarn
+        run: |
+          corepack enable
+          corepack prepare yarn@4.18.0 --activate
+          yarn --version
+
+      - name: Restore Yarn cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            .yarn/cache
+            .yarn/install-state.gz
+          key: ${{ runner.os }}-yarn-${{ hashFiles('yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Read the pinned Emscripten version
+        id: emsdk
+        run: echo "version=$(sed -n 's/^EMSDK_VERSION := //p' mk/toolchain.mk)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: ${{ steps.emsdk.outputs.version }}
+          actions-cache-folder: emsdk-cache
+
+      - run: make wasm
+
+      - run: python3 tools/conformance/check_wasm_flags.py
+
+      - run: make test-wasm
+
+      - name: Spec against the WebAssembly module
+        run: make spec-ready IMPL=wasm
+
+      - name: Spec counts match pure TS
+        run: node tools/spec/count.mjs --compare wasm
+
+  # Workflows may only call make and yarn targets that exist, and must be valid.
+  workflows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - run: python3 tools/release/check_workflow_targets.py
+
+      - name: actionlint
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest -color
