@@ -151,6 +151,23 @@ function sharedClassWire(): WeakMap<object, WireEntry> {
   return global[slot];
 }
 
+/**
+ * What the runtime keeps of a decoded hybrid or class instance: its wire, and the callbacks of
+ * the call that produced it when a `$cb` in the wire names one, so a later call can register
+ * them again.
+ */
+function keptEntry(
+  wire: WireObject,
+  fns: readonly Callable[] | undefined,
+  text?: string,
+): WireEntry {
+  const entry: WireEntry = text === undefined ? { wire } : { wire, text };
+  if (fns !== undefined && fns.length > 0 && (text ?? JSON.stringify(wire)).includes('"$cb"')) {
+    entry.fns = fns;
+  }
+  return entry;
+}
+
 /** The facade runtime over one backend. */
 export class Runtime {
   readonly #backend: Backend;
@@ -225,13 +242,14 @@ export class Runtime {
 
   /** Run a constructor op and attach the `$class` it returns to `self`. */
   construct(self: object, op: string, args: readonly unknown[]): void {
-    const wire = this.#run(op, args, this.#newFrame());
+    const frame = this.#newFrame();
+    const wire = this.#run(op, args, frame);
     if (typeof wire !== 'object' || wire === null || Array.isArray(wire) || !('$class' in wire)) {
       throw Object.assign(new Error(`${op} did not return a class instance`), {
         code: 'INTERNAL',
       });
     }
-    this.#classWire.set(self, { wire });
+    this.#classWire.set(self, keptEntry(wire, frame.fns));
   }
 
   /** Release a handle now (`[Symbol.dispose]`); later calls on it fail with RELEASED_HANDLE. */
@@ -310,10 +328,7 @@ export class Runtime {
     if (value === null) return 'null';
     const object = value as object;
     const cls = this.#classWire.get(object);
-    if (cls !== undefined) {
-      cls.text ??= JSON.stringify(cls.wire);
-      return cls.text;
-    }
+    if (cls !== undefined) return this.#entryText(cls, frame);
     const hybrid = this.#hybrids.get(object);
     if (hybrid !== undefined) {
       const text = this.#encodeHybrid(object as Record<string, unknown>, hybrid, frame);
@@ -469,7 +484,7 @@ export class Runtime {
       const repr = String(node.$repr);
       return { toJSON: () => payload, toString: () => repr };
     }
-    if ('$class' in node) return this.#decodeClass(node);
+    if ('$class' in node) return this.#decodeClass(node, ctx);
     if ('$hy' in node) return this.#decodeHybrid(node, ctx);
     if ('$h' in node) return this.#decodeHandle(node);
     if ('$id' in node) return this.#decodeIdentity(node);
@@ -478,7 +493,7 @@ export class Runtime {
     });
   }
 
-  #decodeClass(node: WireObject): unknown {
+  #decodeClass(node: WireObject, ctx: DecodeContext): unknown {
     const name = String(node.$class);
     const error = ERROR_CLASSES[name];
     if (error !== undefined) return error(node);
@@ -489,7 +504,7 @@ export class Runtime {
       });
     }
     const instance = Object.create(cls.prototype) as object;
-    this.#classWire.set(instance, { wire: node });
+    this.#classWire.set(instance, keptEntry(node, ctx.fns));
     return instance;
   }
 
@@ -510,8 +525,7 @@ export class Runtime {
     // A result that is the very hybrid passed in (an assertion returning its argument).
     const passed = ctx.hybrids?.get(text);
     if (passed !== undefined) return passed;
-    const entry: WireEntry = { wire: node, text };
-    if (ctx.fns !== undefined && ctx.fns.length > 0 && text.includes('"$cb"')) entry.fns = ctx.fns;
+    const entry = keptEntry(node, ctx.fns, text);
     const object: Record<string, unknown> = {};
     const methods = new Set(meta.methods);
     // Members in declaration order, so the object's own keys read like the pure one's.
