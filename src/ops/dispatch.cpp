@@ -9,6 +9,7 @@
 #include "ops/codec.h"
 #include "ops/error_map.h"
 #include "ops/registry.h"
+#include "ops/validate.h"
 
 namespace cantus::ops {
 
@@ -47,6 +48,7 @@ Result dispatch(std::string_view op, std::string_view args_json,
       throw RequestError(kNoCallbacks);
     }
     Args a(args.as_array(), context);
+    OptionViews views;
     json::Value result = entry->fn(a);
     return Result{CANTUS_OK, ops::stringify(result)};
   } catch (...) {

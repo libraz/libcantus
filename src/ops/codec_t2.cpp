@@ -2,10 +2,12 @@
 
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "cantus/core/errors.h"
 #include "core/validation/validation.h"
 #include "js/format.h"
+#include "js/number.h"
 #include "js/value.h"
 #include "ops/accessors.h"
 #include "ops/validate.h"
@@ -75,11 +77,39 @@ std::optional<NoteNameSystem> read_symbol_system(const json::Value& asked) {
 }
 
 std::optional<bool> read_symbol_flats(const json::Value& asked) {
-  const json::Value* flats = opt_null_default(asked, "flats");
-  if (flats == nullptr || !flats->is_bool()) {
+  const json::Value* flats = opt_strict(asked, "flats");
+  if (flats == nullptr) {
     return std::nullopt;
   }
-  return flats->as_bool();
+  return assert_flag(*flats, "flats");
+}
+
+void read_attack_arrays(const json::Value& asked, std::size_t slots,
+                        VoiceIndependenceOptions& opts) {
+  const std::pair<const char*, std::optional<std::vector<bool>>*> attack_arrays[] = {
+      {"leadAttacks", &opts.leadAttacks}, {"counterAttacks", &opts.counterAttacks}};
+  for (const auto& [name, target] : attack_arrays) {
+    const json::Value& flags = get(asked, name);
+    if (is_undefined(flags)) {
+      continue;
+    }
+    // `flags.length !== lines.length`: an array, a string or any record with a length.
+    json::Value length = length_of(flags);
+    if (!js::strict_equals(length, json::Value(static_cast<double>(slots)))) {
+      throw InvalidInputError(std::string("voiceIndependence needs ") + name +
+                              " aligned slot for slot with the lines; received " +
+                              js::template_string(length) + " and " + js::to_string(slots));
+    }
+    std::vector<bool> read;
+    for (std::size_t index = 0; index < slots; ++index) {
+      const json::Value flag = element_of(flags, index);
+      read.push_back(flag.is_bool() && flag.as_bool());
+    }
+    *target = std::move(read);
+  }
+  if (const json::Value* fourths = opt_null_default(asked, "countFourths")) {
+    opts.countFourths = js::truthy(*fourths);
+  }
 }
 
 bool is_wire_number(const json::Value& value) { return js::type_of(value) == "number"; }

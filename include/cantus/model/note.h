@@ -82,10 +82,10 @@ class Note {
   int midi() const;
 
   /** The diatonic letter, 0..6. */
-  int letter() const noexcept { return data_.letter; }
+  double letter() const noexcept { return data_.letter; }
 
   /** The chromatic alteration in semitones. */
-  int alter() const noexcept { return data_.alter; }
+  double alter() const noexcept { return data_.alter; }
 
   /** The octave, or absent for a bare pitch class. */
   std::optional<double> octave() const noexcept { return data_.octave; }

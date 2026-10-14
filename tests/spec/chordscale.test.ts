@@ -502,3 +502,14 @@ describe('chord-scale acceptance domain', () => {
     }
   });
 });
+
+describe('availableTensions over a scale that does not fit', () => {
+  it('reads no resolution target', () => {
+    expect(availableTensions(makeChord(7, 'dom7'), 'lydian', { resolvesTo: 5 as never })).toEqual(
+      [],
+    );
+    expect(() =>
+      availableTensions(makeChord(7, 'dom7'), 'mixolydian', { resolvesTo: 5 as never }),
+    ).toThrow('chord must be a chord symbol or chord data; received number');
+  });
+});

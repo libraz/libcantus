@@ -236,7 +236,7 @@ std::optional<NoteData> parse_english(View text) {
     octave = octave_of(text.substr(i));
   }
   int letter = letter_index(kEnglishLetters, View(&glyph, 1));
-  return NoteData{letter, alter, octave};
+  return NoteData{static_cast<double>(letter), static_cast<double>(alter), octave};
 }
 
 /** Write an English name, without its octave (`formatEnglish`). */
@@ -305,16 +305,17 @@ std::optional<NoteData> parse_german(View text) {
   }
   View suffix = View(lower).substr(1);
   if (suffix.empty()) {
-    return NoteData{letter, 0, std::nullopt};
+    return NoteData{static_cast<double>(letter), 0, std::nullopt};
   }
   if (is_sharp_suffix(suffix)) {
-    return NoteData{letter, static_cast<int>(suffix.size() / 2), std::nullopt};
+    return NoteData{static_cast<double>(letter), static_cast<double>(suffix.size() / 2),
+                    std::nullopt};
   }
   std::optional<int> flats = german_flats(letter, suffix);
   if (!flats) {
     return std::nullopt;
   }
-  return NoteData{letter, -*flats, std::nullopt};
+  return NoteData{static_cast<double>(letter), static_cast<double>(-*flats), std::nullopt};
 }
 
 /** Write a German name, without its octave (`formatGerman`). */
@@ -367,7 +368,7 @@ std::optional<NoteData> parse_japanese(View text) {
   if (letter < 0) {
     return std::nullopt;
   }
-  return NoteData{letter, alter, std::nullopt};
+  return NoteData{static_cast<double>(letter), static_cast<double>(alter), std::nullopt};
 }
 
 /** Write a Japanese name, without its octave (`formatJapanese`). */
@@ -440,7 +441,7 @@ std::optional<NoteData> parse_italian(View text) {
   if (doubled) {
     return std::nullopt;
   }
-  return NoteData{letter, alter, std::nullopt};
+  return NoteData{static_cast<double>(letter), static_cast<double>(alter), std::nullopt};
 }
 
 /** Write an Italian (fixed-do) name, without its octave (`formatItalian`). */

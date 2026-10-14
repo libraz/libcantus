@@ -291,13 +291,15 @@ std::vector<int> key_letter_alters(const ResolvedKey& key) {
 /** The note a figure names: its letter from the bass, its accidental from the key (`noteAbove`). */
 NoteData note_above(const NoteData& bass, const Figure& figure, const std::vector<int>& alters) {
   int letter = diatonic_letter_of(bass.letter + figure.number - 1);
-  return NoteData{letter, altered_by(alters[static_cast<std::size_t>(letter)], figure.accidental),
-                  std::nullopt};
+  return NoteData{
+      static_cast<double>(letter),
+      static_cast<double>(altered_by(alters[static_cast<std::size_t>(letter)], figure.accidental)),
+      std::nullopt};
 }
 
 /** A bass note reduced to the letter and accidental the figures are read from (`bareNote`). */
 NoteData bare_note(const NoteData& note) {
-  return NoteData{diatonic_letter_of(note.letter), note.alter, std::nullopt};
+  return NoteData{static_cast<double>(diatonic_letter_of(note.letter)), note.alter, std::nullopt};
 }
 
 std::string joined_names(const std::vector<NoteData>& notes) {

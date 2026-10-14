@@ -521,3 +521,29 @@ describe('a generator dial merged into a context', () => {
     expect(value).toBeLessThan(1);
   });
 });
+
+describe('a resolved context handed back as a context', () => {
+  it('is read through its properties alone', () => {
+    const resolved = resolveContext({
+      seed: 3,
+      rng: { at: () => 0.25 },
+      complexity: { rhythmic: 0.5 },
+    });
+    const again = resolveContext(resolved as never);
+    expect(again.part('a').at('x')).toBe(resolveContext(3).part('a').at('x'));
+    expect(again.rhythmic).toBeUndefined();
+  });
+
+  it('draws from the seed when the supplied source is falsy', () => {
+    expect(
+      resolveContext({ seed: 3, rng: null as never })
+        .part('a')
+        .at('x'),
+    ).toBe(resolveContext(3).part('a').at('x'));
+    expect(
+      resolveContext({ seed: 3, rng: 0 as never })
+        .part('a')
+        .at('x'),
+    ).toBe(resolveContext(3).part('a').at('x'));
+  });
+});

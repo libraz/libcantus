@@ -27,6 +27,7 @@
 #include "js/value.h"
 #include "ops/accessors.h"
 #include "ops/codec_c2.h"
+#include "ops/codec_g1.h"
 #include "ops/handles.h"
 #include "ops/register_all.h"
 #include "ops/registry.h"
@@ -111,30 +112,13 @@ void register_random() {
   // no kCallbacks flag; dispatch still refuses a `$cb` argument when the caller has no host.
   def("includeAt", [](Args& a) -> json::Value {
     double complexity = assert_range(a[1], 0, 1, "complexity");
-    if (tag_of(a[0]) == Tag::kHybrid) {
-      return to_json(include_at(positional_rng_of(a, 0), complexity, read_seed_path(a, 2)));
-    }
-    // A caller-supplied source: an object whose `at` is a function, called with the path as
-    // written.
-    const json::Value& at = get(a[0], "at");
-    if (tag_of(at) != Tag::kCallback) {
-      if (a[0].is_null() || is_undefined(a[0])) {
-        throw js::TypeError("Cannot read properties of " + js::template_string(a[0]) +
-                            " (reading 'at')");
-      }
-      throw js::TypeError("rng.at is not a function");
-    }
     json::Array path;
     for (std::size_t i = 2; i < a.size(); ++i) {
       path.push_back(a[i]);
     }
-    json::Value drawn = a.callback(at)(path);
-    double draw = js::to_number(drawn);
-    if (!(draw >= 0 && draw < 1)) {
-      throw InvalidInputError("positional draw must be in [0, 1); received " +
-                              js::template_string(drawn));
-    }
-    return to_json(draw < complexity);
+    // `rng.at(...path)` for whatever source the caller passed, held to [0, 1).
+    json::Value draw = draw_from(WireRng(a, a[0]), path);
+    return json::Value(js::less_than(draw, json::Value(complexity)));
   });
 }
 
@@ -301,10 +285,19 @@ void register_pitch() {
   });
   def("intervalSemitones", [](Args& a) -> json::Value {
     double number = assert_integer(a[0], "interval number", 1, MAX_INTERVAL_NUMBER);
-    if (!a[1].is_string()) {
+    if (a[1].is_string()) {
+      return interval_semitones(static_cast<int>(number), a[1].as_string());
+    }
+    // A quality that is no string can only match the repeated-letter patterns, which read it as
+    // text; the count is its `length` (an array's size), not the length of that text.
+    std::string text = js::template_string(a[1]);
+    bool repeated = !text.empty() && (text.find_first_not_of('A') == std::string::npos ||
+                                      text.find_first_not_of('d') == std::string::npos);
+    if (!repeated || !a[1].is_array()) {
       throw InvalidInputError("unknown interval quality " + describe_rejected(a[1]));
     }
-    return interval_semitones(static_cast<int>(number), a[1].as_string());
+    std::string quality(a[1].as_array().size(), text[0]);
+    return interval_semitones(static_cast<int>(number), quality);
   });
   def("parseInterval", [](Args& a) -> json::Value {
     if (!a[0].is_string()) {

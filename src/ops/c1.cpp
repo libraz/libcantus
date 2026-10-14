@@ -39,27 +39,31 @@ void register_validation() {
   def("$const:DEFAULT_GENERATION_BUDGET",
       [](Args&) -> json::Value { return to_json(DEFAULT_GENERATION_BUDGET); });
   def("assertFiniteNumber", [](Args& a) -> json::Value {
-    assert_finite_number(a[0], name_arg(a, 1));
+    with_name_arg(a, 1, [&](const std::string& name) { assert_finite_number(a[0], name); });
     return a.take(0);
   });
   def("assertInteger", [](Args& a) -> json::Value {
-    assert_integer(a[0], name_arg(a, 1), arg_or(a, 2, -kMaxSafeInteger),
-                   arg_or(a, 3, kMaxSafeInteger));
+    with_name_arg(a, 1, [&](const std::string& name) {
+      assert_integer(a[0], name, arg_or(a, 2, -kMaxSafeInteger), arg_or(a, 3, kMaxSafeInteger));
+    });
     return a.take(0);
   });
   def("assertMidiPitch", [](Args& a) -> json::Value {
-    assert_midi_pitch(a[0], name_arg(a, 1, "MIDI pitch"));
+    with_name_arg(a, 1, "MIDI pitch",
+                  [&](const std::string& name) { assert_midi_pitch(a[0], name); });
     return a.take(0);
   });
   def("clampToMidi", [](Args& a) -> json::Value {
-    return to_json(clamp_to_midi(a[0], name_arg(a, 1, "MIDI pitch")));
+    return to_json(with_name_arg(
+        a, 1, "MIDI pitch", [&](const std::string& name) { return clamp_to_midi(a[0], name); }));
   });
   def("assertDegree", [](Args& a) -> json::Value {
-    assert_degree(a[0], name_arg(a, 1, "degree"));
+    with_name_arg(a, 1, "degree", [&](const std::string& name) { assert_degree(a[0], name); });
     return a.take(0);
   });
   def("assertFiniteSemitones", [](Args& a) -> json::Value {
-    assert_finite_semitones(a[0], name_arg(a, 1, "semitones"));
+    with_name_arg(a, 1, "semitones",
+                  [&](const std::string& name) { assert_finite_semitones(a[0], name); });
     return a.take(0);
   });
   def("dropSilentNotes", [](Args& a) -> json::Value { return drop_silent_notes(a.take(0)); });
@@ -69,12 +73,13 @@ void register_validation() {
     return a.take(0);
   });
   def("assertPositiveInt", [](Args& a) -> json::Value {
-    assert_positive_int(a[0], name_arg(a, 1),
-                        arg_or(a, 2, static_cast<double>(DEFAULT_GENERATION_BUDGET)));
+    with_name_arg(a, 1, [&](const std::string& name) {
+      assert_positive_int(a[0], name, arg_or(a, 2, static_cast<double>(DEFAULT_GENERATION_BUDGET)));
+    });
     return a.take(0);
   });
   def("assertRange", [](Args& a) -> json::Value {
-    assert_range(a[0], a[1], a[2], name_arg(a, 3));
+    with_name_arg(a, 3, [&](const std::string& name) { assert_range(a[0], a[1], a[2], name); });
     return a.take(0);
   });
   def("assertGenerationBudget", [](Args& a) -> json::Value {
@@ -110,13 +115,15 @@ void register_instrument() {
   def("$const:GUITAR_STANDARD", [](Args&) -> json::Value { return to_json(GUITAR_STANDARD); });
   def("$const:GUITAR_DROP_D", [](Args&) -> json::Value { return to_json(GUITAR_DROP_D); });
   def("toInstrumentProfile", [](Args& a) -> json::Value {
-    std::string name = name_arg(a, 1, "instrument");
-    to_instrument_profile(read_instrument_profile(a[0], name), name);
+    with_name_arg(a, 1, "instrument", [&](const std::string& name) {
+      to_instrument_profile(read_instrument_profile(a[0], name), name);
+    });
     return like_data(a.take(0));
   });
   def("toStringedProfile", [](Args& a) -> json::Value {
-    std::string name = name_arg(a, 1, "instrument");
-    to_stringed_profile(read_instrument_profile(a[0], name), name);
+    with_name_arg(a, 1, "instrument", [&](const std::string& name) {
+      to_stringed_profile(read_instrument_profile(a[0], name), name);
+    });
     return like_data(a.take(0));
   });
   def("instrumentRange", [](Args& a) -> json::Value {

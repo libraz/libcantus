@@ -1,6 +1,8 @@
+import { keyTimelineFromNotes } from '@libraz/libcantus/analyze';
 import {
   beatsPerBar,
   metricWeight,
+  type NoteEvent,
   parseTimeSignature,
   type TimeSignature,
 } from '@libraz/libcantus/core';
@@ -496,5 +498,20 @@ describe('the meter a pattern is counted in', () => {
         onsets = count;
       }
     }
+  });
+});
+
+describe('a Rhythm handed over as options', () => {
+  it('is read through its getters', () => {
+    const notes: NoteEvent[] = [
+      { pitch: 60, startBeat: 0, durationBeat: 1 },
+      { pitch: 64, startBeat: 1, durationBeat: 1 },
+      { pitch: 67, startBeat: 2, durationBeat: 1 },
+      { pitch: 72, startBeat: 3, durationBeat: 4 },
+    ];
+    const rhythm = Rhythm.of([{ position: 0, duration: 1 }], '3/4');
+    expect(keyTimelineFromNotes(notes, rhythm as never)).toEqual(
+      keyTimelineFromNotes(notes, { totalBeats: rhythm.totalBeats, ts: rhythm.ts } as never),
+    );
   });
 });

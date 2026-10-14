@@ -688,3 +688,17 @@ describe('the leading tone the voicer and the checker share', () => {
     }
   });
 });
+
+describe('voiceChord ranges of another kind', () => {
+  it('reads them as JS reads any value with a length', () => {
+    expect(() => voiceChord(makeChord(0, 'maj'), { ranges: '' as never })).toThrow(
+      'ranges must contain at least one voice range',
+    );
+    expect(() => voiceChord(makeChord(0, 'maj'), { ranges: { length: 4 } as never })).toThrow(
+      'opts.ranges.map is not a function',
+    );
+    expect(() => voiceChord(makeChord(0, 'maj'), { ranges: null as never })).toThrow(
+      "Cannot read properties of null (reading 'length')",
+    );
+  });
+});

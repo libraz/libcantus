@@ -288,6 +288,12 @@ std::vector<int> avoid_notes(const ChordArg& chord, std::string_view scale_name,
   return avoid_notes_of(to_chord_data(chord), scale_name, mask, opts);
 }
 
+bool weighs_tensions(const Chord& chord, std::string_view scale_name) {
+  int mask = require_chord_scale_mask(scale_name);
+  return matches_chord(chord_pitch_classes(chord), mask, pitch_class_of(chord.rootPc)) ||
+         is_altered_dominant(chord, scale_name);
+}
+
 std::vector<int> available_tensions(const ChordArg& chord, std::string_view scale_name,
                                     const AvailableTensionsOptions& opts) {
   int mask = require_chord_scale_mask(scale_name);

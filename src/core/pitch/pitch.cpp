@@ -256,7 +256,8 @@ NoteData parse_note(std::string_view text, const NoteNameOptions& opts) {
 
 std::string format_note(const NoteData& note, const NoteNameOptions& opts) {
   assert_note(note, "note");
-  return write_note_name(NoteData{mod7(note.letter), note.alter, note.octave}, opts);
+  return write_note_name(NoteData{static_cast<double>(mod7(note.letter)), note.alter, note.octave},
+                         opts);
 }
 
 ParseResult<KeyName> try_parse_key_name(std::string_view text, const NoteNameOptions& opts) {
@@ -276,7 +277,9 @@ KeyName parse_key_name(std::string_view text, const NoteNameOptions& opts) {
 std::string format_key_name(const KeyName& key, const NoteNameOptions& opts) {
   assert_note(key.tonic, "key.tonic");
   return write_key_name(
-      KeyName{NoteData{mod7(key.tonic.letter), key.tonic.alter, std::nullopt}, key.mode}, opts);
+      KeyName{NoteData{static_cast<double>(mod7(key.tonic.letter)), key.tonic.alter, std::nullopt},
+              key.mode},
+      opts);
 }
 
 int note_to_pitch_class(const NoteData& note) {
@@ -300,7 +303,7 @@ NoteData midi_to_note(double midi, MidiSpelling spelling) {
   int pc = mod12(rounded);
   double octave = std::floor(rounded / 12) - 1;
   const SpellingEntry& entry = kSpellings[static_cast<std::size_t>(spelling)].entries[pc];
-  return NoteData{entry.letter, entry.alter, octave};
+  return NoteData{static_cast<double>(entry.letter), static_cast<double>(entry.alter), octave};
 }
 
 NoteData transpose_note(const NoteData& note, double semitones, const TransposeNoteOptions& opts) {

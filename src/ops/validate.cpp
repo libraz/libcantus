@@ -9,6 +9,7 @@
 #include "core/validation/validation.h"
 #include "js/format.h"
 #include "js/number.h"
+#include "js/utf16.h"
 #include "js/value.h"
 #include "ops/accessors.h"
 #include "ops/codec.h"
@@ -76,6 +77,30 @@ bool is_js_object(const json::Value& v) { return !v.is_null() && js::type_of(v) 
 const json::Value& get(const json::Value& v, std::string_view key) {
   const json::Value* f = field(v, key);
   return f == nullptr ? undefined_value() : *f;
+}
+
+json::Value length_of(const json::Value& value) {
+  if (value.is_array()) {
+    return json::Value(static_cast<double>(value.as_array().size()));
+  }
+  if (value.is_string()) {
+    return json::Value(static_cast<double>(js::utf16_length(value.as_string())));
+  }
+  return property_of(value, "length");
+}
+
+json::Value element_of(const json::Value& list, std::size_t index) {
+  property_of(list, js::to_string(static_cast<double>(index)));
+  if (list.is_array()) {
+    return list.as_array().size() > index ? list.as_array()[index] : undefined_value();
+  }
+  if (list.is_string()) {
+    return js::utf16_length(list.as_string()) > index
+               ? json::Value(js::utf16_slice(list.as_string(), static_cast<double>(index),
+                                             static_cast<double>(index + 1)))
+               : undefined_value();
+  }
+  return get(list, js::to_string(static_cast<double>(index)));
 }
 
 const json::Value& property_of(const json::Value& v, std::string_view key) {
@@ -149,9 +174,39 @@ const json::Value& assert_record(const json::Value& value, std::string_view name
   return value;
 }
 
+namespace {
+
+/** The innermost live OptionViews of this thread. */
+thread_local OptionViews* option_views = nullptr;
+
+}  // namespace
+
+OptionViews::OptionViews() : outer_(option_views) { option_views = this; }
+
+OptionViews::~OptionViews() { option_views = outer_; }
+
+const json::Value& OptionViews::keep(json::Value view) {
+  views_.push_back(std::make_unique<json::Value>(std::move(view)));
+  return *views_.back();
+}
+
+json::Value default_options(const Args& a, std::size_t i) {
+  if (a.undefined(i)) {
+    return json::Value(json::Object());
+  }
+  return tag_of(a[i]) == Tag::kClass ? options_view(a[i]) : a[i];
+}
+
 const json::Value& assert_options(const json::Value& value, std::string_view name) {
   static const json::Value kEmpty{json::Object()};
-  return is_undefined(value) ? kEmpty : assert_record(value, name);
+  if (is_undefined(value)) {
+    return kEmpty;
+  }
+  const json::Value& bag = assert_record(value, name);
+  if (tag_of(bag) != Tag::kClass || option_views == nullptr) {
+    return bag;
+  }
+  return option_views->keep(options_view(bag));
 }
 
 bool assert_flag(const json::Value& value, std::string_view name) {

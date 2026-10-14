@@ -648,3 +648,31 @@ describe('every safety entry point checks its profile and its pitches', () => {
     );
   });
 });
+
+describe('evaluateSafety harmony and voices of another kind', () => {
+  const key: KeyScale = { rootPc: 0, modeMask12: MAJOR_MASK };
+  const query = { candidatePitch: 64, profile: 'pop' as const, otherVoices: [], key };
+
+  it('reads only null as no harmony', () => {
+    expect(() => evaluateSafety({ ...query } as never)).toThrow(
+      'chord must be an object; received undefined',
+    );
+    expect(() => evaluateSafety({ ...query, chord: 5 } as never)).toThrow(
+      'chord must be an object; received number',
+    );
+    expect(() =>
+      enumerateSafePitches({ profile: 'pop', otherVoices: [], key } as never, 60, 62),
+    ).toThrow('chord must be an object; received undefined');
+    expect(evaluateSafety({ ...query, chord: null }).safety).toBe(NoteSafety.Warning);
+  });
+
+  it('refuses another voice that is no record', () => {
+    const chord = makeChord(0, 'maj');
+    expect(() => evaluateSafety({ ...query, chord, otherVoices: [null] } as never)).toThrow(
+      'otherVoices[0] must be an object; received null',
+    );
+    expect(() => evaluateSafety({ ...query, chord, otherVoices: [0] } as never)).toThrow(
+      'otherVoices[0] must be an object; received number',
+    );
+  });
+});

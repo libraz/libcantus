@@ -82,11 +82,16 @@ void register_symbol() {
     ChordData data = read_chord_like(a[0]);
     const json::Value& quality = get(data.wire, "quality");
     if (!quality.is_string() || !parse_chord_quality(quality.as_string())) {
-      throw InvalidInputError("Unknown chord quality: " + js::template_string(quality));
+      throw InvalidInputError("Unknown chord quality: " + js::string_of(quality));
     }
     const json::Value& asked = assert_options(a[1], "opts");
     ChordSymbolOptions opts;
     opts.flats = read_symbol_flats(asked);
+    // `hintFor(data.rootSpelling, rootPc)` reads a hint as a note before the root is written.
+    const json::Value& root_hint = get(data.wire, "rootSpelling");
+    if (!is_undefined(root_hint)) {
+      read_note(root_hint, "note");
+    }
     try {
       opts.system = read_symbol_system(asked);
     } catch (const InvalidInputError&) {
@@ -95,6 +100,13 @@ void register_symbol() {
       prefix.bassPc.reset();
       format_chord_symbol(prefix, opts);
       throw;
+    }
+    // So is the slash bass's, when the bass is not the root.
+    const json::Value& bass_hint = get(data.wire, "bassSpelling");
+    if (data.chord.bassPc &&
+        pitch_class_of(*data.chord.bassPc) != pitch_class_of(data.chord.rootPc) &&
+        !is_undefined(bass_hint)) {
+      read_note(bass_hint, "note");
     }
     return json::Value(format_chord_symbol(data.chord, opts));
   });
@@ -161,16 +173,17 @@ void register_counterpoint() {
     return to_json(creates_voice_crossing(upper, lower));
   });
   def("createsVerticalDissonance", [](Args& a) -> json::Value {
+    // The classifiers it hands the flag to default an absent one to true.
     if (!is_wire_number(a[0]) && !is_wire_number(a[1])) {
       // spelledInterval names its notes `a` and `b`.
       NoteData first = read_note(a[0], "a");
       NoteData second = read_note(a[1], "b");
-      bool two_voice = assert_flag(a[2], "twoVoice");
+      bool two_voice = assert_flag(arg_or(a, 2, true), "twoVoice");
       return to_json(creates_vertical_dissonance(first, second, two_voice));
     }
     double first = read_pitch(a[0]);
     double second = read_pitch(a[1]);
-    bool two_voice = assert_flag(a[2], "twoVoice");
+    bool two_voice = assert_flag(arg_or(a, 2, true), "twoVoice");
     return to_json(creates_vertical_dissonance(first, second, two_voice));
   });
   def("isForbiddenMelodicLeap", [](Args& a) -> json::Value {
@@ -232,34 +245,7 @@ void register_counterpoint() {
     }
     // An attack array of the wrong length would read every slot past its end as a sustain.
     VoiceIndependenceOptions opts;
-    const std::pair<const char*, std::optional<std::vector<bool>>*> attack_arrays[] = {
-        {"leadAttacks", &opts.leadAttacks}, {"counterAttacks", &opts.counterAttacks}};
-    for (const auto& [name, target] : attack_arrays) {
-      const json::Value& flags = get(asked, name);
-      if (is_undefined(flags)) {
-        continue;
-      }
-      std::vector<bool> read;
-      std::string length = "undefined";
-      if (flags.is_array()) {
-        length = js::to_string(flags.as_array().size());
-        for (const json::Value& flag : flags.as_array()) {
-          read.push_back(flag.is_bool() && flag.as_bool());
-        }
-      } else if (flags.is_string()) {
-        length = js::to_string(js::utf16_length(flags.as_string()));
-        read.assign(js::utf16_length(flags.as_string()), false);
-      }
-      if (length != js::to_string(upper.size())) {
-        throw InvalidInputError(std::string("voiceIndependence needs ") + name +
-                                " aligned slot for slot with the lines; received " + length +
-                                " and " + js::to_string(upper.size()));
-      }
-      *target = std::move(read);
-    }
-    if (const json::Value* fourths = opt_null_default(asked, "countFourths")) {
-      opts.countFourths = js::truthy(*fourths);
-    }
+    read_attack_arrays(asked, upper.size(), opts);
     // Each slot's pitches are read lead first, as the TS map reads them.
     std::vector<Nullable<NoteData>> lead;
     std::vector<Nullable<NoteData>> counter;
@@ -356,7 +342,9 @@ void register_chordscale() {
     require_chord_scale_mask(name);
     ChordData data = read_chord_like(a[0]);
     AvailableTensionsOptions opts;
-    if (const json::Value* target = opt_strict(asked, "resolvesTo")) {
+    // The target is read only once the scale is weighed over the chord.
+    const json::Value* target = opt_strict(asked, "resolvesTo");
+    if (target != nullptr && weighs_tensions(data.chord, name)) {
       opts.resolvesTo = ChordArg(read_chord_like(*target).chord);
     }
     return to_json(available_tensions(data.chord, name, opts));

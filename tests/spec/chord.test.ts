@@ -5,7 +5,9 @@ import {
   chordFromSpan,
   chordPitchClasses,
   chordToneRole,
+  isChordMember,
   MAJOR_MASK,
+  majorKey,
   makeChord,
   spanFromChord,
 } from '@libraz/libcantus/theory';
@@ -147,5 +149,41 @@ describe('spanFromChord', () => {
     expect(() =>
       spanFromChord({ rootPc: 0, quality: 'nope' as never, intervals: [0, 4, 7] }, 0),
     ).toThrow(/Unknown chord quality/);
+  });
+});
+
+describe('chord fields read as JS reads them', () => {
+  const maj7 = makeChord(0, 'maj7');
+
+  it('sums the root with each interval before reading the pitch', () => {
+    expect(() => isChordMember(60, { ...maj7, rootPc: '3' as never })).toThrow(
+      'pitch must be finite; received 30',
+    );
+    expect(isChordMember(60, { ...maj7, rootPc: null as never })).toBe(true);
+    expect(() => chordToneRole(60, { ...maj7, rootPc: null as never })).toThrow(
+      'pitch must be finite; received null',
+    );
+  });
+
+  it('reads the slash bass unless it is left out', () => {
+    expect(() =>
+      chordPitchClasses({ ...maj7, bassPc: '3' as never }, { includeBass: true }),
+    ).toThrow('pitch must be finite; received 3');
+    expect(chordPitchClasses({ ...maj7, bassPc: '3' as never }, { includeBass: false })).toEqual([
+      0, 4, 7, 11,
+    ]);
+  });
+
+  it('iterates the intervals of a role', () => {
+    expect(() => chordToneRole(60, majorKey(0) as never)).toThrow(
+      'chord.intervals is not iterable',
+    );
+  });
+
+  it('names only a text quality', () => {
+    expect(() => makeChord(0, 5 as never)).toThrow('Unknown chord quality: 5');
+    expect(() => makeChord(0, ['maj'] as never)).toThrow('Unknown chord quality: maj');
+    expect(() => chordFromDegree(1, 5 as never, majorKey(0))).toThrow('Unknown chord quality: 5');
+    expect(() => makeChord(0, Symbol('s') as never)).toThrow('Unknown chord quality: Symbol(s)');
   });
 });

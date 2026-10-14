@@ -236,7 +236,7 @@ InstrumentProfile read_instrument_profile(const json::Value& value, std::string_
   if (!stringed && !(kind.is_string() && kind.as_string() == "percussion")) {
     throw InvalidInputError(str(name) +
                             " must be a stringed or percussion profile; received kind " +
-                            js::template_string(kind));
+                            js::string_of(kind));
   }
   // assertProfile: every field the library goes on to read, in the TS order.
   const json::Value& profile_name = get(data, "name");

@@ -22,6 +22,7 @@
 #include "js/format.h"
 #include "js/math.h"
 #include "js/number.h"
+#include "js/sort.h"
 #include "js/utf16.h"
 #include "js/value.h"
 #include "ops/accessors.h"
@@ -34,11 +35,21 @@ namespace cantus::ops {
 
 namespace {
 
+/** `a - b` for two beats as a sort comparator's result is read: a bigint either way is refused. */
+double beat_difference(const json::Value& a, const json::Value& b) {
+  bool big_a = js::type_of(a) == "bigint";
+  bool big_b = js::type_of(b) == "bigint";
+  if (big_a != big_b) {
+    throw js::TypeError("Cannot mix BigInt and other types, use explicit conversions");
+  }
+  if (big_a) {
+    throw js::TypeError("Cannot convert a BigInt value to a number");
+  }
+  return js::to_number(a) - js::to_number(b);
+}
+
 /** `Number.MIN_VALUE`. */
 constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
-
-/** The options bag a detector is called with: `opts = {}` applies only to undefined. */
-json::Value options_or_empty(const Args& a, std::size_t i) { return arg_or(a, i, json::Object()); }
 
 /** The `input` option: only `auto` and `midi` are told apart from an unordered set. */
 ChordInputKind read_input_kind(const json::Value& asked) {
@@ -148,12 +159,12 @@ void register_detect() {
     return to_json(detect_chord_best(pitches, read_chord_options(asked)));
   });
   def("detectKey", [](Args& a) -> json::Value {
-    json::Value opts = options_or_empty(a, 1);
+    json::Value opts = default_options(a, 1);
     KeyCall call = read_key_call(a[0], opts);
     return to_json(detect_key_over(call.pitches, call.options, call.profile));
   });
   def("detectKeyBest", [](Args& a) -> json::Value {
-    json::Value opts = options_or_empty(a, 1);
+    json::Value opts = default_options(a, 1);
     KeyCall call = read_key_call(a[0], opts);
     std::vector<KeyMatch> matches = detect_key_over(call.pitches, call.options, call.profile);
     if (matches.empty()) {
@@ -162,7 +173,7 @@ void register_detect() {
     return to_json(matches.front());
   });
   def("detectKeyFromNotes", [](Args& a) -> json::Value {
-    json::Value opts = options_or_empty(a, 1);
+    json::Value opts = default_options(a, 1);
     const json::Value& asked = assert_options(opts, "opts");
     json::Object note_bag;
     note_bag.set("allowNonPositiveDuration", true);
@@ -198,7 +209,7 @@ KeyTimelineOptions read_timeline_options(const json::Value& opts, const MeterMap
 
 void register_keys() {
   def("keyTimelineFromNotes", [](Args& a) -> json::Value {
-    json::Value opts = options_or_empty(a, 1);
+    json::Value opts = default_options(a, 1);
     MeterMap meters = resolve_wire_meters(opts, "key timeline meters");
     double bar = beats_per_bar_at(0, MeterArg(meters));
     double expected = assert_range_option(opts, "expectedKeyBeats", bar * 4, kMinValue,
@@ -223,7 +234,7 @@ void register_keys() {
     return to_json(key_timeline_over(notes, typed, wire_profile_source(field(opts, "profile"))));
   });
   def("detectModulations", [](Args& a) -> json::Value {
-    json::Value opts = options_or_empty(a, 1);
+    json::Value opts = default_options(a, 1);
     const json::Array& chords = assert_array(a[0], "modulation chord segments");
     for (std::size_t index = 0; index < chords.size(); ++index) {
       assert_record(chords[index], "modulation chord segments[" + index_text(index) + "]");
@@ -237,9 +248,31 @@ void register_keys() {
     assert_generation_budget(json::Value(static_cast<double>(chords.size() * 24)),
                              "modulation chord segments", get(opts, "budget"));
     KeyTimelineOptions typed = read_timeline_options(opts, meters, expected, minimum);
+    // The beats are read as JS reads them before any chord is: `endBeat > startBeat`, the sort by
+    // `a.startBeat - b.startBeat`, then `Math.max` over the ends, where a bigint is refused.
+    std::vector<const json::Value*> sounding;
+    for (const json::Value& segment : chords) {
+      if (js::greater_than(get(segment, "endBeat"), get(segment, "startBeat"))) {
+        sounding.push_back(&segment);
+      }
+    }
+    js::array_sort(sounding, [](const json::Value* x, const json::Value* y) {
+      return beat_difference(get(*x, "startBeat"), get(*y, "startBeat"));
+    });
+    for (const json::Value* segment : sounding) {
+      js::to_math_number(get(*segment, "endBeat"));
+    }
     // A total named by the caller is checked here, before any chord is read.
     if (const json::Value* total = opt_null_default(opts, "totalBeats")) {
       typed.totalBeats = assert_range(*total, 0, kMaxSafeInteger, "modulation totalBeats");
+    }
+    // A lone bigint start is met where the segment's length is measured.
+    if (sounding.size() == 1 && js::type_of(get(*sounding[0], "startBeat")) == "bigint") {
+      double end = js::to_number(get(*sounding[0], "endBeat"));
+      if (js::greater_than(json::Value(typed.totalBeats ? js::min(end, *typed.totalBeats) : end),
+                           get(*sounding[0], "startBeat"))) {
+        js::subtract(get(*sounding[0], "startBeat"), 0);
+      }
     }
     std::vector<SegmentBeats> beats;
     for (const json::Value& segment : chords) {
@@ -262,7 +295,7 @@ void register_keys() {
         assert_record(wire, "chord");
         assert_finite_number(get(wire, "rootPc"), "chord.rootPc");
         ChordQuality quality = assert_chord_quality(wire);
-        assert_chord_mask_inputs(wire);
+        assert_mask_inputs(wire);
         read[index] = std::make_unique<Chord>(read_chord_fields(wire, quality));
       }
       return *read[index];

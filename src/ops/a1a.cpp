@@ -27,6 +27,7 @@
 #include "ops/register_all.h"
 #include "ops/registry.h"
 #include "ops/validate.h"
+#include "theory/tendency/tendency.h"
 
 namespace cantus::ops {
 
@@ -113,6 +114,10 @@ void register_functional() {
     KeyScale key = read_key_like(a[1]);
     // Every reading of the chord goes through a guard that refuses a quality no table has.
     settle_chord_quality(data);
+    // A Neapolitan is answered before the chord is read as an augmented sixth.
+    if (!is_neapolitan_chord_of(data.chord, key)) {
+      read_augmented_sixth_hints(data, KeyArg(key));
+    }
     return to_json(function_of(data.chord, key));
   });
   def("isDiatonic", [](Args& a) -> json::Value {
@@ -126,6 +131,9 @@ void register_functional() {
     ChordData data = read_chord_like(a[0]);
     KeyScale key = read_key_like(a[1]);
     settle_chord_quality(data);
+    if (!is_neapolitan_chord_of(data.chord, key)) {
+      read_augmented_sixth_hints(data, KeyArg(key));
+    }
     return to_json(
         analyze_chord(data.chord, key, read_numeral_options<AnalyzeChordOptions>(asked)));
   });
@@ -247,6 +255,7 @@ void register_functional() {
     if (pitch_class_of(bass) == augmented_sixth_bass_pc(resolved.scale)) {
       settle_chord_quality(data);
     }
+    read_augmented_sixth_hints(data, KeyArg(resolved));
     return to_json(augmented_sixth_kind(data.chord, resolved));
   });
   def("augmentedSixthFromPitchClasses", [](Args& a) -> json::Value {

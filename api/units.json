@@ -24,7 +24,7 @@
       "modules": ["core/validation", "core/instrument", "core/meter"],
       "root_files": ["core/types.ts"],
       "expected": {
-        "replay": 5330,
+        "replay": 5336,
         "spec_files": 7
       }
     },
@@ -42,7 +42,7 @@
       ],
       "root_files": [],
       "expected": {
-        "replay": 4714,
+        "replay": 4719,
         "spec_files": 18
       }
     },
@@ -52,7 +52,7 @@
       "modules": ["theory/chord", "theory/scale", "theory/spelling"],
       "root_files": [],
       "expected": {
-        "replay": 10410,
+        "replay": 10427,
         "spec_files": 20
       }
     },
@@ -70,7 +70,7 @@
       ],
       "root_files": [],
       "expected": {
-        "replay": 4373,
+        "replay": 4381,
         "spec_files": 19
       }
     },
@@ -80,7 +80,7 @@
       "modules": ["theory/partwriting", "theory/voicing"],
       "root_files": [],
       "expected": {
-        "replay": 785,
+        "replay": 805,
         "spec_files": 8
       }
     },
@@ -90,7 +90,7 @@
       "modules": ["theory/safety"],
       "root_files": [],
       "expected": {
-        "replay": 539,
+        "replay": 540,
         "spec_files": 1
       }
     },
@@ -105,7 +105,7 @@
         "analyze/sequence.ts"
       ],
       "expected": {
-        "replay": 2382,
+        "replay": 2388,
         "spec_files": 15
       }
     },
@@ -115,7 +115,7 @@
       "modules": ["analyze/detect", "analyze/keys"],
       "root_files": [],
       "expected": {
-        "replay": 871,
+        "replay": 879,
         "spec_files": 8
       }
     },
@@ -135,7 +135,7 @@
       "modules": ["analyze/timeline", "analyze/spelling", "analyze/reduction"],
       "root_files": [],
       "expected": {
-        "replay": 513,
+        "replay": 515,
         "spec_files": 13
       }
     },
@@ -165,7 +165,7 @@
       "modules": ["analyze/reference"],
       "root_files": [],
       "expected": {
-        "replay": 188,
+        "replay": 190,
         "spec_files": 5
       }
     },
@@ -175,7 +175,7 @@
       "modules": ["generate/context", "generate/vocabulary", "generate/drums"],
       "root_files": [],
       "expected": {
-        "replay": 2155,
+        "replay": 2161,
         "spec_files": 13
       }
     },
@@ -241,7 +241,7 @@
       ],
       "root_files": [],
       "expected": {
-        "replay": 5361,
+        "replay": 5365,
         "spec_files": 39
       }
     },
@@ -267,7 +267,7 @@
       "modules": ["model/motif.ts", "model/rhythm.ts", "model/arrangement.ts", "model/composer.ts"],
       "root_files": [],
       "expected": {
-        "replay": 1286,
+        "replay": 1289,
         "spec_files": 35
       }
     }

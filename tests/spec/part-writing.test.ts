@@ -9,6 +9,7 @@ import {
   minorKey,
   noteNames,
   type PartWritingViolation,
+  SATB_RANGES,
   scaleByName,
   spellChord,
   spelledKeyOf,
@@ -805,5 +806,42 @@ describe('augmented sixths in part writing', () => {
     expect(
       checkPartWriting(spelled, chords, C_MAJOR).map((violation) => violation.kind),
     ).not.toContain('unresolvedSeventh');
+  });
+});
+
+describe('checkPartWriting voicings and ranges of another kind', () => {
+  const key = majorKey(0);
+  const chords = [makeChord(0, 'maj'), makeChord(7, 'maj')];
+  const first = ['C3', 'G3', 'E4', 'C5'].map((n) => parseNote(n));
+  const second = ['G2', 'G3', 'D4', 'B4'].map((n) => parseNote(n));
+
+  it('fails where JS maps a voicing that is no list', () => {
+    expect(() => checkPartWriting([first, 5 as never], chords, key)).toThrow(
+      'notes.map is not a function',
+    );
+    expect(() => checkPartWriting([first, null as never], chords, key)).toThrow(
+      "Cannot read properties of null (reading 'length')",
+    );
+    expect(() =>
+      checkPartWriting([first, [null as never, ...second.slice(1)]], chords, key),
+    ).toThrow("Cannot read properties of null (reading 'octave')");
+  });
+
+  it('measures a voicing that is text by its length', () => {
+    expect(() =>
+      checkPartWriting([first, 'abcdefgh' as never], chords, key, { ranges: [...SATB_RANGES] }),
+    ).toThrow('checkPartWriting needs one range per voice; received 4 ranges for 8 voices');
+  });
+
+  it('reads the ranges as JS reads any value with a length', () => {
+    expect(() => checkPartWriting([first, second], chords, key, { ranges: 5 as never })).toThrow(
+      'voice ranges must be finite; received undefined',
+    );
+    expect(() =>
+      checkPartWriting([first, second], chords, key, { ranges: 'abcd' as never }),
+    ).toThrow('opts.ranges.map is not a function');
+    expect(() =>
+      checkPartWriting([first, second], chords, key, { ranges: [null, null, null, null] as never }),
+    ).toThrow("Cannot read properties of null (reading 'min')");
   });
 });

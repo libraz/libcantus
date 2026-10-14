@@ -163,3 +163,25 @@ describe('voiceIndependence input', () => {
     });
   });
 });
+
+describe('voiceIndependence attack flags of another kind', () => {
+  const lead = ['C5', 'D5', 'E5'].map((n) => parseNote(n));
+  const counter = ['E4', 'F4', 'G4'].map((n) => parseNote(n));
+
+  it('measures anything with a length and reads its slots', () => {
+    const plain = voiceIndependence(lead, counter, { leadAttacks: [false, false, false] });
+    expect(voiceIndependence(lead, counter, { leadAttacks: { length: 3 } as never })).toEqual(
+      plain,
+    );
+    expect(
+      voiceIndependence(lead, counter, { counterAttacks: { length: 3, 0: true } as never })
+        .rhythmicComplementarity,
+    ).toBe(0);
+  });
+
+  it('refuses a null flag list as JS reads its length', () => {
+    expect(() => voiceIndependence(lead, counter, { leadAttacks: null as never })).toThrow(
+      "Cannot read properties of null (reading 'length')",
+    );
+  });
+});

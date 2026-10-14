@@ -175,3 +175,11 @@ describe('modal key candidates', () => {
     expect(detectKeyFromNotes(notes)).toHaveLength(DIATONIC_CANDIDATES);
   });
 });
+
+describe('a mode named by a value that is no text', () => {
+  it('is written as String writes it', () => {
+    expect(() => detectKey([60, 64, 67], { modes: [Symbol('s')] as never })).toThrow(
+      "unknown mode 'Symbol(s)'; expected one of dorian, phrygian, lydian, mixolydian, locrian",
+    );
+  });
+});

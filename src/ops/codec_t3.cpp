@@ -6,6 +6,8 @@
 
 #include "cantus/core/errors.h"
 #include "core/validation/validation.h"
+#include "js/format.h"
+#include "js/value.h"
 #include "ops/accessors.h"
 #include "ops/validate.h"
 #include "theory/voicing/limits.gen.h"
@@ -14,16 +16,20 @@ namespace cantus::ops {
 
 void read_ranges_option(const json::Value& asked, VoicingOptions& out) {
   if (const json::Value* ranges = field(asked, "ranges")) {
-    const json::Array& given = assert_array(*ranges, "ranges");
-    if (given.empty()) {
+    // `opts.ranges.length`, then `opts.ranges.map(...)`: any value with a length is measured.
+    json::Value length = length_of(*ranges);
+    if (js::strict_equals(length, json::Value(0))) {
       throw InvalidInputError("ranges must contain at least one voice range");
     }
-    assert_generation_budget(json::Value(static_cast<double>(given.size())), "voice ranges",
-                             json::Value(128));
+    assert_generation_budget(length, "voice ranges", json::Value(128));
+    if (!ranges->is_array()) {
+      throw js::TypeError("opts.ranges.map is not a function");
+    }
+    const json::Array& given = ranges->as_array();
     std::vector<VoiceRange> read;
     for (std::size_t index = 0; index < given.size(); ++index) {
       std::string label = "ranges[" + index_text(index) + "]";
-      double min = assert_finite_number(get(given[index], "min"), label + ".min");
+      double min = assert_finite_number(property_of(given[index], "min"), label + ".min");
       double max = assert_finite_number(get(given[index], "max"), label + ".max");
       if (min > max) {
         throw InvalidInputError(label + ".min must not exceed max");

@@ -6,6 +6,8 @@
 #ifndef CANTUS_SRC_THEORY_PARTWRITING_INTERNAL_H_
 #define CANTUS_SRC_THEORY_PARTWRITING_INTERNAL_H_
 
+#include <cstddef>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -27,6 +29,33 @@ bool is_species_number(double value);
 
 /** The error check_species() raises for a species it does not accept. */
 InvalidInputError species_rejected(const json::Value& species);
+
+/** The note lengths a species exercise is read by, or the reason they cannot be read. */
+struct SpeciesDurations {
+  std::vector<double> durations;
+  std::optional<std::string> problem;
+};
+
+/**
+ * `resolveDurations` for a counterpoint of `notes` notes over `measures` cantus-firmus notes. It
+ * reads no note, so check_species() reports an unreadable rhythm before any note is read.
+ * @throws InvalidInputError for the fifth species given no durations.
+ */
+SpeciesDurations resolve_species_durations(std::size_t notes, std::size_t measures, int species,
+                                           const SpeciesOptions& opts);
+
+/** A counterpoint note and a cantus-firmus note it sounds against (one `buildEntries` entry). */
+struct SpeciesEntryPair {
+  std::size_t note = 0;
+  std::size_t against = 0;
+  bool held = false;
+  /** Where the stretch begins: the note's onset, or the measure it is held into. */
+  double begins = 0;
+};
+
+/** The pairs `buildEntries` measures, in its order, for resolved durations. */
+std::vector<SpeciesEntryPair> species_entry_pairs(std::size_t cantus_firmus,
+                                                  const std::vector<double>& durations);
 
 /** Build one violation record (`violation`). */
 PartWritingViolation violation(PartWritingViolationKind kind, std::vector<int> voices,

@@ -580,3 +580,67 @@ describe('a suspension that resolves onto another dissonance', () => {
     expect(found.filter((v) => v.kind === 'unresolvedSuspension')).toEqual([]);
   });
 });
+
+describe('checkSpecies durations and notes it cannot read', () => {
+  const cf = ['D4', 'F4', 'E4', 'D4'].map((n) => parseNote(n));
+  const cp = ['A4', 'A4', 'C5', 'D5'].map((n) => parseNote(n));
+  const dorian = scaleByName('dorian', 2);
+
+  it('takes the durations only as finite numbers', () => {
+    expect(() => checkSpecies(cf, cp, 1, dorian, { durations: 5 as never })).toThrow(
+      'durations must be an array; received number',
+    );
+    expect(() =>
+      checkSpecies(cf, cp, 1, dorian, { durations: ['1', '1', '1', '1'] as never }),
+    ).toThrow('durations[0] must be finite; received 1');
+    expect(() => checkSpecies(cf, cp, 1, dorian, { durations: [1, 1, Number.NaN, 1] })).toThrow(
+      'durations[2] must be finite; received NaN',
+    );
+  });
+
+  it('reports a rhythm it cannot read before it reads a note', () => {
+    const bad = { letter: 9 } as never;
+    expect(checkSpecies(cf, [bad], 1, dorian)).toEqual([
+      {
+        kind: 'wrongRhythmicRatio',
+        voices: [1],
+        fromIndex: 0,
+        toIndex: 0,
+        rationale:
+          'Species 1 sets 1 notes against each of the 4 cantus firmus notes, and the counterpoint has 1',
+      },
+    ]);
+    expect(
+      kinds(checkSpecies(cf, [bad, ...cp.slice(1)], 1, dorian, { durations: [1, 1, 1] })),
+    ).toEqual(['wrongRhythmicRatio']);
+  });
+
+  it('names the notes as the interval between them reads them once a side is given', () => {
+    const bad = { letter: 1, alter: 0, octave: 4.5 };
+    expect(() =>
+      checkSpecies(cf, [bad, ...cp.slice(1)], 1, dorian, { counterpointAbove: true }),
+    ).toThrow('b.octave must be an integer in [-100, 100]; received 4.5');
+    expect(() =>
+      checkSpecies(cf, [bad, ...cp.slice(1)], 1, dorian, { counterpointAbove: false }),
+    ).toThrow('a.octave must be an integer in [-100, 100]; received 4.5');
+    expect(() =>
+      checkSpecies([bad, ...cf.slice(1)], cp, 1, dorian, { counterpointAbove: true }),
+    ).toThrow('a.octave must be an integer in [-100, 100]; received 4.5');
+    expect(() => checkSpecies(cf, [bad, ...cp.slice(1)], 1, dorian)).toThrow(
+      'note.octave must be an integer in [-100, 100]; received 4.5',
+    );
+  });
+});
+
+describe('checkSpecies reading each line for its mean pitch', () => {
+  it('reads note by note, the counterpoint first', () => {
+    const cf = ['D4', 'F4'].map((n) => parseNote(n));
+    const cp = [
+      { letter: 1, alter: 0 },
+      { letter: 9, alter: 0, octave: 4 },
+    ] as never;
+    expect(() => checkSpecies(cf, cp, 1, scaleByName('dorian', 2))).toThrow(
+      'noteToMidi requires an octave',
+    );
+  });
+});

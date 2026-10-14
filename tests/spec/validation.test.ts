@@ -56,6 +56,7 @@ import {
   pulsesPerBar,
   ratioToCents,
   type TimeSignature,
+  toInstrumentProfile,
   tuplet,
 } from '@libraz/libcantus/core';
 import {
@@ -706,5 +707,21 @@ describe('generator MIDI-output contract', () => {
     const generated = [...counter, ...motif.notes, ...bass];
     expect(() => analyzeArrangement([{ notes: humanize(generated) }])).not.toThrow();
     expect(() => transformMotif(motif, 'transposeChromatic', 0.5)).toThrow(RangeError);
+  });
+});
+
+describe('a validator name that cannot be written', () => {
+  // The name reaches a failure's message and nothing else, so a Symbol fails only there.
+  it('passes a value the check accepts', () => {
+    expect(assertFiniteNumber(5, Symbol('n') as unknown as string)).toBe(5);
+    expect(toInstrumentProfile(GUITAR_STANDARD, Symbol('n') as unknown as string).name).toBe(
+      'guitar',
+    );
+  });
+
+  it('fails as JS fails to write it once the check fails', () => {
+    expect(() => assertFiniteNumber(Number.NaN, Symbol('n') as unknown as string)).toThrow(
+      'Cannot convert a Symbol value to a string',
+    );
   });
 });

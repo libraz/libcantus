@@ -238,13 +238,26 @@ Chord augmented_sixth_chord(AugmentedSixthKind kind, const KeyArg& key) {
   return augmented_sixth_on(kind, key);
 }
 
-Nullable<AugmentedSixthKind> augmented_sixth_kind_of(const Chord& chord, const KeyArg& key_like) {
-  ResolvedKey resolved = resolve_key(key_like);
-  int bass = augmented_sixth_bass_pc(resolved.scale);
+namespace {
+
+/** The kind a chord sounds over the key's lowered submediant, before its letters are read. */
+Nullable<AugmentedSixthKind> sounded_kind(const Chord& chord, const ResolvedKey& key) {
+  int bass = augmented_sixth_bass_pc(key.scale);
   if (pitch_class_of(chord.bassPc ? *chord.bassPc : chord.rootPc) != bass) {
     return std::nullopt;
   }
-  Nullable<AugmentedSixthKind> kind = kind_of_pitch_classes(chord_pitch_classes(chord), bass);
+  return kind_of_pitch_classes(chord_pitch_classes(chord), bass);
+}
+
+}  // namespace
+
+bool reads_augmented_sixth_spelling(const Chord& chord, const KeyArg& key) {
+  return sounded_kind(chord, resolve_key(key)).has_value();
+}
+
+Nullable<AugmentedSixthKind> augmented_sixth_kind_of(const Chord& chord, const KeyArg& key_like) {
+  ResolvedKey resolved = resolve_key(key_like);
+  Nullable<AugmentedSixthKind> kind = sounded_kind(chord, resolved);
   if (!kind || !spells_augmented_sixth(chord, *kind, resolved)) {
     return std::nullopt;
   }

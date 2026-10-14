@@ -72,6 +72,12 @@ bool less_than(const json::Value& lhs, const json::Value& rhs);
 bool less_equal(const json::Value& lhs, const json::Value& rhs);
 
 /**
+ * `v - n` for a wire value of unknown kind and a number.
+ * @throws TypeError for a bigint or a Symbol.
+ */
+double subtract(const json::Value& v, double n);
+
+/**
  * `v * factor` for a wire value of unknown kind.
  * @throws TypeError for a bigint or a Symbol.
  */

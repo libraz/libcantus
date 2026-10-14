@@ -119,3 +119,14 @@ describe('spelled input', () => {
     expect(createsBattuta(72, 74, 60, 62)).toBe(false); // similar motion is not a battuta
   });
 });
+
+describe('createsVerticalDissonance without a voice count', () => {
+  it('reads the two voices as the whole texture', () => {
+    expect(createsVerticalDissonance(60, 65, undefined as never)).toBe(
+      createsVerticalDissonance(60, 65, true),
+    );
+    expect(createsVerticalDissonance(parseNote('C4'), parseNote('F4'), undefined as never)).toBe(
+      createsVerticalDissonance(parseNote('C4'), parseNote('F4'), true),
+    );
+  });
+});

@@ -164,3 +164,16 @@ describe('a scale form has to match the mask it is claimed for', () => {
     expect(() => assertKeyVariant('lydian' as never, MAJOR_MASK)).toThrow();
   });
 });
+
+describe('a key carrying one field it cannot read', () => {
+  const C = majorKey(0);
+
+  it('names the field', () => {
+    expect(() => resolveKey({ scale: C, tonic: { letter: 9, alter: 0 } } as never)).toThrow(
+      'note.letter must be an integer in [0, 6]; received 9',
+    );
+    expect(() => resolveKey({ scale: C, variant: 'bogus' } as never)).toThrow(
+      'variant must be one of major, natural, harmonic, melodic, modal; received "bogus"',
+    );
+  });
+});

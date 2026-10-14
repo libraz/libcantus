@@ -105,33 +105,6 @@ const json::Value& optional_property(const json::Value& value, std::string_view 
   return is_null_or_undefined(value) ? undefined_value() : get(value, key);
 }
 
-/** `value.length`: the size of an array or a string, else the field of that name. */
-json::Value length_of(const json::Value& value) {
-  if (value.is_array()) {
-    return json::Value(static_cast<double>(value.as_array().size()));
-  }
-  if (value.is_string()) {
-    return json::Value(static_cast<double>(js::utf16_length(value.as_string())));
-  }
-  return property_of(value, "length");
-}
-
-/** `list[index]` of an array, a string or a record; the TypeError JS raises for null or undefined.
- */
-json::Value element_of(const json::Value& list, std::size_t index) {
-  if (list.is_array()) {
-    return list.as_array().size() > index ? list.as_array()[index] : undefined_value();
-  }
-  property_of(list, js::to_string(index));
-  if (list.is_string()) {
-    return js::utf16_length(list.as_string()) > index
-               ? json::Value(js::utf16_slice(list.as_string(), static_cast<double>(index),
-                                             static_cast<double>(index + 1)))
-               : undefined_value();
-  }
-  return get(list, js::to_string(index));
-}
-
 //--------------------------------------------------------------------------------------------
 // model/note
 
@@ -1048,35 +1021,6 @@ std::vector<NoteData> spell_wire_line(const json::Value& line, const ResolvedKey
     }
   }
   return out;
-}
-
-/** The attack flags of a `voiceIndependence` options bag, aligned with the lines. */
-void read_attack_arrays(const json::Value& asked, std::size_t slots,
-                        VoiceIndependenceOptions& opts) {
-  const std::pair<const char*, std::optional<std::vector<bool>>*> attack_arrays[] = {
-      {"leadAttacks", &opts.leadAttacks}, {"counterAttacks", &opts.counterAttacks}};
-  for (const auto& [name, target] : attack_arrays) {
-    const json::Value& flags = get(asked, name);
-    if (is_undefined(flags)) {
-      continue;
-    }
-    // `flags.length !== lines.length`: an array, a string or any record with a length.
-    json::Value length = length_of(flags);
-    if (!js::strict_equals(length, json::Value(static_cast<double>(slots)))) {
-      throw InvalidInputError(std::string("voiceIndependence needs ") + name +
-                              " aligned slot for slot with the lines; received " +
-                              js::template_string(length) + " and " + js::to_string(slots));
-    }
-    std::vector<bool> read;
-    for (std::size_t index = 0; index < slots; ++index) {
-      const json::Value flag = element_of(flags, index);
-      read.push_back(flag.is_bool() && flag.as_bool());
-    }
-    *target = std::move(read);
-  }
-  if (const json::Value* fourths = opt_null_default(asked, "countFourths")) {
-    opts.countFourths = js::truthy(*fourths);
-  }
 }
 
 /** The options bag of Voicing#independence without its `key`: `{key, ...rest} = opts ?? {}`. */

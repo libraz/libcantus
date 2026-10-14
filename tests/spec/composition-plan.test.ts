@@ -931,3 +931,17 @@ describe('deriveCompositionPlan: the melodic surface is not carried', () => {
     });
   });
 });
+
+describe('a reference whose phrases span more bars than a plan re-cuts', () => {
+  it('is charged against the generation budget before the phrases are laid', () => {
+    const vast = structuredClone(SOURCE);
+    (vast.span as { endBeat: number }).endBeat = 2 ** 32;
+    (vast.form.phrases.at(-1) as { endBeat: number }).endBeat = 2 ** 32;
+    expect(() => deriveCompositionPlan(vast, { preserve: { phraseLengths: 0 } })).toThrow(
+      BudgetExceededError,
+    );
+    expect(() => deriveCompositionPlan(vast)).toThrow(
+      /^plan phrase bars exceeds the generation budget 1000000; received \d+$/,
+    );
+  });
+});

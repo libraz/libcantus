@@ -697,3 +697,54 @@ describe('non-heptatonic scales lean the way the scale does', () => {
     expect(() => Chord.fromData(makeChord(0, 'maj')).spell()).toThrow();
   });
 });
+
+describe('spelling with a tonic or a context the caller wrote unusually', () => {
+  const C = majorKey(0);
+  const tonic = { letter: 0, alter: 0 };
+
+  it('hands the tonic back with the alteration as written, a negative zero included', () => {
+    expect(Object.is(spellPitchClass(0, { letter: 0, alter: -0 }, C).alter, -0)).toBe(true);
+    expect(Object.is(spellScale({ letter: 0, alter: -0 }, C)[0]?.alter, -0)).toBe(true);
+  });
+
+  it('refuses a bigint pitch class where it is measured from the tonic', () => {
+    expect(() => spellPitchClass(3n as never, tonic, C)).toThrow(
+      'Cannot mix BigInt and other types, use explicit conversions',
+    );
+  });
+
+  it('reads a null neighbour or chord root as the pitch it is not', () => {
+    expect(() => spellPitch(61, tonic, C, { chordRoot: null as never })).toThrow(
+      'pitch must be finite; received null',
+    );
+    expect(() => spellPitch(61, tonic, C, { previous: null as never })).toThrow(
+      'pitch must be finite; received null',
+    );
+    expect(() => spellPitch(61, tonic, C, { previous: 'x' as never })).toThrow(
+      'pitch must be finite; received NaN',
+    );
+  });
+
+  it('reads a null chord as none unless a chord root stands beside it', () => {
+    expect(spellPitch(61, tonic, C, { chord: null as never })).toEqual(spellPitch(61, tonic, C));
+    expect(() => spellPitch(61, tonic, C, { chord: null as never, chordRoot: 1 })).toThrow(
+      "Cannot read properties of null (reading 'rootSpelling')",
+    );
+  });
+
+  it('reads the hints a chord spells by', () => {
+    const chord = makeChord(1, 'maj');
+    expect(() =>
+      spellChord({ ...chord, rootSpelling: { letter: 'x', alter: 0 } as never }, tonic, C),
+    ).toThrow('diatonic letter must be finite; received x');
+    expect(() => spellChord({ ...chord, rootSpelling: null as never }, tonic, C)).toThrow(
+      "Cannot read properties of null (reading 'letter')",
+    );
+    expect(() =>
+      spellChordFromRoot(
+        { ...chord, toneSpellings: ['C', 'C', 'C'] as never },
+        { letter: 1, alter: -1 },
+      ),
+    ).toThrow('note must be an object; received "C"');
+  });
+});

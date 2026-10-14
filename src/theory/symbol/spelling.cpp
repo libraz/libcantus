@@ -20,7 +20,7 @@ MidiSpelling side_of(bool as_flat) { return as_flat ? MidiSpelling::kFlat : Midi
 NoteData spelling_note(const PitchSpelling& spelling) {
   double letter = assert_integer(spelling.letter, "note.letter", 0, 6);
   double alter = assert_integer(spelling.alter, "note.alter", -MAX_NOTE_ALTER, MAX_NOTE_ALTER);
-  return NoteData{static_cast<int>(letter), static_cast<int>(alter), std::nullopt};
+  return NoteData{static_cast<double>(letter), static_cast<double>(alter), std::nullopt};
 }
 
 PitchSpelling bare_spelling(const NoteData& note) {
@@ -67,9 +67,9 @@ NoteData by_same_step(const NoteData& spelling, const NoteData& from, const Note
 
 NoteData spelling_above(const NoteData& root, double letters, int pc) {
   int letter = static_cast<int>(std::fmod(std::fmod(root.letter + letters, 7) + 7, 7));
-  int natural = note_to_pitch_class(NoteData{letter, 0, std::nullopt});
+  int natural = note_to_pitch_class(NoteData{static_cast<double>(letter), 0, std::nullopt});
   int alter = static_cast<int>(std::fmod(std::fmod(pc - natural, 12) + 18, 12)) - 6;
-  return NoteData{letter, alter, std::nullopt};
+  return NoteData{static_cast<double>(letter), static_cast<double>(alter), std::nullopt};
 }
 
 NoteData carried_bass(const NoteData& spelling, const NoteData& from, const NoteData& to,

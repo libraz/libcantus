@@ -115,7 +115,9 @@ int note_pitch_class(const NoteData& note) {
   return mod12(natural_pitch_class_of(note.letter) + note.alter);
 }
 
-NoteData note(int letter, int alter) { return NoteData{letter, alter, std::nullopt}; }
+NoteData note(int letter, double alter) {
+  return NoteData{static_cast<double>(letter), alter, std::nullopt};
+}
 
 /** Shortest signed alteration taking a letter's natural pitch class to `pc` (`alterFor`). */
 int alter_for(int letter, double pc) {
@@ -273,12 +275,12 @@ std::optional<std::vector<NoteData>> assign_distinct_letters(
       std::size_t pick = (choice >> index) & 1U;
       bool alternative = pick < options.size() && pick == 1;
       const NoteData& spelled = alternative ? options[1] : options[0];
-      bool taken = (letters & (1 << spelled.letter)) != 0;
-      if (taken && (spare == 0 || (reserved & (1 << spelled.letter)) != 0)) {
+      bool taken = (letters & (1 << static_cast<int>(spelled.letter))) != 0;
+      if (taken && (spare == 0 || (reserved & (1 << static_cast<int>(spelled.letter))) != 0)) {
         break;
       }
       spare -= taken ? 1 : 0;
-      letters |= 1 << spelled.letter;
+      letters |= 1 << static_cast<int>(spelled.letter);
       strain += degree_strain(tonic, spelled);
       alter += std::abs(spelled.alter);
       deviations += alternative ? 1 : 0;

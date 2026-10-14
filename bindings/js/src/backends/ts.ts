@@ -639,7 +639,8 @@ function noteProvenance(op: string, args: unknown[], value: unknown): void {
     const supplied = provenance.get(ctx)?.rng;
     const version = ctx.algorithmVersion as number;
     const name = args[1] as string;
-    if (supplied !== undefined) {
+    // `supplied ? drawsFrom(supplied, ...) : ...`: a falsy source draws from the seed.
+    if (supplied) {
       provenance.set(value, { rng: supplied, path: [name, VERSION_SEGMENT, version] });
     } else {
       const seed = Pure.deriveSeed(ctx.seed as number, name, VERSION_SEGMENT, version);

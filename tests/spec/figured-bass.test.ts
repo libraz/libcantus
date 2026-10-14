@@ -412,3 +412,11 @@ describe('the two directions of the figure grammar reach the same chords', () =>
     }
   });
 });
+
+describe('a bass written with a negative zero alteration', () => {
+  it('keeps it in the spellings the chord carries', () => {
+    const chord = realizeFiguredBass({ letter: 4, alter: -0, octave: 3 }, '7', majorKey(0));
+    expect(Object.is(chord.bassSpelling?.alter, -0)).toBe(true);
+    expect(Object.is(chord.rootSpelling?.alter, -0)).toBe(true);
+  });
+});

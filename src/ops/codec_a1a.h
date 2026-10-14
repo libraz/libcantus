@@ -60,6 +60,13 @@ ChordQuality assert_chord_quality(const json::Value& chord);
 /** assert_chord_quality() on the chord data of a read chord, taking the quality it names. */
 void settle_chord_quality(ChordData& data);
 
+/**
+ * What reading a wire chord as an augmented sixth reads of its spelling hints (`spellChord`'s root
+ * hint, then its tone spellings), when the chord stands on the key's lowered submediant and sounds
+ * one of the kinds.
+ */
+void read_augmented_sixth_hints(const ChordData& data, const KeyArg& key);
+
 /** The `voicing` option of `detectCadence`, read the way its destructuring reads it. */
 std::optional<std::array<std::vector<double>, 2>> read_cadence_voicing(const json::Value& asked);
 

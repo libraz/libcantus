@@ -54,7 +54,7 @@ bool is_natural_letter(std::string_view letter) {
 Note::Note(const NoteData& data) : data_(copy_note(data)) {}
 
 Note Note::of(int letter, int alter, std::optional<double> octave) {
-  return Note(NoteData{letter, alter, octave});
+  return Note(NoteData{static_cast<double>(letter), static_cast<double>(alter), octave});
 }
 
 Note Note::of(std::string_view letter, int alter, std::optional<double> octave) {

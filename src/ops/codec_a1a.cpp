@@ -4,6 +4,7 @@
 #include <limits>
 #include <string>
 
+#include "analyze/functional/augmented_sixth.h"
 #include "cantus/core/errors.h"
 #include "js/format.h"
 #include "js/value.h"
@@ -91,12 +92,19 @@ ChordQuality assert_chord_quality(const json::Value& chord) {
   const json::Value& quality = get(chord, "quality");
   std::optional<ChordQuality> known = table_quality(quality);
   if (!known) {
-    throw InvalidInputError("Unknown chord quality: " + js::template_string(quality));
+    throw InvalidInputError("Unknown chord quality: " + js::string_of(quality));
   }
   return *known;
 }
 
 void settle_chord_quality(ChordData& data) { data.chord.quality = assert_chord_quality(data.wire); }
+
+void read_augmented_sixth_hints(const ChordData& data, const KeyArg& key) {
+  if (reads_augmented_sixth_spelling(data.chord, key)) {
+    read_root_hint(data.wire);
+    reads_tone_letter_offsets(data.wire);
+  }
+}
 
 bool inherits_object_member(std::string_view name) { return js::inherits_object_member(name); }
 

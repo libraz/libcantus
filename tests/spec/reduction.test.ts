@@ -454,3 +454,29 @@ describe('reduceProgression over a hand-made timeline with a malformed chord', (
     );
   });
 });
+
+describe('reduceProgression with a key function answering in another form', () => {
+  const timeline = chordTimelineFromChords(
+    [
+      { rootPc: 2, quality: 'min7', startBeat: 0 },
+      { rootPc: 7, quality: 'dom7', startBeat: 4 },
+      { rootPc: 0, quality: 'maj', startBeat: 8 },
+    ],
+    12,
+  );
+
+  it('reads each answer as a key', () => {
+    expect(reduceProgression(timeline, () => 'G major' as never)).toEqual(
+      reduceProgression(timeline, () => majorKey(7)),
+    );
+  });
+
+  it('refuses an answer that names no key', () => {
+    expect(() => reduceProgression(timeline, () => null as never)).toThrow(
+      'key must be a key name or a key/scale; received object',
+    );
+    expect(() => reduceProgression(timeline, () => ({}) as never)).toThrow(
+      'key.modeMask12 must be finite; received undefined',
+    );
+  });
+});

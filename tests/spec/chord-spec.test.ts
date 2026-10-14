@@ -352,3 +352,15 @@ describe('symbol round-trip through the spec', () => {
     expect(formatChordSymbol(chord)).toBe('Ab7');
   });
 });
+
+describe('a spec degree that is no number', () => {
+  it('is written as String writes it', () => {
+    const spec = { rootPc: 0, base: 'maj', additions: [], omissions: [] };
+    expect(() =>
+      chordSpecIntervals({ ...spec, alterations: [{ degree: Symbol('s'), alter: 1 }] } as never),
+    ).toThrow('chord spec alteration degree must be one of 5, 9, 11, 13; received Symbol(s)');
+    expect(() =>
+      chordSpecIntervals({ ...spec, alterations: [], additions: [Symbol('s')] } as never),
+    ).toThrow('chord spec additions must be one of 6, 9, 11, 13; received Symbol(s)');
+  });
+});

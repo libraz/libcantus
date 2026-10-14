@@ -1,4 +1,4 @@
-import { InvalidInputError, isLibcantusError } from '@libraz/libcantus/core';
+import { InvalidInputError, isLibcantusError, parseNote } from '@libraz/libcantus/core';
 import {
   Arrangement,
   Chord,
@@ -18,6 +18,7 @@ import {
   Tuning,
   Voicing,
 } from '@libraz/libcantus/model';
+import { makeChord } from '@libraz/libcantus/theory';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -407,6 +408,18 @@ describe('model classes read a value they are handed through its public surface'
     expect(() => progression.concat(timeline as never)).toThrow('chord.toJSON is not a function');
     expect(() => Key.major('C').spellPitchClasses(timeline as never)).toThrow(
       'pcs[0] must be finite; received [object Object]',
+    );
+  });
+});
+
+describe('a class instance written into a message', () => {
+  it('is written by its own text', () => {
+    expect(() => makeChord(0, Note.parse('C4') as never)).toThrow('Unknown chord quality: C4');
+    expect(() => makeChord(Note.parse('C4') as never, 'maj')).toThrow(
+      'chord rootPc must be finite; received C4',
+    );
+    expect(() => makeChord(parseNote('C4') as never, 'maj')).toThrow(
+      'chord rootPc must be finite; received [object Object]',
     );
   });
 });

@@ -89,18 +89,10 @@ json::Value call_member(const json::Value& value, std::string_view name, json::A
                         const CallContext& host = CallContext());
 /** The named members of a value as a plain record: a class instance read through its getters. */
 json::Value surface_record(const json::Value& value, std::initializer_list<std::string_view> names);
-/**
- * A class instance or a `toJSON` carrier as the plain record of every member a reader can see,
- * for an options bag handed on to a function that reads it field by field; anything else as it
- * is.
- */
-json::Value options_view(const json::Value& value);
 /** `[...value]`: an array, a string's code units, or what a Progression or a Timeline yields. */
 json::Array spread_iterable(const json::Value& value, std::string_view name);
-/** `` `${value}` ``: a class instance written through its own `toString`. */
-std::string text_of(const json::Value& value);
-/** `String(value)`: text_of(), with a Symbol written as `Symbol(description)`. */
-std::string string_of(const json::Value& value);
+/** A model-class value's own `toString()`, which js::template_string() writes it with. */
+std::string class_text(const json::Value& value);
 
 //--------------------------------------------------------------------------------------------
 // The data a factory takes, over a wire value

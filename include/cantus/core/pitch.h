@@ -24,10 +24,10 @@ namespace cantus {
 
 /** A spelled note: a letter, an alteration and an optional octave (`Note`, exported `NoteData`). */
 struct NoteData {
-  /** Diatonic letter, 0..6 for C..B. */
-  int letter = 0;
-  /** Semitones of alteration: -2 double flat .. +2 double sharp. */
-  int alter = 0;
+  /** Diatonic letter, 0..6 for C..B; a double so a -0 the caller wrote is kept. */
+  double letter = 0;
+  /** Semitones of alteration, -2 double flat .. +2 double sharp; a double so -0 is kept. */
+  double alter = 0;
   /** Scientific pitch octave (middle C = C4); absent for a bare pitch class. */
   std::optional<double> octave;
 };

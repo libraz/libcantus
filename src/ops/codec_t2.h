@@ -10,6 +10,7 @@
 #ifndef CANTUS_SRC_OPS_CODEC_T2_H_
 #define CANTUS_SRC_OPS_CODEC_T2_H_
 
+#include <cstddef>
 #include <optional>
 #include <string_view>
 
@@ -67,6 +68,14 @@ std::optional<bool> read_symbol_flats(const json::Value& asked);
 
 /** `pitchOf` over a wire pitch or note: a number as it is, a note as its MIDI number. */
 double read_pitch(const json::Value& value);
+
+/**
+ * The options `voiceIndependence` reads beside its lines: the attack flags, each of the lines'
+ * length (`flags.length !== lines.length` for an array, a string or any record), read slot by
+ * slot as `flags[index] === true`, and `countFourths`.
+ */
+void read_attack_arrays(const json::Value& asked, std::size_t slots,
+                        VoiceIndependenceOptions& opts);
 
 /** `typeof value === 'number'`. */
 bool is_wire_number(const json::Value& value);

@@ -17,6 +17,7 @@
 #include "cantus/theory/spelling.h"
 #include "core/validation/validation.h"
 #include "js/format.h"
+#include "js/math.h"
 #include "js/value.h"
 #include "ops/accessors.h"
 #include "ops/codec_t1.h"
@@ -132,7 +133,7 @@ void register_masks() {
     return to_json(mask_from_offsets(read));
   });
   def("assertModeMask", [](Args& a) -> json::Value {
-    read_mode_mask(a[0], name_arg(a, 1, "modeMask12"));
+    with_name_arg(a, 1, "modeMask12", [&](const std::string& name) { read_mode_mask(a[0], name); });
     return a.take(0);
   });
   def("resolveScaleName", [](Args& a) -> json::Value {
@@ -144,8 +145,9 @@ void register_masks() {
     return mask ? to_json(*mask) : undefined_value();
   });
   def("requireScaleMask", [](Args& a) -> json::Value {
-    std::string label = name_arg(a, 1, "scale");
-    return to_json(require_scale_mask(scale_name_arg(a[0]), label));
+    return to_json(with_name_arg(a, 1, "scale", [&](const std::string& label) {
+      return require_scale_mask(scale_name_arg(a[0]), label);
+    }));
   });
   def("variantOfMask", [](Args& a) -> json::Value {
     return to_json(variant_of_mask(read_mode_mask(a[0], "modeMask12")));
@@ -417,12 +419,12 @@ void register_chords() {
   def("chordPitchClasses", [](Args& a) -> json::Value {
     const json::Value& value = assert_chord(a[0]);
     const json::Value& asked = assert_options(a[1], "opts");
-    assert_mask_inputs(value);
     ChordPitchClassOptions opts;
     const json::Value& include_bass = get(asked, "includeBass");
-    if (include_bass.is_bool()) {
-      opts.includeBass = include_bass.as_bool();
-    }
+    // `opts.includeBass !== false`.
+    bool with_bass = !(include_bass.is_bool() && !include_bass.as_bool());
+    opts.includeBass = with_bass;
+    assert_mask_inputs(value, with_bass);
     return to_json(chord_pitch_classes(read_chord_fields(value), opts));
   });
   def("intervalAboveRoot", [](Args& a) -> json::Value {
@@ -443,12 +445,29 @@ void register_chords() {
   def("chordToneRole", [](Args& a) -> json::Value {
     const json::Value& value = assert_record(a[1], "chord");
     Chord chord = read_chord_fields(value);
-    if (!number_of(a[0])) {
-      // The chord's own spelling is read before the pitch is.
-      if (chord_tone_letter_offsets(chord) && !chord.intervals.empty()) {
-        pitch_class_of(chord.rootPc + chord.intervals.front());
+    // The role the chord's own spelling gives the pitch: the tone it is found among, as
+    // `pitchClass(chord.rootPc + interval) === pitchClass(pitch)` finds it.
+    bool spelled = false;
+    if (reads_tone_letter_offsets(value)) {
+      const json::Value& root = get(value, "rootPc");
+      std::optional<std::vector<int>> offsets = chord_tone_letter_offsets(chord);
+      for (std::size_t index = 0; index < chord.intervals.size(); ++index) {
+        double tone = assert_finite_number(
+            js::add(root, value.as_object().find("intervals")->as_array()[index]), "pitch");
+        if (pitch_class_of(tone) == pitch_class_of(assert_finite_number(a[0], "pitch"))) {
+          spelled = offsets && index < offsets->size();
+          break;
+        }
       }
+    }
+    if (!spelled) {
       assert_finite_number(a[0], "pitch");
+      assert_finite_number(get(value, "rootPc"), "pitch");
+      // `for (const interval of chord.intervals)`.
+      const json::Value& intervals = get(value, "intervals");
+      if (!intervals.is_array() && !intervals.is_string()) {
+        throw js::TypeError("chord.intervals is not iterable");
+      }
     }
     return to_json(chord_tone_role(*number_of(a[0]), chord));
   });
@@ -471,15 +490,19 @@ void register_spelling() {
     KeyScale key = read_key_like(a[2]);
     assert_tonic_of(tonic, key, "spellPitchClass");
     SpellingContext context = read_spelling_context(a[3]);
+    if (!a.undefined(3) && number_of(a[0])) {
+      read_context_evidence(a[3], *number_of(a[0]), tonic, key);
+    }
     if (!number_of(a[0])) {
       // A value that is no number still reaches `pc - tonicPc` before it is read as a pitch: the
       // tonic itself is answered without reading it further, unless a context is weighed.
-      double offset = js::to_number(a[0]) - note_to_pitch_class(tonic);
+      double offset = js::subtract(a[0], note_to_pitch_class(tonic));
       if (!std::isfinite(offset)) {
         throw InvalidInputError("pitch must be finite; received NaN");
       }
       if (pitch_class_of(offset) == 0 && a.undefined(3)) {
-        return to_json(NoteData{diatonic_letter_of(tonic.letter), tonic.alter, std::nullopt});
+        return to_json(NoteData{static_cast<double>(diatonic_letter_of(tonic.letter)), tonic.alter,
+                                std::nullopt});
       }
       assert_finite_number(a[0], "pitch");
     }
@@ -503,12 +526,16 @@ void register_spelling() {
   def("spellChordFromRoot", [](Args& a) -> json::Value {
     const json::Value& value = assert_chord(a[0]);
     NoteData root = read_note_like(a[1]);
+    reads_tone_letter_offsets(value);
     return to_json(spell_chord_from_root(read_chord_fields(value), root));
   });
   def("spellChord", [](Args& a) -> json::Value {
     const json::Value& value = assert_chord(a[0]);
     NoteData tonic = read_note_like(a[1]);
     KeyScale key = read_key_like(a[2]);
+    assert_tonic_of(tonic, key, "spellChord");
+    read_root_hint(value);
+    reads_tone_letter_offsets(value);
     return to_json(spell_chord(read_chord_fields(value), tonic, key));
   });
   def("spellPitch", [](Args& a) -> json::Value {
@@ -516,7 +543,11 @@ void register_spelling() {
     KeyScale key = read_key_like(a[2]);
     assert_tonic_of(tonic, key, "spellPitch");
     SpellingContext context = read_spelling_context(a[3]);
-    return to_json(spell_pitch(assert_finite_number(a[0], "pitch"), tonic, key, context));
+    double pitch = assert_finite_number(a[0], "pitch");
+    if (!a.undefined(3)) {
+      read_context_evidence(a[3], pitch_class_of(js::round(pitch)), tonic, key);
+    }
+    return to_json(spell_pitch(pitch, tonic, key, context));
   });
   def("noteNames", [](Args& a) -> json::Value {
     const json::Array& notes = assert_array(a[0], "notes");

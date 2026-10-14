@@ -55,7 +55,7 @@ NoteData read_note(const json::Value& value, std::string_view name) {
   if (!is_undefined(wire_octave)) {
     octave = assert_integer(wire_octave, join_name(name, ".octave"), -MAX_OCTAVE, MAX_OCTAVE);
   }
-  return NoteData{static_cast<int>(letter), static_cast<int>(alter), octave};
+  return NoteData{letter, alter, octave};
 }
 
 NoteData read_note_like(const json::Value& value) {

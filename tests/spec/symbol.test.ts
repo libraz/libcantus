@@ -604,3 +604,37 @@ describe('formatChordSymbol writes a bass a chart would write', () => {
     expect(ROOTS.length * BASSES.length * 3).toBeGreaterThan(200);
   });
 });
+
+describe('formatChordSymbol options and hints the caller wrote unusually', () => {
+  it('takes the flats preference only as a boolean', () => {
+    expect(() => formatChordSymbol(makeChord(1, 'maj', 6), { flats: 1 as never })).toThrow(
+      'flats must be a boolean; received number',
+    );
+    expect(() => transposeChordSymbol('C', 1, { flats: null as never })).toThrow(
+      'flats must be a boolean; received null',
+    );
+    expect(formatChordSymbol(makeChord(1, 'maj', 6), { flats: true })).toBe('Db/Gb');
+  });
+
+  it('reads a spelling hint as a note', () => {
+    const chord = makeChord(1, 'maj');
+    expect(() => formatChordSymbol({ ...chord, rootSpelling: 5 as never })).toThrow(
+      'note must be an object; received number',
+    );
+    expect(() =>
+      formatChordSymbol({ ...chord, rootSpelling: { letter: 'x', alter: 0 } as never }),
+    ).toThrow('note.letter must be finite; received x');
+    expect(() => formatChordSymbol({ ...chord, bassPc: 5, bassSpelling: null as never })).toThrow(
+      'note must be an object; received null',
+    );
+  });
+
+  it('names only a text quality', () => {
+    expect(() =>
+      formatChordSymbol({ rootPc: 0, quality: Symbol('s') as never, intervals: [0, 4, 7] }),
+    ).toThrow('Unknown chord quality: Symbol(s)');
+    expect(() => formatChordSymbol({ rootPc: 0, quality: 5 as never, intervals: [0, 7] })).toThrow(
+      'Unknown chord quality: 5',
+    );
+  });
+});

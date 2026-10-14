@@ -139,7 +139,7 @@ std::optional<std::variant<bool, std::vector<ModalScaleName>>> read_modal_modes(
         }
         expected += to_string(candidate);
       }
-      throw InvalidInputError("unknown mode '" + js::template_string(name) + "'; expected one of " +
+      throw InvalidInputError("unknown mode '" + js::string_of(name) + "'; expected one of " +
                               expected);
     }
     names.push_back(*known);

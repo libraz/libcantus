@@ -52,16 +52,17 @@ SafetyContext read_safety_context(const json::Value& query) {
   assert_generation_budget(json::Value(static_cast<double>(voices.as_array().size())),
                            "other voices", undefined_value());
   for (std::size_t index = 0; index < voices.as_array().size(); ++index) {
-    const json::Value& voice = voices.as_array()[index];
-    if (!js::truthy(voice)) {
-      throw InvalidInputError("otherVoices[" + index_text(index) +
-                              "] must be an object; received " + describe_rejected(voice));
-    }
     std::string label = "otherVoices[" + index_text(index) + "]";
+    const json::Value& voice = assert_record(voices.as_array()[index], label);
     VoiceSnapshot snapshot;
     snapshot.pitch = static_cast<int>(assert_midi_pitch(get(voice, "pitch"), label + ".pitch"));
     snapshot.prevPitch = read_pitch_field(voice, "prevPitch", label + ".prevPitch");
     context.otherVoices.push_back(snapshot);
+  }
+  // No harmony is null; anything else is a chord.
+  const json::Value& chord = get(query, "chord");
+  if (!chord.is_null()) {
+    assert_record(chord, "chord");
   }
   context.strongBeat = js::truthy(get(query, "strongBeat"));
   return context;
@@ -69,7 +70,7 @@ SafetyContext read_safety_context(const json::Value& query) {
 
 void read_safety_harmony(const json::Value& query, SafetyContext& context) {
   const json::Value& chord = get(query, "chord");
-  if (js::truthy(chord)) {
+  if (!chord.is_null()) {
     context.chord = read_chord_fields(chord);
   }
   context.key = read_key_like(get(query, "key"));

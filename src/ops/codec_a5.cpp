@@ -207,10 +207,14 @@ ReferencePhraseMelody read_reference_phrase_melody(const json::Value& value,
 }
 
 ReferencePhrase read_reference_phrase(const json::Value& value, std::string_view name,
-                                      double section_count, double node_count) {
+                                      const ReferenceSpan& span, double section_count,
+                                      double node_count) {
   const json::Value& read = assert_record(value, name);
   ReferencePhrase out;
   read_span(read, name, out.startBeat, out.endBeat);
+  // A phrase is part of the piece the profile measures; a plan reads it bar by bar.
+  cantus::assert_range(out.startBeat, span.startBeat, span.endBeat, with(name, ".startBeat"));
+  cantus::assert_range(out.endBeat, span.startBeat, span.endBeat, with(name, ".endBeat"));
   out.bars = assert_range(get(read, "bars"), 0, kMaxSafe, with(name, ".bars"));
   out.section = read_nullable(
       get(read, "section"), with(name, ".section"), [&](const json::Value& v, std::string_view n) {
@@ -229,7 +233,7 @@ ReferencePhrase read_reference_phrase(const json::Value& value, std::string_view
 }
 
 ReferenceForm read_reference_form(const json::Value& value, std::string_view name,
-                                  double node_count) {
+                                  const ReferenceSpan& span, double node_count) {
   const json::Value& read = assert_record(value, name);
   ReferenceForm out;
   const json::Value& hypermeter = assert_record(get(read, "hypermeter"), with(name, ".hypermeter"));
@@ -246,7 +250,7 @@ ReferenceForm read_reference_form(const json::Value& value, std::string_view nam
   const json::Array& phrases = assert_array(get(read, "phrases"), with(name, ".phrases"));
   for (std::size_t index = 0; index < phrases.size(); ++index) {
     out.phrases.push_back(read_reference_phrase(phrases[index], at(with(name, ".phrases"), index),
-                                                section_count, node_count));
+                                                span, section_count, node_count));
   }
   return out;
 }
@@ -488,7 +492,7 @@ ReferenceProfile read_reference_profile(const json::Value& value, std::string_vi
   out.span.bars = assert_range(get(span_value, "bars"), 0, kMaxSafe, span + ".bars");
   out.meters = assert_meter_map(get(read, "meters"), with(name, ".meters"));
   out.melody = read_reference_melody(get(read, "melody"), with(name, ".melody"));
-  out.form = read_reference_form(get(read, "form"), with(name, ".form"),
+  out.form = read_reference_form(get(read, "form"), with(name, ".form"), out.span,
                                  static_cast<double>(out.melody.graph.nodes.size()));
   out.harmony = read_reference_harmony(get(read, "harmony"), with(name, ".harmony"));
   return out;

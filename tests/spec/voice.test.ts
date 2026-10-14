@@ -283,3 +283,19 @@ describe('analyzeVoice with hosts as callers write them', () => {
     expect(() => analyzeVoice(voice, chords, cMajor, () => null as never)).toThrow();
   });
 });
+
+describe('analyzeVoice other voices read as JS reads them', () => {
+  const C: KeyScale = { rootPc: 0, modeMask12: MAJOR_MASK };
+  const notes = [
+    { id: 0, pitch: 72, startBeat: 0, durationBeat: 1 },
+    { id: 1, pitch: 72, startBeat: 1, durationBeat: 1 },
+    { id: 2, pitch: 71, startBeat: 2, durationBeat: 1 },
+  ];
+  const chordAt = (beat: number): Chord => (beat < 1 ? makeChord(0, 'maj') : makeChord(7, 'maj'));
+
+  it('refuses a bigint pitch where the bass is found', () => {
+    expect(() =>
+      analyzeVoice(notes, chordAt, C, () => [{ pitch: 62 }, { pitch: 5n as never }]),
+    ).toThrow('Cannot convert a BigInt value to a number');
+  });
+});

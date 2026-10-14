@@ -181,16 +181,6 @@ void WireSegments::scan_dominant(std::size_t i) const {
 void WireSegments::check_pitch_classes(std::size_t i) const {
   const json::Value& chord = assert_chord(chord_value(i));
   assert_mask_inputs(chord);
-  // `pitchClass(chord.rootPc + interval)`: the sum is JS addition, so a string interval joins the
-  // root as text.
-  double root = js::to_number(get(chord, "rootPc"));
-  for (const json::Value& interval : get(chord, "intervals").as_array()) {
-    assert_finite_number(js::add_number(root, interval), "pitch");
-  }
-  const json::Value& bass = get(chord, "bassPc");
-  if (!is_undefined(bass)) {
-    assert_finite_number(bass, "pitch");
-  }
 }
 
 void WireSegments::scan_six_four(std::size_t i) const {

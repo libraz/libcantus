@@ -88,7 +88,7 @@ json::Value element_of(const json::Value& list, std::size_t index) {
 bool in_operator(const json::Value& value, std::string_view key) {
   if (!is_js_object(value)) {
     throw js::TypeError("Cannot use 'in' operator to search for '" + std::string(key) + "' in " +
-                        string_of(value));
+                        js::string_of(value));
   }
   return has_member(value, key);
 }

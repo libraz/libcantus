@@ -312,8 +312,8 @@ void register_voice() {
           OtherVoice voice;
           voice.raw_pitch = [read] {
             json::Value pitch = read();
-            // `Math.min` reads it as a number.
-            return js::to_number(pitch);
+            // `Math.min` reads it as a number, which a bigint is not.
+            return js::to_math_number(pitch);
           };
           voice.pitch_of = [read] { return read_pitch(read()); };
           voices.push_back(std::move(voice));

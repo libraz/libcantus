@@ -727,3 +727,33 @@ describe('chord data the readings cannot take', () => {
     ).toThrow(/note\.letter/);
   });
 });
+
+describe('a chord read as an augmented sixth reads its spelling hints', () => {
+  const C = majorKey(0);
+  const flatSix = makeChord(8, 'dom7');
+
+  it('reads the root hint as spelling the chord reads it', () => {
+    expect(() => functionOf({ ...flatSix, rootSpelling: 5 as never }, C)).toThrow(
+      'diatonic letter must be finite; received undefined',
+    );
+    expect(() => functionOf({ ...flatSix, rootSpelling: null as never }, C)).toThrow(
+      "Cannot read properties of null (reading 'letter')",
+    );
+    expect(() =>
+      functionOf({ ...flatSix, rootSpelling: { letter: 'x', alter: 0 } as never }, C),
+    ).toThrow('diatonic letter must be finite; received x');
+  });
+
+  it('reads each tone hint as a note', () => {
+    expect(() =>
+      functionOf({ ...flatSix, toneSpellings: [null, null, null, null] as never }, C),
+    ).toThrow('note must be an object; received null');
+    expect(() =>
+      functionOf({ ...flatSix, toneSpellings: ['C', 'C', 'C', 'C'] as never }, C),
+    ).toThrow('note must be an object; received "C"');
+  });
+
+  it('reads no hint of a chord off the family bass', () => {
+    expect(functionOf({ ...makeChord(7, 'dom7'), rootSpelling: 5 as never }, C)).toBe('dominant');
+  });
+});

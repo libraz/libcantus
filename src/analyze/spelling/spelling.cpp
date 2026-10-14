@@ -55,7 +55,8 @@ std::vector<NoteData> candidates_for(int pitch, const NoteData& preferred) {
     if (std::abs(alter) > SPELLING_MAX_ALTER || letter == preferred.letter) {
       continue;
     }
-    rest.push_back(NoteData{letter, alter, octave_for(pitch, letter, alter)});
+    rest.push_back(NoteData{static_cast<double>(letter), static_cast<double>(alter),
+                            octave_for(pitch, letter, alter)});
   }
   std::stable_sort(rest.begin(), rest.end(), [](const NoteData& a, const NoteData& b) {
     int by_alter = std::abs(a.alter) - std::abs(b.alter);
@@ -84,7 +85,8 @@ std::optional<NoteData> chord_spelling_of(int pc, const Chord& chord, const Note
   }
   const std::optional<PitchSpelling>& hint = chord.bassSpelling;
   if (hint && mod12(natural_pitch_class_of(hint->letter) + hint->alter) == pc) {
-    return NoteData{diatonic_letter_of(hint->letter), static_cast<int>(hint->alter), std::nullopt};
+    return NoteData{static_cast<double>(diatonic_letter_of(hint->letter)), hint->alter,
+                    std::nullopt};
   }
   return spell_pitch_class(pc, tonic, key);
 }

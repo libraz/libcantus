@@ -24,7 +24,12 @@ import {
   spelledInterval,
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import { assertArray, assertOptions, describeRejected } from '../../core/validation/index.js';
+import {
+  assertArray,
+  assertFiniteNumber,
+  assertOptions,
+  describeRejected,
+} from '../../core/validation/index.js';
 import {
   classifySpelledInterval,
   createsBattuta,
@@ -892,6 +897,12 @@ function resolveDurations(
 ): { durations: number[] } | { problem: string } {
   const given = opts?.durations;
   if (given !== undefined) {
+    // Checked as numbers before they are judged as note values: a duration that is no number
+    // would otherwise reach the measure arithmetic and the rationale as text.
+    assertArray<number>(given, 'durations');
+    given.forEach((duration, index) => {
+      assertFiniteNumber(duration, `durations[${index}]`);
+    });
     if (given.length !== counterpoint.length) {
       return {
         problem: `The exercise gives ${given.length} durations for ${counterpoint.length} notes`,
@@ -1046,7 +1057,8 @@ function motionPairs(entries: readonly Entry[]): [number, number][] {
  * @returns Every violation found, in the order the exercise commits them; an
  *   empty array for a clean exercise.
  * @throws If the species is not one of the five, either voice is empty, a note
- *   carries no octave, or the fifth species is given without durations.
+ *   carries no octave, the durations are not an array of finite numbers, or the
+ *   fifth species is given without durations.
  * @example
  * ```ts
  * import { checkSpecies, majorKey, parseNote } from '@libraz/libcantus';

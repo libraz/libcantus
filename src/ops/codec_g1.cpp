@@ -67,6 +67,25 @@ std::vector<std::string_view> hybrid_methods(std::string_view type) {
   return {};
 }
 
+/**
+ * Whether a hybrid shows a payload field as a property, as its manifest type lists it; the rest of
+ * its payload (a supplied source, the instruments) is the core's own and reads as undefined.
+ */
+bool shows_property(std::string_view type, std::string_view key) {
+  static constexpr std::string_view kContextProperties[] = {
+      "seed",       "rhythmic", "harmonic",         "ornament",
+      "difficulty", "bpm",      "algorithmVersion", "vocabulary"};
+  if (type == "ResolvedContext") {
+    for (std::string_view known : kContextProperties) {
+      if (known == key) {
+        return true;
+      }
+    }
+    return false;
+  }
+  return type == "ChordTimeline" && key == "segments";
+}
+
 bool has_hybrid_method(const json::Value& value, std::string_view method) {
   for (std::string_view known : hybrid_methods(hybrid_type(value))) {
     if (known == method) {
@@ -417,6 +436,10 @@ WireContext read_generation_context(const Args& a, const json::Value& input) {
         return undefined_value();
       }
       return numeric ? input : kDefaultSeed;
+    }
+    // A context handed back is read through its properties alone.
+    if (tag_of(input) == Tag::kHybrid && !shows_property(hybrid_type(input), key)) {
+      return undefined_value();
     }
     return get(input, key);
   };

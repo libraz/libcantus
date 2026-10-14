@@ -186,8 +186,10 @@ ResolvedKey parallel_key_of(const NoteArg& tonic, const KeyArg& key) {
   // The spelled tonic decides the root, so the returned key and its tonic agree.
   int root_pc = note_to_pitch_class(note);
   KeyScale scale = mode == KeyMode::kMinor ? minor_scale(root_pc) : major_scale(root_pc);
-  return ResolvedKey{scale, NoteData{diatonic_letter_of(note.letter), note.alter, std::nullopt},
-                     variant_of_mask(scale.modeMask12)};
+  return ResolvedKey{
+      scale,
+      NoteData{static_cast<double>(diatonic_letter_of(note.letter)), note.alter, std::nullopt},
+      variant_of_mask(scale.modeMask12)};
 }
 
 bool is_written_tonic(const NoteData& tonic, const KeyScale& key) {

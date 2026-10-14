@@ -468,12 +468,15 @@ function assertSafetyContext(q: Omit<SafetyQuery, 'candidatePitch'>): void {
   }
   assertGenerationBudget(q.otherVoices.length, 'other voices');
   for (let index = 0; index < q.otherVoices.length; index += 1) {
-    const voice = q.otherVoices[index];
-    if (!voice) continue;
+    const voice = assertRecord<VoiceSnapshot>(q.otherVoices[index], `otherVoices[${index}]`);
     assertMidiPitch(voice.pitch, `otherVoices[${index}].pitch`);
     if (voice.prevPitch !== undefined) {
       assertMidiPitch(voice.prevPitch, `otherVoices[${index}].prevPitch`);
     }
+  }
+  // No harmony is `null`; anything else is read as a chord wherever the verdict asks of it.
+  if (q.chord !== null) {
+    assertRecord(q.chord, 'chord');
   }
 }
 

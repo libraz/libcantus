@@ -27,6 +27,7 @@ import { assertReferenceProfile } from '../../analyze/reference/validate.js';
 import { InvalidInputError } from '../../core/errors/index.js';
 import {
   BEAT_EPS,
+  barIndexAt,
   barStartBeat,
   beatsPerBarAt,
   type MeterMap,
@@ -685,6 +686,15 @@ export function deriveCompositionPlan(
 
   const sections = plannedSections(profile, preserve.form, draw);
   const shapeWeight = preserve.registerShape;
+  // Phrase lengths are re-cut bar by bar, so the bars the phrases span are charged first.
+  const phraseBars = profile.form.phrases.reduce(
+    (bars, phrase) =>
+      bars +
+      barIndexAt(phrase.endBeat, profile.meters) -
+      barIndexAt(phrase.startBeat, profile.meters),
+    0,
+  );
+  assertGenerationBudget(phraseBars, 'plan phrase bars');
   const spans = plannedPhraseSpans(profile, sections, preserve.phraseLengths, draw);
   const phrases: PlannedPhrase[] = spans.map((span) => {
     const melody = profile.form.phrases[span.source]?.melody ?? null;

@@ -337,3 +337,18 @@ describe('roman numerals the analyzer can produce read back for every quality', 
     }
   });
 });
+
+describe('a reference phrase outside the span it is part of', () => {
+  it('is refused by its beats', () => {
+    const late = validProfile();
+    (late.form.phrases[0] as { endBeat: number }).endBeat = 2 ** 32;
+    expect(() => assertReferenceProfile(late)).toThrow(
+      'reference profile.form.phrases[0].endBeat must be in [0, 8]; received 4294967296',
+    );
+    const early = validProfile();
+    (early.form.phrases[0] as { startBeat: number }).startBeat = -4;
+    expect(() => assertReferenceProfile(early)).toThrow(
+      'reference profile.form.phrases[0].startBeat must be in [0, 8]; received -4',
+    );
+  });
+});

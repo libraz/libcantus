@@ -67,8 +67,40 @@ KeyScale read_key_like(const json::Value& value);
  */
 KeyArg read_key_arg(const json::Value& value);
 
-/** `assertRecord(chord)` and `assertArray(chord.intervals)` of chordPcMask. */
-void assert_mask_inputs(const json::Value& chord);
+/**
+ * What `chordPcMask` checks of a wire chord before it reads the tones: a record whose intervals
+ * are an array, each of which sums with the root to a finite pitch (the sum is JS addition, so a
+ * string on either side makes it text), then the bass when `include_bass`.
+ * @throws InvalidInputError with the TS message.
+ */
+void assert_mask_inputs(const json::Value& chord, bool include_bass = true);
+
+/**
+ * `chordToneSpellings` over a wire chord: one hint per interval, each read as a note (assertNote)
+ * before its pitch class is compared with the tone's (`pitchClass(chord.rootPc + interval)`, a JS
+ * sum), or nullopt when the list does not run one per interval or a hint names another tone.
+ */
+std::optional<std::vector<PitchSpelling>> read_tone_spellings(const json::Value& chord);
+
+/**
+ * What `chordToneLetterOffsets` reads of a wire chord: its tone spellings, then each interval up
+ * to the root's (`pitchClass(interval) === 0`). Returns whether the chord names its tones' letters.
+ */
+bool reads_tone_letter_offsets(const json::Value& chord);
+
+/**
+ * What `chordRootSpelling` reads of a wire chord's root hint before it chooses it: the letter's
+ * natural pitch class plus the alteration, as JS sums them.
+ */
+void read_root_hint(const json::Value& chord);
+
+/**
+ * What `refineByContext` reads of a wire context that read_spelling_context() cannot refuse, once
+ * `pc` is a chromatic tone: a `chordRoot` beside no chord, or a null chord beside one, and each
+ * neighbour (`next`, `previous`) whose distance from `pc` makes it the evidence.
+ */
+void read_context_evidence(const json::Value& context, double pc, const NoteData& tonic,
+                           const KeyScale& key);
 
 /** `assertModeMask` over a wire value. */
 int read_mode_mask(const json::Value& value, std::string_view name);
@@ -90,25 +122,6 @@ const json::Value& assert_chord(const json::Value& value, std::string_view name 
  * makes are the adapter's; a quality TS never reads may be unknown and reads as `fallback`.
  */
 Chord read_chord_fields(const json::Value& value, ChordQuality fallback = ChordQuality::kMaj);
-
-/**
- * What `chordPcMask` checks of a wire chord before it reads the tones: a record whose intervals
- * are an array, each of which sums with the root to a finite pitch (a string interval makes the
- * sum text), and a finite bass.
- * @throws InvalidInputError with the TS message.
- */
-inline void assert_chord_mask_inputs(const json::Value& chord) {
-  assert_record(chord, "chord");
-  const json::Array& intervals = assert_array(get(chord, "intervals"), "chord intervals");
-  double root = js::to_number(get(chord, "rootPc"));
-  for (const json::Value& interval : intervals) {
-    assert_finite_number(js::add_number(root, interval), "pitch");
-  }
-  const json::Value& bass = get(chord, "bassPc");
-  if (!is_undefined(bass)) {
-    assert_finite_number(bass, "pitch");
-  }
-}
 
 /** `copySpanIntervals`'s checks over a wire template. */
 std::vector<double> read_span_intervals(const json::Value& intervals);

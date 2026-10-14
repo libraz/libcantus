@@ -114,13 +114,13 @@ export type KeyContext = KeyLike | ((beat: number) => KeyScale);
  * The scale in force at a beat, whichever form the context was given in.
  *
  * One key is read once, here, so an entry point may take a key in any form a
- * caller holds one without the reading being repeated per note. The per-beat
- * form is handed back as it stands: it is called once per note, and resolving
- * inside that loop would put a key parse under every note of the piece.
+ * caller holds one without the reading being repeated per note. Each answer of
+ * the per-beat form is read the same way as it arrives, so every consumer meets
+ * a checked scale whatever the caller's function returned.
  */
 export function keyScaleAt(key: KeyContext): (beat: number) => KeyScale {
   if (typeof key === 'function') {
-    return key;
+    return (beat) => toKeyScale(key(beat));
   }
   const scale = toKeyScale(key);
   return () => scale;

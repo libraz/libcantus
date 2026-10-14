@@ -553,21 +553,53 @@ Violations cadence_violations(const std::vector<Entry>& entries, const KeyScale&
   return found;
 }
 
-/** The note lengths to read the exercise by, or the reason they cannot be read. */
-struct Durations {
-  std::vector<double> durations;
-  std::optional<std::string> problem;
-};
+/** Place every counterpoint note against the cantus-firmus notes it sounds with
+ * (`buildEntries`). */
+std::vector<Entry> build_entries(const std::vector<NoteData>& cantus_firmus,
+                                 const std::vector<NoteData>& counterpoint,
+                                 const std::vector<double>& durations, bool counterpoint_above) {
+  std::vector<Entry> entries;
+  for (const SpeciesEntryPair& pair : species_entry_pairs(cantus_firmus.size(), durations)) {
+    const NoteData& note = counterpoint[pair.note];
+    const NoteData& against = cantus_firmus[pair.against];
+    SpelledInterval interval =
+        counterpoint_above ? spelled_interval(against, note) : spelled_interval(note, against);
+    Entry entry;
+    entry.note = note;
+    entry.index = static_cast<int>(pair.note);
+    entry.held = pair.held;
+    entry.against = against;
+    entry.againstIndex = static_cast<int>(pair.against);
+    entry.downbeat = std::fabs(pair.begins - js::round(pair.begins)) < BEAT_EPS;
+    entry.interval = interval;
+    entry.consonance = classify_spelled_interval(interval);
+    entries.push_back(std::move(entry));
+  }
+  return entries;
+}
 
-/** `resolveDurations`. */
-Durations resolve_durations(const std::vector<NoteData>& counterpoint, std::size_t measures,
-                            int species, const SpeciesOptions& opts) {
-  Durations out;
+/** The pairs of struck notes the motion rules are judged over: successive attacks that cross a
+ * bar line (`motionPairs`). */
+std::vector<std::pair<std::size_t, std::size_t>> motion_pairs(const std::vector<Entry>& entries) {
+  std::vector<std::pair<std::size_t, std::size_t>> pairs;
+  for (std::size_t position = 1; position < entries.size(); ++position) {
+    if (entries[position - 1].againstIndex != entries[position].againstIndex) {
+      pairs.emplace_back(position - 1, position);
+    }
+  }
+  return pairs;
+}
+
+}  // namespace
+
+SpeciesDurations resolve_species_durations(std::size_t notes, std::size_t measures, int species,
+                                           const SpeciesOptions& opts) {
+  SpeciesDurations out;
   if (opts.durations) {
     const std::vector<double>& given = *opts.durations;
-    if (given.size() != counterpoint.size()) {
+    if (given.size() != notes) {
       out.problem = "The exercise gives " + js::to_string(given.size()) + " durations for " +
-                    js::to_string(counterpoint.size()) + " notes";
+                    js::to_string(notes) + " notes";
       return out;
     }
     for (double duration : given) {
@@ -598,69 +630,38 @@ Durations resolve_durations(const std::vector<NoteData>& counterpoint, std::size
   double full = static_cast<double>(ratio) * static_cast<double>(measures);
   // A closing measure written as one whole note is the convention rather than an exception, so
   // both note counts read as the correct ratio.
-  double length = static_cast<double>(counterpoint.size());
+  double length = static_cast<double>(notes);
   if (length != full && length != full - ratio + 1) {
     out.problem = "Species " + js::to_string(species) + " sets " + js::to_string(ratio) +
                   " notes against each of the " + js::to_string(measures) +
-                  " cantus firmus notes, and the counterpoint has " +
-                  js::to_string(counterpoint.size());
+                  " cantus firmus notes, and the counterpoint has " + js::to_string(notes);
     return out;
   }
-  out.durations = implied_durations(counterpoint.size(), static_cast<double>(measures), ratio);
+  out.durations = implied_durations(notes, static_cast<double>(measures), ratio);
   return out;
 }
 
-/** Place every counterpoint note against the cantus-firmus notes it sounds with
- * (`buildEntries`). */
-std::vector<Entry> build_entries(const std::vector<NoteData>& cantus_firmus,
-                                 const std::vector<NoteData>& counterpoint,
-                                 const std::vector<double>& durations, bool counterpoint_above) {
-  std::vector<Entry> entries;
+std::vector<SpeciesEntryPair> species_entry_pairs(std::size_t cantus_firmus,
+                                                  const std::vector<double>& durations) {
+  std::vector<SpeciesEntryPair> pairs;
   double onset = 0;
-  double last_cantus = static_cast<double>(cantus_firmus.size()) - 1;
-  for (std::size_t index = 0; index < counterpoint.size(); ++index) {
-    const NoteData& note = counterpoint[index];
+  double last_cantus = static_cast<double>(cantus_firmus) - 1;
+  for (std::size_t index = 0; index < durations.size(); ++index) {
     double duration = durations[index];
     double struck_over = js::min(std::floor(onset + BEAT_EPS), last_cantus);
     double last_over =
         js::min(js::max(std::ceil(onset + duration - BEAT_EPS) - 1, struck_over), last_cantus);
     for (double against_index = struck_over; against_index <= last_over; against_index += 1) {
-      const NoteData& against = cantus_firmus[static_cast<std::size_t>(against_index)];
       bool held = against_index > struck_over;
       // A held stretch begins where the measure does; the first begins wherever the note was
       // struck, which is what makes it a weak-beat note or not.
-      double begins = held ? against_index : onset;
-      SpelledInterval interval =
-          counterpoint_above ? spelled_interval(against, note) : spelled_interval(note, against);
-      Entry entry;
-      entry.note = note;
-      entry.index = static_cast<int>(index);
-      entry.held = held;
-      entry.against = against;
-      entry.againstIndex = static_cast<int>(against_index);
-      entry.downbeat = std::fabs(begins - js::round(begins)) < BEAT_EPS;
-      entry.interval = interval;
-      entry.consonance = classify_spelled_interval(interval);
-      entries.push_back(std::move(entry));
+      pairs.push_back(SpeciesEntryPair{index, static_cast<std::size_t>(against_index), held,
+                                       held ? against_index : onset});
     }
     onset += duration;
   }
-  return entries;
-}
-
-/** The pairs of struck notes the motion rules are judged over: successive attacks that cross a
- * bar line (`motionPairs`). */
-std::vector<std::pair<std::size_t, std::size_t>> motion_pairs(const std::vector<Entry>& entries) {
-  std::vector<std::pair<std::size_t, std::size_t>> pairs;
-  for (std::size_t position = 1; position < entries.size(); ++position) {
-    if (entries[position - 1].againstIndex != entries[position].againstIndex) {
-      pairs.emplace_back(position - 1, position);
-    }
-  }
   return pairs;
 }
-
-}  // namespace
 
 std::vector<PartWritingViolation> check_species(const std::vector<NoteData>& cantus_firmus,
                                                 const std::vector<NoteData>& counterpoint,
@@ -673,7 +674,8 @@ std::vector<PartWritingViolation> check_species(const std::vector<NoteData>& can
   if (cantus_firmus.empty() || counterpoint.empty()) {
     throw InvalidInputError("checkSpecies needs both a cantus firmus and a counterpoint");
   }
-  Durations resolved = resolve_durations(counterpoint, cantus_firmus.size(), species, opts);
+  SpeciesDurations resolved =
+      resolve_species_durations(counterpoint.size(), cantus_firmus.size(), species, opts);
   if (resolved.problem) {
     return in_time_order({violation(Kind::kWrongRhythmicRatio, {1}, 0,
                                     static_cast<int>(counterpoint.size()) - 1, *resolved.problem)});

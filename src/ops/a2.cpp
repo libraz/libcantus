@@ -9,6 +9,7 @@
 #include <limits>
 #include <numeric>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -81,13 +82,20 @@ void register_timeline() {
     return timeline_chord_at(listed.as_array(), beat);
   });
   def("assertChordTimeline", [](Args& a) -> json::Value {
-    // The name only reaches a message, so it is read once the timeline has failed.
+    std::string name;
     try {
-      assert_wire_timeline(a[0]);
-    } catch (const InvalidInputError&) {
-      assert_wire_timeline(a[0], name_arg(a, 1, "timeline"));
-      throw;
+      name = name_arg(a, 1, "timeline");
+    } catch (const std::invalid_argument&) {
+      // A function's text is its source, which only a failure's message would hold.
+      try {
+        assert_wire_timeline(a[0]);
+      } catch (const InvalidInputError&) {
+        name_arg(a, 1, "timeline");
+        throw;
+      }
+      return a[0];
     }
+    assert_wire_timeline(a[0], name);
     return a[0];
   });
   def("chordTimelineFromChords", [](Args& a) -> json::Value {
@@ -119,7 +127,7 @@ void register_timeline() {
     return to_json(chord_timeline_from_chords(spans, total_beats));
   });
   def("chordTimelineFromNotes", [](Args& a) -> json::Value {
-    json::Value bag = arg_or(a, 1, json::Object());
+    json::Value bag = default_options(a, 1);
     const json::Value& opts = bag;
     MeterMap meters = resolve_wire_meters(opts, "timeline meters");
     ChordTimelineOptions typed;

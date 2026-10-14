@@ -173,3 +173,38 @@ describe('threshold sampling', () => {
     }
   });
 });
+
+describe('includeAt over any source with an at', () => {
+  it('reads another source by its method', () => {
+    const rng = createPositionalRng(7);
+    expect(includeAt({ at: rng.at }, 0.5, 'a', 1)).toBe(includeAt(rng, 0.5, 'a', 1));
+  });
+
+  it('indexes a text or a list by the first segment, as their own at does', () => {
+    expect(includeAt('0.5' as never, 0.5)).toBe(true);
+    expect(includeAt([0.2, 0.9] as never, 0.5, 1)).toBe(false);
+    expect(includeAt([0.2, 0.9] as never, 0.5, -1)).toBe(false);
+    expect(() => includeAt('abc' as never, 0.5)).toThrow(
+      'positional draw must be in [0, 1); received a',
+    );
+    expect(() => includeAt([0.2, 0.9] as never, 0.5, 5)).toThrow(
+      'positional draw must be in [0, 1); received undefined',
+    );
+  });
+
+  it('refuses a source with no at to call', () => {
+    expect(() => includeAt(5 as never, 0.5)).toThrow('rng.at is not a function');
+    expect(() => includeAt(null as never, 0.5)).toThrow(
+      "Cannot read properties of null (reading 'at')",
+    );
+  });
+
+  it('writes a draw that is no number as JS writes it', () => {
+    expect(() => includeAt({ at: () => 5n as never }, 0.5)).toThrow(
+      'positional draw must be in [0, 1); received 5',
+    );
+    expect(() => includeAt({ at: () => ({}) as never }, 0.5)).toThrow(
+      'positional draw must be in [0, 1); received [object Object]',
+    );
+  });
+});

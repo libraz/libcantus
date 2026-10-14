@@ -80,32 +80,6 @@ json::Value member_or_throw(const json::Value& value, std::string_view key) {
   return member_of(value, key);
 }
 
-/** `value.length` of an array or a string, else the field of that name. */
-json::Value length_of(const json::Value& value) {
-  if (value.is_array()) {
-    return json::Value(static_cast<double>(value.as_array().size()));
-  }
-  if (value.is_string()) {
-    return json::Value(static_cast<double>(js::utf16_length(value.as_string())));
-  }
-  return property_of(value, "length");
-}
-
-/** `list[index]`: the TypeError JS raises for null or undefined, else the element or field. */
-json::Value element_of(const json::Value& list, std::size_t index) {
-  property_of(list, js::to_string(static_cast<double>(index)));
-  if (list.is_array()) {
-    return list.as_array().size() > index ? list.as_array()[index] : undefined_value();
-  }
-  if (list.is_string()) {
-    return js::utf16_length(list.as_string()) > index
-               ? json::Value(js::utf16_slice(list.as_string(), static_cast<double>(index),
-                                             static_cast<double>(index + 1)))
-               : undefined_value();
-  }
-  return get(list, js::to_string(static_cast<double>(index)));
-}
-
 /** `{...first, ...second}` over wire values. */
 json::Value merged(std::initializer_list<const json::Value*> parts) {
   json::Object out;
@@ -172,7 +146,7 @@ json::Value key_echo(const Key& key, const json::Value& source) {
 /** `describeTonic`: how a value that is not the class API's Note is named. */
 std::string describe_tonic(const json::Value& value) {
   if (!is_js_object(value)) {
-    return string_of(value);
+    return js::string_of(value);
   }
   bool numbers = js::type_of(member_of(value, "letter")) == "number" &&
                  js::type_of(member_of(value, "alter")) == "number";
@@ -907,7 +881,7 @@ json::Value closing_voicing(const json::Value& voicing, std::size_t chords) {
       !js::strict_equals(length, json::Value(2.0))) {
     throw InvalidInputError("voicing must hold one voicing per chord (" +
                             js::to_string(static_cast<double>(chords)) +
-                            ") or the closing pair; received " + text_of(length));
+                            ") or the closing pair; received " + js::template_string(length));
   }
   // The length is the chord count or 2, both at least 2 here.
   auto count = static_cast<std::size_t>(*number_of(length));
@@ -1100,7 +1074,8 @@ void register_progression() {
     Progression self = read_progression_instance(a, 0);
     const json::Value& other = a[1];
     if (!is_js_object(other)) {
-      throw js::TypeError("Cannot use 'in' operator to search for 'chords' in " + string_of(other));
+      throw js::TypeError("Cannot use 'in' operator to search for 'chords' in " +
+                          js::string_of(other));
     }
     // Read structurally: anything with a `chords` member supplies those chords.
     json::Value chords = has_member(other, "chords") ? member_of(other, "chords") : other;
@@ -1236,8 +1211,8 @@ void register_progression() {
       }
     }
     if (!at || !(*at >= 0 && *at < count && std::trunc(*at) == *at)) {
-      throw InvalidInputError("progression has no chord at index " + text_of(a[1]) + "; it holds " +
-                              js::to_string(count));
+      throw InvalidInputError("progression has no chord at index " + js::template_string(a[1]) +
+                              "; it holds " + js::to_string(count));
     }
     auto target = static_cast<std::size_t>(*at);
     Key key = progression_analysis_key(self, undefined_value());
@@ -1253,8 +1228,8 @@ void register_progression() {
     }
     json::Value symbol =
         forward(a, "formatChordSymbol", json::Array{view_of(self.chords()[target])});
-    throw InvalidInputError("no " + text_of(a[2]) + " substitution for " + symbol.as_string() +
-                            " in " + key.to_string());
+    throw InvalidInputError("no " + js::template_string(a[2]) + " substitution for " +
+                            symbol.as_string() + " in " + key.to_string());
   });
   def_class_method("Progression#timeline", [](Args& a) -> json::Value {
     read_progression_instance(a, 0);
@@ -2118,6 +2093,8 @@ void register_score() {
 }  // namespace
 
 void register_m2() {
+  // Messages write a class instance the way TS's template literals do, through its toString().
+  js::set_class_text(&class_text);
   register_key();
   register_chord();
   register_progression();

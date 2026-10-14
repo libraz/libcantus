@@ -572,24 +572,13 @@ json::Array spread_iterable(const json::Value& value, std::string_view name) {
   throw js::TypeError(std::string(name) + " is not iterable");
 }
 
-std::string text_of(const json::Value& value) {
+std::string class_text(const json::Value& value) {
   std::string cls = class_name_of(value);
-  if (!cls.empty() && member_op(cls, "toString") != nullptr) {
-    json::Value text = call_member(value, "toString", {});
-    return text.is_string() ? text.as_string() : js::template_string(text);
+  if (member_op(cls, "toString") == nullptr) {
+    return "[object Object]";
   }
-  return js::template_string(value);
-}
-
-std::string string_of(const json::Value& value) {
-  if (tag_of(value) == Tag::kSymbol) {
-    const json::Value* description = value.as_object().find("$sym");
-    return "Symbol(" +
-           (description != nullptr && description->is_string() ? description->as_string()
-                                                               : std::string()) +
-           ")";
-  }
-  return text_of(value);
+  json::Value text = call_member(value, "toString", {});
+  return text.is_string() ? text.as_string() : js::template_string(text);
 }
 
 json::Value surface_record(const json::Value& value,

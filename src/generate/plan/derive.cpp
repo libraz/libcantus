@@ -579,6 +579,13 @@ CompositionPlan derive_composition_plan_with(const ReferenceProfile& profile,
 
   std::vector<PlannedSection> sections = planned_sections(profile, preserve.form, draw);
   double shape_weight = preserve.registerShape;
+  // Phrase lengths are re-cut bar by bar, so the bars the phrases span are charged first.
+  double phrase_bars = 0;
+  for (const ReferencePhrase& phrase : profile.form.phrases) {
+    phrase_bars = phrase_bars + bar_index_at(phrase.endBeat, MeterArg(profile.meters)) -
+                  bar_index_at(phrase.startBeat, MeterArg(profile.meters));
+  }
+  assert_generation_budget(phrase_bars, "plan phrase bars");
   std::vector<PhraseSpan> spans =
       planned_phrase_spans(profile, sections, preserve.phraseLengths, draw);
   std::vector<PlannedPhrase> phrases;

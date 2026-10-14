@@ -232,6 +232,13 @@ bool less_equal(const json::Value& lhs, const json::Value& rhs) {
   return to_number(lhs) <= to_number(rhs);
 }
 
+double subtract(const json::Value& v, double n) {
+  if (type_of(v) == "bigint") {
+    throw TypeError("Cannot mix BigInt and other types, use explicit conversions");
+  }
+  return to_number(v) - n;
+}
+
 double multiply(const json::Value& v, double factor) {
   if (type_of(v) == "bigint") {
     throw TypeError("Cannot mix BigInt and other types, use explicit conversions");

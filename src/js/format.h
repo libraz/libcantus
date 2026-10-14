@@ -31,11 +31,24 @@ void quote_to(std::string_view s, std::string& out);
 
 /**
  * `${v}` of the JS value `v` stands for: arrays comma-join (null/undefined elements empty),
- * plain objects give "[object Object]".
+ * plain objects give "[object Object]", a model-class value its `toString()` (set_class_text()).
  * @throws TypeError for a Symbol (`$sym`), anywhere in the value.
  * @throws std::invalid_argument for a callback (`$cb`), whose source text is not available.
  */
 std::string template_string(const json::Value& v);
+
+/** `String(v)`: as template_string(), but a Symbol reads as `Symbol(description)`. */
+std::string string_of(const json::Value& v);
+
+/** How a model-class value (`$class`) reads as text: its class's `toString()`. */
+using ClassText = std::string (*)(const json::Value& v);
+
+/**
+ * Install how template_string() and string_of() write a model-class value. The op layer installs
+ * it while it registers the class ops, before any call runs; until then such a value reads as
+ * "[object Object]", as one with no `toString` of its own does.
+ */
+void set_class_text(ClassText text);
 
 }  // namespace cantus::js
 

@@ -1,6 +1,7 @@
 import {
   ConsonanceClass,
   classifyInterval,
+  intervalSemitones,
   isConsonantInterval,
   isPerfectInterval,
 } from '@libraz/libcantus/core';
@@ -69,5 +70,23 @@ describe('isConsonantInterval', () => {
     expect(isConsonantInterval(5)).toBe(false);
     expect(isConsonantInterval(5)).toBe(isConsonantInterval(5, true));
     expect(isConsonantInterval(7)).toBe(true);
+  });
+});
+
+describe('intervalSemitones with a quality that is no string', () => {
+  // The repeated-letter qualities are matched against the value's text, and counted by its length.
+  it('reads a one-element list by its text and its length', () => {
+    expect(intervalSemitones(4, ['A'] as never)).toBe(6);
+    expect(intervalSemitones(4, ['AA'] as never)).toBe(6);
+    expect(() => intervalSemitones(1, ['dd'] as never)).toThrow(
+      "a unison cannot be diminished; a unison narrowed by a semitone descends, so name it '-A1'",
+    );
+  });
+
+  it('refuses the named qualities and a Symbol', () => {
+    expect(() => intervalSemitones(5, ['P'] as never)).toThrow('unknown interval quality');
+    expect(() => intervalSemitones(5, Symbol('A') as never)).toThrow(
+      'Cannot convert a Symbol value to a string',
+    );
   });
 });

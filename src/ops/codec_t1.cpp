@@ -59,7 +59,7 @@ double read_degree_in(const json::Value& value, const std::array<int, N>& allowe
   std::optional<double> number = number_of(value);
   if (!number || !includes_degree(allowed, *number)) {
     throw InvalidInputError(str(name) + " must be one of " + join_degrees(allowed) + "; received " +
-                            js::template_string(value));
+                            js::string_of(value));
   }
   return *number;
 }
@@ -180,6 +180,99 @@ KeyArg read_key_arg(const json::Value& value) {
   return KeyArg(std::move(data));
 }
 
+std::optional<std::vector<PitchSpelling>> read_tone_spellings(const json::Value& chord) {
+  const json::Value& hints = get(chord, "toneSpellings");
+  if (is_undefined(hints)) {
+    return std::nullopt;
+  }
+  const json::Value& intervals = get(chord, "intervals");
+  json::Value count = length_of(hints);
+  if (!js::strict_equals(count, length_of(intervals))) {
+    return std::nullopt;
+  }
+  const json::Value& root = get(chord, "rootPc");
+  std::vector<PitchSpelling> usable;
+  for (std::size_t index = 0; js::less_than(json::Value(static_cast<double>(index)), count);
+       ++index) {
+    json::Value hint = element_of(hints, index);
+    json::Value interval = element_of(intervals, index);
+    if (is_undefined(hint) || is_undefined(interval)) {
+      return std::nullopt;
+    }
+    NoteData note = read_note(hint, "note");
+    if (note_to_pitch_class(note) !=
+        pitch_class_of(assert_finite_number(js::add(root, interval), "pitch"))) {
+      return std::nullopt;
+    }
+    usable.push_back(
+        PitchSpelling{static_cast<double>(diatonic_letter_of(note.letter)), note.alter});
+  }
+  return usable;
+}
+
+bool reads_tone_letter_offsets(const json::Value& chord) {
+  std::optional<std::vector<PitchSpelling>> hints = read_tone_spellings(chord);
+  if (!hints) {
+    return false;
+  }
+  const json::Value& intervals = get(chord, "intervals");
+  if (!intervals.is_array()) {
+    throw js::TypeError("chord.intervals.findIndex is not a function");
+  }
+  for (const json::Value& interval : intervals.as_array()) {
+    if (pitch_class_of(assert_finite_number(interval, "pitch")) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void read_root_hint(const json::Value& chord) {
+  const json::Value& hint = get(chord, "rootSpelling");
+  if (is_undefined(hint)) {
+    return;
+  }
+  // `mod12(naturalPc(hint.letter) + hint.alter)`.
+  double natural =
+      natural_pitch_class_of(assert_finite_number(property_of(hint, "letter"), "diatonic letter"));
+  assert_finite_number(js::add_number(natural, property_of(hint, "alter")), "pitch");
+}
+
+void read_context_evidence(const json::Value& context, double pc, const NoteData& tonic,
+                           const KeyScale& key) {
+  if (pitch_class_of(pc) == note_to_pitch_class(tonic) || is_scale_tone(pc, key)) {
+    return;
+  }
+  // `chord?.rootPc ?? context.chordRoot`; with no chord the root is spelled from
+  // `mod12(chordRoot)`.
+  const json::Value& chord = get(context, "chord");
+  const json::Value& own_root =
+      is_null_or_undefined(chord) ? undefined_value() : get(chord, "rootPc");
+  const json::Value& chord_root =
+      is_null_or_undefined(own_root) ? get(context, "chordRoot") : own_root;
+  if (!is_undefined(chord_root)) {
+    if (is_undefined(chord)) {
+      assert_finite_number(chord_root, "pitch");
+    } else if (chord.is_null()) {
+      throw js::TypeError("Cannot read properties of null (reading 'rootSpelling')");
+    }
+  }
+  // `neighbourSpelling(neighbour, gap, ...)`: `mod12(neighbour - pc) !== mod12(gap)`, then
+  // `mod12(neighbour)`.
+  const std::pair<const char*, double> evidence[] = {
+      {"next", 1}, {"previous", -1}, {"next", -1}, {"previous", 1}};
+  for (const auto& [name, gap] : evidence) {
+    const json::Value& neighbour = get(context, name);
+    if (is_undefined(neighbour)) {
+      continue;
+    }
+    double distance = assert_finite_number(json::Value(js::subtract(neighbour, pc)), "pitch");
+    if (pitch_class_of(distance) == pitch_class_of(gap)) {
+      assert_finite_number(neighbour, "pitch");
+    }
+  }
+}
+
 int read_mode_mask(const json::Value& value, std::string_view name) {
   return static_cast<int>(assert_integer(value, name, 1, CHROMATIC_MASK));
 }
@@ -195,7 +288,7 @@ ChordQuality read_chord_quality(const json::Value& value) {
       return *quality;
     }
   }
-  throw InvalidInputError("Unknown chord quality: " + js::template_string(value));
+  throw InvalidInputError("Unknown chord quality: " + js::string_of(value));
 }
 
 const json::Value& assert_chord(const json::Value& value, std::string_view name) {
@@ -205,9 +298,17 @@ const json::Value& assert_chord(const json::Value& value, std::string_view name)
   return chord;
 }
 
-void assert_mask_inputs(const json::Value& chord) {
+void assert_mask_inputs(const json::Value& chord, bool include_bass) {
   assert_record(chord, "chord");
-  assert_array(get(chord, "intervals"), "chord intervals");
+  const json::Array& intervals = assert_array(get(chord, "intervals"), "chord intervals");
+  const json::Value& root = get(chord, "rootPc");
+  for (const json::Value& interval : intervals) {
+    assert_finite_number(js::add(root, interval), "pitch");
+  }
+  const json::Value& bass = get(chord, "bassPc");
+  if (include_bass && !is_undefined(bass)) {
+    assert_finite_number(bass, "pitch");
+  }
 }
 
 Chord read_chord_fields(const json::Value& value, ChordQuality fallback) {

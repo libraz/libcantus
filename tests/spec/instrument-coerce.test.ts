@@ -122,3 +122,11 @@ describe('toInstrumentProfile holds a kit to the limbs and the lists the library
     expect(core.instrumentRange(Instrument.of(DRUM_KIT))).toEqual(core.instrumentRange(DRUM_KIT));
   });
 });
+
+describe('a profile kind that is no text', () => {
+  it('is written as String writes it', () => {
+    expect(() => core.toInstrumentProfile({ kind: Symbol('k') } as never)).toThrow(
+      'instrument must be a stringed or percussion profile; received kind Symbol(k)',
+    );
+  });
+});

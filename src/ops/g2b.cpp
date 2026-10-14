@@ -348,7 +348,7 @@ void register_motif() {
       ChordData read = read_chord_like(chord);
       plan.chord = read.chord;
       if (!table_quality(get(read.wire, "quality"))) {
-        plan.unknownChordQuality = js::template_string(get(read.wire, "quality"));
+        plan.unknownChordQuality = js::string_of(get(read.wire, "quality"));
       }
     }
     return to_json(generate_motif_with(plan, ctx.resolved));

@@ -480,3 +480,10 @@ describe('tuplet', () => {
     expect(() => tuplet(1, 0)).toThrow();
   });
 });
+
+describe('a negative zero beat', () => {
+  it('stays negative zero through the bar position', () => {
+    expect(Object.is(beatToBarPosition(-0, '4/4').beat, -0)).toBe(true);
+    expect(Object.is(barPositionToBeat({ bar: -0, beat: -0 }, '4/4'), -0)).toBe(true);
+  });
+});

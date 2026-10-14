@@ -15,7 +15,10 @@
 #ifndef CANTUS_SRC_OPS_VALIDATE_H_
 #define CANTUS_SRC_OPS_VALIDATE_H_
 
+#include <cstddef>
 #include <cstdint>
+#include <exception>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -73,8 +76,40 @@ const json::Array& assert_array(const json::Value& value, std::string_view name)
 /** `assertRecord`. */
 const json::Value& assert_record(const json::Value& value, std::string_view name);
 
-/** `assertOptions`: an empty object for undefined, else the record. */
+/**
+ * `assertOptions`: an empty object for undefined, else the record. A model-class instance is
+ * handed back as the record of its members read through its getters (options_view()), since TS
+ * reads an options bag field by field; that record lives until the current OptionViews ends.
+ */
 const json::Value& assert_options(const json::Value& value, std::string_view name = "options");
+
+/**
+ * A model-class instance or a `toJSON` carrier as the plain record of every member a reader can
+ * see; anything else as it is. Defined with the class codecs (ops/codec_m2.cpp).
+ */
+json::Value options_view(const json::Value& value);
+
+/**
+ * An options bag TS defaults with `opts = {}` and reads without assertOptions: an empty bag for
+ * undefined, a class instance as options_view() reads it, anything else as given.
+ */
+json::Value default_options(const Args& a, std::size_t i);
+
+/** The records assert_options() builds for the ops run while it is alive (one per dispatch). */
+class OptionViews {
+ public:
+  OptionViews();
+  ~OptionViews();
+  OptionViews(const OptionViews&) = delete;
+  OptionViews& operator=(const OptionViews&) = delete;
+
+  /** Keep `view` until this scope ends. */
+  const json::Value& keep(json::Value view);
+
+ private:
+  std::vector<std::unique_ptr<json::Value>> views_;
+  OptionViews* outer_;
+};
 
 /** `assertFlag`. */
 bool assert_flag(const json::Value& value, std::string_view name);
@@ -156,12 +191,51 @@ inline bool is_null_or_undefined(const json::Value& v) noexcept {
  */
 const json::Value& property_of(const json::Value& v, std::string_view key);
 
+/** `value.length`: the size of an array or a string (UTF-16), else the property of that name. */
+json::Value length_of(const json::Value& value);
+
+/** `list[index]` of an array, a string or a record; the TypeError JS raises for null/undefined. */
+json::Value element_of(const json::Value& list, std::size_t index);
+
 /** `${name}` of argument `i`, where TS declares no default. */
 inline std::string name_arg(const Args& a, std::size_t i) { return js::template_string(a[i]); }
 
 /** `${name}` of argument `i`, or the TS default when it is undefined. */
 inline std::string name_arg(const Args& a, std::size_t i, std::string_view fallback) {
   return a.undefined(i) ? std::string(fallback) : js::template_string(a[i]);
+}
+
+/** The stand-in with_name_arg() checks under, to tell whether a failure wrote the name. */
+inline constexpr std::string_view kPendingName = "\x01name\x01";
+
+/**
+ * `check(name)` with the name of argument `i` (name_arg()), for a TS check that writes the name
+ * only into a failure's message: a name that cannot be written, such as a Symbol, fails only when
+ * a failure's message holds it.
+ */
+template <class Check>
+decltype(auto) with_name_arg(const Args& a, std::size_t i, std::string_view fallback,
+                             Check&& check) {
+  std::optional<std::string> name;
+  try {
+    name = name_arg(a, i, fallback);
+  } catch (const std::exception&) {
+    try {
+      return check(std::string(kPendingName));
+    } catch (const Error& failure) {
+      if (std::string_view(failure.what()).find(kPendingName) != std::string_view::npos) {
+        name_arg(a, i, fallback);
+      }
+      throw;
+    }
+  }
+  return check(*name);
+}
+
+/** with_name_arg() for a name TS declares no default for: `${undefined}` when it is absent. */
+template <class Check>
+decltype(auto) with_name_arg(const Args& a, std::size_t i, Check&& check) {
+  return with_name_arg(a, i, "undefined", std::forward<Check>(check));
 }
 
 /** Argument `i`, or the TS default when it is undefined. */

@@ -407,3 +407,12 @@ describe('assertChordTimeline names the timeline only in a message', () => {
     );
   });
 });
+
+describe('assertChordTimeline with a name that cannot be written', () => {
+  it('fails once it reads the timeline under that name', () => {
+    const placed = chordTimelineFromNotes([{ pitch: 60, startBeat: 0, durationBeat: 4 }]).timeline;
+    expect(() => assertChordTimeline(placed, Symbol('n') as unknown as string)).toThrow(
+      'Cannot convert a Symbol value to a string',
+    );
+  });
+});

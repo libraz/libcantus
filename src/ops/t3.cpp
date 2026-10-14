@@ -15,6 +15,7 @@
 #include "cantus/theory/voicing.h"
 #include "core/validation/validation.h"
 #include "js/format.h"
+#include "js/math.h"
 #include "js/number.h"
 #include "js/value.h"
 #include "ops/accessors.h"
@@ -158,22 +159,36 @@ void register_partwriting() {
     VoicingOptions limits;
     read_max_spacing_option(asked, limits);
     opts.maxSpacing = limits.maxSpacing;
-    // The widest voicing decides whether the default ranges apply.
-    for (std::size_t index = 0; index < voicings.size(); ++index) {
-      assert_array(voicings[index], "voicings[" + index_text(index) + "]");
+    // The widest voicing decides whether the default ranges apply:
+    // `Math.max(widest, voicing.length)` over whatever each voicing is.
+    double voice_count = 0;
+    for (const json::Value& voicing : voicings) {
+      voice_count = js::max(voice_count, js::to_math_number(length_of(voicing)));
     }
     if (field(asked, "ranges") != nullptr) {
       read_ranges_option(asked, limits);
       opts.ranges = limits.ranges;
+      if (static_cast<double>(opts.ranges->size()) < voice_count) {
+        throw InvalidInputError("checkPartWriting needs one range per voice; received " +
+                                js::to_string(opts.ranges->size()) + " ranges for " +
+                                js::to_string(voice_count) + " voices");
+      }
     }
     // A note without an octave is refused by check_part_writing() where TS meets it, so the notes
     // from there on are not read.
     std::vector<SpelledVoicing> notes;
     bool unread = false;
     for (const json::Value& voicing : voicings) {
+      if (!voicing.is_array() && !unread) {
+        throw js::TypeError("notes.map is not a function");
+      }
+      static const json::Array kNoVoices;
       SpelledVoicing line;
-      for (const json::Value& note : voicing.as_array()) {
-        unread = unread || is_undefined(get(note, "octave"));
+      for (const json::Value& note : voicing.is_array() ? voicing.as_array() : kNoVoices) {
+        if (!unread) {
+          // `note.octave === undefined`, read off whatever the voice holds.
+          unread = is_undefined(property_of(note, "octave"));
+        }
         line.push_back(unread ? NoteData{} : read_note(note, "note"));
       }
       notes.push_back(std::move(line));
@@ -198,18 +213,50 @@ void register_partwriting() {
     }
     SpeciesOptions opts;
     if (const json::Value* durations = field(asked, "durations")) {
+      const json::Array& listed = assert_array(*durations, "durations");
       std::vector<double> read;
-      for (const json::Value& duration : assert_array(*durations, "durations")) {
-        read.push_back(js::to_number(duration));
+      for (std::size_t index = 0; index < listed.size(); ++index) {
+        read.push_back(assert_finite_number(listed[index], "durations[" + index_text(index) + "]"));
       }
       opts.durations = std::move(read);
     }
-    if (const json::Value* above = opt_null_default(asked, "counterpointAbove")) {
+    const json::Value* above = opt_null_default(asked, "counterpointAbove");
+    if (above != nullptr) {
       opts.counterpointAbove = js::truthy(*above);
     }
-    std::vector<NoteData> given = read_line(cantus_firmus);
+    int kind = static_cast<int>(*species);
+    // The rhythm is resolved before any note is read: one it cannot read is reported over notes
+    // nobody looks at.
+    SpeciesDurations resolved =
+        resolve_species_durations(counterpoint.size(), cantus_firmus.size(), kind, opts);
+    if (resolved.problem) {
+      return to_json(check_species(std::vector<NoteData>(cantus_firmus.size()),
+                                   std::vector<NoteData>(counterpoint.size()), kind, KeyArg(mode),
+                                   opts));
+    }
+    if (above != nullptr) {
+      // Each note is first read by spelledInterval, which names the lower note `a`, against the
+      // cantus-firmus notes it sounds with, in time order.
+      for (const SpeciesEntryPair& pair :
+           species_entry_pairs(cantus_firmus.size(), resolved.durations)) {
+        const json::Value& note = counterpoint[pair.note];
+        const json::Value& against = cantus_firmus[pair.against];
+        read_note(*opts.counterpointAbove ? against : note, "a");
+        read_note(*opts.counterpointAbove ? note : against, "b");
+      }
+    }
+    if (above == nullptr) {
+      // Otherwise each line is first read for its mean pitch, the counterpoint's first, note by
+      // note as noteToMidi reads it.
+      for (const json::Array* line : {&counterpoint, &cantus_firmus}) {
+        for (const json::Value& note : *line) {
+          note_to_midi(read_note(note, "note"));
+        }
+      }
+    }
     std::vector<NoteData> written = read_line(counterpoint);
-    return to_json(check_species(given, written, static_cast<int>(*species), KeyArg(mode), opts));
+    std::vector<NoteData> given = read_line(cantus_firmus);
+    return to_json(check_species(given, written, kind, KeyArg(mode), opts));
   });
 }
 

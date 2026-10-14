@@ -22,6 +22,12 @@ namespace cantus {
 /** The pitch class of the lowered submediant, the bass every kind stands on (`bassPcOf`). */
 int augmented_sixth_bass_pc(const KeyScale& key);
 
+/**
+ * Whether augmented_sixth_kind_of() reads a chord's letters at all: the chord stands on the key's
+ * lowered submediant and sounds one of the kinds. Its spelling hints are read only then.
+ */
+bool reads_augmented_sixth_spelling(const Chord& chord, const KeyArg& key);
+
 /** `augmentedSixthKind` on chord data the analysis layer already holds (`augmentedSixthKindOf`). */
 Nullable<AugmentedSixthKind> augmented_sixth_kind_of(const Chord& chord, const KeyArg& key);
 

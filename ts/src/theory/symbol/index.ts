@@ -31,6 +31,7 @@ import {
 } from '../../core/pitch/index.js';
 import {
   assertFiniteSemitones,
+  assertFlag,
   assertOptions,
   describeRejected,
 } from '../../core/validation/index.js';
@@ -224,12 +225,12 @@ export function formatChordSymbol(chord: ChordLike, opts?: ChordSymbolOptions): 
   // non-finite root or a quality this module has no suffix for; formatting
   // those produces 'C' and 'Cundefined', which read as real symbols.
   const data = toChordData(chord);
-  if (!Object.hasOwn(CANONICAL_SUFFIX, data.quality)) {
+  if (typeof data.quality !== 'string' || !Object.hasOwn(CANONICAL_SUFFIX, data.quality)) {
     throw new InvalidInputError(`Unknown chord quality: ${String(data.quality)}`);
   }
   const asked = assertOptions(opts, 'opts');
   const system = asked.system ?? DEFAULT_SYSTEM;
-  const flats = asked.flats;
+  const flats = symbolFlats(asked.flats);
   const rootPc = pitchClass(data.rootPc);
   const rootHint = hintFor(data.rootSpelling, rootPc);
   const rootSpelling = rootSpellingFor(rootPc, rootHint, flats);
@@ -277,6 +278,11 @@ export function formatChordSymbol(chord: ChordLike, opts?: ChordSymbolOptions): 
     symbol += `/${bassName}`;
   }
   return symbol;
+}
+
+/** The `flats` preference of a symbol's options: absent, or a boolean. */
+function symbolFlats(flats: boolean | undefined): boolean | undefined {
+  return flats === undefined ? undefined : assertFlag(flats, 'flats');
 }
 
 /**
@@ -424,7 +430,7 @@ export function transposeChordSymbol(
   if (chord.bassPc !== undefined) {
     transposed.bassPc = pitchClass(chord.bassPc + semitones);
   }
-  const spellings = transposeChordSpellings(chord, semitones, opts?.flats);
+  const spellings = transposeChordSpellings(chord, semitones, symbolFlats(opts?.flats));
   if (spellings.rootSpelling !== undefined) {
     transposed.rootSpelling = spellings.rootSpelling;
   }

@@ -624,3 +624,16 @@ describe('Voicing reads whatever carries pitches where the functions do', () => 
     expect(() => lead.independence(like('abcd'))).toThrow(/pitches\.map is not a function/);
   });
 });
+
+describe('Voicing#independence attack flags of another kind', () => {
+  it('reads them as voiceIndependence reads them', () => {
+    const upper = Voicing.of([60, 64]);
+    const lower = Voicing.of([55, 60]);
+    expect(upper.independence(lower, { leadAttacks: { length: 2 } as never })).toEqual(
+      upper.independence(lower, { leadAttacks: [false, false] }),
+    );
+    expect(() => upper.independence(lower, { leadAttacks: null as never })).toThrow(
+      "Cannot read properties of null (reading 'length')",
+    );
+  });
+});

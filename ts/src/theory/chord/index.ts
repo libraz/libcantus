@@ -168,7 +168,7 @@ export function chordQualities(): ChordQuality[] {
  * @throws If the quality is not a known name ({@link InvalidInputError}).
  */
 export function assertChordQuality(quality: ChordQuality): ChordQuality {
-  if (!Object.hasOwn(QUALITY_INTERVALS, quality)) {
+  if (typeof quality !== 'string' || !Object.hasOwn(QUALITY_INTERVALS, quality)) {
     throw new InvalidInputError(`Unknown chord quality: ${String(quality)}`);
   }
   return quality;

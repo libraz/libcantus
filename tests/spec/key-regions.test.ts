@@ -1004,3 +1004,29 @@ describe('region searches over input the readings cannot take', () => {
     expect(prevailingKeyOf(regions as never)).toEqual({ scale: { rootPc: 0, modeMask12: 2741 } });
   });
 });
+
+describe('detectModulations beats that are no numbers', () => {
+  const at = (startBeat: unknown, endBeat: unknown) =>
+    ({ startBeat, endBeat, chord: makeChord(0, 'maj') }) as never;
+
+  it('reads a bigint beat where JS arithmetic refuses it', () => {
+    expect(() => detectModulations([at(0, 4n)])).toThrow(
+      'Cannot convert a BigInt value to a number',
+    );
+    expect(() => detectModulations([at(0n, 4)])).toThrow(
+      'Cannot mix BigInt and other types, use explicit conversions',
+    );
+    expect(() => detectModulations([at(0n, 4), at(4, 8)])).toThrow(
+      'Cannot mix BigInt and other types, use explicit conversions',
+    );
+    expect(() => detectModulations([at(0n, 4n), at(4n, 8n)])).toThrow(
+      'Cannot convert a BigInt value to a number',
+    );
+  });
+
+  it('refuses a Symbol beat where it is compared', () => {
+    expect(() => detectModulations([at(Symbol('b'), 4)])).toThrow(
+      'Cannot convert a Symbol value to a number',
+    );
+  });
+});

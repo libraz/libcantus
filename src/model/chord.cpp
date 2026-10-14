@@ -434,8 +434,7 @@ std::vector<Note> ChordValue::spell(const std::optional<KeyArg>& key) const {
       sounded = sounded || note_to_pitch_class(tone) == bass_pc;
     }
     if (!sounded) {
-      tones.push_back(NoteData{static_cast<int>(data.bassSpelling->letter),
-                               static_cast<int>(data.bassSpelling->alter), std::nullopt});
+      tones.push_back(NoteData{data.bassSpelling->letter, data.bassSpelling->alter, std::nullopt});
     }
   }
   std::vector<Note> out;

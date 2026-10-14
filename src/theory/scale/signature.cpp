@@ -80,8 +80,9 @@ ResolvedKey key_from_fifths(double fifths, KeyMode mode) {
   auto alter = static_cast<int>(std::floor(index / 7.0));
   int root_pc = pitch_class_of(natural_pitch_class_of(letter) + alter);
   KeyScale scale = mode == KeyMode::kMinor ? minor_scale(root_pc) : major_scale(root_pc);
-  return ResolvedKey{scale, NoteData{letter, alter, std::nullopt},
-                     variant_of_mask(scale.modeMask12)};
+  return ResolvedKey{
+      scale, NoteData{static_cast<double>(letter), static_cast<double>(alter), std::nullopt},
+      variant_of_mask(scale.modeMask12)};
 }
 
 }  // namespace cantus

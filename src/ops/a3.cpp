@@ -68,7 +68,7 @@ std::optional<double> budget_of(const json::Value& opts) {
 void register_rhythm() {
   def("$const:RHYTHM_IOI_BINS", [](Args&) -> json::Value { return to_json(rhythm_ioi_bins()); });
   def("analyzeRhythm", [](Args& a) -> json::Value {
-    json::Value bag = arg_or(a, 1, json::Object());
+    json::Value bag = default_options(a, 1);
     const json::Value& opts = bag;
     MeterMap meters = resolve_wire_meters(opts, "rhythm meters");
     std::vector<NoteEvent> notes =
@@ -136,7 +136,7 @@ void register_hypermeter() {
 
 void register_sections() {
   def("sectionsFromNotes", [](Args& a) -> json::Value {
-    json::Value bag = arg_or(a, 1, json::Object());
+    json::Value bag = default_options(a, 1);
     const json::Value& opts = bag;
     MeterMap meters = resolve_wire_meters(opts, "section meters");
     std::vector<NoteEvent> notes =
@@ -172,7 +172,7 @@ void register_sections() {
 void register_phrases() {
   def("phrasesFromTimeline", [](Args& a) -> json::Value {
     const json::Array& segments = assert_wire_timeline(a[0]);
-    json::Value bag = arg_or(a, 2, json::Object());
+    json::Value bag = default_options(a, 2);
     const json::Value& opts = bag;
     MeterMap meters = resolve_wire_meters(opts, "phrase meters");
     std::vector<NoteEvent> notes =

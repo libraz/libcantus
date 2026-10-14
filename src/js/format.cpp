@@ -12,6 +12,8 @@ namespace {
 
 constexpr char kHex[] = "0123456789abcdef";
 
+ClassText class_text = nullptr;
+
 void append_u_escape(std::string& out, std::uint32_t unit) {
   out += "\\u";
   out.push_back(kHex[(unit >> 12) & 0xF]);
@@ -28,7 +30,8 @@ const std::string* tag_string(const json::Object& o, std::string_view key) {
 
 void append_template(const json::Value& v, std::string& out);
 
-void append_object_template(const json::Object& o, std::string& out) {
+void append_object_template(const json::Value& v, std::string& out) {
+  const json::Object& o = v.as_object();
   if (const std::string* n = tag_string(o, "$n")) {
     out += *n == "-0" ? "0" : *n;
   } else if (o.contains("$u")) {
@@ -41,6 +44,8 @@ void append_object_template(const json::Object& o, std::string& out) {
     out += *repr;
   } else if (o.contains("$cb")) {
     throw std::invalid_argument("a callback has no portable string form");
+  } else if (o.contains("$class") && class_text != nullptr) {
+    out += class_text(v);
   } else {
     out += "[object Object]";
   }
@@ -76,7 +81,7 @@ void append_template(const json::Value& v, std::string& out) {
       return;
     }
     case json::Kind::kObject:
-      append_object_template(v.as_object(), out);
+      append_object_template(v, out);
       return;
   }
 }
@@ -134,5 +139,17 @@ std::string template_string(const json::Value& v) {
   append_template(v, out);
   return out;
 }
+
+std::string string_of(const json::Value& v) {
+  if (v.is_object()) {
+    if (const json::Value* description = v.as_object().find("$sym")) {
+      return "Symbol(" + (description->is_string() ? description->as_string() : std::string()) +
+             ")";
+    }
+  }
+  return template_string(v);
+}
+
+void set_class_text(ClassText text) { class_text = text; }
 
 }  // namespace cantus::js

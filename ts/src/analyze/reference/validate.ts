@@ -219,10 +219,14 @@ function assertReferencePhraseMelody(value: unknown, name: string): ReferencePhr
   return read;
 }
 
-/** Validate one phrase, bounding its section and motif-node indices by the arrays they point into. */
+/**
+ * Validate one phrase, bounding its beats by the profile's span and its section and motif-node
+ * indices by the arrays they point into.
+ */
 function assertReferencePhrase(
   value: unknown,
   name: string,
+  span: { startBeat: number; endBeat: number },
   sectionCount: number,
   nodeCount: number,
 ): ReferencePhrase {
@@ -230,6 +234,9 @@ function assertReferencePhrase(
   const startBeat = assertFiniteNumber(read.startBeat, `${name}.startBeat`);
   const endBeat = assertFiniteNumber(read.endBeat, `${name}.endBeat`);
   assertSpanOrder(startBeat, endBeat, name);
+  // A phrase is part of the piece the profile measures; a plan reads it bar by bar.
+  assertRange(startBeat, span.startBeat, span.endBeat, `${name}.startBeat`);
+  assertRange(endBeat, span.startBeat, span.endBeat, `${name}.endBeat`);
   assertRange(read.bars, 0, Number.MAX_SAFE_INTEGER, `${name}.bars`);
   assertNullable(read.section, `${name}.section`, (v, n) =>
     assertInteger(v as number, n, 0, Math.max(sectionCount - 1, 0)),
@@ -250,7 +257,12 @@ function assertReferencePhrase(
 }
 
 /** Validate the form reading: hypermeter, sections, and the phrases within them. */
-function assertReferenceForm(value: unknown, name: string, nodeCount: number): ReferenceForm {
+function assertReferenceForm(
+  value: unknown,
+  name: string,
+  span: { startBeat: number; endBeat: number },
+  nodeCount: number,
+): ReferenceForm {
   const read = assertRecord<ReferenceForm>(value, name);
   const hypermeter = assertRecord<{ groupBars: number; confidence: number }>(
     read.hypermeter,
@@ -264,7 +276,13 @@ function assertReferenceForm(value: unknown, name: string, nodeCount: number): R
   }
   const phrases = assertArray<ReferencePhrase>(read.phrases, `${name}.phrases`);
   for (let index = 0; index < phrases.length; index += 1) {
-    assertReferencePhrase(phrases[index], `${name}.phrases[${index}]`, sections.length, nodeCount);
+    assertReferencePhrase(
+      phrases[index],
+      `${name}.phrases[${index}]`,
+      span,
+      sections.length,
+      nodeCount,
+    );
   }
   return read;
 }
@@ -556,7 +574,7 @@ export function assertReferenceProfile(
   assertRange(span.bars, 0, Number.MAX_SAFE_INTEGER, `${name}.span.bars`);
   assertMeterMap(read.meters as MeterMap, `${name}.meters`);
   const melody = assertReferenceMelody(read.melody, `${name}.melody`);
-  assertReferenceForm(read.form, `${name}.form`, melody.graph.nodes.length);
+  assertReferenceForm(read.form, `${name}.form`, { startBeat, endBeat }, melody.graph.nodes.length);
   assertReferenceHarmony(read.harmony, `${name}.harmony`);
   return read;
 }

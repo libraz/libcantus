@@ -7,7 +7,9 @@ using namespace cantus;
 
 namespace {
 
-NoteData note(int letter, int alter, int octave) { return NoteData{letter, alter, octave}; }
+NoteData note(int letter, int alter, int octave) {
+  return NoteData{static_cast<double>(letter), static_cast<double>(alter), octave};
+}
 
 }  // namespace
 
