@@ -2,10 +2,13 @@
 /**
  * Check that splitting the suite lost or duplicated no test.
  *
- * Default: `vitest list --json` over `ts/test` (the package's own config) and
- * over `tests/spec` (CANTUS_IMPL=ts), summed, must equal BASELINE. Spec files
- * the split did not produce (absent from `tests/spec/manifest.json` and outside
- * `generated/`) were added afterwards; they are reported and left out of the sum.
+ * Default: every unit (one `it` / `test`, or one `.each` / loop statement, as
+ * `split.mjs` counts them) of each file `tests/spec/manifest.json` records is
+ * read from the split base and looked up, by its describe path and title, in
+ * the file's two halves today: `ts/test/<file>` for the units the manifest lists
+ * as `tsOnly`, `tests/spec/<file>` for the rest. A unit missing from its half
+ * or present in the other fails; units and files added since the split are
+ * reported and pass. The base must hold the unit counts the manifest records.
  * `--compare <impl>`: run `tests/spec` under CANTUS_IMPL=ts and under
  * CANTUS_IMPL=<impl> with the JSON reporter; the passed counts must match and
  * neither run may skip, mark todo, or fail.
@@ -15,18 +18,18 @@
  * Usage: node tools/spec/count.mjs [--compare <impl>] [--max-workers <n>]
  */
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-/** Tests in the suite before the split (`vitest list --json`, 347 files). */
-const BASELINE = 4723;
+import ts from 'typescript';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const VITEST = path.join(REPO, 'node_modules/.bin/vitest');
 const SPEC = path.join(REPO, 'tests/spec');
 const SPEC_CONFIG = path.join(SPEC, 'vitest.config.ts');
+const TS_TEST = path.join(REPO, 'ts/test');
+const MANIFEST = path.join(SPEC, 'manifest.json');
 
 function parseArgs(argv) {
   const args = { compare: null, maxWorkers: '2' };
@@ -49,20 +52,212 @@ function fail(message) {
   process.exit(1);
 }
 
-/** Tests `vitest list` collects for one config, as `{ file, name }` entries. */
-function listed(label, cwd, config, env) {
-  const out = execFileSync(VITEST, ['list', '--json', '-c', config], {
-    cwd,
-    env: { ...process.env, ...env },
-    encoding: 'utf8',
-    maxBuffer: 1 << 28,
-    stdio: ['ignore', 'pipe', 'inherit'],
+const TEST_ROOTS = new Set(['it', 'test']);
+const HOOKS = new Set(['beforeEach', 'afterEach', 'beforeAll', 'afterAll']);
+
+/** The identifier a call chain such as `it.each(table)(...)` starts from. */
+function calleeRoot(expr) {
+  let current = expr;
+  for (;;) {
+    if (ts.isCallExpression(current) || ts.isPropertyAccessExpression(current)) {
+      current = current.expression;
+    } else if (ts.isTaggedTemplateExpression(current)) current = current.tag;
+    else break;
+  }
+  return ts.isIdentifier(current) ? current.text : null;
+}
+
+/** The first `it` / `test` / `describe` call inside a node. */
+function firstTestCall(node) {
+  let found = null;
+  const visit = (n) => {
+    if (found) return;
+    if (ts.isCallExpression(n)) {
+      const root = calleeRoot(n.expression) ?? '';
+      if (TEST_ROOTS.has(root) || root === 'describe') {
+        found = n;
+        return;
+      }
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(node);
+  return found;
+}
+
+function titleOf(call, sf) {
+  const first = call.arguments[0];
+  if (!first) return '';
+  return ts.isStringLiteral(first) || ts.isNoSubstitutionTemplateLiteral(first)
+    ? first.text
+    : first.getText(sf);
+}
+
+/** The callback block of a plain `describe(...)` (not `.each` / `.for`), or null. */
+function describeBody(statement) {
+  if (!ts.isExpressionStatement(statement) || !ts.isCallExpression(statement.expression)) {
+    return null;
+  }
+  const call = statement.expression;
+  if (calleeRoot(call.expression) !== 'describe') return null;
+  for (let e = call.expression; ts.isPropertyAccessExpression(e) || ts.isCallExpression(e); ) {
+    if (ts.isPropertyAccessExpression(e) && (e.name.text === 'each' || e.name.text === 'for')) {
+      return null;
+    }
+    e = e.expression;
+  }
+  const fn = call.arguments.find((a) => ts.isArrowFunction(a) || ts.isFunctionExpression(a));
+  return fn && ts.isBlock(fn.body) ? fn.body : null;
+}
+
+function isSkipped(statement) {
+  if (
+    ts.isVariableStatement(statement) ||
+    ts.isFunctionDeclaration(statement) ||
+    ts.isClassDeclaration(statement) ||
+    ts.isInterfaceDeclaration(statement) ||
+    ts.isTypeAliasDeclaration(statement) ||
+    ts.isEnumDeclaration(statement) ||
+    ts.isModuleDeclaration(statement) ||
+    ts.isImportDeclaration(statement)
+  ) {
+    return true;
+  }
+  return (
+    ts.isExpressionStatement(statement) &&
+    ts.isCallExpression(statement.expression) &&
+    ts.isIdentifier(statement.expression.expression) &&
+    HOOKS.has(statement.expression.expression.text)
+  );
+}
+
+/** The units of one test file, as `{ key, line }`; the key is the describe path and title. */
+function unitsOf(text, name) {
+  const sf = ts.createSourceFile(name, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const units = [];
+  const scope = (statements, prefix) => {
+    for (const statement of statements) {
+      const body = describeBody(statement);
+      if (body) {
+        scope(body.statements, [...prefix, titleOf(statement.expression, sf)]);
+        continue;
+      }
+      if (isSkipped(statement)) continue;
+      const call = firstTestCall(statement);
+      if (!call) continue;
+      const line = sf.getLineAndCharacterOfPosition(statement.getStart(sf)).line + 1;
+      units.push({ key: [...prefix, titleOf(call, sf)].join(' > '), line });
+    }
+  };
+  scope(sf.statements, []);
+  return units;
+}
+
+/** Each file's text at a git ref, from one `git cat-file --batch`. */
+function readAt(ref, names) {
+  const out = execFileSync('git', ['cat-file', '--batch'], {
+    cwd: REPO,
+    input: names.map((name) => `${ref}:${name}\n`).join(''),
+    maxBuffer: 1 << 30,
   });
-  const tests = JSON.parse(out.slice(out.indexOf('[')));
-  const files = new Set(tests.map((t) => t.file)).size;
-  log(`${label}: ${files} files, ${tests.length} tests`);
-  if (tests.length === 0) fail(`${label} collected no tests`);
-  return tests;
+  const texts = new Map();
+  let offset = 0;
+  for (const name of names) {
+    const headerEnd = out.indexOf(10, offset);
+    const header = out.subarray(offset, headerEnd).toString('utf8');
+    if (header.endsWith(' missing')) fail(`${name} is missing at ${ref}`);
+    const size = Number(header.split(' ')[2]);
+    texts.set(name, out.subarray(headerEnd + 1, headerEnd + 1 + size).toString('utf8'));
+    offset = headerEnd + 1 + size + 1;
+  }
+  return texts;
+}
+
+/** How many times each key occurs in a list of units. */
+function tally(units) {
+  const counts = new Map();
+  for (const { key } of units) counts.set(key, (counts.get(key) ?? 0) + 1);
+  return counts;
+}
+
+/** Units of the file in one half today, or none when the half has no such file. */
+function unitsNow(dir, file) {
+  const full = path.join(dir, file);
+  return existsSync(full) ? unitsOf(readFileSync(full, 'utf8'), full) : [];
+}
+
+/** Test files directly under a directory (the suite is flat). */
+function testFiles(dir) {
+  return readdirSync(dir).filter((name) => name.endsWith('.test.ts'));
+}
+
+/** Compare one recorded file's units at the base with its two halves today. */
+function checkFile(file, entry, baseText, problems) {
+  const before = unitsOf(baseText, file);
+  if (before.length !== entry.units) {
+    problems.push(
+      `${file}: ${before.length} units at the base, the manifest records ${entry.units}`,
+    );
+    return 0;
+  }
+  const tsLines = new Set(entry.tsOnly.map((u) => u.line));
+  const expected = {
+    ts: tally(before.filter((u) => tsLines.has(u.line))),
+    spec: tally(before.filter((u) => !tsLines.has(u.line))),
+  };
+  const actual = { ts: tally(unitsNow(TS_TEST, file)), spec: tally(unitsNow(SPEC, file)) };
+  let added = 0;
+  for (const [side, other] of [
+    ['ts', 'spec'],
+    ['spec', 'ts'],
+  ]) {
+    for (const [key, want] of expected[side]) {
+      const have = actual[side].get(key) ?? 0;
+      if (have < want) problems.push(`${file}: lost from ${side}: ${key}`);
+      else added += have - want;
+      if (!expected[other].has(key) && actual[other].has(key)) {
+        problems.push(`${file}: in both ts and spec: ${key}`);
+      }
+    }
+    for (const [key, have] of actual[side]) {
+      if (!expected.ts.has(key) && !expected.spec.has(key)) added += have;
+    }
+  }
+  if (added > 0) log(`${file}: ${added} units added since the split`);
+  return before.length;
+}
+
+/** Check every file the manifest records, and report the files added since the split. */
+function checkSplit() {
+  const manifest = JSON.parse(readFileSync(MANIFEST, 'utf8'));
+  const files = Object.keys(manifest.files).sort();
+  if (files.length === 0) fail('the manifest records no file');
+  const base = readAt(
+    manifest.base,
+    files.map((file) => `ts/test/${file}`),
+  );
+  const problems = [];
+  let units = 0;
+  for (const file of files) {
+    units += checkFile(file, manifest.files[file], base.get(`ts/test/${file}`), problems);
+  }
+  const recorded = new Set(files);
+  for (const [label, dir] of [
+    ['ts/test', TS_TEST],
+    ['tests/spec', SPEC],
+  ]) {
+    for (const file of testFiles(dir)
+      .filter((f) => !recorded.has(f))
+      .sort()) {
+      log(`${label}/${file}: ${unitsNow(dir, file).length} units, a file added since the split`);
+    }
+  }
+  for (const problem of problems) console.error(`count: ${problem}`);
+  if (problems.length > 0) fail(`${problems.length} problems in the split`);
+  if (units === 0) fail('the split base holds no unit');
+  log(
+    `count: ${units} units of ${files.length} files at ${manifest.base.slice(0, 12)} all present once`,
+  );
 }
 
 /** Status totals of one `vitest run` of the spec suite under an implementation. */
@@ -114,22 +309,5 @@ if (args.compare) {
   }
   log(`count: IMPL=${args.compare} matches IMPL=ts at ${reference.passed} passed`);
 } else {
-  const pkg = listed('ts/test', path.join(REPO, 'ts'), 'vitest.config.ts', {}).length;
-  const split = new Set(
-    Object.keys(JSON.parse(readFileSync(path.join(SPEC, 'manifest.json'), 'utf8')).files),
-  );
-  const added = new Map();
-  let spec = 0;
-  for (const test of listed('tests/spec', REPO, SPEC_CONFIG, { CANTUS_IMPL: 'ts' })) {
-    const rel = path.relative(SPEC, test.file).split(path.sep).join('/');
-    if (split.has(rel) || rel.startsWith('generated/')) spec += 1;
-    else added.set(rel, (added.get(rel) ?? 0) + 1);
-  }
-  for (const [rel, n] of [...added].sort())
-    log(`tests/spec/${rel}: ${n} tests added after the split`);
-  if (spec === 0) fail('tests/spec holds no split test');
-  const total = pkg + spec;
-  if (total !== BASELINE)
-    fail(`ts/test + tests/spec = ${pkg} + ${spec} = ${total}, baseline ${BASELINE}`);
-  log(`count: ${pkg} + ${spec} = ${total} = baseline`);
+  checkSplit();
 }

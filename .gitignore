@@ -1,11 +1,5 @@
+# Dependencies and the package manager's state.
 node_modules/
-dist/
-coverage/
-docs/api/
-backup/
-.DS_Store
-*.log
-
 .yarn/*
 !.yarn/patches
 !.yarn/plugins
@@ -14,21 +8,31 @@ backup/
 !.yarn/versions
 .pnp.*
 
-ts/dist/
-ts/docs/api/
-ts/coverage/
-ts/test/generated/
+# Build trees and package output: build/, build-release/, build-wasm/, build-shared/,
+# build-install/ and the node addon's bindings/node/build/; ts/dist/ and bindings/*/dist/.
 build*/
+dist/
+compile_commands.json
+
+# Generated docs, test output and the recorded call corpus.
+docs/api/
+ts/docs/api/
+coverage/
+ts/test/generated/
 tests/spec/generated/
 tests/corpus/out/
-bindings/*/dist/
-bindings/python/.venv/
-bindings/wasm/dist/*.wasm
-compile_commands.json
+
+# Tool caches and the Python environment.
 .cache/
 .ruff_cache/
+__pycache__/
+bindings/python/.venv/
 
+# Local notes and agent configuration.
+backup/
 .claude/
+.serena/
 AGENT.md
 CLAUDE.md
-.serena/
+.DS_Store
+*.log

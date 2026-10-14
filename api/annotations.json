@@ -218,8 +218,17 @@
     {
       "ts": "ts/src/analyze/form/internal.ts#firstSoundingBeat",
       "cpp": "src/analyze/grid.cpp",
-      "unit": "A1a",
-      "reason": "grid.ts and reference/profile.ts import it from form/internal.ts; C++ places it with the grid so A1a owns it and A3 (form) and A5 (reference) use it from there."
+      "reason": "grid.ts and reference/profile.ts import it from form/internal.ts; C++ places it with the grid, and the form and reference modules use it from there."
+    },
+    {
+      "ts": "ts/src/generate/vocabulary/freeze.ts",
+      "cpp": null,
+      "reason": "deepFreeze makes the vocabulary tables immutable at runtime; in C++ the generated tables are const values, so the file has no counterpart."
+    },
+    {
+      "ts": "ts/src/theory/safety/index.ts#profileWeights",
+      "cpp": "src/theory/safety/weights.h",
+      "reason": "The field-name reader of ProfileWeightOverrides is an internal header so the op adapter that checks a caller's overrides can share it with safety.cpp."
     }
   ],
   "identity_exceptions": [

@@ -1,0 +1,5 @@
+{
+  "description": "Size ceiling of the shipped module, as `gzip -9` output bytes: 1.10 times the size measured with every op registered (1416669 bytes gzip, 4637920 raw). Before raising it, take the module through a size-reduction pass.",
+  "file": "bindings/wasm/dist/cantus.wasm",
+  "gzipBytes": 1558336
+}

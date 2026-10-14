@@ -1,0 +1,33 @@
+{
+  "description": "Every place the release version is written. `part` is the piece of the version a site holds (default: the whole of it); `pattern` is a multiline regex whose one group is that piece. bump.mjs rewrites them and check_versions.py checks that they agree.",
+  "sites": [
+    { "file": "ts/package.json", "pattern": "^  \"version\": \"([^\"]+)\"" },
+    { "file": "package.json", "pattern": "^  \"version\": \"([^\"]+)\"" },
+    { "file": "bindings/js/package.json", "pattern": "^  \"version\": \"([^\"]+)\"" },
+    { "file": "bindings/wasm/package.json", "pattern": "^  \"version\": \"([^\"]+)\"" },
+    { "file": "bindings/node/package.json", "pattern": "^  \"version\": \"([^\"]+)\"" },
+    { "file": "bindings/python/pyproject.toml", "pattern": "^version = \"([^\"]+)\"" },
+    {
+      "file": "include/cantus/version.h",
+      "pattern": "^#define CANTUS_VERSION_STRING \"([^\"]+)\""
+    },
+    {
+      "file": "include/cantus/version.h",
+      "part": "major",
+      "pattern": "^#define CANTUS_VERSION_MAJOR (\\d+)$"
+    },
+    {
+      "file": "include/cantus/version.h",
+      "part": "minor",
+      "pattern": "^#define CANTUS_VERSION_MINOR (\\d+)$"
+    },
+    {
+      "file": "include/cantus/version.h",
+      "part": "patch",
+      "pattern": "^#define CANTUS_VERSION_PATCH (\\d+)$"
+    },
+    { "file": "bindings/js/src/backends/ts.ts", "pattern": "^const VERSION = '([^']+)';$" },
+    { "file": "tests/api/test_c_api.cpp", "pattern": "cantus_version\\(\\)\\) == \"([^\"]+)\"" },
+    { "file": "tests/ops/test_builtins.cpp", "pattern": "\\{\"version\":\"([^\"]+)\"" }
+  ]
+}

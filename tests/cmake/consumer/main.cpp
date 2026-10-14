@@ -1,4 +1,4 @@
-// A program using the installed typed API.
+// A program using the installed typed API: one call into each of the five layers.
 
 #include <cantus/cantus.h>
 
@@ -17,6 +17,13 @@ int main() {
       return 1;
     }
   }
+  // core, theory, analyze, generate, model.
+  if (cantus::format_note(cantus::parse_note("C#4")) != "C#4") return 2;
+  if (cantus::named_scale_mask("major") != 0xAB5) return 3;
+  const auto chords = cantus::detect_chord({60, 64, 67});
+  if (chords.empty() || chords[0].rootPc != 0 || !chords[0].exact) return 4;
+  if (cantus::generate_rhythm("4/4").empty()) return 5;
+  if (cantus::Note::from_midi(61).name() != "C#4") return 6;
   std::printf("cantus %s\n", cantus::version());
   return 0;
 }

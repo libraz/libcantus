@@ -12,14 +12,25 @@ libcantus has two implementations of one library: the pure TypeScript package in
 | `make test-install` | Install into a scratch prefix and build outside projects against it, through `find_package(cantus)` and through `add_subdirectory()` |
 | `make conformance-fast` | Public-header, banned-API, generated-table and install checks |
 | `make format` | Apply every formatter of the repository, then `make lint` |
-| `make format-check` / `make lint` | The same checks without modifying anything |
+| `make format-check` / `make lint` | The same checks without modifying anything; the C++ tools must be LLVM 18 (`LLVM_VERSION` in `mk/toolchain.mk`) |
+| `make test-wasm` / `make test-node` / `make test-python` / `make test-cli` | Build one surface and run its boundary tests and the fixed corpus through it |
+| `make corpus` / `make corpus-check UNIT=<id>\|all` | Record the call corpus from pure TS; replay a unit's recorded calls through the C ABI |
+| `make spec-ready IMPL=node\|wasm` | Run the spec files whose ops are all registered against that surface |
+| `make parity` | Generated artifacts up to date, the file map, and the API member by member across pure TS, the manifest, the C++ registry and the facade |
+| `make ci-local` | Every check CI runs, in one command, cheapest first |
+| `make release-check` | Before tagging: versions, CHANGELOG, package contents and the WebAssembly size budget |
 
-Builds run two jobs under `nice` by default; set `JOBS=` to change that. `yarn spec` runs the shared behavioural suite in `tests/spec` against the implementation selected by `CANTUS_IMPL`.
+Builds run two jobs under `nice` by default; set `JOBS=` to change that. `yarn spec` runs the shared behavioural suite in `tests/spec` against the implementation selected by `CANTUS_IMPL`; `node tools/spec/count.mjs --compare <impl>` checks that an implementation passes exactly the tests pure TS passes, with nothing skipped.
+
+## Shared and TS-only tests
+
+The shared suite in `tests/spec` and the TS-only tests in `ts/test` were split unit by unit from one suite, and `tests/spec/manifest.json` records the split. `node tools/spec/count.mjs` checks that every unit of the split is still in its half and in only one; tests added since are reported. A new test goes in `tests/spec` unless it reads internals, source text or object identity that no other surface can reproduce; a test that has to move to `ts/test` later is listed in `ts_only_units` of `api/annotations.json` with its reason.
 
 ## Layout and ownership
 
 - `ts/src/<layer>/<module>/<name>.ts` corresponds to `src/<layer>/<module>/<snake_name>.{h,cpp}`, one file to one file. `index.ts` corresponds to `<module>.cpp`, and its public declarations go in `include/cantus/<layer>/<module>.h`. The model layer is flat: `ts/src/model/<name>.ts` corresponds to `src/model/<snake_name>.{h,cpp}`.
 - Each module directory adds its own sources with `target_sources(cantus PRIVATE ...)` in its `CMakeLists.txt`.
+- `tools/conformance/check_file_map.mjs` checks the correspondence both ways. A file that has no counterpart on purpose (a C++-only placement, or a TS module whose job C++ does differently) is listed in `file_map_exceptions` of `api/annotations.json` with its reason.
 - `include/cantus/` is the typed C++ API (`cantus::cantus`). No public header except `cantus_c.h` and `ops.h` may name a JSON type, and every public header must compile on its own with only `-I include`.
 - `src/ops/` is the JSON op layer (`cantus::ops`): one adapter per public TS function, member or constant, registered with `ops::def`, plus the wire codec. Every binding goes through `cantus_call` in `include/cantus/cantus_c.h`.
 - Default values live only in C++. Bindings send an absent argument as absent.
@@ -131,3 +142,13 @@ Three things are written by hand:
 3. The op adapter (`ops::def` in `src/ops/<group>.cpp`) and the codec lines (`CANTUS_JSON_FIELDS` in `src/ops/codec_<group>.h`).
 
 The API manifest, the TS facade, the Python module and stubs, and the type declarations are generated or copied; `make parity` names anything that is missing.
+
+## Releasing
+
+All packages carry one version. `node tools/release/bump.mjs <version>` writes it into every site listed in `tools/release/versions.json`, and `tools/release/check_versions.py` checks that they agree. Then:
+
+1. Move the `Unreleased` entries of `CHANGELOG.md` under a dated `## [<version>] - YYYY-MM-DD` heading.
+2. Run `make ci-local`, then `make release-check`.
+3. Tag. The publish workflow builds and publishes the pure TS package, the WebAssembly package, the Python wheels and the CLI executables. `@libraz/libcantus-node` stays private.
+
+`make release-check` fails when the gzip size of `cantus.wasm` exceeds `bindings/wasm/wasm-size-budget.json`. The budget is 1.10 times a measured size; before raising it, take the module through a size-reduction pass.
