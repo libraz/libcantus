@@ -7,6 +7,102 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **libcantus has a C++17 core that behaves exactly like the TypeScript
+  package.** Every function, class and constant of `@libraz/libcantus` has a
+  C++ counterpart that returns the same results and raises the same errors,
+  with the same messages, for the same input. Generated output matches to the
+  bit on Linux x86-64, Linux AArch64, macOS arm64 and WebAssembly: the core
+  carries its own ports of the transcendental functions instead of the
+  platform's math library, and a seed and an algorithm version reproduce the
+  same piece everywhere. The TypeScript source stays the reference, and
+  `@libraz/libcantus` itself is unchanged: the same name, the same API, the
+  same ESM and CommonJS builds, no native code.
+- **The core is a C++ library in its own right.** The CMake package `cantus`
+  installs a typed API under `include/cantus/` as `cantus::cantus` —
+  `cantus::detect_chord`, `cantus::Note::parse` and the rest, with no JSON in
+  any header — and can be used through `find_package(cantus)`,
+  `add_subdirectory` or FetchContent. Errors are exceptions derived from
+  `cantus::Error` (`InvalidInputError`, `NoSolutionError` with its `at()`
+  beat, `BudgetExceededError`). A separate target, `cantus::ops`, exposes
+  every API by name through the C ABI `cantus_call` in `cantus_c.h`, taking
+  and returning JSON; it is what the other surfaces are built on.
+- **`@libraz/libcantus-wasm` runs the core in JavaScript.** It exports the
+  same names from the same six entry points as `@libraz/libcantus` and ships
+  its type declarations, so code written against one compiles against the
+  other. The package is ESM only and instantiates the module with top-level
+  await; every call after the import is synchronous. A result is a fresh value
+  per call, so an object pure TypeScript hands back as it was given comes back
+  as an equal copy; the handles of `createRng`, `createNoteEventIndex` and
+  `createArrangementSession`, and the values their getters share, keep their
+  identity.
+- **`libcantus` on PyPI calls the core from Python.** The wheel bundles the
+  shared library and loads it through `ctypes`, so no compiler is needed.
+  Functions are the snake_case forms of the TypeScript names, model classes
+  keep theirs, option fields are keyword arguments, and results are plain
+  dicts and lists. Errors are `InvalidInputError`, `NoSolutionError` and
+  `BudgetExceededError`, subclasses of `CantusError` with an `ErrorCode`.
+  Requires Python 3.10 or later.
+- **`cantus` runs any op that takes plain data from the command line.**
+  `cantus <op> [ARGS_JSON | @file | -]` prints the JSON result;
+  `cantus list`, `cantus describe <op>` and `cantus version` describe the
+  build. The exit status names the kind of failure: 1 invalid input, 2 no
+  solution, 3 budget exceeded, 10 unknown op, 11 a malformed request. The
+  executable is published with each release.
+
+### Changed
+
+- **Caller-supplied generation material is checked before it is used.**
+  `generateDrums` checks each fill stroke of a fill archetype in the caller's
+  vocabulary field by field — voice, offset, duration, velocity and
+  articulation, with `velocity.offset` in [-127, 127] and a `null` scale or
+  offset refused — and `placeLicks` checks every note of a supplied lick,
+  naming the field that failed (`lick vocabulary[0] notes[0].degree …`).
+- **`rhythmToNoteEvents` checks its events.** An event that is not an object
+  is refused (`events[0] must be an object`), as is one whose `position` or
+  `duration` is not a finite beat inside the safe-integer range.
+- **`generateMelody` stops on its generation budget.** A plan whose span
+  yields more onset slots than the budget allows now fails with
+  `BudgetExceededError` before the slot grid is built, instead of a
+  `RangeError` from inside it. `deriveCompositionPlan` charges the bars its
+  phrases span to the generation budget in the same way
+  (`plan phrase bars exceeds the generation budget 1000000; received N`), and
+  reads each key region of a reference profile through `resolveKey`, so a
+  region that carries only its scale is accepted as the profile check already
+  accepted it.
+- **Instrument profiles and interval data are checked in full.** A drum
+  profile's `reach` table may name only known limbs, and its `overdub` must be
+  an array of MIDI pitches. `Interval.fromData` refuses a `descending` that is
+  not a boolean.
+- **The model classes check what they keep.** A key region read into a
+  `Timeline` must name a known `modulation`, and its pivot's `romanFrom` and
+  `romanTo` must be strings. On a score with a stated key, `Score#keys` holds
+  an explicit `totalBeats` to [0, `Number.MAX_SAFE_INTEGER`]. `new Key`
+  rebuilds a note-like tonic as a `Note`, so the key holds and writes out a
+  checked note. A `Progression` rebuilds each member from its own data, so a
+  plain record given as a member is refused with a `TypeError` whether or not
+  a key is given.
+- **Chord and symbol inputs refuse values of the wrong type.** A numeric
+  chord quality is refused (`Unknown chord quality: 5`) rather than looked up
+  as a property name. `formatChordSymbol` and `transposeChordSymbol` refuse a
+  `flats` option that is not a boolean
+  (`flats must be a boolean; received number`).
+- **`checkSpecies` checks its rhythm.** `durations` must be an array
+  (`durations must be an array; received number`) of finite numbers.
+- **`evaluateSafety` checks the harmony and the other voices.** A missing
+  `chord` is refused (`chord must be an object; received undefined`); `null`
+  still means no harmony. A `null` entry of `otherVoices` is refused
+  (`otherVoices[0] must be an object; received null`) instead of being skipped.
+- **A per-beat key callback's answers are read like a key argument.** Each
+  value the callback returns is read through `toKeyScale`, so it may be any key
+  form a key argument accepts, and a malformed answer is refused with the same
+  message.
+- **A reference profile's phrases must lie inside its span.**
+  `assertReferenceProfile` holds each phrase's `startBeat` and `endBeat` to the
+  profile's own span
+  (`reference profile.form.phrases[0].endBeat must be in [0, 8]; received 4294967296`).
+
 ## [1.3.0] - 2026-09-28
 
 ### Added
