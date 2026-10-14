@@ -110,7 +110,7 @@ export type ScoreOptions = {
 };
 
 /** The tempo a score is read at when the caller names none. */
-const DEFAULT_BPM = 120;
+export const DEFAULT_BPM = 120;
 
 /**
  * The notes checked and copied, in time order, ties broken by pitch.
@@ -662,7 +662,12 @@ export class Score {
   keys(opts?: KeyTimelineOptions): KeyRegion[] {
     if (opts !== undefined) {
       if (this.#key !== undefined) {
-        return statedKeyRegions(this.#key, this.#data.notes, opts.totalBeats ?? this.totalBeats);
+        // Held to the bound the search holds it to, so the region's end is a beat.
+        const totalBeats =
+          opts.totalBeats === undefined || opts.totalBeats === null
+            ? this.totalBeats
+            : assertRange(opts.totalBeats, 0, Number.MAX_SAFE_INTEGER, 'key timeline totalBeats');
+        return statedKeyRegions(this.#key, this.#data.notes, totalBeats);
       }
       return keyTimelineFromNotes(this.#data.notes, { meters: this.#data.meters, ...opts });
     }

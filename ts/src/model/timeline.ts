@@ -14,10 +14,15 @@ import {
 import { InvalidInputError } from '../core/errors/index.js';
 import type { IntervalLike } from '../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../core/types.js';
-import { assertFiniteNumber, assertRange } from '../core/validation/index.js';
+import {
+  assertFiniteNumber,
+  assertOneOf,
+  assertRange,
+  describeRejected,
+} from '../core/validation/index.js';
 import type { ChordSegment, ChordSpan } from '../theory/chord/index.js';
 import { spanFromChord } from '../theory/chord/index.js';
-import type { KeyLike, ResolvedKey } from '../theory/scale/index.js';
+import type { KeyLike, KeyRelation, ResolvedKey } from '../theory/scale/index.js';
 import { resolveKey, scaleOf } from '../theory/scale/index.js';
 import type { Chord } from './chord.js';
 import { Chord as ChordClass } from './chord.js';
@@ -59,6 +64,26 @@ export type TimelineRoman = {
   roman: string;
 };
 
+/** Every relation a key region's modulation may name. */
+export const KEY_RELATIONS: readonly KeyRelation[] = [
+  'same',
+  'enharmonic',
+  'relative',
+  'parallel',
+  'dominant',
+  'subdominant',
+  'relativeOfDominant',
+  'relativeOfSubdominant',
+];
+
+/** A pivot chord's numeral, which is text. */
+function assertNumeral(numeral: unknown, name: string): string {
+  if (typeof numeral !== 'string') {
+    throw new InvalidInputError(`${name} must be a string; received ${describeRejected(numeral)}`);
+  }
+  return numeral;
+}
+
 /** A validated, defensive copy of one chord segment. */
 function copySegment(segment: ChordSegment): ChordSegment {
   assertDataObject(segment, 'timeline segment');
@@ -84,14 +109,14 @@ export function copyKeyRegion(region: KeyRegion): KeyRegion {
     confidence: assertFiniteNumber(region.confidence, 'key region confidence'),
   };
   if (region.modulation !== undefined) {
-    copy.modulation = region.modulation;
+    copy.modulation = assertOneOf(region.modulation, KEY_RELATIONS, 'key region modulation');
   }
   if (region.pivot !== undefined) {
     assertDataObject(region.pivot, 'key region pivot');
     copy.pivot = {
       chord: new ChordClass(region.pivot.chord).toJSON(),
-      romanFrom: region.pivot.romanFrom,
-      romanTo: region.pivot.romanTo,
+      romanFrom: assertNumeral(region.pivot.romanFrom, 'key region pivot romanFrom'),
+      romanTo: assertNumeral(region.pivot.romanTo, 'key region pivot romanTo'),
     };
   }
   return copy;

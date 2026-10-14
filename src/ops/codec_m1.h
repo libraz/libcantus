@@ -13,7 +13,9 @@
 #define CANTUS_SRC_OPS_CODEC_M1_H_
 
 #include <string_view>
+#include <vector>
 
+#include "cantus/core/validation.h"
 #include "cantus/model/duration.h"
 #include "cantus/model/instrument.h"
 #include "cantus/model/interval.h"
@@ -74,6 +76,13 @@ const json::Array& assert_data_array(const json::Value& value, std::string_view 
 
 /** `assertKeyArgument`: refuse anything but a key where a method takes the key first. */
 void assert_key_argument(const json::Value& value, std::string_view name);
+
+/** `assertDataObjects`: the value as an array of data records, every element checked. */
+const json::Array& assert_data_objects(const json::Value& value, std::string_view name);
+
+/** `assertNoteEventArray`: an array of note events, its count capped before any is read. */
+std::vector<NoteEvent> assert_note_event_array(const json::Value& notes, std::string_view name,
+                                               const NoteEventAssertOptions& options = {});
 
 //--------------------------------------------------------------------------------------------
 // The data a factory takes (`new Note(data)`, `Note.fromData`, ...), over a wire value

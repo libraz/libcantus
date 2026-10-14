@@ -124,6 +124,12 @@ class KeyArg {
             std::enable_if_t<
                 std::is_convertible_v<decltype(std::declval<const T&>().data()), KeyData>, int> = 0>
   KeyArg(const T& value) : value_(KeyData(value.data())) {}  // NOLINT
+  /** A value whose `data()` returns a whole key (the Key class). */
+  template <class T,
+            std::enable_if_t<std::is_same_v<std::decay_t<decltype(std::declval<const T&>().data())>,
+                                            ResolvedKey>,
+                             int> = 0>
+  KeyArg(const T& value) : KeyArg(ResolvedKey(value.data())) {}  // NOLINT
 
   /** The form this argument holds. */
   const Value& value() const noexcept { return value_; }

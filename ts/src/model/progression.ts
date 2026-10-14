@@ -77,7 +77,9 @@ export class Progression {
    */
   static #attachKey(chords: readonly Chord[], key: Key | undefined): Chord[] {
     const given = assertDataObjects<Chord>(chords, 'progression chords');
-    return key === undefined ? [...given] : given.map((chord) => chord.withKey(key));
+    // Each member is rebuilt from its own data, so a value that is no chord is
+    // refused here rather than kept as a member.
+    return given.map((chord) => new ChordClass(chord.toJSON(), key ?? chord.key));
   }
 
   /**

@@ -15,6 +15,14 @@
       "cxx_type": "SpelledInterval",
       "cxx_name": "kDescendingDiminishedSecond",
       "fields": ["number", "quality", "semitones", "descending"]
+    },
+    {
+      "module": "model/key.ts",
+      "export": "REFERENCE_TONIC",
+      "form": "record",
+      "cxx_type": "NoteData",
+      "cxx_name": "kReferenceTonic",
+      "fields": ["letter", "alter", "octave"]
     }
   ],
   "limits": [
@@ -44,6 +52,18 @@
       "module": "model/interval.ts",
       "export": "OCTAVE_DEGREES",
       "cxx_type": "int"
+    },
+    {
+      "module": "model/key.ts",
+      "export": "HEPTATONIC_DEGREES",
+      "cxx_type": "int",
+      "cxx_name": "KEY_HEPTATONIC_DEGREES"
+    },
+    {
+      "module": "model/score.ts",
+      "export": "DEFAULT_BPM",
+      "cxx_type": "double",
+      "cxx_name": "SCORE_DEFAULT_BPM"
     }
   ]
 }

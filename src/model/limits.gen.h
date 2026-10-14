@@ -19,6 +19,12 @@ inline constexpr int INVERSION_SUM = 9;
 /** OCTAVE_DEGREES of ts/src/model/interval.ts. */
 inline constexpr int OCTAVE_DEGREES = 8;
 
+/** HEPTATONIC_DEGREES of ts/src/model/key.ts. */
+inline constexpr int KEY_HEPTATONIC_DEGREES = 7;
+
+/** DEFAULT_BPM of ts/src/model/score.ts. */
+inline constexpr double SCORE_DEFAULT_BPM = 120;
+
 }  // namespace cantus
 
 #endif  // CANTUS_SRC_MODEL_LIMITS_GEN_H_

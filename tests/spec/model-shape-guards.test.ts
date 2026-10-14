@@ -318,3 +318,95 @@ describe('plain-data copies terminate on pathological input', () => {
     expect(composer.data.vocabulary?.[0]?.material).toEqual({ a: { weight: 1 }, b: { weight: 1 } });
   });
 });
+
+describe('model classes read a value they are handed through its public surface', () => {
+  const region = { startBeat: 0, endBeat: 4, key: 'C major', confidence: 1 };
+  const cMajorTriad = { rootPc: 0, quality: 'maj', intervals: [0, 4, 7] };
+
+  it('refuses a key region whose modulation or pivot numeral the library does not write', () => {
+    const timeline = (keys: unknown[]) =>
+      Timeline.fromData({ segments: [], totalBeats: 4, keys } as never);
+    expect(() => timeline([{ ...region, modulation: 'sideways' }])).toThrow(
+      'key region modulation must be one of same, enharmonic, relative, parallel, dominant, subdominant, relativeOfDominant, relativeOfSubdominant; received "sideways"',
+    );
+    expect(timeline([{ ...region, modulation: 'relative' }]).keys[0]?.modulation).toBe('relative');
+    const pivot = { chord: cMajorTriad, romanFrom: 'I', romanTo: 'IV' };
+    expect(() => timeline([{ ...region, pivot: { ...pivot, romanFrom: 1 } }])).toThrow(
+      'key region pivot romanFrom must be a string; received number',
+    );
+    expect(() => timeline([{ ...region, pivot: { ...pivot, romanTo: null } }])).toThrow(
+      'key region pivot romanTo must be a string; received null',
+    );
+  });
+
+  it('holds the span of a stated-key region to a beat', () => {
+    const score = Score.of([{ pitch: 60, startBeat: 0, durationBeat: 4 }], { key: 'C major' });
+    expect(() => score.keys({ totalBeats: 'x' as never })).toThrow(
+      'key timeline totalBeats must be finite; received x',
+    );
+    expect(() => score.keys({ totalBeats: -1 })).toThrow(
+      'key timeline totalBeats must be in [0, 9007199254740991]; received -1',
+    );
+    expect(score.keys({ totalBeats: 2 })[0]?.endBeat).toBe(2);
+  });
+
+  it('keeps a tonic read structurally as the note its data names', () => {
+    const scale = { rootPc: 2, modeMask12: 2741 };
+    expect(() => new Key(scale, { pitchClass: 2, data: null } as never)).toThrow(
+      'note data must be an object; received null',
+    );
+    const key = new Key(scale, { pitchClass: 2, data: { letter: 1, alter: 0 } } as never);
+    expect(key.toJSON().tonic).toEqual({ letter: 1, alter: 0 });
+    expect(() => new Key({ rootPc: 0, modeMask12: 2 }, 5 as never)).toThrow(
+      'scale.modeMask12 must include the tonic (bit 0)',
+    );
+    expect(() => new Key(Key.major('D') as never, Note.parse('D'))).toThrow(
+      'scale.modeMask12 must be finite; received undefined',
+    );
+  });
+
+  it('rebuilds every progression member from its own data', () => {
+    expect(() => new Progression([cMajorTriad] as never)).toThrow(TypeError);
+    expect(() => new Progression([cMajorTriad] as never, 'C major')).toThrow(
+      'chord.toJSON is not a function',
+    );
+    expect(() => new Progression([Score.of([])] as never, 'C major')).toThrow(
+      'Unknown chord quality: undefined',
+    );
+    const progression = new Progression([Chord.parse('G7/D')], Key.major('Eb'));
+    expect(Progression.fromData(progression as never).toJSON().chords).toEqual([
+      { rootPc: 7, quality: 'dom7', intervals: [0, 4, 7, 10], bassPc: 2 },
+    ]);
+  });
+
+  it('reads an instance handed as options or data through its getters and methods', () => {
+    expect(() => Key.major('Eb').noteNames(Key.major('C') as never)).toThrow(
+      'system must be one of english, german, japanese, italian, fixedDo; received function',
+    );
+    const timeline = Timeline.fromChords(
+      [{ rootPc: 8, quality: 'min', startBeat: 0 }],
+      4,
+      'Ab minor',
+    );
+    expect(Score.empty(timeline as never).toJSON().key).toEqual({
+      scale: { rootPc: 8, modeMask12: 1453 },
+      tonic: { letter: 5, alter: -1 },
+      variant: 'natural',
+    });
+    expect(() => Score.fromData(Key.major('C') as never)).toThrow(
+      'score notes must be an array; received function',
+    );
+  });
+
+  it('iterates a progression or a timeline and calls an array through its own members', () => {
+    const progression = new Progression([Chord.parse('C'), Chord.parse('G')]);
+    expect(() => progression.equals([1, 2] as never)).toThrow(
+      "Cannot read properties of undefined (reading 'rootPc')",
+    );
+    const timeline = Timeline.fromChords([{ rootPc: 0, quality: 'maj', startBeat: 0 }], 4);
+    expect(() => progression.concat(timeline as never)).toThrow('chord.toJSON is not a function');
+    expect(() => Key.major('C').spellPitchClasses(timeline as never)).toThrow(
+      'pcs[0] must be finite; received [object Object]',
+    );
+  });
+});

@@ -12,6 +12,7 @@
 #include "js/number.h"
 #include "js/value.h"
 #include "model/limits.gen.h"
+#include "ops/codec_m2.h"
 #include "ops/error_map.h"
 #include "ops/validate.h"
 
@@ -192,6 +193,20 @@ void assert_key_argument(const json::Value& value, std::string_view name) {
       ". A method that also takes options takes them after the key, not in its place");
 }
 
+const json::Array& assert_data_objects(const json::Value& value, std::string_view name) {
+  const json::Array& items = assert_data_array(value, name);
+  for (std::size_t index = 0; index < items.size(); ++index) {
+    assert_data_object(items[index], std::string(name) + "[" + index_text(index) + "]");
+  }
+  return items;
+}
+
+std::vector<NoteEvent> assert_note_event_array(const json::Value& notes, std::string_view name,
+                                               const NoteEventAssertOptions& options) {
+  assert_data_array(notes, name);
+  return assert_note_events(notes, name, options);
+}
+
 //--------------------------------------------------------------------------------------------
 // Factory data
 
@@ -318,6 +333,8 @@ void decode_class_value(const json::Value& v) {
     read_instrument_data(v);
   } else if (name == "Voicing") {
     read_voicing_data(get(v, "pitches"));
+  } else {
+    decode_m2_class(v, name);
   }
 }
 

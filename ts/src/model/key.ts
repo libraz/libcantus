@@ -140,10 +140,10 @@ function scaleWord(mask: number, isMinor: boolean): string {
 }
 
 /** How many degrees a scale needs before thirds can be stacked on it. */
-const HEPTATONIC_DEGREES = 7;
+export const HEPTATONIC_DEGREES = 7;
 
 /** The tonic a mode's reference scale is spelled on; C spells both modes plainly. */
-const REFERENCE_TONIC: NoteData = { letter: 0, alter: 0 };
+export const REFERENCE_TONIC: NoteData = { letter: 0, alter: 0 };
 
 /**
  * The interval between two tonics. Both are read octave-less, so the answer is
@@ -248,10 +248,13 @@ export class Key {
           'wrap plain note data with Note.fromData, or omit the tonic to have one chosen',
       );
     }
+    // A note read structurally is held to the checks of the note it stands for,
+    // so what the key keeps and later writes out is a note.
+    const note = tonic instanceof Note ? tonic : new Note((tonic as Note).data);
     const rootPc = mod12(scale.rootPc);
-    if (tonic.pitchClass !== rootPc) {
+    if (note.pitchClass !== rootPc) {
       throw new InvalidInputError(
-        `tonic ${tonic.name} does not match the scale root pitch class ${rootPc}; ` +
+        `tonic ${note.name} does not match the scale root pitch class ${rootPc}; ` +
           'pass a tonic that spells the scale root, or omit it to have one chosen',
       );
     }
@@ -259,7 +262,7 @@ export class Key {
       assertKeyVariant(variant, scale.modeMask12);
     }
     this.#scale = { rootPc, modeMask12: scale.modeMask12 };
-    this.#tonic = tonic;
+    this.#tonic = note;
     this.#variant = variant ?? variantOfMask(scale.modeMask12);
   }
 
