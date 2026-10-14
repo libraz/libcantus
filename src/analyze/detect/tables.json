@@ -56,21 +56,21 @@
       "fields": []
     },
     {
-      "module": "analyze/detect/index.ts",
+      "module": "analyze/detect/internal.ts",
       "export": "MINOR_VARIANTS",
       "cxx_type": "VariantRow",
       "cxx_name": "kMinorVariants",
       "fields": ["variant", "mask", "scaleName"]
     },
     {
-      "module": "analyze/detect/index.ts",
+      "module": "analyze/detect/internal.ts",
       "export": "MAJOR_VARIANTS",
       "cxx_type": "VariantRow",
       "cxx_name": "kMajorVariants",
       "fields": ["variant", "mask", "scaleName"]
     },
     {
-      "module": "analyze/detect/index.ts",
+      "module": "analyze/detect/internal.ts",
       "export": "SCALE_NAME_ORDER",
       "cxx_type": "std::string_view",
       "cxx_name": "kScaleNameOrder",
@@ -89,17 +89,17 @@
       "cxx_type": "double"
     },
     {
-      "module": "analyze/detect/index.ts",
+      "module": "analyze/detect/internal.ts",
       "export": "EXPLAINED_RIVALS",
       "cxx_type": "int"
     },
     {
-      "module": "analyze/detect/index.ts",
+      "module": "analyze/detect/internal.ts",
       "export": "SCORE_DIGITS",
       "cxx_type": "int"
     },
     {
-      "module": "analyze/detect/index.ts",
+      "module": "analyze/detect/internal.ts",
       "export": "MAX_SCORE_DIGITS",
       "cxx_type": "int"
     }
