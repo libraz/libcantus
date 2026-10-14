@@ -79,13 +79,13 @@
   "totals": {
     "files": 194,
     "units": 4016,
-    "specUnits": 3720,
-    "tsUnits": 296,
+    "specUnits": 3719,
+    "tsUnits": 297,
     "expects": 9693,
-    "tsExpects": 705,
-    "tsExpectRatio": 0.0727,
+    "tsExpects": 708,
+    "tsExpectRatio": 0.073,
     "specFiles": 181,
-    "tsFiles": 88
+    "tsFiles": 89
   },
   "files": {
     "architecture.test.ts": {
@@ -2370,12 +2370,22 @@
     "meter-map.test.ts": {
       "units": 26,
       "expects": 99,
-      "specUnits": 26,
-      "specExpects": 99,
-      "tsUnits": 0,
-      "tsExpects": 0,
-      "tsReasons": {},
-      "tsOnly": []
+      "specUnits": 25,
+      "specExpects": 96,
+      "tsUnits": 1,
+      "tsExpects": 3,
+      "tsReasons": {
+        "boundary": 1
+      },
+      "tsOnly": [
+        {
+          "line": 251,
+          "title": "answers a piece-long sweep without rebuilding the map for each beat",
+          "reasons": [
+            "boundary:Times the WeakMap index of one resolved meter map; each call over the wire receives a fresh copy (identity-cache)."
+          ]
+        }
+      ]
     },
     "meter.test.ts": {
       "units": 31,

@@ -207,6 +207,11 @@
       "file": "spelling.test.ts",
       "test": "works a scale out once rather than once per tone of it",
       "reason": "Times the TS memo of joint scale spellings, which the C++ core does not keep (module-memo)."
+    },
+    {
+      "file": "meter-map.test.ts",
+      "test": "answers a piece-long sweep without rebuilding the map for each beat",
+      "reason": "Times the WeakMap index of one resolved meter map; each call over the wire receives a fresh copy (identity-cache)."
     }
   ],
   "file_map_exceptions": [

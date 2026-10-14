@@ -24,7 +24,7 @@
       "modules": ["core/validation", "core/instrument", "core/meter"],
       "root_files": ["core/types.ts"],
       "expected": {
-        "replay": 5331,
+        "replay": 5330,
         "spec_files": 7
       }
     },
@@ -257,7 +257,7 @@
       ],
       "root_files": [],
       "expected": {
-        "replay": 8964,
+        "replay": 8966,
         "spec_files": 63
       }
     },
