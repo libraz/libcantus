@@ -473,3 +473,19 @@ describe('the reproduction recipe', () => {
     expect(Composer.fromJSON(Composer.of(settings).toJSON()).data.algorithmVersion).toBe(1);
   });
 });
+
+describe('Composer drawing from a caller-held source', () => {
+  it('keeps the source usable in the calls after the one that took it', () => {
+    const composer = Composer.of({ seed: 1, rng: { at: () => 0.5 } });
+    expect(composer.data).toEqual({
+      meters: [{ startBeat: 0, ts: { numerator: 4, denominator: 4 } }],
+      seed: 1,
+      algorithmVersion: ALGORITHM_VERSION,
+    });
+    const keyed = composer.withKey('C major');
+    expect(keyed.progression({ style: 'dance', bars: 2 }).totalBeats).toBe(8);
+    expect(() => keyed.plan(Score.of([]).reference())).toThrow(
+      'composer plan cannot record a caller-held rng; give the composer a seed instead',
+    );
+  });
+});

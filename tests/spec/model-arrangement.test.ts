@@ -469,3 +469,12 @@ describe('Arrangement updates', () => {
     expect(plain(shuffled.analysis)).toEqual(plain(analyzeArrangement(tracks(reordered), OPTIONS)));
   });
 });
+
+describe('Arrangement holding a track name that is not data', () => {
+  it('refuses to hand the function back as plain data', () => {
+    const name = (() => 'lead') as never;
+    expect(() => Arrangement.of([{ name, notes: MELODY }]).data).toThrow(
+      'arrangement data.tracks[0].name must be plain data; received function',
+    );
+  });
+});

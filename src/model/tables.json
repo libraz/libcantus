@@ -64,6 +64,16 @@
       "export": "DEFAULT_BPM",
       "cxx_type": "double",
       "cxx_name": "SCORE_DEFAULT_BPM"
+    },
+    {
+      "module": "model/shared.ts",
+      "export": "MAX_PLAIN_DEPTH",
+      "cxx_type": "int"
+    },
+    {
+      "module": "model/rhythm.ts",
+      "export": "GRID_VELOCITY",
+      "cxx_type": "double"
     }
   ]
 }

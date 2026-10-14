@@ -61,7 +61,7 @@ export type RhythmDeformOptions = {
  * statement about dynamics; a rhythm is onsets alone, so they all enter alike
  * and the scaling is dropped again on the way back.
  */
-const GRID_VELOCITY = 1;
+export const GRID_VELOCITY = 1;
 
 /** The part name the pattern's draws are addressed under, as the generator's are. */
 const PART = 'rhythm';

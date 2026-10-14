@@ -25,6 +25,12 @@ inline constexpr int KEY_HEPTATONIC_DEGREES = 7;
 /** DEFAULT_BPM of ts/src/model/score.ts. */
 inline constexpr double SCORE_DEFAULT_BPM = 120;
 
+/** MAX_PLAIN_DEPTH of ts/src/model/shared.ts. */
+inline constexpr int MAX_PLAIN_DEPTH = 64;
+
+/** GRID_VELOCITY of ts/src/model/rhythm.ts. */
+inline constexpr double GRID_VELOCITY = 1;
+
 }  // namespace cantus
 
 #endif  // CANTUS_SRC_MODEL_LIMITS_GEN_H_

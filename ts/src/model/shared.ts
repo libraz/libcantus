@@ -230,7 +230,7 @@ export function copyTimeSignature(ts: TimeSignature, name?: string): TimeSignatu
  * value that reaches the limit describes a document built to exhaust the stack
  * rather than music.
  */
-const MAX_PLAIN_DEPTH = 64;
+export const MAX_PLAIN_DEPTH = 64;
 
 /**
  * A deep copy of caller data, with every number checked and every absent field

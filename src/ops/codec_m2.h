@@ -81,8 +81,12 @@ json::Value member_of(const json::Value& value, std::string_view name);
 bool has_member(const json::Value& value, std::string_view name);
 /** `value.toJSON()` of a class instance or a `toJSON` carrier. */
 json::Value class_to_json(const json::Value& value);
-/** `value[name](...args)` for a method of a class instance, through the method's op. */
-json::Value call_member(const json::Value& value, std::string_view name, json::Array args);
+/**
+ * `value[name](...args)`: a method of a class instance through the method's op, or a function a
+ * plain record carries, called on `host`.
+ */
+json::Value call_member(const json::Value& value, std::string_view name, json::Array args,
+                        const CallContext& host = CallContext());
 /** The named members of a value as a plain record: a class instance read through its getters. */
 json::Value surface_record(const json::Value& value, std::initializer_list<std::string_view> names);
 /**

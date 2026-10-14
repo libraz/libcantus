@@ -1034,7 +1034,8 @@ void register_progression() {
       if (js::type_of(member_of(a[1], "at")) != "function") {
         throw js::TypeError("other.at is not a function");
       }
-      json::Value theirs = call_member(a[1], "at", json::Array{static_cast<double>(index)});
+      json::Value theirs =
+          call_member(a[1], "at", json::Array{static_cast<double>(index)}, a.context());
       if (is_undefined(theirs) || !chord_equals_wire(self.chords()[index], theirs)) {
         return false;
       }

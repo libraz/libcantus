@@ -84,6 +84,15 @@ const json::Array& assert_data_objects(const json::Value& value, std::string_vie
 std::vector<NoteEvent> assert_note_event_array(const json::Value& notes, std::string_view name,
                                                const NoteEventAssertOptions& options = {});
 
+/**
+ * `copyPlain`: a deep copy of plain data, every number held finite; a function, a symbol or a
+ * bigint is refused, and a class instance copies to the empty record its own fields make.
+ */
+json::Value copy_plain(const json::Value& value, std::string_view name);
+
+/** `samePlain`: two plain values hold the same data, numbers and strings compared by `===`. */
+bool same_plain(const json::Value& value, const json::Value& other);
+
 //--------------------------------------------------------------------------------------------
 // The data a factory takes (`new Note(data)`, `Note.fromData`, ...), over a wire value
 

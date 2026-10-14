@@ -100,6 +100,8 @@ Each validation helper of `ts/src/core/validation` has two C++ twins: a typed on
 | `assertKeyArgument` (`model/shared`) | none | `ops::assert_key_argument` (`src/ops/codec_m1.h`) |
 | `assertDataObjects` (`model/shared`) | none | `ops::assert_data_objects` (`src/ops/codec_m1.h`) |
 | `assertNoteEventArray` (`model/shared`) | none | `ops::assert_note_event_array` (`src/ops/codec_m1.h`) |
+| `copyPlain` (`model/shared`) | none | `ops::copy_plain` (`src/ops/codec_m1.h`) |
+| `samePlain` (`model/shared`) | none | `ops::same_plain` (`src/ops/codec_m1.h`) |
 
 ## Errors
 

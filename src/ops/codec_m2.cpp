@@ -493,7 +493,8 @@ json::Value class_to_json(const json::Value& value) {
   return like_data(value);
 }
 
-json::Value call_member(const json::Value& value, std::string_view name, json::Array args) {
+json::Value call_member(const json::Value& value, std::string_view name, json::Array args,
+                        const CallContext& host) {
   if ((value.is_array() || value.is_string()) && name == "at") {
     // `Array.prototype.at` / `String.prototype.at`: a relative integer index.
     double length = *number_of(wire_length(value));
@@ -505,7 +506,15 @@ json::Value call_member(const json::Value& value, std::string_view name, json::A
     }
     return wire_element(value, static_cast<std::size_t>(position));
   }
-  const OpEntry* op = member_op(class_name_of(value), name);
+  std::string cls = class_name_of(value);
+  if (cls.empty() && value.is_object() && tag_of(value) == Tag::kNone) {
+    // A plain record's own function: the host callback it carries.
+    const json::Value& fn = get(value, name);
+    if (tag_of(fn) == Tag::kCallback) {
+      return Callback(host, static_cast<std::uint32_t>(*number_of(get(fn, "$cb"))))(args);
+    }
+  }
+  const OpEntry* op = member_op(cls, name);
   if (op == nullptr) {
     throw js::TypeError(std::string(name) + " is not a function");
   }

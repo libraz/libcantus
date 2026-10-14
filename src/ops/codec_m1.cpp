@@ -13,6 +13,7 @@
 #include "js/value.h"
 #include "model/limits.gen.h"
 #include "ops/codec_m2.h"
+#include "ops/codec_m3.h"
 #include "ops/error_map.h"
 #include "ops/validate.h"
 
@@ -207,6 +208,103 @@ std::vector<NoteEvent> assert_note_event_array(const json::Value& notes, std::st
   return assert_note_events(notes, name, options);
 }
 
+namespace {
+
+/** The member a hybrid's copy meets first that is a function, in the TS object's key order. */
+std::string first_method_of(const json::Value& hybrid) {
+  const json::Value* type = hybrid.as_object().find("$hy");
+  return type != nullptr && type->is_string() && type->as_string() == "ResolvedContext"
+             ? "instrument"
+             : "at";
+}
+
+json::Value copy_plain_at(const json::Value& value, const std::string& name, int depth) {
+  std::string kind = js::type_of(value);
+  if (kind == "number") {
+    assert_finite_number(value, name);
+    return value;
+  }
+  if (kind == "function" || kind == "symbol" || kind == "bigint") {
+    throw InvalidInputError(name + " must be plain data; received " + kind);
+  }
+  if (kind != "object" || value.is_null()) {
+    return value;
+  }
+  if (depth >= MAX_PLAIN_DEPTH) {
+    throw InvalidInputError(name + " must be plain data; received a value nested more than " +
+                            js::to_string(static_cast<double>(MAX_PLAIN_DEPTH)) + " levels deep");
+  }
+  if (value.is_array()) {
+    json::Array out;
+    const json::Array& items = value.as_array();
+    for (std::size_t index = 0; index < items.size(); ++index) {
+      out.push_back(copy_plain_at(items[index], name + "[" + index_text(index) + "]", depth + 1));
+    }
+    return json::Value(std::move(out));
+  }
+  Tag tag = tag_of(value);
+  if (tag == Tag::kHybrid) {
+    throw InvalidInputError(name + "." + first_method_of(value) +
+                            " must be plain data; received function");
+  }
+  if (tag == Tag::kToJson) {
+    throw InvalidInputError(name + ".toJSON must be plain data; received function");
+  }
+  json::Object out;
+  // A class instance and a handle keep their state out of reach of Object.entries.
+  if (tag == Tag::kNone) {
+    for (const json::Member& m : value.as_object()) {
+      if (!is_undefined(m.value)) {
+        out.set(m.key, copy_plain_at(m.value, name + "." + m.key, depth + 1));
+      }
+    }
+  }
+  return json::Value(std::move(out));
+}
+
+/** `Object.entries(value)` of an object as a reader sees it: a plain record's own fields. */
+const json::Object* own_entries(const json::Value& value) {
+  static const json::Object kNone;
+  return value.is_object() && tag_of(value) == Tag::kNone ? &value.as_object() : &kNone;
+}
+
+}  // namespace
+
+json::Value copy_plain(const json::Value& value, std::string_view name) {
+  return copy_plain_at(value, std::string(name), 0);
+}
+
+bool same_plain(const json::Value& value, const json::Value& other) {
+  if (value.is_array() || other.is_array()) {
+    if (!value.is_array() || !other.is_array() ||
+        value.as_array().size() != other.as_array().size()) {
+      return false;
+    }
+    for (std::size_t index = 0; index < value.as_array().size(); ++index) {
+      if (!same_plain(value.as_array()[index], other.as_array()[index])) {
+        return false;
+      }
+    }
+    return true;
+  }
+  if (js::type_of(value) == "object" && !value.is_null() && js::type_of(other) == "object" &&
+      !other.is_null()) {
+    const json::Object& mine = *own_entries(value);
+    const json::Object& theirs = *own_entries(other);
+    if (mine.size() != theirs.size()) {
+      return false;
+    }
+    for (const json::Member& m : mine) {
+      const json::Value* item = theirs.find(m.key);
+      if (item == nullptr || !same_plain(m.value, *item)) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return js::strict_equals(value, other);
+}
+
 //--------------------------------------------------------------------------------------------
 // Factory data
 
@@ -333,8 +431,8 @@ void decode_class_value(const json::Value& v) {
     read_instrument_data(v);
   } else if (name == "Voicing") {
     read_voicing_data(get(v, "pitches"));
-  } else {
-    decode_m2_class(v, name);
+  } else if (!decode_m2_class(v, name)) {
+    decode_m3_class(v, name);
   }
 }
 
