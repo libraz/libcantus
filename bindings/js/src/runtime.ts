@@ -66,12 +66,16 @@ type Frame = {
 type DecodeContext = {
   freeze: boolean;
   hybrids: ReadonlyMap<string, object> | null;
+  /** The callbacks of the call that produced the result, which a `$cb` in a payload names. */
+  fns?: readonly Callable[];
 };
 
 /** What the runtime keeps about a hybrid object or a model-class instance. */
 type WireEntry = {
   wire: WireObject;
   text?: string;
+  /** The callbacks a `$cb` in the wire names, kept so a later call can register them again. */
+  fns?: readonly Callable[];
 };
 
 /** The `$counter` builtin handle, described like a manifest handle type. */
@@ -199,7 +203,11 @@ export class Runtime {
     const wire = this.#run(op, args, frame);
     const hash = op.indexOf('#');
     const freeze = hash > 0 && this.#types[op.slice(0, hash)]?.kind === 'handle';
-    return this.#decode(wire, { freeze, hybrids: frame.hybrids.size > 0 ? frame.hybrids : null });
+    return this.#decode(wire, {
+      freeze,
+      hybrids: frame.hybrids.size > 0 ? frame.hybrids : null,
+      fns: frame.fns,
+    });
   }
 
   /** A function export: calls op `op` with its arguments; `length` is the pure function's. */
@@ -358,9 +366,8 @@ export class Runtime {
    * since a caller may have written to a visible field (a timeline's segments) after decoding.
    */
   #encodeHybrid(object: Record<string, unknown>, entry: WireEntry, frame: Frame): string {
-    entry.text ??= JSON.stringify(entry.wire);
     const visible = this.#types[String(entry.wire.$hy)]?.properties ?? [];
-    if (visible.length === 0) return entry.text;
+    if (visible.length === 0) return this.#entryText(entry, frame);
     let out = '{';
     let first = true;
     for (const key of Object.keys(entry.wire)) {
@@ -368,11 +375,38 @@ export class Runtime {
       const value =
         !isTagKey(key) && visible.includes(name)
           ? this.#encode(object[name], frame, [])
-          : JSON.stringify(entry.wire[key]);
+          : this.#nodeText(entry.wire[key] as Wire, entry.fns, frame);
       out += `${first ? '' : ','}${JSON.stringify(key)}:${value}`;
       first = false;
     }
     return `${out}}`;
+  }
+
+  /** A kept node as wire text; the callbacks it names are registered with `frame` again. */
+  #entryText(entry: WireEntry, frame: Frame): string {
+    if (entry.fns === undefined) {
+      entry.text ??= JSON.stringify(entry.wire);
+      return entry.text;
+    }
+    return this.#nodeText(entry.wire, entry.fns, frame);
+  }
+
+  #nodeText(node: Wire, fns: readonly Callable[] | undefined, frame: Frame): string {
+    return JSON.stringify(fns === undefined ? node : this.#reseat(node, fns, frame));
+  }
+
+  /** `node` with every `{"$cb": id}` pointing at a callback registered with `frame`. */
+  #reseat(node: Wire, fns: readonly Callable[], frame: Frame): Wire {
+    if (typeof node !== 'object' || node === null) return node;
+    if (Array.isArray(node)) return node.map((element) => this.#reseat(element, fns, frame));
+    const fn = typeof node.$cb === 'number' ? fns[node.$cb] : undefined;
+    if (fn !== undefined) {
+      frame.fns.push(fn);
+      return { $cb: frame.fns.length - 1 };
+    }
+    const out: WireObject = {};
+    for (const key of Object.keys(node)) out[key] = this.#reseat(node[key] as Wire, fns, frame);
+    return out;
   }
 
   /**
@@ -390,10 +424,7 @@ export class Runtime {
     if (method !== undefined) {
       const { wire } = method.entry;
       const ref = wire.$ref;
-      if (ref === undefined) {
-        method.entry.text ??= JSON.stringify(wire);
-        return method.entry.text;
-      }
+      if (ref === undefined) return this.#entryText(method.entry, frame);
       return JSON.stringify({ ...wire, $ref: `${String(ref)}#${method.method}` });
     }
     frame.fns.push(fn);
@@ -480,6 +511,7 @@ export class Runtime {
     const passed = ctx.hybrids?.get(text);
     if (passed !== undefined) return passed;
     const entry: WireEntry = { wire: node, text };
+    if (ctx.fns !== undefined && ctx.fns.length > 0 && text.includes('"$cb"')) entry.fns = ctx.fns;
     const object: Record<string, unknown> = {};
     const methods = new Set(meta.methods);
     // Members in declaration order, so the object's own keys read like the pure one's.
