@@ -51,7 +51,7 @@ namespace {
 constexpr char kOutOfMemoryReply[] =
     R"({"code":"INTERNAL","name":"Error","message":"out of memory"})";
 
-ErrorReply reply(ErrorCode code, const std::string& message, std::optional<std::size_t> at) {
+ErrorReply reply(ErrorCode code, const std::string& message, std::optional<double> at) {
   // Every ErrorCode value is in the table.
   ErrorInfo info = *error_info(code);
   json::Object o;
@@ -59,7 +59,7 @@ ErrorReply reply(ErrorCode code, const std::string& message, std::optional<std::
   o.set("name", info.name);
   o.set("message", message);
   if (at) {
-    o.set("at", static_cast<double>(*at));
+    o.set("at", *at);
   }
   return ErrorReply{info.status, ops::stringify(json::Value(std::move(o)))};
 }

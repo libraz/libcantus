@@ -27,7 +27,7 @@ import { planChordTimeline } from './timeline.js';
 import type { CompositionPlan } from './types.js';
 
 /** Labels {@link analyzeVoice} gives a pulse note that count as fitting the planned harmony. */
-const HARMONY_OK_KINDS = new Set([
+export const HARMONY_OK_KIND_NAMES = [
   'chordTone',
   'tension',
   'suspension',
@@ -35,10 +35,11 @@ const HARMONY_OK_KINDS = new Set([
   'anticipation',
   'passing',
   'neighbor',
-]);
+] as const;
+const HARMONY_OK_KINDS: ReadonlySet<string> = new Set(HARMONY_OK_KIND_NAMES);
 
 /** Scale degrees a phrase's closing note may take, by cadence type. */
-const CADENCE_DEGREES = {
+export const CADENCE_DEGREES = {
   authentic: [1, 3],
   plagal: [1, 3],
   half: [2, 5, 7],

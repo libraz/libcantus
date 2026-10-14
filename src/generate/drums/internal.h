@@ -30,6 +30,14 @@ struct GeneratedList {
   std::optional<std::vector<T>> value;
 };
 
+/** A generated entry's time signature: none, or a numerator and a denominator. */
+struct SignatureSlot {
+  SignatureSlot(std::nullopt_t) {}  // NOLINT
+  SignatureSlot(int numerator, int denominator)
+      : value(TimeSignature{numerator, denominator, std::nullopt}) {}
+  std::optional<TimeSignature> value;
+};
+
 /** General MIDI percussion note numbers used across the drum engine (`GM`). */
 struct GeneralMidiNotes {
   int BD;

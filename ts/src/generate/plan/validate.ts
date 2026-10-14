@@ -39,7 +39,7 @@ import {
 } from './types.js';
 
 /** Tolerance a mass distribution's shares may sum away from 1 by. */
-const MASS_TOLERANCE = 1e-9;
+export const MASS_TOLERANCE = 1e-9;
 
 /** Require a string, before it is read as one. */
 function assertString(value: unknown, name: string): string {

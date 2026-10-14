@@ -1166,6 +1166,25 @@ describe('generateMelody', () => {
       expect(() => generateMelody(p, { budget: 128 })).not.toThrow();
     });
 
+    it('refuses a statement span no bar line bounds before building its grid', () => {
+      const p = plan({
+        phrases: [phrase({ startBeat: 0, endBeat: 8, motifs: [0] })],
+        motifs: [
+          {
+            phrase: 0,
+            startBeat: 0,
+            endBeat: 1e15,
+            notes: 4,
+            rhythm: null,
+            from: null,
+            relation: null,
+          },
+        ],
+      });
+      expect(() => generateMelody(p)).toThrow(BudgetExceededError);
+      expect(() => generateMelody(p)).toThrow(/melody onset slots/);
+    });
+
     it('rejects a malformed budget', () => {
       expect(() => generateMelody(mixedPlan(), { budget: -1 })).toThrow(InvalidInputError);
     });

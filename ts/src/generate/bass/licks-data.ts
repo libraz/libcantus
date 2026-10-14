@@ -9,8 +9,17 @@
  * plays, and each records the ground it qualifies under.
  */
 
-import type { Articulation } from '../../core/instrument/index.js';
+import { InvalidInputError } from '../../core/errors/index.js';
+import { ARTICULATIONS, type Articulation } from '../../core/instrument/index.js';
 import type { TimeSignature } from '../../core/meter/index.js';
+import {
+  assertDegree,
+  assertFiniteNumber,
+  assertInteger,
+  assertOneOf,
+  assertRecord,
+  describeRejected,
+} from '../../core/validation/index.js';
 import { deepFreeze } from '../vocabulary/freeze.js';
 import { BEAT_STEPS, type GridEvent, type Vocabulary } from '../vocabulary/index.js';
 
@@ -72,6 +81,44 @@ export function isLickMaterial(material: unknown): material is LickMaterial {
     Array.isArray(candidate.notes)
   );
 }
+/**
+ * Check every note of a lick a caller brought, field by field.
+ *
+ * The notes of a caller's lick are read as they were written, and what they hold
+ * reaches the line: a degree sets the pitch, a velocity the loudness, a length the
+ * duration, an articulation the note's technique. Each is refused by name here
+ * rather than shaping the output as written.
+ *
+ * @param material The caller's lick.
+ * @param label Name used in the error message.
+ */
+export function assertLickMaterial(material: LickMaterial, label: string): void {
+  material.notes.forEach((given, index) => {
+    const name = `${label} notes[${index}]`;
+    const lickNote = assertRecord<LickNote>(given, name);
+    assertDegree(lickNote.degree, `${name}.degree`);
+    assertFiniteNumber(lickNote.step, `${name}.step`);
+    assertFiniteNumber(lickNote.velocity, `${name}.velocity`);
+    if (lickNote.alter !== undefined) {
+      assertInteger(lickNote.alter, `${name}.alter`);
+    }
+    if (lickNote.lengthSteps !== undefined) {
+      assertFiniteNumber(lickNote.lengthSteps, `${name}.lengthSteps`);
+    }
+    if (lickNote.articulation !== undefined) {
+      assertOneOf(lickNote.articulation, ARTICULATIONS, `${name}.articulation`);
+    }
+    for (const field of ['voice', 'limb'] as const) {
+      const value: unknown = lickNote[field];
+      if (value !== undefined && typeof value !== 'string') {
+        throw new InvalidInputError(
+          `${name}.${field} must be a string; received ${describeRejected(value)}`,
+        );
+      }
+    }
+  });
+}
+
 /** One note of a lick. */
 function note(
   degree: number,

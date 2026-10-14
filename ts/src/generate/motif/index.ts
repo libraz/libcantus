@@ -31,7 +31,7 @@ import { type GenerationContextInput, resolveContextWith } from '../context/inde
  *
  * @category Composition
  */
-const MOTIF_TRANSFORMS = Object.freeze([
+export const MOTIF_TRANSFORMS = Object.freeze([
   'transposeDiatonic',
   'transposeChromatic',
   'invert',
@@ -134,10 +134,10 @@ export type MotifOptions = {
  * Smallest span, in beats, treated as a distinct tile step. A positive but
  * near-zero cell span is clamped to this so tiling cannot stall.
  */
-const MIN_TILE_SPAN = 1 / 256;
+export const MIN_TILE_SPAN = 1 / 256;
 
 /** Meter assumed when none is supplied. */
-const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
+export const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
 
 /** Whether a beat position falls on a bar line of a `barBeats`-long bar. */
 function isDownbeat(startBeat: number, barBeats: number): boolean {
@@ -160,7 +160,7 @@ function nearestChordTone(pitch: number, chord: Chord): number {
 }
 
 /** Widest move, in semitones, a developed note is displaced by. */
-const MAX_DEVELOP_SHIFT = 12;
+export const MAX_DEVELOP_SHIFT = 12;
 
 /**
  * Pick the pitch a developed note takes.

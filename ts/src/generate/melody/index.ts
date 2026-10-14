@@ -69,15 +69,15 @@ export type MelodyOptions = {
 };
 
 /** Grid resolution onsets are drawn on: sixteenth notes. */
-const RHYTHM_SUBDIVISION = 4;
+export const RHYTHM_SUBDIVISION = 4;
 /** Cost of an out-of-scale tone off the pulses. */
-const OFF_SCALE_COST = 1;
+export const OFF_SCALE_COST = 1;
 /** Cost per semitone of distance from the phrase's target curve. */
-const TARGET_COST = 0.1;
+export const TARGET_COST = 0.1;
 /** Width of the seeded noise that breaks ties between equal-cost pitches. */
-const TIE_BREAK = 1e-6;
+export const TIE_BREAK = 1e-6;
 /** Leap states a pitch-search state multiplies the register by, squared: (3R)². */
-const SEARCH_STATES_SQUARED = 9;
+export const SEARCH_STATES_SQUARED = 9;
 
 /** One stretch of a phrase: a motif statement or a span no motif covers. */
 type Segment = { startBeat: number; endBeat: number; motif: number | null };
@@ -265,6 +265,8 @@ function onsetSlots(scene: Scene, startBeat: number, endBeat: number): number[] 
         slots.push(beat);
       }
     }
+    // A span no bar line bounds is refused here rather than after its grid is built.
+    assertGenerationBudget(slots.length, 'melody onset slots', scene.budget);
     bar = barEnd;
   }
   return slots;

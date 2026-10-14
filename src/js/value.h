@@ -43,6 +43,13 @@ double to_math_number(const json::Value& v);
 json::Value add_number(double lhs, const json::Value& rhs);
 
 /**
+ * `lhs + rhs` for two wire values of unknown kind: the sum of numbers, or the concatenated text
+ * when either side is a string, array or object.
+ * @throws TypeError for a Symbol or a bigint operand.
+ */
+json::Value add(const json::Value& lhs, const json::Value& rhs);
+
+/**
  * `lhs > rhs` for wire values: text against text (strings, arrays, plain objects) compares by
  * UTF-16 code units, anything else compares as numbers.
  * @throws TypeError for a Symbol.

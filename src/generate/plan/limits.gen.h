@@ -2,4 +2,38 @@
 #ifndef CANTUS_SRC_GENERATE_PLAN_LIMITS_GEN_H_
 #define CANTUS_SRC_GENERATE_PLAN_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** COMPOSITION_PLAN_VERSION of ts/src/generate/plan/types.ts. */
+inline constexpr int COMPOSITION_PLAN_VERSION = 1;
+
+/** MASS_TOLERANCE of ts/src/generate/plan/validate.ts. */
+inline constexpr double PLAN_MASS_TOLERANCE = 1e-9;
+
+/** STRONG_WEIGHT of ts/src/generate/plan/internal.ts. */
+inline constexpr int PLAN_STRONG_WEIGHT = 2;
+
+/** NEUTRAL_PEAK_POSITION of ts/src/generate/plan/derive.ts. */
+inline constexpr double PLAN_NEUTRAL_PEAK_POSITION = 0.6;
+
+/** SHAPE_KEEP_THRESHOLD of ts/src/generate/plan/derive.ts. */
+inline constexpr double PLAN_SHAPE_KEEP_THRESHOLD = 0.5;
+
+/** STRONG_WEIGHT of ts/src/generate/plan/derive.ts. */
+inline constexpr int PLAN_DERIVE_STRONG_WEIGHT = 2;
+
+/** HEPTATONIC_DEGREES of ts/src/generate/plan/derive.ts. */
+inline constexpr int PLAN_HEPTATONIC_DEGREES = 7;
+
+/** PEAK_POSITION_TOLERANCE of ts/src/generate/plan/evaluate.ts. */
+inline constexpr double PLAN_PEAK_POSITION_TOLERANCE = 0.2;
+
+/** OUTLINE_POINTS of ts/src/generate/plan/evaluate.ts. */
+inline constexpr int PLAN_OUTLINE_POINTS = 8;
+
+/** HELD_NOTE_BEATS of ts/src/generate/plan/evaluate.ts. */
+inline constexpr double PLAN_HELD_NOTE_BEATS = 1;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_GENERATE_PLAN_LIMITS_GEN_H_

@@ -2,4 +2,71 @@
 #ifndef CANTUS_SRC_GENERATE_HARMONIZE_LIMITS_GEN_H_
 #define CANTUS_SRC_GENERATE_HARMONIZE_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** UNSTABLE_TRIAD of ts/src/generate/harmonize/candidates.ts. */
+inline constexpr double HARMONIZE_UNSTABLE_TRIAD = 0.9;
+
+/** SECONDARY_DOMINANT_BASE of ts/src/generate/harmonize/candidates.ts. */
+inline constexpr double HARMONIZE_SECONDARY_DOMINANT_BASE = 0.5;
+
+/** BORROWED_BASE of ts/src/generate/harmonize/candidates.ts. */
+inline constexpr double HARMONIZE_BORROWED_BASE = 0.5;
+
+/** SECONDARY_DOMINANT_BAND of ts/src/generate/harmonize/candidates.ts. */
+inline constexpr double HARMONIZE_SECONDARY_DOMINANT_BAND = 0.5;
+
+/** NON_CHORD_TONE_STRONG of ts/src/generate/harmonize/cost.ts. */
+inline constexpr double HARMONIZE_NON_CHORD_TONE_STRONG = 4;
+
+/** NON_CHORD_TONE_WEAK of ts/src/generate/harmonize/cost.ts. */
+inline constexpr double HARMONIZE_NON_CHORD_TONE_WEAK = 1;
+
+/** NON_SCALE_TONE of ts/src/generate/harmonize/cost.ts. */
+inline constexpr double HARMONIZE_NON_SCALE_TONE = 0.5;
+
+/** CHORD_CHANGE of ts/src/generate/harmonize/cost.ts. */
+inline constexpr double HARMONIZE_CHORD_CHANGE = 0.8;
+
+/** DESCENDING_FIFTH of ts/src/generate/harmonize/cost.ts. */
+inline constexpr double HARMONIZE_DESCENDING_FIFTH = -0.4;
+
+/** ASCENDING_FIFTH of ts/src/generate/harmonize/cost.ts. */
+inline constexpr double HARMONIZE_ASCENDING_FIFTH = 0;
+
+/** DOMINANT_TO_TONIC of ts/src/generate/harmonize/cost.ts. */
+inline constexpr double HARMONIZE_DOMINANT_TO_TONIC = -0.3;
+
+/** SECONDARY_UNRESOLVED of ts/src/generate/harmonize/cost.ts. */
+inline constexpr double HARMONIZE_SECONDARY_UNRESOLVED = 1;
+
+/** SECONDARY_AFTER_TARGET of ts/src/generate/harmonize/cost.ts. */
+inline constexpr double HARMONIZE_SECONDARY_AFTER_TARGET = 0.8;
+
+/** PHRASE_TONIC of ts/src/generate/harmonize/cost.ts. */
+inline constexpr double HARMONIZE_PHRASE_TONIC = -7;
+
+/** PHRASE_AUTHENTIC of ts/src/generate/harmonize/cost.ts. */
+inline constexpr double HARMONIZE_PHRASE_AUTHENTIC = -0.5;
+
+/** OUT_OF_KEY_PER_BEAT of ts/src/generate/harmonize/cost.ts. */
+inline constexpr double HARMONIZE_OUT_OF_KEY_PER_BEAT = 3;
+
+/** COMFORT_LOW of ts/src/generate/harmonize/key-fit.ts. */
+inline constexpr int HARMONIZE_COMFORT_LOW = 55;
+
+/** COMFORT_HIGH of ts/src/generate/harmonize/key-fit.ts. */
+inline constexpr int HARMONIZE_COMFORT_HIGH = 79;
+
+/** TESSITURA_WEIGHT of ts/src/generate/harmonize/key-fit.ts. */
+inline constexpr double HARMONIZE_TESSITURA_WEIGHT = 0.001;
+
+/** STEP_SEMITONES of ts/src/generate/harmonize/nct.ts. */
+inline constexpr int HARMONIZE_STEP_SEMITONES = 2;
+
+/** TIE_BREAK_JITTER of ts/src/generate/harmonize/internal.ts. */
+inline constexpr double HARMONIZE_TIE_BREAK_JITTER = 0.000001;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_GENERATE_HARMONIZE_LIMITS_GEN_H_

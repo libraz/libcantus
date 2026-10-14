@@ -56,16 +56,15 @@ class NoSolutionError : public Error {
  public:
   /**
    * @param message What could not be satisfied.
-   * @param at Where in a sequence the failure occurred (a chord index, say), when known.
+   * @param at Where in a sequence the failure occurred (a chord index or a beat, say), when known.
    */
-  explicit NoSolutionError(const std::string& message,
-                           std::optional<std::size_t> at = std::nullopt);
+  explicit NoSolutionError(const std::string& message, std::optional<double> at = std::nullopt);
 
   /** Where in a sequence the failure occurred, when the operation was working through one. */
-  std::optional<std::size_t> at() const noexcept { return at_; }
+  std::optional<double> at() const noexcept { return at_; }
 
  private:
-  std::optional<std::size_t> at_;
+  std::optional<double> at_;
 };
 
 /** Work that would exceed the synchronous generation budget. */

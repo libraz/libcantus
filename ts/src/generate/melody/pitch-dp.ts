@@ -30,18 +30,18 @@ export type PitchSlot = {
 export type StepCost = (index: number, from: number, to: number) => number;
 
 /** Direction of the leap that reached a state. */
-const NO_LEAP = 0;
-const LEAP_UP = 1;
-const LEAP_DOWN = 2;
-const LEAP_STATES = 3;
+export const NO_LEAP = 0;
+export const LEAP_UP = 1;
+export const LEAP_DOWN = 2;
+export const LEAP_STATES = 3;
 
 /** Budget label every table of the search is charged under. */
 const SEARCH_LABEL = 'melody pitch search';
 
 /** Widest step, in semitones, still read as a third; anything wider is a leap. */
-const WIDEST_THIRD = 4;
+export const WIDEST_THIRD = 4;
 /** Surcharge for continuing in the direction of the leap just taken. */
-const LEAP_CONTINUATION_COST = 0.5;
+export const LEAP_CONTINUATION_COST = 0.5;
 
 /**
  * Cost of a melodic step by its size: a repeated note, a step, a third, a

@@ -1,0 +1,87 @@
+{
+  "tables": [
+    {
+      "module": "generate/countermelody/index.ts",
+      "export": "DEFAULT_TS",
+      "form": "record",
+      "cxx_type": "TimeSignature",
+      "cxx_name": "kCounterDefaultTs",
+      "fields": ["numerator", "denominator", "grouping"]
+    },
+    {
+      "module": "generate/countermelody/imitation.ts",
+      "export": "IMITATION_ANSWERS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kImitationAnswerNames",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "generate/countermelody/index.ts",
+      "export": "GRID_STEP",
+      "cxx_name": "COUNTER_GRID_STEP",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/countermelody/index.ts",
+      "export": "MIN_ONSET_GAP",
+      "cxx_name": "COUNTER_MIN_ONSET_GAP",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/countermelody/index.ts",
+      "export": "REGISTER_OFFSET",
+      "cxx_name": "COUNTER_REGISTER_OFFSET",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/countermelody/index.ts",
+      "export": "DEFAULT_HALF_RANGE",
+      "cxx_name": "COUNTER_DEFAULT_HALF_RANGE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/countermelody/index.ts",
+      "export": "HOLD_ON_BEAT_PROB",
+      "cxx_name": "COUNTER_HOLD_ON_BEAT_PROB",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/countermelody/index.ts",
+      "export": "HOLD_OFF_BEAT_PROB",
+      "cxx_name": "COUNTER_HOLD_OFF_BEAT_PROB",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/countermelody/index.ts",
+      "export": "REINFORCE_PROB",
+      "cxx_name": "COUNTER_REINFORCE_PROB",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/countermelody/index.ts",
+      "export": "DEFAULT_MELODY_VELOCITY",
+      "cxx_name": "COUNTER_DEFAULT_MELODY_VELOCITY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/countermelody/index.ts",
+      "export": "VELOCITY_DROP",
+      "cxx_name": "COUNTER_VELOCITY_DROP",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/countermelody/index.ts",
+      "export": "TIE_BREAK_JITTER",
+      "cxx_name": "COUNTER_TIE_BREAK_JITTER",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/countermelody/index.ts",
+      "export": "SCORE_EPS",
+      "cxx_name": "COUNTER_SCORE_EPS",
+      "cxx_type": "double"
+    }
+  ]
+}

@@ -29,7 +29,9 @@ import { cadencesThroughRaisedSeventh } from './internal.js';
  * supertonic, the tritone, the raised leading tone — are remote, and cost what
  * a chord the melody has to spell outright costs.
  */
-const ROOT_WEIGHT_BY_SEMITONE = [0, 0.9, 0.3, 0.45, 0.45, 0.15, 0.9, 0.1, 0.3, 0.3, 0.3, 0.9];
+export const ROOT_WEIGHT_BY_SEMITONE = [
+  0, 0.9, 0.3, 0.45, 0.45, 0.15, 0.9, 0.1, 0.3, 0.3, 0.3, 0.9,
+];
 /**
  * What a triad costs for its own instability, wherever in the key it sits. A
  * diminished or augmented triad in root position is unstable as a harmony, not
@@ -37,15 +39,10 @@ const ROOT_WEIGHT_BY_SEMITONE = [0, 0.9, 0.3, 0.45, 0.45, 0.15, 0.9, 0.1, 0.3, 0
  * note only that chord explains before the search will spend it — and the same
  * triad costs the same in every key that holds it.
  */
-const UNSTABLE_TRIAD = 0.9;
+export const UNSTABLE_TRIAD = 0.9;
 /** The triad qualities {@link UNSTABLE_TRIAD} is charged for. */
-const UNSTABLE_QUALITIES: ReadonlySet<ChordQuality> = new Set<ChordQuality>([
-  'dim',
-  'aug',
-  'dim7',
-  'm7b5',
-  'aug7',
-]);
+export const UNSTABLE_QUALITY_NAMES = ['dim', 'aug', 'dim7', 'm7b5', 'aug7'] as const;
+const UNSTABLE_QUALITIES: ReadonlySet<ChordQuality> = new Set<ChordQuality>(UNSTABLE_QUALITY_NAMES);
 /**
  * What using one of the key's own chords costs, standing for how much tonal
  * weight it carries.
@@ -70,13 +67,13 @@ function vocabularyBase(rootPc: number, quality: ChordQuality, tonicPc: number):
  * Widening the vocabulary adds the chords the melody asks for and leaves a
  * melody with no accidental in it where it was.
  */
-const SECONDARY_DOMINANT_BASE = 0.5;
-const BORROWED_BASE = 0.5;
+export const SECONDARY_DOMINANT_BASE = 0.5;
+export const BORROWED_BASE = 0.5;
 /**
  * The degrees a secondary dominant conventionally tonicizes, in the order the
  * candidate list has always held them.
  */
-const SECONDARY_DOMINANT_TARGETS = [2, 4, 5, 6];
+export const SECONDARY_DOMINANT_TARGETS = [2, 4, 5, 6];
 /**
  * Those degrees the key at hand can actually make a local tonic.
  *
@@ -102,7 +99,7 @@ function secondaryDominantTargets(key: KeyScale): TonicizableDegree[] {
  * Kept apart from {@link SECONDARY_DOMINANT_TARGETS} so that widening the
  * vocabulary adds to the candidate list without reordering it.
  */
-const SECONDARY_DOMINANT_ENTRY_ORDER = [5, 6, 2, 4];
+export const SECONDARY_DOMINANT_ENTRY_ORDER = [5, 6, 2, 4];
 /**
  * The order the parallel mode's chords open up in as the dial rises, keyed by
  * the semitone each root stands above the tonic: the minor subdominant first,
@@ -113,13 +110,13 @@ const SECONDARY_DOMINANT_ENTRY_ORDER = [5, 6, 2, 4];
  * than a filter, so an offset it does not name still opens, behind the ones it
  * does.
  */
-const BORROWED_ENTRY_ORDER = [5, 10, 8, 3, 7, 2, 0];
+export const BORROWED_ENTRY_ORDER = [5, 10, 8, 3, 7, 2, 0];
 /**
  * The dial position at which the last secondary dominant has entered. Above it
  * the parallel mode's chords start arriving, so the two families open one after
  * the other rather than at once.
  */
-const SECONDARY_DOMINANT_BAND = 0.5;
+export const SECONDARY_DOMINANT_BAND = 0.5;
 /** Every named reharmonization strength, in dial order. */
 export const REHARMONIZE_STRENGTHS = ['diatonic', 'secondaryDominant', 'borrowed'] as const;
 /** Where each named reharmonization strength sits on the harmonic dial. */

@@ -10,7 +10,7 @@ import { metricWeight } from '../../core/meter/index.js';
 export type PositionClass = 'strong' | 'weak' | 'off';
 
 /** Metric weight from which a pulse counts as strong. */
-const STRONG_WEIGHT = 2;
+export const STRONG_WEIGHT = 2;
 
 /**
  * The class of a position under a meter map.

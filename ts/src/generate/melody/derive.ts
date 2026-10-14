@@ -41,18 +41,18 @@ export type PhraseFrame = {
 };
 
 /** Cost per semitone a variation's step departs from the matching step of its source. */
-const VARIATION_STEP_COST = 0.2;
+export const VARIATION_STEP_COST = 0.2;
 /** Octave a pitch-keeping relation, or a variation's outer notes, may move by. */
-const OCTAVE = 12;
+export const OCTAVE = 12;
 /** Cost per semitone of a placed statement's mean distance from the target curve. */
-const LEVEL_TARGET_COST = 0.1;
+export const LEVEL_TARGET_COST = 0.1;
 /** Cost per step a placed statement's level departs from the planned one. */
-const LEVEL_PLAN_COST = 0.02;
+export const LEVEL_PLAN_COST = 0.02;
 
 /** Semitone reach either way of the levels a chromatic relation is looked for at. */
-const LEVEL_REACH = 24;
+export const LEVEL_REACH = 24;
 /** Scale-degree reach either way of the levels a tonal transposition is looked for at. */
-const TONAL_LEVEL_REACH = 14;
+export const TONAL_LEVEL_REACH = 14;
 
 /** Scale a cell's timing about its first onset, unless the ratio leaves it as it is. */
 function stretched(cell: MotifCell, timeRatio: number): MotifCell {

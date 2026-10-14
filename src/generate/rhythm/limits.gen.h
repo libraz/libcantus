@@ -2,4 +2,20 @@
 #ifndef CANTUS_SRC_GENERATE_RHYTHM_LIMITS_GEN_H_
 #define CANTUS_SRC_GENERATE_RHYTHM_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** DEFAULT_RHYTHM_VELOCITY of ts/src/generate/rhythm/index.ts. */
+inline constexpr int RHYTHM_DEFAULT_NOTE_VELOCITY = 96;
+
+/** DEFAULT_SUBDIVISION of ts/src/generate/rhythm/index.ts. */
+inline constexpr int RHYTHM_DEFAULT_SUBDIVISION = 2;
+
+/** DEFAULT_DENSITY of ts/src/generate/rhythm/index.ts. */
+inline constexpr double RHYTHM_DEFAULT_DENSITY = 0.5;
+
+/** DEFAULT_BARS of ts/src/generate/rhythm/index.ts. */
+inline constexpr int RHYTHM_DEFAULT_BARS = 1;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_GENERATE_RHYTHM_LIMITS_GEN_H_

@@ -1,0 +1,103 @@
+{
+  "tables": [
+    {
+      "module": "generate/bass/index.ts",
+      "export": "BASS_STYLES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kBassStyleNames",
+      "fields": []
+    },
+    {
+      "module": "generate/bass/internal.ts",
+      "export": "DEFAULT_TS",
+      "form": "record",
+      "cxx_type": "TimeSignature",
+      "cxx_name": "kBassDefaultTs",
+      "fields": ["numerator", "denominator", "grouping"]
+    },
+    {
+      "module": "generate/bass/degrees.ts",
+      "export": "MAJOR_DEGREE_SEMITONES",
+      "cxx_type": "int",
+      "cxx_name": "kMajorDegreeSemitones",
+      "fields": []
+    },
+    {
+      "module": "generate/bass/licks-data.ts",
+      "export": "BASS_LICKS",
+      "cxx_type": "LickRecord",
+      "cxx_name": "kBassLicks",
+      "fields": [
+        "id",
+        "genre",
+        "difficulty",
+        "articulations",
+        {
+          "name": "ts",
+          "fields": ["numerator", "denominator"]
+        },
+        "tempoRange",
+        {
+          "name": "material",
+          "fields": [
+            "lengthSteps",
+            {
+              "name": "notes",
+              "fields": ["degree", "step", "velocity", "alter", "lengthSteps", "articulation"]
+            }
+          ]
+        },
+        {
+          "name": "provenance",
+          "fields": ["basis", "note"]
+        },
+        "sections",
+        "fitsOver"
+      ]
+    }
+  ],
+  "limits": [
+    {
+      "module": "generate/bass/index.ts",
+      "export": "DEFAULT_PICKUP_DENSITY",
+      "cxx_name": "BASS_DEFAULT_PICKUP_DENSITY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/bass/internal.ts",
+      "export": "STRONG_VELOCITY",
+      "cxx_name": "BASS_STRONG_VELOCITY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/bass/internal.ts",
+      "export": "WEAK_VELOCITY",
+      "cxx_name": "BASS_WEAK_VELOCITY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/bass/internal.ts",
+      "export": "DEFAULT_OCTAVE",
+      "cxx_name": "BASS_DEFAULT_OCTAVE",
+      "cxx_type": "int"
+    },
+    {
+      "module": "generate/bass/degrees.ts",
+      "export": "HEPTATONIC_SIZE",
+      "cxx_name": "BASS_HEPTATONIC_SIZE",
+      "cxx_type": "int"
+    },
+    {
+      "module": "generate/bass/licks.ts",
+      "export": "DEFAULT_BPM",
+      "cxx_name": "LICK_DEFAULT_BPM",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/bass/licks.ts",
+      "export": "DEFAULT_LICK_DENSITY",
+      "cxx_name": "LICK_DEFAULT_DENSITY",
+      "cxx_type": "double"
+    }
+  ]
+}

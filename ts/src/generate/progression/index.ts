@@ -22,7 +22,7 @@ import {
 export type { ChordSpan } from '../../theory/chord/index.js';
 
 /** The meter a progression is laid out in when the caller names none. */
-const DEFAULT_TS = { numerator: 4, denominator: 4 };
+export const DEFAULT_TS = { numerator: 4, denominator: 4 };
 
 /**
  * Every production style a preset may suit, in declaration order.
@@ -31,7 +31,7 @@ const DEFAULT_TS = { numerator: 4, denominator: 4 };
  * a union is checked when the caller compiles, and a style arriving from a
  * config file or a JavaScript caller is checked against this.
  */
-const PROG_STYLES = Object.freeze(['minimal', 'dance', 'idol', 'rock'] as const);
+export const PROG_STYLES = Object.freeze(['minimal', 'dance', 'idol', 'rock'] as const);
 
 /**
  * Broad production style a progression preset suits.
@@ -158,7 +158,7 @@ export type ProgressionOptions = {
   ctx?: GenerationContextInput;
 };
 
-const PRESETS: ProgressionPreset[] = [
+export const PRESETS: ProgressionPreset[] = [
   {
     id: 'fourChordPop',
     name: 'Four Chord Pop',
@@ -316,10 +316,10 @@ const PRESETS: ProgressionPreset[] = [
 ];
 
 /** Share of the eligible chords replaced when the caller names no dial. */
-const DEFAULT_HARMONIC = 0;
+export const DEFAULT_HARMONIC = 0;
 
 /** Chromatic semitone offset from the tonic for borrowed (non-diatonic) degrees. */
-const BORROWED_OFFSET: Record<number, number> = {
+export const BORROWED_OFFSET: Record<number, number> = {
   [BORROWED_DEGREES.bVI]: 8,
   [BORROWED_DEGREES.bVII]: 10,
   [BORROWED_DEGREES.bIII]: 3,

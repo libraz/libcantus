@@ -26,6 +26,8 @@ import {
   assertMidiPitch,
   assertOptions,
   assertPositiveInt,
+  assertRange,
+  assertRecord,
 } from '../../core/validation/index.js';
 import { type GenerationContextInput, resolveContext } from '../context/index.js';
 
@@ -42,7 +44,7 @@ export type RhythmEvent = {
 };
 
 /** Velocity given to converted rhythm events when the caller names none. */
-const DEFAULT_RHYTHM_VELOCITY = 96;
+export const DEFAULT_RHYTHM_VELOCITY = 96;
 
 /**
  * Turn rhythm events into note events at a fixed pitch.
@@ -56,7 +58,8 @@ const DEFAULT_RHYTHM_VELOCITY = 96;
  * @param pitch The MIDI pitch to give every note.
  * @param velocity Velocity for every note; defaults to a mezzo-forte 96.
  * @returns The note events, in the order given.
- * @throws If the pitch or the velocity is not a whole MIDI value in [0, 127].
+ * @throws If the pitch or the velocity is not a whole MIDI value in [0, 127], or an event is not
+ *   a record with a finite position and duration.
  * @example
  * ```ts
  * import { generateRhythm, humanize, rhythmToNoteEvents } from '@libraz/libcantus';
@@ -77,12 +80,14 @@ export function rhythmToNoteEvents(
   // MIDI quantities, not merely finite numbers.
   assertMidiPitch(pitch, 'pitch');
   assertInteger(velocity, 'velocity', 0, 127);
-  return assertArray<RhythmEvent>(events, 'events').map((event) => ({
-    pitch,
-    startBeat: event.position,
-    durationBeat: event.duration,
-    velocity,
-  }));
+  return assertArray<RhythmEvent>(events, 'events').map((given, index) => {
+    // The positions are held to the note-event guard's domain for the same reason.
+    const event = assertRecord<RhythmEvent>(given, `events[${index}]`);
+    const bound = Number.MAX_SAFE_INTEGER;
+    assertRange(event.position, -bound, bound, `events[${index}].position`);
+    assertRange(event.duration, -bound, bound, `events[${index}].duration`);
+    return { pitch, startBeat: event.position, durationBeat: event.duration, velocity };
+  });
 }
 
 /**
@@ -118,9 +123,9 @@ export type RhythmOptions = {
   ctx?: GenerationContextInput;
 };
 
-const DEFAULT_SUBDIVISION = 2;
-const DEFAULT_DENSITY = 0.5;
-const DEFAULT_BARS = 1;
+export const DEFAULT_SUBDIVISION = 2;
+export const DEFAULT_DENSITY = 0.5;
+export const DEFAULT_BARS = 1;
 
 /**
  * Map a metric weight (0–3 from {@link metricWeight}) to a base onset

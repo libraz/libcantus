@@ -59,7 +59,7 @@ import {
   WEAK_VELOCITY,
 } from './internal.js';
 import type { LickMaterial, LickNote } from './licks-data.js';
-import { BASS_LICKS, isLickMaterial } from './licks-data.js';
+import { assertLickMaterial, BASS_LICKS, isLickMaterial } from './licks-data.js';
 
 /**
  * Options controlling {@link placeLicks}.
@@ -112,10 +112,10 @@ export type PlaceLicksOptions = {
   budget?: number;
 };
 
-const DEFAULT_BPM = 120;
+export const DEFAULT_BPM = 120;
 
 /** How much of the line is figures when the caller names nothing. */
-const DEFAULT_LICK_DENSITY = 0.6;
+export const DEFAULT_LICK_DENSITY = 0.6;
 
 /**
  * Lay licks over a chord placement.
@@ -204,10 +204,11 @@ export function placeLicks(
   const difficulty = resolved.difficulty ?? supplied;
   const { instrument, low } = bassRegister(resolved.instrument('bass'), asked.instrument, octave);
 
-  const dictionary = mergeVocabulary(
-    BASS_LICKS,
-    vocabularyOfKind(resolved.vocabulary, isLickMaterial),
-  );
+  const callerLicks = vocabularyOfKind(resolved.vocabulary, isLickMaterial);
+  callerLicks.forEach((entry, index) => {
+    assertLickMaterial(entry.material, `lick vocabulary[${index}]`);
+  });
+  const dictionary = mergeVocabulary(BASS_LICKS, callerLicks);
   // Naming an instrument is the request that the line be playable on it, so a
   // figure calling for a technique it cannot produce — a slide on an instrument
   // with no slide — is not offered rather than written and misread.

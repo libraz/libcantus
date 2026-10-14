@@ -238,6 +238,13 @@ bool wire_is_fill_archetype(const json::Value& material);
 std::function<bool(int)> wire_kit_check(const json::Value& kit);
 
 /**
+ * The conditions of a validated vocabulary entry, typed (id, genre, articulations, fitsOver,
+ * sections, tempoRange, ts, difficulty), with an empty material. An id that is not text becomes
+ * one no other id or built-in name can equal; `index` makes it distinct from the others.
+ */
+Vocabulary<std::any> read_vocabulary_header(const json::Value& entry, std::size_t index);
+
+/**
  * The fill archetypes of a context's validated entries (`vocabularyOfKind(entries,
  * isFillArchetype)`), each checked stroke by stroke as `assertFillArchetype` checks it and typed
  * for generate_drums. An id that is not text becomes one no other id or built-in name can equal.

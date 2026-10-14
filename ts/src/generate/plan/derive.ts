@@ -114,7 +114,7 @@ export type CompositionPlanOptions = {
 };
 
 /** Every preserve dimension, in declaration order. */
-const PRESERVE_ASPECTS = [
+export const PRESERVE_ASPECTS = [
   'form',
   'phraseLengths',
   'harmonicFunction',
@@ -128,26 +128,26 @@ const PRESERVE_ASPECTS = [
 const NEUTRAL_SHAPE: MelodicContourShape = 'arch';
 
 /** The peak position a phrase is interpolated toward. */
-const NEUTRAL_PEAK_POSITION = 0.6;
+export const NEUTRAL_PEAK_POSITION = 0.6;
 
 /** The registerShape weight at and above which the reference's contour shape is kept. */
-const SHAPE_KEEP_THRESHOLD = 0.5;
+export const SHAPE_KEEP_THRESHOLD = 0.5;
 
 /** Onset-level mass proportional to the level index, levels 0..5. */
-const NEUTRAL_ONSET_LEVELS = Object.freeze([0, 1, 2, 3, 4, 5].map((level) => level / 15));
+export const NEUTRAL_ONSET_LEVELS = Object.freeze([0, 1, 2, 3, 4, 5].map((level) => level / 15));
 
 /** Scale degrees whose triads may stand in for a structural chord of each function. */
-const FUNCTION_DEGREES: Readonly<Record<HarmonicFunction, readonly number[]>> = {
+export const FUNCTION_DEGREES: Readonly<Record<HarmonicFunction, readonly number[]>> = {
   tonic: [1, 6, 3],
   subdominant: [4, 2],
   dominant: [5, 7],
 };
 
 /** Metric weight from which a beat counts as strong: the downbeat and a bar's secondary accent. */
-const STRONG_WEIGHT = 2;
+export const STRONG_WEIGHT = 2;
 
 /** Degree count of a scale whose degrees stack into diatonic triads. */
-const HEPTATONIC_DEGREES = 7;
+export const HEPTATONIC_DEGREES = 7;
 
 /** A phrase span in the plan, and the reference phrase it was laid from. */
 type PhraseSpan = {
@@ -204,13 +204,15 @@ function rejectSuppliedRng(ctx: GenerationContextInput | undefined): void {
  * spelled interval from the reference's home tonic to the requested one.
  */
 function plannedKeys(profile: ReferenceProfile, requested: KeyLike | undefined): ResolvedKey[] {
-  const regions = profile.harmony.keys.map(
-    ({ key }): ResolvedKey => ({
-      scale: { ...key.scale },
-      tonic: { ...key.tonic },
-      variant: key.variant,
-    }),
-  );
+  const regions = profile.harmony.keys.map(({ key }): ResolvedKey => {
+    // A region may carry the scale alone, which the profile check accepts as a key.
+    const resolved = resolveKey(key);
+    return {
+      scale: { ...resolved.scale },
+      tonic: { ...resolved.tonic },
+      variant: resolved.variant,
+    };
+  });
   const home = regions[0] as ResolvedKey;
   if (requested === undefined) {
     return regions;

@@ -2,4 +2,29 @@
 #ifndef CANTUS_SRC_GENERATE_BASS_LIMITS_GEN_H_
 #define CANTUS_SRC_GENERATE_BASS_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** DEFAULT_PICKUP_DENSITY of ts/src/generate/bass/index.ts. */
+inline constexpr double BASS_DEFAULT_PICKUP_DENSITY = 0.35;
+
+/** STRONG_VELOCITY of ts/src/generate/bass/internal.ts. */
+inline constexpr double BASS_STRONG_VELOCITY = 100;
+
+/** WEAK_VELOCITY of ts/src/generate/bass/internal.ts. */
+inline constexpr double BASS_WEAK_VELOCITY = 80;
+
+/** DEFAULT_OCTAVE of ts/src/generate/bass/internal.ts. */
+inline constexpr int BASS_DEFAULT_OCTAVE = 2;
+
+/** HEPTATONIC_SIZE of ts/src/generate/bass/degrees.ts. */
+inline constexpr int BASS_HEPTATONIC_SIZE = 7;
+
+/** DEFAULT_BPM of ts/src/generate/bass/licks.ts. */
+inline constexpr double LICK_DEFAULT_BPM = 120;
+
+/** DEFAULT_LICK_DENSITY of ts/src/generate/bass/licks.ts. */
+inline constexpr double LICK_DEFAULT_DENSITY = 0.6;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_GENERATE_BASS_LIMITS_GEN_H_

@@ -1,0 +1,188 @@
+{
+  "tables": [
+    {
+      "module": "generate/harmonize/candidates.ts",
+      "export": "ROOT_WEIGHT_BY_SEMITONE",
+      "cxx_type": "double",
+      "cxx_name": "kRootWeightBySemitone",
+      "fields": []
+    },
+    {
+      "module": "generate/harmonize/candidates.ts",
+      "export": "UNSTABLE_QUALITY_NAMES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kUnstableQualityNames",
+      "fields": []
+    },
+    {
+      "module": "generate/harmonize/candidates.ts",
+      "export": "SECONDARY_DOMINANT_TARGETS",
+      "cxx_type": "int",
+      "cxx_name": "kSecondaryDominantTargets",
+      "fields": []
+    },
+    {
+      "module": "generate/harmonize/candidates.ts",
+      "export": "SECONDARY_DOMINANT_ENTRY_ORDER",
+      "cxx_type": "int",
+      "cxx_name": "kSecondaryDominantEntryOrder",
+      "fields": []
+    },
+    {
+      "module": "generate/harmonize/candidates.ts",
+      "export": "BORROWED_ENTRY_ORDER",
+      "cxx_type": "int",
+      "cxx_name": "kBorrowedEntryOrder",
+      "fields": []
+    },
+    {
+      "module": "generate/harmonize/candidates.ts",
+      "export": "REHARMONIZE_STRENGTHS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kReharmonizeStrengths",
+      "fields": []
+    },
+    {
+      "module": "generate/harmonize/candidates.ts",
+      "export": "REHARMONIZE_DIAL",
+      "cxx_type": "ReharmonizeDialRow",
+      "cxx_name": "kReharmonizeDial",
+      "fields": []
+    },
+    {
+      "module": "generate/harmonize/cost.ts",
+      "export": "ROOT_MOTION_COST",
+      "cxx_type": "double",
+      "cxx_name": "kRootMotionCost",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "generate/harmonize/candidates.ts",
+      "export": "UNSTABLE_TRIAD",
+      "cxx_name": "HARMONIZE_UNSTABLE_TRIAD",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/harmonize/candidates.ts",
+      "export": "SECONDARY_DOMINANT_BASE",
+      "cxx_name": "HARMONIZE_SECONDARY_DOMINANT_BASE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/harmonize/candidates.ts",
+      "export": "BORROWED_BASE",
+      "cxx_name": "HARMONIZE_BORROWED_BASE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/harmonize/candidates.ts",
+      "export": "SECONDARY_DOMINANT_BAND",
+      "cxx_name": "HARMONIZE_SECONDARY_DOMINANT_BAND",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/harmonize/cost.ts",
+      "export": "NON_CHORD_TONE_STRONG",
+      "cxx_name": "HARMONIZE_NON_CHORD_TONE_STRONG",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/harmonize/cost.ts",
+      "export": "NON_CHORD_TONE_WEAK",
+      "cxx_name": "HARMONIZE_NON_CHORD_TONE_WEAK",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/harmonize/cost.ts",
+      "export": "NON_SCALE_TONE",
+      "cxx_name": "HARMONIZE_NON_SCALE_TONE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/harmonize/cost.ts",
+      "export": "CHORD_CHANGE",
+      "cxx_name": "HARMONIZE_CHORD_CHANGE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/harmonize/cost.ts",
+      "export": "DESCENDING_FIFTH",
+      "cxx_name": "HARMONIZE_DESCENDING_FIFTH",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/harmonize/cost.ts",
+      "export": "ASCENDING_FIFTH",
+      "cxx_name": "HARMONIZE_ASCENDING_FIFTH",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/harmonize/cost.ts",
+      "export": "DOMINANT_TO_TONIC",
+      "cxx_name": "HARMONIZE_DOMINANT_TO_TONIC",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/harmonize/cost.ts",
+      "export": "SECONDARY_UNRESOLVED",
+      "cxx_name": "HARMONIZE_SECONDARY_UNRESOLVED",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/harmonize/cost.ts",
+      "export": "SECONDARY_AFTER_TARGET",
+      "cxx_name": "HARMONIZE_SECONDARY_AFTER_TARGET",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/harmonize/cost.ts",
+      "export": "PHRASE_TONIC",
+      "cxx_name": "HARMONIZE_PHRASE_TONIC",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/harmonize/cost.ts",
+      "export": "PHRASE_AUTHENTIC",
+      "cxx_name": "HARMONIZE_PHRASE_AUTHENTIC",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/harmonize/cost.ts",
+      "export": "OUT_OF_KEY_PER_BEAT",
+      "cxx_name": "HARMONIZE_OUT_OF_KEY_PER_BEAT",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/harmonize/key-fit.ts",
+      "export": "COMFORT_LOW",
+      "cxx_name": "HARMONIZE_COMFORT_LOW",
+      "cxx_type": "int"
+    },
+    {
+      "module": "generate/harmonize/key-fit.ts",
+      "export": "COMFORT_HIGH",
+      "cxx_name": "HARMONIZE_COMFORT_HIGH",
+      "cxx_type": "int"
+    },
+    {
+      "module": "generate/harmonize/key-fit.ts",
+      "export": "TESSITURA_WEIGHT",
+      "cxx_name": "HARMONIZE_TESSITURA_WEIGHT",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/harmonize/nct.ts",
+      "export": "STEP_SEMITONES",
+      "cxx_name": "HARMONIZE_STEP_SEMITONES",
+      "cxx_type": "int"
+    },
+    {
+      "module": "generate/harmonize/internal.ts",
+      "export": "TIE_BREAK_JITTER",
+      "cxx_name": "HARMONIZE_TIE_BREAK_JITTER",
+      "cxx_type": "double"
+    }
+  ]
+}

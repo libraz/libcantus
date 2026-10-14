@@ -16,6 +16,7 @@
 #include "js/math.h"
 #include "js/number.h"
 #include "theory/safety/limits.gen.h"
+#include "theory/safety/weights.h"
 
 namespace cantus {
 
@@ -420,6 +421,47 @@ ProfileWeights profile_weights(SafetyProfile profile, const ProfileWeightOverrid
   apply(weights.forbiddenLeap, overrides.forbiddenLeap, "forbiddenLeap");
   apply(weights.registerDrift, overrides.registerDrift, "registerDrift");
   return weights;
+}
+
+namespace {
+
+/** The weight fields, in the order of the weight table, with the override member of each. */
+constexpr std::pair<std::string_view, std::optional<double> ProfileWeightOverrides::*>
+    kWeightOverrideFields[] = {
+        {"imperfectConsonance", &ProfileWeightOverrides::imperfectConsonance},
+        {"perfectConsonance", &ProfileWeightOverrides::perfectConsonance},
+        {"dissonance", &ProfileWeightOverrides::dissonance},
+        {"chordTone", &ProfileWeightOverrides::chordTone},
+        {"contraryMotion", &ProfileWeightOverrides::contraryMotion},
+        {"obliqueMotion", &ProfileWeightOverrides::obliqueMotion},
+        {"similarMotion", &ProfileWeightOverrides::similarMotion},
+        {"parallelImperfect", &ProfileWeightOverrides::parallelImperfect},
+        {"stepwise", &ProfileWeightOverrides::stepwise},
+        {"melodicDistance", &ProfileWeightOverrides::melodicDistance},
+        {"forbiddenLeap", &ProfileWeightOverrides::forbiddenLeap},
+        {"registerDrift", &ProfileWeightOverrides::registerDrift},
+};
+
+}  // namespace
+
+std::optional<double> ProfileWeightOverrides::*weight_override_member(std::string_view field) {
+  for (const auto& [name, member] : kWeightOverrideFields) {
+    if (name == field) {
+      return member;
+    }
+  }
+  return nullptr;
+}
+
+std::vector<std::pair<std::string_view, double>> named_weight_overrides(
+    const ProfileWeightOverrides& overrides) {
+  std::vector<std::pair<std::string_view, double>> named;
+  for (const auto& [name, member] : kWeightOverrideFields) {
+    if (overrides.*member) {
+      named.emplace_back(name, *(overrides.*member));
+    }
+  }
+  return named;
 }
 
 SafetyResult evaluate_safety(const SafetyQuery& query, const EvaluateSafetyOptions& opts) {

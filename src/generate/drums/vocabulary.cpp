@@ -25,14 +25,6 @@ struct StrokeRecord {
   std::optional<std::string_view> limb;
 };
 
-/** A generated entry's time signature: none, or a numerator and a denominator. */
-struct SignatureSlot {
-  SignatureSlot(std::nullopt_t) {}  // NOLINT
-  SignatureSlot(int numerator, int denominator)
-      : value(TimeSignature{numerator, denominator, std::nullopt}) {}
-  std::optional<TimeSignature> value;
-};
-
 /** A generated DRUM_PATTERNS entry, with its names still as text. */
 struct PatternRecord {
   std::string_view id;

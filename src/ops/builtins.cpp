@@ -82,7 +82,7 @@ const std::string& string_field(const json::Object& o, const char* key) {
           std::floor(at->as_number()) != at->as_number()) {
         throw RequestError("$throw: \"at\" must be a non-negative integer");
       }
-      throw NoSolutionError(message, static_cast<std::size_t>(at->as_number()));
+      throw NoSolutionError(message, at->as_number());
     }
     case ErrorCode::kBudgetExceeded:
       throw BudgetExceededError(message);

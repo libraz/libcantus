@@ -1,0 +1,101 @@
+{
+  "tables": [
+    {
+      "module": "generate/plan/derive.ts",
+      "export": "PRESERVE_ASPECTS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kPreserveAspects",
+      "fields": []
+    },
+    {
+      "module": "generate/plan/derive.ts",
+      "export": "NEUTRAL_ONSET_LEVELS",
+      "cxx_type": "double",
+      "cxx_name": "kNeutralOnsetLevels",
+      "fields": []
+    },
+    {
+      "module": "generate/plan/derive.ts",
+      "export": "FUNCTION_DEGREES",
+      "cxx_type": "FunctionDegreesRow",
+      "cxx_name": "kFunctionDegrees",
+      "fields": []
+    },
+    {
+      "module": "generate/plan/harmony.ts",
+      "export": "HARMONY_OK_KIND_NAMES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kHarmonyOkKinds",
+      "fields": []
+    },
+    {
+      "module": "generate/plan/harmony.ts",
+      "export": "CADENCE_DEGREES",
+      "cxx_type": "CadenceDegreesRow",
+      "cxx_name": "kCadenceDegrees",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "generate/plan/types.ts",
+      "export": "COMPOSITION_PLAN_VERSION",
+      "cxx_name": "COMPOSITION_PLAN_VERSION",
+      "cxx_type": "int"
+    },
+    {
+      "module": "generate/plan/validate.ts",
+      "export": "MASS_TOLERANCE",
+      "cxx_name": "PLAN_MASS_TOLERANCE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/plan/internal.ts",
+      "export": "STRONG_WEIGHT",
+      "cxx_name": "PLAN_STRONG_WEIGHT",
+      "cxx_type": "int"
+    },
+    {
+      "module": "generate/plan/derive.ts",
+      "export": "NEUTRAL_PEAK_POSITION",
+      "cxx_name": "PLAN_NEUTRAL_PEAK_POSITION",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/plan/derive.ts",
+      "export": "SHAPE_KEEP_THRESHOLD",
+      "cxx_name": "PLAN_SHAPE_KEEP_THRESHOLD",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/plan/derive.ts",
+      "export": "STRONG_WEIGHT",
+      "cxx_name": "PLAN_DERIVE_STRONG_WEIGHT",
+      "cxx_type": "int"
+    },
+    {
+      "module": "generate/plan/derive.ts",
+      "export": "HEPTATONIC_DEGREES",
+      "cxx_name": "PLAN_HEPTATONIC_DEGREES",
+      "cxx_type": "int"
+    },
+    {
+      "module": "generate/plan/evaluate.ts",
+      "export": "PEAK_POSITION_TOLERANCE",
+      "cxx_name": "PLAN_PEAK_POSITION_TOLERANCE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/plan/evaluate.ts",
+      "export": "OUTLINE_POINTS",
+      "cxx_name": "PLAN_OUTLINE_POINTS",
+      "cxx_type": "int"
+    },
+    {
+      "module": "generate/plan/evaluate.ts",
+      "export": "HELD_NOTE_BEATS",
+      "cxx_name": "PLAN_HELD_NOTE_BEATS",
+      "cxx_type": "double"
+    }
+  ]
+}

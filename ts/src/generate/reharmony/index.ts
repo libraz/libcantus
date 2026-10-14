@@ -123,10 +123,10 @@ function sameChord(a: Chord, b: Chord): boolean {
 }
 
 /** Root offsets (semitones) that form a third above or below a root. */
-const THIRD_OFFSETS = [3, 4, 8, 9] as const;
+export const THIRD_OFFSETS = [3, 4, 8, 9] as const;
 
 /** Widest alteration a {@link PitchSpelling} hint may carry: a double accidental. */
-const MAX_HINT_ALTER = 2;
+export const MAX_HINT_ALTER = 2;
 
 /** Reduce a spelled note to the bare letter/alter a chord records as a hint. */
 function bareSpelling(note: Note): PitchSpelling {

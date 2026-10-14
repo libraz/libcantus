@@ -38,6 +38,7 @@ The C++ code uses the helpers in `src/js/` wherever JavaScript semantics differ 
 | `Math.imul`, `\| 0`, `>>> 0` | `js::imul`, `js::to_int32`, `js::to_uint32` | relying on signed overflow | Wrap-around is defined |
 | `x % y` | `std::fmod` | `%` on negative integers | Sign rules |
 | `Array.prototype.sort` | `std::stable_sort` with a comparator giving the TS order | `std::sort` | JS sort is stable |
+| `sort((a, b) => a.x - b.x)` over values not yet checked | `js::array_sort` | `std::stable_sort` over keys that may be NaN | A comparator that returns NaN is no ordering; NaN reads as 0 and V8's run detection fixes the result |
 | `` `${n}` `` / `String(n)` | `js::to_string` | `std::to_string`, printf `%f` / `%g` / `%e` | ES number formatting |
 | `` `${v}` `` of any value | `js::template_string` | — | Messages match word for word |
 | `describeRejected` / `JSON.stringify(s)` | `js::describe_rejected` / `js::quote` | — | Same |

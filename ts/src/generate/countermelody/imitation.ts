@@ -28,7 +28,7 @@ import {
 } from '../../theory/scale/index.js';
 
 /** Every way an imitation can answer, in declaration order. */
-const IMITATION_ANSWERS = ['real', 'tonal'] as const;
+export const IMITATION_ANSWERS = ['real', 'tonal'] as const;
 
 /**
  * How an imitation answers the voice it follows.

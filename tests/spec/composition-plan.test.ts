@@ -794,6 +794,19 @@ describe('deriveCompositionPlan: key change', () => {
     expect(plan.harmony.map((c) => c.key)).toEqual(modulating.harmony.chords.map((c) => c.key));
   });
 
+  it('reads a key region that carries only its scale as the key it spells', () => {
+    const bare = edited(SOURCE, (p) => {
+      const home = p.harmony.keys[0];
+      if (!home) throw new Error('fixture has a key');
+      home.key = { scale: { ...home.key.scale } } as typeof home.key;
+    });
+    const expected = deriveCompositionPlan(SOURCE);
+    expect(deriveCompositionPlan(bare)).toEqual(expected);
+    expect(deriveCompositionPlan(bare, { key: 'F major' })).toEqual(
+      deriveCompositionPlan(SOURCE, { key: 'F major' }),
+    );
+  });
+
   it('keeps a modal home key modal', () => {
     const dorian = analyzeReference(SOURCE_SONG.notes, {
       meters: SOURCE_SONG.meters,

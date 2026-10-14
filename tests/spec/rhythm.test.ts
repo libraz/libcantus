@@ -49,6 +49,19 @@ describe('rhythmToNoteEvents pitch and velocity', () => {
     expect(() => rhythmToNoteEvents(events, pitch, velocity)).toThrow(InvalidInputError);
   });
 
+  it.each([
+    [{ position: Number.NaN, duration: 1 }, /events\[0\]\.position must be finite; received NaN/],
+    [
+      { position: 0, duration: Number.POSITIVE_INFINITY },
+      /events\[0\]\.duration must be finite; received Infinity/,
+    ],
+    [{ position: '1', duration: 1 }, /events\[0\]\.position must be finite; received 1/],
+    [{ duration: 1 }, /events\[0\]\.position must be finite; received undefined/],
+    [null, /events\[0\] must be an object; received null/],
+  ])('refuses the event %j, as the note-event guard refuses its note', (event, message) => {
+    expect(() => rhythmToNoteEvents([event as RhythmEvent], 38, 100)).toThrow(message);
+  });
+
   it('hands back notes the note-event guard accepts', () => {
     // The bridge builds note events without going through the guard, so what it
     // writes is checked against the guard rather than against itself.

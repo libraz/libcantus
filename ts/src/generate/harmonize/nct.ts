@@ -54,7 +54,7 @@ export function snapToPulse(beat: number, pulse: number): number {
 }
 
 /** Largest interval still heard as a step; anything wider is a leap. */
-const STEP_SEMITONES = 2;
+export const STEP_SEMITONES = 2;
 
 function isStep(a: number, b: number): boolean {
   const d = Math.abs(a - b);

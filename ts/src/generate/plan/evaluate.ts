@@ -49,11 +49,11 @@ import {
 import { assertCompositionPlan } from './validate.js';
 
 /** How far a phrase's actual peak position may drift from the planned one before it warns. */
-const PEAK_POSITION_TOLERANCE = 0.2;
+export const PEAK_POSITION_TOLERANCE = 0.2;
 /** Sample points an outline is read at, matching {@link ReferencePhraseMelody.outline}. */
-const OUTLINE_POINTS = 8;
+export const OUTLINE_POINTS = 8;
 /** Shortest note, in beats, whose end marks a phrase boundary. */
-const HELD_NOTE_BEATS = 1;
+export const HELD_NOTE_BEATS = 1;
 
 /**
  * One way a candidate melody departs from its plan.

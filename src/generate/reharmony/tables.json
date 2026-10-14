@@ -1,0 +1,19 @@
+{
+  "tables": [
+    {
+      "module": "generate/reharmony/index.ts",
+      "export": "THIRD_OFFSETS",
+      "cxx_type": "int",
+      "cxx_name": "kThirdOffsets",
+      "fields": []
+    }
+  ],
+  "limits": [
+    {
+      "module": "generate/reharmony/index.ts",
+      "export": "MAX_HINT_ALTER",
+      "cxx_name": "REHARMONY_MAX_HINT_ALTER",
+      "cxx_type": "int"
+    }
+  ]
+}

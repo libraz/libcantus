@@ -93,24 +93,24 @@ export type OrnamentOptions = {
   ctx?: GenerationContextInput;
 };
 
-const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
+export const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
 const DEFAULT_STYLE: OrnamentStyle = 'ghost';
-const DEFAULT_AMOUNT = 0.5;
+export const DEFAULT_AMOUNT = 0.5;
 /** Velocity a ghosted stroke keeps, as a fraction of what it had. */
-const GHOST_VELOCITY_SCALE = 0.45;
+export const GHOST_VELOCITY_SCALE = 0.45;
 /** Velocity an accent adds, in MIDI units. */
-const ACCENT_VELOCITY_BOOST = 12;
+export const ACCENT_VELOCITY_BOOST = 12;
 /** Velocity assumed for a note that carries none. */
-const DEFAULT_VELOCITY = 80;
-const MIN_VELOCITY = 1;
-const MAX_VELOCITY = 127;
+export const DEFAULT_VELOCITY = 80;
+export const MIN_VELOCITY = 1;
+export const MAX_VELOCITY = 127;
 /**
  * Interval, in semitones, from which a move reads as slid into rather than
  * restruck. A semitone is the most idiomatic slide there is on a fretted or a
  * bowed instrument, so every move of the line qualifies and only a repeated
  * pitch, which is no move at all, does not.
  */
-const SLIDE_MIN_SEMITONES = 1;
+export const SLIDE_MIN_SEMITONES = 1;
 
 /** Whether a note is a candidate for an ornament of this style. */
 function eligible(

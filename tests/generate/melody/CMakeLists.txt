@@ -1,0 +1,1 @@
+cantus_add_test(generate_melody test_melody.cpp)

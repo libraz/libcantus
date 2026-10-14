@@ -1,0 +1,1 @@
+cantus_add_test(generate_countermelody test_countermelody.cpp)

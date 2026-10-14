@@ -116,6 +116,18 @@ bool is_text(const json::Value& v) {
 
 }  // namespace
 
+json::Value add(const json::Value& lhs, const json::Value& rhs) {
+  if (is_text(lhs) || is_text(rhs)) {
+    return json::Value(template_string(lhs) + template_string(rhs));
+  }
+  for (const json::Value* operand : {&lhs, &rhs}) {
+    if (type_of(*operand) == "bigint") {
+      throw TypeError("Cannot mix BigInt and other types, use explicit conversions");
+    }
+  }
+  return json::Value(to_number(lhs) + to_number(rhs));
+}
+
 bool greater_than(const json::Value& lhs, const json::Value& rhs) {
   if (is_text(lhs) && is_text(rhs)) {
     std::string a = lhs.kind() == json::Kind::kString ? lhs.as_string() : template_string(lhs);

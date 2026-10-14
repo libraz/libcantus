@@ -1,0 +1,62 @@
+{
+  "tables": [
+    {
+      "module": "generate/groove/index.ts",
+      "export": "DEFAULT_TS",
+      "form": "record",
+      "cxx_type": "TimeSignature",
+      "cxx_name": "kGrooveDefaultTs",
+      "fields": ["numerator", "denominator", "grouping"]
+    }
+  ],
+  "limits": [
+    {
+      "module": "generate/groove/index.ts",
+      "export": "DEFAULT_GROOVE_SUBDIVISION",
+      "cxx_name": "GROOVE_DEFAULT_SUBDIVISION",
+      "cxx_type": "int"
+    },
+    {
+      "module": "generate/groove/index.ts",
+      "export": "DEFAULT_TIMING",
+      "cxx_name": "GROOVE_DEFAULT_TIMING",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/groove/index.ts",
+      "export": "DEFAULT_VELOCITY_JITTER",
+      "cxx_name": "GROOVE_DEFAULT_VELOCITY_JITTER",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/groove/index.ts",
+      "export": "DEFAULT_ACCENT",
+      "cxx_name": "GROOVE_DEFAULT_ACCENT",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/groove/index.ts",
+      "export": "DEFAULT_BASE_VELOCITY",
+      "cxx_name": "GROOVE_DEFAULT_BASE_VELOCITY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/groove/index.ts",
+      "export": "MAX_METRIC_WEIGHT",
+      "cxx_name": "GROOVE_MAX_METRIC_WEIGHT",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/groove/index.ts",
+      "export": "MIN_VELOCITY",
+      "cxx_name": "GROOVE_MIN_VELOCITY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/groove/index.ts",
+      "export": "MAX_VELOCITY",
+      "cxx_name": "GROOVE_MAX_VELOCITY",
+      "cxx_type": "double"
+    }
+  ]
+}

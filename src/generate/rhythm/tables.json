@@ -1,0 +1,29 @@
+{
+  "tables": [],
+  "limits": [
+    {
+      "module": "generate/rhythm/index.ts",
+      "export": "DEFAULT_RHYTHM_VELOCITY",
+      "cxx_name": "RHYTHM_DEFAULT_NOTE_VELOCITY",
+      "cxx_type": "int"
+    },
+    {
+      "module": "generate/rhythm/index.ts",
+      "export": "DEFAULT_SUBDIVISION",
+      "cxx_name": "RHYTHM_DEFAULT_SUBDIVISION",
+      "cxx_type": "int"
+    },
+    {
+      "module": "generate/rhythm/index.ts",
+      "export": "DEFAULT_DENSITY",
+      "cxx_name": "RHYTHM_DEFAULT_DENSITY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/rhythm/index.ts",
+      "export": "DEFAULT_BARS",
+      "cxx_name": "RHYTHM_DEFAULT_BARS",
+      "cxx_type": "int"
+    }
+  ]
+}

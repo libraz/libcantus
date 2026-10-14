@@ -6,9 +6,9 @@ import { chordScales } from '../../theory/chordscale/index.js';
 import { namedScaleMask, nearestScaleTone } from '../../theory/scale/index.js';
 
 /** Semitones above the root for each degree of a major scale, 1-based. */
-const MAJOR_DEGREE_SEMITONES = [0, 2, 4, 5, 7, 9, 11] as const;
+export const MAJOR_DEGREE_SEMITONES = [0, 2, 4, 5, 7, 9, 11] as const;
 /** How many tones a scale has one degree apiece. */
-const HEPTATONIC_SIZE = 7;
+export const HEPTATONIC_SIZE = 7;
 /**
  * The scale a chord's own quality implies, as semitones above its root.
  *

@@ -2,4 +2,41 @@
 #ifndef CANTUS_SRC_GENERATE_COUNTERMELODY_LIMITS_GEN_H_
 #define CANTUS_SRC_GENERATE_COUNTERMELODY_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** GRID_STEP of ts/src/generate/countermelody/index.ts. */
+inline constexpr double COUNTER_GRID_STEP = 0.5;
+
+/** MIN_ONSET_GAP of ts/src/generate/countermelody/index.ts. */
+inline constexpr double COUNTER_MIN_ONSET_GAP = 1;
+
+/** REGISTER_OFFSET of ts/src/generate/countermelody/index.ts. */
+inline constexpr double COUNTER_REGISTER_OFFSET = 12;
+
+/** DEFAULT_HALF_RANGE of ts/src/generate/countermelody/index.ts. */
+inline constexpr double COUNTER_DEFAULT_HALF_RANGE = 10;
+
+/** HOLD_ON_BEAT_PROB of ts/src/generate/countermelody/index.ts. */
+inline constexpr double COUNTER_HOLD_ON_BEAT_PROB = 0.55;
+
+/** HOLD_OFF_BEAT_PROB of ts/src/generate/countermelody/index.ts. */
+inline constexpr double COUNTER_HOLD_OFF_BEAT_PROB = 0.2;
+
+/** REINFORCE_PROB of ts/src/generate/countermelody/index.ts. */
+inline constexpr double COUNTER_REINFORCE_PROB = 0.35;
+
+/** DEFAULT_MELODY_VELOCITY of ts/src/generate/countermelody/index.ts. */
+inline constexpr double COUNTER_DEFAULT_MELODY_VELOCITY = 96;
+
+/** VELOCITY_DROP of ts/src/generate/countermelody/index.ts. */
+inline constexpr double COUNTER_VELOCITY_DROP = 16;
+
+/** TIE_BREAK_JITTER of ts/src/generate/countermelody/index.ts. */
+inline constexpr double COUNTER_TIE_BREAK_JITTER = 0.000001;
+
+/** SCORE_EPS of ts/src/generate/countermelody/index.ts. */
+inline constexpr double COUNTER_SCORE_EPS = 1e-9;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_GENERATE_COUNTERMELODY_LIMITS_GEN_H_

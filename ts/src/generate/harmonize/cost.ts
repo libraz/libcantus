@@ -64,9 +64,9 @@ import { classifyMelodyTones } from './nct.js';
  * Ornamental tones are removed before the emission term is computed (see
  * {@link classifyMelodyTones}), so these numbers weigh structural tones only.
  */
-const NON_CHORD_TONE_STRONG = 4;
-const NON_CHORD_TONE_WEAK = 1;
-const NON_SCALE_TONE = 0.5;
+export const NON_CHORD_TONE_STRONG = 4;
+export const NON_CHORD_TONE_WEAK = 1;
+export const NON_SCALE_TONE = 0.5;
 /**
  * What changing chord costs at all, before the motion is judged. It is more than
  * the deepest discount any motion earns — a dominant resolving to its tonic —
@@ -77,18 +77,18 @@ const NON_SCALE_TONE = 0.5;
  * Functional flow still orders the changes the melody does ask for, which is all
  * it is there to do.
  */
-const CHORD_CHANGE = 0.8;
-const DESCENDING_FIFTH = -0.4;
-const ASCENDING_FIFTH = 0;
-const DOMINANT_TO_TONIC = -0.3;
+export const CHORD_CHANGE = 0.8;
+export const DESCENDING_FIFTH = -0.4;
+export const ASCENDING_FIFTH = 0;
+export const DOMINANT_TO_TONIC = -0.3;
 /**
  * What a secondary dominant pays for not reaching the degree it tonicizes.
  * Reaching it earns no separate discount: the descending fifth an applied
  * dominant makes into its target is already priced, and paying it twice made
  * borrowing a chromatic chord and resolving it cheaper than staying in the key.
  */
-const SECONDARY_UNRESOLVED = 1;
-const SECONDARY_AFTER_TARGET = 0.8;
+export const SECONDARY_UNRESOLVED = 1;
+export const SECONDARY_AFTER_TARGET = 0.8;
 /**
  * What other root motion costs, by the shorter distance in semitones between
  * the two roots: a third or a step asks a little, a tritone asks a lot. Motion
@@ -96,7 +96,7 @@ const SECONDARY_AFTER_TARGET = 0.8;
  * and is judged by direction instead, the descending one being the one a
  * progression is driven by.
  */
-const ROOT_MOTION_COST = [0, 0.15, 0.15, 0.2, 0.2, 0, 0.4];
+export const ROOT_MOTION_COST = [0, 0.15, 0.15, 0.2, 0.2, 0, 0.4];
 /**
  * What closing a phrase on the tonic is worth, per beat of the closing slot. It
  * is worth more than everything that slot can otherwise decide — covering every
@@ -107,8 +107,8 @@ const ROOT_MOTION_COST = [0, 0.15, 0.15, 0.2, 0.2, 0, 0.4];
  * the tonic, so a phrase ending anywhere else is still harmonized by what it
  * sounds.
  */
-const PHRASE_TONIC = -7;
-const PHRASE_AUTHENTIC = -0.5;
+export const PHRASE_TONIC = -7;
+export const PHRASE_AUTHENTIC = -0.5;
 export const OUT_OF_KEY_PER_BEAT = 3;
 /**
  * Melody-fit cost of a candidate over a segment's structural notes.

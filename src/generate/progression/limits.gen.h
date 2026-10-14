@@ -2,4 +2,11 @@
 #ifndef CANTUS_SRC_GENERATE_PROGRESSION_LIMITS_GEN_H_
 #define CANTUS_SRC_GENERATE_PROGRESSION_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** DEFAULT_HARMONIC of ts/src/generate/progression/index.ts. */
+inline constexpr double PROGRESSION_DEFAULT_HARMONIC = 0;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_GENERATE_PROGRESSION_LIMITS_GEN_H_

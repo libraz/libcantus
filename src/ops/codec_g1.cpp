@@ -768,6 +768,46 @@ std::function<bool(int)> wire_kit_check(const json::Value& kit) {
   };
 }
 
+Vocabulary<std::any> read_vocabulary_header(const json::Value& entry, std::size_t index) {
+  Vocabulary<std::any> typed;
+  const json::Value& id = get(entry, "id");
+  // An id that is not text cannot meet a built-in name; it stays distinct from every other id.
+  typed.id = id.is_string() ? id.as_string() : std::string("\x01") + index_text(index);
+  typed.genre = *parse_genre(get(entry, "genre").as_string());
+  for (const json::Value& name : get(entry, "articulations").as_array()) {
+    typed.articulations.push_back(*parse_articulation(name.as_string()));
+  }
+  const json::Value& fits_over = get(entry, "fitsOver");
+  if (fits_over.is_array()) {
+    typed.fitsOver.emplace();
+    for (const json::Value& name : fits_over.as_array()) {
+      for (ChordQuality quality : chord_qualities()) {
+        if (to_string(quality) == name.as_string()) {
+          typed.fitsOver->push_back(quality);
+        }
+      }
+    }
+  }
+  const json::Value& sections = get(entry, "sections");
+  if (sections.is_array()) {
+    typed.sections.emplace();
+    for (const json::Value& name : sections.as_array()) {
+      typed.sections->push_back(*parse_section(name.as_string()));
+    }
+  }
+  const json::Value& tempo_range = get(entry, "tempoRange");
+  if (tempo_range.is_array()) {
+    typed.tempoRange = std::array<double, 2>{*number_of(tempo_range.as_array()[0]),
+                                             *number_of(tempo_range.as_array()[1])};
+  }
+  const json::Value& ts = get(entry, "ts");
+  if (!is_undefined(ts)) {
+    typed.ts = assert_time_signature(ts, "ts");
+  }
+  typed.difficulty = *number_of(get(entry, "difficulty"));
+  return typed;
+}
+
 std::vector<Vocabulary<std::any>> read_fill_vocabulary(const json::Array& entries) {
   std::vector<Vocabulary<std::any>> out;
   for (std::size_t index = 0; index < entries.size(); ++index) {
@@ -813,42 +853,7 @@ std::vector<Vocabulary<std::any>> read_fill_vocabulary(const json::Array& entrie
     if (js::truthy(get(material, "boundToBar"))) {
       shape.boundToBar = true;
     }
-    Vocabulary<std::any> typed;
-    const json::Value& id = get(entry, "id");
-    // An id that is not text cannot meet a built-in name; it stays distinct from every other id.
-    typed.id = id.is_string() ? id.as_string() : std::string("\x01") + index_text(index);
-    typed.genre = *parse_genre(get(entry, "genre").as_string());
-    for (const json::Value& name : get(entry, "articulations").as_array()) {
-      typed.articulations.push_back(*parse_articulation(name.as_string()));
-    }
-    const json::Value& fits_over = get(entry, "fitsOver");
-    if (fits_over.is_array()) {
-      typed.fitsOver.emplace();
-      for (const json::Value& name : fits_over.as_array()) {
-        for (ChordQuality quality : chord_qualities()) {
-          if (to_string(quality) == name.as_string()) {
-            typed.fitsOver->push_back(quality);
-          }
-        }
-      }
-    }
-    const json::Value& sections = get(entry, "sections");
-    if (sections.is_array()) {
-      typed.sections.emplace();
-      for (const json::Value& name : sections.as_array()) {
-        typed.sections->push_back(*parse_section(name.as_string()));
-      }
-    }
-    const json::Value& tempo_range = get(entry, "tempoRange");
-    if (tempo_range.is_array()) {
-      typed.tempoRange = std::array<double, 2>{*number_of(tempo_range.as_array()[0]),
-                                               *number_of(tempo_range.as_array()[1])};
-    }
-    const json::Value& ts = get(entry, "ts");
-    if (!is_undefined(ts)) {
-      typed.ts = assert_time_signature(ts, "ts");
-    }
-    typed.difficulty = *number_of(get(entry, "difficulty"));
+    Vocabulary<std::any> typed = read_vocabulary_header(entry, index);
     typed.material = std::move(shape);
     out.push_back(std::move(typed));
   }

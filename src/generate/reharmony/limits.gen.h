@@ -2,4 +2,11 @@
 #ifndef CANTUS_SRC_GENERATE_REHARMONY_LIMITS_GEN_H_
 #define CANTUS_SRC_GENERATE_REHARMONY_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** MAX_HINT_ALTER of ts/src/generate/reharmony/index.ts. */
+inline constexpr int REHARMONY_MAX_HINT_ALTER = 2;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_GENERATE_REHARMONY_LIMITS_GEN_H_

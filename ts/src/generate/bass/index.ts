@@ -163,7 +163,7 @@ export type BassLineOptions = {
 const DEFAULT_STYLE: BassStyle = 'root';
 
 /** How often the `pop` style takes a weak-beat pickup when nothing else says. */
-const DEFAULT_PICKUP_DENSITY = 0.35;
+export const DEFAULT_PICKUP_DENSITY = 0.35;
 
 type RawNote = { startBeat: number; pitch: number; velocity: number };
 

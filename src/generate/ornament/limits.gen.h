@@ -2,4 +2,29 @@
 #ifndef CANTUS_SRC_GENERATE_ORNAMENT_LIMITS_GEN_H_
 #define CANTUS_SRC_GENERATE_ORNAMENT_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** DEFAULT_AMOUNT of ts/src/generate/ornament/index.ts. */
+inline constexpr double ORNAMENT_DEFAULT_AMOUNT = 0.5;
+
+/** GHOST_VELOCITY_SCALE of ts/src/generate/ornament/index.ts. */
+inline constexpr double ORNAMENT_GHOST_VELOCITY_SCALE = 0.45;
+
+/** ACCENT_VELOCITY_BOOST of ts/src/generate/ornament/index.ts. */
+inline constexpr double ORNAMENT_ACCENT_VELOCITY_BOOST = 12;
+
+/** DEFAULT_VELOCITY of ts/src/generate/ornament/index.ts. */
+inline constexpr double ORNAMENT_DEFAULT_VELOCITY = 80;
+
+/** MIN_VELOCITY of ts/src/generate/ornament/index.ts. */
+inline constexpr double ORNAMENT_MIN_VELOCITY = 1;
+
+/** MAX_VELOCITY of ts/src/generate/ornament/index.ts. */
+inline constexpr double ORNAMENT_MAX_VELOCITY = 127;
+
+/** SLIDE_MIN_SEMITONES of ts/src/generate/ornament/index.ts. */
+inline constexpr double ORNAMENT_SLIDE_MIN_SEMITONES = 1;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_GENERATE_ORNAMENT_LIMITS_GEN_H_

@@ -123,31 +123,31 @@ export type CounterMelodyOptions = {
 };
 
 /** Grid resolution, in quarter-note beats, scanned for complement onsets. */
-const GRID_STEP = 0.5;
+export const GRID_STEP = 0.5;
 
 /** Minimum spacing between counter onsets, keeping the line uncluttered. */
-const MIN_ONSET_GAP = 1;
+export const MIN_ONSET_GAP = 1;
 
 /** Semitone offset of the counter register's centre from the melody's mean pitch. */
-const REGISTER_OFFSET = 12;
+export const REGISTER_OFFSET = 12;
 
 /** Half-width, in semitones, of the default counter register. */
-const DEFAULT_HALF_RANGE = 10;
+export const DEFAULT_HALF_RANGE = 10;
 
 /** Probability of moving on a whole beat while the melody sustains. */
-const HOLD_ON_BEAT_PROB = 0.55;
+export const HOLD_ON_BEAT_PROB = 0.55;
 
 /** Probability of moving on an off-beat subdivision while the melody sustains. */
-const HOLD_OFF_BEAT_PROB = 0.2;
+export const HOLD_OFF_BEAT_PROB = 0.2;
 
 /** Probability of reinforcing a strong beat that the melody also attacks. */
-const REINFORCE_PROB = 0.35;
+export const REINFORCE_PROB = 0.35;
 
 /** Velocity assumed for melody notes that carry none. */
-const DEFAULT_MELODY_VELOCITY = 96;
+export const DEFAULT_MELODY_VELOCITY = 96;
 
 /** How far below the concurrent melody velocity the counter line sits. */
-const VELOCITY_DROP = 16;
+export const VELOCITY_DROP = 16;
 
 /**
  * Magnitude of the seed-driven per-candidate perturbation. Kept far below the
@@ -155,7 +155,7 @@ const VELOCITY_DROP = 16;
  * of 0.02), so the seed can only decide between candidates whose scores are
  * otherwise exactly equal, and never overrides consonance or motion.
  */
-const TIE_BREAK_JITTER = 1e-6;
+export const TIE_BREAK_JITTER = 1e-6;
 
 /** Whether a beat position falls on a whole quarter-note beat. */
 function isWholeBeat(beat: number): boolean {
@@ -193,7 +193,7 @@ function followOnsets(melody: NoteEventIndex): number[] {
 }
 
 /** Meter assumed when none is supplied. */
-const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
+export const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
 
 /**
  * Largest difference between two candidate scores that are the same score.
@@ -203,7 +203,7 @@ const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
  * named apart from the beat axis so that a correction to either does not travel
  * to the other.
  */
-const SCORE_EPS = 1e-9;
+export const SCORE_EPS = 1e-9;
 
 /**
  * Counter onsets complementing the melody: whole beats inside rests are always

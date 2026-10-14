@@ -2,4 +2,59 @@
 #ifndef CANTUS_SRC_GENERATE_MELODY_LIMITS_GEN_H_
 #define CANTUS_SRC_GENERATE_MELODY_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** RHYTHM_SUBDIVISION of ts/src/generate/melody/index.ts. */
+inline constexpr int MELODY_RHYTHM_SUBDIVISION = 4;
+
+/** OFF_SCALE_COST of ts/src/generate/melody/index.ts. */
+inline constexpr double MELODY_OFF_SCALE_COST = 1;
+
+/** TARGET_COST of ts/src/generate/melody/index.ts. */
+inline constexpr double MELODY_TARGET_COST = 0.1;
+
+/** TIE_BREAK of ts/src/generate/melody/index.ts. */
+inline constexpr double MELODY_TIE_BREAK = 0.000001;
+
+/** SEARCH_STATES_SQUARED of ts/src/generate/melody/index.ts. */
+inline constexpr double MELODY_SEARCH_STATES_SQUARED = 9;
+
+/** NO_LEAP of ts/src/generate/melody/pitch-dp.ts. */
+inline constexpr int PITCH_NO_LEAP = 0;
+
+/** LEAP_UP of ts/src/generate/melody/pitch-dp.ts. */
+inline constexpr int PITCH_LEAP_UP = 1;
+
+/** LEAP_DOWN of ts/src/generate/melody/pitch-dp.ts. */
+inline constexpr int PITCH_LEAP_DOWN = 2;
+
+/** LEAP_STATES of ts/src/generate/melody/pitch-dp.ts. */
+inline constexpr int PITCH_LEAP_STATES = 3;
+
+/** WIDEST_THIRD of ts/src/generate/melody/pitch-dp.ts. */
+inline constexpr double PITCH_WIDEST_THIRD = 4;
+
+/** LEAP_CONTINUATION_COST of ts/src/generate/melody/pitch-dp.ts. */
+inline constexpr double PITCH_LEAP_CONTINUATION_COST = 0.5;
+
+/** VARIATION_STEP_COST of ts/src/generate/melody/derive.ts. */
+inline constexpr double MELODY_VARIATION_STEP_COST = 0.2;
+
+/** OCTAVE of ts/src/generate/melody/derive.ts. */
+inline constexpr double MELODY_OCTAVE = 12;
+
+/** LEVEL_TARGET_COST of ts/src/generate/melody/derive.ts. */
+inline constexpr double MELODY_LEVEL_TARGET_COST = 0.1;
+
+/** LEVEL_PLAN_COST of ts/src/generate/melody/derive.ts. */
+inline constexpr double MELODY_LEVEL_PLAN_COST = 0.02;
+
+/** LEVEL_REACH of ts/src/generate/melody/derive.ts. */
+inline constexpr double MELODY_LEVEL_REACH = 24;
+
+/** TONAL_LEVEL_REACH of ts/src/generate/melody/derive.ts. */
+inline constexpr double MELODY_TONAL_LEVEL_REACH = 14;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_GENERATE_MELODY_LIMITS_GEN_H_

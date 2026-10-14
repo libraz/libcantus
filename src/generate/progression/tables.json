@@ -1,0 +1,48 @@
+{
+  "tables": [
+    {
+      "module": "generate/progression/index.ts",
+      "export": "PROG_STYLES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kProgStyleNames",
+      "fields": []
+    },
+    {
+      "module": "generate/progression/index.ts",
+      "export": "DEFAULT_TS",
+      "form": "record",
+      "cxx_type": "TimeSignature",
+      "cxx_name": "kProgressionDefaultTs",
+      "fields": ["numerator", "denominator", "grouping"]
+    },
+    {
+      "module": "generate/progression/index.ts",
+      "export": "BORROWED_DEGREES",
+      "cxx_type": "BorrowedDegreeRow",
+      "cxx_name": "kBorrowedDegrees",
+      "fields": []
+    },
+    {
+      "module": "generate/progression/index.ts",
+      "export": "BORROWED_OFFSET",
+      "cxx_type": "BorrowedOffsetRow",
+      "cxx_name": "kBorrowedOffsets",
+      "fields": []
+    },
+    {
+      "module": "generate/progression/index.ts",
+      "export": "PRESETS",
+      "cxx_type": "PresetRecord",
+      "cxx_name": "kProgressionPresets",
+      "fields": ["id", "name", "degrees", "functional", "styles"]
+    }
+  ],
+  "limits": [
+    {
+      "module": "generate/progression/index.ts",
+      "export": "DEFAULT_HARMONIC",
+      "cxx_name": "PROGRESSION_DEFAULT_HARMONIC",
+      "cxx_type": "double"
+    }
+  ]
+}

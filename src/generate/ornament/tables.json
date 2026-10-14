@@ -1,0 +1,63 @@
+{
+  "tables": [
+    {
+      "module": "generate/ornament/index.ts",
+      "export": "ORNAMENT_STYLES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kOrnamentStyleNames",
+      "fields": []
+    },
+    {
+      "module": "generate/ornament/index.ts",
+      "export": "DEFAULT_TS",
+      "form": "record",
+      "cxx_type": "TimeSignature",
+      "cxx_name": "kOrnamentDefaultTs",
+      "fields": ["numerator", "denominator", "grouping"]
+    }
+  ],
+  "limits": [
+    {
+      "module": "generate/ornament/index.ts",
+      "export": "DEFAULT_AMOUNT",
+      "cxx_name": "ORNAMENT_DEFAULT_AMOUNT",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/ornament/index.ts",
+      "export": "GHOST_VELOCITY_SCALE",
+      "cxx_name": "ORNAMENT_GHOST_VELOCITY_SCALE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/ornament/index.ts",
+      "export": "ACCENT_VELOCITY_BOOST",
+      "cxx_name": "ORNAMENT_ACCENT_VELOCITY_BOOST",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/ornament/index.ts",
+      "export": "DEFAULT_VELOCITY",
+      "cxx_name": "ORNAMENT_DEFAULT_VELOCITY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/ornament/index.ts",
+      "export": "MIN_VELOCITY",
+      "cxx_name": "ORNAMENT_MIN_VELOCITY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/ornament/index.ts",
+      "export": "MAX_VELOCITY",
+      "cxx_name": "ORNAMENT_MAX_VELOCITY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/ornament/index.ts",
+      "export": "SLIDE_MIN_SEMITONES",
+      "cxx_name": "ORNAMENT_SLIDE_MIN_SEMITONES",
+      "cxx_type": "double"
+    }
+  ]
+}

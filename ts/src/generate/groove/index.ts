@@ -86,21 +86,21 @@ export type HumanizeOptions = {
 };
 
 /** Default time signature for {@link humanize} when none is given. */
-const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
+export const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
 /** The namespace {@link humanize} draws under when the caller names none. */
 const DEFAULT_PART = 'humanize';
 /**
  * Grid resolution assumed by {@link extractGrooveTemplate}. A sixteenth-note
  * grid is where the deviations a template records are audible.
  */
-const DEFAULT_GROOVE_SUBDIVISION = 4;
-const DEFAULT_TIMING = 0.02;
-const DEFAULT_VELOCITY_JITTER = 8;
-const DEFAULT_ACCENT = 12;
-const DEFAULT_BASE_VELOCITY = 80;
-const MAX_METRIC_WEIGHT = 3;
-const MIN_VELOCITY = 1;
-const MAX_VELOCITY = 127;
+export const DEFAULT_GROOVE_SUBDIVISION = 4;
+export const DEFAULT_TIMING = 0.02;
+export const DEFAULT_VELOCITY_JITTER = 8;
+export const DEFAULT_ACCENT = 12;
+export const DEFAULT_BASE_VELOCITY = 80;
+export const MAX_METRIC_WEIGHT = 3;
+export const MIN_VELOCITY = 1;
+export const MAX_VELOCITY = 127;
 
 /**
  * Humanize a sequence of note events by nudging their timing and velocity

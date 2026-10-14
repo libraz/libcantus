@@ -2,4 +2,32 @@
 #ifndef CANTUS_SRC_GENERATE_GROOVE_LIMITS_GEN_H_
 #define CANTUS_SRC_GENERATE_GROOVE_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** DEFAULT_GROOVE_SUBDIVISION of ts/src/generate/groove/index.ts. */
+inline constexpr int GROOVE_DEFAULT_SUBDIVISION = 4;
+
+/** DEFAULT_TIMING of ts/src/generate/groove/index.ts. */
+inline constexpr double GROOVE_DEFAULT_TIMING = 0.02;
+
+/** DEFAULT_VELOCITY_JITTER of ts/src/generate/groove/index.ts. */
+inline constexpr double GROOVE_DEFAULT_VELOCITY_JITTER = 8;
+
+/** DEFAULT_ACCENT of ts/src/generate/groove/index.ts. */
+inline constexpr double GROOVE_DEFAULT_ACCENT = 12;
+
+/** DEFAULT_BASE_VELOCITY of ts/src/generate/groove/index.ts. */
+inline constexpr double GROOVE_DEFAULT_BASE_VELOCITY = 80;
+
+/** MAX_METRIC_WEIGHT of ts/src/generate/groove/index.ts. */
+inline constexpr double GROOVE_MAX_METRIC_WEIGHT = 3;
+
+/** MIN_VELOCITY of ts/src/generate/groove/index.ts. */
+inline constexpr double GROOVE_MIN_VELOCITY = 1;
+
+/** MAX_VELOCITY of ts/src/generate/groove/index.ts. */
+inline constexpr double GROOVE_MAX_VELOCITY = 127;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_GENERATE_GROOVE_LIMITS_GEN_H_

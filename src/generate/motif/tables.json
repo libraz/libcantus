@@ -1,0 +1,33 @@
+{
+  "tables": [
+    {
+      "module": "generate/motif/index.ts",
+      "export": "MOTIF_TRANSFORMS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kMotifTransformNames",
+      "fields": []
+    },
+    {
+      "module": "generate/motif/index.ts",
+      "export": "DEFAULT_TS",
+      "form": "record",
+      "cxx_type": "TimeSignature",
+      "cxx_name": "kMotifDefaultTs",
+      "fields": ["numerator", "denominator", "grouping"]
+    }
+  ],
+  "limits": [
+    {
+      "module": "generate/motif/index.ts",
+      "export": "MIN_TILE_SPAN",
+      "cxx_name": "MOTIF_MIN_TILE_SPAN",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/motif/index.ts",
+      "export": "MAX_DEVELOP_SHIFT",
+      "cxx_name": "MOTIF_MAX_DEVELOP_SHIFT",
+      "cxx_type": "int"
+    }
+  ]
+}

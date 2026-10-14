@@ -13,9 +13,9 @@ import type { MelodyNote } from './internal.js';
 import { isKeyTone } from './internal.js';
 
 /** Comfortable melodic range (MIDI) and the per-semitone cost of leaving it. */
-const COMFORT_LOW = 55;
-const COMFORT_HIGH = 79;
-const TESSITURA_WEIGHT = 0.001;
+export const COMFORT_LOW = 55;
+export const COMFORT_HIGH = 79;
+export const TESSITURA_WEIGHT = 0.001;
 /**
  * Register cost of a placed melody: a small penalty for notes pushed outside a
  * comfortable range. Kept far below emission/transition costs so it only breaks

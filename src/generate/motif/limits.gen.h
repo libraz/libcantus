@@ -2,4 +2,14 @@
 #ifndef CANTUS_SRC_GENERATE_MOTIF_LIMITS_GEN_H_
 #define CANTUS_SRC_GENERATE_MOTIF_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** MIN_TILE_SPAN of ts/src/generate/motif/index.ts. */
+inline constexpr double MOTIF_MIN_TILE_SPAN = 0.00390625;
+
+/** MAX_DEVELOP_SHIFT of ts/src/generate/motif/index.ts. */
+inline constexpr int MOTIF_MAX_DEVELOP_SHIFT = 12;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_GENERATE_MOTIF_LIMITS_GEN_H_

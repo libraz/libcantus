@@ -28,6 +28,7 @@
 #include "js/format.h"
 #include "json/json.h"
 #include "ops/args.h"
+#include "ops/codec.h"
 
 namespace cantus::ops {
 
@@ -142,6 +143,18 @@ std::vector<NoteEvent> assert_note_events(const json::Value& events, std::string
 std::vector<NoteEvent> assert_note_events(const json::Value& events,
                                           std::string_view name = "note events",
                                           const NoteEventAssertOptions& options = {});
+
+/** `v == null`: the null or the undefined wire value. */
+inline bool is_null_or_undefined(const json::Value& v) noexcept {
+  return v.is_null() || is_undefined(v);
+}
+
+/**
+ * `v.key` where `v` may be null or undefined: the TypeError JS raises reading a property off
+ * either, else get().
+ * @throws js::TypeError for a null or undefined `v`.
+ */
+const json::Value& property_of(const json::Value& v, std::string_view key);
 
 /** `${name}` of argument `i`, where TS declares no default. */
 inline std::string name_arg(const Args& a, std::size_t i) { return js::template_string(a[i]); }

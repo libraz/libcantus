@@ -78,6 +78,15 @@ const json::Value& get(const json::Value& v, std::string_view key) {
   return f == nullptr ? undefined_value() : *f;
 }
 
+const json::Value& property_of(const json::Value& v, std::string_view key) {
+  if (is_null_or_undefined(v)) {
+    throw js::TypeError(std::string("Cannot read properties of ") +
+                        (v.is_null() ? "null" : "undefined") + " (reading '" + std::string(key) +
+                        "')");
+  }
+  return get(v, key);
+}
+
 double assert_finite_number(const json::Value& value, std::string_view name) {
   return cantus::assert_finite_number(number_or_reject(value, name), name);
 }

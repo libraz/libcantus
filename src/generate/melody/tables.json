@@ -1,0 +1,107 @@
+{
+  "tables": [],
+  "limits": [
+    {
+      "module": "generate/melody/index.ts",
+      "export": "RHYTHM_SUBDIVISION",
+      "cxx_name": "MELODY_RHYTHM_SUBDIVISION",
+      "cxx_type": "int"
+    },
+    {
+      "module": "generate/melody/index.ts",
+      "export": "OFF_SCALE_COST",
+      "cxx_name": "MELODY_OFF_SCALE_COST",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/melody/index.ts",
+      "export": "TARGET_COST",
+      "cxx_name": "MELODY_TARGET_COST",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/melody/index.ts",
+      "export": "TIE_BREAK",
+      "cxx_name": "MELODY_TIE_BREAK",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/melody/index.ts",
+      "export": "SEARCH_STATES_SQUARED",
+      "cxx_name": "MELODY_SEARCH_STATES_SQUARED",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/melody/pitch-dp.ts",
+      "export": "NO_LEAP",
+      "cxx_name": "PITCH_NO_LEAP",
+      "cxx_type": "int"
+    },
+    {
+      "module": "generate/melody/pitch-dp.ts",
+      "export": "LEAP_UP",
+      "cxx_name": "PITCH_LEAP_UP",
+      "cxx_type": "int"
+    },
+    {
+      "module": "generate/melody/pitch-dp.ts",
+      "export": "LEAP_DOWN",
+      "cxx_name": "PITCH_LEAP_DOWN",
+      "cxx_type": "int"
+    },
+    {
+      "module": "generate/melody/pitch-dp.ts",
+      "export": "LEAP_STATES",
+      "cxx_name": "PITCH_LEAP_STATES",
+      "cxx_type": "int"
+    },
+    {
+      "module": "generate/melody/pitch-dp.ts",
+      "export": "WIDEST_THIRD",
+      "cxx_name": "PITCH_WIDEST_THIRD",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/melody/pitch-dp.ts",
+      "export": "LEAP_CONTINUATION_COST",
+      "cxx_name": "PITCH_LEAP_CONTINUATION_COST",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/melody/derive.ts",
+      "export": "VARIATION_STEP_COST",
+      "cxx_name": "MELODY_VARIATION_STEP_COST",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/melody/derive.ts",
+      "export": "OCTAVE",
+      "cxx_name": "MELODY_OCTAVE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/melody/derive.ts",
+      "export": "LEVEL_TARGET_COST",
+      "cxx_name": "MELODY_LEVEL_TARGET_COST",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/melody/derive.ts",
+      "export": "LEVEL_PLAN_COST",
+      "cxx_name": "MELODY_LEVEL_PLAN_COST",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/melody/derive.ts",
+      "export": "LEVEL_REACH",
+      "cxx_name": "MELODY_LEVEL_REACH",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/melody/derive.ts",
+      "export": "TONAL_LEVEL_REACH",
+      "cxx_name": "MELODY_TONAL_LEVEL_REACH",
+      "cxx_type": "double"
+    }
+  ]
+}

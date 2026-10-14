@@ -590,6 +590,66 @@ describe('a caller-supplied lick dictionary', () => {
       }),
     ).toThrow();
   });
+
+  describe('refuses a note whose fields would shape the line as written', () => {
+    const withNote = (given: unknown): Vocabulary<unknown> => ({
+      ...ownLick,
+      material: { lengthSteps: 16, notes: [given] },
+    });
+    const place = (given: unknown) =>
+      placeLicks(TIMELINE, KEY, {
+        genre: 'hiphop',
+        ctx: { seed: 1, bpm: 90, vocabulary: [withNote(given)] },
+      });
+    const base = { degree: 1, step: 0, velocity: 1 };
+
+    it.each([
+      [
+        { ...base, degree: 0 },
+        /lick vocabulary\[0\] notes\[0\]\.degree must be an integer in \[1, 1000\]; received 0/,
+      ],
+      [{ ...base, degree: 'x' }, /notes\[0\]\.degree must be finite; received x/],
+      [{ ...base, step: Number.NaN }, /notes\[0\]\.step must be finite; received NaN/],
+      [{ ...base, step: undefined }, /notes\[0\]\.step must be finite; received undefined/],
+      [
+        { ...base, velocity: Number.POSITIVE_INFINITY },
+        /notes\[0\]\.velocity must be finite; received Infinity/,
+      ],
+      [{ ...base, alter: 0.5 }, /notes\[0\]\.alter must be an integer in \[.*\]; received 0\.5/],
+      [
+        { ...base, lengthSteps: Number.NaN },
+        /notes\[0\]\.lengthSteps must be finite; received NaN/,
+      ],
+      [
+        { ...base, articulation: 'whistle' },
+        /notes\[0\]\.articulation must be one of .*; received "whistle"/,
+      ],
+      [{ ...base, voice: 5 }, /notes\[0\]\.voice must be a string; received number/],
+      [{ ...base, limb: {} }, /notes\[0\]\.limb must be a string; received object/],
+      [null, /lick vocabulary\[0\] notes\[0\] must be an object; received null/],
+    ])('%j', (given, message) => {
+      expect(() => place(given)).toThrow(message);
+    });
+
+    it('reads the entries in the order the context lists them', () => {
+      expect(() =>
+        placeLicks(TIMELINE, KEY, {
+          genre: 'hiphop',
+          ctx: {
+            seed: 1,
+            vocabulary: [
+              ownLick,
+              {
+                ...ownLick,
+                id: 'second',
+                material: { lengthSteps: 16, notes: [{ ...base, degree: 0 }] },
+              },
+            ],
+          },
+        }),
+      ).toThrow(/lick vocabulary\[1\] notes\[0\]\.degree/);
+    });
+  });
 });
 
 describe('the meter a lick is shaped against', () => {
