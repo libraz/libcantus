@@ -182,6 +182,11 @@
       "description": "Each call receives a fresh copy of its arguments, so TS's per-object caches (the tempo-map and meter WeakMaps) never see a repeat; results are unchanged, only the saving is lost."
     },
     {
+      "id": "module-memo",
+      "surface": "cpp",
+      "description": "The C++ core keeps no module-level memo of pure results (TS remembers joint scale spellings), so a repeated question is worked out again; results are unchanged, only the saving is lost."
+    },
+    {
       "id": "result-identity",
       "surface": "facade",
       "description": "A result is a fresh decoded value per call. Identity survives only for `$id` results of handle getters (and the objects they share), handles by id, and a hybrid returned unchanged from an argument."
@@ -197,6 +202,11 @@
       "file": "tempo.test.ts",
       "test": "validates a map once however many positions are converted against it",
       "reason": "Times the WeakMap cache of one tempo-map object; each call over the wire receives a fresh copy (identity-cache)."
+    },
+    {
+      "file": "spelling.test.ts",
+      "test": "works a scale out once rather than once per tone of it",
+      "reason": "Times the TS memo of joint scale spellings, which the C++ core does not keep (module-memo)."
     }
   ],
   "file_map_exceptions": [

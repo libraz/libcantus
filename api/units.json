@@ -24,7 +24,7 @@
       "modules": ["core/validation", "core/instrument", "core/meter"],
       "root_files": ["core/types.ts"],
       "expected": {
-        "replay": 5320,
+        "replay": 5331,
         "spec_files": 7
       }
     },
@@ -52,7 +52,7 @@
       "modules": ["theory/chord", "theory/scale", "theory/spelling"],
       "root_files": [],
       "expected": {
-        "replay": 10601,
+        "replay": 10410,
         "spec_files": 20
       }
     },
@@ -105,7 +105,7 @@
         "analyze/sequence.ts"
       ],
       "expected": {
-        "replay": 2358,
+        "replay": 2382,
         "spec_files": 15
       }
     },
@@ -115,7 +115,7 @@
       "modules": ["analyze/detect", "analyze/keys"],
       "root_files": [],
       "expected": {
-        "replay": 835,
+        "replay": 871,
         "spec_files": 8
       }
     },
@@ -125,7 +125,7 @@
       "modules": ["analyze/voice", "analyze/melody"],
       "root_files": [],
       "expected": {
-        "replay": 451,
+        "replay": 461,
         "spec_files": 9
       }
     },
@@ -135,7 +135,7 @@
       "modules": ["analyze/timeline", "analyze/spelling", "analyze/reduction"],
       "root_files": [],
       "expected": {
-        "replay": 494,
+        "replay": 513,
         "spec_files": 13
       }
     },
@@ -145,7 +145,7 @@
       "modules": ["analyze/form", "analyze/rhythm"],
       "root_files": [],
       "expected": {
-        "replay": 176,
+        "replay": 190,
         "spec_files": 6
       }
     },
@@ -155,7 +155,7 @@
       "modules": ["analyze/arrange"],
       "root_files": [],
       "expected": {
-        "replay": 271,
+        "replay": 272,
         "spec_files": 7
       }
     },
@@ -201,7 +201,7 @@
       ],
       "root_files": [],
       "expected": {
-        "replay": 1716,
+        "replay": 1721,
         "spec_files": 10
       }
     },
@@ -211,7 +211,7 @@
       "modules": ["generate/melody", "generate/plan"],
       "root_files": [],
       "expected": {
-        "replay": 587,
+        "replay": 589,
         "spec_files": 9
       }
     },
@@ -241,7 +241,7 @@
       ],
       "root_files": [],
       "expected": {
-        "replay": 5248,
+        "replay": 5361,
         "spec_files": 39
       }
     },
@@ -257,7 +257,7 @@
       ],
       "root_files": [],
       "expected": {
-        "replay": 8936,
+        "replay": 8964,
         "spec_files": 63
       }
     },

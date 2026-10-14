@@ -79,13 +79,13 @@
   "totals": {
     "files": 194,
     "units": 4016,
-    "specUnits": 3721,
-    "tsUnits": 295,
+    "specUnits": 3720,
+    "tsUnits": 296,
     "expects": 9693,
-    "tsExpects": 702,
-    "tsExpectRatio": 0.0724,
+    "tsExpects": 705,
+    "tsExpectRatio": 0.0727,
     "specFiles": 181,
-    "tsFiles": 87
+    "tsFiles": 88
   },
   "files": {
     "architecture.test.ts": {
@@ -3553,12 +3553,22 @@
     "spelling.test.ts": {
       "units": 60,
       "expects": 114,
-      "specUnits": 60,
-      "specExpects": 114,
-      "tsUnits": 0,
-      "tsExpects": 0,
-      "tsReasons": {},
-      "tsOnly": []
+      "specUnits": 59,
+      "specExpects": 111,
+      "tsUnits": 1,
+      "tsExpects": 3,
+      "tsReasons": {
+        "boundary": 1
+      },
+      "tsOnly": [
+        {
+          "line": 677,
+          "title": "works a scale out once rather than once per tone of it",
+          "reasons": [
+            "boundary:Times the TS memo of joint scale spellings, which the C++ core does not keep (module-memo)."
+          ]
+        }
+      ]
     },
     "suite-hygiene.test.ts": {
       "units": 4,
