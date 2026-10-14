@@ -105,8 +105,8 @@ std::string list_beats(const std::vector<MotifOccurrence>& occurrences) {
 }
 
 /** Build the motif a group of identical windows stands for (`motifFromGroup`). */
-MotifData motif_from_group(const WindowGroup& group, const std::vector<NoteEvent>& notes) {
-  std::vector<LineNote> all = line_of(notes);
+MotifData motif_from_group(const WindowGroup& group, const std::vector<NoteEvent>& notes,
+                           const std::vector<LineNote>& all) {
   auto slice = [&](std::size_t start) {
     std::size_t stop = std::min<std::size_t>(start + group.length, all.size());
     return std::vector<LineNote>(
@@ -265,7 +265,7 @@ std::vector<MotifData> extract_motifs(const std::vector<NoteEvent>& notes,
   }
   std::vector<MotifData> out;
   for (std::size_t index : kept) {
-    out.push_back(motif_from_group(candidates[index], sounding));
+    out.push_back(motif_from_group(candidates[index], sounding, line));
   }
   return out;
 }
@@ -275,7 +275,7 @@ MotifData motif_of_line(const std::vector<NoteEvent>& ordered) {
   group.signature = window_signature(line_of(ordered)).value_or("");
   group.length = ordered.size();
   group.starts = {0};
-  return motif_from_group(group, ordered);
+  return motif_from_group(group, ordered, line_of(ordered));
 }
 
 MotifData motif_from_notes(const std::vector<NoteEvent>& notes) {
