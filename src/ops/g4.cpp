@@ -36,9 +36,9 @@ namespace {
 bool nullish(const json::Value& v) { return v.is_null() || is_undefined(v); }
 
 /** `opts.x ?? fallback`. */
-json::Value value_or(const json::Value& opts, std::string_view key, json::Value fallback) {
+json::Value value_or(const json::Value& opts, std::string_view key, const json::Value& fallback) {
   const json::Value& given = get(opts, key);
-  return nullish(given) ? std::move(fallback) : given;
+  return nullish(given) ? fallback : given;
 }
 
 /** `for (const end of phraseEnds) assertFiniteNumber(end, ...)` over `opts.phraseEnds ?? []`. */

@@ -308,8 +308,9 @@ std::optional<NoteData> parse_german(View text) {
     return NoteData{static_cast<double>(letter), 0, std::nullopt};
   }
   if (is_sharp_suffix(suffix)) {
-    return NoteData{static_cast<double>(letter), static_cast<double>(suffix.size() / 2),
-                    std::nullopt};
+    // Each sharp is two letters ("is").
+    const std::size_t sharps = suffix.size() / 2;
+    return NoteData{static_cast<double>(letter), static_cast<double>(sharps), std::nullopt};
   }
   std::optional<int> flats = german_flats(letter, suffix);
   if (!flats) {

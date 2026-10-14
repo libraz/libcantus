@@ -47,15 +47,18 @@ conformance-fast:
 	$(MAKE) test-install
 
 format-cxx:
+	$(call LLVM_CHECK,$(CLANG_FORMAT))
 	$(CXX_SOURCES) | xargs -0 $(CLANG_FORMAT) -i
 
 format-check-cxx:
+	$(call LLVM_CHECK,$(CLANG_FORMAT))
 	$(CXX_SOURCES) | xargs -0 $(CLANG_FORMAT) --dry-run --Werror
 
 lint-cxx:
+	$(call LLVM_CHECK,$(CLANG_TIDY))
 	$(NICE) $(CMAKE) -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
 	git ls-files -z --cached --others --exclude-standard -- 'src/*.cpp' | \
-	  xargs -0 $(NICE) $(CLANG_TIDY) -p $(BUILD_DIR) --quiet
+	  xargs -0 $(NICE) $(CLANG_TIDY) -p $(BUILD_DIR) --quiet $(CLANG_TIDY_ARGS)
 
 # The single auto-fix entry: every format-<area> of every fragment, then lint.
 format: $$(filter-out format-check%,$$(filter format-%,$$(CANTUS_TARGETS)))

@@ -105,7 +105,7 @@ json::Value wrapped_chord(const json::Value& data, const std::optional<Key>& key
 }
 
 /** A record with one field replaced in place. */
-json::Value with_field(const json::Value& record, std::string_view name, json::Value value) {
+json::Value with_field(const json::Value& record, std::string_view name, const json::Value& value) {
   json::Object out;
   for (const json::Member& m : record.as_object()) {
     out.set(m.key, m.key == name ? value : m.value);

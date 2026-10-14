@@ -57,9 +57,9 @@ TimeSignature read_ts_or(const json::Value& opts, const TimeSignature& fallback)
 }
 
 /** `opts.key ?? fallback`, as the value TS then checks. */
-json::Value value_or(const json::Value& opts, std::string_view key, json::Value fallback) {
+json::Value value_or(const json::Value& opts, std::string_view key, const json::Value& fallback) {
   const json::Value* given = opt_null_default(opts, key);
-  return given != nullptr ? *given : std::move(fallback);
+  return given != nullptr ? *given : fallback;
 }
 
 /** The sounding notes of a wire list, and the wire notes they are, in order. */

@@ -29,7 +29,7 @@ bool emit(const std::string& s, char** out_json, size_t* out_len) noexcept {
   return true;
 }
 
-CantusStatus finish(cantus::ops::Result result, char** out_json, size_t* out_len) noexcept {
+CantusStatus finish(const cantus::ops::Result& result, char** out_json, size_t* out_len) noexcept {
   return emit(result.json, out_json, out_len) ? result.status : CANTUS_INTERNAL;
 }
 

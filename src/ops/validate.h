@@ -239,8 +239,8 @@ decltype(auto) with_name_arg(const Args& a, std::size_t i, Check&& check) {
 }
 
 /** Argument `i`, or the TS default when it is undefined. */
-inline json::Value arg_or(const Args& a, std::size_t i, json::Value fallback) {
-  return a.undefined(i) ? std::move(fallback) : a[i];
+inline json::Value arg_or(const Args& a, std::size_t i, const json::Value& fallback) {
+  return a.undefined(i) ? fallback : a[i];
 }
 
 }  // namespace cantus::ops
