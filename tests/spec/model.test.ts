@@ -1397,3 +1397,52 @@ describe('a key argument refuses the options that belong after it', () => {
     expect(progression.cadences(Key.major('C'), { alternatives: true }).length).toBe(2);
   });
 });
+
+describe('Note and Interval read another instance through its public surface', () => {
+  const c4 = Note.parse('C4');
+  const g4 = { data: Note.parse('G4').data } as unknown as Note;
+
+  it('compares, orders and measures against anything that carries note data', () => {
+    expect(c4.equals({ data: c4.data } as unknown as Note)).toBe(true);
+    expect(c4.equals(g4)).toBe(false);
+    expect(c4.compareTo(g4)).toBeLessThan(0);
+    expect(c4.intervalTo(g4).name).toBe('P5');
+    expect(Interval.between(c4, g4).name).toBe('P5');
+    expect(
+      Interval.parse('M3').equals({ ...Interval.parse('M3').data } as unknown as Interval),
+    ).toBe(false);
+  });
+
+  it('reports what the other value lacks as the TypeError JavaScript raises', () => {
+    expect(() => c4.equals(undefined as unknown as Note)).toThrow(TypeError);
+    expect(() => c4.compareTo(null as unknown as Note)).toThrow(/reading 'data'/);
+    expect(() => c4.compareTo(5 as unknown as Note)).toThrow(/reading 'octave'/);
+    expect(() => Interval.between(undefined as unknown as Note, c4)).toThrow(
+      /reading 'intervalTo'/,
+    );
+    expect(() => Interval.parse('P5').equals(null as unknown as Interval)).toThrow(TypeError);
+  });
+
+  it('reads a letter name through the parser, and only a bare text one', () => {
+    expect(() => Note.of(['C'] as never)).toThrow(/note must be a string/);
+    expect(() => Note.of(true as never)).toThrow(/Note\.of takes a letter number/);
+  });
+
+  it('holds interval data to a boolean direction', () => {
+    const data = { number: 5, quality: 'P', semitones: 7 };
+    for (const descending of [1, 0, null, 'yes']) {
+      expect(() => Interval.fromData({ ...data, descending } as never)).toThrow(
+        /interval\.descending must be a boolean/,
+      );
+    }
+    expect(Interval.fromData({ ...data, descending: false }).isDescending).toBe(false);
+  });
+
+  it('keeps a negative zero the caller wrote where the class copies its input', () => {
+    expect(Object.is(Note.of(0, -0).alter, -0)).toBe(true);
+    expect(Object.is(Note.of(0, -0).data.alter, -0)).toBe(true);
+    expect(Object.is(Note.of(0, -0, 4).withOctave(3).alter, -0)).toBe(true);
+    expect(Object.is(Interval.of(1, 'P', -0).semitones, -0)).toBe(true);
+    expect(Object.is(Interval.of(1, 'P', -0).negate().semitones, 0)).toBe(true);
+  });
+});

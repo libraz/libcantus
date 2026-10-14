@@ -253,3 +253,52 @@ describe('Instrument answers what the instrument functions answer', () => {
     ).toBe(true);
   });
 });
+
+describe('Instrument holds a kit to the limbs and the lists the library names', () => {
+  const kit = (patch: object) => ({ ...KIT, ...patch }) as unknown as PercussionProfile;
+
+  it('refuses a reach entry that is no list of limbs', () => {
+    expect(() => Instrument.of(kit({ reach: { 36: ['rightFoot', 'tail'] } }))).toThrow(
+      /kit reach\[36\]\[1\] must be one of rightHand, leftHand, rightFoot, leftFoot/,
+    );
+    expect(() => Instrument.of(kit({ reach: { 36: null, 38: ['rightHand'] } }))).toThrow(
+      /kit reach\[36\] must be an array; received null/,
+    );
+    expect(() => Instrument.of(kit({ reach: { 36: ['rightFoot', null] } }))).toThrow(
+      /kit reach\[36\]\[1\] must be one of/,
+    );
+  });
+
+  it('refuses an overdub that is no list', () => {
+    expect(() => Instrument.of(kit({ overdub: null }))).toThrow(
+      /kit overdub must be an array; received null/,
+    );
+    expect(Instrument.of(kit({ overdub: [] })).data).toEqual(kit({ overdub: [] }));
+  });
+
+  it('reads another instrument through its public data', () => {
+    const guitar = Instrument.guitar();
+    expect(guitar.equals({ data: Instrument.guitar().data } as unknown as Instrument)).toBe(true);
+    expect(guitar.equals({ data: Instrument.bass4().data } as unknown as Instrument)).toBe(false);
+    expect(() => guitar.equals(null as unknown as Instrument)).toThrow(TypeError);
+    expect(() => guitar.equals({} as unknown as Instrument)).toThrow(/reading 'name'/);
+  });
+
+  it('keeps a negative zero pitch the caller wrote', () => {
+    const open = {
+      ...GUITAR_STANDARD,
+      tuning: [-0, 45, 50, 55, 59, 64],
+    } as unknown as StringedProfile;
+    expect(
+      Object.is(
+        Instrument.of(open).data.kind === 'stringed' ? Instrument.of(open).data.tuning[0] : 1,
+        -0,
+      ),
+    ).toBe(true);
+    expect(Object.is(Instrument.of(open).range().low, -0)).toBe(true);
+    expect(Object.is(Instrument.of(open).foldIntoRange(-0), -0)).toBe(true);
+    const lowest = Instrument.of({ ...GUITAR_STANDARD, tuning: [0, 45], frets: 12 });
+    expect(Object.is(lowest.fingerings(-0)[0]?.fret, -0)).toBe(true);
+    expect(Object.is(lowest.fingerings(0)[0]?.fret, 0)).toBe(true);
+  });
+});

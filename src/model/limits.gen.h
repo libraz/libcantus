@@ -2,4 +2,23 @@
 #ifndef CANTUS_SRC_MODEL_LIMITS_GEN_H_
 #define CANTUS_SRC_MODEL_LIMITS_GEN_H_
 
+namespace cantus {
+
+/** STATED_KEY_CONFIDENCE of ts/src/model/shared.ts. */
+inline constexpr double STATED_KEY_CONFIDENCE = 1;
+
+/** MAX_BPM of ts/src/model/tempo.ts. */
+inline constexpr double MAX_MODEL_BPM = 1000;
+
+/** MIN_BPM of ts/src/model/tempo.ts. */
+inline constexpr double MIN_MODEL_BPM = 0.1;
+
+/** INVERSION_SUM of ts/src/model/interval.ts. */
+inline constexpr int INVERSION_SUM = 9;
+
+/** OCTAVE_DEGREES of ts/src/model/interval.ts. */
+inline constexpr int OCTAVE_DEGREES = 8;
+
+}  // namespace cantus
+
 #endif  // CANTUS_SRC_MODEL_LIMITS_GEN_H_

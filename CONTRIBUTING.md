@@ -95,6 +95,9 @@ Each validation helper of `ts/src/core/validation` has two C++ twins: a typed on
 | `assertMeterMap` | `cantus::assert_meter_map` | `ops::assert_meter_map` |
 | `assertNoteEvent` | `cantus::assert_note_event` | `ops::assert_note_event` |
 | `assertNoteEvents` | `cantus::assert_note_events` | `ops::assert_note_events` |
+| `assertDataObject` (`model/shared`) | none | `ops::assert_data_object` (`src/ops/codec_m1.h`) |
+| `assertDataArray` (`model/shared`) | none | `ops::assert_data_array` (`src/ops/codec_m1.h`) |
+| `assertKeyArgument` (`model/shared`) | none | `ops::assert_key_argument` (`src/ops/codec_m1.h`) |
 
 ## Errors
 

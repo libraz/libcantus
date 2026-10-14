@@ -102,3 +102,11 @@ describe('Tempo as a value', () => {
     expect(() => Tempo.of(-120)).toThrow(InvalidInputError);
   });
 });
+
+describe('Tempo reads another tempo through its public marking', () => {
+  it('compares against anything that carries a marking', () => {
+    expect(Tempo.of(96).equals({ bpm: 96 } as unknown as Tempo)).toBe(true);
+    expect(Tempo.of(96).equals({ bpm: '96' } as unknown as Tempo)).toBe(false);
+    expect(() => Tempo.of(96).equals(null as unknown as Tempo)).toThrow(/reading 'bpm'/);
+  });
+});

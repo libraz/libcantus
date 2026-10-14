@@ -1,5 +1,6 @@
 import { InvalidInputError } from '../errors/index.js';
 import {
+  assertArray,
   assertInteger,
   assertMidiPitch,
   assertOneOf,
@@ -303,6 +304,17 @@ function assertProfile(profile: InstrumentProfile): void {
   for (const key of voices) {
     assertMidiPitch(Number(key), `${profile.name} reach pitch`);
   }
+  // The table is held to the limbs the library names, so a voice reaching for
+  // something else is refused here rather than carried to the plain data.
+  for (const key of voices) {
+    const label = `${profile.name} reach[${key}]`;
+    for (const [index, limb] of assertArray<Limb>(
+      (profile.reach as Record<string, unknown>)[key],
+      label,
+    ).entries()) {
+      assertOneOf(limb, LIMBS, `${label}[${index}]`);
+    }
+  }
   // A voice is on the kit only when a limb the player has can strike it, so a
   // reach table naming limbs the player has not got describes a kit with
   // nothing on it — and a range read off one has no low or high to report.
@@ -312,8 +324,10 @@ function assertProfile(profile: InstrumentProfile): void {
   // An overdub is still held in a hand, on a pass of its own, so it is read
   // through the reach and the limbs like every other voice: naming one the
   // player cannot hold leaves it off the instrument rather than in dispute.
-  for (const pitch of profile.overdub ?? []) {
-    assertMidiPitch(pitch, `${profile.name} overdub pitch`);
+  if (profile.overdub !== undefined) {
+    for (const pitch of assertArray<number>(profile.overdub, `${profile.name} overdub`)) {
+      assertMidiPitch(pitch, `${profile.name} overdub pitch`);
+    }
   }
 }
 

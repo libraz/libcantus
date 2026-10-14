@@ -160,3 +160,21 @@ describe('Tuning answers what the tuning functions answer', () => {
     expect(() => Tuning.justDeviationCents(13)).toThrow(RangeError);
   });
 });
+
+describe('Tuning reads another tuning through its public fields', () => {
+  it('compares against anything that carries the three fields', () => {
+    const table = { refStep: 69, refFreq: 432, divisions: 19 };
+    expect(Tuning.of(table).equals(table as unknown as Tuning)).toBe(true);
+    expect(Tuning.of(table).equals({ ...table, divisions: '19' } as unknown as Tuning)).toBe(false);
+    expect(() => Tuning.of(table).equals(undefined as unknown as Tuning)).toThrow(
+      /reading 'refStep'/,
+    );
+  });
+
+  it('keeps a negative zero reference step the caller wrote', () => {
+    expect(Object.is(Tuning.of({ refStep: -0, refFreq: 440, divisions: 12 }).refStep, -0)).toBe(
+      true,
+    );
+    expect(Object.is(Tuning.edo(12, 440, -0).data.refStep, -0)).toBe(true);
+  });
+});

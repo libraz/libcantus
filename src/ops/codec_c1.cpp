@@ -1,6 +1,7 @@
 #include "ops/codec_c1.h"
 
 #include <cmath>
+#include <map>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -101,25 +102,6 @@ StringedProfile read_stringed(const json::Value& data, std::string name,
   return out;
 }
 
-/** The limbs of a reach entry the library knows; `reach[p] ?? []`, then read as an array. */
-std::vector<Limb> read_reach_entry(const json::Value& entry) {
-  std::vector<Limb> out;
-  if (entry.is_null() || is_undefined(entry)) {
-    return out;
-  }
-  if (!entry.is_array()) {
-    throw js::TypeError("(profile.reach[pitch] ?? []).filter is not a function");
-  }
-  for (const json::Value& limb : entry.as_array()) {
-    if (limb.is_string()) {
-      if (std::optional<Limb> l = parse_limb(limb.as_string())) {
-        out.push_back(*l);
-      }
-    }
-  }
-  return out;
-}
-
 PercussionProfile read_percussion(const json::Value& data, std::string name,
                                   std::vector<Articulation> articulations, int polyphony) {
   PercussionProfile out;
@@ -141,11 +123,22 @@ PercussionProfile read_percussion(const json::Value& data, std::string name,
   for (const auto& [key, entry] : voices) {
     cantus::assert_midi_pitch(js::number(key), name + " reach pitch");
   }
+  // Each voice's limbs are held to the names the library knows, in property order.
+  std::map<std::string, std::vector<Limb>> limbs_by_key;
+  for (const auto& [key, entry] : voices) {
+    std::string label = name + " reach[" + key + "]";
+    std::vector<Limb>& reached = limbs_by_key[key];
+    const json::Array& listed = assert_array(*entry, label);
+    for (std::size_t i = 0; i < listed.size(); ++i) {
+      reached.push_back(
+          *parse_limb(assert_one_of(listed[i], limb_names(), label + "[" + index_text(i) + "]")));
+    }
+  }
   // `reach[Number(key)]` reads the canonical key, so a key such as "060" adds no voice of its own.
   for (const auto& [key, entry] : voices) {
     double pitch = js::number(key);
     if (js::to_string(pitch) == key) {
-      out.reach[static_cast<int>(pitch)] = read_reach_entry(*entry);
+      out.reach[static_cast<int>(pitch)] = limbs_by_key[key];
     }
   }
   bool reachable = false;
@@ -158,27 +151,11 @@ PercussionProfile read_percussion(const json::Value& data, std::string name,
   if (!reachable) {
     throw InvalidInputError(name + " must have at least one voice within reach");
   }
-  // `profile.overdub ?? []`, iterated: a string iterates its characters.
   const json::Value& overdub = get(data, "overdub");
-  if (!overdub.is_null() && !is_undefined(overdub)) {
+  if (!is_undefined(overdub)) {
     std::vector<int> pitches;
-    if (overdub.is_array()) {
-      for (const json::Value& pitch : overdub.as_array()) {
-        pitches.push_back(static_cast<int>(assert_midi_pitch(pitch, name + " overdub pitch")));
-      }
-    } else if (overdub.is_string()) {
-      if (!overdub.as_string().empty()) {
-        std::u16string units = js::to_utf16(overdub.as_string());
-        std::size_t length = units.size() > 1 && units[0] >= 0xD800 && units[0] <= 0xDBFF &&
-                                     units[1] >= 0xDC00 && units[1] <= 0xDFFF
-                                 ? 2
-                                 : 1;
-        assert_midi_pitch(
-            json::Value(js::utf16_slice(overdub.as_string(), 0, static_cast<double>(length))),
-            name + " overdub pitch");
-      }
-    } else {
-      throw js::TypeError("profile.overdub ?? [] is not iterable");
+    for (const json::Value& pitch : assert_array(overdub, name + " overdub")) {
+      pitches.push_back(static_cast<int>(assert_midi_pitch(pitch, name + " overdub pitch")));
     }
     out.overdub = std::move(pitches);
   }

@@ -83,3 +83,42 @@ describe('the instrument coercers are reachable as the family they belong to', (
     expect(toStringedProfile(bass)).toEqual(toStringedProfile(bass.data));
   });
 });
+
+describe('toInstrumentProfile holds a kit to the limbs and the lists the library names', () => {
+  const kit = (patch: object) => ({ ...DRUM_KIT, ...patch }) as unknown as typeof DRUM_KIT;
+  const name = DRUM_KIT.name;
+
+  it('refuses a reach entry that is no list of known limbs', () => {
+    expect(() => toInstrumentProfile(kit({ reach: { 36: ['rightFoot', 'tail'] } }))).toThrow(
+      `${name} reach[36][1] must be one of rightHand, leftHand, rightFoot, leftFoot; received "tail"`,
+    );
+    expect(() => toInstrumentProfile(kit({ reach: { 36: null, 38: ['rightHand'] } }))).toThrow(
+      `${name} reach[36] must be an array; received null`,
+    );
+    expect(() => toInstrumentProfile(kit({ reach: { 36: ['rightFoot'], 38: 5 } }))).toThrow(
+      `${name} reach[38] must be an array; received number`,
+    );
+    expect(() => toInstrumentProfile(kit({ reach: { 36: ['rightFoot', null] } }))).toThrow(
+      `${name} reach[36][1] must be one of`,
+    );
+  });
+
+  it('refuses an overdub that is no list', () => {
+    for (const overdub of [null, 'ab', 5]) {
+      expect(() => toInstrumentProfile(kit({ overdub }))).toThrow(
+        new RegExp(`${name} overdub must be an array; received `),
+      );
+    }
+    expect(() => toInstrumentProfile(kit({ overdub: [1, 'x'] }))).toThrow(
+      `${name} overdub pitch must be finite`,
+    );
+    expect(toInstrumentProfile(kit({ overdub: [] })).kind).toBe('percussion');
+  });
+
+  it('checks every table entry before it asks whether a voice is within reach', () => {
+    expect(() => toInstrumentProfile(kit({ reach: { 36: ['leftFoot'], 38: 'x' } }))).toThrow(
+      `${name} reach[38] must be an array`,
+    );
+    expect(core.instrumentRange(Instrument.of(DRUM_KIT))).toEqual(core.instrumentRange(DRUM_KIT));
+  });
+});

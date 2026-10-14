@@ -151,3 +151,28 @@ describe('Meter text entry', () => {
     expect(reference.ok ? '' : reference.error.message).toBe(bad.error.message);
   });
 });
+
+describe('Meter reads another meter through its public data', () => {
+  const additive = Meter.of(7, 8, [2, 2, 3]);
+
+  it('compares against anything that carries a time signature', () => {
+    const like = (data: unknown) => ({ data }) as unknown as Meter;
+    expect(additive.equals(like({ numerator: 7, denominator: 8, grouping: [2, 2, 3] }))).toBe(true);
+    expect(additive.equals(like({ numerator: 7, denominator: 8, grouping: [2, 3, 2] }))).toBe(
+      false,
+    );
+    expect(additive.equals(like({ numerator: 7, denominator: 8 }))).toBe(false);
+    expect(Meter.of(7, 8).equals(like({ numerator: 7, denominator: 8 }))).toBe(true);
+    expect(Meter.of(7, 8).equals(like({ numerator: 7, denominator: 8, grouping: [2, 2, 3] }))).toBe(
+      false,
+    );
+  });
+
+  it('asks the other meter for what it needs first, so a missing value names that', () => {
+    expect(() => additive.equals(null as unknown as Meter)).toThrow(TypeError);
+    expect(() => additive.equals({ data: null } as unknown as Meter)).toThrow(/reading 'grouping'/);
+    expect(() => Meter.of(4, 4).equals({ data: null } as unknown as Meter)).toThrow(
+      /reading 'numerator'/,
+    );
+  });
+});

@@ -1,14 +1,15 @@
-import { type ParseResult, unwrapParse } from '../core/errors/index.js';
+import { InvalidInputError, type ParseResult, unwrapParse } from '../core/errors/index.js';
 import { isConsonantInterval } from '../core/interval/index.js';
 import type { IntervalData, IntervalQualityLabel, SpelledInterval } from '../core/pitch/index.js';
 import { intervalSemitones, toSpelledInterval, tryParseInterval } from '../core/pitch/index.js';
+import { describeRejected } from '../core/validation/index.js';
 import type { Note } from './note.js';
 
 /** Number of diatonic degrees an interval and its inversion span together. */
-const INVERSION_SUM = 9;
+export const INVERSION_SUM = 9;
 
 /** Diatonic size of an octave, the largest simple interval. */
-const OCTAVE_DEGREES = 8;
+export const OCTAVE_DEGREES = 8;
 
 /**
  * The simple interval a diatonic number belongs to.
@@ -21,6 +22,21 @@ const OCTAVE_DEGREES = 8;
 function simpleDegree(numberValue: number): number {
   const reduced = ((numberValue - 1) % 7) + 1;
   return reduced === 1 && numberValue > 1 ? OCTAVE_DEGREES : reduced;
+}
+
+/**
+ * The direction flag of interval data.
+ *
+ * The pitch module keeps the flag as the caller wrote it, so an instance, which
+ * holds it as it was given, refuses anything but a boolean.
+ */
+function checkedDirection(descending: boolean): boolean {
+  if (typeof descending !== 'boolean') {
+    throw new InvalidInputError(
+      `interval.descending must be a boolean; received ${describeRejected(descending)}`,
+    );
+  }
+  return descending;
 }
 
 /** The quality an interval's inversion carries. */
@@ -114,7 +130,12 @@ export class Interval {
     // of number, quality and span together tells that from a descent. The
     // canonical form always carries the flag, whichever way the interval goes.
     const checked = toSpelledInterval(data);
-    return new Interval(checked.number, checked.quality, checked.semitones, checked.descending);
+    return new Interval(
+      checked.number,
+      checked.quality,
+      checked.semitones,
+      checkedDirection(checked.descending),
+    );
   }
 
   /**

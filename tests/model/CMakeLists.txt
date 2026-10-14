@@ -1,0 +1,3 @@
+cantus_add_test(model_value_classes test_value_classes.cpp)
+cantus_add_test(model_instrument test_instrument.cpp)
+cantus_add_test(model_voicing test_voicing.cpp)

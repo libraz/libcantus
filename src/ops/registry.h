@@ -63,6 +63,28 @@ void def_method(std::string name, F fn, unsigned flags = kNoFlags) {
       flags | kHandles);
 }
 
+/**
+ * Decode the model-class values (`$class`) found anywhere in a call's arguments through their
+ * `Class.fromData`, innermost first, so an instance that fails its own checks is refused before an
+ * op reads it. Defined with the class codecs (ops/codec_m1.cpp and the groups after it).
+ */
+void decode_class_arguments(const json::Array& args);
+
+/**
+ * Register a method of a value class `Type#member` (or a factory `Type.member`): its instance
+ * arrives as a `$class` value, not a handle, so the op carries no kHandles flag and the CLI runs
+ * it. Use def_method for a handle type, def for a free function.
+ */
+inline void def_class_method(std::string name, OpFn fn, unsigned flags = kNoFlags) {
+  def(
+      std::move(name),
+      [fn = std::move(fn)](Args& a) -> json::Value {
+        decode_class_arguments(a.values());
+        return fn(a);
+      },
+      flags);
+}
+
 /** The op called `name`, or nullptr. */
 const OpEntry* find_op(std::string_view name);
 

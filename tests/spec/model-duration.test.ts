@@ -145,3 +145,31 @@ describe('Duration as a value', () => {
     expect(() => Duration.ofBeats(0)).toThrow(InvalidInputError);
   });
 });
+
+describe('Duration reads another duration through its public data', () => {
+  const quarter = Duration.of('quarter');
+
+  it('compares against anything that carries a written duration', () => {
+    expect(quarter.equals({ data: { base: 'quarter', dots: 0 } } as unknown as Duration)).toBe(
+      true,
+    );
+    expect(quarter.equals({ data: { base: 'quarter', dots: 1 } } as unknown as Duration)).toBe(
+      false,
+    );
+    const triplet = Duration.of('quarter', 0, { actual: 3, normal: 2 });
+    expect(triplet.equals({ data: { base: 'quarter', dots: 0 } } as unknown as Duration)).toBe(
+      false,
+    );
+    expect(triplet.equals({ data: triplet.data } as unknown as Duration)).toBe(true);
+  });
+
+  it('reports a missing value as the TypeError JavaScript raises', () => {
+    expect(() => quarter.equals(null as unknown as Duration)).toThrow(TypeError);
+    expect(() => quarter.equals({} as unknown as Duration)).toThrow(/reading 'base'/);
+  });
+
+  it('keeps a negative zero dot count the caller wrote', () => {
+    expect(Object.is(Duration.of('quarter', -0).dots, -0)).toBe(true);
+    expect(Object.is(Duration.fromData({ base: 'half', dots: -0 }).data.dots, -0)).toBe(true);
+  });
+});

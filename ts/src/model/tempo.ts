@@ -13,14 +13,14 @@ import { assertDataObject } from './shared.js';
  * accept. A faster marking is a notation of a slower pulse, not a distinct
  * tempo.
  */
-const MAX_BPM = 1000;
+export const MAX_BPM = 1000;
 
 /**
  * Lower bound on a tempo, the bound the tempo module accepts. One beat lasts
  * ten minutes here; anything slower is a corrupt or mis-scaled value rather
  * than a marking, and the conversions it feeds would overflow to infinity.
  */
-const MIN_BPM = 0.1;
+export const MIN_BPM = 0.1;
 
 /**
  * A constant tempo as plain data: quarter-note beats per minute.

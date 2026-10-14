@@ -534,3 +534,93 @@ describe('the key a chord carries', () => {
     expect(Voicing.satb(data).pitches).toEqual(voiceChord(data));
   });
 });
+
+describe('Voicing reads another voicing and its arguments the way the functions do', () => {
+  const tonic = Voicing.of(TONIC);
+  const supertonic = Voicing.of(SUPERTONIC);
+  const like = (pitches: unknown) => ({ pitches }) as unknown as Voicing;
+
+  it('compares and measures against anything that carries pitches', () => {
+    expect(tonic.equals(like([...TONIC]))).toBe(true);
+    expect(tonic.equals(like([...TONIC, 76]))).toBe(false);
+    expect(tonic.equals(like('abcd'))).toBe(false);
+    expect(tonic.costTo(like([...SUPERTONIC]))).toBe(tonic.costTo(supertonic));
+    expect(tonic.costTo(like([...SUPERTONIC, 1]))).toBe(Number.POSITIVE_INFINITY);
+    expect(() => tonic.equals(null as unknown as Voicing)).toThrow(TypeError);
+    expect(() => tonic.equals({} as unknown as Voicing)).toThrow(/reading 'length'/);
+    expect(() => tonic.costTo(like(null))).toThrow(/voice leading|from|to must be an array/);
+  });
+
+  it('reads the chord pair and the cantus firmus by index and by element', () => {
+    expect(tonic.checkTo(supertonic, 'CD' as never, C_MAJOR)).toEqual(
+      tonic.checkTo(supertonic, ['C', 'D'], C_MAJOR),
+    );
+    expect(() => tonic.checkTo(supertonic, null as never, C_MAJOR)).toThrow(TypeError);
+    expect(() => tonic.species(undefined as never, 1, C_MAJOR)).toThrow(/reading 'map'/);
+    expect(() => tonic.species(5 as never, 1, C_MAJOR)).toThrow(/line\.map is not a function/);
+  });
+
+  it('reads the attack flags by length, whatever carries one', () => {
+    const lead = Voicing.of([72, 74, 76]);
+    const counter = Voicing.of([65, 67, 69]);
+    expect(() => lead.independence(counter, { leadAttacks: null as never })).toThrow(
+      /reading 'length'/,
+    );
+    expect(lead.independence(counter, { counterAttacks: { length: 3 } as never })).toEqual(
+      lead.independence(counter, { counterAttacks: [false, false, false] }),
+    );
+  });
+
+  it('reads the voicing the motion came from through its pitches', () => {
+    const query = { profile: 'strict', chord: 'C', key: 'C major' } as const;
+    const from = { pitches: [47, 55, 62] } as unknown as Voicing;
+    const sounding = Voicing.of([48, 55, 64]);
+    expect(sounding.safetyOf(72, { ...query, previous: from } as never)).toEqual(
+      sounding.safetyOf(72, { ...query, previous: Voicing.of([47, 55, 62]) }),
+    );
+    expect(() => sounding.safetyOf(72, null as never)).toThrow(/reading 'previous'/);
+  });
+
+  it('keeps a negative zero pitch the caller wrote', () => {
+    const low = Voicing.of([-0, 7]);
+    expect(Object.is(low.pitches[0], -0)).toBe(true);
+    expect(Object.is(low.range.min, -0)).toBe(true);
+    expect(Object.is(low.invert(0).pitches[0], -0)).toBe(true);
+    expect(low.toString()).toBe('0 7');
+  });
+});
+
+describe('Voicing reads whatever carries pitches where the functions do', () => {
+  const tonic = Voicing.of(TONIC);
+  const like = (pitches: unknown) => ({ pitches }) as unknown as Voicing;
+
+  it('checks the motion to a plain object as it does to a voicing', () => {
+    const chords: [string, string] = ['C', 'Dm'];
+    const plain = tonic.checkTo(like([...SUPERTONIC]), chords, C_MAJOR);
+    expect(plain).toEqual(tonic.checkTo(Voicing.of(SUPERTONIC), chords, C_MAJOR));
+    expect(() => tonic.checkTo(like([50, 'x', 65, 69]), chords, C_MAJOR)).toThrow(/pitch/);
+    expect(() => tonic.checkTo(like(5), chords, C_MAJOR)).toThrow(
+      /voicing must be an array; received number/,
+    );
+    expect(() => tonic.checkTo(undefined as never, chords, C_MAJOR)).toThrow(/reading 'pitches'/);
+    expect(Array.isArray(tonic.checkTo(like([50, 57, 65, 130]), chords, C_MAJOR))).toBe(true);
+  });
+
+  it('measures independence against a plain object as against a voicing', () => {
+    const lead = Voicing.of([72, 74, 76, 74]);
+    const counter = [65, 67, 69, 67];
+    expect(lead.independence(like(counter))).toEqual(lead.independence(Voicing.of(counter)));
+    expect(lead.independence(like(counter), { key: 'C major' })).toEqual(
+      lead.independence(Voicing.of(counter), { key: 'C major' }),
+    );
+    expect(lead.independence(like(['C4', 'D4', 60, 'E4']))).toEqual(
+      lead.independence(Voicing.of([60, 62, 60, 64])),
+    );
+    expect(() => lead.independence(like(counter.slice(1)))).toThrow(/aligned slot for slot/);
+    expect(() => lead.independence(like(5))).toThrow(/pitches\.map is not a function/);
+    expect(() => lead.independence(like(5), { key: 'C major' })).toThrow(
+      /line\.map is not a function/,
+    );
+    expect(() => lead.independence(like('abcd'))).toThrow(/pitches\.map is not a function/);
+  });
+});

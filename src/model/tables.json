@@ -1,0 +1,49 @@
+{
+  "tables": [
+    {
+      "module": "model/note.ts",
+      "export": "DIMINISHED_SECOND",
+      "form": "record",
+      "cxx_type": "SpelledInterval",
+      "cxx_name": "kDiminishedSecond",
+      "fields": ["number", "quality", "semitones", "descending"]
+    },
+    {
+      "module": "model/note.ts",
+      "export": "DESCENDING_DIMINISHED_SECOND",
+      "form": "record",
+      "cxx_type": "SpelledInterval",
+      "cxx_name": "kDescendingDiminishedSecond",
+      "fields": ["number", "quality", "semitones", "descending"]
+    }
+  ],
+  "limits": [
+    {
+      "module": "model/shared.ts",
+      "export": "STATED_KEY_CONFIDENCE",
+      "cxx_type": "double"
+    },
+    {
+      "module": "model/tempo.ts",
+      "export": "MAX_BPM",
+      "cxx_type": "double",
+      "cxx_name": "MAX_MODEL_BPM"
+    },
+    {
+      "module": "model/tempo.ts",
+      "export": "MIN_BPM",
+      "cxx_type": "double",
+      "cxx_name": "MIN_MODEL_BPM"
+    },
+    {
+      "module": "model/interval.ts",
+      "export": "INVERSION_SUM",
+      "cxx_type": "int"
+    },
+    {
+      "module": "model/interval.ts",
+      "export": "OCTAVE_DEGREES",
+      "cxx_type": "int"
+    }
+  ]
+}

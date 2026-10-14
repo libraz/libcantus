@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <optional>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -68,6 +69,14 @@ class DurationArg {
   DurationArg(DurationData data) : value_(std::move(data)) {}  // NOLINT
   DurationArg(const SpelledDuration& spelled)                  // NOLINT
       : value_(DurationData{spelled.base, spelled.dots, spelled.tuplet}) {}
+  /** A value whose `data()` returns a spelled duration (the Duration class). */
+  template <class T,
+            std::enable_if_t<!std::is_same_v<std::decay_t<T>, DurationData> &&
+                                 !std::is_same_v<std::decay_t<T>, SpelledDuration> &&
+                                 std::is_convertible_v<decltype(std::declval<const T&>().data()),
+                                                       SpelledDuration>,
+                             int> = 0>
+  DurationArg(const T& value) : DurationArg(SpelledDuration(value.data())) {}  // NOLINT
 
   /** The form this argument holds. */
   const std::variant<NoteValue, DurationData>& value() const noexcept { return value_; }

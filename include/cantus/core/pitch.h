@@ -134,6 +134,14 @@ class IntervalArg {
       std::enable_if_t<
           std::is_convertible_v<decltype(std::declval<const T&>().data()), IntervalData>, int> = 0>
   IntervalArg(const T& value) : value_(IntervalData(value.data())) {}  // NOLINT
+  /** A value whose `data()` returns a spelled interval (the Interval class). */
+  template <
+      class T,
+      std::enable_if_t<
+          !std::is_convertible_v<decltype(std::declval<const T&>().data()), IntervalData> &&
+              std::is_convertible_v<decltype(std::declval<const T&>().data()), SpelledInterval>,
+          int> = 0>
+  IntervalArg(const T& value) : IntervalArg(SpelledInterval(value.data())) {}  // NOLINT
 
   /** The form this argument holds. */
   const Value& value() const noexcept { return value_; }
