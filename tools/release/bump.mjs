@@ -5,7 +5,7 @@
  * Each pattern must match exactly once in its file; nothing is written unless all of them do.
  * `tools/release/check_versions.py` checks the result.
  *
- * Usage: node tools/release/bump.mjs <major.minor.patch[-prerelease]>
+ * Usage: node tools/release/bump.mjs <major.minor.patch>
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const SITES = path.join(REPO, 'tools/release/versions.json');
-const SEMVER = /^(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?$/;
+const SEMVER = /^(\d+)\.(\d+)\.(\d+)$/;
 
 function fail(message) {
   console.error(`bump: ${message}`);
@@ -22,7 +22,12 @@ function fail(message) {
 
 const version = process.argv[2];
 if (process.argv.length !== 3 || !SEMVER.test(version ?? '')) {
-  fail('usage: node tools/release/bump.mjs <major.minor.patch[-prerelease]>');
+  if (/^\d+\.\d+\.\d+-/.test(version ?? '')) {
+    fail(
+      `${version}: a prerelease suffix is not accepted (CMake and PEP 440 take major.minor.patch)`,
+    );
+  }
+  fail('usage: node tools/release/bump.mjs <major.minor.patch>');
 }
 const [, major, minor, patch] = SEMVER.exec(version);
 const parts = { version, major, minor, patch };

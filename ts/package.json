@@ -121,7 +121,8 @@
     "dist",
     "README.md",
     "README_ja.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "sideEffects": false,
   "scripts": {

@@ -15,14 +15,18 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-SEMVER = re.compile(r"^(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?$")
+SEMVER = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 
 
 def main() -> int:
     version = json.loads((REPO / "ts/package.json").read_text())["version"]
     parsed = SEMVER.match(version)
     if not parsed:
-        print(f"check_versions: ts/package.json version {version!r} is not semver", file=sys.stderr)
+        print(
+            f"check_versions: ts/package.json version {version!r} is not major.minor.patch "
+            "(CMake and PEP 440 accept no prerelease suffix)",
+            file=sys.stderr,
+        )
         return 1
     parts = {"version": version, "major": parsed[1], "minor": parsed[2], "patch": parsed[3]}
     sites = json.loads((REPO / "tools/release/versions.json").read_text())["sites"]

@@ -3,8 +3,8 @@
  * Pre-tag checks of what a release publishes, after the packages are built.
  *
  *   CHANGELOG.md   has a dated `## [<version>] - YYYY-MM-DD` section for the ts/package.json version
- *   LICENSE        every package directory's copy is the repository's
- *   npm packages   each published one is not private and packs its README, LICENSE, the files
+ *   LICENSE, NOTICE  every package directory's copy is the repository's
+ *   npm packages   each published one is not private and packs its README, LICENSE, NOTICE, the files
  *                  its `exports` name and their declarations; the private ones stay private
  *
  * Usage: node tools/release/check_release.mjs
@@ -19,7 +19,8 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const PUBLISHED = ['ts', 'bindings/wasm'];
 /** Workspace packages that are never published. */
 const PRIVATE = ['bindings/js', 'bindings/node'];
-const LICENSES = ['ts/LICENSE', 'bindings/wasm/LICENSE'];
+/** Package directories that ship LICENSE and NOTICE copies (the npm packages and the wheel). */
+const LEGAL_DIRS = ['ts', 'bindings/wasm', 'bindings/python'];
 
 const problems = [];
 const read = (file) => readFileSync(path.join(REPO, file), 'utf8');
@@ -31,9 +32,19 @@ if (!new RegExp(`^## \\[${escaped}\\] - \\d{4}-\\d{2}-\\d{2}$`, 'm').test(read('
   problems.push(`CHANGELOG.md has no dated section for ${version}`);
 }
 
-const license = read('LICENSE');
-for (const copy of LICENSES) {
-  if (read(copy) !== license) problems.push(`${copy} differs from LICENSE`);
+for (const name of ['LICENSE', 'NOTICE']) {
+  const root = read(name);
+  for (const dir of LEGAL_DIRS) {
+    const copy = `${dir}/${name}`;
+    let text;
+    try {
+      text = read(copy);
+    } catch {
+      problems.push(`${copy} is missing`);
+      continue;
+    }
+    if (text !== root) problems.push(`${copy} differs from ${name}`);
+  }
 }
 
 /** Every file path an `exports` map names. */
@@ -59,6 +70,7 @@ for (const dir of PUBLISHED) {
   const wanted = [
     'README.md',
     'LICENSE',
+    'NOTICE',
     'package.json',
     ...exportTargets(pkg.exports).map((f) => f.replace(/^\.\//, '')),
   ];

@@ -245,7 +245,7 @@ describe('packed package consumer matrix', () => {
       [...packedPaths].filter(
         (file) =>
           !file.startsWith('dist/') &&
-          !['package.json', 'README.md', 'README_ja.md', 'LICENSE'].includes(file),
+          !['package.json', 'README.md', 'README_ja.md', 'LICENSE', 'NOTICE'].includes(file),
       ),
     ).toEqual([]);
 
