@@ -8,6 +8,12 @@
  * the core produced. The `$ref` key a backend may add to a hybrid tag is opaque
  * here: it stays in the kept node and goes back with it.
  *
+ * An instance of a by-reference type (see `RuntimeOptions`) is retained in the core on its first
+ * use as a receiver (`$retain`); later calls send `{"$class": T, "$ref": id}` instead of its data.
+ * The reference is released when the instance is collected, and at most `maxRefs` are live at
+ * once: the least recently used is released when a call returns, and that instance sends its
+ * data again from then on.
+ *
  * Freezing follows the pure package, which hands out mutable results: decoded
  * results are left writable, except what the pure package freezes: the entries
  * of `FROZEN_RESULTS`, and the consts it freezes. `freezeAt` is the one place a
@@ -38,6 +44,19 @@ export type TypeMeta = {
   properties: readonly string[];
   /** Every member in declaration order, which is the order the object's own keys take. */
   order?: readonly string[];
+  /** Properties of a handle that never change while it lives, so one read is kept. */
+  stable?: readonly string[];
+};
+
+/** The most references to retained values one runtime holds at a time. */
+export const MAX_LIVE_REFS = 1024;
+
+/** How a runtime treats the values it sends. */
+export type RuntimeOptions = {
+  /** Types whose instances are retained in the core on first use as a receiver. */
+  byReference?: readonly string[];
+  /** The most live references; `MAX_LIVE_REFS` when absent. */
+  maxRefs?: number;
 };
 
 /** `Function.length` of a generated class's constructor and members, as the pure class has them. */
@@ -60,6 +79,8 @@ type Frame = {
   error: unknown;
   /** Hybrid arguments by wire text, so a result naming one returns the caller's object. */
   hybrids: Map<string, object>;
+  /** Whether the reply names hybrid references, which the objects decoded from it then hold. */
+  refs: boolean;
 };
 
 /** How one result is decoded. */
@@ -67,6 +88,8 @@ type DecodeContext = {
   hybrids: ReadonlyMap<string, object> | null;
   /** The callbacks of the call that produced the result, which a `$cb` in a payload names. */
   fns?: readonly Callable[];
+  /** Whether the result names hybrid references. */
+  refs?: boolean;
 };
 
 /** What the runtime keeps about a hybrid object or a model-class instance. */
@@ -75,6 +98,8 @@ type WireEntry = {
   text?: string;
   /** The callbacks a `$cb` in the wire names, kept so a later call can register them again. */
   fns?: readonly Callable[];
+  /** The core's retained copy of the value, when it has one on this runtime's backend. */
+  ref?: { backend: Backend; id: number };
 };
 
 /** The `$counter` builtin handle, described like a manifest handle type. */
@@ -92,6 +117,23 @@ const ERROR_CLASSES: Record<string, (wire: WireObject) => Error> = {
 const DISPOSE: symbol = (Symbol as { dispose?: symbol }).dispose ?? Symbol.for('Symbol.dispose');
 
 const PLAIN: DecodeContext = { hybrids: null };
+const WITH_REFS: DecodeContext = { hybrids: null, refs: true };
+
+/** Whether a reply's text can name a hybrid reference. */
+function mayNameRefs(json: string): boolean {
+  return json.includes('"$ref"') && json.includes('"$hy"');
+}
+
+/** Every reference a hybrid tag in `node` names, itself and the ones nested in it. */
+function collectHybridRefs(node: Wire, out: Set<number>): void {
+  if (typeof node !== 'object' || node === null) return;
+  if (Array.isArray(node)) {
+    for (const element of node) collectHybridRefs(element, out);
+    return;
+  }
+  if (typeof node.$hy === 'string' && typeof node.$ref === 'number') out.add(node.$ref);
+  for (const key in node) collectHybridRefs(node[key] as Wire, out);
+}
 
 /** The whole result. */
 const WHOLE: readonly string[] = [];
@@ -249,20 +291,51 @@ export class Runtime {
   readonly #classWire = sharedClassWire();
   readonly #hybrids = new WeakMap<object, WireEntry>();
   readonly #hybridMethods = new WeakMap<object, { entry: WireEntry; method: string }>();
-  readonly #handleOf = new WeakMap<object, { id: number; type: string }>();
+  readonly #handleOf = new WeakMap<
+    object,
+    { id: number; type: string; cache: Map<string, unknown> }
+  >();
   readonly #handles = new Map<number, WeakRef<object>>();
   readonly #identities = new Map<number, WeakRef<object>>();
   readonly #frames: Frame[] = [];
   readonly #handleRegistry: FinalizationRegistry<number>;
   readonly #identityRegistry: FinalizationRegistry<number>;
+  readonly #byReference: ReadonlySet<string>;
+  readonly #maxRefs: number;
+  /** Retained values by reference id, least recently used first. */
+  readonly #liveRefs = new Map<number, WeakRef<WireEntry>>();
+  readonly #refRegistry: FinalizationRegistry<number>;
+  /** How many live objects hold each hybrid reference a backend issued. */
+  readonly #hybridRefCounts = new Map<number, number>();
+  readonly #hybridRefRegistry: FinalizationRegistry<readonly number[]>;
+  #retainUnsupported = false;
 
   /**
    * @param backend The core every op goes to.
    * @param types The hybrid and handle types the results may carry.
+   * @param options Which types are held in the core by reference, and how many at most.
    */
-  constructor(backend: Backend, types: Record<string, TypeMeta> = {}) {
+  constructor(
+    backend: Backend,
+    types: Record<string, TypeMeta> = {},
+    options: RuntimeOptions = {},
+  ) {
     this.#backend = backend;
     this.#types = { ...BUILTIN_TYPES, ...types };
+    this.#byReference = new Set(options.byReference ?? []);
+    this.#maxRefs = options.maxRefs ?? MAX_LIVE_REFS;
+    this.#refRegistry = new FinalizationRegistry((id) => this.#dropRef(id));
+    this.#hybridRefRegistry = new FinalizationRegistry((ids) => {
+      for (const id of ids) {
+        const left = (this.#hybridRefCounts.get(id) ?? 0) - 1;
+        if (left > 0) {
+          this.#hybridRefCounts.set(id, left);
+        } else {
+          this.#hybridRefCounts.delete(id);
+          this.#backend.release(id);
+        }
+      }
+    });
     this.#handleRegistry = new FinalizationRegistry((id) => {
       if (this.#handles.get(id)?.deref() === undefined) {
         this.#handles.delete(id);
@@ -289,18 +362,25 @@ export class Runtime {
 
   /** Run op `op` on `args` and return its decoded result. */
   call(op: string, args: readonly unknown[]): unknown {
-    const frame = this.#newFrame();
-    const wire = this.#run(op, args, frame);
-    const result = this.#decode(wire, {
-      hybrids: frame.hybrids.size > 0 ? frame.hybrids : null,
-      fns: frame.fns,
-    });
-    const frozen = FROZEN_RESULTS[op];
-    if (frozen !== undefined) freezeAt(result, frozen);
-    else if (SEGMENT_CHORD_OPS.has(op) && sharesFrozenChords((args[0] as WireObject)?.segments)) {
-      freezeAt(result, []);
+    try {
+      this.#retainReceiver(op, args[0]);
+      const frame = this.#newFrame();
+      const wire = this.#run(op, args, frame);
+      const result = this.#decode(wire, {
+        hybrids: frame.hybrids.size > 0 ? frame.hybrids : null,
+        fns: frame.fns,
+        refs: frame.refs,
+      });
+      const frozen = FROZEN_RESULTS[op];
+      if (frozen !== undefined) freezeAt(result, frozen);
+      else if (SEGMENT_CHORD_OPS.has(op) && sharesFrozenChords((args[0] as WireObject)?.segments)) {
+        freezeAt(result, []);
+      }
+      return result;
+    } finally {
+      // A reference an enclosing call has already sent stays valid until that call returns.
+      if (this.#frames.length === 0) this.#evict();
     }
-    return result;
   }
 
   /** A function export: calls op `op` with its arguments; `length` is the pure function's. */
@@ -327,6 +407,7 @@ export class Runtime {
       });
     }
     this.#classWire.set(self, keptEntry(wire, frame.fns));
+    if (frame.refs) this.#holdHybridRefs([self], wire);
   }
 
   /** Release a handle now (`[Symbol.dispose]`); later calls on it fail with RELEASED_HANDLE. */
@@ -334,6 +415,7 @@ export class Runtime {
     const info = this.#handleOf.get(handle);
     if (info === undefined) return;
     this.#handleRegistry.unregister(handle);
+    info.cache.clear();
     this.#handles.delete(info.id);
     this.#backend.release(info.id);
   }
@@ -343,8 +425,101 @@ export class Runtime {
     return this.#handles.size;
   }
 
+  /** How many retained values the runtime holds a reference to, for tests. */
+  get retainedRefs(): number {
+    return this.#liveRefs.size;
+  }
+
   #newFrame(): Frame {
-    return { fns: [], failed: false, error: undefined, hybrids: new Map() };
+    return { fns: [], failed: false, error: undefined, hybrids: new Map(), refs: false };
+  }
+
+  /** The id of the core's copy of `entry`'s value, when this runtime's backend holds one. */
+  #refOf(entry: WireEntry): number | undefined {
+    return entry.ref?.backend === this.#backend ? entry.ref.id : undefined;
+  }
+
+  #touchRef(id: number): void {
+    const weak = this.#liveRefs.get(id);
+    if (weak === undefined) return;
+    this.#liveRefs.delete(id);
+    this.#liveRefs.set(id, weak);
+  }
+
+  /** Remember that the core holds `entry`'s value under `id` for as long as `owner` lives. */
+  #adoptRef(owner: object, entry: WireEntry, id: number): void {
+    entry.ref = { backend: this.#backend, id };
+    this.#liveRefs.set(id, new WeakRef(entry));
+    this.#refRegistry.register(owner, id, entry);
+  }
+
+  /** Forget a reference and release it in the core. */
+  #dropRef(id: number): void {
+    const entry = this.#liveRefs.get(id)?.deref();
+    this.#liveRefs.delete(id);
+    if (entry !== undefined) entry.ref = undefined;
+    this.#backend.release(id);
+  }
+
+  /** Release the least recently used references beyond the cap. */
+  #evict(): void {
+    for (const [id, weak] of this.#liveRefs) {
+      if (this.#liveRefs.size <= this.#maxRefs) break;
+      const entry = weak.deref();
+      if (entry === undefined) continue;
+      this.#refRegistry.unregister(entry);
+      this.#dropRef(id);
+    }
+  }
+
+  /**
+   * Retain the receiver of a `Type#member` op in the core the first time it is used, when its
+   * type is by-reference. A refusal is left to the op itself, which fails the same way.
+   */
+  #retainReceiver(op: string, self: unknown): void {
+    const hash = op.indexOf('#');
+    if (hash <= 0 || this.#retainUnsupported || typeof self !== 'object' || self === null) return;
+    if (!this.#byReference.has(op.slice(0, hash))) return;
+    const entry = this.#classWire.get(self) ?? this.#hybrids.get(self);
+    if (entry === undefined || entry.fns !== undefined) return;
+    const id = this.#refOf(entry);
+    if (id !== undefined) {
+      this.#touchRef(id);
+      return;
+    }
+    if (entry.ref !== undefined) return;
+    const type = entry.wire.$class ?? entry.wire.$hy;
+    if (type !== op.slice(0, hash)) return;
+    entry.text ??= JSON.stringify(entry.wire);
+    const reply = this.#backend.call('$retain', `[${entry.text}]`, null);
+    if (reply.status === ERROR_CODES.UNKNOWN_OP) this.#retainUnsupported = true;
+    if (reply.status !== 0) return;
+    const ref = (JSON.parse(reply.json) as WireObject).$ref;
+    if (typeof ref === 'number') this.#adoptRef(self, entry, ref);
+  }
+
+  /** `{"$hy": T, "$ref": id}` when `value` is a retained hybrid receiving one of its own methods. */
+  #receiverRef(op: string, value: unknown): string | undefined {
+    if (typeof value !== 'object' || value === null) return undefined;
+    const entry = this.#hybrids.get(value);
+    const id = entry === undefined ? undefined : this.#refOf(entry);
+    if (entry === undefined || id === undefined) return undefined;
+    const type = String(entry.wire.$hy);
+    if (!op.startsWith(`${type}#`)) return undefined;
+    this.#touchRef(id);
+    return `{"$hy":${JSON.stringify(type)},"$ref":${id}}`;
+  }
+
+  /** Count the hybrid references in `wire` against each of `owners`, released with the last. */
+  #holdHybridRefs(owners: readonly object[], wire: Wire): void {
+    const found = new Set<number>();
+    collectHybridRefs(wire, found);
+    if (found.size === 0) return;
+    const ids = [...found];
+    for (const owner of owners) {
+      for (const id of ids) this.#hybridRefCounts.set(id, (this.#hybridRefCounts.get(id) ?? 0) + 1);
+      this.#hybridRefRegistry.register(owner, ids);
+    }
   }
 
   #run(op: string, args: readonly unknown[], frame: Frame): Wire {
@@ -354,14 +529,19 @@ export class Runtime {
       let argsJson = '[';
       for (let i = 0; i < args.length; i += 1) {
         if (i > 0) argsJson += ',';
-        argsJson += this.#encode(args[i], frame, []);
+        argsJson +=
+          (i === 0 ? this.#receiverRef(op, args[0]) : undefined) ??
+          this.#encode(args[i], frame, []);
       }
       argsJson += ']';
       reply = this.#backend.call(op, argsJson, frame.fns.length > 0 ? this.#host(frame) : null);
     } finally {
       this.#frames.pop();
     }
-    if (reply.status === 0) return JSON.parse(reply.json) as Wire;
+    if (reply.status === 0) {
+      frame.refs = mayNameRefs(reply.json);
+      return JSON.parse(reply.json) as Wire;
+    }
     if (reply.status === ERROR_CODES.CALLBACK_FAILED && frame.failed) throw frame.error;
     let parsed: ErrorReply;
     try {
@@ -377,7 +557,10 @@ export class Runtime {
       const fn = frame.fns[id];
       try {
         if (fn === undefined) throw new Error(`no callback ${id}`);
-        const args = this.#decode(JSON.parse(argsJson) as Wire, PLAIN) as unknown[];
+        const args = this.#decode(
+          JSON.parse(argsJson) as Wire,
+          mayNameRefs(argsJson) ? WITH_REFS : PLAIN,
+        ) as unknown[];
         return this.#encode(fn(...args), frame, []);
       } catch (error) {
         if (!frame.failed) {
@@ -411,7 +594,12 @@ export class Runtime {
     if (value === null) return 'null';
     const object = value as object;
     const cls = this.#classWire.get(object);
-    if (cls !== undefined) return this.#entryText(cls, frame);
+    if (cls !== undefined) {
+      const id = this.#refOf(cls);
+      if (id === undefined) return this.#entryText(cls, frame);
+      this.#touchRef(id);
+      return `{"$class":${JSON.stringify(cls.wire.$class)},"$ref":${id}}`;
+    }
     const hybrid = this.#hybrids.get(object);
     if (hybrid !== undefined) {
       const text = this.#encodeHybrid(object as Record<string, unknown>, hybrid, frame);
@@ -591,7 +779,17 @@ export class Runtime {
       });
     }
     const instance = Object.create(cls.prototype) as object;
-    this.#classWire.set(instance, keptEntry(node, ctx.fns));
+    // A `$ref` beside the data is the core's retained copy of this very value.
+    const id = node.$ref;
+    if (typeof id === 'number') {
+      const { $ref: _ref, ...wire } = node;
+      const entry = keptEntry(wire, ctx.fns);
+      this.#classWire.set(instance, entry);
+      this.#adoptRef(instance, entry, id);
+    } else {
+      this.#classWire.set(instance, keptEntry(node, ctx.fns));
+    }
+    if (ctx.refs) this.#holdHybridRefs([instance], node);
     return instance;
   }
 
@@ -615,6 +813,7 @@ export class Runtime {
     const entry = keptEntry(node, ctx.fns, text);
     const object: Record<string, unknown> = {};
     const methods = new Set(meta.methods);
+    const owners: object[] = [object];
     // Members in declaration order, so the object's own keys read like the pure one's.
     for (const name of meta.order ?? [...meta.properties, ...meta.methods]) {
       if (methods.has(name)) {
@@ -622,6 +821,7 @@ export class Runtime {
         const fn = (...args: unknown[]): unknown => this.call(op, [object, ...args]);
         Object.defineProperty(fn, 'name', { value: name });
         this.#hybridMethods.set(fn, { entry, method: name });
+        owners.push(fn);
         object[name] = fn;
       } else {
         const field = node[escapeKey(name)];
@@ -629,6 +829,7 @@ export class Runtime {
       }
     }
     this.#hybrids.set(object, entry);
+    if (ctx.refs) this.#holdHybridRefs(owners, node);
     return object;
   }
 
@@ -652,7 +853,13 @@ export class Runtime {
       }
     }
     target[DISPOSE] = () => this.release(proxy);
-    const read = (key: string) => this.call(`${type}#${key}`, [proxy]);
+    const stable = new Set(meta.stable);
+    const cache = new Map<string, unknown>();
+    const read = (key: string): unknown => {
+      if (!stable.has(key)) return this.call(`${type}#${key}`, [proxy]);
+      if (!cache.has(key)) cache.set(key, this.call(`${type}#${key}`, [proxy]));
+      return cache.get(key);
+    };
     // A property the caller wrote or deleted is theirs from then on; the others read the core.
     const written = new Set<string>();
     const reads = (key: string | symbol): key is string =>
@@ -681,7 +888,7 @@ export class Runtime {
         return Reflect.deleteProperty(t, key);
       },
     });
-    this.#handleOf.set(proxy, { id, type });
+    this.#handleOf.set(proxy, { id, type, cache });
     this.#handles.set(id, new WeakRef(proxy));
     this.#handleRegistry.register(proxy, id, proxy);
     return proxy;

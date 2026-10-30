@@ -40,6 +40,14 @@ export const CLASS_WIRE: Readonly<Record<string, ClassWire>> = {
   Voicing: { array: 'pitches' },
 };
 
+/** The types whose instances a host holds in the core once and sends by reference. */
+export const BY_REFERENCE: readonly string[] = [
+  'Arrangement',
+  'Score',
+  'Timeline',
+  'ChordTimeline',
+];
+
 /** The hybrid and handle types. */
 export const TYPES: Readonly<Record<string, TypeInfo>> = {
   ArrangementSession: {
@@ -48,6 +56,7 @@ export const TYPES: Readonly<Record<string, TypeInfo>> = {
     properties: ['tracks', 'analysis'],
     order: ['tracks', 'analysis', 'update'],
     payload: [],
+    stable: ['tracks', 'analysis'],
   },
   ChordTimeline: {
     kind: 'hybrid',
@@ -69,6 +78,7 @@ export const TYPES: Readonly<Record<string, TypeInfo>> = {
     properties: ['notes'],
     order: ['notes', 'at', 'attacksAt', 'onsetsBetween'],
     payload: [],
+    stable: ['notes'],
   },
   PositionalRng: {
     kind: 'hybrid',
@@ -121,5 +131,6 @@ export const TYPES: Readonly<Record<string, TypeInfo>> = {
     properties: [],
     order: ['next', 'prob', 'range', 'float'],
     payload: [],
+    stable: [],
   },
 };

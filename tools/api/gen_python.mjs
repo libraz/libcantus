@@ -137,7 +137,7 @@ function functionBlock(e) {
 }
 
 /** A method or getter of a class, hybrid or handle. */
-function memberBlock(owner, base, m) {
+function memberBlock(owner, base, m, stable = new Set()) {
   const name = snake(m.name);
   const op = `${owner}${m.static ? '.' : '#'}${m.name}`;
   const call = base === 'Handle' ? 'self._call' : 'runtime.call';
@@ -152,6 +152,16 @@ function memberBlock(owner, base, m) {
     if (base === 'Hybrid') return { py: [], pyi: [`    ${name}: Any`] };
     decorator.push('    @property');
     sig = { positional: [], rest: null, bag: null };
+    if (base === 'Handle' && stable.has(m.name)) {
+      return {
+        py: [
+          ...decorator,
+          ...header({ indent: '    ', name, lead, sig, stub: false }),
+          `        return self._stable(${q(name)}, ${q(op)})`,
+        ],
+        pyi: [...decorator, ...header({ indent: '    ', name, lead, sig, stub: true })],
+      };
+    }
   } else {
     if (m.static) decorator.push('    @staticmethod');
     sig = shape(op, m.params ?? []);
@@ -226,10 +236,17 @@ function modelBlock(e) {
   return classLines(e.id, 'Model', [], blocks);
 }
 
-function typeBlock(t) {
+function typeBlock(t, annotations) {
   const base = t.kind === 'handle' ? 'Handle' : 'Hybrid';
   checkMembers(t.id, t.members, base);
-  const blocks = t.members.map((m) => memberBlock(t.id, base, m));
+  const stable = new Set(annotations.classification?.[t.kind]?.[t.id]?.stable ?? []);
+  for (const name of stable) {
+    const member = t.members.find((m) => m.name === name);
+    if (base !== 'Handle' || member?.kind !== 'property') {
+      fail(`${t.id}: stable names ${name}, which is not a handle property`);
+    }
+  }
+  const blocks = t.members.map((m) => memberBlock(t.id, base, m, stable));
   const head = [];
   if (base === 'Handle') {
     head.push(`    _TYPE = ${q(t.id)}`);
@@ -281,7 +298,10 @@ function build(manifest, annotations) {
   py.push('from ._codec import UNSET, Handle, Hybrid, Model, StaticGetter, freeze, runtime', '');
   pyi.push('from ._codec import Handle, Hybrid, Model', '');
 
-  const classes = [...models.map(modelBlock), ...manifest.types.map(typeBlock)];
+  const classes = [
+    ...models.map(modelBlock),
+    ...manifest.types.map((t) => typeBlock(t, annotations)),
+  ];
   const typeNames = [...models.map((m) => m.id), ...manifest.types.map((t) => t.id)];
   // Constants first, then classes, then the rest, each alphabetical (ruff's isort-style order).
   const group = (n) => (n === n.toUpperCase() ? 0 : /^[A-Z]/.test(n) ? 1 : 2);
@@ -331,6 +351,11 @@ function build(manifest, annotations) {
     pyi.push('', ...c.pyi);
   }
   py.push('runtime.register(', ...typeNames.map((n) => `    ${n},`), ')');
+  const byReference = annotations.by_reference ?? [];
+  for (const name of byReference) {
+    if (!typeNames.includes(name)) fail(`by_reference names unknown class or hybrid ${name}`);
+  }
+  py.push(`runtime.by_reference(${byReference.map(q).join(', ')})`);
   return {
     py: `${py.join('\n').replace(/\n{4,}/g, '\n\n\n')}\n`,
     pyi: `${pyi.join('\n').replace(/\n{4,}/g, '\n\n\n')}\n`,

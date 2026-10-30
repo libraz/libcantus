@@ -904,3 +904,14 @@ describe('arrangement span over notes that end before beat 0', () => {
     expect(keys[keys.length - 1]?.endBeat).toBe(-2);
   });
 });
+
+describe('the arrangement session keeps the objects it hands out', () => {
+  it('returns the same tracks and the same analysis on every read', () => {
+    const session = createArrangementSession(baseArrangement(), { key: majorKey(0) });
+    expect(session.tracks).toBe(session.tracks);
+    expect(session.analysis).toBe(session.analysis);
+    const updated = session.update([{ trackIndex: 0, notes: melodyTrack().slice(0, 4) }]);
+    expect(updated.tracks).toBe(updated.tracks);
+    expect(updated.analysis).toBe(updated.analysis);
+  });
+});

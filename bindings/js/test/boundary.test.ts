@@ -312,6 +312,67 @@ describe(`boundary (${NAME} backend)`, () => {
     });
   });
 
+  describe('retained values', () => {
+    const notes = [60, 64].map((pitch) => ({ pitch, startBeat: 0, durationBeat: 4 }));
+    const score = () => raw('Score.of', JSON.stringify([notes])).json;
+    const retain = (value: string) => raw('$retain', `[${value}]`);
+    const idOf = (reply: { json: string }) => (JSON.parse(reply.json) as { $ref: number }).$ref;
+    const rejected = (reply: { status: number; json: string }, code: string, message: RegExp) => {
+      expect(JSON.parse(reply.json).code).toBe(code);
+      expect(JSON.parse(reply.json).message).toMatch(message);
+    };
+
+    it('holds a value under a reference that stands for its data', () => {
+      const reply = retain(score());
+      expect(reply.status).toBe(0);
+      const id = idOf(reply);
+      expect(reply.json).toBe(`{"$class":"Score","$ref":${id}}`);
+      const byRef = raw('Score#secondsAt', `[{"$class":"Score","$ref":${id}},1.5]`);
+      const byData = raw('Score#secondsAt', `[${score()},1.5]`);
+      expect(byRef).toEqual(byData);
+    });
+
+    it('counts a retained value as live until it is released', () => {
+      const before = live();
+      const id = idOf(retain(score()));
+      expect(live()).toBe(before + 1);
+      backend.release(id);
+      expect(live()).toBe(before);
+      rejected(
+        raw('Score#secondsAt', `[{"$class":"Score","$ref":${id}},1]`),
+        'RELEASED_HANDLE',
+        /released/,
+      );
+    });
+
+    it('rejects a reference that names nothing, names another class, or carries data', () => {
+      const id = idOf(retain(score()));
+      rejected(
+        raw('Score#secondsAt', '[{"$class":"Score","$ref":999999},1]'),
+        'BAD_REQUEST',
+        /^unknown handle 999999$/,
+      );
+      rejected(
+        raw('Timeline#at', `[{"$class":"Timeline","$ref":${id}},1]`),
+        'BAD_REQUEST',
+        /^expected a "Timeline" instance$/,
+      );
+      rejected(
+        raw('Score#secondsAt', `[{"$class":"Score","$ref":${id},"notes":[]},1]`),
+        'BAD_REQUEST',
+        /^malformed "\$class" tag$/,
+      );
+      backend.release(id);
+    });
+
+    it('refuses what the plain path refuses, and values holding callbacks', () => {
+      const broken = '{"$class":"Score","notes":"x"}';
+      expect(retain(broken)).toEqual(raw('Score#totalBeats', `[${broken}]`));
+      rejected(retain('{"$class":"Score","notes":[],"f":{"$cb":0}}'), 'BAD_REQUEST', /callback/);
+      rejected(retain('1'), 'BAD_REQUEST', /\$retain/);
+    });
+  });
+
   it('reports the version triple', () => {
     expect(rt.call('$version', [])).toEqual({
       version: expect.stringMatching(/^\d+\.\d+\.\d+/),

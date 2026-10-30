@@ -27,10 +27,15 @@
     },
     "handle": {
       "Rng": {},
-      "NoteEventIndex": {},
-      "ArrangementSession": {}
+      "NoteEventIndex": {
+        "stable": ["notes"]
+      },
+      "ArrangementSession": {
+        "stable": ["tracks", "analysis"]
+      }
     }
   },
+  "by_reference": ["Arrangement", "Score", "Timeline", "ChordTimeline"],
   "class_wire": {
     "description": "Model classes whose wire form is not `{\"$class\", ...toJSON()}`. Each maps a wire field to the getter (dotted path) it is read from. `extra`: written beside the toJSON fields when defined and left in the data fromData reads. `context`: written beside the toJSON fields when defined, and passed to the constructor after the data. `fields`: replace the toJSON fields; the constructor takes them in this order. `array`: toJSON is an array, carried under this field.",
     "Chord": {

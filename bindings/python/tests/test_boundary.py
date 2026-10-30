@@ -7,7 +7,7 @@ import json
 import math
 import threading
 from collections.abc import Callable
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 
@@ -440,3 +440,332 @@ class TestLibrary:
         assert {"$echo", "$throw", "$counter", "$call", "$live", "$version"} <= names
         call = next(e for e in libcantus.list_ops() if e["name"] == "$call")
         assert call["callbacks"] is True
+
+
+class FakeCore:
+    """A transport that records every call and releases, and answers ``$retain`` with fresh ids."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
+        self.released: list[int] = []
+        self.replies: dict[str, bytes] = {}
+        self.retain_status = 0
+        self.next_id = 100
+        self.on_call: Callable[[str], None] | None = None
+
+    def transport(self, op: bytes, body: bytes, _cb: Any) -> tuple[int, bytes]:
+        name = op.decode()
+        self.calls.append((name, body.decode("ascii")))
+        if self.on_call is not None:
+            self.on_call(name)
+        if name == "$retain":
+            if self.retain_status != 0:
+                return self.retain_status, b'{"code":"UNKNOWN_OP","message":"unknown op"}'
+            self.next_id += 1
+            wire = json.loads(body)[0]
+            tag = "$class" if "$class" in wire else "$hy"
+            return 0, json.dumps({tag: wire[tag], "$ref": self.next_id}).encode()
+        if name.startswith("ArrangementSession#") and 7 in self.released:
+            return ErrorCode.RELEASED_HANDLE, b'{"code":"RELEASED_HANDLE","message":"released"}'
+        return 0, self.replies.get(name, b"null")
+
+    def ops(self) -> list[str]:
+        return [name for name, _ in self.calls]
+
+
+def fake_runtime(max_refs: int = _codec.MAX_LIVE_REFS) -> tuple[_codec.Runtime, FakeCore]:
+    core = FakeCore()
+    rt = _codec.Runtime(core.transport, core.released.append)
+    rt._max_refs = max_refs
+    rt.register(libcantus.Score, libcantus.Timeline, libcantus.ChordTimeline, libcantus.Rng)
+    rt.register(libcantus.ArrangementSession, libcantus.Arrangement)
+    rt.by_reference("Arrangement", "Score", "Timeline", "ChordTimeline")
+    return rt, core
+
+
+def make_score(rt: _codec.Runtime, notes: int = 1) -> Any:
+    return rt._decode({"$class": "Score", "notes": list(range(notes))})
+
+
+class TestRetainedValues:
+    def test_receiver_is_retained_once_and_sent_as_a_reference(self) -> None:
+        rt, core = fake_runtime()
+        score = make_score(rt)
+        rt.call("Score#secondsAt", [score, 1.5])
+        rt.call("Score#secondsAt", [score, 2.5])
+        assert core.ops() == ["$retain", "Score#secondsAt", "Score#secondsAt"]
+        assert core.calls[0][1] == '[{"$class":"Score","notes":[0]}]'
+        assert core.calls[1][1] == '[{"$class":"Score","$ref":101},1.5]'
+        assert core.calls[2][1] == '[{"$class":"Score","$ref":101},2.5]'
+
+    def test_a_retained_class_is_a_reference_in_any_position(self) -> None:
+        rt, core = fake_runtime()
+        score = make_score(rt)
+        rt.call("Score#secondsAt", [score, 0])
+        rt.call("$echo", [[score, {"inner": score}]])
+        assert core.calls[-1][1] == (
+            '[[{"$class":"Score","$ref":101},{"inner":{"$class":"Score","$ref":101}}]]'
+        )
+
+    def test_only_receivers_of_by_reference_types_are_retained(self) -> None:
+        rt, core = fake_runtime()
+        score = make_score(rt)
+        rt.call("$echo", [score])
+        rt.call("Tempo#secondsAt", [score, 1])
+        rt.call("Score.of", [score])
+        assert core.ops() == ["$echo", "Tempo#secondsAt", "Score.of"]
+        assert score._ref is None
+
+    def test_a_hybrid_is_a_reference_only_as_its_own_receiver(self) -> None:
+        rt, core = fake_runtime()
+        timeline = rt._decode({"$hy": "ChordTimeline", "segments": [1, 2]})
+        rt.call("ChordTimeline#at", [timeline, 0])
+        rt.call("ChordTimeline#at", [timeline, 1])
+        assert core.calls[0] == ("$retain", '[{"$hy":"ChordTimeline","segments":[1,2]}]')
+        assert core.calls[1][1] == '[{"$hy":"ChordTimeline","$ref":101},0]'
+        assert core.calls[2][1] == '[{"$hy":"ChordTimeline","$ref":101},1]'
+        rt.call("$echo", [timeline])
+        rt.call("Score#secondsAt", [make_score(rt), timeline])
+        assert core.calls[3][1] == '[{"$hy":"ChordTimeline","segments":[1,2]}]'
+        assert core.calls[-1][1].endswith(',{"$hy":"ChordTimeline","segments":[1,2]}]')
+
+    def test_a_retained_hybrid_sends_its_original_segments(self) -> None:
+        rt, core = fake_runtime()
+        timeline = rt._decode({"$hy": "ChordTimeline", "segments": [1, 2]})
+        timeline.segments = [9]
+        rt.call("ChordTimeline#at", [timeline, 0])
+        assert core.calls[0][1] == '[{"$hy":"ChordTimeline","segments":[1,2]}]'
+
+    def test_a_value_holding_a_callback_is_not_retained(self) -> None:
+        rt, core = fake_runtime()
+        score = rt._decode({"$class": "Score", "notes": [], "f": {"$cb": 0}})
+        rt.call("Score#secondsAt", [score, 0])
+        assert core.ops() == ["Score#secondsAt"]
+
+    def test_a_failed_retain_sends_data_and_is_tried_again(self) -> None:
+        rt, core = fake_runtime()
+        core.retain_status = ErrorCode.BAD_REQUEST
+        score = make_score(rt)
+        rt.call("Score#secondsAt", [score, 0])
+        rt.call("Score#secondsAt", [score, 0])
+        assert core.ops() == ["$retain", "Score#secondsAt", "$retain", "Score#secondsAt"]
+        assert core.calls[1][1] == '[{"$class":"Score","notes":[0]},0]'
+        core.retain_status = 0
+        rt.call("Score#secondsAt", [score, 0])
+        assert core.calls[-1][1] == '[{"$class":"Score","$ref":101},0]'
+
+    def test_unknown_op_stops_trying(self) -> None:
+        rt, core = fake_runtime()
+        core.retain_status = ErrorCode.UNKNOWN_OP
+        score = make_score(rt)
+        for _ in range(3):
+            rt.call("Score#secondsAt", [score, 0])
+        assert core.ops().count("$retain") == 1
+        assert core.ops().count("Score#secondsAt") == 3
+
+    def test_a_result_reference_is_adopted_and_left_out_of_the_data(self) -> None:
+        rt, core = fake_runtime()
+        core.replies["Arrangement#update"] = b'{"$class":"Arrangement","tracks":[],"$ref":7}'
+        arrangement = rt._decode({"$class": "Arrangement", "tracks": []})
+        updated = rt.call("Arrangement#update", [arrangement, []])
+        assert updated._wire == {"$class": "Arrangement", "tracks": []}
+        assert updated._ref == (rt, 7)
+        rt.call("Arrangement#analysis", [updated])
+        assert core.ops() == ["$retain", "Arrangement#update", "Arrangement#analysis"]
+        assert core.calls[-1][1] == '[{"$class":"Arrangement","$ref":7}]'
+        assert rt.retained_refs == 2
+
+    def test_dropping_an_instance_releases_its_reference(self) -> None:
+        rt, core = fake_runtime()
+        score = make_score(rt)
+        rt.call("Score#secondsAt", [score, 0])
+        assert rt.retained_refs == 1
+        del score
+        gc.collect()
+        assert core.released == [101]
+        assert rt.retained_refs == 0
+
+    def test_the_cap_evicts_the_least_recently_used(self) -> None:
+        rt, core = fake_runtime(max_refs=2)
+        scores = [make_score(rt, n) for n in (1, 2, 3)]
+        for score in scores:
+            rt.call("Score#secondsAt", [score, 0])
+        assert core.released == [101]
+        assert rt.retained_refs == 2
+        assert scores[0]._ref is None
+        rt.call("Score#secondsAt", [scores[0], 0])
+        assert core.calls[-1][1] == '[{"$class":"Score","$ref":104},0]'
+        assert core.ops()[-2:] == ["$retain", "Score#secondsAt"]
+        assert core.released == [101, 102]
+
+    def test_a_recent_use_protects_from_eviction(self) -> None:
+        rt, core = fake_runtime(max_refs=2)
+        first, second, third = (make_score(rt, n) for n in (1, 2, 3))
+        rt.call("Score#secondsAt", [first, 0])
+        rt.call("Score#secondsAt", [second, 0])
+        rt.call("Score#secondsAt", [first, 0])
+        rt.call("Score#secondsAt", [third, 0])
+        assert core.released == [102]
+
+    def test_eviction_waits_for_the_outermost_call(self) -> None:
+        rt, core = fake_runtime(max_refs=1)
+        first, second = make_score(rt, 1), make_score(rt, 2)
+        rt.call("Score#secondsAt", [first, 0])
+        inside: list[list[int]] = []
+
+        def nested(name: str) -> None:
+            if name == "Score#barAt" and not inside:
+                rt.call("Score#secondsAt", [second, 0])
+                inside.append(list(core.released))
+
+        core.on_call = nested
+        rt.call("Score#barAt", [first, 0])
+        assert inside == [[]]
+        assert core.released == [101]
+
+    def test_the_loser_of_a_concurrent_retain_releases_its_id(self) -> None:
+        rt, core = fake_runtime()
+        score = make_score(rt)
+
+        def other_thread_wins(name: str) -> None:
+            if name == "$retain":
+                core.on_call = None
+                rt._adopt(score, 50)
+
+        core.on_call = other_thread_wins
+        rt.call("Score#secondsAt", [score, 0])
+        assert score._ref == (rt, 50)
+        assert core.released == [101]
+        rt.call("Score#secondsAt", [score, 0])
+        assert core.calls[-1][1] == '[{"$class":"Score","$ref":50},0]'
+
+    def test_a_reference_of_another_runtime_is_not_used(self) -> None:
+        rt, _ = fake_runtime()
+        other, other_core = fake_runtime()
+        score = make_score(rt)
+        rt.call("Score#secondsAt", [score, 0])
+        other.call("Score#secondsAt", [score, 0])
+        assert other_core.ops() == ["Score#secondsAt"]
+        assert other_core.calls[0][1] == '[{"$class":"Score","notes":[0]},0]'
+
+
+class TestStableHandleProperties:
+    def handle(self, rt: _codec.Runtime) -> Any:
+        return rt._decode({"$h": 7, "$type": "ArrangementSession"})
+
+    def test_a_stable_property_is_read_once(self) -> None:
+        rt, core = fake_runtime()
+        core.replies["ArrangementSession#tracks"] = b'[{"role":"melody"}]'
+        session = self.handle(rt)
+        assert session.tracks is session.tracks
+        assert core.ops() == ["ArrangementSession#tracks"]
+        assert session.tracks == [{"role": "melody"}]
+
+    def test_other_members_still_call_the_core(self) -> None:
+        rt, core = fake_runtime()
+        session = self.handle(rt)
+        session.update([])
+        session.update([])
+        assert core.ops() == ["ArrangementSession#update"] * 2
+
+    def test_a_released_handle_still_raises(self) -> None:
+        rt, core = fake_runtime()
+        core.replies["ArrangementSession#tracks"] = b"[]"
+        session = self.handle(rt)
+        assert session.tracks == []
+        session.close()
+        with pytest.raises(libcantus.CantusError) as info:
+            _ = session.tracks
+        assert info.value.code is ErrorCode.RELEASED_HANDLE
+
+    def test_a_failed_read_is_not_cached(self) -> None:
+        rt, core = fake_runtime()
+        core.replies["ArrangementSession#analysis"] = b"[1]"
+        session = self.handle(rt)
+        original = core.transport
+        failing = [True]
+
+        def transport(op: bytes, body: bytes, cb: Any) -> tuple[int, bytes]:
+            if failing[0]:
+                failing[0] = False
+                return ErrorCode.INTERNAL, b'{"code":"INTERNAL","message":"boom"}'
+            return original(op, body, cb)
+
+        rt._transport = transport
+        with pytest.raises(libcantus.CantusError):
+            _ = session.analysis
+        assert session.analysis == [1]
+
+
+class TestRetainedWithTheCore:
+    """The same behaviour against the native library."""
+
+    NOTES: ClassVar[list[dict[str, int]]] = [
+        {"pitch": p, "startBeat": 0, "durationBeat": 4} for p in (60, 64, 67)
+    ]
+
+    @pytest.fixture
+    def recorded(self, monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
+        calls: list[tuple[str, str]] = []
+
+        def transport(op: bytes, body: bytes, cb: Any) -> tuple[int, bytes]:
+            calls.append((op.decode(), body.decode("ascii")))
+            return _ffi.call(op, body, cb)
+
+        monkeypatch.setattr(runtime, "_transport", transport)
+        return calls
+
+    def test_a_retained_score_answers_like_its_data(self, recorded: list[tuple[str, str]]) -> None:
+        score = libcantus.Score.of(self.NOTES)
+        first = score.seconds_at(1.5)
+        second = score.seconds_at(1.5)
+        assert first == second
+        assert [op for op, _ in recorded] == [
+            "Score.of",
+            "$retain",
+            "Score#secondsAt",
+            "Score#secondsAt",
+        ]
+        assert recorded[3][1].startswith('[{"$class":"Score","$ref":')
+        assert "notes" not in recorded[3][1]
+
+    def test_the_live_count_follows_the_instance(self) -> None:
+        before = live()
+        score = libcantus.Score.of(self.NOTES)
+        score.seconds_at(0)
+        assert live() == before + 1
+        del score
+        gc.collect()
+        assert live() == before
+
+    def test_the_cap_evicts_and_the_evicted_instance_still_answers(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(runtime, "_max_refs", 2)
+        before = live()
+        scores = [libcantus.Score.of(self.NOTES) for _ in range(4)]
+        answers = [score.seconds_at(1.5) for score in scores]
+        assert live() == before + 2
+        assert scores[0].seconds_at(1.5) == answers[0]
+        assert live() == before + 2
+
+    def test_core_errors_for_bad_references(self) -> None:
+        score = libcantus.Score.of(self.NOTES)
+        score.seconds_at(0)
+        ref = score._ref
+        assert ref is not None
+
+        def message(op: bytes, arg: str) -> str:
+            status, body = _ffi.call(op, f"[{arg},1]".encode())
+            assert status != 0
+            return str(json.loads(body)["message"])
+
+        assert message(b"Score#secondsAt", '{"$class":"Score","$ref":999999}') == (
+            "unknown handle 999999"
+        )
+        assert message(b"Score#secondsAt", f'{{"$class":"Score","$ref":{ref[1]},"notes":[]}}') == (
+            'malformed "$class" tag'
+        )
+        assert message(b"Timeline#at", f'{{"$class":"Timeline","$ref":{ref[1]}}}') == (
+            'expected a "Timeline" instance'
+        )

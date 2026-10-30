@@ -3,8 +3,8 @@
  * `#backend` import resolves to.
  */
 import { backend } from '#backend';
-import { TYPES } from './generated/meta.js';
+import { BY_REFERENCE, TYPES } from './generated/meta.js';
 import { Runtime } from './runtime.js';
 
 /** The facade's runtime. */
-export const runtime = new Runtime(backend, TYPES);
+export const runtime = new Runtime(backend, TYPES, { byReference: BY_REFERENCE });

@@ -3,7 +3,8 @@
  * Generate the TS facade's export modules from `api/manifest.json`.
  *
  * Writes bindings/js/src/generated/:
- *   meta.ts      model classes, and the hybrid / handle types with their members and payload
+ *   meta.ts      model classes, the by-reference types, and the hybrid / handle types with their
+ *                members, payload and stable properties
  *   api.ts       every export: functions and classes call ops, consts decode consts.json
  *   <layer>.ts   one re-export list per layer subpath
  *   consts.json  the wire form of every const and enum, as the pure TS package evaluates it
@@ -61,6 +62,16 @@ function metaModule(manifest, annotations) {
     `export const CLASS_WIRE: Readonly<Record<string, ClassWire>> = ${JSON.stringify(wire)};`,
     '',
   );
+  const byReference = annotations.by_reference ?? [];
+  for (const name of byReference) {
+    const known = classes.includes(name) || manifest.types.some((t) => t.id === name);
+    if (!known) fail(`by_reference names unknown class or hybrid ${name}`);
+  }
+  lines.push(
+    '/** The types whose instances a host holds in the core once and sends by reference. */',
+  );
+  lines.push(`export const BY_REFERENCE: readonly string[] = [${byReference.map(q).join(', ')}];`);
+  lines.push('');
   lines.push('/** The hybrid and handle types. */');
   lines.push('export const TYPES: Readonly<Record<string, TypeInfo>> = {');
   for (const t of manifest.types) {
@@ -68,12 +79,19 @@ function metaModule(manifest, annotations) {
     const methods = t.members.filter((m) => m.kind === 'method').map((m) => m.name);
     const properties = t.members.filter((m) => m.kind === 'property').map((m) => m.name);
     const payload = info.payload ?? [];
+    const stable = info.stable ?? [];
+    if (stable.length > 0 && t.kind !== 'handle') fail(`${t.id}: stable applies to handles only`);
+    for (const name of stable) {
+      if (!properties.includes(name))
+        fail(`${t.id}: stable names ${name}, which is not a property`);
+    }
     lines.push(`  ${t.id}: {`);
     lines.push(`    kind: ${q(t.kind)},`);
     lines.push(`    methods: [${methods.map(q).join(', ')}],`);
     lines.push(`    properties: [${properties.map(q).join(', ')}],`);
     lines.push(`    order: [${t.members.map((m) => q(m.name)).join(', ')}],`);
     lines.push(`    payload: [${payload.map(q).join(', ')}],`);
+    if (t.kind === 'handle') lines.push(`    stable: [${stable.map(q).join(', ')}],`);
     lines.push('  },');
   }
   lines.push('};', '');

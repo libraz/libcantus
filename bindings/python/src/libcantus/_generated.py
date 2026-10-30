@@ -4439,11 +4439,11 @@ class ArrangementSession(Handle):
 
     @property
     def tracks(self) -> Any:
-        return self._call("ArrangementSession#tracks", [self])
+        return self._stable("tracks", "ArrangementSession#tracks")
 
     @property
     def analysis(self) -> Any:
-        return self._call("ArrangementSession#analysis", [self])
+        return self._stable("analysis", "ArrangementSession#analysis")
 
     def update(self, edits: Any, /) -> Any:
         return self._call("ArrangementSession#update", [self, edits])
@@ -4479,7 +4479,7 @@ class NoteEventIndex(Handle):
 
     @property
     def notes(self) -> Any:
-        return self._call("NoteEventIndex#notes", [self])
+        return self._stable("notes", "NoteEventIndex#notes")
 
     def at(self, beat: Any, /) -> Any:
         return self._call("NoteEventIndex#at", [self, beat])
@@ -4568,3 +4568,4 @@ runtime.register(
     ResolvedContext,
     Rng,
 )
+runtime.by_reference("Arrangement", "Score", "Timeline", "ChordTimeline")

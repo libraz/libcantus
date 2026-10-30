@@ -4,12 +4,15 @@
  *
  * Arguments are decoded the way the core decodes them: `$class` through
  * `Class.fromData`, `$cb` into a function that calls back into the facade.
- * Hybrids and handles are pure TS objects kept in reference tables: a result
+ * Hybrids and handles are pure TS objects kept in one handle table: a result
  * carries `$ref` (hybrid) or a handle id, and an argument naming either gets
- * the very same object back. The builtin `$` ops are emulated to the C++
+ * the very same object back; releasing the id drops it. `$retain` stores a
+ * model-class instance or hybrid in the same table, and `{"$class": T, "$ref": id}`
+ * names it again. The builtin `$` ops are emulated to the C++
  * semantics, so the boundary tests run against this backend too.
  *
- * With `CANTUS_RECORD=1` every call is handed to the corpus recorder.
+ * With `CANTUS_RECORD=1` every call is handed to the corpus recorder, a retained value in its
+ * arguments written out as the full data it was retained from.
  */
 import * as Pure from '../../../../ts/src/index.js';
 import type { Backend, CallReply, HostCallback } from '../backend.js';
@@ -129,7 +132,10 @@ function validateValue(v: Wire, undefinedAllowed: boolean, stats: { callbacks: n
         if (typeof o[k] !== 'string') throw badRequest(`malformed ${quote(k)} tag`);
       } else if (k === '$id') {
         if (!isInteger(o.$id, 0, MAX_SAFE)) throw badRequest('malformed "$id" tag');
-      } else if (!(k === '$ref' && primary === '$hy')) {
+      } else if (k === '$ref' && primary === '$class') {
+        if (keys !== 2 || !isInteger(o.$ref, 1, MAX_SAFE))
+          throw badRequest('malformed "$class" tag');
+      } else if (k !== '$ref') {
         throw badRequest(`malformed ${quote(primary)} tag`);
       }
     }
@@ -191,19 +197,27 @@ function isUndefinedTag(v: Wire | undefined): boolean {
 // ---------------------------------------------------------------------------
 // Reference tables.
 
-type HandleEntry = { object: object; type: string; counter?: { count: number; token: number } };
+/**
+ * `kind` is absent on a handle; `hybrid` marks a hybrid object a result named by `$ref`, and
+ * `value` a model-class instance or hybrid held by `$retain` (with `wire`, its data, when recording).
+ */
+type HandleEntry = {
+  object: object;
+  type: string;
+  counter?: { count: number; token: number };
+  kind?: 'hybrid' | 'value';
+  wire?: Wire;
+};
 
-/** Live handles by id; ids are never reused. */
+/** Live handles, hybrid references and retained values by id; ids are never reused. */
 const handles = new Map<number, HandleEntry>();
 const handleIds = new WeakMap<object, number>();
 let lastHandle = 0;
-
-/** Hybrid objects by `$ref`, and the reverse. */
-const refs = new Map<number, object>();
-const refIds = new WeakMap<object, number>();
-let lastRef = 0;
 /** References whose payload could not be read in full; a call passing one back is not replayable. */
 const incompleteRefs = new Set<number>();
+
+/** Ops whose result adopts the receiver's state, so a receiver sent by reference returns by reference. */
+const RETAINING_RESULTS: ReadonlySet<string> = new Set(['Arrangement#update']);
 
 /** Identity tokens of handle getter results. */
 const tokens = new WeakMap<object, number>();
@@ -229,13 +243,38 @@ function tokenOf(object: object): number {
   return token;
 }
 
-function newHandle(object: object, type: string, counter?: HandleEntry['counter']): number {
+function newHandle(
+  object: object,
+  type: string,
+  counter?: HandleEntry['counter'],
+  kind?: HandleEntry['kind'],
+): number {
   const known = handleIds.get(object);
   if (known !== undefined && handles.has(known)) return known;
   lastHandle += 1;
-  handles.set(lastHandle, { object, type, ...(counter ? { counter } : {}) });
+  handles.set(lastHandle, {
+    object,
+    type,
+    ...(counter ? { counter } : {}),
+    ...(kind ? { kind } : {}),
+  });
   handleIds.set(object, lastHandle);
   return lastHandle;
+}
+
+/** Hold `object` under a new id of its own, apart from any id it has as a handle or hybrid. */
+function retainValue(object: object, type: string, wire: Wire | undefined): number {
+  lastHandle += 1;
+  handles.set(lastHandle, { object, type, kind: 'value', ...(wire === undefined ? {} : { wire }) });
+  return lastHandle;
+}
+
+/** The failure for an id that names nothing live: released once, or never issued. */
+function missingHandle(id: number, type: string): BoundaryFailure {
+  if (id >= 1 && id <= lastHandle) {
+    return new BoundaryFailure('RELEASED_HANDLE', `${type} handle ${id} has been released`);
+  }
+  return badRequest(`unknown handle ${id}`);
 }
 
 function resolveHandle(tag: Wire | undefined, type: string): HandleEntry {
@@ -244,16 +283,8 @@ function resolveHandle(tag: Wire | undefined, type: string): HandleEntry {
   }
   const id = tag.$h as number;
   const entry = handles.get(id);
-  if (entry === undefined) {
-    if (id >= 1 && id <= lastHandle) {
-      throw new BoundaryFailure(
-        'RELEASED_HANDLE',
-        `${String(tag.$type)} handle ${id} has been released`,
-      );
-    }
-    throw badRequest(`unknown handle ${id}`);
-  }
-  if (entry.type !== type || tag.$type !== type) {
+  if (entry === undefined) throw missingHandle(id, String(tag.$type));
+  if (entry.kind !== undefined || entry.type !== type || tag.$type !== type) {
     throw badRequest(`handle ${id} is a ${quote(entry.type)}, not a ${quote(type)}`);
   }
   return entry;
@@ -285,6 +316,10 @@ type EncodeState = {
   incomplete: boolean;
   /** Tag every plain object with its `$id` (handle getter results, whose parts are shared). */
   identity?: boolean;
+  /** An argument named a retained value by reference. */
+  referenced?: boolean;
+  /** The arguments with each retained value written out, for the recorder. */
+  recorded?: string;
 };
 
 function encodeValue(v: unknown, state: EncodeState): string {
@@ -384,13 +419,7 @@ function encodeTyped(record: Record<string, unknown>, keys: string[], state: Enc
     state.incomplete = true;
     return `{"$h":${newHandle(record, match.name)},"$type":${quote(match.name)}}`;
   }
-  let ref = refIds.get(record);
-  if (ref === undefined) {
-    lastRef += 1;
-    ref = lastRef;
-    refs.set(ref, record);
-    refIds.set(record, ref);
-  }
+  const ref = newHandle(record, match.name, undefined, 'hybrid');
   const captured = provenance.get(record) ?? {};
   const inner: EncodeState = { incomplete: false, identity: state.identity };
   let out = `{"$hy":${quote(match.name)}`;
@@ -400,7 +429,7 @@ function encodeTyped(record: Record<string, unknown>, keys: string[], state: Enc
       if (!Object.hasOwn(record, field) && !Object.hasOwn(captured, field)) inner.incomplete = true;
       continue;
     }
-    if (typeof own === 'function' && !refIds.has(own)) {
+    if (typeof own === 'function' && !handleIds.has(own)) {
       inner.incomplete = true;
       continue;
     }
@@ -453,15 +482,30 @@ function decodeValue(v: Wire, host: HostCallback | null, state: EncodeState): un
     toJsonWire.set(object, o);
     return object;
   }
-  if ('$class' in o) return decodeClass(o, host, state);
+  if ('$class' in o) {
+    if (!('$ref' in o)) return decodeClass(o, host, state);
+    state.referenced = true;
+    return referencedValue(o.$ref as number, String(o.$class)).object;
+  }
   if ('$hy' in o) {
     const ref = o.$ref;
     if (ref === undefined)
       throw badRequest(`a ${quote(String(o.$hy))} hybrid needs a reference here`);
     const [id, method] = String(ref).split('#');
+    const type = String(o.$hy);
+    // A bare numeric reference names a retained value; with data or a member it names a hybrid.
+    const bare = typeof ref === 'number' && Object.keys(o).length === 2;
+    if (bare) state.referenced = true;
     if (incompleteRefs.has(Number(id))) state.incomplete = true;
-    const object = refs.get(Number(id));
-    if (object === undefined) throw badRequest(`unknown hybrid reference ${String(ref)}`);
+    const entry = handles.get(Number(id));
+    if (entry === undefined) {
+      if (bare) throw missingHandle(Number(id), type);
+      throw badRequest(`unknown hybrid reference ${String(ref)}`);
+    }
+    if (entry.kind === undefined || entry.type !== type) {
+      throw badRequest(`expected a ${quote(type)} instance`);
+    }
+    const object = entry.object;
     if (method !== undefined) return (object as Record<string, unknown>)[method];
     return withVisibleFields(object as Record<string, unknown>, o, host, state);
   }
@@ -474,6 +518,32 @@ function decodeValue(v: Wire, host: HostCallback | null, state: EncodeState): un
     return out;
   }
   throw badRequest(`unknown wire tag ${quote(Object.keys(o).find(isTagKey) as string)}`);
+}
+
+/** The value `$retain` holds under `id`, which must be an instance of the class `name`. */
+function referencedValue(id: number, name: string): HandleEntry {
+  const entry = handles.get(id);
+  if (entry === undefined) throw missingHandle(id, name);
+  if (entry.kind !== 'value' || entry.type !== name) {
+    throw badRequest(`expected a ${quote(name)} instance`);
+  }
+  return entry;
+}
+
+/** `v` with every retained value named by reference written out as the data it was held from. */
+function expandRefs(v: Wire, state: EncodeState): Wire {
+  if (Array.isArray(v)) return v.map((e) => expandRefs(e, state));
+  if (!isObject(v)) return v;
+  const o = v as WireObject;
+  if (typeof o.$ref === 'number' && Object.keys(o).length === 2 && ('$class' in o || '$hy' in o)) {
+    const wire = handles.get(o.$ref)?.wire;
+    if (wire !== undefined) return expandRefs(wire, state);
+    state.incomplete = true;
+    return o;
+  }
+  const out: WireObject = {};
+  for (const k of Object.keys(o)) out[k] = expandRefs(o[k] as Wire, state);
+  return out;
 }
 
 /**
@@ -677,6 +747,31 @@ function throwRequested(spec: Wire | undefined): never {
   throw Object.assign(new BoundaryFailure(code, message), at === undefined ? {} : { at });
 }
 
+function containsCallback(v: Wire): boolean {
+  if (Array.isArray(v)) return v.some(containsCallback);
+  if (!isObject(v)) return false;
+  return '$cb' in v || Object.values(v).some((x) => containsCallback(x as Wire));
+}
+
+/** `$retain`: hold a model-class instance or hybrid and answer the reference naming it. */
+function retain(args: Wire[], host: HostCallback | null): string {
+  const value = args[0];
+  const tag =
+    isObject(value) && !Array.isArray(value) ? ('$class' in value ? '$class' : '$hy') : '';
+  if (!isObject(value) || Array.isArray(value) || !(tag in value)) {
+    throw badRequest('$retain needs a "$class" or "$hy" value');
+  }
+  const type = String(value[tag]);
+  if (tag === '$class' && !CLASSES.includes(type)) {
+    throw badRequest(`$retain: ${quote(type)} is not a model class`);
+  }
+  if (containsCallback(value))
+    throw badRequest('$retain: a value holding callbacks cannot be held');
+  const object = decodeValue(value, host, { incomplete: false });
+  const id = retainValue(object as object, type, recorder === null ? undefined : value);
+  return `{"${tag}":${quote(type)},"$ref":${id}}`;
+}
+
 function builtin(op: string, args: Wire[], host: HostCallback | null): string {
   switch (op) {
     case '$echo':
@@ -723,6 +818,8 @@ function builtin(op: string, args: Wire[], host: HostCallback | null): string {
       validateValue(result, true, { callbacks: 0 });
       return stringifyWire(result);
     }
+    case '$retain':
+      return retain(args, host);
     case '$live':
       return String(handles.size);
     case '$version':
@@ -808,10 +905,25 @@ function run(
       return { status: 0, json: builtin(op, parsed, host) };
     }
     const args = parsed.map((a) => decodeValue(a, host, state));
+    if (state.referenced && recorder !== null) {
+      state.recorded = stringifyWire(expandRefs(parsed, state));
+    }
     const { value, identity } = invoke(op, args);
     noteProvenance(op, args, value);
     state.identity = identity;
-    return { status: 0, json: encodeValue(value, state) };
+    let json = encodeValue(value, state);
+    const receiver = parsed[0];
+    if (
+      RETAINING_RESULTS.has(op) &&
+      isObject(receiver) &&
+      !Array.isArray(receiver) &&
+      '$ref' in receiver &&
+      '$class' in receiver
+    ) {
+      const wire = recorder === null ? undefined : (JSON.parse(json) as Wire);
+      json = `${json.slice(0, -1)},"$ref":${retainValue(value as object, String(receiver.$class), wire)}}`;
+    }
+    return { status: 0, json };
   } catch (error) {
     return failure(error);
   }
@@ -822,12 +934,13 @@ export const backend: Backend = {
   call(op: string, argsJson: string, cb: HostCallback | null): CallReply {
     const state: EncodeState = { incomplete: false };
     const reply = run(op, argsJson, cb, state);
-    recorder?.({ op, argsJson, reply, incomplete: state.incomplete });
+    recorder?.({ op, argsJson: state.recorded ?? argsJson, reply, incomplete: state.incomplete });
     return reply;
   },
   release(handle: number): void {
     const entry = handles.get(handle);
     if (entry === undefined) return;
     handles.delete(handle);
+    incompleteRefs.delete(handle);
   },
 };
