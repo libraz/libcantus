@@ -128,7 +128,8 @@ int run_op(const std::string& op, const char* arg) {
   } else if (arg[0] == '@') {
     std::error_code ec;
     std::ifstream file;
-    if (std::filesystem::is_regular_file(arg + 1, ec)) file.open(arg + 1, std::ios::binary);
+    // Only a directory is refused up front; FIFOs and /dev/fd paths are read as streams.
+    if (!std::filesystem::is_directory(arg + 1, ec)) file.open(arg + 1, std::ios::binary);
     if (!file.is_open() || !read_stream(file, &args)) {
       return bad_request(std::string("cannot read ") + (arg + 1));
     }

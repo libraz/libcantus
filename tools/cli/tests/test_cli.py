@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -90,6 +92,39 @@ class CliTest(unittest.TestCase):
             p = run("chordQualities", "@" + directory)
             self.assertEqual(p.returncode, 11)
             self.assertEqual(p.stdout, "")
+
+    def test_stream_sources_are_read_in_full(self) -> None:
+        read_end, write_end = os.pipe()
+        os.write(write_end, b"[9]")
+        os.close(write_end)
+        try:
+            p = subprocess.run(
+                [str(CLI), "$echo", f"@/dev/fd/{read_end}"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                pass_fds=(read_end,),
+            )
+        finally:
+            os.close(read_end)
+        self.assertEqual(p.returncode, 0)
+        self.assertEqual(json.loads(p.stdout), 9)
+        with tempfile.TemporaryDirectory() as directory:
+            fifo = Path(directory) / "args.fifo"
+            os.mkfifo(fifo)
+
+            def feed() -> None:
+                with open(fifo, "w", encoding="utf-8") as sink:
+                    sink.write("[10]")
+
+            writer = threading.Thread(target=feed)
+            writer.start()
+            try:
+                q = run("$echo", "@" + str(fifo))
+            finally:
+                writer.join()
+            self.assertEqual(q.returncode, 0)
+            self.assertEqual(json.loads(q.stdout), 10)
 
     def test_usage_errors(self) -> None:
         self.assertEqual(run().returncode, 11)

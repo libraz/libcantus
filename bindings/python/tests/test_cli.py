@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -63,6 +65,40 @@ def test_arguments_from_stdin_and_file(tmp_path: Path) -> None:
     assert run("$echo", f"@{file}").stdout == '"from file"\n'
     missing = run("$echo", f"@{tmp_path / 'absent.json'}")
     assert missing.returncode == 11
+
+
+def test_stream_sources_are_read_in_full(tmp_path: Path) -> None:
+    read_end, write_end = os.pipe()
+    os.write(write_end, b"[9]")
+    os.close(write_end)
+    try:
+        piped = subprocess.run(
+            [sys.executable, "-m", "libcantus", "$echo", f"@/dev/fd/{read_end}"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+            pass_fds=(read_end,),
+        )
+    finally:
+        os.close(read_end)
+    assert piped.returncode == 0
+    assert piped.stdout == "9\n"
+    fifo = tmp_path / "args.fifo"
+    os.mkfifo(fifo)
+
+    def feed() -> None:
+        with open(fifo, "w", encoding="utf-8") as sink:
+            sink.write("[10]")
+
+    writer = threading.Thread(target=feed)
+    writer.start()
+    try:
+        named = run("$echo", f"@{fifo}")
+    finally:
+        writer.join()
+    assert named.returncode == 0
+    assert named.stdout == "10\n"
 
 
 def test_directory_argument_is_unreadable(tmp_path: Path) -> None:
