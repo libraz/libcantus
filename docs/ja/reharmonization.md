@@ -249,7 +249,7 @@ harmonized.transposeSemitones; // 0
 ```ts
 import { harmonizeMelody } from '@libraz/libcantus';
 
-// Two four-bar phrases in C, each coming to rest on the tonic.
+// Two two-bar phrases in C, each coming to rest on the tonic.
 const period = [60, 62, 64, 65, 67, 65, 64, 60, 64, 65, 67, 69, 71, 67, 62, 60].map(
   (pitch, index) => ({ pitch, startBeat: index, durationBeat: 1 }),
 );

@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | `cantus::cantus` | `include/cantus/` 以下の型付き C++ API。ヘッダに JSON の型は現れません。 | ライブラリを直接呼ぶアプリケーション。 |
 | `cantus::ops` | JSON の op レイヤー（`cantus/ops.h`）と C ABI（`cantus/cantus_c.h`）。 | JSON をやり取りするホスト、またはバインディング。 |
-| `cantus::shared` | 共有ライブラリとしての C ABI。`CANTUS_BUILD_SHARED=ON` のときだけビルドされます。 | 共有ライブラリを読み込む言語ランタイム。 |
+| `cantus::shared` | 共有ライブラリとしての C ABI。`CANTUS_BUILD_SHARED=ON` のときだけビルドされ、この名前でリンクできるのはインストール済みパッケージからだけです。 | 共有ライブラリを読み込む言語ランタイム。 |
 
 インストール済みのプレフィックスからは次のように使います。
 
@@ -19,7 +19,7 @@ find_package(cantus REQUIRED)
 target_link_libraries(app PRIVATE cantus::cantus)
 ```
 
-ソースから取り込む場合も、ターゲット名は同じです。
+ソースから取り込む場合、`cantus::cantus` と `cantus::ops` は同じ名前です。`cantus::shared` はインストール済みパッケージにだけ存在し、ソースビルドでは代わりに `cantus_shared` ターゲットをビルドします。
 
 ```cmake
 include(FetchContent)
@@ -112,6 +112,8 @@ JSON で表せない値は、タグ付きオブジェクトで運びます。`Na
 **循環した引数。** JSON は循環を表せません。自分自身を含む引数は、繰り返し部分が空のオブジェクトまたは配列に切られて渡され、ファサードは切られた値が満たさない条件を報告します。純 TypeScript は循環そのものを報告します。
 
 **オブジェクトの同一性。** 呼び出しごとに引数は新しいコピーを受け取り、結果も毎回新しくデコードされた値です。同一性が保たれるのは、ハンドルの getter が返すオブジェクト、ハンドル自身、そのまま返された `ChordTimeline` だけです。結果として、以前の結果と `toBe` で比べても別のオブジェクトになり、純 TypeScript が tempo map や meter map に対して持つオブジェクト単位のキャッシュも効きません。結果は変わらず、失われるのは節約だけです。
+
+**ハイブリッド値のフィールドへの再代入。** ハイブリッド値のフィールドに再代入すると（`timeline.segments = other` など）、次のメソッド呼び出しでその値がコアへ送られるため、`timeline.at(beat)` は新しい segments から答えます。純 TypeScript は検索表を一度だけ作り、元の segments から答え続けます。
 
 **モジュール単位のメモがない。** TypeScript が持つ、スケールの綴りのキャッシュを C++ コアは持ちません。同じ問いは毎回計算し直しますが、結果は同じです。
 

@@ -190,7 +190,7 @@ noteNames(figuredBassRealization(parseNote('G'), '+3', Key.minor('C')).notes); /
 noteNames(figuredBassRealization(parseNote('E'), '+3', Key.minor('A')).notes); // ['E', 'G#', 'B']
 ```
 
-The French sixth is the one member of the augmented-sixth family that stacks in thirds over a root of its own, so it is the one the notation reaches, written `#643`. The Italian and German sixths stack over no root and have no figures.
+The French sixth is the one member of the augmented-sixth family that stacks in thirds over a root of its own, so it is the one the notation reaches, written `#643`. Conventional practice does figure the Italian and German sixths (`#6` and `#6/5/3`), but the realizer only reads figures that name a tertian chord quality over the bass, so those figures, and `figuredBassOf` on those chords, raise `NoSolutionError`. That is a limit of this library rather than of the theory.
 
 ```ts
 import { augmentedSixthChord, figuredBassOf, figuredBassRealization, majorKey, noteNames, parseNote } from '@libraz/libcantus';

@@ -15,7 +15,7 @@ No. Pitch detection from audio and playback both belong to the host. `nearestSte
 No. The TypeScript package has no dependencies, and every entry point is synchronous. The Python wheel bundles its native library.
 
 **Can it run in a browser or a worker?**
-Yes. There is no Node-specific API in the library, and every input and output is plain JSON-compatible data apart from a chord timeline's `at`, which is a function: post `timeline.segments` in place of the timeline itself and rebuild the lookup on the far side with `Timeline.fromJSON`. Everything else crosses a worker boundary with a structured clone and no revival step.
+Yes. There is no Node-specific API in the library, and every input and output is plain JSON-compatible data apart from a chord timeline's `at`, which is a function: post `{ segments: timeline.segments, totalBeats }` in place of the timeline itself, with `totalBeats` the beat the timeline ends on (the last segment's `endBeat`, or the length of the piece), and rebuild the lookup on the far side with `Timeline.fromJSON`, which needs both fields. Everything else crosses a worker boundary with a structured clone and no revival step.
 
 ## Analysis
 

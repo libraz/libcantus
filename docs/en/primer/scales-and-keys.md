@@ -128,7 +128,7 @@ resolveKey('C major');
 // { scale: { rootPc: 0, modeMask12: 2741 }, tonic: { letter: 0, alter: 0 }, variant: 'major' }
 ```
 
-`2741` is the mask for the major pattern, `0b101010110101`. The spelling a builder writes down is the reading with the fewest accidentals, so `majorKey(6)` is G-flat major rather than F-sharp major. Pass a spelled key such as `'F# major'` when the piece is written the other way.
+`2741` is the mask for the major pattern, `0b101010110101`. The spelling a builder writes down is the reading with the fewest accidentals, and where two readings tie the flat side is taken: F-sharp major has six sharps and G-flat major six flats, so `majorKey(6)` is G-flat major. Pass a spelled key such as `'F# major'` when the piece is written the other way.
 
 Which forms an entry point accepts follows from whether its answer depends on the spelling. Most do not, and take a key in any form. The ones that do — `figuredBassOf`, `romanToChord`, `spellVoicing`, `substituteChord` and their neighbours — take only the forms that carry one, so handing such an entry point a key that has been reduced to pitch classes is a compile error rather than an answer spelled from the far side of the circle.
 

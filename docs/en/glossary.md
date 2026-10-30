@@ -12,7 +12,7 @@ Terms as this library uses them. Where a musical term has more than one common m
 
 **KeyScale** — A root pitch class plus a twelve-bit `modeMask12`. Bit `n` is set when the scale contains the pitch `n` semitones above the root. This is the representation for keys, modes, and any other scale.
 
-**SpelledKey** — A `KeyScale` paired with the spelled tonic that anchors its letter names. Db major and C# major are the same `KeyScale` and different `SpelledKey` values.
+**ResolvedKey** — A key read into its `scale` (a `KeyScale`), the spelled `tonic` that anchors its letter names, and its `variant`. It is what `spelledKeyOf` returns. Db major and C# major are the same `KeyScale` and different `ResolvedKey` values. `SpelledKeyScale` is a `KeyScale` that carries its `tonic` and `variant` itself, and `SpelledKeyLike` is the set of key-shaped arguments that must carry a spelled tonic.
 
 **ChordSpec** — A chord as structure: a base quality plus sevenths, alterations, additions, omissions, and an optional bass. Not a name from a fixed list.
 

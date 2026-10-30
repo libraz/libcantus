@@ -43,7 +43,7 @@ import { Chord, romanToChord } from '@libraz/libcantus';
 
 Chord.parse('G7').withKey('C major').roman(); // 'V7'
 Chord.parse('G7').withKey('G major').roman(); // 'I7'
-romanToChord('V7', 'C major'); // { rootPc: 7, quality: 'dom7', intervals: [0, 4, 7, 10] }
+romanToChord('V7', 'C major'); // { rootPc: 7, quality: 'dom7', intervals: [0, 4, 7, 10], rootSpelling: { letter: 4, alter: 0 } }
 ```
 
 Guessing a key from a single chord would be a detection step, and one chord is rarely enough evidence for one. Detecting a key from actual material is a separate call — `detectKey` and `keyTimelineFromNotes`, covered in [Analysis](../analysis.md).
@@ -133,7 +133,7 @@ detectCadence('G7', 'C', 'C major').strength; // null
 
 const graded = detectCadence('G7', 'C', 'C major', {
   voicing: [
-    [55, 62, 71],
+    [55, 65, 71],
     [48, 64, 72],
   ],
 });

@@ -134,7 +134,7 @@ The pages are also in Japanese under [`docs/ja/`](docs/ja/introduction.md). Cont
 
 - **No I/O, notation or audio.** No MIDI file reader or writer, no score rendering, no audio analysis, no playback. Bring your own parser and hand it note events. For the layer below, [libsonare](https://github.com/libraz/libsonare) covers audio analysis, mastering, synthesis and SMF I/O; the two share no code and neither requires the other.
 - **No microtonal analysis.** Frequencies, cents and just-intonation ratios live in `core`, but everything above the pitch layer runs on twelve pitch classes.
-- **No modal systems.** `WORLD_SCALES` records the pitch material a tradition names, not the grammar built on it.
+- **No rāga or maqām-style modal grammars.** `WORLD_SCALES` records the pitch material a tradition names, not the grammar built on it.
 - **No corpus.** Nothing is bundled to run statistics over.
 
 ## License

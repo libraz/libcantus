@@ -61,13 +61,13 @@ Both CommonJS and ESM builds are published, and TypeScript declarations accompan
 
 ## Generated TypeDoc
 
-Run the repository script to generate the full API reference:
+Run the TypeScript package's script from the repository root to generate the full API reference:
 
 ```sh
-yarn docs
+yarn workspace @libraz/libcantus docs
 ```
 
-TypeDoc writes its output to `docs/api`. That generated directory is separate from the bilingual hand-authored guides under `docs/en` and `docs/ja`; do not edit generated pages by hand.
+TypeDoc writes its output to `ts/docs/api`, the directory the documentation workflow publishes. That generated directory is separate from the bilingual hand-authored guides under `docs/en` and `docs/ja`; do not edit generated pages by hand.
 
 The source comments remain the reference for parameters, return values, categories, and examples. The generated reference is also published through the project's API-reference documentation badge.
 

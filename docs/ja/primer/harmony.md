@@ -43,7 +43,7 @@ import { Chord, romanToChord } from '@libraz/libcantus';
 
 Chord.parse('G7').withKey('C major').roman(); // 'V7'
 Chord.parse('G7').withKey('G major').roman(); // 'I7'
-romanToChord('V7', 'C major'); // { rootPc: 7, quality: 'dom7', intervals: [0, 4, 7, 10] }
+romanToChord('V7', 'C major'); // { rootPc: 7, quality: 'dom7', intervals: [0, 4, 7, 10], rootSpelling: { letter: 4, alter: 0 } }
 ```
 
 和音1つから調を推測することは検出にあたりますが、和音1つでは根拠として足りません。実際の素材から調を検出するのは別の呼び出しです。`detectKey` と `keyTimelineFromNotes` がそれにあたり、[解析](../analysis.md)で扱います。
@@ -133,7 +133,7 @@ detectCadence('G7', 'C', 'C major').strength; // null
 
 const graded = detectCadence('G7', 'C', 'C major', {
   voicing: [
-    [55, 62, 71],
+    [55, 65, 71],
     [48, 64, 72],
   ],
 });

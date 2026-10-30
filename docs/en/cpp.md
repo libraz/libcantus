@@ -4,13 +4,13 @@ The library has a C++17 core that reproduces the TypeScript reference result for
 
 ## Using the C++ library
 
-The package is named `cantus` and exports two targets:
+The package is named `cantus` and exports three targets:
 
 | Target | Provides | Link it for |
 | --- | --- | --- |
 | `cantus::cantus` | The typed C++ API under `include/cantus/`. No JSON type appears in its headers. | An application that calls the library directly. |
 | `cantus::ops` | The JSON op layer (`cantus/ops.h`) and the C ABI (`cantus/cantus_c.h`). | A host that exchanges JSON, or a binding. |
-| `cantus::shared` | The C ABI as a shared library. Built only with `CANTUS_BUILD_SHARED=ON`. | A language runtime that loads a shared library. |
+| `cantus::shared` | The C ABI as a shared library. Built only with `CANTUS_BUILD_SHARED=ON`; linkable by this name from the installed package only. | A language runtime that loads a shared library. |
 
 From an installed prefix:
 
@@ -19,7 +19,7 @@ find_package(cantus REQUIRED)
 target_link_libraries(app PRIVATE cantus::cantus)
 ```
 
-Or from source, with the same target names:
+Or from source, with the same names for `cantus::cantus` and `cantus::ops`. `cantus::shared` exists only in the installed package; a source build builds the `cantus_shared` target instead:
 
 ```cmake
 include(FetchContent)
@@ -112,6 +112,8 @@ These differences are deliberate and listed in full. Anything not listed here is
 **Cyclic arguments.** JSON holds no cycle. An argument that contains itself crosses with each repeat cut to an empty object or array, and the facade reports what the cut value fails. Pure TypeScript reports the cycle.
 
 **Object identity.** Each call receives a fresh copy of its arguments, and each result is a fresh decoded value. Identity survives only for the objects a handle getter returns, for handles themselves, and for a `ChordTimeline` passed back unchanged. Two consequences: a result compared with `toBe` against an earlier result is a different object, and the per-object caches pure TypeScript keeps for a tempo map or meter map do not apply. Results are unchanged; only the saving is lost.
+
+**Reassigned hybrid fields.** A field reassigned on a hybrid value, such as `timeline.segments = other`, is sent to the core with the next method call, so `timeline.at(beat)` answers from the new segments. Pure TypeScript builds the lookup once and keeps answering from the original segments.
 
 **No module memo.** The C++ core does not remember the joint scale spellings that TypeScript caches. A repeated question is worked out again, with the same result.
 

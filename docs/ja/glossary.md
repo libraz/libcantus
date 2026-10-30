@@ -12,7 +12,7 @@
 
 **KeyScale** — ルートのピッチクラスと12ビットの `modeMask12` の組。ビット n が立っていれば、ルートの n 半音上の音が含まれます。調、旋法、その他あらゆるスケールの表現です。
 
-**SpelledKey** — `KeyScale` と、音名の基準となる綴られた主音の組。変ニ長調と嬰ハ長調は同じ `KeyScale` で、異なる `SpelledKey` です。
+**ResolvedKey** — 調を、`scale`（`KeyScale`）、音名の基準となる綴られた主音 `tonic`、スケール形 `variant` に読み分けたもの。`spelledKeyOf` の戻り値です。変ニ長調と嬰ハ長調は同じ `KeyScale` で、異なる `ResolvedKey` です。`SpelledKeyScale` は `tonic` と `variant` を自身で持つ `KeyScale`、`SpelledKeyLike` は綴られた主音を必ず持たなければならない、調の形をした引数の総称です。
 
 **ChordSpec** — 構造としてのコード。基本の性質に加えて、7th、変化音、付加音、省略音、任意のベースを持ちます。固定の一覧から選ぶ名前ではありません。
 

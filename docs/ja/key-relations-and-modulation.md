@@ -6,7 +6,7 @@
 
 ## 調を綴る
 
-`SpelledKey` は、音名の基準となる綴られた主音と調を組にしたものです。主音はオクターブを持ちません。調はピッチクラスの上に立つためです。
+`spelledKeyOf` は `ResolvedKey` を返します。これは、音名の基準となる綴られた主音と調（およびそのスケール形）を組にしたものです。主音はオクターブを持ちません。調はピッチクラスの上に立つためです。
 
 ```ts
 import { formatNote, majorKey, scaleByName, spelledKeyOf } from '@libraz/libcantus';
@@ -81,6 +81,8 @@ isSignatureKey(scaleByName('majorPentatonic', 0)); // false
 ![1つの調とそのもっとも近い調の関係](../images/key-relations-ja.svg)
 
 伸びている線はいずれも1手の移動です。平行調は調号を保って主音を動かし、同主調は主音を保って調号を変え、属調と下属調は5度圏を♯側・♭側へ1歩動きます。距離はこの歩数で数え、近い調どうしほど共有する素材が多くなります。両方の調が持つ和音が転調の起点になり得るのはそのためです。`relatedKeysOf` はこの4つに、属調と下属調それぞれの平行調を加えた6つを、決まった順で返します。
+
+ここでの近親調はドイツ・日本の教育で用いられる定義に従い、同主調を含めます。英米の定義はこれより狭く、調号の違いが臨時記号1つ以内の5つの調で、同主調を含みません。通常の長調・短調でその集合がほしい場合は、`relation !== 'parallel'` で絞り込んでください。
 
 ```ts
 import { formatNote, majorKey, parseNote, relatedKeysOf } from '@libraz/libcantus';

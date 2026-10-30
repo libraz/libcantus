@@ -190,7 +190,7 @@ noteNames(figuredBassRealization(parseNote('G'), '+3', Key.minor('C')).notes); /
 noteNames(figuredBassRealization(parseNote('E'), '+3', Key.minor('A')).notes); // ['E', 'G#', 'B']
 ```
 
-増六の和音のうち、自身のルートの上に3度で積み上がるのはフランスの増六だけです。そのためこれだけが記譜の届く範囲にあり、`#643` と書かれます。イタリアとドイツの増六はルートを持たずに積み上がるため、数字を持ちません。
+増六の和音のうち、自身のルートの上に3度で積み上がるのはフランスの増六だけです。そのためこれだけが記譜の届く範囲にあり、`#643` と書かれます。イタリアとドイツの増六も、慣例では数字（`#6` と `#6/5/3`）で表されます。ただしリアライザが読めるのは、バスの上に3度堆積の和音の性質を名指す数字だけです。そのためこれらの数字や、これらの和音に対する `figuredBassOf` は `NoSolutionError` を送出します。これは理論上の制約ではなく、このライブラリの制限です。
 
 ```ts
 import { augmentedSixthChord, figuredBassOf, figuredBassRealization, majorKey, noteNames, parseNote } from '@libraz/libcantus';

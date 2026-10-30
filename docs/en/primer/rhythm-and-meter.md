@@ -79,7 +79,7 @@ metricWeight(1.5, '6/8'); // 2
 metricWeight(1, '6/8'); // 0
 ```
 
-Beat 2 of a 4/4 bar outranks beats 1 and 3 because the half-bar is the next strongest point after the downbeat. In 6/8 the second pulse at 1.5 is the strong one and beat 1 is off-pulse entirely, which is the same fact as the compound division seen from the accent side.
+The argument is an offset in quarter notes from the start of the bar, so offset 0 is the downbeat (counted beat 1). In 4/4 offset 2 — the third quarter, counted beat 3 — outranks offsets 1 and 3 (counted beats 2 and 4) because the half-bar is the next strongest point after the downbeat; counted as a musician does, beat 1 is the strongest and beat 3 the second. In 6/8 the second pulse at offset 1.5 is the strong one and offset 1 is off-pulse entirely, which is the same fact as the compound division seen from the accent side.
 
 Metric weight is what several analyses are built on. Chord segmentation prefers to start a chord on a strong beat; a note on a weak beat is a better candidate for a passing tone than one on a downbeat; phrase and hypermeter detection look for repeating weight patterns; and generation uses it to place onsets and shape accents. An analysis run under the wrong signature comes out wrong in a way that still looks plausible, so supply the correct meter map wherever one is known.
 

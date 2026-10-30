@@ -6,7 +6,7 @@ A key is a root pitch class plus a mode mask, which says nothing about how it is
 
 ## Spelling a key
 
-`SpelledKey` pairs a key with the spelled tonic that anchors its letter names. The tonic carries no octave, because a key is rooted on a pitch class:
+`spelledKeyOf` returns a `ResolvedKey`, which pairs a key with the spelled tonic that anchors its letter names (and the scale form it stands in). The tonic carries no octave, because a key is rooted on a pitch class:
 
 ```ts
 import { formatNote, majorKey, scaleByName, spelledKeyOf } from '@libraz/libcantus';
@@ -81,6 +81,8 @@ isSignatureKey(scaleByName('majorPentatonic', 0)); // false
 ![How one key relates to its closest neighbours](../images/key-relations.svg)
 
 Each spoke is one short move: the relative minor keeps the signature and moves the tonic, the parallel minor keeps the tonic and changes the signature, and the dominant and subdominant are a single step sharpwards and flatwards around the circle. Distance is counted in those steps, and the closer two keys sit the more material they share — which is what makes a chord both of them own a place a modulation can turn. `relatedKeysOf` returns those four together with the relative minors of the dominant and the subdominant, in a fixed order.
+
+"Closely related" here follows the German and Japanese teaching tradition, which counts the parallel key among a key's near relations. The Anglo-American definition is narrower: the five keys whose signatures differ by at most one accidental, which leaves the parallel key out. Filter on `relation !== 'parallel'` to get that set for a plain major or minor key.
 
 ```ts
 import { formatNote, majorKey, parseNote, relatedKeysOf } from '@libraz/libcantus';
