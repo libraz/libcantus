@@ -91,7 +91,7 @@ int main() {
 
 A failed call does not throw: `status` is a `CantusStatus` and `json` is an object `{ "code", "name", "message", "at"? }`. `call` refuses ops that need a host callback or handle with `BAD_REQUEST`; those need `cantus_call` from `cantus/cantus_c.h`, which accepts a callback function. The status table is in [Errors and validation](errors-and-validation.md#status-codes-across-surfaces).
 
-Values that JSON cannot carry travel as tagged objects: `{"$n": "NaN"}` for `NaN`, `Infinity`, `-Infinity` and `-0`, `{"$u": 1}` for an `undefined` array element, `{"$big": "10"}` for a bigint, `{"$class": "Chord", …}` for a model class, `{"$h": 1, "$type": "Rng"}` for a handle, and `{"$cb": 1}` for a callback. A user key that begins with `$` is written with a doubled `$$`; the facades and the Python binding do this themselves, while the command line takes the wire form directly ([Command line](cli.md#the-wire-format)).
+Values that JSON cannot carry travel as tagged objects: `{"$n": "NaN"}` for `NaN`, `Infinity`, `-Infinity` and `-0`, `{"$u": 1}` for an `undefined` array element, `{"$big": "10"}` for a bigint, `{"$class": "Chord", …}` for a model class, `{"$h": 1, "$type": "Rng"}` for a handle, `{"$class": "Score", "$ref": 7}` for a value the core retains, and `{"$cb": 1}` for a callback. A user key that begins with `$` is written with a doubled `$$`; the facades and the Python binding do this themselves, while the command line takes the wire form directly ([Command line](cli.md#the-wire-format)).
 
 ## The same answers on every surface
 
@@ -111,15 +111,15 @@ These differences are deliberate and listed in full. Anything not listed here is
 
 **Cyclic arguments.** JSON holds no cycle. An argument that contains itself crosses with each repeat cut to an empty object or array, and the facade reports what the cut value fails. Pure TypeScript reports the cycle.
 
-**Object identity.** Each call receives a fresh copy of its arguments, and each result is a fresh decoded value. Identity survives only for the objects a handle getter returns, for handles themselves, and for a `ChordTimeline` passed back unchanged. Two consequences: a result compared with `toBe` against an earlier result is a different object, and the per-object caches pure TypeScript keeps for a tempo map or meter map do not apply. Results are unchanged; only the saving is lost.
-
-**Reassigned hybrid fields.** A field reassigned on a hybrid value, such as `timeline.segments = other`, is sent to the core with the next method call, so `timeline.at(beat)` answers from the new segments. Pure TypeScript builds the lookup once and keeps answering from the original segments.
+**Object identity.** Each call receives a fresh copy of its arguments, and each result is a fresh decoded value. Identity survives only for the objects a handle getter returns, for handles themselves, and for a `ChordTimeline` passed back unchanged, so a result compared with `toBe` against an earlier result is a different object. Results are unchanged.
 
 **Malformed chords in `checkPartWriting`.** Pure TypeScript reads a chord entry only where a rule needs its tones, so a malformed entry (a non-finite interval, say) is rejected when a rule reaches it. The core does not read the entry there and returns the violations. Well-formed chords give identical results.
 
 **No module memo.** The C++ core does not remember the joint scale spellings that TypeScript caches. A repeated question is worked out again, with the same result.
 
 **Handles.** `Rng`, `NoteEventIndex` and `ArrangementSession` live in the core and are released explicitly. In JavaScript a handle has `[Symbol.dispose]` and a finalizer as a fallback; in Python it has `close()`, a context manager and `__del__`. Using a released handle is an error with code `RELEASED_HANDLE`. The same handle must not be used from two threads at once.
+
+**Retained values.** A `Score`, `Timeline`, `ChordTimeline` or `Arrangement` is handed to the core once, the first time one of its methods is called, and kept there decoded; later calls send only a reference, so a per-note loop costs what it costs in TypeScript and an `Arrangement` keeps its analysis session across `update`. The facades and the Python binding do this themselves and release the value with the host object; at most 1024 values are retained per runtime, the least recently used giving way. A retained value never changes, so it may be used from several threads at once.
 
 **WebAssembly is ESM only.** The module instantiates with top-level await, so after the import resolves every call is synchronous. `require()` of it fails with `ERR_REQUIRE_ASYNC_MODULE`; a CommonJS application uses pure TypeScript. A bundler for the browser needs a target of es2022 or later.
 
@@ -129,6 +129,6 @@ The edge-value behaviour (`NaN`, `-0`, `null`, empty input, range limits) is spe
 
 ## Threads and size limits
 
-- The op layer is thread-safe and the handle table is guarded by a mutex. Using one handle from several threads at once is outside the contract.
+- The op layer is thread-safe and the handle table is guarded by a mutex. Using one handle from several threads at once is outside the contract; a retained value may be shared.
 - The JSON parser accepts nesting up to 4096 levels; deeper input is `BAD_REQUEST`.
 - Strings are carried as UTF-8, with lone surrogates preserved (WTF-8) and written back as `\udXXX` escapes. Lengths and truncation are counted in UTF-16 code units, as in JavaScript.

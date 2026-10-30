@@ -45,7 +45,7 @@ cantus detectChord '[[200]]'
 
 This prints `{"code":"INVALID_INPUT","name":"InvalidInputError","message":"pitches[0] must be an integer in [0, 127]; received 200"}` on standard error and exits with 1. The status numbers are the ones in [Errors and validation](errors-and-validation.md#status-codes-across-surfaces).
 
-An op that needs a callback or a handle (`Score#filter`, `createRng`, `Rng#next`) is refused with `BAD_REQUEST` and the message `callback arguments are not available from the CLI`. Each invocation is one call with no state kept between runs.
+An op that needs a callback or a handle (`Score#filter`, `createRng`, `Rng#next`) is refused with `BAD_REQUEST` and the message `callback arguments are not available from the CLI`. Each invocation is one call with no state kept between runs, so a retained reference (`{"$class": "Score", "$ref": 7}`) is refused as `unknown handle 7`; send the value itself.
 
 ## The wire format
 

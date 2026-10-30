@@ -45,7 +45,7 @@ cantus detectChord '[[200]]'
 
 このコマンドは、標準エラー出力に `{"code":"INVALID_INPUT","name":"InvalidInputError","message":"pitches[0] must be an integer in [0, 127]; received 200"}` を出力し、終了コード 1 で終わります。ステータスの番号は[エラーと検証](errors-and-validation.md#面ごとのステータスコード)のものと同じです。
 
-コールバックやハンドルを必要とする op（`Score#filter`、`createRng`、`Rng#next`）は、`BAD_REQUEST` とメッセージ `callback arguments are not available from the CLI` で拒否されます。1 回の実行は 1 回の呼び出しで、実行をまたいだ状態は保持されません。
+コールバックやハンドルを必要とする op（`Score#filter`、`createRng`、`Rng#next`）は、`BAD_REQUEST` とメッセージ `callback arguments are not available from the CLI` で拒否されます。1 回の実行は 1 回の呼び出しで、実行をまたいだ状態は保持されません。そのため、保持された値への参照（`{"$class": "Score", "$ref": 7}`）は `unknown handle 7` で拒否されます。値そのものを送ってください。
 
 ## ワイヤ形式
 
