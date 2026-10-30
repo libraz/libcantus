@@ -117,7 +117,7 @@ chordToRoman(german, key); // 'Ger6'
 spellAugmentedSixth('german', parseNote('C')).map((note) => formatNote(note)); // ['Ab', 'C', 'Eb', 'F#']
 ```
 
-増六の和音を綴るローマ数字は存在しないため、3種類は常に `It6`、`Fr6`、`Ger6` として出力され、出力を切り替えるオプションを持ちません。ただし他のローマ数字と同じように対象を取れるので、`applied: true` のもとでは、半音階的なドミナント前の和音がどの度数を指しているかを解析が言えます。
+増六の和音を綴るローマ数字は存在しないため、調の第6度を半音下げた音をベースに鳴らし、その上に増6度を綴っている和音は `It6`、`Fr6`、`Ger6` として出力され、出力を切り替えるオプションを持ちません。同じ和音は他のローマ数字と同じように対象も取れるので、`applied: true` のもとでは、半音階的なドミナント前の和音がどの度数を指しているかを解析が言えます。`applied` を付けない場合、別の度数の増六にしかあたらない和音は、他の和音と同じく、主調に対する根音で名付けられます。
 
 ```ts
 import { chordToRoman, majorKey, romanToChord } from '@libraz/libcantus';

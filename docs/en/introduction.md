@@ -4,7 +4,7 @@
 
 No musical training is assumed. The [primer](primer/index.md) teaches each musical idea the library models and names the function that implements it; start there if a term on this page is unfamiliar.
 
-The package has no runtime dependencies, every entry point is synchronous, and the functional API produces plain JSON-compatible data — no class instances. The class API wraps that same data and exposes it through `.data`.
+The package has no runtime dependencies, every entry point is synchronous, and the functional API produces plain JSON-compatible data — no class instances, apart from the handles listed in [Interoperability](interoperability.md). The class API wraps that same data and exposes it through `.data`.
 
 ## What the library does end to end
 

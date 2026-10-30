@@ -11,15 +11,15 @@
 - **ベロシティは省略でき、ある場合は MIDI のベロシティです。** `velocity` は 0..127 の整数で、隣のピッチと同じ領域です。ベロシティを持たない音符に既定値が割り当てられることはなく、解析はその音符を最大の重みで数えます。
 - **アーティキュレーションは省略でき、記録するのは意図だけです。** `articulation` はその音符の奏法を閉じた一覧から名指します。`accent`、`ghost`、`staccato`、`legato`、`slide`、`hammer`、`mute`、`flam`、`drag`、`roll`、`choke`、`open` です。`slide` をピッチベンドに、`ghost` をベロシティの下限に写す方法は、受け取る側の楽器とコントローラの割り当てによって変わります。そのためライブラリは名前を記録するだけにとどめ、実際の表現はホストに委ねます。一覧にない名前は、イベントを受け取る時点で `InvalidInputError` になります。黙って通り抜けることはありません。
 
-解析と生成の結果は JSON 互換のプレーンデータです。関数 API にクラスインスタンスは現れず、隠れたプロトタイプもありません。結果はそのままプロジェクトファイルに直列化でき、復元処理なしで読み戻せます。クラス API は同じデータを包み、`.data` で公開します。
+解析と生成の結果は JSON 互換のプレーンデータです。関数 API に（後述のハンドルを除いて）クラスインスタンスは現れず、隠れたプロトタイプもありません。結果はそのままプロジェクトファイルに直列化でき、復元処理なしで読み戻せます。クラス API は同じデータを包み、`.data` で公開します。
 
-データではなく検索関数であるフィールドが1つだけあります。コードタイムラインは `segments` と、それを引く `at` の組で、関数は `JSON.stringify` を通り抜けられません。解析結果の報告フィールドは `timeline.segments` を含めてそのまま往復し、`at` は保存したデータ（区間と `totalBeats`。関数 API が返す `segments` の配列だけでは `totalBeats` を欠きます）から `Timeline.fromJSON` がそのまま復元します。復元したものは、元のタイムラインとすべての拍で同じ和音を返します。関数 API のままで済ませる場合はもう一手間かかります。`chordTimelineFromChords` が受け取るのは `ChordSpan`、つまり根音・和音種別・開始拍の組であって、保存されている `ChordSegment` ではありません。保存した区間はいったん span に写してから渡してください。
+結果のなかで、データではなく検索関数であるフィールドは1つだけです。コードタイムラインは `segments` と、それを引く `at` の組で、関数は `JSON.stringify` を通り抜けられません。解析結果の報告フィールドは `timeline.segments` を含めてそのまま往復し、`at` は保存したデータ（区間と `totalBeats`。関数 API が返す `segments` の配列だけでは `totalBeats` を欠きます）から `Timeline.fromJSON` がそのまま復元します。復元したものは、元のタイムラインとすべての拍で同じ和音を返します。関数 API のままで済ませる場合はもう一手間かかります。`chordTimelineFromChords` が受け取るのは `ChordSpan`、つまり根音・和音種別・開始拍の組であって、保存されている `ChordSegment` ではありません。保存した区間はいったん span に写してから渡してください。
 
-例外はハンドルで、これらは結果ではありません。`createNoteEventIndex`、`createArrangementSession`、`createRng`、`createPositionalRng`、`resolveContext` が返すのはライブオブジェクトです。メソッドや関数のフィールドは `JSON.stringify` を通り抜けられません。保存するのは、それらを組み立てた入力のほうです。ノートイベント、シード、解決後の `algorithmVersion` を保存し、読み込み時に作り直してください。[決定性とシード](determinism-and-seeding.md)を参照してください。
+もう1つの例外はハンドルで、これらは結果ではありません。`createNoteEventIndex`、`createArrangementSession`、`createRng`、`createPositionalRng`、`resolveContext` が返すのはライブオブジェクトです。メソッドや関数のフィールドは `JSON.stringify` を通り抜けられません。保存するのは、それらを組み立てた入力のほうです。ノートイベント、シード、解決後の `algorithmVersion` を保存し、読み込み時に作り直してください。[決定性とシード](determinism-and-seeding.md)を参照してください。
 
 ## 音・音程・調・和音・拍子の渡し方
 
-これらを受け取る公開エントリポイントは、手元にある形をそのまま受け取ります。入力欄が持っている文字列でも、ライブラリが返すプレーンデータでも、それを包むクラスでもかまいません。種類ごとに変換関数が1つあり、文字列を読むのはそこだけです。
+これらを受け取る公開エントリポイントは、後述の例外を除いて、手元にある形をそのまま受け取ります。入力欄が持っている文字列でも、ライブラリが返すプレーンデータでも、それを包むクラスでもかまいません。種類ごとに変換関数が1つあり、文字列を読むのはそこだけです。
 
 | 種類 | 受け取る形 | 変換関数 |
 | --- | --- | --- |
@@ -40,6 +40,8 @@ toChordData('Cmaj7').intervals; // [0, 4, 7, 11]
 ```
 
 例外は `core` の綴り primitive で、これらは変換関数が結果を渡す先の層です。`formatNote` `formatKeyName` `transposeNote` `spelledInterval` は、`toNoteData` が読み取った文字列ではなく、それが生成する綴られたデータを受け取ります。名前を渡すときは先に変換関数を通すか（`formatNote(toNoteData('Eb4'))`）、クラス側を使ってください。クラスは同じことを内部で行います。
+
+読み取り済みの音・調・和音を扱うデータ層のヘルパーも同様です。`keyRelationBetween`、`spelledKeyOf`、`isSignatureKey`、`scaleOf` は `KeyScale` か解決済みの調のデータを、`chordPitchClasses`、`chordSpecOf`、`chordToneRole`、`intervalAboveRoot`、`spanFromChord`、`transposeChord` は `ChordData` を、対位法の述語（`createsParallelPerfect`、`isForbiddenMelodicLeap` など。一覧は[対位法とパート書法](counterpoint-and-part-writing.md)）は `NoteData` か MIDI 番号を受け取ります。これらに名前やクラスのインスタンスを渡すと、オブジェクトではないとして拒否されます。各関数が受け取る形は、リファレンスのシグネチャに書かれています。
 
 調に変換関数が2つあるのは、調がピッチクラスより多くのものを持つためです。`resolveKey` は綴られた主音と音階の形、つまりプロジェクトファイルが保存する `{ scale, tonic, variant }` の形をそのまま保ちます。クラス層とジェネレーターが受け取るのはこちらです。`toKeyScale` は同じ形を読んで、根音のピッチクラスとマスクだけを返します。それだけが欲しい呼び出し側のためのもので、これを通した調は、第6度を変イと綴るのか嬰トと綴るのかを答えられなくなります。
 

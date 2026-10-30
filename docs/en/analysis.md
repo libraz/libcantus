@@ -149,6 +149,8 @@ A confidence is the share of a window the chosen chord accounts for: the weight 
 
 `segmentation` decides where a boundary may fall. The default `'dynamic'` searches the notes for the changes they imply, and `harmonicRhythm` is a prior on that search: the longer a chord is expected to hold, the more evidence a change needs before one is placed. `'grid'` cuts a segment every `harmonicRhythm` beats instead, which is right only where the harmonic rhythm is known to be fixed.
 
+Under `'dynamic'` a silence at least `harmonicRhythm` long produces no segment, so `at()` returns null across it, while a shorter rest is absorbed into the chord around it; under `'grid'` any window with nothing sounding produces no segment. A window whose notes give fewer than two tones of any chord produces none either.
+
 An augmented sixth — a chord named for the interval between its bass and one upper voice rather than for a stack of thirds — is worked out separately, because no tertian match can carry one. Where the same tones over the lowered submediant resolve outward onto the dominant, straight onto V or V7 or through a cadential six-four standing on the dominant bass, the augmented sixth is reported as the segment's chord; where they move anywhere else, the tertian reading of a ♭VI7 stands instead.
 
 `timeline.cadences()` labels every arrival across a whole span — a cadence being the chord pair that closes a phrase — each with the beat it lands on:

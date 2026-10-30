@@ -26,7 +26,7 @@ C++ コアの上に載る 2 つの JavaScript ビルド（`-wasm` と `-node`）
 - **コマンドライン** は、プレーンなデータを取る op を、シェルやスクリプトから実行して JSON を出力します。
 - **C++** は、ネイティブアプリケーション向けの型付き API で、ヘッダに JSON は現れません。
 
-純 TypeScript と C++ コアを使う面の差は[C++ コアと面ごとの差](cpp.md)にまとめています。差は小さく、オブジェクトの同一性、型システム由来のいくつかの効果、モジュール形式に限られます。
+純 TypeScript と C++ コアを使う面の差は[C++ コアと面ごとの差](cpp.md)にまとめています。差は小さく、たとえばオブジェクトの同一性、型システム由来のいくつかの効果、モジュール形式があります。
 
 ## 面ごとのドキュメント
 
@@ -70,6 +70,6 @@ pip install libcantus
 | `make build-node` | Node-API アドオンと `bindings/node/dist` |
 | `make build-shared` | Python バインディング用の `libcantus.{so,dylib}` |
 | `make test-install` | 一時プレフィックスにインストールし、外部プロジェクトをそれに対してビルドする |
-| `make examples` | `examples/` 以下をすべてビルドして実行する |
+| `make examples` | `examples/` の例をビルドして実行する（ブラウザ向けのテンプレートを除く） |
 
 Python バインディングは、チェックアウトでは `build-shared/` からライブラリを探します。別のファイルを読み込ませるには `CANTUS_LIB` を設定します。

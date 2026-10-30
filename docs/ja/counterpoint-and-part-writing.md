@@ -176,7 +176,7 @@ isForbiddenMelodicLeap(68, 71); // false
 
 最後の2行は同じ2つのピッチです。綴られた音として見ると増2度で禁止、MIDI 番号として見ると短3度で許容されます。チェッカーが綴り付きの入力を取るのはこのためです。
 
-各述語は綴られた音と MIDI 番号のどちらも受け取り、数値形式では綴りを必要とする規則だけが適用されません。一覧は `createsParallelPerfect`、`createsParallelOctave`、`createsParallelUnison`、`createsHiddenParallelPerfect`、`createsVoiceCrossing`、`createsVoiceOverlap`、`createsVerticalDissonance`、`createsBattuta`、`exceedsSpacing`、`isForbiddenMelodicLeap`、`isAugmentedMelodicInterval`、`isLeadingToneResolution` です。
+各述語は綴られた音のデータ（音名の文字列は不可）と MIDI 番号のどちらも受け取り、数値形式では綴りを必要とする規則だけが適用されません。一覧は `createsParallelPerfect`、`createsParallelOctave`、`createsParallelUnison`、`createsHiddenParallelPerfect`、`createsVoiceCrossing`、`createsVoiceOverlap`、`createsVerticalDissonance`、`createsBattuta`、`exceedsSpacing`、`isForbiddenMelodicLeap`、`isAugmentedMelodicInterval`、`isLeadingToneResolution` です。
 
 `createsHiddenParallelPerfect` だけは、ほかの述語に対応するもののない5番目の引数を取ります。2つのテクスチャがこの規則について一致しないためで、`strictness` は `'fourPart'` か `'twoVoice'` のいずれかを取り、既定は `'fourPart'` です。既定はコラールの例外を適用し、上声が順次進行で動く場合の到達を許します。残り2声がそれを覆うからです。`'twoVoice'` は何も除外せず、`checkSpecies` が使うのはこちらの読みです。
 

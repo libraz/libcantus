@@ -1,6 +1,6 @@
 # Runnable examples under examples/: each one is built or run against the installed or built
 # artifact of its surface and exits non-zero when its output is not the documented one.
-#   make examples          every example below
+#   make examples          every example below; examples/browser is a bundler template and is not run
 #   make examples-cpp      examples/cpp against an install tree of the C++ core
 #   make examples-python   examples/python against the shared library
 #   make examples-node     examples/node/node.mjs against the native addon

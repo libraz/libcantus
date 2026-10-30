@@ -64,7 +64,7 @@ The parser options are API arguments, not text. They are validated before parsin
 
 Each throwing parser is written on top of its non-throwing sibling, so `parseNote` and `tryParseNote` cannot disagree about what is valid.
 
-An entry point that takes a note, a key, or a chord accepts the text form as well as the data, and reads it through the same parsers (see [Interoperability](interoperability.md)). That means such a function can raise `InvalidInputError` for text that names nothing, where the plain-data form could only have failed on a value out of range. Where a name arrives from a user rather than from your own code, parse it first with the `try*` sibling and hand over the result, so the failure surfaces at the field it was typed into rather than several calls later.
+An entry point that takes a note, a key, or a chord accepts the text form as well as the data (bar the data-level helpers named in [Interoperability](interoperability.md)), and reads it through the same parsers (see [Interoperability](interoperability.md)). That means such a function can raise `InvalidInputError` for text that names nothing, where the plain-data form could only have failed on a value out of range. Where a name arrives from a user rather than from your own code, parse it first with the `try*` sibling and hand over the result, so the failure surfaces at the field it was typed into rather than several calls later.
 
 ## Validating what a host hands over
 
@@ -91,7 +91,7 @@ assertChordTimeline(timeline) === timeline; // true
 
 Each helper returns its argument, so it can wrap a value in place instead of sitting on a line of its own. Both `assertMidiPitch` and `clampToMidi` require a whole number — a MIDI byte has no fractional value to carry — and they differ only in what they do with the range: `assertMidiPitch` rejects a pitch outside 0..127, while `clampToMidi` folds it into 0..127, which is what an importer usually wants.
 
-Every note event is held to that rule. `pitch` is a whole number in 0..127, and `velocity`, where an event carries one, has the same domain and is checked the same way: a velocity arriving at 96.5 is a rounding left undone upstream, and admitting it would hand the writer a note the format cannot store. `articulation`, where an event carries one, is checked against the names the library knows, so a misspelt technique is an input error rather than the musical claim that the instrument cannot play it that way. `startBeat` and `durationBeat` are beats rather than MIDI bytes and take any finite value.
+Every note event is held to that rule. `pitch` is a whole number in 0..127, and `velocity`, where an event carries one, has the same domain and is checked the same way: a velocity arriving at 96.5 is a rounding left undone upstream, and admitting it would hand the writer a note the format cannot store. `articulation`, where an event carries one, is checked against the names the library knows, so a misspelt technique is an input error rather than the musical claim that the instrument cannot play it that way. `startBeat` and `durationBeat` are beats rather than MIDI bytes, so they are not limited to 0..127; each must be a finite value within `Number.MAX_SAFE_INTEGER` in magnitude (`startBeat` has its lower bound raised by `minStartBeat`), and `durationBeat` must also be positive unless `allowNonPositiveDuration` is set.
 
 ```ts
 import { assertNoteEvents, isLibcantusError } from '@libraz/libcantus';
@@ -118,7 +118,7 @@ An instrument profile is checked the same way, at the point it is accepted. A st
 
 ## Notes that never sound
 
-Analysis entry points ignore events with a non-positive duration. `dropSilentNotes` — also exported as `soundingNotesOnly` — applies that policy explicitly, which is useful right after an import:
+The aggregate analysis entry points ignore events with a non-positive duration. The per-note results, `analyzeVoice` and `spellLine`, return one entry per input event and keep them. `dropSilentNotes` — also exported as `soundingNotesOnly` — applies that policy explicitly, which is useful right after an import:
 
 ```ts
 import { dropSilentNotes } from '@libraz/libcantus';

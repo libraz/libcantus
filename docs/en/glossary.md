@@ -58,7 +58,7 @@ Terms as this library uses them. Where a musical term has more than one common m
 
 **Harmonic function** — Whether a chord acts as tonic, subdominant, or dominant. `functionOf` reports it; it is meaningful only where `supportsFunctionalHarmony` is true.
 
-**Augmented sixth** — Italian, French, and German chords built on the lowered sixth degree, the submediant. No Roman numeral names them, so they render as `It6`, `Fr6`, and `Ger6`.
+**Augmented sixth** — Italian, French, and German chords built on the lowered sixth degree, the submediant. No Roman numeral names them, so a chord that spells one over that bass renders as `It6`, `Fr6`, or `Ger6`; an augmented sixth of another degree does so only with `applied: true`, and otherwise reads by its root.
 
 **Neapolitan** — The major triad on the lowered second degree, written `bII6` in first inversion, or `N6` when `neapolitan: true`. It is an altered chord, so a mode that has a lowered second of its own — phrygian, locrian — sounds the same triad as its native `II` rather than as the Neapolitan.
 

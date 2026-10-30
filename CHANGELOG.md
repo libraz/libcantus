@@ -156,6 +156,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   transpositions and the retrograde family.
 - **Melody comparison is budgeted.** `compareMelodies` and `melodicSimilarity`
   raise `BudgetExceededError` for an oversized alignment instead of blocking.
+- **Analysis reads a key as it is spelled.** `functionOf` and `analyzeChord`
+  call an augmented sixth of A flat minor predominant (`Ger6`), `pivotChords`
+  numbers against the target key's own letters (C flat major to A flat minor
+  gives `viio = iio`), and `substituteChord` and `modalInterchangePalette`
+  number their proposals in the key as written. The analysis methods of `Chord`
+  and `Progression` spell the chord in the key passed to them, a free function
+  handed a model `Chord` reads it as it prints, and a keyless progression keeps
+  each chord's own key through `toJSON` and `fromJSON`.
+- **Chord timelines read chords the way a musician would.** A single sounding
+  pitch class is no longer reported as a power chord, a diminished seventh
+  takes its root from where it resolves rather than from its bass, a short low
+  passing note no longer re-inverts a segment, and an exact slash chord reads
+  with full confidence. A stated key over an empty span yields no key region.
+- **Timelines and arrangements refuse what their readers cannot hold.**
+  `Timeline`, `ChordTimeline` and `Arrangement` refuse segments and key regions
+  that are out of order, overlapping or inverted, and `Arrangement.of` refuses
+  an unknown profile, a percussion track among `harmonyTracks` and a note before
+  the declared pickup. `Arrangement.reference()` uses the meter given as `ts`.
+- **Unknown option values are refused.** `detectChords` `input`,
+  `analyzeTimeline` `segmentation`, `createNoteEventIndex` `tieBreak`,
+  `avoidNotes` `use`, `voiceChordStyled` `style`, `generateCountermelody`
+  `register`, `generateMotif` `contour`, the `rate` of `deform` and
+  `placeDrumPattern`, a custom `generateProgression` preset and the
+  `harmonizeMelody` phrase ends and placement are checked instead of falling
+  back to a default. A `null` note list or meter map is reported as `null`.
+- **Chord-scale and voice-leading verdicts.** The flat ninth of a dominant
+  seventh is an available tension on every scale, never an avoid note; an
+  applied leading-tone chord may bring its chromatic tone without a cross
+  relation, as an applied dominant may; `harmonizeMelody` no longer marks a
+  dominant seventh native to the mode as secondary; and an inverted tonal
+  answer keeps a chromatic first note in place.
+- **Playability places simultaneous notes together.** A chord that fits the
+  hand on distinct strings is no longer reported as `stretchTooWide` or
+  `stringConflict` because its notes were placed one at a time.
+- **Smaller analysis fixes.** `NoteEventIndex.at()` treats onsets that differ
+  only by float rounding as one onset; reference profiles measure phrase onset
+  density and rest ratio from the phrase start; a `-0` pitch is reported as
+  `0`; and a context's `instrument()` answers only for the parts it was given.
+- **`@libraz/libcantus` ships its NOTICE.** The package carries the project's
+  NOTICE file next to its LICENSE, as the Apache License asks.
 
 These corrections change generated output for affected seeds without raising
 `ALGORITHM_VERSION`, as [Determinism and seeding](docs/en/determinism-and-seeding.md#pinning-the-algorithm-version)

@@ -108,7 +108,7 @@ target_link_libraries(app PRIVATE cantus::cantus)
 auto matches = cantus::detect_chord({60, 64, 67});
 ```
 
-インストール済みのプレフィックスに対する `find_package(cantus)` や `add_subdirectory` でも同じように使えます。これらの例を実行できる形にしたものが [`examples/`](examples) にあり、`make examples` で実行できます。
+インストール済みのプレフィックスに対する `find_package(cantus)` や `add_subdirectory` でも同じように使えます。これらの例を実行できる形にしたものが [`examples/`](examples) にあり、`make examples` で実行できます。ただしブラウザ向けの例はバンドラ用のテンプレートで、`make examples` では実行されません。
 
 ## ソースからのビルド
 
@@ -118,7 +118,7 @@ make test-cxx      # C++ テストを実行する
 make wasm          # WebAssembly パッケージ（Emscripten が必要）
 make build-node    # Node-API アドオン
 make build-shared  # Python バインディング用の共有ライブラリ
-make examples      # examples/ 以下をすべてビルドして実行する
+make examples      # examples/ の例をビルドして実行する（ブラウザ向けを除く）
 ```
 
 ## ドキュメント

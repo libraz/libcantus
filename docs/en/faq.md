@@ -15,7 +15,7 @@ No. Pitch detection from audio and playback both belong to the host. `nearestSte
 No. The TypeScript package has no dependencies, and every entry point is synchronous. The Python wheel bundles its native library.
 
 **Can it run in a browser or a worker?**
-Yes. There is no Node-specific API in the library, and every input and output is plain JSON-compatible data apart from a chord timeline's `at`, which is a function: post `{ segments: timeline.segments, totalBeats }` in place of the timeline itself, with `totalBeats` the beat the timeline ends on (the last segment's `endBeat`, or the length of the piece), and rebuild the lookup on the far side with `Timeline.fromJSON`, which needs both fields. Everything else crosses a worker boundary with a structured clone and no revival step.
+Yes. There is no Node-specific API in the library, and every input and output is plain JSON-compatible data apart from the handles and function-valued inputs listed in [Interoperability](interoperability.md) and a chord timeline's `at`, which is a function: post `{ segments: timeline.segments, totalBeats }` in place of the timeline itself, with `totalBeats` the beat the timeline ends on (the last segment's `endBeat`, or the length of the piece), and rebuild the lookup on the far side with `Timeline.fromJSON`, which needs both fields. Everything else crosses a worker boundary with a structured clone and no revival step.
 
 ## Analysis
 
@@ -104,7 +104,7 @@ A lone `B` from an unknown source is far more often English. Pass `system` expli
 Pure TypeScript for a web application or anything that bundles its dependencies or needs `require()`. WebAssembly when a JavaScript application should run the C++ core. Python for scripts and notebooks, the command line for shell pipelines, and C++ for a native application. [Packages and surfaces](packages.md) compares them.
 
 **Do the surfaces give the same results?**
-Yes. Results, errors and error messages are the same, and floating-point output is bit-identical across platforms. The differences are small and listed in [C++ core and surface differences](cpp.md): object identity, C++ implicit conversions, unknown keyword arguments in Python, and the module format.
+Yes. Results, errors and error messages are the same, and floating-point output is bit-identical across platforms. The differences are small and listed in full in [C++ core and surface differences](cpp.md); among them are object identity, C++ implicit conversions, unknown keyword arguments in Python, and the module format.
 
 **Is the C++ core faster than pure TypeScript?**
 Speed is not what it is for. It exists so that one implementation serves JavaScript, Python, the shell and native code, and so that a native application can link the library without a JavaScript runtime.

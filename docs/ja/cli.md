@@ -73,9 +73,10 @@ cantus '$echo' '[{"$$note": 1}]'
 失敗ごとに終了コードが異なり、出力も構造化されているので、スクリプトはメッセージを解析せずに分岐できます。
 
 ```sh
-if ! voiced=$(cantus voiceProgression "$args" 2>err.json); then
-  status=$?
-  [ "$status" -eq 2 ] && echo "no voicing fits"
+voiced=$(cantus voiceProgression "$args" 2>err.json)
+status=$?
+if [ "$status" -eq 2 ]; then
+  echo "no voicing fits"
 fi
 ```
 

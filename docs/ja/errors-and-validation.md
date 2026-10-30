@@ -64,7 +64,7 @@ const label = typed.ok ? typed.value.quality : typed.error.message;
 
 例外を投げるパーサは、いずれも投げないパーサの上に実装されています。`parseNote` と `tryParseNote` が妥当性の判定でずれることはありません。
 
-音・調・和音を受け取るエントリポイントは、データだけでなくテキスト形式も受け取り、同じパーサで読みます（[相互運用](interoperability.md)を参照）。したがってこれらの関数は、何も指していない文字列に対して `InvalidInputError` を投げることがあります。プレーンデータの形では、値の範囲外でしか失敗しえなかったところです。名前が自分のコードではなく利用者から届く場面では、先に `try*` の側で解析し、その結果を渡してください。そうすれば失敗は、入力された欄そのもので表面化します。数回先の呼び出しではなく。
+音・調・和音を受け取るエントリポイントは、（[相互運用](interoperability.md)に挙げたデータ層のヘルパーを除いて）データだけでなくテキスト形式も受け取り、同じパーサで読みます（[相互運用](interoperability.md)を参照）。したがってこれらの関数は、何も指していない文字列に対して `InvalidInputError` を投げることがあります。プレーンデータの形では、値の範囲外でしか失敗しえなかったところです。名前が自分のコードではなく利用者から届く場面では、先に `try*` の側で解析し、その結果を渡してください。そうすれば失敗は、入力された欄そのもので表面化します。数回先の呼び出しではなく。
 
 ## ホストから渡された値の検証
 
@@ -91,7 +91,7 @@ assertChordTimeline(timeline) === timeline; // true
 
 いずれの関数も引数をそのまま返すため、独立した1行を割かずに値を包めます。`assertMidiPitch` と `clampToMidi` はどちらも整数を要求します。MIDI のバイトは小数を載せられないためです。両者の違いは範囲の扱いだけで、`assertMidiPitch` は 0..127 を外れたピッチを拒否し、`clampToMidi` は 0..127 に丸めます。インポート処理では後者が適することが多いです。
 
-ノートイベントも同じ規則に従います。`pitch` は 0..127 の整数で、イベントが `velocity` を持つ場合もその領域は同じであり、検査のしかたも同じです。96.5 という velocity は上流で丸め損ねた値であり、これを通せば、フォーマットが保持できないノートを書き出し側に渡すことになります。イベントが `articulation` を持つ場合は、ライブラリが知る名前の一覧に照らして検査されます。綴り違いの奏法は入力の誤りとして扱われ、「その楽器はその奏法で演奏できない」という音楽上の主張にはなりません。`startBeat` と `durationBeat` は MIDI のバイトではなく拍なので、有限の値であれば受け取ります。
+ノートイベントも同じ規則に従います。`pitch` は 0..127 の整数で、イベントが `velocity` を持つ場合もその領域は同じであり、検査のしかたも同じです。96.5 という velocity は上流で丸め損ねた値であり、これを通せば、フォーマットが保持できないノートを書き出し側に渡すことになります。イベントが `articulation` を持つ場合は、ライブラリが知る名前の一覧に照らして検査されます。綴り違いの奏法は入力の誤りとして扱われ、「その楽器はその奏法で演奏できない」という音楽上の主張にはなりません。`startBeat` と `durationBeat` は MIDI のバイトではなく拍なので、0..127 に限られません。どちらも絶対値が `Number.MAX_SAFE_INTEGER` 以内の有限値でなければならず（`startBeat` の下限は `minStartBeat` で引き上げられます）、`durationBeat` は `allowNonPositiveDuration` を指定しない限り正である必要があります。
 
 ```ts
 import { assertNoteEvents, isLibcantusError } from '@libraz/libcantus';
@@ -118,7 +118,7 @@ reported; // 'score notes[0].velocity must be an integer in [0, 127]; received 9
 
 ## 鳴らないノート
 
-解析側の入り口は、長さが正でないイベントを無視します。`dropSilentNotes`（別名 `soundingNotesOnly`）はその方針を明示的に適用するもので、インポート直後に置くのに適しています。
+集計を行う解析側の入り口は、長さが正でないイベントを無視します。音符ごとに結果を返す `analyzeVoice` と `spellLine` は、入力イベント1つにつき1件を返し、そうしたイベントも残します。`dropSilentNotes`（別名 `soundingNotesOnly`）はその方針を明示的に適用するもので、インポート直後に置くのに適しています。
 
 ```ts
 import { dropSilentNotes } from '@libraz/libcantus';

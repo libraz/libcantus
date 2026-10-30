@@ -129,7 +129,7 @@ session.analysis.timeline.segments.length >= 1; // true
 - 解析は編集の後ろでデバウンスし、1打鍵ごとに走らせません。
 - アレンジ解析にはセッションを使います。`createArrangementSession` か、内部でセッションを持つ `Arrangement.update` です。位置の反復的な問い合わせには `createNoteEventIndex` か `Score.index` のインデックスを使います。
 - 入力を絞ります。`chordTimelineFromNotes` は曲全体より画面上の小節だけのほうが速く、既にコードが分かっているホストは推定し直さずに `chordTimelineFromChords` を呼びます。
-- 時間のかかる解析はワーカーへ移します。関数 API の入出力は、和音区間のタイムラインが持つ `at` を除いてすべて JSON 互換のプレーンデータです。`at` は関数なので、タイムラインそのものではなく `{ segments: timeline.segments, totalBeats }` を送り、受け取った側で `Timeline.fromJSON` を使って参照を組み直します。`totalBeats` はタイムラインが終わる拍（最後の区間の `endBeat`、または曲の長さ）で、`Timeline.fromJSON` は両方のフィールドを必要とします。それ以外は構造化クローンでワーカー境界を越えられ、復元処理は不要です。
+- 時間のかかる解析はワーカーへ移します。関数 API の入出力は、[相互運用](interoperability.md)に挙げたハンドルと関数を取る入力、および和音区間のタイムラインが持つ `at` を除いて、すべて JSON 互換のプレーンデータです。`at` は関数なので、タイムラインそのものではなく `{ segments: timeline.segments, totalBeats }` を送り、受け取った側で `Timeline.fromJSON` を使って参照を組み直します。`totalBeats` はタイムラインが終わる拍（最後の区間の `endBeat`、または曲の長さ）で、`Timeline.fromJSON` は両方のフィールドを必要とします。それ以外は構造化クローンでワーカー境界を越えられ、復元処理は不要です。
 
 クラスの値はそのままでは越えられません。状態はプライベートフィールドにあるため、インスタンスをクローンしても中身のない、もはや `Score` ですらないオブジェクトになります。代わりに `toJSON()` を送り、対応する `fromJSON` で組み立て直します。モデルのクラスはいずれも両方を持っています。
 

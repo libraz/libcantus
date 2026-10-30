@@ -108,7 +108,7 @@ target_link_libraries(app PRIVATE cantus::cantus)
 auto matches = cantus::detect_chord({60, 64, 67});
 ```
 
-`find_package(cantus)` against an installed prefix and `add_subdirectory` work the same way. Runnable versions of these examples are in [`examples/`](examples) and run with `make examples`.
+`find_package(cantus)` against an installed prefix and `add_subdirectory` work the same way. Runnable versions of these examples are in [`examples/`](examples) and run with `make examples`; the browser example there is a bundler template that `make examples` does not run.
 
 ## Building from source
 
@@ -118,7 +118,7 @@ make test-cxx      # run the C++ tests
 make wasm          # WebAssembly package (needs Emscripten)
 make build-node    # Node-API addon
 make build-shared  # shared library for the Python binding
-make examples      # build and run everything in examples/
+make examples      # build and run the examples in examples/ (not the browser one)
 ```
 
 ## Documentation

@@ -176,7 +176,7 @@ isForbiddenMelodicLeap(68, 71); // false
 
 The last two lines are the same two pitches. As spelled notes they form an augmented second and are forbidden; as MIDI numbers they form a minor third and are permitted. This is why the checkers take spelled input.
 
-Each predicate accepts either spelled notes or MIDI numbers, and the numeric form skips exactly the rules that need spelling. The full set: `createsParallelPerfect`, `createsParallelOctave`, `createsParallelUnison`, `createsHiddenParallelPerfect`, `createsVoiceCrossing`, `createsVoiceOverlap`, `createsVerticalDissonance`, `createsBattuta`, `exceedsSpacing`, `isForbiddenMelodicLeap`, `isAugmentedMelodicInterval`, and `isLeadingToneResolution`.
+Each predicate accepts either spelled note data (not a note name) or MIDI numbers, and the numeric form skips exactly the rules that need spelling. The full set: `createsParallelPerfect`, `createsParallelOctave`, `createsParallelUnison`, `createsHiddenParallelPerfect`, `createsVoiceCrossing`, `createsVoiceOverlap`, `createsVerticalDissonance`, `createsBattuta`, `exceedsSpacing`, `isForbiddenMelodicLeap`, `isAugmentedMelodicInterval`, and `isLeadingToneResolution`.
 
 `createsHiddenParallelPerfect` takes a fifth argument the others have no counterpart for, because the two textures disagree about the rule: `strictness`, either `'fourPart'` or `'twoVoice'`, defaulting to `'fourPart'`. The default applies the chorale's exception and allows the arrival where the upper voice moves by step, since the two remaining voices cover it. `'twoVoice'` exempts nothing, and is the reading `checkSpecies` uses:
 

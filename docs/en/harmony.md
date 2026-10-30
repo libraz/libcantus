@@ -117,7 +117,7 @@ chordToRoman(german, key); // 'Ger6'
 spellAugmentedSixth('german', parseNote('C')).map((note) => formatNote(note)); // ['Ab', 'C', 'Eb', 'F#']
 ```
 
-No Roman numeral spells an augmented sixth, so the three always render as `It6`, `Fr6`, and `Ger6` and need no rendering switch of their own. They do take a target the way any other numeral does, so under `applied: true` an analysis can say which degree a chromatic predominant points at:
+No Roman numeral spells an augmented sixth, so a chord that sounds the lowered sixth degree of the key in the bass and spells an augmented sixth above it renders as `It6`, `Fr6`, or `Ger6`, with no rendering switch of its own. The same chords take a target the way any other numeral does: under `applied: true` an analysis can say which degree a chromatic predominant points at. Without `applied`, a chord that is an augmented sixth only of another degree is named like any other chord, by its root against the home key:
 
 ```ts
 import { chordToRoman, majorKey, romanToChord } from '@libraz/libcantus';

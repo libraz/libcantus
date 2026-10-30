@@ -26,7 +26,7 @@ All packages carry the same version number.
 - **Command line** runs any op that takes plain data, from a shell or a script, and prints JSON.
 - **C++** is the typed API for native applications, with no JSON in its headers.
 
-The differences between pure TypeScript and the core-backed surfaces are described in [C++ core and surface differences](cpp.md). They are small: object identity, a few type-system effects, and the module format.
+The differences between pure TypeScript and the core-backed surfaces are described in [C++ core and surface differences](cpp.md). They are small; among them are object identity, a few type-system effects, and the module format.
 
 ## Where each surface is documented
 
@@ -70,6 +70,6 @@ A checkout builds every surface with `make`. Builds run two jobs by default; set
 | `make build-node` | The Node-API addon and `bindings/node/dist` |
 | `make build-shared` | `libcantus.{so,dylib}` for the Python binding |
 | `make test-install` | Install to a scratch prefix and build outside projects against it |
-| `make examples` | Build and run everything under `examples/` |
+| `make examples` | Build and run the examples under `examples/` (not the browser template) |
 
 The Python binding finds the library in `build-shared/` in a checkout. Set `CANTUS_LIB` to load a different file.

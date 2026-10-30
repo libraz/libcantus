@@ -73,9 +73,10 @@ This prints `{"$$note":1}`, an object whose key is `$note`. The JavaScript and P
 Because failures use distinct exit codes and structured output, a script can branch on them without parsing messages:
 
 ```sh
-if ! voiced=$(cantus voiceProgression "$args" 2>err.json); then
-  status=$?
-  [ "$status" -eq 2 ] && echo "no voicing fits"
+voiced=$(cantus voiceProgression "$args" 2>err.json)
+status=$?
+if [ "$status" -eq 2 ]; then
+  echo "no voicing fits"
 fi
 ```
 
