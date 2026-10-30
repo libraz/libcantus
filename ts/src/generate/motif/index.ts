@@ -651,7 +651,12 @@ export function developMotif(
       const pitch = developedPitch(n.pitch, allows, direction, taken);
       taken.set(pitch, n.pitch);
       previous = n.pitch;
-      out.push({ pitch, startBeat, durationBeat: n.durationBeat });
+      // A note that would run past the span is cut at its end.
+      out.push({
+        pitch,
+        startBeat,
+        durationBeat: Math.min(n.durationBeat, totalBeats - startBeat),
+      });
     }
   }
   return inTimeOrder({ notes: out });

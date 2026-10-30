@@ -22,7 +22,7 @@ import { evaluateSafety, NoteSafety, type SafetyProfile } from '../../theory/saf
 import { majorKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
 import { BEAT_EPS } from '../adjacency.js';
 import { functionOf } from '../functional/index.js';
-import { gridForNotes } from '../grid.js';
+import { gridForNotes, latestSoundingEnd } from '../grid.js';
 import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
 import { type ChordTimeline, chordTimelineFromNotes } from '../timeline/index.js';
 import {
@@ -140,7 +140,7 @@ export function tensionCurve(
   const harmonyTracks = harmonyTrackSet(opts.harmonyTracks, tracks);
   const pooled = poolNotes(tracks, harmonyTracks);
   const all = poolNotes(tracks);
-  const totalBeats = all.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
+  const totalBeats = latestSoundingEnd(all);
   // The grid the samples sit on is a whole number of steps from beat 0, and the
   // music itself starts at `musicStart`: a pickup sounds before beat 0 and an
   // excerpt lifted from bar 9 begins there, and neither is sampled across

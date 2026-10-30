@@ -10,6 +10,9 @@
 
 namespace cantus {
 
+/** Whether `value` is a whole multiple of `unit`, within float tolerance (`isMultipleOf`). */
+bool is_multiple_of(double value, double unit);
+
 /**
  * A position's rhythmic level (`rhythmLevel`): 2-5 on a main pulse (`metricWeight` plus 2), 1 on
  * the pulse's first subdivision, 0 elsewhere.

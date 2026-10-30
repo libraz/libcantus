@@ -131,7 +131,7 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   if (soundingMelody.length === 0) {
     return { transposeSemitones: 0, key: resolvedKey, chords: [], melodyRoles: [] };
   }
-  const candidates = buildCandidates(key, harmonic);
+  const candidates = buildCandidates(resolvedKey, harmonic);
   const candAt = (i: number): Candidate => candidates[i] ?? FALLBACK;
   const draw = ctx.part('harmony');
   const jitter = candidates.map((_, index) => draw.at('jitter', index) * TIE_BREAK_JITTER);

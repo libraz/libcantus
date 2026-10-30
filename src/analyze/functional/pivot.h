@@ -10,11 +10,13 @@
 
 #include "cantus/analyze/functional.h"
 #include "cantus/core/types.h"
+#include "cantus/theory/scale.h"
 
 namespace cantus {
 
-/** `pivotChords` on keys already read into their narrow form (`pivotsBetween`). */
-std::vector<PivotChord> pivots_between(const KeyScale& from, const KeyScale& to);
+/** `pivotChords` on keys already read: the key being left whole, the other as its scale
+ * (`pivotsBetween`). */
+std::vector<PivotChord> pivots_between(const ResolvedKey& from, const KeyScale& to);
 
 }  // namespace cantus
 

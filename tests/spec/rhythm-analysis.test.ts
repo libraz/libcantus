@@ -313,3 +313,50 @@ describe('analyzeRhythm reads the options an empty span never reaches only when 
     );
   });
 });
+
+describe('analyzeRhythm on notes that end before beat 0', () => {
+  const notes: NoteEvent[] = [{ pitch: 60, startBeat: -2, durationBeat: 1 }];
+
+  it('ends the span where the last note ends', () => {
+    const result = analyzeRhythm(notes, { ts: '4/4' });
+    expect(result.endBeat).toBe(-1);
+    expect(result.restRatio).toBe(0);
+    expect(result.onsetDensity).toBe(4);
+  });
+
+  it('accepts a totalBeats at or above the span start', () => {
+    expect(analyzeRhythm(notes, { ts: '4/4', totalBeats: -1 }).endBeat).toBe(-1);
+    expect(() => analyzeRhythm(notes, { ts: '4/4', totalBeats: Number.NaN })).toThrow(
+      InvalidInputError,
+    );
+  });
+});
+
+describe('analyzeRhythm syncopation in a division the meter does not use', () => {
+  /** `count` equal notes of `width` beats, back to back from beat 0. */
+  function run(count: number, width: number): NoteEvent[] {
+    return Array.from({ length: count }, (_, i) => ({
+      pitch: 60,
+      startBeat: i * width,
+      durationBeat: width,
+    }));
+  }
+
+  it('does not charge eighth-note triplets in 4/4', () => {
+    expect(analyzeRhythm(run(3, 1 / 3), { ts: '4/4' }).syncopation).toBe(0);
+    expect(analyzeRhythm(run(12, 1 / 3), { ts: '4/4' }).syncopation).toBe(0);
+    expect(analyzeRhythm(run(48, 1 / 3), { ts: '4/4' }).syncopation).toBe(0);
+  });
+
+  it('does not charge even duplets in 6/8', () => {
+    expect(analyzeRhythm(run(8, 0.75), { ts: '6/8' }).syncopation).toBe(0);
+  });
+
+  it('still charges a note held through a stronger position of its own division', () => {
+    const held: NoteEvent[] = [
+      { pitch: 60, startBeat: 0.5, durationBeat: 1 },
+      { pitch: 62, startBeat: 1.5, durationBeat: 2.5 },
+    ];
+    expect(analyzeRhythm(held, { ts: '4/4' }).syncopation).toBeGreaterThan(0);
+  });
+});

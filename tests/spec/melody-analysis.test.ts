@@ -91,6 +91,32 @@ describe('real versus tonal restatement', () => {
   });
 });
 
+describe('the interval a transposition is named by', () => {
+  const NAMES = ['P1', 'm2', 'M2', 'm3', 'M3', 'P4', 'A4', 'P5', 'm6', 'M6', 'm7', 'M7'];
+
+  it('is the conventional name of the distance wherever the model starts', () => {
+    for (const start of [60, 61, 66, 70]) {
+      const model = motifFromNotes(line(0, [start, start + 2, start + 7]));
+      for (let shift = -11; shift <= 11; shift += 1) {
+        if (shift === 0) {
+          continue;
+        }
+        const answer = motifFromNotes(
+          line(4, [start + shift, start + shift + 2, start + shift + 7]),
+        );
+        const relation = relateMotifs(model, answer);
+        const name = `${shift < 0 ? '-' : ''}${NAMES[Math.abs(shift)]}`;
+        const { interval } = relation ?? { interval: undefined };
+        expect(
+          interval && `${interval.descending ? '-' : ''}${interval.quality}${interval.number}`,
+          `${start} ${shift}`,
+        ).toBe(name);
+        expect(interval?.semitones, `${start} ${shift}`).toBe(shift);
+      }
+    }
+  });
+});
+
 describe('named transformations of a motif', () => {
   // Intervals +2 then +5, so the cell is not symmetrical and each transform has
   // exactly one name.
@@ -645,5 +671,29 @@ describe('melodies as callers write them', () => {
     expect(() => relateMotifs(null as never, null as never, 'nonsense' as never)).toThrow(
       /Invalid key name/,
     );
+  });
+});
+
+describe('motifs lying before beat 0', () => {
+  it('reports the end of a statement wholly in the pickup region', () => {
+    const melody = [...line(-8, [60, 62, 64]), ...line(-4, [67, 69, 71])];
+    const motif = extractMotifs(melody)[0];
+    expect(motif?.occurrences.map((o) => o.startBeat)).toEqual([-8, -4]);
+    expect(motif?.occurrences.map((o) => o.endBeat)).toEqual([-5, -1]);
+  });
+
+  it('keeps the sequence flag when the pair sits before beat 0', () => {
+    const shifted = relateMotifs(
+      motifFromNotes(line(0, [60, 62, 64])),
+      motifFromNotes(line(3, [62, 64, 66])),
+      cMajor,
+    );
+    const early = relateMotifs(
+      motifFromNotes(line(-6, [60, 62, 64])),
+      motifFromNotes(line(-3, [62, 64, 66])),
+      cMajor,
+    );
+    expect(shifted?.sequence).toBe(true);
+    expect(early?.sequence).toBe(true);
   });
 });

@@ -100,8 +100,10 @@ describe('keyFromFifths', () => {
 
   it('round-trips the theoretical signatures too', () => {
     for (let fifths = -12; fifths <= 12; fifths += 1) {
-      const { tonic, scale } = keyFromFifths(fifths);
-      expect(keySignatureFifths(tonic, scale), `${fifths}`).toBe(fifths);
+      for (const mode of ['major', 'minor'] as const) {
+        const { tonic, scale } = keyFromFifths(fifths, mode);
+        expect(keySignatureFifths(tonic, scale), `${fifths}/${mode}`).toBe(fifths);
+      }
     }
   });
 

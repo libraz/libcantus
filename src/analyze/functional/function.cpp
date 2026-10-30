@@ -15,6 +15,7 @@
 #include "cantus/core/pitch.h"
 #include "cantus/core/validation.h"
 #include "core/pitch/pitch.h"
+#include "theory/chord/chord.h"
 #include "theory/tendency/tendency.h"
 
 namespace cantus {
@@ -222,28 +223,34 @@ ChordAnalysis analyze_chord(const ChordArg& chord, const KeyArg& key,
 }
 
 Chord secondary_dominant(double target_degree, const KeyArg& key) {
-  KeyScale scale = to_key_scale(key);
+  ResolvedKey resolved = resolve_key(key);
+  const KeyScale& scale = resolved.scale;
   // A degree outside the scale is a caller error, not a wrap-around.
   auto degree_count = static_cast<double>(scale_tones_in_degree_order(scale).size());
   assert_integer(target_degree, "targetDegree", 1, degree_count);
   int target_root = degree_root_pc(target_degree, scale);
-  return make_chord(pitch_class_of(target_root + 7), ChordQuality::kDom7);
+  // A perfect fifth above the target as the key writes it.
+  PitchSpelling target = key_spelling(target_root, resolved);
+  NoteData fifth = transpose_by_interval(NoteData{target.letter, target.alter, std::nullopt}, "P5");
+  SpelledChordParts parts;
+  parts.rootSpelling = PitchSpelling{fifth.letter, fifth.alter};
+  return make_spelled_chord(pitch_class_of(target_root + 7), ChordQuality::kDom7, parts);
 }
 
 Chord secondary_dominant_of(const ChordArg& target) {
   Chord data = to_chord_data(target);
   assert_finite_number(data.rootPc, "target chord rootPc");
-  Chord dominant = make_chord(pitch_class_of(data.rootPc + 7), ChordQuality::kDom7);
   // Move an explicit spelling hint rather than deriving one: the dominant of a flat-named target
   // is spelled flat, whatever key it is later read in.
+  SpelledChordParts parts;
   if (data.rootSpelling) {
     NoteData hint = assert_note_values(data.rootSpelling->letter, data.rootSpelling->alter,
                                        std::nullopt, "note");
     NoteData moved = transpose_note(hint, 7);
-    dominant.rootSpelling =
+    parts.rootSpelling =
         PitchSpelling{static_cast<double>(moved.letter), static_cast<double>(moved.alter)};
   }
-  return dominant;
+  return make_spelled_chord(pitch_class_of(data.rootPc + 7), ChordQuality::kDom7, parts);
 }
 
 }  // namespace cantus

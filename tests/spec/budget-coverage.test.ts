@@ -5,10 +5,12 @@ import {
   type ChordTimeline,
   chordTimelineFromChords,
   chordTimelineFromNotes,
+  compareMelodies,
   compareReferences,
   createArrangementSession,
   extractMotifs,
   hypermeter,
+  melodicSimilarity,
   motifFromNotes,
   motifGraph,
   phrasesFromTimeline,
@@ -390,6 +392,15 @@ const REACHES: readonly { label: string; run: () => unknown }[] = [
     label: 'developed motif notes',
     // A four-note cell tiled over a million bars.
     run: () => developMotif({ notes: run(4) }, chordRun(4), C_MAJOR, 400_000, '4/4'),
+  },
+  {
+    label: 'melody alignment',
+    // Two lines whose interval sequences multiply past the budget.
+    run: () => compareMelodies(run(1_002), run(1_001)),
+  },
+  {
+    label: 'melody alignment',
+    run: () => melodicSimilarity(run(1_002), run(1_001)),
   },
   {
     label: 'tie chain length',

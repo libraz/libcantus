@@ -41,8 +41,12 @@ class Error : public std::runtime_error {
   /** The failure kind. */
   ErrorCode code() const noexcept { return code_; }
 
+  /** The full message; what() stops at an embedded NUL, this does not. */
+  const std::string& message() const noexcept { return message_; }
+
  private:
   ErrorCode code_;
+  std::string message_;
 };
 
 /** A rejected argument: malformed, out of range, or naming something unknown. */

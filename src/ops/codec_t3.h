@@ -46,8 +46,18 @@ void read_max_candidates_option(const json::Value& asked, VoicingOptions& out);
 /** The `key` of wire options, as `resolvedKeyOf` reads it; `out.key` stays empty when absent. */
 void read_key_option(const json::Value& asked, VoicingOptions& out);
 
-/** `resolvePreviousChord` over wire options; `out.previousChord` stays empty when absent. */
-void read_previous_chord_option(const json::Value& asked, VoicingOptions& out);
+/**
+ * What `voiceChord` reads of a read chord once the search options are read: the chord's tones,
+ * where the candidates are enumerated, then the key (`resolvedKeyOf`), then the roles the chord's
+ * own spelling gives its tones, where the voicing is scored.
+ */
+void read_voiced_chord(ChordData& data, const json::Value& asked, VoicingOptions& out);
+
+/**
+ * read_voiced_chord() as `nextVoicing` reads it: `resolvePreviousChord` comes before the scoring,
+ * which then reads the roles of the chord being left as well, looking for its seventh.
+ */
+void read_next_voiced_chord(ChordData& data, const json::Value& asked, VoicingOptions& out);
 
 /** `assertVoicing`: an array holding a finite pitch in every voice. */
 std::vector<double> read_voicing(const json::Value& value, std::string_view name);

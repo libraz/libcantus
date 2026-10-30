@@ -10,9 +10,6 @@
 
 namespace cantus {
 
-namespace {
-
-/** Whether `value` is a whole multiple of `unit`, within float tolerance (`isMultipleOf`). */
 bool is_multiple_of(double value, double unit) {
   if (unit <= 0) {
     return false;
@@ -20,8 +17,6 @@ bool is_multiple_of(double value, double unit) {
   double ratio = value / unit;
   return std::fabs(ratio - js::round(ratio)) < BEAT_EPS;
 }
-
-}  // namespace
 
 int rhythm_level(double beat_in_quarters, const MeterArg& meters) {
   TimeSignature ts = meter_at(beat_in_quarters, meters);

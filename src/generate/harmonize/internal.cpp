@@ -29,10 +29,6 @@ double default_harmonic_rhythm(const TimeSignature& ts) {
   return std::fmod(half, pulse_beats(ts)) == 0 ? half : bar;
 }
 
-bool cadences_through_raised_seventh(const KeyScale& key) {
-  return is_minor_key(key) && scale_system_of(key) == ScaleSystem::kCommonPractice;
-}
-
 bool is_key_tone(double pitch, const KeyScale& key) {
   return is_scale_tone(pitch, key) ||
          (cadences_through_raised_seventh(key) && pitch_class_of(pitch) == leading_tone_pc_of(key));

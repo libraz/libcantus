@@ -42,10 +42,10 @@ Span span_of(const std::vector<NoteEvent>& sounding, const ChordTimeline& timeli
   double first_onset = first_sounding_beat(sounding, first_start);
   double start_beat =
       bar_grid_start(js::min(first_onset, has_segments ? first_start : first_onset), meters);
-  double notes_end = has_segments ? segments.back().endBeat : 0;
-  for (const NoteEvent& note : sounding) {
-    notes_end = js::max(notes_end, note.startBeat + note.durationBeat);
-  }
+  double latest_end =
+      js::max(has_segments ? segments.back().endBeat : -std::numeric_limits<double>::infinity(),
+              latest_sounding_end(sounding, -std::numeric_limits<double>::infinity()));
+  double notes_end = std::isfinite(latest_end) ? latest_end : 0;
   return Span{start_beat, js::max(start_beat, total_beats.value_or(notes_end))};
 }
 

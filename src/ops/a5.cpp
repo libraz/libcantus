@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "analyze/grid.h"
 #include "analyze/reference/profile.h"
 #include "cantus/analyze/reference.h"
 #include "cantus/core/limits.h"
@@ -33,15 +34,15 @@ std::optional<double> budget_of(const json::Value& opts) {
   return budget != nullptr ? number_of(*budget) : std::nullopt;
 }
 
-/** The end of the last note that sounds, or 0. */
-double last_sounding_end(const std::vector<NoteEvent>& notes) {
-  double end = 0;
+/** The notes that sound. */
+std::vector<NoteEvent> sounding_notes(const std::vector<NoteEvent>& notes) {
+  std::vector<NoteEvent> out;
   for (const NoteEvent& note : notes) {
     if (note.durationBeat > 0) {
-      end = js::max(end, note.startBeat + note.durationBeat);
+      out.push_back(note);
     }
   }
-  return end;
+  return out;
 }
 
 /** The segments of a wire timeline with each chord read as `toChordData` reads it. */
@@ -69,7 +70,9 @@ ReferenceProfile analyze_wire(Args& a) {
   if (is_undefined(get(asked, "timeline"))) {
     // chordTimelineFromNotes reads the notes, then the span's end, then the key.
     notes = assert_note_events(a[0], "timeline notes", line_options(budget));
-    assert_range_option(asked, "totalBeats", last_sounding_end(notes), 0, kMaxSafeInteger,
+    std::vector<NoteEvent> sounding = sounding_notes(notes);
+    assert_range_option(asked, "totalBeats", latest_sounding_end(sounding),
+                        js::min(0, first_sounding_beat(sounding)), kMaxSafeInteger,
                         "timeline totalBeats");
     if (key != nullptr) {
       typed.key = read_key_arg(*key);
@@ -80,7 +83,9 @@ ReferenceProfile analyze_wire(Args& a) {
     notes = assert_note_events(a[0], key == nullptr ? "key timeline notes" : "reference notes",
                                line_options(budget));
     if (key == nullptr) {
-      assert_range_option(asked, "totalBeats", last_sounding_end(notes), 0, kMaxSafeInteger,
+      std::vector<NoteEvent> sounding = sounding_notes(notes);
+      assert_range_option(asked, "totalBeats", latest_sounding_end(sounding),
+                          js::min(0, first_sounding_beat(sounding)), kMaxSafeInteger,
                           "key timeline totalBeats");
     } else {
       typed.key = read_key_arg(*key);

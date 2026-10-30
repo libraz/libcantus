@@ -1102,7 +1102,7 @@ void register_voicing_class() {
     read_ranges_option(asked, opts);
     read_max_spacing_option(asked, opts);
     read_max_candidates_option(asked, opts);
-    read_key_option(asked, opts);
+    read_voiced_chord(data, asked, opts);
     return to_json(Voicing::satb(ChordArg(data.chord), opts));
   });
 
@@ -1172,8 +1172,7 @@ void register_voicing_class() {
     }
     read_max_spacing_option(asked, opts);
     read_max_candidates_option(asked, opts);
-    read_key_option(asked, opts);
-    read_previous_chord_option(asked, opts);
+    read_next_voiced_chord(data, asked, opts);
     return to_json(self.next(ChordArg(data.chord), opts));
   });
   def_class_method("Voicing#checkTo", [](Args& a) -> json::Value {

@@ -27,8 +27,8 @@ import {
 } from '../../core/validation/index.js';
 import { BEAT_EPS, HUMANIZE_ADJACENCY } from '../adjacency.js';
 import { barSpanOf, lastBarOf } from '../form/internal.js';
-import { barGridStart } from '../grid.js';
-import { ioiBinIndex, rhythmLevel } from './internal.js';
+import { barGridStart, latestSoundingEnd } from '../grid.js';
+import { ioiBinIndex, isMultipleOf, rhythmLevel } from './internal.js';
 
 /**
  * Options for {@link analyzeRhythm}.
@@ -224,14 +224,64 @@ function tsKey(ts: TimeSignature): string {
     : `${ts.numerator}/${ts.denominator}:${ts.grouping.join('+')}`;
 }
 
-/** The pulse and first-subdivision beats of one bar, in bar order. */
-function barGridBeats(bar: number, meters: MeterMap): number[] {
+/** A grid position and its rhythmic level. */
+type GridPoint = { beat: number; level: number };
+
+/** Identifies the pulse a bar's `index`th pulse is, for the pulses read in the other division. */
+function pulseKey(bar: number, index: number): string {
+  return `${bar}/${index}`;
+}
+
+/**
+ * The pulses whose onsets sit on the division the meter does not use: thirds
+ * of a pulse in a simple meter (triplets), halves in a compound one (duplets).
+ * Those pulses are read against that division, or the notes of a triplet would
+ * be charged for holding through a half-pulse nothing attacks.
+ */
+function otherDivisionPulses(snapped: readonly SnappedOnset[], meters: MeterMap): Set<string> {
+  const pulses = new Set<string>();
+  for (const onset of snapped) {
+    const pulse = pulseBeats(onset.ts);
+    const offset = onset.snapped - onset.barStart;
+    const index = Math.floor(offset / pulse + BEAT_EPS);
+    const within = offset - index * pulse;
+    const [used, other] = isCompound(onset.ts) ? [3, 2] : [2, 3];
+    if (isMultipleOf(within, pulse / other) && !isMultipleOf(within, pulse / used)) {
+      pulses.add(pulseKey(barIndexAt(onset.beat, meters), index));
+    }
+  }
+  return pulses;
+}
+
+/** The pulse and first-subdivision points of one bar, in bar order. */
+function barGridPoints(
+  bar: number,
+  meters: MeterMap,
+  otherPulses: ReadonlySet<string>,
+): GridPoint[] {
   const barStart = barPositionToBeat({ bar, beat: 0 }, meters);
   const ts = meterAt(barStart, meters);
   const barLength = beatsPerBarAt(barStart, meters);
-  const subUnit = pulseBeats(ts) / (isCompound(ts) ? 3 : 2);
+  const pulse = pulseBeats(ts);
+  const [used, other] = isCompound(ts) ? [3, 2] : [2, 3];
+  const subUnit = pulse / used;
   const steps = Math.max(1, Math.round(barLength / subUnit));
-  return Array.from({ length: steps }, (_, k) => barStart + k * subUnit);
+  const points: GridPoint[] = [];
+  for (let k = 0; k < steps; k += 1) {
+    const index = Math.floor((k * subUnit) / pulse + BEAT_EPS);
+    if (k % used === 0 || !otherPulses.has(pulseKey(bar, index))) {
+      const beat = barStart + k * subUnit;
+      points.push({ beat, level: rhythmLevel(beat, meters) });
+    }
+  }
+  for (let index = 0; index * pulse < steps * subUnit - BEAT_EPS; index += 1) {
+    if (otherPulses.has(pulseKey(bar, index))) {
+      for (let m = 1; m < other; m += 1) {
+        points.push({ beat: barStart + index * pulse + (m * pulse) / other, level: 1 });
+      }
+    }
+  }
+  return points.sort((a, b) => a.beat - b.beat);
 }
 
 /**
@@ -292,11 +342,12 @@ function syncopationOf(
   }
   const firstBar = barIndexAt(startBeat, meters);
   const lastBar = barIndexAt(endBeat, meters);
-  const points: { beat: number; level: number }[] = [];
+  const otherPulses = otherDivisionPulses(snapped, meters);
+  const points: GridPoint[] = [];
   for (let bar = firstBar; bar <= lastBar; bar += 1) {
-    for (const beat of barGridBeats(bar, meters)) {
-      if (beat > startBeat + BEAT_EPS && beat <= endBeat + BEAT_EPS) {
-        points.push({ beat, level: rhythmLevel(beat, meters) });
+    for (const point of barGridPoints(bar, meters, otherPulses)) {
+      if (point.beat > startBeat + BEAT_EPS && point.beat <= endBeat + BEAT_EPS) {
+        points.push(point);
       }
     }
   }
@@ -319,6 +370,13 @@ function syncopationOf(
     ) {
       ptr += 1;
     }
+    // An onset on a point of the division its pulse is read in sits at that
+    // division's level, not at the 0 the meter's own division gives it.
+    const here = ptr > 0 ? points[ptr - 1] : undefined;
+    const onsetLevel =
+      here !== undefined && Math.abs(here.beat - onset.snapped) < BEAT_EPS
+        ? Math.max(onset.level, here.level)
+        : onset.level;
     let scan = ptr;
     let maxLevel = 0;
     while (
@@ -328,8 +386,8 @@ function syncopationOf(
       maxLevel = Math.max(maxLevel, points[scan]?.level ?? 0);
       scan += 1;
     }
-    if (maxLevel > onset.level) {
-      numerator += maxLevel - onset.level;
+    if (maxLevel > onsetLevel) {
+      numerator += maxLevel - onsetLevel;
     }
     ptr = scan;
   }
@@ -382,9 +440,8 @@ export function analyzeRhythm(
     Number.POSITIVE_INFINITY,
   );
   const startBeat = barGridStart(firstOnset, meters);
-  const lastEnd = sounding.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
-  const endBeat = Math.max(startBeat, opts.totalBeats ?? lastEnd);
-  assertRange(endBeat, 0, Number.MAX_SAFE_INTEGER, 'rhythm totalBeats');
+  const endBeat = Math.max(startBeat, opts.totalBeats ?? latestSoundingEnd(sounding));
+  assertRange(endBeat, Math.min(0, startBeat), Number.MAX_SAFE_INTEGER, 'rhythm totalBeats');
 
   const bars = barSpanOf(startBeat, endBeat, meters);
   assertGenerationBudget(

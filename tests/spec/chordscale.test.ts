@@ -60,14 +60,26 @@ const SCALE_NAMES = Object.keys(NAMED_SCALES);
 /**
  * Whether the chord-scale rules read this pair at all. A scale that does not
  * contain the chord has neither avoid notes nor tensions over it; the altered
- * scale is the documented exception, read over an ordinary dominant seventh
- * whose perfect fifth it does not contain.
+ * scale is the documented exception, read over a dominant seventh whose only
+ * tones outside it are its perfect fifth.
  */
 function analysed(chord: Chord, name: string): boolean {
   const mask = SCALE_MASKS.get(name) ?? 0;
+  const pcs = chordPitchClasses(chord);
+  if (scaleMatchesChord(pcs, mask, chord.rootPc)) {
+    return true;
+  }
+  const rootPc = chord.rootPc % 12;
+  const sounds = (semitones: number) => pcs.includes((rootPc + semitones) % 12);
   return (
-    scaleMatchesChord(chordPitchClasses(chord), mask, chord.rootPc) ||
-    (chord.quality === 'dom7' && name === 'altered')
+    name === 'altered' &&
+    sounds(4) &&
+    sounds(10) &&
+    scaleMatchesChord(
+      pcs.filter((pc) => pc !== (rootPc + 7) % 12),
+      mask,
+      rootPc,
+    )
   );
 }
 
@@ -133,7 +145,9 @@ describe('chordScales', () => {
     // name. A chromatic fallback here reads as an answer while being none.
     expect(chordScales(makeChord(0, '7b13'))[0]?.name).toBe('mixolydianB13');
     expect(chordScales(makeChord(0, '7#11'))[0]?.name).toBe('lydianDominant');
-    expect(chordScales(makeChord(0, '7alt')).map((m) => m.name)).toContain('altered');
+    expect(chordScales(makeChord(0, '7b9'))[0]?.name).toBe('phrygianDominant');
+    expect(chordScales(makeChord(0, '7alt'))[0]?.name).toBe('altered');
+    expect(chordScales('C7#9b13')[0]?.name).toBe('altered');
     expect(chordScales(makeChord(0, 'm7b5')).map((m) => m.name)).toContain('locrianNatural2');
   });
 
@@ -170,8 +184,17 @@ describe('chordScales', () => {
       if (first === undefined || first.tensions.length > 0 || CHURCH_MODES.includes(first.name)) {
         continue;
       }
+      // A scale admitted only through the altered dominant's fifth exemption does not
+      // hold the written chord, so it is no rival to a scale that does.
       const playable = report.find(
-        (entry) => scaleSize(entry.name) === scaleSize(first.name) && entry.tensions.length > 0,
+        (entry) =>
+          scaleSize(entry.name) === scaleSize(first.name) &&
+          entry.tensions.length > 0 &&
+          scaleMatchesChord(
+            chordPitchClasses(chord),
+            SCALE_MASKS.get(entry.name) ?? 0,
+            chord.rootPc,
+          ),
       );
       if (playable !== undefined) {
         failures.push(`${chord.quality}@${chord.rootPc}: ${first.name} over ${playable.name}`);
@@ -265,6 +288,29 @@ describe('availableTensions', () => {
     const chord = makeChord(7, 'dom7');
     expect(chordScales(chord).map((match) => match.name)).toContain('altered');
     expect(availableTensions(chord, 'altered')).toEqual([1, 3, 8, 10]);
+  });
+
+  it('reads a dominant from its tones, whatever its quality is spelled', () => {
+    // The altered scale is offered, and its flat ninth is no avoid note, over every
+    // dominant whose only tone outside it is the perfect fifth.
+    for (const quality of ['dom7', '7alt', '7b9', '7#9', '7b13'] as const) {
+      const chord = makeChord(0, quality);
+      expect(
+        chordScales(chord).map((match) => match.name),
+        quality,
+      ).toContain('altered');
+      expect(avoidNotes(chord, 'altered'), quality).toEqual([]);
+      const entry = chordScaleReport(chord).find((match) => match.name === 'altered');
+      expect(entry?.avoid, quality).toEqual([]);
+    }
+    expect(chordScales(makeChord(0, 'dom9')).map((match) => match.name)).not.toContain('altered');
+    expect(chordScales(makeChord(0, 'maj7')).map((match) => match.name)).not.toContain('altered');
+  });
+
+  it('classifies a flat ninth over the half-whole scale alike for every spelling', () => {
+    const plain = avoidNotes(makeChord(0, 'dom7'), 'octatonicHalfWhole');
+    expect(plain).toEqual([1]);
+    expect(avoidNotes(makeChord(0, '7#9'), 'octatonicHalfWhole')).toEqual(plain);
   });
 
   it('does not offer a suspended chord its conflicting major third', () => {

@@ -8,10 +8,10 @@ import {
 
 /**
  * Minor-scale variants a minor-key candidate may report. Ranking does not
- * consult them: the minor profile already expects weight on the raised sixth
- * and seventh, so the variant is chosen afterwards as the mask that covers the
- * most input weight. Natural minor comes first so it wins a tie as the most
- * diatonic reading.
+ * consult them: the minor profile already expects weight on the raised seventh
+ * and treats the raised sixth as chromatic, so the variant is chosen
+ * afterwards as the mask that covers the most input weight. Natural minor comes
+ * first so it wins a tie as the most diatonic reading.
  */
 export const MINOR_VARIANTS = [
   { variant: 'natural', mask: NATURAL_MINOR_MASK, scaleName: 'naturalMinor' },

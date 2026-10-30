@@ -19,6 +19,17 @@ double first_sounding_beat(const std::vector<NoteEvent>& notes, double fallback)
   return std::isfinite(first) ? first : fallback;
 }
 
+double latest_sounding_end(const std::vector<NoteEvent>& notes, double fallback) {
+  if (notes.empty()) {
+    return fallback;
+  }
+  double end = -std::numeric_limits<double>::infinity();
+  for (const NoteEvent& note : notes) {
+    end = js::max(end, note.startBeat + note.durationBeat);
+  }
+  return end;
+}
+
 GridOrigin grid_origin_of(double first_onset, double slot_beats) {
   // A note a millibeat before the downbeat is playing it rather than anticipating it, and reading
   // it as a pickup would hand the analysis a whole silent slot ahead of the music.

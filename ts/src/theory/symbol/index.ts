@@ -258,9 +258,11 @@ export function formatChordSymbol(chord: ChordLike, opts?: ChordSymbolOptions): 
     // moved by is what keeps the bass inside the chord the root names, but it
     // is not a licence to write a name no chart writes, so a carried bass that
     // lands outside the written vocabulary falls back to the plain name of its
-    // pitch class — the same policy transposing the symbol applies.
+    // pitch class — the same policy transposing the symbol applies. With no
+    // side asked for the root keeps its spelling, so a bass hint that still names
+    // the bass is written as given, as the root is: `Gb7/Cb` stays `Gb7/Cb`.
     const bassName =
-      rootHint !== undefined && bassHint !== undefined
+      flats !== undefined && rootHint !== undefined && bassHint !== undefined
         ? symbolName(
             carriedBass(
               bassHint,

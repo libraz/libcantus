@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <limits>
+#include <optional>
 #include <string>
 
 #include "cantus/core/errors.h"
@@ -68,9 +69,34 @@ void read_key_option(const json::Value& asked, VoicingOptions& out) {
   }
 }
 
-void read_previous_chord_option(const json::Value& asked, VoicingOptions& out) {
+namespace {
+
+/** The chord's tones, then `resolvedKeyOf`. */
+void read_voiced_tones_and_key(ChordData& data, const json::Value& asked, VoicingOptions& out) {
+  settle_chord_quality(data);
+  read_key_option(asked, out);
+  if (out.key) {
+    resolve_key(*out.key);
+  }
+}
+
+}  // namespace
+
+void read_voiced_chord(ChordData& data, const json::Value& asked, VoicingOptions& out) {
+  read_voiced_tones_and_key(data, asked, out);
+  reads_tone_letter_offsets(data.wire);
+}
+
+void read_next_voiced_chord(ChordData& data, const json::Value& asked, VoicingOptions& out) {
+  read_voiced_tones_and_key(data, asked, out);
+  std::optional<ChordData> previous;
   if (const json::Value* given = opt_strict(asked, "previousChord")) {
-    out.previousChord = ChordArg(read_chord_like(*given).chord);
+    previous = read_chord_like(*given);
+    out.previousChord = ChordArg(previous->chord);
+  }
+  reads_tone_letter_offsets(data.wire);
+  if (previous && !previous->chord.intervals.empty()) {
+    reads_tone_letter_offsets(previous->wire);
   }
 }
 

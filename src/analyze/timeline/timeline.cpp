@@ -774,12 +774,9 @@ TimelineAnalysis analyze_timeline(const std::vector<NoteEvent>& notes,
     }
   }
   std::vector<NoteEvent> sounding = sorted_note_events(audible);
-  double last_note_end = 0;
-  for (const NoteEvent& note : sounding) {
-    last_note_end = js::max(last_note_end, note.startBeat + note.durationBeat);
-  }
-  double total_beats = opts.totalBeats.value_or(last_note_end);
-  assert_range(total_beats, 0, kMaxSafeInteger, "timeline totalBeats");
+  double total_beats = opts.totalBeats.value_or(latest_sounding_end(sounding));
+  assert_range(total_beats, js::min(0, first_sounding_beat(sounding)), kMaxSafeInteger,
+               "timeline totalBeats");
   double slot_beats = mode == SegmentationMode::kGrid
                           ? harmonic_rhythm
                           : slot_beats_within(grid_unit, min_chord_beats, harmonic_rhythm);

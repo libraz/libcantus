@@ -18,6 +18,7 @@
 #include "cantus/core/errors.h"
 #include "cantus/core/meter.h"
 #include "cantus/core/validation.h"
+#include "cantus/theory/scale.h"
 #include "core/validation/validation.h"
 #include "generate/context/context.h"
 #include "generate/groove/groove.h"
@@ -39,6 +40,7 @@
 #include "ops/codec_g1.h"
 #include "ops/codec_g2a.h"
 #include "ops/codec_g2b.h"
+#include "ops/codec_t1.h"
 #include "ops/register_all.h"
 #include "ops/registry.h"
 #include "ops/validate.h"
@@ -347,7 +349,7 @@ void register_motif() {
     if (js::truthy(chord)) {
       ChordData read = read_chord_like(chord);
       plan.chord = read.chord;
-      if (!table_quality(get(read.wire, "quality"))) {
+      if (!known_chord_quality(get(read.wire, "quality"))) {
         plan.unknownChordQuality = js::string_of(get(read.wire, "quality"));
       }
     }
@@ -447,8 +449,8 @@ void register_progression() {
     ProgressionPlan plan;
     plan.bars = assert_positive_int(get(opts, "bars"), "progression bars");
     assert_generation_budget(get(opts, "bars"), "progression chords", undefined_value());
-    // The key is read into its plain form once, here at the boundary.
-    plan.key = read_key_like(get(opts, "key"));
+    // The key is resolved once, here at the boundary, so a tonic that contradicts it is refused.
+    plan.key = resolve_key(read_key_arg(get(opts, "key"))).scale;
     WireContext ctx = read_generation_context(a, get(opts, "ctx"));
     std::optional<ProgressionPreset> preset;
     bool cadence_strong = false;

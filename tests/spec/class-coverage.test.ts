@@ -41,6 +41,7 @@ const NOT_A_CLASS_METHOD: Readonly<Record<string, string>> = {
   // so `Interval` answers through `classifySpelledInterval` instead.
   classifyInterval: 'predicate on an unspelled semitone count',
   isPerfectInterval: 'predicate on an unspelled semitone count',
+  isConsonantInterval: 'predicate on an unspelled semitone count',
 
   // A predicate on a bare mask. Whether a scale has a signature of its own is a
   // question about the mask alone; a `Key` is asked the spelled question that
@@ -64,7 +65,6 @@ const NOT_A_CLASS_METHOD: Readonly<Record<string, string>> = {
   isAugmentedMelodicInterval: 'judges one step of one line',
   isForbiddenMelodicLeap: 'judges one step of one line',
   isLeadingToneResolution: 'judges one step of one line',
-  classifySpelledInterval: 'graded form of the answer Interval.isConsonant gives',
 
   // Seed plumbing. A class takes a seed and derives what it needs inside its
   // generation context, so these are the primitives underneath that.

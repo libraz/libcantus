@@ -507,28 +507,61 @@ class SessionHandle : public Handle {
   /** The token of the analysis, which stays while the analysis does. */
   std::shared_ptr<Identity> analysis_identity = std::make_shared<Identity>();
 
-  /** The analysis with its identity tokens, and the tokens of the chords an update carried. */
+  /**
+   * The analysis with its identity tokens, and the tokens of the chords an update carried. Each
+   * member is copied once; the chord tokens are taken before the analysis token, innermost first.
+   */
   json::Value tagged_analysis() {
-    json::Object copy = analysis.as_object();
-    if (!segment_objects.empty()) {
-      json::Value* timeline = copy.find("timeline");
-      json::Value* segments = timeline->as_object().find("segments");
-      for (std::size_t i = 0; i < segments->as_array().size() && i < segment_objects.size(); ++i) {
-        json::Object& segment = segments->as_array()[i].as_object();
-        json::Value* chord = segment.find("chord");
-        json::Object data = chord->as_object();
-        json::Object tagged;
-        tagged.set("$id", static_cast<double>(tokens->of(segment_objects[i])));
-        for (const json::Member& member : data) {
-          tagged.set(member.key, member.value);
-        }
-        *chord = json::Value(std::move(tagged));
-      }
+    const json::Value* timeline = analysis.as_object().find("timeline");
+    const json::Array* segments =
+        segment_objects.empty() ? nullptr : &timeline->as_object().find("segments")->as_array();
+    std::size_t tagged =
+        segments == nullptr ? 0 : std::min(segments->size(), segment_objects.size());
+    for (std::size_t i = 0; i < tagged; ++i) {
+      tokens->of(segment_objects[i]);
     }
     json::Object out;
     out.set("$id", static_cast<double>(analysis_identity->token()));
-    for (const json::Member& member : copy) {
-      out.set(member.key, member.value);
+    for (const json::Member& member : analysis.as_object()) {
+      out.set(member.key, tagged > 0 && &member.value == timeline
+                              ? tagged_timeline(*timeline, tagged)
+                              : member.value);
+    }
+    return json::Value(std::move(out));
+  }
+
+ private:
+  /** The timeline with the chord of each of its first `tagged` segments carrying its token. */
+  json::Value tagged_timeline(const json::Value& timeline, std::size_t tagged) {
+    json::Object out;
+    for (const json::Member& member : timeline.as_object()) {
+      if (member.key != "segments") {
+        out.set(member.key, member.value);
+        continue;
+      }
+      json::Array segments;
+      for (const json::Value& segment : member.value.as_array()) {
+        std::size_t i = segments.size();
+        if (i >= tagged) {
+          segments.push_back(segment);
+          continue;
+        }
+        json::Object fields;
+        for (const json::Member& field : segment.as_object()) {
+          if (field.key != "chord") {
+            fields.set(field.key, field.value);
+            continue;
+          }
+          json::Object chord;
+          chord.set("$id", static_cast<double>(tokens->of(segment_objects[i])));
+          for (const json::Member& part : field.value.as_object()) {
+            chord.set(part.key, part.value);
+          }
+          fields.set(field.key, json::Value(std::move(chord)));
+        }
+        segments.push_back(json::Value(std::move(fields)));
+      }
+      out.set(member.key, json::Value(std::move(segments)));
     }
     return json::Value(std::move(out));
   }
@@ -700,10 +733,7 @@ void register_arrange() {
     std::vector<NoteEvent> pooled =
         pool_notes(read.typed, harmony_tracks ? &*harmony_tracks : nullptr);
     std::vector<NoteEvent> all = pool_notes(read.typed);
-    double total_beats = 0;
-    for (const NoteEvent& note : all) {
-      total_beats = js::max(total_beats, note.startBeat + note.durationBeat);
-    }
+    double total_beats = latest_sounding_end(all);
     GridOrigin placed = grid_for_notes(all, step);
     std::optional<double> budget =
         field(opts, "budget") ? number_of(*field(opts, "budget")) : std::nullopt;

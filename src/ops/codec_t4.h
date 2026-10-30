@@ -39,6 +39,13 @@ SafetyContext read_safety_context(const json::Value& query);
 /** The chord and the key of a wire query, which TS reads once a pitch is being evaluated. */
 void read_safety_harmony(const json::Value& query, SafetyContext& context);
 
+/**
+ * What evaluating `pitch` asserts of the query's chord: the guards of its tones (`isChordMember`),
+ * then, for a pitch outside the chord, `assertChord` (`intervalAboveRoot`). Returns whether the
+ * chord was asserted.
+ */
+bool read_safety_chord(const json::Value& query, double pitch);
+
 }  // namespace cantus::ops
 
 #endif  // CANTUS_SRC_OPS_CODEC_T4_H_

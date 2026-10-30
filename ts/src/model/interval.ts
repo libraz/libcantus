@@ -1,8 +1,9 @@
 import { InvalidInputError, type ParseResult, unwrapParse } from '../core/errors/index.js';
-import { isConsonantInterval } from '../core/interval/index.js';
+import { ConsonanceClass } from '../core/interval/index.js';
 import type { IntervalData, IntervalQualityLabel, SpelledInterval } from '../core/pitch/index.js';
 import { intervalSemitones, toSpelledInterval, tryParseInterval } from '../core/pitch/index.js';
 import { describeRejected } from '../core/validation/index.js';
+import { classifySpelledInterval } from '../theory/counterpoint/index.js';
 import type { Note } from './note.js';
 
 /** Number of diatonic degrees an interval and its inversion span together. */
@@ -274,12 +275,15 @@ export class Interval {
   /**
    * Whether the interval is consonant.
    *
+   * The spelling decides, not the span: a diminished fourth is a dissonance
+   * though it sounds like a major third.
+   *
    * @param twoVoice When true, the perfect fourth counts as a dissonance,
    *   matching two-voice counterpoint.
    * @returns True if the interval is consonant in that context.
    */
   isConsonant(twoVoice = true): boolean {
-    return isConsonantInterval(this.#semitones, twoVoice);
+    return classifySpelledInterval(this.toJSON(), twoVoice) !== ConsonanceClass.Dissonance;
   }
 
   /**

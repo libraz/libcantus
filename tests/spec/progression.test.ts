@@ -1,5 +1,11 @@
 import { chordToRoman } from '@libraz/libcantus/analyze';
-import { createPositionalRng, type KeyScale, type PositionalRng } from '@libraz/libcantus/core';
+import {
+  createPositionalRng,
+  InvalidInputError,
+  type KeyScale,
+  type PositionalRng,
+  parseNote,
+} from '@libraz/libcantus/core';
 import {
   generateProgression,
   pickProgressionPreset,
@@ -400,5 +406,21 @@ describe('the context a progression is drawn under', () => {
 
   it('still answers to a bare seed', () => {
     expect(pickProgressionPreset('dance', 3).styles).toContain('dance');
+  });
+});
+
+describe('generateProgression key identity', () => {
+  it('refuses a key whose tonic contradicts its scale', () => {
+    const key = { scale: majorKey(0), tonic: parseNote('F') };
+    let caught: unknown;
+    try {
+      generateProgression({ key, style: 'dance', bars: 4 });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(InvalidInputError);
+    expect((caught as Error).message).toBe(
+      'tonic F does not match the scale root pitch class 0; pass a tonic that spells the scale root, or omit it to have one chosen',
+    );
   });
 });

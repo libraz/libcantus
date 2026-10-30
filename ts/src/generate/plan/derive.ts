@@ -17,7 +17,7 @@
 
 import { HUMANIZE_ADJACENCY } from '../../analyze/adjacency.js';
 import type { CadenceType } from '../../analyze/functional/cadence.js';
-import type { HarmonicFunction } from '../../analyze/functional/function.js';
+import { functionOf, type HarmonicFunction } from '../../analyze/functional/function.js';
 import { chordToRoman } from '../../analyze/functional/roman.js';
 import type { MelodicContourShape } from '../../analyze/melody/contour.js';
 import type { MotifGraph, MotifGraphEdge } from '../../analyze/melody/graph.js';
@@ -33,7 +33,7 @@ import {
   type MeterMap,
   metricWeight,
 } from '../../core/meter/index.js';
-import { spelledInterval, transposeByInterval } from '../../core/pitch/index.js';
+import { pitchClassOf, spelledInterval, transposeByInterval } from '../../core/pitch/index.js';
 import {
   assertGenerationBudget,
   assertMidiPitch,
@@ -41,13 +41,14 @@ import {
   assertRange,
   assertRecord,
 } from '../../core/validation/index.js';
-import { diatonicTriad } from '../../theory/chord/index.js';
+import { type Chord, diatonicTriad, makeChord } from '../../theory/chord/index.js';
 import {
   type KeyLike,
   type ResolvedKey,
   resolveKey,
   scaleTonesInDegreeOrder,
 } from '../../theory/scale/index.js';
+import { cadencesThroughRaisedSeventh, leadingTonePcOf } from '../../theory/tendency/index.js';
 import { type Draw, type GenerationContextInput, resolveContext } from '../context/index.js';
 import {
   COMPOSITION_PLAN_VERSION,
@@ -550,15 +551,36 @@ function selectedDerivation(
 }
 
 /**
- * Candidate numerals for a structural chord of a function: the diatonic
- * triads on that function's degrees, named in the chord's key. Null for a key
- * whose scale has no diatonic triads.
+ * The triad standing on a degree as a chord of a function. A key that cadences
+ * through the raised seventh writes its dominant as the major V and the
+ * leading-tone diminished, not as the natural-minor triads on those degrees.
+ */
+function functionTriad(fn: HarmonicFunction, degree: number, key: ResolvedKey): Chord {
+  if (fn === 'dominant' && cadencesThroughRaisedSeventh(key.scale)) {
+    if (degree === 5) {
+      return makeChord(pitchClassOf(key.scale.rootPc + 7), 'maj');
+    }
+    if (degree === 7) {
+      return makeChord(leadingTonePcOf(key.scale), 'dim');
+    }
+  }
+  return diatonicTriad(degree, key);
+}
+
+/**
+ * Candidate numerals for a structural chord of a function: the triads on that
+ * function's degrees that the key reads as that function, named in the chord's
+ * key. Null for a key whose scale has no diatonic triads or offers none.
  */
 function functionCandidates(fn: HarmonicFunction, key: ResolvedKey): string[] | null {
   if (scaleTonesInDegreeOrder(key).length !== HEPTATONIC_DEGREES) {
     return null;
   }
-  return FUNCTION_DEGREES[fn].map((degree) => chordToRoman(diatonicTriad(degree, key), key));
+  const numerals = FUNCTION_DEGREES[fn]
+    .map((degree) => functionTriad(fn, degree, key))
+    .filter((chord) => functionOf(chord, key) === fn)
+    .map((chord) => chordToRoman(chord, key));
+  return numerals.length === 0 ? null : numerals;
 }
 
 /**

@@ -3,7 +3,7 @@
 namespace cantus {
 
 Error::Error(ErrorCode code, const std::string& message)
-    : std::runtime_error(message), code_(code) {}
+    : std::runtime_error(message), code_(code), message_(message) {}
 
 InvalidInputError::InvalidInputError(const std::string& message)
     : Error(ErrorCode::kInvalidInput, message) {}

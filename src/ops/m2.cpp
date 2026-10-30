@@ -113,6 +113,20 @@ json::Value with_field(const json::Value& record, std::string_view name, const j
   return json::Value(std::move(out));
 }
 
+/**
+ * A degree chord without the spelling its builder attached: the chord carries the key, which
+ * spells its root on read.
+ */
+json::Value without_spelling(const json::Value& chord) {
+  json::Object out;
+  for (const json::Member& m : chord.as_object()) {
+    if (m.key != "rootSpelling" && m.key != "bassSpelling" && m.key != "toneSpellings") {
+      out.set(m.key, m.value);
+    }
+  }
+  return json::Value(std::move(out));
+}
+
 /** A typed value with the signs of the zeros its source wrote at the same place. */
 json::Value with_signed_zeros(json::Value value, const json::Value& source) {
   restore_signed_zero(value, source);
@@ -389,7 +403,8 @@ void register_key() {
     Key self = read_key_instance(a, 0);
     assert_key_argument(a[1], "key");
     json::Array out;
-    json::Value pivot_list = forward(a, "pivotChords", json::Array{to_json(self.scale()), a[1]});
+    json::Value pivot_list =
+        forward(a, "pivotChords", json::Array{key_data_json(self.data()), a[1]});
     for (const json::Value& pivot : pivot_list.as_array()) {
       out.push_back(with_field(pivot, "chord", wrapped_chord(get(pivot, "chord"), self)));
     }
@@ -470,20 +485,22 @@ void register_key() {
   });
   def_class_method("Key#chord", [](Args& a) -> json::Value {
     Key self = read_key_instance(a, 0);
-    json::Value data =
-        is_undefined(a[2])
-            ? forward(a, "diatonicTriad", json::Array{a[1], to_json(self.scale())})
-            : forward(a, "chordFromDegree", json::Array{a[1], a[2], to_json(self.scale())});
-    return wrapped_chord(data, self);
+    json::Value key = key_data_json(self.data());
+    json::Value data = is_undefined(a[2])
+                           ? forward(a, "diatonicTriad", json::Array{a[1], key})
+                           : forward(a, "chordFromDegree", json::Array{a[1], a[2], key});
+    return wrapped_chord(without_spelling(data), self);
   });
   def_class_method("Key#diatonicTriad", [](Args& a) -> json::Value {
     Key self = read_key_instance(a, 0);
-    return wrapped_chord(forward(a, "diatonicTriad", json::Array{a[1], to_json(self.scale())}),
+    return wrapped_chord(without_spelling(forward(a, "diatonicTriad",
+                                                  json::Array{a[1], key_data_json(self.data())})),
                          self);
   });
   def_class_method("Key#diatonicSeventh", [](Args& a) -> json::Value {
     Key self = read_key_instance(a, 0);
-    return wrapped_chord(forward(a, "diatonicSeventh", json::Array{a[1], to_json(self.scale())}),
+    return wrapped_chord(without_spelling(forward(a, "diatonicSeventh",
+                                                  json::Array{a[1], key_data_json(self.data())})),
                          self);
   });
   def_class_method("Key#roman", [](Args& a) -> json::Value {

@@ -51,14 +51,26 @@ const SCALE_NAMES = Object.keys(NAMED_SCALES);
 /**
  * Whether the chord-scale rules read this pair at all. A scale that does not
  * contain the chord has neither avoid notes nor tensions over it; the altered
- * scale is the documented exception, read over an ordinary dominant seventh
- * whose perfect fifth it does not contain.
+ * scale is the documented exception, read over a dominant seventh whose only
+ * tones outside it are its perfect fifth.
  */
 function analysed(chord: Chord, name: string): boolean {
   const mask = SCALE_MASKS.get(name) ?? 0;
+  const pcs = chordPitchClasses(chord);
+  if (scaleMatchesChord(pcs, mask, chord.rootPc)) {
+    return true;
+  }
+  const rootPc = chord.rootPc % 12;
+  const sounds = (semitones: number) => pcs.includes((rootPc + semitones) % 12);
   return (
-    scaleMatchesChord(chordPitchClasses(chord), mask, chord.rootPc) ||
-    (chord.quality === 'dom7' && name === 'altered')
+    name === 'altered' &&
+    sounds(4) &&
+    sounds(10) &&
+    scaleMatchesChord(
+      pcs.filter((pc) => pc !== (rootPc + 7) % 12),
+      mask,
+      rootPc,
+    )
   );
 }
 

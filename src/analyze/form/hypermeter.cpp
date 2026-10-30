@@ -146,12 +146,8 @@ Hypermeter hypermeter_with(const std::vector<NoteEvent>& notes,
     }
   }
   double first_onset = first_sounding_beat(sounding);
-  double last_end = 0;
-  for (const NoteEvent& note : sounding) {
-    last_end = js::max(last_end, note.startBeat + note.durationBeat);
-  }
-  double span_end = opts.totalBeats.value_or(last_end);
-  assert_range(span_end, 0, kMaxSafeInteger, "hypermeter totalBeats");
+  double span_end = opts.totalBeats.value_or(latest_sounding_end(sounding));
+  assert_range(span_end, js::min(0, first_onset), kMaxSafeInteger, "hypermeter totalBeats");
   // Whether the music starts before the downbeat is the analysis-wide pickup question.
   double span_start = bar_grid_start(first_onset, meters);
   std::vector<BarSlice> slices = slice_bars(sounding, meters, span_start, span_end, opts.budget);

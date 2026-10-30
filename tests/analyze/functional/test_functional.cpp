@@ -5,6 +5,7 @@
 #include "cantus/core/errors.h"
 #include "cantus/theory/chord.h"
 #include "cantus/theory/scale.h"
+#include "cantus/theory/symbol.h"
 
 using namespace cantus;
 
@@ -109,4 +110,52 @@ TEST_CASE("the augmented sixths are built, spelled and recognised", "[functional
   CHECK(found->quality == ChordQuality::kDom7);
   CHECK_FALSE(augmented_sixth_from_pitch_classes({8, 0, 3, 6}, 0, "C major"));
   CHECK_FALSE(augmented_sixth_kind(make_chord(8, ChordQuality::kDom7), "C major"));
+}
+
+TEST_CASE("a chord built from a numeral or a key carries the spelling it denotes", "[functional]") {
+  CHECK(format_chord_symbol(roman_to_chord("bII", "Ab minor")) == "Bbb");
+  CHECK(format_chord_symbol(roman_to_chord("N6", "Ab minor")) == "Bbb/Db");
+  CHECK(format_chord_symbol(roman_to_chord("viio7/vi", "C major")) == "G#dim7");
+  CHECK(format_chord_symbol(roman_to_chord("V7/bVI", "C major")) == "Eb7");
+  CHECK(format_chord_symbol(roman_to_chord("V43", "Ab major")) == "Eb7/Bb");
+  CHECK(format_chord_symbol(roman_to_chord("viio42", "Ab major")) == "Gdim7/Fb");
+  CHECK(format_chord_symbol(diatonic_seventh(5, major_key(8))) == "Eb7");
+  CHECK(format_chord_symbol(secondary_dominant(4, major_key(3))) == "Eb7");
+  CHECK(format_chord_symbol(chord_from_degree(1, ChordQuality::kMaj7, "Eb major")) == "Ebmaj7");
+  CHECK(format_chord_symbol(diatonic_triad(1, "Ab minor")) == "Abm");
+  CHECK(format_chord_symbol(diatonic_triad(1, "G# minor")) == "G#m");
+}
+
+TEST_CASE("a chromatic chord is numbered by one reading", "[functional]") {
+  CHECK(chord_to_roman(make_chord(8, ChordQuality::kDim7), "C major") == "#vo7");
+  CHECK(chord_to_roman(make_chord(1, ChordQuality::kDim7), "C major") == "#io7");
+  CHECK(chord_to_roman(make_chord(3, ChordQuality::kDim7), "C major") == "#iio7");
+  CHECK(chord_to_roman(make_chord(1, ChordQuality::kM7b5), "C major") ==
+        "#i\xC3\xB8"
+        "7");
+  ChordToRomanOptions applied{true, std::nullopt};
+  CHECK(chord_to_roman(make_chord(8, ChordQuality::kDim7), "C major", applied) == "viio7/vi");
+  // The borrowed tonic and subdominant of a minor key sound their own degrees.
+  CHECK(chord_to_roman(make_chord(0, ChordQuality::kMaj), "C minor", applied) == "I");
+  CHECK(chord_to_roman(make_chord(5, ChordQuality::kMaj), "C minor", applied) == "IV");
+  CHECK(chord_to_roman(make_chord(9, ChordQuality::kMaj), "A minor", applied) == "I");
+  CHECK(chord_to_roman(make_chord(2, ChordQuality::kMaj), "A minor", applied) == "IV");
+  CHECK(chord_to_roman(make_chord(4, ChordQuality::kMaj), "E phrygian", applied) == "I");
+  CHECK(chord_to_roman(make_chord(2, ChordQuality::kDom7), "C major", applied) == "V7/V");
+}
+
+TEST_CASE("a diminished seventh is numbered by the letter it is written on", "[functional]") {
+  ChordToRomanOptions applied{true, std::nullopt};
+  struct Row {
+    const char* symbol;
+    const char* plain;
+    const char* with_applied;
+  };
+  for (const Row& row : {Row{"Bbdim7", "bviio7", "bviio7"}, Row{"Abdim7", "bvio7", "bvio7"},
+                         Row{"Ebdim7", "biiio7", "biiio7"}, Row{"A#dim7", "#vio7", "#vio7"},
+                         Row{"G#dim7", "#vo7", "viio7/vi"}, Row{"D#dim7", "#iio7", "viio7/iii"}}) {
+    Chord chord = parse_chord_symbol(row.symbol);
+    CHECK(chord_to_roman(chord, "C major") == row.plain);
+    CHECK(chord_to_roman(chord, "C major", applied) == row.with_applied);
+  }
 }

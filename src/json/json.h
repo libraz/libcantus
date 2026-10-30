@@ -12,6 +12,7 @@
 #define CANTUS_JSON_JSON_H_
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -58,6 +59,12 @@ class Object {
   Object& operator=(Object&& other) noexcept;
   ~Object();
 
+  /**
+   * The object successive set() calls over `members`, in order, would build, in O(n log n) for
+   * any order of keys.
+   */
+  static Object from_members(std::vector<Member> members);
+
   /** Insert `key` or overwrite its value, keeping JS property order. */
   void set(std::string key, Value value);
   /** The member's value, or nullptr when absent. */
@@ -82,6 +89,8 @@ class Object {
   friend class Value;
 
   std::ptrdiff_t index_of(std::string_view key) const;
+  /** Where array-index key `n` belongs: after every smaller index key, before any other key. */
+  std::size_t index_position(std::uint32_t n) const;
 
   std::vector<Member> members_;
   /** Lazily built key-to-position index for large objects; dropped when positions shift. */

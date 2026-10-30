@@ -81,12 +81,8 @@ std::vector<FormSection> sections_from_notes(const std::vector<NoteEvent>& notes
   }
   // The pickup rule the whole analysis shares.
   double first_onset = bar_grid_start(first_sounding_beat(sounding), meters);
-  double last_end = 0;
-  for (const NoteEvent& note : sounding) {
-    last_end = js::max(last_end, note.startBeat + note.durationBeat);
-  }
-  double span_end = js::max(first_onset, opts.totalBeats.value_or(last_end));
-  assert_range(span_end, 0, kMaxSafeInteger, "section totalBeats");
+  double span_end = js::max(first_onset, opts.totalBeats.value_or(latest_sounding_end(sounding)));
+  assert_range(span_end, js::min(0, first_onset), kMaxSafeInteger, "section totalBeats");
   double threshold = opts.threshold.value_or(SECTION_DEFAULT_THRESHOLD);
   assert_range(threshold, 0, 1, "section threshold");
   HypermeterOptions grouping_options;

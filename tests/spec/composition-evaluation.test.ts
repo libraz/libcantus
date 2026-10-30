@@ -247,6 +247,22 @@ describe('evaluateComposition: one violation kind at a time', () => {
     ]);
   });
 
+  it('closes a half cadence of a minor key on its leading tone, not on the subtonic', () => {
+    const plan = basePlan();
+    plan.keys = [resolveKey('A minor')];
+    plan.harmony = [
+      { startBeat: 0, endBeat: 4, key: 0, roman: 'i' },
+      { startBeat: 4, endBeat: 8, key: 0, roman: 'V' },
+    ];
+    const closing = (pitch: number) => {
+      const melody = baseMelody();
+      melody[7] = { pitch, startBeat: 7, durationBeat: 1 };
+      return evaluateComposition(melody, plan).violations.filter((v) => v.kind === 'cadence');
+    };
+    expect(closing(80)).toEqual([]);
+    expect(closing(79)).toEqual([expect.objectContaining({ kind: 'cadence', atBeat: 8 })]);
+  });
+
   it('flags cadence when the phrase has no note to close on', () => {
     const plan = splitPlan();
     (plan.phrases[1] as (typeof plan.phrases)[number]).cadence = 'half';

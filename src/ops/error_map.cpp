@@ -71,11 +71,11 @@ ErrorReply map_current_exception() noexcept {
     try {
       throw;
     } catch (const NoSolutionError& e) {
-      return reply(e.code(), e.what(), e.at());
+      return reply(e.code(), e.message(), e.at());
     } catch (const Error& e) {
-      return reply(e.code(), e.what(), std::nullopt);
+      return reply(e.code(), e.message(), std::nullopt);
     } catch (const js::TypeError& e) {
-      return reply(ErrorCode::kHostTypeError, e.what(), std::nullopt);
+      return reply(ErrorCode::kHostTypeError, e.message(), std::nullopt);
     } catch (const json::ParseError& e) {
       return reply(ErrorCode::kBadRequest, e.what(), std::nullopt);
     } catch (const std::bad_alloc&) {

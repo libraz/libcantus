@@ -4,7 +4,6 @@
  * than one of them asks.
  */
 
-import { isMinorKey } from '../../analyze/functional/index.js';
 import type { MeterLike, TimeSignature } from '../../core/meter/index.js';
 import { beatsPerBar, pulseBeats } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
@@ -13,8 +12,8 @@ import type { ChordQuality } from '../../theory/chord/index.js';
 import { chordPitchClasses, makeChord } from '../../theory/chord/index.js';
 import type { HarmonyRole } from '../../theory/harmony/index.js';
 import type { KeyLike, ResolvedKey } from '../../theory/scale/index.js';
-import { isScaleTone, majorKey, minorKey, scaleSystemOf } from '../../theory/scale/index.js';
-import { leadingTonePcOf } from '../../theory/tendency/index.js';
+import { isScaleTone, majorKey, minorKey } from '../../theory/scale/index.js';
+import { cadencesThroughRaisedSeventh, leadingTonePcOf } from '../../theory/tendency/index.js';
 import type { GenerationContextInput } from '../context/index.js';
 import type { ChordSpan } from '../progression/index.js';
 
@@ -279,20 +278,6 @@ export const DEFAULT_METER: TimeSignature = { numerator: 4, denominator: 4 };
  * never overrides melody fit or functional flow.
  */
 export const TIE_BREAK_JITTER = 1e-6;
-/**
- * Whether a key cadences through the raised seventh of the harmonic minor.
- *
- * A minor key does, and it is the only key that raises a seventh its own
- * signature lowers. A mode with a lowered third does not: dorian and phrygian
- * are held together by the sevenths they have, and locrian has no perfect fifth
- * to stand that dominant on at all, so raising theirs would overwrite the very
- * degree that names them. The scale system is what separates the two — a
- * natural-minor mask and an aeolian one are the same twelve bits, and the
- * difference is which tradition the key is being read in.
- */
-export function cadencesThroughRaisedSeventh(key: KeyScale): boolean {
-  return isMinorKey(key) && scaleSystemOf(key) === 'common-practice';
-}
 /**
  * Whether a pitch belongs to the key, counting the raised seventh of a minor
  * key.

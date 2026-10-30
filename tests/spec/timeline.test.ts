@@ -435,3 +435,16 @@ describe('chordTimelineFromChords', () => {
     expect(span.intervals).toEqual([0, 4, 11, 18]);
   });
 });
+
+describe('chordTimelineFromNotes over notes that end before beat 0', () => {
+  it('ends the chords and the keys on the same beat', () => {
+    const notes = [60, 64, 67, 72].map((pitch, i) => ({
+      pitch,
+      startBeat: -8 + i,
+      durationBeat: 1,
+    }));
+    const result = chordTimelineFromNotes(notes);
+    expect(result.keys[result.keys.length - 1]?.endBeat).toBe(-4);
+    expect(result.timeline.segments[result.timeline.segments.length - 1]?.endBeat).toBe(-4);
+  });
+});

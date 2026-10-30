@@ -1,8 +1,10 @@
 import {
   analyzeReference,
   assertReferenceProfile,
+  functionOf,
   type MotifRelationSummary,
   type ReferenceProfile,
+  romanToChord,
 } from '@libraz/libcantus/analyze';
 import {
   ALGORITHM_VERSION,
@@ -943,5 +945,52 @@ describe('a reference whose phrases span more bars than a plan re-cuts', () => {
     expect(() => deriveCompositionPlan(vast)).toThrow(
       /^plan phrase bars exceeds the generation budget 1000000; received \d+$/,
     );
+  });
+});
+
+describe('a replaced dominant in a minor key or mode', () => {
+  const keys = ['A minor', 'A dorian', 'E phrygian', 'G mixolydian'];
+
+  for (const name of keys) {
+    it(`stays a dominant in ${name}`, () => {
+      const reference = edited(SOURCE, (p) => {
+        for (const entry of p.harmony.keys) entry.key = resolveKey(name);
+        for (const chord of p.harmony.chords) {
+          chord.function = 'dominant';
+          chord.level = 'structural';
+        }
+      });
+      for (let seed = 0; seed < 40; seed += 1) {
+        const plan = deriveCompositionPlan(reference, {
+          preserve: { harmonicFunction: 0 },
+          ctx: seed,
+        });
+        for (const chord of plan.harmony) {
+          const key = plan.keys[chord.key] as (typeof plan.keys)[number];
+          expect(functionOf(romanToChord(chord.roman, key), key), `${name} ${chord.roman}`).toBe(
+            'dominant',
+          );
+        }
+      }
+    });
+  }
+
+  it('writes the dominant of a minor key as the raised V', () => {
+    const reference = edited(SOURCE, (p) => {
+      for (const entry of p.harmony.keys) entry.key = resolveKey('A minor');
+      for (const chord of p.harmony.chords) {
+        chord.function = 'dominant';
+        chord.level = 'structural';
+      }
+    });
+    const romans = new Set<string>();
+    for (let seed = 0; seed < 40; seed += 1) {
+      const plan = deriveCompositionPlan(reference, {
+        preserve: { harmonicFunction: 0 },
+        ctx: seed,
+      });
+      for (const chord of plan.harmony) romans.add(chord.roman);
+    }
+    expect([...romans].sort()).toEqual(['V', 'viio']);
   });
 });

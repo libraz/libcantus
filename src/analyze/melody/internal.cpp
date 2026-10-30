@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <string>
 
 #include "cantus/core/limits.h"
@@ -124,7 +125,10 @@ double round_to(double value, int digits) {
 }
 
 double end_beat_of(const std::vector<LineNote>& notes) {
-  double end = 0;
+  if (notes.empty()) {
+    return 0;
+  }
+  double end = -std::numeric_limits<double>::infinity();
   for (const LineNote& note : notes) {
     if (note.absent != nullptr) {
       throw js::TypeError(std::string("Cannot read properties of ") + note.absent +

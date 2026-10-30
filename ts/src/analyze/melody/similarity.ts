@@ -8,6 +8,7 @@
  * a slightly ornamented version of itself still reads as close.
  */
 
+import { assertGenerationBudget } from '../../core/validation/index.js';
 import { BEAT_EPS } from '../adjacency.js';
 import { distanceToSimilarity, gradedEditDistance } from '../sequence.js';
 import type { MelodicPhrase } from './internal.js';
@@ -104,6 +105,7 @@ export function compareMelodies(a: MelodicPhrase, b: MelodicPhrase): MelodicComp
   const right = orderedNotes(phraseNotes(b), 'melody b');
   const leftIntervals = intervalsOf(left);
   const rightIntervals = intervalsOf(right);
+  assertGenerationBudget(leftIntervals.length * rightIntervals.length, 'melody alignment');
   const pitchSimilarity = distanceToSimilarity(
     gradedEditDistance(leftIntervals, rightIntervals, intervalCost),
     leftIntervals.length,

@@ -1008,3 +1008,25 @@ describe('form analyses that read their options late', () => {
     );
   });
 });
+
+describe('form analyses over material that ends before beat 0', () => {
+  const notes = Array.from({ length: 24 }, (_, i) => ({
+    pitch: 60 + (i % 5),
+    startBeat: -32 + i,
+    durationBeat: 1,
+  }));
+
+  it('ends the last section where the last note ends', () => {
+    const sections = sectionsFromNotes(notes, { unitBars: 1 });
+    expect(sections[sections.length - 1]?.endBeat).toBe(-8);
+  });
+
+  it('ends the last phrase where the last note ends', () => {
+    const phrases = phrasesFromTimeline(chordTimelineFromNotes(notes).timeline, notes);
+    expect(phrases[phrases.length - 1]?.endBeat).toBe(-8);
+  });
+
+  it('accepts a hypermeter totalBeats at or above the first note', () => {
+    expect(() => hypermeter(notes, '4/4', { totalBeats: -8 })).not.toThrow();
+  });
+});

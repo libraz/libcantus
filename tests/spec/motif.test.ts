@@ -504,4 +504,19 @@ describe('developMotif', () => {
     expect(Date.now() - startedAt).toBeLessThan(1000);
     expect(developed.notes.length).toBeGreaterThan(0);
   });
+
+  it('cuts a note at the end of the requested bars', () => {
+    const timeline = chordTimelineFromChords([{ rootPc: 0, quality: 'maj', startBeat: 0 }], 3);
+    const cell: MotifCell = {
+      notes: [
+        { pitch: 60, startBeat: 0, durationBeat: 1 },
+        { pitch: 64, startBeat: 1, durationBeat: 3 },
+      ],
+    };
+    const developed = developMotif(cell, timeline, cMajor, 1, { numerator: 3, denominator: 4 });
+    expect(developed.notes.length).toBeGreaterThan(0);
+    for (const note of developed.notes) {
+      expect(note.startBeat + note.durationBeat).toBeLessThanOrEqual(3);
+    }
+  });
 });

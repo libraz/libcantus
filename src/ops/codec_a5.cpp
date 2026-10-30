@@ -261,7 +261,7 @@ ResolvedKey read_resolved_key_field(const json::Value& value, std::string_view n
   try {
     return resolve_key(read_key_arg(read));
   } catch (const InvalidInputError& error) {
-    throw InvalidInputError(std::string(name) + " must be a valid key: " + error.what());
+    throw InvalidInputError(std::string(name) + " must be a valid key: " + error.message());
   }
 }
 
@@ -291,7 +291,7 @@ ReferenceChord read_reference_chord(const json::Value& value, std::string_view n
   } catch (const InvalidInputError& error) {
     throw InvalidInputError(std::string(name) +
                             ".roman must be readable by romanToChord; received " +
-                            describe_rejected(json::Value(out.roman)) + ": " + error.what());
+                            describe_rejected(json::Value(out.roman)) + ": " + error.message());
   }
   out.function = *parse_harmonic_function(assert_one_of(
       get(read, "function"), names_of(harmonic_functions()), with(name, ".function")));

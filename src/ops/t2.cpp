@@ -6,7 +6,9 @@
 // TS names, then calls the typed function. A guard that returns its argument returns the wire
 // value it was given. theory/tendency has no op of its own.
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <limits>
 #include <optional>
 #include <string>
@@ -45,6 +47,29 @@ const std::string& scale_name_arg(const json::Value& name) {
   return name.as_string();
 }
 
+/** Whether a chord's intervals hold a third, so that `thirdSlotOf` reads no spec. */
+bool states_third(const Chord& chord) {
+  for (double interval : chord.intervals) {
+    // `1 << (((interval % 12) + 12) % 12)` shifts by the integer part.
+    auto ic = static_cast<int>(std::fmod(std::fmod(interval, 12) + 12, 12));
+    if (ic == 3 || ic == 4) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Whether a chord sounds a major third and a minor seventh over its root (`resolvesToMinorTonic`).
+ */
+bool sounds_dominant_seventh_tones(const Chord& chord) {
+  std::vector<int> pcs = chord_pitch_classes(chord);
+  auto sounds = [&](double semitones) {
+    int pc = pitch_class_of(chord.rootPc + semitones);
+    return std::find(pcs.begin(), pcs.end(), pc) != pcs.end();
+  };
+  return sounds(4) && sounds(10);
+}
+
 /** The names of the hidden-parallel readings, for assert_one_of(). */
 std::vector<std::string_view> hidden_reading_names() {
   return {to_string(HiddenParallelReading::kFourPart), to_string(HiddenParallelReading::kTwoVoice)};
@@ -80,10 +105,7 @@ void register_symbol() {
   def("toChordData", [](Args& a) -> json::Value { return read_chord_like(a[0]).wire; });
   def("formatChordSymbol", [](Args& a) -> json::Value {
     ChordData data = read_chord_like(a[0]);
-    const json::Value& quality = get(data.wire, "quality");
-    if (!quality.is_string() || !parse_chord_quality(quality.as_string())) {
-      throw InvalidInputError("Unknown chord quality: " + js::string_of(quality));
-    }
+    settle_chord_quality(data);
     const json::Value& asked = assert_options(a[1], "opts");
     ChordSymbolOptions opts;
     opts.flats = read_symbol_flats(asked);
@@ -132,6 +154,11 @@ void register_harmony() {
     double chord_id = assert_finite_number(arg_or(a, 2, 0), "chordId");
     ChordData data = read_chord_like(a[1]);
     double pitch = assert_finite_number(a[0], "pitch");
+    // `thirdSlotOf`, then `chordToneRole`'s reading of the chord's own spelling.
+    if (!states_third(data.chord)) {
+      read_spec_quality(data.chord, get(data.wire, "quality"));
+    }
+    reads_tone_letter_offsets(data.wire);
     return to_json(role_of(pitch, data.chord, chord_id));
   });
 }
@@ -322,13 +349,17 @@ void register_chordscale() {
     }
     return to_json(true);
   });
-  def("chordScales",
-      [](Args& a) -> json::Value { return to_json(chord_scales(read_chord_like(a[0]).chord)); });
+  def("chordScales", [](Args& a) -> json::Value {
+    ChordData data = read_chord_like(a[0]);
+    settle_chord_quality(data);
+    return to_json(chord_scales(data.chord));
+  });
   def("avoidNotes", [](Args& a) -> json::Value {
     const json::Value& asked = assert_options(a[2], "opts");
     const std::string& name = scale_name_arg(a[1]);
     require_chord_scale_mask(name);
     ChordData data = read_chord_like(a[0]);
+    settle_chord_quality(data);
     AvoidNotesOptions opts;
     const json::Value& use = get(asked, "use");
     if (use.is_string() && use.as_string() == to_string(AvoidNoteUse::kMelodic)) {
@@ -341,11 +372,18 @@ void register_chordscale() {
     const std::string& name = scale_name_arg(a[1]);
     require_chord_scale_mask(name);
     ChordData data = read_chord_like(a[0]);
+    settle_chord_quality(data);
     AvailableTensionsOptions opts;
     // The target is read only once the scale is weighed over the chord.
     const json::Value* target = opt_strict(asked, "resolvesTo");
     if (target != nullptr && weighs_tensions(data.chord, name)) {
-      opts.resolvesTo = ChordArg(read_chord_like(*target).chord);
+      ChordData resolves = read_chord_like(*target);
+      // Its tones are asked for only when a dominant seventh moves to it down a fifth.
+      if (sounds_dominant_seventh_tones(data.chord) &&
+          pitch_class_of(resolves.chord.rootPc) == pitch_class_of(data.chord.rootPc + 5)) {
+        settle_chord_quality(resolves);
+      }
+      opts.resolvesTo = ChordArg(resolves.chord);
     }
     return to_json(available_tensions(data.chord, name, opts));
   });
@@ -355,6 +393,7 @@ void register_chordscale() {
       limit = assert_positive_int(a[1], "chord-scale report limit");
     }
     ChordData data = read_chord_like(a[0]);
+    settle_chord_quality(data);
     return to_json(chord_scale_report(data.chord, limit));
   });
   def("scalesForChanges", [](Args& a) -> json::Value {
@@ -363,7 +402,9 @@ void register_chordscale() {
                              undefined_value());
     std::vector<Chord> read;
     for (const json::Value& chord : chords) {
-      read.push_back(read_chord_like(chord).chord);
+      ChordData data = read_chord_like(chord);
+      settle_chord_quality(data);
+      read.push_back(std::move(data.chord));
     }
     std::vector<ScaleChoice> choices = scales_for_changes(read);
     // Each choice pairs its scale with the chord exactly as it was handed in.
@@ -398,8 +439,11 @@ void register_figured_bass() {
       [](Args& a) -> json::Value { return to_json(realization_of(a).chord); });
   def("figuredBassOf", [](Args& a) -> json::Value {
     ChordData data = read_chord_like(a[0]);
-    KeyArg key = read_key_arg(a[1]);
-    return json::Value(figured_bass_of(data.chord, key));
+    ResolvedKey key = resolve_key(read_key_arg(a[1]));
+    // `spellChord` asserts the chord, then reads its spelling hints.
+    settle_chord_quality(data);
+    read_spelled_hints(data.wire);
+    return json::Value(figured_bass_of(data.chord, KeyArg(key)));
   });
 }
 

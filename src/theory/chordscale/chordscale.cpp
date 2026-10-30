@@ -18,6 +18,7 @@
 #include "theory/chord/chord.h"
 #include "theory/chordscale/chordscale.h"
 #include "theory/chordscale/limits.gen.h"
+#include "theory/tendency/tendency.h"
 
 namespace cantus {
 
@@ -103,23 +104,34 @@ int idiomatic_rank(const Chord& chord, std::string_view name) {
   return 0;
 }
 
-/** An ordinary dominant seventh may use altered colours (`isAlteredDominant`). */
+/** A dominant seventh whose tones outside the altered scale are at most its fifth
+ * (`isAlteredDominant`). */
 bool is_altered_dominant(const Chord& chord, std::string_view scale_name) {
-  return chord.quality == ChordQuality::kDom7 && scale_name == kAlteredScale;
+  if (scale_name != kAlteredScale || !sounds_dominant_seventh(chord)) {
+    return false;
+  }
+  std::optional<int> mask = named_scale_mask(scale_name);
+  int root_pc = pitch_class_of(chord.rootPc);
+  int fifth_pc = pitch_class_of(root_pc + 7);
+  if (!mask) {
+    return false;
+  }
+  std::vector<int> chord_pcs = chord_pitch_classes(chord);
+  return std::all_of(chord_pcs.begin(), chord_pcs.end(), [&](int pc) {
+    return pc == fifth_pc || mask_has_pitch_class(*mask, root_pc, pc);
+  });
 }
 
-/** The avoid notes of a scale over a normalized chord (`avoidNotes` past its coercions). */
-std::vector<int> avoid_notes_of(const Chord& data, std::string_view scale_name, int mask,
-                                const AvoidNotesOptions& opts) {
+/** The scale tones that clash with the chord by the avoid-note rule, before the altered dominant's
+ * exemption (`clashingNotes`). */
+std::vector<int> clashing_notes(const Chord& data, int mask, bool melodic) {
   int root_pc = pitch_class_of(data.rootPc);
   std::vector<int> chord_pcs = chord_pitch_classes(data);
-  bool altered_dominant = is_altered_dominant(data, scale_name);
-  if (!matches_chord(chord_pcs, mask, root_pc) && !altered_dominant) {
+  if (!matches_chord(chord_pcs, mask, root_pc)) {
     return {};
   }
   // Both thirds a suspension may have displaced end it when sounded.
   std::vector<int> displaced = displaced_thirds(data);
-  bool melodic = opts.use == AvoidNoteUse::kMelodic;
   int semitone_above_root = pitch_class_of(root_pc + 1);
   std::vector<int> avoid;
   for (int pc = 0; pc < kScaleTones; ++pc) {
@@ -129,13 +141,21 @@ std::vector<int> avoid_notes_of(const Chord& data, std::string_view scale_name, 
     if (melodic && pc != semitone_above_root) {
       continue;
     }
-    if (!altered_dominant &&
-        (includes(chord_pcs, pitch_class_of(pc - 1)) || includes(displaced, pc))) {
+    if (includes(chord_pcs, pitch_class_of(pc - 1)) || includes(displaced, pc)) {
       avoid.push_back(pc);
     }
   }
   std::stable_sort(avoid.begin(), avoid.end());
   return avoid;
+}
+
+/** The avoid notes of a scale over a normalized chord (`avoidNotes` past its coercions). */
+std::vector<int> avoid_notes_of(const Chord& data, std::string_view scale_name, int mask,
+                                const AvoidNotesOptions& opts) {
+  if (is_altered_dominant(data, scale_name)) {
+    return {};
+  }
+  return clashing_notes(data, mask, opts.use == AvoidNoteUse::kMelodic);
 }
 
 std::vector<ChordScaleMatch> chord_scales_of(const Chord& data) {
@@ -146,7 +166,13 @@ std::vector<ChordScaleMatch> chord_scales_of(const Chord& data) {
     int extra;
     int size;
     int avoid;
+    bool borrowed;
   };
+  // A tone beyond the plain seventh chord is a written alteration or extension.
+  bool writes_tension = std::any_of(chord_pcs.begin(), chord_pcs.end(), [&](int pc) {
+    int offset = pitch_class_of(pc - root_pc);
+    return offset != 0 && offset != 4 && offset != 7 && offset != 10;
+  });
   std::vector<Ranked> ranked;
   std::vector<int> seen_masks;
   for (const NamedScaleMask& entry : NAMED_SCALES) {
@@ -164,7 +190,8 @@ std::vector<ChordScaleMatch> chord_scales_of(const Chord& data) {
     if (matches_chord(chord_pcs, *mask, root_pc) || is_altered_dominant(data, name)) {
       int size = popcount12(*mask);
       ranked.push_back(Ranked{std::string(name), size - static_cast<int>(chord_pcs.size()), size,
-                              static_cast<int>(avoid_notes_of(data, name, *mask, {}).size())});
+                              static_cast<int>(clashing_notes(data, *mask, false).size()),
+                              writes_tension && !matches_chord(chord_pcs, *mask, root_pc)});
     }
   }
   if (ranked.empty()) {
@@ -180,6 +207,9 @@ std::vector<ChordScaleMatch> chord_scales_of(const Chord& data) {
     }
     if (prefer_heptatonic && (a.size == HEPTATONIC_SIZE) != (b.size == HEPTATONIC_SIZE)) {
       return a.size == HEPTATONIC_SIZE;
+    }
+    if (a.borrowed != b.borrowed) {
+      return !a.borrowed;
     }
     if (a.extra != b.extra) {
       return a.extra < b.extra;

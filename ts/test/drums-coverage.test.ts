@@ -29,6 +29,13 @@ describe('euclid', () => {
     expect(euclideanRhythm(7, 16).filter(Boolean)).toHaveLength(7);
   });
 
+  it('places the single rest of a pattern one step short of full in the canonical rotation', () => {
+    const pattern = (text: string): boolean[] => [...text].map((glyph) => glyph === 'x');
+    expect(euclideanRhythm(3, 4)).toEqual(pattern('x.xx'));
+    expect(euclideanRhythm(5, 6)).toEqual(pattern('x.xxxx'));
+    expect(euclideanRhythm(7, 8)).toEqual(pattern('x.xxxxxx'));
+  });
+
   it('rotates onsets forward by the given number of steps', () => {
     // A rotation moves each onset later by `rotation` steps, wrapping around;
     // asserting only that the array changed would pass for either direction.

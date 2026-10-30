@@ -34,7 +34,7 @@ import {
 import { majorKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
 import { BEAT_EPS } from '../adjacency.js';
 import type { CadenceResult } from '../functional/index.js';
-import { barGridStart } from '../grid.js';
+import { barGridStart, latestSoundingEnd } from '../grid.js';
 import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
 import { melodicSimilarity } from '../melody/index.js';
 import type { CadenceHit, ChordTimeline } from '../timeline/index.js';
@@ -638,12 +638,13 @@ export function phrasesFromTimeline(
   // The pickup rule the whole analysis shares, so the first beat this reports
   // is the one sections and hypermeter report for the same notes.
   const spanStart = barGridStart(firstOnset, meters);
-  const notesEnd = sounding.reduce(
-    (end, n) => Math.max(end, n.startBeat + n.durationBeat),
-    lastSegment?.endBeat ?? 0,
+  const latestEnd = Math.max(
+    lastSegment?.endBeat ?? Number.NEGATIVE_INFINITY,
+    latestSoundingEnd(sounding, Number.NEGATIVE_INFINITY),
   );
+  const notesEnd = Number.isFinite(latestEnd) ? latestEnd : 0;
   const spanEnd = Math.max(spanStart, opts.totalBeats ?? notesEnd);
-  assertRange(spanEnd, 0, Number.MAX_SAFE_INTEGER, 'phrase totalBeats');
+  assertRange(spanEnd, Math.min(0, spanStart), Number.MAX_SAFE_INTEGER, 'phrase totalBeats');
   if (spanEnd <= spanStart + BEAT_EPS) {
     // Nothing sounds, so there is no material to hear a phrase in — the answer
     // `sectionsFromNotes` gives an empty span. A phrase of no length, closed by

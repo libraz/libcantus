@@ -1,5 +1,6 @@
 import { chordTimelineFromChords, spellLine } from '@libraz/libcantus/analyze';
 import type { KeyScale, NoteEvent } from '@libraz/libcantus/core';
+import { Key } from '@libraz/libcantus/model';
 import {
   type ChordSpan,
   majorKey,
@@ -95,10 +96,10 @@ describe('spellLine under a chord', () => {
     expect(noteByNote([61, 65, 68, 71], majorKey(0))).toEqual(['Db4', 'F4', 'Ab4', 'B4']);
   });
 
-  it('keeps a sharp-side chord on its own spelling', () => {
+  it('keeps a flat-side chord on its own spelling in Gb major', () => {
     const timeline = chordTimelineFromChords([{ rootPc: 1, quality: 'dom7', startBeat: 0 }], 4);
     const sharp = spellLine(line([61, 65, 68, 71]), timeline, majorKey(6));
-    // The key is F# major, but the chord is still the one that was played.
+    // majorKey(6) is Gb major, where the chord on pitch class 1 is its plain V7.
     expect(noteNames(sharp)).toEqual(['Db4', 'F4', 'Ab4', 'Cb5']);
   });
 
@@ -167,6 +168,25 @@ describe('spellLine consistency across a line', () => {
       'Eb4',
       'F4',
     ]);
+  });
+});
+
+describe('spellLine over a line end with a chromatic note', () => {
+  const spelled = (pitches: number[], key: KeyScale): string[] =>
+    noteNames(spellLine(line(pitches), null, key));
+
+  it('writes a major-third leap as a third, not a diminished fourth', () => {
+    expect(spelled([64, 68], majorKey(0))).toEqual(['E4', 'G#4']);
+    expect(spelled([64, 68, 71], majorKey(0))).toEqual(['E4', 'G#4', 'B4']);
+    expect(spelled([59, 63], majorKey(7))).toEqual(['B3', 'D#4']);
+    expect(spelled([57, 61], majorKey(0))).toEqual(['A3', 'C#4']);
+    expect(spelled([62, 66], majorKey(5))).toEqual(['D4', 'F#4']);
+    expect(spelled([62, 66, 70], majorKey(0))).toEqual(['D4', 'F#4', 'A#4']);
+  });
+
+  it('spells the dominant seventh of F# major on the sharp side', () => {
+    const sharp = spellLine(line([61, 65, 68, 71]), null, Key.parse('F# major'));
+    expect(noteNames(sharp)).toEqual(['C#4', 'E#4', 'G#4', 'B4']);
   });
 });
 

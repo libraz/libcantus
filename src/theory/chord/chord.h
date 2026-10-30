@@ -9,8 +9,29 @@
 #include <vector>
 
 #include "cantus/theory/chord.h"
+#include "cantus/theory/scale.h"
 
 namespace cantus {
+
+/** The slash bass and spellings a chord builder attaches beside the pitch classes
+ * (`SpelledChordParts`). */
+struct SpelledChordParts {
+  std::optional<double> bassPc;
+  std::optional<PitchSpelling> rootSpelling;
+  /** Left out, it is the bass tone's spelling over the root spelling when the bass is a chord tone.
+   */
+  std::optional<PitchSpelling> bassSpelling;
+  std::optional<std::vector<PitchSpelling>> toneSpellings;
+};
+
+/**
+ * The one constructor behind every chord built from a quality (`makeSpelledChord`).
+ * @throws InvalidInputError if the root or bass is not finite.
+ */
+Chord make_spelled_chord(double root_pc, ChordQuality quality, const SpelledChordParts& parts = {});
+
+/** How a key writes a pitch class, as a bare spelling (`keySpelling`). */
+PitchSpelling key_spelling(double pc, const ResolvedKey& key);
 
 /** A chord's pitch classes as a twelve-bit mask (`chordPcMask`). */
 int chord_pc_mask(const Chord& chord, const ChordPitchClassOptions& opts = {});

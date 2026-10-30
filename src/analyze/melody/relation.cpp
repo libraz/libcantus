@@ -36,10 +36,13 @@ MidiSpelling spelling_of(const std::optional<ResolvedKey>& key) {
                                                           : MidiSpelling::kSharp;
 }
 
-/** Name the distance between two pitches as a spelled interval (`intervalBetween`). */
+/**
+ * Name the distance between two pitches as a spelled interval: the start is spelled by the key's
+ * side and the end is reached by the conventional interval for that distance (`intervalBetween`).
+ */
 SpelledInterval interval_between(double from, double to, const std::optional<ResolvedKey>& key) {
-  MidiSpelling spelling = spelling_of(key);
-  return spelled_interval(midi_to_note(from, spelling), midi_to_note(to, spelling));
+  NoteData start = midi_to_note(from, spelling_of(key));
+  return spelled_interval(start, transpose_note(start, to - from));
 }
 
 /** An interval name in the grammar `parseInterval` reads, such as `-m3` (`intervalName`). */

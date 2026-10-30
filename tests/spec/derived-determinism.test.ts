@@ -33,10 +33,11 @@ import { describe, expect, it } from 'vitest';
  * and a change to it is a change a reader has to approve rather than a diff two
  * calls agree to hide.
  *
- * Regenerate deliberately, never to make a red run green:
+ * Regenerate deliberately, never to make a red run green, and only from the
+ * pure TypeScript implementation:
  *
  * ```
- * UPDATE_GOLDEN=1 yarn spec tests/spec/derived-determinism.test.ts
+ * node tools/spec/regen_golden.mjs
  * ```
  */
 
@@ -182,12 +183,20 @@ describe('a seed reproduces its part', () => {
   const produced = record();
 
   if (process.env.UPDATE_GOLDEN === '1') {
+    const impl = process.env.CANTUS_IMPL ?? 'ts';
+    if (impl !== 'ts') {
+      throw new Error(
+        `the determinism reference is recorded from the TypeScript implementation, not ${impl}; run node tools/spec/regen_golden.mjs`,
+      );
+    }
     mkdirSync(path.dirname(GOLDEN), { recursive: true });
     writeFileSync(GOLDEN, `${JSON.stringify(produced, null, 2)}\n`);
   }
 
   it('has a recorded reference to reproduce', () => {
-    expect(existsSync(GOLDEN), 'run with UPDATE_GOLDEN=1 to record the reference').toBe(true);
+    expect(existsSync(GOLDEN), 'run node tools/spec/regen_golden.mjs to record the reference').toBe(
+      true,
+    );
   });
 
   it.each(Object.keys(CASES))('writes the recorded part for %s', (name) => {

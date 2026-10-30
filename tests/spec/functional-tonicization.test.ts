@@ -63,7 +63,7 @@ describe('a chromatic chord only tonicizes a degree that can be a tonic', () => 
   it('agrees with the numeral about which degrees can be tonicized', () => {
     // Both layers read one predicate, so a chord the numeral refuses to name a
     // target for is not reported as an applied dominant either.
-    expect(chordToRoman(makeChord(10, 'dim7'), cMajor, { applied: true })).toBe('bviio7');
+    expect(chordToRoman(makeChord(10, 'dim7'), cMajor, { applied: true })).toBe('#vio7');
     expect(functionOf(makeChord(10, 'dim7'), cMajor)).toBe('subdominant');
     expect(chordToRoman(makeChord(2, 'maj'), cMajor, { applied: true })).toBe('V/V');
     expect(functionOf(makeChord(2, 'maj'), cMajor)).toBe('dominant');

@@ -20,7 +20,7 @@ import {
   assertRange,
 } from '../../core/validation/index.js';
 import { BEAT_EPS } from '../adjacency.js';
-import { barGridStart } from '../grid.js';
+import { barGridStart, latestSoundingEnd } from '../grid.js';
 import { windowWeights } from '../histogram.js';
 import { melodicSimilarity } from '../melody/index.js';
 import { hypermeter } from './hypermeter.js';
@@ -234,9 +234,8 @@ export function sectionsFromNotes(
   // The pickup rule the whole analysis shares: a note a millibeat before the
   // downbeat is playing it, and only one a whole bar early opens a pickup.
   const firstOnset = barGridStart(firstSoundingBeat(sounding), meters);
-  const lastEnd = sounding.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
-  const spanEnd = Math.max(firstOnset, opts.totalBeats ?? lastEnd);
-  assertRange(spanEnd, 0, Number.MAX_SAFE_INTEGER, 'section totalBeats');
+  const spanEnd = Math.max(firstOnset, opts.totalBeats ?? latestSoundingEnd(sounding));
+  assertRange(spanEnd, Math.min(0, firstOnset), Number.MAX_SAFE_INTEGER, 'section totalBeats');
   const threshold = opts.threshold ?? DEFAULT_THRESHOLD;
   assertRange(threshold, 0, 1, 'section threshold');
   const unitBars =

@@ -4,9 +4,9 @@
  * Given a sequence of chord segments and a key, this builds a monophonic bass
  * line in a chosen low register. Several idiomatic styles are supported, from a
  * single held root per segment to a quarter-note walking line that leads by
- * step into each chord change. All pitches are kept in a narrow bass band and
- * consecutive notes move by small intervals; given a seed the output is fully
- * reproducible.
+ * step into each chord change. All pitches are kept in an octave-wide bass band
+ * `[low, low + 12]`, so consecutive notes may lie up to an octave apart; given a
+ * seed the output is fully reproducible.
  *
  * Positions and durations are measured in quarter-note beats, matching the
  * library-wide convention.
@@ -389,9 +389,10 @@ function buildWalking(
  * Generate a bass line following a chord placement.
  *
  * Each segment contributes notes in the chosen bass register per the selected
- * style; consecutive notes are kept within roughly a fifth. Every note's
- * duration extends to the next onset (the final note extends to the last
- * segment's end). Given a seed the output is fully reproducible.
+ * style; every note lies in the `[low, low + 12]` band, so consecutive notes may
+ * be up to an octave apart. Every note's duration extends to the next onset (the
+ * final note extends to the last segment's end). Given a seed the output is
+ * fully reproducible.
  *
  * The `pop` style's pickups are drawn per position, so raising
  * `complexity.rhythmic` adds pickups without moving the notes already written.

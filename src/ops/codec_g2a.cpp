@@ -47,10 +47,9 @@ BassPlacement read_bass_placement(const json::Array& placement) {
     const json::Value& quality = get(chord.wire, "quality");
     LickQuality read_quality;
     read_quality.absent = is_undefined(quality);
-    std::optional<ChordQuality> named =
-        quality.is_string() ? parse_chord_quality(quality.as_string()) : std::nullopt;
+    std::optional<ChordQuality> named = known_chord_quality(quality);
     read_quality.foreign = !read_quality.absent && !named;
-    if (!table_quality(quality)) {
+    if (!named) {
       read_quality.unknown = js::template_string(quality);
     }
     qualities.push_back(std::move(read_quality));

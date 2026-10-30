@@ -35,9 +35,10 @@ import { soundsDominantSeventh } from '../../theory/tendency/index.js';
 import { BEAT_EPS } from '../adjacency.js';
 import type { KeyProfileName, KeyProfilePair } from '../detect/index.js';
 import { profileScore, resolveKeyProfile } from '../detect/profiles.js';
+import { firstSoundingBeat } from '../form/internal.js';
 import type { PivotChord } from '../functional/index.js';
 import { pivotChords } from '../functional/index.js';
-import { gridForNotes } from '../grid.js';
+import { gridForNotes, latestSoundingEnd } from '../grid.js';
 import type { WindowWeights } from '../histogram.js';
 import { bucketNotesBySlot, windowWeights } from '../histogram.js';
 
@@ -693,9 +694,13 @@ export function keyTimelineFromNotes(
   const budget = opts.budget;
   assertNoteEvents(notes, 'key timeline notes', { allowNonPositiveDuration: true, budget });
   const sounding = notes.filter((note) => note.durationBeat > 0);
-  const lastEnd = sounding.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
-  const totalBeats = opts.totalBeats ?? lastEnd;
-  assertRange(totalBeats, 0, Number.MAX_SAFE_INTEGER, 'key timeline totalBeats');
+  const totalBeats = opts.totalBeats ?? latestSoundingEnd(sounding);
+  assertRange(
+    totalBeats,
+    Math.min(0, firstSoundingBeat(sounding)),
+    Number.MAX_SAFE_INTEGER,
+    'key timeline totalBeats',
+  );
 
   const slotBeats = Math.min(minKeyBeats, expectedKeyBeats);
   // The key slots are longer than the chord slots, so the two grids start on

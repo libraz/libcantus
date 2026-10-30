@@ -354,3 +354,15 @@ describe('analyzeReference options', () => {
     expect(melody).toEqual(SOURCE_SONG.melody);
   });
 });
+
+describe('analyzeReference over notes that end before beat 0', () => {
+  it('ends the span where the last note ends', () => {
+    const notes = Array.from({ length: 8 }, (_, i) => ({
+      pitch: 60 + (i % 3),
+      startBeat: -16 + i,
+      durationBeat: 1,
+    }));
+    const profile = analyzeReference(notes, { key: 'C' });
+    expect(profile.span.endBeat).toBe(-8);
+  });
+});

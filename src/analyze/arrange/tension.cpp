@@ -218,10 +218,7 @@ std::vector<TensionPoint> tension_curve(const std::vector<ArrangementTrack>& tra
       harmony_track_set(opts.harmonyTracks, tracks);
   std::vector<NoteEvent> pooled = pool_notes(tracks, harmony_tracks ? &*harmony_tracks : nullptr);
   std::vector<NoteEvent> all = pool_notes(tracks);
-  double total_beats = 0;
-  for (const NoteEvent& note : all) {
-    total_beats = js::max(total_beats, note.startBeat + note.durationBeat);
-  }
+  double total_beats = latest_sounding_end(all);
   // The grid the samples sit on is a whole number of steps from beat 0, and the music itself
   // starts at `music_start`.
   GridOrigin placed = grid_for_notes(all, step);

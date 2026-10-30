@@ -889,3 +889,18 @@ describe('arrangement entry points that read an argument late or as a text', () 
     ).toThrow(InvalidInputError);
   });
 });
+
+describe('arrangement span over notes that end before beat 0', () => {
+  const notes: NoteEvent[] = [...blockChord([48, 52, 55], -8), ...blockChord([53, 57, 60], -4, 2)];
+  const tracks: ArrangementTrack[] = [{ name: 'harmony', role: 'harmony', notes }];
+
+  it('samples tension no further than the last note', () => {
+    const points = tensionCurve(tracks, { key: majorKey(0) });
+    expect(points.map((point) => point.beat)).toEqual([-8, -7, -6, -5, -4, -3]);
+  });
+
+  it('ends the key regions where the notes end', () => {
+    const { keys } = analyzeArrangement(tracks, { key: majorKey(0) });
+    expect(keys[keys.length - 1]?.endBeat).toBe(-2);
+  });
+});

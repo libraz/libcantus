@@ -9,10 +9,13 @@
  */
 
 import { InvalidInputError } from '../../core/errors/index.js';
+import type { Note } from '../../core/pitch/index.js';
+import { diatonicLetterOf, naturalPitchClassOf } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import { assertOptions } from '../../core/validation/index.js';
-import type { Chord, ChordQuality } from '../../theory/chord/index.js';
-import { chordToneSpellings, makeChord } from '../../theory/chord/index.js';
+import type { Chord, ChordQuality, PitchSpelling } from '../../theory/chord/index.js';
+import { chordToneSpellings, makeSpelledChord } from '../../theory/chord/index.js';
+import { QUALITY_INTERVALS } from '../../theory/chord/spec.js';
 import {
   type KeyLike,
   majorKey,
@@ -23,10 +26,10 @@ import {
 } from '../../theory/scale/index.js';
 import { spellPitchClass } from '../../theory/spelling/index.js';
 import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
+import { spellingAbove } from '../../theory/symbol/spelling.js';
 import { augmentedSixthFromSymbol, augmentedSixthSymbol } from './augmented-sixth.js';
 import {
   degreeRootPc,
-  isDiatonicChord,
   isNeapolitanChordOf,
   loweredDegrees,
   mod12,
@@ -35,6 +38,7 @@ import {
 import type { RejectedCandidate } from './rationale.js';
 import {
   appliedTarget,
+  isAppliedDominant,
   LEADING_TONE_QUALITIES,
   type TonicizableDegree,
   tonicizableDegrees,
@@ -176,11 +180,33 @@ function parseInversion(figures: string): { inversion: number; seventh: boolean 
   return { inversion: 0, seventh: false };
 }
 
+/** What a Roman numeral without a slash names: the root and how it is written, the quality and the inversion. */
+type ParsedRoman = {
+  rootPc: number;
+  rootSpelling: PitchSpelling | undefined;
+  quality: ChordQuality;
+  inversion: number;
+};
+
+/**
+ * The root a numeral writes, on the letter of its degree counted from the tonic.
+ *
+ * The accidental follows from the pitch class, so a lowered second degree of Ab
+ * minor is a Bb flattened twice and never the A its pitch class reads best as.
+ * A root that would need more than a double accidental is left unspelled.
+ */
+function numeralRootSpelling(
+  tonic: Note,
+  degreeNumber: number,
+  rootPc: number,
+): PitchSpelling | undefined {
+  const spelling = spellingAbove(tonic, degreeNumber - 1, rootPc);
+  return Math.abs(spelling.alter) <= 2 ? spelling : undefined;
+}
+
 /** Parse a Roman numeral (no secondary '/') into a root, quality, and inversion. */
-function parseSimpleRoman(
-  text: string,
-  key: KeyScale,
-): { rootPc: number; quality: ChordQuality; inversion: number } {
+function parseSimpleRoman(text: string, resolved: ResolvedKey): ParsedRoman {
+  const key = resolved.scale;
   const match = /^([b#]?)([iIvV]+)(.*)$/.exec(text.trim());
   if (!match) {
     throw new InvalidInputError(`Invalid Roman numeral: ${text}`);
@@ -226,8 +252,17 @@ function parseSimpleRoman(
   // whose digits would otherwise be misread as figured bass (`Iadd6`, `I69`,
   // `Isus2`, `Iadd11`) resolve to their qualities in root position.
   const canonical = SUFFIX_QUALITY.get(`${isUpper ? 'u' : 'l'}:${suffix}`);
+  const parsed = (quality: ChordQuality, inversion: number): ParsedRoman => {
+    const rootPc = rootForQuality(quality);
+    return {
+      rootPc,
+      rootSpelling: numeralRootSpelling(resolved.tonic, degreeNumber, rootPc),
+      quality,
+      inversion,
+    };
+  };
   if (canonical !== undefined) {
-    return { rootPc: rootForQuality(canonical), quality: canonical, inversion: 0 };
+    return parsed(canonical, 0);
   }
 
   // Non-canonical spellings are limited to a complete quality marker followed
@@ -279,7 +314,7 @@ function parseSimpleRoman(
   } else {
     quality = base;
   }
-  return { rootPc: rootForQuality(quality), quality, inversion };
+  return parsed(quality, inversion);
 }
 
 /** The conventional figured name for the Neapolitan in first inversion. */
@@ -304,7 +339,10 @@ function chromaticSymbolChord(text: string, key: ResolvedKey): Chord | null {
   if (text === NEAPOLITAN_SIXTH) {
     // Exactly the chord `bII6` builds: the major triad on b2, third in the bass.
     const rootPc = mod12(key.scale.rootPc + 1);
-    return makeChord(rootPc, 'maj', mod12(rootPc + 4));
+    return makeSpelledChord(rootPc, 'maj', {
+      bassPc: mod12(rootPc + 4),
+      rootSpelling: numeralRootSpelling(key.tonic, 2, rootPc),
+    });
   }
   return augmentedSixthFromSymbol(text, key);
 }
@@ -315,12 +353,13 @@ function chromaticSymbolChord(text: string, key: ResolvedKey): Chord | null {
  * The degree being tonicized is spelled the way the prevailing key writes that
  * pitch class, so the local key is written on a letter the caller's key would
  * use: `Ger6/V` in Ab minor is built on Eb, not on the D# the bare pitch class
- * would otherwise be named.
+ * would otherwise be named. A numeral names its target outright, and that
+ * spelling wins: the `V7` of `bVI` in C major is built on Ab and is Eb7.
  */
-function tonicizedKey(targetRoot: number, key: ResolvedKey): ResolvedKey {
+function tonicizedKey(targetRoot: number, key: ResolvedKey, written?: PitchSpelling): ResolvedKey {
   return resolveKey({
     scale: majorKey(targetRoot),
-    tonic: spellPitchClass(targetRoot, key.tonic, key.scale),
+    tonic: written ?? spellPitchClass(targetRoot, key.tonic, key.scale),
   });
 }
 
@@ -366,16 +405,13 @@ function augmentedSixthTarget(chord: Chord, key: ResolvedKey): TonicizableDegree
 }
 
 /** Build a chord from a parsed Roman numeral, attaching a bass for inversions. */
-function chordFromParsed(parsed: {
-  rootPc: number;
-  quality: ChordQuality;
-  inversion: number;
-}): Chord {
-  const chord = makeChord(parsed.rootPc, parsed.quality);
-  if (parsed.inversion > 0 && parsed.inversion < chord.intervals.length) {
-    chord.bassPc = mod12(parsed.rootPc + (chord.intervals[parsed.inversion] ?? 0));
-  }
-  return chord;
+function chordFromParsed(parsed: ParsedRoman): Chord {
+  const bassInterval =
+    parsed.inversion > 0 ? QUALITY_INTERVALS[parsed.quality][parsed.inversion] : undefined;
+  return makeSpelledChord(parsed.rootPc, parsed.quality, {
+    bassPc: bassInterval === undefined ? undefined : mod12(parsed.rootPc + bassInterval),
+    rootSpelling: parsed.rootSpelling,
+  });
 }
 
 /**
@@ -421,7 +457,6 @@ export function romanToChord(text: string, key: SpelledKeyLike): Chord {
   // spelled from its tonic, and a key reduced here would spell them from
   // whichever side of the circle its pitch classes read best as.
   const resolved = resolveKey(key);
-  const scale = resolved.scale;
   // Accept the conventional slashes in figured bass (`V6/4`, `V6/5`) while
   // retaining `/` as the separator for applied dominants (`V7/V`).
   const trimmed = text.trim().replace(/(\d)\/(?=\d)/g, '$1');
@@ -429,15 +464,15 @@ export function romanToChord(text: string, key: SpelledKeyLike): Chord {
   if (slash >= 0) {
     const applied = trimmed.slice(0, slash);
     const target = trimmed.slice(slash + 1);
-    const targetRoot = parseSimpleRoman(target, scale).rootPc;
-    const localKey = tonicizedKey(targetRoot, resolved);
+    const targetNumeral = parseSimpleRoman(target, resolved);
+    const localKey = tonicizedKey(targetNumeral.rootPc, resolved, targetNumeral.rootSpelling);
     return (
       chromaticSymbolChord(applied, localKey) ??
-      chordFromParsed(parseSimpleRoman(applied, localKey.scale))
+      chordFromParsed(parseSimpleRoman(applied, localKey))
     );
   }
   return (
-    chromaticSymbolChord(trimmed, resolved) ?? chordFromParsed(parseSimpleRoman(trimmed, scale))
+    chromaticSymbolChord(trimmed, resolved) ?? chordFromParsed(parseSimpleRoman(trimmed, resolved))
   );
 }
 
@@ -446,10 +481,18 @@ function romanStyle(quality: ChordQuality): { lower: boolean; suffix: string } {
   return ROMAN_STYLE[quality];
 }
 
-/** Choose the degree number and accidental to spell a root as a Roman numeral. */
+/**
+ * Choose the degree number and accidental to spell a root as a Roman numeral.
+ *
+ * A chord of leading-tone quality stands a semitone above the degree it leads
+ * to, so on a chromatic root it is numbered as the raised degree below it: the
+ * `G#o7` of C major is `#vo7`, never `bvio7`, which would name a root a
+ * semitone higher.
+ */
 function romanSpelling(
   rootPc: number,
   key: KeyScale,
+  quality: ChordQuality,
 ): { degreeNumber: number; accidental: string } {
   const tones = scaleTonesInDegreeOrder(romanReference(key));
   const diatonic = tones.indexOf(mod12(rootPc));
@@ -469,8 +512,9 @@ function romanSpelling(
   // degree 5 (the dominant) are skipped in the flat pass, so a raised leading
   // tone spells as `#vii` rather than a flat tonic `bI`, and the tritone above
   // the tonic spells as `#iv` rather than a flat fifth `bV` (matching the
-  // conventional `OFFSET_SPELLING` for offset 6).
-  for (let i = 0; i < tones.length; i += 1) {
+  // conventional `OFFSET_SPELLING` for offset 6). A leading-tone quality goes
+  // straight to the sharp pass.
+  for (let i = 0; i < tones.length && !LEADING_TONE_QUALITIES.has(quality); i += 1) {
     const degreeNumber = i + 1;
     if (degreeNumber === 1 || degreeNumber === 5) {
       continue;
@@ -596,7 +640,7 @@ export type ChordToRomanOptions = {
    * Off by default: naming the root is always a correct spelling, whereas
    * whether a chromatic dominant is genuinely applied is a reading only the
    * caller can make. Turning it on names the chords {@link secondaryDominant}
-   * builds as the applied numerals they are, except in three cases, where the
+   * builds as the applied numerals they are, except in four cases, where the
    * numeral names the root against the home key as it does with this off:
    *
    * - The target degree carries no perfect fifth: nothing tonicizes a
@@ -607,6 +651,9 @@ export type ChordToRomanOptions = {
    * - The chord is diatonic to the key, which keeps the function of its degree
    *   rather than tonicizing another. `G7` is `VII7` in A minor and `I7` in C
    *   mixolydian, not `V7/III` and `V7/IV`.
+   * - The chord is borrowed from the parallel mode, which sounds its own degree:
+   *   the Picardy tonic and the major IV of a minor key are `I` and `IV`, not
+   *   `V/iv` and `V/VII`.
    */
   applied?: boolean;
   /**
@@ -713,6 +760,112 @@ type RomanDerivation =
       figure?: string;
     };
 
+/** How a chord is numbered: against a local tonic it tonicizes, or by its own root. */
+type NumeralReading =
+  | { kind: 'applied'; target: TonicizableDegree }
+  | { kind: 'root'; degreeNumber: number; accidental: string };
+
+/**
+ * The one reading that decides how a chord is numbered.
+ *
+ * With `applied` asked for, a chord that tonicizes a degree is numbered against
+ * it — the augmented sixth of a degree first, which no sonority test finds,
+ * then a dominant or leading-tone chord the function layer accepts as applied.
+ * That is exactly {@link isAppliedDominant}: a chord diatonic to the key keeps
+ * its degree, and the borrowed Picardy tonic or major IV of a minor key sound
+ * their own degrees, so neither is read as a dominant of something else.
+ * Every other chord, and every chord with `applied` off, is numbered by its
+ * root: a diatonic degree, or a chromatic one with its accidental.
+ */
+function readNumeral(chord: Chord, resolved: ResolvedKey, applied: boolean): NumeralReading {
+  const key = resolved.scale;
+  const written = writtenRoot(chord);
+  if (applied) {
+    // The augmented sixth is not held to the chromatic test the ordinary reading
+    // is: the German sixth of the dominant stands a tritone from its target
+    // rather than a fifth above it, so the sonority test would hand back a
+    // different degree for the same chord. A chord is one only while its own
+    // letters spell that sixth over its bass, so asking first pulls no ordinary
+    // chord into the exotic reading.
+    const target =
+      augmentedSixthTarget(chord, resolved) ??
+      (isAppliedDominant(chord, key) ? appliedTarget(chord, key) : null);
+    if (target !== null && leadsByLetter(chord, written, target, resolved)) {
+      return { kind: 'applied', target };
+    }
+  }
+  return {
+    kind: 'root',
+    ...(writtenSpelling(chord.rootPc, written, resolved) ??
+      romanSpelling(chord.rootPc, key, chord.quality)),
+  };
+}
+
+/**
+ * The root a chord writes, when its spelling hint is usable: a letter and an
+ * alteration that still sound the chord's root.
+ */
+function writtenRoot(chord: Chord): PitchSpelling | undefined {
+  const hint = chord.rootSpelling;
+  if (
+    typeof hint !== 'object' ||
+    hint === null ||
+    !Number.isInteger(hint.letter) ||
+    hint.letter < 0 ||
+    hint.letter > 6 ||
+    !Number.isInteger(hint.alter) ||
+    mod12(naturalPitchClassOf(hint.letter) + hint.alter) !== mod12(chord.rootPc)
+  ) {
+    return undefined;
+  }
+  return hint;
+}
+
+/**
+ * The numeral a written root denotes: the degree on its letter, with the
+ * alteration it stands at above that degree of the key.
+ *
+ * Undefined when the chord writes no root, or writes one more than a semitone
+ * from its degree, which a single accidental cannot name.
+ */
+function writtenSpelling(
+  rootPc: number,
+  written: PitchSpelling | undefined,
+  resolved: ResolvedKey,
+): { degreeNumber: number; accidental: string } | undefined {
+  if (written === undefined) {
+    return undefined;
+  }
+  const degreeNumber = diatonicLetterOf(written.letter - resolved.tonic.letter) + 1;
+  const tones = scaleTonesInDegreeOrder(romanReference(resolved.scale));
+  const degreePc = tones[degreeNumber - 1];
+  if (degreePc === undefined) {
+    return undefined;
+  }
+  const offset = mod12(rootPc - degreePc + 6) - 6;
+  return Math.abs(offset) > 1
+    ? undefined
+    : { degreeNumber, accidental: offset < 0 ? 'b' : offset > 0 ? '#' : '' };
+}
+
+/**
+ * Whether a leading-tone chord's written root leads to the target: a semitone
+ * below it and on the letter just below it. A chord that writes no root, or is
+ * no leading-tone chord, is held to the sonority test alone.
+ */
+function leadsByLetter(
+  chord: Chord,
+  written: PitchSpelling | undefined,
+  target: TonicizableDegree,
+  resolved: ResolvedKey,
+): boolean {
+  if (written === undefined || !LEADING_TONE_QUALITIES.has(chord.quality)) {
+    return true;
+  }
+  const targetLetter = spellPitchClass(target.rootPc, resolved.tonic, resolved.scale).letter;
+  return diatonicLetterOf(targetLetter - written.letter) === 1;
+}
+
 /** Render a chord as a numeral, keeping the facts that decided it. */
 export function renderRoman(
   chord: Chord,
@@ -734,29 +887,16 @@ export function renderRoman(
   if (augmented !== null) {
     return { roman: augmented, derivation: { kind: 'augmentedSixth' } };
   }
-  if (opts.applied === true) {
-    // The augmented sixth of a degree is asked for first, and is not held to the
-    // chromatic test the ordinary applied reading is. It has to be asked
-    // separately because nothing about where a dominant resolves finds it: the
-    // German sixth of the dominant stands a tritone from its target rather than
-    // a fifth above it, so the sonority test would hand back a different degree
-    // for the same chord. Ordering it first pulls no ordinary chord into the
-    // exotic reading, because a chord is an augmented sixth only while its own
-    // letters spell that sixth over its bass — the same pitch classes written
-    // with a minor seventh on top stay the bIII7 they are.
-    const target =
-      augmentedSixthTarget(chord, resolved) ??
-      (isDiatonicChord(chord, key) ? null : appliedTarget(chord, key));
-    if (target !== null) {
-      const local = renderRoman(chord, tonicizedKey(target.rootPc, resolved), {}).roman;
-      const numeral = numeralFor(target.degreeNumber, target.lower);
-      return {
-        roman: `${local}/${numeral}`,
-        derivation: { kind: 'applied', target: numeral },
-      };
-    }
+  const reading = readNumeral(chord, resolved, opts.applied === true);
+  if (reading.kind === 'applied') {
+    const local = renderRoman(chord, tonicizedKey(reading.target.rootPc, resolved), {}).roman;
+    const numeral = numeralFor(reading.target.degreeNumber, reading.target.lower);
+    return {
+      roman: `${local}/${numeral}`,
+      derivation: { kind: 'applied', target: numeral },
+    };
   }
-  const { degreeNumber, accidental: spelledAccidental } = romanSpelling(chord.rootPc, key);
+  const { degreeNumber, accidental: spelledAccidental } = reading;
   const { lower, suffix } = romanStyle(chord.quality);
   const cased = numeralFor(degreeNumber, lower);
   // Render the conventional unaltered `viio`/`viio7` for the raised leading

@@ -18,7 +18,7 @@ import {
   assertRange,
 } from '../../core/validation/index.js';
 import { BEAT_EPS } from '../adjacency.js';
-import { barGridStart } from '../grid.js';
+import { barGridStart, latestSoundingEnd } from '../grid.js';
 import type { BarSlice } from './internal.js';
 import { clamp01, firstSoundingBeat, floorMod, harmonicNovelty, sliceBars } from './internal.js';
 
@@ -292,9 +292,8 @@ export function hypermeter(
   });
   const sounding = notes.filter((note) => note.durationBeat > 0);
   const firstOnset = firstSoundingBeat(sounding);
-  const lastEnd = sounding.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
-  const spanEnd = asked.totalBeats ?? lastEnd;
-  assertRange(spanEnd, 0, Number.MAX_SAFE_INTEGER, 'hypermeter totalBeats');
+  const spanEnd = asked.totalBeats ?? latestSoundingEnd(sounding);
+  assertRange(spanEnd, Math.min(0, firstOnset), Number.MAX_SAFE_INTEGER, 'hypermeter totalBeats');
   // Whether the music starts before the downbeat is the analysis-wide pickup
   // question, and the slot grids of chord and key inference answer it here: a
   // note a millibeat early is playing beat 0, and only one a whole grid unit

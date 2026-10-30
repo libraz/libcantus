@@ -221,7 +221,7 @@ describe('Chord.fromFiguredBass', () => {
     const cases = [
       { bass: 'B', figures: '6', key: majorKey(0) },
       { bass: 'D', figures: '43', key: majorKey(0) },
-      { bass: 'G', figures: '#', key: minorKey(0) },
+      { bass: 'E', figures: '#', key: minorKey(9) },
       { bass: 'F', figures: '', key: majorKey(0) },
     ] as const;
     for (const { bass, figures, key } of cases) {

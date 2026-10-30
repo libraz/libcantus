@@ -41,7 +41,7 @@ void register_voicing() {
     read_ranges_option(asked, opts);
     read_max_spacing_option(asked, opts);
     read_max_candidates_option(asked, opts);
-    read_key_option(asked, opts);
+    read_voiced_chord(data, asked, opts);
     return to_json(voice_chord(data.chord, opts));
   });
   def("voiceProgression", [](Args& a) -> json::Value {
@@ -49,18 +49,29 @@ void register_voicing() {
     // The budget and the key are read off the options before the options are checked to be a bag.
     assert_generation_budget(json::Value(static_cast<double>(chords.size())),
                              "voiced progression chords", get(a[1], "budget"));
-    std::vector<ChordArg> data;
+    std::vector<ChordData> read;
     for (const json::Value& chord : chords) {
-      data.emplace_back(read_chord_like(chord).chord);
+      read.push_back(read_chord_like(chord));
     }
     VoicingOptions opts;
     read_key_option(a[1], opts);
+    if (opts.key) {
+      resolve_key(*opts.key);
+    }
     const json::Value& asked = assert_options(a[1], "opts");
     read_ranges_option(asked, opts);
     read_max_spacing_option(asked, opts);
     read_max_candidates_option(asked, opts);
     if (const json::Value* budget = field(asked, "budget")) {
       opts.budget = number_of(*budget);
+    }
+    // Each chord's tones are read where its candidates are enumerated, then the roles its own
+    // spelling gives them where its move is scored, chord by chord.
+    std::vector<ChordArg> data;
+    for (ChordData& chord : read) {
+      settle_chord_quality(chord);
+      reads_tone_letter_offsets(chord.wire);
+      data.emplace_back(std::move(chord.chord));
     }
     return to_json(voice_progression(data, opts));
   });
@@ -80,8 +91,7 @@ void register_voicing() {
     }
     read_max_spacing_option(asked, opts);
     read_max_candidates_option(asked, opts);
-    read_key_option(asked, opts);
-    read_previous_chord_option(asked, opts);
+    read_next_voiced_chord(data, asked, opts);
     return to_json(next_voicing(current, data.chord, opts));
   });
   def("voiceLeadingCost", [](Args& a) -> json::Value {

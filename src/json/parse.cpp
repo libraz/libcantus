@@ -45,10 +45,14 @@ class Parser {
     pos_ += word.size();
   }
 
-  /** An array or object whose members are still being read; `key` is the member being parsed. */
+  /**
+   * An array or object whose members are still being read; `key` is the member being parsed. An
+   * object's members are collected and ordered once, when it closes.
+   */
   struct Frame {
     Value value;
     std::string key;
+    std::vector<Member> members;
   };
 
   /** A non-container value at the current position. */
@@ -114,7 +118,7 @@ class Parser {
           ++pos_;
           done = std::move(container);
         } else {
-          stack.push_back(Frame{std::move(container), std::string()});
+          stack.push_back(Frame{std::move(container), std::string(), {}});
           if (is_object) {
             stack.back().key = parse_key();
           }
@@ -131,7 +135,7 @@ class Parser {
         Frame& frame = stack.back();
         const bool is_object = frame.value.is_object();
         if (is_object) {
-          frame.value.as_object().set(std::move(frame.key), std::move(done));
+          frame.members.push_back(Member{std::move(frame.key), std::move(done)});
         } else {
           frame.value.as_array().push_back(std::move(done));
         }
@@ -151,7 +155,8 @@ class Parser {
           fail(is_object ? "expected ',' or '}'" : "expected ',' or ']'");
         }
         ++pos_;
-        done = std::move(frame.value);
+        done = is_object ? Value(Object::from_members(std::move(frame.members)))
+                         : std::move(frame.value);
         stack.pop_back();
       }
     }

@@ -259,7 +259,7 @@ MeterData read_meter_data(const MeterArg& value, std::string_view name) {
     }
     // The reading is the parser's; the failure names the argument the caller filled.
     throw InvalidInputError(std::string(name) + " must name a time signature; " +
-                            parsed.error().what());
+                            parsed.error().message());
   }
   if (const auto* ts = std::get_if<TimeSignature>(&v)) {
     return assert_time_signature(*ts, name);

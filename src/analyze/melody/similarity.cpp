@@ -9,6 +9,7 @@
 #include "analyze/melody/internal.h"
 #include "analyze/sequence.h"
 #include "cantus/core/limits.h"
+#include "cantus/core/validation.h"
 #include "js/math.h"
 #include "js/number.h"
 
@@ -40,6 +41,9 @@ MelodicComparison compare_ordered(const std::vector<NoteEvent>& left,
   std::vector<LineNote> right_line = line_of(right);
   std::vector<double> left_intervals = intervals_of(left_line);
   std::vector<double> right_intervals = intervals_of(right_line);
+  assert_generation_budget(
+      static_cast<double>(left_intervals.size()) * static_cast<double>(right_intervals.size()),
+      "melody alignment");
   double pitch_similarity = distance_to_similarity(
       graded_edit_distance(left_intervals, right_intervals, interval_cost),
       static_cast<double>(left_intervals.size()), static_cast<double>(right_intervals.size()));

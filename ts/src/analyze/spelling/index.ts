@@ -67,7 +67,7 @@ export const CHORD_MISMATCH = 64;
 export const SCALE_TONE_MISMATCH = 32;
 
 /** Transition cost per diatonic step an interval's letters miss its written size by. */
-export const LETTER_STEP_DEVIATION = 4;
+export const LETTER_STEP_DEVIATION = 8;
 
 /**
  * How many steps of deviation are counted before the cost stops growing.

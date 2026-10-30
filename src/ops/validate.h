@@ -194,6 +194,12 @@ const json::Value& property_of(const json::Value& v, std::string_view key);
 /** `value.length`: the size of an array or a string (UTF-16), else the property of that name. */
 json::Value length_of(const json::Value& value);
 
+/**
+ * What V8 says of a value spread or iterated that has no iterator: its type, and its text for a
+ * number or a boolean ("number 5 is not iterable (cannot read property Symbol(Symbol.iterator))").
+ */
+std::string not_iterable_message(const json::Value& value);
+
 /** `list[index]` of an array, a string or a record; the TypeError JS raises for null/undefined. */
 json::Value element_of(const json::Value& list, std::size_t index);
 
@@ -223,7 +229,7 @@ decltype(auto) with_name_arg(const Args& a, std::size_t i, std::string_view fall
     try {
       return check(std::string(kPendingName));
     } catch (const Error& failure) {
-      if (std::string_view(failure.what()).find(kPendingName) != std::string_view::npos) {
+      if (std::string_view(failure.message()).find(kPendingName) != std::string_view::npos) {
         name_arg(a, i, fallback);
       }
       throw;

@@ -303,8 +303,8 @@ describe('data arriving from outside is checked, not trusted', () => {
 
   it('rejects an interval whose parts describe no interval', () => {
     // The same reading `Interval.of` refuses: a fifth spanning eight semitones
-    // names itself a fifth and sounds a sixth, and every method downstream —
-    // `isConsonant` above all — answers for the sound rather than the name.
+    // names itself a fifth and sounds a sixth, and every method downstream
+    // would answer for a name that does not match the sound.
     expect(() => Interval.fromJSON({ number: 5, quality: 'P', semitones: 8 })).toThrow(RangeError);
     expect(() => Interval.of(5, 'P', 8)).toThrow(RangeError);
     expect(() => Interval.fromData({ number: 5, quality: 'M', semitones: 7 })).toThrow(RangeError);

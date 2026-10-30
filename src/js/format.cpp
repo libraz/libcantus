@@ -1,6 +1,7 @@
 #include "js/format.h"
 
 #include <cstdint>
+#include <vector>
 
 #include "js/number.h"
 #include "js/utf16.h"
@@ -28,8 +29,6 @@ const std::string* tag_string(const json::Object& o, std::string_view key) {
   return v != nullptr && v->is_string() ? &v->as_string() : nullptr;
 }
 
-void append_template(const json::Value& v, std::string& out);
-
 void append_object_template(const json::Value& v, std::string& out) {
   const json::Object& o = v.as_object();
   if (const std::string* n = tag_string(o, "$n")) {
@@ -51,7 +50,8 @@ void append_object_template(const json::Value& v, std::string& out) {
   }
 }
 
-void append_template(const json::Value& v, std::string& out) {
+/** A value that is no array, as a template literal writes it. */
+void append_scalar_template(const json::Value& v, std::string& out) {
   switch (v.kind()) {
     case json::Kind::kNull:
       out += "null";
@@ -65,24 +65,44 @@ void append_template(const json::Value& v, std::string& out) {
     case json::Kind::kString:
       out += v.as_string();
       return;
-    case json::Kind::kArray: {
-      bool first = true;
-      for (const json::Value& e : v.as_array()) {
-        if (!first) {
-          out.push_back(',');
-        }
-        first = false;
-        // Array.prototype.join writes null and undefined elements as empty.
-        if (e.is_null() || (e.is_object() && e.as_object().contains("$u"))) {
-          continue;
-        }
-        append_template(e, out);
-      }
-      return;
-    }
     case json::Kind::kObject:
       append_object_template(v, out);
       return;
+    case json::Kind::kArray:
+      return;
+  }
+}
+
+void append_template(const json::Value& v, std::string& out) {
+  if (!v.is_array()) {
+    append_scalar_template(v, out);
+    return;
+  }
+  // Nested arrays join from an explicit stack, so nesting costs heap, not native stack.
+  struct Frame {
+    const json::Array* items;
+    std::size_t next;
+  };
+  std::vector<Frame> stack{Frame{&v.as_array(), 0}};
+  while (!stack.empty()) {
+    Frame& frame = stack.back();
+    if (frame.next == frame.items->size()) {
+      stack.pop_back();
+      continue;
+    }
+    const json::Value& e = (*frame.items)[frame.next];
+    if (frame.next++ > 0) {
+      out.push_back(',');
+    }
+    // Array.prototype.join writes null and undefined elements as empty.
+    if (e.is_null() || (e.is_object() && e.as_object().contains("$u"))) {
+      continue;
+    }
+    if (e.is_array()) {
+      stack.push_back(Frame{&e.as_array(), 0});
+    } else {
+      append_scalar_template(e, out);
+    }
   }
 }
 

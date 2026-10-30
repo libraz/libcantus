@@ -23,7 +23,7 @@ json::Value error_to_json(const Error& error) {
   json::Object o;
   // Every ErrorCode value is in the table.
   o.set("$class", ops::error_info(error.code())->name);
-  o.set("message", error.what());
+  o.set("message", error.message());
   if (const auto* no_solution = dynamic_cast<const NoSolutionError*>(&error)) {
     if (no_solution->at()) {
       o.set("at", static_cast<double>(*no_solution->at()));

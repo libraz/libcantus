@@ -21,3 +21,11 @@ describe('shared deterministic random generator', () => {
     expect(new Set(streams.map((stream) => JSON.stringify(stream))).size).toBe(1);
   });
 });
+
+describe('error messages', () => {
+  it('carries a rejected value whole, past a NUL character', () => {
+    expect(() => createRng('x\u0000y' as unknown as number)).toThrow(
+      'seed must be finite; received x\u0000y',
+    );
+  });
+});

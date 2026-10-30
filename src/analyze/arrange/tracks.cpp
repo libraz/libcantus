@@ -296,15 +296,13 @@ CallerKeys caller_keys(const TimelineHost& timeline, const std::optional<KeyArg>
   // The span is the one the notes sound over, not the one the chords cover: a chart of the
   // opening bars is a partial answer about the harmony and no answer at all about where the
   // piece ends.
-  double chart_end = 0;
+  double chart_end = -std::numeric_limits<double>::infinity();
   for (const SegmentSpan& segment : timeline.spans) {
     chart_end = js::max(chart_end, segment.endBeat);
   }
-  double sounding_end = 0;
-  for (const NoteEvent& note : pooled) {
-    sounding_end = js::max(sounding_end, note.startBeat + note.durationBeat);
-  }
-  double total_beats = js::max(chart_end, sounding_end);
+  double sounding_end = latest_sounding_end(pooled, -std::numeric_limits<double>::infinity());
+  double span_end = js::max(chart_end, sounding_end);
+  double total_beats = std::isfinite(span_end) ? span_end : 0;
   // ...and it begins where the music begins.
   double music_start = grid_for_notes(pooled, beats_per_bar_at(0, MeterArg(meters))).startBeat;
   CallerKeys out;

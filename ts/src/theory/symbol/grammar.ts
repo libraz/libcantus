@@ -723,7 +723,7 @@ function bassNote(text: string, system: NoteNameSystem): Note | undefined {
 }
 
 /** Build a chord and record the parsed spellings as enharmonic hints. */
-function makeSpelledChord(root: Note, spec: ChordSpec, bass?: Note): Chord {
+function chordFromSymbolParts(root: Note, spec: ChordSpec, bass?: Note): Chord {
   const rooted: ChordSpec = { ...spec, rootPc: noteToPitchClass(root) };
   if (bass !== undefined) {
     rooted.bassPc = noteToPitchClass(bass);
@@ -752,9 +752,9 @@ export function chordAfterRoot(
     const slashSpec = suffixSpec(rest.slice(0, slashIndex));
     const bass = slashSpec === undefined ? undefined : bassNote(rest.slice(slashIndex + 1), system);
     if (slashSpec !== undefined && bass !== undefined) {
-      return makeSpelledChord(root, slashSpec, bass);
+      return chordFromSymbolParts(root, slashSpec, bass);
     }
   }
   const spec = suffixSpec(rest);
-  return spec === undefined ? undefined : makeSpelledChord(root, spec);
+  return spec === undefined ? undefined : chordFromSymbolParts(root, spec);
 }

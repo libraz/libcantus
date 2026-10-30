@@ -121,6 +121,10 @@ Nullable<TonicizableDegree> applied_dominant_target(double root_pc, const KeySca
   return std::nullopt;
 }
 
+bool cadences_through_raised_seventh(const KeyScale& key) {
+  return is_minor_mask(key.modeMask12) && scale_system_of(key) == ScaleSystem::kCommonPractice;
+}
+
 int leading_tone_pc_of(const KeyScale& key) { return pitch_class_of(key.rootPc - 1); }
 
 bool sounds_diminished_triad(const Chord& chord) {

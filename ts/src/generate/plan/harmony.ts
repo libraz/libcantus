@@ -22,6 +22,7 @@ import {
   scaleOf,
   scaleTonesInDegreeOrder,
 } from '../../theory/scale/index.js';
+import { cadencesThroughRaisedSeventh, leadingTonePcOf } from '../../theory/tendency/index.js';
 import { positionClass } from './internal.js';
 import { planChordTimeline } from './timeline.js';
 import type { CompositionPlan } from './types.js';
@@ -38,7 +39,10 @@ export const HARMONY_OK_KIND_NAMES = [
 ] as const;
 const HARMONY_OK_KINDS: ReadonlySet<string> = new Set(HARMONY_OK_KIND_NAMES);
 
-/** Scale degrees a phrase's closing note may take, by cadence type. */
+/**
+ * Scale degrees a phrase's closing note may take, by cadence type. The seventh
+ * is the leading tone in a key that cadences through the raised seventh.
+ */
 export const CADENCE_DEGREES = {
   authentic: [1, 3],
   plagal: [1, 3],
@@ -92,9 +96,15 @@ export function cadencePitchClasses(
     return chord === null ? null : chordPitchClasses(chord);
   }
   const entry = plan.harmony.find((chord) => beat >= chord.startBeat && beat < chord.endBeat);
-  const tones = scaleTonesInDegreeOrder(scaleOf(plan.keys[entry?.key ?? 0] as ResolvedKey));
+  const scale = scaleOf(plan.keys[entry?.key ?? 0] as ResolvedKey);
+  const tones = scaleTonesInDegreeOrder(scale);
+  // The dominant a half or phrygian cadence lands on carries the raised seventh.
+  const raised = cadencesThroughRaisedSeventh(scale);
   return CADENCE_DEGREES[cadence]
-    .map((degree) => tones[degree - 1])
+    .map((degree) => {
+      const tone = tones[degree - 1];
+      return raised && degree === 7 && tone !== undefined ? leadingTonePcOf(scale) : tone;
+    })
     .filter((pc): pc is number => pc !== undefined);
 }
 

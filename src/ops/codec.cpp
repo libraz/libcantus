@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <limits>
+#include <vector>
 
 #include "js/format.h"
 #include "ops/error_map.h"
@@ -65,18 +66,24 @@ void expect_only(const json::Object& o, std::size_t keys, std::string_view tag) 
   }
 }
 
-void validate_value(const json::Value& v, bool undefined_allowed, ValidateStats& stats);
+/** A value still to validate, and whether `$u` may stand there. */
+struct Pending {
+  const json::Value* value;
+  bool undefined_allowed;
+};
 
-void validate_members(const json::Object& o, ValidateStats& stats) {
-  for (const json::Member& m : o) {
-    if (!is_tag_key(m.key)) {
-      validate_value(m.value, false, stats);
+/** Queue the user-data members of `o` so they are validated in member order. */
+void push_members(const json::Object& o, std::vector<Pending>& pending) {
+  for (const json::Member* m = o.end(); m != o.begin();) {
+    --m;
+    if (!is_tag_key(m->key)) {
+      pending.push_back(Pending{&m->value, false});
     }
   }
 }
 
 /** A tag that carries user data beside it: `$class`, `$hy`, and `$id` on a getter result. */
-void validate_data_tag(const json::Object& o, std::string_view tag, ValidateStats& stats) {
+void validate_data_tag(const json::Object& o, std::string_view tag, std::vector<Pending>& pending) {
   for (const json::Member& m : o) {
     if (!is_tag_key(m.key)) {
       continue;
@@ -96,14 +103,16 @@ void validate_data_tag(const json::Object& o, std::string_view tag, ValidateStat
   if (o.contains("$class") && o.contains("$hy")) {
     reject("malformed \"$class\" tag");
   }
-  validate_members(o, stats);
+  push_members(o, pending);
 }
 
-void validate_object(const json::Object& o, bool undefined_allowed, ValidateStats& stats) {
+/** Check the tags of `o` itself and queue the values nested in it. */
+void validate_object(const json::Object& o, bool undefined_allowed, ValidateStats& stats,
+                     std::vector<Pending>& pending) {
   std::string_view tag;
   std::size_t n = tag_keys(o, tag);
   if (n == 0) {
-    validate_members(o, stats);
+    push_members(o, pending);
     return;
   }
   if (const json::Value* x = o.find("$n")) {
@@ -144,11 +153,11 @@ void validate_object(const json::Object& o, bool undefined_allowed, ValidateStat
     if (payload == nullptr || repr == nullptr || o.size() != 2 || !repr->is_string()) {
       reject("malformed \"$tojson\" tag");
     }
-    validate_value(*payload, true, stats);
+    pending.push_back(Pending{payload, true});
     return;
   }
   if (o.contains("$class") || o.contains("$hy")) {
-    validate_data_tag(o, o.contains("$class") ? "$class" : "$hy", stats);
+    validate_data_tag(o, o.contains("$class") ? "$class" : "$hy", pending);
     return;
   }
   if (const json::Value* x = o.find("$h")) {
@@ -168,27 +177,23 @@ void validate_object(const json::Object& o, bool undefined_allowed, ValidateStat
     return;
   }
   if (o.contains("$id")) {
-    validate_data_tag(o, "$id", stats);
+    validate_data_tag(o, "$id", pending);
     return;
   }
   reject("unknown wire tag " + quoted(tag));
 }
 
-void validate_value(const json::Value& v, bool undefined_allowed, ValidateStats& stats) {
-  switch (v.kind()) {
-    case json::Kind::kArray:
-      for (const json::Value& e : v.as_array()) {
-        validate_value(e, true, stats);
-      }
-      return;
-    case json::Kind::kObject:
-      validate_object(v.as_object(), undefined_allowed, stats);
-      return;
-    case json::Kind::kNull:
-    case json::Kind::kBool:
-    case json::Kind::kNumber:
-    case json::Kind::kString:
-      return;
+/** Append a number as the wire writes it: NaN, ±Infinity and -0 as `$n` tags. */
+void write_number(const json::Value& v, std::string& out) {
+  double x = v.as_number();
+  if (std::isnan(x)) {
+    out += R"({"$n":"NaN"})";
+  } else if (std::isinf(x)) {
+    out += x > 0 ? R"({"$n":"Infinity"})" : R"({"$n":"-Infinity"})";
+  } else if (x == 0 && std::signbit(x)) {
+    out += R"({"$n":"-0"})";
+  } else {
+    json::stringify_to(v, out);
   }
 }
 
@@ -213,59 +218,79 @@ Tag tag_of(const json::Value& v) noexcept {
 }
 
 ValidateStats validate(const json::Value& v, bool allow_top_level_undefined) {
+  // Depth-first in document order from an explicit stack, so nesting costs heap, not native stack.
   ValidateStats stats;
-  validate_value(v, allow_top_level_undefined, stats);
+  std::vector<Pending> pending{Pending{&v, allow_top_level_undefined}};
+  while (!pending.empty()) {
+    Pending next = pending.back();
+    pending.pop_back();
+    if (next.value->is_array()) {
+      const json::Array& items = next.value->as_array();
+      for (auto it = items.rbegin(); it != items.rend(); ++it) {
+        pending.push_back(Pending{&*it, true});
+      }
+    } else if (next.value->is_object()) {
+      validate_object(next.value->as_object(), next.undefined_allowed, stats, pending);
+    }
+  }
   return stats;
 }
 
 void stringify_to(const json::Value& v, std::string& out) {
-  switch (v.kind()) {
-    case json::Kind::kNumber: {
-      double x = v.as_number();
-      if (std::isnan(x)) {
-        out += R"({"$n":"NaN"})";
-      } else if (std::isinf(x)) {
-        out += x > 0 ? R"({"$n":"Infinity"})" : R"({"$n":"-Infinity"})";
-      } else if (x == 0 && std::signbit(x)) {
-        out += R"({"$n":"-0"})";
+  // One frame per open container, as json::stringify_to keeps them.
+  struct Frame {
+    const json::Value* container;
+    std::size_t next;
+  };
+  std::vector<Frame> stack;
+  const json::Value* current = &v;
+  while (true) {
+    switch (current->kind()) {
+      case json::Kind::kNumber:
+        write_number(*current, out);
+        break;
+      case json::Kind::kArray:
+        out.push_back('[');
+        stack.push_back(Frame{current, 0});
+        break;
+      case json::Kind::kObject:
+        out.push_back('{');
+        stack.push_back(Frame{current, 0});
+        break;
+      case json::Kind::kNull:
+      case json::Kind::kBool:
+      case json::Kind::kString:
+        json::stringify_to(*current, out);
+        break;
+    }
+    // Advance to the next value to write, closing containers that are exhausted.
+    while (true) {
+      if (stack.empty()) {
+        return;
+      }
+      Frame& frame = stack.back();
+      const bool is_array = frame.container->is_array();
+      const std::size_t size =
+          is_array ? frame.container->as_array().size() : frame.container->as_object().size();
+      if (frame.next == size) {
+        out.push_back(is_array ? ']' : '}');
+        stack.pop_back();
+        continue;
+      }
+      if (frame.next > 0) {
+        out.push_back(',');
+      }
+      if (is_array) {
+        current = &frame.container->as_array()[frame.next];
       } else {
-        json::stringify_to(v, out);
-      }
-      return;
-    }
-    case json::Kind::kArray: {
-      out.push_back('[');
-      bool first = true;
-      for (const json::Value& e : v.as_array()) {
-        if (!first) {
-          out.push_back(',');
-        }
-        first = false;
-        ops::stringify_to(e, out);
-      }
-      out.push_back(']');
-      return;
-    }
-    case json::Kind::kObject: {
-      out.push_back('{');
-      bool first = true;
-      for (const json::Member& m : v.as_object()) {
-        if (!first) {
-          out.push_back(',');
-        }
-        first = false;
-        js::quote_to(m.key, out);
+        const json::Member& member = frame.container->as_object().begin()[frame.next];
+        js::quote_to(member.key, out);
         out.push_back(':');
-        ops::stringify_to(m.value, out);
+        current = &member.value;
       }
-      out.push_back('}');
-      return;
+      ++frame.next;
+      break;
     }
-    case json::Kind::kNull:
-    case json::Kind::kBool:
-    case json::Kind::kString:
-      json::stringify_to(v, out);
-      return;
   }
 }
 

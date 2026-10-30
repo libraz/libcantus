@@ -45,3 +45,24 @@ TEST_CASE("a bass outside the chord has no figures", "[figured_bass]") {
   CHECK_THROWS_AS(figured_bass_of(make_chord(0, ChordQuality::kMaj, 1), "C major"),
                   NoSolutionError);
 }
+
+TEST_CASE("a motion between run-together stacks moves them column by column", "[figured_bass]") {
+  FiguredBassRealization realized = figured_bass_realization("G", "64-53", "C major");
+  CHECK(realized.chord.rootPc == 7);
+  CHECK(realized.chord.quality == ChordQuality::kMaj);
+  REQUIRE(realized.suspensions.size() == 2);
+  CHECK(realized.suspensions[0].from == 6);
+  CHECK(realized.suspensions[0].to == 5);
+  CHECK(realized.suspensions[1].from == 4);
+  CHECK(realized.suspensions[1].to == 3);
+  CHECK_THROWS_AS(realize_figured_bass("G", "64-3", "C major"), InvalidInputError);
+  CHECK_THROWS_AS(realize_figured_bass("G", "4-53", "C major"), InvalidInputError);
+}
+
+TEST_CASE("an altered stack of thirds is not rounded to a suspended or added-tone chord",
+          "[figured_bass]") {
+  CHECK_THROWS_AS(realize_figured_bass("A", "b3", "C major"), NoSolutionError);
+  CHECK_THROWS_AS(realize_figured_bass("G", "#", "A minor"), NoSolutionError);
+  CHECK_THROWS_AS(realize_figured_bass("C", "bb7", "C major"), NoSolutionError);
+  CHECK_THROWS_AS(realize_figured_bass("C", "b3bb7", "C major"), NoSolutionError);
+}

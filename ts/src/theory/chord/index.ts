@@ -4,7 +4,6 @@ import {
   noteToPitchClass,
   pitchClassOf as pitchClass,
 } from '../../core/pitch/index.js';
-import type { KeyScale } from '../../core/types.js';
 import {
   assertArray,
   assertDegree,
@@ -13,7 +12,13 @@ import {
   assertOptions,
   assertRecord,
 } from '../../core/validation/index.js';
-import { type KeyLike, scaleTonesInDegreeOrder, toKeyScale } from '../scale/index.js';
+import {
+  type ResolvedKey,
+  resolveKey,
+  type SpelledKeyLike,
+  scaleTonesInDegreeOrder,
+} from '../scale/index.js';
+import { spellChordFromRoot, spellPitchClass } from '../spelling/index.js';
 import type { ChordQuality, ChordSpec } from './spec.js';
 import {
   assertChordSpec,
@@ -202,7 +207,8 @@ export function assertChord(chord: Chord, name = 'chord'): Chord {
 /**
  * Build a chord rooted on a diatonic scale degree.
  *
- * The root pitch class is the degree's diatonic pitch class in `key`; the
+ * The root pitch class is the degree's diatonic pitch class in `key`, spelled
+ * the way the key writes it (a flat key names its degrees with flats); the
  * quality's interval template is attached unchanged. Degrees beyond the scale
  * length wrap around, so degree 8 of a heptatonic scale is its degree 1.
  *
@@ -216,17 +222,17 @@ export function assertChord(chord: Chord, name = 'chord'): Chord {
  *
  * @category Chords
  */
-export function chordFromDegree(degree: number, ext: ChordQuality, key: KeyLike): Chord {
+export function chordFromDegree(degree: number, ext: ChordQuality, key: SpelledKeyLike): Chord {
   // Degree 0 is rejected rather than wrapped onto the last degree: a caller
   // still counting from zero gets an error instead of a plausible chord.
   assertDegree(degree, 'chord degree');
   assertChordQuality(ext);
-  const scale = toKeyScale(key);
-  const tones = scaleTonesInDegreeOrder(scale);
+  const resolved = resolveKey(key);
+  const tones = scaleTonesInDegreeOrder(resolved.scale);
   const length = tones.length;
   const index = length > 0 ? (degree - 1) % length : 0;
-  const rootPc = tones[index] ?? pitchClass(scale.rootPc);
-  return { rootPc, quality: ext, intervals: [...QUALITY_INTERVALS[ext]] };
+  const rootPc = tones[index] ?? pitchClass(resolved.scale.rootPc);
+  return makeSpelledChord(rootPc, ext, { rootSpelling: keySpelling(rootPc, resolved) });
 }
 
 /**
@@ -247,12 +253,49 @@ export function chordFromDegree(degree: number, ext: ChordQuality, key: KeyLike)
  * @category Chords
  */
 export function makeChord(rootPc: number, quality: ChordQuality, bassPc?: number): Chord {
+  return makeSpelledChord(rootPc, quality, { bassPc });
+}
+
+/**
+ * The slash bass and spellings a chord builder attaches beside the pitch
+ * classes.
+ *
+ * `bassSpelling` may be left out when the bass is one of the chord's own tones:
+ * it is then that tone's spelling over the given root spelling.
+ */
+export type SpelledChordParts = {
+  bassPc?: number;
+  rootSpelling?: PitchSpelling;
+  bassSpelling?: PitchSpelling;
+  toneSpellings?: PitchSpelling[];
+};
+
+/**
+ * The one constructor behind every chord built from a quality.
+ *
+ * {@link makeChord} is this without spellings. A builder that knows how its
+ * chord is written, from a key or a numeral, passes the letters here: a chord
+ * built from a bare root pitch class forgets them, and a formatter then writes
+ * the default name (Bb7 as A#7, the Neapolitan of Ab minor as A major).
+ *
+ * Not part of the package's public surface.
+ *
+ * @param rootPc Root pitch class.
+ * @param quality Chord quality supplying the interval template.
+ * @param parts The slash bass and the spellings to attach; each is copied.
+ * @returns The constructed chord.
+ */
+export function makeSpelledChord(
+  rootPc: number,
+  quality: ChordQuality,
+  parts: SpelledChordParts = {},
+): Chord {
   // A NaN root formats as 'C' and an unknown quality as 'Cundefined', so both
   // travel on into voicing, detection, and serialization as a chord that looks
   // real. They are rejected where the chord is built instead.
   assertFiniteNumber(rootPc, 'chord rootPc');
-  if (bassPc !== undefined) {
-    assertFiniteNumber(bassPc, 'chord bassPc');
+  if (parts.bassPc !== undefined) {
+    assertFiniteNumber(parts.bassPc, 'chord bassPc');
   }
   assertChordQuality(quality);
   const chord: Chord = {
@@ -260,10 +303,33 @@ export function makeChord(rootPc: number, quality: ChordQuality, bassPc?: number
     quality,
     intervals: [...(QUALITY_INTERVALS[quality] ?? [])],
   };
-  if (bassPc !== undefined) {
-    chord.bassPc = pitchClass(bassPc);
+  if (parts.bassPc !== undefined) {
+    chord.bassPc = pitchClass(parts.bassPc);
+  }
+  if (parts.rootSpelling !== undefined) {
+    chord.rootSpelling = { letter: parts.rootSpelling.letter, alter: parts.rootSpelling.alter };
+  }
+  if (parts.bassSpelling !== undefined) {
+    chord.bassSpelling = { letter: parts.bassSpelling.letter, alter: parts.bassSpelling.alter };
+  } else if (chord.rootSpelling !== undefined && chord.bassPc !== undefined) {
+    const index = chord.intervals.findIndex(
+      (interval) => pitchClass(chord.rootPc + interval) === chord.bassPc,
+    );
+    const tone = index >= 0 ? spellChordFromRoot(chord, chord.rootSpelling)[index] : undefined;
+    if (tone !== undefined) {
+      chord.bassSpelling = { letter: tone.letter, alter: tone.alter };
+    }
+  }
+  if (parts.toneSpellings !== undefined) {
+    chord.toneSpellings = parts.toneSpellings.map(({ letter, alter }) => ({ letter, alter }));
   }
   return chord;
+}
+
+/** How a key writes a pitch class, as a bare spelling. */
+export function keySpelling(pc: number, key: ResolvedKey): PitchSpelling {
+  const { letter, alter } = spellPitchClass(pc, key.tonic, key.scale);
+  return { letter, alter };
 }
 
 /**
@@ -413,7 +479,7 @@ function hasCustomIntervals(chord: Chord): boolean {
  */
 export function chordFromSpan(span: ChordSpan): Chord {
   assertRecord<ChordSpan>(span, 'chord span');
-  const chord = makeChord(span.rootPc, span.quality, span.bassPc);
+  const chord = makeSpelledChord(span.rootPc, span.quality, { bassPc: span.bassPc });
   if (span.intervals !== undefined) {
     chord.intervals = copySpanIntervals(span.intervals);
   }
@@ -916,10 +982,11 @@ function matchesQualityIntervals(quality: ChordQuality, intervals: readonly numb
  * Stack scale thirds from a 1-based scale degree into a chord of `size` notes.
  * Degrees beyond the scale length wrap around.
  */
-function stackThirds(degree: number, key: KeyScale, size: 3 | 4): Chord {
+function stackThirds(degree: number, resolved: ResolvedKey, size: 3 | 4): Chord {
   // Degree 0 is rejected rather than wrapped onto the last degree: a caller
   // still counting from zero gets an error instead of a plausible chord.
   assertDegree(degree, 'chord degree');
+  const key = resolved.scale;
   const tones = scaleTonesInDegreeOrder(key);
   const length = tones.length;
   if (length !== 7) {
@@ -944,7 +1011,7 @@ function stackThirds(degree: number, key: KeyScale, size: 3 | 4): Chord {
       `scale thirds at degree ${degree} produce unsupported intervals [${offsets.join(', ')}]`,
     );
   }
-  return { rootPc, quality, intervals: offsets };
+  return makeSpelledChord(rootPc, quality, { rootSpelling: keySpelling(rootPc, resolved) });
 }
 
 /**
@@ -953,6 +1020,7 @@ function stackThirds(degree: number, key: KeyScale, size: 3 | 4): Chord {
  * Unlike {@link chordFromDegree}, the chord quality is derived from the scale
  * rather than supplied, so degrees yield their scale-correct triads (e.g. a
  * diminished triad on the leading tone of a major key).
+ * The root is spelled the way the key writes it.
  *
  * @param degree 1-based scale degree of the chord root: 1 is the tonic.
  * @param key Key/scale context, as a key name, a key/scale, or a `Key`.
@@ -970,12 +1038,14 @@ function stackThirds(degree: number, key: KeyScale, size: 3 | 4): Chord {
  *
  * @category Chords
  */
-export function diatonicTriad(degree: number, key: KeyLike): Chord {
-  return stackThirds(degree, toKeyScale(key), 3);
+export function diatonicTriad(degree: number, key: SpelledKeyLike): Chord {
+  return stackThirds(degree, resolveKey(key), 3);
 }
 
 /**
  * Build the diatonic seventh chord rooted on a scale degree.
+ *
+ * The root is spelled the way the key writes it.
  *
  * @param degree 1-based scale degree of the chord root: 1 is the tonic.
  * @param key Key/scale context, as a key name, a key/scale, or a `Key`.
@@ -985,6 +1055,6 @@ export function diatonicTriad(degree: number, key: KeyLike): Chord {
  *
  * @category Chords
  */
-export function diatonicSeventh(degree: number, key: KeyLike): Chord {
-  return stackThirds(degree, toKeyScale(key), 4);
+export function diatonicSeventh(degree: number, key: SpelledKeyLike): Chord {
+  return stackThirds(degree, resolveKey(key), 4);
 }

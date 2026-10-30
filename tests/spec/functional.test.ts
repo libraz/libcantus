@@ -2,13 +2,16 @@ import {
   analyzeChord,
   chordToRoman,
   detectCadence,
+  explainRoman,
   functionOf,
   isDiatonic,
   romanToChord,
   secondaryDominant,
   secondaryDominantOf,
 } from '@libraz/libcantus/analyze';
+import { Key } from '@libraz/libcantus/model';
 import {
+  chordFromDegree,
   chordPitchClasses,
   chordQualities,
   diatonicTriad,
@@ -248,11 +251,13 @@ describe('secondaryDominantOf', () => {
     ['A minor', aMinor],
   ] as const) {
     it(`agrees with the degree-based entry point on every degree of ${name}`, () => {
-      scaleTonesInDegreeOrder(key).forEach((rootPc, index) => {
+      scaleTonesInDegreeOrder(key).forEach((_rootPc, index) => {
         const degree = index + 1;
-        expect(secondaryDominantOf(makeChord(rootPc, 'maj')), `degree ${degree}`).toEqual(
-          secondaryDominant(degree, key),
-        );
+        // The target carries the key's spelling, which the dominant moves with it.
+        expect(
+          secondaryDominantOf(chordFromDegree(degree, 'maj', key)),
+          `degree ${degree}`,
+        ).toEqual(secondaryDominant(degree, key));
       });
     });
   }
@@ -544,7 +549,7 @@ describe('applied Roman numerals', () => {
     // chord tonicizes, so the dominant built over it is named against the home
     // key instead of pointing at a target that cannot be one.
     expect(chordToRoman(secondaryDominant(7, cMajor), cMajor, { applied: true })).toBe('#IV7');
-    expect(chordToRoman(makeChord(10, 'dim7'), cMajor, { applied: true })).toBe('bviio7');
+    expect(chordToRoman(makeChord(10, 'dim7'), cMajor, { applied: true })).toBe('#vio7');
   });
 
   it('points every applied numeral at a degree that can be a tonic, in every key', () => {
@@ -755,5 +760,98 @@ describe('a chord read as an augmented sixth reads its spelling hints', () => {
 
   it('reads no hint of a chord off the family bass', () => {
     expect(functionOf({ ...makeChord(7, 'dom7'), rootSpelling: 5 as never }, C)).toBe('dominant');
+  });
+});
+
+describe('a numeral builds the chord it spells', () => {
+  it('writes the root on the letter of its degree, whatever the pitch class reads best as', () => {
+    // bII is the second degree lowered: B flat flattened again in Ab minor.
+    expect(Key.of('Ab minor').roman('bII').symbol()).toBe('Bbb');
+    expect(Key.of('Ab minor').roman('N6').symbol()).toBe('Bbb/Db');
+    expect(Key.of('Ab minor').roman('bII6').symbol()).toBe('Bbb/Db');
+    expect(Key.of('Ab minor').roman('N6').rootPc).toBe(Key.of('Ab minor').roman('bII6').rootPc);
+    expect(Key.of('C major').roman('bII6').symbol()).toBe('Db/F');
+  });
+
+  it('writes an applied chord in the local key its numeral names', () => {
+    expect(formatChordSymbol(romanToChord('V7/bVI', 'C major'))).toBe('Eb7');
+    expect(formatChordSymbol(romanToChord('viio7/vi', 'C major'))).toBe('G#dim7');
+    expect(formatChordSymbol(romanToChord('viio7/ii', 'C major'))).toBe('C#dim7');
+    expect(formatChordSymbol(romanToChord('V7/V', 'Eb major'))).toBe('F7');
+    expect(formatChordSymbol(romanToChord('V7/bII', 'C major'))).toBe('Ab7');
+  });
+
+  it('carries the spelling to the bass of an inversion', () => {
+    expect(formatChordSymbol(romanToChord('V65', 'C major'))).toBe('G7/B');
+    expect(formatChordSymbol(romanToChord('V43', 'Ab major'))).toBe('Eb7/Bb');
+    expect(formatChordSymbol(romanToChord('viio42', 'Ab major'))).toBe('Gdim7/Fb');
+  });
+
+  it('keeps the pitch classes of the same numeral under the other spelling', () => {
+    expect(romanToChord('bII', 'Ab minor').rootPc).toBe(9);
+    expect(romanToChord('bII', 'G# minor').rootPc).toBe(9);
+    expect(formatChordSymbol(romanToChord('bII', 'G# minor'))).toBe('A');
+  });
+});
+
+describe('a chromatic chord is numbered by one reading', () => {
+  const cMajorKey = 'C major';
+
+  it('numbers a leading-tone chord on a chromatic root as the raised degree below it', () => {
+    for (const [rootPc, quality, numeral] of [
+      [8, 'dim7', '#vo7'],
+      [1, 'dim7', '#io7'],
+      [3, 'dim7', '#iio7'],
+      [1, 'm7b5', '#iø7'],
+      [8, 'dim', '#vo'],
+    ] as const) {
+      const chord = makeChord(rootPc, quality);
+      expect(chordToRoman(chord, cMajorKey), numeral).toBe(numeral);
+      expect(romanToChord(numeral, cMajorKey).rootPc, numeral).toBe(rootPc);
+    }
+    const explained = explainRoman(makeChord(8, 'dim7'), cMajorKey);
+    expect(explained.rationale).toContain('raised a semitone');
+  });
+
+  it('reads the same chord as the leading tone of its target when applied is asked for', () => {
+    expect(chordToRoman(makeChord(8, 'dim7'), cMajorKey, { applied: true })).toBe('viio7/vi');
+  });
+
+  it('numbers a diminished seventh by the letter it is written on', () => {
+    // Only the sharp spellings are leading-tone chords of the degree above;
+    // the flat ones are diminished sevenths on a lowered degree. The leading tone
+    // of the seventh degree has no target, so A#dim7 keeps its plain numeral.
+    for (const [symbol, plain, applied] of [
+      ['Bbdim7', 'bviio7', 'bviio7'],
+      ['Abdim7', 'bvio7', 'bvio7'],
+      ['Ebdim7', 'biiio7', 'biiio7'],
+      ['A#dim7', '#vio7', '#vio7'],
+      ['G#dim7', '#vo7', 'viio7/vi'],
+      ['D#dim7', '#iio7', 'viio7/iii'],
+    ] as const) {
+      const chord = parseChordSymbol(symbol);
+      expect(chordToRoman(chord, cMajorKey), symbol).toBe(plain);
+      expect(chordToRoman(chord, cMajorKey, { applied: true }), symbol).toBe(applied);
+    }
+  });
+
+  it('numbers the borrowed tonic and subdominant of a minor key by their own degrees', () => {
+    for (const [rootPc, key, numeral] of [
+      [0, 'C minor', 'I'],
+      [5, 'C minor', 'IV'],
+      [9, 'A minor', 'I'],
+      [2, 'A minor', 'IV'],
+      [4, 'E phrygian', 'I'],
+    ] as const) {
+      const chord = makeChord(rootPc, 'maj');
+      expect(chordToRoman(chord, key), `${rootPc} ${key}`).toBe(numeral);
+      expect(chordToRoman(chord, key, { applied: true }), `${rootPc} ${key}`).toBe(numeral);
+      expect(functionOf(chord, key), `${rootPc} ${key}`).not.toBe('dominant');
+    }
+  });
+
+  it('still reads a chromatic dominant of a diatonic degree as applied', () => {
+    expect(chordToRoman(makeChord(2, 'dom7'), cMajorKey, { applied: true })).toBe('V7/V');
+    expect(chordToRoman(makeChord(2, 'dom7'), cMajorKey)).toBe('II7');
   });
 });

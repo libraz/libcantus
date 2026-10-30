@@ -57,6 +57,12 @@ struct ChordData {
 ChordData read_chord_like(const json::Value& value);
 
 /**
+ * assert_chord_quality() on the data of a read chord, taking the quality it names: what
+ * `assertChord` (and so `chordPitchClasses`) refuses of a chord `toChordData` has read.
+ */
+void settle_chord_quality(ChordData& data);
+
+/**
  * The `system` option of a chord symbol (`asked.system ?? DEFAULT_SYSTEM`): nullopt when absent or
  * null, else a known system.
  * @throws InvalidInputError if it names no system.

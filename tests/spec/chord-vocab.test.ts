@@ -101,7 +101,11 @@ describe('diatonic stacking', () => {
   });
 
   it('labels a flattened-fifth dominant with its matching template', () => {
-    const doubleHarmonic = { rootPc: 0, modeMask12: maskFromOffsets([0, 1, 4, 5, 7, 8, 11]) };
+    const doubleHarmonic = {
+      rootPc: 0,
+      modeMask12: maskFromOffsets([0, 1, 4, 5, 7, 8, 11]),
+      tonic: { letter: 0, alter: 0 },
+    };
     const chord = diatonicSeventh(5, doubleHarmonic);
     expect(chord.quality).toBe('7b5');
     expect(chord.intervals).toEqual([0, 4, 6, 10]);

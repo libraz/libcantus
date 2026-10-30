@@ -83,9 +83,9 @@ SimpleNumber split_number(int number) {
   return {octaves, simple, kSimpleReference[static_cast<std::size_t>(simple)] + 12 * octaves};
 }
 
-/** `glyph` repeated `count` times, at most MAX_NOTE_ALTER * 2 in all (`repeat`). */
+/** `glyph` repeated `count` times, at most MAX_NOTE_ALTER * 2 + 1 in all (`repeat`). */
 std::string repeat_quality(char glyph, double count) {
-  auto length = static_cast<std::size_t>(js::min(count, MAX_NOTE_ALTER * 2));
+  auto length = static_cast<std::size_t>(js::min(count, MAX_NOTE_ALTER * 2 + 1));
   return std::string(length, glyph);
 }
 

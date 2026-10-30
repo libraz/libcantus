@@ -467,11 +467,11 @@ function explainMatches(results: KeyMatch[], inputSize: number): void {
  *
  * Choosing the minor variant is deliberately not part of the ranking. A minor
  * candidate is ranked once, on the minor profile, which already expects some
- * weight on the raised sixth and seventh; only then does it report whichever of
- * the natural, harmonic and melodic masks covers the most input weight, and
- * `fit` is measured against that mask. That split is why a harmonic-minor
- * cadence ranks its own tonic first without the harmonic variant having to win
- * a scoring contest against the natural one.
+ * weight on the raised seventh and treats the raised sixth as chromatic; only
+ * then does it report whichever of the natural, harmonic and melodic masks
+ * covers the most input weight, and `fit` is measured against that mask. That
+ * split is why a harmonic-minor cadence ranks its own tonic first without the
+ * harmonic variant having to win a scoring contest against the natural one.
  *
  * {@link DetectKeyOptions.modes} adds the church modes to the same contest, one
  * candidate per mode per tonic, each ranked on a profile derived from its

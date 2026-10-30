@@ -74,6 +74,28 @@ export function gridForNotes(notes: readonly NoteEvent[], slotBeats: number): Gr
 }
 
 /**
+ * The beat the latest-ending note stops sounding on.
+ *
+ * Every analysed span's end reads from here. The reduction is seeded from
+ * negative infinity: seeding it with 0 anchors a span to beat 0 and reports a
+ * pickup lying wholly before the downbeat as ending on it.
+ *
+ * @param notes The sounding notes of the span.
+ * @param fallback The beat to report when nothing sounds.
+ * @returns The greatest `startBeat + durationBeat`, or `fallback` for an empty span.
+ */
+export function latestSoundingEnd(notes: readonly NoteEvent[], fallback = 0): number {
+  if (notes.length === 0) {
+    return fallback;
+  }
+  let end = Number.NEGATIVE_INFINITY;
+  for (const note of notes) {
+    end = Math.max(end, note.startBeat + note.durationBeat);
+  }
+  return end;
+}
+
+/**
  * First beat of a span read in bars, with the pickup rule applied.
  *
  * The bar is the slot the form analyses work in, so phrases, sections and

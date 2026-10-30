@@ -6,6 +6,7 @@
 #include <cmath>
 #include <limits>
 #include <map>
+#include <set>
 #include <string>
 
 #include "analyze/adjacency.h"
@@ -72,6 +73,7 @@ std::vector<Onset> fold_onsets(const std::vector<NoteEvent>& sounding) {
 /** An onset read against the grid (`SnappedOnset`). */
 struct SnappedOnset : Onset {
   TimeSignature ts;
+  double barStart = 0;
   /** Nearest grid slot, relative to the bar's own downbeat. */
   double slot = 0;
   /** The onset's beat, moved to the nearest grid slot. */
@@ -86,6 +88,7 @@ SnappedOnset snap_onset(const Onset& onset, const MeterArg& meters) {
   static_cast<Onset&>(out) = onset;
   out.ts = meter_at(onset.beat, meters);
   double bar_start = bar_start_beat(onset.beat, meters);
+  out.barStart = bar_start;
   double offset = onset.beat - bar_start;
   out.slot = js::round(offset / kSlotWidth);
   out.snapped = bar_start + out.slot * kSlotWidth;
@@ -106,18 +109,65 @@ std::string ts_key(const TimeSignature& ts) {
   return key;
 }
 
-/** The pulse and first-subdivision beats of one bar, in bar order (`barGridBeats`). */
-std::vector<double> bar_grid_beats(double bar, const MeterArg& meters) {
+/** A grid position and its rhythmic level (`GridPoint`). */
+struct GridPoint {
+  double beat;
+  int level;
+};
+
+/** A bar and the index of a pulse within it (`pulseKey`). */
+using PulseKey = std::pair<double, double>;
+
+/**
+ * The pulses whose onsets sit on the division the meter does not use: thirds of a pulse in a
+ * simple meter, halves in a compound one (`otherDivisionPulses`).
+ */
+std::set<PulseKey> other_division_pulses(const std::vector<SnappedOnset>& snapped,
+                                         const MeterArg& meters) {
+  std::set<PulseKey> pulses;
+  for (const SnappedOnset& onset : snapped) {
+    double pulse = pulse_beats(onset.ts);
+    double offset = onset.snapped - onset.barStart;
+    double index = std::floor(offset / pulse + BEAT_EPS);
+    double within = offset - index * pulse;
+    double used = is_compound(onset.ts) ? 3 : 2;
+    double other = is_compound(onset.ts) ? 2 : 3;
+    if (is_multiple_of(within, pulse / other) && !is_multiple_of(within, pulse / used)) {
+      pulses.insert(PulseKey{bar_index_at(onset.beat, meters), index});
+    }
+  }
+  return pulses;
+}
+
+/** The pulse and first-subdivision points of one bar, in bar order (`barGridPoints`). */
+std::vector<GridPoint> bar_grid_points(double bar, const MeterArg& meters,
+                                       const std::set<PulseKey>& other_pulses) {
   double bar_start = bar_position_to_beat(BarPosition{bar, 0}, meters);
   TimeSignature ts = meter_at(bar_start, meters);
   double bar_length = beats_per_bar_at(bar_start, meters);
-  double sub_unit = pulse_beats(ts) / (is_compound(ts) ? 3 : 2);
+  double pulse = pulse_beats(ts);
+  double used = is_compound(ts) ? 3 : 2;
+  double other = is_compound(ts) ? 2 : 3;
+  double sub_unit = pulse / used;
   double steps = js::max(1, js::round(bar_length / sub_unit));
-  std::vector<double> out;
+  std::vector<GridPoint> points;
   for (double k = 0; k < steps; k += 1) {
-    out.push_back(bar_start + k * sub_unit);
+    double index = std::floor((k * sub_unit) / pulse + BEAT_EPS);
+    if (std::fmod(k, used) == 0 || other_pulses.count(PulseKey{bar, index}) == 0) {
+      double beat = bar_start + k * sub_unit;
+      points.push_back(GridPoint{beat, rhythm_level(beat, meters)});
+    }
   }
-  return out;
+  for (double index = 0; index * pulse < steps * sub_unit - BEAT_EPS; index += 1) {
+    if (other_pulses.count(PulseKey{bar, index}) != 0) {
+      for (double m = 1; m < other; m += 1) {
+        points.push_back(GridPoint{bar_start + index * pulse + (m * pulse) / other, 1});
+      }
+    }
+  }
+  std::stable_sort(points.begin(), points.end(),
+                   [](const GridPoint& a, const GridPoint& b) { return a.beat - b.beat < 0; });
+  return points;
 }
 
 /** Share of `[window_start, window_end)` during which nothing sounds (`restRatioOf`). */
@@ -165,20 +215,17 @@ double syncopation_of(const std::vector<SnappedOnset>& snapped, double start_bea
   }
   double first_bar = bar_index_at(start_beat, meters);
   double last_bar = bar_index_at(end_beat, meters);
-  struct Point {
-    double beat;
-    int level;
-  };
-  std::vector<Point> points;
+  std::set<PulseKey> other_pulses = other_division_pulses(snapped, meters);
+  std::vector<GridPoint> points;
   for (double bar = first_bar; bar <= last_bar; bar += 1) {
-    for (double beat : bar_grid_beats(bar, meters)) {
-      if (beat > start_beat + BEAT_EPS && beat <= end_beat + BEAT_EPS) {
-        points.push_back(Point{beat, rhythm_level(beat, meters)});
+    for (const GridPoint& point : bar_grid_points(bar, meters, other_pulses)) {
+      if (point.beat > start_beat + BEAT_EPS && point.beat <= end_beat + BEAT_EPS) {
+        points.push_back(point);
       }
     }
   }
   double normalizer = 0;
-  for (const Point& point : points) {
+  for (const GridPoint& point : points) {
     normalizer += point.level;
   }
   if (normalizer <= 0) {
@@ -192,14 +239,19 @@ double syncopation_of(const std::vector<SnappedOnset>& snapped, double start_bea
     while (ptr < points.size() && points[ptr].beat <= onset.snapped + BEAT_EPS) {
       ptr += 1;
     }
+    // An onset on a point of the division its pulse is read in sits at that division's level.
+    int onset_level = onset.level;
+    if (ptr > 0 && std::fabs(points[ptr - 1].beat - onset.snapped) < BEAT_EPS) {
+      onset_level = static_cast<int>(js::max(onset.level, points[ptr - 1].level));
+    }
     std::size_t scan = ptr;
     double max_level = 0;
     while (scan < points.size() && points[scan].beat < window_end - BEAT_EPS) {
       max_level = js::max(max_level, points[scan].level);
       scan += 1;
     }
-    if (max_level > onset.level) {
-      numerator += max_level - onset.level;
+    if (max_level > onset_level) {
+      numerator += max_level - onset_level;
     }
     ptr = scan;
   }
@@ -232,14 +284,12 @@ RhythmAnalysis analyze_rhythm(const std::vector<NoteEvent>& notes,
   }
 
   double first_onset = std::numeric_limits<double>::infinity();
-  double last_end = 0;
   for (const NoteEvent& note : sounding) {
     first_onset = js::min(first_onset, note.startBeat);
-    last_end = js::max(last_end, note.startBeat + note.durationBeat);
   }
   double start_beat = bar_grid_start(first_onset, meters);
-  double end_beat = js::max(start_beat, opts.totalBeats.value_or(last_end));
-  assert_range(end_beat, 0, kMaxSafeInteger, "rhythm totalBeats");
+  double end_beat = js::max(start_beat, opts.totalBeats.value_or(latest_sounding_end(sounding)));
+  assert_range(end_beat, js::min(0, start_beat), kMaxSafeInteger, "rhythm totalBeats");
 
   double bars = bar_span_of(start_beat, end_beat, meters);
   assert_generation_budget(std::ceil(bars) * BUDGET_SLOTS_PER_BAR, "rhythm analysis slots",

@@ -183,7 +183,9 @@ function expectedDerivation(
       if (relation.timeRatio !== 1) cell = scaleTime(cell, relation.timeRatio);
       break;
     case 'tonalTransposition': {
-      const sorted = [...cell].sort((a, b) => a.startBeat - b.startBeat);
+      const sorted = [...scaleTime(cell, relation.timeRatio)].sort(
+        (a, b) => a.startBeat - b.startBeat,
+      );
       const offset = startBeat - (sorted[0]?.startBeat ?? 0);
       return sorted.map((n) => ({
         ...n,
@@ -196,10 +198,10 @@ function expectedDerivation(
       if (relation.timeRatio !== 1) cell = scaleTime(cell, relation.timeRatio);
       break;
     case 'retrograde':
-      cell = retrograde(cell);
+      cell = scaleTime(retrograde(cell), relation.timeRatio);
       break;
     case 'retrogradeInversion':
-      cell = retrograde(invert(cell));
+      cell = scaleTime(retrograde(invert(cell)), relation.timeRatio);
       break;
     case 'augmentation':
     case 'diminution':
@@ -438,6 +440,9 @@ describe('generateMelody', () => {
       [{ kind: 'inversion', sequence: false, semitones: 3, timeRatio: 2 }, 8],
       [{ kind: 'retrograde', sequence: false, semitones: 0, timeRatio: 1 }, 4],
       [{ kind: 'retrogradeInversion', sequence: false, semitones: -2, timeRatio: 1 }, 4],
+      [{ kind: 'tonalTransposition', sequence: false, semitones: 2, degrees: 1, timeRatio: 2 }, 8],
+      [{ kind: 'retrograde', sequence: false, semitones: 0, timeRatio: 2 }, 8],
+      [{ kind: 'retrogradeInversion', sequence: false, semitones: -2, timeRatio: 2 }, 8],
       [{ kind: 'augmentation', sequence: false, semitones: 0, timeRatio: 2 }, 8],
       [{ kind: 'diminution', sequence: false, semitones: 0, timeRatio: 0.5 }, 2],
     ];

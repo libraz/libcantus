@@ -453,8 +453,10 @@ describe('the half-diminished glyph', () => {
   // which is what these pin.
   it('parses viiø7 and viiø as the half-diminished seventh', () => {
     const expected = makeChord(11, 'm7b5');
-    expect(romanToChord('viiø7', cMajor)).toEqual(expected);
-    expect(romanToChord('viiø', cMajor)).toEqual(expected);
+    // A numeral writes its root: the seventh degree of C major is a B.
+    const written = { ...expected, rootSpelling: { letter: 6, alter: 0 } };
+    expect(romanToChord('viiø7', cMajor)).toEqual(written);
+    expect(romanToChord('viiø', cMajor)).toEqual(written);
     expect(chordToRoman(expected, cMajor)).toBe('viiø7');
   });
 

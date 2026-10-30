@@ -155,7 +155,7 @@ void assert_plan_key(const KeyArg& key, std::string_view name) {
   try {
     resolve_key(key);
   } catch (const InvalidInputError& error) {
-    throw InvalidInputError(std::string(name) + " must be a valid key: " + error.what());
+    throw InvalidInputError(std::string(name) + " must be a valid key: " + error.message());
   }
 }
 
@@ -165,7 +165,7 @@ void assert_plan_roman(const std::string& roman, const ResolvedKey& key, std::st
   } catch (const InvalidInputError& error) {
     throw InvalidInputError(std::string(name) +
                             ".roman must be readable by romanToChord; received " +
-                            describe_rejected(json::Value(roman)) + ": " + error.what());
+                            describe_rejected(json::Value(roman)) + ": " + error.message());
   }
 }
 

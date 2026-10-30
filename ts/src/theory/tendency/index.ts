@@ -3,7 +3,7 @@ import { pitchClassOf } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { Chord, ChordQuality } from '../chord/index.js';
 import { chordPitchClasses, chordToneRole } from '../chord/index.js';
-import { isScaleTone, majorKey, scaleTonesInDegreeOrder } from '../scale/index.js';
+import { isScaleTone, majorKey, scaleSystemOf, scaleTonesInDegreeOrder } from '../scale/index.js';
 import { isMinorMask } from '../scale/masks.js';
 
 /**
@@ -231,6 +231,21 @@ export function appliedDominantTarget(rootPc: number, key: KeyScale): Tonicizabl
       (degree) => degree.degreeNumber !== 1 && degree.rootPc === target,
     ) ?? null
   );
+}
+
+/**
+ * Whether a key cadences through the raised seventh of the harmonic minor.
+ *
+ * A minor key does, and it is the only key that raises a seventh its own
+ * signature lowers. A mode with a lowered third does not: dorian and phrygian
+ * are held together by the sevenths they have, and locrian has no perfect fifth
+ * to stand that dominant on at all, so raising theirs would overwrite the very
+ * degree that names them. The scale system is what separates the two — a
+ * natural-minor mask and an aeolian one are the same twelve bits, and the
+ * difference is which tradition the key is being read in.
+ */
+export function cadencesThroughRaisedSeventh(key: KeyScale): boolean {
+  return isMinorMask(key.modeMask12) && scaleSystemOf(key) === 'common-practice';
 }
 
 /**

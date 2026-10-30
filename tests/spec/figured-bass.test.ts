@@ -147,8 +147,9 @@ describe('accidentals in figures', () => {
       bassPc: 7,
     });
     // A sharp on that same figure names the sharp note, which over this bass is
-    // a B sharp and not the leading tone.
-    expect(realizedNames('G', '#', cMinor)).toEqual(['G', 'B#', 'D']);
+    // a B sharp and not the leading tone. G B# D is a third a fourth wide, which
+    // no tertian chord has, so it names no chord rather than a suspended one.
+    expect(() => realizedNames('G', '#', cMinor)).toThrow(/no chord quality names/);
     // A flat names the flat note: the third above Db in Ab major is an F, and
     // `b3` writes the Fb rather than an enharmonic E.
     expect(realizedNames('Db', 'b', majorKey(8))).toEqual(['Db', 'Fb', 'Ab']);
@@ -238,6 +239,33 @@ describe('moving figures', () => {
     );
   });
 
+  it('moves a run-together stack column by column', () => {
+    const realized = figuredBassRealization(parseNote('G'), '64-53', cMajor);
+    expect(realized.chord).toMatchObject({ rootPc: 7, quality: 'maj', bassPc: 7 });
+    expect(realized.suspensions.map(({ from, to }) => [from, to])).toEqual([
+      [6, 5],
+      [4, 3],
+    ]);
+    expect(figuredBassRealization(parseNote('G'), '6-5 4-3', cMajor).chord).toEqual(realized.chord);
+    const stacked = figuredBassRealization(parseNote('G'), '65-43', cMajor);
+    expect(stacked.suspensions.map(({ from, to }) => [from, to])).toEqual([
+      [6, 4],
+      [5, 3],
+    ]);
+  });
+
+  it('refuses a motion between stacks of different sizes', () => {
+    for (const figures of ['64-3', '4-53', '643-53']) {
+      let caught: unknown;
+      try {
+        realizeFiguredBass(parseNote('G'), figures, cMajor);
+      } catch (error) {
+        caught = error;
+      }
+      expect(isLibcantusError(caught) && caught.code, figures).toBe('INVALID_INPUT');
+    }
+  });
+
   it('leaves the suspension list empty for a static figure', () => {
     expect(figuredBassRealization(parseNote('G'), '7', cMajor).suspensions).toEqual([]);
   });
@@ -259,6 +287,24 @@ describe('figures that name no chord', () => {
       }
       expect(isLibcantusError(caught) && caught.code, figures).toBe('INVALID_INPUT');
       expect(String(caught), figures).toContain(JSON.stringify(figures));
+    }
+  });
+
+  it('does not round an altered stack of thirds to a suspended or added-tone chord', () => {
+    const cases: [string, string, KeyScale][] = [
+      ['A', 'b3', cMajor],
+      ['G', '#', aMinor],
+      ['C', 'bb7', cMajor],
+      ['C', 'b3bb7', cMajor],
+    ];
+    for (const [bass, figures, key] of cases) {
+      let caught: unknown;
+      try {
+        realizeFiguredBass(parseNote(bass), figures, key);
+      } catch (error) {
+        caught = error;
+      }
+      expect(isLibcantusError(caught) && caught.code, `${bass} ${figures}`).toBe('NO_SOLUTION');
     }
   });
 

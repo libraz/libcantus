@@ -89,6 +89,15 @@ json::Value length_of(const json::Value& value) {
   return property_of(value, "length");
 }
 
+std::string not_iterable_message(const json::Value& value) {
+  std::string type = js::type_of(value);
+  std::string subject = type;
+  if (type == "number" || type == "boolean") {
+    subject = type + " " + js::template_string(value);
+  }
+  return subject + " is not iterable (cannot read property Symbol(Symbol.iterator))";
+}
+
 json::Value element_of(const json::Value& list, std::size_t index) {
   property_of(list, js::to_string(static_cast<double>(index)));
   if (list.is_array()) {

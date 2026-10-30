@@ -107,12 +107,12 @@ function triadQualityOf(chord: Chord): ChordQuality {
   return hasThird;
 }
 
-/** The diatonic triads of a key, one per scale degree. */
-function diatonicTriadsOf(key: KeyScale): Chord[] {
+/** The diatonic triads of a key, one per scale degree, spelled from the caller's tonic. */
+function diatonicTriadsOf(key: KeyScale, tonic: Note): Chord[] {
   const degrees = scaleTonesInDegreeOrder(key).length;
   const triads: Chord[] = [];
   for (let degree = 1; degree <= degrees; degree += 1) {
-    triads.push(diatonicTriad(degree, key));
+    triads.push(diatonicTriad(degree, { ...key, tonic }));
   }
   return triads;
 }
@@ -247,7 +247,7 @@ export function substituteChord(
   }
 
   // Relative: a diatonic triad a third away sharing two common tones.
-  for (const triad of diatonicTriadsOf(scale)) {
+  for (const triad of diatonicTriadsOf(scale, tonic)) {
     const offset = mod12(triad.rootPc - source.rootPc);
     if (
       (THIRD_OFFSETS as readonly number[]).includes(offset) &&
@@ -262,7 +262,7 @@ export function substituteChord(
   // the key names the borrowing: C major borrows Eb and Ab from C minor.
   const targetFunction = functionOf(source, scale);
   const parallel = parallelKey(scale);
-  for (const triad of diatonicTriadsOf(parallel)) {
+  for (const triad of diatonicTriadsOf(parallel, tonic)) {
     if (functionOf(triad, scale) === targetFunction && !isDiatonic(triad, scale)) {
       candidates.push({ chord: spelledInKey(triad, tonic, parallel), type: 'borrowed' });
     }
@@ -367,7 +367,7 @@ export function modalInterchangePalette(key: SpelledKeyLike): BorrowedChord[] {
   };
 
   const parallel = parallelKey(scale);
-  for (const triad of diatonicTriadsOf(parallel)) {
+  for (const triad of diatonicTriadsOf(parallel, tonic)) {
     if (!isDiatonic(triad, scale) && borrowedSource(triad, scale) !== null) {
       add(spelledInKey(triad, tonic, parallel));
     }

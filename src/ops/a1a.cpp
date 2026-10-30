@@ -49,24 +49,30 @@ AugmentedSixthKind read_kind(const json::Value& value) {
 }
 
 /**
- * What renderRoman asks of a chord's quality before it styles a numeral. The style table has no
- * entry for a quality no table has, which TS meets as a plain TypeError, unless a guard on the
- * chord's tones refuses the quality first: the tonicizing reading asks for the tones, and so does
- * a chord on the lowered submediant. A name the table inherits from Object.prototype finds a
- * value that carries no style, which the numeral then shows.
+ * What renderRoman reads of a chord before it styles a numeral. A chord on the lowered submediant
+ * is read as an augmented sixth first: its tones, which refuse a quality no table has, then its
+ * spelling. The tonicizing reading asks whether the chord carries usable tone spellings, then for
+ * its tones. The style table has no entry for any other quality no table has, which TS meets as a
+ * plain TypeError; a name the table inherits from Object.prototype finds a value that carries no
+ * style, which the numeral then shows.
  */
 std::optional<InheritedQuality> settle_numeral_quality(ChordData& data,
                                                        const ChordToRomanOptions& options,
                                                        const ResolvedKey& key) {
   const json::Value& quality = get(data.wire, "quality");
+  double bass = data.chord.bassPc ? *data.chord.bassPc : data.chord.rootPc;
+  if (pitch_class_of(bass) == augmented_sixth_bass_pc(key.scale)) {
+    settle_chord_quality(data);
+    read_augmented_sixth_hints(data, KeyArg(key));
+  }
+  if (options.applied == true) {
+    read_tone_spellings(data.wire);
+    settle_chord_quality(data);
+  }
   std::optional<ChordQuality> known = table_quality(quality);
   if (known) {
     data.chord.quality = *known;
     return std::nullopt;
-  }
-  double bass = data.chord.bassPc ? *data.chord.bassPc : data.chord.rootPc;
-  if (options.applied == true || pitch_class_of(bass) == augmented_sixth_bass_pc(key.scale)) {
-    assert_chord_quality(data.wire);
   }
   if (js::type_of(quality) != "symbol" && inherits_object_member(js::template_string(quality))) {
     // Outside every set of qualities a numeral looks a quality up in.
@@ -134,15 +140,19 @@ void register_functional() {
     if (!is_neapolitan_chord_of(data.chord, key)) {
       read_augmented_sixth_hints(data, KeyArg(key));
     }
-    return to_json(
-        analyze_chord(data.chord, key, read_numeral_options<AnalyzeChordOptions>(asked)));
+    AnalyzeChordOptions options = read_numeral_options<AnalyzeChordOptions>(asked);
+    // The numeral's tonicizing reading asks whether the chord carries usable tone spellings.
+    if (options.applied == true) {
+      read_tone_spellings(data.wire);
+    }
+    return to_json(analyze_chord(data.chord, key, options));
   });
   def("secondaryDominant", [](Args& a) -> json::Value {
-    KeyScale key = read_key_like(a[1]);
+    ResolvedKey key = resolve_key(read_key_arg(a[1]));
     // A degree outside the scale is a caller error, not a wrap-around.
-    auto count = static_cast<double>(scale_tones_in_degree_order(key).size());
+    auto count = static_cast<double>(scale_tones_in_degree_order(key.scale).size());
     double degree = assert_integer(a[0], "targetDegree", 1, count);
-    return to_json(secondary_dominant(degree, key));
+    return to_json(secondary_dominant(degree, KeyArg(key)));
   });
   def("secondaryDominantOf", [](Args& a) -> json::Value {
     ChordData data = read_chord_like(a[0]);
@@ -174,9 +184,9 @@ void register_functional() {
 
   // functional/pivot
   def("pivotChords", [](Args& a) -> json::Value {
-    KeyScale from = read_key_like(a[0]);
-    KeyScale to = read_key_like(a[1]);
-    return to_json(pivot_chords(from, to));
+    ResolvedKey from = resolve_key(read_key_arg(a[0]));
+    ResolvedKey to = resolve_key(read_key_arg(a[1]));
+    return to_json(pivot_chords(KeyArg(from), KeyArg(to)));
   });
 
   // functional/cadence

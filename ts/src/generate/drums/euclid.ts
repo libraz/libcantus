@@ -36,7 +36,8 @@ function bjorklund(pulses: number, steps: number): boolean[] {
   }
   let head: boolean[][] = Array.from({ length: pulses }, () => [true]);
   let remainder: boolean[][] = Array.from({ length: steps - pulses }, () => [false]);
-  while (remainder.length > 1) {
+  // At least one distribution: a single leftover rest still has to be placed.
+  do {
     const count = Math.min(head.length, remainder.length);
     const next: boolean[][] = [];
     for (let i = 0; i < count; i += 1) {
@@ -44,6 +45,6 @@ function bjorklund(pulses: number, steps: number): boolean[] {
     }
     remainder = head.length > count ? head.slice(count) : remainder.slice(count);
     head = next;
-  }
+  } while (remainder.length > 1);
   return [...head.flat(), ...remainder.flat()];
 }

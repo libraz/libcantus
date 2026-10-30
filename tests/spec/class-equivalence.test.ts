@@ -19,6 +19,7 @@ import {
   Chord,
   type ChordSegment,
   Composer,
+  ConsonanceClass,
   canSound,
   centsBetweenFreq,
   centsFromNearestStep,
@@ -33,6 +34,7 @@ import {
   chordTimelineFromNotes,
   chordToneRole,
   chordToRoman,
+  classifySpelledInterval,
   createNoteEventIndex,
   createPositionalRng,
   Duration,
@@ -87,7 +89,6 @@ import {
   isBorrowedChord,
   isChordMember,
   isCompound,
-  isConsonantInterval,
   isScaleTone,
   isStrongBeat,
   justDeviationCents,
@@ -687,13 +688,14 @@ describe('Interval', () => {
     }
   });
 
-  it('reads consonance the way the interval module reads it, in both contexts', () => {
-    for (const name of ['P4', 'P5', 'M3', 'm7']) {
+  it('reads consonance the way the spelled-interval classifier reads it, in both contexts', () => {
+    for (const name of ['P4', 'P5', 'M3', 'm7', 'A2', 'd4', 'A5', 'd7']) {
       const interval = Interval.parse(name);
-      expect(interval.isConsonant(), name).toBe(isConsonantInterval(interval.semitones, true));
-      expect(interval.isConsonant(false), name).toBe(
-        isConsonantInterval(interval.semitones, false),
-      );
+      for (const twoVoice of [true, false]) {
+        expect(interval.isConsonant(twoVoice), `${name} ${twoVoice}`).toBe(
+          classifySpelledInterval(interval.data, twoVoice) !== ConsonanceClass.Dissonance,
+        );
+      }
     }
     // The two-voice reading is the one that differs, so the argument is doing
     // work rather than being accepted and ignored.
@@ -720,16 +722,14 @@ describe('Key', () => {
 
   it('builds the chords on a degree that the chord functions build', () => {
     expect(key.chord(5, 'dom7').data).toEqual(
-      Chord.fromData(chordFromDegree(5, 'dom7', key.scale)).withKey(key).data,
+      Chord.fromData(chordFromDegree(5, 'dom7', key)).withKey(key).data,
     );
-    expect(key.chord(2).data).toEqual(
-      Chord.fromData(diatonicTriad(2, key.scale)).withKey(key).data,
-    );
+    expect(key.chord(2).data).toEqual(Chord.fromData(diatonicTriad(2, key)).withKey(key).data);
     expect(key.diatonicTriad(7).data).toEqual(
-      Chord.fromData(diatonicTriad(7, key.scale)).withKey(key).data,
+      Chord.fromData(diatonicTriad(7, key)).withKey(key).data,
     );
     expect(key.diatonicSeventh(5).data).toEqual(
-      Chord.fromData(diatonicSeventh(5, key.scale)).withKey(key).data,
+      Chord.fromData(diatonicSeventh(5, key)).withKey(key).data,
     );
     expect(key.roman('V7/V').data).toEqual(
       Chord.fromData(romanToChord('V7/V', key)).withKey(key).data,

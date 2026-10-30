@@ -11,7 +11,7 @@ inline constexpr double CHORD_MISMATCH = 64;
 inline constexpr double SCALE_TONE_MISMATCH = 32;
 
 /** LETTER_STEP_DEVIATION of ts/src/analyze/spelling/index.ts. */
-inline constexpr double LETTER_STEP_DEVIATION = 4;
+inline constexpr double LETTER_STEP_DEVIATION = 8;
 
 /** MAX_COUNTED_DEVIATION of ts/src/analyze/spelling/index.ts. */
 inline constexpr int MAX_COUNTED_DEVIATION = 2;

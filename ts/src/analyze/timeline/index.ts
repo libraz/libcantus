@@ -33,11 +33,12 @@ import {
 import { BEAT_EPS } from '../adjacency.js';
 import type { ChordMatch } from '../detect/index.js';
 import { detectChord } from '../detect/index.js';
+import { firstSoundingBeat } from '../form/internal.js';
 import { augmentedSixthFromPitchClasses } from '../functional/augmented-sixth.js';
 import { isCadentialSixFour } from '../functional/cadence.js';
 import type { CadenceResult } from '../functional/index.js';
 import { detectCadence } from '../functional/index.js';
-import { gridForNotes } from '../grid.js';
+import { gridForNotes, latestSoundingEnd } from '../grid.js';
 import type { SlotGrid, WindowWeights } from '../histogram.js';
 import { bucketNotesBySlot, windowWeights } from '../histogram.js';
 import type { KeyRegion } from '../keys/index.js';
@@ -1400,9 +1401,13 @@ export function analyzeTimeline(
   // is built: none of them asks which note sounds at a beat, and an index would
   // charge every analysis for lookups it never makes.
   const sounding = sortedNoteEvents(notes.filter((note) => note.durationBeat > 0));
-  const lastNoteEnd = sounding.reduce((end, n) => Math.max(end, n.startBeat + n.durationBeat), 0);
-  const totalBeats = opts.totalBeats ?? lastNoteEnd;
-  assertRange(totalBeats, 0, Number.MAX_SAFE_INTEGER, 'timeline totalBeats');
+  const totalBeats = opts.totalBeats ?? latestSoundingEnd(sounding);
+  assertRange(
+    totalBeats,
+    Math.min(0, firstSoundingBeat(sounding)),
+    Number.MAX_SAFE_INTEGER,
+    'timeline totalBeats',
+  );
   const slotBeats =
     segmentation === 'grid'
       ? harmonicRhythm

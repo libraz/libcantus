@@ -14,6 +14,8 @@
 #include "js/format.h"
 #include "js/number.h"
 #include "js/utf16.h"
+#include "theory/chord/chord.h"
+#include "theory/chord/spec.h"
 #include "theory/figured_bass/limits.gen.h"
 
 namespace cantus {
@@ -213,6 +215,25 @@ ReadFigure read_figure(const Text& text, std::size_t start) {
   return ReadFigure{Figure{kAccidentalOnlyFigure, accidental}, index};
 }
 
+/** The figures written together and where they end (`readStack`'s result). */
+struct ReadStack {
+  std::vector<Figure> figures;
+  std::size_t index;
+};
+
+/** Read the figures written together from `start`: one figure or a run-together stack
+ * (`readStack`). */
+ReadStack read_stack(const Text& text, std::size_t start) {
+  ReadStack stack{{}, start};
+  do {
+    ReadFigure read = read_figure(text, stack.index);
+    stack.figures.push_back(read.figure);
+    stack.index = read.index;
+  } while (stack.index < text.size() && !unit_in(text, stack.index, kFigureSeparators) &&
+           !unit_in(text, stack.index, kMotionMarks));
+  return stack;
+}
+
 /** Split a figure string into its static figures and its moving ones (`parseFigures`). */
 ParsedFigures parse_figures(const Text& text) {
   ParsedFigures parsed;
@@ -222,22 +243,32 @@ ParsedFigures parse_figures(const Text& text) {
       index += 1;
       continue;
     }
-    ReadFigure first = read_figure(text, index);
+    ReadStack first = read_stack(text, index);
     index = first.index;
     if (!unit_in(text, index, kMotionMarks)) {
-      parsed.figures.push_back(first.figure);
+      parsed.figures.insert(parsed.figures.end(), first.figures.begin(), first.figures.end());
       continue;
     }
-    ReadFigure second = read_figure(text, index + 1);
+    ReadStack second = read_stack(text, index + 1);
     index = second.index;
     if (unit_in(text, index, kMotionMarks)) {
       throw invalid_figures(text, "chains more than one motion onto a single figure");
     }
-    if (first.figure.number == second.figure.number) {
-      throw invalid_figures(
-          text, "moves the interval " + js::to_string(first.figure.number) + " onto itself");
+    if (first.figures.size() != second.figures.size()) {
+      throw invalid_figures(text, "moves " +
+                                      js::to_string(static_cast<double>(first.figures.size())) +
+                                      " run-together figures onto " +
+                                      js::to_string(static_cast<double>(second.figures.size())));
     }
-    parsed.motions.push_back(FigureMotion{first.figure, second.figure});
+    for (std::size_t column = 0; column < first.figures.size(); ++column) {
+      const Figure& from = first.figures[column];
+      const Figure& to = second.figures[column];
+      if (from.number == to.number) {
+        throw invalid_figures(text,
+                              "moves the interval " + js::to_string(from.number) + " onto itself");
+      }
+      parsed.motions.push_back(FigureMotion{from, to});
+    }
   }
   return parsed;
 }
@@ -260,11 +291,16 @@ const std::vector<std::pair<std::vector<double>, ChordQuality>>& tertian_qualiti
     std::vector<std::pair<std::vector<double>, ChordQuality>> out;
     for (ChordQuality quality : chord_qualities()) {
       std::vector<double> intervals = make_chord(0, quality).intervals;
+      ChordSpec spec = chord_spec_for_quality(quality, 0);
+      // Only a major, minor, diminished or augmented base with no added tone is tertian.
+      bool tertian = (spec.base == ChordBase::kMaj || spec.base == ChordBase::kMin ||
+                      spec.base == ChordBase::kDim || spec.base == ChordBase::kAug) &&
+                     spec.additions.empty();
       // Declaration order decides a tie, exactly as it does for chord detection.
       bool known = std::any_of(out.begin(), out.end(),
                                [&](const auto& entry) { return entry.first == intervals; });
       if (intervals.size() >= 3 && intervals.size() <= static_cast<std::size_t>(MAX_STACK_SIZE) &&
-          !known) {
+          tertian && !known) {
         out.emplace_back(std::move(intervals), quality);
       }
     }
@@ -394,12 +430,13 @@ std::pair<Chord, std::vector<NoteData>> realize_sonority(const NoteData& bass,
     throw NoSolutionError("figured bass " + describe_rejected(json::Value(js::from_utf16(text))) +
                           " sounds " + joined_names(tones) + ", which no chord quality names");
   }
-  Chord chord = make_chord(root_pc, *quality, note_to_pitch_class(bass));
-  chord.rootSpelling =
+  SpelledChordParts parts;
+  parts.bassPc = note_to_pitch_class(bass);
+  parts.rootSpelling =
       PitchSpelling{static_cast<double>(root.letter), static_cast<double>(root.alter)};
-  chord.bassSpelling =
+  parts.bassSpelling =
       PitchSpelling{static_cast<double>(bass.letter), static_cast<double>(bass.alter)};
-  return {std::move(chord), std::move(notes)};
+  return {make_spelled_chord(root_pc, *quality, parts), std::move(notes)};
 }
 
 FiguredBassRealization realize_in(const NoteArg& bass, std::string_view figures,

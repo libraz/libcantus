@@ -84,6 +84,66 @@ TEST_CASE("large objects keep lookups and order through the hash index", "[json]
   CHECK(copy.find("k20")->as_number() == 20);
 }
 
+TEST_CASE("objects with many index keys are read in JS order whatever order they arrive in",
+          "[json][keys]") {
+  // Inserting each index key in turn is quadratic in the key count; 50k keys of any order must
+  // parse in near-linear time.
+  constexpr int kKeys = 50000;
+  auto object_text = [](const std::vector<std::string>& names) {
+    std::string text = "{";
+    for (std::size_t i = 0; i < names.size(); ++i) {
+      text += (i == 0 ? "\"" : ",\"") + names[i] + "\":" + std::to_string(i);
+    }
+    return text + "}";
+  };
+  std::vector<std::string> ascending;
+  for (int i = 0; i < kKeys; ++i) {
+    ascending.push_back(std::to_string(i));
+  }
+  std::vector<std::string> descending(ascending.rbegin(), ascending.rend());
+
+  json::Value up = json::parse(object_text(ascending));
+  CHECK(keys(up) == ascending);
+  CHECK(up.as_object().find("49999")->as_number() == kKeys - 1);
+
+  json::Value down = json::parse(object_text(descending));
+  CHECK(keys(down) == ascending);
+  CHECK(down.as_object().find("0")->as_number() == kKeys - 1);
+
+  // Names and indices interleaved, with repeats: indices ascend first, then names in the order
+  // they first appeared, each carrying the last value written.
+  auto interleaved = [](int pairs) {
+    std::vector<std::string> names;
+    for (int i = pairs - 1; i >= 0; --i) {
+      names.push_back("n" + std::to_string(i));
+      names.push_back(std::to_string(i * 2));
+    }
+    names.push_back("n7");
+    names.push_back("14");
+    return names;
+  };
+  std::vector<std::string> mixed = interleaved(kKeys / 2);
+  json::Value both = json::parse(object_text(mixed));
+  std::vector<std::string> expected;
+  for (int i = 0; i < kKeys / 2; ++i) {
+    expected.push_back(std::to_string(i * 2));
+  }
+  for (int i = kKeys / 2 - 1; i >= 0; --i) {
+    expected.push_back("n" + std::to_string(i));
+  }
+  CHECK(keys(both) == expected);
+  CHECK(both.as_object().find("n7")->as_number() == static_cast<double>(mixed.size() - 2));
+  CHECK(both.as_object().find("14")->as_number() == static_cast<double>(mixed.size() - 1));
+
+  // The same as setting each member in turn.
+  std::vector<std::string> few = interleaved(100);
+  json::Object one_by_one;
+  for (std::size_t i = 0; i < few.size(); ++i) {
+    one_by_one.set(few[i], static_cast<int>(i));
+  }
+  CHECK(json::parse(object_text(few)).as_object() == one_by_one);
+}
+
 TEST_CASE("lone surrogates survive as WTF-8 and are written escaped", "[json][surrogate]") {
   json::Value high = json::parse(R"("\ud800")");
   CHECK(high.as_string() == "\xED\xA0\x80");

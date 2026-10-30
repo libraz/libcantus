@@ -95,6 +95,12 @@ bool reads_tone_letter_offsets(const json::Value& chord);
 void read_root_hint(const json::Value& chord);
 
 /**
+ * What `spellChord` reads of an asserted wire chord's spelling hints: the root hint
+ * (read_root_hint), then the tone spellings (reads_tone_letter_offsets).
+ */
+void read_spelled_hints(const json::Value& chord);
+
+/**
  * What `refineByContext` reads of a wire context that read_spelling_context() cannot refuse, once
  * `pc` is a chromatic tone: a `chordRoot` beside no chord, or a null chord beside one, and each
  * neighbour (`next`, `previous`) whose distance from `pc` makes it the evidence.
@@ -108,8 +114,20 @@ int read_mode_mask(const json::Value& value, std::string_view name);
 /** `maskOf(value, name)` over a wire value: a record carrying a mode mask. */
 int read_mask_of(const json::Value& value, std::string_view name);
 
+/**
+ * The quality a wire value names when `assertChordQuality` accepts it: a string the quality table
+ * holds as its own key. Every wire reading of a chord quality goes through here.
+ */
+std::optional<ChordQuality> known_chord_quality(const json::Value& value);
+
 /** `assertChordQuality` over a wire value. */
 ChordQuality read_chord_quality(const json::Value& value);
+
+/**
+ * `assertChordQuality(chord.quality)` over a wire chord.
+ * @throws InvalidInputError "Unknown chord quality: ..." for a quality no table has.
+ */
+ChordQuality assert_chord_quality(const json::Value& chord);
 
 /**
  * `assertChord(value, name)` over a wire value: a record with a finite root and a known quality.
@@ -119,9 +137,31 @@ const json::Value& assert_chord(const json::Value& value, std::string_view name 
 
 /**
  * A wire chord as a typed one, each field converted the way JS arithmetic reads it. The checks TS
- * makes are the adapter's; a quality TS never reads may be unknown and reads as `fallback`.
+ * makes are the adapter's, through the readers above; a quality TS never reads may be unknown and
+ * reads as `fallback`.
  */
 Chord read_chord_fields(const json::Value& value, ChordQuality fallback = ChordQuality::kMaj);
+
+/**
+ * What `chordSpecOf` reads of a wire chord's intervals (`chord.intervals ?? []`, then
+ * `chordSpecFromIntervals` over a non-empty list): the offsets when every one is a number, else an
+ * empty list, standing for a template with no structural reading.
+ * @throws js::TypeError where JS cannot iterate the value, or cannot sort or compare its entries
+ *         (a symbol, a bigint beside another value).
+ */
+std::vector<double> read_spec_intervals(const json::Value& intervals);
+
+/**
+ * What `chordSpecOf` reads of a chord's quality: the quality names the spec only when the
+ * template has no structural reading of its own (`chordSpecForQuality`).
+ */
+void read_spec_quality(const Chord& chord, const json::Value& quality);
+
+/**
+ * What `hasInterval(chord, semitones)` reads of a wire chord whose intervals are an array: each
+ * interval as a pitch, up to the first whose pitch class is `semitones`. Returns whether one is.
+ */
+bool reads_interval(const json::Value& chord, int semitones);
 
 /** `copySpanIntervals`'s checks over a wire template. */
 std::vector<double> read_span_intervals(const json::Value& intervals);

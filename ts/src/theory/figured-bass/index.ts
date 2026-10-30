@@ -25,8 +25,9 @@ import {
   toNoteData,
 } from '../../core/pitch/index.js';
 import { describeRejected } from '../../core/validation/index.js';
-import type { Chord, ChordQuality } from '../chord/index.js';
-import { chordQualities, makeChord } from '../chord/index.js';
+import type { Chord, ChordBase, ChordQuality } from '../chord/index.js';
+import { chordQualities, makeChord, makeSpelledChord } from '../chord/index.js';
+import { chordSpecForQuality } from '../chord/spec.js';
 import {
   type KeyLike,
   type ResolvedKey,
@@ -197,7 +198,32 @@ function readFigure(text: string, start: number): { figure: Figure; index: numbe
   return { figure: { number: 3, accidental }, index };
 }
 
-/** Split a figure string into its static figures and its moving ones. */
+/**
+ * Read the figures written together from `start`, up to a separator, a motion
+ * mark or the end: one figure such as `4`, or a run-together stack such as `64`.
+ */
+function readStack(text: string, start: number): { figures: Figure[]; index: number } {
+  const figures: Figure[] = [];
+  let index = start;
+  do {
+    const read = readFigure(text, index);
+    figures.push(read.figure);
+    index = read.index;
+  } while (
+    index < text.length &&
+    !FIGURE_SEPARATORS.has(text[index] ?? '') &&
+    !MOTION_MARKS.has(text[index] ?? '')
+  );
+  return { figures, index };
+}
+
+/**
+ * Split a figure string into its static figures and its moving ones.
+ *
+ * A motion mark joins the stack written before it to the stack written after
+ * it, column by column: `4-3` moves one figure and `64-53` moves two, `6-5`
+ * and `4-3`. Stacks of different sizes have no columns to pair and are refused.
+ */
 function parseFigures(text: string): ParsedFigures {
   const figures: Figure[] = [];
   const motions: FigureMotion[] = [];
@@ -207,21 +233,30 @@ function parseFigures(text: string): ParsedFigures {
       index += 1;
       continue;
     }
-    const first = readFigure(text, index);
+    const first = readStack(text, index);
     index = first.index;
     if (!MOTION_MARKS.has(text[index] ?? '')) {
-      figures.push(first.figure);
+      figures.push(...first.figures);
       continue;
     }
-    const second = readFigure(text, index + 1);
+    const second = readStack(text, index + 1);
     index = second.index;
     if (MOTION_MARKS.has(text[index] ?? '')) {
       throw invalidFigures(text, 'chains more than one motion onto a single figure');
     }
-    if (first.figure.number === second.figure.number) {
-      throw invalidFigures(text, `moves the interval ${first.figure.number} onto itself`);
+    if (first.figures.length !== second.figures.length) {
+      throw invalidFigures(
+        text,
+        `moves ${first.figures.length} run-together figures onto ${second.figures.length}`,
+      );
     }
-    motions.push({ from: first.figure, to: second.figure });
+    first.figures.forEach((from, column) => {
+      const to = second.figures[column] as Figure;
+      if (from.number === to.number) {
+        throw invalidFigures(text, `moves the interval ${from.number} onto itself`);
+      }
+      motions.push({ from, to });
+    });
   }
   return { figures, motions };
 }
@@ -298,19 +333,32 @@ const FIGURE_ABBREVIATIONS: ReadonlyMap<string, readonly number[]> = new Map(
   FIGURE_ABBREVIATION_ENTRIES,
 );
 
+/** The bases a stack of thirds can build on: the suspended and power bases have no third. */
+const TERTIAN_BASES: ReadonlySet<ChordBase> = new Set<ChordBase>(['maj', 'min', 'dim', 'aug']);
+
 /**
  * Index the chord vocabulary by interval template, for the triads and seventh
  * chords a figure can stack. Reading the templates back from the chord builder
  * keeps the two in step: a quality added to the vocabulary becomes reachable
- * from a figure without a second table to maintain.
+ * from a figure without a second table to maintain. Only tertian qualities are
+ * indexed — a major, minor, diminished or augmented base with an optional
+ * seventh — so a stack of thirds with an altered tone is never named as a
+ * suspended or added-tone chord that happens to share its semitones.
  */
 function tertianQualityIndex(): ReadonlyMap<string, ChordQuality> {
   const index = new Map<string, ChordQuality>();
   for (const quality of chordQualities()) {
     const { intervals } = makeChord(0, quality);
     const template = intervals.join(',');
+    const spec = chordSpecForQuality(quality, 0);
     // Declaration order decides a tie, exactly as it does for chord detection.
-    if (intervals.length >= 3 && intervals.length <= MAX_STACK_SIZE && !index.has(template)) {
+    if (
+      intervals.length >= 3 &&
+      intervals.length <= MAX_STACK_SIZE &&
+      TERTIAN_BASES.has(spec.base) &&
+      spec.additions.length === 0 &&
+      !index.has(template)
+    ) {
       index.set(template, quality);
     }
   }
@@ -398,9 +446,11 @@ function realizeSonority(
       `figured bass ${describeRejected(text)} sounds ${noteNames(tones).join(' ')}, which no chord quality names`,
     );
   }
-  const chord = makeChord(rootPc, quality, noteToPitchClass(bass));
-  chord.rootSpelling = { letter: root.letter, alter: root.alter };
-  chord.bassSpelling = { letter: bass.letter, alter: bass.alter };
+  const chord = makeSpelledChord(rootPc, quality, {
+    bassPc: noteToPitchClass(bass),
+    rootSpelling: { letter: root.letter, alter: root.alter },
+    bassSpelling: { letter: bass.letter, alter: bass.alter },
+  });
   return { chord, notes };
 }
 
@@ -595,10 +645,13 @@ export function realizeFiguredBass(bass: NoteLike, figures: string, key: KeyLike
  * What this returns is read back before it is returned, so the two directions
  * cannot disagree: a chord the digits would name only approximately has no
  * figures rather than figures that fail to realize. What that excludes is a
- * stack, not a family of chords — the Italian and German sixths stack in thirds
- * over no root of their own and have no figures, while the French sixth stacks
- * from its lowered supertonic and is written `#643`, which realizes back to the
- * chord it was written from.
+ * stack, not a family of chords — the Italian and German sixths are
+ * conventionally figured `#6` and `#6/5/3`, but their tones do not stack in
+ * thirds into any chord quality, so this reads no figures for them (and
+ * {@link realizeFiguredBass} raises {@link NoSolutionError} for those figures).
+ * That is a limit of the quality vocabulary, not of the notation. The French
+ * sixth stacks from its lowered supertonic and is written `#643`, which
+ * realizes back to the chord it was written from.
  *
  * @param chord The chord to figure, as a chord symbol, chord data, or a
  *   `Chord`; its `bassPc`, when present, is the bass the intervals are measured

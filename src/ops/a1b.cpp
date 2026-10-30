@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "analyze/detect/detect.h"
+#include "analyze/grid.h"
 #include "analyze/keys/keys.h"
 #include "cantus/core/errors.h"
 #include "cantus/core/limits.h"
@@ -221,13 +222,14 @@ void register_keys() {
     note_bag.set("budget", get(opts, "budget"));
     std::vector<NoteEvent> notes =
         assert_note_events(a[0], "key timeline notes", json::Value(std::move(note_bag)));
-    double last_end = 0;
+    std::vector<NoteEvent> sounding;
     for (const NoteEvent& note : notes) {
       if (note.durationBeat > 0) {
-        last_end = js::max(last_end, note.startBeat + note.durationBeat);
+        sounding.push_back(note);
       }
     }
-    double total = assert_range_option(opts, "totalBeats", last_end, 0, kMaxSafeInteger,
+    double total = assert_range_option(opts, "totalBeats", latest_sounding_end(sounding),
+                                       js::min(0, first_sounding_beat(sounding)), kMaxSafeInteger,
                                        "key timeline totalBeats");
     KeyTimelineOptions typed = read_timeline_options(opts, meters, expected, minimum);
     typed.totalBeats = total;
@@ -291,11 +293,15 @@ void register_keys() {
     ChordSource chord_at = [&](std::size_t index) -> const Chord& {
       if (!read[index]) {
         const json::Value& wire = get(chords[index], "chord");
-        // `assertChord`, then the guards of the tones.
+        // `assertChord`, then the guards of the tones, then `soundsDominantSeventh`'s scans of the
+        // intervals, which the candidate a fifth below the root asks for.
         assert_record(wire, "chord");
         assert_finite_number(get(wire, "rootPc"), "chord.rootPc");
         ChordQuality quality = assert_chord_quality(wire);
         assert_mask_inputs(wire);
+        if (reads_interval(wire, 4)) {
+          reads_interval(wire, 10);
+        }
         read[index] = std::make_unique<Chord>(read_chord_fields(wire, quality));
       }
       return *read[index];

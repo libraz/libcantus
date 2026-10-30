@@ -8,6 +8,7 @@ import {
 import {
   chordFromSpan,
   chordPitchClasses,
+  diatonicTriad,
   isScaleTone,
   majorKey,
   makeChord,
@@ -777,6 +778,45 @@ describe('the diatonic tier stays inside the mode it names', () => {
     for (const span of result.chords) {
       for (const pc of chordPitchClasses(chordFromSpan(span))) {
         expect(isScaleTone(pc, dDorian)).toBe(true);
+      }
+    }
+  });
+});
+
+describe('a secondary dominant never tonicizes a diminished degree', () => {
+  // Each melody outlines a dominant of the diminished degree, then that degree.
+  const cases = [
+    {
+      name: 'A minor',
+      key: minorKey(9),
+      pitches: [66, 70, 73, 70, 71, 74, 77, 74],
+    },
+    {
+      name: 'C lydian',
+      key: scaleByName('lydian', 0),
+      pitches: [61, 65, 68, 65, 66, 69, 72, 69],
+    },
+  ];
+
+  it.each(cases)('keeps the dominant off the diminished triad in $name', ({ key, pitches }) => {
+    const result = harmonizeMelody({
+      melody: quarters(pitches),
+      key,
+      harmonicRhythm: 4,
+      reharmonize: 'secondaryDominant',
+      placement: { transposeSearch: false, octaveSearch: false },
+    });
+    expect(result.chords.some((chord) => chord.secondaryDominant)).toBe(true);
+    for (const chord of result.chords) {
+      if (!chord.secondaryDominant) {
+        continue;
+      }
+      const targetPc = (chord.rootPc + 5) % 12;
+      for (let degree = 1; degree <= 7; degree += 1) {
+        const triad = diatonicTriad(degree, key);
+        if (triad.rootPc === targetPc) {
+          expect(triad.quality, `degree ${degree}`).not.toBe('dim');
+        }
       }
     }
   });

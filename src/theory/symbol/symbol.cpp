@@ -92,7 +92,7 @@ std::string format_chord_symbol(const ChordArg& chord, const ChordSymbolOptions&
       own_spelling = spelling_above(root_spelling, degree - 1, bass_pc);
     }
     std::string bass_name;
-    if (root_hint && bass_hint) {
+    if (flats && root_hint && bass_hint) {
       bass_name = symbol_name(carried_bass(*bass_hint, *root_hint, root_spelling,
                                            flats.value_or(root_spelling.alter < 0),
                                            [&](const NoteData& spelling) {

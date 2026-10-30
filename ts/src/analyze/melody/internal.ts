@@ -11,6 +11,7 @@
 import type { NoteEvent } from '../../core/types.js';
 import { assertNoteEvents, assertRecord } from '../../core/validation/index.js';
 import { BEAT_EPS } from '../adjacency.js';
+import { latestSoundingEnd } from '../grid.js';
 import type { MotifData } from './motifs.js';
 
 /**
@@ -150,11 +151,7 @@ export function roundTo(value: number, digits: number): number {
 }
 /** Beat of the last note's end. */
 export function endBeatOf(notes: readonly NoteEvent[]): number {
-  let end = 0;
-  for (const note of notes) {
-    end = Math.max(end, note.startBeat + note.durationBeat);
-  }
-  return end;
+  return latestSoundingEnd(notes);
 }
 /** Distance from the first onset to the last, which is what a stretch scales. */
 export function onsetSpan(notes: readonly NoteEvent[]): number {

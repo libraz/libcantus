@@ -17,6 +17,12 @@ namespace {
 
 constexpr char kNoCallbacks[] = "callback arguments need a host callback function";
 
+/** A boundary probe, which takes its arguments in wire form; `$const:` ops are API constants. */
+bool is_builtin(std::string_view op) {
+  constexpr std::string_view kConstant = "$const:";
+  return !op.empty() && op[0] == '$' && op.substr(0, kConstant.size()) != kConstant;
+}
+
 json::Value parse_args(std::string_view args_json) {
   if (args_json.empty()) {
     return json::Value(json::Array());
@@ -46,6 +52,10 @@ Result dispatch(std::string_view op, std::string_view args_json,
     }
     if (validate(args).callbacks > 0 && !context.has_callbacks()) {
       throw RequestError(kNoCallbacks);
+    }
+    // Every API op receives its model-class arguments decoded, once per call.
+    if (!is_builtin(op)) {
+      decode_class_arguments(args.as_array());
     }
     Args a(args.as_array(), context);
     OptionViews views;

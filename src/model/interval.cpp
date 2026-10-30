@@ -4,6 +4,7 @@
 
 #include "cantus/core/interval.h"
 #include "cantus/model/note.h"
+#include "cantus/theory/counterpoint.h"
 #include "js/number.h"
 #include "model/limits.gen.h"
 #include "model/shared.h"
@@ -84,7 +85,7 @@ Interval Interval::negate() const {
 }
 
 bool Interval::is_consonant(bool two_voice) const {
-  return is_consonant_interval(semitones_, two_voice);
+  return classify_spelled_interval(data(), two_voice) != ConsonanceClass::kDissonance;
 }
 
 bool Interval::equals(const Interval& other) const {

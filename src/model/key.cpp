@@ -20,6 +20,12 @@ namespace cantus {
 
 namespace {
 
+/**
+ * A degree chord without the spelling its builder attached (`#withoutSpelling`): the chord
+ * carries the key, which spells its root on read.
+ */
+Chord without_spelling(const Chord& chord) { return make_chord(chord.rootPc, chord.quality); }
+
 /** The tonic a mode's reference scale is spelled on; C spells both modes plainly. */
 const NoteData kReferenceTonic =
 #include "model/reference_tonic.gen.inc"
@@ -249,7 +255,7 @@ Nullable<KeyRelation> Key::relation_to(const Key& other) const {
 
 std::vector<KeyPivot> Key::pivots_to(const KeyArg& other) const {
   std::vector<KeyPivot> out;
-  for (PivotChord& pivot : pivot_chords(scale_, other)) {
+  for (PivotChord& pivot : pivot_chords(data(), other)) {
     out.push_back(KeyPivot{ChordValue(pivot.chord, KeyArg(*this)), std::move(pivot.romanFrom),
                            std::move(pivot.romanTo)});
   }
@@ -266,7 +272,7 @@ KeyMode Key::mode_of_degree(double n) const {
   if (static_cast<int>(pitch_classes().size()) != KEY_HEPTATONIC_DEGREES) {
     return is_minor() ? KeyMode::kMinor : KeyMode::kMajor;
   }
-  ChordQuality quality = cantus::diatonic_triad(n, scale_).quality;
+  ChordQuality quality = cantus::diatonic_triad(n, data()).quality;
   return quality == ChordQuality::kMin || quality == ChordQuality::kDim ? KeyMode::kMinor
                                                                         : KeyMode::kMajor;
 }
@@ -357,17 +363,17 @@ std::vector<Note> Key::spell_pitch_classes(const std::vector<double>& pcs,
 }
 
 ChordValue Key::chord(double degree, const std::optional<ChordQuality>& quality) const {
-  Chord data = quality ? chord_from_degree(degree, *quality, scale_)
-                       : cantus::diatonic_triad(degree, scale_);
-  return ChordValue(data, KeyArg(*this));
+  Chord built = quality ? chord_from_degree(degree, *quality, data())
+                        : cantus::diatonic_triad(degree, data());
+  return ChordValue(without_spelling(built), KeyArg(*this));
 }
 
 ChordValue Key::diatonic_triad(double degree) const {
-  return ChordValue(cantus::diatonic_triad(degree, scale_), KeyArg(*this));
+  return ChordValue(without_spelling(cantus::diatonic_triad(degree, data())), KeyArg(*this));
 }
 
 ChordValue Key::diatonic_seventh(double degree) const {
-  return ChordValue(cantus::diatonic_seventh(degree, scale_), KeyArg(*this));
+  return ChordValue(without_spelling(cantus::diatonic_seventh(degree, data())), KeyArg(*this));
 }
 
 ChordValue Key::roman(std::string_view text) const {

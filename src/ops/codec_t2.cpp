@@ -66,6 +66,8 @@ ChordData read_chord_like(const json::Value& value) {
                           js::type_of(value));
 }
 
+void settle_chord_quality(ChordData& data) { data.chord.quality = assert_chord_quality(data.wire); }
+
 std::optional<NoteNameSystem> read_symbol_system(const json::Value& asked) {
   const json::Value* system = opt_null_default(asked, "system");
   if (system == nullptr) {

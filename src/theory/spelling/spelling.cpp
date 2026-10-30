@@ -504,11 +504,8 @@ int chord_letter_offset(double interval, const Chord& chord) {
       case 4:
         return 2;
       case 15:
-        // A raised ninth over a chord that already has a third is a ninth, not a second third.
-        return std::any_of(chord.intervals.begin(), chord.intervals.end(),
-                           [](double i) { return i == 3 || i == 4; })
-                   ? 1
-                   : 2;
+        // The spec reads 15 as a raised ninth whatever else the chord holds.
+        return 1;
       case 5:
       case 16:
       case 17:

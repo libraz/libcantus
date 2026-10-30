@@ -399,6 +399,11 @@ describe('Interval as a usable value', () => {
     expect(Interval.parse('P4').isConsonant()).toBe(false);
     expect(Interval.parse('P4').isConsonant(false)).toBe(true);
     expect(Interval.parse('M2').isConsonant()).toBe(false);
+    // The spelling decides, not the span: each of these sounds like a consonance.
+    for (const name of ['A2', 'd4', 'A5', 'd7', 'd2', 'A7', 'AA2']) {
+      expect(Interval.parse(name).isConsonant(), name).toBe(false);
+      expect(Interval.parse(name).isConsonant(false), name).toBe(false);
+    }
     expect(Interval.parse('M3').equals(Interval.parse('M3'))).toBe(true);
     // Same distance, different interval: an augmented second is not a minor third.
     expect(Interval.parse('A2').semitones).toBe(Interval.parse('m3').semitones);

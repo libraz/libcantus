@@ -18,6 +18,7 @@ import {
   resolveScaleName,
 } from '../scale/index.js';
 import { type ChordLike, toChordData } from '../symbol/index.js';
+import { soundsDominantSeventh } from '../tendency/index.js';
 
 /**
  * The mask of a scale a chord-scale question may be asked about.
@@ -159,12 +160,23 @@ function idiomaticRank(chord: Chord, name: string): number {
 }
 
 /**
- * An ordinary dominant seventh may use altered colors while retaining its
- * perfect fifth in the voicing; the `7alt` quality makes that alteration
- * explicit, but lead sheets commonly write the shorter `7` here.
+ * A dominant seventh may use altered colors while retaining its perfect fifth
+ * in the voicing. It is read from the tones, as every dominant is: a major
+ * third with a minor seventh whose only tones outside the altered scale are the
+ * fifth, so `7`, `7alt`, `7b9`, `7#9` and `7b13` all take it while `9` and `13`
+ * do not. Lead sheets commonly write the shorter `7` here.
  */
 function isAlteredDominant(chord: Chord, scaleName: string): boolean {
-  return chord.quality === 'dom7' && scaleName === 'altered';
+  if (scaleName !== 'altered' || !soundsDominantSeventh(chord)) {
+    return false;
+  }
+  const mask = namedScaleMask(scaleName);
+  const rootPc = pitchClass(chord.rootPc);
+  const fifthPc = pitchClass(rootPc + 7);
+  return (
+    mask !== undefined &&
+    chordPitchClasses(chord).every((pc) => pc === fifthPc || maskHasPitchClass(mask, rootPc, pc))
+  );
 }
 
 /**
@@ -214,7 +226,15 @@ export function chordScales(chord: ChordLike): ChordScaleMatch[] {
   const data = toChordData(chord);
   const chordPcs = chordPitchClasses(data);
   const rootPc = pitchClass(data.rootPc);
-  const ranked: { name: string; extra: number; size: number; avoid: number }[] = [];
+  const ranked: {
+    name: string;
+    extra: number;
+    size: number;
+    avoid: number;
+    borrowed: boolean;
+  }[] = [];
+  // A tone beyond the plain seventh chord is a written alteration or extension.
+  const writesTension = chordPcs.some((pc) => ![0, 4, 7, 10].includes(pitchClass(pc - rootPc)));
   const seenMasks = new Set<number>();
   for (const name of Object.keys(NAMED_SCALES)) {
     if (name === 'chromatic' || ALIASED_SCALE_NAMES.has(name)) {
@@ -231,7 +251,10 @@ export function chordScales(chord: ChordLike): ChordScaleMatch[] {
         name,
         extra: size - chordPcs.length,
         size,
-        avoid: avoidNotes(data, name).length,
+        avoid: clashingNotes(data, mask, false).length,
+        // Eligible only through the fifth exemption: a scale that holds every
+        // written tone is the better answer for a chord that writes a tension.
+        borrowed: writesTension && !scaleMatchesChord(chordPcs, mask, rootPc),
       });
     }
   }
@@ -252,6 +275,9 @@ export function chordScales(chord: ChordLike): ChordScaleMatch[] {
     }
     if (preferHeptatonic && (a.size === HEPTATONIC_SIZE) !== (b.size === HEPTATONIC_SIZE)) {
       return a.size === HEPTATONIC_SIZE ? -1 : 1;
+    }
+    if (a.borrowed !== b.borrowed) {
+      return a.borrowed ? 1 : -1;
     }
     if (a.extra !== b.extra) {
       return a.extra - b.extra;
@@ -276,7 +302,7 @@ export function chordScales(chord: ChordLike): ChordScaleMatch[] {
 /**
  * Which use an avoid note is judged for: sounding it, or passing through it.
  *
- * `'harmonic'` is the Berklee-style rule in full — a tone that must not be
+ * `'harmonic'` is the Berklee-style rule — a tone that must not be
  * sounded against the chord. `'melodic'` keeps only what a line cannot pass
  * through either, which is the semitone above the root; every other clash
  * resolves as the line moves on.
@@ -335,10 +361,21 @@ export function avoidNotes(
   const asked = assertOptions(opts, 'opts');
   const mask = requireChordScaleMask(scaleName);
   const data = toChordData(chord);
+  if (isAlteredDominant(data, scaleName)) {
+    return [];
+  }
+  return clashingNotes(data, mask, asked.use === 'melodic');
+}
+
+/**
+ * The scale tones that clash with the chord by the avoid-note rule, whatever
+ * function the chord serves: {@link avoidNotes} before the altered dominant's
+ * exemption. Empty when the scale does not contain the chord.
+ */
+function clashingNotes(data: Chord, mask: number, melodic: boolean): number[] {
   const rootPc = pitchClass(data.rootPc);
   const chordPcs = chordPitchClasses(data);
-  const alteredDominant = isAlteredDominant(data, scaleName);
-  if (!scaleMatchesChord(chordPcs, mask, rootPc) && !alteredDominant) {
+  if (!scaleMatchesChord(chordPcs, mask, rootPc)) {
     return [];
   }
   const chordSet = new Set(chordPcs);
@@ -347,7 +384,6 @@ export function avoidNotes(
   // scale. Both thirds are named: a suspension does not say which one it
   // displaced — that is what suspending is — so meeting either one ends it.
   const displaced = new Set(displacedThirds(data));
-  const melodic = asked.use === 'melodic';
   const semitoneAboveRoot = pitchClass(rootPc + 1);
   const avoid: number[] = [];
   for (let pc = 0; pc < 12; pc += 1) {
@@ -357,7 +393,7 @@ export function avoidNotes(
     if (melodic && pc !== semitoneAboveRoot) {
       continue;
     }
-    if (!alteredDominant && (chordSet.has(pitchClass(pc - 1)) || displaced.has(pc))) {
+    if (chordSet.has(pitchClass(pc - 1)) || displaced.has(pc)) {
       avoid.push(pc);
     }
   }

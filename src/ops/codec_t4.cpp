@@ -68,6 +68,19 @@ SafetyContext read_safety_context(const json::Value& query) {
   return context;
 }
 
+bool read_safety_chord(const json::Value& query, double pitch) {
+  const json::Value& chord = get(query, "chord");
+  if (chord.is_null()) {
+    return false;
+  }
+  assert_mask_inputs(chord);
+  if (is_chord_member(pitch, read_chord_fields(chord))) {
+    return false;
+  }
+  assert_chord(chord);
+  return true;
+}
+
 void read_safety_harmony(const json::Value& query, SafetyContext& context) {
   const json::Value& chord = get(query, "chord");
   if (!chord.is_null()) {

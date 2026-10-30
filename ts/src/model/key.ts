@@ -25,10 +25,12 @@ import {
 import type { KeyScale } from '../core/types.js';
 import { assertFiniteNumber, assertInteger, assertOneOf } from '../core/validation/index.js';
 import {
+  type Chord as ChordData,
   type ChordQuality,
   chordFromDegree,
   diatonicSeventh,
   diatonicTriad,
+  makeChord,
 } from '../theory/chord/index.js';
 import {
   assertKeyVariant,
@@ -597,7 +599,7 @@ export class Key {
     return this.toJSON();
   }
 
-  /** The detected scale form, when this key came from key detection. */
+  /** The scale form this key stands in: natural, harmonic or melodic, read from the mask unless named. */
   get variant(): KeyVariant {
     return this.#variant;
   }
@@ -860,7 +862,7 @@ export class Key {
    */
   pivotsTo(other: KeyLike): { chord: Chord; romanFrom: string; romanTo: string }[] {
     assertKeyArgument(other, 'key');
-    return pivotChords(this.#scale, other).map(({ chord, romanFrom, romanTo }) => ({
+    return pivotChords(this, resolveKey(other)).map(({ chord, romanFrom, romanTo }) => ({
       chord: new Chord(chord, this),
       romanFrom,
       romanTo,
@@ -979,7 +981,7 @@ export class Key {
     if (this.pitchClasses().length !== HEPTATONIC_DEGREES) {
       return this.isMinor ? 'minor' : 'major';
     }
-    const { quality } = diatonicTriad(n, this.#scale);
+    const { quality } = diatonicTriad(n, this);
     return quality === 'min' || quality === 'dim' ? 'minor' : 'major';
   }
 
@@ -989,7 +991,7 @@ export class Key {
    *
    * Unlike {@link Key.transpose}, which picks a letter from the semitone count,
    * the interval's diatonic number decides the tonic's letter: G# minor down an
-   * augmented fourth is D minor, while down a diminished fifth it is Dbb minor.
+   * augmented fourth is D minor, while down a diminished fifth it is C## minor.
    * The mode mask is unchanged, so the scale keeps its shape.
    *
    * @param interval The interval to apply, as a name (`'A4'`, `'-A4'`), plain
@@ -1221,6 +1223,16 @@ export class Key {
   }
 
   /**
+   * A degree chord without the spelling its builder attached.
+   *
+   * The chord carries this key, which spells its root on read, so a chord
+   * re-keyed later follows its new key instead of keeping these letters.
+   */
+  #withoutSpelling(chord: ChordData): ChordData {
+    return makeChord(chord.rootPc, chord.quality);
+  }
+
+  /**
    * Build a chord on a scale degree, carrying this key as context.
    *
    * With an explicit quality the quality's interval template is attached to the
@@ -1238,10 +1250,8 @@ export class Key {
    */
   chord(degree: number, quality?: ChordQuality): Chord {
     const data =
-      quality === undefined
-        ? diatonicTriad(degree, this.#scale)
-        : chordFromDegree(degree, quality, this.#scale);
-    return new Chord(data, this);
+      quality === undefined ? diatonicTriad(degree, this) : chordFromDegree(degree, quality, this);
+    return new Chord(this.#withoutSpelling(data), this);
   }
 
   /**
@@ -1254,7 +1264,7 @@ export class Key {
    *   degrees. Use {@link Key.chord} with an explicit quality instead.
    */
   diatonicTriad(degree: number): Chord {
-    return new Chord(diatonicTriad(degree, this.#scale), this);
+    return new Chord(this.#withoutSpelling(diatonicTriad(degree, this)), this);
   }
 
   /**
@@ -1267,7 +1277,7 @@ export class Key {
    *   degrees. Use {@link Key.chord} with an explicit quality instead.
    */
   diatonicSeventh(degree: number): Chord {
-    return new Chord(diatonicSeventh(degree, this.#scale), this);
+    return new Chord(this.#withoutSpelling(diatonicSeventh(degree, this)), this);
   }
 
   /**
@@ -1390,16 +1400,13 @@ export class Key {
    *
    * Private class fields do not serialize, so an explicit `toJSON` keeps
    * `JSON.stringify(key)` from collapsing to `{}`. The result pairs the
-   * `KeyScale` with the spelled tonic and, for a detected harmonic or melodic
-   * minor, the scale form — everything {@link Key.fromJSON} needs to rebuild a
-   * key that reads and prints as this one.
+   * `KeyScale` with the spelled tonic and the scale form — everything
+   * {@link Key.fromJSON} needs to rebuild a key that reads and prints as this
+   * one.
    *
-   * @returns The key/scale, its spelled tonic, and its scale form when it has
-   *   one.
+   * @returns The key/scale, its spelled tonic, and its scale form.
    */
   toJSON(): KeyData {
-    // The variant is omitted rather than written as undefined, so a key that
-    // never came from detection serializes to the same object it always did.
     return { scale: this.scale, tonic: this.#tonic.data, variant: this.#variant };
   }
 
@@ -1497,7 +1504,7 @@ export function toKey(value: KeyLike): Key {
  * harmonic minor comes back a harmonic minor.
  *
  * @param key The key to write down.
- * @returns The key/scale, its spelled tonic, and its scale form when it has one.
+ * @returns The key/scale, its spelled tonic, and its scale form.
  */
 export function keyIdentity(key: Key): ResolvedKey {
   return { scale: key.scale, tonic: key.tonic.data, variant: key.variant };

@@ -10,7 +10,12 @@ import { InvalidInputError } from '../../core/errors/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { Chord } from '../../theory/chord/index.js';
 import { diatonicTriad } from '../../theory/chord/index.js';
-import { type KeyLike, scaleTonesInDegreeOrder, toKeyScale } from '../../theory/scale/index.js';
+import {
+  type ResolvedKey,
+  resolveKey,
+  type SpelledKeyLike,
+  scaleTonesInDegreeOrder,
+} from '../../theory/scale/index.js';
 import { isDiatonicChord } from './internal.js';
 import { renderRoman } from './roman.js';
 
@@ -51,7 +56,8 @@ export type PivotChord = {
  * so it may be any scale; its numerals then follow the {@link chordToRoman}
  * fallback of naming roots against the parallel major.
  *
- * @param from The key being left, as a key name, a key/scale, or a `Key`.
+ * @param from The key being left, as a key name, a key/scale, or a `Key`; the
+ *   shared chords are spelled the way it writes them.
  * @param to The key being entered, in any of the same forms.
  * @returns The shared triads, ascending by their degree in `from`.
  * @example
@@ -62,15 +68,15 @@ export type PivotChord = {
  * ```
  * @category Functional Harmony
  */
-export function pivotChords(from: KeyLike, to: KeyLike): PivotChord[] {
-  return pivotsBetween(toKeyScale(from), toKeyScale(to));
+export function pivotChords(from: SpelledKeyLike, to: SpelledKeyLike): PivotChord[] {
+  return pivotsBetween(resolveKey(from), resolveKey(to).scale);
 }
 
-/** {@link pivotChords} on keys already read into their narrow form. */
-export function pivotsBetween(from: KeyScale, to: KeyScale): PivotChord[] {
+/** {@link pivotChords} on keys already read: the key being left whole, the other as its scale. */
+export function pivotsBetween(from: ResolvedKey, to: KeyScale): PivotChord[] {
   // Testing the degree count keeps a key with no diatonic triads an empty
   // result rather than letting the stacking throw.
-  if (scaleTonesInDegreeOrder(from).length !== HEPTATONIC_DEGREES) {
+  if (scaleTonesInDegreeOrder(from.scale).length !== HEPTATONIC_DEGREES) {
     return [];
   }
   const pivots: PivotChord[] = [];
@@ -104,7 +110,7 @@ export function pivotsBetween(from: KeyScale, to: KeyScale): PivotChord[] {
  * offers nothing to pivot on, so it is skipped rather than failing the query
  * for the six degrees that may well be pivots.
  */
-function stackedTriad(degree: number, key: KeyScale): Chord | null {
+function stackedTriad(degree: number, key: ResolvedKey): Chord | null {
   try {
     return diatonicTriad(degree, key);
   } catch (error) {

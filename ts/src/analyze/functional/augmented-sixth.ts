@@ -26,7 +26,7 @@ import {
 import type { KeyScale } from '../../core/types.js';
 import { assertArray, assertOneOf } from '../../core/validation/index.js';
 import type { Chord, ChordQuality, PitchSpelling } from '../../theory/chord/index.js';
-import { chordPitchClasses, makeChord } from '../../theory/chord/index.js';
+import { chordPitchClasses, makeSpelledChord } from '../../theory/chord/index.js';
 import {
   type KeyLike,
   type ResolvedKey,
@@ -196,16 +196,18 @@ function augmentedSixthOn(kind: AugmentedSixthKind, keyLike: KeyLike): Chord {
   const shape = CHORD_SHAPE[checked];
   const { scale: key, tonic } = resolveKey(keyLike);
   const bassPc = bassPcOf(key);
-  const chord = makeChord(mod12(bassPc + shape.rootAboveBass), shape.quality, bassPc);
-  chord.intervals = [...shape.intervals];
   const bass = transposeByInterval(tonic, BASS_INTERVAL);
   const tones = spelledInChordOrder(checked, tonic);
   // The rotation starts on the tone the template is measured from, so the first
   // spelling is the root's own; the three kinds all sound, so it is never empty.
   const [root = bass] = tones;
-  chord.rootSpelling = bareSpelling(root);
-  chord.bassSpelling = bareSpelling(bass);
-  chord.toneSpellings = tones.map(bareSpelling);
+  const chord = makeSpelledChord(mod12(bassPc + shape.rootAboveBass), shape.quality, {
+    bassPc,
+    rootSpelling: bareSpelling(root),
+    bassSpelling: bareSpelling(bass),
+    toneSpellings: tones.map(bareSpelling),
+  });
+  chord.intervals = [...shape.intervals];
   return chord;
 }
 

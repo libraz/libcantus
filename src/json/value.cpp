@@ -1,4 +1,7 @@
+#include <algorithm>
 #include <cstdint>
+#include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -83,6 +86,61 @@ Value* Object::find(std::string_view key) {
   return i < 0 ? nullptr : &members_[static_cast<std::size_t>(i)].value;
 }
 
+std::size_t Object::index_position(std::uint32_t n) const {
+  // Index keys form a sorted prefix: binary-search its end, then the first larger index in it.
+  std::uint32_t m = 0;
+  auto prefix_end = std::partition_point(members_.begin(), members_.end(),
+                                         [&m](const Member& x) { return array_index(x.key, m); });
+  auto at = std::partition_point(members_.begin(), prefix_end, [&m, n](const Member& x) {
+    array_index(x.key, m);
+    return m < n;
+  });
+  return static_cast<std::size_t>(at - members_.begin());
+}
+
+Object Object::from_members(std::vector<Member> members) {
+  Object out;
+  if (members.size() < kIndexThreshold) {
+    for (Member& m : members) {
+      out.set(std::move(m.key), std::move(m.value));
+    }
+    return out;
+  }
+  // A repeated key keeps its first place and its last value.
+  std::unordered_map<std::string_view, std::size_t> first;
+  first.reserve(members.size());
+  std::vector<std::size_t> kept;
+  kept.reserve(members.size());
+  for (std::size_t i = 0; i < members.size(); ++i) {
+    auto [it, inserted] = first.emplace(members[i].key, i);
+    if (inserted) {
+      kept.push_back(i);
+    } else {
+      members[it->second].value = std::move(members[i].value);
+    }
+  }
+  // Array-index keys first in ascending order, then the rest in first-insertion order.
+  std::vector<std::pair<std::uint32_t, std::size_t>> indices;
+  std::vector<std::size_t> names;
+  for (std::size_t i : kept) {
+    std::uint32_t n = 0;
+    if (array_index(members[i].key, n)) {
+      indices.emplace_back(n, i);
+    } else {
+      names.push_back(i);
+    }
+  }
+  std::sort(indices.begin(), indices.end());
+  out.members_.reserve(kept.size());
+  for (const auto& entry : indices) {
+    out.members_.push_back(std::move(members[entry.second]));
+  }
+  for (std::size_t i : names) {
+    out.members_.push_back(std::move(members[i]));
+  }
+  return out;
+}
+
 void Object::set(std::string key, Value value) {
   std::ptrdiff_t existing = index_of(key);
   if (existing >= 0) {
@@ -92,12 +150,7 @@ void Object::set(std::string key, Value value) {
   std::size_t pos = members_.size();
   std::uint32_t n = 0;
   if (array_index(key, n)) {
-    // Index keys form a sorted prefix; insert before the first larger index or first string key.
-    pos = 0;
-    std::uint32_t m = 0;
-    while (pos < members_.size() && array_index(members_[pos].key, m) && m < n) {
-      ++pos;
-    }
+    pos = index_position(n);
   }
   if (pos == members_.size()) {
     if (index_) {

@@ -149,20 +149,22 @@ Chord augmented_sixth_on(AugmentedSixthKind kind, const KeyArg& key_like) {
   const KindShape::Shape& shape = chord_shape()[index_of(kind)].shape;
   ResolvedKey resolved = resolve_key(key_like);
   int bass_pc = augmented_sixth_bass_pc(resolved.scale);
-  Chord chord = make_chord(pitch_class_of(bass_pc + shape.rootAboveBass),
-                           *parse_chord_quality(shape.quality), bass_pc);
-  chord.intervals.assign(shape.intervals.begin(), shape.intervals.end());
   NoteData bass = transpose_by_interval(resolved.tonic, interval_of(kBassInterval));
   std::vector<NoteData> tones = spelled_in_chord_order(kind, resolved.tonic);
+  SpelledChordParts parts;
+  parts.bassPc = bass_pc;
   // The rotation starts on the tone the template is measured from, so the first spelling is the
   // root's own.
-  chord.rootSpelling = bare_spelling(tones.empty() ? bass : tones.front());
-  chord.bassSpelling = bare_spelling(bass);
+  parts.rootSpelling = bare_spelling(tones.empty() ? bass : tones.front());
+  parts.bassSpelling = bare_spelling(bass);
   std::vector<PitchSpelling> spellings;
   for (const NoteData& tone : tones) {
     spellings.push_back(bare_spelling(tone));
   }
-  chord.toneSpellings = std::move(spellings);
+  parts.toneSpellings = std::move(spellings);
+  Chord chord = make_spelled_chord(pitch_class_of(bass_pc + shape.rootAboveBass),
+                                   *parse_chord_quality(shape.quality), parts);
+  chord.intervals.assign(shape.intervals.begin(), shape.intervals.end());
   return chord;
 }
 

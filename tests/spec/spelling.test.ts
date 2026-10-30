@@ -400,18 +400,29 @@ describe('spellPitchClasses', () => {
 });
 
 describe('spelling stays on the key side across every path', () => {
-  it('spells common borrowed roots without double accidentals in flat keys', () => {
-    expect(Key.major('Ab').roman('bII7').symbol()).toBe('A7');
-    expect(Key.major('Db').roman('bII').symbol()).toBe('D');
-    expect(Key.major('Gb').roman('bII').symbol()).toBe('G');
-    expect(Key.major('Cb').roman('bII').symbol()).toBe('C');
+  it('spells a borrowed root on the letter its numeral names, even in flat keys', () => {
+    // bII is the lowered second degree: the letter above the tonic's, flattened.
+    expect(Key.major('Ab').roman('bII7').symbol()).toBe('Bbb7');
+    expect(Key.major('Db').roman('bII').symbol()).toBe('Ebb');
+    expect(Key.major('Gb').roman('bII').symbol()).toBe('Abb');
+    expect(Key.major('Cb').roman('bII').symbol()).toBe('Dbb');
+    expect(Key.major('C').roman('bII').symbol()).toBe('Db');
   });
 
-  it('keeps borrowed roots readable across every major key', () => {
+  it('keeps borrowed roots on the letter of their degree across every major key', () => {
+    const letters = 'CDEFGAB';
     for (let rootPc = 0; rootPc < 12; rootPc += 1) {
       const key = Key.major(rootPc);
-      for (const roman of ['bII', 'bII7', 'bVI', 'bVII']) {
-        expect(key.roman(roman).symbol(), `${key}/${roman}`).toMatch(/^[A-G](?:#|b)?(?:7)?$/);
+      const tonicLetter = letters.indexOf(key.tonic.name[0] ?? 'C');
+      for (const [roman, steps] of [
+        ['bII', 1],
+        ['bII7', 1],
+        ['bVI', 5],
+        ['bVII', 6],
+      ] as const) {
+        expect(key.roman(roman).symbol()[0], `${key}/${roman}`).toBe(
+          letters[(tonicLetter + steps) % 7],
+        );
       }
     }
   });
@@ -492,6 +503,19 @@ describe('spelling stays on the key side across every path', () => {
         .spell()
         .map((n) => n.name),
     ).toEqual(['Bb', 'D', 'F', 'Ab', 'C#']);
+  });
+
+  it('spells a raised ninth over a chord with no third as a ninth', () => {
+    const chord = Chord.parse('C7sus4(#9)');
+    expect(chord.intervals).toContain(15);
+    expect(chord.spell().map((n) => n.name)).toEqual(['C', 'F', 'G', 'Bb', 'D#']);
+    expect(noteNames(spellChordFromRoot(chord.data, parseNote('C')))).toEqual([
+      'C',
+      'F',
+      'G',
+      'Bb',
+      'D#',
+    ]);
   });
 
   it('never spells one chord with the same letter twice', () => {

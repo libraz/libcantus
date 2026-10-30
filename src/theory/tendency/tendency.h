@@ -62,6 +62,10 @@ std::vector<TonicizableDegree> tonicizable_degrees(const KeyScale& key);
  */
 Nullable<TonicizableDegree> applied_dominant_target(double root_pc, const KeyScale& key);
 
+/** Whether a key cadences through the raised seventh of the harmonic minor
+ * (`cadencesThroughRaisedSeventh`). */
+bool cadences_through_raised_seventh(const KeyScale& key);
+
 /** The pitch class a semitone below the tonic (`leadingTonePcOf`). */
 int leading_tone_pc_of(const KeyScale& key);
 

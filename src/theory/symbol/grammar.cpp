@@ -524,9 +524,9 @@ std::optional<NoteData> bass_note(std::string_view text, NoteNameSystem system) 
   return bare_note(text, system);
 }
 
-/** Build a chord and record the parsed spellings as enharmonic hints (`makeSpelledChord`). */
-Chord make_spelled_chord(const NoteData& root, ChordSpec spec,
-                         const std::optional<NoteData>& bass) {
+/** Build a chord and record the parsed spellings as enharmonic hints (`chordFromSymbolParts`). */
+Chord chord_from_symbol_parts(const NoteData& root, ChordSpec spec,
+                              const std::optional<NoteData>& bass) {
   spec.rootPc = note_to_pitch_class(root);
   if (bass) {
     spec.bassPc = note_to_pitch_class(*bass);
@@ -576,14 +576,14 @@ std::optional<Chord> chord_after_root(const NoteData& root, std::string_view res
       bass = bass_note(rest.substr(slash + 1), system);
     }
     if (slash_spec && bass) {
-      return make_spelled_chord(root, *slash_spec, bass);
+      return chord_from_symbol_parts(root, *slash_spec, bass);
     }
   }
   std::optional<ChordSpec> spec = suffix_spec(rest);
   if (!spec) {
     return std::nullopt;
   }
-  return make_spelled_chord(root, *spec, std::nullopt);
+  return chord_from_symbol_parts(root, *spec, std::nullopt);
 }
 
 }  // namespace cantus

@@ -136,7 +136,7 @@ ResolvedKey read_resolved_key_field(const json::Value& value, std::string_view n
   try {
     return resolve_key(read_key_arg(read));
   } catch (const InvalidInputError& error) {
-    throw InvalidInputError(std::string(name) + " must be a valid key: " + error.what());
+    throw InvalidInputError(std::string(name) + " must be a valid key: " + error.message());
   }
 }
 

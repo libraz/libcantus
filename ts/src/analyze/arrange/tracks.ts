@@ -27,7 +27,7 @@ import {
 import type { KeyLike } from '../../theory/scale/index.js';
 import { majorKey, type ResolvedKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
 import { BEAT_EPS, sameInstant } from '../adjacency.js';
-import { gridForNotes } from '../grid.js';
+import { gridForNotes, latestSoundingEnd } from '../grid.js';
 import {
   attachPivots,
   type KeyRegion,
@@ -201,12 +201,13 @@ function callerTimeline(
   // chart of the opening bars is a partial answer about the harmony and no
   // answer at all about where the piece ends, so stopping the key search at its
   // last chord would read every note after it against the opening key.
-  const chartEnd = timeline.segments.reduce((end, segment) => Math.max(end, segment.endBeat), 0);
-  const soundingEnd = pooled.reduce(
-    (end, note) => Math.max(end, note.startBeat + note.durationBeat),
-    0,
+  const chartEnd = timeline.segments.reduce(
+    (end, segment) => Math.max(end, segment.endBeat),
+    Number.NEGATIVE_INFINITY,
   );
-  const totalBeats = Math.max(chartEnd, soundingEnd);
+  const soundingEnd = latestSoundingEnd(pooled, Number.NEGATIVE_INFINITY);
+  const spanEnd = Math.max(chartEnd, soundingEnd);
+  const totalBeats = Number.isFinite(spanEnd) ? spanEnd : 0;
   // ...and it begins where the music begins, read from the one derivation of an
   // analysed span's origin that the inferring path and the tension curve read
   // too: an excerpt lifted from bar 9 holds no key over the eight bars of

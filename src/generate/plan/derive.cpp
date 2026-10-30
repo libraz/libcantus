@@ -20,6 +20,7 @@
 #include "js/number.h"
 #include "js/sort.h"
 #include "theory/chord/chord.h"
+#include "theory/tendency/tendency.h"
 
 namespace cantus {
 
@@ -429,7 +430,21 @@ Derivation selected_derivation(const MotifGraph& graph,
   return Derivation{};
 }
 
-/** Candidate numerals for a structural chord of a function; null for a key with no triads. */
+/** The triad standing on a degree as a chord of a function (`functionTriad`). */
+Chord function_triad(HarmonicFunction function, int degree, const ResolvedKey& key) {
+  if (function == HarmonicFunction::kDominant && cadences_through_raised_seventh(key.scale)) {
+    if (degree == 5) {
+      return make_chord(pitch_class_of(key.scale.rootPc + 7), ChordQuality::kMaj);
+    }
+    if (degree == 7) {
+      return make_chord(leading_tone_pc_of(key.scale), ChordQuality::kDim);
+    }
+  }
+  return diatonic_triad(degree, KeyArg(key));
+}
+
+/** Candidate numerals for a structural chord of a function; null for a key with no triads or none
+ * that read as the function (`functionCandidates`). */
 std::optional<std::vector<std::string>> function_candidates(HarmonicFunction function,
                                                             const ResolvedKey& key) {
   if (scale_tones_in_degree_order(key).size() !=
@@ -440,9 +455,15 @@ std::optional<std::vector<std::string>> function_candidates(HarmonicFunction fun
   for (const FunctionDegreesRow& row : kFunctionDegrees) {
     if (row.function == to_string(function)) {
       for (int degree : row.degrees) {
-        out.push_back(chord_to_roman(diatonic_triad(degree, KeyArg(key)), KeyArg(key)));
+        Chord chord = function_triad(function, degree, key);
+        if (function_of(chord, KeyArg(key)) == function) {
+          out.push_back(chord_to_roman(chord, KeyArg(key)));
+        }
       }
     }
+  }
+  if (out.empty()) {
+    return std::nullopt;
   }
   return out;
 }

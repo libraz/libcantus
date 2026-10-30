@@ -45,20 +45,11 @@ ChordToRomanOptions read_chord_to_roman_options(const json::Value& asked);
 bool inherits_object_member(std::string_view name);
 
 /**
- * The table entry a chord's `quality` names (`Object.hasOwn(QUALITY_INTERVALS, quality)`): a
- * string, or any other value by the text it has, so the number 5 names the power chord. Nullopt
- * for a name the table does not hold.
+ * The entry a quality-keyed table lookup (`TABLE[quality]`, as the numeral styles are read) finds:
+ * a string, or any other value by the text it has, so the number 5 names the power chord. Nullopt
+ * for a name the table does not hold. `assertChordQuality` is stricter: known_chord_quality().
  */
 std::optional<ChordQuality> table_quality(const json::Value& quality);
-
-/**
- * `assertChordQuality` over a wire chord.
- * @throws InvalidInputError "Unknown chord quality: ..." for a quality no table has.
- */
-ChordQuality assert_chord_quality(const json::Value& chord);
-
-/** assert_chord_quality() on the chord data of a read chord, taking the quality it names. */
-void settle_chord_quality(ChordData& data);
 
 /**
  * What reading a wire chord as an augmented sixth reads of its spelling hints (`spellChord`'s root

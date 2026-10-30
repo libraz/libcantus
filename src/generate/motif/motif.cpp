@@ -375,7 +375,9 @@ std::vector<MotifResult> develop_notes(const std::vector<NoteEvent>& notes,
       double pitch = developed_pitch(cell_pitch, allows, direction, taken);
       taken[pitch] = cell_pitch;
       previous = cell_pitch;
-      out.push_back(MotifResult{pitch, start_beat, n.durationBeat, std::nullopt});
+      // A note that would run past the span is cut at its end.
+      out.push_back(MotifResult{pitch, start_beat,
+                                js::min(n.durationBeat, total_beats - start_beat), std::nullopt});
     }
   }
   in_time_order(out);

@@ -14,7 +14,7 @@ import {
 import { BEAT_EPS } from '../adjacency.js';
 
 /** Whether `value` is a whole multiple of `unit`, within float tolerance. */
-function isMultipleOf(value: number, unit: number): boolean {
+export function isMultipleOf(value: number, unit: number): boolean {
   if (unit <= 0) {
     return false;
   }

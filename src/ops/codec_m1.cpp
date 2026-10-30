@@ -5,6 +5,7 @@
 #include <string>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "cantus/core/errors.h"
 #include "core/validation/validation.h"
@@ -394,27 +395,17 @@ const json::Value& class_instance(const Args& a, std::size_t i, std::string_view
 
 namespace {
 
-void decode_class_value(const json::Value& v) {
-  if (v.is_array()) {
-    for (const json::Value& element : v.as_array()) {
-      decode_class_value(element);
-    }
+/** Error classes cross as `$class` values too; they are not model classes and decode to nothing. */
+bool is_error_class(const std::string& name) {
+  return name == "InvalidInputError" || name == "NoSolutionError" || name == "BudgetExceededError";
+}
+
+/** `Class.fromData` over one `$class` value whose nested values are decoded already. */
+void decode_class_instance(const json::Value& v) {
+  const std::string& name = v.as_object().find("$class")->as_string();
+  if (is_error_class(name)) {
     return;
   }
-  if (!v.is_object()) {
-    return;
-  }
-  for (const json::Member& member : v.as_object()) {
-    decode_class_value(member.value);
-  }
-  if (tag_of(v) != Tag::kClass) {
-    return;
-  }
-  const json::Value* tag = v.as_object().find("$class");
-  if (!tag->is_string()) {
-    return;
-  }
-  const std::string& name = tag->as_string();
   if (name == "Note") {
     read_note_data(v);
   } else if (name == "Interval") {
@@ -431,8 +422,44 @@ void decode_class_value(const json::Value& v) {
     read_instrument_data(v);
   } else if (name == "Voicing") {
     read_voicing_data(get(v, "pitches"));
-  } else if (!decode_m2_class(v, name)) {
-    decode_m3_class(v, name);
+  } else if (!decode_m2_class(v, name) && !decode_m3_class(v, name)) {
+    throw RequestError("unknown class " + js::quote(name));
+  }
+}
+
+/** Decode every `$class` value in `v`, innermost first, from an explicit stack. */
+void decode_class_value(const json::Value& v) {
+  struct Pending {
+    const json::Value* value;
+    bool children_done;
+  };
+  std::vector<Pending> pending{Pending{&v, false}};
+  while (!pending.empty()) {
+    Pending next = pending.back();
+    pending.pop_back();
+    if (next.children_done) {
+      decode_class_instance(*next.value);
+      continue;
+    }
+    if (next.value->is_array()) {
+      const json::Array& items = next.value->as_array();
+      for (auto it = items.rbegin(); it != items.rend(); ++it) {
+        pending.push_back(Pending{&*it, false});
+      }
+      continue;
+    }
+    if (!next.value->is_object()) {
+      continue;
+    }
+    // validate() has made every `$class` tag a string.
+    if (tag_of(*next.value) == Tag::kClass) {
+      pending.push_back(Pending{next.value, true});
+    }
+    const json::Object& members = next.value->as_object();
+    for (const json::Member* m = members.end(); m != members.begin();) {
+      --m;
+      pending.push_back(Pending{&m->value, false});
+    }
   }
 }
 

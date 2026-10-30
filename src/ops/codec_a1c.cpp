@@ -58,7 +58,7 @@ std::optional<VoiceChord> read_host_chord(const json::Value& wire) {
   assert_mask_inputs(wire);
   VoiceChord out;
   const json::Value& quality = get(wire, "quality");
-  std::optional<ChordQuality> known = table_quality(quality);
+  std::optional<ChordQuality> known = known_chord_quality(quality);
   out.chord = read_chord_fields(wire, known.value_or(ChordQuality::kMaj));
   if (!known) {
     out.unknown_quality = "Unknown chord quality: " + js::string_of(quality);

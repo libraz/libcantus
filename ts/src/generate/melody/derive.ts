@@ -63,16 +63,19 @@ function stretched(cell: MotifCell, timeRatio: number): MotifCell {
 function shaped(cell: MotifCell, relation: MotifRelationSummary): MotifCell {
   switch (relation.kind) {
     case 'repetition':
-    case 'tonalTransposition':
       return cell;
     case 'transposition':
+    case 'tonalTransposition':
       return stretched(cell, relation.timeRatio);
     case 'inversion':
       return stretched(transformMotif(cell, 'invert'), relation.timeRatio);
     case 'retrograde':
-      return transformMotif(cell, 'retrograde');
+      return stretched(transformMotif(cell, 'retrograde'), relation.timeRatio);
     case 'retrogradeInversion':
-      return transformMotif(transformMotif(cell, 'invert'), 'retrograde');
+      return stretched(
+        transformMotif(transformMotif(cell, 'invert'), 'retrograde'),
+        relation.timeRatio,
+      );
     case 'augmentation':
       return transformMotif(cell, 'augment', relation.timeRatio);
     case 'diminution':

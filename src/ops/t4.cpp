@@ -12,6 +12,7 @@
 
 #include "cantus/core/errors.h"
 #include "cantus/theory/safety.h"
+#include "js/math.h"
 #include "js/number.h"
 #include "js/value.h"
 #include "ops/accessors.h"
@@ -143,6 +144,7 @@ void register_safety() {
       opts.partners = js::truthy(*partners);
     }
     read_safety_harmony(a[0], query);
+    read_safety_chord(a[0], query.candidatePitch);
     return to_json(evaluate_safety(query, opts));
   });
   def("enumerateSafePitches", [](Args& a) -> json::Value {
@@ -150,6 +152,17 @@ void register_safety() {
     double low = assert_midi_pitch(a[1], "pitchLow");
     double high = assert_midi_pitch(a[2], "pitchHigh");
     read_safety_harmony(a[0], context);
+    // The chord is asserted at the first pitch outside it, enumerating down from the top.
+    if (low <= high) {
+      double top =
+          context.vocalHigh ? js::min(high, static_cast<double>(*context.vocalHigh)) : high;
+      double bottom = context.vocalLow ? js::max(low, static_cast<double>(*context.vocalLow)) : low;
+      for (double pitch = top; pitch >= bottom; pitch -= 1) {
+        if (read_safety_chord(a[0], pitch)) {
+          break;
+        }
+      }
+    }
     return to_json(enumerate_safe_pitches(context, low, high));
   });
 }

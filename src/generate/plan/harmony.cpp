@@ -13,6 +13,7 @@
 #include "generate/plan/internal.h"
 #include "generate/plan/limits.gen.h"
 #include "js/sort.h"
+#include "theory/tendency/tendency.h"
 
 namespace cantus {
 
@@ -74,14 +75,17 @@ std::optional<std::vector<int>> cadence_pitch_classes(const CompositionPlan& pla
       break;
     }
   }
-  std::vector<int> tones = scale_tones_in_degree_order(
-      scale_of(plan.keys[entry != nullptr ? static_cast<std::size_t>(entry->key) : 0]));
+  KeyScale scale = scale_of(plan.keys[entry != nullptr ? static_cast<std::size_t>(entry->key) : 0]);
+  std::vector<int> tones = scale_tones_in_degree_order(scale);
+  // The dominant a half or phrygian cadence lands on carries the raised seventh.
+  bool raised = cadences_through_raised_seventh(scale);
   std::vector<int> allowed;
   for (const CadenceDegreesRow& row : kCadenceDegrees) {
     if (row.cadence == to_string(cadence)) {
       for (int degree : row.degrees) {
         if (degree >= 1 && static_cast<std::size_t>(degree) <= tones.size()) {
-          allowed.push_back(tones[static_cast<std::size_t>(degree - 1)]);
+          allowed.push_back(raised && degree == 7 ? leading_tone_pc_of(scale)
+                                                  : tones[static_cast<std::size_t>(degree - 1)]);
         }
       }
     }

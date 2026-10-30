@@ -1,5 +1,6 @@
-import { generateProgression } from '@libraz/libcantus/generate';
-import { majorKey } from '@libraz/libcantus/theory';
+import { chordToRoman } from '@libraz/libcantus/analyze';
+import { generateProgression, progressions } from '@libraz/libcantus/generate';
+import { majorKey, makeChord, minorKey, scaleByName } from '@libraz/libcantus/theory';
 import { describe, expect, it } from 'vitest';
 
 const cMajor = majorKey(0);
@@ -94,5 +95,65 @@ describe('generateProgression reharmonize', () => {
       bars: 4,
     });
     expect(plain.some((c) => c.secondaryDominant)).toBe(false);
+  });
+});
+
+describe('generateProgression dominants', () => {
+  it('flags only chords the key reads as applied dominants', () => {
+    const keys = [
+      majorKey(0),
+      minorKey(9),
+      scaleByName('mixolydian', 7),
+      scaleByName('lydian', 5),
+      scaleByName('dorian', 2),
+    ];
+    let flagged = 0;
+    for (const key of keys) {
+      for (const preset of progressions()) {
+        for (let seed = 0; seed < 4; seed += 1) {
+          const chords = generateProgression({
+            key,
+            style: 'idol',
+            bars: 8,
+            presetId: preset.id,
+            ctx: { seed, complexity: { harmonic: 1 } },
+          });
+          for (const chord of chords) {
+            if (chord.secondaryDominant === true) {
+              const roman = chordToRoman(makeChord(chord.rootPc, chord.quality), key, {
+                applied: true,
+              });
+              expect(roman, `${preset.id} ${key.rootPc}`).toContain('/');
+              flagged += 1;
+            }
+          }
+        }
+      }
+    }
+    expect(flagged).toBeGreaterThan(0);
+  });
+
+  it('leaves a dominant that already resolves onto the next chord as written', () => {
+    const chords = generateProgression({
+      key: majorKey(0),
+      style: 'idol',
+      bars: 4,
+      ext: '7alt',
+      preset: { degrees: [2, 5, 1, 4] },
+      ctx: { complexity: { harmonic: 1 } },
+    });
+    // II7alt falls a fifth onto V: it is already the dominant of the chord after it.
+    expect(chords[0]).toMatchObject({ rootPc: 2, quality: '7alt' });
+    expect(chords.every((chord) => chord.quality === '7alt')).toBe(true);
+    expect(chords[0]?.secondaryDominant).toBeUndefined();
+  });
+
+  it('raises the fifth degree of a cadence-strong progression only where the key cadences through a raised seventh', () => {
+    const preset = { degrees: [1, 4, 5, 1], functional: 'cadenceStrong' as const };
+    const qualityOfFifth = (key: ReturnType<typeof minorKey>) =>
+      generateProgression({ key, style: 'idol', bars: 4, preset })[2]?.quality;
+    expect(qualityOfFifth(minorKey(9))).toBe('maj');
+    expect(qualityOfFifth(scaleByName('dorian', 9))).toBe('min');
+    expect(qualityOfFifth(scaleByName('phrygian', 4))).toBe('dim');
   });
 });

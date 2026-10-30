@@ -352,8 +352,10 @@ describe('planTimeline', () => {
     expect(timeline.segments).toHaveLength(2);
     expect(timeline.segments[0]).toMatchObject({ startBeat: 0, endBeat: 4 });
     expect(timeline.segments[1]).toMatchObject({ startBeat: 4, endBeat: 8 });
-    expect(timeline.at(0)).toEqual(romanToChord('I', C_MAJOR));
-    expect(timeline.at(4)).toEqual(romanToChord('V7', C_MAJOR));
+    // A timeline chord is built from a span, which records pitch classes and quality
+    // but no spelling, so the numeral's chord carries a spelling the span does not.
+    expect(romanToChord('I', C_MAJOR)).toMatchObject(timeline.at(0) ?? {});
+    expect(romanToChord('V7', C_MAJOR)).toMatchObject(timeline.at(4) ?? {});
     expect(timeline.at(8)).toBeNull();
   });
 

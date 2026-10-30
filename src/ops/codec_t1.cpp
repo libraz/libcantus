@@ -238,6 +238,11 @@ void read_root_hint(const json::Value& chord) {
   assert_finite_number(js::add_number(natural, property_of(hint, "alter")), "pitch");
 }
 
+void read_spelled_hints(const json::Value& chord) {
+  read_root_hint(chord);
+  reads_tone_letter_offsets(chord);
+}
+
 void read_context_evidence(const json::Value& context, double pc, const NoteData& tonic,
                            const KeyScale& key) {
   if (pitch_class_of(pc) == note_to_pitch_class(tonic) || is_scale_tone(pc, key)) {
@@ -282,13 +287,19 @@ int read_mask_of(const json::Value& value, std::string_view name) {
   return read_mode_mask(get(record, "modeMask12"), join_name(name, ".modeMask12"));
 }
 
+std::optional<ChordQuality> known_chord_quality(const json::Value& value) {
+  return value.is_string() ? parse_chord_quality(value.as_string()) : std::nullopt;
+}
+
 ChordQuality read_chord_quality(const json::Value& value) {
-  if (value.is_string()) {
-    if (std::optional<ChordQuality> quality = parse_chord_quality(value.as_string())) {
-      return *quality;
-    }
+  if (std::optional<ChordQuality> quality = known_chord_quality(value)) {
+    return *quality;
   }
   throw InvalidInputError("Unknown chord quality: " + js::string_of(value));
+}
+
+ChordQuality assert_chord_quality(const json::Value& chord) {
+  return read_chord_quality(get(chord, "quality"));
 }
 
 const json::Value& assert_chord(const json::Value& value, std::string_view name) {
@@ -314,9 +325,7 @@ void assert_mask_inputs(const json::Value& chord, bool include_bass) {
 Chord read_chord_fields(const json::Value& value, ChordQuality fallback) {
   Chord chord;
   chord.rootPc = arithmetic(get(value, "rootPc"));
-  const json::Value& quality = get(value, "quality");
-  chord.quality =
-      quality.is_string() ? parse_chord_quality(quality.as_string()).value_or(fallback) : fallback;
+  chord.quality = known_chord_quality(get(value, "quality")).value_or(fallback);
   const json::Value& intervals = get(value, "intervals");
   if (intervals.is_array()) {
     for (const json::Value& interval : intervals.as_array()) {
@@ -346,6 +355,75 @@ Chord read_chord_fields(const json::Value& value, ChordQuality fallback) {
     }
   }
   return chord;
+}
+
+std::vector<double> read_spec_intervals(const json::Value& intervals) {
+  if (is_null_or_undefined(intervals)) {
+    return {};
+  }
+  if (!intervals.is_array()) {
+    // `intervals.length === 0`; a string iterates as characters, none of which is an offset.
+    if (js::strict_equals(length_of(intervals), json::Value(0.0)) || intervals.is_string()) {
+      return {};
+    }
+    throw js::TypeError(not_iterable_message(intervals));
+  }
+  // `[...new Set(intervals)].sort((a, b) => a - b)`, then `offset <= 12` over each offset.
+  std::vector<const json::Value*> compared;
+  bool symbol = false;
+  bool bigint = false;
+  bool numbers = true;
+  for (const json::Value& interval : intervals.as_array()) {
+    std::string type = js::type_of(interval);
+    symbol = symbol || type == "symbol";
+    bigint = bigint || type == "bigint";
+    numbers = numbers && type == "number";
+    if (is_undefined(interval)) {
+      continue;
+    }
+    bool seen = false;
+    for (const json::Value* other : compared) {
+      seen = seen || js::same_value_zero(*other, interval);
+    }
+    if (!seen) {
+      compared.push_back(&interval);
+    }
+  }
+  if (symbol) {
+    throw js::TypeError("Cannot convert a Symbol value to a number");
+  }
+  if (bigint && compared.size() > 1) {
+    bool all_bigint = true;
+    for (const json::Value* entry : compared) {
+      all_bigint = all_bigint && js::type_of(*entry) == "bigint";
+    }
+    throw js::TypeError(all_bigint ? "Cannot convert a BigInt value to a number"
+                                   : "Cannot mix BigInt and other types, use explicit conversions");
+  }
+  // An entry that is not a number never equals the offset a reading rebuilds.
+  std::vector<double> out;
+  if (numbers) {
+    for (const json::Value& interval : intervals.as_array()) {
+      out.push_back(*number_of(interval));
+    }
+  }
+  return out;
+}
+
+void read_spec_quality(const Chord& chord, const json::Value& quality) {
+  if (!known_chord_quality(quality) &&
+      (chord.intervals.empty() || !chord_spec_from_intervals(chord.intervals))) {
+    read_chord_quality(quality);
+  }
+}
+
+bool reads_interval(const json::Value& chord, int semitones) {
+  for (const json::Value& interval : get(chord, "intervals").as_array()) {
+    if (pitch_class_of(assert_finite_number(interval, "pitch")) == semitones) {
+      return true;
+    }
+  }
+  return false;
 }
 
 ChordSpec read_chord_spec(const json::Value& value) {

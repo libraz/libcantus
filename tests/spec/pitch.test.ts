@@ -126,6 +126,15 @@ describe('spelledInterval', () => {
     });
   });
 
+  it('returns an interval the other interval functions accept at the widest alterations', () => {
+    const from: Note = { letter: 3, alter: -6, octave: 4 };
+    const to: Note = { letter: 6, alter: 6, octave: 4 };
+    const interval = spelledInterval(from, to);
+    expect(interval).toMatchObject({ number: 4, quality: 'A'.repeat(13), semitones: 18 });
+    expect(toSpelledInterval(interval)).toEqual(interval);
+    expect(transposeByInterval(from, interval)).toEqual(to);
+  });
+
   it('detects the augmented second in harmonic minor', () => {
     const aug2 = spelledInterval(parseNote('Ab4'), parseNote('B4'));
     expect(aug2).toMatchObject({ number: 2, quality: 'A', semitones: 3 });

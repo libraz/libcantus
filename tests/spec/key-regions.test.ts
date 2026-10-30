@@ -1030,3 +1030,22 @@ describe('detectModulations beats that are no numbers', () => {
     );
   });
 });
+
+describe('keyTimelineFromNotes over notes that end before beat 0', () => {
+  const notes: NoteEvent[] = [60, 62, 64, 65, 67].map((pitch, i) => ({
+    pitch,
+    startBeat: -8 + i,
+    durationBeat: 1,
+  }));
+
+  it('ends its last region where the last note ends', () => {
+    const regions = keyTimelineFromNotes(notes);
+    expect(regions[0]?.startBeat).toBe(-8);
+    expect(regions[regions.length - 1]?.endBeat).toBe(-3);
+  });
+
+  it('accepts a totalBeats at or above the first note', () => {
+    const regions = keyTimelineFromNotes(notes, { totalBeats: -3 });
+    expect(regions[regions.length - 1]?.endBeat).toBe(-3);
+  });
+});

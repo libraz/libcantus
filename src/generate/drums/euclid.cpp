@@ -24,7 +24,8 @@ std::vector<bool> bjorklund(double pulses, double steps) {
   std::size_t onsets = static_cast<std::size_t>(pulses);
   std::vector<std::vector<bool>> head(onsets, std::vector<bool>{true});
   std::vector<std::vector<bool>> remainder(total - onsets, std::vector<bool>{false});
-  while (remainder.size() > 1) {
+  // At least one distribution: a single leftover rest still has to be placed.
+  do {
     std::size_t count = head.size() < remainder.size() ? head.size() : remainder.size();
     std::vector<std::vector<bool>> next;
     for (std::size_t i = 0; i < count; ++i) {
@@ -36,7 +37,7 @@ std::vector<bool> bjorklund(double pulses, double steps) {
                     ? std::vector<std::vector<bool>>(head.begin() + count, head.end())
                     : std::vector<std::vector<bool>>(remainder.begin() + count, remainder.end());
     head = std::move(next);
-  }
+  } while (remainder.size() > 1);
   std::vector<bool> out;
   for (const std::vector<bool>& group : head) {
     out.insert(out.end(), group.begin(), group.end());

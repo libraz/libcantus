@@ -943,9 +943,9 @@ function chordLetterOffset(interval: number, chord: Chord): number {
     case 4:
       return 2;
     case 15:
-      // A raised ninth over a chord that already has a third is a ninth, not a
-      // second third: C7#9 spells D#, not a duplicate E.
-      return chord.intervals.some((i) => i === 3 || i === 4) ? 1 : 2;
+      // The spec reads 15 as a raised ninth whatever else the chord holds, so it
+      // is one letter above the root: C7#9 and C7sus4(#9) both spell D#.
+      return 1;
     case 5:
     case 16:
     case 17:

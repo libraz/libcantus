@@ -110,3 +110,11 @@ TEST_CASE("Key builds chords and progressions in itself", "[model][key]") {
   REQUIRE(best.has_value());
   CHECK(best->to_string() == "C major");
 }
+
+TEST_CASE("Key spells the chords it builds the way it is written", "[model][key]") {
+  Key ab_minor = Key::of("Ab minor");
+  CHECK(ab_minor.roman("bII").symbol() == "Bbb");
+  CHECK(ab_minor.chord(1).symbol() == "Abm");
+  CHECK(Key::major("Eb").diatonic_seventh(5).symbol() == "Bb7");
+  CHECK(Key::major("C").roman("viio7/vi").symbol() == "G#dim7");
+}

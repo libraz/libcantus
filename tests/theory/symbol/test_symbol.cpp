@@ -1,6 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
+#include <string>
+#include <vector>
 
 #include "cantus/core/errors.h"
+#include "cantus/theory/spelling.h"
 #include "cantus/theory/symbol.h"
 
 using namespace cantus;
@@ -71,4 +74,21 @@ TEST_CASE("chord data is validated and reduced to pitch classes", "[symbol]") {
   CHECK(data.bassPc == 7);
   chord.intervals.push_back(0.0 / 0.0);
   CHECK_THROWS_AS(to_chord_data(chord), InvalidInputError);
+}
+
+TEST_CASE("a parsed flat root keeps a bass spelled outside the chord's own tones", "[symbol]") {
+  CHECK(format_chord_symbol(parse_chord_symbol("Gb7/Cb")) == "Gb7/Cb");
+  CHECK(format_chord_symbol(parse_chord_symbol("Cbmaj7")) == "Cbmaj7");
+}
+
+TEST_CASE("a raised ninth over a chord with no third is a ninth", "[symbol]") {
+  Chord chord = parse_chord_symbol("C7sus4(#9)");
+  std::vector<std::string> names = note_names([&] {
+    std::vector<NoteArg> notes;
+    for (const NoteData& note : spell_chord_from_root(chord, "C")) {
+      notes.emplace_back(note);
+    }
+    return notes;
+  }());
+  CHECK(names == std::vector<std::string>{"C", "F", "G", "Bb", "D#"});
 }

@@ -458,6 +458,8 @@ describe('symbol round-trip', () => {
     'C6/9',
     'C6/9/E',
     'Bb6/9/D',
+    // A bass the chart writes in a spelling the chord does not own.
+    'Gb7/Cb',
   ];
 
   for (const symbol of stableSymbols) {

@@ -7,12 +7,18 @@
  * spelled key signature.
  */
 
-import { transposeNote } from '../../core/pitch/index.js';
+import { transposeByInterval, transposeNote } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import { assertFiniteNumber, assertInteger, assertOptions } from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
-import { makeChord } from '../../theory/chord/index.js';
-import { type KeyLike, scaleTonesInDegreeOrder, toKeyScale } from '../../theory/scale/index.js';
+import { keySpelling, makeSpelledChord } from '../../theory/chord/index.js';
+import {
+  type KeyLike,
+  resolveKey,
+  type SpelledKeyLike,
+  scaleTonesInDegreeOrder,
+  toKeyScale,
+} from '../../theory/scale/index.js';
 import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
 import { augmentedSixthKindOf } from './augmented-sixth.js';
 import { type BorrowedSource, borrowedSourceOf } from './borrowed.js';
@@ -405,20 +411,25 @@ export function analyzeChord(
  * @param targetDegree 1-based scale degree to tonicize: 5 is the dominant, so
  *   `secondaryDominant(5, majorKey(0))` is the V of V.
  * @param key The prevailing key, as a key name, a key/scale, or a `Key`.
- * @returns A dominant-seventh chord a fifth above the target's root.
+ * @returns A dominant-seventh chord a fifth above the target's root, spelled the
+ *   way the key writes it (in Ab major the V of IV is Eb7, not D#7).
  * @throws If `targetDegree` is not an integer naming a degree in `key`.
  * @see {@link secondaryDominantOf} to tonicize a chord that has no degree in
  *   the key, or when no key is at hand.
  * @category Functional Harmony
  */
-export function secondaryDominant(targetDegree: number, key: KeyLike): Chord {
-  const scale = toKeyScale(key);
+export function secondaryDominant(targetDegree: number, key: SpelledKeyLike): Chord {
+  const resolved = resolveKey(key);
+  const scale = resolved.scale;
   // A degree outside the scale is a caller error, not a wrap-around: silently
   // tonicizing some other degree produces a chord that reads as intentional.
   const degreeCount = scaleTonesInDegreeOrder(scale).length;
   assertInteger(targetDegree, 'targetDegree', 1, degreeCount);
   const targetRoot = degreeRootPc(targetDegree, scale);
-  return makeChord(mod12(targetRoot + 7), 'dom7');
+  // A perfect fifth above the target as the key writes it, so the dominant takes
+  // the letter a fifth up rather than whichever name its pitch class defaults to.
+  const rootSpelling = transposeByInterval(keySpelling(targetRoot, resolved), 'P5');
+  return makeSpelledChord(mod12(targetRoot + 7), 'dom7', { rootSpelling });
 }
 
 /**
@@ -448,12 +459,9 @@ export function secondaryDominant(targetDegree: number, key: KeyLike): Chord {
 export function secondaryDominantOf(target: ChordLike): Chord {
   const data = toChordData(target);
   assertFiniteNumber(data.rootPc, 'target chord rootPc');
-  const dominant = makeChord(mod12(data.rootPc + 7), 'dom7');
   // Move an explicit spelling hint rather than deriving one: the dominant of a
   // flat-named target is spelled flat, whatever key it is later read in.
-  if (data.rootSpelling !== undefined) {
-    const moved = transposeNote(data.rootSpelling, 7);
-    dominant.rootSpelling = { letter: moved.letter, alter: moved.alter };
-  }
-  return dominant;
+  const rootSpelling =
+    data.rootSpelling === undefined ? undefined : transposeNote(data.rootSpelling, 7);
+  return makeSpelledChord(mod12(data.rootPc + 7), 'dom7', { rootSpelling });
 }

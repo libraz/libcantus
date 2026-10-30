@@ -582,8 +582,10 @@ function qualityFromSpan(numberValue: number, semitones: number): IntervalQualit
   const simple = numberValue - 7 * octaves;
   const reference = (SIMPLE_REFERENCE[simple] ?? 0) + 12 * octaves;
   const delta = semitones - reference;
+  // A fourth or fifth between the extreme alterations deviates by one more than
+  // twice the alteration limit: both accidentals plus the natural tritone offset.
   const repeat = (glyph: 'A' | 'd', count: number): IntervalQualityLabel =>
-    `${glyph}${glyph.repeat(Math.min(count, MAX_ALTER * 2) - 1)}`;
+    `${glyph}${glyph.repeat(Math.min(count, MAX_ALTER * 2 + 1) - 1)}`;
   if (isPerfectNumber(simple)) {
     if (delta === 0) {
       return 'P';
@@ -1003,12 +1005,15 @@ function diatonicIndex(note: Note): number {
  * The spelled interval from one note to another.
  *
  * When both notes carry octaves, the interval reflects their full signed
- * distance (so `C4 -> C5` is a perfect octave). When either lacks an octave the
- * interval is measured within a single ascending octave from `a` to `b`.
+ * distance (so `C4 -> C5` is a perfect octave). When neither carries an octave
+ * the interval is measured within a single octave from `a` to `b`, normally
+ * ascending; a chromatic step down on one letter, such as `C -> Cb`, descends
+ * (`-A1`). Exactly one octave-bearing note has no defined answer and throws.
  *
  * @param a The lower/first note.
  * @param b The upper/second note.
  * @returns The diatonic number, quality, and semitone span.
+ * @throws If exactly one of the notes carries an octave.
  * @example
  * ```ts
  * import { spelledInterval, parseNote } from '@libraz/libcantus';

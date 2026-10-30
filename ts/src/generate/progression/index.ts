@@ -1,6 +1,7 @@
-import { isMinorKey, tonicizableDegrees } from '../../analyze/functional/index.js';
+import { tonicizableDegrees } from '../../analyze/functional/index.js';
 import { InvalidInputError } from '../../core/errors/index.js';
 import { beatsPerBar, type MeterLike } from '../../core/meter/index.js';
+import type { Note } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import {
   assertDegree,
@@ -11,8 +12,14 @@ import {
 } from '../../core/validation/index.js';
 import type { ChordQuality, ChordSpan } from '../../theory/chord/index.js';
 import { chordQualities, diatonicTriad, makeChord } from '../../theory/chord/index.js';
-import { type KeyLike, scaleTonesInDegreeOrder, toKeyScale } from '../../theory/scale/index.js';
-import { fifthPcOf, heptatonicFrameOf } from '../../theory/tendency/index.js';
+import { type KeyLike, resolveKey, scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
+import {
+  cadencesThroughRaisedSeventh,
+  fifthPcOf,
+  heptatonicFrameOf,
+  isDiatonicChord,
+  soundsDominantSeventh,
+} from '../../theory/tendency/index.js';
 import {
   type GenerationContextInput,
   type ResolvedContext,
@@ -376,16 +383,22 @@ function degreeToRootPc(degree: number, key: KeyScale): number {
  * keys yield diatonic chords. Borrowed degrees keep their fixed chromatic
  * qualities (`#IV` diminished, `iv` minor, the rest major).
  */
-function autoQuality(degree: number, key: KeyScale, harmonicDominant: boolean): ChordQuality {
+function autoQuality(
+  degree: number,
+  key: KeyScale,
+  tonic: Note,
+  harmonicDominant: boolean,
+): ChordQuality {
   if (degree >= 1 && degree <= 7) {
     // A cadence-oriented progression needs a leading tone in minor too: use
-    // the conventional harmonic-minor V rather than the natural-minor v.
-    if (harmonicDominant && isMinorKey(key) && degree === 5) {
+    // the conventional harmonic-minor V rather than the natural-minor v. A mode
+    // keeps its own fifth degree.
+    if (harmonicDominant && cadencesThroughRaisedSeventh(key) && degree === 5) {
       return 'maj';
     }
     // The same frame the root was read in, so the two halves of one chord
     // cannot come from different degree spaces.
-    return diatonicTriad(degree, heptatonicFrameOf(key)).quality;
+    return diatonicTriad(degree, { ...heptatonicFrameOf(key), tonic }).quality;
   }
   if (degree === 14) {
     return 'dim';
@@ -414,6 +427,7 @@ type CycleStep = { degree?: number; rootPc: number; quality: ChordQuality };
 function resolveCycle(
   degrees: readonly number[],
   key: KeyScale,
+  tonic: Note,
   ext: ProgressionOptions['ext'],
   harmonicDominant: boolean,
 ): CycleStep[] {
@@ -421,7 +435,9 @@ function resolveCycle(
     const step: CycleStep = {
       rootPc: degreeToRootPc(degree, key),
       quality:
-        ext !== undefined && ext !== 'auto' ? ext : autoQuality(degree, key, harmonicDominant),
+        ext !== undefined && ext !== 'auto'
+          ? ext
+          : autoQuality(degree, key, tonic, harmonicDominant),
     };
     if (degree >= 1 && degree <= 7) {
       step.degree = degree;
@@ -531,7 +547,10 @@ function canBeTonicized(span: ChordSpan, tonicizable: ReadonlySet<number>): bool
  * the secondary dominant (V7) of the following chord, flagged with
  * `secondaryDominant`. Only a chord the key can make a local tonic is given one:
  * nothing tonicizes a diminished triad, so the supertonic of a minor key takes
- * no dominant of its own.
+ * no dominant of its own, and a dominant seventh the key already contains
+ * (the tonic seventh of mixolydian) is a native chord rather than an applied
+ * one, so it is not inserted. A chord that already sounds a dominant seventh
+ * onto the next one is left as written.
  *
  * @param opts Generation options.
  * @returns One chord per bar in timeline order.
@@ -557,9 +576,9 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
   assertRecord(opts, 'progression options');
   assertPositiveInt(opts.bars, 'progression bars');
   assertGenerationBudget(opts.bars, 'progression chords');
-  // The key is read into its plain form once, here at the boundary; the degree
-  // resolution below is given the scale it resolved to.
-  const key = toKeyScale(opts.key);
+  // The key is resolved once, here at the boundary; the degree resolution below
+  // is given the scale it resolved to and the tonic the caller wrote it with.
+  const { scale: key, tonic } = resolveKey(opts.key);
   const ctx = resolveContext(opts.ctx);
   let preset: ProgressionPreset | undefined;
   if (opts.preset !== undefined) {
@@ -599,6 +618,7 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
   const cycle = resolveCycle(
     preset?.degrees ?? [0],
     key,
+    tonic,
     ext,
     preset?.functional === 'cadenceStrong',
   );
@@ -634,7 +654,12 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
       const domRoot = (next.rootPc + 7) % 12;
       const targetsTonic = (next.rootPc - tonicPc + 12) % 12 === 0;
       const isLastTonicStatement = cur.rootPc === tonicPc && tonicStatements <= 1;
-      const alreadySecondary = cur.rootPc === domRoot && cur.quality === 'dom7';
+      const dominantChord = makeChord(domRoot, 'dom7');
+      const alreadySecondary =
+        cur.rootPc === domRoot && soundsDominantSeventh(makeChord(cur.rootPc, cur.quality));
+      // A dominant seventh the key already contains is a native chord of it, not
+      // an applied one (I7 of mixolydian, II7 of lydian).
+      const isNativeDominant = isDiatonicChord(dominantChord, key);
       // A secondary dominant inserted at i-1 resolves onto this chord; replacing
       // it here would orphan that dominant.
       const isResolutionTarget = chords[i - 1]?.secondaryDominant === true;
@@ -644,7 +669,8 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
         isLastTonicStatement ||
         alreadySecondary ||
         isResolutionTarget ||
-        takesNoDominant
+        takesNoDominant ||
+        isNativeDominant
       ) {
         continue;
       }

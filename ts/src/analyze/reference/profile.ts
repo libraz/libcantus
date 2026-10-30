@@ -29,7 +29,7 @@ import {
 import { barSpanOf, firstSoundingBeat } from '../form/internal.js';
 import { functionOf } from '../functional/function.js';
 import { chordToRoman } from '../functional/roman.js';
-import { barGridStart } from '../grid.js';
+import { barGridStart, latestSoundingEnd } from '../grid.js';
 import type { KeyRegion } from '../keys/index.js';
 import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
 import { melodicContour } from '../melody/contour.js';
@@ -139,10 +139,11 @@ function spanOf(
     Math.min(firstOnset, firstSegment?.startBeat ?? firstOnset),
     meters,
   );
-  const notesEnd = sounding.reduce(
-    (end, note) => Math.max(end, note.startBeat + note.durationBeat),
-    lastSegment?.endBeat ?? 0,
+  const latestEnd = Math.max(
+    lastSegment?.endBeat ?? Number.NEGATIVE_INFINITY,
+    latestSoundingEnd(sounding, Number.NEGATIVE_INFINITY),
   );
+  const notesEnd = Number.isFinite(latestEnd) ? latestEnd : 0;
   return { startBeat, endBeat: Math.max(startBeat, totalBeats ?? notesEnd) };
 }
 

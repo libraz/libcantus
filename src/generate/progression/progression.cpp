@@ -111,8 +111,9 @@ int degree_to_root_pc(int degree, const KeyScale& key) {
 /** Diatonic (or borrowed) triad quality of a degree in the given key. */
 ChordQuality auto_quality(int degree, const KeyScale& key, bool harmonic_dominant) {
   if (degree >= 1 && degree <= 7) {
-    // A cadence-oriented progression needs a leading tone in minor too.
-    if (harmonic_dominant && is_minor_key(key) && degree == 5) {
+    // A cadence-oriented progression needs a leading tone in minor too; a mode keeps its own fifth
+    // degree.
+    if (harmonic_dominant && cadences_through_raised_seventh(key) && degree == 5) {
       return ChordQuality::kMaj;
     }
     return diatonic_triad(degree, heptatonic_frame_of(key)).quality;
@@ -302,13 +303,17 @@ std::vector<ChordSpan> generate_progression_with(const ProgressionPlan& plan,
       int dom_root = (next_root + 7) % 12;
       bool targets_tonic = (next_root - tonic_pc + 12) % 12 == 0;
       bool is_last_tonic_statement = cur.rootPc == tonic_pc && tonic_statements <= 1;
-      bool already_secondary = cur.rootPc == dom_root && cur.quality == ChordQuality::kDom7;
+      Chord dominant_chord = make_chord(dom_root, ChordQuality::kDom7);
+      bool already_secondary =
+          cur.rootPc == dom_root && sounds_dominant_seventh(make_chord(cur.rootPc, cur.quality));
+      // A dominant seventh the key already contains is a native chord of it, not an applied one.
+      bool is_native_dominant = is_diatonic_chord(dominant_chord, plan.key);
       // A secondary dominant inserted at i-1 resolves onto this chord; replacing it here would
       // orphan that dominant.
       bool is_resolution_target = i > 0 && chords[i - 1].secondaryDominant.value_or(false) == true;
       bool takes_no_dominant = !can_be_tonicized(next, tonicizable);
       if (targets_tonic || is_last_tonic_statement || already_secondary || is_resolution_target ||
-          takes_no_dominant) {
+          takes_no_dominant || is_native_dominant) {
         continue;
       }
       if (draw.prob(harmonic, {std::string("reharmonize"), static_cast<double>(i)})) {
@@ -330,9 +335,9 @@ std::vector<ChordSpan> generate_progression_with(const ProgressionPlan& plan,
 std::vector<ChordSpan> generate_progression(const ProgressionOptions& opts) {
   assert_positive_int(opts.bars, "progression bars");
   assert_generation_budget(opts.bars, "progression chords");
-  // The key is read into its plain form once, here at the boundary.
+  // The key is resolved once, here at the boundary, so a tonic contradicting its scale is refused.
   ProgressionPlan plan;
-  plan.key = to_key_scale(opts.key);
+  plan.key = resolve_key(opts.key).scale;
   ResolvedContext ctx = resolve_context(opts.ctx);
   std::optional<ProgressionPreset> preset;
   if (opts.preset) {

@@ -41,17 +41,18 @@ MotifCell stretched(const MotifCell& cell, double time_ratio) {
 MotifCell shaped(const MotifCell& cell, const MotifRelationSummary& relation) {
   switch (relation.kind) {
     case MotifRelationKind::kRepetition:
-    case MotifRelationKind::kTonalTransposition:
       return cell;
     case MotifRelationKind::kTransposition:
+    case MotifRelationKind::kTonalTransposition:
       return stretched(cell, relation.timeRatio);
     case MotifRelationKind::kInversion:
       return stretched(transform_motif(cell, MotifTransform::kInvert), relation.timeRatio);
     case MotifRelationKind::kRetrograde:
-      return transform_motif(cell, MotifTransform::kRetrograde);
+      return stretched(transform_motif(cell, MotifTransform::kRetrograde), relation.timeRatio);
     case MotifRelationKind::kRetrogradeInversion:
-      return transform_motif(transform_motif(cell, MotifTransform::kInvert),
-                             MotifTransform::kRetrograde);
+      return stretched(transform_motif(transform_motif(cell, MotifTransform::kInvert),
+                                       MotifTransform::kRetrograde),
+                       relation.timeRatio);
     case MotifRelationKind::kAugmentation:
       return transform_motif(cell, MotifTransform::kAugment, relation.timeRatio);
     case MotifRelationKind::kDiminution:

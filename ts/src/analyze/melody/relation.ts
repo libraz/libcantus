@@ -8,7 +8,12 @@
  */
 
 import type { SpelledInterval } from '../../core/pitch/index.js';
-import { midiToNote, pitchClassOf as pitchClass, spelledInterval } from '../../core/pitch/index.js';
+import {
+  midiToNote,
+  pitchClassOf as pitchClass,
+  spelledInterval,
+  transposeNote,
+} from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import { assertArray, assertRecord } from '../../core/validation/index.js';
 import {
@@ -111,10 +116,14 @@ function spellingOf(key?: ResolvedKey): 'sharp' | 'flat' {
   }
   return keySignatureFifths(key.tonic, key.scale) < 0 ? 'flat' : 'sharp';
 }
-/** Name the distance between two pitches as a spelled interval. */
+/**
+ * Name the distance between two pitches as a spelled interval: the start is
+ * spelled by the key's side and the end is reached by the conventional interval
+ * for that distance, so the name does not depend on where the start sits.
+ */
 function intervalBetween(from: number, to: number, key?: ResolvedKey): SpelledInterval {
-  const spelling = spellingOf(key);
-  return spelledInterval(midiToNote(from, spelling), midiToNote(to, spelling));
+  const start = midiToNote(from, spellingOf(key));
+  return spelledInterval(start, transposeNote(start, to - from));
 }
 /** An interval name in the grammar `parseInterval` reads, such as `-m3`. */
 function intervalName(interval: SpelledInterval): string {

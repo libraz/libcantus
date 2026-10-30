@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <string_view>
 #include <utility>
@@ -17,6 +18,8 @@
 #include "js/number.h"
 #include "js/utf16.h"
 #include "theory/chord/chord.h"
+#include "theory/chord/spec.h"
+#include "theory/symbol/spelling.h"
 #include "theory/tendency/tendency.h"
 
 namespace cantus {
@@ -206,12 +209,26 @@ Inversion parse_inversion(std::string_view figures) {
   return {0, false};
 }
 
-/** A parsed numeral without a slash. */
+/** A parsed numeral without a slash: the root and how it is written, the quality, the inversion. */
 struct ParsedRoman {
   int rootPc;
+  std::optional<PitchSpelling> rootSpelling;
   ChordQuality quality;
   int inversion;
 };
+
+/**
+ * The root a numeral writes, on the letter of its degree counted from the tonic
+ * (`numeralRootSpelling`); a root that would need more than a double accidental is left unspelled.
+ */
+std::optional<PitchSpelling> numeral_root_spelling(const NoteData& tonic, int degree_number,
+                                                   int root_pc) {
+  NoteData spelling = spelling_above(tonic, degree_number - 1, root_pc);
+  if (std::abs(spelling.alter) > 2) {
+    return std::nullopt;
+  }
+  return PitchSpelling{spelling.letter, spelling.alter};
+}
 
 /** Whether a UTF-8 text holds a character `.` does not match (a line terminator). */
 bool has_line_terminator(std::string_view text) {
@@ -282,7 +299,8 @@ std::optional<SuffixParts> parse_suffix(std::string_view suffix) {
 }
 
 /** Parse a Roman numeral (no secondary '/') into a root, quality and inversion. */
-ParsedRoman parse_simple_roman(std::string_view text, const KeyScale& key) {
+ParsedRoman parse_simple_roman(std::string_view text, const ResolvedKey& resolved) {
+  const KeyScale& key = resolved.scale;
   std::string trimmed = js::trim(text);
   std::string_view view = trimmed;
   // /^([b#]?)([iIvV]+)(.*)$/
@@ -344,10 +362,16 @@ ParsedRoman parse_simple_roman(std::string_view text, const KeyScale& key) {
                : diatonic_root_pc;
   };
 
+  auto parsed_as = [&](ChordQuality quality, int inversion) {
+    int root_pc = root_for_quality(quality);
+    return ParsedRoman{root_pc, numeral_root_spelling(resolved.tonic, *degree_number, root_pc),
+                       quality, inversion};
+  };
+
   // Canonical quality suffixes come first so every chord_to_roman rendering re-parses to the same
   // quality.
   if (std::optional<ChordQuality> canonical = quality_of_suffix(!is_upper, suffix)) {
-    return {root_for_quality(*canonical), *canonical, 0};
+    return parsed_as(*canonical, 0);
   }
 
   // Non-canonical spellings are a complete quality marker, an optional major-seventh marker and a
@@ -397,7 +421,7 @@ ParsedRoman parse_simple_roman(std::string_view text, const KeyScale& key) {
   } else {
     quality = base == ChordBase::kMaj ? ChordQuality::kMaj : ChordQuality::kMin;
   }
-  return {root_for_quality(quality), quality, inversion.inversion};
+  return parsed_as(quality, inversion.inversion);
 }
 
 /**
@@ -408,14 +432,19 @@ Nullable<Chord> chromatic_symbol_chord(std::string_view text, const ResolvedKey&
   if (text == kNeapolitanSixth) {
     // Exactly the chord `bII6` builds: the major triad on b2, third in the bass.
     int root_pc = pitch_class_of(key.scale.rootPc + 1);
-    return make_chord(root_pc, ChordQuality::kMaj, pitch_class_of(root_pc + 4));
+    SpelledChordParts parts;
+    parts.bassPc = pitch_class_of(root_pc + 4);
+    parts.rootSpelling = numeral_root_spelling(key.tonic, 2, root_pc);
+    return make_spelled_chord(root_pc, ChordQuality::kMaj, parts);
   }
   return augmented_sixth_from_symbol(text, key);
 }
 
 /** The local major key an applied numeral is read in (`tonicizedKey`). */
-ResolvedKey tonicized_key(double target_root, const ResolvedKey& key) {
-  NoteData tonic = spell_pitch_class(target_root, key.tonic, key.scale);
+ResolvedKey tonicized_key(double target_root, const ResolvedKey& key,
+                          const std::optional<PitchSpelling>& written = std::nullopt) {
+  NoteData tonic = written ? NoteData{written->letter, written->alter, std::nullopt}
+                           : spell_pitch_class(target_root, key.tonic, key.scale);
   return resolve_key(KeyData{major_key(target_root).scale(), tonic, std::nullopt});
 }
 
@@ -438,16 +467,19 @@ Nullable<TonicizableDegree> augmented_sixth_target(const Chord& chord, const Res
 /** Build a chord from a parsed Roman numeral, attaching a bass for inversions (`chordFromParsed`).
  */
 Chord chord_from_parsed(const ParsedRoman& parsed) {
-  Chord chord = make_chord(parsed.rootPc, parsed.quality);
-  if (parsed.inversion > 0 && static_cast<std::size_t>(parsed.inversion) < chord.intervals.size()) {
-    chord.bassPc =
-        pitch_class_of(parsed.rootPc + chord.intervals[static_cast<std::size_t>(parsed.inversion)]);
+  const std::vector<double>& intervals = quality_intervals(parsed.quality);
+  SpelledChordParts parts;
+  parts.rootSpelling = parsed.rootSpelling;
+  if (parsed.inversion > 0 && static_cast<std::size_t>(parsed.inversion) < intervals.size()) {
+    parts.bassPc =
+        pitch_class_of(parsed.rootPc + intervals[static_cast<std::size_t>(parsed.inversion)]);
   }
-  return chord;
+  return make_spelled_chord(parsed.rootPc, parsed.quality, parts);
 }
 
 /** Choose the degree number and accidental to spell a root as a numeral (`romanSpelling`). */
-std::pair<int, std::string> roman_spelling(double root_pc, const KeyScale& key) {
+std::pair<int, std::string> roman_spelling(double root_pc, const KeyScale& key,
+                                           ChordQuality quality) {
   std::vector<int> tones = scale_tones_in_degree_order(roman_reference(key));
   int target = pitch_class_of(root_pc);
   auto diatonic = std::find(tones.begin(), tones.end(), target);
@@ -464,8 +496,9 @@ std::pair<int, std::string> roman_spelling(double root_pc, const KeyScale& key) 
     }
   }
   // Otherwise prefer a flat of the diatonic degree a semitone above it, then a sharp of the degree
-  // a semitone below. Degree 1 and degree 5 are skipped in the flat pass.
-  for (std::size_t i = 0; i < tones.size(); ++i) {
+  // a semitone below. Degree 1 and degree 5 are skipped in the flat pass, and a leading-tone
+  // quality goes straight to the sharp pass.
+  for (std::size_t i = 0; i < tones.size() && !is_leading_tone_quality(quality); ++i) {
     int degree = static_cast<int>(i) + 1;
     if (degree == 1 || degree == 5) {
       continue;
@@ -571,6 +604,92 @@ std::string describe_bass(RomanBass bass, const std::optional<std::string>& figu
   return {};
 }
 
+/** How a chord is numbered: against a local tonic it tonicizes, or by its own root. */
+struct NumeralReading {
+  Nullable<TonicizableDegree> target;
+  int degreeNumber = 1;
+  std::string accidental;
+};
+
+/**
+ * The root a chord writes, when its spelling hint is usable: a letter and an alteration that still
+ * sound the chord's root (`writtenRoot`).
+ */
+std::optional<PitchSpelling> written_root(const Chord& chord) {
+  const std::optional<PitchSpelling>& hint = chord.rootSpelling;
+  if (!hint || std::floor(hint->letter) != hint->letter || hint->letter < 0 || hint->letter > 6 ||
+      std::floor(hint->alter) != hint->alter ||
+      pitch_class_of(natural_pitch_class_of(hint->letter) + hint->alter) !=
+          pitch_class_of(chord.rootPc)) {
+    return std::nullopt;
+  }
+  return hint;
+}
+
+/**
+ * The numeral a written root denotes: the degree on its letter, with the alteration it stands at
+ * above that degree of the key (`writtenSpelling`); nullopt when no single accidental names it.
+ */
+std::optional<std::pair<int, std::string>> written_spelling(
+    double root_pc, const std::optional<PitchSpelling>& written, const ResolvedKey& resolved) {
+  if (!written) {
+    return std::nullopt;
+  }
+  int degree_number = diatonic_letter_of(written->letter - resolved.tonic.letter) + 1;
+  std::vector<int> tones = scale_tones_in_degree_order(roman_reference(resolved.scale));
+  if (degree_number < 1 || static_cast<std::size_t>(degree_number) > tones.size()) {
+    return std::nullopt;
+  }
+  int offset = pitch_class_of(root_pc - tones[static_cast<std::size_t>(degree_number) - 1] + 6) - 6;
+  if (std::abs(offset) > 1) {
+    return std::nullopt;
+  }
+  return std::make_pair(degree_number, std::string(offset < 0 ? "b" : offset > 0 ? "#" : ""));
+}
+
+/**
+ * Whether a leading-tone chord's written root leads to the target: a semitone below it and on the
+ * letter just below it (`leadsByLetter`).
+ */
+bool leads_by_letter(const Chord& chord, const std::optional<PitchSpelling>& written,
+                     const TonicizableDegree& target, const ResolvedKey& resolved) {
+  if (!written || !is_leading_tone_quality(chord.quality)) {
+    return true;
+  }
+  double target_letter = spell_pitch_class(target.rootPc, resolved.tonic, resolved.scale).letter;
+  return diatonic_letter_of(target_letter - written->letter) == 1;
+}
+
+/**
+ * The one reading that decides how a chord is numbered (`readNumeral`): applied when asked for and
+ * the function layer accepts the chord as tonicizing, otherwise by its root.
+ */
+NumeralReading read_numeral(const Chord& chord, const ResolvedKey& resolved, bool applied) {
+  const KeyScale& key = resolved.scale;
+  std::optional<PitchSpelling> written = written_root(chord);
+  if (applied) {
+    // The augmented sixth of a degree is asked for first, and is not held to the chromatic test
+    // the ordinary reading is.
+    Nullable<TonicizableDegree> target = augmented_sixth_target(chord, resolved);
+    if (!target) {
+      target = is_applied_dominant(chord, key) ? applied_target(chord, key)
+                                               : Nullable<TonicizableDegree>();
+    }
+    if (target && leads_by_letter(chord, written, *target, resolved)) {
+      NumeralReading reading;
+      reading.target = target;
+      return reading;
+    }
+  }
+  std::pair<int, std::string> spelled =
+      written_spelling(chord.rootPc, written, resolved)
+          .value_or(roman_spelling(chord.rootPc, key, chord.quality));
+  NumeralReading reading;
+  reading.degreeNumber = spelled.first;
+  reading.accidental = spelled.second;
+  return reading;
+}
+
 }  // namespace
 
 RomanRendering render_roman(const Chord& chord, const KeyArg& key_like,
@@ -585,27 +704,21 @@ RomanRendering render_roman(const Chord& chord, const KeyArg& key_like,
     out.derivation.kind = RomanDerivation::Kind::kAugmentedSixth;
     return out;
   }
-  if (opts.applied == true) {
-    // The augmented sixth of a degree is asked for first, and is not held to the chromatic test
-    // the ordinary applied reading is.
-    Nullable<TonicizableDegree> target = augmented_sixth_target(chord, resolved);
-    if (!target) {
-      target = is_diatonic_chord(chord, key) ? Nullable<TonicizableDegree>()
-                                             : applied_target(chord, key);
-    }
-    if (target) {
-      std::string local = render_roman(chord, tonicized_key(target->rootPc, resolved),
-                                       ChordToRomanOptions{}, inherited)
-                              .roman;
-      std::string numeral = numeral_for(target->degreeNumber, target->lower);
-      RomanRendering out;
-      out.roman = local + "/" + numeral;
-      out.derivation.kind = RomanDerivation::Kind::kApplied;
-      out.derivation.target = numeral;
-      return out;
-    }
+  NumeralReading reading = read_numeral(chord, resolved, opts.applied == true);
+  if (reading.target) {
+    const TonicizableDegree& target = *reading.target;
+    std::string local = render_roman(chord, tonicized_key(target.rootPc, resolved),
+                                     ChordToRomanOptions{}, inherited)
+                            .roman;
+    std::string numeral = numeral_for(target.degreeNumber, target.lower);
+    RomanRendering out;
+    out.roman = local + "/" + numeral;
+    out.derivation.kind = RomanDerivation::Kind::kApplied;
+    out.derivation.target = numeral;
+    return out;
   }
-  auto [degree_number, spelled_accidental] = roman_spelling(chord.rootPc, key);
+  int degree_number = reading.degreeNumber;
+  const std::string& spelled_accidental = reading.accidental;
   const RomanStyle style =
       inherited != nullptr ? RomanStyle{false, "undefined"} : roman_style(chord.quality);
   std::string cased = numeral_for(degree_number, style.lower);
@@ -746,7 +859,6 @@ RomanExplanation explain_roman(const ChordArg& chord, const KeyArg& key,
 Chord roman_to_chord(std::string_view text, const KeyArg& key) {
   // The key is kept whole: the chromatic chords named as whole symbols are spelled from its tonic.
   ResolvedKey resolved = resolve_key(key);
-  const KeyScale& scale = resolved.scale;
   // Accept the conventional slashes in figured bass (`V6/4`, `V6/5`) while retaining `/` as the
   // separator for applied dominants (`V7/V`).
   std::string stripped = js::trim(text);
@@ -766,17 +878,17 @@ Chord roman_to_chord(std::string_view text, const KeyArg& key) {
   if (slash != std::string::npos) {
     std::string applied = trimmed.substr(0, slash);
     std::string target = trimmed.substr(slash + 1);
-    int target_root = parse_simple_roman(target, scale).rootPc;
-    ResolvedKey local = tonicized_key(target_root, resolved);
+    ParsedRoman target_numeral = parse_simple_roman(target, resolved);
+    ResolvedKey local = tonicized_key(target_numeral.rootPc, resolved, target_numeral.rootSpelling);
     if (Nullable<Chord> chromatic = chromatic_symbol_chord(applied, local)) {
       return *chromatic;
     }
-    return chord_from_parsed(parse_simple_roman(applied, local.scale));
+    return chord_from_parsed(parse_simple_roman(applied, local));
   }
   if (Nullable<Chord> chromatic = chromatic_symbol_chord(trimmed, resolved)) {
     return *chromatic;
   }
-  return chord_from_parsed(parse_simple_roman(trimmed, scale));
+  return chord_from_parsed(parse_simple_roman(trimmed, resolved));
 }
 
 }  // namespace cantus

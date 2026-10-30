@@ -542,7 +542,7 @@ void attach_pivots(std::vector<KeyRegion>& regions, const std::vector<OrderedSeg
       continue;
     }
     int root = pitch_class_of(chord.rootPc);
-    for (const PivotChord& entry : pivots_between(regions[i - 1].key.scale, regions[i].key.scale)) {
+    for (const PivotChord& entry : pivots_between(regions[i - 1].key, regions[i].key.scale)) {
       std::vector<int> tones = chord_pitch_classes(entry.chord);
       if (entry.chord.rootPc == root && tones.size() == core->size() &&
           std::equal(tones.begin(), tones.end(), core->begin())) {
@@ -586,12 +586,9 @@ std::vector<KeyRegion> key_timeline_over(const std::vector<NoteEvent>& notes,
       sounding.push_back(note);
     }
   }
-  double last_end = 0;
-  for (const NoteEvent& note : sounding) {
-    last_end = js::max(last_end, note.startBeat + note.durationBeat);
-  }
-  double total_beats = opts.totalBeats.value_or(last_end);
-  assert_range(total_beats, 0, kMaxSafeInteger, "key timeline totalBeats");
+  double total_beats = opts.totalBeats.value_or(latest_sounding_end(sounding));
+  assert_range(total_beats, js::min(0, first_sounding_beat(sounding)), kMaxSafeInteger,
+               "key timeline totalBeats");
 
   double slot_beats = js::min(min_key_beats, expected_key_beats);
   // The key slots are longer than the chord slots, so the two grids start on different beats, but

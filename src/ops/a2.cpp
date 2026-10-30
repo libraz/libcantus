@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "analyze/grid.h"
 #include "analyze/reduction/reduction.h"
 #include "analyze/spelling/spelling.h"
 #include "analyze/timeline/timeline.h"
@@ -146,14 +147,15 @@ void register_timeline() {
       note_bag.as_object().set("minStartBeat", -*typed.pickupBeats);
     }
     std::vector<NoteEvent> notes = assert_note_events(a[0], "timeline notes", note_bag);
-    double last_note_end = 0;
+    std::vector<NoteEvent> sounding;
     for (const NoteEvent& note : notes) {
       if (note.durationBeat > 0) {
-        last_note_end = js::max(last_note_end, note.startBeat + note.durationBeat);
+        sounding.push_back(note);
       }
     }
-    typed.totalBeats = assert_range_option(opts, "totalBeats", last_note_end, 0, kMaxSafeInteger,
-                                           "timeline totalBeats");
+    typed.totalBeats = assert_range_option(opts, "totalBeats", latest_sounding_end(sounding),
+                                           js::min(0, first_sounding_beat(sounding)),
+                                           kMaxSafeInteger, "timeline totalBeats");
     if (const json::Value* b = field(opts, "budget")) {
       typed.budget = number_of(*b);
     }

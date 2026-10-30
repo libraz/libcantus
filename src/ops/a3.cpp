@@ -105,15 +105,11 @@ void register_hypermeter() {
     MeterMap meters = meter_argument(a, 1);
     std::vector<NoteEvent> notes =
         assert_note_events(a[0], "hypermeter notes", line_options(get(asked, "budget")));
-    double last_end = 0;
-    for (const NoteEvent& note : notes) {
-      if (note.durationBeat > 0) {
-        last_end = js::max(last_end, note.startBeat + note.durationBeat);
-      }
-    }
+    std::vector<NoteEvent> sounding = sounding_of(notes);
     HypermeterOptions typed;
-    typed.totalBeats = assert_range_option(asked, "totalBeats", last_end, 0, kMaxSafeInteger,
-                                           "hypermeter totalBeats");
+    typed.totalBeats = assert_range_option(asked, "totalBeats", latest_sounding_end(sounding),
+                                           js::min(0, first_sounding_beat(sounding)),
+                                           kMaxSafeInteger, "hypermeter totalBeats");
     typed.budget = budget_of(asked);
     // The cadence beats are read once the span is long enough to hold a grouping.
     CadenceBars cadence_bars = [&asked](const MeterArg& resolved) {
@@ -149,16 +145,13 @@ void register_sections() {
     typed.meters = MeterArg(meters);
     typed.budget = budget_of(opts);
     double first_onset = bar_grid_start(first_sounding_beat(sounding), MeterArg(meters));
-    double last_end = 0;
-    for (const NoteEvent& note : sounding) {
-      last_end = js::max(last_end, note.startBeat + note.durationBeat);
-    }
+    double last_end = latest_sounding_end(sounding);
     // `Math.max(firstOnset, opts.totalBeats ?? lastEnd)`.
     const json::Value* total = opt_null_default(opts, "totalBeats");
     double span_end =
         js::max(first_onset, total != nullptr ? js::to_math_number(*total) : last_end);
-    typed.totalBeats =
-        assert_range(json::Value(span_end), 0, kMaxSafeInteger, "section totalBeats");
+    typed.totalBeats = assert_range(json::Value(span_end), js::min(0, first_onset), kMaxSafeInteger,
+                                    "section totalBeats");
     typed.threshold = assert_range_option(opts, "threshold", SECTION_DEFAULT_THRESHOLD, 0, 1,
                                           "section threshold");
     // Without `unitBars` the grouping is inferred first, and the typed analysis checks the result.

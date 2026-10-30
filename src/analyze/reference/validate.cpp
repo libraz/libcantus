@@ -160,7 +160,7 @@ void assert_reference_chord(const ReferenceChord& read, std::string_view name,
   } catch (const InvalidInputError& error) {
     throw InvalidInputError(std::string(name) +
                             ".roman must be readable by romanToChord; received " +
-                            js::quote(read.roman) + ": " + error.what());
+                            js::quote(read.roman) + ": " + error.message());
   }
 }
 

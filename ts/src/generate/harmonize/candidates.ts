@@ -8,10 +8,13 @@ import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { chordPitchClasses, diatonicTriad, makeChord } from '../../theory/chord/index.js';
-import { scaleTonesInDegreeOrder } from '../../theory/scale/index.js';
-import { heptatonicFrameOf } from '../../theory/tendency/index.js';
+import {
+  resolveKey,
+  type SpelledKeyLike,
+  scaleTonesInDegreeOrder,
+} from '../../theory/scale/index.js';
+import { cadencesThroughRaisedSeventh, heptatonicFrameOf } from '../../theory/tendency/index.js';
 import type { Candidate, HarmonizeOptions } from './internal.js';
-import { cadencesThroughRaisedSeventh } from './internal.js';
 
 /**
  * What a root costs to build a chord on, by the semitones it sits above the
@@ -142,7 +145,9 @@ function admittedCount(fraction: number, size: number): number {
  * Exported for the tests that pin the vocabulary a dial position opens; it is
  * not part of the package surface.
  */
-export function buildCandidates(key: KeyScale, harmonic: number): Candidate[] {
+export function buildCandidates(keyLike: SpelledKeyLike, harmonic: number): Candidate[] {
+  // The caller's key is resolved once; the frames below borrow its tonic.
+  const { scale: key, tonic } = resolveKey(keyLike);
   const tonicPc = pitchClass(key.rootPc);
   // A degree is one of seven, so a key with some other number of tones — a
   // pentatonic or a blues scale, which pops writes tunes in — is read against
@@ -156,7 +161,7 @@ export function buildCandidates(key: KeyScale, harmonic: number): Candidate[] {
     // Scale degrees are 1-based across the library, while the array index is
     // not; the candidate records the degree, which is what reaches the caller.
     const degree = index + 1;
-    const quality = diatonicTriad(degree, frame).quality;
+    const quality = diatonicTriad(degree, { ...frame, tonic }).quality;
     return {
       rootPc,
       quality,
@@ -221,7 +226,7 @@ export function buildCandidates(key: KeyScale, harmonic: number): Candidate[] {
   const parallelTones = scaleTonesInDegreeOrder(parallel);
   const borrowed: Chord[] = [];
   for (let degree = 1; degree <= parallelTones.length; degree += 1) {
-    const chord = diatonicTriad(degree, parallel);
+    const chord = diatonicTriad(degree, { ...parallel, tonic });
     if (!isDiatonic(chord, key)) {
       borrowed.push(chord);
     }

@@ -1,19 +1,22 @@
-import { InvalidInputError, type KeyScale } from '@libraz/libcantus/core';
+import { secondaryDominant } from '@libraz/libcantus/analyze';
+import { InvalidInputError } from '@libraz/libcantus/core';
 import {
   type ChordSpan,
   chordFromDegree,
   chordFromSpan,
   chordPitchClasses,
   chordToneRole,
+  diatonicSeventh,
+  diatonicTriad,
+  formatChordSymbol,
   isChordMember,
-  MAJOR_MASK,
   majorKey,
   makeChord,
   spanFromChord,
 } from '@libraz/libcantus/theory';
 import { describe, expect, it } from 'vitest';
 
-const cMajor: KeyScale = { rootPc: 0, modeMask12: MAJOR_MASK };
+const cMajor = majorKey(0);
 
 describe('chordFromDegree', () => {
   it('builds a maj7 chord on the tonic', () => {
@@ -26,6 +29,24 @@ describe('chordFromDegree', () => {
     const chord = chordFromDegree(5, 'dom7', cMajor);
     expect(chord.rootPc).toBe(7);
     expect(chordPitchClasses(chord)).toEqual([2, 5, 7, 11]);
+  });
+});
+
+describe('chords built from a key', () => {
+  it('spell their root the way the key writes it', () => {
+    expect(formatChordSymbol(diatonicSeventh(5, majorKey(8)))).toBe('Eb7');
+    expect(
+      [1, 2, 3, 4, 5, 6, 7].map((d) => formatChordSymbol(diatonicTriad(d, majorKey(3)))),
+    ).toEqual(['Eb', 'Fm', 'Gm', 'Ab', 'Bb', 'Cm', 'Ddim']);
+    expect(formatChordSymbol(secondaryDominant(4, majorKey(3)))).toBe('Eb7');
+    expect(formatChordSymbol(chordFromDegree(1, 'maj7', 'Eb major'))).toBe('Ebmaj7');
+  });
+
+  it('follow the spelled tonic, not the pitch classes alone', () => {
+    expect(formatChordSymbol(diatonicTriad(1, 'Ab minor'))).toBe('Abm');
+    expect(formatChordSymbol(diatonicTriad(1, 'G# minor'))).toBe('G#m');
+    expect(formatChordSymbol(secondaryDominant(3, 'Ab minor'))).toBe('Gb7');
+    expect(formatChordSymbol(secondaryDominant(3, 'G# minor'))).toBe('F#7');
   });
 });
 

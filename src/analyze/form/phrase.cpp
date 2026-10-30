@@ -351,12 +351,12 @@ PhraseReading phrases_over(const PhraseSource& source, const std::vector<NoteEve
   }
   // The pickup rule the whole analysis shares.
   double span_start = bar_grid_start(first_onset, meters);
-  double notes_end = segments.empty() ? 0 : segments.back().endBeat;
-  for (const NoteEvent& note : sounding) {
-    notes_end = js::max(notes_end, note.startBeat + note.durationBeat);
-  }
+  double latest_end =
+      js::max(segments.empty() ? -std::numeric_limits<double>::infinity() : segments.back().endBeat,
+              latest_sounding_end(sounding, -std::numeric_limits<double>::infinity()));
+  double notes_end = std::isfinite(latest_end) ? latest_end : 0;
   double span_end = js::max(span_start, source.total_beats(notes_end));
-  assert_range(span_end, 0, kMaxSafeInteger, "phrase totalBeats");
+  assert_range(span_end, js::min(0, span_start), kMaxSafeInteger, "phrase totalBeats");
   PhraseReading reading;
   if (span_end <= span_start + BEAT_EPS) {
     // Nothing sounds, so there is no material to hear a phrase in.

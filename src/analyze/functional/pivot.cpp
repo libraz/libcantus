@@ -17,7 +17,7 @@ namespace {
 
 /** The diatonic triad on a scale degree, or nullopt where the scale stacks none (`stackedTriad`).
  */
-std::optional<Chord> stacked_triad(int degree, const KeyScale& key) {
+std::optional<Chord> stacked_triad(int degree, const ResolvedKey& key) {
   try {
     return diatonic_triad(degree, key);
   } catch (const InvalidInputError&) {
@@ -27,9 +27,9 @@ std::optional<Chord> stacked_triad(int degree, const KeyScale& key) {
 
 }  // namespace
 
-std::vector<PivotChord> pivots_between(const KeyScale& from, const KeyScale& to) {
+std::vector<PivotChord> pivots_between(const ResolvedKey& from, const KeyScale& to) {
   // Testing the degree count keeps a key with no diatonic triads an empty result.
-  if (static_cast<int>(scale_tones_in_degree_order(from).size()) != HEPTATONIC_DEGREES) {
+  if (static_cast<int>(scale_tones_in_degree_order(from.scale).size()) != HEPTATONIC_DEGREES) {
     return {};
   }
   std::vector<PivotChord> pivots;
@@ -60,9 +60,8 @@ std::vector<PivotChord> pivots_between(const KeyScale& from, const KeyScale& to)
 }
 
 std::vector<PivotChord> pivot_chords(const KeyArg& from, const KeyArg& to) {
-  KeyScale from_scale = to_key_scale(from);
-  KeyScale to_scale = to_key_scale(to);
-  return pivots_between(from_scale, to_scale);
+  ResolvedKey from_key = resolve_key(from);
+  return pivots_between(from_key, resolve_key(to).scale);
 }
 
 }  // namespace cantus

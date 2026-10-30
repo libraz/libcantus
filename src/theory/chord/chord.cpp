@@ -9,6 +9,7 @@
 
 #include "cantus/core/pitch.h"
 #include "cantus/core/validation.h"
+#include "cantus/theory/spelling.h"
 #include "core/pitch/pitch.h"
 #include "core/validation/validation.h"
 #include "js/math.h"
@@ -140,9 +141,10 @@ bool matches_quality_intervals(ChordQuality quality, const std::vector<double>& 
 }
 
 /** Stack scale thirds from a 1-based degree into a chord of `size` notes (`stackThirds`). */
-Chord stack_thirds(double degree, const KeyScale& key, std::size_t size) {
+Chord stack_thirds(double degree, const ResolvedKey& resolved, std::size_t size) {
   // Degree 0 is rejected rather than wrapped onto the last degree.
   auto number = static_cast<int>(assert_degree(degree, "chord degree"));
+  const KeyScale& key = resolved.scale;
   std::vector<int> tones = scale_tones_in_degree_order(key);
   auto length = static_cast<int>(tones.size());
   if (length != 7) {
@@ -168,13 +170,9 @@ Chord stack_thirds(double degree, const KeyScale& key, std::size_t size) {
     throw InvalidInputError("scale thirds at degree " + js::to_string(number) +
                             " produce unsupported intervals [" + text + "]");
   }
-  return Chord{static_cast<double>(root_pc),
-               quality,
-               offsets,
-               std::nullopt,
-               std::nullopt,
-               std::nullopt,
-               std::nullopt};
+  SpelledChordParts parts;
+  parts.rootSpelling = key_spelling(root_pc, resolved);
+  return make_spelled_chord(root_pc, quality, parts);
 }
 
 }  // namespace
@@ -196,29 +194,67 @@ std::vector<ChordQuality> chord_qualities() { return quality_order(); }
 
 Chord chord_from_degree(double degree, ChordQuality ext, const KeyArg& key) {
   auto number = static_cast<int>(assert_degree(degree, "chord degree"));
-  KeyScale scale = to_key_scale(key);
-  std::vector<int> tones = scale_tones_in_degree_order(scale);
+  ResolvedKey resolved = resolve_key(key);
+  std::vector<int> tones = scale_tones_in_degree_order(resolved.scale);
   auto length = static_cast<int>(tones.size());
   int index = length > 0 ? (number - 1) % length : 0;
-  double root_pc =
-      index < length ? tones[static_cast<std::size_t>(index)] : pitch_class_of(scale.rootPc);
-  return Chord{root_pc,      ext,         quality_intervals(ext), std::nullopt, std::nullopt,
-               std::nullopt, std::nullopt};
+  double root_pc = index < length ? tones[static_cast<std::size_t>(index)]
+                                  : pitch_class_of(resolved.scale.rootPc);
+  SpelledChordParts parts;
+  parts.rootSpelling = key_spelling(root_pc, resolved);
+  return make_spelled_chord(root_pc, ext, parts);
 }
 
 Chord make_chord(double root_pc, ChordQuality quality, std::optional<double> bass_pc) {
+  SpelledChordParts parts;
+  parts.bassPc = bass_pc;
+  return make_spelled_chord(root_pc, quality, parts);
+}
+
+Chord make_spelled_chord(double root_pc, ChordQuality quality, const SpelledChordParts& parts) {
+  // A NaN root formats as 'C', so it is rejected where the chord is built.
   assert_finite_number(root_pc, "chord rootPc");
-  if (bass_pc) {
-    assert_finite_number(*bass_pc, "chord bassPc");
+  if (parts.bassPc) {
+    assert_finite_number(*parts.bassPc, "chord bassPc");
   }
   Chord chord;
   chord.rootPc = pitch_class_of(root_pc);
   chord.quality = quality;
   chord.intervals = quality_intervals(quality);
-  if (bass_pc) {
-    chord.bassPc = pitch_class_of(*bass_pc);
+  if (parts.bassPc) {
+    chord.bassPc = pitch_class_of(*parts.bassPc);
+  }
+  if (parts.rootSpelling) {
+    chord.rootSpelling = PitchSpelling{parts.rootSpelling->letter, parts.rootSpelling->alter};
+  }
+  if (parts.bassSpelling) {
+    chord.bassSpelling = PitchSpelling{parts.bassSpelling->letter, parts.bassSpelling->alter};
+  } else if (chord.rootSpelling && chord.bassPc) {
+    auto found = std::find_if(chord.intervals.begin(), chord.intervals.end(), [&](double interval) {
+      return pitch_class_of(chord.rootPc + interval) == *chord.bassPc;
+    });
+    if (found != chord.intervals.end()) {
+      auto index = static_cast<std::size_t>(found - chord.intervals.begin());
+      std::vector<NoteData> tones = spell_chord_from_root(
+          chord, NoteData{chord.rootSpelling->letter, chord.rootSpelling->alter, std::nullopt});
+      if (index < tones.size()) {
+        chord.bassSpelling = PitchSpelling{tones[index].letter, tones[index].alter};
+      }
+    }
+  }
+  if (parts.toneSpellings) {
+    std::vector<PitchSpelling> tones;
+    for (const PitchSpelling& tone : *parts.toneSpellings) {
+      tones.push_back(PitchSpelling{tone.letter, tone.alter});
+    }
+    chord.toneSpellings = std::move(tones);
   }
   return chord;
+}
+
+PitchSpelling key_spelling(double pc, const ResolvedKey& key) {
+  NoteData note = spell_pitch_class(pc, key.tonic, key.scale);
+  return PitchSpelling{note.letter, note.alter};
 }
 
 Chord chord_from_spec(const ChordSpec& spec) {
@@ -254,7 +290,9 @@ ChordSpec chord_spec_of(const Chord& chord) {
 }
 
 Chord chord_from_span(const ChordSpan& span) {
-  Chord chord = make_chord(span.rootPc, span.quality, span.bassPc);
+  SpelledChordParts parts;
+  parts.bassPc = span.bassPc;
+  Chord chord = make_spelled_chord(span.rootPc, span.quality, parts);
   if (span.intervals) {
     const char* name = "chord span intervals";
     if (span.intervals->empty()) {
@@ -454,11 +492,11 @@ std::vector<int> displaced_thirds(const Chord& chord) {
 }
 
 Chord diatonic_triad(double degree, const KeyArg& key) {
-  return stack_thirds(degree, to_key_scale(key), 3);
+  return stack_thirds(degree, resolve_key(key), 3);
 }
 
 Chord diatonic_seventh(double degree, const KeyArg& key) {
-  return stack_thirds(degree, to_key_scale(key), 4);
+  return stack_thirds(degree, resolve_key(key), 4);
 }
 
 }  // namespace cantus

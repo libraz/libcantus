@@ -364,7 +364,7 @@ void register_chords() {
   def("chordFromDegree", [](Args& a) -> json::Value {
     double degree = assert_degree(a[0], "chord degree");
     ChordQuality ext = read_chord_quality(a[1]);
-    return to_json(chord_from_degree(degree, ext, read_key_like(a[2])));
+    return to_json(chord_from_degree(degree, ext, read_key_arg(a[2])));
   });
   def("makeChord", [](Args& a) -> json::Value {
     return to_json(make_chord_from_wire(a[0], a[1], a.undefined(2) ? undefined_value() : a[2]));
@@ -379,13 +379,8 @@ void register_chords() {
       assert_finite_number(bass, "pitch");
     }
     Chord chord = read_chord_fields(value);
-    // The quality is read only when the template has no structural reading of its own.
-    const json::Value& quality = get(value, "quality");
-    if (!quality.is_string() || !parse_chord_quality(quality.as_string())) {
-      if (chord.intervals.empty() || !chord_spec_from_intervals(chord.intervals)) {
-        read_chord_quality(quality);
-      }
-    }
+    chord.intervals = read_spec_intervals(get(value, "intervals"));
+    read_spec_quality(chord, get(value, "quality"));
     return to_json(chord_spec_of(chord));
   });
   def("chordFromSpan",
@@ -472,12 +467,13 @@ void register_chords() {
     return to_json(chord_tone_role(*number_of(a[0]), chord));
   });
   def("diatonicTriad", [](Args& a) -> json::Value {
-    KeyScale key = read_key_like(a[1]);
-    return to_json(diatonic_triad(assert_degree(a[0], "chord degree"), key));
+    // The key is resolved before the degree is checked, as the stacking is handed a resolved key.
+    ResolvedKey key = resolve_key(read_key_arg(a[1]));
+    return to_json(diatonic_triad(assert_degree(a[0], "chord degree"), KeyArg(key)));
   });
   def("diatonicSeventh", [](Args& a) -> json::Value {
-    KeyScale key = read_key_like(a[1]);
-    return to_json(diatonic_seventh(assert_degree(a[0], "chord degree"), key));
+    ResolvedKey key = resolve_key(read_key_arg(a[1]));
+    return to_json(diatonic_seventh(assert_degree(a[0], "chord degree"), KeyArg(key)));
   });
 }
 

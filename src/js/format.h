@@ -20,7 +20,13 @@ namespace cantus::js {
 /** The TypeError JS raises when a Symbol is converted to a string. */
 class TypeError : public std::runtime_error {
  public:
-  using std::runtime_error::runtime_error;
+  explicit TypeError(const std::string& message) : std::runtime_error(message), message_(message) {}
+
+  /** The full message; what() stops at an embedded NUL, this does not. */
+  const std::string& message() const noexcept { return message_; }
+
+ private:
+  std::string message_;
 };
 
 /** `JSON.stringify(s)` of a WTF-8 string; lone surrogates are written as `\udXXX`. */

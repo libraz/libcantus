@@ -66,9 +66,6 @@ const Candidate& fallback_candidate();
 /** Chord slot length assumed when the caller names none: half a bar, or the bar. */
 double default_harmonic_rhythm(const TimeSignature& ts);
 
-/** Whether a key cadences through the raised seventh of the harmonic minor. */
-bool cadences_through_raised_seventh(const KeyScale& key);
-
 /** Whether a pitch belongs to the key, counting the raised seventh of a minor key. */
 bool is_key_tone(double pitch, const KeyScale& key);
 

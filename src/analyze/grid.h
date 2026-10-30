@@ -28,6 +28,12 @@ struct GridOrigin {
  */
 double first_sounding_beat(const std::vector<NoteEvent>& notes, double fallback = 0);
 
+/**
+ * The beat the latest-ending note stops sounding on, or `fallback` for an empty span
+ * (`latestSoundingEnd`).
+ */
+double latest_sounding_end(const std::vector<NoteEvent>& notes, double fallback = 0);
+
 /** Place the slot grid for a span whose earliest onset is `first_onset` (`gridOriginOf`). */
 GridOrigin grid_origin_of(double first_onset, double slot_beats);
 

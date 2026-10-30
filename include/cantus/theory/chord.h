@@ -172,7 +172,8 @@ struct ChordPitchClassOptions {
 std::vector<ChordQuality> chord_qualities();
 
 /**
- * A chord rooted on a diatonic scale degree, with the quality's template (`chordFromDegree`).
+ * A chord rooted on a diatonic scale degree, with the quality's template, spelled the way the key
+ * writes the degree (`chordFromDegree`).
  * @throws InvalidInputError if `degree` is not an integer in [1, 1000].
  */
 Chord chord_from_degree(double degree, ChordQuality ext, const KeyArg& key);
@@ -224,7 +225,8 @@ inline bool is_chord_member(double /*pitch*/, std::nullptr_t /*chord*/) { return
 Nullable<ChordToneRole> chord_tone_role(double pitch, const Chord& chord);
 
 /**
- * The diatonic triad on a scale degree, by stacking scale thirds (`diatonicTriad`).
+ * The diatonic triad on a scale degree, by stacking scale thirds, its root spelled the way the key
+ * writes it (`diatonicTriad`).
  * @throws InvalidInputError if the scale is not heptatonic.
  */
 Chord diatonic_triad(double degree, const KeyArg& key);
