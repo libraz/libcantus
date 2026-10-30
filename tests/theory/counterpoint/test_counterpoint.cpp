@@ -34,9 +34,10 @@ TEST_CASE("parallel perfect intervals need both voices to move", "[counterpoint]
 }
 
 TEST_CASE("the hidden-parallel reading changes what the upper step excuses", "[counterpoint]") {
-  // The upper voice moves by step into an octave from a sixth.
-  CHECK_FALSE(
-      creates_hidden_parallel_perfect(72, 74, 62, 62 + 12 - 12, HiddenParallelReading::kFourPart));
+  // The upper voice steps into an octave from a tenth by similar motion: the four-part reading
+  // excuses the step, the two-voice reading does not.
+  CHECK_FALSE(creates_hidden_parallel_perfect(69, 71, 53, 59, HiddenParallelReading::kFourPart));
+  CHECK(creates_hidden_parallel_perfect(69, 71, 53, 59, HiddenParallelReading::kTwoVoice));
   CHECK(creates_hidden_parallel_perfect(60, 67, 52, 55, HiddenParallelReading::kFourPart));
   CHECK(parse_hidden_parallel_reading("twoVoice") == HiddenParallelReading::kTwoVoice);
   CHECK_FALSE(parse_hidden_parallel_reading("loose"));

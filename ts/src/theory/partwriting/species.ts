@@ -1000,8 +1000,10 @@ function buildEntries(
 
 /**
  * The pairs of counterpoint notes the motion rules are judged over: the
- * successive attacks that cross a bar line. It is given the notes actually
- * struck, since a note held on across the bar line is not a motion at all.
+ * successive sounding notes that cross a bar line. A note held on across the
+ * bar line counts as the counterpoint staying put, so moving onto or off a
+ * held stretch is judged exactly as it is when the tie is written as a
+ * repeated note.
  *
  * Two counterpoint notes over one unmoving cantus-firmus note are oblique
  * motion, which no parallel rule can touch, so the pairs that can break a rule
@@ -1116,9 +1118,9 @@ export function checkSpecies(
     }
   }
   violations.push(...melodicShapeViolations(struck, species));
-  for (const [from, to] of motionPairs(struck)) {
-    const previous = struck[from];
-    const current = struck[to];
+  for (const [from, to] of motionPairs(entries)) {
+    const previous = entries[from];
+    const current = entries[to];
     if (previous !== undefined && current !== undefined) {
       violations.push(...motionViolations(previous, current, counterpointAbove));
     }

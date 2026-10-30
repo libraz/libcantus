@@ -31,7 +31,7 @@ const FIGURE_INTERVALS: Record<SuspensionFigure, number[]> = {
   'sus4-3': [5, 6],
   'sus6-5': [8, 9],
   'sus7-6': [10, 11],
-  'sus9-8': [2],
+  'sus9-8': [1, 2],
 };
 
 /** The extension each interval class above the root forms, when it forms one. */
@@ -70,6 +70,12 @@ describe('suspension figures', () => {
   it('names a second above the bass resolving up as the 2-3', () => {
     // C2 in the bass, D4 held over the arriving C major and rising to E4.
     expect(suspension(62, 2, 36, makeChord(0, 'maj'))).toBe('sus2-3');
+  });
+
+  it('names a major or minor ninth resolving down to the octave as the 9-8', () => {
+    // E2 in the bass with F4 (minor ninth) or F#4 (major ninth) falling to E4.
+    expect(suspension(65, -1, 40, makeChord(4, 'min'))).toBe('sus9-8');
+    expect(suspension(66, -2, 40, makeChord(4, 'min'))).toBe('sus9-8');
   });
 
   it('leaves a retardation rising to the octave unfigured', () => {

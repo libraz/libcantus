@@ -110,7 +110,7 @@ std::optional<SuspensionFigure> suspension_type(double ic, double delta) {
     }
     return std::nullopt;
   }
-  if (ic == 2) {
+  if (ic == 1 || ic == 2) {
     return SuspensionFigure::kSus9_8;
   }
   if (ic == 10 || ic == 11) {

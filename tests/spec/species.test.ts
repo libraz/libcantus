@@ -397,6 +397,25 @@ describe('fourth species', () => {
   });
 });
 
+describe('a tie written as one held note or as repeated notes', () => {
+  const motionKinds = (violations: { kind: string }[]) =>
+    kinds(violations).filter((kind) => /^(parallel|hiddenPerfect|battuta)/.test(kind));
+  const cantus = line('D4 F4');
+
+  it('gives the same motion verdicts and never reads the held stretch as a parallel', () => {
+    // A4 is struck on the weak half of the first measure and carried into the
+    // second, where it is a fifth over D4's neighbour; the move to C5 follows.
+    const held = checkSpecies(cantus, line('G4 A4 C5'), 4, D_DORIAN, {
+      durations: [0.5, 1, 0.5],
+    });
+    const repeated = checkSpecies(cantus, line('G4 A4 A4 C5'), 4, D_DORIAN, {
+      durations: [0.5, 0.5, 0.5, 0.5],
+    });
+    expect(motionKinds(held)).toEqual(motionKinds(repeated));
+    expect(motionKinds(held)).not.toContain('parallelFifth');
+  });
+});
+
 describe('fifth species', () => {
   const cantus = line('C4 F4 E4 D4 C4');
   const counterpoint = line('C5 D5 C5 C5 B4 C5 C5 B4 C5');

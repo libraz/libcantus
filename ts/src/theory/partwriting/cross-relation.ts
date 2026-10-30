@@ -122,7 +122,10 @@ function isChromaticHarmony(
   );
 }
 
-/** Whether a voice reaches its note by a diatonic step from the voicing before. */
+/**
+ * Whether a voice reaches its note by a diatonic step from the voicing before,
+ * or by the chromatic semitone that inflects the same letter (F to F#).
+ */
 function approachedByStep(
   before: readonly Note[] | undefined,
   moment: readonly Note[],
@@ -133,7 +136,8 @@ function approachedByStep(
   if (earlier === undefined || later === undefined) {
     return false;
   }
-  return spelledInterval(earlier, later).number === 2;
+  const interval = spelledInterval(earlier, later);
+  return interval.number === 2 || (interval.number === 1 && Math.abs(interval.semitones) === 1);
 }
 
 /** Whether a voice is the bass or the top voice of its chord. */

@@ -51,13 +51,15 @@ bool is_chromatic_harmony(const ChromaticMoment& moment, const Chord* next, cons
          is_neapolitan_chord_of(moment.chord, key) || sounds_augmented_sixth(moment, key);
 }
 
-/** Whether a voice reaches its note by a diatonic step from the voicing before. */
+/** Whether a voice reaches its note by a diatonic step from the voicing before, or by the
+ * chromatic semitone that inflects the same letter (F to F#). */
 bool approached_by_step(const std::vector<NoteData>* before, const std::vector<NoteData>& moment,
                         std::size_t voice) {
   if (before == nullptr || voice >= before->size() || voice >= moment.size()) {
     return false;
   }
-  return spelled_interval((*before)[voice], moment[voice]).number == 2;
+  SpelledInterval interval = spelled_interval((*before)[voice], moment[voice]);
+  return interval.number == 2 || (interval.number == 1 && std::abs(interval.semitones) == 1);
 }
 
 }  // namespace

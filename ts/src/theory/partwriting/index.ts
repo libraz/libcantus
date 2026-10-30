@@ -287,7 +287,7 @@ function pairViolations(transition: Transition): PartWritingViolation[] {
         continue;
       }
       if (createsParallelPerfect(upperPrev, upperCur, lowerPrev, lowerCur)) {
-        const fifth = pitchClassOf(upperCur - lowerCur) === 7;
+        const fifth = pitchClassOf(Math.abs(upperCur - lowerCur)) === 7;
         found.push(
           violation(
             fifth ? 'parallelFifth' : 'parallelOctave',

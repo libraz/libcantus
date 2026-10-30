@@ -115,8 +115,10 @@ function nearestPc(target: number, pcs: number[]): number {
  * {@link VoicingStyle} then transforms the stack, and the result is returned as
  * ascending MIDI pitches (index 0 = lowest).
  *
- * A drop voicing lowers one voice below the rest, so that voice is its bass —
- * which is what tells the drop-2 voicings of one chord apart. When the chord
+ * A drop voicing lowers one voice by an octave. On a stack spanning no more than
+ * an octave above that voice it becomes the bass — which is what tells the
+ * drop-2 voicings of one chord apart; on a wider stack (an eleventh or
+ * thirteenth chord) it can land inside the stack. When the chord
  * names a bass tone of its own, the close stack is therefore rotated so the
  * style drops that tone, and the result is the drop voicing whose bass is the
  * tone asked for; the named bass is not lowered under an already dropped voice

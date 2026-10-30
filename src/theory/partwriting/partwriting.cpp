@@ -126,7 +126,7 @@ std::vector<PartWritingViolation> pair_violations(const Transition& transition) 
       int lower_cur = to.pitches[lower];
       std::vector<int> pair = {static_cast<int>(lower), static_cast<int>(upper)};
       if (creates_parallel_perfect(upper_prev, upper_cur, lower_prev, lower_cur)) {
-        bool fifth = pitch_class_of(upper_cur - lower_cur) == 7;
+        bool fifth = pitch_class_of(std::abs(upper_cur - lower_cur)) == 7;
         found.push_back(violation(fifth ? Kind::kParallelFifth : Kind::kParallelOctave, pair,
                                   from.index, to.index,
                                   fifth ? "The two voices move into consecutive perfect fifths"

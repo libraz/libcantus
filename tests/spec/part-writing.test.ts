@@ -72,6 +72,28 @@ describe('parallel perfects', () => {
     ]);
   });
 
+  it('names a fifth between crossed voices a fifth, not an octave', () => {
+    // Voice 2 sits below voice 1 (C4 under G4), so their interval is a fifth
+    // read downward; the kind follows the interval, not the voice order.
+    const chords = [makeChord(0, 'maj'), makeChord(2, 'min')];
+    const voicings = spellExercise(
+      [
+        [48, 67, 60, 76],
+        [50, 69, 62, 77],
+      ],
+      chords,
+    );
+    const parallels = summarize(checkPartWriting(voicings, chords, C_MAJOR)).filter((v) =>
+      v.kind.startsWith('parallel'),
+    );
+    expect(parallels).toContainEqual({
+      kind: 'parallelFifth',
+      voices: [1, 2],
+      fromIndex: 0,
+      toIndex: 1,
+    });
+  });
+
   it('names the musical reason rather than a rule identifier', () => {
     const chords = [makeChord(0, 'maj'), makeChord(2, 'min')];
     const voicings = spellExercise(
@@ -149,26 +171,6 @@ describe('cross relation', () => {
       { kind: 'crossRelation', voices: [3, 2], fromIndex: 0, toIndex: 1 },
     ]);
     expect(crossRelations[0]?.rationale).toBe('F is contradicted by F# in another voice');
-  });
-
-  it('reports one clash per pair of voices, not one per direction', () => {
-    // G7 doubling its seventh against a D major doubling its third: the two
-    // voices are walked in both directions, so the same F/F# clash is met twice.
-    const doubled = [makeChord(7, 'dom7'), makeChord(2, 'maj')];
-    const voicings = spellExercise(
-      [
-        [43, 53, 59, 65],
-        [50, 54, 62, 66],
-      ],
-      doubled,
-    );
-    expect(noteNames(voicings[0] ?? [])).toEqual(['G2', 'F3', 'B3', 'F4']);
-    expect(noteNames(voicings[1] ?? [])).toEqual(['D3', 'F#3', 'D4', 'F#4']);
-    expect(
-      summarize(
-        checkPartWriting(voicings, doubled, C_MAJOR).filter((v) => v.kind === 'crossRelation'),
-      ),
-    ).toEqual([{ kind: 'crossRelation', voices: [1, 3], fromIndex: 0, toIndex: 1 }]);
   });
 
   it('does not flag the same motion inside a single voice', () => {
@@ -261,6 +263,39 @@ describe('cross relations the style admits', () => {
     ).toEqual([{ kind: 'crossRelation', voices: [1, 3], fromIndex: 0, toIndex: 1 }]);
   });
 
+  it('admits a chromatic tone the same voice inflects from its natural', () => {
+    // F to F# in one voice is an ordinary inflection, not a clash with the F
+    // another voice just left.
+    const fToD = [makeChord(5, 'maj'), makeChord(2, 'maj')];
+    expect(
+      crossRelations(
+        [
+          [41, 57, 60, 65],
+          [42, 57, 62, 62],
+        ],
+        fToD,
+      ),
+    ).toEqual([]);
+    expect(
+      crossRelations(
+        [
+          [53, 60, 65, 69],
+          [50, 62, 66, 69],
+        ],
+        fToD,
+      ),
+    ).toEqual([]);
+    expect(
+      crossRelations(
+        [
+          [48, 55, 64, 67],
+          [52, 56, 64, 71],
+        ],
+        [makeChord(0, 'maj'), makeChord(4, 'maj')],
+      ),
+    ).toEqual([]);
+  });
+
   it('admits a cross relation buried in the inner voices', () => {
     // The same clash between tenor and alto, where the classical norm is far
     // milder than it is between the outer voices.
@@ -299,15 +334,15 @@ describe('cross relations the style admits', () => {
     // The same two chords in two keys. E phrygian writes its second degree flat
     // already, so the F major triad is the mode's own II and earns nothing: the
     // bass C natural against the soprano C# is an exposed contradiction between
-    // the outer voices, sprung rather than led into.
+    // the outer voices, sprung rather than led into by an inflection of C.
     const chords = [makeChord(5, 'maj'), makeChord(9, 'maj')];
     const pitches = [
-      [48, 53, 57, 60],
+      [48, 53, 57, 65],
       [45, 52, 57, 61],
     ];
     const phrygian = scaleByName('phrygian', 4);
     const inMode = spellExercise(pitches, chords, phrygian);
-    expect(noteNames(inMode[0] ?? [])).toEqual(['C3', 'F3', 'A3', 'C4']);
+    expect(noteNames(inMode[0] ?? [])).toEqual(['C3', 'F3', 'A3', 'F4']);
     expect(noteNames(inMode[1] ?? [])).toEqual(['A2', 'E3', 'A3', 'C#4']);
     expect(summarize(checkPartWriting(inMode, chords, phrygian))).toContainEqual({
       kind: 'crossRelation',

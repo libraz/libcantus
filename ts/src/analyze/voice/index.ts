@@ -238,7 +238,7 @@ function suspensionType(ic: number, delta: number): SuspensionFigure | null {
     // name it after an interval it does not form.
     return ic === 1 || ic === 2 ? 'sus2-3' : null;
   }
-  if (ic === 2) {
+  if (ic === 1 || ic === 2) {
     return 'sus9-8';
   }
   if (ic === 10 || ic === 11) {

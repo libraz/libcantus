@@ -578,8 +578,8 @@ std::vector<Entry> build_entries(const std::vector<NoteData>& cantus_firmus,
   return entries;
 }
 
-/** The pairs of struck notes the motion rules are judged over: successive attacks that cross a
- * bar line (`motionPairs`). */
+/** The pairs of sounding notes the motion rules are judged over: successive entries, held ones
+ * included, that cross a bar line (`motionPairs`). */
 std::vector<std::pair<std::size_t, std::size_t>> motion_pairs(const std::vector<Entry>& entries) {
   std::vector<std::pair<std::size_t, std::size_t>> pairs;
   for (std::size_t position = 1; position < entries.size(); ++position) {
@@ -709,8 +709,8 @@ std::vector<PartWritingViolation> check_species(const std::vector<NoteData>& can
     append(violations, melodic_violations(struck[position - 1], struck[position]));
   }
   append(violations, melodic_shape_violations(struck, species));
-  for (const auto& [from, to] : motion_pairs(struck)) {
-    append(violations, motion_violations(struck[from], struck[to], counterpoint_above));
+  for (const auto& [from, to] : motion_pairs(entries)) {
+    append(violations, motion_violations(entries[from], entries[to], counterpoint_above));
   }
   append(violations, cadence_violations(struck, mode, counterpoint_above));
   return in_time_order(std::move(violations));
