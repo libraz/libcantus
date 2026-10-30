@@ -84,7 +84,10 @@ CANTUS_C_API CantusStatus cantus_call(const char* op, size_t op_len, const char*
 /** Release a buffer returned by cantus_call() or cantus_list_ops(). NULL is ignored. */
 CANTUS_C_API void cantus_free(char* p) CANTUS_NOEXCEPT;
 
-/** Release a handle (`{"$h": id}`). Unknown and already released ids are ignored. */
+/**
+ * Release a handle (`{"$h": id}`) or a retained value (`{"$class"|"$hy": T, "$ref": id}`).
+ * Unknown and already released ids are ignored.
+ */
 CANTUS_C_API void cantus_release(uint64_t handle) CANTUS_NOEXCEPT;
 
 /** Library version, e.g. "1.3.0". Static storage. */

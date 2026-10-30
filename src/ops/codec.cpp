@@ -82,8 +82,13 @@ void push_members(const json::Object& o, std::vector<Pending>& pending) {
   }
 }
 
-/** A tag that carries user data beside it: `$class`, `$hy`, and `$id` on a getter result. */
-void validate_data_tag(const json::Object& o, std::string_view tag, std::vector<Pending>& pending) {
+/**
+ * A tag that carries user data beside it: `$class`, `$hy`, and `$id` on a getter result. A
+ * `$class` or `$hy` with `$ref` names a retained value and carries nothing else.
+ */
+void validate_data_tag(const json::Object& o, std::string_view tag, ValidateStats& stats,
+                       std::vector<Pending>& pending) {
+  const bool by_ref = tag != "$id" && o.contains("$ref");
   for (const json::Member& m : o) {
     if (!is_tag_key(m.key)) {
       continue;
@@ -96,12 +101,21 @@ void validate_data_tag(const json::Object& o, std::string_view tag, std::vector<
       if (!is_integer_in(m.value, 0, kMaxSafeInteger)) {
         reject("malformed \"$id\" tag");
       }
+    } else if (m.key == "$ref" && by_ref) {
+      if (!is_integer_in(m.value, 1, kMaxSafeInteger)) {
+        reject("malformed \"$ref\" tag");
+      }
     } else {
       reject("malformed " + quoted(tag) + " tag");
     }
   }
   if (o.contains("$class") && o.contains("$hy")) {
     reject("malformed \"$class\" tag");
+  }
+  if (by_ref) {
+    expect_only(o, 2, tag);
+    ++stats.refs;
+    return;
   }
   push_members(o, pending);
 }
@@ -157,7 +171,7 @@ void validate_object(const json::Object& o, bool undefined_allowed, ValidateStat
     return;
   }
   if (o.contains("$class") || o.contains("$hy")) {
-    validate_data_tag(o, o.contains("$class") ? "$class" : "$hy", pending);
+    validate_data_tag(o, o.contains("$class") ? "$class" : "$hy", stats, pending);
     return;
   }
   if (const json::Value* x = o.find("$h")) {
@@ -177,7 +191,7 @@ void validate_object(const json::Object& o, bool undefined_allowed, ValidateStat
     return;
   }
   if (o.contains("$id")) {
-    validate_data_tag(o, "$id", pending);
+    validate_data_tag(o, "$id", stats, pending);
     return;
   }
   reject("unknown wire tag " + quoted(tag));

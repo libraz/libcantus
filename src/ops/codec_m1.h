@@ -12,7 +12,9 @@
 #ifndef CANTUS_SRC_OPS_CODEC_M1_H_
 #define CANTUS_SRC_OPS_CODEC_M1_H_
 
+#include <memory>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "cantus/core/validation.h"
@@ -29,6 +31,7 @@
 #include "ops/codec.h"
 #include "ops/codec_c1.h"
 #include "ops/codec_c2.h"
+#include "ops/counters.h"
 
 namespace cantus {
 
@@ -118,8 +121,59 @@ Voicing read_voicing_data(const json::Value& pitches);
 //--------------------------------------------------------------------------------------------
 // A class instance in argument `i`
 
+/**
+ * Decode every `$class` value in `v` through its `Class.fromData`, innermost first, as dispatch
+ * does a call's arguments; the decode of `v` itself, or null when `v` is no model-class value.
+ * @throws RequestError (BAD_REQUEST) "unknown class ..." for a name that is no model class.
+ */
+std::shared_ptr<const Decoded> decode_class_value(const json::Value& v);
+
 /** The `$class` instance of argument `i`. @throws RequestError if it is not a `name`. */
 const json::Value& class_instance(const Args& a, std::size_t i, std::string_view name);
+
+/**
+ * The decode `D` kept for class argument `i`; else `make()` (a `std::shared_ptr<const D>`),
+ * counted as one class decode and kept for the rest of the call.
+ */
+template <class D, class Make>
+const D& kept_instance(const Args& a, std::size_t i, Make make) {
+  if (const auto* kept = dynamic_cast<const D*>(a.decoded(i))) {
+    return *kept;
+  }
+  counters::bump(counters::class_decodes);
+  std::shared_ptr<const D> made = make();
+  const D& out = *made;
+  a.keep(i, std::move(made));
+  return out;
+}
+
+/**
+ * The decode of a class whose readers hand out a value. Argument `i`'s slot only ever holds the
+ * decode of argument `i`'s own class, which the reader checks by name before it looks.
+ */
+template <class T>
+struct DecodedValue final : Decoded {
+  explicit DecodedValue(T v) : value(std::move(v)) {}
+  T value;
+};
+
+/** `value` as a kept decode. */
+template <class T>
+std::shared_ptr<const Decoded> decoded_value(T value) {
+  return std::make_shared<const DecodedValue<T>>(std::move(value));
+}
+
+/**
+ * The `$class` instance `name` of argument `i` as `read` decodes it: the decode dispatch or the
+ * snapshot kept, else `read(value)` counted and kept.
+ */
+template <class T, class Read>
+const T& kept_value(const Args& a, std::size_t i, std::string_view name, Read read) {
+  const json::Value& value = class_instance(a, i, name);
+  return kept_instance<DecodedValue<T>>(
+             a, i, [&value, &read] { return std::make_shared<const DecodedValue<T>>(read(value)); })
+      .value;
+}
 
 Note read_note_instance(const Args& a, std::size_t i);
 Interval read_interval_instance(const Args& a, std::size_t i);

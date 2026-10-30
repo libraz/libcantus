@@ -39,8 +39,8 @@ enum class Tag {
   kBigInt,     ///< `{"$big": "<decimal>"}`
   kSymbol,     ///< `{"$sym": "<description>"}`
   kToJson,     ///< `{"$tojson": <value>, "$repr": "<String(x)>"}`
-  kClass,      ///< `{"$class": "Chord", ...data}`
-  kHybrid,     ///< `{"$hy": "ChordTimeline", ...payload}`
+  kClass,      ///< `{"$class": "Chord", ...data}`, or `{"$class": T, "$ref": id}` retained
+  kHybrid,     ///< `{"$hy": "ChordTimeline", ...payload}`, or `{"$hy": T, "$ref": id}` retained
   kHandle,     ///< `{"$h": <id>, "$type": "Rng"}`
   kCallback,   ///< `{"$cb": <id>}`
   kIdentity,   ///< `{"$id": <n>, ...data}`
@@ -53,6 +53,8 @@ Tag tag_of(const json::Value& v) noexcept;
 struct ValidateStats {
   /** Number of `$cb` tags. */
   std::size_t callbacks = 0;
+  /** Number of `$ref` values. */
+  std::size_t refs = 0;
 };
 
 /**

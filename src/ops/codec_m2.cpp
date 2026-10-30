@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -859,36 +860,47 @@ Progression read_progression_class(const json::Value& value) {
 }
 
 Key read_key_instance(const Args& a, std::size_t i) {
-  return read_key_class(class_instance(a, i, "Key"));
+  return kept_value<Key>(a, i, "Key", read_key_class);
 }
 
 ChordValue read_chord_instance(const Args& a, std::size_t i) {
-  return read_chord_class(class_instance(a, i, "Chord"));
+  return kept_value<ChordValue>(a, i, "Chord", read_chord_class);
 }
 
 Progression read_progression_instance(const Args& a, std::size_t i) {
-  return read_progression_class(class_instance(a, i, "Progression"));
+  return kept_value<Progression>(a, i, "Progression", read_progression_class);
 }
 
-Timeline read_timeline_instance(const Args& a, std::size_t i) {
-  return read_timeline_data(like_data(class_instance(a, i, "Timeline")));
+namespace {
+
+Timeline read_timeline_class(const json::Value& value) {
+  return read_timeline_data(like_data(value));
 }
 
-Score read_score_instance(const Args& a, std::size_t i) {
-  return read_score_data(like_data(class_instance(a, i, "Score")));
+Score read_score_class(const json::Value& value) { return read_score_data(like_data(value)); }
+
+}  // namespace
+
+const Timeline& timeline_instance(const Args& a, std::size_t i) {
+  return kept_value<Timeline>(a, i, "Timeline", read_timeline_class);
 }
 
-bool decode_m2_class(const json::Value& value, std::string_view name) {
+const Score& score_instance(const Args& a, std::size_t i) {
+  return kept_value<Score>(a, i, "Score", read_score_class);
+}
+
+bool decode_m2_class(const json::Value& value, std::string_view name,
+                     std::shared_ptr<const Decoded>& kept) {
   if (name == "Key") {
-    read_key_class(value);
+    kept = decoded_value(read_key_class(value));
   } else if (name == "Chord") {
-    read_chord_class(value);
+    kept = decoded_value(read_chord_class(value));
   } else if (name == "Progression") {
-    read_progression_class(value);
+    kept = decoded_value(read_progression_class(value));
   } else if (name == "Timeline") {
-    read_timeline_data(like_data(value));
+    kept = decoded_value(read_timeline_class(value));
   } else if (name == "Score") {
-    read_score_data(like_data(value));
+    kept = decoded_value(read_score_class(value));
   } else {
     return false;
   }

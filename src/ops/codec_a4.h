@@ -45,6 +45,26 @@ void write_fields(const ArrangementAnalysis& v, FieldWriter& w);
  */
 TimelineHost wire_timeline_host(const Args& a, const json::Value& timeline);
 
+/** An arrangement session: tracks, options, the analysis and what an update reuses of it. */
+class SessionHandle;
+
+/** `createArrangementSession(tracks, opts)` with `opts` already read: a session no handle names. */
+std::shared_ptr<SessionHandle> open_arrangement_session(const Args& a, json::Value tracks,
+                                                        json::Value opts);
+
+/** `ArrangementSession#update(edits)`: the session after the edits; `self` is unchanged. */
+std::shared_ptr<SessionHandle> update_arrangement_session(const Args& a, const SessionHandle& self,
+                                                          const json::Value& edits);
+
+/** The session's tracks (`ArrangementSession#tracks`). */
+const json::Value& session_tracks(const SessionHandle& session);
+
+/** The session's analysis, without identity tokens. */
+const json::Value& session_analysis(const SessionHandle& session);
+
+/** Build the key indices of what the session holds, so several threads may read it at once. */
+void prepare_shared_session(const SessionHandle& session);
+
 }  // namespace cantus::ops
 
 #endif  // CANTUS_SRC_OPS_CODEC_A4_H_

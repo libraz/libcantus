@@ -12,6 +12,9 @@
 #ifndef CANTUS_SRC_OPS_CODEC_M3_H_
 #define CANTUS_SRC_OPS_CODEC_M3_H_
 
+#include <functional>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <string_view>
 
@@ -60,12 +63,52 @@ json::Value composer_wire(const json::Value& held);
 /** The data of the `$class` instance in argument `i`. @throws RequestError for another class. */
 json::Value read_motif_instance(const Args& a, std::size_t i);
 json::Value read_rhythm_instance(const Args& a, std::size_t i);
-json::Value read_arrangement_instance(const Args& a, std::size_t i);
 /** The settings the `$class` Composer in argument `i` holds (composer_options()). */
 json::Value read_composer_instance(const Args& a, std::size_t i);
 
-/** Validate a `$class` value of a class of this group; false when the name is not one. */
-bool decode_m3_class(const json::Value& value, std::string_view name);
+class SessionHandle;
+
+/** A decoded Arrangement: its data, and the session its analysis getters read. */
+class DecodedArrangement final : public Decoded {
+ public:
+  /** `data` as arrangement_data() wrote it; `session`, when given, is adopted (TS `#adopt`). */
+  explicit DecodedArrangement(json::Value data,
+                              std::shared_ptr<const SessionHandle> session = nullptr);
+
+  /** The arrangement's data. */
+  const json::Value& data() const noexcept { return data_; }
+
+  /**
+   * The session (TS `#session()`): made by `open` on the first ask and kept, under a mutex, so
+   * several threads may ask at once; a failure is not kept, and the next ask tries again.
+   */
+  std::shared_ptr<const SessionHandle> session(
+      const std::function<std::shared_ptr<SessionHandle>()>& open) const;
+
+  /**
+   * `update` run over the session, opened as session() opens it. An update takes the evidence it
+   * reuses out of the session it starts from, so the updates of one arrangement run one at a time.
+   */
+  std::shared_ptr<SessionHandle> update(
+      const std::function<std::shared_ptr<SessionHandle>()>& open,
+      const std::function<std::shared_ptr<SessionHandle>(const SessionHandle&)>& update) const;
+
+ private:
+  json::Value data_;
+  mutable std::mutex mutex_;
+  mutable std::mutex update_mutex_;
+  mutable std::shared_ptr<const SessionHandle> session_;
+};
+
+/** The Arrangement of argument `i`, decoded at most once a call (never for a snapshot). */
+const DecodedArrangement& arrangement_instance(const Args& a, std::size_t i);
+
+/**
+ * Validate a `$class` value of a class of this group, setting `kept` to its decode; false when the
+ * name is not one.
+ */
+bool decode_m3_class(const json::Value& value, std::string_view name,
+                     std::shared_ptr<const Decoded>& kept);
 
 }  // namespace cantus::ops
 

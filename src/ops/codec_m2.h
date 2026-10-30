@@ -14,6 +14,7 @@
 #define CANTUS_SRC_OPS_CODEC_M2_H_
 
 #include <initializer_list>
+#include <memory>
 #include <string_view>
 #include <utility>
 
@@ -133,8 +134,10 @@ bool is_class_value(const json::Value& value, std::string_view name);
 Key read_key_instance(const Args& a, std::size_t i);
 ChordValue read_chord_instance(const Args& a, std::size_t i);
 Progression read_progression_instance(const Args& a, std::size_t i);
-Timeline read_timeline_instance(const Args& a, std::size_t i);
-Score read_score_instance(const Args& a, std::size_t i);
+/** The Timeline of argument `i`, decoded at most once a call (never for a snapshot). */
+const Timeline& timeline_instance(const Args& a, std::size_t i);
+/** The Score of argument `i`, decoded at most once a call (never for a snapshot). */
+const Score& score_instance(const Args& a, std::size_t i);
 
 /** A `$class` Key value. */
 Key read_key_class(const json::Value& value);
@@ -143,8 +146,12 @@ ChordValue read_chord_class(const json::Value& value);
 /** A `$class` Progression value. */
 Progression read_progression_class(const json::Value& value);
 
-/** Validate a `$class` value of a class of this group; false when the name is not one. */
-bool decode_m2_class(const json::Value& value, std::string_view name);
+/**
+ * Validate a `$class` value of a class of this group, setting `kept` to its decode; false when the
+ * name is not one.
+ */
+bool decode_m2_class(const json::Value& value, std::string_view name,
+                     std::shared_ptr<const Decoded>& kept);
 
 }  // namespace cantus::ops
 

@@ -1358,21 +1358,19 @@ void register_timeline() {
                    [](Args& a) -> json::Value { return timeline_from_progression(a, a[0], a[1]); });
 
   def_class_method("Timeline#at", [](Args& a) -> json::Value {
-    Timeline self = read_timeline_instance(a, 0);
+    const Timeline& self = timeline_instance(a, 0);
     Nullable<ChordValue> chord = self.at(assert_finite_number(a[1], "timeline query beat"));
     return chord ? to_json(*chord) : json::Value(nullptr);
   });
-  def_class_method("Timeline#segments", [](Args& a) -> json::Value {
-    return segments_json(read_timeline_instance(a, 0));
-  });
-  def_class_method("Timeline#totalBeats", [](Args& a) -> json::Value {
-    return read_timeline_instance(a, 0).total_beats();
-  });
+  def_class_method("Timeline#segments",
+                   [](Args& a) -> json::Value { return segments_json(timeline_instance(a, 0)); });
+  def_class_method("Timeline#totalBeats",
+                   [](Args& a) -> json::Value { return timeline_instance(a, 0).total_beats(); });
   def_class_method("Timeline#key", [](Args& a) -> json::Value {
-    return carried_key(read_timeline_instance(a, 0).key());
+    return carried_key(timeline_instance(a, 0).key());
   });
   def_class_method("Timeline#keys", [](Args& a) -> json::Value {
-    Timeline self = read_timeline_instance(a, 0);
+    const Timeline& self = timeline_instance(a, 0);
     json::Array out;
     for (const KeyRegion& region : self.keys()) {
       out.push_back(key_region_json(region));
@@ -1380,16 +1378,16 @@ void register_timeline() {
     return json::Value(std::move(out));
   });
   def_class_method("Timeline#segmentConfidence", [](Args& a) -> json::Value {
-    return to_json(read_timeline_instance(a, 0).segment_confidence());
+    return to_json(timeline_instance(a, 0).segment_confidence());
   });
   def_class_method("Timeline#length", [](Args& a) -> json::Value {
-    return static_cast<double>(read_timeline_instance(a, 0).length());
+    return static_cast<double>(timeline_instance(a, 0).length());
   });
   def_class_method("Timeline#progression", [](Args& a) -> json::Value {
-    return to_json(read_timeline_instance(a, 0).progression());
+    return to_json(timeline_instance(a, 0).progression());
   });
   def_class_method("Timeline#reduce", [](Args& a) -> json::Value {
-    Timeline self = read_timeline_instance(a, 0);
+    const Timeline& self = timeline_instance(a, 0);
     // The key context is read before the reduction reads its options.
     if (!prevailing_key_of(self.keys())) {
       self.reduce();
@@ -1418,7 +1416,7 @@ void register_timeline() {
   });
   def_class_method("Timeline#cadences", [](Args& a) -> json::Value {
     json::Array out;
-    for (const CadenceHit& hit : read_timeline_instance(a, 0).cadences()) {
+    for (const CadenceHit& hit : timeline_instance(a, 0).cadences()) {
       json::Object entry;
       entry.set("atBeat", to_json(hit.atBeat));
       entry.set("cadence", to_json(hit.cadence));
@@ -1429,7 +1427,7 @@ void register_timeline() {
     return json::Value(std::move(out));
   });
   def_class_method("Timeline#modulations", [](Args& a) -> json::Value {
-    Timeline self = read_timeline_instance(a, 0);
+    const Timeline& self = timeline_instance(a, 0);
     json::Value total = field_record("totalBeats", json::Value(self.total_beats()));
     json::Value regions =
         forward(a, "detectModulations", json::Array{segments_json(self), merged({&total, &a[1]})});
@@ -1440,7 +1438,7 @@ void register_timeline() {
     return json::Value(std::move(out));
   });
   def_class_method("Timeline#roman", [](Args& a) -> json::Value {
-    Timeline self = read_timeline_instance(a, 0);
+    const Timeline& self = timeline_instance(a, 0);
     assert_key_argument(a[1], "timeline key");
     // The key a caller names travels whole; otherwise each segment reads the key in force.
     std::optional<ResolvedKey> given;
@@ -1466,29 +1464,29 @@ void register_timeline() {
     return json::Value(std::move(out));
   });
   def_class_method("Timeline#slice", [](Args& a) -> json::Value {
-    Timeline self = read_timeline_instance(a, 0);
+    const Timeline& self = timeline_instance(a, 0);
     double from = assert_finite_number(a[1], "timeline slice fromBeat");
     double to = assert_finite_number(a[2], "timeline slice toBeat");
     return to_json(self.slice(from, to));
   });
   def_class_method("Timeline#transpose", [](Args& a) -> json::Value {
-    Timeline self = read_timeline_instance(a, 0);
+    const Timeline& self = timeline_instance(a, 0);
     if (nothing_to_move(self)) {
       return to_json(self);
     }
     return to_json(self.transpose(assert_finite_number(a[1], "semitones")));
   });
   def_class_method("Timeline#transposeBy", [](Args& a) -> json::Value {
-    Timeline self = read_timeline_instance(a, 0);
+    const Timeline& self = timeline_instance(a, 0);
     if (nothing_to_move(self)) {
       return to_json(self);
     }
     return to_json(self.transpose_by(IntervalArg(read_interval_like(a[1]))));
   });
   def_class_method("Timeline#equals", [](Args& a) -> json::Value {
-    Timeline self = read_timeline_instance(a, 0);
+    const Timeline& self = timeline_instance(a, 0);
     if (is_class_value(a[1], "Timeline")) {
-      return self.equals(read_timeline_instance(a, 1));
+      return self.equals(timeline_instance(a, 1));
     }
     // The other timeline is read through its public `data`.
     json::Value theirs = member_or_throw(a[1], "data");
@@ -1513,12 +1511,12 @@ void register_timeline() {
     return true;
   });
   auto data = [](Args& a) -> json::Value {
-    return timeline_data_json(read_timeline_instance(a, 0).data());
+    return timeline_data_json(timeline_instance(a, 0).data());
   };
   def_class_method("Timeline#data", data);
   def_class_method("Timeline#toJSON", data);
   def_class_method("Timeline#chordTimeline", [](Args& a) -> json::Value {
-    return timeline_hybrid(segments_json(read_timeline_instance(a, 0)));
+    return timeline_hybrid(segments_json(timeline_instance(a, 0)));
   });
 }
 
@@ -1778,17 +1776,15 @@ void register_score() {
   def_class_method("Score.fromJSON", from_data);
 
   def_class_method("Score#notes",
-                   [](Args& a) -> json::Value { return notes_of(read_score_instance(a, 0)); });
+                   [](Args& a) -> json::Value { return notes_of(score_instance(a, 0)); });
   def_class_method("Score#totalBeats",
-                   [](Args& a) -> json::Value { return read_score_instance(a, 0).total_beats(); });
-  def_class_method("Score#meters", [](Args& a) -> json::Value {
-    return to_json(read_score_instance(a, 0).meters());
-  });
-  def_class_method("Score#tempo", [](Args& a) -> json::Value {
-    return to_json(read_score_instance(a, 0).tempo());
-  });
+                   [](Args& a) -> json::Value { return score_instance(a, 0).total_beats(); });
+  def_class_method("Score#meters",
+                   [](Args& a) -> json::Value { return to_json(score_instance(a, 0).meters()); });
+  def_class_method("Score#tempo",
+                   [](Args& a) -> json::Value { return to_json(score_instance(a, 0).tempo()); });
   def_class_method("Score#slice", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     double from = assert_finite_number(a[1], "slice fromBeat");
     double to = assert_finite_number(a[2], "slice toBeat");
     return to_json(self.slice(from, to));
@@ -1796,7 +1792,7 @@ void register_score() {
   def_class_method(
       "Score#filter",
       [](Args& a) -> json::Value {
-        Score self = read_score_instance(a, 0);
+        const Score& self = score_instance(a, 0);
         json::Array kept;
         if (!self.notes().empty()) {
           require_function(a[1], "predicate");
@@ -1814,7 +1810,7 @@ void register_score() {
   def_class_method(
       "Score#map",
       [](Args& a) -> json::Value {
-        Score self = read_score_instance(a, 0);
+        const Score& self = score_instance(a, 0);
         json::Array mapped;
         if (!self.notes().empty()) {
           require_function(a[1], "fn");
@@ -1828,7 +1824,7 @@ void register_score() {
       },
       kCallbacks);
   def_class_method("Score#concat", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     // Read through the public surface: an array is the notes, anything else supplies `notes`.
     json::Value added = a[1].is_array() ? a[1] : member_or_throw(a[1], "notes");
     json::Array joined = notes_of(self).as_array();
@@ -1838,59 +1834,59 @@ void register_score() {
     return score_with(self, "notes", json::Value(std::move(joined)));
   });
   def_class_method("Score#shift", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     return to_json(self.shift(assert_finite_number(a[1], "shift beats")));
   });
   def_class_method("Score#transpose", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     return to_json(self.transpose(assert_finite_number(a[1], "transpose semitones")));
   });
   def_class_method("Score#transposeBy", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     return to_json(self.transpose_by(IntervalArg(read_interval_like(a[1]))));
   });
   def_class_method("Score#withMeters", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     return score_with(self, "meters", score_meters(a[1]));
   });
   def_class_method("Score#withTempo", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     return score_with(self, "tempo", tempo_from(a[1]));
   });
   def_class_method("Score#withKey", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     return score_with(self, "key", key_data_json(read_key_value(a[1]).data()));
   });
   def_class_method("Score#quantize", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     return to_json(self.quantize(assert_range(a[1], kMinValue, kMaxSafeInteger, "quantize grid")));
   });
   auto opening_meter = [](const Score& score) { return to_json(score.meter_at(0)); };
   def_class_method("Score#humanize", [opening_meter](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     json::Value ts = field_record("ts", opening_meter(self));
     json::Value notes = forward(a, "humanize", json::Array{notes_of(self), merged({&ts, &a[1]})});
     return score_with(self, "notes", std::move(notes));
   });
   def_class_method("Score#ornament", [opening_meter](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     json::Value ts = field_record("ts", opening_meter(self));
     json::Value notes = forward(a, "ornament", json::Array{notes_of(self), merged({&ts, &a[1]})});
     return score_with(self, "notes", std::move(notes));
   });
   def_class_method("Score#groove", [opening_meter](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     json::Value notes =
         forward(a, "applyGrooveTemplate", json::Array{notes_of(self), a[1], opening_meter(self)});
     return score_with(self, "notes", std::move(notes));
   });
   def_class_method("Score#grooveTemplate", [opening_meter](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     return forward(a, "extractGrooveTemplate",
                    json::Array{notes_of(self), opening_meter(self), a[1]});
   });
   def_class_method("Score#timeline", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     json::Value context = analysis_context(self);
     json::Value bag = a.undefined(1) ? context : merged({&context, &a[1]});
     json::Value result = forward(a, "chordTimelineFromNotes", json::Array{notes_of(self), bag});
@@ -1906,7 +1902,7 @@ void register_score() {
     return to_json(read_timeline_data(json::Value(std::move(data))));
   });
   def_class_method("Score#key", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     if (self.data().key) {
       return key_wire(Key::from_json(*self.data().key));
     }
@@ -1914,7 +1910,7 @@ void register_score() {
     return prevailing.is_null() ? undefined_value() : key_wire(read_key_value(prevailing));
   });
   def_class_method("Score#keys", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     if (a.undefined(1)) {
       json::Array out;
       json::Value region_list = score_key_regions(a, self);
@@ -1941,7 +1937,7 @@ void register_score() {
                    json::Array{notes_of(self), merged({&context, &a[1]})});
   });
   def_class_method("Score#detectKeys", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     json::Array out;
     json::Value match_list =
         forward(a, "detectKeyFromNotes", json::Array{notes_of(self), options_view(a[1])});
@@ -1956,19 +1952,18 @@ void register_score() {
     return forward(a, "phrasesFromTimeline",
                    json::Array{timeline, notes_of(self), merged({&context, &a[1]})});
   };
-  def_class_method("Score#phrases", [phrases](Args& a) -> json::Value {
-    return phrases(a, read_score_instance(a, 0));
-  });
+  def_class_method("Score#phrases",
+                   [phrases](Args& a) -> json::Value { return phrases(a, score_instance(a, 0)); });
   def_class_method("Score#structuralCadences", [phrases](Args& a) -> json::Value {
-    return forward(a, "structuralCadences", json::Array{phrases(a, read_score_instance(a, 0))});
+    return forward(a, "structuralCadences", json::Array{phrases(a, score_instance(a, 0))});
   });
   def_class_method("Score#sections", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     json::Value context = meters_context(self);
     return forward(a, "sectionsFromNotes", json::Array{notes_of(self), merged({&context, &a[1]})});
   });
   def_class_method("Score#hypermeter", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     // The cadences come from the score's own harmony, read against its key context.
     json::Value timeline = get(score_chord_analysis(a, self), "timeline");
     std::variant<json::Value, KeyAtBeat> context = score_key_context(a, self, undefined_value());
@@ -1990,13 +1985,13 @@ void register_score() {
   });
   def_class_method("Score#motifs", [](Args& a) -> json::Value {
     return forward(a, "extractMotifs",
-                   json::Array{notes_of(read_score_instance(a, 0)), options_view(a[1])});
+                   json::Array{notes_of(score_instance(a, 0)), options_view(a[1])});
   });
   def_class_method("Score#contour", [](Args& a) -> json::Value {
-    return forward(a, "melodicContour", json::Array{notes_of(read_score_instance(a, 0))});
+    return forward(a, "melodicContour", json::Array{notes_of(score_instance(a, 0))});
   });
   def_class_method("Score#reference", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     json::Object context;
     context.set("meters", to_json(self.meters()));
     context.set("totalBeats", self.total_beats());
@@ -2020,7 +2015,7 @@ void register_score() {
     return to_json(reference_from_readings(self.notes(), readings, opts));
   });
   def_class_method("Score#rhythm", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     json::Object context;
     context.set("meters", to_json(self.meters()));
     context.set("totalBeats", self.total_beats());
@@ -2028,7 +2023,7 @@ void register_score() {
     return forward(a, "analyzeRhythm", json::Array{notes_of(self), merged({&base, &a[1]})});
   });
   def_class_method("Score#motifGraph", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     json::Value motifs =
         forward(a, "extractMotifs", json::Array{notes_of(self), options_view(a[1])});
     json::Value key;
@@ -2044,10 +2039,10 @@ void register_score() {
   });
   def_class_method("Score#evaluate", [](Args& a) -> json::Value {
     return forward(a, "evaluateComposition",
-                   json::Array{notes_of(read_score_instance(a, 0)), a[1], options_view(a[2])});
+                   json::Array{notes_of(score_instance(a, 0)), a[1], options_view(a[2])});
   });
   def_class_method("Score#voices", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     json::Value timeline = get(score_chord_analysis(a, self), "timeline");
     std::variant<json::Value, KeyAtBeat> context = score_key_context(a, self, a[1]);
     if (const auto* key = std::get_if<json::Value>(&context)) {
@@ -2059,17 +2054,17 @@ void register_score() {
         KeyContext(std::get<KeyAtBeat>(context))));
   });
   def_class_method("Score#voiceNotes", [](Args& a) -> json::Value {
-    return forward(a, "toVoiceNotes", json::Array{notes_of(read_score_instance(a, 0))});
+    return forward(a, "toVoiceNotes", json::Array{notes_of(score_instance(a, 0))});
   });
   def_class_method("Score#playability", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     InstrumentProfile profile = read_instrument_profile(a[1], "instrument");
     return to_json(self.playability(InstrumentProfileArg(profile)));
   });
   def_class_method(
       "Score#index",
       [](Args& a) -> json::Value {
-        Score self = read_score_instance(a, 0);
+        const Score& self = score_instance(a, 0);
         json::Object context;
         context.set("allowNonPositiveDuration", true);
         context.set("name", "score notes");
@@ -2079,30 +2074,27 @@ void register_score() {
       },
       kHandles);
   def_class_method("Score#secondsAt", [](Args& a) -> json::Value {
-    return forward(a, "beatsToSeconds",
-                   json::Array{a[1], to_json(read_score_instance(a, 0).tempo())});
+    return forward(a, "beatsToSeconds", json::Array{a[1], to_json(score_instance(a, 0).tempo())});
   });
   def_class_method("Score#barAt", [](Args& a) -> json::Value {
     return forward(a, "beatToBarPosition",
-                   json::Array{a[1], to_json(read_score_instance(a, 0).meters())});
+                   json::Array{a[1], to_json(score_instance(a, 0).meters())});
   });
   def_class_method("Score#meterAt", [](Args& a) -> json::Value {
-    return forward(a, "meterAt", json::Array{a[1], to_json(read_score_instance(a, 0).meters())});
+    return forward(a, "meterAt", json::Array{a[1], to_json(score_instance(a, 0).meters())});
   });
   def_class_method("Score#toTicks", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     return converted_times(a, notes_of(self).as_array(), "beatsToTicks", a[1]);
   });
   def_class_method("Score#equals", [](Args& a) -> json::Value {
-    Score self = read_score_instance(a, 0);
+    const Score& self = score_instance(a, 0);
     if (is_class_value(a[1], "Score")) {
-      return self.equals(read_score_instance(a, 1));
+      return self.equals(score_instance(a, 1));
     }
     return score_equals_wire(self, a[1]);
   });
-  auto data = [](Args& a) -> json::Value {
-    return score_data_json(read_score_instance(a, 0).data());
-  };
+  auto data = [](Args& a) -> json::Value { return score_data_json(score_instance(a, 0).data()); };
   def_class_method("Score#data", data);
   def_class_method("Score#toJSON", data);
 }

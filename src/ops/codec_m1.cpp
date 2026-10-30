@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <limits>
+#include <memory>
 #include <string>
 #include <utility>
 #include <variant>
@@ -15,6 +16,7 @@
 #include "model/limits.gen.h"
 #include "ops/codec_m2.h"
 #include "ops/codec_m3.h"
+#include "ops/counters.h"
 #include "ops/error_map.h"
 #include "ops/validate.h"
 
@@ -400,45 +402,59 @@ bool is_error_class(const std::string& name) {
   return name == "InvalidInputError" || name == "NoSolutionError" || name == "BudgetExceededError";
 }
 
-/** `Class.fromData` over one `$class` value whose nested values are decoded already. */
-void decode_class_instance(const json::Value& v) {
+/** A Voicing instance carries its pitch array under `pitches`. */
+Voicing read_voicing_pitches(const json::Value& v) { return read_voicing_data(get(v, "pitches")); }
+
+/**
+ * `Class.fromData` over one `$class` value whose nested values are decoded already; its decode,
+ * or null for an error class.
+ */
+std::shared_ptr<const Decoded> decode_class_instance(const json::Value& v) {
   const std::string& name = v.as_object().find("$class")->as_string();
   if (is_error_class(name)) {
-    return;
+    return nullptr;
   }
+  counters::bump(counters::class_decodes);
+  std::shared_ptr<const Decoded> kept;
   if (name == "Note") {
-    read_note_data(v);
+    kept = decoded_value(read_note_data(v));
   } else if (name == "Interval") {
-    read_interval_data(v);
+    kept = decoded_value(read_interval_data(v));
   } else if (name == "Duration") {
-    read_duration_data(v);
+    kept = decoded_value(read_duration_data(v));
   } else if (name == "Meter") {
-    read_meter_data(v);
+    kept = decoded_value(read_meter_data(v));
   } else if (name == "Tempo") {
-    read_tempo_data(v);
+    kept = decoded_value(read_tempo_data(v));
   } else if (name == "Tuning") {
-    read_tuning_data(v);
+    kept = decoded_value(read_tuning_data(v));
   } else if (name == "Instrument") {
-    read_instrument_data(v);
+    kept = decoded_value(read_instrument_data(v));
   } else if (name == "Voicing") {
-    read_voicing_data(get(v, "pitches"));
-  } else if (!decode_m2_class(v, name) && !decode_m3_class(v, name)) {
+    kept = decoded_value(read_voicing_pitches(v));
+  } else if (!decode_m2_class(v, name, kept) && !decode_m3_class(v, name, kept)) {
     throw RequestError("unknown class " + js::quote(name));
   }
+  return kept;
 }
 
-/** Decode every `$class` value in `v`, innermost first, from an explicit stack. */
-void decode_class_value(const json::Value& v) {
+}  // namespace
+
+std::shared_ptr<const Decoded> decode_class_value(const json::Value& v) {
   struct Pending {
     const json::Value* value;
     bool children_done;
   };
+  std::shared_ptr<const Decoded> outermost;
   std::vector<Pending> pending{Pending{&v, false}};
   while (!pending.empty()) {
     Pending next = pending.back();
     pending.pop_back();
     if (next.children_done) {
-      decode_class_instance(*next.value);
+      std::shared_ptr<const Decoded> kept = decode_class_instance(*next.value);
+      if (next.value == &v) {
+        outermost = std::move(kept);
+      }
       continue;
     }
     if (next.value->is_array()) {
@@ -461,46 +477,50 @@ void decode_class_value(const json::Value& v) {
       pending.push_back(Pending{&m->value, false});
     }
   }
+  return outermost;
 }
 
-}  // namespace
-
-void decode_class_arguments(const json::Array& args) {
-  for (const json::Value& arg : args) {
-    decode_class_value(arg);
+void decode_class_arguments(Args& a) {
+  for (std::size_t i = 0; i < a.size(); ++i) {
+    if (a.retained(i) != nullptr) {
+      continue;
+    }
+    if (std::shared_ptr<const Decoded> kept = decode_class_value(a[i])) {
+      a.keep(i, std::move(kept));
+    }
   }
 }
 
 Note read_note_instance(const Args& a, std::size_t i) {
-  return read_note_data(class_instance(a, i, "Note"));
+  return kept_value<Note>(a, i, "Note", read_note_data);
 }
 
 Interval read_interval_instance(const Args& a, std::size_t i) {
-  return read_interval_data(class_instance(a, i, "Interval"));
+  return kept_value<Interval>(a, i, "Interval", read_interval_data);
 }
 
 Duration read_duration_instance(const Args& a, std::size_t i) {
-  return read_duration_data(class_instance(a, i, "Duration"));
+  return kept_value<Duration>(a, i, "Duration", read_duration_data);
 }
 
 Meter read_meter_instance(const Args& a, std::size_t i) {
-  return read_meter_data(class_instance(a, i, "Meter"));
+  return kept_value<Meter>(a, i, "Meter", read_meter_data);
 }
 
 Tempo read_tempo_instance(const Args& a, std::size_t i) {
-  return read_tempo_data(class_instance(a, i, "Tempo"));
+  return kept_value<Tempo>(a, i, "Tempo", read_tempo_data);
 }
 
 Tuning read_tuning_instance(const Args& a, std::size_t i) {
-  return read_tuning_data(class_instance(a, i, "Tuning"));
+  return kept_value<Tuning>(a, i, "Tuning", read_tuning_data);
 }
 
 Instrument read_instrument_instance(const Args& a, std::size_t i) {
-  return read_instrument_data(class_instance(a, i, "Instrument"));
+  return kept_value<Instrument>(a, i, "Instrument", read_instrument_data);
 }
 
 Voicing read_voicing_instance(const Args& a, std::size_t i) {
-  return read_voicing_data(get(class_instance(a, i, "Voicing"), "pitches"));
+  return kept_value<Voicing>(a, i, "Voicing", read_voicing_pitches);
 }
 
 }  // namespace cantus::ops

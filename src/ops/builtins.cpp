@@ -13,6 +13,7 @@
 #include "cantus/version.h"
 #include "js/format.h"
 #include "ops/codec.h"
+#include "ops/codec_m1.h"
 #include "ops/error_map.h"
 #include "ops/handles.h"
 #include "ops/register_all.h"
@@ -141,6 +142,23 @@ void register_builtins() {
         return cb(rest);
       },
       kCallbacks);
+
+  def(
+      "$retain",
+      [](Args& a) -> json::Value {
+        json::Value value = a.take(0);
+        Tag tag = tag_of(value);
+        if (tag != Tag::kClass && tag != Tag::kHybrid) {
+          throw RequestError("$retain needs a \"$class\" or \"$hy\" value");
+        }
+        if (validate(value).callbacks > 0) {
+          throw RequestError("$retain: a value holding a callback cannot be retained");
+        }
+        expand_refs(value);
+        std::shared_ptr<const Decoded> decoded = decode_class_value(value);
+        return retain(std::move(value), std::move(decoded));
+      },
+      kHandles);
 
   def("$live", [](Args&) -> json::Value { return static_cast<double>(live_handles()); });
 

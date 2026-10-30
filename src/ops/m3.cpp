@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
@@ -25,6 +26,7 @@
 #include "model/limits.gen.h"
 #include "ops/accessors.h"
 #include "ops/codec_a1c.h"
+#include "ops/codec_a4.h"
 #include "ops/codec_a5.h"
 #include "ops/codec_c1.h"
 #include "ops/codec_g1.h"
@@ -32,6 +34,7 @@
 #include "ops/codec_m2.h"
 #include "ops/codec_m3.h"
 #include "ops/codec_t1.h"
+#include "ops/counters.h"
 #include "ops/error_map.h"
 #include "ops/handles.h"
 #include "ops/register_all.h"
@@ -560,10 +563,19 @@ json::Value arrangement_options(const json::Value& data) {
   return json::Value(std::move(opts));
 }
 
-/** `#session().analysis`: the reading of the tracks under the stored settings. */
-json::Value arrangement_analysis(const Args& a, const json::Value& data) {
-  return forward(a, "analyzeArrangement",
-                 json::Array{get(data, "tracks"), arrangement_options(data)});
+/** `createArrangementSession([...tracks], #analysisOptions())`: what `#session()` opens. */
+std::function<std::shared_ptr<SessionHandle>()> session_opener(const Args& a,
+                                                               const DecodedArrangement& self) {
+  return [&a, &self] {
+    return open_arrangement_session(a, get(self.data(), "tracks"),
+                                    arrangement_options(self.data()));
+  };
+}
+
+/** `#session()`: the reading of the tracks under the stored settings, made on the first ask. */
+std::shared_ptr<const SessionHandle> arrangement_session(const Args& a,
+                                                         const DecodedArrangement& self) {
+  return self.session(session_opener(a, self));
 }
 
 /** `analysisOptionsOf(setup)`: a caller's setup as the analysis functions take it. */
@@ -653,23 +665,6 @@ ReferenceReadings arrangement_readings(const json::Value& analysis) {
   return readings;
 }
 
-/** A handle an adapter made for itself, released when the adapter is done with it. */
-class OwnedHandle {
- public:
-  explicit OwnedHandle(json::Value tag) : tag_(std::move(tag)) {}
-  OwnedHandle(const OwnedHandle&) = delete;
-  OwnedHandle& operator=(const OwnedHandle&) = delete;
-  ~OwnedHandle() {
-    if (std::optional<double> id = number_of(get(tag_, "$h"))) {
-      release_handle(static_cast<std::uint64_t>(*id));
-    }
-  }
-  const json::Value& tag() const noexcept { return tag_; }
-
- private:
-  json::Value tag_;
-};
-
 void register_arrangement() {
   auto from_data = [](Args& a) -> json::Value {
     return arrangement_wire(arrangement_data(a[0], a.context()));
@@ -710,46 +705,49 @@ void register_arrangement() {
   });
 
   def_class_method("Arrangement#tracks", [](Args& a) -> json::Value {
-    return copy_plain(get(read_arrangement_instance(a, 0), "tracks"), "arrangement tracks");
+    return copy_plain(get(arrangement_instance(a, 0).data(), "tracks"), "arrangement tracks");
   });
   auto data = [](Args& a) -> json::Value {
-    return copy_plain(read_arrangement_instance(a, 0), "arrangement data");
+    return copy_plain(arrangement_instance(a, 0).data(), "arrangement data");
   };
   def_class_method("Arrangement#data", data);
   def_class_method("Arrangement#toJSON", data);
   def_class_method("Arrangement#analysis", [](Args& a) -> json::Value {
-    json::Value self = read_arrangement_instance(a, 0);
-    json::Value analysis = arrangement_analysis(a, self);
+    std::shared_ptr<const SessionHandle> session =
+        arrangement_session(a, arrangement_instance(a, 0));
+    const json::Value& analysis = session_analysis(*session);
     json::Value rest =
         copy_plain(json::Value(rest_of(analysis, {"timeline"})), "arrangement analysis");
     rest.as_object().set("timeline", member_of(arrangement_timeline(analysis), "chordTimeline"));
     return rest;
   });
   def_class_method("Arrangement#conflicts", [](Args& a) -> json::Value {
-    json::Value analysis = arrangement_analysis(a, read_arrangement_instance(a, 0));
-    return copy_plain(get(analysis, "conflicts"), "arrangement conflicts");
+    std::shared_ptr<const SessionHandle> session =
+        arrangement_session(a, arrangement_instance(a, 0));
+    return copy_plain(get(session_analysis(*session), "conflicts"), "arrangement conflicts");
   });
   def_class_method("Arrangement#track", [](Args& a) -> json::Value {
-    json::Value self = read_arrangement_instance(a, 0);
-    json::Value analysis = arrangement_analysis(a, self);
-    const json::Array& tracks = get(analysis, "tracks").as_array();
+    const DecodedArrangement& self = arrangement_instance(a, 0);
+    std::shared_ptr<const SessionHandle> session = arrangement_session(a, self);
+    const json::Array& tracks = get(session_analysis(*session), "tracks").as_array();
     for (std::size_t index = 0; index < tracks.size(); ++index) {
       if (js::strict_equals(get(tracks[index], "name"), a[1])) {
-        const json::Array& given = get(self, "tracks").as_array();
+        const json::Array& given = get(self.data(), "tracks").as_array();
         if (index >= given.size()) {
           return undefined_value();
         }
-        return forward(a, "Score.of",
-                       json::Array{get(given[index], "notes"), arrangement_score_options(self)});
+        return forward(
+            a, "Score.of",
+            json::Array{get(given[index], "notes"), arrangement_score_options(self.data())});
       }
     }
     return undefined_value();
   });
   def_class_method("Arrangement#update", [](Args& a) -> json::Value {
-    json::Value self = read_arrangement_instance(a, 0);
+    const DecodedArrangement& self = arrangement_instance(a, 0);
     const json::Value& edits = a[1];
     // The reading keeps the arrays it is handed, so it is handed copies.
-    json::Value budget = get(get(self, "settings"), "budget");
+    json::Value budget = get(get(self.data(), "settings"), "budget");
     json::Array copied;
     for (std::size_t index = 0;
          js::less_than(json::Value(static_cast<double>(index)), length_of(edits)); ++index) {
@@ -763,33 +761,47 @@ void register_arrangement() {
                                            "edits[" + index_text(index) + "].notes", budget));
       copied.push_back(json::Value(std::move(entry)));
     }
-    OwnedHandle session(forward(a, "createArrangementSession",
-                                json::Array{get(self, "tracks"), arrangement_options(self)}));
-    OwnedHandle next(forward(a, "ArrangementSession#update",
-                             json::Array{session.tag(), json::Value(std::move(copied))}));
-    json::Value tracks = forward(a, "ArrangementSession#tracks", json::Array{next.tag()});
+    json::Value edited(std::move(copied));
+    std::shared_ptr<SessionHandle> next =
+        self.update(session_opener(a, self), [&a, &edited](const SessionHandle& session) {
+          return update_arrangement_session(a, session, edited);
+        });
     json::Object result;
-    result.set("tracks", assert_data_array(tracks, "tracks"));
-    set_defined(result, "settings", get(self, "settings"));
-    return arrangement_wire(arrangement_data(json::Value(std::move(result)), a.context()));
+    result.set("tracks", assert_data_array(session_tracks(*next), "tracks"));
+    set_defined(result, "settings", get(self.data(), "settings"));
+    json::Value wire =
+        arrangement_wire(arrangement_data(json::Value(std::move(result)), a.context()));
+    if (a.retained(0) == nullptr) {
+      return wire;
+    }
+    // A receiver held as a snapshot hands its result the updated session (TS `#adopt`).
+    counters::bump(counters::class_decodes);
+    auto decoded = std::make_shared<const DecodedArrangement>(
+        arrangement_data(like_data(wire), a.context()), std::move(next));
+    json::Value ref = retain(wire, std::move(decoded));
+    wire.as_object().set("$ref", *ref.as_object().find("$ref"));
+    return wire;
   });
   def_class_method("Arrangement#tension", [](Args& a) -> json::Value {
-    json::Value self = read_arrangement_instance(a, 0);
-    json::Value analysis = arrangement_analysis(a, self);
-    json::Value opts = layered(self, analysis_options_of(a, a[1]));
-    return forward(a, "tensionCurveFrom", json::Array{get(self, "tracks"), analysis, opts});
+    const DecodedArrangement& self = arrangement_instance(a, 0);
+    std::shared_ptr<const SessionHandle> session = arrangement_session(a, self);
+    json::Value opts = layered(self.data(), analysis_options_of(a, a[1]));
+    return forward(a, "tensionCurveFrom",
+                   json::Array{get(self.data(), "tracks"), session_analysis(*session), opts});
   });
   def_class_method("Arrangement#analyze", [](Args& a) -> json::Value {
-    json::Value self = read_arrangement_instance(a, 0);
+    const json::Value& self = arrangement_instance(a, 0).data();
     json::Value opts = layered(self, analysis_options_of(a, a[1]));
     return forward(a, "analyzeArrangement", json::Array{get(self, "tracks"), opts});
   });
   def_class_method("Arrangement#timeline", [](Args& a) -> json::Value {
-    json::Value self = read_arrangement_instance(a, 0);
-    return arrangement_timeline(arrangement_analysis(a, self));
+    std::shared_ptr<const SessionHandle> session =
+        arrangement_session(a, arrangement_instance(a, 0));
+    return arrangement_timeline(session_analysis(*session));
   });
   def_class_method("Arrangement#reference", [](Args& a) -> json::Value {
-    json::Value self = read_arrangement_instance(a, 0);
+    const DecodedArrangement& held = arrangement_instance(a, 0);
+    const json::Value& self = held.data();
     const json::Value& harmony_tracks = get(get(self, "settings"), "harmonyTracks");
     json::Array harmony;
     json::Array melody;
@@ -810,7 +822,8 @@ void register_arrangement() {
         melody.insert(melody.end(), notes.begin(), notes.end());
       }
     }
-    json::Value analysis = arrangement_analysis(a, self);
+    std::shared_ptr<const SessionHandle> session = arrangement_session(a, held);
+    const json::Value& analysis = session_analysis(*session);
     json::Object bag;
     set_defined(bag, "meters", get(get(self, "settings"), "meters"));
     bag.set("totalBeats", member_of(arrangement_timeline(analysis), "totalBeats"));
@@ -825,7 +838,7 @@ void register_arrangement() {
     return to_json(reference_from_readings(typed, arrangement_readings(analysis), opts));
   });
   def_class_method("Arrangement#equals", [](Args& a) -> json::Value {
-    json::Value self = read_arrangement_instance(a, 0);
+    const json::Value& self = arrangement_instance(a, 0).data();
     return same_plain(self, member_or_throw(a[1], "data"));
   });
 }

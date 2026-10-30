@@ -342,7 +342,7 @@ TEST_CASE("cantus_list_ops lists the builtin ops sorted, with their needs", "[c_
     }
   }
   CHECK(builtins == std::vector<std::string>{"$call", "$counter", "$counter#next", "$counter#value",
-                                             "$echo", "$live", "$throw", "$version"});
+                                             "$echo", "$live", "$retain", "$throw", "$version"});
   CHECK(std::is_sorted(names.begin(), names.end()));
   CHECK(json.find(R"({"name":"$call","callbacks":true,"handles":false})") != std::string::npos);
   CHECK(json.find(R"({"name":"$counter#next","callbacks":false,"handles":true})") !=

@@ -87,7 +87,10 @@ class Object {
 
  private:
   friend class Value;
+  friend void build_indices(const Value& value);
 
+  /** Build the key index now if this object is large enough to use one. */
+  void ensure_index() const;
   std::ptrdiff_t index_of(std::string_view key) const;
   /** Where array-index key `n` belongs: after every smaller index key, before any other key. */
   std::size_t index_position(std::uint32_t n) const;
@@ -154,6 +157,12 @@ struct Member {
   std::string key;
   Value value;
 };
+
+/**
+ * Build the key index of every object in `value` now. find() otherwise builds one on first use, so
+ * a value read from several threads at once is prepared with this before it is shared.
+ */
+void build_indices(const Value& value);
 
 /**
  * Parse JSON text as `JSON.parse` does.

@@ -56,6 +56,17 @@ bool Object::empty() const noexcept { return members_.empty(); }
 const Member* Object::begin() const noexcept { return members_.data(); }
 const Member* Object::end() const noexcept { return members_.data() + members_.size(); }
 
+void Object::ensure_index() const {
+  if (members_.size() < kIndexThreshold || index_) {
+    return;
+  }
+  index_ = std::make_unique<std::unordered_map<std::string, std::size_t>>();
+  index_->reserve(members_.size());
+  for (std::size_t i = 0; i < members_.size(); ++i) {
+    index_->emplace(members_[i].key, i);
+  }
+}
+
 std::ptrdiff_t Object::index_of(std::string_view key) const {
   if (members_.size() < kIndexThreshold) {
     for (std::size_t i = 0; i < members_.size(); ++i) {
@@ -65,13 +76,7 @@ std::ptrdiff_t Object::index_of(std::string_view key) const {
     }
     return -1;
   }
-  if (!index_) {
-    index_ = std::make_unique<std::unordered_map<std::string, std::size_t>>();
-    index_->reserve(members_.size());
-    for (std::size_t i = 0; i < members_.size(); ++i) {
-      index_->emplace(members_[i].key, i);
-    }
-  }
+  ensure_index();
   auto it = index_->find(std::string(key));
   return it == index_->end() ? -1 : static_cast<std::ptrdiff_t>(it->second);
 }
@@ -329,6 +334,25 @@ bool operator==(const Value& a, const Value& b) {
     }
   }
   return true;
+}
+
+void build_indices(const Value& value) {
+  std::vector<const Value*> pending{&value};
+  while (!pending.empty()) {
+    const Value* next = pending.back();
+    pending.pop_back();
+    if (next->is_array()) {
+      for (const Value& item : next->as_array()) {
+        pending.push_back(&item);
+      }
+    } else if (next->is_object()) {
+      const Object& o = next->as_object();
+      o.ensure_index();
+      for (const Member& m : o) {
+        pending.push_back(&m.value);
+      }
+    }
+  }
 }
 
 }  // namespace cantus::json

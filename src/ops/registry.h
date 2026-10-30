@@ -66,16 +66,18 @@ void def_method(std::string name, F fn, unsigned flags = kNoFlags) {
 /**
  * Decode the model-class values (`$class`) found anywhere in a call's arguments through their
  * `Class.fromData`, innermost first, so an instance that fails its own checks is refused before an
- * op reads it.
+ * op reads it. An argument's own decode is kept in `a` for its readers; an argument held as a
+ * snapshot was decoded when it was retained and is skipped.
  * @throws RequestError (BAD_REQUEST) "unknown class ..." for a name that is no model class.
  * Defined with the class codecs (ops/codec_m1.cpp and the groups after it).
  */
-void decode_class_arguments(const json::Array& args);
+void decode_class_arguments(Args& a);
 
 /**
  * Register a method of a value class `Type#member` (or a factory `Type.member`): its instance
  * arrives as a `$class` value, not a handle, so the op carries no kHandles flag and the CLI runs
- * it. Dispatch has decoded the instance before the op runs, as it does every op's arguments. Use
+ * it. Dispatch has decoded the instance before the op runs, as it does every op's arguments, or
+ * holds its snapshot when it came as a `$ref`. Use
  * def_method for a handle type, def for a free function.
  */
 inline void def_class_method(std::string name, OpFn fn, unsigned flags = kNoFlags) {

@@ -8,6 +8,7 @@
 #include "ops/args.h"
 #include "ops/codec.h"
 #include "ops/error_map.h"
+#include "ops/handles.h"
 #include "ops/registry.h"
 #include "ops/validate.h"
 
@@ -34,6 +35,17 @@ json::Value parse_args(std::string_view args_json) {
   }
 }
 
+/** Hold the snapshot of each argument sent as a `$ref`; expand every `$ref` nested deeper. */
+void resolve_refs(Args& a, json::Array& values) {
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    if (is_ref(values[i])) {
+      a.hold(i, resolve_ref(values[i]));
+    } else {
+      expand_refs(values[i]);
+    }
+  }
+}
+
 }  // namespace
 
 Result dispatch(std::string_view op, std::string_view args_json,
@@ -50,14 +62,19 @@ Result dispatch(std::string_view op, std::string_view args_json,
     if (!args.is_array()) {
       throw RequestError("args must be a JSON array");
     }
-    if (validate(args).callbacks > 0 && !context.has_callbacks()) {
+    ValidateStats stats = validate(args);
+    if (stats.callbacks > 0 && !context.has_callbacks()) {
       throw RequestError(kNoCallbacks);
     }
-    // Every API op receives its model-class arguments decoded, once per call.
-    if (!is_builtin(op)) {
-      decode_class_arguments(args.as_array());
-    }
     Args a(args.as_array(), context);
+    // Every API op receives its model-class arguments decoded, once per call; a builtin takes its
+    // arguments as sent.
+    if (!is_builtin(op)) {
+      if (stats.refs > 0) {
+        resolve_refs(a, args.as_array());
+      }
+      decode_class_arguments(a);
+    }
     OptionViews views;
     json::Value result = entry->fn(a);
     return Result{CANTUS_OK, ops::stringify(result)};

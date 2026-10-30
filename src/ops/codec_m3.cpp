@@ -1,6 +1,8 @@
 #include "ops/codec_m3.h"
 
 #include <limits>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -13,6 +15,7 @@
 #include "js/math.h"
 #include "js/value.h"
 #include "model/shared.h"
+#include "ops/codec_a4.h"
 #include "ops/codec_c1.h"
 #include "ops/codec_g2b.h"
 #include "ops/codec_m1.h"
@@ -397,31 +400,70 @@ json::Value composer_wire(const json::Value& held) { return with_class("Composer
 //--------------------------------------------------------------------------------------------
 // Class instances
 
+namespace {
+
+json::Value read_motif_class(const json::Value& value) { return motif_data(like_data(value)); }
+
+json::Value read_rhythm_class(const json::Value& value) { return rhythm_data(like_data(value)); }
+
+}  // namespace
+
 json::Value read_motif_instance(const Args& a, std::size_t i) {
-  return motif_data(like_data(class_instance(a, i, "Motif")));
+  return kept_value<json::Value>(a, i, "Motif", read_motif_class);
 }
 
 json::Value read_rhythm_instance(const Args& a, std::size_t i) {
-  return rhythm_data(like_data(class_instance(a, i, "Rhythm")));
+  return kept_value<json::Value>(a, i, "Rhythm", read_rhythm_class);
 }
 
-json::Value read_arrangement_instance(const Args& a, std::size_t i) {
-  return arrangement_data(like_data(class_instance(a, i, "Arrangement")), a.context());
+DecodedArrangement::DecodedArrangement(json::Value data,
+                                       std::shared_ptr<const SessionHandle> session)
+    : data_(std::move(data)), session_(std::move(session)) {
+  json::build_indices(data_);
+}
+
+std::shared_ptr<const SessionHandle> DecodedArrangement::session(
+    const std::function<std::shared_ptr<SessionHandle>()>& open) const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (!session_) {
+    std::shared_ptr<SessionHandle> made = open();
+    prepare_shared_session(*made);
+    session_ = std::move(made);
+  }
+  return session_;
+}
+
+std::shared_ptr<SessionHandle> DecodedArrangement::update(
+    const std::function<std::shared_ptr<SessionHandle>()>& open,
+    const std::function<std::shared_ptr<SessionHandle>(const SessionHandle&)>& update) const {
+  std::lock_guard<std::mutex> lock(update_mutex_);
+  return update(*session(open));
+}
+
+const DecodedArrangement& arrangement_instance(const Args& a, std::size_t i) {
+  const json::Value& value = class_instance(a, i, "Arrangement");
+  return kept_instance<DecodedArrangement>(a, i, [&] {
+    return std::make_shared<const DecodedArrangement>(
+        arrangement_data(like_data(value), a.context()));
+  });
 }
 
 json::Value read_composer_instance(const Args& a, std::size_t i) {
-  return composer_options(like_data(class_instance(a, i, "Composer")), a.context());
+  return kept_value<json::Value>(a, i, "Composer", [&a](const json::Value& value) {
+    return composer_options(like_data(value), a.context());
+  });
 }
 
-bool decode_m3_class(const json::Value& value, std::string_view name) {
+bool decode_m3_class(const json::Value& value, std::string_view name,
+                     std::shared_ptr<const Decoded>& kept) {
   if (name == "Motif") {
-    motif_data(like_data(value));
+    kept = decoded_value(read_motif_class(value));
   } else if (name == "Rhythm") {
-    rhythm_data(like_data(value));
+    kept = decoded_value(read_rhythm_class(value));
   } else if (name == "Arrangement") {
-    arrangement_data(like_data(value), kNoHost);
+    kept = std::make_shared<const DecodedArrangement>(arrangement_data(like_data(value), kNoHost));
   } else if (name == "Composer") {
-    composer_options(like_data(value), kNoHost);
+    kept = decoded_value(composer_options(like_data(value), kNoHost));
   } else {
     return false;
   }

@@ -32,6 +32,7 @@
 #include "ops/codec_a1c.h"
 #include "ops/codec_a2.h"
 #include "ops/codec_a4.h"
+#include "ops/counters.h"
 #include "ops/handles.h"
 #include "ops/register_all.h"
 #include "ops/registry.h"
@@ -336,6 +337,7 @@ void carry(json::Value& object, std::string_view key, const std::optional<json::
 
 WireRun analyze_wire(const Args& a, const json::Value& tracks, const json::Value& opts,
                      TimelineEvidence* previous, const DirtySlots* dirty) {
+  counters::bump(previous == nullptr ? counters::full_analyses : counters::incremental_analyses);
   MeterMap meters = resolve_wire_meters(opts, "arrangement meters");
   json::Value note_options = arrangement_note_options(opts);
   ReadTracks read = read_tracks(tracks, note_options, opts);
@@ -468,6 +470,8 @@ WireRun analyze_wire(const Args& a, const json::Value& tracks, const json::Value
   return run;
 }
 
+}  // namespace
+
 //--------------------------------------------------------------------------------------------
 // analyze/arrange: sessions
 
@@ -567,6 +571,124 @@ class SessionHandle : public Handle {
   }
 };
 
+std::shared_ptr<SessionHandle> open_arrangement_session(const Args& a, json::Value tracks,
+                                                        json::Value opts) {
+  auto session = std::make_shared<SessionHandle>();
+  session->opts = std::move(opts);
+  session->tracks = std::move(tracks);
+  WireRun run = analyze_wire(a, session->tracks, session->opts, nullptr, nullptr);
+  session->analysis = std::move(run.analysis);
+  session->evidence = std::move(run.evidence);
+  session->segment_objects = std::move(run.segment_objects);
+  session->typed_tracks = std::move(run.tracks);
+  return session;
+}
+
+std::shared_ptr<SessionHandle> update_arrangement_session(const Args& a, const SessionHandle& self,
+                                                          const json::Value& edits) {
+  // `edits.length`: a text has one too, and walks as characters.
+  if (is_nullish(edits)) {
+    no_properties(edits, "length");
+  }
+  json::Value edit_count =
+      edits.is_array()    ? json::Value(static_cast<double>(edits.as_array().size()))
+      : edits.is_string() ? json::Value(static_cast<double>(js::utf16_length(edits.as_string())))
+                          : get(edits, "length");
+  assert_generation_budget(edit_count, "arrangement edits", get(self.opts, "budget"));
+  if (edits.is_string() && !edits.as_string().empty()) {
+    // A character has no `trackIndex`.
+    throw InvalidInputError("edits[0].trackIndex undefined is outside the session's " +
+                            js::to_string(static_cast<double>(self.tracks.as_array().size())) +
+                            " tracks");
+  }
+  json::Array next = self.tracks.as_array();
+  std::vector<ArrangementTrack> next_typed = self.typed_tracks;
+  std::optional<EditedSpan> edited;
+  bool reordered = false;
+  if (edits.is_array()) {
+    for (std::size_t index = 0; index < edits.as_array().size(); ++index) {
+      const json::Value& edit = edits.as_array()[index];
+      if (is_undefined(edit)) {
+        continue;
+      }
+      if (edit.is_null()) {
+        no_properties(edit, "trackIndex");
+      }
+      const json::Value& wire_index = get(edit, "trackIndex");
+      // `next[edit.trackIndex]` finds a track only for a whole index inside the array.
+      std::optional<double> position;
+      if (js::type_of(wire_index) == "number") {
+        position = number_of(wire_index);
+      } else if (wire_index.is_string()) {
+        position = js::number(wire_index.as_string());
+      }
+      bool found = position && *position >= 0 && *position < static_cast<double>(next.size()) &&
+                   *position == std::floor(*position) &&
+                   (js::type_of(wire_index) == "number" ||
+                    js::to_string(*position) == wire_index.as_string());
+      if (!found) {
+        throw InvalidInputError("edits[" + index_text(index) + "].trackIndex " +
+                                js::template_string(wire_index) + " is outside the session's " +
+                                js::to_string(static_cast<double>(self.tracks.as_array().size())) +
+                                " tracks");
+      }
+      auto at = static_cast<std::size_t>(*position);
+      const json::Value& notes = get(edit, "notes");
+      if (!notes.is_array()) {
+        throw InvalidInputError("edits[" + index_text(index) +
+                                "].notes must be an array; received " + js::type_of(notes));
+      }
+      json::Object bag;
+      bag.set("allowNonPositiveDuration", true);
+      bag.set("budget", get(self.opts, "budget"));
+      std::vector<NoteEvent> typed = assert_note_events(
+          notes, "edits[" + index_text(index) + "].notes", json::Value(std::move(bag)));
+      edited = union_span(edited, edited_span(next_typed[at].notes, typed));
+      reordered = reordered || !same_order(next_typed[at].notes, typed);
+      json::Object replaced;
+      if (next[at].is_object()) {
+        replaced = next[at].as_object();
+      }
+      replaced.set("notes", notes);
+      next[at] = json::Value(std::move(replaced));
+      next_typed[at].notes = std::move(typed);
+    }
+  }
+  auto session = std::make_shared<SessionHandle>();
+  session->opts = self.opts;
+  session->tracks = json::Value(std::move(next));
+  session->tokens = self.tokens;
+  // Nothing the analysis reads actually changed, so the analysis has not.
+  if (!edited && !reordered) {
+    session->analysis = self.analysis;
+    session->evidence = self.evidence;
+    session->segment_objects = self.segment_objects;
+    session->typed_tracks = std::move(next_typed);
+    session->analysis_identity = self.analysis_identity;
+    return session;
+  }
+  std::optional<DirtySlots> dirty = dirty_slots_of(self.evidence.get(), edited);
+  WireRun run = analyze_wire(a, session->tracks, session->opts, self.evidence.get(),
+                             dirty ? &*dirty : nullptr);
+  session->analysis = std::move(run.analysis);
+  session->evidence = std::move(run.evidence);
+  session->segment_objects = std::move(run.segment_objects);
+  session->typed_tracks = std::move(run.tracks);
+  return session;
+}
+
+const json::Value& session_tracks(const SessionHandle& session) { return session.tracks; }
+
+const json::Value& session_analysis(const SessionHandle& session) { return session.analysis; }
+
+void prepare_shared_session(const SessionHandle& session) {
+  json::build_indices(session.tracks);
+  json::build_indices(session.opts);
+  json::build_indices(session.analysis);
+}
+
+namespace {
+
 void register_arrange() {
   def("analyzePolyphony", [](Args& a) -> json::Value {
     json::Object bag;
@@ -604,15 +726,8 @@ void register_arrange() {
   def(
       "createArrangementSession",
       [](Args& a) -> json::Value {
-        auto session = std::make_shared<SessionHandle>();
-        session->opts = options_of(a, 1);
-        session->tracks = a.take(0);
-        WireRun run = analyze_wire(a, session->tracks, session->opts, nullptr, nullptr);
-        session->analysis = std::move(run.analysis);
-        session->evidence = std::move(run.evidence);
-        session->segment_objects = std::move(run.segment_objects);
-        session->typed_tracks = std::move(run.tracks);
-        return new_handle(std::move(session));
+        json::Value opts = options_of(a, 1);
+        return new_handle(open_arrangement_session(a, a.take(0), std::move(opts)));
       },
       kHandles);
 
@@ -621,101 +736,10 @@ void register_arrange() {
   def_method<SessionHandle>(
       "ArrangementSession#analysis",
       [](SessionHandle& self, Args&) -> json::Value { return self.tagged_analysis(); });
-  def_method<SessionHandle>(
-      "ArrangementSession#update", [](SessionHandle& self, Args& a) -> json::Value {
-        const json::Value& edits = a[1];
-        // `edits.length`: a text has one too, and walks as characters.
-        if (is_nullish(edits)) {
-          no_properties(edits, "length");
-        }
-        json::Value edit_count =
-            edits.is_array() ? json::Value(static_cast<double>(edits.as_array().size()))
-            : edits.is_string()
-                ? json::Value(static_cast<double>(js::utf16_length(edits.as_string())))
-                : get(edits, "length");
-        assert_generation_budget(edit_count, "arrangement edits", get(self.opts, "budget"));
-        if (edits.is_string() && !edits.as_string().empty()) {
-          // A character has no `trackIndex`.
-          throw InvalidInputError(
-              "edits[0].trackIndex undefined is outside the session's " +
-              js::to_string(static_cast<double>(self.tracks.as_array().size())) + " tracks");
-        }
-        json::Array next = self.tracks.as_array();
-        std::vector<ArrangementTrack> next_typed = self.typed_tracks;
-        std::optional<EditedSpan> edited;
-        bool reordered = false;
-        if (edits.is_array()) {
-          for (std::size_t index = 0; index < edits.as_array().size(); ++index) {
-            const json::Value& edit = edits.as_array()[index];
-            if (is_undefined(edit)) {
-              continue;
-            }
-            if (edit.is_null()) {
-              no_properties(edit, "trackIndex");
-            }
-            const json::Value& wire_index = get(edit, "trackIndex");
-            // `next[edit.trackIndex]` finds a track only for a whole index inside the array.
-            std::optional<double> position;
-            if (js::type_of(wire_index) == "number") {
-              position = number_of(wire_index);
-            } else if (wire_index.is_string()) {
-              position = js::number(wire_index.as_string());
-            }
-            bool found = position && *position >= 0 &&
-                         *position < static_cast<double>(next.size()) &&
-                         *position == std::floor(*position) &&
-                         (js::type_of(wire_index) == "number" ||
-                          js::to_string(*position) == wire_index.as_string());
-            if (!found) {
-              throw InvalidInputError(
-                  "edits[" + index_text(index) + "].trackIndex " + js::template_string(wire_index) +
-                  " is outside the session's " +
-                  js::to_string(static_cast<double>(self.tracks.as_array().size())) + " tracks");
-            }
-            auto at = static_cast<std::size_t>(*position);
-            const json::Value& notes = get(edit, "notes");
-            if (!notes.is_array()) {
-              throw InvalidInputError("edits[" + index_text(index) +
-                                      "].notes must be an array; received " + js::type_of(notes));
-            }
-            json::Object bag;
-            bag.set("allowNonPositiveDuration", true);
-            bag.set("budget", get(self.opts, "budget"));
-            std::vector<NoteEvent> typed = assert_note_events(
-                notes, "edits[" + index_text(index) + "].notes", json::Value(std::move(bag)));
-            edited = union_span(edited, edited_span(next_typed[at].notes, typed));
-            reordered = reordered || !same_order(next_typed[at].notes, typed);
-            json::Object replaced;
-            if (next[at].is_object()) {
-              replaced = next[at].as_object();
-            }
-            replaced.set("notes", notes);
-            next[at] = json::Value(std::move(replaced));
-            next_typed[at].notes = std::move(typed);
-          }
-        }
-        auto session = std::make_shared<SessionHandle>();
-        session->opts = self.opts;
-        session->tracks = json::Value(std::move(next));
-        session->tokens = self.tokens;
-        // Nothing the analysis reads actually changed, so the analysis has not.
-        if (!edited && !reordered) {
-          session->analysis = self.analysis;
-          session->evidence = self.evidence;
-          session->segment_objects = self.segment_objects;
-          session->typed_tracks = std::move(next_typed);
-          session->analysis_identity = self.analysis_identity;
-          return new_handle(std::move(session));
-        }
-        std::optional<DirtySlots> dirty = dirty_slots_of(self.evidence.get(), edited);
-        WireRun run = analyze_wire(a, session->tracks, session->opts, self.evidence.get(),
-                                   dirty ? &*dirty : nullptr);
-        session->analysis = std::move(run.analysis);
-        session->evidence = std::move(run.evidence);
-        session->segment_objects = std::move(run.segment_objects);
-        session->typed_tracks = std::move(run.tracks);
-        return new_handle(std::move(session));
-      });
+  def_method<SessionHandle>("ArrangementSession#update",
+                            [](SessionHandle& self, Args& a) -> json::Value {
+                              return new_handle(update_arrangement_session(a, self, a[1]));
+                            });
 
   def("tensionCurve", [](Args& a) -> json::Value {
     json::Value opts = options_of(a, 1);

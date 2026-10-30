@@ -4,6 +4,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "js/format.h"
 #include "js/number.h"
@@ -72,6 +73,23 @@ HandleTable& table() {
 
 std::atomic<std::uint64_t> g_last_token{0};
 
+/** The live entry of `id`; `label` names the handle in the released message. */
+Entry find_entry(std::uint64_t id, const std::string& label) {
+  Entry entry;
+  bool issued = false;
+  if (!table().find(id, entry, issued)) {
+    if (issued) {
+      throw ReleasedHandleError(label + " handle " + js::to_string(static_cast<double>(id)) +
+                                " has been released");
+    }
+    throw RequestError("unknown handle " + js::to_string(static_cast<double>(id)));
+  }
+  return entry;
+}
+
+/** The tag key of a `$class` or `$hy` value. */
+const char* data_tag_key(const json::Object& o) { return o.contains("$class") ? "$class" : "$hy"; }
+
 }  // namespace
 
 json::Value new_handle(std::shared_ptr<Handle> object, std::string type) {
@@ -90,20 +108,69 @@ std::shared_ptr<Handle> resolve_handle(const json::Value& tag, std::string_view 
   const json::Object& o = tag.as_object();
   auto id = static_cast<std::uint64_t>(o.find("$h")->as_number());
   const std::string& tag_type = o.find("$type")->as_string();
-  Entry entry;
-  bool issued = false;
-  if (!table().find(id, entry, issued)) {
-    if (issued) {
-      throw ReleasedHandleError(tag_type + " handle " + js::to_string(static_cast<double>(id)) +
-                                " has been released");
-    }
-    throw RequestError("unknown handle " + js::to_string(static_cast<double>(id)));
-  }
+  Entry entry = find_entry(id, tag_type);
   if (entry.type != type || tag_type != type) {
     throw RequestError("handle " + js::to_string(static_cast<double>(id)) + " is a " +
                        js::quote(entry.type) + ", not a " + js::quote(type));
   }
   return entry.object;
+}
+
+Retained::Retained(json::Value wire, std::shared_ptr<const Decoded> decoded)
+    : wire_(std::move(wire)), decoded_(std::move(decoded)) {}
+
+json::Value retain(json::Value wire, std::shared_ptr<const Decoded> decoded) {
+  const char* key = data_tag_key(wire.as_object());
+  json::Object out;
+  out.set(key, *wire.as_object().find(key));
+  json::build_indices(wire);
+  std::uint64_t id = table().insert(std::make_shared<Retained>(std::move(wire), std::move(decoded)),
+                                    Retained::kTypeName);
+  out.set("$ref", static_cast<double>(id));
+  return json::Value(std::move(out));
+}
+
+bool is_ref(const json::Value& v) noexcept {
+  return v.is_object() && v.as_object().contains("$ref") &&
+         (v.as_object().contains("$class") || v.as_object().contains("$hy"));
+}
+
+std::shared_ptr<const Retained> resolve_ref(const json::Value& ref) {
+  const json::Object& o = ref.as_object();
+  const char* key = data_tag_key(o);
+  const std::string& name = o.find(key)->as_string();
+  auto id = static_cast<std::uint64_t>(o.find("$ref")->as_number());
+  Entry entry = find_entry(id, name);
+  const json::Value* held = nullptr;
+  if (entry.type == Retained::kTypeName) {
+    held = static_cast<const Retained&>(*entry.object).wire().as_object().find(key);
+  }
+  if (held == nullptr || held->as_string() != name) {
+    throw RequestError("expected a " + js::quote(name) +
+                       (o.contains("$class") ? " instance" : " hybrid"));
+  }
+  return std::static_pointer_cast<const Retained>(entry.object);
+}
+
+void expand_refs(json::Value& v) {
+  std::vector<json::Value*> pending{&v};
+  while (!pending.empty()) {
+    json::Value* next = pending.back();
+    pending.pop_back();
+    if (is_ref(*next)) {
+      // A snapshot holds no `$ref`, so its copy needs no further walk.
+      *next = resolve_ref(*next)->wire();
+    } else if (next->is_array()) {
+      for (json::Value& item : next->as_array()) {
+        pending.push_back(&item);
+      }
+    } else if (next->is_object()) {
+      json::Object& o = next->as_object();
+      for (const json::Member& m : o) {
+        pending.push_back(o.find(m.key));
+      }
+    }
+  }
 }
 
 void release_handle(std::uint64_t id) noexcept { table().erase(id); }
