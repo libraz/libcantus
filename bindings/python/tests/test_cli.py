@@ -65,6 +65,25 @@ def test_arguments_from_stdin_and_file(tmp_path: Path) -> None:
     assert missing.returncode == 11
 
 
+def test_directory_argument_is_unreadable(tmp_path: Path) -> None:
+    result = run("$echo", f"@{tmp_path}")
+    assert result.returncode == 11
+    assert result.stdout == ""
+    assert json.loads(result.stderr)["message"] == f"cannot read {tmp_path}"
+
+
+def test_error_messages_match_the_cantus_tool() -> None:
+    absent = run("$echo", "@/nonexistent/cantus.json")
+    assert absent.stderr == (
+        '{"code":"BAD_REQUEST","name":"Error","message":"cannot read /nonexistent/cantus.json"}\n'
+    )
+    unknown = run("describe", "\u30c9")
+    assert unknown.returncode == 10
+    assert unknown.stderr == (
+        '{"code":"UNKNOWN_OP","name":"Error","message":"unknown op \\"\u30c9\\""}\n'
+    )
+
+
 def test_no_arguments_means_none() -> None:
     result = run("$counter")
     assert result.returncode == 11

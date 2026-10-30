@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-from ._codec import UNSET, Handle, Hybrid, Model, StaticGetter, runtime
+from ._codec import UNSET, Handle, Hybrid, Model, StaticGetter, freeze, runtime
 
 __all__ = [
     "Arrangement",
@@ -425,7 +425,7 @@ def constant(name: str) -> Any:
     if name not in CONSTANTS:
         raise AttributeError(f"module 'libcantus' has no attribute {name!r}")
     if name not in _constants:
-        _constants[name] = runtime.call(f"$const:{name}", [])
+        _constants[name] = freeze(runtime.call(f"$const:{name}", []))
     return _constants[name]
 
 

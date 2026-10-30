@@ -195,9 +195,20 @@ class TestTaggedObjects:
         timeline.segments = [3]
         assert sent("$echo", [timeline]) == '[{"$hy":"ChordTimeline","segments":[3]}]'
 
-    def test_hybrid_method_goes_over_as_its_hybrid(self, sent: Callable[..., str]) -> None:
+    def test_hybrid_method_goes_over_as_a_callback(self, sent: Callable[..., str]) -> None:
         timeline = echo_wire('{"$hy":"ChordTimeline","segments":[]}')
-        assert sent("$echo", [timeline.at]) == '[{"$hy":"ChordTimeline","segments":[]}]'
+        assert sent("$echo", [timeline.at]) == '[{"$cb":0}]'
+
+    def test_class_instance_goes_over_as_its_methods(self, sent: Callable[..., str]) -> None:
+        class Rng:
+            hidden = 1
+
+            def at(self) -> float:
+                return 0.1
+
+        assert sent("$echo", [Rng()]) == '[{"at":{"$cb":0}}]'
+        with pytest.raises(TypeError):
+            echo(object())
 
     def test_callback_tag(self, sent: Callable[..., str]) -> None:
         assert sent("$echo", [lambda: 1]) == '[{"$cb":0}]'
@@ -400,6 +411,22 @@ class TestHandles:
         with pytest.raises(libcantus.CantusError) as info:
             runtime._decode({"$h": 99, "$type": "Nope"})
         assert info.value.code is ErrorCode.BAD_REQUEST
+
+
+class TestSharedValues:
+    def test_identity_results_refuse_writes(self) -> None:
+        shared = echo_wire('{"$id":4101,"pitch":60,"tags":[1,2],"inner":{"a":1}}')
+        with pytest.raises(TypeError):
+            shared["pitch"] = 0
+        with pytest.raises(TypeError):
+            shared["tags"].append(3)
+        with pytest.raises(TypeError):
+            shared["inner"].update(a=2)
+        assert shared == {"pitch": 60, "tags": [1, 2], "inner": {"a": 1}}
+
+    def test_constants_refuse_writes(self) -> None:
+        with pytest.raises(TypeError):
+            libcantus.NAMED_SCALES["major"] = "CORRUPT"
 
 
 class TestLibrary:

@@ -86,6 +86,10 @@ class CliTest(unittest.TestCase):
         finally:
             Path(f.name).unlink()
         self.assertEqual(run("$echo", "@/nonexistent/cantus.json").returncode, 11)
+        with tempfile.TemporaryDirectory() as directory:
+            p = run("chordQualities", "@" + directory)
+            self.assertEqual(p.returncode, 11)
+            self.assertEqual(p.stdout, "")
 
     def test_usage_errors(self) -> None:
         self.assertEqual(run().returncode, 11)

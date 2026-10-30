@@ -287,12 +287,18 @@ function run(impl, maxWorkers) {
       failed: data.numFailedTests,
       skipped: data.numPendingTests,
       todo: data.numTodoTests,
+      failedSuites: data.numFailedTestSuites,
       exit: result.status,
     };
     log(`IMPL=${impl}: ${JSON.stringify(totals)}`);
     if (totals.passed === 0) fail(`IMPL=${impl} passed no tests`);
     if (totals.failed > 0 || totals.skipped > 0 || totals.todo > 0) {
       fail(`IMPL=${impl} has failed, skipped or todo tests`);
+    }
+    if (totals.failedSuites > 0 || totals.exit !== 0) {
+      fail(
+        `IMPL=${impl} has ${totals.failedSuites} spec files that failed to load or exit ${totals.exit}`,
+      );
     }
     return totals;
   } finally {

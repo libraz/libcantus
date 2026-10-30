@@ -1,10 +1,11 @@
 // The cantus command-line tool: one op per invocation through the C ABI, JSON in and out.
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <iterator>
 #include <string>
 #include <string_view>
+#include <system_error>
 
 #include "cantus/cantus_c.h"
 #include "exit_codes.h"
@@ -103,8 +104,11 @@ std::string find_entry(const std::string& list, const std::string& op) {
 }
 
 bool read_stream(std::istream& in, std::string* out) {
-  out->assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
-  return !in.bad();
+  out->clear();
+  char buffer[4096];
+  while (in.read(buffer, sizeof buffer) || in.gcount() > 0) out->append(buffer, in.gcount());
+  // A clean read ends at end of file; anything else is a read error.
+  return in.eof() && !in.bad();
 }
 
 int run_op(const std::string& op, const char* arg) {
@@ -122,8 +126,10 @@ int run_op(const std::string& op, const char* arg) {
   } else if (std::string_view(arg) == "-") {
     if (!read_stream(std::cin, &args)) return bad_request("cannot read standard input");
   } else if (arg[0] == '@') {
-    std::ifstream file(arg + 1, std::ios::binary);
-    if (!file || !read_stream(file, &args)) {
+    std::error_code ec;
+    std::ifstream file;
+    if (std::filesystem::is_regular_file(arg + 1, ec)) file.open(arg + 1, std::ios::binary);
+    if (!file.is_open() || !read_stream(file, &args)) {
       return bad_request(std::string("cannot read ") + (arg + 1));
     }
   } else {

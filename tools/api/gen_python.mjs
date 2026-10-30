@@ -278,7 +278,7 @@ function build(manifest, annotations) {
   const iterImport = hasIter ? ['from collections.abc import Iterator'] : [];
   py.push(...iterImport, 'from typing import Any', '');
   pyi.push(...iterImport, 'from typing import Any, ClassVar', '');
-  py.push('from ._codec import UNSET, Handle, Hybrid, Model, StaticGetter, runtime', '');
+  py.push('from ._codec import UNSET, Handle, Hybrid, Model, StaticGetter, freeze, runtime', '');
   pyi.push('from ._codec import Handle, Hybrid, Model', '');
 
   const classes = [...models.map(modelBlock), ...manifest.types.map(typeBlock)];
@@ -311,7 +311,7 @@ function build(manifest, annotations) {
     '    if name not in CONSTANTS:',
     '        raise AttributeError(f"module \'libcantus\' has no attribute {name!r}")',
     '    if name not in _constants:',
-    '        _constants[name] = runtime.call(f"$const:{name}", [])',
+    '        _constants[name] = freeze(runtime.call(f"$const:{name}", []))',
     '    return _constants[name]',
     '',
     '',

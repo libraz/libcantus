@@ -282,7 +282,7 @@ describe(`boundary (${NAME} backend)`, () => {
       const second = c.value;
       expect(second).not.toBe(first);
       expect(second).toEqual({ count: 1 });
-      // A handle's results are shared state, so they are handed out frozen.
+      // The pure package freezes the shared $counter state, so the facade does too.
       expect(Object.isFrozen(second)).toBe(true);
       c[Symbol.dispose]();
     });

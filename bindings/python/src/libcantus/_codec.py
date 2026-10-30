@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import contextlib
 import ctypes
-import inspect
 import json
 import math
 import threading
@@ -79,8 +78,46 @@ class StaticGetter:
         return runtime.call(self._op, [])
 
 
-class Identified(dict[str, Any]):
-    """A handle getter's result; the same token yields the same object while it is alive."""
+def _read_only(*names: str) -> Callable[[type], type]:
+    """Class decorator: make the named mutators raise ``TypeError``."""
+
+    def refuse(self: object, *args: object, **kwargs: object) -> None:
+        raise TypeError(f"{type(self).__name__} is read-only")
+
+    def decorate(cls: type) -> type:
+        for name in names:
+            setattr(cls, name, refuse)
+        return cls
+
+    return decorate
+
+
+@_read_only(
+    "__setitem__", "__delitem__", "__ior__", "clear", "pop", "popitem", "setdefault", "update"
+)
+class FrozenDict(dict[str, Any]):
+    """A dict that refuses writes, for values shared between calls."""
+
+
+@_read_only(
+    "__setitem__", "__delitem__", "__iadd__", "__imul__", "append", "clear", "extend", "insert",
+    "pop", "remove", "reverse", "sort",
+)  # fmt: skip
+class FrozenList(list[Any]):
+    """A list that refuses writes, for values shared between calls."""
+
+
+def freeze(value: Any) -> Any:
+    """``value`` with every list and dict inside it made read-only."""
+    if isinstance(value, list):
+        return FrozenList(freeze(item) for item in value)
+    if isinstance(value, dict):
+        return FrozenDict({k: freeze(v) for k, v in value.items()})
+    return value
+
+
+class Identified(FrozenDict):
+    """A handle getter's result: read-only; one token yields one object while it is alive."""
 
 
 class Handle:
@@ -288,8 +325,6 @@ class Runtime:
             return {"$h": value._id, "$type": value._TYPE}
         if isinstance(value, Hybrid):
             return self._encode_hybrid(value, frame)
-        if inspect.ismethod(value) and isinstance(value.__self__, Hybrid):
-            return self._encode_hybrid(value.__self__, frame)
         if callable(value):
             frame.fns.append(value)
             return {"$cb": len(frame.fns) - 1}
@@ -307,6 +342,14 @@ class Runtime:
                 if field is not UNSET:
                     out[_escape(key)] = self._encode(field, frame, inner)
             return out
+        methods = {
+            name: attr
+            for name in dir(value)
+            if not name.startswith("_") and callable(attr := getattr(value, name, None))
+        }
+        if methods:
+            # An instance of a user class stands for the methods it offers, like a dict of them.
+            return self._encode(methods, frame, inner)
         raise TypeError(f"cannot pass a {type(value).__name__} to libcantus")
 
     def _encode_hybrid(self, obj: Hybrid, frame: _Frame) -> dict[str, Any]:
@@ -397,7 +440,9 @@ class Runtime:
         live = self._identities.get(token)
         if live is not None:
             return live
-        obj = Identified({_unescape(k): self._decode(v) for k, v in node.items() if not _is_tag(k)})
+        obj = Identified(
+            {_unescape(k): freeze(self._decode(v)) for k, v in node.items() if not _is_tag(k)}
+        )
         self._identities[token] = obj
         return obj
 

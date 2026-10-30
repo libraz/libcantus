@@ -37,9 +37,23 @@ def _exit_code(status: int) -> int:
         return 99
 
 
+def _quote(text: str) -> str:
+    """A JSON string literal as the cantus tool writes it: quote, backslash and controls escaped."""
+    out = ['"']
+    for char in text:
+        if char in '"\\':
+            out.append("\\" + char)
+        elif ord(char) < 0x20:
+            out.append(f"\\u{ord(char):04x}")
+        else:
+            out.append(char)
+    out.append('"')
+    return "".join(out)
+
+
 def _fail(code: ErrorCode, message: str) -> int:
-    reply = {"code": code.name, "name": "Error", "message": message}
-    sys.stderr.write(json.dumps(reply, ensure_ascii=True, separators=(",", ":")) + "\n")
+    reply = f'{{"code":{_quote(code.name)},"name":"Error","message":{_quote(message)}}}'
+    _write(sys.stderr, reply.encode("utf-8", "surrogateescape"))
     return _exit_code(code)
 
 
@@ -56,14 +70,24 @@ def _entry(name: str) -> dict[str, object] | None:
     return None
 
 
+class _Unreadable(Exception):
+    """An argument source that could not be read in full; the message names it."""
+
+
 def _payload(arg: str | None) -> bytes:
     if arg is None:
         return b""
     if arg == "-":
-        return sys.stdin.buffer.read()
+        try:
+            return sys.stdin.buffer.read()
+        except OSError as error:
+            raise _Unreadable("standard input") from error
     if arg.startswith("@"):
-        with open(arg[1:], "rb") as file:
-            return file.read()
+        try:
+            with open(arg[1:], "rb") as file:
+                return file.read()
+        except OSError as error:
+            raise _Unreadable(arg[1:]) from error
     return arg.encode("utf-8", "surrogatepass")
 
 
@@ -73,8 +97,8 @@ def _run_op(op: str, arg: str | None) -> int:
         return _fail(ErrorCode.BAD_REQUEST, "callback arguments are not available from the CLI")
     try:
         args = _payload(arg)
-    except OSError:
-        return _fail(ErrorCode.BAD_REQUEST, f"cannot read {arg}")
+    except _Unreadable as error:
+        return _fail(ErrorCode.BAD_REQUEST, f"cannot read {error}")
     status, body = _ffi.call(op.encode("utf-8", "surrogatepass"), args)
     _write(sys.stdout if status == 0 else sys.stderr, body)
     return _exit_code(status)
@@ -98,7 +122,7 @@ def main(argv: list[str]) -> int:
                 return _fail(ErrorCode.BAD_REQUEST, "describe takes one op name")
             entry = _entry(argv[1])
             if entry is None:
-                message = f"unknown op {json.dumps(argv[1])}"
+                message = f"unknown op {_quote(argv[1])}"
                 return _fail(ErrorCode.UNKNOWN_OP, message)
             print(json.dumps(entry, ensure_ascii=True, separators=(",", ":")))
             return 0

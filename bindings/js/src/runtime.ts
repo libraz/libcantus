@@ -9,9 +9,9 @@
  * here: it stays in the kept node and goes back with it.
  *
  * Freezing follows the pure package, which hands out mutable results: decoded
- * results are left writable, except what a handle op returns (state shared
- * across calls, `$id` results included), which is deep-frozen; consts mirror
- * the pure value.
+ * results are left writable, except what the pure package freezes: the entries
+ * of `FROZEN_RESULTS`, and the consts it freezes. `freezeAt` is the one place a
+ * value is frozen.
  */
 import type { Backend, CallReply, HostCallback } from './backend.js';
 import {
@@ -64,7 +64,6 @@ type Frame = {
 
 /** How one result is decoded. */
 type DecodeContext = {
-  freeze: boolean;
   hybrids: ReadonlyMap<string, object> | null;
   /** The callbacks of the call that produced the result, which a `$cb` in a payload names. */
   fns?: readonly Callable[];
@@ -92,8 +91,55 @@ const ERROR_CLASSES: Record<string, (wire: WireObject) => Error> = {
 
 const DISPOSE: symbol = (Symbol as { dispose?: symbol }).dispose ?? Symbol.for('Symbol.dispose');
 
-const NO_FREEZE: DecodeContext = { freeze: false, hybrids: null };
-const FREEZE: DecodeContext = { freeze: true, hybrids: null };
+const PLAIN: DecodeContext = { hybrids: null };
+
+/** The whole result. */
+const WHOLE: readonly string[] = [];
+
+/** Where the pure analysis freezes the chords it shares between readings (`*` is each element). */
+const SHARED_CHORDS: readonly string[] = ['timeline', 'segments', '*', 'chord'];
+
+/** Ops whose result the pure package freezes, as the path below the result that is. */
+const FROZEN_RESULTS: Readonly<Record<string, readonly string[]>> = {
+  chordTimelineFromNotes: SHARED_CHORDS,
+  analyzeArrangement: SHARED_CHORDS,
+  'ArrangementSession#analysis': SHARED_CHORDS,
+  'NoteEventIndex#notes': WHOLE,
+  'NoteEventIndex#at': WHOLE,
+  '$counter#value': WHOLE,
+};
+
+/** Ops answering one of the receiver's own segment chords, frozen when the receiver's are. */
+const SEGMENT_CHORD_OPS: ReadonlySet<string> = new Set(['ChordTimeline#at']);
+
+/**
+ * The single policy for freezing a decoded value: everything at `path` below `value`, deeply
+ * (`*` steps into each element, no path freezes `value` itself). Class instances and handles are
+ * left alone.
+ */
+function freezeAt<T>(value: T, path: readonly string[]): T {
+  if (typeof value !== 'object' || value === null) return value;
+  const [head, ...rest] = path;
+  if (head === undefined) {
+    if (Array.isArray(value) || isPlainPrototype(value)) {
+      for (const child of Object.values(value)) freezeAt(child, path);
+      Object.freeze(value);
+    }
+    return value;
+  }
+  const record = value as Record<string, unknown>;
+  for (const child of head === '*' ? Object.values(record) : [record[head]]) freezeAt(child, rest);
+  return value;
+}
+
+/** Whether `chords` is a non-empty segment list whose chords the pure analysis froze. */
+function sharesFrozenChords(segments: unknown): boolean {
+  return (
+    Array.isArray(segments) &&
+    segments.length > 0 &&
+    segments.every((s: { chord?: unknown }) => Object.isFrozen(s?.chord))
+  );
+}
 
 /** Whether an object key is a wire tag (one `$`) rather than an escaped user key (`$$`). */
 function isTagKey(key: string): boolean {
@@ -138,6 +184,33 @@ function setLength(fn: unknown, length: number | undefined): void {
   if (typeof fn === 'function' && length !== undefined) {
     Object.defineProperty(fn, 'length', { value: length });
   }
+}
+
+/**
+ * The methods an instance of a user class inherits, bound to it: what a structural interface
+ * (`{ at(beat): number }`) reads off the object. Built-in prototypes contribute nothing.
+ */
+function inheritedMethods(record: object, own: readonly string[]): [string, Callable][] {
+  const found = new Map<string, Callable>();
+  let proto = Object.getPrototypeOf(record) as object | null;
+  while (proto !== null && proto !== Object.prototype) {
+    const ctor = (proto as { constructor?: unknown }).constructor;
+    if (
+      typeof ctor !== 'function' ||
+      Function.prototype.toString.call(ctor).includes('[native code]')
+    ) {
+      break;
+    }
+    for (const name of Object.getOwnPropertyNames(proto)) {
+      const fn = Object.getOwnPropertyDescriptor(proto, name)?.value;
+      if (name === 'constructor' || typeof fn !== 'function') continue;
+      if (!own.includes(name) && !found.has(name)) {
+        found.set(name, (...args: unknown[]) => (fn as Callable).apply(record, args));
+      }
+    }
+    proto = Object.getPrototypeOf(proto) as object | null;
+  }
+  return [...found];
 }
 
 /**
@@ -218,13 +291,16 @@ export class Runtime {
   call(op: string, args: readonly unknown[]): unknown {
     const frame = this.#newFrame();
     const wire = this.#run(op, args, frame);
-    const hash = op.indexOf('#');
-    const freeze = hash > 0 && this.#types[op.slice(0, hash)]?.kind === 'handle';
-    return this.#decode(wire, {
-      freeze,
+    const result = this.#decode(wire, {
       hybrids: frame.hybrids.size > 0 ? frame.hybrids : null,
       fns: frame.fns,
     });
+    const frozen = FROZEN_RESULTS[op];
+    if (frozen !== undefined) freezeAt(result, frozen);
+    else if (SEGMENT_CHORD_OPS.has(op) && sharesFrozenChords((args[0] as WireObject)?.segments)) {
+      freezeAt(result, []);
+    }
+    return result;
   }
 
   /** A function export: calls op `op` with its arguments; `length` is the pure function's. */
@@ -237,7 +313,8 @@ export class Runtime {
 
   /** A const export from its wire form; `frozen` mirrors whether the pure value is. */
   constant(wire: unknown, frozen: boolean): unknown {
-    return this.#decode(wire as Wire, frozen ? FREEZE : NO_FREEZE);
+    const value = this.#decode(wire as Wire, PLAIN);
+    return frozen ? freezeAt(value, []) : value;
   }
 
   /** Run a constructor op and attach the `$class` it returns to `self`. */
@@ -257,7 +334,13 @@ export class Runtime {
     const info = this.#handleOf.get(handle);
     if (info === undefined) return;
     this.#handleRegistry.unregister(handle);
+    this.#handles.delete(info.id);
     this.#backend.release(info.id);
+  }
+
+  /** How many handle ids the runtime still tracks, for tests. */
+  get trackedHandles(): number {
+    return this.#handles.size;
   }
 
   #newFrame(): Frame {
@@ -294,7 +377,7 @@ export class Runtime {
       const fn = frame.fns[id];
       try {
         if (fn === undefined) throw new Error(`no callback ${id}`);
-        const args = this.#decode(JSON.parse(argsJson) as Wire, NO_FREEZE) as unknown[];
+        const args = this.#decode(JSON.parse(argsJson) as Wire, PLAIN) as unknown[];
         return this.#encode(fn(...args), frame, []);
       } catch (error) {
         if (!frame.failed) {
@@ -370,6 +453,10 @@ export class Runtime {
         out += `${first ? '' : ','}${JSON.stringify(escapeKey(key))}:${this.#encode(field, frame, stack)}`;
         first = false;
       }
+      for (const [key, method] of inheritedMethods(record, keys)) {
+        out += `${first ? '' : ','}${JSON.stringify(escapeKey(key))}:${this.#encodeFunction(method, frame)}`;
+        first = false;
+      }
       return `${out}}`;
     } finally {
       stack.pop();
@@ -438,9 +525,11 @@ export class Runtime {
     const method = this.#hybridMethods.get(fn);
     if (method !== undefined) {
       const { wire } = method.entry;
-      const ref = wire.$ref;
-      if (ref === undefined) return this.#entryText(method.entry, frame);
-      return JSON.stringify({ ...wire, $ref: `${String(ref)}#${method.method}` });
+      // A hybrid the backend can resolve by reference goes as that; otherwise the method is
+      // an ordinary callback.
+      if (wire.$ref !== undefined) {
+        return JSON.stringify({ ...wire, $ref: `${String(wire.$ref)}#${method.method}` });
+      }
     }
     frame.fns.push(fn);
     return `{"$cb":${frame.fns.length - 1}}`;
@@ -449,14 +538,12 @@ export class Runtime {
   #decode(node: Wire, ctx: DecodeContext): unknown {
     if (typeof node !== 'object' || node === null) return node;
     if (Array.isArray(node)) {
-      const out = node.map((e) => this.#decode(e, ctx));
-      return ctx.freeze ? Object.freeze(out) : out;
+      return node.map((e) => this.#decode(e, ctx));
     }
     for (const key in node) {
       if (isTagKey(key)) return this.#decodeTag(node, key, ctx);
     }
-    const out = this.#decodePlain(node, ctx);
-    return ctx.freeze ? Object.freeze(out) : out;
+    return this.#decodePlain(node, ctx);
   }
 
   #decodePlain(node: WireObject, ctx: DecodeContext): Record<string, unknown> {
@@ -542,7 +629,7 @@ export class Runtime {
       }
     }
     this.#hybrids.set(object, entry);
-    return ctx.freeze ? Object.freeze(object) : object;
+    return object;
   }
 
   #decodeHandle(node: WireObject): unknown {
@@ -566,18 +653,33 @@ export class Runtime {
     }
     target[DISPOSE] = () => this.release(proxy);
     const read = (key: string) => this.call(`${type}#${key}`, [proxy]);
+    // A property the caller wrote or deleted is theirs from then on; the others read the core.
+    const written = new Set<string>();
+    const reads = (key: string | symbol): key is string =>
+      typeof key === 'string' && properties.has(key) && !written.has(key);
+    const own = (key: string | symbol) => {
+      if (typeof key === 'string') written.add(key);
+    };
     proxy = new Proxy(target, {
-      get: (t, key, receiver) =>
-        typeof key === 'string' && properties.has(key) ? read(key) : Reflect.get(t, key, receiver),
+      get: (t, key, receiver) => (reads(key) ? read(key) : Reflect.get(t, key, receiver)),
       getOwnPropertyDescriptor: (t, key) => {
-        if (typeof key === 'string' && properties.has(key)) {
+        if (reads(key)) {
           return { value: read(key), writable: true, enumerable: true, configurable: true };
         }
         return Reflect.getOwnPropertyDescriptor(t, key);
       },
-      set: () => false,
-      defineProperty: () => false,
-      deleteProperty: () => false,
+      set: (t, key, value) => {
+        own(key);
+        return Reflect.set(t, key, value);
+      },
+      defineProperty: (t, key, descriptor) => {
+        own(key);
+        return Reflect.defineProperty(t, key, descriptor);
+      },
+      deleteProperty: (t, key) => {
+        own(key);
+        return Reflect.deleteProperty(t, key);
+      },
     });
     this.#handleOf.set(proxy, { id, type });
     this.#handles.set(id, new WeakRef(proxy));
@@ -585,12 +687,12 @@ export class Runtime {
     return proxy;
   }
 
-  /** A `$id` object: the one already handed out under this token, or a new frozen one. */
+  /** A `$id` object: the one already handed out under this token, or a new one. */
   #decodeIdentity(node: WireObject): unknown {
     const token = Number(node.$id);
     const live = this.#identities.get(token)?.deref();
     if (live !== undefined) return live;
-    const object = Object.freeze(this.#decodePlain(node, FREEZE));
+    const object = this.#decodePlain(node, PLAIN);
     this.#identities.set(token, new WeakRef(object));
     this.#identityRegistry.register(object, token);
     return object;
