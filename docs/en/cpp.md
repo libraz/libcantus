@@ -115,6 +115,8 @@ These differences are deliberate and listed in full. Anything not listed here is
 
 **Reassigned hybrid fields.** A field reassigned on a hybrid value, such as `timeline.segments = other`, is sent to the core with the next method call, so `timeline.at(beat)` answers from the new segments. Pure TypeScript builds the lookup once and keeps answering from the original segments.
 
+**Malformed chords in `checkPartWriting`.** Pure TypeScript reads a chord entry only where a rule needs its tones, so a malformed entry (a non-finite interval, say) is rejected when a rule reaches it. The core does not read the entry there and returns the violations. Well-formed chords give identical results.
+
 **No module memo.** The C++ core does not remember the joint scale spellings that TypeScript caches. A repeated question is worked out again, with the same result.
 
 **Handles.** `Rng`, `NoteEventIndex` and `ArrangementSession` live in the core and are released explicitly. In JavaScript a handle has `[Symbol.dispose]` and a finalizer as a fallback; in Python it has `close()`, a context manager and `__del__`. Using a released handle is an error with code `RELEASED_HANDLE`. The same handle must not be used from two threads at once.

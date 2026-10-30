@@ -103,6 +103,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   profile's own span
   (`reference profile.form.phrases[0].endBeat must be in [0, 8]; received 4294967296`).
 
+### Fixed
+
+- **Chords built from a key or a numeral keep the key's spelling.**
+  `romanToChord`, `Key.roman`, `diatonicTriad`, `diatonicSeventh`,
+  `chordFromDegree`, `secondaryDominant` and `pivotChords` carry the root and
+  tone spellings of the key they were given: the Neapolitan of A flat minor is
+  `Bbb`, `bII` of D flat major is `Ebb`, and chords of flat keys print flat
+  names. A parsed `Gb7/Cb` formats back as written, and a raised ninth over a
+  chord without a third (`C7sus4(#9)`) is spelled `D#`.
+- **Roman numerals follow how a chromatic chord is written.** A chord with a
+  root spelling takes its numeral from that letter: in C major `Abdim7` is
+  `bvio7` and `G#dim7` is `#vo7`, and with `applied: true` only a real leading
+  tone reads as an applied chord (`G#dim7` is `viio7/vi`). The Picardy tonic and
+  the major IV of a minor key stay `I` and `IV` under `applied: true`.
+- **Minor keys and modes get their dominant right in generation.** Half and
+  phrygian cadences of a minor key close on the leading tone, composition plans
+  no longer replace a dominant with a chord the library itself classes as
+  subdominant, and `generateProgression` raises the fifth-degree chord only in
+  minor keys, as `harmonizeMelody` does, leaving dorian, phrygian and locrian
+  their own chord. A dominant seventh native to the key (mixolydian `I7`) is no
+  longer flagged as a secondary dominant, and an extended or altered dominant
+  already resolving down a fifth is no longer rewritten to a plain seventh.
+- **Altered dominants are offered the altered scale.** `chordScales` and the
+  reports built on it read a dominant from its tones, so `7alt`, `7b9`, `7#9`
+  and `7b13` are offered the altered scale and `b9` is no longer an avoid note
+  on altered-family scales. A scale holding every written tone still comes
+  first: lydian dominant for `C7#11`, mixolydian b13 for `C7b13`.
+- **Intervals are named and judged by their spelling.** `Interval#isConsonant`
+  calls a diminished fourth dissonant, `relateMotifs` names transpositions with
+  the conventional interval, `spellLine` writes a major-third leap as a third
+  rather than a diminished fourth, and `spelledInterval` no longer returns an
+  interval the other interval functions refuse.
+- **Voice-leading verdicts match the textbook rules.** Parallel fifths between
+  crossed voices are reported as fifths, a chromatic inflection inside one voice
+  is no longer a cross relation, `analyzeVoice` recognises the minor-ninth 9-8
+  suspension, and fourth and fifth species give the same parallel verdicts
+  whether a tie is written as a held note or as repeated notes.
+- **Figured bass reads moving figures column by column.** `64-53` is a 6-5
+  over a 4-3, stacks of different sizes are refused, and an altered stack that
+  is not a stack of thirds raises `NoSolutionError` instead of being named a
+  suspended or added-tone chord.
+- **Material before beat 0 keeps its real end.** Rhythm, key, chord-timeline,
+  tension, arrangement, form and reference analyses end their span at the last
+  sounding note when everything sounds before beat 0, accept a matching
+  negative `totalBeats`, and pickup motifs keep their `endBeat` and sequence
+  flag.
+- **Rhythm and motif output fixes.** Plain triplets in simple meter are not
+  reported as syncopation, Euclidean patterns with one rest come out in the
+  canonical rotation (`E(3,4)` is `x.xx`), `developMotif` stays within the
+  requested bars, and `generateMelody` applies the planned stretch to tonal
+  transpositions and the retrograde family.
+- **Melody comparison is budgeted.** `compareMelodies` and `melodicSimilarity`
+  raise `BudgetExceededError` for an oversized alignment instead of blocking.
+
+These corrections change generated output for affected seeds without raising
+`ALGORITHM_VERSION`, as [Determinism and seeding](docs/en/determinism-and-seeding.md#pinning-the-algorithm-version)
+describes.
+
 ## [1.3.0] - 2026-09-28
 
 ### Added
