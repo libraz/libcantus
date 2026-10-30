@@ -309,8 +309,39 @@ describe('availableTensions', () => {
 
   it('classifies a flat ninth over the half-whole scale alike for every spelling', () => {
     const plain = avoidNotes(makeChord(0, 'dom7'), 'octatonicHalfWhole');
-    expect(plain).toEqual([1]);
+    expect(plain).toEqual([]);
     expect(avoidNotes(makeChord(0, '7#9'), 'octatonicHalfWhole')).toEqual(plain);
+  });
+
+  it('never marks the flat ninth of a dominant seventh as an avoid note', () => {
+    for (const quality of ['dom7', 'dom9', '7b9', '7#9', '13'] as const) {
+      const chord = makeChord(0, quality);
+      for (const name of Object.keys(NAMED_SCALES)) {
+        if (!scaleMatchesChord(chordPitchClasses(chord), SCALE_MASKS.get(name) ?? 0, 0)) {
+          continue;
+        }
+        expect(avoidNotes(chord, name), `${quality} ${name}`).not.toContain(1);
+        expect(avoidNotes(chord, name, { use: 'melodic' }), `${quality} ${name}`).not.toContain(1);
+      }
+    }
+    expect(avoidNotes(makeChord(0, 'dom7'), 'octatonicHalfWhole', { use: 'melodic' })).toEqual([]);
+    expect(
+      availableTensions(makeChord(7, 'dom7'), 'octatonicHalfWhole', {
+        resolvesTo: makeChord(0, 'maj'),
+      }),
+    ).toContain(8);
+  });
+
+  it('rejects an avoid-note use it does not name', () => {
+    expect(() =>
+      avoidNotes(makeChord(0, 'maj7'), 'ionian', { use: 'Melodic' as 'melodic' }),
+    ).toThrow('avoid-note use must be one of harmonic, melodic; received "Melodic"');
+    expect(() =>
+      avoidNotes(makeChord(0, 'maj7'), 'ionian', { use: 5 as unknown as 'melodic' }),
+    ).toThrow(InvalidInputError);
+    expect(
+      avoidNotes(makeChord(0, 'maj7'), 'ionian', { use: null as unknown as 'melodic' }),
+    ).toEqual([5]);
   });
 
   it('does not offer a suspended chord its conflicting major third', () => {
@@ -375,21 +406,21 @@ describe('harmonic and melodic avoid notes', () => {
   });
 
   it('offers a dominant its minor-key colours only when it resolves to minor', () => {
-    // G7 read on its own has no tension in the scale of C harmonic minor: the
-    // b9, the 11 and the b13 each sit a semitone above a chord tone. Heard as
-    // the dominant of C minor, the b9 and b13 are the key's own tones.
+    // G7 read on its own takes only the b9 from the scale of C harmonic minor:
+    // the 11 and the b13 each sit a semitone above a chord tone. Heard as the
+    // dominant of C minor, the b13 is the key's own tone as well.
     const dominant = makeChord(7, 'dom7');
-    expect(availableTensions(dominant, 'phrygianDominant')).toEqual([]);
+    expect(availableTensions(dominant, 'phrygianDominant')).toEqual([8]);
     // The natural eleventh stays an avoid note; only the b9, #9 and b13 turn.
     expect(
       availableTensions(dominant, 'phrygianDominant', { resolvesTo: makeChord(0, 'min') }),
     ).toEqual([3, 8]);
     expect(
       availableTensions(dominant, 'phrygianDominant', { resolvesTo: makeChord(0, 'maj') }),
-    ).toEqual([]);
+    ).toEqual([8]);
     expect(
       availableTensions(dominant, 'phrygianDominant', { resolvesTo: makeChord(2, 'min') }),
-    ).toEqual([]);
+    ).toEqual([8]);
   });
 
   it('leaves a chord that is not a dominant seventh unchanged by resolvesTo', () => {

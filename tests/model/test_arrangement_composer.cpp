@@ -30,7 +30,7 @@ ArrangementTrack track(const char* name, TrackRole role, std::vector<NoteEvent> 
 
 TEST_CASE("Arrangement reads its tracks and takes edits", "[model][arrangement]") {
   Arrangement arrangement = Arrangement::of(
-      {track("lead", TrackRole::kMelody, {note(72, 0, 2), note(76, 2, 2), note(79, 4, 4)}),
+      {track("lead", TrackRole::kMelody, {note(72, 0, 2), note(76, 2, 2), note(83, 4, 4)}),
        track("bass", TrackRole::kBass, {note(36, 0, 4), note(43, 4, 4)})});
   Timeline timeline = arrangement.timeline();
   REQUIRE(timeline.length() == 2);

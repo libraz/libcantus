@@ -48,6 +48,13 @@ std::vector<double> copy_confidence(const std::optional<std::vector<double>>& co
   return out;
 }
 
+/** Reject a timeline whose segments or key regions a reader cannot search (`validateTimeline`). */
+void validate_timeline(const std::vector<ChordSegment>& segments,
+                       const std::vector<KeyRegion>& keys) {
+  assert_spans_in_order(segments, "timeline segments");
+  assert_spans_in_order(keys, "timeline keys");
+}
+
 /** The part of a span inside `[from_beat, to_beat)`, or nothing (`clipSpan`). */
 template <class T>
 std::optional<T> clip_span(const T& span, double from_beat, double to_beat) {
@@ -90,6 +97,7 @@ Timeline::Timeline(const TimelineData& data) {
     }
   }
   segment_confidence_ = copy_confidence(data.segmentConfidence, segments_.size());
+  validate_timeline(segments_, keys_);
 }
 
 Timeline Timeline::from_chords(const std::vector<ChordSpan>& spans, double total_beats,
@@ -97,13 +105,11 @@ Timeline Timeline::from_chords(const std::vector<ChordSpan>& spans, double total
   ChordTimeline timeline = chord_timeline_from_chords(spans, total_beats);
   TimelineData data{timeline.segments, total_beats, std::nullopt, std::nullopt};
   if (key) {
+    ResolvedKey stated = key_identity(to_key(*key));
     // The region starts where the music does, so a chord in a pickup is covered by its key.
-    KeyRegion region;
-    region.startBeat = timeline.segments.empty() ? 0 : timeline.segments.front().startBeat;
-    region.endBeat = total_beats;
-    region.key = key_identity(to_key(*key));
-    region.confidence = STATED_KEY_CONFIDENCE;
-    data.keys = std::vector<KeyRegion>{region};
+    data.keys = timeline.segments.empty()
+                    ? std::vector<KeyRegion>{}
+                    : stated_key_regions(stated, timeline.segments.front().startBeat, total_beats);
   }
   return Timeline(data);
 }

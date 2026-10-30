@@ -457,6 +457,10 @@ std::shared_ptr<const Decoded> decode_class_value(const json::Value& v) {
       }
       continue;
     }
+    // A nested snapshot decoded without error when it was retained.
+    if (next.value != &v && next.value->is_shared()) {
+      continue;
+    }
     if (next.value->is_array()) {
       const json::Array& items = next.value->as_array();
       for (auto it = items.rbegin(); it != items.rend(); ++it) {

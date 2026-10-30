@@ -183,6 +183,188 @@ void check_polyphony(Analysis& state, const std::string& name, int polyphony, co
           num(polyphony)});
 }
 
+/** Most notes of one attack that are placed jointly; a larger group keeps its greedy picks. */
+constexpr std::size_t kMaxJointPlacementNotes = 12;
+/** Most search nodes spent on one attack before the best placement found so far stands. */
+constexpr std::size_t kMaxPlacementSearchNodes = 20000;
+
+/** One note of an attack waiting for a string. */
+struct NeckMember {
+  std::size_t index = 0;
+  double startBeat = 0;
+  double endBeat = 0;
+  /** Whether the note is still sounding once the attack has landed. */
+  bool sounding = false;
+  std::vector<StringFingering> candidates;
+};
+
+/** A note that found no free string, with the notes holding the strings it could use. */
+struct NeckConflict {
+  std::size_t member = 0;
+  std::vector<std::size_t> blocked;
+};
+
+struct AttackPlacement {
+  std::vector<StringFingering> picks;
+  std::vector<NeckConflict> conflicts;
+};
+
+/** Whether the fretted notes of a hand fit one maxStretch. */
+bool fits_hand(const std::vector<int>& frets, double max_stretch) {
+  int low = 0;
+  int high = 0;
+  std::size_t count = 0;
+  for (int fret : frets) {
+    if (fret > 0) {
+      low = count == 0 ? fret : std::min<int>(low, fret);
+      high = count == 0 ? fret : std::max<int>(high, fret);
+      count += 1;
+    }
+  }
+  return count < 2 || static_cast<double>(high - low) <= max_stretch;
+}
+
+/** Each member takes the cheapest free string in turn; members with no free one are reported. */
+AttackPlacement place_greedily(const std::vector<NeckMember>& members,
+                               const std::optional<StringFingering>& previous,
+                               const std::vector<double>& free_at,
+                               const std::vector<std::optional<std::size_t>>& held_by) {
+  std::vector<double> free = free_at;
+  std::vector<std::optional<std::size_t>> held = held_by;
+  AttackPlacement out;
+  std::optional<StringFingering> from = previous;
+  for (std::size_t m = 0; m < members.size(); ++m) {
+    const NeckMember& member = members[m];
+    std::vector<StringFingering> open;
+    for (const StringFingering& candidate : member.candidates) {
+      if (free[candidate.string] <= member.startBeat + BEAT_EPS) {
+        open.push_back(candidate);
+      }
+    }
+    if (open.empty()) {
+      NeckConflict conflict{m, {}};
+      for (const StringFingering& candidate : member.candidates) {
+        if (held[candidate.string]) {
+          conflict.blocked.push_back(*held[candidate.string]);
+        }
+      }
+      out.conflicts.push_back(std::move(conflict));
+    }
+    const std::vector<StringFingering>& pool = open.empty() ? member.candidates : open;
+    StringFingering chosen = pool.front();
+    for (std::size_t k = 1; k < pool.size(); ++k) {
+      if (fingering_cost(pool[k], from) < fingering_cost(chosen, from)) {
+        chosen = pool[k];
+      }
+    }
+    out.picks.push_back(chosen);
+    free[chosen.string] = member.endBeat;
+    held[chosen.string] = member.index;
+    from = chosen;
+  }
+  return out;
+}
+
+/** Depth-first search state for the cheapest assignment to distinct free strings. */
+struct PlacementSearch {
+  const std::vector<NeckMember>& members;
+  std::vector<double> free;
+  /** Frets of the hand so far; engaged only when the span is limited. */
+  std::optional<std::vector<int>> frets;
+  double max_stretch;
+  std::vector<StringFingering> picks;
+  std::optional<std::vector<StringFingering>> best;
+  double best_cost = std::numeric_limits<double>::infinity();
+  std::size_t nodes = 0;
+
+  void visit(std::size_t depth, const std::optional<StringFingering>& from, double cost) {
+    if (cost >= best_cost || nodes >= kMaxPlacementSearchNodes) {
+      return;
+    }
+    if (depth >= members.size()) {
+      best = picks;
+      best_cost = cost;
+      return;
+    }
+    const NeckMember& member = members[depth];
+    for (const StringFingering& candidate : member.candidates) {
+      if (free[candidate.string] > member.startBeat + BEAT_EPS) {
+        continue;
+      }
+      nodes += 1;
+      bool fretted = frets.has_value() && member.sounding;
+      if (fretted) {
+        frets->push_back(candidate.fret);
+        if (!fits_hand(*frets, max_stretch)) {
+          frets->pop_back();
+          continue;
+        }
+      }
+      double previous_free = free[candidate.string];
+      free[candidate.string] = member.endBeat;
+      picks.push_back(candidate);
+      visit(depth + 1, candidate, cost + fingering_cost(candidate, from));
+      picks.pop_back();
+      free[candidate.string] = previous_free;
+      if (fretted) {
+        frets->pop_back();
+      }
+    }
+  }
+};
+
+/**
+ * Cheapest assignment of the members to distinct free strings, found by a bounded depth-first
+ * search; nullopt when none exists within the budget. With `held_frets` the fretted span, held
+ * notes included, must fit `max_stretch`.
+ */
+std::optional<std::vector<StringFingering>> search_placement(
+    const std::vector<NeckMember>& members, const std::optional<StringFingering>& previous,
+    const std::vector<double>& free_at, const std::optional<std::vector<int>>& held_frets,
+    double max_stretch) {
+  PlacementSearch search{members, free_at, held_frets, max_stretch, {}, std::nullopt};
+  search.visit(0, previous, 0);
+  return search.best;
+}
+
+/**
+ * Pick a string for each note of one attack. The greedy picks stand when they are free and fit the
+ * hand; otherwise the notes are placed jointly, and the greedy picks and their issues remain only
+ * when no assignment exists.
+ */
+AttackPlacement place_attack(const std::vector<NeckMember>& members,
+                             const std::optional<StringFingering>& previous,
+                             const std::vector<double>& free_at,
+                             const std::vector<std::optional<std::size_t>>& held_by,
+                             const std::vector<int>& held_frets, double max_stretch) {
+  AttackPlacement greedy = place_greedily(members, previous, free_at, held_by);
+  std::vector<int> frets = held_frets;
+  for (std::size_t k = 0; k < greedy.picks.size(); ++k) {
+    if (members[k].sounding) {
+      frets.push_back(greedy.picks[k].fret);
+    }
+  }
+  if (greedy.conflicts.empty() && fits_hand(frets, max_stretch)) {
+    return greedy;
+  }
+  if (members.size() > kMaxJointPlacementNotes) {
+    return greedy;
+  }
+  std::optional<std::vector<StringFingering>> fitted =
+      search_placement(members, previous, free_at, held_frets, max_stretch);
+  if (fitted) {
+    return AttackPlacement{std::move(*fitted), {}};
+  }
+  if (!greedy.conflicts.empty()) {
+    std::optional<std::vector<StringFingering>> loose =
+        search_placement(members, previous, free_at, std::nullopt, max_stretch);
+    if (loose) {
+      return AttackPlacement{std::move(*loose), {}};
+    }
+  }
+  return greedy;
+}
+
 /** Layers 2 and 3 for a string instrument, and the fingering that goes with them. */
 void place_on_neck(Analysis& state, const StringedProfile& profile) {
   std::vector<double> string_free_at(profile.tuning.size(),
@@ -190,57 +372,85 @@ void place_on_neck(Analysis& state, const StringedProfile& profile) {
   std::vector<std::optional<std::size_t>> string_held_by(profile.tuning.size());
   std::optional<StringFingering> previous;
   std::optional<std::size_t> previous_index;
+  // Placed notes still sounding at the current attack.
+  std::vector<std::size_t> held;
 
-  for (std::size_t index : state.order) {
-    const NoteEvent& note = state.notes[index];
-    NotePlacement& placement = state.placements[index];
-    std::vector<StringFingering> candidates = fingerings_in(profile, note.pitch);
-    if (candidates.empty()) {
-      continue;
-    }
-    std::vector<StringFingering> free;
-    for (const StringFingering& candidate : candidates) {
-      if (string_free_at[candidate.string] <= note.startBeat + BEAT_EPS) {
-        free.push_back(candidate);
+  std::size_t cursor = 0;
+  while (cursor < state.order.size()) {
+    double anchor = state.notes[state.order[cursor]].startBeat;
+    std::vector<NeckMember> members;
+    while (cursor < state.order.size()) {
+      std::size_t index = state.order[cursor];
+      const NoteEvent& note = state.notes[index];
+      if (!is_simultaneous(anchor, note.startBeat)) {
+        break;
+      }
+      cursor += 1;
+      std::vector<StringFingering> candidates = fingerings_in(profile, note.pitch);
+      if (!candidates.empty()) {
+        double end_beat = note.startBeat + note.durationBeat;
+        members.push_back(NeckMember{index, note.startBeat, end_beat, end_beat > anchor + BEAT_EPS,
+                                     std::move(candidates)});
       }
     }
-    if (free.empty()) {
-      // [...new Set([...blocked, index])].sort()
-      std::vector<std::size_t> involved;
-      std::set<std::size_t> seen;
-      for (const StringFingering& candidate : candidates) {
-        const std::optional<std::size_t>& held = string_held_by[candidate.string];
-        if (held && seen.insert(*held).second) {
-          involved.push_back(*held);
+    std::vector<std::size_t> still_held;
+    for (std::size_t member : held) {
+      const NoteEvent& note = state.notes[member];
+      if (note.startBeat + note.durationBeat > anchor + BEAT_EPS) {
+        still_held.push_back(member);
+      }
+    }
+    held = std::move(still_held);
+    std::vector<int> held_frets;
+    for (std::size_t member : held) {
+      const std::optional<StringFingering>& fingering = state.placements[member].fingering;
+      if (fingering) {
+        held_frets.push_back(fingering->fret);
+      }
+    }
+    AttackPlacement attack = place_attack(members, previous, string_free_at, string_held_by,
+                                          held_frets, profile.maxStretch);
+    for (std::size_t m = 0; m < members.size(); ++m) {
+      const NeckMember& member = members[m];
+      const NoteEvent& note = state.notes[member.index];
+      const StringFingering& chosen = attack.picks[m];
+      for (const NeckConflict& conflict : attack.conflicts) {
+        if (conflict.member != m) {
+          continue;
         }
+        // [...new Set([...blocked, index])].sort()
+        std::vector<std::size_t> involved;
+        std::set<std::size_t> seen;
+        for (std::size_t blocked : conflict.blocked) {
+          if (seen.insert(blocked).second) {
+            involved.push_back(blocked);
+          }
+        }
+        if (seen.insert(member.index).second) {
+          involved.push_back(member.index);
+        }
+        state.issues.push_back(PlayabilityIssue{
+            PlayabilityIssueType::kStringConflict, 2, sorted(std::move(involved)), note.startBeat,
+            true,
+            "MIDI " + num(note.pitch) + " needs a string already sounding on " + profile.name});
       }
-      if (seen.insert(index).second) {
-        involved.push_back(index);
+      state.placements[member.index].fingering = chosen;
+      string_free_at[chosen.string] = member.endBeat;
+      string_held_by[chosen.string] = member.index;
+      if (member.sounding) {
+        held.push_back(member.index);
       }
-      state.issues.push_back(PlayabilityIssue{
-          PlayabilityIssueType::kStringConflict, 2, sorted(std::move(involved)), note.startBeat,
-          true, "MIDI " + num(note.pitch) + " needs a string already sounding on " + profile.name});
-    }
-    const std::vector<StringFingering>& pool = free.empty() ? candidates : free;
-    StringFingering chosen = pool.front();
-    for (std::size_t k = 1; k < pool.size(); ++k) {
-      if (fingering_cost(pool[k], previous) < fingering_cost(chosen, previous)) {
-        chosen = pool[k];
-      }
-    }
-    placement.fingering = chosen;
-    string_free_at[chosen.string] = note.startBeat + note.durationBeat;
-    string_held_by[chosen.string] = index;
 
-    state.movement += 1;
-    if (previous) {
-      state.movement +=
-          std::fabs(static_cast<double>(chosen.fret - previous->fret)) +
-          std::fabs(static_cast<double>(chosen.string) - static_cast<double>(previous->string));
-      check_shift_speed(state, profile.name, previous_index, index, *previous, chosen);
+      state.movement += 1;
+      if (previous) {
+        state.movement +=
+            std::fabs(static_cast<double>(chosen.fret - previous->fret)) +
+            std::fabs(static_cast<double>(chosen.string) - static_cast<double>(previous->string));
+        check_shift_speed(state, profile.name, previous_index, member.index, *previous, chosen);
+      }
+      previous = chosen;
+      previous_index = member.index;
     }
-    previous = chosen;
-    previous_index = index;
   }
 
   for (const Group& group : sounding_groups(state)) {

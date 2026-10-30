@@ -13,7 +13,11 @@ import {
   type SpelledKeyLike,
   scaleTonesInDegreeOrder,
 } from '../../theory/scale/index.js';
-import { cadencesThroughRaisedSeventh, heptatonicFrameOf } from '../../theory/tendency/index.js';
+import {
+  cadencesThroughRaisedSeventh,
+  heptatonicFrameOf,
+  isNativeDominantSeventh,
+} from '../../theory/tendency/index.js';
 import type { Candidate, HarmonizeOptions } from './internal.js';
 
 /**
@@ -85,14 +89,16 @@ export const SECONDARY_DOMINANT_TARGETS = [2, 4, 5, 6];
  * a dominant seventh placed in front of it is a chord the analysis layer refuses
  * to read as applied. The degrees come from the same predicate that layer names
  * its targets with, so what the generator marks as a secondary dominant is what
- * the numeral can be written for.
+ * the numeral can be written for. A degree whose dominant seventh the key
+ * already contains is no target either: that chord is native, not applied.
  */
 function secondaryDominantTargets(key: KeyScale): TonicizableDegree[] {
   const tonicizable = new Map(
     tonicizableDegrees(key).map((degree) => [degree.degreeNumber, degree] as const),
   );
   return SECONDARY_DOMINANT_TARGETS.map((degree) => tonicizable.get(degree)).filter(
-    (degree): degree is TonicizableDegree => degree !== undefined,
+    (degree): degree is TonicizableDegree =>
+      degree !== undefined && !isNativeDominantSeventh(degree.rootPc + 7, key),
   );
 }
 /**

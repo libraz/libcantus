@@ -133,9 +133,12 @@ std::vector<int> clashing_notes(const Chord& data, int mask, bool melodic) {
   // Both thirds a suspension may have displaced end it when sounded.
   std::vector<int> displaced = displaced_thirds(data);
   int semitone_above_root = pitch_class_of(root_pc + 1);
+  // The flat ninth is a dominant's own tension, whichever scale supplies it.
+  bool dominant = sounds_dominant_seventh(data);
   std::vector<int> avoid;
   for (int pc = 0; pc < kScaleTones; ++pc) {
-    if (!mask_has_pitch_class(mask, root_pc, pc) || includes(chord_pcs, pc)) {
+    if (!mask_has_pitch_class(mask, root_pc, pc) || includes(chord_pcs, pc) ||
+        (dominant && pc == semitone_above_root)) {
       continue;
     }
     if (melodic && pc != semitone_above_root) {
@@ -281,6 +284,10 @@ int require_chord_scale_mask(std::string_view name) {
 
 std::string_view to_string(AvoidNoteUse use) {
   return use == AvoidNoteUse::kHarmonic ? "harmonic" : "melodic";
+}
+
+std::vector<std::string_view> avoid_note_use_names() {
+  return {to_string(AvoidNoteUse::kHarmonic), to_string(AvoidNoteUse::kMelodic)};
 }
 
 std::optional<AvoidNoteUse> parse_avoid_note_use(std::string_view name) {

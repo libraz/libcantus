@@ -2,12 +2,14 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_exception.hpp>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include "analyze/timeline/timeline.h"
 #include "cantus/analyze/timeline.h"
 #include "cantus/core/errors.h"
 #include "cantus/theory/chord.h"
+#include "cantus/theory/scale.h"
 
 using namespace cantus;
 
@@ -124,4 +126,67 @@ TEST_CASE("cadences are found between touching segments only", "[timeline]") {
   for (const CadenceHit& hit : hits) {
     CHECK(hit.atBeat != 4);
   }
+}
+
+TEST_CASE("segments out of beat order are refused with the TS message", "[timeline]") {
+  ChordTimeline timeline = chord_timeline_from_chords(
+      {span(0, ChordQuality::kMaj, 0), span(7, ChordQuality::kMaj, 4)}, 8);
+  std::swap(timeline.segments[0], timeline.segments[1]);
+  CHECK_THROWS_WITH(
+      assert_chord_timeline(timeline),
+      "timeline.segments[1] must not start before timeline.segments[0] ends; received 0 before 8");
+  timeline.segments = {timeline.segments[1]};
+  timeline.segments[0].endBeat = -1;
+  CHECK_THROWS_WITH(assert_chord_timeline(timeline),
+                    "timeline.segments[0] must end after it starts; received [0, -1)");
+}
+
+TEST_CASE("a stated key over an empty span yields no region", "[timeline]") {
+  ResolvedKey c_major = resolve_key(KeyArg("C major"));
+  CHECK(stated_key_regions(c_major, 4, 2).empty());
+  CHECK(stated_key_regions(c_major, 0, 0).empty());
+  REQUIRE(stated_key_regions(c_major, 0, 4).size() == 1);
+  ChordTimelineOptions options;
+  options.key = KeyArg("C major");
+  options.totalBeats = 2;
+  std::vector<NoteEvent> late = {note(60, 4, 4), note(64, 4, 4), note(67, 4, 4)};
+  CHECK(chord_timeline_from_notes(late, options).keys.empty());
+}
+
+TEST_CASE("a lone pitch class reads as no chord", "[timeline]") {
+  CHECK(chord_timeline_from_notes({note(60, 0, 4)}).timeline.segments.empty());
+}
+
+TEST_CASE("a diminished seventh is rooted by its resolution, not its bass", "[timeline]") {
+  for (int bass : {47, 50, 53, 56}) {
+    std::vector<NoteEvent> notes = {note(bass, 0, 4), note(62, 0, 4), note(65, 0, 4),
+                                    note(68, 0, 4),   note(71, 0, 4), note(43, 4, 4),
+                                    note(59, 4, 4),   note(62, 4, 4), note(67, 4, 4)};
+    ChordTimelineOptions options;
+    options.key = KeyArg("C minor");
+    ChordTimelineResult result = chord_timeline_from_notes(notes, options);
+    REQUIRE_FALSE(result.timeline.segments.empty());
+    CHECK(result.timeline.segments[0].chord.rootPc == 11);
+    CHECK(result.timeline.segments[0].chord.quality == ChordQuality::kDim7);
+  }
+}
+
+TEST_CASE("an anticipated bass does not invert the chord before it", "[timeline]") {
+  std::vector<NoteEvent> notes = {note(48, 0, 3.5),   note(64, 0, 3.5),   note(67, 0, 3.5),
+                                  note(72, 0, 3.5),   note(43, 3.5, 4.5), note(59, 3.5, 4.5),
+                                  note(62, 3.5, 4.5), note(67, 3.5, 4.5)};
+  ChordTimelineOptions options;
+  options.key = KeyArg("C major");
+  ChordTimelineResult result = chord_timeline_from_notes(notes, options);
+  REQUIRE(result.timeline.segments.size() == 2);
+  CHECK(result.timeline.segments[0].chord.rootPc == 0);
+  CHECK_FALSE(result.timeline.segments[0].chord.bassPc);
+}
+
+TEST_CASE("a slash chord its notes spell exactly reads at full confidence", "[timeline]") {
+  ChordTimelineResult result =
+      chord_timeline_from_notes({note(43, 0, 4), note(65, 0, 4), note(69, 0, 4), note(72, 0, 4)});
+  REQUIRE(result.segmentConfidence.size() == 1);
+  CHECK(result.segmentConfidence[0] == 1);
+  CHECK(result.timeline.segments[0].chord.bassPc == 7);
 }

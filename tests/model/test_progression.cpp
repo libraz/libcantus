@@ -70,3 +70,26 @@ TEST_CASE("Progression lays its chords on a grid", "[model][progression]") {
   CHECK(t.at(5)->symbol() == "F");
   CHECK(t.progression().to_string() == "C F G7 C");
 }
+
+TEST_CASE("Progression keeps each chord its own key through JSON", "[model][progression]") {
+  Progression p({ChordValue::of(1.0, ChordQuality::kMaj).with_key(KeyArg(Key::major("Db"))),
+                 ChordValue::of(6.0, ChordQuality::kMaj).with_key(KeyArg(Key::major("C#"))),
+                 ChordValue::of(7.0, ChordQuality::kMaj)});
+  CHECK(p.to_string() == "Db F# G");
+  ProgressionData data = p.to_json();
+  REQUIRE(data.chordKeys.has_value());
+  Progression restored = Progression::from_json(data);
+  CHECK(restored.to_string() == p.to_string());
+  CHECK(restored.chords()[1].key()->equals(Key::major("C#")));
+  CHECK_FALSE(restored.chords()[2].key().has_value());
+  CHECK_FALSE(cadence().to_json().chordKeys.has_value());
+  data.chordKeys->pop_back();
+  CHECK_THROWS_WITH(Progression::from_json(data),
+                    "progression chord keys must hold one entry per chord (3); received 2");
+}
+
+TEST_CASE("Progression members read an explicit key on its own letters", "[model][progression]") {
+  ChordValue chord = ChordValue::of(8.0, ChordQuality::kMaj).with_key(KeyArg(Key::major("E")));
+  CHECK(chord.roman(KeyArg(Key::major("Ab"))) == "I");
+  CHECK(Progression({chord}).roman(KeyArg(Key::major("Ab"))) == std::vector<std::string>{"I"});
+}

@@ -30,7 +30,8 @@ struct ChordScaleMatch {
 enum class AvoidNoteUse : std::uint8_t {
   /** A tone that must not be sounded against the chord. */
   kHarmonic,
-  /** Only what a line cannot pass through either: the semitone above the root. */
+  /** Only what a line cannot pass through either: the semitone above the root, except over a
+   * dominant seventh, whose flat ninth is a tension. */
   kMelodic,
 };
 

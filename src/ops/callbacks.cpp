@@ -36,7 +36,7 @@ json::Value CallContext::invoke(std::uint32_t id, const json::Array& args) const
   } catch (const json::ParseError& e) {
     throw RequestError(std::string("invalid callback result JSON: ") + e.what());
   }
-  validate(result, true);
+  decode_host_value(result, true);
   return result;
 }
 

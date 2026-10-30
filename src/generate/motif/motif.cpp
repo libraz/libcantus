@@ -115,15 +115,12 @@ double pivot_pitch(const std::vector<NoteEvent>& notes, const std::vector<double
 }
 
 /** Diatonic scale-degree offsets shaping a contour of `count` notes. */
-std::vector<double> contour_offsets(const std::optional<MotifContour>& contour, std::size_t count) {
+std::vector<double> contour_offsets(MotifContour contour, std::size_t count) {
   std::vector<double> offsets;
   for (std::size_t i = 0; i < count; ++i) {
     double index = static_cast<double>(i);
     double last = static_cast<double>(count) - 1;
-    if (!contour) {
-      continue;
-    }
-    switch (*contour) {
+    switch (contour) {
       case MotifContour::kAscending:
         offsets.push_back(index);
         break;
@@ -270,6 +267,11 @@ std::string_view to_string(MotifContour contour) {
       return "wave";
   }
   return "arch";
+}
+
+std::vector<std::string_view> motif_contour_names() {
+  return {to_string(MotifContour::kArch), to_string(MotifContour::kAscending),
+          to_string(MotifContour::kDescending), to_string(MotifContour::kWave)};
 }
 
 std::optional<MotifContour> parse_motif_contour(std::string_view name) {

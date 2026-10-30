@@ -24,6 +24,7 @@ import {
   assertArray,
   assertFiniteNumber,
   assertFunction,
+  assertOneOf,
   assertPositiveInt,
   assertRange,
   assertRecord,
@@ -39,6 +40,9 @@ export const BEAT_STEPS = 4;
 
 /** One sixteenth expressed in quarter-note beats. */
 export const STEP_BEATS = 1 / BEAT_STEPS;
+
+/** The rates a figure may be played at: as written, half time, or double time. */
+export const FIGURE_RATES = ['straight', 'half', 'double'] as const;
 
 /**
  * The figure as a list of onsets, checked before it is walked.
@@ -501,10 +505,11 @@ export function deform<T extends GridEvent>(
   assertSeedPath(path);
   const spanSteps = assertSpanSteps(asked.spanSteps === undefined ? BAR_STEPS : asked.spanSteps);
   const ts = asked.ts ?? FIGURE_TS;
+  const rate = assertOneOf(asked.rate ?? 'straight', FIGURE_RATES, 'rate');
   let out: T[] =
-    asked.rate === 'half'
+    rate === 'half'
       ? halfTime(figure, spanSteps)
-      : asked.rate === 'double'
+      : rate === 'double'
         ? doubleTime(figure, spanSteps)
         : [...figure];
 

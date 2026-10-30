@@ -16,6 +16,9 @@ import { parseChordSymbol } from './index.js';
  * Anything that names a chord: a chord symbol, plain chord data, or a value
  * that serializes to chord data such as the `Chord` class.
  *
+ * A value that also holds its chord as `data`, as the `Chord` class does, is
+ * read through that: the chord as it prints, spelled by the key it carries.
+ *
  * @category Chords
  */
 export type ChordLike =
@@ -68,8 +71,8 @@ function normalizedChord(data: Chord): Chord {
  * is accepted through its `toJSON` method rather than by its type, so the
  * layers below the model can read a class without importing it.
  *
- * @param value A chord symbol, plain chord data, or a value whose `toJSON`
- *   returns chord data.
+ * @param value A chord symbol, plain chord data, or a value whose `data` or
+ *   `toJSON` returns chord data.
  * @returns The validated chord data, with root and bass reduced to pitch
  *   classes and any spelling hint carried through.
  * @throws If the value names no chord, or an interval, root, or bass is not a
@@ -87,7 +90,14 @@ export function toChordData(value: ChordLike): Chord {
     return parseChordSymbol(value);
   }
   if (typeof value === 'object' && value !== null) {
-    const data = 'toJSON' in value && typeof value.toJSON === 'function' ? value.toJSON() : value;
+    // `toJSON` keeps only the caller's spellings, for a later key to re-spell;
+    // `data` is the chord as it prints, which is what a reader is handed.
+    const data =
+      'toJSON' in value && typeof value.toJSON === 'function'
+        ? 'data' in value && typeof value.data === 'object' && value.data !== null
+          ? value.data
+          : value.toJSON()
+        : value;
     return normalizedChord(data as Chord);
   }
   throw new InvalidInputError(

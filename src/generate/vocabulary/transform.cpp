@@ -135,6 +135,11 @@ std::string_view to_string(FigureRate rate) {
   return "straight";
 }
 
+std::vector<std::string_view> figure_rate_names() {
+  return {to_string(FigureRate::kStraight), to_string(FigureRate::kHalf),
+          to_string(FigureRate::kDouble)};
+}
+
 std::optional<FigureRate> parse_figure_rate(std::string_view name) {
   for (FigureRate rate : {FigureRate::kStraight, FigureRate::kHalf, FigureRate::kDouble}) {
     if (to_string(rate) == name) {

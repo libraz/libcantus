@@ -247,45 +247,45 @@ Nullable<ChordToneRole> ChordValue::role_of(double pitch) const {
 std::string ChordValue::roman(const std::optional<KeyArg>& key,
                               const ChordToRomanOptions& opts) const {
   Key resolved = resolve_analysis_key(key);
-  return chord_to_roman(data(), resolved.data(), opts);
+  return chord_to_roman(data_with_key(resolved), resolved.data(), opts);
 }
 
 RomanExplanation ChordValue::explain(const std::optional<KeyArg>& key,
                                      const ExplainRomanOptions& opts) const {
   Key resolved = resolve_analysis_key(key);
-  return explain_roman(data(), resolved.data(), opts);
+  return explain_roman(data_with_key(resolved), resolved.data(), opts);
 }
 
 HarmonicFunction ChordValue::function(const std::optional<KeyArg>& key) const {
   Key resolved = resolve_analysis_key(key);
-  return function_of(data(), resolved.data());
+  return function_of(data_with_key(resolved), resolved.data());
 }
 
 ChordAnalysis ChordValue::analyze(const std::optional<KeyArg>& key,
                                   const AnalyzeChordOptions& opts) const {
   Key resolved = resolve_analysis_key(key);
-  return analyze_chord(data(), resolved.data(), opts);
+  return analyze_chord(data_with_key(resolved), resolved.data(), opts);
 }
 
 bool ChordValue::is_borrowed(const std::optional<KeyArg>& key) const {
   Key resolved = resolve_analysis_key(key);
-  return is_borrowed_chord(data(), resolved.data());
+  return is_borrowed_chord(data_with_key(resolved), resolved.data());
 }
 
 Nullable<BorrowedSource> ChordValue::borrowed_source(const std::optional<KeyArg>& key) const {
   Key resolved = resolve_analysis_key(key);
-  return cantus::borrowed_source(data(), resolved.data());
+  return cantus::borrowed_source(data_with_key(resolved), resolved.data());
 }
 
 std::string ChordValue::figured_bass(const std::optional<KeyArg>& key) const {
   Key resolved = resolve_analysis_key(key);
-  return figured_bass_of(data(), resolved.data());
+  return figured_bass_of(data_with_key(resolved), resolved.data());
 }
 
 std::vector<Substitution> ChordValue::substitutions(const std::optional<KeyArg>& key,
                                                     const SubstituteOptions& opts) const {
   Key resolved = resolve_analysis_key(key);
-  return substitute_chord(data(), resolved.data(), opts);
+  return substitute_chord(data_with_key(resolved), resolved.data(), opts);
 }
 
 std::vector<BorrowedChord> ChordValue::modal_interchange(const std::optional<KeyArg>& key) const {
@@ -298,7 +298,10 @@ std::string ChordValue::symbol(const ChordSymbolOptions& opts) const {
 
 std::vector<int> ChordValue::voice(const VoicingOptions& opts) const {
   // The carried key travels whole, as it does through the analysis methods.
-  if (opts.key || !key_) {
+  if (opts.key) {
+    return voice_chord(data_with_key(to_key(*opts.key)), opts);
+  }
+  if (!key_) {
     return voice_chord(data(), opts);
   }
   VoicingOptions keyed = opts;
@@ -313,7 +316,8 @@ std::vector<int> ChordValue::styled_voicing(const StyledVoicingOptions& opts) co
 ChordValue ChordValue::negative_harmony(const std::optional<KeyArg>& key) const {
   // The key that anchored the reflection is kept, so a later analysis still has one.
   Key resolved = resolve_analysis_key(key);
-  return ChordValue(negative_harmony_mirror(data(), resolved.data()), KeyArg(resolved));
+  return ChordValue(negative_harmony_mirror(data_with_key(resolved), resolved.data()),
+                    KeyArg(resolved));
 }
 
 ChordValue ChordValue::secondary_dominant() const {

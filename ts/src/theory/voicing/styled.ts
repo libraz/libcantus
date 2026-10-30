@@ -1,5 +1,10 @@
 import { InvalidInputError } from '../../core/errors/index.js';
-import { assertFiniteNumber, assertInteger, assertOptions } from '../../core/validation/index.js';
+import {
+  assertFiniteNumber,
+  assertInteger,
+  assertOneOf,
+  assertOptions,
+} from '../../core/validation/index.js';
 import { chordToneRole } from '../chord/index.js';
 import { type ChordLike, toChordData } from '../symbol/index.js';
 import { pitchClass } from './internal.js';
@@ -134,7 +139,8 @@ function nearestPc(target: number, pcs: number[]): number {
  *   plain chord data, or a `Chord`.
  * @param opts Styled voicing options; defaults to a close voicing at octave 4.
  * @returns MIDI pitches, ascending, one per retained voice.
- * @throws If the voicing would not fit inside MIDI 0..127 at the given octave.
+ * @throws If the voicing would not fit inside MIDI 0..127 at the given octave,
+ *   or `style` is not a {@link VoicingStyle}.
  * @example
  * ```ts
  * import { voiceChordStyled } from '@libraz/libcantus';
@@ -145,7 +151,11 @@ function nearestPc(target: number, pcs: number[]): number {
 export function voiceChordStyled(given: ChordLike, opts?: StyledVoicingOptions): number[] {
   assertOptions(opts, 'opts');
   const chord = toChordData(given);
-  const style = opts?.style ?? 'close';
+  const style = assertOneOf(
+    opts?.style ?? 'close',
+    ['close', 'drop2', 'drop3', 'shell', 'rootless'],
+    'styled voicing style',
+  );
   const octave = opts?.octave ?? DEFAULT_STYLE_OCTAVE;
   assertInteger(octave, 'styled voicing octave', -10, 10);
   if (opts?.topNote !== undefined) {

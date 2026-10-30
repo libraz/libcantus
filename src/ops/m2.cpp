@@ -566,6 +566,11 @@ void register_key() {
 /** A chord's `data` view, which the functions it forwards to are handed. */
 json::Value view_of(const ChordValue& chord) { return chord_view_json(chord); }
 
+/** `#dataWithKey(key)`: the caller's own spellings, the rest derived from `key`. */
+json::Value view_in(const ChordValue& chord, const Key& key) {
+  return view_of(chord.with_key(KeyArg(key)));
+}
+
 /** `#resolveKey(key)`: the explicit key, else the carried one. */
 Key chord_analysis_key(const ChordValue& chord, const json::Value& key) {
   std::optional<Key> given = read_key_argument(key, "chord key");
@@ -583,7 +588,7 @@ OpFn chord_analysis(const char* op, std::size_t extra) {
   return [op, extra](Args& a) -> json::Value {
     ChordValue self = read_chord_instance(a, 0);
     Key key = chord_analysis_key(self, a[1]);
-    json::Array args{view_of(self), key_wire(key)};
+    json::Array args{view_in(self, key), key_wire(key)};
     for (std::size_t index = 0; index < extra; ++index) {
       args.push_back(options_view(a[2 + index]));
     }
@@ -761,11 +766,15 @@ void register_chord() {
     if (is_null_or_undefined(key)) {
       key = self.key() ? key_wire(*self.key()) : undefined_value();
     }
+    // An explicit key selects the spelling view before the voicer reads it.
+    const json::Value& asked_key = optional_property(a[1], "key");
+    json::Value view =
+        is_undefined(asked_key) ? view_of(self) : view_in(self, read_key_value(asked_key));
     if (is_undefined(key)) {
-      return forward(a, "voiceChord", json::Array{view_of(self), options_view(a[1])});
+      return forward(a, "voiceChord", json::Array{std::move(view), options_view(a[1])});
     }
     json::Value keyed = field_record("key", key);
-    return forward(a, "voiceChord", json::Array{view_of(self), merged({&a[1], &keyed})});
+    return forward(a, "voiceChord", json::Array{std::move(view), merged({&a[1], &keyed})});
   });
   def_class_method("Chord#styledVoicing", [](Args& a) -> json::Value {
     return forward(a, "voiceChordStyled",
@@ -775,7 +784,7 @@ void register_chord() {
     ChordValue self = read_chord_instance(a, 0);
     Key key = chord_analysis_key(self, a[1]);
     return wrapped_chord(
-        forward(a, "negativeHarmonyMirror", json::Array{view_of(self), key_wire(key)}), key);
+        forward(a, "negativeHarmonyMirror", json::Array{view_in(self, key), key_wire(key)}), key);
   });
   def_class_method("Chord#secondaryDominant", [](Args& a) -> json::Value {
     ChordValue self = read_chord_instance(a, 0);
@@ -921,14 +930,16 @@ json::Value timeline_from_chords(const Args& a, const json::Value& spans, const 
   data.set("segments", segments);
   data.set("totalBeats", total);
   if (!is_undefined(key)) {
+    ResolvedKey stated = key_identity(read_key_value(key));
     // The region starts where the music does, so a chord in a pickup is covered by its key.
-    KeyRegion region;
-    region.startBeat =
-        segments.as_array().empty() ? 0 : *number_of(get(segments.as_array().front(), "startBeat"));
-    region.endBeat = *number_of(total);
-    region.key = key_identity(read_key_value(key));
-    region.confidence = STATED_KEY_CONFIDENCE;
-    data.set("keys", json::Value(json::Array{key_region_json(region)}));
+    json::Array keys;
+    if (!segments.as_array().empty()) {
+      double start = *number_of(get(segments.as_array().front(), "startBeat"));
+      for (const KeyRegion& region : stated_key_regions(stated, start, *number_of(total))) {
+        keys.push_back(key_region_json(region));
+      }
+    }
+    data.set("keys", json::Value(std::move(keys)));
   }
   return to_json(read_timeline_data(json::Value(std::move(data))));
 }
@@ -998,6 +1009,13 @@ void register_progression() {
     o.set("chords", json::Value(std::move(chords)));
     if (plain.key) {
       o.set("key", key_data_json(*plain.key));
+    }
+    if (plain.chordKeys) {
+      json::Array keys;
+      for (const Nullable<ResolvedKey>& entry : *plain.chordKeys) {
+        keys.push_back(entry ? key_data_json(*entry) : json::Value(nullptr));
+      }
+      o.set("chordKeys", json::Value(std::move(keys)));
     }
     return json::Value(std::move(o));
   };
@@ -1118,14 +1136,26 @@ void register_progression() {
   def_class_method("Progression#voice", [](Args& a) -> json::Value {
     Progression self = read_progression_instance(a, 0);
     json::Value key = optional_property(a[1], "key");
+    // An explicit key spells the members before the voicer reads them.
+    json::Value views;
+    if (is_undefined(key)) {
+      views = views_of(self);
+    } else {
+      Key asked = read_key_value(key);
+      json::Array keyed_views;
+      for (const ChordValue& chord : self.chords()) {
+        keyed_views.push_back(view_in(chord, asked));
+      }
+      views = json::Value(std::move(keyed_views));
+    }
     if (is_null_or_undefined(key)) {
       key = carried_key(self.key());
     }
     if (is_undefined(key)) {
-      return forward(a, "voiceProgression", json::Array{views_of(self), options_view(a[1])});
+      return forward(a, "voiceProgression", json::Array{std::move(views), options_view(a[1])});
     }
     json::Value keyed = field_record("key", key);
-    return forward(a, "voiceProgression", json::Array{views_of(self), merged({&a[1], &keyed})});
+    return forward(a, "voiceProgression", json::Array{std::move(views), merged({&a[1], &keyed})});
   });
   def_class_method("Progression#roman", [](Args& a) -> json::Value {
     Progression self = read_progression_instance(a, 0);
@@ -1133,7 +1163,7 @@ void register_progression() {
     json::Array out;
     for (const ChordValue& chord : self.chords()) {
       out.push_back(forward(a, "chordToRoman",
-                            json::Array{view_of(chord), key_wire(key), options_view(a[2])}));
+                            json::Array{view_in(chord, key), key_wire(key), options_view(a[2])}));
     }
     return json::Value(std::move(out));
   });
@@ -1142,7 +1172,7 @@ void register_progression() {
     Key key = progression_analysis_key(self, a[1]);
     json::Array out;
     for (const ChordValue& chord : self.chords()) {
-      out.push_back(forward(a, "functionOf", json::Array{view_of(chord), key_wire(key)}));
+      out.push_back(forward(a, "functionOf", json::Array{view_in(chord, key), key_wire(key)}));
     }
     return json::Value(std::move(out));
   });
@@ -1151,8 +1181,8 @@ void register_progression() {
     Key key = progression_analysis_key(self, a[1]);
     json::Array chords;
     for (const ChordValue& chord : self.chords()) {
-      chords.push_back(forward(a, "analyzeChord",
-                               json::Array{view_of(chord), key_wire(key), options_view(a[2])}));
+      chords.push_back(forward(
+          a, "analyzeChord", json::Array{view_in(chord, key), key_wire(key), options_view(a[2])}));
     }
     json::Value cadence(nullptr);
     std::size_t count = self.length();
@@ -1168,15 +1198,15 @@ void register_progression() {
         }
       }
       if (count >= 3) {
-        options.set("approach", view_of(self.chords()[count - 3]));
+        options.set("approach", view_in(self.chords()[count - 3], key));
       }
       if (!is_undefined(voicing)) {
         options.set("voicing", closing_voicing(voicing, count));
       }
-      cadence =
-          forward(a, "detectCadence",
-                  json::Array{view_of(self.chords()[count - 2]), view_of(self.chords()[count - 1]),
-                              key_wire(key), json::Value(std::move(options))});
+      cadence = forward(a, "detectCadence",
+                        json::Array{view_in(self.chords()[count - 2], key),
+                                    view_in(self.chords()[count - 1], key), key_wire(key),
+                                    json::Value(std::move(options))});
     }
     json::Object out;
     out.set("chords", json::Value(std::move(chords)));
@@ -1199,7 +1229,7 @@ void register_progression() {
         options.set("alternatives", alternatives);
       }
       // The progression supplies its own predecessor wherever it has one.
-      json::Value before = index >= 2 ? view_of(self.chords()[index - 2]) : approach;
+      json::Value before = index >= 2 ? view_in(self.chords()[index - 2], key) : approach;
       if (!is_undefined(before)) {
         options.set("approach", before);
       }
@@ -1207,10 +1237,10 @@ void register_progression() {
         options.set("voicing",
                     json::Value(json::Array{voicing_at(pair, index - 1), voicing_at(pair, index)}));
       }
-      found.push_back(
-          forward(a, "detectCadence",
-                  json::Array{view_of(self.chords()[index - 1]), view_of(self.chords()[index]),
-                              key_wire(key), json::Value(std::move(options))}));
+      found.push_back(forward(
+          a, "detectCadence",
+          json::Array{view_in(self.chords()[index - 1], key), view_in(self.chords()[index], key),
+                      key_wire(key), json::Value(std::move(options))}));
     }
     return json::Value(std::move(found));
   });

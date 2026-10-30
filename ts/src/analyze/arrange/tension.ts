@@ -24,7 +24,7 @@ import { BEAT_EPS } from '../adjacency.js';
 import { functionOf } from '../functional/index.js';
 import { gridForNotes, latestSoundingEnd } from '../grid.js';
 import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
-import { type ChordTimeline, chordTimelineFromNotes } from '../timeline/index.js';
+import { type ChordTimeline, chordTimelineFromNotes, statedKeyRegions } from '../timeline/index.js';
 import {
   arrangementProfile,
   assertGivenKeys,
@@ -154,17 +154,10 @@ export function tensionCurve(
       ? undefined
       : (opts.keys ??
         (opts.key !== undefined
-          ? [
-              {
-                // The one region a named key holds starts where the music does,
-                // as the searched regions and the timeline's own key window do:
-                // a key cannot be in force over beats nothing sounds in.
-                startBeat: musicStart,
-                endBeat: totalBeats,
-                key: resolveKey(opts.key),
-                confidence: 1,
-              },
-            ]
+          ? // The one region a named key holds starts where the music does, as
+            // the searched regions and the timeline's own key window do: a key
+            // cannot be in force over beats nothing sounds in.
+            statedKeyRegions(resolveKey(opts.key), musicStart, totalBeats)
           : keyTimelineFromNotes(pooled, { meters, totalBeats, budget })));
   const { timeline, keys, prevailingKey } =
     opts.timeline === undefined || suppliedKeys === undefined

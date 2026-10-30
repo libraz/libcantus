@@ -219,6 +219,29 @@ describe('cross relations the style admits', () => {
     expect(checkPartWriting(voicings, chords, C_MAJOR)).toEqual([]);
   });
 
+  it('admits the chromatic tone an applied leading-tone chord brings with it', () => {
+    // C: IV - viio7/V - V and IV - viiø7/V - V, against IV - V7/V - V. The F of
+    // the subdominant is contradicted by the F# that tonicizes the dominant,
+    // whether a dominant seventh or a leading-tone chord carries it.
+    const subdominant = [41, 57, 60, 65];
+    const dominant = [43, 55, 59, 62];
+    for (const [quality, applied] of [
+      ['dim7', [45, 54, 60, 63]],
+      ['m7b5', [45, 54, 60, 64]],
+    ] as const) {
+      const chords = [makeChord(5, 'maj'), makeChord(6, quality), makeChord(7, 'maj')];
+      expect(crossRelations([subdominant, [...applied], dominant], chords), quality).toEqual([]);
+    }
+    const viaDominant = [makeChord(5, 'maj'), makeChord(2, 'dom7'), makeChord(7, 'maj')];
+    expect(crossRelations([subdominant, [50, 54, 60, 69], dominant], viaDominant)).toEqual([]);
+    // Without the chord it tonicizes following, the same diminished seventh is
+    // no applied chord and the contradiction is reported.
+    const unresolved = [makeChord(5, 'maj'), makeChord(6, 'dim7'), makeChord(0, 'maj')];
+    expect(
+      crossRelations([subdominant, [45, 54, 60, 63], [48, 55, 60, 64]], unresolved),
+    ).not.toEqual([]);
+  });
+
   it('still flags the same two letters where nothing is tonicized', () => {
     // The same G against G#, this time as a bare III with both voices leaping
     // into it and the soprano exposed. Nothing follows to be tonicized, so the

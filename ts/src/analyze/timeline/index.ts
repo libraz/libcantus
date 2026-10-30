@@ -1,3 +1,4 @@
+import { InvalidInputError } from '../../core/errors/index.js';
 import { sortedNoteEvents } from '../../core/event-index/index.js';
 import type { MeterLike, MeterMap } from '../../core/meter/index.js';
 import {
@@ -17,6 +18,7 @@ import {
   assertFunction,
   assertGenerationBudget,
   assertNoteEvents,
+  assertOneOf,
   assertRange,
   assertRecord,
 } from '../../core/validation/index.js';
@@ -40,7 +42,7 @@ import type { CadenceResult } from '../functional/index.js';
 import { detectCadence } from '../functional/index.js';
 import { gridForNotes, latestSoundingEnd } from '../grid.js';
 import type { SlotGrid, WindowWeights } from '../histogram.js';
-import { bucketNotesBySlot, windowWeights } from '../histogram.js';
+import { bucketNotesBySlot, noteWeight, windowWeights } from '../histogram.js';
 import type { KeyRegion } from '../keys/index.js';
 import { attachPivots, keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
 import type { KeyContext } from '../voice/index.js';
@@ -56,7 +58,11 @@ import type { ChordSegment } from '../../theory/chord/index.js';
  * @category Arrangement & Analysis
  */
 export type ChordTimeline = {
-  /** The chord sounding at a beat, or null when no segment covers it. */
+  /**
+   * The chord sounding at a beat, or null when no segment covers it. An
+   * inferred timeline covers a rest shorter than its harmonic rhythm with the
+   * chord around it; see {@link chordTimelineFromNotes}.
+   */
   at: (beat: number) => Chord | null;
   segments: ChordSegment[];
 };
@@ -95,7 +101,69 @@ export function assertChordTimeline(timeline: ChordTimeline, name = 'timeline'):
     assertFiniteNumber(segment.startBeat, `${name}.segments[${index}].startBeat`);
     assertFiniteNumber(segment.endBeat, `${name}.segments[${index}].endBeat`);
   }
+  assertSpansInOrder(segments, `${name}.segments`);
   return read;
+}
+
+/**
+ * Reject spans that are not disjoint, in beat order, and of positive length.
+ *
+ * Every reader of a timeline's segments or key regions finds the one covering a
+ * beat by binary search, which answers wrongly — or not at all — for spans out
+ * of order or overlapping. This is the one check every timeline and every set
+ * of key regions passes before it is read, whichever entry point built it.
+ *
+ * @param spans Spans whose beats are already known to be finite.
+ * @param name What the list is called in an error message.
+ * @throws If a span ends at or before its start, or starts before the previous
+ *   one ends.
+ */
+export function assertSpansInOrder(
+  spans: readonly { startBeat: number; endBeat: number }[],
+  name: string,
+): void {
+  for (let index = 0; index < spans.length; index += 1) {
+    const span = spans[index];
+    if (span === undefined) {
+      continue;
+    }
+    if (!(span.endBeat > span.startBeat)) {
+      throw new InvalidInputError(
+        `${name}[${index}] must end after it starts; received [${span.startBeat}, ${span.endBeat})`,
+      );
+    }
+    const previous = spans[index - 1];
+    if (previous !== undefined && span.startBeat < previous.endBeat) {
+      throw new InvalidInputError(
+        `${name}[${index}] must not start before ${name}[${index - 1}] ends; received ${span.startBeat} before ${previous.endBeat}`,
+      );
+    }
+  }
+}
+
+/**
+ * The key regions a stated key describes: that key, in force from where the
+ * music starts to where the analysed span ends.
+ *
+ * Every path that turns a key the caller named into regions builds them here,
+ * so a span with nothing in it — no notes, or an end at or before the first
+ * one — yields no region on every path rather than an empty or inverted one.
+ *
+ * @param key The stated key.
+ * @param startBeat Where the music starts.
+ * @param endBeat Where the analysed span ends.
+ * @returns The one region, or none when the span is empty.
+ */
+export function statedKeyRegions(
+  key: ResolvedKey,
+  startBeat: number,
+  endBeat: number,
+): KeyRegion[] {
+  if (!(endBeat > startBeat)) {
+    return [];
+  }
+  // A stated key is not a measurement, so it carries full confidence.
+  return [{ startBeat, endBeat, key, confidence: 1 }];
 }
 
 /**
@@ -292,6 +360,9 @@ export const OCTAVE = 12;
  */
 export type ChordSegmentation = 'dynamic' | 'grid';
 
+/** Every value {@link ChordTimelineOptions.segmentation} may take. */
+const CHORD_SEGMENTATIONS: readonly ChordSegmentation[] = ['dynamic', 'grid'];
+
 /**
  * Options controlling {@link chordTimelineFromNotes}.
  *
@@ -329,13 +400,14 @@ export type ChordTimelineOptions = {
    * The first downbeat is beat 0 whatever precedes it, so an upbeat is written
    * at negative beats — a one-beat pickup in 4/4 sounds at beat -1. Declaring
    * its length rejects a note that starts before the pickup does; leave it
-   * unset to accept any finite onset.
+   * unset to accept any onset within ±`Number.MAX_SAFE_INTEGER` (2^53 - 1).
    *
    * @defaultValue no declared pickup
    */
   pickupBeats?: number;
   /**
-   * Where chord boundaries may fall; defaults to `'dynamic'`.
+   * Where chord boundaries may fall; defaults to `'dynamic'`. Any other value
+   * is an input error.
    *
    * @defaultValue `'dynamic'`
    */
@@ -427,6 +499,14 @@ type WindowChord = {
    * the segment reports.
    */
   augmented?: { chord: Chord; confidence: number };
+  /**
+   * The readings of a diminished seventh on each of its tones, in pitch-class
+   * order.
+   *
+   * The four are the same pitch classes, so the window cannot tell them apart;
+   * {@link settledDiminishedRoot} chooses by what follows and by the key.
+   */
+  rootings?: { chord: Chord; confidence: number }[];
 };
 
 /**
@@ -580,6 +660,54 @@ function bassSoundsOnlyBelow(
   return highestBass <= upperFloor;
 }
 
+/**
+ * The bass of a window: the lowest note that sounds where the window's music
+ * begins, or that holds for more than half of the window or for a whole
+ * expected chord.
+ *
+ * A note heard for a small part of the window — a passing bass tone, or the
+ * next chord's bass arriving early — does not invert the chord the rest of the
+ * window holds over another bass. A note the histogram does not count, one of
+ * velocity zero, cannot be the bass either.
+ */
+function windowBass(
+  notes: readonly NoteEvent[],
+  windowStart: number,
+  windowEnd: number,
+  meters: MeterMap,
+  harmonicRhythm: number,
+): number {
+  const counted: { note: NoteEvent; overlap: number }[] = [];
+  let firstSounding = Number.POSITIVE_INFINITY;
+  for (const note of notes) {
+    const overlap =
+      Math.min(note.startBeat + note.durationBeat, windowEnd) -
+      Math.max(note.startBeat, windowStart);
+    if (overlap <= BEAT_EPS) {
+      continue;
+    }
+    const onsetInWindow =
+      note.startBeat >= windowStart - BEAT_EPS && note.startBeat < windowEnd - BEAT_EPS;
+    if (noteWeight(note, overlap, onsetInWindow ? meters : undefined) <= BEAT_EPS) {
+      continue;
+    }
+    counted.push({ note, overlap });
+    firstSounding = Math.min(firstSounding, Math.max(note.startBeat, windowStart));
+  }
+  const half = (windowEnd - windowStart) / 2;
+  let bass = Number.POSITIVE_INFINITY;
+  for (const { note, overlap } of counted) {
+    if (
+      note.startBeat <= firstSounding + BEAT_EPS ||
+      overlap > half ||
+      overlap >= harmonicRhythm - BEAT_EPS
+    ) {
+      bass = Math.min(bass, note.pitch);
+    }
+  }
+  return bass;
+}
+
 /** Confidence of a chord for a window: chord-tone weight over total weight. */
 function chordConfidence(
   chord: Chord,
@@ -614,13 +742,9 @@ function analyzeWindow(
   windowEnd: number,
   meters: MeterMap,
   key: ResolvedKey,
+  harmonicRhythm: number,
 ): WindowChord | null {
-  const { weights, totalWeight, maxWeight, lowestPitch } = windowWeights(
-    notes,
-    windowStart,
-    windowEnd,
-    meters,
-  );
+  const { weights, totalWeight, maxWeight } = windowWeights(notes, windowStart, windowEnd, meters);
   if (totalWeight <= BEAT_EPS) {
     return null;
   }
@@ -639,7 +763,7 @@ function analyzeWindow(
   // detection works. If that pitch class was removed as noise, detection must
   // become unordered instead: promoting the strongest remaining tone to bass
   // manufactures a slash chord that the input never established.
-  const bassPc = pitchClass(lowestPitch);
+  const bassPc = pitchClass(windowBass(notes, windowStart, windowEnd, meters, harmonicRhythm));
   const hasBass = selected.includes(bassPc);
   const detectionPitches = hasBass
     ? selected.map((pc) => (pc === bassPc ? pc : pc + 12))
@@ -668,10 +792,30 @@ function analyzeWindow(
       makeChord(bestMatch.rootPc, bestMatch.quality),
       pedalPc,
     );
+    // A slash chord names its bass, so a window holding nothing but the triad
+    // and that bass is accounted for exactly, though it does not rank as exact.
+    const explained = account.exact || isSlashReading(bestMatch, pedalPc);
     const reading: WindowChord = {
       chord: shared(chord),
-      confidence: chordConfidence(chord, weights, totalWeight, account.exact),
+      confidence: chordConfidence(chord, weights, totalWeight, explained),
     };
+    if (bestMatch.quality === SYMMETRIC_QUALITY) {
+      // Every tone of a diminished seventh roots the same tones, so the reading
+      // on each is carried out of the window for the progression to choose from.
+      reading.rootings = chordPitchClasses(makeChord(bestMatch.rootPc, bestMatch.quality)).map(
+        (rootPc) => {
+          const rooted = makeChord(
+            rootPc,
+            bestMatch.quality,
+            hasBass && bassPc !== rootPc ? bassPc : undefined,
+          );
+          return {
+            chord: shared(rooted),
+            confidence: chordConfidence(rooted, weights, totalWeight, explained),
+          };
+        },
+      );
+    }
     // An augmented sixth is a bass and an interval rather than a stack of
     // thirds, so no tertian match can carry one: over the lowered submediant
     // the same pitch classes are read as bVI7, whose seventh is spelled a
@@ -756,6 +900,47 @@ function resolvesOntoDominant(
     // what the next window still has to hold.
   }
   return true;
+}
+
+/** The chord quality whose root its tones leave open: every tone roots the same set. */
+const SYMMETRIC_QUALITY: ChordQuality = 'dim7';
+
+/**
+ * The root a diminished seventh read at `index` takes from its context, or null
+ * to keep the reading the window chose.
+ *
+ * Its four readings sound the same pitch classes, so the bass decides nothing:
+ * the chord is a leading-tone chord, and its root is the leading tone of the
+ * chord it resolves to — a semitone below that chord's root. Where the next
+ * harmony offers no such tone, the key's own leading tone roots it as viio7.
+ * The same tones held across a boundary, or a rest, are not a resolution.
+ */
+function settledDiminishedRoot(
+  readings: readonly (WindowChord | null)[],
+  index: number,
+  key: KeyScale,
+): number | null {
+  const reading = readings[index];
+  const rootings = reading?.rootings;
+  if (!reading || rootings === undefined) {
+    return null;
+  }
+  const roots = rootings.map((rooting) => rooting.chord.rootPc);
+  const tones = chordPitchClasses(reading.chord).join();
+  for (let i = index + 1; i < readings.length; i += 1) {
+    const next = readings[i];
+    if (!next || chordPitchClasses(next.chord).join() === tones) {
+      continue;
+    }
+    // The leading tone lies a semitone below the root it leads to.
+    const leading = pitchClass(next.chord.rootPc - 1);
+    if (roots.includes(leading)) {
+      return leading;
+    }
+    break;
+  }
+  const leadingTone = pitchClass(key.rootPc - 1);
+  return roots.includes(leadingTone) ? leadingTone : null;
 }
 
 /** Whether two chords are the same root, quality, and bass. */
@@ -1181,8 +1366,13 @@ function notesOfSpan(
  * Each settled segment's chord is inferred from a pitch-class weight histogram
  * of the notes overlapping it (weight = overlap duration x velocity x
  * metric-accent bonus for onsets in the segment). Adjacent segments carrying
- * the identical chord are merged; a stretch with no notes produces no segment,
- * so `at(beat)` returns null there. Each segment carries a confidence in [0, 1]
+ * the identical chord are merged. Under `'dynamic'` segmentation a silence at
+ * least `harmonicRhythm` long produces no segment, so `at(beat)` returns null
+ * there, while a shorter rest is absorbed into the chord around it — a C triad
+ * for two beats, two beats of rest and a G triad read C over beats 0-4. Under `'grid'` any
+ * window with nothing sounding produces no segment. A window whose notes give
+ * fewer than two tones of any chord produces none either: a lone pitch class
+ * names no chord. Each segment carries a confidence in [0, 1]
  * — the fraction of its weight explained by chord tones, reduced when the match
  * is inexact, and duration-weighted across anything merged into it.
  *
@@ -1200,7 +1390,8 @@ function notesOfSpan(
  * @param opts Analysis options; see {@link ChordTimelineOptions}.
  * @returns The inferred timeline, the key regions it ran against, the key that
  *   prevails across them, and per-segment confidences.
- * @throws If `harmonicRhythm` is not positive.
+ * @throws If `harmonicRhythm` is not positive, or `segmentation` names neither
+ *   mode.
  * @example
  * ```ts
  * import { chordTimelineFromNotes } from '@libraz/libcantus';
@@ -1382,7 +1573,11 @@ export function analyzeTimeline(
   const meters = resolveMeters(opts, 'timeline meters');
   const harmonicRhythm = opts.harmonicRhythm ?? beatsPerBarAt(0, meters);
   assertRange(harmonicRhythm, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'harmonic rhythm');
-  const segmentation = opts.segmentation ?? 'dynamic';
+  const segmentation = assertOneOf(
+    opts.segmentation ?? 'dynamic',
+    CHORD_SEGMENTATIONS,
+    'timeline segmentation',
+  );
   // One pulse by default, whatever the pulse of this meter is: a chord is not
   // expected to change faster than the meter is felt, and a resolution written
   // in quarters would step over the pulses of every compound meter.
@@ -1438,14 +1633,7 @@ export function analyzeTimeline(
   // modulates is not analysed against the wrong key for every bar after it does.
   const keys: KeyRegion[] =
     opts.key !== undefined
-      ? [
-          {
-            startBeat: musicStart,
-            endBeat: totalBeats,
-            key: resolveKey(opts.key),
-            confidence: 1,
-          },
-        ]
+      ? statedKeyRegions(resolveKey(opts.key), musicStart, totalBeats)
       : keyTimelineFromNotes(sounding, { meters, totalBeats, budget });
   const prevailingKey = prevailingKeyOf(keys) ?? resolveKey(majorKey(0));
   const keyAt = keyLookup(keys, prevailingKey);
@@ -1548,7 +1736,14 @@ export function analyzeTimeline(
     const inferred =
       cached !== undefined
         ? cached
-        : analyzeWindow(notesOfSpan(slotNotes, span, grid), start, end, meters, spanKeyWhole);
+        : analyzeWindow(
+            notesOfSpan(slotNotes, span, grid),
+            start,
+            end,
+            meters,
+            spanKeyWhole,
+            harmonicRhythm,
+          );
     // What is cached is the window's own reading, both spellings and all: an
     // edit elsewhere can change which of them the music supports without
     // changing a note this span holds.
@@ -1556,6 +1751,17 @@ export function analyzeTimeline(
     readings.push(inferred);
     readingKeys.push(spanKey);
     readingBounds.push({ start, end });
+  }
+
+  // Root the diminished sevenths by where they resolve, last first, so each is
+  // read against the settled chord after it.
+  for (let i = readings.length - 1; i >= 0; i -= 1) {
+    const spanKey = readingKeys[i];
+    const root = spanKey === undefined ? null : settledDiminishedRoot(readings, i, spanKey);
+    const rooting = readings[i]?.rootings?.find((option) => option.chord.rootPc === root);
+    if (rooting !== undefined && root !== readings[i]?.chord.rootPc) {
+      readings[i] = rooting;
+    }
   }
 
   // Settle the augmented sixths against what follows them, in the key each was
@@ -1659,10 +1865,9 @@ export type CadenceHit = {
  * @example
  * ```ts
  * import { chordTimelineFromNotes, detectCadences } from '@libraz/libcantus';
- * const notes = [
- *   { pitch: 67, startBeat: 0, durationBeat: 4 }, // G, a dominant
- *   { pitch: 60, startBeat: 4, durationBeat: 4 }, // C, the tonic
- * ];
+ * const triad = (pitches: number[], startBeat: number) =>
+ *   pitches.map((pitch) => ({ pitch, startBeat, durationBeat: 4 }));
+ * const notes = [...triad([55, 59, 62], 0), ...triad([48, 52, 55], 4)]; // G, then C
  * const { timeline, prevailingKey } = chordTimelineFromNotes(notes);
  * const cadences = detectCadences(timeline, prevailingKey);
  * ```

@@ -249,6 +249,18 @@ describe('voiceChordStyled', () => {
     expect(() => voiceChordStyled('not a chord', { style: 'drop2' })).toThrow(InvalidInputError);
   });
 
+  it('rejects a style it does not name instead of voicing the close stack', () => {
+    expect(() => voiceChordStyled('Dm7', { style: 'drop-2' as 'drop2' })).toThrow(
+      'styled voicing style must be one of close, drop2, drop3, shell, rootless; received "drop-2"',
+    );
+    expect(() => voiceChordStyled('Dm7', { style: 2 as unknown as 'drop2' })).toThrow(
+      InvalidInputError,
+    );
+    expect(voiceChordStyled('Dm7', { style: null as unknown as 'close' })).toEqual(
+      voiceChordStyled('Dm7', { style: 'close' }),
+    );
+  });
+
   it('drops the second voice from the top an octave below the close voicing', () => {
     const chord = makeChord(0, 'maj7');
     const close = voiceChordStyled(chord, { style: 'close' });

@@ -6,6 +6,7 @@
 #include <cmath>
 #include <limits>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 
@@ -264,6 +265,11 @@ const std::vector<double>& rhythm_ioi_bins() { return ioi_bins(); }
 
 RhythmAnalysis analyze_rhythm(const std::vector<NoteEvent>& notes,
                               const RhythmAnalysisOptions& opts) {
+  return rhythm_over(notes, opts, std::nullopt);
+}
+
+RhythmAnalysis rhythm_over(const std::vector<NoteEvent>& notes, const RhythmAnalysisOptions& opts,
+                           std::optional<double> window_start) {
   ResolveMetersOptions meter_options;
   meter_options.ts = opts.ts;
   meter_options.meters = opts.meters;
@@ -287,7 +293,7 @@ RhythmAnalysis analyze_rhythm(const std::vector<NoteEvent>& notes,
   for (const NoteEvent& note : sounding) {
     first_onset = js::min(first_onset, note.startBeat);
   }
-  double start_beat = bar_grid_start(first_onset, meters);
+  double start_beat = window_start.value_or(bar_grid_start(first_onset, meters));
   double end_beat = js::max(start_beat, opts.totalBeats.value_or(latest_sounding_end(sounding)));
   assert_range(end_beat, js::min(0, start_beat), kMaxSafeInteger, "rhythm totalBeats");
 

@@ -54,13 +54,20 @@ constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
 
 /** The `input` option: only `auto` and `midi` are told apart from an unordered set. */
 ChordInputKind read_input_kind(const json::Value& asked) {
-  const json::Value* input = field(asked, "input");
-  if (input == nullptr || (input->is_string() && input->as_string() == "auto")) {
-    return ChordInputKind::kAuto;
+  constexpr ChordInputKind kKinds[] = {ChordInputKind::kAuto, ChordInputKind::kMidi,
+                                       ChordInputKind::kPitchClass};
+  std::vector<std::string_view> names;
+  for (ChordInputKind kind : kKinds) {
+    names.push_back(to_string(kind));
   }
-  // Anything but 'midi' reads as an unordered pitch-class set.
-  return input->is_string() && input->as_string() == "midi" ? ChordInputKind::kMidi
-                                                            : ChordInputKind::kPitchClass;
+  std::string named =
+      assert_one_of(opt_or(asked, "input", to_string(ChordInputKind::kAuto)), names, "input");
+  for (ChordInputKind kind : kKinds) {
+    if (to_string(kind) == named) {
+      return kind;
+    }
+  }
+  return ChordInputKind::kAuto;
 }
 
 DetectChordOptions read_chord_options(const json::Value& asked) {

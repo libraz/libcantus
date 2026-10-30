@@ -357,6 +357,23 @@ describe('generateCounterMelody', () => {
   });
 });
 
+describe('register', () => {
+  it('rejects a register it does not name, before the empty-melody exit', () => {
+    expect(() => generate({ register: 'Above' as 'above' })).toThrow(
+      'register must be one of above, below; received "Above"',
+    );
+    expect(() =>
+      generateCounterMelody({
+        melody: [],
+        chordAt,
+        key: cMajor,
+        register: 'over' as 'above',
+      }),
+    ).toThrow(InvalidInputError);
+    expect(generate({ register: null as unknown as 'below' })).toEqual(generate({}));
+  });
+});
+
 describe('ranking weight overrides', () => {
   const nonFinite = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
 

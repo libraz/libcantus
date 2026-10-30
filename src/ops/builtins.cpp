@@ -151,10 +151,9 @@ void register_builtins() {
         if (tag != Tag::kClass && tag != Tag::kHybrid) {
           throw RequestError("$retain needs a \"$class\" or \"$hy\" value");
         }
-        if (validate(value).callbacks > 0) {
+        if (decode_host_value(value).callbacks > 0) {
           throw RequestError("$retain: a value holding a callback cannot be retained");
         }
-        expand_refs(value);
         std::shared_ptr<const Decoded> decoded = decode_class_value(value);
         return retain(std::move(value), std::move(decoded));
       },

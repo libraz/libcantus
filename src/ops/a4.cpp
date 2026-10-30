@@ -10,6 +10,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <set>
 #include <string>
@@ -91,7 +92,7 @@ ReadTracks read_tracks(const json::Value& tracks, const json::Value& note_option
     const json::Value& notes = is_nullish(track) ? undefined_value() : get(track, "notes");
     if (!notes.is_array()) {
       throw InvalidInputError("tracks[" + index_text(index) +
-                              "].notes must be an array; received " + js::type_of(notes));
+                              "].notes must be an array; received " + describe_rejected(notes));
     }
     ArrangementTrack typed;
     typed.notes =
@@ -107,18 +108,6 @@ ReadTracks read_tracks(const json::Value& tracks, const json::Value& note_option
   // The pooled total is what the downstream analysis actually sizes its work by.
   assert_generation_budget(json::Value(out.note_count), "arrangement notes", get(opts, "budget"));
   return out;
-}
-
-/** `arrangementProfile(opts.profile)`. */
-SafetyProfile read_profile(const json::Value& opts) {
-  const json::Value* given = opt_null_default(opts, "profile");
-  json::Value name =
-      given != nullptr ? *given : json::Value(std::string(to_string(SafetyProfile::kPop)));
-  return *parse_safety_profile(
-      assert_one_of(name,
-                    std::vector<std::string_view>{to_string(SafetyProfile::kStrict),
-                                                  to_string(SafetyProfile::kPop)},
-                    "arrangement profile"));
 }
 
 /** `opts.minSeverity`, which names a point on the safety scale. */
@@ -145,6 +134,7 @@ void assert_given(const json::Value& opts) {
     throw InvalidInputError(name + " must be an array of key regions; received " +
                             describe_rejected(*keys));
   }
+  std::vector<SegmentSpan> spans;
   for (std::size_t index = 0; index < keys->as_array().size(); ++index) {
     const json::Value& region = keys->as_array()[index];
     std::string label = name + "[" + index_text(index) + "]";
@@ -152,8 +142,9 @@ void assert_given(const json::Value& opts) {
       throw InvalidInputError(label + " must be a key region; received " +
                               describe_rejected(region));
     }
-    assert_finite_number(get(region, "startBeat"), label + ".startBeat");
-    assert_finite_number(get(region, "endBeat"), label + ".endBeat");
+    double start = assert_finite_number(get(region, "startBeat"), label + ".startBeat");
+    double end = assert_finite_number(get(region, "endBeat"), label + ".endBeat");
+    spans.push_back(SegmentSpan{start, end});
     const json::Value& key = get(region, "key");
     std::string kind = js::type_of(key);
     if (is_nullish(key) || (kind != "string" && kind != "object")) {
@@ -161,6 +152,7 @@ void assert_given(const json::Value& opts) {
     }
     resolve_key(read_key_arg(key));
   }
+  assert_spans_in_order(spans, name);
 }
 
 /** `harmonyTrackSet(opts.harmonyTracks, tracks)`. */
@@ -341,7 +333,7 @@ WireRun analyze_wire(const Args& a, const json::Value& tracks, const json::Value
   MeterMap meters = resolve_wire_meters(opts, "arrangement meters");
   json::Value note_options = arrangement_note_options(opts);
   ReadTracks read = read_tracks(tracks, note_options, opts);
-  SafetyProfile profile = read_profile(opts);
+  SafetyProfile profile = read_arrangement_profile(opts);
   // A severity outside the scale narrows the report to nothing, which reads like a clean piece.
   double min_severity = read_min_severity(opts).value_or(static_cast<double>(NoteSafety::kWarning));
   assert_given(opts);
@@ -506,6 +498,8 @@ class SessionHandle : public Handle {
   json::Value analysis;
   std::vector<ArrangementTrack> typed_tracks;
   std::shared_ptr<TimelineEvidence> evidence;
+  /** Held by an update, which takes the evidence's tables over; shared along with the evidence. */
+  std::shared_ptr<std::recursive_mutex> evidence_lock = std::make_shared<std::recursive_mutex>();
   std::vector<ChordObject> segment_objects;
   std::shared_ptr<ObjectTokens> tokens = std::make_shared<ObjectTokens>();
   /** The token of the analysis, which stays while the analysis does. */
@@ -520,7 +514,7 @@ class SessionHandle : public Handle {
     const json::Array* segments =
         segment_objects.empty() ? nullptr : &timeline->as_object().find("segments")->as_array();
     std::size_t tagged =
-        segments == nullptr ? 0 : std::min(segments->size(), segment_objects.size());
+        segments == nullptr ? 0 : std::min<std::size_t>(segments->size(), segment_objects.size());
     for (std::size_t i = 0; i < tagged; ++i) {
       tokens->of(segment_objects[i]);
     }
@@ -636,7 +630,7 @@ std::shared_ptr<SessionHandle> update_arrangement_session(const Args& a, const S
       const json::Value& notes = get(edit, "notes");
       if (!notes.is_array()) {
         throw InvalidInputError("edits[" + index_text(index) +
-                                "].notes must be an array; received " + js::type_of(notes));
+                                "].notes must be an array; received " + describe_rejected(notes));
       }
       json::Object bag;
       bag.set("allowNonPositiveDuration", true);
@@ -662,11 +656,14 @@ std::shared_ptr<SessionHandle> update_arrangement_session(const Args& a, const S
   if (!edited && !reordered) {
     session->analysis = self.analysis;
     session->evidence = self.evidence;
+    session->evidence_lock = self.evidence_lock;
     session->segment_objects = self.segment_objects;
     session->typed_tracks = std::move(next_typed);
     session->analysis_identity = self.analysis_identity;
     return session;
   }
+  // Sessions sharing one evidence update in turn: the first takes its tables, the rest start anew.
+  std::lock_guard<std::recursive_mutex> taking(*self.evidence_lock);
   std::optional<DirtySlots> dirty = dirty_slots_of(self.evidence.get(), edited);
   WireRun run = analyze_wire(a, session->tracks, session->opts, self.evidence.get(),
                              dirty ? &*dirty : nullptr);
@@ -707,7 +704,7 @@ void register_arrange() {
       const json::Value& listed = get(a[1], "segments");
       if (!listed.is_array()) {
         throw InvalidInputError("timeline.segments must be an array; received " +
-                                js::type_of(listed));
+                                describe_rejected(listed));
       }
       const json::Array& segments = listed.as_array();
       chord_at = [&segments](double beat) {
@@ -746,7 +743,7 @@ void register_arrange() {
     MeterMap meters = resolve_wire_meters(opts, "arrangement meters");
     json::Value note_options = arrangement_note_options(opts);
     ReadTracks read = read_tracks(a[0], note_options, opts);
-    SafetyProfile profile = read_profile(opts);
+    SafetyProfile profile = read_arrangement_profile(opts);
     const json::Value* given_step = opt_null_default(opts, "step");
     double step = assert_range(given_step != nullptr ? *given_step : json::Value(1.0), kMinValue,
                                kMaxSafeInteger, "tension sampling step");
@@ -782,12 +779,7 @@ void register_arrange() {
         given_keys = read_given_keys(a, *given_keys_wire);
         keys = given_keys->typed;
       } else if (const json::Value* named = opt_strict(opts, "key")) {
-        KeyRegion region;
-        region.startBeat = placed.startBeat;
-        region.endBeat = total_beats;
-        region.key = resolve_key(read_key_arg(*named));
-        region.confidence = 1;
-        keys.push_back(std::move(region));
+        keys = stated_key_regions(resolve_key(read_key_arg(*named)), placed.startBeat, total_beats);
       } else {
         KeyTimelineOptions key_options;
         key_options.meters = meters;

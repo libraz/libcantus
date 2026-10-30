@@ -42,6 +42,7 @@ import {
   vocabularyOfKind,
   withinCeiling,
 } from '../vocabulary/index.js';
+import { FIGURE_RATES } from '../vocabulary/transform.js';
 import { type DrumHit, type DrumVoice, drumNoteOf, HitList } from './hit.js';
 import {
   DRUM_FEELS,
@@ -437,6 +438,7 @@ export function placeDrumPattern(opts: DrumPatternOptions): DrumHit[] {
     assertRange(opts.velocity, 1, 127, 'drum pattern velocity');
   }
   const feel = opts.feel === undefined ? 'straight' : assertOneOf(opts.feel, DRUM_FEELS, 'feel');
+  const rate = assertOneOf(opts.rate ?? 'straight', FIGURE_RATES, 'rate');
   const resolved = resolveContext(opts.ctx);
   const bpm = resolved.bpm ?? DEFAULT_BPM;
   const draw = resolved.part('drums');
@@ -492,7 +494,7 @@ export function placeDrumPattern(opts: DrumPatternOptions): DrumHit[] {
         ...(resolved.rhythmic === undefined ? {} : { rhythmic: resolved.rhythmic }),
         ...(resolved.ornament === undefined ? {} : { ornament: resolved.ornament }),
         isOrnament: (stroke) => (stroke as DrumStroke).articulation === 'ghost',
-        rate: opts.rate ?? 'straight',
+        rate,
         spanSteps: entry.material.steps,
         // The dials rank the figure's positions against the bar it is written
         // in, which is the bar this call is placing it in.

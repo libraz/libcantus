@@ -64,6 +64,21 @@ struct ValidateStats {
  */
 ValidateStats validate(const json::Value& v, bool allow_top_level_undefined = false);
 
+/** Which `$ref` values decode_host_value() replaces. */
+enum class RefScope : std::uint8_t {
+  kAll,        ///< Every one, `v` itself included.
+  kArguments,  ///< `v` is a call's argument array: all but an argument that is itself a `$ref`.
+  kNone,       ///< None: a builtin takes its arguments as sent.
+};
+
+/**
+ * validate() a value the host supplied, then replace each `$ref` in `scope` by a copy of the value
+ * it names, so no op reads a retained marker.
+ * @throws RequestError as validate() does, or for a `$ref` that names no live value.
+ */
+ValidateStats decode_host_value(json::Value& v, bool allow_top_level_undefined = false,
+                                RefScope scope = RefScope::kAll);
+
 /** Serialize a wire value; NaN, ±Infinity and -0 are written as `$n` tags. */
 std::string stringify(const json::Value& v);
 

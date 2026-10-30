@@ -26,6 +26,15 @@ TEST_CASE("chords are ranked by fewest extras, fewest missing, root position, th
   CHECK_FALSE(detect_chord_best({}));
 }
 
+TEST_CASE("a single pitch class matches no chord", "[detect]") {
+  CHECK(detect_chord({60}).empty());
+  CHECK(detect_chord({60, 72, 48}).empty());
+  CHECK_FALSE(detect_chord_best({0}));
+  std::vector<ChordMatch> power = detect_chord({60, 67});
+  REQUIRE_FALSE(power.empty());
+  CHECK(power[0].quality == ChordQuality::k5);
+}
+
 TEST_CASE("a bass that is no chord tone names no inversion", "[detect]") {
   DetectChordOptions options;
   options.bassPc = 2;

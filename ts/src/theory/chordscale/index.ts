@@ -3,6 +3,7 @@ import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import {
   assertArray,
   assertGenerationBudget,
+  assertOneOf,
   assertOptions,
   assertPitchClass,
   assertPositiveInt,
@@ -305,7 +306,9 @@ export function chordScales(chord: ChordLike): ChordScaleMatch[] {
  * `'harmonic'` is the Berklee-style rule — a tone that must not be
  * sounded against the chord. `'melodic'` keeps only what a line cannot pass
  * through either, which is the semitone above the root; every other clash
- * resolves as the line moves on.
+ * resolves as the line moves on. Over a chord that sounds a dominant seventh
+ * the semitone above the root is the flat ninth, a tension under either use
+ * whichever scale supplies it; the flat thirteenth stays a harmonic avoid note.
  *
  * @category Scales
  */
@@ -361,10 +364,11 @@ export function avoidNotes(
   const asked = assertOptions(opts, 'opts');
   const mask = requireChordScaleMask(scaleName);
   const data = toChordData(chord);
+  const use = assertOneOf(asked.use ?? 'harmonic', ['harmonic', 'melodic'], 'avoid-note use');
   if (isAlteredDominant(data, scaleName)) {
     return [];
   }
-  return clashingNotes(data, mask, asked.use === 'melodic');
+  return clashingNotes(data, mask, use === 'melodic');
 }
 
 /**
@@ -385,9 +389,11 @@ function clashingNotes(data: Chord, mask: number, melodic: boolean): number[] {
   // displaced — that is what suspending is — so meeting either one ends it.
   const displaced = new Set(displacedThirds(data));
   const semitoneAboveRoot = pitchClass(rootPc + 1);
+  // The flat ninth is a dominant's own tension, whichever scale supplies it.
+  const dominantNinth = soundsDominantSeventh(data) ? semitoneAboveRoot : undefined;
   const avoid: number[] = [];
   for (let pc = 0; pc < 12; pc += 1) {
-    if (!maskHasPitchClass(mask, rootPc, pc) || chordSet.has(pc)) {
+    if (!maskHasPitchClass(mask, rootPc, pc) || chordSet.has(pc) || pc === dominantNinth) {
       continue;
     }
     if (melodic && pc !== semitoneAboveRoot) {
@@ -404,10 +410,10 @@ function clashingNotes(data: Chord, mask: number, melodic: boolean): number[] {
  * Semitones above the root of the colors a dominant takes when it resolves to a
  * minor tonic: the flat ninth, the sharp ninth, and the flat thirteenth.
  *
- * Over a dominant read on its own, each of them sits a semitone above a chord
- * tone and is an avoid note. Heard as the dominant of a minor key they are the
- * key's own tones, and standard practice, so the function the chord serves is
- * what decides.
+ * Over a dominant read on its own, the flat ninth is already a tension and the
+ * others sit a semitone above a chord tone. Heard as the dominant of a minor key
+ * they are the key's own tones, and standard practice, so the function the
+ * chord serves is what decides.
  */
 export const MINOR_RESOLUTION_TENSIONS = [1, 3, 8] as const;
 
@@ -455,8 +461,8 @@ export type AvailableTensionsOptions = {
  *
  * A tension's availability also depends on what the chord is doing. Pass
  * `resolvesTo` to say which chord this one resolves to: a dominant seventh
- * resolving down a fifth to a minor tonic takes its flat ninth, sharp ninth and
- * flat thirteenth, which read on their own would each be an avoid note. Only
+ * resolving down a fifth to a minor tonic takes its sharp ninth and flat
+ * thirteenth as well as the flat ninth every dominant takes. Only
  * scale tones are ever added, so the result stays within the scale.
  *
  * @param chord The chord providing the chord tones, as a chord symbol, chord
@@ -472,7 +478,7 @@ export type AvailableTensionsOptions = {
  * import { makeChord, availableTensions } from '@libraz/libcantus';
  * availableTensions(makeChord(0, 'maj7'), 'ionian'); // [2, 9] — color tones over Cmaj7
  * availableTensions(makeChord(7, 'dom7'), 'phrygianDominant', { resolvesTo: makeChord(0, 'min') });
- * // [3, 8] — the b13 and b9 the resolution to C minor makes available
+ * // [3, 8] — the b9, and the b13 the resolution to C minor makes available
  * ```
  *
  * @category Scales

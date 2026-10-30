@@ -21,8 +21,8 @@ json::Value Args::take(std::size_t i) {
   if (i >= values_->size()) {
     return undefined_value();
   }
-  if (const Retained* snapshot = retained(i)) {
-    return snapshot->wire();
+  if (retained(i) != nullptr) {
+    return share_wire(slots_[i].snapshot);
   }
   json::Value out;
   std::swap(out, (*values_)[i]);

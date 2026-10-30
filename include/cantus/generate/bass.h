@@ -80,6 +80,10 @@ struct BassLineOptions {
 
 /**
  * Generate a bass line following a chord placement (`generateBassLine`).
+ *
+ * Root-position chord tones lie in the band `[low, low + 12]`; a slash chord's other tones sit up
+ * to an octave above its placed bass, and the `pop` octave pickup and the walking approach notes
+ * leave the band, so consecutive notes can be more than an octave apart.
  * @returns Bass notes sorted by onset, non-overlapping.
  * @throws InvalidInputError if an option is malformed, a segment has no positive duration or two
  *   segments overlap.

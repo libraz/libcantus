@@ -42,6 +42,7 @@ import {
   type ChordTimelineResult,
   type DirtySlots,
   detectCadences,
+  statedKeyRegions,
   type TimelineEvidence,
 } from '../timeline/index.js';
 import {
@@ -220,7 +221,7 @@ function callerTimeline(
     given ??
     attachPivots(
       key !== undefined
-        ? [{ startBeat: musicStart, endBeat: totalBeats, key: resolveKey(key), confidence: 1 }]
+        ? statedKeyRegions(resolveKey(key), musicStart, totalBeats)
         : keyTimelineFromNotes(pooled, { meters, totalBeats, budget }),
       timeline.segments,
     );
@@ -316,7 +317,8 @@ export type ArrangementOptions = {
    *
    * The first downbeat is beat 0, so an upbeat is written at negative beats.
    * Declaring its length rejects a note that starts before the pickup does;
-   * leave it unset to accept any finite onset.
+   * leave it unset to accept any onset within ±`Number.MAX_SAFE_INTEGER`
+   * (2^53 - 1).
    *
    * @defaultValue no declared pickup
    */

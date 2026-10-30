@@ -219,9 +219,49 @@ describe('the reference cap', () => {
     expect(rt.retainedRefs).toBe(2);
   });
 
-  it('holds MAX_LIVE_REFS references by default', async () => {
-    const { MAX_LIVE_REFS } = await import('../src/runtime.js');
+  it('holds MAX_LIVE_REFS references and MAX_REF_BYTES of text by default', async () => {
+    const { MAX_LIVE_REFS, MAX_REF_BYTES } = await import('../src/runtime.js');
     expect(MAX_LIVE_REFS).toBe(1024);
+    expect(MAX_REF_BYTES).toBe(4 * 1024 * 1024);
+  });
+
+  it('holds what a synchronous loop retains to the byte budget, and every answer is right', () => {
+    const text = (p: number) => backend.call('Score.of', JSON.stringify([[note(p)]]), null).json;
+    const budget = 3 * text(60).length;
+    const { rt, events } = observed({ byReference: BY_REFERENCE, maxRefBytes: budget });
+    for (let p = 60; p < 80; p += 1) {
+      const score = rt.call('Score.of', [[note(p)]]);
+      expect(rt.call('Score#secondsAt', [score, 1])).toBe(Pure.Score.of([note(p)]).secondsAt(1));
+      expect(rt.retainedBytes).toBeLessThanOrEqual(budget);
+    }
+    expect(rt.retainedRefs).toBe(3);
+    expect(events.filter((e) => 'release' in e)).toHaveLength(17);
+  });
+
+  it('never retains a value larger than the byte budget', () => {
+    const { rt, calls } = observed({ byReference: BY_REFERENCE, maxRefBytes: 10 });
+    const score = rt.call('Score.of', [NOTES]);
+    rt.call('Score#secondsAt', [score, 1]);
+    expect(rt.call('Score#secondsAt', [score, 1])).toBe(Pure.Score.of(NOTES).secondsAt(1));
+    expect(calls().map((c) => c.op)).toEqual(['Score.of', 'Score#secondsAt', 'Score#secondsAt']);
+    expect(rt.retainedRefs).toBe(0);
+  });
+
+  it('releases a reference whose instance is gone once, at a call return or by its finalizer', async () => {
+    const { rt, events, last } = observed();
+    (() => {
+      const score = rt.call('Score.of', [[note(61)]]);
+      rt.call('Score#totalBeats', [score]);
+    })();
+    const id = Number(/"\$ref":(\d+)/.exec(last())?.[1]);
+    await until(() => {
+      rt.call('$live', []);
+      return rt.retainedRefs === 0;
+    });
+    await settle();
+    expect(rt.retainedRefs).toBe(0);
+    expect(rt.retainedBytes).toBe(0);
+    expect(events.filter((e) => 'release' in e && e.release === id)).toHaveLength(1);
   });
 });
 

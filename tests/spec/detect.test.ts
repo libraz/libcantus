@@ -4,6 +4,7 @@ import {
   detectKey,
   detectKeyFromNotes,
 } from '@libraz/libcantus/analyze';
+import { InvalidInputError } from '@libraz/libcantus/core';
 import { chordQualities, isScaleTone, majorKey, makeChord } from '@libraz/libcantus/theory';
 import { describe, expect, it } from 'vitest';
 
@@ -237,16 +238,36 @@ describe('detectKey', () => {
 describe('detectChord input kinds', () => {
   const triad = [60, 64, 67];
 
-  it('reads any input kind it does not know as an unordered pitch-class set', () => {
-    const unordered = detectChord(triad, { input: 'pitchClass' });
-    expect(unordered[0]?.inversion).toBeNull();
-    expect(detectChord(triad, { input: 'other' as never })).toEqual(unordered);
-    expect(detectChord(triad, { input: null as never })).toEqual(unordered);
+  it('refuses an input kind it does not know', () => {
+    for (const input of ['other', 'MIDI', 3]) {
+      expect(() => detectChord(triad, { input: input as never })).toThrow(InvalidInputError);
+      expect(() => detectChordBest(triad, { input: input as never })).toThrow(
+        /^input must be one of auto, midi, pitchClass; received/,
+      );
+    }
+    // Refused before an empty input returns, as the other options are.
+    expect(() => detectChord([], { input: 'other' as never })).toThrow(InvalidInputError);
+    expect(detectChord(triad, { input: 'pitchClass' })[0]?.inversion).toBeNull();
+    expect(detectChord(triad, { input: null as never })).toEqual(detectChord(triad));
     expect(detectChord(triad, { input: 'auto' })).toEqual(detectChord(triad));
   });
 
   it('refuses a bass pitch that is not a number even when the input is empty', () => {
     expect(() => detectChord([], { bassPc: null as never })).toThrow(/bassPc must be finite/);
     expect(detectChordBest([], {})).toBeNull();
+  });
+});
+
+describe("detectChord needs two of a chord's tones", () => {
+  it('matches no chord for a single pitch class', () => {
+    for (const pitches of [[60], [0], [60, 72, 48]]) {
+      expect(detectChord(pitches)).toEqual([]);
+      expect(detectChordBest(pitches)).toBeNull();
+    }
+  });
+
+  it('still reads two tones of a chord as that chord without its fifth', () => {
+    expect(detectChord([60, 67])[0]).toMatchObject({ rootPc: 0, quality: '5', exact: true });
+    expect(detectChord([60, 64])[0]).toMatchObject({ rootPc: 0, quality: 'maj', missingPcs: [7] });
   });
 });

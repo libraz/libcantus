@@ -4,6 +4,7 @@ import { beatsPerBar, type MeterLike } from '../../core/meter/index.js';
 import type { Note } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import {
+  assertArray,
   assertDegree,
   assertGenerationBudget,
   assertOneOf,
@@ -17,7 +18,7 @@ import {
   cadencesThroughRaisedSeventh,
   fifthPcOf,
   heptatonicFrameOf,
-  isDiatonicChord,
+  isNativeDominantSeventh,
   soundsDominantSeventh,
 } from '../../theory/tendency/index.js';
 import {
@@ -582,13 +583,18 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
   const ctx = resolveContext(opts.ctx);
   let preset: ProgressionPreset | undefined;
   if (opts.preset !== undefined) {
-    if (opts.preset.degrees.length === 0) {
+    const custom = assertRecord<NonNullable<ProgressionOptions['preset']>>(
+      opts.preset,
+      'progression preset',
+    );
+    const degrees = assertArray<ProgressionDegree>(custom.degrees, 'progression preset degrees');
+    if (degrees.length === 0) {
       throw new InvalidInputError('progression preset must name at least one degree');
     }
     preset = {
-      id: opts.preset.id ?? 'custom',
-      name: opts.preset.name ?? 'Custom',
-      degrees: opts.preset.degrees.map((degree, index) => {
+      id: custom.id ?? 'custom',
+      name: custom.name ?? 'Custom',
+      degrees: degrees.map((degree, index) => {
         assertDegree(degree, `progression preset degrees[${index}]`);
         const supported =
           (degree >= 1 && degree <= 7) ||
@@ -600,8 +606,12 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
         }
         return degree;
       }),
-      functional: opts.preset.functional ?? 'loop',
-      styles: opts.preset.styles ?? [opts.style],
+      functional: assertOneOf(
+        custom.functional ?? 'loop',
+        ['loop', 'tensionBuild', 'cadenceStrong', 'stable'],
+        'progression preset functional',
+      ),
+      styles: custom.styles ?? [opts.style],
     };
   }
   if (preset === undefined && opts.presetId !== undefined) {
@@ -654,12 +664,11 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
       const domRoot = (next.rootPc + 7) % 12;
       const targetsTonic = (next.rootPc - tonicPc + 12) % 12 === 0;
       const isLastTonicStatement = cur.rootPc === tonicPc && tonicStatements <= 1;
-      const dominantChord = makeChord(domRoot, 'dom7');
       const alreadySecondary =
         cur.rootPc === domRoot && soundsDominantSeventh(makeChord(cur.rootPc, cur.quality));
       // A dominant seventh the key already contains is a native chord of it, not
       // an applied one (I7 of mixolydian, II7 of lydian).
-      const isNativeDominant = isDiatonicChord(dominantChord, key);
+      const isNativeDominant = isNativeDominantSeventh(domRoot, key);
       // A secondary dominant inserted at i-1 resolves onto this chord; replacing
       // it here would orphan that dominant.
       const isResolutionTarget = chords[i - 1]?.secondaryDominant === true;

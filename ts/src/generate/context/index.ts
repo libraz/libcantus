@@ -219,7 +219,8 @@ export function resolveContext(input?: GenerationContextInput): ResolvedContext 
     difficulty,
     bpm,
     algorithmVersion,
-    instrument: (part) => instruments?.[part],
+    instrument: (part) =>
+      instruments !== undefined && Object.hasOwn(instruments, part) ? instruments[part] : undefined,
     vocabulary,
     part: (name) =>
       supplied

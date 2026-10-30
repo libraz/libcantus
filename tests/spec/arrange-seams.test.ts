@@ -230,7 +230,7 @@ describe('where the tension curve starts', () => {
 });
 
 describe('the tracks a harmony may be read from', () => {
-  const melody: NoteEvent[] = [{ pitch: 70, startBeat: 0, durationBeat: 4 }];
+  const melody: NoteEvent[] = blockChord([70, 74, 77], 0);
   const kit: NoteEvent[] = [
     { pitch: 36, startBeat: 0, durationBeat: 0.25 },
     { pitch: 42, startBeat: 1, durationBeat: 0.25 },
@@ -400,5 +400,101 @@ describe('reading polyphony through the function the class is a skin over', () =
     const score = Score.of(notes, { key: 'C major' });
     const timeline = chordTimelineFromNotes(notes, { key: 'C major' }).timeline;
     expect(fromAnalyzeBarrel(notes, timeline.at, 'C major')).toEqual(score.voices());
+  });
+});
+
+describe('Arrangement refuses at construction what its analysis would refuse', () => {
+  const lead: NoteEvent[] = blockChord([60, 64, 67], 0);
+  const kit: NoteEvent[] = [{ pitch: 36, startBeat: 0, durationBeat: 0.25 }];
+
+  it('refuses a profile the analysis does not know', () => {
+    const build = () => Arrangement.of([{ notes: lead }], { profile: 'zz' as never });
+    expect(build).toThrow(InvalidInputError);
+    expect(build).toThrow(/^arrangement profile must be one of /);
+  });
+
+  it('refuses a harmony track that is percussion', () => {
+    const build = () =>
+      Arrangement.of(
+        [
+          { name: 'lead', notes: lead },
+          { name: 'kit', role: 'drums', notes: kit },
+        ],
+        { harmonyTracks: [1] },
+      );
+    expect(build).toThrow(InvalidInputError);
+    expect(build).toThrow(/^arrangement harmonyTracks\[0\] 1 names a percussion track/);
+  });
+
+  it('refuses a note that starts before the declared pickup', () => {
+    const early: NoteEvent[] = [{ pitch: 60, startBeat: -2, durationBeat: 1 }, ...lead];
+    const build = () => Arrangement.of([{ notes: early }], { pickupBeats: 1 });
+    expect(build).toThrow(InvalidInputError);
+    expect(build).toThrow(/^tracks\[0\]\.notes\[0\]\.startBeat must be in \[-1, /);
+    expect(() =>
+      Arrangement.fromData({ tracks: [{ notes: early }], settings: { pickupBeats: 1 } }),
+    ).toThrow(/^tracks\[0\]\.notes\[0\]\.startBeat must be in \[-1, /);
+  });
+
+  it('reads every member of an arrangement that constructs', () => {
+    const arrangement = Arrangement.of(
+      [
+        { name: 'lead', notes: [{ pitch: 60, startBeat: -1, durationBeat: 1 }, ...lead] },
+        { name: 'kit', role: 'drums', notes: kit },
+      ],
+      { harmonyTracks: [0], pickupBeats: 1, profile: 'strict' },
+    );
+    expect(() => [
+      arrangement.analysis,
+      arrangement.conflicts,
+      arrangement.timeline(),
+      arrangement.tension(),
+      arrangement.reference(),
+      arrangement.track('lead'),
+    ]).not.toThrow();
+  });
+});
+
+describe('Arrangement.reference reads the meter the arrangement is set in', () => {
+  const dottedHalves = (pitches: number[], startBeat: number): NoteEvent[] =>
+    pitches.map((pitch) => ({ pitch, startBeat, durationBeat: 3 }));
+  const tracks = [
+    {
+      name: 'pad',
+      notes: [
+        ...dottedHalves([60, 64, 67], 0),
+        ...dottedHalves([60, 65, 69], 3),
+        ...dottedHalves([59, 62, 67], 6),
+        ...dottedHalves([60, 64, 67], 9),
+      ],
+    },
+  ];
+
+  it('takes ts as it takes meters', () => {
+    const viaTs = Arrangement.of(tracks, { ts: '3/4', key: 'C major' }).reference();
+    const viaMeters = Arrangement.of(tracks, { meters: '3/4', key: 'C major' }).reference();
+    expect(viaTs).toEqual(viaMeters);
+    expect(viaTs.meters).toEqual([{ startBeat: 0, ts: Meter.parse('3/4').data }]);
+    expect(viaTs.span.bars).toBe(4);
+  });
+});
+
+describe('a pitch of -0 reads as pitch 0', () => {
+  it('reports a conflicting note at pitch 0 rather than -0', () => {
+    const analysis = analyzeArrangement(
+      [
+        { name: 'pad', notes: blockChord([13, 17, 20], 0) },
+        { name: 'clash', notes: [{ pitch: -0, startBeat: 0, durationBeat: 4 }] },
+      ],
+      { harmonyTracks: [0], minSeverity: NoteSafety.Warning },
+    );
+    const clash = analysis.conflicts.find((conflict) => conflict.trackName === 'clash');
+    expect(clash).toBeDefined();
+    expect(Object.is(clash?.pitch, 0)).toBe(true);
+    for (const track of analysis.tracks) {
+      for (const note of track.notes) {
+        expect(Object.is(note.pitch, -0)).toBe(false);
+      }
+    }
   });
 });

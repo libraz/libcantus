@@ -11,10 +11,10 @@ import libcantus
 GROWTH = 4
 # A per-call cost may grow by this factor between the two sizes; linear would be GROWTH.
 TOLERANCE = 2.0
-# Slack in seconds, so two readings in the noise of the timer pass.
-SLACK = 0.0005
 CALLS = 200
 SAMPLES = 5
+# Slack in seconds per call: 1 ms per run of CALLS calls, so two readings in the timer noise pass.
+SLACK = 0.001 / CALLS
 
 
 def per_call(run: Callable[[], None]) -> float:

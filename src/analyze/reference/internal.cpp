@@ -3,6 +3,7 @@
 #include "analyze/reference/internal.h"
 
 #include "analyze/adjacency.h"
+#include "analyze/rhythm/internal.h"
 #include "cantus/core/limits.h"
 #include "js/math.h"
 
@@ -60,7 +61,7 @@ Nullable<ReferencePhraseMelody> phrase_melody(const std::vector<NoteEvent>& line
   rhythm_options.meters = MeterArg(meters);
   rhythm_options.totalBeats = end_beat;
   rhythm_options.budget = budget;
-  RhythmAnalysis rhythm = analyze_rhythm(inside, rhythm_options);
+  RhythmAnalysis rhythm = rhythm_over(inside, rhythm_options, start_beat);
   out.shape = melodic_contour(inside).shape;
   out.low = static_cast<int>(low);
   out.high = peak->pitch;

@@ -279,7 +279,7 @@ void register_voice() {
       const json::Value& listed = get(a[1], "segments");
       if (!listed.is_array()) {
         throw InvalidInputError("timeline.segments must be an array; received " +
-                                js::type_of(listed));
+                                describe_rejected(listed));
       }
       const json::Array& segments = listed.as_array();
       host.chord_at = [&segments](double beat) {

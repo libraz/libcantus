@@ -13,6 +13,7 @@
 #include "cantus/model/rhythm.h"
 #include "core/validation/validation.h"
 #include "js/math.h"
+#include "js/number.h"
 #include "js/value.h"
 #include "model/shared.h"
 #include "ops/codec_a4.h"
@@ -83,8 +84,8 @@ double wire_span_end(const json::Array& spans) {
   return end;
 }
 
-/** `copySettings(settings, trackCount)`. */
-json::Value copy_settings(const json::Value& settings, std::size_t track_count,
+/** `copySettings(settings, tracks)`, over the tracks as copyTrack copied them. */
+json::Value copy_settings(const json::Value& settings, const json::Array& tracks,
                           const CallContext& context) {
   if (is_undefined(settings)) {
     return undefined_value();
@@ -135,7 +136,17 @@ json::Value copy_settings(const json::Value& settings, std::size_t track_count,
     const json::Array& given = assert_data_array(harmony, "arrangement harmonyTracks");
     for (std::size_t index = 0; index < given.size(); ++index) {
       assert_integer(given[index], "arrangement harmonyTracks[" + index_text(index) + "]", 0,
-                     static_cast<double>(track_count) - 1);
+                     static_cast<double>(tracks.size()) - 1);
+    }
+    // A percussion track states no harmony, which the analysis refuses too.
+    for (std::size_t index = 0; index < given.size(); ++index) {
+      double track = js::to_number(given[index]);
+      const json::Value& role = get(tracks[static_cast<std::size_t>(track)], "role");
+      if (role.is_string() && role.as_string() == to_string(TrackRole::kDrums)) {
+        throw InvalidInputError("arrangement harmonyTracks[" + index_text(index) + "] " +
+                                js::to_string(track) +
+                                " names a percussion track, whose pitches state no harmony");
+      }
     }
     copy.set("harmonyTracks", given);
   }
@@ -147,7 +158,14 @@ json::Value copy_settings(const json::Value& settings, std::size_t track_count,
   }
   json::Value pickup = member_of(settings, "pickupBeats");
   if (!is_undefined(pickup)) {
-    assert_range(pickup, 0, kMaxSafeInteger, "arrangement pickupBeats");
+    double beats = assert_range(pickup, 0, kMaxSafeInteger, "arrangement pickupBeats");
+    // A note before the declared pickup is one the analysis refuses, under the same name.
+    json::Value note_bag = line_options(member_of(settings, "budget"));
+    note_bag.as_object().set("minStartBeat", -beats);
+    for (std::size_t index = 0; index < tracks.size(); ++index) {
+      assert_note_events(get(tracks[index], "notes"), "tracks[" + index_text(index) + "].notes",
+                         note_bag);
+    }
     copy.set("pickupBeats", std::move(pickup));
   }
   json::Value rhythm = member_of(settings, "harmonicRhythm");
@@ -155,9 +173,8 @@ json::Value copy_settings(const json::Value& settings, std::size_t track_count,
     assert_range(rhythm, kMinValue, kMaxSafeInteger, "arrangement harmonicRhythm");
     copy.set("harmonicRhythm", std::move(rhythm));
   }
-  json::Value profile = member_of(settings, "profile");
-  if (!is_undefined(profile)) {
-    copy.set("profile", std::move(profile));
+  if (!is_undefined(member_of(settings, "profile"))) {
+    copy.set("profile", to_string(read_arrangement_profile(settings)));
   }
   json::Value budget = member_of(settings, "budget");
   if (!is_undefined(budget)) {
@@ -294,7 +311,7 @@ json::Value arrangement_data(const json::Value& data, const CallContext& context
   for (std::size_t index = 0; index < tracks.size(); ++index) {
     copied.push_back(copy_track(tracks[index], index, budget));
   }
-  json::Value kept = copy_settings(settings, copied.size(), context);
+  json::Value kept = copy_settings(settings, copied, context);
   json::Object o;
   o.set("tracks", json::Value(std::move(copied)));
   if (!is_undefined(kept)) {
@@ -420,6 +437,9 @@ DecodedArrangement::DecodedArrangement(json::Value data,
                                        std::shared_ptr<const SessionHandle> session)
     : data_(std::move(data)), session_(std::move(session)) {
   json::build_indices(data_);
+  if (session_) {
+    prepare_shared_session(*session_);
+  }
 }
 
 std::shared_ptr<const SessionHandle> DecodedArrangement::session(

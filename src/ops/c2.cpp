@@ -508,14 +508,14 @@ class NoteEventIndexHandle : public Handle {
   std::vector<Identity> note_ids_;
 };
 
-/** `opts.tieBreak ?? 'highest'`: anything but 'highest' and 'last' orders like 'lowest'. */
+/** `opts.tieBreak ?? 'highest'`, refusing anything but the three tie-breaks. */
 OnsetTieBreak read_tie_break(const json::Value& asked) {
   const json::Value* tie_break = opt_null_default(asked, "tieBreak");
-  if (tie_break == nullptr || (tie_break->is_string() && tie_break->as_string() == "highest")) {
+  if (tie_break == nullptr) {
     return OnsetTieBreak::kHighest;
   }
-  return tie_break->is_string() && tie_break->as_string() == "last" ? OnsetTieBreak::kLast
-                                                                    : OnsetTieBreak::kLowest;
+  return *parse_onset_tie_break(
+      assert_one_of(*tie_break, {"highest", "lowest", "last"}, "options.tieBreak"));
 }
 
 void register_event_index() {

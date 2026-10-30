@@ -359,12 +359,11 @@ void register_chordscale() {
     const std::string& name = scale_name_arg(a[1]);
     require_chord_scale_mask(name);
     ChordData data = read_chord_like(a[0]);
-    settle_chord_quality(data);
     AvoidNotesOptions opts;
-    const json::Value& use = get(asked, "use");
-    if (use.is_string() && use.as_string() == to_string(AvoidNoteUse::kMelodic)) {
-      opts.use = AvoidNoteUse::kMelodic;
-    }
+    opts.use = *parse_avoid_note_use(
+        assert_one_of(opt_or(asked, "use", to_string(AvoidNoteUse::kHarmonic)),
+                      avoid_note_use_names(), "avoid-note use"));
+    settle_chord_quality(data);
     return to_json(avoid_notes(data.chord, name, opts));
   });
   def("availableTensions", [](Args& a) -> json::Value {

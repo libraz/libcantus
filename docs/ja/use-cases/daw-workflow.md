@@ -39,15 +39,15 @@ bass.notes.length; // 16
 ```ts
 import { Score } from '@libraz/libcantus';
 
-// Two bare tritones: nothing in them settles which root they belong to.
-const notes = [[60, 66], [63, 69]].flatMap((pitches, bar) =>
+// Two shell voicings: each leaves its fifth for the listener to assume.
+const notes = [[48, 52, 58], [53, 57, 63]].flatMap((pitches, bar) =>
   pitches.map((pitch) => ({ pitch, startBeat: bar * 4, durationBeat: 4 })),
 );
 
 const timeline = Score.of(notes).timeline({ harmonicRhythm: 1 });
 
 timeline.segmentConfidence.length === timeline.length; // true
-timeline.segmentConfidence; // [0.425, 0.425]
+timeline.segmentConfidence; // [0.85, 0.85]
 ```
 
 ## 入力を正しく与える

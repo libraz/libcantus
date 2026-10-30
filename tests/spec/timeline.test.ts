@@ -4,7 +4,8 @@ import {
   detectCadences,
   detectChordBest,
 } from '@libraz/libcantus/analyze';
-import type { NoteEvent } from '@libraz/libcantus/core';
+import { InvalidInputError, type NoteEvent } from '@libraz/libcantus/core';
+import { Score, Timeline } from '@libraz/libcantus/model';
 import {
   type ChordSpan,
   MAJOR_MASK,
@@ -446,5 +447,249 @@ describe('chordTimelineFromNotes over notes that end before beat 0', () => {
     const result = chordTimelineFromNotes(notes);
     expect(result.keys[result.keys.length - 1]?.endBeat).toBe(-4);
     expect(result.timeline.segments[result.timeline.segments.length - 1]?.endBeat).toBe(-4);
+  });
+});
+
+describe('chordTimelineFromNotes reads a chord only where two of its tones sound', () => {
+  it('reports no chord for a lone held pitch class', () => {
+    expect(
+      chordTimelineFromNotes([{ pitch: 60, startBeat: 0, durationBeat: 4 }]).timeline.segments,
+    ).toEqual([]);
+  });
+
+  it('reports no chord for a melody of single held notes', () => {
+    const held = [60, 67, 65].map((pitch, index) => ({
+      pitch,
+      startBeat: index * 4,
+      durationBeat: 4,
+    }));
+    expect(chordTimelineFromNotes(held).timeline.segments).toEqual([]);
+    const steps = [
+      { pitch: 59, startBeat: 0, durationBeat: 1 },
+      { pitch: 60, startBeat: 1, durationBeat: 1 },
+    ];
+    expect(chordTimelineFromNotes(steps).timeline.segments).toEqual([]);
+  });
+});
+
+describe('chordTimelineFromNotes roots a diminished seventh by its resolution', () => {
+  /** The diminished seventh on B over `bass`, then V and i of C minor. */
+  function toDominant(bass: number): NoteEvent[] {
+    return [
+      ...blockChord([bass, 62, 65, 68, 71], 0),
+      ...blockChord([43, 59, 62, 67], 4),
+      ...blockChord([48, 63, 67, 72], 8),
+    ];
+  }
+
+  it('gives every inversion the leading-tone root of the key', () => {
+    for (const [bass, bassPc] of [
+      [47, undefined],
+      [50, 2],
+      [53, 5],
+      [56, 8],
+    ] as const) {
+      const chord = chordTimelineFromNotes(toDominant(bass), { key: 'C minor' }).timeline
+        .segments[0]?.chord;
+      expect(chord?.rootPc).toBe(11);
+      expect(chord?.quality).toBe('dim7');
+      expect(chord?.bassPc).toBe(bassPc);
+    }
+  });
+
+  it('numbers the inversions as the leading-tone chord, in either minor form', () => {
+    for (const key of ['C minor', 'C harmonic minor']) {
+      expect(
+        Timeline.fromNotes(toDominant(50), { key })
+          .roman()
+          .map((entry) => entry.roman),
+      ).toEqual(['viio65', 'V', 'i']);
+    }
+  });
+
+  it('takes the root a semitone below the chord it resolves to', () => {
+    const notes = [
+      ...blockChord([36, 52, 55, 60], 0),
+      ...blockChord([45, 60, 63, 66], 4), // A C Eb F#
+      ...blockChord([43, 59, 62, 67], 8),
+    ];
+    const timeline = Timeline.fromNotes(notes, { key: 'C major' });
+    expect(timeline.segments[1]?.chord).toMatchObject({ rootPc: 6, quality: 'dim7', bassPc: 9 });
+    expect(timeline.roman(undefined, { applied: true }).map((entry) => entry.roman)).toEqual([
+      'I',
+      'viio65/V',
+      'V',
+    ]);
+  });
+});
+
+describe('chordTimelineFromNotes takes the bass from the voice that holds it', () => {
+  it('does not let an anticipated bass invert the chord before it', () => {
+    const notes = [
+      ...blockChord([48, 64, 67, 72], 0, 3.5),
+      ...blockChord([43, 59, 62, 67], 3.5, 4.5),
+      ...blockChord([48, 64, 67, 72], 8),
+    ];
+    const result = chordTimelineFromNotes(notes, { key: 'C major' });
+    expect(
+      result.timeline.segments.map((segment) => [
+        segment.startBeat,
+        segment.chord.rootPc,
+        segment.chord.bassPc,
+      ]),
+    ).toEqual([
+      [0, 0, undefined],
+      [4, 7, undefined],
+      [8, 0, undefined],
+    ]);
+    expect(
+      detectCadences(result.timeline, result.prevailingKey).map((hit) => [
+        hit.atBeat,
+        hit.cadence.type,
+      ]),
+    ).toEqual([
+      [4, 'half'],
+      [8, 'authentic'],
+    ]);
+  });
+
+  it('keeps a held chord in root position under a bass alternating root and fifth', () => {
+    const notes = [
+      ...blockChord([60, 64, 67], 0),
+      { pitch: 48, startBeat: 0, durationBeat: 2 },
+      { pitch: 43, startBeat: 2, durationBeat: 2 },
+    ];
+    const segments = chordTimelineFromNotes(notes, { key: 'C major' }).timeline.segments;
+    expect(segments).toHaveLength(1);
+    expect(segments[0]?.chord).toMatchObject({ rootPc: 0, quality: 'maj' });
+    expect(segments[0]?.chord.bassPc).toBeUndefined();
+  });
+});
+
+describe('chordTimelineFromNotes is sure of a slash chord its notes spell exactly', () => {
+  it('reads a triad over a foreign bass at full confidence', () => {
+    for (const [pitches, rootPc] of [
+      [[43, 65, 69, 72], 5], // F/G
+      [[36, 65, 69, 72], 5], // F/C
+      [[36, 67, 71, 74], 7], // G/C
+    ] as const) {
+      const result = chordTimelineFromNotes(blockChord([...pitches], 0));
+      expect(result.timeline.segments[0]?.chord.rootPc).toBe(rootPc);
+      expect(result.segmentConfidence).toEqual([1]);
+    }
+  });
+});
+
+describe('chordTimelineFromNotes absorbs a rest shorter than the harmonic rhythm', () => {
+  it('covers the rest with the chord before it', () => {
+    const notes = [...blockChord([60, 64, 67], 0, 2), ...blockChord([67, 71, 74], 4)];
+    const { timeline } = chordTimelineFromNotes(notes);
+    expect(timeline.at(3)?.rootPc).toBe(0);
+    expect(timeline.segments.map((segment) => [segment.startBeat, segment.endBeat])).toEqual([
+      [0, 4],
+      [4, 8],
+    ]);
+  });
+});
+
+describe('a stated key yields a region only over a span that holds music', () => {
+  it('yields none when the span ends before the first note or holds nothing', () => {
+    const late = blockChord([60, 64, 67], 4);
+    expect(chordTimelineFromNotes(late, { key: 'C major', totalBeats: 2 }).keys).toEqual([]);
+    expect(chordTimelineFromNotes([], { key: 'C major' }).keys).toEqual([]);
+    expect(Timeline.fromChords([], 8, 'C major').keys).toEqual([]);
+  });
+
+  it('answers the same from a score and from the timeline it hands out', () => {
+    const score = Score.of(blockChord([60, 64, 67], 4), { key: 'C major' });
+    expect(score.timeline({ totalBeats: 2 }).keys).toEqual(score.keys({ totalBeats: 2 }));
+    expect(score.keys({ totalBeats: 2 })).toEqual([]);
+  });
+});
+
+describe('chordTimelineFromNotes onset bounds without a declared pickup', () => {
+  it('accepts onsets within the safe-integer range and refuses those beyond it', () => {
+    for (const startBeat of [1e16, -1e16]) {
+      expect(() => chordTimelineFromNotes([{ pitch: 60, startBeat, durationBeat: 1 }])).toThrow(
+        /startBeat must be in \[-9007199254740991, 9007199254740991\]/,
+      );
+    }
+  });
+});
+
+describe('a timeline holds its segments and key regions in beat order', () => {
+  const C = makeChord(0, 'maj');
+  const G = makeChord(7, 'maj');
+
+  it('refuses unsorted, overlapping or inverted segments', () => {
+    for (const segments of [
+      [
+        { startBeat: 4, endBeat: 8, chord: G },
+        { startBeat: 0, endBeat: 4, chord: C },
+      ],
+      [
+        { startBeat: 0, endBeat: 5, chord: C },
+        { startBeat: 4, endBeat: 8, chord: G },
+      ],
+      [{ startBeat: 4, endBeat: 2, chord: C }],
+      [{ startBeat: 4, endBeat: 4, chord: C }],
+    ]) {
+      expect(() => Timeline.fromData({ segments, totalBeats: 8 })).toThrow(InvalidInputError);
+      expect(() => Timeline.fromData({ segments, totalBeats: 8 })).toThrow(
+        /^timeline segments\[\d\] must /,
+      );
+      expect(() => detectCadences({ at: () => null, segments }, majorKey(0))).toThrow(
+        /^timeline\.segments\[\d\] must /,
+      );
+    }
+    expect(() =>
+      Timeline.fromData({
+        segments: [
+          { startBeat: 4, endBeat: 8, chord: G },
+          { startBeat: 0, endBeat: 4, chord: C },
+        ],
+        totalBeats: 8,
+      }),
+    ).toThrow(
+      'timeline segments[1] must not start before timeline segments[0] ends; received 0 before 8',
+    );
+  });
+
+  it('refuses unsorted, overlapping or inverted key regions', () => {
+    const segments = [
+      { startBeat: 0, endBeat: 4, chord: C },
+      { startBeat: 4, endBeat: 6, chord: G },
+    ];
+    const region = (startBeat: number, endBeat: number, rootPc: number) => ({
+      startBeat,
+      endBeat,
+      key: { rootPc, modeMask12: MAJOR_MASK },
+      confidence: 1,
+    });
+    for (const keys of [
+      [region(4, 6, 7), region(0, 4, 0)],
+      [region(0, 5, 0), region(4, 6, 7)],
+      [region(6, 4, 7)],
+    ]) {
+      expect(() => Timeline.fromData({ segments, totalBeats: 6, keys } as never)).toThrow(
+        /^timeline keys\[\d\] must /,
+      );
+    }
+    const sorted = Timeline.fromData({
+      segments,
+      totalBeats: 6,
+      keys: [region(0, 4, 0), region(4, 6, 7)],
+    } as never);
+    expect(sorted.roman().map((entry) => entry.roman)).toEqual(['I', 'I']);
+    expect(sorted.at(5)?.data.rootPc).toBe(7);
+  });
+
+  it('accepts the timelines its own builders produce', () => {
+    const notes = cfgcNotes();
+    expect(() => Timeline.fromNotes(notes)).not.toThrow();
+    expect(() => Timeline.fromNotes(notes, { key: 'C major' })).not.toThrow();
+    expect(() =>
+      Timeline.fromChords([{ rootPc: 0, quality: 'maj', startBeat: 0 }], 4, 'C major'),
+    ).not.toThrow();
   });
 });

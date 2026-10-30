@@ -67,12 +67,15 @@ const json::Array& assert_wire_timeline(const json::Value& timeline, std::string
     assert_function(get(read, "at"), join_name(name, ".at"));
   }
   const json::Array& segments = assert_array(get(read, "segments"), join_name(name, ".segments"));
+  std::vector<SegmentSpan> spans;
   for (std::size_t index = 0; index < segments.size(); ++index) {
     std::string label = join_name(name, ".segments[") + index_text(index) + "]";
     const json::Value& segment = assert_record(segments[index], label);
-    assert_finite_number(get(segment, "startBeat"), label + ".startBeat");
-    assert_finite_number(get(segment, "endBeat"), label + ".endBeat");
+    double start = assert_finite_number(get(segment, "startBeat"), label + ".startBeat");
+    double end = assert_finite_number(get(segment, "endBeat"), label + ".endBeat");
+    spans.push_back(SegmentSpan{start, end});
   }
+  assert_spans_in_order(spans, join_name(name, ".segments"));
   return segments;
 }
 

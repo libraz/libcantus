@@ -135,7 +135,7 @@ std::optional<IndexedNoteEvent> NoteEventIndex::at(double beat) const {
   std::optional<IndexedNoteEvent> best;
   for (std::ptrdiff_t candidate = index; candidate >= 0; --candidate) {
     const IndexedNoteEvent& indexed = notes_[static_cast<std::size_t>(candidate)];
-    if (indexed.note.startBeat != onset) {
+    if (std::fabs(indexed.note.startBeat - onset) >= BEAT_EPS) {
       break;
     }
     if (indexed.note.durationBeat <= 0 || indexed.note.startBeat - BEAT_EPS > beat ||
@@ -146,7 +146,11 @@ std::optional<IndexedNoteEvent> NoteEventIndex::at(double beat) const {
       best = indexed;
       continue;
     }
+    // Onsets inside one BEAT_EPS group are not in input order, so 'last' compares indices.
     if (tie_break_ == OnsetTieBreak::kLast) {
+      if (indexed.originalIndex > best->originalIndex) {
+        best = indexed;
+      }
       continue;
     }
     int difference = indexed.note.pitch - best->note.pitch;

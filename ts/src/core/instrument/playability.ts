@@ -303,6 +303,169 @@ function soundingGroups(state: Analysis): { startBeat: number; members: number[]
   return groups;
 }
 
+/** Most notes of one attack that are placed jointly; a larger group keeps its greedy picks. */
+const MAX_JOINT_PLACEMENT_NOTES = 12;
+/** Most search nodes spent on one attack before the best placement found so far stands. */
+const MAX_PLACEMENT_SEARCH_NODES = 20000;
+
+/** One note of an attack waiting for a string. */
+type NeckMember = {
+  index: number;
+  startBeat: number;
+  endBeat: number;
+  /** Whether the note is still sounding once the attack has landed. */
+  sounding: boolean;
+  candidates: StringFingering[];
+};
+
+/** Whether the fretted notes of a hand fit one maxStretch. */
+function fitsHand(frets: readonly number[], maxStretch: number): boolean {
+  let low = Number.POSITIVE_INFINITY;
+  let high = Number.NEGATIVE_INFINITY;
+  let count = 0;
+  for (const fret of frets) {
+    if (fret > 0) {
+      low = Math.min(low, fret);
+      high = Math.max(high, fret);
+      count += 1;
+    }
+  }
+  return count < 2 || high - low <= maxStretch;
+}
+
+/** Each member takes the cheapest free string in turn; strings with no free one are reported. */
+function placeGreedily(
+  members: readonly NeckMember[],
+  previous: StringFingering | undefined,
+  freeAt: readonly number[],
+  heldBy: readonly (number | undefined)[],
+): { picks: StringFingering[]; conflicts: { member: NeckMember; blocked: number[] }[] } {
+  const free = [...freeAt];
+  const held = [...heldBy];
+  const picks: StringFingering[] = [];
+  const conflicts: { member: NeckMember; blocked: number[] }[] = [];
+  let from = previous;
+  for (const member of members) {
+    const open = member.candidates.filter(
+      (candidate) => (free[candidate.string] ?? 0) <= member.startBeat + BEAT_EPS,
+    );
+    if (open.length === 0) {
+      conflicts.push({
+        member,
+        blocked: member.candidates
+          .map((candidate) => held[candidate.string])
+          .filter((value): value is number => value !== undefined),
+      });
+    }
+    const pool = open.length > 0 ? open : member.candidates;
+    const origin = from;
+    const chosen = pool.reduce((best, candidate) =>
+      fingeringCost(candidate, origin) < fingeringCost(best, origin) ? candidate : best,
+    );
+    picks.push(chosen);
+    free[chosen.string] = member.endBeat;
+    held[chosen.string] = member.index;
+    from = chosen;
+  }
+  return { picks, conflicts };
+}
+
+/**
+ * Cheapest assignment of the members to distinct free strings, found by a
+ * bounded depth-first search; `undefined` when none exists within the budget.
+ * With `heldFrets` the fretted span, held notes included, must fit `maxStretch`.
+ */
+function searchPlacement(
+  members: readonly NeckMember[],
+  previous: StringFingering | undefined,
+  freeAt: readonly number[],
+  heldFrets: readonly number[] | undefined,
+  maxStretch: number,
+): StringFingering[] | undefined {
+  const free = [...freeAt];
+  const frets = heldFrets === undefined ? undefined : [...heldFrets];
+  const picks: StringFingering[] = [];
+  let best: StringFingering[] | undefined;
+  let bestCost = Number.POSITIVE_INFINITY;
+  let nodes = 0;
+  const visit = (depth: number, from: StringFingering | undefined, cost: number): void => {
+    if (cost >= bestCost || nodes >= MAX_PLACEMENT_SEARCH_NODES) {
+      return;
+    }
+    const member = members[depth];
+    if (member === undefined) {
+      best = [...picks];
+      bestCost = cost;
+      return;
+    }
+    for (const candidate of member.candidates) {
+      if ((free[candidate.string] ?? 0) > member.startBeat + BEAT_EPS) {
+        continue;
+      }
+      nodes += 1;
+      const fretted = frets !== undefined && member.sounding;
+      if (fretted) {
+        frets.push(candidate.fret);
+        if (!fitsHand(frets, maxStretch)) {
+          frets.pop();
+          continue;
+        }
+      }
+      const previousFree = free[candidate.string];
+      free[candidate.string] = member.endBeat;
+      picks.push(candidate);
+      visit(depth + 1, candidate, cost + fingeringCost(candidate, from));
+      picks.pop();
+      free[candidate.string] = previousFree ?? Number.NEGATIVE_INFINITY;
+      if (fretted) {
+        frets.pop();
+      }
+    }
+  };
+  visit(0, previous, 0);
+  return best;
+}
+
+/**
+ * Pick a string for each note of one attack.
+ *
+ * The greedy picks stand when they are free and fit the hand. Otherwise the
+ * notes are placed jointly, so that a chord tone is not pushed up the neck by
+ * the note below it taking an open string; the greedy picks, and the issues they
+ * raise, remain only when no assignment exists.
+ */
+function placeAttack(
+  members: readonly NeckMember[],
+  previous: StringFingering | undefined,
+  freeAt: readonly number[],
+  heldBy: readonly (number | undefined)[],
+  heldFrets: readonly number[],
+  maxStretch: number,
+): { picks: StringFingering[]; conflicts: { member: NeckMember; blocked: number[] }[] } {
+  const greedy = placeGreedily(members, previous, freeAt, heldBy);
+  const soundingFrets = (picks: readonly StringFingering[]): number[] => [
+    ...heldFrets,
+    ...picks.filter((_, k) => members[k]?.sounding).map((pick) => pick.fret),
+  ];
+  if (greedy.conflicts.length === 0 && fitsHand(soundingFrets(greedy.picks), maxStretch)) {
+    return greedy;
+  }
+  if (members.length > MAX_JOINT_PLACEMENT_NOTES) {
+    return greedy;
+  }
+  const fitted = searchPlacement(members, previous, freeAt, heldFrets, maxStretch);
+  if (fitted !== undefined) {
+    return { picks: fitted, conflicts: [] };
+  }
+  if (greedy.conflicts.length > 0) {
+    const loose = searchPlacement(members, previous, freeAt, undefined, maxStretch);
+    if (loose !== undefined) {
+      return { picks: loose, conflicts: [] };
+    }
+  }
+  return greedy;
+}
+
 /** Layers 2 and 3 for a string instrument, and the fingering that goes with them. */
 function placeOnNeck(state: Analysis, profile: ValidatedStringedProfile): void {
   /** Beat each string becomes free again. */
@@ -311,49 +474,87 @@ function placeOnNeck(state: Analysis, profile: ValidatedStringedProfile): void {
   const stringHeldBy = profile.tuning.map<number | undefined>(() => undefined);
   let previous: StringFingering | undefined;
   let previousIndex: number | undefined;
+  /** Placed notes still sounding at the current attack. */
+  let held: number[] = [];
 
-  for (const index of state.order) {
-    const note = state.notes[index];
-    const placement = state.placements[index];
-    if (!note || !placement) {
+  let cursor = 0;
+  while (cursor < state.order.length) {
+    const firstIndex = state.order[cursor];
+    const first = firstIndex === undefined ? undefined : state.notes[firstIndex];
+    if (first === undefined) {
+      cursor += 1;
       continue;
     }
-    const candidates = fingeringsIn(profile, note.pitch);
-    if (candidates.length === 0) {
-      continue;
+    const anchor = first.startBeat;
+    const members: NeckMember[] = [];
+    while (cursor < state.order.length) {
+      const index = state.order[cursor];
+      const note = index === undefined ? undefined : state.notes[index];
+      if (index === undefined || note === undefined || !isSimultaneous(anchor, note.startBeat)) {
+        break;
+      }
+      cursor += 1;
+      const candidates = fingeringsIn(profile, note.pitch);
+      if (candidates.length > 0) {
+        const endBeat = note.startBeat + note.durationBeat;
+        members.push({
+          index,
+          startBeat: note.startBeat,
+          endBeat,
+          sounding: endBeat > anchor + BEAT_EPS,
+          candidates,
+        });
+      }
     }
-    const free = candidates.filter(
-      (candidate) => (stringFreeAt[candidate.string] ?? 0) <= note.startBeat + BEAT_EPS,
+    held = held.filter((member) => {
+      const note = state.notes[member];
+      return note !== undefined && note.startBeat + note.durationBeat > anchor + BEAT_EPS;
+    });
+    const heldFrets = held
+      .map((member) => state.placements[member]?.fingering?.fret)
+      .filter((fret): fret is number => fret !== undefined);
+    const { picks, conflicts } = placeAttack(
+      members,
+      previous,
+      stringFreeAt,
+      stringHeldBy,
+      heldFrets,
+      profile.maxStretch,
     );
-    if (free.length === 0) {
-      const blocked = candidates
-        .map((candidate) => stringHeldBy[candidate.string])
-        .filter((held): held is number => held !== undefined);
-      state.issues.push({
-        type: 'stringConflict',
-        layer: 2,
-        notes: [...new Set([...blocked, index])].sort((a, b) => a - b),
-        startBeat: note.startBeat,
-        impossible: true,
-        message: `MIDI ${note.pitch} needs a string already sounding on ${profile.name}`,
-      });
-    }
-    const pool = free.length > 0 ? free : candidates;
-    const chosen = pool.reduce((best, candidate) =>
-      fingeringCost(candidate, previous) < fingeringCost(best, previous) ? candidate : best,
-    );
-    placement.fingering = chosen;
-    stringFreeAt[chosen.string] = note.startBeat + note.durationBeat;
-    stringHeldBy[chosen.string] = index;
+    members.forEach((member, k) => {
+      const chosen = picks[k];
+      const placement = state.placements[member.index];
+      if (!chosen || !placement) {
+        return;
+      }
+      const conflict = conflicts.find((entry) => entry.member === member);
+      const note = state.notes[member.index];
+      if (conflict && note) {
+        state.issues.push({
+          type: 'stringConflict',
+          layer: 2,
+          notes: [...new Set([...conflict.blocked, member.index])].sort((a, b) => a - b),
+          startBeat: note.startBeat,
+          impossible: true,
+          message: `MIDI ${note.pitch} needs a string already sounding on ${profile.name}`,
+        });
+      }
+      placement.fingering = chosen;
+      stringFreeAt[chosen.string] = member.endBeat;
+      stringHeldBy[chosen.string] = member.index;
+      if (member.sounding) {
+        held.push(member.index);
+      }
 
-    state.movement += 1;
-    if (previous) {
-      state.movement +=
-        Math.abs(chosen.fret - previous.fret) + Math.abs(chosen.string - previous.string);
-      checkShiftSpeed(state, profile, previousIndex, index, previous, chosen);
-    }
-    previous = chosen;
-    previousIndex = index;
+      state.movement += 1;
+      if (previous) {
+        state.movement +=
+          Math.abs(chosen.fret - previous.fret) + Math.abs(chosen.string - previous.string);
+        checkShiftSpeed(state, profile, previousIndex, member.index, previous, chosen);
+      }
+      previous = chosen;
+      previousIndex = member.index;
+    });
   }
 
   for (const group of soundingGroups(state)) {

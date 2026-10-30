@@ -7,7 +7,6 @@
  */
 
 import { InvalidInputError } from '../../core/errors/index.js';
-import type { KeyScale } from '../../core/types.js';
 import type { Chord } from '../../theory/chord/index.js';
 import { diatonicTriad } from '../../theory/chord/index.js';
 import {
@@ -69,11 +68,14 @@ export type PivotChord = {
  * @category Functional Harmony
  */
 export function pivotChords(from: SpelledKeyLike, to: SpelledKeyLike): PivotChord[] {
-  return pivotsBetween(resolveKey(from), resolveKey(to).scale);
+  return pivotsBetween(resolveKey(from), resolveKey(to));
 }
 
-/** {@link pivotChords} on keys already read: the key being left whole, the other as its scale. */
-export function pivotsBetween(from: ResolvedKey, to: KeyScale): PivotChord[] {
+/**
+ * {@link pivotChords} on keys already read. Both are taken whole: the chords
+ * are spelled in `from`, and each numeral is read against its key as written.
+ */
+export function pivotsBetween(from: ResolvedKey, to: ResolvedKey): PivotChord[] {
   // Testing the degree count keeps a key with no diatonic triads an empty
   // result rather than letting the stacking throw.
   if (scaleTonesInDegreeOrder(from.scale).length !== HEPTATONIC_DEGREES) {
@@ -83,7 +85,7 @@ export function pivotsBetween(from: ResolvedKey, to: KeyScale): PivotChord[] {
   const seen = new Set<string>();
   for (let degree = 1; degree <= HEPTATONIC_DEGREES; degree += 1) {
     const chord = stackedTriad(degree, from);
-    if (chord === null || !isDiatonicChord(chord, to)) {
+    if (chord === null || !isDiatonicChord(chord, to.scale)) {
       continue;
     }
     // Candidates are identified by sonority, so a scale whose degrees repeat a

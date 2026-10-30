@@ -381,15 +381,19 @@ describe('chordTimelineFromNotes dynamic segmentation on degenerate input', () =
 });
 
 describe('chordTimelineFromNotes with a segmentation that names neither mode', () => {
-  it('keeps each sounding run as one span, as an unsearched grid would', () => {
+  it('refuses it rather than running a mode of its own', () => {
     const notes = [
       ...blockChord([60, 64, 67], 0, 2), // C E G
       ...blockChord([62, 65, 69], 2, 2), // D F A
     ];
-    const result = chordTimelineFromNotes(notes, { segmentation: 'bogus' as never });
-    expect(bounds(result)).toEqual([[0, 4]]);
-    expect(roots(result)).toEqual([5]);
-    expect(result.timeline.segments[0]?.chord.quality).toBe('maj13');
+    for (const segmentation of ['bogus', 'Grid', 'fixed', 1]) {
+      expect(() => chordTimelineFromNotes(notes, { segmentation: segmentation as never })).toThrow(
+        /^timeline segmentation must be one of dynamic, grid; received/,
+      );
+    }
+    expect(bounds(chordTimelineFromNotes(notes, { segmentation: null as never }))).toEqual(
+      bounds(chordTimelineFromNotes(notes)),
+    );
   });
 });
 

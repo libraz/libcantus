@@ -34,6 +34,11 @@ struct ProgressionData {
   std::vector<Chord> chords;
   /** The carried key, absent when there is none. */
   std::optional<ResolvedKey> key;
+  /**
+   * Each chord's own key by position, null for a chord without one. Written only when the
+   * progression carries no key and some chord does; read only when `key` is absent.
+   */
+  std::optional<std::vector<Nullable<ResolvedKey>>> chordKeys;
 };
 
 /** Options of Progression::analyze(): the chord and cadence options, over the whole progression. */
@@ -82,7 +87,11 @@ class Progression {
   static Progression from_spans(const std::vector<ChordSpan>& spans,
                                 const std::optional<KeyArg>& key = std::nullopt);
 
-  /** Rebuild a progression from its to_json() (`Progression.fromJSON`). */
+  /**
+   * Rebuild a progression from its to_json(), with the carried key or, without one, each chord's
+   * own key (`Progression.fromJSON`).
+   * @throws InvalidInputError if `chordKeys` does not hold one entry per chord.
+   */
   static Progression from_json(const ProgressionData& data);
 
   /** Wrap plain progression data (`Progression.fromData`). */
@@ -191,6 +200,8 @@ class Progression {
  private:
   /** The key an analysis method reads: the explicit one, else the carried one. */
   Key resolve_analysis_key(const std::optional<KeyArg>& key) const;
+  /** The members read in `key`: spellings the caller gave, the rest derived from it. */
+  std::vector<Chord> views_in(const Key& key) const;
   /** The carried key as a constructor argument. */
   std::optional<KeyArg> carried_key() const;
 

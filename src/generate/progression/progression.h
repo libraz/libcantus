@@ -23,6 +23,9 @@ extern const TimeSignature kProgressionDefaultTs;
 /** The names of PROG_STYLES, for assert_one_of(). */
 std::vector<std::string_view> prog_style_names();
 
+/** The names of the preset functions, for assert_one_of(). */
+std::vector<std::string_view> prog_function_names();
+
 /** The built-in presets as the table holds them (`PRESETS`). */
 const std::vector<ProgressionPreset>& builtin_presets();
 

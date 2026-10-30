@@ -10,6 +10,7 @@
 
 #include "analyze/adjacency.h"
 #include "analyze/grid.h"
+#include "analyze/timeline/timeline.h"
 #include "cantus/analyze/functional.h"
 #include "cantus/core/errors.h"
 #include "cantus/core/limits.h"
@@ -243,12 +244,8 @@ std::vector<TensionPoint> tension_curve(const std::vector<ArrangementTrack>& tra
     if (opts.keys) {
       keys = *opts.keys;
     } else if (opts.key) {
-      KeyRegion region;
-      region.startBeat = placed.startBeat;
-      region.endBeat = total_beats;
-      region.key = resolve_key(*opts.key);
-      region.confidence = 1;
-      keys.push_back(std::move(region));
+      // The one region a named key holds starts where the music does.
+      keys = stated_key_regions(resolve_key(*opts.key), placed.startBeat, total_beats);
     } else {
       KeyTimelineOptions key_options;
       key_options.meters = meters;

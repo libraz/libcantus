@@ -31,7 +31,11 @@ import type {
   ChordTimelineOptions,
   ChordTimelineResult,
 } from '../analyze/timeline/index.js';
-import { chordTimelineFromNotes, detectCadences } from '../analyze/timeline/index.js';
+import {
+  chordTimelineFromNotes,
+  detectCadences,
+  statedKeyRegions,
+} from '../analyze/timeline/index.js';
 import type { AnalyzedNote, IdentifiedVoiceNote, KeyContext } from '../analyze/voice/index.js';
 import { toVoiceNotes } from '../analyze/voice/index.js';
 import type { NoteEventIndex, NoteEventIndexOptions } from '../core/event-index/index.js';
@@ -81,7 +85,6 @@ import {
   assertNoteEventArray,
   copyNoteEvent,
   copyPlain,
-  STATED_KEY_CONFIDENCE,
   withoutNegativeZero,
 } from './shared.js';
 import { copyKeyRegion, Timeline } from './timeline.js';
@@ -200,27 +203,15 @@ function tempoFrom(tempo: TempoMap | number | undefined): TempoMap {
  * The one region a stated key describes: that key, in force from where the
  * music starts to where the analyzed span ends.
  *
- * The same region the chord analysis builds for a key it was given, so a score
- * that carries a key answers with one key wherever it is asked — from
+ * Built by the helper the chord analysis builds a given key's region with, so a
+ * score that carries a key answers with one key wherever it is asked — from
  * {@link Score.key}, from {@link Score.keys}, and from the timeline it hands
  * out. A score with nothing sounding has no region at all, since there is no
  * music for the key to be in force over.
  */
-function statedKeyRegions(key: Key, notes: readonly NoteEvent[], totalBeats: number): KeyRegion[] {
+function scoreKeyRegions(key: Key, notes: readonly NoteEvent[], totalBeats: number): KeyRegion[] {
   const first = notes[0];
-  if (first === undefined || totalBeats <= first.startBeat) {
-    return [];
-  }
-  return [
-    {
-      // The region starts where the music does, as an inferred one does, so a
-      // pickup is covered by the key it sounds in.
-      startBeat: first.startBeat,
-      endBeat: totalBeats,
-      key: keyIdentity(key),
-      confidence: STATED_KEY_CONFIDENCE,
-    },
-  ];
+  return first === undefined ? [] : statedKeyRegions(keyIdentity(key), first.startBeat, totalBeats);
 }
 
 /** The plain data a set of notes and a context describe. */
@@ -667,7 +658,7 @@ export class Score {
           opts.totalBeats === undefined || opts.totalBeats === null
             ? this.totalBeats
             : assertRange(opts.totalBeats, 0, Number.MAX_SAFE_INTEGER, 'key timeline totalBeats');
-        return statedKeyRegions(this.#key, this.#data.notes, totalBeats);
+        return scoreKeyRegions(this.#key, this.#data.notes, totalBeats);
       }
       return keyTimelineFromNotes(this.#data.notes, { meters: this.#data.meters, ...opts });
     }
@@ -779,8 +770,9 @@ export class Score {
    *
    * A melody is one line, so a score holding several is read as its top voice:
    * notes struck together are one event and the highest of them stands for it.
-   * A piano part read whole therefore answers for the voice a listener follows
-   * rather than for a line assembled from the insides of its chords. Split the
+   * A block-chord part read whole therefore answers for its top voice rather
+   * than for a line assembled from the insides of its chords; a lower note
+   * struck while a higher one still sounds stays in the line, though. Split the
    * score into lines first to have each of them answered for.
    *
    * @param opts Cell-length bounds and the recurrence threshold; see
@@ -1234,7 +1226,7 @@ export class Score {
       this.#regions ??
       (this.#key === undefined
         ? keyTimelineFromNotes(this.#data.notes, { meters: this.#data.meters })
-        : statedKeyRegions(this.#key, this.#data.notes, this.totalBeats));
+        : scoreKeyRegions(this.#key, this.#data.notes, this.totalBeats));
     this.#regions = regions;
     return regions;
   }

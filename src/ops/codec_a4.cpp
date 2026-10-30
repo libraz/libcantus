@@ -5,6 +5,7 @@
 #include <string>
 
 #include "cantus/core/errors.h"
+#include "core/validation/validation.h"
 #include "js/format.h"
 #include "js/value.h"
 #include "ops/accessors.h"
@@ -23,6 +24,14 @@ void write_fields(const ArrangementAnalysis& v, FieldWriter& w) {
   w.field("cadences", v.cadences);
   w.field("tracks", v.tracks);
   w.field("conflicts", v.conflicts);
+}
+
+SafetyProfile read_arrangement_profile(const json::Value& opts) {
+  return *parse_safety_profile(
+      assert_one_of(opt_or(opts, "profile", to_string(SafetyProfile::kPop)),
+                    std::vector<std::string_view>{to_string(SafetyProfile::kStrict),
+                                                  to_string(SafetyProfile::kPop)},
+                    "arrangement profile"));
 }
 
 TimelineHost wire_timeline_host(const Args& a, const json::Value& timeline) {
@@ -44,7 +53,8 @@ TimelineHost wire_timeline_host(const Args& a, const json::Value& timeline) {
   }
   const json::Value& listed = get(timeline, "segments");
   if (!listed.is_array()) {
-    throw InvalidInputError("timeline.segments must be an array; received " + js::type_of(listed));
+    throw InvalidInputError("timeline.segments must be an array; received " +
+                            describe_rejected(listed));
   }
   segments = std::make_shared<WireSegments>(listed.as_array());
   const json::Array* own = nullptr;
@@ -52,7 +62,7 @@ TimelineHost wire_timeline_host(const Args& a, const json::Value& timeline) {
     const json::Value& payload = get(*source, "segments");
     if (!payload.is_array()) {
       throw InvalidInputError("timeline.segments must be an array; received " +
-                              js::type_of(payload));
+                              describe_rejected(payload));
     }
     own = &payload.as_array();
   }

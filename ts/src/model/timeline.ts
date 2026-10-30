@@ -6,10 +6,12 @@ import type { ReducedChord, ReduceProgressionOptions } from '../analyze/reductio
 import { reduceProgression } from '../analyze/reduction/index.js';
 import type { CadenceHit, ChordTimeline, ChordTimelineOptions } from '../analyze/timeline/index.js';
 import {
+  assertSpansInOrder,
   chordAtBeat,
   chordTimelineFromChords,
   chordTimelineFromNotes,
   detectCadences,
+  statedKeyRegions,
 } from '../analyze/timeline/index.js';
 import { InvalidInputError } from '../core/errors/index.js';
 import type { IntervalLike } from '../core/pitch/index.js';
@@ -29,13 +31,7 @@ import { Chord as ChordClass } from './chord.js';
 import type { Key } from './key.js';
 import { keyIdentity, toKey } from './key.js';
 import { Progression } from './progression.js';
-import {
-  assertDataArray,
-  assertDataObject,
-  assertKeyArgument,
-  STATED_KEY_CONFIDENCE,
-  spanEnd,
-} from './shared.js';
+import { assertDataArray, assertDataObject, assertKeyArgument, spanEnd } from './shared.js';
 
 /** The plain form a {@link Timeline} hands out and is rebuilt from. */
 export type TimelineData = {
@@ -148,6 +144,18 @@ function copyConfidence(
   );
 }
 
+/**
+ * Reject a timeline whose segments or key regions a reader cannot search.
+ *
+ * Every constructor and rebuild of a {@link Timeline} — and through it every
+ * key region an `Arrangement` stores — passes here, so a timeline that
+ * constructs answers `at`, `roman` and `keys` for every beat it covers.
+ */
+function validateTimeline(segments: readonly ChordSegment[], keys: readonly KeyRegion[]): void {
+  assertSpansInOrder(segments, 'timeline segments');
+  assertSpansInOrder(keys, 'timeline keys');
+}
+
 /** The part of a span lying inside `[fromBeat, toBeat)`, or null when none does. */
 function clipSpan<T extends { startBeat: number; endBeat: number }>(
   span: T,
@@ -191,8 +199,9 @@ export class Timeline {
    *
    * @param data The segments and the span they cover; copied, never retained.
    * @throws If the span, a segment, or a key region carries a number it cannot
-   *   hold — a beat that is not finite, a mode mask that names no scale — or if
-   *   the confidences do not run one per segment.
+   *   hold — a beat that is not finite, a mode mask that names no scale — if
+   *   the segments or the key regions are not disjoint, in beat order and of
+   *   positive length, or if the confidences do not run one per segment.
    */
   constructor(data: TimelineData) {
     assertDataObject(data, 'timeline data');
@@ -211,6 +220,7 @@ export class Timeline {
     this.#segmentConfidence = Object.freeze(
       copyConfidence(data.segmentConfidence, this.#segments.length),
     );
+    validateTimeline(this.#segments, this.#keys);
   }
 
   /**
@@ -219,7 +229,8 @@ export class Timeline {
    * @param spans The chords with their onsets, in any order.
    * @param totalBeats Where the last chord stops sounding.
    * @param key The key the chords are read in, when it is already known. It
-   *   becomes the one key region under the whole span; without it the timeline
+   *   becomes the one key region from the first chord to the end of the span;
+   *   without it, or without a chord for it to be in force over, the timeline
    *   carries no key, and the members that need one say so.
    * @returns The timeline.
    */
@@ -227,16 +238,11 @@ export class Timeline {
     const timeline = chordTimelineFromChords(spans, totalBeats);
     const data: TimelineData = { segments: timeline.segments, totalBeats };
     if (key !== undefined) {
-      data.keys = [
-        {
-          // The region starts where the music does, as an inferred one does,
-          // so a chord placed in a pickup is covered by the key it sounds in.
-          startBeat: timeline.segments[0]?.startBeat ?? 0,
-          endBeat: totalBeats,
-          key: keyIdentity(toKey(key)),
-          confidence: STATED_KEY_CONFIDENCE,
-        },
-      ];
+      const stated = keyIdentity(toKey(key));
+      const first = timeline.segments[0];
+      // The region starts where the music does, as an inferred one does, so a
+      // chord placed in a pickup is covered by the key it sounds in.
+      data.keys = first === undefined ? [] : statedKeyRegions(stated, first.startBeat, totalBeats);
     }
     return new Timeline(data);
   }

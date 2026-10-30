@@ -3760,7 +3760,7 @@
               "name": "data",
               "optional": false,
               "rest": false,
-              "fields": ["chords", "key"]
+              "fields": ["chords", "key", "chordKeys"]
             }
           ],
           "length": 1
@@ -3774,7 +3774,7 @@
               "name": "data",
               "optional": false,
               "rest": false,
-              "fields": ["chords", "key"]
+              "fields": ["chords", "key", "chordKeys"]
             }
           ],
           "length": 1

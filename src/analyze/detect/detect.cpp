@@ -248,6 +248,10 @@ std::vector<ChordMatch> detect_chord(const std::vector<int>& pitches,
       if (missing.size() > 1 || (missing.size() == 1 && missing[0] != fifth_pc)) {
         continue;
       }
+      // A chord needs two of its own tones sounding: a lone root is not a power chord.
+      if (tones.size() - missing.size() < 2) {
+        continue;
+      }
       std::vector<int> extra;
       for (int pc : input) {
         if (!contains(tones, pc)) {

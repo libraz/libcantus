@@ -8,9 +8,10 @@
  * curve is sampled across the piece.
  */
 
-// The role check the class API applies at its own entrance, so both entrances
-// take the same set of names rather than each holding a list of its own.
-export { trackRoleOf } from './internal.js';
+// The checks the class API applies at its own entrance, so both entrances
+// refuse the same values with the same messages rather than each holding rules
+// of its own.
+export { arrangementProfile, assertTrackNotes, harmonyTrackSet, trackRoleOf } from './internal.js';
 export type { ArrangementSession, TrackEdit } from './session.js';
 export { createArrangementSession } from './session.js';
 export type { TensionPoint } from './tension.js';

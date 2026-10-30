@@ -1,9 +1,12 @@
 // Retained values: `$retain`, `{"$class"|"$hy": T, "$ref": id}` arguments, and what they save.
 
 #include <catch2/catch_test_macros.hpp>
+#include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "cantus/cantus_c.h"
@@ -359,7 +362,7 @@ TEST_CASE("a nested $ref is expanded to its data", "[retain]") {
   CHECK(
       ok("Progression.constructor", "[[" + c_ref + "," + g_ref + "," + c_ref + "]," + key + "]") ==
       ok("Progression.constructor", "[[" + c + "," + g + "," + c + "]," + key + "]"));
-  // $retain over a value holding a ref keeps a copy of the data.
+  // $retain over a value holding a ref keeps the data, past the release of that ref.
   const std::string again = ok("$retain", "[" + c_ref + "]");
   CHECK(ref_of(again) != ref_of(c_ref));
   cantus::ops::release_handle(ref_of(c_ref));
@@ -418,4 +421,258 @@ TEST_CASE("one ref serves several threads at once", "[retain]") {
   CHECK(live() == before);
   cantus::ops::release_handle(ref_of(ref));
   cantus::ops::release_handle(ref_of(arrangement));
+}
+
+namespace {
+
+/** A host function that answers `true`, releasing `id` (when nonzero) on its first call. */
+struct ReleaseOnFirstCall {
+  std::uint64_t id = 0;
+  int calls = 0;
+  std::string reply = "true";
+};
+
+std::int32_t release_on_first_call(void* ctx, std::uint32_t, const char*, std::size_t, char** out,
+                                   std::size_t* out_len) {
+  auto* host = static_cast<ReleaseOnFirstCall*>(ctx);
+  if (host->calls++ == 0 && host->id != 0) {
+    cantus::ops::release_handle(host->id);
+  }
+  *out = host->reply.data();
+  *out_len = host->reply.size();
+  return 0;
+}
+
+/** kArrangement with its first track named by an object of 20 keys. */
+std::string arrangement_with_wide_name() {
+  std::string name = "{";
+  for (int i = 0; i < 20; ++i) {
+    name += (i == 0 ? "\"k" : ",\"k") + num(i) + "\":" + num(i);
+  }
+  name += "}";
+  std::string out = kArrangement;
+  const std::string from = R"("name":"keys")";
+  out.replace(out.find(from), from.size(), "\"name\":" + name);
+  return out;
+}
+
+/** Run `work(t)` on `n` threads at once and return the mismatches each counted. */
+template <class Work>
+std::vector<int> on_threads(int n, Work work) {
+  std::vector<int> mismatches(static_cast<std::size_t>(n), 0);
+  std::vector<std::thread> threads;
+  for (int t = 0; t < n; ++t) {
+    threads.emplace_back([&, t] { mismatches[static_cast<std::size_t>(t)] = work(t); });
+  }
+  for (std::thread& thread : threads) {
+    thread.join();
+  }
+  return mismatches;
+}
+
+}  // namespace
+
+TEST_CASE("a shared value reads as its target and copies it on the first change", "[retain]") {
+  auto target = std::make_shared<const json::Value>(json::parse(R"({"a":[1,2],"b":"x"})"));
+  json::Value shared = json::Value::share(target);
+  CHECK(shared.is_shared());
+  CHECK(shared == *target);
+  CHECK(json::stringify(shared) == R"({"a":[1,2],"b":"x"})");
+  const json::Value copy = shared;
+  CHECK(copy.is_shared());
+  CHECK(&copy.as_object() == &target->as_object());
+  CHECK(!json::Value::share(std::make_shared<const json::Value>(3.0)).is_shared());
+  shared.as_object().set("b", "y");
+  CHECK(!shared.is_shared());
+  CHECK(json::stringify(shared) == R"({"a":[1,2],"b":"y"})");
+  CHECK(json::stringify(*target) == R"({"a":[1,2],"b":"x"})");
+  CHECK(json::stringify(copy) == R"({"a":[1,2],"b":"x"})");
+}
+
+TEST_CASE("a value naming one snapshot many times shares it", "[retain]") {
+  const std::string score = score_wire(2000);
+  const std::string ref = ok("$retain", "[" + score + "]");
+  json::Value named = json::parse("[[" + ref + "," + ref + "],{\"inner\":" + ref + "}]");
+  cantus::ops::expand_refs(named);
+  const json::Value& snapshot = cantus::ops::resolve_ref(json::parse(ref))->wire();
+  const json::Array& items = std::as_const(named).as_array();
+  const json::Value& first = items[0].as_array()[0];
+  const json::Value& second = items[0].as_array()[1];
+  const json::Value& inner = *items[1].as_object().find("inner");
+  for (const json::Value* v : {&first, &second, &inner}) {
+    CHECK(v->is_shared());
+    CHECK(&v->as_object() == &snapshot.as_object());
+  }
+
+  // Thousands of names of one large snapshot in a small request: no copy, no decode per name.
+  std::string many = "[";
+  for (int i = 0; i < 5000; ++i) {
+    many += (i == 0 ? "" : ",") + ref;
+  }
+  many += "]";
+  const std::string expected = ok("Score#totalBeats", "[" + score + "]");
+  std::uint64_t start = decodes();
+  CHECK(ok("Score#totalBeats", "[" + ref + "," + many + "]") == expected);
+  CHECK(decodes() - start == 0);
+  cantus::ops::release_handle(ref_of(ref));
+}
+
+TEST_CASE("a chain of retained values naming the one before stays one snapshot each", "[retain]") {
+  const std::string empty = R"({"$hy":"ChordTimeline","segments":[]})";
+  const std::string expected = ok("ChordTimeline#at", "[" + empty + ",0]");
+  double before = live();
+  std::vector<std::uint64_t> made;
+  std::string previous = ok("$retain", "[" + empty + "]");
+  made.push_back(ref_of(previous));
+  // Copying each name would make the last level 8^16 copies of the first.
+  for (int level = 0; level < 16; ++level) {
+    std::string held;
+    for (int i = 0; i < 8; ++i) {
+      held += (i == 0 ? "" : ",") + previous;
+    }
+    previous = ok("$retain", R"([{"$hy":"ChordTimeline","segments":[],"held":[)" + held + "]}]");
+    made.push_back(ref_of(previous));
+  }
+  CHECK(live() == before + 17);
+  CHECK(ok("ChordTimeline#at", "[" + previous + ",0]") == expected);
+  // A snapshot keeps what it names alive past that one's release.
+  cantus::ops::release_handle(made.front());
+  CHECK(ok("ChordTimeline#at", "[" + previous + ",0]") == expected);
+  for (std::uint64_t id : made) {
+    cantus::ops::release_handle(id);
+  }
+  CHECK(live() == before);
+}
+
+TEST_CASE("a ref released while its call runs answers that call, then is refused", "[retain]") {
+  const std::string score = score_wire(40);
+  const std::string args_tail = R"(,{"$cb":0}])";
+  ReleaseOnFirstCall plain_host;
+  Result plain =
+      cantus::ops::dispatch("Score#filter", "[" + score + args_tail,
+                            cantus::ops::CallContext(release_on_first_call, &plain_host));
+  REQUIRE(plain.status == CANTUS_OK);
+
+  double before = live();
+  const std::string ref = ok("$retain", "[" + score + "]");
+  ReleaseOnFirstCall host{ref_of(ref)};
+  Result during = cantus::ops::dispatch("Score#filter", "[" + ref + args_tail,
+                                        cantus::ops::CallContext(release_on_first_call, &host));
+  CHECK(host.calls == 40);
+  CHECK(during.status == CANTUS_OK);
+  CHECK(during.json == plain.json);
+  CHECK(live() == before);
+  Result after = call("Score#notes", "[" + ref + "]");
+  CHECK(after.status == CANTUS_RELEASED_HANDLE);
+}
+
+TEST_CASE("arrangements sharing evidence through an unchanged update update concurrently",
+          "[retain]") {
+  const std::string plain_76 =
+      ok("Arrangement#update", std::string("[") + kArrangement + "," + lead_edit(76) + "]");
+  const std::string plain_77 =
+      ok("Arrangement#update", std::string("[") + kArrangement + "," + lead_edit(77) + "]");
+  const std::string analysis_76 = ok("Arrangement#analysis", "[" + plain_76 + "]");
+  const std::string analysis_77 = ok("Arrangement#analysis", "[" + plain_77 + "]");
+  double before = live();
+  for (int round = 0; round < 12; ++round) {
+    INFO("round " << round);
+    const std::string a = ok("$retain", std::string("[") + kArrangement + "]");
+    // Both forms change nothing the analysis reads, so the two sessions share one evidence.
+    const std::string unchanged = round % 2 == 0 ? std::string("[]") : lead_edit(72);
+    const std::string b_result = ok("Arrangement#update", "[" + a + "," + unchanged + "]");
+    const std::string b =
+        R"({"$class":"Arrangement","$ref":)" + num(static_cast<double>(ref_of(b_result))) + "}";
+    std::vector<int> mismatches = on_threads(2, [&](int t) {
+      const std::string& self = t == 0 ? a : b;
+      const std::string& plain = t == 0 ? plain_76 : plain_77;
+      const std::string& analysis = t == 0 ? analysis_76 : analysis_77;
+      Result u = call("Arrangement#update", "[" + self + "," + lead_edit(t == 0 ? 76 : 77) + "]");
+      if (u.status != CANTUS_OK || without_ref(u.json) != plain) {
+        return 1;
+      }
+      const std::string next =
+          R"({"$class":"Arrangement","$ref":)" + num(static_cast<double>(ref_of(u.json))) + "}";
+      Result read = call("Arrangement#analysis", "[" + next + "]");
+      cantus::ops::release_handle(ref_of(u.json));
+      return read.status == CANTUS_OK && read.json == analysis ? 0 : 1;
+    });
+    CHECK(mismatches == std::vector<int>{0, 0});
+    cantus::ops::release_handle(ref_of(a));
+    cantus::ops::release_handle(ref_of(b_result));
+  }
+  CHECK(live() == before);
+}
+
+TEST_CASE("a parent ref and its unchanged child serve several threads at once", "[retain]") {
+  const int pitches[] = {73, 76, 77, 79};
+  std::vector<std::string> plain;
+  for (int pitch : pitches) {
+    plain.push_back(
+        ok("Arrangement#update", std::string("[") + kArrangement + "," + lead_edit(pitch) + "]"));
+  }
+  const std::string conflicts = ok("Arrangement#conflicts", std::string("[") + kArrangement + "]");
+  double before = live();
+  std::uint64_t full = counters::full_analyses.load();
+  const std::string parent = ok("$retain", std::string("[") + kArrangement + "]");
+  // The first concurrent round opens the lazy session once.
+  std::vector<int> mismatches = on_threads(8, [&](int) {
+    Result r = call("Arrangement#conflicts", "[" + parent + "]");
+    return r.status == CANTUS_OK && r.json == conflicts ? 0 : 1;
+  });
+  CHECK(mismatches == std::vector<int>(8, 0));
+  CHECK(counters::full_analyses.load() - full == 1);
+
+  const std::string child_result = ok("Arrangement#update", "[" + parent + ",[]]");
+  const std::string child =
+      R"({"$class":"Arrangement","$ref":)" + num(static_cast<double>(ref_of(child_result))) + "}";
+  mismatches = on_threads(8, [&](int t) {
+    int bad = 0;
+    for (int round = 0; round < 5; ++round) {
+      std::size_t which = static_cast<std::size_t>(t + round) % 4;
+      Result u = call("Arrangement#update",
+                      "[" + (t % 2 == 0 ? parent : child) + "," + lead_edit(pitches[which]) + "]");
+      if (u.status != CANTUS_OK || without_ref(u.json) != plain[which]) {
+        ++bad;
+        continue;
+      }
+      cantus::ops::release_handle(ref_of(u.json));
+    }
+    return bad;
+  });
+  CHECK(mismatches == std::vector<int>(8, 0));
+  // Every update starts from a session, so none of them is a full analysis.
+  CHECK(counters::full_analyses.load() - full == 1);
+  cantus::ops::release_handle(ref_of(parent));
+  cantus::ops::release_handle(ref_of(child_result));
+  CHECK(live() == before);
+}
+
+TEST_CASE("an updated ref is read from several threads at once", "[retain]") {
+  const std::string wide = arrangement_with_wide_name();
+  const std::string updated = ok("Arrangement#update", "[" + wide + "," + lead_edit(76) + "]");
+  const char* const ops[] = {"Arrangement#analysis",  "Arrangement#conflicts",
+                             "Arrangement#timeline",  "Arrangement#tracks",
+                             "Arrangement#reference", "Arrangement#tension"};
+  std::vector<std::string> expected;
+  for (const char* op : ops) {
+    expected.push_back(ok(op, "[" + updated + "]"));
+  }
+  const std::string base = ok("$retain", "[" + wide + "]");
+  const std::string result = ok("Arrangement#update", "[" + base + "," + lead_edit(76) + "]");
+  REQUIRE(without_ref(result) == updated);
+  const std::string ref =
+      R"({"$class":"Arrangement","$ref":)" + num(static_cast<double>(ref_of(result))) + "}";
+  std::vector<int> mismatches = on_threads(8, [&](int t) {
+    int bad = 0;
+    for (int round = 0; round < 10; ++round) {
+      std::size_t i = static_cast<std::size_t>(t + round) % expected.size();
+      Result r = call(ops[i], "[" + ref + "]");
+      bad += r.status == CANTUS_OK && r.json == expected[i] ? 0 : 1;
+    }
+    return bad;
+  });
+  CHECK(mismatches == std::vector<int>(8, 0));
+  cantus::ops::release_handle(ref_of(result));
+  cantus::ops::release_handle(ref_of(base));
 }

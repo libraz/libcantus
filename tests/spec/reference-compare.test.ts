@@ -219,8 +219,9 @@ describe('compareReferences on the reference fixtures', () => {
     // Both are read in one key, C major throughout.
     expect(comparison.harmony.keyPlanSimilarity).toBe(1);
     // Function shares, weighted by chord length: source T 44 / S 56 / D 28 of 128 beats,
-    // unrelated T 8 / S 9 / D 7 of 24 beats.
-    expect(comparison.harmony.functionSimilarity).toBeCloseTo(8 / 24 + 9 / 24 + 28 / 128, 9);
+    // unrelated T 8 / S 14 / D 2 of 24 beats — its opening span stands on the F its first
+    // downbeat sounds in the bass, so it reads as IV rather than a dominant.
+    expect(comparison.harmony.functionSimilarity).toBeCloseTo(8 / 24 + 56 / 128 + 2 / 24, 9);
     // Chord changes per bar: 21 over 32 bars against 10 over 8.
     expect(comparison.harmony.harmonicRhythmDensitySimilarity).toBeCloseTo(21 / 32 / 1.25, 9);
     // 4/4 against 3/4 shares no meter, so the onset levels stand in: every source chord

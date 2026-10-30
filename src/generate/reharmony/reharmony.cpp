@@ -188,10 +188,10 @@ std::vector<Substitution> substitute_chord_with(
   // Borrowed: a parallel-mode triad sharing the original's harmonic function. It is written the way
   // the mode it comes from writes it.
   settle_source();
-  HarmonicFunction target_function = function_of(source, scale);
+  HarmonicFunction target_function = function_of(source, resolved);
   KeyScale parallel = parallel_key(scale);
   for (const Chord& triad : diatonic_triads_of(parallel)) {
-    if (function_of(triad, scale) == target_function && !is_diatonic(triad, scale)) {
+    if (function_of(triad, resolved) == target_function && !is_diatonic(triad, resolved)) {
       candidates.push_back(
           Candidate{spelled_in_key(triad, tonic, parallel), SubstitutionType::kBorrowed});
     }
@@ -202,7 +202,7 @@ std::vector<Substitution> substitute_chord_with(
     for (ChordQuality quality : {ChordQuality::kMaj, ChordQuality::kMin}) {
       Chord mediant = make_chord(mod12(source.rootPc + offset), quality);
       if (common_tone_count(original_triad, chord_pitch_classes(mediant)) == 1 &&
-          !is_diatonic(mediant, scale)) {
+          !is_diatonic(mediant, resolved)) {
         candidates.push_back(
             Candidate{spelled_in_key(mediant, tonic, scale), SubstitutionType::kChromaticMediant});
       }
@@ -229,8 +229,8 @@ std::vector<Substitution> substitute_chord_with(
       }
     }
     Substitution out;
-    out.roman = chord_to_roman(candidate.chord, scale);
-    out.function = function_of(candidate.chord, scale);
+    out.roman = chord_to_roman(candidate.chord, resolved);
+    out.function = function_of(candidate.chord, resolved);
     out.chord = std::move(candidate.chord);
     out.type = candidate.type;
     results.push_back(std::move(out));
@@ -251,21 +251,21 @@ std::vector<BorrowedChord> modal_interchange_palette(const KeyArg& key) {
     }
     BorrowedChord out;
     out.chord = chord;
-    out.roman = chord_to_roman(chord, scale);
-    out.source = borrowed_source(chord, scale);
+    out.roman = chord_to_roman(chord, resolved);
+    out.source = borrowed_source(chord, resolved);
     palette.push_back(std::move(out));
   };
 
   KeyScale parallel = parallel_key(scale);
   for (const Chord& triad : diatonic_triads_of(parallel)) {
-    if (!is_diatonic(triad, scale) && borrowed_source(triad, scale).has_value()) {
+    if (!is_diatonic(triad, resolved) && borrowed_source(triad, resolved).has_value()) {
       add(spelled_in_key(triad, tonic, parallel));
     }
   }
   // The Neapolitan sits outside both parallel modes, so it is added explicitly, unless b2 is
   // already diatonic.
   Chord neapolitan = make_chord(mod12(scale.rootPc + 1), ChordQuality::kMaj);
-  if (!is_diatonic(neapolitan, scale)) {
+  if (!is_diatonic(neapolitan, resolved)) {
     add(spelled_on_root(neapolitan, transpose_note(tonic, 1), tonic, scale));
   }
   return palette;

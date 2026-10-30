@@ -153,7 +153,9 @@ Nullable<Chord> read_host_chord_answer(const json::Value& answer) {
   if (!js::truthy(answer)) {
     return Nullable<Chord>();
   }
-  return Nullable<Chord>(read_chord_fields(answer));
+  // The safety check takes a record and reads the quality of every chord it is handed.
+  assert_record(answer, "chord");
+  return Nullable<Chord>(read_chord_fields(answer, read_chord_quality(get(answer, "quality"))));
 }
 
 /** `assertWeightOverrides(opts.weights)`, and the overrides it accepted. */
@@ -245,12 +247,10 @@ void register_countermelody() {
         return read_host_chord_answer(args->callback(at)(json::Array{json::Value(beat)}));
       };
     }
-    // `register` is compared, not checked: any name but 'below' and 'above' selects neither side.
-    const json::Value* given_side = opt_null_default(opts, "register");
-    json::Value side = given_side != nullptr ? *given_side : json::Value("below");
-    request.side = js::strict_equals(side, json::Value("below"))   ? CounterSide::kBelow
-                   : js::strict_equals(side, json::Value("above")) ? CounterSide::kAbove
-                                                                   : CounterSide::kOther;
+    CounterRegister side = *parse_counter_register(
+        assert_one_of(opt_or(opts, "register", to_string(CounterRegister::kBelow)),
+                      counter_register_names(), "register"));
+    request.side = side == CounterRegister::kBelow ? CounterSide::kBelow : CounterSide::kAbove;
     request.melody = assert_note_events(get(opts, "melody"), "countermelody melody",
                                         line_options(undefined_value()));
     request.ts = meter_at(0, [&opts]() {

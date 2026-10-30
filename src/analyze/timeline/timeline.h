@@ -13,6 +13,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 #include "analyze/histogram.h"
@@ -33,11 +34,33 @@ const ChordSegment* segment_starting_at(const std::vector<ChordSegment>& segment
 /** segment_starting_at() over the beats of the segments alone. */
 const SegmentSpan* segment_span_starting_at(const std::vector<SegmentSpan>& segments, double beat);
 
-/** How chord boundaries are found: the two named modes, or any other value `segmentation` held. */
-enum class SegmentationMode : std::uint8_t { kDynamic, kGrid, kOther };
+/**
+ * Reject the span at `index` when it ends at or before its start, or starts before the span
+ * before it ends (`assertSpansInOrder`, one step).
+ * @throws InvalidInputError naming the span.
+ */
+void assert_span_in_order(double start_beat, double end_beat, const double* previous_end,
+                          std::size_t index, std::string_view name);
 
-/** The mode a typed segmentation names; dynamic when absent. */
-SegmentationMode segmentation_mode_of(const std::optional<ChordSegmentation>& segmentation);
+/**
+ * Reject spans that are not disjoint, in beat order, and of positive length
+ * (`assertSpansInOrder`). The beats must already be known to be finite.
+ * @throws InvalidInputError naming the first span out of order.
+ */
+template <class Span>
+void assert_spans_in_order(const std::vector<Span>& spans, std::string_view name) {
+  for (std::size_t index = 0; index < spans.size(); ++index) {
+    const double* previous_end = index > 0 ? &spans[index - 1].endBeat : nullptr;
+    assert_span_in_order(spans[index].startBeat, spans[index].endBeat, previous_end, index, name);
+  }
+}
+
+/**
+ * The key regions a stated key describes, from where the music starts to where the analysed span
+ * ends (`statedKeyRegions`); none when the span is empty.
+ */
+std::vector<KeyRegion> stated_key_regions(const ResolvedKey& key, double start_beat,
+                                          double end_beat);
 
 /** Number of candidates the boundary search scores each slot against. */
 std::size_t lexicon_size();
@@ -82,6 +105,8 @@ struct WindowReading {
 struct WindowChord : WindowReading {
   /** The augmented-sixth reading of the very same tones, when they spell one over the bass. */
   std::optional<WindowReading> augmented;
+  /** A diminished seventh read on each of its tones, in pitch-class order (`rootings`). */
+  std::vector<WindowReading> rootings;
 };
 
 /** A half-open run of slots whose contents an edit may have changed (`DirtySlots`). */
@@ -106,7 +131,7 @@ struct TimelineEvidence {
   SlotGrid grid;
   double slotCount = 0;
   double totalBeats = 0;
-  SegmentationMode segmentation = SegmentationMode::kDynamic;
+  ChordSegmentation segmentation = ChordSegmentation::kDynamic;
   double harmonicRhythm = 0;
   /** Whether the key was given rather than searched for. */
   bool keyGiven = false;
@@ -131,15 +156,9 @@ DirtySlots dirty_slots_for(const TimelineEvidence& evidence, double start_beat, 
 
 /**
  * chord_timeline_from_notes(), carrying over every slot the edit cannot reach (`analyzeTimeline`).
- * `mode` is how the segmentation option is read; `previous` and `dirty`, both or neither, name
- * the analysis being updated and the slots to recompute.
+ * `previous` and `dirty`, both or neither, name the analysis being updated and the slots to
+ * recompute.
  */
-TimelineAnalysis analyze_timeline(const std::vector<NoteEvent>& notes,
-                                  const ChordTimelineOptions& opts, SegmentationMode mode,
-                                  TimelineEvidence* previous = nullptr,
-                                  const DirtySlots* dirty = nullptr);
-
-/** analyze_timeline() with the mode the typed option names. */
 TimelineAnalysis analyze_timeline(const std::vector<NoteEvent>& notes,
                                   const ChordTimelineOptions& opts,
                                   TimelineEvidence* previous = nullptr,

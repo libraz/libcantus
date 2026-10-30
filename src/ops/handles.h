@@ -85,7 +85,13 @@ bool is_ref(const json::Value& v) noexcept;
  */
 std::shared_ptr<const Retained> resolve_ref(const json::Value& ref);
 
-/** Replace every `$ref` value inside `v`, `v` itself included, by a copy of its snapshot. */
+/**
+ * The snapshot's wire as a value that shares it (json::Value::share) and keeps the snapshot alive,
+ * so a value naming one snapshot many times costs one snapshot, not one copy per name.
+ */
+json::Value share_wire(const std::shared_ptr<const Retained>& snapshot);
+
+/** Replace every `$ref` value inside `v`, `v` itself included, by share_wire() of its snapshot. */
 void expand_refs(json::Value& v);
 
 /** Drop handle `id`; unknown and released ids are ignored. */

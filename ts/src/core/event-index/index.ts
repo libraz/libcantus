@@ -1,6 +1,11 @@
 import { BEAT_EPS } from '../meter/internal.js';
 import type { NoteEvent } from '../types.js';
-import { assertFiniteNumber, assertNoteEvents, assertOptions } from '../validation/index.js';
+import {
+  assertFiniteNumber,
+  assertNoteEvents,
+  assertOneOf,
+  assertOptions,
+} from '../validation/index.js';
 
 /**
  * A validated note retaining its position in the caller's original array.
@@ -118,7 +123,10 @@ export function createNoteEventIndex(
 ): NoteEventIndex {
   const asked = assertOptions(options, 'options');
   assertNoteEvents(events, asked.name ?? 'note events', asked);
-  const tieBreak = asked.tieBreak ?? 'highest';
+  const tieBreak: OnsetTieBreak =
+    asked.tieBreak === undefined || asked.tieBreak === null
+      ? 'highest'
+      : assertOneOf(asked.tieBreak, ['highest', 'lowest', 'last'], 'options.tieBreak');
   // Each wrapper is frozen, not only the array and the note inside it: `endBeat`
   // is what the active-note search is built from, so a host that writes to it
   // would leave the index answering from a span nothing else knows about.
@@ -184,11 +192,11 @@ export function createNoteEventIndex(
       assertFiniteNumber(beat, 'beat');
       const index = latestActiveIndex(upperBound(notes, beat + BEAT_EPS), beat);
       if (index < 0) return undefined;
-      const onset = notes[index]?.note.startBeat;
+      const onset = notes[index]?.note.startBeat ?? 0;
       let best: IndexedNoteEvent | undefined;
       for (let candidateIndex = index; candidateIndex >= 0; candidateIndex -= 1) {
         const indexed = notes[candidateIndex];
-        if (indexed !== undefined && indexed.note.startBeat !== onset) break;
+        if (indexed !== undefined && Math.abs(indexed.note.startBeat - onset) >= BEAT_EPS) break;
         if (
           indexed === undefined ||
           indexed.note.durationBeat <= 0 ||
@@ -201,7 +209,11 @@ export function createNoteEventIndex(
           best = indexed;
           continue;
         }
-        if (tieBreak === 'last') continue;
+        // Onsets inside one BEAT_EPS group are not in input order, so 'last' compares indices.
+        if (tieBreak === 'last') {
+          if (indexed.originalIndex > best.originalIndex) best = indexed;
+          continue;
+        }
         const difference = indexed.note.pitch - best.note.pitch;
         // Equal pitches name no voice apart, so they are settled on the lower
         // original index rather than on whichever end of the array the scan

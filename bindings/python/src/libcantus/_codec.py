@@ -10,8 +10,10 @@ Results turn ``{"$u": 1}`` into ``None``.
 An instance of a by-reference type (``Runtime.by_reference``) is retained in the core on its first
 use as a receiver (``$retain``); later calls send ``{"$class": T, "$ref": id}`` instead of its data
 (a hybrid only as the receiver of its own methods). The reference is released when the instance is
-collected, and at most ``MAX_LIVE_REFS`` are live per runtime: the least recently used is released
-once the outermost call returns, and that instance sends its data again from then on.
+collected, and at most ``MAX_LIVE_REFS`` are live per runtime: whenever a call returns, the least
+recently used beyond the cap are released, except those a call still running has sent. An evicted
+instance sends its data and is retained again on its next use as a receiver. The reference belongs
+to the one instance: a copy or an unpickled instance sends its data until it is retained itself.
 """
 
 from __future__ import annotations
@@ -57,12 +59,20 @@ class _Unset:
 UNSET: Any = _Unset()
 
 
+def _without_ref(instance: Model | Hybrid) -> dict[str, Any]:
+    """The state a copy or a pickle of ``instance`` carries: everything but its reference."""
+    return {k: v for k, v in instance.__dict__.items() if k != "_ref"}
+
+
 class Model:
     """A model-class instance: an immutable value that keeps the wire node it came from."""
 
     _wire: dict[str, Any]
     # The runtime and id of the core's retained copy of this value, once it has one.
     _ref: tuple[Runtime, int] | None = None
+
+    def __getstate__(self) -> dict[str, Any]:
+        return _without_ref(self)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({json.dumps(self._wire, ensure_ascii=True)})"
@@ -75,6 +85,9 @@ class Hybrid:
     _ref: tuple[Runtime, int] | None = None
     # (wire field name, attribute name) of every data member, in declaration order.
     _FIELDS: ClassVar[tuple[tuple[str, str], ...]] = ()
+
+    def __getstate__(self) -> dict[str, Any]:
+        return _without_ref(self)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({json.dumps(self._wire, ensure_ascii=True)})"
@@ -160,6 +173,10 @@ class Handle:
     def __enter__(self: _H) -> _H:
         return self
 
+    def __reduce_ex__(self, protocol: Any) -> Any:
+        # A copy would share the core state and release it under the original.
+        raise TypeError(f"a {type(self).__name__} handle cannot be copied or pickled")
+
     def __exit__(self, *exc: object) -> None:
         self.close()
 
@@ -208,6 +225,8 @@ class _Frame:
         self.fns: list[Callable[..., Any]] = []
         self.error: BaseException | None = None
         self.keep: list[Any] = []
+        # The reference ids this call sent, held from eviction until it returns.
+        self.pins: list[int] = []
 
 
 _ERROR_CLASSES: dict[str, Callable[[Mapping[str, Any]], Exception]] = {
@@ -258,9 +277,10 @@ class Runtime:
         self._max_refs = MAX_LIVE_REFS
         self._retain_unsupported = False
         self._lock = threading.RLock()
-        self._depth = 0
         # Retained values by reference id, least recently used first.
         self._live: dict[int, tuple[weakref.ref[Model | Hybrid], Any]] = {}
+        # How many calls still running have sent each reference id.
+        self._pins: dict[int, int] = {}
 
     def register(self, *types: type) -> None:
         """Make results naming these classes decode to them."""
@@ -296,36 +316,24 @@ class Runtime:
             args: The positional arguments; trailing ``UNSET`` ones are left out.
             bag: The keyword options as ``{wire name: value}``; ``None`` values are absent.
         """
-        self._enter()
         try:
             self._retain_receiver(op, args)
-            return self._decode(self._run(op, args, bag))
+            frame = _Frame()
+            return self._decode(self._run(op, args, bag, frame), frame.fns)
         finally:
-            self._leave()
+            self._evict()
 
     def construct(
         self, target: Model, op: str, args: Sequence[Any], bag: Mapping[str, Any] | None = None
     ) -> None:
         """Run a constructor op and attach the ``$class`` node it returns to ``target``."""
-        self._enter()
         try:
             wire = self._run(op, args, bag)
         finally:
-            self._leave()
+            self._evict()
         if not isinstance(wire, dict) or "$class" not in wire:
             raise CantusError(f"{op} did not return a class instance", ErrorCode.INTERNAL)
         target._wire = wire
-
-    def _enter(self) -> None:
-        with self._lock:
-            self._depth += 1
-
-    def _leave(self) -> None:
-        with self._lock:
-            self._depth -= 1
-            # A reference an enclosing call has already sent stays valid until that call returns.
-            if self._depth == 0:
-                self._evict()
 
     def _touch(self, ref_id: int) -> None:
         with self._lock:
@@ -353,15 +361,41 @@ class Runtime:
         self._release(ref_id)
 
     def _evict(self) -> None:
-        """Release the least recently used references beyond the cap."""
-        while len(self._live) > self._max_refs:
-            ref_id = next(iter(self._live))
-            weak, finalizer = self._live.pop(ref_id)
-            finalizer.detach()
-            instance = weak()
-            if instance is not None:
-                instance._ref = None
-            self._release(ref_id)
+        """Release the least recently used references beyond the cap that no running call sent."""
+        with self._lock:
+            excess = len(self._live) - self._max_refs
+            if excess <= 0:
+                return
+            doomed = [ref_id for ref_id in self._live if ref_id not in self._pins][:excess]
+            for ref_id in doomed:
+                weak, finalizer = self._live.pop(ref_id)
+                finalizer.detach()
+                instance = weak()
+                if instance is not None:
+                    instance._ref = None
+                self._release(ref_id)
+
+    def _send_ref(self, value: Model | Hybrid, frame: _Frame) -> int | None:
+        """The reference id to send for ``value``, held by ``frame`` until its call returns."""
+        with self._lock:
+            ref = value._ref
+            if ref is None or ref[0] is not self:
+                return None
+            ref_id = ref[1]
+            self._touch(ref_id)
+            self._pins[ref_id] = self._pins.get(ref_id, 0) + 1
+            frame.pins.append(ref_id)
+            return ref_id
+
+    def _unpin(self, frame: _Frame) -> None:
+        with self._lock:
+            for ref_id in frame.pins:
+                left = self._pins[ref_id] - 1
+                if left > 0:
+                    self._pins[ref_id] = left
+                else:
+                    del self._pins[ref_id]
+            frame.pins.clear()
 
     def _retain_receiver(self, op: str, args: Sequence[Any]) -> None:
         """Retain the receiver of a ``Type#member`` op the first time it is used.
@@ -396,21 +430,24 @@ class Runtime:
         if isinstance(ref_id, int):
             self._adopt(value, ref_id)
 
-    def _hybrid_receiver(self, op: str, value: Any) -> dict[str, Any] | None:
+    def _hybrid_receiver(self, op: str, value: Any, frame: _Frame) -> dict[str, Any] | None:
         """``{"$hy": T, "$ref": id}`` for a retained hybrid receiving one of its own methods."""
         if not isinstance(value, Hybrid):
-            return None
-        ref = value._ref
-        if ref is None or ref[0] is not self:
             return None
         name = str(value._wire.get("$hy"))
         if not op.startswith(f"{name}#"):
             return None
-        self._touch(ref[1])
-        return {"$hy": name, "$ref": ref[1]}
+        ref_id = self._send_ref(value, frame)
+        return None if ref_id is None else {"$hy": name, "$ref": ref_id}
 
-    def _run(self, op: str, args: Sequence[Any], bag: Mapping[str, Any] | None) -> Any:
-        frame = _Frame()
+    def _run(
+        self,
+        op: str,
+        args: Sequence[Any],
+        bag: Mapping[str, Any] | None,
+        frame: _Frame | None = None,
+    ) -> Any:
+        frame = _Frame() if frame is None else frame
         items = list(args)
         if bag is not None:
             options = {k: v for k, v in bag.items() if v is not None}
@@ -418,13 +455,16 @@ class Runtime:
                 items.append(options)
         while items and items[-1] is UNSET:
             items.pop()
-        wire: list[Any] = []
-        for index, item in enumerate(items):
-            receiver = self._hybrid_receiver(op, item) if index == 0 else None
-            wire.append(receiver or self._encode(item, frame, ()))
-        text = _dumps(wire)
-        callback = self._host(frame) if frame.fns else None
-        status, body = self._transport(op.encode("utf-8", "surrogatepass"), text, callback)
+        try:
+            wire: list[Any] = []
+            for index, item in enumerate(items):
+                receiver = self._hybrid_receiver(op, item, frame) if index == 0 else None
+                wire.append(receiver or self._encode(item, frame, ()))
+            text = _dumps(wire)
+            callback = self._host(frame) if frame.fns else None
+            status, body = self._transport(op.encode("utf-8", "surrogatepass"), text, callback)
+        finally:
+            self._unpin(frame)
         if status == 0:
             return json.loads(body.decode("utf-8", "surrogatepass"))
         if status == ErrorCode.CALLBACK_FAILED and frame.error is not None:
@@ -466,10 +506,9 @@ class Runtime:
         if isinstance(value, float):
             return _encode_float(float(value))
         if isinstance(value, Model):
-            ref = value._ref
-            if ref is not None and ref[0] is self:
-                self._touch(ref[1])
-                return {"$class": value._wire["$class"], "$ref": ref[1]}
+            ref_id = self._send_ref(value, frame)
+            if ref_id is not None:
+                return {"$class": value._wire["$class"], "$ref": ref_id}
             return value._wire
         if isinstance(value, Handle):
             return {"$h": value._id, "$type": value._TYPE}
@@ -511,17 +550,17 @@ class Runtime:
             out[key] = node if name is None else self._encode(getattr(obj, name), frame, ())
         return out
 
-    def _decode(self, node: Any) -> Any:
+    def _decode(self, node: Any, fns: Sequence[Callable[..., Any]] = ()) -> Any:
         if isinstance(node, list):
-            return [self._decode(item) for item in node]
+            return [self._decode(item, fns) for item in node]
         if isinstance(node, dict):
             for key in node:
                 if _is_tag(key):
-                    return self._decode_tag(node, key)
-            return {_unescape(k): self._decode(v) for k, v in node.items()}
+                    return self._decode_tag(node, key, fns)
+            return {_unescape(k): self._decode(v, fns) for k, v in node.items()}
         return node
 
-    def _decode_tag(self, node: dict[str, Any], key: str) -> Any:
+    def _decode_tag(self, node: dict[str, Any], key: str, fns: Sequence[Callable[..., Any]]) -> Any:
         if "$n" in node:
             return {"NaN": math.nan, "Infinity": math.inf, "-Infinity": -math.inf}.get(
                 node["$n"], -0.0
@@ -533,15 +572,19 @@ class Runtime:
         if "$sym" in node:
             return str(node["$sym"])
         if "$tojson" in node:
-            return self._decode(node["$tojson"])
+            return self._decode(node["$tojson"], fns)
         if "$class" in node:
             return self._decode_class(node)
         if "$hy" in node:
-            return self._decode_hybrid(node)
+            return self._decode_hybrid(node, fns)
         if "$h" in node:
             return self._decode_handle(node)
         if "$id" in node:
-            return self._decode_identity(node)
+            return self._decode_identity(node, fns)
+        # A result echoing a callback argument hands back the caller's own function.
+        callback_id = node.get("$cb")
+        if isinstance(callback_id, int) and 0 <= callback_id < len(fns):
+            return fns[callback_id]
         raise _bad_request(f"unexpected wire tag {json.dumps(key)} in a result")
 
     def _decode_class(self, node: dict[str, Any]) -> Any:
@@ -562,7 +605,7 @@ class Runtime:
             instance._wire = node
         return instance
 
-    def _decode_hybrid(self, node: dict[str, Any]) -> Any:
+    def _decode_hybrid(self, node: dict[str, Any], fns: Sequence[Callable[..., Any]] = ()) -> Any:
         name = str(node["$hy"])
         cls = self._hybrids.get(name)
         if cls is None:
@@ -571,7 +614,7 @@ class Runtime:
         instance._wire = node
         for wire_name, attr in cls._FIELDS:
             field = node.get(_escape(wire_name))
-            setattr(instance, attr, None if field is None else self._decode(field))
+            setattr(instance, attr, None if field is None else self._decode(field, fns))
         return instance
 
     def _decode_handle(self, node: dict[str, Any]) -> Any:
@@ -592,13 +635,13 @@ class Runtime:
         self._handles[handle_id] = handle
         return handle
 
-    def _decode_identity(self, node: dict[str, Any]) -> Any:
+    def _decode_identity(self, node: dict[str, Any], fns: Sequence[Callable[..., Any]] = ()) -> Any:
         token = int(node["$id"])
         live = self._identities.get(token)
         if live is not None:
             return live
         obj = Identified(
-            {_unescape(k): freeze(self._decode(v)) for k, v in node.items() if not _is_tag(k)}
+            {_unescape(k): freeze(self._decode(v, fns)) for k, v in node.items() if not _is_tag(k)}
         )
         self._identities[token] = obj
         return obj

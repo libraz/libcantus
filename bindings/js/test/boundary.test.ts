@@ -7,6 +7,7 @@
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { Worker } from 'node:worker_threads';
 import { describe, expect, it } from 'vitest';
 import { replayCorpus } from '../../../tools/corpus/replay_js.mjs';
 import type { Backend } from '../src/backend.js';
@@ -260,6 +261,19 @@ describe(`boundary (${NAME} backend)`, () => {
       expect(rt.call('$call', [outer])).toBe('outer survived');
     });
 
+    // The pure backend answers with a timeline object of its own rather than echoing the input.
+    it.runIf(NAME !== 'ts')('hands back the caller function a result echoes', () => {
+      const at = () => null;
+      const segments = [{ startBeat: 0, endBeat: 4, chord: null }];
+      const result = rt.call('assertChordTimeline', [{ segments, at }]) as {
+        segments: unknown;
+        at: unknown;
+      };
+      expect(result.segments).toEqual(segments);
+      expect(result.at).toBe(at);
+      expect(echo(at)).toBe(at);
+    });
+
     it('needs a host function for $cb arguments', () => {
       const reply = raw('$call', '[{"$cb":0}]');
       expect(reply.status).toBe(11);
@@ -370,6 +384,35 @@ describe(`boundary (${NAME} backend)`, () => {
       expect(retain(broken)).toEqual(raw('Score#totalBeats', `[${broken}]`));
       rejected(retain('{"$class":"Score","notes":[],"f":{"$cb":0}}'), 'BAD_REQUEST', /callback/);
       rejected(retain('1'), 'BAD_REQUEST', /\$retain/);
+    });
+
+    it.runIf(NAME === 'node')('releases what a terminated worker still held', async () => {
+      const before = live();
+      // The worker keeps the ids in no object at all, so only its teardown can release them.
+      const worker = new Worker(
+        `const { parentPort, workerData } = require('node:worker_threads');
+        import(workerData).then(({ backend }) => {
+          const score = backend.call('Score.of', ${JSON.stringify(JSON.stringify([notes]))}, null);
+          for (let i = 0; i < 3; i += 1) backend.call('$retain', '[' + score.json + ']', null);
+          backend.call('$counter', '[]', null);
+          setInterval(() => {}, 1000);
+          parentPort.postMessage('held');
+        });`,
+        {
+          eval: true,
+          workerData: pathToFileURL(path.join(REPO, 'bindings/node/dist/backend.js')).href,
+        },
+      );
+      await new Promise((resolve, reject) => {
+        worker.once('message', resolve);
+        worker.once('error', reject);
+      });
+      expect(live()).toBe(before + 4);
+      await worker.terminate();
+      for (let i = 0; i < 100 && live() > before; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      expect(live()).toBe(before);
     });
   });
 

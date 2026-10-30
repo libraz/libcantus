@@ -2,7 +2,7 @@ import type { SpelledInterval } from '../../core/pitch/index.js';
 import { pitchClassOf } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { Chord, ChordQuality } from '../chord/index.js';
-import { chordPitchClasses, chordToneRole } from '../chord/index.js';
+import { chordPitchClasses, chordToneRole, makeChord } from '../chord/index.js';
 import { isScaleTone, majorKey, scaleSystemOf, scaleTonesInDegreeOrder } from '../scale/index.js';
 import { isMinorMask } from '../scale/masks.js';
 
@@ -41,6 +41,17 @@ function hasInterval(chord: Chord, semitones: number): boolean {
  */
 export function isDiatonicChord(chord: Chord, key: KeyScale): boolean {
   return chordPitchClasses(chord).every((pc) => isScaleTone(pc, key));
+}
+
+/**
+ * Whether the dominant seventh on a root is a chord the key already contains.
+ *
+ * Such a chord is native to the key rather than applied to one of its degrees
+ * (I7 of mixolydian, II7 of lydian), so it is never marked as a secondary
+ * dominant, whichever generator places it.
+ */
+export function isNativeDominantSeventh(rootPc: number, key: KeyScale): boolean {
+  return isDiatonicChord(makeChord(rootPc, 'dom7'), key);
 }
 
 /**
@@ -271,6 +282,19 @@ export const LEADING_TONE_QUALITY_NAMES: readonly ChordQuality[] = ['dim', 'dim7
 export const LEADING_TONE_QUALITIES: ReadonlySet<ChordQuality> = new Set(
   LEADING_TONE_QUALITY_NAMES,
 );
+
+/**
+ * The degree a chord points at as an applied chord, or null where it points at
+ * none: a dominant sonority a fifth below itself, a leading-tone chord a
+ * semitone above itself, each limited to {@link appliedDominantTarget}.
+ */
+export function appliedChordTarget(chord: Chord, key: KeyScale): TonicizableDegree | null {
+  const dominant = hasDominantSonority(chord);
+  if (!dominant && !LEADING_TONE_QUALITIES.has(chord.quality)) {
+    return null;
+  }
+  return appliedDominantTarget(chord.rootPc + (dominant ? 5 : 1), key);
+}
 
 /**
  * Whether a chord sounds the diminished triad a leading-tone chord is built on.

@@ -8,6 +8,7 @@
 #define CANTUS_SRC_THEORY_VOICING_SATB_H_
 
 #include <optional>
+#include <string_view>
 #include <vector>
 
 #include "cantus/theory/chord.h"
@@ -15,6 +16,9 @@
 #include "cantus/theory/voicing.h"
 
 namespace cantus {
+
+/** The names of the voicing styles, for assert_one_of(). */
+std::vector<std::string_view> voicing_style_names();
 
 /**
  * The per-voice ranges the options imply: explicit `ranges` win, four voices use SATB_RANGES, and

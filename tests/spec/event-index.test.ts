@@ -153,3 +153,37 @@ describe('note event timeline index', () => {
     expect(timeline.at(9_999)?.note.pitch).toBe(72);
   });
 });
+
+describe('note event index tie-break', () => {
+  it('rejects a tieBreak that is not highest, lowest or last', () => {
+    const notes = [{ pitch: 60, startBeat: 0, durationBeat: 1 }];
+    for (const bad of ['Highest', 'top', 5]) {
+      expect(() => createNoteEventIndex(notes, { tieBreak: bad as never })).toThrow(
+        InvalidInputError,
+      );
+    }
+    expect(() => createNoteEventIndex(notes, { tieBreak: 'top' as never })).toThrow(
+      'options.tieBreak must be one of highest, lowest, last; received "top"',
+    );
+    expect(() => createNoteEventIndex(notes, { tieBreak: 5 as never })).toThrow(
+      'options.tieBreak must be one of highest, lowest, last; received number',
+    );
+    for (const good of ['highest', 'lowest', 'last'] as const) {
+      expect(createNoteEventIndex(notes, { tieBreak: good }).at(0)?.note.pitch).toBe(60);
+    }
+  });
+
+  it('treats onsets that differ only by float rounding as one onset', () => {
+    const sum = 0.1 + 0.2;
+    const low = { pitch: 60, startBeat: 0.3, durationBeat: 2 };
+    const high = { pitch: 72, startBeat: sum, durationBeat: 2 };
+    for (const events of [
+      [low, high],
+      [high, low],
+    ]) {
+      expect(createNoteEventIndex(events, { tieBreak: 'highest' }).at(0.5)?.note.pitch).toBe(72);
+      expect(createNoteEventIndex(events, { tieBreak: 'lowest' }).at(0.5)?.note.pitch).toBe(60);
+      expect(createNoteEventIndex(events, { tieBreak: 'last' }).at(0.5)?.originalIndex).toBe(1);
+    }
+  });
+});

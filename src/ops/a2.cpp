@@ -54,20 +54,13 @@ json::Value span_start(const json::Value& chord) {
   return json::Value(std::numeric_limits<double>::quiet_NaN());
 }
 
-/** The mode a wire `segmentation` selects (`opts.segmentation ?? 'dynamic'`). */
-SegmentationMode read_segmentation(const json::Value& opts) {
-  const json::Value* given = opt_null_default(opts, "segmentation");
-  if (given == nullptr) {
-    return SegmentationMode::kDynamic;
-  }
-  if (given->is_string()) {
-    std::optional<ChordSegmentation> named = parse_chord_segmentation(given->as_string());
-    if (named) {
-      return segmentation_mode_of(named);
-    }
-  }
-  // Any other value is neither of the two modes the analysis tells apart.
-  return SegmentationMode::kOther;
+/** `assertOneOf(opts.segmentation ?? 'dynamic', CHORD_SEGMENTATIONS, ...)`. */
+ChordSegmentation read_segmentation(const json::Value& opts) {
+  return *parse_chord_segmentation(
+      assert_one_of(opt_or(opts, "segmentation", to_string(ChordSegmentation::kDynamic)),
+                    std::vector<std::string_view>{to_string(ChordSegmentation::kDynamic),
+                                                  to_string(ChordSegmentation::kGrid)},
+                    "timeline segmentation"));
 }
 
 void register_timeline() {
@@ -78,7 +71,7 @@ void register_timeline() {
     double beat = assert_finite_number(a[1], "timeline query beat");
     if (!listed.is_array()) {
       throw InvalidInputError("timeline.segments must be an array; received " +
-                              js::type_of(listed));
+                              describe_rejected(listed));
     }
     return timeline_chord_at(listed.as_array(), beat);
   });
@@ -136,7 +129,7 @@ void register_timeline() {
     typed.harmonicRhythm =
         assert_range_option(opts, "harmonicRhythm", beats_per_bar_at(0, MeterArg(meters)),
                             kMinValue, kMaxSafeInteger, "harmonic rhythm");
-    SegmentationMode mode = read_segmentation(opts);
+    typed.segmentation = read_segmentation(opts);
     double grid_unit = metric_grid_unit(MeterArg(meters));
     typed.minChordBeats = assert_range_option(opts, "minChordBeats", grid_unit, kMinValue,
                                               kMaxSafeInteger, "minChordBeats");
@@ -162,7 +155,7 @@ void register_timeline() {
     if (const json::Value* key = field(opts, "key")) {
       typed.key = read_key_arg(*key);
     }
-    return to_json(analyze_timeline(notes, typed, mode).result);
+    return to_json(analyze_timeline(notes, typed).result);
   });
   def("detectCadences", [](Args& a) -> json::Value {
     const json::Array& segments = assert_wire_timeline(a[0]);
@@ -237,7 +230,7 @@ void register_spelling() {
         const json::Value& listed = get(*source, "segments");
         if (!listed.is_array()) {
           throw InvalidInputError("timeline.segments must be an array; received " +
-                                  js::type_of(listed));
+                                  describe_rejected(listed));
         }
         segments = &listed.as_array();
       }
@@ -248,8 +241,10 @@ void register_spelling() {
         if (chord.is_null() || is_undefined(chord)) {
           return std::nullopt;
         }
-        // `spellChord` checks the chord it is handed.
-        return read_chord_fields(assert_chord(chord));
+        // `spellChord` checks the chord it is handed, then reads its spelling hints.
+        const json::Value& value = assert_chord(chord);
+        read_spelled_hints(value);
+        return read_chord_fields(value);
       };
     }
     return to_json(spell_line_over(notes, lookup, key, typed));

@@ -6,6 +6,8 @@
 #include <cmath>
 #include <limits>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <string>
 
 #include "analyze/arrange/tracks.h"
@@ -23,6 +25,8 @@ struct ArrangementSession::State {
   ArrangementAnalysis analysis;
   /** The slot-level evidence behind the analysis; null when the harmony was supplied. */
   std::shared_ptr<TimelineEvidence> evidence;
+  /** Held by an update, which takes the evidence's tables over; shared along with the evidence. */
+  std::shared_ptr<std::recursive_mutex> evidence_lock = std::make_shared<std::recursive_mutex>();
 };
 
 namespace {
@@ -145,10 +149,13 @@ ArrangementSession ArrangementSession::update(const std::vector<TrackEdit>& edit
   if (!edited && !reordered) {
     state->analysis = current.analysis;
     state->evidence = current.evidence;
+    state->evidence_lock = current.evidence_lock;
     return ArrangementSession(std::move(state));
   }
   // A pure re-ordering moves no note, so every slot of the harmony is clean and the whole
   // timeline is carried over; what it does move is the array position each annotation reports.
+  // Sessions sharing one evidence update in turn: the first takes its tables, the rest start anew.
+  std::lock_guard<std::recursive_mutex> taking(*current.evidence_lock);
   std::optional<DirtySlots> dirty = dirty_slots_of(current.evidence.get(), edited);
   ArrangementRun run = analyze_arrangement_with(state->tracks, state->opts, current.evidence.get(),
                                                 dirty ? &*dirty : nullptr);

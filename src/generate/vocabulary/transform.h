@@ -58,6 +58,9 @@ double assert_span_steps(double span_steps);
 /** `meterAt(0, toMeterData(ts, 'ts'))`. */
 TimeSignature figure_signature(const MeterArg& ts);
 
+/** The names of the figure rates (`FIGURE_RATES`), for assert_one_of(). */
+std::vector<std::string_view> figure_rate_names();
+
 /** Stable sort by step, as `sort((a, b) => a.step - b.step)` orders finite steps. */
 template <class M>
 void sort_by_step(std::vector<typename M::Event>& events) {

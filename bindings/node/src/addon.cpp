@@ -6,6 +6,10 @@
  * passed to `call` through a C trampoline, which calls back into JS on the same thread, so a
  * callback may re-enter `call`. Strings go in as WTF-8 (a lone surrogate keeps its code unit) and
  * come back as UTF-8: the core escapes lone surrogates as `\udXXX` in everything it writes.
+ *
+ * The core's handle table is process-wide, but a worker's finalizers need not run when it exits.
+ * Each environment therefore records the ids its replies hand out (`$h`, `$ref`) and releases
+ * those still held when the environment is torn down.
  */
 #include <napi.h>
 
@@ -15,6 +19,8 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <unordered_set>
 #include <vector>
 
 #include "cantus/cantus_c.h"
@@ -78,6 +84,42 @@ Napi::String StringArgument(const Napi::CallbackInfo& info, size_t index, const 
   return info[index].As<Napi::String>();
 }
 
+/** The handle and retained-value ids one environment acquired and has not released. */
+class EnvIds {
+ public:
+  EnvIds() = default;
+  EnvIds(const EnvIds&) = delete;
+  EnvIds& operator=(const EnvIds&) = delete;
+
+  /** Runs at environment teardown. */
+  ~EnvIds() {
+    for (uint64_t id : held_) cantus_release(id);
+  }
+
+  /** Record every id a successful reply hands out: the number after a `"$h":` or `"$ref":` key. */
+  void Acquire(std::string_view json) {
+    // Inside a JSON string a quote is escaped, so these keys can only be real tag keys.
+    for (std::string_view key : {std::string_view("\"$h\":"), std::string_view("\"$ref\":")}) {
+      for (size_t at = json.find(key); at != std::string_view::npos; at = json.find(key, at + 1)) {
+        uint64_t id = 0;
+        size_t i = at + key.size();
+        for (; i < json.size() && json[i] >= '0' && json[i] <= '9'; ++i) {
+          id = id * 10 + static_cast<uint64_t>(json[i] - '0');
+        }
+        if (i > at + key.size()) held_.insert(id);
+      }
+    }
+  }
+
+  void Release(uint64_t id) {
+    held_.erase(id);
+    cantus_release(id);
+  }
+
+ private:
+  std::unordered_set<uint64_t> held_;
+};
+
 /** One `call` and its host function, as the trampoline sees them. */
 struct CallFrame {
   Napi::Env env;
@@ -134,6 +176,9 @@ Napi::Value Call(const Napi::CallbackInfo& info) {
                   has_host ? &frame : nullptr, &out, &out_len);
   CantusBuffer owned(out);
   if (frame.error) throw *frame.error;
+  if (status == CANTUS_OK && out != nullptr) {
+    env.GetInstanceData<EnvIds>()->Acquire(std::string_view(out, out_len));
+  }
 
   Napi::Object reply = Napi::Object::New(env);
   reply.Set("status", Napi::Number::New(env, status));
@@ -146,7 +191,7 @@ Napi::Value Release(const Napi::CallbackInfo& info) {
   if (!info[0].IsNumber()) throw Napi::TypeError::New(info.Env(), "handle must be a number");
   const double id = info[0].As<Napi::Number>().DoubleValue();
   if (id >= 0 && id <= 9007199254740991.0 && id == static_cast<double>(static_cast<uint64_t>(id))) {
-    cantus_release(static_cast<uint64_t>(id));
+    info.Env().GetInstanceData<EnvIds>()->Release(static_cast<uint64_t>(id));
   }
   return info.Env().Undefined();
 }
@@ -178,6 +223,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
                                     std::to_string(cantus_abi_version()) + ", expected " +
                                     std::to_string(CANTUS_ABI_VERSION));
   }
+  // Deleted, releasing what it still holds, when this environment (a worker's, say) is torn down.
+  env.SetInstanceData(new EnvIds());
   exports.Set("call", Napi::Function::New(env, Call, "call"));
   exports.Set("release", Napi::Function::New(env, Release, "release"));
   exports.Set("version", Napi::Function::New(env, Version, "version"));

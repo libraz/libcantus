@@ -32,7 +32,16 @@ import { Timeline } from './timeline.js';
  * The plain form of a {@link Progression}: the chords as plain data, and the
  * carried key as its own plain data when the progression has one.
  */
-export type ProgressionData = { chords: ChordData[]; key: KeyData | undefined };
+export type ProgressionData = {
+  chords: ChordData[];
+  key: KeyData | undefined;
+  /**
+   * Each chord's own key by position, null for a chord without one. Written
+   * only when the progression carries no key and some chord does; read only
+   * when `key` is absent, since a progression key reaches every chord.
+   */
+  chordKeys?: (KeyData | null)[];
+};
 
 /**
  * An immutable ordered sequence of chords, optionally carrying a {@link Key}
@@ -130,18 +139,39 @@ export class Progression {
   }
 
   /**
-   * Rebuild a progression from its {@link Progression.toJSON} output.
+   * Rebuild a progression from its {@link Progression.toJSON} output, with the
+   * carried key or, without one, each chord's own key.
    *
-   * @param data The serialized chords and key.
+   * @param data The serialized chords and keys.
    * @returns The progression.
+   * @throws If `chordKeys` does not hold one entry per chord.
    */
   static fromJSON(data: ProgressionData): Progression {
     assertDataObject(data, 'progression data');
     const key = data.key === undefined ? undefined : KeyClass.fromJSON(data.key);
-    const chords = assertDataArray<ChordData>(data.chords, 'progression chords').map((chord) =>
-      ChordClass.fromJSON(chord),
-    );
+    const given = assertDataArray<ChordData>(data.chords, 'progression chords');
+    const chordKeys =
+      key === undefined && data.chordKeys !== undefined
+        ? Progression.#readChordKeys(data.chordKeys, given.length)
+        : undefined;
+    const chords = given.map((chord, index) => {
+      const own = chordKeys?.[index];
+      return own === undefined
+        ? ChordClass.fromJSON(chord)
+        : ChordClass.fromJSON(chord).withKey(own);
+    });
     return key === undefined ? new Progression(chords) : new Progression(chords, key);
+  }
+
+  /** Read the per-chord keys of {@link ProgressionData}, one entry per chord. */
+  static #readChordKeys(value: unknown, count: number): (Key | undefined)[] {
+    const entries = assertDataArray<KeyData | null>(value, 'progression chord keys');
+    if (entries.length !== count) {
+      throw new InvalidInputError(
+        `progression chord keys must hold one entry per chord (${count}); received ${entries.length}`,
+      );
+    }
+    return entries.map((entry) => (entry === null ? undefined : KeyClass.fromJSON(entry)));
   }
 
   /**
@@ -376,10 +406,11 @@ export class Progression {
     // minor voiced through its pitch classes alone would be led by the sharps
     // of a G# minor.
     const key = opts?.key ?? this.#key;
-    return voiceProgression(
-      this.#chords.map((chord) => chord.data),
-      key === undefined ? opts : { ...opts, key },
-    );
+    const views =
+      opts?.key === undefined
+        ? this.#chords.map((chord) => chord.data)
+        : this.#viewsIn(toKey(opts.key));
+    return voiceProgression(views, key === undefined ? opts : { ...opts, key });
   }
 
   /**
@@ -451,19 +482,20 @@ export class Progression {
     // The whole-progression voicing is cut to the closing pair below, so it is
     // held apart from the options that reach the cadence unchanged.
     const { voicing, ...cadenceOpts } = opts ?? {};
-    const from = this.#chords[this.#chords.length - 2];
-    const to = this.#chords[this.#chords.length - 1];
+    const views = this.#viewsIn(resolved);
+    const from = views[views.length - 2];
+    const to = views[views.length - 1];
     // The chord before the closing pair is supplied from the progression
     // itself, exactly as `cadences` supplies it, so a cadential six-four is
     // reported as one event by both and the two never explain the same final
     // pair differently. A caller's own `approach` still reaches a progression
     // too short to have one of its own.
-    const approach = this.#chords[this.#chords.length - 3];
+    const approach = views[views.length - 3];
     const cadence =
       from !== undefined && to !== undefined
-        ? detectCadence(from.data, to.data, resolved, {
+        ? detectCadence(from, to, resolved, {
             ...cadenceOpts,
-            ...(approach === undefined ? {} : { approach: approach.data }),
+            ...(approach === undefined ? {} : { approach }),
             ...(voicing === undefined ? {} : { voicing: this.#closingVoicing(voicing) }),
           })
         : null;
@@ -537,10 +569,11 @@ export class Progression {
     opts?: { voicing?: number[][] } & Pick<DetectCadenceOptions, 'alternatives' | 'approach'>,
   ): CadenceResult[] {
     const resolved = this.#resolveKey(key);
+    const views = this.#viewsIn(resolved);
     const found: CadenceResult[] = [];
-    for (let index = 1; index < this.#chords.length; index += 1) {
-      const from = this.#chords[index - 1];
-      const to = this.#chords[index];
+    for (let index = 1; index < views.length; index += 1) {
+      const from = views[index - 1];
+      const to = views[index];
       if (from === undefined || to === undefined) {
         continue;
       }
@@ -549,10 +582,10 @@ export class Progression {
       // in the width the option it mirrors declares, so a chord named as a
       // symbol reaches the detector rather than being read for a field only the
       // class shape has and arriving as undefined.
-      const approach = index >= 2 ? this.#chords[index - 2]?.data : opts?.approach;
+      const approach = index >= 2 ? views[index - 2] : opts?.approach;
       const pair = opts?.voicing;
       found.push(
-        detectCadence(from.data, to.data, resolved, {
+        detectCadence(from, to, resolved, {
           ...(opts?.alternatives === undefined ? {} : { alternatives: opts.alternatives }),
           ...(approach === undefined ? {} : { approach }),
           ...(pair === undefined
@@ -728,16 +761,28 @@ export class Progression {
   /**
    * The plain progression data, for JSON serialization.
    *
-   * Private class fields do not serialize, so this preserves both the chord
-   * data and any carried key in `JSON.stringify(progression)`.
+   * Private class fields do not serialize, so this preserves the chord data,
+   * any carried key, and — for a progression with no key of its own — each
+   * chord's own key in `JSON.stringify(progression)`.
    *
-   * @returns The chord data sequence and the carried key, if any.
+   * @returns The chord data sequence, the carried key, if any, and the
+   *   per-chord keys when they are what spells the chords.
    */
   toJSON(): ProgressionData {
-    return {
+    const out: ProgressionData = {
       chords: this.#chords.map((chord) => chord.toJSON()),
       key: this.#key?.toJSON(),
     };
+    // A chord's own key spells it, so a keyless progression keeps each one.
+    if (this.#key === undefined && this.#chords.some((chord) => chord.key !== undefined)) {
+      out.chordKeys = this.#chords.map((chord) => chord.key?.toJSON() ?? null);
+    }
+    return out;
+  }
+
+  /** The members read in `key`: spellings the caller gave, the rest derived from it. */
+  #viewsIn(key: Key): ChordData[] {
+    return this.#chords.map((chord) => chord.withKey(key).data);
   }
 
   /**

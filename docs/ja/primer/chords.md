@@ -148,7 +148,7 @@ import { Chord, detectChordBest } from '@libraz/libcantus';
 detectChordBest([60, 64, 67]); // { rootPc: 0, quality: 'maj', intervals: [0, 4, 7] }
 Chord.detectBest([60, 64, 67, 71])?.symbol(); // 'Cmaj7'
 Chord.detectBest([64, 67, 72])?.symbol(); // 'C/E'
-Chord.detect([60, 64, 67]).length; // 6
+Chord.detect([60, 64, 67]).length; // 4
 ```
 
 各候補は、余分に含まれていた音（`extraPcs`）と、欠けていると見なした音（`missingPcs`）を持ちます。最上位の候補を鵜呑みにせず、呼び出し側で独自のしきい値を決められます。値がすべて 0..11 に収まる入力は順序を持たないピッチクラスとして読まれるため、報告できるベース音がありません。上の例のような MIDI 番号なら転回形まで返ります。

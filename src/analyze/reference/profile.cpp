@@ -13,6 +13,8 @@
 #include "analyze/keys/keys.h"
 #include "analyze/melody/internal.h"
 #include "analyze/reference/internal.h"
+#include "analyze/rhythm/internal.h"
+#include "analyze/timeline/timeline.h"
 #include "cantus/analyze/form.h"
 #include "cantus/analyze/functional.h"
 #include "cantus/analyze/melody.h"
@@ -130,12 +132,7 @@ ReferenceReadings readings_for(const std::vector<NoteEvent>& notes,
     // A stated key is taken as read across the span, as chord inference takes it.
     std::vector<NoteEvent> sounding = sounding_of(notes, opts.budget);
     Span span = span_of(sounding, timeline, meters, opts.totalBeats);
-    KeyRegion region;
-    region.startBeat = span.startBeat;
-    region.endBeat = span.endBeat;
-    region.key = resolve_key(*opts.key);
-    region.confidence = 1;
-    keys.push_back(std::move(region));
+    keys = stated_key_regions(resolve_key(*opts.key), span.startBeat, span.endBeat);
   }
   Nullable<ResolvedKey> prevailing = prevailing_key_of(keys);
   ResolvedKey key = prevailing ? *prevailing : resolve_key(major_key(0));
@@ -303,7 +300,7 @@ ReferenceProfile reference_from_readings(const std::vector<NoteEvent>& notes,
   }
   profile.melody.motifs = std::move(reference_motifs);
   profile.melody.graph = std::move(graph);
-  profile.melody.rhythm = analyze_rhythm(line, rhythm_options);
+  profile.melody.rhythm = rhythm_over(line, rhythm_options, span.startBeat);
   return profile;
 }
 

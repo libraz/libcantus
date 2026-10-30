@@ -7,6 +7,7 @@
 #include <limits>
 
 #include "analyze/adjacency.h"
+#include "analyze/timeline/timeline.h"
 #include "cantus/analyze/timeline.h"
 #include "cantus/core/errors.h"
 #include "cantus/core/limits.h"
@@ -264,6 +265,7 @@ void assert_given_keys(const std::optional<std::vector<KeyRegion>>& keys, std::s
     assert_finite_number((*keys)[index].startBeat, label + ".startBeat");
     assert_finite_number((*keys)[index].endBeat, label + ".endBeat");
   }
+  assert_spans_in_order(*keys, name);
 }
 
 std::optional<std::set<std::size_t>> harmony_track_set(

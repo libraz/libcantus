@@ -6,6 +6,7 @@
 
 #include "js/format.h"
 #include "ops/error_map.h"
+#include "ops/handles.h"
 
 namespace cantus::ops {
 
@@ -246,6 +247,27 @@ ValidateStats validate(const json::Value& v, bool allow_top_level_undefined) {
     } else if (next.value->is_object()) {
       validate_object(next.value->as_object(), next.undefined_allowed, stats, pending);
     }
+  }
+  return stats;
+}
+
+ValidateStats decode_host_value(json::Value& v, bool allow_top_level_undefined, RefScope scope) {
+  ValidateStats stats = validate(v, allow_top_level_undefined);
+  if (stats.refs == 0 || scope == RefScope::kNone) {
+    return stats;
+  }
+  std::vector<json::Value*> targets{&v};
+  if (scope == RefScope::kArguments) {
+    // An argument sent as a `$ref` is held by the call rather than copied.
+    targets.clear();
+    for (json::Value& argument : v.as_array()) {
+      if (!is_ref(argument)) {
+        targets.push_back(&argument);
+      }
+    }
+  }
+  for (json::Value* target : targets) {
+    expand_refs(*target);
   }
   return stats;
 }

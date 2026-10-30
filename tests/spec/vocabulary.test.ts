@@ -386,6 +386,18 @@ describe('transformation rules', () => {
     );
   });
 
+  it('rejects a rate it does not name instead of leaving the figure straight', () => {
+    expect(() => deform(figure, { rate: 'halftime' as 'half' }, draw, 'bar', 0)).toThrow(
+      'rate must be one of straight, half, double; received "halftime"',
+    );
+    expect(() => deform(figure, { rate: 2 as unknown as 'half' }, draw, 'bar', 0)).toThrow(
+      InvalidInputError,
+    );
+    expect(deform(figure, { rate: null as unknown as 'straight' }, draw, 'bar', 0)).toEqual(
+      deform(figure, {}, draw, 'bar', 0),
+    );
+  });
+
   it('thins below the middle and syncopates above it', () => {
     expect(deform(figure, { rhythmic: 0 }, draw, 'bar', 0).map((e) => e.step)).toEqual([0]);
     const busy = deform(figure, { rhythmic: 1 }, draw, 'bar', 0);

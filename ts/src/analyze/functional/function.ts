@@ -14,6 +14,7 @@ import type { Chord } from '../../theory/chord/index.js';
 import { keySpelling, makeSpelledChord } from '../../theory/chord/index.js';
 import {
   type KeyLike,
+  type ResolvedKey,
   resolveKey,
   type SpelledKeyLike,
   scaleTonesInDegreeOrder,
@@ -137,7 +138,7 @@ export function isMinorKey(key: KeyLike): boolean {
  * @category Functional Harmony
  */
 export function functionOf(chord: ChordLike, key: KeyLike): HarmonicFunction {
-  return functionWithReason(toChordData(chord), toKeyScale(key)).function;
+  return functionWithReason(toChordData(chord), resolveKey(key)).function;
 }
 
 /**
@@ -156,16 +157,22 @@ function degreeFunction(chord: Chord, key: KeyScale): HarmonicFunction {
   return functions[mod12(chord.rootPc - key.rootPc)] ?? 'tonic';
 }
 
-/** {@link functionOf}, keeping the rule that decided the answer. */
+/**
+ * {@link functionOf}, keeping the rule that decided the answer.
+ *
+ * The key is taken whole: the augmented-sixth rule reads the chord's letters
+ * against the key as written, which a bare scale cannot answer.
+ */
 export function functionWithReason(
   chord: Chord,
-  key: KeyScale,
+  resolved: ResolvedKey,
 ): { function: HarmonicFunction; reason: FunctionReason } {
+  const key = resolved.scale;
   const offset = mod12(chord.rootPc - key.rootPc);
   if (isNeapolitanChordOf(chord, key)) {
     return { function: 'subdominant', reason: 'neapolitan' };
   }
-  if (augmentedSixthKindOf(chord, key) !== null) {
+  if (augmentedSixthKindOf(chord, resolved) !== null) {
     return { function: 'subdominant', reason: 'augmentedSixth' };
   }
   if (isAppliedDominant(chord, key)) {
@@ -266,10 +273,11 @@ function describeChord(
 /** The readings of the chord's function that were considered and rejected. */
 function functionAlternatives(
   chord: Chord,
-  key: KeyScale,
+  resolved: ResolvedKey,
   reason: FunctionReason,
   accepted: HarmonicFunction,
 ): RejectedCandidate[] {
+  const key = resolved.scale;
   const out: RejectedCandidate[] = [];
   if (reason === 'degree') {
     // The sonority could tonicize, and only its being in the key stopped it.
@@ -296,7 +304,7 @@ function functionAlternatives(
       });
     }
   }
-  if (augmentedSixthKindOf(chord, key) === 'german') {
+  if (augmentedSixthKindOf(chord, resolved) === 'german') {
     out.push({
       label: 'tritone substitute',
       reason:
@@ -385,10 +393,10 @@ export function analyzeChord(
 ): ChordAnalysis {
   const asked = assertOptions(opts, 'opts');
   const data = toChordData(chord);
-  const scale = toKeyScale(key);
-  const source = borrowedSourceOf(data, scale);
-  const { function: fn, reason } = functionWithReason(data, scale);
-  const roman = renderRoman(data, scale, asked).roman;
+  const resolved = resolveKey(key);
+  const source = borrowedSourceOf(data, resolved.scale);
+  const { function: fn, reason } = functionWithReason(data, resolved);
+  const roman = renderRoman(data, resolved, asked).roman;
   return {
     function: fn,
     borrowed: source !== null,
@@ -398,8 +406,8 @@ export function analyzeChord(
     alternatives:
       asked.alternatives === true
         ? [
-            ...functionAlternatives(data, scale, reason, fn),
-            ...romanAlternatives(data, scale, asked),
+            ...functionAlternatives(data, resolved, reason, fn),
+            ...romanAlternatives(data, resolved, asked),
           ]
         : [],
   };

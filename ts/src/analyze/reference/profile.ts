@@ -38,9 +38,14 @@ import { motifGraph } from '../melody/graph.js';
 import { orderedNotes } from '../melody/internal.js';
 import { extractMotifs } from '../melody/motifs.js';
 import { reduceProgression } from '../reduction/index.js';
-import { analyzeRhythm } from '../rhythm/index.js';
+import { analyzeRhythm, rhythmOver } from '../rhythm/index.js';
 import type { ChordTimeline, ChordTimelineResult } from '../timeline/index.js';
-import { assertChordTimeline, chordTimelineFromNotes, detectCadences } from '../timeline/index.js';
+import {
+  assertChordTimeline,
+  chordTimelineFromNotes,
+  detectCadences,
+  statedKeyRegions,
+} from '../timeline/index.js';
 import { phraseMelody, weightedMean } from './internal.js';
 import type {
   ReferenceCadence,
@@ -90,7 +95,10 @@ export type ReferenceProfileOptions = {
   timeline?: ChordTimeline;
   /**
    * The melodic line. Omit it to read the top line of `notes`, where notes
-   * struck together are one event and the highest of them stands for it.
+   * struck together are one event and the highest of them stands for it. Only
+   * notes struck together are collapsed: a lower note struck while a higher
+   * one still sounds — a broken-chord or Alberti accompaniment under a held
+   * melody note — joins the line, so pass the melody of such a texture.
    *
    * @defaultValue the top line of the notes
    */
@@ -217,14 +225,7 @@ export function readingsFor(
       budget,
     }).filter((note) => note.durationBeat > 0);
     const span = spanOf(sounding, timeline, meters, asked.totalBeats);
-    keys = [
-      {
-        startBeat: span.startBeat,
-        endBeat: span.endBeat,
-        key: resolveKey(asked.key),
-        confidence: 1,
-      },
-    ];
+    keys = statedKeyRegions(resolveKey(asked.key), span.startBeat, span.endBeat);
   }
   return { timeline, keys, prevailingKey: prevailingKeyOf(keys) ?? resolveKey(majorKey(0)) };
 }
@@ -255,7 +256,10 @@ export function referenceFromReadings(
   if (asked.totalBeats !== undefined) {
     assertRange(asked.totalBeats, 0, Number.MAX_SAFE_INTEGER, 'reference totalBeats');
   }
-  const line = orderedNotes(asked.melody ?? notes, 'reference melody', budget);
+  // A pitch of -0 is pitch 0, which is all an integer pitch can hold.
+  const line = orderedNotes(asked.melody ?? notes, 'reference melody', budget).map((note) =>
+    Object.is(note.pitch, -0) ? { ...note, pitch: 0 } : note,
+  );
   const { timeline, prevailingKey } = readings;
 
   const span = spanOf(sounding, timeline, meters, asked.totalBeats);
@@ -389,7 +393,7 @@ export function referenceFromReadings(
       shape: line.length < 2 ? null : melodicContour(line).shape,
       motifs: referenceMotifs,
       graph,
-      rhythm: analyzeRhythm(line, { meters, totalBeats: spanEnd, budget }),
+      rhythm: rhythmOver(line, { meters, totalBeats: spanEnd, budget }, span.startBeat),
     },
   };
 }
@@ -401,7 +405,9 @@ export function referenceFromReadings(
  *
  * The melody is the `melody` option when given, and otherwise the top line of
  * the notes — notes struck together read as one event, the highest standing
- * for it — so a piano part read whole answers for its upper voice. The harmony
+ * for it. A lower note struck while a higher one still sounds stays in that
+ * line, so a part whose accompaniment moves under a held melody note is read
+ * as its melody only when the melody is passed. The harmony
  * is the `timeline` option when given, and otherwise inferred from all the
  * notes. The motif search expects quantized onsets.
  *

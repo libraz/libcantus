@@ -18,12 +18,12 @@ import type { KeyScale } from '../../core/types.js';
 import type { Chord } from '../../theory/chord/index.js';
 import type { TonicizableDegree } from '../../theory/tendency/index.js';
 import {
-  appliedDominantTarget,
+  appliedChordTarget,
   LEADING_TONE_QUALITIES,
   tonicizableDegrees,
 } from '../../theory/tendency/index.js';
 import { borrowedSourceOf } from './borrowed.js';
-import { hasDominantSonority, isDiatonicChord, mod12, soundsDominantSeventh } from './internal.js';
+import { isDiatonicChord, mod12, soundsDominantSeventh } from './internal.js';
 
 /**
  * Which degrees of a key can be made a local tonic, and the type naming one.
@@ -52,22 +52,11 @@ function isTonicizableRoot(rootPc: number, key: KeyScale): boolean {
 
 /**
  * The scale degree a chromatic chord tonicizes as a numeral names it, or null
- * when it tonicizes nothing.
- *
- * A dominant sonority points a fifth below itself and a diminished one a
- * semitone above itself; which degrees may be pointed at is
- * {@link appliedDominantTarget}, so the tonic is not among them — a chord
- * pointing there is the key's own dominant, and `V/I` is a numeral no harmony
- * text writes.
+ * when it tonicizes nothing; the theory layer's {@link appliedChordTarget}, so
+ * the numerals, the function layer and the part-writing checker share one
+ * answer.
  */
-export function appliedTarget(chord: Chord, key: KeyScale): TonicizableDegree | null {
-  const dominant = hasDominantSonority(chord);
-  const leadingTone = LEADING_TONE_QUALITIES.has(chord.quality);
-  if (!dominant && !leadingTone) {
-    return null;
-  }
-  return appliedDominantTarget(chord.rootPc + (dominant ? 5 : 1), key);
-}
+export { appliedChordTarget as appliedTarget };
 
 /**
  * Whether a chord is an applied dominant: a chromatic chord whose sonority and
@@ -114,7 +103,7 @@ export function isAppliedDominant(chord: Chord, key: KeyScale): boolean {
  * one of them gives is what would make the other take the chord.
  */
 export function pointsAtTonicizableDegree(chord: Chord, key: KeyScale): boolean {
-  if (appliedTarget(chord, key) !== null) {
+  if (appliedChordTarget(chord, key) !== null) {
     return true;
   }
   return soundsDominantSeventh(chord) && isTonicizableRoot(mod12(chord.rootPc - 1), key);

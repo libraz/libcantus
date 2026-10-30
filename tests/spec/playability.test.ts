@@ -741,3 +741,31 @@ describe('playability reads the instrument before the passage', () => {
     expect(playability([], DRUM_KIT).issues).toEqual([]);
   });
 });
+
+describe('joint placement of simultaneous notes', () => {
+  const stringOrder = (report: ReturnType<typeof playability>): number[] =>
+    report.placements.map((placement) => placement.fingering?.string ?? -1);
+
+  it('plays an open-position A major triad on guitar without crossing strings', () => {
+    const report = playability([note(45, 0), note(49, 0), note(52, 0)], GUITAR_STANDARD);
+    expect(report.issues).toEqual([]);
+    const strings = stringOrder(report);
+    expect(strings).toEqual([...strings].sort((a, b) => a - b));
+  });
+
+  it('plays the same triad on a four-string bass', () => {
+    const report = playability([note(33, 0), note(37, 0), note(40, 0)], BASS_4_STRING);
+    expect(report.issues).toEqual([]);
+    const strings = stringOrder(report);
+    expect(strings).toEqual([...strings].sort((a, b) => a - b));
+  });
+
+  it('still reports a stretch and a string clash that no assignment resolves', () => {
+    expect(
+      issuesOfType(playability([note(29, 0), note(55, 0)], BASS_4_STRING), 'stretchTooWide'),
+    ).toHaveLength(1);
+    expect(
+      issuesOfType(playability([note(28, 0), note(29, 0)], BASS_4_STRING), 'stringConflict'),
+    ).toHaveLength(1);
+  });
+});

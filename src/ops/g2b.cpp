@@ -58,12 +58,6 @@ TimeSignature read_ts_or(const json::Value& opts, const TimeSignature& fallback)
   return ts != nullptr ? meter_at(0, read_meter_like(*ts, "ts")) : meter_at(0, fallback);
 }
 
-/** `opts.key ?? fallback`, as the value TS then checks. */
-json::Value value_or(const json::Value& opts, std::string_view key, const json::Value& fallback) {
-  const json::Value* given = opt_null_default(opts, key);
-  return given != nullptr ? *given : fallback;
-}
-
 /** The sounding notes of a wire list, and the wire notes they are, in order. */
 struct Sounding {
   std::vector<NoteEvent> typed;
@@ -115,10 +109,9 @@ void register_rhythm() {
     // The meter is read once, here: the grid below is one repeated bar.
     const json::Value& asked = assert_options(a[1], "opts");
     TimeSignature meter = meter_at(0, read_meter_like(a[0], "ts"));
-    json::Value bars =
-        value_or(asked, "bars", json::Value(static_cast<double>(RHYTHM_DEFAULT_BARS)));
-    json::Value subdivision = value_or(
-        asked, "subdivision", json::Value(static_cast<double>(RHYTHM_DEFAULT_SUBDIVISION)));
+    json::Value bars = opt_or(asked, "bars", json::Value(static_cast<double>(RHYTHM_DEFAULT_BARS)));
+    json::Value subdivision =
+        opt_or(asked, "subdivision", json::Value(static_cast<double>(RHYTHM_DEFAULT_SUBDIVISION)));
     WireContext ctx = read_generation_context(a, get(asked, "ctx"));
     double checked_bars = assert_positive_int(bars, "rhythm bars");
     double checked_subdivision = assert_positive_int(subdivision, "rhythm subdivision");
@@ -161,18 +154,18 @@ void register_groove() {
     std::vector<NoteEvent> events =
         assert_note_events(a[0], "humanize events", line_options(undefined_value()));
     Sounding sounding = sounding_of(a[0], events);
-    json::Value timing = value_or(asked, "timing", json::Value(GROOVE_DEFAULT_TIMING));
+    json::Value timing = opt_or(asked, "timing", json::Value(GROOVE_DEFAULT_TIMING));
     json::Value velocity_jitter =
-        value_or(asked, "velocity", json::Value(GROOVE_DEFAULT_VELOCITY_JITTER));
-    json::Value accent = value_or(asked, "accent", json::Value(GROOVE_DEFAULT_ACCENT));
+        opt_or(asked, "velocity", json::Value(GROOVE_DEFAULT_VELOCITY_JITTER));
+    json::Value accent = opt_or(asked, "accent", json::Value(GROOVE_DEFAULT_ACCENT));
     json::Value base_velocity =
-        value_or(asked, "baseVelocity", json::Value(GROOVE_DEFAULT_BASE_VELOCITY));
+        opt_or(asked, "baseVelocity", json::Value(GROOVE_DEFAULT_BASE_VELOCITY));
     request.timing = assert_range(timing, 0, kMaxSafeInteger, "humanize timing");
     request.velocityJitter = assert_range(velocity_jitter, 0, 127, "humanize velocity jitter");
     request.accent = assert_range(accent, 0, 127, "humanize accent");
     request.baseVelocity = assert_range(base_velocity, 0, 127, "humanize base velocity");
     WireContext ctx = read_generation_context(a, get(asked, "ctx"));
-    Draw draw = wire_part(ctx, value_or(asked, "part", json::Value("humanize")));
+    Draw draw = wire_part(ctx, opt_or(asked, "part", json::Value("humanize")));
     std::vector<NoteEvent> out = humanize_with(sounding.typed, request, draw);
     // A copy keeps every field the note carries; the pass writes its own over it.
     json::Array notes;
@@ -274,7 +267,7 @@ void register_ornament() {
     std::vector<NoteEvent> events =
         assert_note_events(a[0], "ornament notes", line_options(undefined_value()));
     OrnamentStyle style = *parse_ornament_style(assert_one_of(
-        value_or(asked, "style", json::Value("ghost")), ornament_style_names(), "ornament style"));
+        opt_or(asked, "style", json::Value("ghost")), ornament_style_names(), "ornament style"));
     TimeSignature ts = read_ts_or(asked, kOrnamentDefaultTs);
     cantus::assert_time_signature(ts);
     std::optional<double> amount;
@@ -327,9 +320,9 @@ void register_motif() {
   def("generateMotif", [](Args& a) -> json::Value {
     const json::Value& opts = assert_record(a[0], "motif options");
     MotifPlan plan;
-    // `opts.contour ?? 'arch'`: a name the table lacks flattens the line.
-    json::Value contour = value_or(opts, "contour", json::Value("arch"));
-    plan.contour = contour.is_string() ? parse_motif_contour(contour.as_string()) : std::nullopt;
+    plan.contour =
+        *parse_motif_contour(assert_one_of(opt_or(opts, "contour", to_string(MotifContour::kArch)),
+                                           motif_contour_names(), "motif contour"));
     plan.bars = assert_positive_int(get(opts, "bars"), "motif bars");
     // The meter is read once, here: a motif is one repeated bar grid.
     plan.barBeats = beats_per_bar(read_ts_or(opts, kMotifDefaultTs));
@@ -454,23 +447,17 @@ void register_progression() {
     WireContext ctx = read_generation_context(a, get(opts, "ctx"));
     std::optional<ProgressionPreset> preset;
     bool cadence_strong = false;
-    const json::Value& custom = get(opts, "preset");
-    if (!is_undefined(custom)) {
-      const json::Value& degrees = property_of(custom, "degrees");
-      // `degrees.length`: a list's, a text's or an object's own.
-      property_of(degrees, "length");
-      std::vector<json::Value> listed;
-      json::Value length;
-      read_array_like(degrees, listed, length);
-      if (js::strict_equals(length, json::Value(0.0))) {
+    const json::Value& given_preset = get(opts, "preset");
+    if (!is_undefined(given_preset)) {
+      const json::Value& custom = assert_record(given_preset, "progression preset");
+      const json::Array& degrees =
+          assert_array(get(custom, "degrees"), "progression preset degrees");
+      if (degrees.empty()) {
         throw InvalidInputError("progression preset must name at least one degree");
       }
-      if (!degrees.is_array()) {
-        throw js::TypeError("opts.preset.degrees.map is not a function");
-      }
       ProgressionPreset read;
-      for (std::size_t index = 0; index < degrees.as_array().size(); ++index) {
-        const json::Value& given = degrees.as_array()[index];
+      for (std::size_t index = 0; index < degrees.size(); ++index) {
+        const json::Value& given = degrees[index];
         double degree =
             assert_degree(given, "progression preset degrees[" + index_text(index) + "]");
         if (!((degree >= 1 && degree <= 7) || is_borrowed_degree(degree))) {
@@ -480,8 +467,10 @@ void register_progression() {
         }
         read.degrees.push_back(static_cast<int>(degree));
       }
-      cadence_strong = js::strict_equals(value_or(custom, "functional", json::Value("loop")),
-                                         json::Value("cadenceStrong"));
+      read.functional = *parse_prog_function(
+          assert_one_of(opt_or(custom, "functional", to_string(ProgFunction::kLoop)),
+                        prog_function_names(), "progression preset functional"));
+      cadence_strong = read.functional == ProgFunction::kCadenceStrong;
       preset = std::move(read);
     }
     const json::Value& preset_id = get(opts, "presetId");

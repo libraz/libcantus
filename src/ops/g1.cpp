@@ -208,20 +208,19 @@ struct WirePatternModel {
   bool playable(int pitch) const { return !sounds || sounds(pitch); }
 };
 
+/** `assertOneOf(opts.rate ?? 'straight', FIGURE_RATES, 'rate')`. */
+FigureRate read_figure_rate(const json::Value& opts) {
+  return *parse_figure_rate(assert_one_of(opt_or(opts, "rate", to_string(FigureRate::kStraight)),
+                                          figure_rate_names(), "rate"));
+}
+
 /** The options of deform, read when TS reads them. */
 struct WireDeformPlan {
   const Args& a;
   const json::Value& asked;
   const json::Value* ts;
 
-  FigureRate rate() const {
-    const json::Value& rate = get(asked, "rate");
-    if (js::strict_equals(rate, json::Value("half"))) {
-      return FigureRate::kHalf;
-    }
-    return js::strict_equals(rate, json::Value("double")) ? FigureRate::kDouble
-                                                          : FigureRate::kStraight;
-  }
+  FigureRate rate() const { return read_figure_rate(asked); }
 
   std::optional<double> rhythmic() const {
     const json::Value* given = opt_strict(asked, "rhythmic");
@@ -483,16 +482,12 @@ void register_drums() {
     const json::Value& feel = get(opts, "feel");
     plan.feel = is_undefined(feel) ? GrooveFeel::kStraight
                                    : *parse_groove_feel(assert_one_of(feel, feel_names(), "feel"));
+    plan.rate = read_figure_rate(opts);
     WireContext ctx = read_generation_context(a, get(opts, "ctx"));
     plan.bpm = ctx.resolved.bpm.value_or(DRUM_PATTERN_DEFAULT_BPM);
     Draw draw = ctx.resolved.part("drums");
     plan.baseVelocity =
         is_undefined(velocity) ? DRUM_PATTERN_DEFAULT_VELOCITY : *number_of(velocity);
-    // `opts.rate ?? 'straight'`, read by deform as `rate === 'half'` and `rate === 'double'`.
-    const json::Value& rate = get(opts, "rate");
-    plan.rate = js::strict_equals(rate, json::Value("half"))     ? FigureRate::kHalf
-                : js::strict_equals(rate, json::Value("double")) ? FigureRate::kDouble
-                                                                 : FigureRate::kStraight;
     plan.rhythmic = ctx.resolved.rhythmic;
     plan.ornament = ctx.resolved.ornament;
     plan.difficulty = ctx.resolved.difficulty;

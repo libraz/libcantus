@@ -161,6 +161,33 @@ describe('inversion', () => {
     expect(new Set(real.map((note) => note.pitch)).size).toBe(3);
   });
 
+  it('starts an inverted tonal answer where the transposition puts a chromatic first note', () => {
+    const lead = quarters([61, 62, 64]);
+    for (const interval of ['P1', 'M2', 'M3', 'P4', 'P5', 'M6', 'P8'] as const) {
+      for (const answer of ['tonal', 'real'] as const) {
+        const upright = imitate(lead, { atBeat: 4, interval, key: C_MAJOR, answer });
+        const inverted = imitate(lead, { atBeat: 4, interval, key: C_MAJOR, answer, invert: true });
+        expect(inverted[0]?.pitch, `${answer} ${interval}`).toBe(upright[0]?.pitch);
+      }
+    }
+    const p1 = imitate(lead, {
+      atBeat: 4,
+      interval: 'P1',
+      key: C_MAJOR,
+      answer: 'tonal',
+      invert: true,
+    });
+    expect(p1.map((note) => note.pitch)).toEqual([61, 60, 59]);
+    const p5 = imitate(lead, {
+      atBeat: 4,
+      interval: 'P5',
+      key: C_MAJOR,
+      answer: 'tonal',
+      invert: true,
+    });
+    expect(p5.map((note) => note.pitch)).toEqual([68, 67, 65]);
+  });
+
   it('combines inversion with the transposition', () => {
     const answer = imitate(quarters([60, 64]), {
       atBeat: 2,

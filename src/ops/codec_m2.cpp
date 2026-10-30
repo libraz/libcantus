@@ -728,14 +728,32 @@ Progression read_progression_value(const json::Value& chords, const json::Value&
 
 Progression read_progression_data(const json::Value& data) {
   assert_data_object(data, "progression data");
-  json::Value given = surface_record(data, {"key", "chords"});
+  json::Value given = surface_record(data, {"key", "chords", "chordKeys"});
   std::optional<Key> key;
   if (!is_undefined(get(given, "key"))) {
     key = read_key_data(get(given, "key"));
   }
+  const json::Array& listed = assert_data_array(get(given, "chords"), "progression chords");
+  // Without a carried key, each chord may name its own.
+  std::vector<std::optional<Key>> chord_keys(listed.size());
+  const json::Value& own_keys = get(given, "chordKeys");
+  if (!key && !is_undefined(own_keys)) {
+    const json::Array& entries = assert_data_array(own_keys, "progression chord keys");
+    if (entries.size() != listed.size()) {
+      throw InvalidInputError("progression chord keys must hold one entry per chord (" +
+                              index_text(listed.size()) + "); received " +
+                              index_text(entries.size()));
+    }
+    for (std::size_t index = 0; index < entries.size(); ++index) {
+      if (!entries[index].is_null()) {
+        chord_keys[index] = read_key_data(entries[index]);
+      }
+    }
+  }
   std::vector<ChordValue> chords;
-  for (const json::Value& chord : assert_data_array(get(given, "chords"), "progression chords")) {
-    chords.push_back(ChordValue::from_json(read_chord_data(chord)));
+  for (std::size_t index = 0; index < listed.size(); ++index) {
+    ChordValue chord = ChordValue::from_json(read_chord_data(listed[index]));
+    chords.push_back(chord_keys[index] ? chord.with_key(KeyArg(*chord_keys[index])) : chord);
   }
   if (!key) {
     return Progression(chords);

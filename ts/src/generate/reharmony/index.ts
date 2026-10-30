@@ -229,7 +229,8 @@ export function substituteChord(
   // it was named with: everything below spells from that tonic, so the letters
   // are the caller's key's rather than the ones its pitch classes read best as.
   const source = toChordData(chord);
-  const { scale, tonic } = resolveKey(key);
+  const resolved = resolveKey(key);
+  const { scale, tonic } = resolved;
   // The relative test counts common tones against the chord's triad, not its
   // full pitch-class set: an exact count of two would otherwise be decided by
   // how many tensions the input carries, so C proposes both Em and Am while
@@ -260,10 +261,10 @@ export function substituteChord(
   // Borrowed: a parallel-mode triad sharing the original's harmonic function.
   // It is written the way the mode it comes from writes it, which is also how
   // the key names the borrowing: C major borrows Eb and Ab from C minor.
-  const targetFunction = functionOf(source, scale);
+  const targetFunction = functionOf(source, resolved);
   const parallel = parallelKey(scale);
   for (const triad of diatonicTriadsOf(parallel, tonic)) {
-    if (functionOf(triad, scale) === targetFunction && !isDiatonic(triad, scale)) {
+    if (functionOf(triad, resolved) === targetFunction && !isDiatonic(triad, resolved)) {
       candidates.push({ chord: spelledInKey(triad, tonic, parallel), type: 'borrowed' });
     }
   }
@@ -274,7 +275,7 @@ export function substituteChord(
       const mediant = makeChord(mod12(source.rootPc + offset), quality);
       if (
         commonToneCount(originalTriad, chordPitchClasses(mediant)) === 1 &&
-        !isDiatonic(mediant, scale)
+        !isDiatonic(mediant, resolved)
       ) {
         candidates.push({ chord: spelledInKey(mediant, tonic, scale), type: 'chromaticMediant' });
       }
@@ -302,8 +303,8 @@ export function substituteChord(
     results.push({
       chord: candidate.chord,
       type: candidate.type,
-      roman: chordToRoman(candidate.chord, scale),
-      function: functionOf(candidate.chord, scale),
+      roman: chordToRoman(candidate.chord, resolved),
+      function: functionOf(candidate.chord, resolved),
     });
   }
   return results;
@@ -349,8 +350,9 @@ export type BorrowedChord = {
  */
 export function modalInterchangePalette(key: SpelledKeyLike): BorrowedChord[] {
   // The key is read once, here at the boundary, and keeps the tonic it was
-  // named with: every chord below is spelled from that tonic.
-  const { scale, tonic } = resolveKey(key);
+  // named with: every chord below is spelled from that tonic and numbered against it.
+  const resolved = resolveKey(key);
+  const { scale, tonic } = resolved;
   const palette: BorrowedChord[] = [];
   const seen = new Set<string>();
   const add = (chord: Chord) => {
@@ -361,14 +363,14 @@ export function modalInterchangePalette(key: SpelledKeyLike): BorrowedChord[] {
     seen.add(dedupeKey);
     palette.push({
       chord,
-      roman: chordToRoman(chord, scale),
-      source: borrowedSource(chord, scale),
+      roman: chordToRoman(chord, resolved),
+      source: borrowedSource(chord, resolved),
     });
   };
 
   const parallel = parallelKey(scale);
   for (const triad of diatonicTriadsOf(parallel, tonic)) {
-    if (!isDiatonic(triad, scale) && borrowedSource(triad, scale) !== null) {
+    if (!isDiatonic(triad, resolved) && borrowedSource(triad, resolved) !== null) {
       add(spelledInKey(triad, tonic, parallel));
     }
   }
@@ -377,7 +379,7 @@ export function modalInterchangePalette(key: SpelledKeyLike): BorrowedChord[] {
   // where it is a native chord rather than a borrowing). Being a bII, it is
   // written a minor second above the tonic: Db in C major, C in B major.
   const neapolitan = makeChord(mod12(scale.rootPc + 1), 'maj');
-  if (!isDiatonic(neapolitan, scale)) {
+  if (!isDiatonic(neapolitan, resolved)) {
     add(spelledOnRoot(neapolitan, transposeNote(tonic, 1), tonic, scale));
   }
   return palette;

@@ -261,6 +261,10 @@ std::vector<std::string_view> counter_rhythm_names() {
   return {to_string(CounterRhythm::kComplement), to_string(CounterRhythm::kFollow)};
 }
 
+std::vector<std::string_view> counter_register_names() {
+  return {to_string(CounterRegister::kAbove), to_string(CounterRegister::kBelow)};
+}
+
 std::string_view to_string(CounterRegister side) {
   switch (side) {
     case CounterRegister::kAbove:

@@ -219,6 +219,11 @@ std::optional<ProgFunction> parse_prog_function(std::string_view name) {
   return std::nullopt;
 }
 
+std::vector<std::string_view> prog_function_names() {
+  return {to_string(ProgFunction::kLoop), to_string(ProgFunction::kTensionBuild),
+          to_string(ProgFunction::kCadenceStrong), to_string(ProgFunction::kStable)};
+}
+
 std::vector<std::string_view> prog_style_names() {
   return std::vector<std::string_view>(std::begin(kStyleNames), std::end(kStyleNames));
 }
@@ -303,11 +308,10 @@ std::vector<ChordSpan> generate_progression_with(const ProgressionPlan& plan,
       int dom_root = (next_root + 7) % 12;
       bool targets_tonic = (next_root - tonic_pc + 12) % 12 == 0;
       bool is_last_tonic_statement = cur.rootPc == tonic_pc && tonic_statements <= 1;
-      Chord dominant_chord = make_chord(dom_root, ChordQuality::kDom7);
       bool already_secondary =
           cur.rootPc == dom_root && sounds_dominant_seventh(make_chord(cur.rootPc, cur.quality));
       // A dominant seventh the key already contains is a native chord of it, not an applied one.
-      bool is_native_dominant = is_diatonic_chord(dominant_chord, plan.key);
+      bool is_native_dominant = is_native_dominant_seventh(dom_root, plan.key);
       // A secondary dominant inserted at i-1 resolves onto this chord; replacing it here would
       // orphan that dominant.
       bool is_resolution_target = i > 0 && chords[i - 1].secondaryDominant.value_or(false) == true;

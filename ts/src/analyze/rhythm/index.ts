@@ -428,6 +428,19 @@ export function analyzeRhythm(
   notes: readonly NoteEvent[],
   opts: RhythmAnalysisOptions = {},
 ): RhythmAnalysis {
+  return rhythmOver(notes, opts, undefined);
+}
+
+/**
+ * {@link analyzeRhythm} over a window that opens at `windowStart` rather than
+ * at the bar grid of the first onset, so bars and rest count from the span the
+ * caller measures; undefined opens it at the first onset.
+ */
+export function rhythmOver(
+  notes: readonly NoteEvent[],
+  opts: RhythmAnalysisOptions,
+  windowStart: number | undefined,
+): RhythmAnalysis {
   const meters = resolveMeters(opts, 'rhythm meters');
   assertNoteEvents(notes, 'rhythm notes', { allowNonPositiveDuration: true, budget: opts.budget });
   const sounding = notes.filter((note) => note.durationBeat > 0);
@@ -439,7 +452,7 @@ export function analyzeRhythm(
     (min, n) => Math.min(min, n.startBeat),
     Number.POSITIVE_INFINITY,
   );
-  const startBeat = barGridStart(firstOnset, meters);
+  const startBeat = windowStart ?? barGridStart(firstOnset, meters);
   const endBeat = Math.max(startBeat, opts.totalBeats ?? latestSoundingEnd(sounding));
   assertRange(endBeat, Math.min(0, startBeat), Number.MAX_SAFE_INTEGER, 'rhythm totalBeats');
 

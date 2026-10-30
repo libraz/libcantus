@@ -10,6 +10,7 @@
 #include "js/number.h"
 #include "js/value.h"
 #include "ops/accessors.h"
+#include "ops/codec_m2.h"
 #include "ops/validate.h"
 
 namespace cantus::ops {
@@ -58,6 +59,10 @@ ChordData read_chord_like(const json::Value& value) {
     Chord chord = parse_chord_symbol(value.as_string());
     json::Value wire = to_json(chord);
     return ChordData{std::move(chord), std::move(wire)};
+  }
+  if (is_class_value(value, "Chord")) {
+    // A model chord is read through its `data` view, spelled by the key it carries.
+    return normalized_chord(to_json(read_chord_class(value).data()));
   }
   if (is_js_object(value)) {
     return normalized_chord(like_target(value));

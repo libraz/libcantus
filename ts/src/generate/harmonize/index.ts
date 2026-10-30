@@ -1,5 +1,6 @@
 import { meterAt, pulseBeats, toMeterData } from '../../core/meter/index.js';
 import {
+  assertArray,
   assertFiniteNumber,
   assertGenerationBudget,
   assertNoteEvents,
@@ -20,7 +21,12 @@ import { classifyMelodyTones, snapToPulse } from './nct.js';
 export type { ClassifiedMelodyTone, MelodyToneRole } from './nct.js';
 export { classifyMelodyTones } from './nct.js';
 
-import type { Candidate, HarmonizeOptions, HarmonizeResult } from './internal.js';
+import type {
+  Candidate,
+  HarmonizeOptions,
+  HarmonizePlacement,
+  HarmonizeResult,
+} from './internal.js';
 import {
   DEFAULT_METER,
   DEFAULT_PLACEMENT,
@@ -95,7 +101,7 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
     allowNonPositiveDuration: true,
     budget: opts.budget,
   });
-  const phraseEnds = opts.phraseEnds ?? [];
+  const phraseEnds = assertArray<number>(opts.phraseEnds ?? [], 'harmonize phrase ends');
   for (const end of phraseEnds) {
     assertFiniteNumber(end, 'harmonize phrase end');
   }
@@ -111,7 +117,10 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
     requestedKey === 'infer' ? inferKey(soundingMelody) : requestedKey,
   );
   const key = resolvedKey.scale;
-  const placement = opts.placement ?? DEFAULT_PLACEMENT;
+  const placement = assertRecord<HarmonizePlacement>(
+    opts.placement ?? DEFAULT_PLACEMENT,
+    'harmonize placement',
+  );
   const ctx = resolveContext(opts.ctx);
   // `reharmonize` names three points on the dial the context sets continuously,
   // so a caller who says `'secondaryDominant'` gets exactly the vocabulary that

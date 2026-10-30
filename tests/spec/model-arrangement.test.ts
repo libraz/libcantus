@@ -349,7 +349,8 @@ describe('Arrangement answers as the functions do', () => {
     expect(timeline.keys).toEqual(analysis.keys);
     // Through `toJSON`, since a chord read off a timeline carries the key in
     // force and spells itself against it, which the plain segment does not.
-    expect(timeline.at(0)?.toJSON()).toEqual(analysis.timeline.at(0));
+    const first = analysis.timeline.segments[0]?.startBeat ?? Number.NaN;
+    expect(timeline.at(first)?.toJSON()).toEqual(analysis.timeline.at(first));
     expect(timeline.totalBeats).toBe(
       analysis.timeline.segments.reduce((end, segment) => Math.max(end, segment.endBeat), 0),
     );

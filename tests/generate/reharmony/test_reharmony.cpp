@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "cantus/analyze/functional.h"
 #include "cantus/generate/reharmony.h"
 #include "cantus/ops.h"
 #include "ops/codec_g4.h"
@@ -70,4 +71,18 @@ TEST_CASE("negative harmony reflects G major to F minor in C major", "[reharmony
         call("negativeHarmonyMirror",
              std::string("[") + ops::stringify(ops::to_json(make_chord(7, ChordQuality::kMaj))) +
                  "," + kWireKey + "]"));
+}
+
+TEST_CASE("proposals are numbered in the key as written", "[reharmony]") {
+  for (const char* key : {"Ab minor", "C# major"}) {
+    for (const Substitution& sub : substitute_chord(roman_to_chord("V7", key), key)) {
+      CHECK(sub.roman == chord_to_roman(sub.chord, key));
+      CHECK(sub.function == function_of(sub.chord, key));
+    }
+    for (const BorrowedChord& borrowed : modal_interchange_palette(key)) {
+      CHECK(borrowed.roman == chord_to_roman(borrowed.chord, key));
+      const std::optional<BorrowedSource>& expected = borrowed_source(borrowed.chord, key);
+      CHECK(static_cast<const std::optional<BorrowedSource>&>(borrowed.source) == expected);
+    }
+  }
 }

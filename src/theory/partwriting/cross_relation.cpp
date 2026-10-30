@@ -15,14 +15,15 @@ namespace cantus {
 namespace {
 
 /**
- * Whether a chord resolves as an applied dominant: the dominant's sonority, taken down a fifth
- * onto a degree the key can make a local tonic, with the chord it names actually following.
+ * Whether a chord resolves as an applied chord: a dominant sonority taken down a fifth, or a
+ * leading-tone chord taken up a semitone, onto a degree the key can make a local tonic, with the
+ * chord it names actually following.
  */
-bool resolves_as_applied_dominant(const Chord& chord, const Chord* next, const KeyScale& key) {
-  if (next == nullptr || !has_dominant_sonority(chord)) {
+bool resolves_as_applied_chord(const Chord& chord, const Chord* next, const KeyScale& key) {
+  if (next == nullptr) {
     return false;
   }
-  Nullable<TonicizableDegree> target = applied_dominant_target(chord.rootPc + 5, key);
+  Nullable<TonicizableDegree> target = applied_chord_target(chord, key);
   return target && pitch_class_of(next->rootPc) == target->rootPc;
 }
 
@@ -47,7 +48,7 @@ bool sounds_augmented_sixth(const ChromaticMoment& moment, const KeyScale& key) 
 /** Whether a chord is one of the chromatic harmonies whose own definition contains the
  * contradiction. */
 bool is_chromatic_harmony(const ChromaticMoment& moment, const Chord* next, const KeyScale& key) {
-  return resolves_as_applied_dominant(moment.chord, next, key) ||
+  return resolves_as_applied_chord(moment.chord, next, key) ||
          is_neapolitan_chord_of(moment.chord, key) || sounds_augmented_sixth(moment, key);
 }
 

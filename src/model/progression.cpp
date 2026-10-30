@@ -64,9 +64,23 @@ Progression Progression::from_json(const ProgressionData& data) {
   if (data.key) {
     key = KeyArg(Key::from_json(*data.key));
   }
+  std::optional<std::vector<Nullable<ResolvedKey>>> chord_keys;
+  if (!key && data.chordKeys) {
+    if (data.chordKeys->size() != data.chords.size()) {
+      throw InvalidInputError("progression chord keys must hold one entry per chord (" +
+                              js::to_string(static_cast<double>(data.chords.size())) +
+                              "); received " +
+                              js::to_string(static_cast<double>(data.chordKeys->size())));
+    }
+    chord_keys = data.chordKeys;
+  }
   std::vector<ChordValue> chords;
-  for (const Chord& chord : data.chords) {
-    chords.push_back(ChordValue::from_json(chord));
+  for (std::size_t index = 0; index < data.chords.size(); ++index) {
+    ChordValue chord = ChordValue::from_json(data.chords[index]);
+    if (chord_keys && (*chord_keys)[index]) {
+      chord = chord.with_key(KeyArg(Key::from_json(*(*chord_keys)[index])));
+    }
+    chords.push_back(std::move(chord));
   }
   return Progression(chords, key);
 }
@@ -153,8 +167,14 @@ Progression Progression::with_key(const KeyArg& key) const { return Progression(
 
 std::vector<std::vector<int>> Progression::voice(const VoicingOptions& opts) const {
   std::vector<ChordArg> chords;
-  for (const ChordValue& chord : chords_) {
-    chords.emplace_back(chord.data());
+  if (opts.key) {
+    for (Chord& view : views_in(to_key(*opts.key))) {
+      chords.emplace_back(std::move(view));
+    }
+  } else {
+    for (const ChordValue& chord : chords_) {
+      chords.emplace_back(chord.data());
+    }
   }
   // The carried key travels whole: the voicer spells the chords it scores.
   if (opts.key || !key_) {
@@ -163,6 +183,14 @@ std::vector<std::vector<int>> Progression::voice(const VoicingOptions& opts) con
   VoicingOptions keyed = opts;
   keyed.key = KeyArg(*key_);
   return voice_progression(chords, keyed);
+}
+
+std::vector<Chord> Progression::views_in(const Key& key) const {
+  std::vector<Chord> views;
+  for (const ChordValue& chord : chords_) {
+    views.push_back(chord.with_key(KeyArg(key)).data());
+  }
+  return views;
 }
 
 Key Progression::resolve_analysis_key(const std::optional<KeyArg>& key) const {
@@ -206,12 +234,13 @@ ProgressionAnalysis Progression::analyze(const std::optional<KeyArg>& key,
   if (count < 2) {
     return out;
   }
+  std::vector<Chord> views = views_in(resolved);
   DetectCadenceOptions cadence;
   cadence.alternatives = opts.alternatives;
   cadence.approach = opts.approach;
   // The chord before the closing pair comes from the progression itself, as cadences() takes it.
   if (count >= 3) {
-    cadence.approach = ChordArg(chords_[count - 3].data());
+    cadence.approach = ChordArg(views[count - 3]);
   }
   if (opts.voicing) {
     const std::vector<std::vector<double>>& voicing = *opts.voicing;
@@ -223,8 +252,7 @@ ProgressionAnalysis Progression::analyze(const std::optional<KeyArg>& key,
     cadence.voicing = std::array<std::vector<double>, 2>{voicing[voicing.size() - 2],
                                                          voicing[voicing.size() - 1]};
   }
-  out.cadence = detect_cadence(chords_[count - 2].data(), chords_[count - 1].data(),
-                               resolved.data(), cadence);
+  out.cadence = detect_cadence(views[count - 2], views[count - 1], resolved.data(), cadence);
   return out;
 }
 
@@ -239,13 +267,14 @@ std::vector<ScaleChoice> Progression::scales() const {
 std::vector<CadenceResult> Progression::cadences(const std::optional<KeyArg>& key,
                                                  const ProgressionCadenceOptions& opts) const {
   Key resolved = resolve_analysis_key(key);
+  std::vector<Chord> views = views_in(resolved);
   std::vector<CadenceResult> found;
-  for (std::size_t index = 1; index < chords_.size(); ++index) {
+  for (std::size_t index = 1; index < views.size(); ++index) {
     DetectCadenceOptions pair;
     pair.alternatives = opts.alternatives;
     // The progression supplies its own predecessor wherever it has one.
     if (index >= 2) {
-      pair.approach = ChordArg(chords_[index - 2].data());
+      pair.approach = ChordArg(views[index - 2]);
     } else {
       pair.approach = opts.approach;
     }
@@ -255,8 +284,7 @@ std::vector<CadenceResult> Progression::cadences(const std::optional<KeyArg>& ke
           index - 1 < voicing.size() ? voicing[index - 1] : std::vector<double>{},
           index < voicing.size() ? voicing[index] : std::vector<double>{}};
     }
-    found.push_back(
-        detect_cadence(chords_[index - 1].data(), chords_[index].data(), resolved.data(), pair));
+    found.push_back(detect_cadence(views[index - 1], views[index], resolved.data(), pair));
   }
   return found;
 }
@@ -343,6 +371,19 @@ ProgressionData Progression::to_json() const {
   }
   if (key_) {
     out.key = key_->to_json();
+  }
+  // A chord's own key spells it, so a keyless progression keeps each one.
+  bool any_chord_key = false;
+  for (const ChordValue& chord : chords_) {
+    any_chord_key = any_chord_key || chord.key().has_value();
+  }
+  if (!key_ && any_chord_key) {
+    std::vector<Nullable<ResolvedKey>> chord_keys;
+    for (const ChordValue& chord : chords_) {
+      chord_keys.push_back(chord.key() ? Nullable<ResolvedKey>(chord.key()->to_json())
+                                       : Nullable<ResolvedKey>());
+    }
+    out.chordKeys = std::move(chord_keys);
   }
   return out;
 }

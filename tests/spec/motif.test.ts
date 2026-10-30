@@ -1,5 +1,5 @@
 import { chordTimelineFromChords } from '@libraz/libcantus/analyze';
-import type { KeyScale } from '@libraz/libcantus/core';
+import { InvalidInputError, type KeyScale } from '@libraz/libcantus/core';
 import {
   developMotif,
   generateMotif,
@@ -183,6 +183,20 @@ describe('transformMotif shifts', () => {
 });
 
 describe('generateMotif', () => {
+  it('rejects a contour it does not name instead of writing a flat line', () => {
+    expect(() => generateMotif({ key: cMajor, bars: 2, contour: 'rising' as 'ascending' })).toThrow(
+      'motif contour must be one of arch, ascending, descending, wave; received "rising"',
+    );
+    expect(() => generateMotif({ key: cMajor, bars: 2, contour: 3 as unknown as 'arch' })).toThrow(
+      InvalidInputError,
+    );
+    const wave = generateMotif({ key: cMajor, bars: 2, contour: 'wave' }).notes;
+    expect(new Set(wave.map((note) => note.pitch)).size).toBeGreaterThan(1);
+    expect(generateMotif({ key: cMajor, bars: 2, contour: null as unknown as 'arch' })).toEqual(
+      generateMotif({ key: cMajor, bars: 2 }),
+    );
+  });
+
   it('is deterministic for a given seed', () => {
     const a = generateMotif({ key: cMajor, bars: 2, contour: 'arch', ctx: { seed: 7 } });
     const b = generateMotif({ key: cMajor, bars: 2, contour: 'arch', ctx: { seed: 7 } });

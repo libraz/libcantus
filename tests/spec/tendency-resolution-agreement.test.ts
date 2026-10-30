@@ -1,9 +1,9 @@
 /**
  * The voicing search and the part-writing checker state one rule about a
  * tendency tone, so the search must never hand back a progression the checker
- * then reports. The sweep below walks the whole named chord vocabulary rather
- * than a list written by hand, so a quality added to the registry is covered by
- * the same run that publishes it.
+ * then reports. This file holds the two flat-side cases (Db and Gb major) that
+ * every implementation runs; the sweep over the whole chord vocabulary needs
+ * internals and lives in ts/test/tendency-resolution-agreement.test.ts.
  */
 
 import {

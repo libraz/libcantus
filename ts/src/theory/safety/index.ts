@@ -8,6 +8,7 @@ import {
   assertOneOf,
   assertOptions,
   assertRecord,
+  describeRejected,
 } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
 import { intervalAboveRoot, isChordMember } from '../chord/index.js';
@@ -464,7 +465,9 @@ function assertSafetyContext(q: Omit<SafetyQuery, 'candidatePitch'>): void {
     throw new InvalidInputError('vocalLow must not exceed vocalHigh');
   }
   if (!Array.isArray(q.otherVoices)) {
-    throw new InvalidInputError(`otherVoices must be an array; received ${typeof q.otherVoices}`);
+    throw new InvalidInputError(
+      `otherVoices must be an array; received ${describeRejected(q.otherVoices)}`,
+    );
   }
   assertGenerationBudget(q.otherVoices.length, 'other voices');
   for (let index = 0; index < q.otherVoices.length; index += 1) {

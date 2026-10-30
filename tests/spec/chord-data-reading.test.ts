@@ -9,13 +9,16 @@
 
 import {
   analyzeChord,
+  analyzeReference,
   chordToRoman,
   detectModulations,
   explainRoman,
   functionOf,
   isDiatonic,
+  spellLine,
 } from '@libraz/libcantus/analyze';
 import { generateMotif } from '@libraz/libcantus/generate';
+import { Voicing } from '@libraz/libcantus/model';
 import {
   availableTensions,
   avoidNotes,
@@ -25,9 +28,11 @@ import {
   enumerateSafePitches,
   evaluateSafety,
   figuredBassOf,
+  majorKey,
   nextVoicing,
   roleOf,
   scalesForChanges,
+  spellVoicing,
   voiceChord,
   voiceProgression,
 } from '@libraz/libcantus/theory';
@@ -114,6 +119,87 @@ describe('an unknown quality is refused where the chord tones are read', () => {
   });
 });
 
+describe('an unknown quality is refused where a profile or a voicing reads the chord', () => {
+  const line = [{ pitch: 60, startBeat: 0, durationBeat: 1 }];
+  const reference = (chords: unknown[], fields: Record<string, unknown> = {}) =>
+    analyzeReference(line, {
+      key: majorKey(0),
+      timeline: {
+        segments: chords.map((value, index) => ({
+          startBeat: 4 * index,
+          endBeat: 4 * index + 4,
+          chord: value,
+        })),
+        at: () => null,
+      },
+      ...fields,
+    } as never);
+
+  it('by the reference profile of a timeline, never reading it as major', () => {
+    for (const quality of ['minor', undefined, 5, null]) {
+      expect(() => reference([chord({ quality, intervals: [0, 3, 7] })])).toThrow(
+        `Unknown chord quality: ${String(quality)}`,
+      );
+      expect(() => reference([{ rootPc: 0, quality }])).toThrow(
+        `Unknown chord quality: ${String(quality)}`,
+      );
+    }
+    expect(() => reference([{ rootPc: 0, quality: 'maj' }])).toThrow(
+      'chord intervals must be an array; received undefined',
+    );
+    // The chord is read as data, not as a symbol, and its offsets where it is named.
+    expect(() => reference(['C'])).toThrow('pitch must be finite; received NaN');
+    expect(() => reference([chord({ intervals: [0, null, 7] })])).toThrow(
+      'chord.intervals[1] must be finite; received null',
+    );
+    expect(() => reference([chord({ rootPc: 2, quality: 'min', intervals: [0, 'x', 7] })])).toThrow(
+      'chord.intervals[1] must be finite; received x',
+    );
+    expect(() =>
+      reference([chord({ rootPc: 7, quality: 'aa' }), chord({ quality: 'bb' })]),
+    ).toThrow('Unknown chord quality: bb');
+    expect(() => reference([chord({ quality: 'minor' })], { melody: 5 })).toThrow(
+      'reference melody must be an array; received number',
+    );
+    expect(
+      reference([chord({ toneSpellings: [null, null, null], rootSpelling: 5 })]).harmony.chords.map(
+        (entry) => entry.roman,
+      ),
+    ).toEqual(['I']);
+  });
+
+  it('by a voicing spelled against a chord', () => {
+    const tonic = Voicing.satb(chord({}), { key: majorKey(0) });
+    expect(() =>
+      tonic.spell(majorKey(0), chord({ quality: 'minor', intervals: [0, 3, 7] })),
+    ).toThrow('Unknown chord quality: minor');
+    expect(() => tonic.spell(majorKey(0), noQuality)).toThrow('Unknown chord quality: undefined');
+    // The voicing's tones are all in the key, so the root hint is never read.
+    expect(tonic.spell(majorKey(0), chord({ rootSpelling: 5 }))).toHaveLength(4);
+  });
+
+  it('by a voicing checked against the next, each chord asserted before the first is spelled', () => {
+    const tonic = Voicing.satb(chord({}), { key: majorKey(0) });
+    const dominantChord = chord({ rootPc: 7 });
+    const other = Voicing.satb(dominantChord, { key: majorKey(0) });
+    const check = (from: unknown, to: unknown, peer: unknown = other) =>
+      tonic.checkTo(peer as never, [from, to] as never, majorKey(0));
+    expect(() => check(chord({}), chord({ rootPc: 7, quality: 'minor' }))).toThrow(
+      'Unknown chord quality: minor',
+    );
+    expect(() => check(chord({ quality: 'minor' }), chord({ rootPc: 7, quality: 'zz' }))).toThrow(
+      'Unknown chord quality: minor',
+    );
+    expect(() => check(noQuality, dominantChord)).toThrow('Unknown chord quality: undefined');
+    expect(() => check(chord({ quality: 'minor' }), dominantChord, [43, 59, 62, 67])).toThrow(
+      'Unknown chord quality: minor',
+    );
+    expect(() => check(chord({}), dominantChord, [43, 59, 62, 67])).toThrow(
+      'voicing must be an array; received undefined',
+    );
+  });
+});
+
 describe('a spelling hint is read as a note where the chord spelling is read', () => {
   const nullTones = (fields: Record<string, unknown> = {}) =>
     chord({ toneSpellings: [null, null, null], ...fields });
@@ -124,6 +210,112 @@ describe('a spelling hint is read as a note where the chord spelling is read', (
     expect(() => nextVoicing([48, 55, 64, 72], chord({ toneSpellings: ['', '', ''] }))).toThrow(
       'note must be an object; received ""',
     );
+  });
+
+  it('by the chord left in a checked pair, where its seventh is looked for', () => {
+    const tonic = Voicing.satb(chord({}), { key: majorKey(0) });
+    const dominantChord = chord({ rootPc: 7 });
+    const other = Voicing.satb(dominantChord, { key: majorKey(0) });
+    const check = (from: unknown, to: unknown) =>
+      tonic.checkTo(other, [from, to] as never, majorKey(0));
+    expect(() => check(chord({ toneSpellings: [5, null, null] }), dominantChord)).toThrow(
+      'note must be an object; received number',
+    );
+    expect(() => check(nullTones(), dominantChord)).toThrow(
+      'note must be an object; received null',
+    );
+    expect(() => check(nullTones(), chord({ rootPc: 7, quality: 'minor' }))).toThrow(
+      'Unknown chord quality: minor',
+    );
+    expect(check(chord({}), chord({ rootPc: 7, toneSpellings: [null, null, null] }))).toEqual([]);
+    expect(check(chord({ rootSpelling: 5 }), dominantChord)).toEqual([]);
+  });
+
+  it('by the voicing entrances that spell in a key, the root hint included', () => {
+    const misspelled = chord({ rootSpelling: 5 });
+    const message = 'diatonic letter must be finite; received undefined';
+    const key = majorKey(0);
+    expect(() => voiceChord(misspelled, { key })).toThrow(message);
+    expect(() => voiceProgression([misspelled], { key: 'C major' })).toThrow(message);
+    expect(() => voiceProgression([chord({}), misspelled], { key: 'C major' })).toThrow(message);
+    expect(() => nextVoicing([48, 55, 64, 72], misspelled, { key: 'C major' })).toThrow(message);
+    expect(() =>
+      nextVoicing([48, 55, 64, 72], chord({}), { key: 'C major', previousChord: misspelled }),
+    ).toThrow(message);
+    expect(() => Voicing.satb(misspelled, { key })).toThrow(message);
+    expect(() => Voicing.satb(chord({}), { key }).next(misspelled, { key })).toThrow(message);
+    // The tone spellings are read where the roles are scored, before the key spells the root.
+    expect(() =>
+      voiceChord(chord({ rootSpelling: 5, toneSpellings: [null, null, null] }), { key }),
+    ).toThrow('note must be an object; received null');
+    // Without a key nothing spells the chord, and a key that names every pitch class asks nothing
+    // of it.
+    expect(voiceChord(misspelled)).toEqual([48, 60, 64, 67]);
+    expect(voiceProgression([misspelled])).toEqual([[48, 60, 64, 67]]);
+    expect(nextVoicing([48, 55, 64, 72], chord({}), { previousChord: misspelled })).toHaveLength(4);
+    expect(voiceChord(misspelled, { key: { rootPc: 0, modeMask12: 4095 } })).toEqual([
+      48, 60, 64, 67,
+    ]);
+  });
+
+  it('by a voicing spelled against a chord, at the first pitch the key leaves to it', () => {
+    const misspelled = chord({
+      rootPc: 2,
+      quality: 'dom7',
+      intervals: [0, 4, 7, 10],
+      rootSpelling: 5,
+    });
+    const message = 'diatonic letter must be finite; received undefined';
+    const key = majorKey(0);
+    expect(() => spellVoicing([50, 66, 69, 72], misspelled, 'C major')).toThrow(message);
+    expect(spellVoicing([50, 62, 69, 72], misspelled, 'C major')).toHaveLength(4);
+    expect(() => spellVoicing([50, 'x', 66] as never, misspelled, 'C major')).toThrow(
+      'pitch must be finite; received x',
+    );
+    expect(() => spellVoicing([66, 'x'] as never, misspelled, 'C major')).toThrow(message);
+    expect(() => spellVoicing([Number.NaN, 66], misspelled, 'C major')).toThrow(
+      'pitch must be finite; received NaN',
+    );
+    const chromatic = Voicing.of([50, 66, 69, 72]);
+    const unspelledTones = chord({
+      rootPc: 2,
+      quality: 'dom7',
+      intervals: [0, 4, 7, 10],
+      toneSpellings: [null, null, null, null],
+    });
+    expect(() => chromatic.spell(key, misspelled)).toThrow(message);
+    expect(() => chromatic.spell(key, unspelledTones)).toThrow(
+      'note must be an object; received null',
+    );
+    const dominantVoicing = Voicing.of([43, 59, 62, 67]);
+    const dominantChord = chord({ rootPc: 7 });
+    expect(() => chromatic.checkTo(dominantVoicing, [misspelled, dominantChord], key)).toThrow(
+      message,
+    );
+    expect(() => dominantVoicing.checkTo(chromatic, [dominantChord, misspelled], key)).toThrow(
+      message,
+    );
+    expect(() =>
+      dominantVoicing.checkTo(
+        { pitches: [50, 66, 69, 72] } as never,
+        [dominantChord, misspelled],
+        key,
+      ),
+    ).toThrow(message);
+  });
+
+  it('by a line spelled over a timeline chord', () => {
+    const over = (value: unknown) =>
+      spellLine(
+        [{ pitch: 60, startBeat: 0, durationBeat: 1 }],
+        { segments: [{ startBeat: 0, endBeat: 4, chord: value }], at: () => value } as never,
+        majorKey(0),
+      );
+    expect(() => over(chord({ rootSpelling: 5 }))).toThrow(
+      'diatonic letter must be finite; received undefined',
+    );
+    expect(() => over(nullTones())).toThrow('note must be an object; received null');
+    expect(over(chord({}))).toEqual([{ letter: 0, alter: 0, octave: 4 }]);
   });
 
   it('by the figures, which spell the chord in the key', () => {

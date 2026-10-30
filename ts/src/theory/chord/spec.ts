@@ -764,7 +764,7 @@ function assertDegreeList(
   name: string,
 ): void {
   if (!Array.isArray(value)) {
-    throw new InvalidInputError(`${name} must be an array; received ${typeof value}`);
+    throw new InvalidInputError(`${name} must be an array; received ${describeRejected(value)}`);
   }
   for (const degree of value) {
     assertDegreeIn(degree, allowed, name);

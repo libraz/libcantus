@@ -547,3 +547,13 @@ describe('a resolved context handed back as a context', () => {
     ).toBe(resolveContext(3).part('a').at('x'));
   });
 });
+
+describe('instrument lookup on the resolved context', () => {
+  it('answers only for part names the context was given', () => {
+    const resolved = resolveContext({ seed: 1, instruments: { lead: BASS_4_STRING } });
+    expect(resolved.instrument('lead')?.name).toBe(BASS_4_STRING.name);
+    for (const inherited of ['toString', 'constructor', '__proto__', 'hasOwnProperty']) {
+      expect(resolved.instrument(inherited)).toBeUndefined();
+    }
+  });
+});

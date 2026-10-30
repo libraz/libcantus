@@ -104,11 +104,12 @@ function sourcePlan(): api.CompositionPlan {
 const TYPED_SEEDS: Readonly<Record<string, () => unknown>> = {
   deriveCompositionPlan: () => structuredClone(sourcePlan()),
   majorKey: () => api.majorKey(0),
-  resolveKey: () => api.resolveKey('C'),
   parseInterval: () => api.parseInterval('M3'),
   parseNote: () => api.parseNote('C4'),
   parseChordSymbol: () => api.parseChordSymbol('C'),
   chordSpecOf: () => api.chordSpecOf(api.parseChordSymbol('C')),
+  chordTimelineFromChords: () =>
+    api.chordTimelineFromChords([{ rootPc: 0, quality: 'maj', startBeat: 0 }], 4),
 };
 
 /** The constituents of a type, with `null` and `undefined` set aside. */

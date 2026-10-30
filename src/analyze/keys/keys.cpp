@@ -542,7 +542,7 @@ void attach_pivots(std::vector<KeyRegion>& regions, const std::vector<OrderedSeg
       continue;
     }
     int root = pitch_class_of(chord.rootPc);
-    for (const PivotChord& entry : pivots_between(regions[i - 1].key, regions[i].key.scale)) {
+    for (const PivotChord& entry : pivots_between(regions[i - 1].key, regions[i].key)) {
       std::vector<int> tones = chord_pitch_classes(entry.chord);
       if (entry.chord.rootPc == root && tones.size() == core->size() &&
           std::equal(tones.begin(), tones.end(), core->begin())) {
@@ -729,12 +729,18 @@ std::vector<KeyRegion> detect_modulations_over(const std::vector<SegmentBeats>& 
                    [](const OrderedSegment& a, const OrderedSegment& b) {
                      return a.startBeat - b.startBeat < 0;
                    });
+  // Seeded below every beat, so a chart lying wholly before beat 0 ends at its last chord.
   double last_chord_end = 0;
-  for (const OrderedSegment& segment : sorted) {
-    last_chord_end = js::max(last_chord_end, segment.endBeat);
+  if (!sorted.empty()) {
+    last_chord_end = -std::numeric_limits<double>::infinity();
+    for (const OrderedSegment& segment : sorted) {
+      last_chord_end = js::max(last_chord_end, segment.endBeat);
+    }
   }
   double total_beats = opts.totalBeats.value_or(last_chord_end);
-  assert_range(total_beats, 0, kMaxSafeInteger, "modulation totalBeats");
+  // Only a span ending before beat 0 can be bounded by where the first chord starts.
+  double lowest = total_beats < 0 ? js::min(0, sorted.empty() ? 0 : sorted.front().startBeat) : 0;
+  assert_range(total_beats, lowest, kMaxSafeInteger, "modulation totalBeats");
   // The analyzed span ends where the caller says it does, so a chord held past the end of the
   // piece argues for its key only over the part that sounds.
   std::vector<OrderedSegment> ordered;

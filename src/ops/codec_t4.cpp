@@ -47,7 +47,7 @@ SafetyContext read_safety_context(const json::Value& query) {
   }
   const json::Value& voices = get(query, "otherVoices");
   if (!voices.is_array()) {
-    throw InvalidInputError("otherVoices must be an array; received " + js::type_of(voices));
+    throw InvalidInputError("otherVoices must be an array; received " + describe_rejected(voices));
   }
   assert_generation_budget(json::Value(static_cast<double>(voices.as_array().size())),
                            "other voices", undefined_value());

@@ -1,10 +1,11 @@
 /**
  * @file accessors.h
- * @brief The three ways TS reads an option field that may be null.
+ * @brief The ways TS reads an option field that may be null.
  *
  * | TS                    | accessor            | absent  | null            |
  * |-----------------------|---------------------|---------|-----------------|
  * | `opts.x ?? d`         | opt_null_default    | nullopt | nullopt         |
+ * | `opts.x ?? d` (value) | opt_or              | d       | d               |
  * | `opts.x === undefined`| opt_strict          | nullopt | read(null)      |
  * | `assertNullable(...)` | opt_nullable        | nullopt | Nullable(empty) |
  *
@@ -29,6 +30,9 @@ const json::Value* field(const json::Value& opts, std::string_view key) noexcept
 
 /** `opts.key ?? default`: nullptr when absent or null. */
 const json::Value* opt_null_default(const json::Value& opts, std::string_view key) noexcept;
+
+/** `opts.key ?? fallback`, as the value TS then checks. */
+json::Value opt_or(const json::Value& opts, std::string_view key, const json::Value& fallback);
 
 /** `opts.key === undefined`: nullptr only when absent; null is returned for `read` to reject. */
 inline const json::Value* opt_strict(const json::Value& opts, std::string_view key) noexcept {

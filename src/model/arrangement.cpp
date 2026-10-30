@@ -5,6 +5,7 @@
 #include <string>
 #include <utility>
 
+#include "analyze/arrange/internal.h"
 #include "analyze/reference/profile.h"
 #include "cantus/core/validation.h"
 #include "core/validation/validation.h"
@@ -42,7 +43,7 @@ ArrangementTrack copy_track(const ArrangementTrack& track, std::size_t index,
 
 /** Defensive copy of the settings, with every part validated (`copySettings`). */
 std::optional<ArrangementSettings> copy_settings(const std::optional<ArrangementSettings>& given,
-                                                 std::size_t track_count) {
+                                                 const std::vector<ArrangementTrack>& tracks) {
   if (!given) {
     return std::nullopt;
   }
@@ -81,13 +82,15 @@ std::optional<ArrangementSettings> copy_settings(const std::optional<Arrangement
     named = true;
   }
   if (settings.harmonyTracks) {
-    std::vector<double> tracks;
+    std::vector<double> harmony;
     for (std::size_t index = 0; index < settings.harmonyTracks->size(); ++index) {
-      tracks.push_back(assert_integer((*settings.harmonyTracks)[index],
-                                      "arrangement harmonyTracks[" + index_text(index) + "]", 0,
-                                      static_cast<double>(track_count) - 1));
+      harmony.push_back(assert_integer((*settings.harmonyTracks)[index],
+                                       "arrangement harmonyTracks[" + index_text(index) + "]", 0,
+                                       static_cast<double>(tracks.size()) - 1));
     }
-    copy.harmonyTracks = std::move(tracks);
+    copy.harmonyTracks = std::move(harmony);
+    // A percussion track states no harmony, which the analysis refuses too.
+    harmony_track_set(copy.harmonyTracks, tracks, "arrangement harmonyTracks");
     named = true;
   }
   if (settings.minSeverity) {
@@ -99,6 +102,12 @@ std::optional<ArrangementSettings> copy_settings(const std::optional<Arrangement
   if (settings.pickupBeats) {
     copy.pickupBeats =
         assert_range(*settings.pickupBeats, 0, kMaxSafeInteger, "arrangement pickupBeats");
+    // A note before the declared pickup is one the analysis refuses, under the same name.
+    NoteEventAssertOptions onsets;
+    onsets.allowNonPositiveDuration = true;
+    onsets.minStartBeat = -*copy.pickupBeats;
+    onsets.budget = settings.budget;
+    assert_track_notes(tracks, onsets);
     named = true;
   }
   if (settings.harmonicRhythm) {
@@ -127,7 +136,7 @@ ArrangementData copy_arrangement(const ArrangementData& data) {
   for (std::size_t index = 0; index < data.tracks.size(); ++index) {
     copy.tracks.push_back(copy_track(data.tracks[index], index, budget));
   }
-  copy.settings = copy_settings(data.settings, copy.tracks.size());
+  copy.settings = copy_settings(data.settings, copy.tracks);
   return copy;
 }
 
@@ -456,8 +465,11 @@ ReferenceProfile Arrangement::reference(std::optional<double> budget) const {
   }
   ArrangementAnalysis analysis = session().analysis();
   ReferenceProfileOptions opts;
+  // The meter the arrangement's own analysis reads, `ts` included.
   if (data_.settings && data_.settings->meters) {
     opts.meters = MeterArg(*data_.settings->meters);
+  } else if (data_.settings && data_.settings->ts) {
+    opts.meters = MeterArg(*data_.settings->ts);
   }
   opts.totalBeats = timeline().total_beats();
   if (!melody.empty()) {

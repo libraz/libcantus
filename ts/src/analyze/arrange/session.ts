@@ -6,7 +6,11 @@
 
 import { InvalidInputError } from '../../core/errors/index.js';
 import type { NoteEvent } from '../../core/types.js';
-import { assertGenerationBudget, assertNoteEvents } from '../../core/validation/index.js';
+import {
+  assertGenerationBudget,
+  assertNoteEvents,
+  describeRejected,
+} from '../../core/validation/index.js';
 import type { DirtySlots, TimelineEvidence } from '../timeline/index.js';
 import { dirtySlotsFor } from '../timeline/index.js';
 import type { ArrangementAnalysis, ArrangementOptions, ArrangementTrack } from './tracks.js';
@@ -161,7 +165,7 @@ function sessionOf(
         }
         if (!Array.isArray(edit.notes)) {
           throw new InvalidInputError(
-            `edits[${index}].notes must be an array; received ${typeof edit.notes}`,
+            `edits[${index}].notes must be an array; received ${describeRejected(edit.notes)}`,
           );
         }
         assertNoteEvents(edit.notes, `edits[${index}].notes`, {

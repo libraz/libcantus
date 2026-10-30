@@ -69,7 +69,7 @@ template <std::size_t N>
 std::vector<int> read_degree_list(const json::Value& value, const std::array<int, N>& allowed,
                                   std::string_view name) {
   if (!value.is_array()) {
-    throw InvalidInputError(str(name) + " must be an array; received " + js::type_of(value));
+    throw InvalidInputError(str(name) + " must be an array; received " + describe_rejected(value));
   }
   std::vector<int> out;
   for (const json::Value& degree : value.as_array()) {
@@ -92,7 +92,7 @@ json::Value scale_first(const ResolvedKey& key) {
 std::vector<double> read_span_intervals(const json::Value& intervals) {
   const std::string name = "chord span intervals";
   if (!intervals.is_array()) {
-    throw InvalidInputError(name + " must be an array; received " + js::type_of(intervals));
+    throw InvalidInputError(name + " must be an array; received " + describe_rejected(intervals));
   }
   const json::Array& list = intervals.as_array();
   if (list.empty()) {

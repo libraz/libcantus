@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
+#include <chrono>
 #include <cstring>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -269,6 +271,92 @@ TEST_CASE("the handle table is shared safely between threads", "[c_api]") {
   }
   CHECK(failures == 0);
   CHECK(live() == base);
+}
+
+TEST_CASE("one id shared by threads may be released by another while calls run", "[c_api]") {
+  auto live = [] { return cantus::json::parse(call("$live", "[]").json).as_number(); };
+  double base = live();
+  std::string notes;
+  for (int i = 0; i < 300; ++i) {
+    notes += (i == 0 ? "" : ",") + std::string(R"({"pitch":60,"startBeat":)") + std::to_string(i) +
+             R"(,"durationBeat":1})";
+  }
+  const std::string score = R"({"$class":"Score","notes":[)" + notes +
+                            R"(],"meters":[{"startBeat":0,"ts":{"numerator":4,"denominator":4}}],)"
+                            R"("tempo":[{"startBeat":0,"bpm":120}]})";
+  const std::string expected = call("Score#secondsAt", "[" + score + ",250]").json;
+  Reply ref = call("$retain", "[" + score + "]");
+  Reply counter = call("$counter", "[]");
+  REQUIRE(ref.status == CANTUS_OK);
+  REQUIRE(counter.status == CANTUS_OK);
+  const std::string on_ref = "[" + ref.json + ",250]";
+  const std::string on_counter = "[" + counter.json + "]";
+
+  std::atomic<bool> released{false};
+  std::atomic<int> failures{0};
+  std::atomic<int> refused{0};
+  // A counter handle is used by one thread at a time; its release is not.
+  std::mutex counter_turn;
+  std::vector<std::thread> threads;
+  for (int t = 0; t < 4; ++t) {
+    threads.emplace_back([&] {
+      // Calls run until a few have started after the release.
+      for (int late = 0; late < 20;) {
+        bool after = released.load();
+        late += after ? 1 : 0;
+        Reply r = call("Score#secondsAt", on_ref);
+        if (r.status == CANTUS_RELEASED_HANDLE) {
+          ++refused;
+        } else if (after || r.status != CANTUS_OK || r.json != expected) {
+          ++failures;
+        }
+        std::lock_guard<std::mutex> turn(counter_turn);
+        after = released.load();
+        Reply c = call("$counter#next", on_counter);
+        if (c.status == CANTUS_RELEASED_HANDLE) {
+          ++refused;
+        } else if (after || c.status != CANTUS_OK) {
+          ++failures;
+        }
+      }
+    });
+  }
+  threads.emplace_back([&] {
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    cantus_release(static_cast<uint64_t>(field(ref, "$ref").as_number()));
+    cantus_release(static_cast<uint64_t>(field(counter, "$h").as_number()));
+    released = true;
+  });
+  for (std::thread& t : threads) {
+    t.join();
+  }
+  CHECK(failures == 0);
+  CHECK(refused > 0);
+  CHECK(call("Score#secondsAt", on_ref).status == CANTUS_RELEASED_HANDLE);
+  CHECK(call("$counter#next", on_counter).status == CANTUS_RELEASED_HANDLE);
+  CHECK(live() == base);
+}
+
+TEST_CASE("a request naming one retained value many times holds one snapshot", "[c_api]") {
+  std::string notes;
+  for (int i = 0; i < 2000; ++i) {
+    notes += (i == 0 ? "" : ",") + std::string(R"({"pitch":)") + std::to_string(40 + i % 40) +
+             R"(,"startBeat":)" + std::to_string(i) + R"(,"durationBeat":1})";
+  }
+  const std::string score = R"({"$class":"Score","notes":[)" + notes +
+                            R"(],"meters":[{"startBeat":0,"ts":{"numerator":4,"denominator":4}}],)"
+                            R"("tempo":[{"startBeat":0,"bpm":120}]})";
+  Reply ref = call("$retain", "[" + score + "]");
+  REQUIRE(ref.status == CANTUS_OK);
+  std::string many = "[";
+  for (int i = 0; i < 20000; ++i) {
+    many += (i == 0 ? "" : ",") + ref.json;
+  }
+  many += "]";
+  Reply r = call("Score#totalBeats", "[" + ref.json + "," + many + "]");
+  CHECK(r.status == CANTUS_OK);
+  CHECK(r.json == call("Score#totalBeats", "[" + score + "]").json);
+  cantus_release(static_cast<uint64_t>(field(ref, "$ref").as_number()));
 }
 
 TEST_CASE("nesting beyond the parser limit is BAD_REQUEST", "[c_api]") {

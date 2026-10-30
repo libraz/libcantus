@@ -33,6 +33,10 @@ extern const std::vector<ChordQuality> LEADING_TONE_QUALITIES;
 /** Whether every pitch class of a chord belongs to the key's scale (`isDiatonicChord`). */
 bool is_diatonic_chord(const Chord& chord, const KeyScale& key);
 
+/** Whether the dominant seventh on a root is a chord the key already contains
+ * (`isNativeDominantSeventh`). */
+bool is_native_dominant_seventh(double root_pc, const KeyScale& key);
+
 /** Whether a chord's interval template carries a major third above its root (`hasMajorThird`). */
 bool has_major_third(const Chord& chord);
 
@@ -61,6 +65,9 @@ std::vector<TonicizableDegree> tonicizable_degrees(const KeyScale& key);
 /** The degree an applied dominant may tonicize at a pitch class, or null (`appliedDominantTarget`).
  */
 Nullable<TonicizableDegree> applied_dominant_target(double root_pc, const KeyScale& key);
+
+/** The degree a chord points at as an applied chord, or null (`appliedChordTarget`). */
+Nullable<TonicizableDegree> applied_chord_target(const Chord& chord, const KeyScale& key);
 
 /** Whether a key cadences through the raised seventh of the harmonic minor
  * (`cadencesThroughRaisedSeventh`). */

@@ -179,6 +179,14 @@ describe('lead-sheet vocabulary', () => {
   });
 
   it('spells every quality with distinct letters', () => {
+    for (const quality of chordQualities()) {
+      const chord = makeChord(0, quality);
+      const letters = spellChordFromRoot(chord, 'C').map((note) => note.letter);
+      expect(new Set(letters).size, quality).toBe(letters.length);
+    }
+  });
+
+  it('names as many pitch classes as a chord has intervals', () => {
     for (const quality of ['7sus4', '7b5', '7alt', '13b9', 'maj13', 'min11'] as const) {
       const chord = makeChord(0, quality);
       expect(chordPitchClasses(chord).length, quality).toBe(chord.intervals.length);

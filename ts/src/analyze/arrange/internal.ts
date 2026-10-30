@@ -18,7 +18,7 @@ import { PROFILE_WEIGHTS, type SafetyProfile } from '../../theory/safety/index.j
 import { resolveKey } from '../../theory/scale/index.js';
 import { adjacent, BEAT_EPS, hasEnded, sameInstant } from '../adjacency.js';
 import type { KeyRegion } from '../keys/index.js';
-import { assertChordTimeline, type ChordTimeline } from '../timeline/index.js';
+import { assertChordTimeline, assertSpansInOrder, type ChordTimeline } from '../timeline/index.js';
 import type { IdentifiedVoiceNote } from '../voice/index.js';
 import type { ArrangementTrack, TrackRole } from './tracks.js';
 
@@ -163,7 +163,7 @@ export function assertTrackNotes(
     const notes = tracks[index]?.notes;
     if (!Array.isArray(notes)) {
       throw new InvalidInputError(
-        `tracks[${index}].notes must be an array; received ${typeof notes}`,
+        `tracks[${index}].notes must be an array; received ${describeRejected(notes)}`,
       );
     }
     assertNoteEvents(notes, `tracks[${index}].notes`, options);
@@ -199,7 +199,8 @@ export function assertGivenTimeline(timeline: ChordTimeline | undefined, name: s
  *
  * @param keys The regions as the caller passed them, or nothing.
  * @param name What the option is called in an error message.
- * @throws If the value is not an array of key regions.
+ * @throws If the value is not an array of key regions, or the regions are not
+ *   disjoint, in beat order and of positive length.
  */
 export function assertGivenKeys(keys: readonly KeyRegion[] | undefined, name: string): void {
   if (keys === undefined) {
@@ -230,6 +231,7 @@ export function assertGivenKeys(keys: readonly KeyRegion[] | undefined, name: st
     }
     resolveKey(region.key);
   }
+  assertSpansInOrder(keys, name);
 }
 
 /**
@@ -516,7 +518,13 @@ export function prepareTracks(tracks: ArrangementTrack[]): PreparedTrack[] {
       .map((note, originalIndex) => ({ note, originalIndex }))
       .filter(({ note }) => note.durationBeat > 0)
       .sort((a, b) => a.note.startBeat - b.note.startBeat || a.note.pitch - b.note.pitch)
-      .map(({ note, originalIndex }) => ({ ...note, id: nextId++, originalIndex }));
+      // A pitch of -0 is pitch 0, which is all an integer pitch can hold.
+      .map(({ note, originalIndex }) => ({
+        ...note,
+        pitch: note.pitch === 0 ? 0 : note.pitch,
+        id: nextId++,
+        originalIndex,
+      }));
     const voices: PreparedVoice[] = splitIntoSubVoices(ordered).map((voice) => {
       const sounding: PreparedNote[] = voice.map((note, i) => {
         const prev = i > 0 ? voice[i - 1] : undefined;

@@ -34,8 +34,8 @@ class Args {
   bool undefined(std::size_t i) const noexcept;
 
   /**
-   * Move argument `i` out (leaving null), avoiding a deep copy; `$u` when absent, a copy of the
-   * wire for a held snapshot.
+   * Move argument `i` out (leaving null), avoiding a deep copy; `$u` when absent, the shared
+   * wire (share_wire()) for a held snapshot.
    */
   json::Value take(std::size_t i);
 

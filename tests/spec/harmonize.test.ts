@@ -661,6 +661,28 @@ describe('reharmonize validation', () => {
   });
 });
 
+describe('nested option validation', () => {
+  const melody = quarters([72, 71, 69, 67]);
+
+  it('rejects phrase ends that are not a list', () => {
+    expect(() => harmonizeMelody({ melody, phraseEnds: 5 as unknown as number[] })).toThrow(
+      'harmonize phrase ends must be an array; received number',
+    );
+    expect(() => harmonizeMelody({ melody, phraseEnds: '4' as unknown as number[] })).toThrow(
+      InvalidInputError,
+    );
+  });
+
+  it('rejects a placement that is not an object instead of skipping the search', () => {
+    expect(() =>
+      harmonizeMelody({ melody, placement: 5 as unknown as HarmonizeOptions['placement'] }),
+    ).toThrow('harmonize placement must be an object; received number');
+    expect(
+      harmonizeMelody({ melody, placement: null as unknown as HarmonizeOptions['placement'] }),
+    ).toEqual(harmonizeMelody({ melody }));
+  });
+});
+
 describe('the role a note is reported in', () => {
   /** The chord the result has sounding at a beat, as a chord. */
   function chordUnder(result: HarmonizeResult, beat: number) {
@@ -781,6 +803,56 @@ describe('the diatonic tier stays inside the mode it names', () => {
       }
     }
   });
+});
+
+describe('a dominant seventh the mode already contains is not a secondary dominant', () => {
+  const halves = (pitches: readonly number[]): NoteEvent[] =>
+    pitches.map((pitch, i) => ({ pitch, startBeat: i * 2, durationBeat: 2 }));
+  // Each melody outlines the mode's own dominant seventh and then the degree it
+  // would tonicize: G7 to C in G mixolydian, F lydian, E phrygian and B locrian.
+  const cases = [
+    {
+      mode: 'mixolydian',
+      tonic: 7,
+      melody: halves([71, 77, 76, 71, 74, 71, 67, 74]),
+      rhythm: undefined,
+    },
+    {
+      mode: 'lydian',
+      tonic: 5,
+      melody: halves([65, 72, 69, 69, 71, 65, 76, 72]),
+      rhythm: undefined,
+    },
+    { mode: 'phrygian', tonic: 4, melody: quarters([67, 71, 74, 77, 72, 76, 79, 72]), rhythm: 4 },
+    { mode: 'locrian', tonic: 11, melody: quarters([71, 74, 77, 71, 72, 76, 79, 76]), rhythm: 4 },
+  ];
+
+  it.each(cases)(
+    'flags no diatonic dominant seventh in $mode',
+    ({ mode, tonic, melody, rhythm }) => {
+      const key = scaleByName(mode, tonic);
+      for (const harmonic of [0.5, 1]) {
+        const result = harmonizeMelody({
+          melody,
+          key,
+          reharmonize: 'secondaryDominant',
+          ...(rhythm === undefined ? {} : { harmonicRhythm: rhythm }),
+          ctx: { complexity: { harmonic } },
+          placement: { transposeSearch: false, octaveSearch: false },
+        });
+        for (const chord of result.chords) {
+          if (!chord.secondaryDominant) {
+            continue;
+          }
+          const pcs = chordPitchClasses(makeChord(chord.rootPc, 'dom7'));
+          expect(
+            pcs.every((pc) => isScaleTone(pc, key)),
+            `${mode} ${chord.rootPc}`,
+          ).toBe(false);
+        }
+      }
+    },
+  );
 });
 
 describe('a secondary dominant never tonicizes a diminished degree', () => {

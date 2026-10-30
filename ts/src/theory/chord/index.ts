@@ -11,6 +11,7 @@ import {
   assertInteger,
   assertOptions,
   assertRecord,
+  describeRejected,
 } from '../../core/validation/index.js';
 import {
   type ResolvedKey,
@@ -426,7 +427,9 @@ export function chordSpecOf(chord: Chord): ChordSpec {
 function copySpanIntervals(intervals: readonly number[]): number[] {
   const name = 'chord span intervals';
   if (!Array.isArray(intervals)) {
-    throw new InvalidInputError(`${name} must be an array; received ${typeof intervals}`);
+    throw new InvalidInputError(
+      `${name} must be an array; received ${describeRejected(intervals)}`,
+    );
   }
   if (intervals.length === 0) {
     throw new InvalidInputError(`${name} must name at least one interval`);

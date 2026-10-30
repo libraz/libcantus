@@ -90,6 +90,21 @@ describe('one onset per voice and position', () => {
     }
   });
 
+  it('rejects a rate it does not name, whether or not a figure is drawn', () => {
+    expect(() => placeDrumPattern({ bars: 1, genre: 'funk', rate: 'Double' as 'double' })).toThrow(
+      'rate must be one of straight, half, double; received "Double"',
+    );
+    // No dnb figure is drawn at this tempo, so no figure is ever deformed.
+    expect(() =>
+      placeDrumPattern({
+        bars: 1,
+        genre: 'dnb',
+        rate: 'halftime' as 'half',
+        ctx: { seed: 1, bpm: 90 },
+      }),
+    ).toThrow(InvalidInputError);
+  });
+
   it('keeps a doubled figure as dense as the dictionary wrote it', () => {
     // Merging the pairs must not empty the bar: the compressed figure still
     // states the genre.

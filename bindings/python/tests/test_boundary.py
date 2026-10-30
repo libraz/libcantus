@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import copy
 import gc
 import json
 import math
+import pickle
 import threading
 from collections.abc import Callable
 from typing import Any, ClassVar
@@ -336,6 +338,16 @@ class TestCallbacks:
             runtime.call("$call", [1])
         assert info.value.code is ErrorCode.BAD_REQUEST
 
+    def test_result_echoing_a_callback_hands_back_the_function(self) -> None:
+        def at(_beat: float) -> None:
+            return None
+
+        segments = [{"startBeat": 0, "endBeat": 4, "chord": None}]
+        result = libcantus.assert_chord_timeline({"segments": segments, "at": at})
+        assert result == {"segments": segments, "at": at}
+        assert result["at"] is at
+        assert echo(at) is at
+
 
 class TestHandles:
     def test_methods_and_identity_tokens(self) -> None:
@@ -607,7 +619,7 @@ class TestRetainedValues:
         rt.call("Score#secondsAt", [third, 0])
         assert core.released == [102]
 
-    def test_eviction_waits_for_the_outermost_call(self) -> None:
+    def test_eviction_spares_a_reference_an_enclosing_call_has_sent(self) -> None:
         rt, core = fake_runtime(max_refs=1)
         first, second = make_score(rt, 1), make_score(rt, 2)
         rt.call("Score#secondsAt", [first, 0])
@@ -620,8 +632,42 @@ class TestRetainedValues:
 
         core.on_call = nested
         rt.call("Score#barAt", [first, 0])
-        assert inside == [[]]
-        assert core.released == [101]
+        # The nested call returns over the cap; the one reference it may release is its own.
+        assert inside == [[102]]
+        assert core.released == [102]
+        rt.call("Score#secondsAt", [first, 0])
+        assert core.calls[-1][1] == '[{"$class":"Score","$ref":101},0]'
+
+    def test_eviction_runs_at_every_call_exit_while_other_threads_call(self) -> None:
+        rt, core = fake_runtime(max_refs=2)
+        held = make_score(rt, 1)
+        rt.call("Score#secondsAt", [held, 0])
+        entered = threading.Event()
+        leave = threading.Event()
+
+        def block(name: str) -> None:
+            if name == "Score#barAt" and threading.current_thread() is not threading.main_thread():
+                entered.set()
+                leave.wait(10)
+
+        core.on_call = block
+        worker = threading.Thread(target=rt.call, args=("Score#barAt", [held, 0]))
+        worker.start()
+        try:
+            assert entered.wait(10)
+            sizes = []
+            scores = [make_score(rt, notes) for notes in range(2, 12)]
+            for score in scores:
+                rt.call("Score#secondsAt", [score, 0])
+                sizes.append(rt.retained_refs)
+            # The call still running keeps its reference; everything else stays within the cap.
+            assert sizes == [2] * 10
+            assert held._ref == (rt, 101)
+            assert 101 not in core.released
+        finally:
+            leave.set()
+            worker.join()
+        assert rt.retained_refs <= 2
 
     def test_the_loser_of_a_concurrent_retain_releases_its_id(self) -> None:
         rt, core = fake_runtime()
@@ -638,6 +684,45 @@ class TestRetainedValues:
         assert core.released == [101]
         rt.call("Score#secondsAt", [score, 0])
         assert core.calls[-1][1] == '[{"$class":"Score","$ref":50},0]'
+
+    def test_copies_and_pickles_carry_no_reference(self) -> None:
+        rt, core = fake_runtime()
+        score = make_score(rt, 2)
+        rt.call("Score#secondsAt", [score, 0])
+        assert score._ref == (rt, 101)
+        copies = [copy.copy(score), copy.deepcopy(score), pickle.loads(pickle.dumps(score))]
+        for duplicate in copies:
+            assert type(duplicate) is type(score)
+            assert duplicate._ref is None
+            assert duplicate._wire == score._wire
+            rt.call("$echo", [duplicate])
+            assert core.calls[-1][1] == '[{"$class":"Score","notes":[0,1]}]'
+        assert copies[1]._wire is not score._wire
+        # A copy used as a receiver is retained on its own, and the original keeps its id.
+        rt.call("Score#secondsAt", [copies[0], 0])
+        assert copies[0]._ref == (rt, 102)
+        del score
+        gc.collect()
+        assert core.released == [101]
+        rt.call("Score#secondsAt", [copies[0], 0])
+        assert core.calls[-1][1] == '[{"$class":"Score","$ref":102},0]'
+
+    def test_a_copied_hybrid_keeps_its_fields_and_drops_the_reference(self) -> None:
+        rt, _ = fake_runtime()
+        timeline = rt._decode({"$hy": "ChordTimeline", "segments": [1, 2]})
+        rt.call("ChordTimeline#at", [timeline, 0])
+        assert timeline._ref == (rt, 101)
+        for duplicate in (copy.copy(timeline), copy.deepcopy(timeline)):
+            assert duplicate._ref is None
+            assert duplicate.segments == [1, 2]
+
+    def test_a_handle_refuses_to_be_copied_or_pickled(self) -> None:
+        rt, core = fake_runtime()
+        session = rt._decode({"$h": 7, "$type": "ArrangementSession"})
+        for duplicate in (copy.copy, copy.deepcopy, pickle.dumps):
+            with pytest.raises(TypeError, match="cannot be copied or pickled"):
+                duplicate(session)
+        assert core.released == []
 
     def test_a_reference_of_another_runtime_is_not_used(self) -> None:
         rt, _ = fake_runtime()
@@ -748,6 +833,81 @@ class TestRetainedWithTheCore:
         assert live() == before + 2
         assert scores[0].seconds_at(1.5) == answers[0]
         assert live() == before + 2
+
+    def test_threads_share_retained_values_and_agree_with_the_plain_path(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        notes = [
+            {"pitch": 48 + i % 24, "startBeat": i * 0.5, "durationBeat": 0.5} for i in range(200)
+        ]
+        lead = [{"pitch": 72 + i % 5, "startBeat": i, "durationBeat": 1} for i in range(16)]
+        tracks = [
+            {"name": "keys", "role": "harmony", "notes": notes[:64]},
+            {"name": "lead", "role": "melody", "notes": lead},
+        ]
+
+        def edit(pitch: int) -> list[dict[str, Any]]:
+            moved = [dict(n, pitch=pitch) if i == 3 else n for i, n in enumerate(lead)]
+            return [{"trackIndex": 1, "notes": moved}]
+
+        beats = [i * 2.5 for i in range(20)]
+        pitches = [70, 71, 73, 74]
+        with monkeypatch.context() as plain:
+            plain.setattr(runtime, "_by_reference", frozenset())
+            plain_score = libcantus.Score.of(notes)
+            seconds = [plain_score.seconds_at(b) for b in beats]
+            bars = [plain_score.bar_at(b) for b in beats]
+            base = libcantus.Arrangement.of(tracks)
+            conflicts = {p: base.update(edit(p)).conflicts for p in pitches}
+            again = {p: base.update(edit(p)).update(edit(pitches[0])).tracks for p in pitches}
+        del plain_score, base
+        gc.collect()
+
+        monkeypatch.setattr(runtime, "_max_refs", 2)
+        before = live()
+        score = libcantus.Score.of(notes)
+        arrangement = libcantus.Arrangement.of(tracks)
+        errors: list[str] = []
+
+        def work(t: int, score: Any, arrangement: Any) -> None:
+            try:
+                for round in range(4):
+                    for i, b in enumerate(beats):
+                        if score.seconds_at(b) != seconds[i] or score.bar_at(b) != bars[i]:
+                            errors.append(f"score {t} {i}")
+                    pitch = pitches[(t + round) % len(pitches)]
+                    updated = arrangement.update(edit(pitch))
+                    if updated.conflicts != conflicts[pitch]:
+                        errors.append(f"conflicts {t} {pitch}")
+                    if updated.update(edit(pitches[0])).tracks != again[pitch]:
+                        errors.append(f"chain {t} {pitch}")
+            except BaseException as error:
+                errors.append(repr(error))
+
+        threads = [threading.Thread(target=work, args=(t, score, arrangement)) for t in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        assert errors == []
+        assert runtime.retained_refs <= 2
+        del score, arrangement
+        gc.collect()
+        assert live() == before
+
+    def test_a_raw_request_naming_one_value_many_times(self) -> None:
+        score = libcantus.Score.of(
+            [{"pitch": 40 + i % 40, "startBeat": i, "durationBeat": 1} for i in range(2000)]
+        )
+        beats = score.total_beats
+        ref = score._ref
+        assert ref is not None
+        tag = f'{{"$class":"Score","$ref":{ref[1]}}}'
+        status, body = _ffi.call(
+            b"Score#totalBeats", f"[{tag},[{','.join([tag] * 20000)}]]".encode()
+        )
+        assert status == 0
+        assert json.loads(body) == beats
 
     def test_core_errors_for_bad_references(self) -> None:
         score = libcantus.Score.of(self.NOTES)

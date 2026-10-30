@@ -27,8 +27,8 @@
 
 namespace cantus {
 
-/** Which side `register === 'below'` and `'above'` select; any other register selects neither. */
-enum class CounterSide : std::uint8_t { kBelow, kAbove, kOther };
+/** Which side of the melody the counter line keeps to (`register`). */
+enum class CounterSide : std::uint8_t { kBelow, kAbove };
 
 /** The options of generateCounterMelody after the checks that precede the melody's span. */
 struct CounterRequest {
@@ -81,6 +81,9 @@ extern const TimeSignature kCounterDefaultTs;
 
 /** The names of the rhythms, for assert_one_of(). */
 std::vector<std::string_view> counter_rhythm_names();
+
+/** The names of the registers, for assert_one_of(). */
+std::vector<std::string_view> counter_register_names();
 
 /** The names of IMITATION_ANSWERS, for assert_one_of(). */
 std::vector<std::string_view> imitation_answer_names();

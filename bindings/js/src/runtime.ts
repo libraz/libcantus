@@ -10,9 +10,11 @@
  *
  * An instance of a by-reference type (see `RuntimeOptions`) is retained in the core on its first
  * use as a receiver (`$retain`); later calls send `{"$class": T, "$ref": id}` instead of its data.
- * The reference is released when the instance is collected, and at most `maxRefs` are live at
- * once: the least recently used is released when a call returns, and that instance sends its
- * data again from then on.
+ * The reference is released when the instance is collected. When the outermost call returns, the
+ * references whose instance is gone are released, and so are the least recently used while more
+ * than `maxRefs` are live or their values' wire text exceeds `maxRefBytes`; an evicted instance
+ * sends its data and is retained again on its next use as a receiver. A value whose text alone
+ * exceeds `maxRefBytes` is never retained.
  *
  * Freezing follows the pure package, which hands out mutable results: decoded
  * results are left writable, except what the pure package freezes: the entries
@@ -51,12 +53,21 @@ export type TypeMeta = {
 /** The most references to retained values one runtime holds at a time. */
 export const MAX_LIVE_REFS = 1024;
 
+/**
+ * The most wire text (UTF-16 code units) the values one runtime retains may total. An analysed
+ * Arrangement measured about 110 bytes of core memory per byte of its wire (a Score about 11), so
+ * this holds what values a synchronous loop has dropped can pin to roughly 450 MB.
+ */
+export const MAX_REF_BYTES = 4 * 1024 * 1024;
+
 /** How a runtime treats the values it sends. */
 export type RuntimeOptions = {
   /** Types whose instances are retained in the core on first use as a receiver. */
   byReference?: readonly string[];
   /** The most live references; `MAX_LIVE_REFS` when absent. */
   maxRefs?: number;
+  /** The most wire text the retained values may total; `MAX_REF_BYTES` when absent. */
+  maxRefBytes?: number;
 };
 
 /** `Function.length` of a generated class's constructor and members, as the pure class has them. */
@@ -81,6 +92,8 @@ type Frame = {
   hybrids: Map<string, object>;
   /** Whether the reply names hybrid references, which the objects decoded from it then hold. */
   refs: boolean;
+  /** The length of the reply's text. */
+  bytes: number;
 };
 
 /** How one result is decoded. */
@@ -90,6 +103,8 @@ type DecodeContext = {
   fns?: readonly Callable[];
   /** Whether the result names hybrid references. */
   refs?: boolean;
+  /** The length of the result's text, which a value retained with it is charged. */
+  bytes?: number;
 };
 
 /** What the runtime keeps about a hybrid object or a model-class instance. */
@@ -302,8 +317,11 @@ export class Runtime {
   readonly #identityRegistry: FinalizationRegistry<number>;
   readonly #byReference: ReadonlySet<string>;
   readonly #maxRefs: number;
-  /** Retained values by reference id, least recently used first. */
-  readonly #liveRefs = new Map<number, WeakRef<WireEntry>>();
+  readonly #maxRefBytes: number;
+  /** Retained values by reference id, least recently used first, with the text each is charged. */
+  readonly #liveRefs = new Map<number, { entry: WeakRef<WireEntry>; bytes: number }>();
+  /** The text the live references are charged in all. */
+  #refBytes = 0;
   readonly #refRegistry: FinalizationRegistry<number>;
   /** How many live objects hold each hybrid reference a backend issued. */
   readonly #hybridRefCounts = new Map<number, number>();
@@ -324,6 +342,7 @@ export class Runtime {
     this.#types = { ...BUILTIN_TYPES, ...types };
     this.#byReference = new Set(options.byReference ?? []);
     this.#maxRefs = options.maxRefs ?? MAX_LIVE_REFS;
+    this.#maxRefBytes = options.maxRefBytes ?? MAX_REF_BYTES;
     this.#refRegistry = new FinalizationRegistry((id) => this.#dropRef(id));
     this.#hybridRefRegistry = new FinalizationRegistry((ids) => {
       for (const id of ids) {
@@ -370,6 +389,7 @@ export class Runtime {
         hybrids: frame.hybrids.size > 0 ? frame.hybrids : null,
         fns: frame.fns,
         refs: frame.refs,
+        bytes: frame.bytes,
       });
       const frozen = FROZEN_RESULTS[op];
       if (frozen !== undefined) freezeAt(result, frozen);
@@ -430,8 +450,13 @@ export class Runtime {
     return this.#liveRefs.size;
   }
 
+  /** The wire text the retained values are charged in all, for tests. */
+  get retainedBytes(): number {
+    return this.#refBytes;
+  }
+
   #newFrame(): Frame {
-    return { fns: [], failed: false, error: undefined, hybrids: new Map(), refs: false };
+    return { fns: [], failed: false, error: undefined, hybrids: new Map(), refs: false, bytes: 0 };
   }
 
   /** The id of the core's copy of `entry`'s value, when this runtime's backend holds one. */
@@ -440,34 +465,45 @@ export class Runtime {
   }
 
   #touchRef(id: number): void {
-    const weak = this.#liveRefs.get(id);
-    if (weak === undefined) return;
+    const live = this.#liveRefs.get(id);
+    if (live === undefined) return;
     this.#liveRefs.delete(id);
-    this.#liveRefs.set(id, weak);
+    this.#liveRefs.set(id, live);
   }
 
-  /** Remember that the core holds `entry`'s value under `id` for as long as `owner` lives. */
-  #adoptRef(owner: object, entry: WireEntry, id: number): void {
+  /**
+   * Remember that the core holds `entry`'s value under `id` for as long as `owner` lives, charged
+   * `bytes` of wire text.
+   */
+  #adoptRef(owner: object, entry: WireEntry, id: number, bytes: number): void {
     entry.ref = { backend: this.#backend, id };
-    this.#liveRefs.set(id, new WeakRef(entry));
+    this.#liveRefs.set(id, { entry: new WeakRef(entry), bytes });
+    this.#refBytes += bytes;
     this.#refRegistry.register(owner, id, entry);
   }
 
-  /** Forget a reference and release it in the core. */
+  /** Forget a reference and release it in the core; one already forgotten is left alone. */
   #dropRef(id: number): void {
-    const entry = this.#liveRefs.get(id)?.deref();
+    const live = this.#liveRefs.get(id);
+    if (live === undefined) return;
     this.#liveRefs.delete(id);
+    this.#refBytes -= live.bytes;
+    const entry = live.entry.deref();
     if (entry !== undefined) entry.ref = undefined;
     this.#backend.release(id);
   }
 
-  /** Release the least recently used references beyond the cap. */
+  /**
+   * Release the references whose instance is gone, then the least recently used while the count
+   * or the text is over its cap.
+   */
   #evict(): void {
-    for (const [id, weak] of this.#liveRefs) {
-      if (this.#liveRefs.size <= this.#maxRefs) break;
-      const entry = weak.deref();
-      if (entry === undefined) continue;
-      this.#refRegistry.unregister(entry);
+    for (const [id, live] of this.#liveRefs) {
+      const entry = live.entry.deref();
+      if (entry !== undefined) {
+        if (this.#liveRefs.size <= this.#maxRefs && this.#refBytes <= this.#maxRefBytes) continue;
+        this.#refRegistry.unregister(entry);
+      }
       this.#dropRef(id);
     }
   }
@@ -491,11 +527,12 @@ export class Runtime {
     const type = entry.wire.$class ?? entry.wire.$hy;
     if (type !== op.slice(0, hash)) return;
     entry.text ??= JSON.stringify(entry.wire);
+    if (entry.text.length > this.#maxRefBytes) return;
     const reply = this.#backend.call('$retain', `[${entry.text}]`, null);
     if (reply.status === ERROR_CODES.UNKNOWN_OP) this.#retainUnsupported = true;
     if (reply.status !== 0) return;
     const ref = (JSON.parse(reply.json) as WireObject).$ref;
-    if (typeof ref === 'number') this.#adoptRef(self, entry, ref);
+    if (typeof ref === 'number') this.#adoptRef(self, entry, ref, entry.text.length);
   }
 
   /** `{"$hy": T, "$ref": id}` when `value` is a retained hybrid receiving one of its own methods. */
@@ -540,6 +577,7 @@ export class Runtime {
     }
     if (reply.status === 0) {
       frame.refs = mayNameRefs(reply.json);
+      frame.bytes = reply.json.length;
       return JSON.parse(reply.json) as Wire;
     }
     if (reply.status === ERROR_CODES.CALLBACK_FAILED && frame.failed) throw frame.error;
@@ -763,6 +801,9 @@ export class Runtime {
     if ('$hy' in node) return this.#decodeHybrid(node, ctx);
     if ('$h' in node) return this.#decodeHandle(node);
     if ('$id' in node) return this.#decodeIdentity(node);
+    // A result echoing a callback argument hands back the caller's own function.
+    const fn = '$cb' in node && ctx.fns !== undefined ? ctx.fns[node.$cb as number] : undefined;
+    if (fn !== undefined) return fn;
     throw Object.assign(new Error(`unexpected wire tag ${JSON.stringify(key)} in a result`), {
       code: 'BAD_REQUEST',
     });
@@ -785,7 +826,7 @@ export class Runtime {
       const { $ref: _ref, ...wire } = node;
       const entry = keptEntry(wire, ctx.fns);
       this.#classWire.set(instance, entry);
-      this.#adoptRef(instance, entry, id);
+      this.#adoptRef(instance, entry, id, ctx.bytes ?? JSON.stringify(wire).length);
     } else {
       this.#classWire.set(instance, keptEntry(node, ctx.fns));
     }

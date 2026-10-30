@@ -825,7 +825,10 @@ void register_arrangement() {
     std::shared_ptr<const SessionHandle> session = arrangement_session(a, held);
     const json::Value& analysis = session_analysis(*session);
     json::Object bag;
-    set_defined(bag, "meters", get(get(self, "settings"), "meters"));
+    // `settings?.meters ?? settings?.ts`.
+    const json::Value& settings = get(self, "settings");
+    const json::Value& meters = get(settings, "meters");
+    set_defined(bag, "meters", is_null_or_undefined(meters) ? get(settings, "ts") : meters);
     bag.set("totalBeats", member_of(arrangement_timeline(analysis), "totalBeats"));
     if (!melody.empty()) {
       bag.set("melody", json::Value(std::move(melody)));

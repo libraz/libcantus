@@ -56,6 +56,10 @@ bool is_diatonic_chord(const Chord& chord, const KeyScale& key) {
   return std::all_of(pcs.begin(), pcs.end(), [&](int pc) { return is_scale_tone(pc, key); });
 }
 
+bool is_native_dominant_seventh(double root_pc, const KeyScale& key) {
+  return is_diatonic_chord(make_chord(root_pc, ChordQuality::kDom7), key);
+}
+
 bool has_major_third(const Chord& chord) { return has_interval(chord, 4); }
 
 bool sounds_dominant_seventh(const Chord& chord) {
@@ -119,6 +123,16 @@ Nullable<TonicizableDegree> applied_dominant_target(double root_pc, const KeySca
     }
   }
   return std::nullopt;
+}
+
+Nullable<TonicizableDegree> applied_chord_target(const Chord& chord, const KeyScale& key) {
+  bool dominant = has_dominant_sonority(chord);
+  bool leading_tone = std::find(LEADING_TONE_QUALITIES.begin(), LEADING_TONE_QUALITIES.end(),
+                                chord.quality) != LEADING_TONE_QUALITIES.end();
+  if (!dominant && !leading_tone) {
+    return std::nullopt;
+  }
+  return applied_dominant_target(chord.rootPc + (dominant ? 5 : 1), key);
 }
 
 bool cadences_through_raised_seventh(const KeyScale& key) {

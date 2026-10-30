@@ -44,8 +44,15 @@ describe('non-heptatonic scales lean the way the scale does', () => {
     const reread = shortestReading(() => spellAll(() => first));
     expect(worked / Math.max(reread, 0.01)).toBeGreaterThan(5);
     // And the reading is the one it always was.
-    expect(Key.named('octatonicHalfWhole', 'C').noteNames()).toEqual(
-      Key.named('octatonicHalfWhole', 'C').noteNames(),
-    );
+    expect(Key.named('octatonicHalfWhole', 'C').noteNames()).toEqual([
+      'C',
+      'Db',
+      'Eb',
+      'E',
+      'F#',
+      'G',
+      'A',
+      'Bb',
+    ]);
   });
 });

@@ -601,7 +601,8 @@ export class Chord {
    * @throws If no key is given and none is carried.
    */
   roman(key?: KeyLike, opts?: ChordToRomanOptions): string {
-    return chordToRoman(this.#data, this.#resolveKey(key), opts);
+    const resolved = this.#resolveKey(key);
+    return chordToRoman(this.#dataWithKey(resolved), resolved, opts);
   }
 
   /**
@@ -630,7 +631,8 @@ export class Chord {
    * ```
    */
   explain(key?: KeyLike, opts?: ExplainRomanOptions): RomanExplanation {
-    return explainRoman(this.#data, this.#resolveKey(key), opts);
+    const resolved = this.#resolveKey(key);
+    return explainRoman(this.#dataWithKey(resolved), resolved, opts);
   }
 
   /**
@@ -642,7 +644,8 @@ export class Chord {
    * @throws If no key is given and none is carried.
    */
   function(key?: KeyLike): HarmonicFunction {
-    return functionOf(this.#data, this.#resolveKey(key));
+    const resolved = this.#resolveKey(key);
+    return functionOf(this.#dataWithKey(resolved), resolved);
   }
 
   /**
@@ -663,7 +666,8 @@ export class Chord {
    * ```
    */
   analyze(key?: KeyLike, opts?: AnalyzeChordOptions): ChordAnalysis {
-    return analyzeChord(this.#data, this.#resolveKey(key), opts);
+    const resolved = this.#resolveKey(key);
+    return analyzeChord(this.#dataWithKey(resolved), resolved, opts);
   }
 
   /**
@@ -675,7 +679,8 @@ export class Chord {
    * @throws If no key is given and none is carried.
    */
   isBorrowed(key?: KeyLike): boolean {
-    return isBorrowedChord(this.#data, this.#resolveKey(key));
+    const resolved = this.#resolveKey(key);
+    return isBorrowedChord(this.#dataWithKey(resolved), resolved);
   }
 
   /**
@@ -687,7 +692,8 @@ export class Chord {
    * @throws If no key is given and none is carried.
    */
   borrowedSource(key?: KeyLike): BorrowedSource {
-    return borrowedSource(this.#data, this.#resolveKey(key));
+    const resolved = this.#resolveKey(key);
+    return borrowedSource(this.#dataWithKey(resolved), resolved);
   }
 
   /**
@@ -713,7 +719,8 @@ export class Chord {
    * ```
    */
   figuredBass(key?: KeyLike): string {
-    return figuredBassOf(this.#data, this.#resolveKey(key));
+    const resolved = this.#resolveKey(key);
+    return figuredBassOf(this.#dataWithKey(resolved), resolved);
   }
 
   /**
@@ -741,7 +748,8 @@ export class Chord {
    * ```
    */
   substitutions(key?: KeyLike, opts?: SubstituteOptions): Substitution[] {
-    return substituteChord(this.#data, this.#resolveKey(key), opts);
+    const resolved = this.#resolveKey(key);
+    return substituteChord(this.#dataWithKey(resolved), resolved, opts);
   }
 
   /**
@@ -801,7 +809,8 @@ export class Chord {
     // the voicer spells the chord it scores, and its pitch classes alone would
     // have an Ab minor led by the sharps of a G# minor.
     const key = opts?.key ?? this.#key;
-    return voiceChord(this.#data, key === undefined ? opts : { ...opts, key });
+    const data = opts?.key === undefined ? this.#data : this.#dataWithKey(toKey(opts.key));
+    return voiceChord(data, key === undefined ? opts : { ...opts, key });
   }
 
   /**
@@ -830,7 +839,7 @@ export class Chord {
     // so a later no-arg analysis method still has a key context. The whole key
     // goes to the mirror as well: reducing it to its scale here is what would
     // spell the reflection in an Ab minor with the sharps of a G# minor.
-    return new Chord(negativeHarmonyMirror(this.#data, resolved), resolved);
+    return new Chord(negativeHarmonyMirror(this.#dataWithKey(resolved), resolved), resolved);
   }
 
   /**

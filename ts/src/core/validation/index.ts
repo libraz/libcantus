@@ -493,7 +493,7 @@ export function assertTimeSignature(ts: TimeSignature, name = 'time signature'):
  */
 export function assertMeterMap(meters: MeterMap, name = 'meters'): MeterMap {
   if (!Array.isArray(meters)) {
-    throw new InvalidInputError(`${name} must be an array; received ${typeof meters}`);
+    throw new InvalidInputError(`${name} must be an array; received ${describeRejected(meters)}`);
   }
   if (meters.length === 0) {
     throw new InvalidInputError(`${name} must not be empty`);
@@ -624,7 +624,7 @@ export function assertNoteEvents(
 ): NoteEvent[] {
   const asked = assertOptions(options, `${name} options`);
   if (!Array.isArray(events)) {
-    throw new InvalidInputError(`${name} must be an array; received ${typeof events}`);
+    throw new InvalidInputError(`${name} must be an array; received ${describeRejected(events)}`);
   }
   assertGenerationBudget(events.length, `${name} count`, asked.budget);
   for (let index = 0; index < events.length; index += 1) {

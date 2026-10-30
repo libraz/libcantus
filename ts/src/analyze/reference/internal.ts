@@ -7,7 +7,7 @@ import type { MeterMap } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import { BEAT_EPS } from '../adjacency.js';
 import { melodicContour } from '../melody/contour.js';
-import { analyzeRhythm } from '../rhythm/index.js';
+import { rhythmOver } from '../rhythm/index.js';
 import type { ReferencePhraseMelody } from './types.js';
 import { PHRASE_OUTLINE_POINTS } from './types.js';
 
@@ -66,7 +66,7 @@ export function phraseMelody(
     }
     outline.push(held.pitch - lineMean);
   }
-  const rhythm = analyzeRhythm(inside, { meters, totalBeats: endBeat, budget });
+  const rhythm = rhythmOver(inside, { meters, totalBeats: endBeat, budget }, startBeat);
   return {
     shape: melodicContour(inside).shape,
     low,

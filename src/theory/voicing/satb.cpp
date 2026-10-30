@@ -129,14 +129,26 @@ std::string_view to_string(VoicingStyle style) {
   return {};
 }
 
+/** Every voicing style, in the order the TS union names them. */
+constexpr VoicingStyle kVoicingStyles[] = {VoicingStyle::kClose, VoicingStyle::kDrop2,
+                                           VoicingStyle::kDrop3, VoicingStyle::kShell,
+                                           VoicingStyle::kRootless};
+
 std::optional<VoicingStyle> parse_voicing_style(std::string_view name) {
-  for (VoicingStyle style : {VoicingStyle::kClose, VoicingStyle::kDrop2, VoicingStyle::kDrop3,
-                             VoicingStyle::kShell, VoicingStyle::kRootless}) {
+  for (VoicingStyle style : kVoicingStyles) {
     if (to_string(style) == name) {
       return style;
     }
   }
   return std::nullopt;
+}
+
+std::vector<std::string_view> voicing_style_names() {
+  std::vector<std::string_view> names;
+  for (VoicingStyle style : kVoicingStyles) {
+    names.push_back(to_string(style));
+  }
+  return names;
 }
 
 std::vector<VoiceRange> resolve_ranges(const VoicingOptions& opts) {

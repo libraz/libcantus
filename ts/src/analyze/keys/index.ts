@@ -968,9 +968,15 @@ export function detectModulations(
   const sorted = [...chords]
     .filter((segment) => segment.endBeat > segment.startBeat)
     .sort((a, b) => a.startBeat - b.startBeat);
-  const lastChordEnd = sorted.reduce((end, segment) => Math.max(end, segment.endBeat), 0);
+  // Seeded below every beat, so a chart lying wholly before beat 0 ends at its last chord.
+  const lastChordEnd =
+    sorted.length === 0
+      ? 0
+      : sorted.reduce((end, segment) => Math.max(end, segment.endBeat), Number.NEGATIVE_INFINITY);
   const totalBeats = opts.totalBeats ?? lastChordEnd;
-  assertRange(totalBeats, 0, Number.MAX_SAFE_INTEGER, 'modulation totalBeats');
+  // Only a span ending before beat 0 can be bounded by where the first chord starts.
+  const lowest = totalBeats < 0 ? Math.min(0, sorted[0]?.startBeat ?? 0) : 0;
+  assertRange(totalBeats, lowest, Number.MAX_SAFE_INTEGER, 'modulation totalBeats');
   // The analyzed span ends where the caller says it does, so a chord held past
   // the end of the piece argues for its key only over the part that sounds.
   const ordered = sorted

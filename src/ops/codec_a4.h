@@ -45,6 +45,9 @@ void write_fields(const ArrangementAnalysis& v, FieldWriter& w);
  */
 TimelineHost wire_timeline_host(const Args& a, const json::Value& timeline);
 
+/** `arrangementProfile(opts.profile)`. */
+SafetyProfile read_arrangement_profile(const json::Value& opts);
+
 /** An arrangement session: tracks, options, the analysis and what an update reuses of it. */
 class SessionHandle;
 

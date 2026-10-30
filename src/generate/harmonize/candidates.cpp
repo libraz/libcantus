@@ -68,14 +68,17 @@ double vocabulary_base(int root_pc, ChordQuality quality, int tonic_pc) {
   return is_unstable(quality) ? js::max(root, HARMONIZE_UNSTABLE_TRIAD) : root;
 }
 
-/** Those degrees the key at hand can actually make a local tonic. */
+/** Those degrees the key at hand can actually make a local tonic, through a dominant it does not
+ * already contain. */
 std::vector<TonicizableDegree> secondary_dominant_targets(const KeyScale& key) {
   std::vector<TonicizableDegree> tonicizable = tonicizable_degrees(key);
   std::vector<TonicizableDegree> out;
   for (int degree : kSecondaryDominantTargets) {
     for (const TonicizableDegree& found : tonicizable) {
       if (found.degreeNumber == degree) {
-        out.push_back(found);
+        if (!is_native_dominant_seventh(found.rootPc + 7, key)) {
+          out.push_back(found);
+        }
         break;
       }
     }

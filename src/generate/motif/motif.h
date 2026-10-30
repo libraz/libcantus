@@ -38,8 +38,7 @@ struct MotifResult {
 struct MotifPlan {
   double bars = 0;
   double barBeats = 0;
-  /** Absent for a contour name no table has, which flattens the line. */
-  std::optional<MotifContour> contour;
+  MotifContour contour = MotifContour::kArch;
   KeyScale key;
   std::optional<Chord> chord;
   /** `String(quality)` when the chord's quality is no name the table has: refused when read. */
@@ -54,6 +53,9 @@ extern const TimeSignature kMotifDefaultTs;
 
 /** The names of MOTIF_TRANSFORMS, for assert_one_of(). */
 std::vector<std::string_view> motif_transform_names();
+
+/** The names of the contours, for assert_one_of(). */
+std::vector<std::string_view> motif_contour_names();
 
 /** The total beat span a cell covers, from its first onset to its last offset (`cellSpan`). */
 double cell_span(const std::vector<NoteEvent>& notes);

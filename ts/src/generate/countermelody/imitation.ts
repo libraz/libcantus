@@ -115,7 +115,8 @@ function assertPlayable(pitch: number): number {
  * `interval`: literally for a real answer, by scale degree for a tonal one, and
  * upside down first when `invert` is set. Inversion mirrors about the first note
  * of the copied span, so the answer starts where the transposition puts that
- * note either way. In a tonal answer a pitch outside the key keeps its distance
+ * note either way, whether or not it is in the key. In a tonal answer a pitch
+ * outside the key keeps its distance
  * from the scale tone below it, and inversion mirrors that distance too — a
  * chromatic passing note stays a chromatic passing note, on the other side.
  * Where a mirrored chromatic note falls into a diatonic semitone the key leaves
@@ -195,10 +196,13 @@ export function imitate(lead: readonly NoteEvent[], opts: ImitationOptions): Not
         // above its scale tone lands a semitone below the one it is mirrored
         // onto, which is what keeps two adjacent chromatic pitches from being
         // flattened onto the same answer. The mirrored pitch is a scale tone, so
-        // the offset is added back after the degree arithmetic.
-        const here = scaleLadderPosition(pitch, key);
-        pitch = scaleLadderPitch(2 * scaleLadderPosition(pivot, key).rung - here.rung, key);
-        offset = -here.offset;
+        // the offset is added back after the degree arithmetic. Each note is read
+        // relative to the pivot's own offset, so a chromatic pivot mirrors onto
+        // itself.
+        const axis = scaleLadderPosition(pivot, key);
+        const here = scaleLadderPosition(pitch - axis.offset, key);
+        pitch = scaleLadderPitch(2 * axis.rung - here.rung, key);
+        offset = axis.offset - here.offset;
       } else {
         pitch = 2 * pivot - pitch;
       }

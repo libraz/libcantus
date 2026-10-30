@@ -9,7 +9,10 @@ import type {
 } from '../analyze/arrange/index.js';
 import {
   analyzeArrangement,
+  arrangementProfile,
+  assertTrackNotes,
   createArrangementSession,
+  harmonyTrackSet,
   tensionCurveFrom,
   trackRoleOf,
 } from '../analyze/arrange/index.js';
@@ -168,13 +171,13 @@ function chordTimelineOf(segments: readonly ChordSegment[]): ChordTimeline {
  * on one of its paths is checked on all of them.
  *
  * @param settings The settings as they arrived.
- * @param trackCount How many tracks they are read against.
+ * @param tracks The tracks they are read against, already copied.
  * @returns The copy, or undefined when nothing was set.
  * @throws If an option carries a value the analysis cannot hold.
  */
 function copySettings(
   settings: ArrangementSettings | undefined,
-  trackCount: number,
+  tracks: readonly ArrangementTrack[],
 ): ArrangementSettings | undefined {
   if (settings === undefined) {
     return undefined;
@@ -209,8 +212,10 @@ function copySettings(
       settings.harmonyTracks,
       'arrangement harmonyTracks',
     ).map((track, index) =>
-      assertInteger(track, `arrangement harmonyTracks[${index}]`, 0, trackCount - 1),
+      assertInteger(track, `arrangement harmonyTracks[${index}]`, 0, tracks.length - 1),
     );
+    // A percussion track states no harmony, which the analysis refuses too.
+    harmonyTrackSet(copy.harmonyTracks, tracks, 'arrangement harmonyTracks');
   }
   if (settings.minSeverity !== undefined) {
     copy.minSeverity = assertInteger(
@@ -227,6 +232,13 @@ function copySettings(
       Number.MAX_SAFE_INTEGER,
       'arrangement pickupBeats',
     );
+    // A note before the declared pickup is one the analysis refuses, under the
+    // same name it refuses it under.
+    assertTrackNotes(tracks, {
+      allowNonPositiveDuration: true,
+      minStartBeat: -copy.pickupBeats,
+      budget: settings.budget,
+    });
   }
   if (settings.harmonicRhythm !== undefined) {
     copy.harmonicRhythm = assertRange(
@@ -237,7 +249,7 @@ function copySettings(
     );
   }
   if (settings.profile !== undefined) {
-    copy.profile = settings.profile;
+    copy.profile = arrangementProfile(settings.profile);
   }
   if (settings.budget !== undefined) {
     copy.budget = assertPositiveInt(settings.budget, 'arrangement budget', Number.MAX_SAFE_INTEGER);
@@ -255,7 +267,7 @@ function copyArrangement(data: ArrangementData): ArrangementData {
   const tracks = assertDataArray<ArrangementTrack>(data.tracks, 'arrangement tracks').map(
     (track, index) => copyTrack(track, index, budget),
   );
-  const settings = copySettings(data.settings, tracks.length);
+  const settings = copySettings(data.settings, tracks);
   return settings === undefined ? { tracks } : { tracks, settings };
 }
 
@@ -634,7 +646,8 @@ export class Arrangement {
       }
     }
     return referenceFromReadings(harmony, this.#session().analysis, {
-      meters: this.#data.settings?.meters,
+      // The meter the arrangement's own analysis reads, `ts` included.
+      meters: this.#data.settings?.meters ?? this.#data.settings?.ts,
       totalBeats: this.timeline().totalBeats,
       ...(melody.length === 0 ? {} : { melody }),
       ...opts,

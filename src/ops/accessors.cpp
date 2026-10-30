@@ -28,6 +28,11 @@ const json::Value* opt_null_default(const json::Value& opts, std::string_view ke
   return v == nullptr || v->is_null() ? nullptr : v;
 }
 
+json::Value opt_or(const json::Value& opts, std::string_view key, const json::Value& fallback) {
+  const json::Value* v = opt_null_default(opts, key);
+  return v != nullptr ? *v : fallback;
+}
+
 Presence opt_nullable(const json::Value& opts, std::string_view key) noexcept {
   const json::Value* v = field(opts, key);
   if (v == nullptr) {

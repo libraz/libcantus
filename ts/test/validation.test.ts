@@ -89,7 +89,7 @@ const NOTE_EVENT_VALIDATION_COVERAGE: Readonly<Record<string, readonly string[]>
   'src/analyze/melody/internal.ts:orderedNotes': ['motifFromNotes'],
   'src/analyze/reference/profile.ts:readingsFor': ['analyzeReference'],
   'src/analyze/reference/profile.ts:referenceFromReadings': ['analyzeReference'],
-  'src/analyze/rhythm/index.ts:analyzeRhythm': ['analyzeRhythm'],
+  'src/analyze/rhythm/index.ts:rhythmOver': ['analyzeRhythm'],
   'src/analyze/spelling/index.ts:spellLine': ['spellLine'],
   'src/analyze/timeline/index.ts:analyzeTimeline': ['chordTimelineFromNotes'],
   'src/analyze/voice/index.ts:analyzeVoice': ['analyzeVoice'],

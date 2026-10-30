@@ -120,9 +120,10 @@ Retained::Retained(json::Value wire, std::shared_ptr<const Decoded> decoded)
     : wire_(std::move(wire)), decoded_(std::move(decoded)) {}
 
 json::Value retain(json::Value wire, std::shared_ptr<const Decoded> decoded) {
-  const char* key = data_tag_key(wire.as_object());
+  const json::Object& tagged = std::as_const(wire).as_object();
+  const char* key = data_tag_key(tagged);
   json::Object out;
-  out.set(key, *wire.as_object().find(key));
+  out.set(key, *tagged.find(key));
   json::build_indices(wire);
   std::uint64_t id = table().insert(std::make_shared<Retained>(std::move(wire), std::move(decoded)),
                                     Retained::kTypeName);
@@ -158,8 +159,8 @@ void expand_refs(json::Value& v) {
     json::Value* next = pending.back();
     pending.pop_back();
     if (is_ref(*next)) {
-      // A snapshot holds no `$ref`, so its copy needs no further walk.
-      *next = resolve_ref(*next)->wire();
+      // A snapshot holds no `$ref`, so what stands in for it needs no further walk.
+      *next = share_wire(resolve_ref(*next));
     } else if (next->is_array()) {
       for (json::Value& item : next->as_array()) {
         pending.push_back(&item);
@@ -171,6 +172,11 @@ void expand_refs(json::Value& v) {
       }
     }
   }
+}
+
+json::Value share_wire(const std::shared_ptr<const Retained>& snapshot) {
+  const json::Value& wire = snapshot->wire();
+  return json::Value::share(std::shared_ptr<const json::Value>(snapshot, &wire));
 }
 
 void release_handle(std::uint64_t id) noexcept { table().erase(id); }

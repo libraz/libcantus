@@ -38,6 +38,7 @@
 #include "ops/registry.h"
 #include "ops/validate.h"
 #include "theory/partwriting/internal.h"
+#include "theory/voicing/satb.h"
 
 namespace cantus::ops {
 
@@ -987,24 +988,6 @@ json::Value with_carried_key(const json::Value& chord, const json::Value& opts) 
   throw js::TypeError(message);
 }
 
-/**
- * `spellVoicing(other.pitches, chord, key)` for pitches read off another object: each element must
- * be a finite number, and the ones before a bad element are spelled first.
- */
-SpelledVoicing spell_peer_voicing(const json::Value& pitches, const Chord& chord,
-                                  const KeyArg& key) {
-  std::vector<double> numbers;
-  for (const json::Value& pitch : assert_array(pitches, "voicing")) {
-    if (is_wire_number(pitch)) {
-      numbers.push_back(*number_of(pitch));
-      continue;
-    }
-    spell_voicing(numbers.empty() ? std::vector<double>{60} : numbers, chord, key);
-    numbers.push_back(assert_finite_number(pitch, "pitch"));
-  }
-  return spell_voicing(numbers, chord, key);
-}
-
 /** `spellLine` over a list of notes: a number is spelled by the key, anything else names itself. */
 std::vector<NoteData> spell_wire_line(const json::Value& line, const ResolvedKey& key) {
   if (!line.is_array()) {
@@ -1079,11 +1062,9 @@ void register_voicing_class() {
     const json::Value& asked = assert_options(a[1], "opts");
     ChordData data = read_chord_like(a[0]);
     StyledVoicingOptions opts;
-    // A style the library does not name is voiced as the plain close stack.
-    const json::Value* style = opt_null_default(asked, "style");
-    if (style != nullptr && style->is_string()) {
-      opts.style = parse_voicing_style(style->as_string());
-    }
+    opts.style =
+        parse_voicing_style(assert_one_of(opt_or(asked, "style", to_string(VoicingStyle::kClose)),
+                                          voicing_style_names(), "styled voicing style"));
     if (const json::Value* octave = opt_null_default(asked, "octave")) {
       opts.octave = assert_integer(*octave, "styled voicing octave", -10, 10);
     }
@@ -1154,11 +1135,15 @@ void register_voicing_class() {
     Voicing self = read_voicing_instance(a, 0);
     assert_key_argument(a[1], "voicing key");
     KeyArg key = read_key_arg(a[1]);
-    resolve_key(key);
+    ResolvedKey resolved = resolve_key(key);
     if (a.undefined(2)) {
       return to_json(self.spell(key));
     }
-    return to_json(self.spell(key, ChordArg(read_chord_like(a[2]).chord)));
+    // `spellVoicing` asserts the chord `toChordData` has read, then spells by it.
+    ChordData data = read_chord_like(a[2]);
+    settle_chord_quality(data);
+    read_voicing_hints(self.pitches(), data.wire, resolved);
+    return to_json(self.spell(key, ChordArg(data.chord)));
   });
   def_class_method("Voicing#next", [](Args& a) -> json::Value {
     Voicing self = read_voicing_instance(a, 0);
@@ -1179,17 +1164,25 @@ void register_voicing_class() {
     Voicing self = read_voicing_instance(a, 0);
     assert_key_argument(a[3], "voicing key");
     KeyArg key = read_key_arg(a[3]);
-    resolve_key(key);
-    Chord from = read_chord_like(element_of(a[2], 0)).chord;
-    Chord to = read_chord_like(element_of(a[2], 1)).chord;
+    ResolvedKey resolved = resolve_key(key);
+    ChordData from = read_chord_like(element_of(a[2], 0));
+    ChordData to = read_chord_like(element_of(a[2], 1));
+    // Each `spellVoicing` reads its voicing, asserts its chord, then spells by it.
+    settle_chord_quality(from);
+    read_voicing_hints(self.pitches(), from.wire, resolved);
     bool instance = is_instance(a, 1, "Voicing");
     std::optional<Voicing> other;
     std::optional<SpelledVoicing> peer;
     if (instance) {
       other = read_voicing_instance(a, 1);
+      settle_chord_quality(to);
+      read_voicing_hints(other->pitches(), to.wire, resolved);
     } else {
       // Anything with a `pitches` list is read as a voicing.
-      peer = spell_peer_voicing(surface_property(a[1], "pitches"), to, key);
+      json::Value pitches = surface_property(a[1], "pitches");
+      const json::Array& listed = assert_array(pitches, "voicing");
+      settle_chord_quality(to);
+      peer = spell_wire_voicing(listed, to.chord, to.wire, key);
     }
     const json::Value& asked = assert_options(a[4], "opts");
     PartWritingOptions opts;
@@ -1200,12 +1193,16 @@ void register_voicing_class() {
       read_ranges_option(asked, limits);
       opts.ranges = limits.ranges;
     }
-    if (instance) {
-      return to_json(self.check_to(*other, {ChordArg(from), ChordArg(to)}, key, opts));
+    // The seventh of the chord left is found through the roles its spelling gives its tones.
+    if (!from.chord.intervals.empty()) {
+      reads_tone_letter_offsets(from.wire);
     }
-    ResolvedKey resolved = resolve_key(key);
-    std::vector<SpelledVoicing> voicings = {spell_voicing(self.pitches(), from, resolved), *peer};
-    return to_json(check_part_writing(voicings, {from, to}, resolved, opts));
+    if (instance) {
+      return to_json(self.check_to(*other, {ChordArg(from.chord), ChordArg(to.chord)}, key, opts));
+    }
+    std::vector<SpelledVoicing> voicings = {spell_voicing(self.pitches(), from.chord, resolved),
+                                            *peer};
+    return to_json(check_part_writing(voicings, {from.chord, to.chord}, resolved, opts));
   });
   def_class_method("Voicing#species", [](Args& a) -> json::Value {
     Voicing self = read_voicing_instance(a, 0);

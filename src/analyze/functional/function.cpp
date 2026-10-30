@@ -97,9 +97,11 @@ std::string describe_chord(HarmonicFunction fn, FunctionReason reason, const std
 }
 
 /** The readings of the chord's function that were considered and rejected. */
-std::vector<RejectedCandidate> function_alternatives(const Chord& chord, const KeyScale& key,
+std::vector<RejectedCandidate> function_alternatives(const Chord& chord,
+                                                     const ResolvedKey& resolved,
                                                      FunctionReason reason,
                                                      HarmonicFunction accepted) {
+  const KeyScale& key = resolved.scale;
   std::vector<RejectedCandidate> out;
   if (reason == FunctionReason::kDegree) {
     // The sonority could tonicize, and only its being in the key stopped it.
@@ -119,7 +121,7 @@ std::vector<RejectedCandidate> function_alternatives(const Chord& chord, const K
                                                            std::string(override_phrase(reason))});
     }
   }
-  Nullable<AugmentedSixthKind> sixth = augmented_sixth_kind_of(chord, key);
+  Nullable<AugmentedSixthKind> sixth = augmented_sixth_kind_of(chord, resolved);
   if (sixth && *sixth == AugmentedSixthKind::kGerman) {
     out.push_back(RejectedCandidate{
         "tritone substitute",
@@ -165,12 +167,13 @@ std::optional<BorrowedSource> parse_borrowed_source(std::string_view name) {
   return std::nullopt;
 }
 
-ReasonedFunction function_with_reason(const Chord& chord, const KeyScale& key) {
+ReasonedFunction function_with_reason(const Chord& chord, const ResolvedKey& resolved) {
+  const KeyScale& key = resolved.scale;
   int offset = pitch_class_of(chord.rootPc - key.rootPc);
   if (is_neapolitan_chord_of(chord, key)) {
     return {HarmonicFunction::kSubdominant, FunctionReason::kNeapolitan};
   }
-  if (augmented_sixth_kind_of(chord, key)) {
+  if (augmented_sixth_kind_of(chord, resolved)) {
     return {HarmonicFunction::kSubdominant, FunctionReason::kAugmentedSixth};
   }
   if (is_applied_dominant(chord, key)) {
@@ -188,8 +191,7 @@ bool is_minor_key(const KeyArg& key) { return is_minor_scale(to_key_scale(key));
 
 HarmonicFunction function_of(const ChordArg& chord, const KeyArg& key) {
   Chord data = to_chord_data(chord);
-  KeyScale scale = to_key_scale(key);
-  return function_with_reason(data, scale).function;
+  return function_with_reason(data, resolve_key(key)).function;
 }
 
 bool is_diatonic(const ChordArg& chord, const KeyArg& key) {
@@ -203,10 +205,10 @@ KeyScale parallel_key(const KeyArg& key) { return parallel_scale(to_key_scale(ke
 ChordAnalysis analyze_chord(const ChordArg& chord, const KeyArg& key,
                             const AnalyzeChordOptions& opts) {
   Chord data = to_chord_data(chord);
-  KeyScale scale = to_key_scale(key);
-  Nullable<BorrowedSource> source = borrowed_source_of(data, scale);
-  ReasonedFunction reasoned = function_with_reason(data, scale);
-  std::string roman = render_roman(data, scale, opts).roman;
+  ResolvedKey resolved = resolve_key(key);
+  Nullable<BorrowedSource> source = borrowed_source_of(data, resolved.scale);
+  ReasonedFunction reasoned = function_with_reason(data, resolved);
+  std::string roman = render_roman(data, resolved, opts).roman;
   ChordAnalysis out;
   out.function = reasoned.function;
   out.borrowed = source.has_value();
@@ -214,8 +216,8 @@ ChordAnalysis analyze_chord(const ChordArg& chord, const KeyArg& key,
   out.rationale = describe_chord(reasoned.function, reasoned.reason, roman, source);
   out.roman = std::move(roman);
   if (opts.alternatives == true) {
-    out.alternatives = function_alternatives(data, scale, reasoned.reason, reasoned.function);
-    for (RejectedCandidate& rival : roman_alternatives(data, scale, opts)) {
+    out.alternatives = function_alternatives(data, resolved, reasoned.reason, reasoned.function);
+    for (RejectedCandidate& rival : roman_alternatives(data, resolved, opts)) {
       out.alternatives.push_back(std::move(rival));
     }
   }

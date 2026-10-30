@@ -116,14 +116,23 @@ class Value {
   Value(std::string_view s);  // NOLINT(google-explicit-constructor)
   Value(Array a);             // NOLINT(google-explicit-constructor)
   Value(Object o);            // NOLINT(google-explicit-constructor)
-  /** Deep copy; nesting depth costs heap, not native stack. */
+  /** Deep copy, except that a shared value stays shared; nesting depth costs heap, not stack. */
   Value(const Value& other);
   Value(Value&& other) noexcept;
   Value& operator=(const Value& other);
   Value& operator=(Value&& other) noexcept;
   ~Value();
 
-  Kind kind() const noexcept { return static_cast<Kind>(data_.index()); }
+  /**
+   * A value that reads as `*target` without copying it; the first mutable access copies the
+   * target in. @pre `target` never changes again and has its key indices built (build_indices).
+   */
+  static Value share(std::shared_ptr<const Value> target);
+
+  /** Whether this value reads through a target it shares (share()). */
+  bool is_shared() const noexcept { return data_.index() == kSharedIndex; }
+
+  Kind kind() const noexcept { return static_cast<Kind>(target().data_.index()); }
   bool is_null() const noexcept { return kind() == Kind::kNull; }
   bool is_bool() const noexcept { return kind() == Kind::kBool; }
   bool is_number() const noexcept { return kind() == Kind::kNumber; }
@@ -132,25 +141,47 @@ class Value {
   bool is_object() const noexcept { return kind() == Kind::kObject; }
 
   /** @throws std::bad_variant_access when the kind differs. */
-  bool as_bool() const { return std::get<bool>(data_); }
-  double as_number() const { return std::get<double>(data_); }
-  const std::string& as_string() const { return std::get<std::string>(data_); }
-  const Array& as_array() const { return std::get<Array>(data_); }
-  Array& as_array() { return std::get<Array>(data_); }
-  const Object& as_object() const { return std::get<Object>(data_); }
-  Object& as_object() { return std::get<Object>(data_); }
+  bool as_bool() const { return std::get<bool>(target().data_); }
+  double as_number() const { return std::get<double>(target().data_); }
+  const std::string& as_string() const { return std::get<std::string>(target().data_); }
+  const Array& as_array() const { return std::get<Array>(target().data_); }
+  Array& as_array() {
+    unshare();
+    return std::get<Array>(data_);
+  }
+  const Object& as_object() const { return std::get<Object>(target().data_); }
+  Object& as_object() {
+    unshare();
+    return std::get<Object>(data_);
+  }
 
   /** Deep equality; numbers compare with `==`. Iterative, like copy and destruction. */
   friend bool operator==(const Value& a, const Value& b);
   friend bool operator!=(const Value& a, const Value& b) { return !(a == b); }
 
  private:
+  using Shared = std::shared_ptr<const Value>;
+  static constexpr std::size_t kSharedIndex = 6;
+
+  /** The value this one reads as: itself, or the target it shares (never shared itself). */
+  const Value& target() const noexcept;
+  /** Copy a shared target into this value, so it may be changed. */
+  void unshare();
+  /** Whether this value holds an array or object of its own. */
+  bool owns_container() const noexcept {
+    return std::holds_alternative<Array>(data_) || std::holds_alternative<Object>(data_);
+  }
   /** Move the nested arrays and objects out of this value, leaving it with no container children.
    */
   void detach_children(std::vector<Value>& out);
 
-  std::variant<std::nullptr_t, bool, double, std::string, Array, Object> data_;
+  std::variant<std::nullptr_t, bool, double, std::string, Array, Object, Shared> data_;
 };
+
+inline const Value& Value::target() const noexcept {
+  const Shared* shared = std::get_if<Shared>(&data_);
+  return shared == nullptr ? *this : **shared;
+}
 
 /** One object member. */
 struct Member {
@@ -160,7 +191,8 @@ struct Member {
 
 /**
  * Build the key index of every object in `value` now. find() otherwise builds one on first use, so
- * a value read from several threads at once is prepared with this before it is shared.
+ * a value read from several threads at once is prepared with this before it is shared. Shared
+ * values (Value::share) are skipped: theirs are built already.
  */
 void build_indices(const Value& value);
 

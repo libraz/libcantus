@@ -151,9 +151,10 @@ describe.skipIf(recording)('a call on a held receiver costs no more for a larger
   });
 
   it('answers the probes the same at both sizes', () => {
-    const score = scoreOf(SIZE);
-    expect(score.barAt(1.25)).toEqual({ bar: 0, beat: 1.25 });
-    expect(timelineOf(SIZE).at(1.25)?.rootPc).toBe(5);
+    for (const size of [SIZE, SIZE * GROWTH]) {
+      expect(scoreOf(size).barAt(1.25)).toEqual({ bar: 0, beat: 1.25 });
+      expect(timelineOf(size).at(1.25)?.rootPc).toBe(5);
+    }
   });
 });
 
@@ -215,9 +216,9 @@ function editorCycle(bars: number): () => void {
 }
 
 describe.skipIf(recording)(
-  'an editor cycle costs what the edit touches, not what the arrangement holds',
+  'an editor cycle grows no faster than linearly in the arrangement',
   () => {
-    it('grows no faster than linearly in the arrangement across updates and reads', () => {
+    it('across updates and reads, quadrupling the arrangement stays under the linear-cost bound', () => {
       // The cycle reads the whole of its result, so it is linear in the arrangement.
       expectBounded('editor cycle', CYCLE_TOLERANCE, editorCycle, BARS);
     });

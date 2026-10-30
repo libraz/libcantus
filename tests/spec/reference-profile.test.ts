@@ -366,3 +366,91 @@ describe('analyzeReference over notes that end before beat 0', () => {
     expect(profile.span.endBeat).toBe(-8);
   });
 });
+
+describe('analyzeReference phrase melody figures', () => {
+  it('pins every documented phrase field of the source song', () => {
+    const phrases = fixtureProfile(SOURCE_SONG).form.phrases.map((phrase) => {
+      const melody = phrase.melody;
+      return [
+        melody?.onsetDensity,
+        melody?.restRatio,
+        melody?.peakPosition,
+        melody?.peakPitch,
+        melody?.mean,
+      ];
+    });
+    expect(phrases).toEqual([
+      [3.625, 0, 0.125, 79, 74.96875],
+      [3.625, 0, 0.125, 79, 73.71875],
+      [3.625, 0, 0, 72, 63.65625],
+      [3.625, 0, 0.125, 79, 74.96875],
+    ]);
+  });
+
+  it('measures density, rest, peak and mean within each phrase', () => {
+    // Two quarter notes at the head of every bar, then a half rest.
+    const pitches = [60, 62, 64, 65, 67, 65, 64, 62];
+    const notes = pitches.map((pitch, index) => ({
+      pitch,
+      startBeat: Math.floor(index / 2) * 4 + (index % 2),
+      durationBeat: 1,
+    }));
+    const phrases = analyzeReference(notes, { key: C_MAJOR }).form.phrases;
+    expect(phrases.map((phrase) => [phrase.startBeat, phrase.endBeat])).toEqual([
+      [0, 8],
+      [8, 14],
+    ]);
+    // Four onsets over two bars, sounding four of eight beats; 65 peaks at beat 5.
+    expect(phrases[0]?.melody).toMatchObject({
+      onsetDensity: 2,
+      restRatio: 0.5,
+      peakPitch: 65,
+      peakPosition: 0.625,
+      mean: 62.75,
+    });
+    // Four onsets over a bar and a half, sounding four of six beats.
+    expect(phrases[1]?.melody?.onsetDensity).toBeCloseTo(8 / 3, 12);
+    expect(phrases[1]?.melody?.restRatio).toBeCloseTo(1 / 3, 12);
+    expect(phrases[1]?.melody).toMatchObject({ peakPitch: 67, peakPosition: 0, mean: 64.5 });
+  });
+});
+
+describe('analyzeReference figures over a span that opens on a rest', () => {
+  const MELODY = [60, 62, 64, 65, 67, 65, 64, 62, 60, 62, 64, 65];
+  // A lead-in note, then two 4-bar phrases each with a silent first bar and twelve quarter notes.
+  const notes = [
+    { pitch: 60, startBeat: 0, durationBeat: 1 },
+    ...[0, 16].flatMap((base) =>
+      MELODY.map((pitch, index) => ({ pitch, startBeat: base + 4 + index, durationBeat: 1 })),
+    ),
+  ];
+
+  it('counts the silent first bar of a phrase in its density and rest', () => {
+    const phrases = analyzeReference(notes, { key: C_MAJOR }).form.phrases;
+    expect(phrases.map((phrase) => [phrase.startBeat, phrase.endBeat])).toEqual([
+      [0, 16],
+      [16, 32],
+    ]);
+    // Twelve onsets over four bars; twelve of sixteen beats sound.
+    expect(phrases[1]?.melody?.onsetDensity).toBe(3);
+    expect(phrases[1]?.melody?.restRatio).toBe(0.25);
+  });
+
+  it('reads the whole melody over the span rather than from its first onset', () => {
+    const accompaniment = { pitch: 48, startBeat: 0, durationBeat: 32 };
+    const line = notes.slice(1);
+    const profile = analyzeReference([accompaniment, ...line], { key: C_MAJOR, melody: line });
+    expect(profile.span.startBeat).toBe(0);
+    expect(profile.melody.rhythm.startBeat).toBe(0);
+    expect(profile.melody.rhythm.bars).toBe(profile.span.bars);
+    expect(profile.melody.rhythm.onsetDensity).toBe(24 / 8);
+  });
+});
+
+describe('analyzeReference over a pitch of -0', () => {
+  it('reports the register at pitch 0', () => {
+    const notes = [-0, 2, 4].map((pitch, index) => ({ pitch, startBeat: index, durationBeat: 1 }));
+    const register = analyzeReference(notes).melody.register;
+    expect(Object.is(register?.low, 0)).toBe(true);
+  });
+});

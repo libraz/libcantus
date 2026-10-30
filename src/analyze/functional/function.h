@@ -31,8 +31,9 @@ struct ReasonedFunction {
   FunctionReason reason = FunctionReason::kDegree;
 };
 
-/** `functionOf`, keeping the rule that decided the answer (`functionWithReason`). */
-ReasonedFunction function_with_reason(const Chord& chord, const KeyScale& key);
+/** `functionOf`, keeping the rule that decided the answer, on the key whole
+ * (`functionWithReason`). */
+ReasonedFunction function_with_reason(const Chord& chord, const ResolvedKey& resolved);
 
 /** The parallel key: same tonic, opposite mode (`parallelKey`). */
 KeyScale parallel_key(const KeyArg& key);

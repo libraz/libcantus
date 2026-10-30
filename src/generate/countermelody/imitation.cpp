@@ -90,11 +90,12 @@ std::vector<NoteEvent> imitation_answers(const std::vector<NoteEvent>& sounding,
     double offset = 0;
     if (plan.invert) {
       if (plan.tonal) {
-        // Mirroring reflects the rung, and the offset with it.
-        ScaleLadderPosition here = scale_ladder_position(pitch, plan.key);
-        pitch = scale_ladder_pitch(2 * scale_ladder_position(pivot, plan.key).rung - here.rung,
-                                   plan.key);
-        offset = -here.offset;
+        // Mirroring reflects the rung, and the offset with it, each note read relative to the
+        // pivot's own offset so that a chromatic pivot mirrors onto itself.
+        ScaleLadderPosition axis = scale_ladder_position(pivot, plan.key);
+        ScaleLadderPosition here = scale_ladder_position(pitch - axis.offset, plan.key);
+        pitch = scale_ladder_pitch(2 * axis.rung - here.rung, plan.key);
+        offset = axis.offset - here.offset;
       } else {
         pitch = 2 * pivot - pitch;
       }

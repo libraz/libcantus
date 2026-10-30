@@ -517,7 +517,7 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
     timeline === undefined
       ? (opts.chordChangeBeats ?? [])
       : timeline.segments.flatMap((segment) => [segment.startBeat, segment.endBeat]);
-  const register = opts.register ?? 'below';
+  const register = assertOneOf(opts.register ?? 'below', ['above', 'below'], 'register');
   // The counter line writes against the voice on its own side of the texture,
   // so a chord in the melody track resolves to that voice rather than to
   // whichever note the caller happened to store last.

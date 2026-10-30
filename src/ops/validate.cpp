@@ -368,7 +368,7 @@ TimeSignature assert_time_signature(const json::Value& ts, std::string_view name
 
 MeterMap assert_meter_map(const json::Value& meters, std::string_view name) {
   if (!meters.is_array()) {
-    throw InvalidInputError(str(name) + " must be an array; received " + js::type_of(meters));
+    throw InvalidInputError(str(name) + " must be an array; received " + describe_rejected(meters));
   }
   const json::Array& entries = meters.as_array();
   if (entries.empty()) {
@@ -439,7 +439,7 @@ std::vector<NoteEvent> assert_note_events(const json::Value& events, std::string
                                           const json::Value& options) {
   const json::Value& asked = assert_options(options, join_name(name, " options"));
   if (!events.is_array()) {
-    throw InvalidInputError(str(name) + " must be an array; received " + js::type_of(events));
+    throw InvalidInputError(str(name) + " must be an array; received " + describe_rejected(events));
   }
   const json::Array& entries = events.as_array();
   assert_generation_budget(json::Value(static_cast<double>(entries.size())),

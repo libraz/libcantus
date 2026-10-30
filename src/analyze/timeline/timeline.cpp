@@ -6,6 +6,7 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <string>
 #include <string_view>
 
 #include "analyze/adjacency.h"
@@ -22,6 +23,7 @@
 #include "core/meter/meter.h"
 #include "core/validation/validation.h"
 #include "js/math.h"
+#include "js/number.h"
 
 namespace cantus {
 
@@ -41,6 +43,9 @@ constexpr std::string_view kSlashUpperQualityNames[] =
     ;
 
 constexpr std::array<std::string_view, 2> kSegmentationNames = {"dynamic", "grid"};
+
+/** The chord quality whose root its tones leave open (`SYMMETRIC_QUALITY`). */
+constexpr ChordQuality kSymmetricQuality = ChordQuality::kDim7;
 
 /** The 12 x SEGMENTATION_QUALITIES lexicon, held flat (`LEXICON_*`). */
 struct Lexicon {
@@ -212,6 +217,47 @@ bool bass_sounds_only_below(const std::vector<NoteEvent>& all,
   return highest_bass <= upper_floor;
 }
 
+/**
+ * The bass of a window: the lowest note that sounds where the window's music begins, or that holds
+ * for more than half of the window or for a whole expected chord (`windowBass`). A note heard for a
+ * small part of the window does not invert the chord the rest of it holds, and a note the
+ * histogram does not count cannot be the bass.
+ */
+double window_bass(const std::vector<NoteEvent>& all, const std::vector<std::size_t>& selection,
+                   double window_start, double window_end, const MeterArg& meters,
+                   double harmonic_rhythm) {
+  struct Counted {
+    const NoteEvent* note;
+    double overlap;
+  };
+  std::vector<Counted> counted;
+  double first_sounding = std::numeric_limits<double>::infinity();
+  for (std::size_t index : selection) {
+    const NoteEvent& note = all[index];
+    double overlap = js::min(note.startBeat + note.durationBeat, window_end) -
+                     js::max(note.startBeat, window_start);
+    if (overlap <= BEAT_EPS) {
+      continue;
+    }
+    bool onset_in_window =
+        note.startBeat >= window_start - BEAT_EPS && note.startBeat < window_end - BEAT_EPS;
+    if (note_weight(note, overlap, onset_in_window ? &meters : nullptr) <= BEAT_EPS) {
+      continue;
+    }
+    counted.push_back(Counted{&note, overlap});
+    first_sounding = js::min(first_sounding, js::max(note.startBeat, window_start));
+  }
+  double half = (window_end - window_start) / 2;
+  double bass = std::numeric_limits<double>::infinity();
+  for (const Counted& entry : counted) {
+    if (entry.note->startBeat <= first_sounding + BEAT_EPS || entry.overlap > half ||
+        entry.overlap >= harmonic_rhythm - BEAT_EPS) {
+      bass = js::min(bass, entry.note->pitch);
+    }
+  }
+  return bass;
+}
+
 /** Confidence of a chord for a window: chord-tone weight over total weight. */
 double chord_confidence(const Chord& chord, const std::array<double, 12>& weights,
                         double total_weight, bool exact) {
@@ -231,7 +277,8 @@ double chord_confidence(const Chord& chord, const std::array<double, 12>& weight
 std::optional<WindowChord> analyze_window(const std::vector<NoteEvent>& all,
                                           const std::vector<std::size_t>& selection,
                                           double window_start, double window_end,
-                                          const MeterArg& meters, const ResolvedKey& key) {
+                                          const MeterArg& meters, const ResolvedKey& key,
+                                          double harmonic_rhythm) {
   WindowWeights window = window_weights(all, &selection, window_start, window_end, meters);
   const std::array<double, 12>& weights = window.weights;
   if (window.totalWeight <= BEAT_EPS) {
@@ -266,7 +313,8 @@ std::optional<WindowChord> analyze_window(const std::vector<NoteEvent>& all,
 
   // The window's true bass is the lowest pitch, so inversion detection works; if that pitch class
   // was removed as noise, detection becomes unordered instead.
-  int bass_pc = pitch_class_of(window.lowestPitch);
+  int bass_pc = pitch_class_of(
+      window_bass(all, selection, window_start, window_end, meters, harmonic_rhythm));
   bool has_bass = std::find(selected.begin(), selected.end(), bass_pc) != selected.end();
   std::vector<int> detection_pitches;
   for (int pc : selected) {
@@ -302,10 +350,27 @@ std::optional<WindowChord> analyze_window(const std::vector<NoteEvent>& all,
   Chord chord = make_chord(best_match->rootPc, best_match->quality, best_bass);
   MatchAccount account =
       match_account(*best_match, make_chord(best_match->rootPc, best_match->quality), pedal_pc);
+  // A slash chord names its bass, so a window holding nothing but the triad and that bass is
+  // accounted for exactly, though it does not rank as exact.
+  bool explained = account.exact || is_slash_reading(*best_match, pedal_pc);
   WindowChord reading;
-  reading.confidence = chord_confidence(chord, weights, window.totalWeight, account.exact);
+  reading.confidence = chord_confidence(chord, weights, window.totalWeight, explained);
   reading.chord = std::move(chord);
   reading.object = std::make_shared<const char>('c');
+  if (best_match->quality == kSymmetricQuality) {
+    // Every tone of a diminished seventh roots the same tones, so the reading on each is carried
+    // out of the window for the progression to choose from.
+    for (int root_pc : chord_pitch_classes(make_chord(best_match->rootPc, best_match->quality))) {
+      std::optional<double> rooted_bass;
+      if (has_bass && bass_pc != root_pc) {
+        rooted_bass = bass_pc;
+      }
+      Chord rooted = make_chord(root_pc, best_match->quality, rooted_bass);
+      double confidence = chord_confidence(rooted, weights, window.totalWeight, explained);
+      reading.rootings.push_back(
+          WindowReading{std::move(rooted), confidence, std::make_shared<const char>('d')});
+    }
+  }
   // An augmented sixth is a bass and an interval rather than a stack of thirds, so the reading
   // is offered alongside the tertian one; the span after it settles which one stands.
   if (has_bass) {
@@ -319,6 +384,45 @@ std::optional<WindowChord> analyze_window(const std::vector<NoteEvent>& all,
     }
   }
   return reading;
+}
+
+/**
+ * The root a diminished seventh read at `index` takes from its context, or nothing to keep the
+ * reading the window chose (`settledDiminishedRoot`): the leading tone of the chord it resolves
+ * to, else the key's leading tone. The same tones held across a boundary, or a rest, are not a
+ * resolution.
+ */
+std::optional<int> settled_diminished_root(const std::vector<std::optional<WindowChord>>& readings,
+                                           std::size_t index, const KeyScale& key) {
+  if (!readings[index] || readings[index]->rootings.empty()) {
+    return std::nullopt;
+  }
+  const WindowChord& reading = *readings[index];
+  auto offers = [&](int pc) {
+    for (const WindowReading& rooting : reading.rootings) {
+      if (rooting.chord.rootPc == pc) {
+        return true;
+      }
+    }
+    return false;
+  };
+  std::vector<int> tones = chord_pitch_classes(reading.chord);
+  for (std::size_t i = index + 1; i < readings.size(); ++i) {
+    if (!readings[i] || chord_pitch_classes(readings[i]->chord) == tones) {
+      continue;
+    }
+    // The leading tone lies a semitone below the root it leads to.
+    int leading = pitch_class_of(readings[i]->chord.rootPc - 1);
+    if (offers(leading)) {
+      return leading;
+    }
+    break;
+  }
+  int leading_tone = pitch_class_of(key.rootPc - 1);
+  if (offers(leading_tone)) {
+    return leading_tone;
+  }
+  return std::nullopt;
 }
 
 /** Whether two chords are the same root, quality, and bass (`sameChord`). */
@@ -596,7 +700,7 @@ bool span_is_clean(const SlotGrid& grid, const BoundarySpan& span, double dirty_
 
 /** Whether previous evidence describes the same grid as this analysis (`evidenceFits`). */
 bool evidence_fits(const TimelineEvidence& previous, const SlotGrid& grid, double slot_count,
-                   double total_beats, SegmentationMode segmentation, double harmonic_rhythm,
+                   double total_beats, ChordSegmentation segmentation, double harmonic_rhythm,
                    bool key_given) {
   return previous.grid.origin == grid.origin && previous.grid.slotBeats == grid.slotBeats &&
          previous.slotCount == slot_count && previous.totalBeats == total_beats &&
@@ -620,11 +724,6 @@ std::optional<ChordSegmentation> parse_chord_segmentation(std::string_view name)
     }
   }
   return std::nullopt;
-}
-
-SegmentationMode segmentation_mode_of(const std::optional<ChordSegmentation>& segmentation) {
-  return segmentation == ChordSegmentation::kGrid ? SegmentationMode::kGrid
-                                                  : SegmentationMode::kDynamic;
 }
 
 std::size_t lexicon_size() { return lexicon().size; }
@@ -671,7 +770,36 @@ const ChordTimeline& assert_chord_timeline(const ChordTimeline& timeline, std::s
     assert_finite_number(timeline.segments[index].startBeat, label + ".startBeat");
     assert_finite_number(timeline.segments[index].endBeat, label + ".endBeat");
   }
+  assert_spans_in_order(timeline.segments, join_name(name, ".segments"));
   return timeline;
+}
+
+void assert_span_in_order(double start_beat, double end_beat, const double* previous_end,
+                          std::size_t index, std::string_view name) {
+  std::string label = std::string(name) + "[" + index_text(index) + "]";
+  if (!(end_beat > start_beat)) {
+    throw InvalidInputError(label + " must end after it starts; received [" +
+                            js::to_string(start_beat) + ", " + js::to_string(end_beat) + ")");
+  }
+  if (previous_end != nullptr && start_beat < *previous_end) {
+    throw InvalidInputError(label + " must not start before " + std::string(name) + "[" +
+                            index_text(index - 1) + "] ends; received " +
+                            js::to_string(start_beat) + " before " + js::to_string(*previous_end));
+  }
+}
+
+std::vector<KeyRegion> stated_key_regions(const ResolvedKey& key, double start_beat,
+                                          double end_beat) {
+  if (!(end_beat > start_beat)) {
+    return {};
+  }
+  // A stated key is not a measurement, so it carries full confidence.
+  KeyRegion region;
+  region.startBeat = start_beat;
+  region.endBeat = end_beat;
+  region.key = key;
+  region.confidence = STATED_KEY_CONFIDENCE;
+  return {region};
 }
 
 ChordTimeline chord_timeline_from_chords(const std::vector<ChordSpan>& chords, double total_beats) {
@@ -740,12 +868,6 @@ DirtySlots dirty_slots_for(const TimelineEvidence& evidence, double start_beat, 
 TimelineAnalysis analyze_timeline(const std::vector<NoteEvent>& notes,
                                   const ChordTimelineOptions& opts, TimelineEvidence* previous,
                                   const DirtySlots* dirty) {
-  return analyze_timeline(notes, opts, segmentation_mode_of(opts.segmentation), previous, dirty);
-}
-
-TimelineAnalysis analyze_timeline(const std::vector<NoteEvent>& notes,
-                                  const ChordTimelineOptions& opts, SegmentationMode mode,
-                                  TimelineEvidence* previous, const DirtySlots* dirty) {
   ResolveMetersOptions meter_options;
   meter_options.ts = opts.ts;
   meter_options.meters = opts.meters;
@@ -753,6 +875,7 @@ TimelineAnalysis analyze_timeline(const std::vector<NoteEvent>& notes,
   const MeterArg meters(meters_map);
   double harmonic_rhythm = opts.harmonicRhythm.value_or(beats_per_bar_at(0, meters));
   assert_range(harmonic_rhythm, kMinValue, kMaxSafeInteger, "harmonic rhythm");
+  const ChordSegmentation mode = opts.segmentation.value_or(ChordSegmentation::kDynamic);
   // One pulse by default, whatever the pulse of this meter is.
   double grid_unit = metric_grid_unit(meters);
   double min_chord_beats = opts.minChordBeats.value_or(grid_unit);
@@ -777,14 +900,14 @@ TimelineAnalysis analyze_timeline(const std::vector<NoteEvent>& notes,
   double total_beats = opts.totalBeats.value_or(latest_sounding_end(sounding));
   assert_range(total_beats, js::min(0, first_sounding_beat(sounding)), kMaxSafeInteger,
                "timeline totalBeats");
-  double slot_beats = mode == SegmentationMode::kGrid
+  double slot_beats = mode == ChordSegmentation::kGrid
                           ? harmonic_rhythm
                           : slot_beats_within(grid_unit, min_chord_beats, harmonic_rhythm);
   GridOrigin placed = grid_for_notes(sounding, slot_beats);
   double music_start = placed.startBeat;
   SlotGrid grid{placed.origin, slot_beats};
   double slot_count = js::max(0, std::ceil((total_beats - grid.origin) / slot_beats - BEAT_EPS));
-  bool dynamic = mode == SegmentationMode::kDynamic;
+  bool dynamic = mode == ChordSegmentation::kDynamic;
   // The boundary search fills one lexicon row per slot, so what the budget has to bound is the
   // table about to be built; a grid builds none.
   assert_generation_budget(dynamic ? slot_count * static_cast<double>(lexicon().size) : slot_count,
@@ -792,12 +915,7 @@ TimelineAnalysis analyze_timeline(const std::vector<NoteEvent>& notes,
   // A given key is taken as read across the whole span, from where the music starts.
   std::vector<KeyRegion> keys;
   if (opts.key) {
-    KeyRegion region;
-    region.startBeat = music_start;
-    region.endBeat = total_beats;
-    region.key = resolve_key(*opts.key);
-    region.confidence = 1;
-    keys.push_back(std::move(region));
+    keys = stated_key_regions(resolve_key(*opts.key), music_start, total_beats);
   } else {
     KeyTimelineOptions key_options;
     key_options.meters = meters;
@@ -852,7 +970,7 @@ TimelineAnalysis analyze_timeline(const std::vector<NoteEvent>& notes,
   }
 
   std::vector<BoundarySpan> spans =
-      mode == SegmentationMode::kGrid
+      mode == ChordSegmentation::kGrid
           ? grid_spans(total_slots, grid)
           : dynamic_spans(slot_weights, *tables, grid, harmonic_rhythm, meters);
 
@@ -882,11 +1000,28 @@ TimelineAnalysis analyze_timeline(const std::vector<NoteEvent>& notes,
         cached != nullptr
             ? *cached
             : analyze_window(sounding, notes_of_span(slot_notes, span, grid, sounding.size()),
-                             start, end, meters, span_key_whole);
+                             start, end, meters, span_key_whole, harmonic_rhythm);
     windows[id] = inferred;
     readings.push_back(std::move(inferred));
     reading_keys.push_back(span_key);
     reading_bounds.push_back(BoundarySpan{start, end});
+  }
+
+  // Root the diminished sevenths by where they resolve, last first, so each is read against the
+  // settled chord after it.
+  for (std::size_t i = readings.size(); i-- > 0;) {
+    std::optional<int> root = settled_diminished_root(readings, i, reading_keys[i]);
+    if (!root || *root == readings[i]->chord.rootPc) {
+      continue;
+    }
+    for (const WindowReading& rooting : readings[i]->rootings) {
+      if (rooting.chord.rootPc == *root) {
+        WindowChord settled;
+        static_cast<WindowReading&>(settled) = rooting;
+        readings[i] = std::move(settled);
+        break;
+      }
+    }
   }
 
   // Settle the augmented sixths against what follows them, in the key each was read in.

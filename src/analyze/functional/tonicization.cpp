@@ -24,13 +24,7 @@ bool is_tonicizable_root(double root_pc, const KeyScale& key) {
 }  // namespace
 
 Nullable<TonicizableDegree> applied_target(const Chord& chord, const KeyScale& key) {
-  bool dominant = has_dominant_sonority(chord);
-  bool leading_tone = std::find(LEADING_TONE_QUALITIES.begin(), LEADING_TONE_QUALITIES.end(),
-                                chord.quality) != LEADING_TONE_QUALITIES.end();
-  if (!dominant && !leading_tone) {
-    return std::nullopt;
-  }
-  return applied_dominant_target(chord.rootPc + (dominant ? 5 : 1), key);
+  return applied_chord_target(chord, key);
 }
 
 bool is_applied_dominant(const Chord& chord, const KeyScale& key) {

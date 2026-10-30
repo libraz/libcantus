@@ -262,7 +262,8 @@ void register_signature() {
 
 void register_relations() {
   def("spelledKeyOf", [](Args& a) -> json::Value {
-    const json::Value& key = assert_record(a[0], "key");
+    // A model-class instance is read through its getters: a Key names its root but no mask.
+    json::Value key = options_view(assert_record(a[0], "key"));
     double root = assert_finite_number(get(key, "rootPc"), "pitch");
     int mask = read_mode_mask(get(key, "modeMask12"), "key.modeMask12");
     // The candidate tonics are weighed by spelling the key, which reads it as a KeyLike.

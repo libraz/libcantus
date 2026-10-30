@@ -24,6 +24,7 @@
 #include "ops/registry.h"
 #include "ops/validate.h"
 #include "theory/partwriting/internal.h"
+#include "theory/voicing/satb.h"
 
 namespace cantus::ops {
 
@@ -55,9 +56,7 @@ void register_voicing() {
     }
     VoicingOptions opts;
     read_key_option(a[1], opts);
-    if (opts.key) {
-      resolve_key(*opts.key);
-    }
+    std::optional<ResolvedKey> key = resolve_key_option(opts);
     const json::Value& asked = assert_options(a[1], "opts");
     read_ranges_option(asked, opts);
     read_max_spacing_option(asked, opts);
@@ -66,11 +65,13 @@ void register_voicing() {
       opts.budget = number_of(*budget);
     }
     // Each chord's tones are read where its candidates are enumerated, then the roles its own
-    // spelling gives them where its move is scored, chord by chord.
+    // spelling gives them where its move is scored, then the hints the key spells it by, chord by
+    // chord.
     std::vector<ChordArg> data;
     for (ChordData& chord : read) {
       settle_chord_quality(chord);
       reads_tone_letter_offsets(chord.wire);
+      read_spelling_table_hints(chord.wire, key);
       data.emplace_back(std::move(chord.chord));
     }
     return to_json(voice_progression(data, opts));
@@ -103,11 +104,9 @@ void register_voicing() {
     const json::Value& asked = assert_options(a[1], "opts");
     ChordData data = read_chord_like(a[0]);
     StyledVoicingOptions opts;
-    // A style the library does not name is voiced as the plain close stack.
-    const json::Value* style = opt_null_default(asked, "style");
-    if (style != nullptr && style->is_string()) {
-      opts.style = parse_voicing_style(style->as_string());
-    }
+    opts.style =
+        parse_voicing_style(assert_one_of(opt_or(asked, "style", to_string(VoicingStyle::kClose)),
+                                          voicing_style_names(), "styled voicing style"));
     if (const json::Value* octave = opt_null_default(asked, "octave")) {
       opts.octave = assert_integer(*octave, "styled voicing octave", -10, 10);
     }
@@ -123,22 +122,6 @@ void register_voicing() {
 //--------------------------------------------------------------------------------------------
 // theory/partwriting
 
-/** `spellPitch` refuses a pitch that is not a number after it has read the tonic and the key. */
-SpelledVoicing spell_wire_voicing(const json::Array& pitches, const Chord& chord,
-                                  const KeyArg& key) {
-  std::vector<double> numbers;
-  for (const json::Value& pitch : pitches) {
-    if (is_wire_number(pitch)) {
-      numbers.push_back(*number_of(pitch));
-      continue;
-    }
-    // The pitches before it are spelled first, and so is a probe pitch when it is the first.
-    spell_voicing(numbers.empty() ? std::vector<double>{60} : numbers, chord, key);
-    numbers.push_back(assert_finite_number(pitch, "pitch"));
-  }
-  return spell_voicing(numbers, chord, key);
-}
-
 /** The notes of a species line, each read as `assertNote` reads it. */
 std::vector<NoteData> read_line(const json::Array& notes) {
   std::vector<NoteData> out;
@@ -153,7 +136,7 @@ void register_partwriting() {
     const json::Array& pitches = assert_array(a[0], "voicing");
     const json::Value& chord = assert_chord(a[1]);
     KeyArg key = read_key_arg(a[2]);
-    return to_json(spell_wire_voicing(pitches, read_chord_fields(chord), key));
+    return to_json(spell_wire_voicing(pitches, read_chord_fields(chord), chord, key));
   });
   def("checkPartWriting", [](Args& a) -> json::Value {
     const json::Array& voicings = assert_array(a[0], "voicings");

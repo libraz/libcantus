@@ -13,6 +13,7 @@ import {
   assertGenerationBudget,
   assertMidiPitch,
   assertNoteEvents,
+  assertOneOf,
   assertOptions,
   assertRecord,
 } from '../../core/validation/index.js';
@@ -232,6 +233,13 @@ export type DetectKeyOptions = {
   budget?: number;
 };
 
+/** Every value {@link DetectChordOptions.input} may take. */
+const CHORD_INPUT_KINDS: readonly NonNullable<DetectChordOptions['input']>[] = [
+  'auto',
+  'midi',
+  'pitchClass',
+];
+
 /** Unique pitch classes of the input, sorted ascending. */
 function uniquePitchClasses(pitches: readonly number[]): number[] {
   return [...new Set(pitches.map(pitchClass))].sort((a, b) => a - b);
@@ -255,7 +263,8 @@ function assertPitches(
  * Every input pitch class is tried as a root against every known chord quality.
  * A match is reported when all of the chord's tones are present in the input, or
  * when the only absent tone is the perfect fifth (a common omission in shell
- * voicings); matches are ranked best-first by fewest extra notes, then fewest
+ * voicings) and at least two of the chord's tones still sound, so a single
+ * pitch class matches no chord; matches are ranked best-first by fewest extra notes, then fewest
  * missing notes, then root position over an inversion, then most specific
  * (largest) chord. An exact match (no extras, no missing) is flagged and ranked
  * first.
@@ -280,17 +289,18 @@ export function detectChord(
 ): ChordMatch[] {
   const asked = assertOptions(opts, 'opts');
   assertPitches(pitches, 'chord detection pitches');
+  const askedKind = assertOneOf(asked.input ?? 'auto', CHORD_INPUT_KINDS, 'input');
   if (asked.bassPc !== undefined) assertFiniteNumber(asked.bassPc, 'bassPc');
   const input = uniquePitchClasses(pitches);
   if (input.length === 0) {
     return [];
   }
   const inputKind =
-    asked.input === undefined || asked.input === 'auto'
+    askedKind === 'auto'
       ? pitches.every((pitch) => Number.isInteger(pitch) && pitch >= 0 && pitch <= 11)
         ? 'pitchClass'
         : 'midi'
-      : asked.input;
+      : askedKind;
   const bassPc =
     asked.bassPc !== undefined
       ? pitchClass(asked.bassPc)
@@ -314,6 +324,11 @@ export function detectChord(
       // fifth; any other missing tone (third, sus tone, seventh, ...) rejects.
       const fifthPc = pitchClass(rootPc + 7);
       if (missingPcs.length > 1 || (missingPcs.length === 1 && missingPcs[0] !== fifthPc)) {
+        continue;
+      }
+      // A chord needs two of its own tones sounding: a lone root is not a power
+      // chord, and reading it as one asserts a fifth nobody played.
+      if (tones.length - missingPcs.length < 2) {
         continue;
       }
       const extraPcs = input.filter((pc) => !toneSet.has(pc));

@@ -23,6 +23,7 @@ import {
   resolveKey,
 } from '@libraz/libcantus/theory';
 import { describe, expect, it } from 'vitest';
+import { growthFactor } from './support/growth.js';
 
 /** Build a block chord: every pitch sounding for the same span. */
 function blockChord(pitches: number[], startBeat: number, durationBeat = 4): NoteEvent[] {
@@ -401,18 +402,27 @@ describe('tensionCurve', () => {
   });
 
   it('handles 2,000 simultaneous notes without quadratic per-voice safety work', () => {
-    const notes: NoteEvent[] = Array.from({ length: 2000 }, (_, index) => ({
-      pitch: 48 + (index % 80),
-      startBeat: 0,
-      durationBeat: 1,
-    }));
-    const points = tensionCurve([{ role: 'harmony', notes }], {
-      key: majorKey(0),
-      step: 1,
-    });
+    const curve = (count: number) =>
+      tensionCurve(
+        [
+          {
+            role: 'harmony',
+            notes: Array.from({ length: count }, (_, index) => ({
+              pitch: 48 + (index % 80),
+              startBeat: 0,
+              durationBeat: 1,
+            })),
+          },
+        ],
+        { key: majorKey(0), step: 1 },
+      );
+    const points = curve(2000);
     expect(points).toHaveLength(1);
     expect(points[0]?.tension).toBeGreaterThanOrEqual(0);
-  });
+    // 250 notes to 2,000: linear work grows about 8 times, quadratic 64; the
+    // bound sits between them with room for a loaded machine.
+    expect(growthFactor(8, (scale) => curve(250 * scale))).toBeLessThan(32);
+  }, 30_000);
 });
 
 describe('percussion tracks', () => {
@@ -524,7 +534,7 @@ describe('track roles', () => {
     for (const [name, run] of entries) {
       expect(() => run(missing), name).toThrow(InvalidInputError);
       expect(() => run(missing), name).toThrow(/tracks\[0\]\.notes must be an array/);
-      expect(() => run(notAnArray), name).toThrow(/received string/);
+      expect(() => run(notAnArray), name).toThrow('received "nope"');
     }
   });
 });

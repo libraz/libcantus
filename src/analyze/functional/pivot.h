@@ -14,9 +14,8 @@
 
 namespace cantus {
 
-/** `pivotChords` on keys already read: the key being left whole, the other as its scale
- * (`pivotsBetween`). */
-std::vector<PivotChord> pivots_between(const ResolvedKey& from, const KeyScale& to);
+/** `pivotChords` on keys already read, both whole (`pivotsBetween`). */
+std::vector<PivotChord> pivots_between(const ResolvedKey& from, const ResolvedKey& to);
 
 }  // namespace cantus
 

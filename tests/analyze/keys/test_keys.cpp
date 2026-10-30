@@ -97,3 +97,9 @@ TEST_CASE("the key at a beat is the covering region's, else the fallback", "[key
   CHECK(at(0).scale.rootPc == 5);
   CHECK(at(regions.back().endBeat).scale.rootPc == 5);
 }
+
+TEST_CASE("chords wholly before beat 0 end their region at the last chord", "[keys]") {
+  std::vector<KeyRegion> regions = detect_modulations({ChordSegment{-2, -1, to_chord_data("C")}});
+  REQUIRE(!regions.empty());
+  CHECK(regions.back().endBeat == -1);
+}

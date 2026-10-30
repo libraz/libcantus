@@ -23,6 +23,7 @@ import {
   assertFiniteNumber,
   assertFiniteSemitones,
   assertGenerationBudget,
+  assertMeterMap,
   assertMidiPitch,
   assertNoteEvent,
   assertNoteEvents,
@@ -170,6 +171,31 @@ describe('shared numeric input contracts', () => {
 describe('core guards reject what would otherwise flow on as garbage', () => {
   it('reports a non-array event collection as invalid input', () => {
     expect(() => assertNoteEvents(null as unknown as NoteEvent[])).toThrow(InvalidInputError);
+  });
+
+  it('names a null note list or meter map as null', () => {
+    expect(() => assertNoteEvents(null as unknown as NoteEvent[])).toThrow(
+      'note events must be an array; received null',
+    );
+    expect(() => assertMeterMap(null as unknown as never)).toThrow(
+      'meters must be an array; received null',
+    );
+    expect(() => assertMeterMap(undefined as unknown as never)).toThrow(
+      'meters must be an array; received undefined',
+    );
+  });
+
+  it('names a null list as null wherever a list is required', () => {
+    expect(() =>
+      api.analyzeArrangement([{ name: 'lead', role: 'melody', notes: null as unknown as [] }]),
+    ).toThrow('tracks[0].notes must be an array; received null');
+    expect(() =>
+      api.evaluateSafety({
+        profile: 'strict',
+        candidatePitch: 60,
+        otherVoices: null as unknown as [],
+      } as never),
+    ).toThrow('otherVoices must be an array; received null');
   });
 
   it('rejects a non-finite MIDI number instead of naming it CNaN', () => {

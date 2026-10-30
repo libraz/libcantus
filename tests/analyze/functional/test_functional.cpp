@@ -159,3 +159,17 @@ TEST_CASE("a diminished seventh is numbered by the letter it is written on", "[f
     CHECK(chord_to_roman(chord, "C major", applied) == row.with_applied);
   }
 }
+
+TEST_CASE("function, numbering and pivots read a respelled key as written", "[functional]") {
+  Chord german = roman_to_chord("Ger6", "Ab minor");
+  CHECK(function_of(german, "Ab minor") == HarmonicFunction::kSubdominant);
+  ChordAnalysis analysis = analyze_chord(german, "Ab minor");
+  CHECK(analysis.roman == "Ger6");
+  CHECK(analysis.roman == chord_to_roman(german, "Ab minor"));
+  bool found = false;
+  for (const PivotChord& pivot : pivot_chords("Cb major", "Ab minor")) {
+    CHECK(pivot.romanTo == chord_to_roman(pivot.chord, "Ab minor"));
+    found = found || (pivot.romanFrom == "viio" && pivot.romanTo == "iio");
+  }
+  CHECK(found);
+}

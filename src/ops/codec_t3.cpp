@@ -6,8 +6,11 @@
 #include <string>
 
 #include "cantus/core/errors.h"
+#include "cantus/core/pitch.h"
+#include "cantus/theory/scale.h"
 #include "core/validation/validation.h"
 #include "js/format.h"
+#include "js/math.h"
 #include "js/value.h"
 #include "ops/accessors.h"
 #include "ops/validate.h"
@@ -69,26 +72,83 @@ void read_key_option(const json::Value& asked, VoicingOptions& out) {
   }
 }
 
+std::optional<ResolvedKey> resolve_key_option(const VoicingOptions& opts) {
+  return opts.key ? std::optional<ResolvedKey>(resolve_key(*opts.key)) : std::nullopt;
+}
+
+bool spelled_by_chord(double pitch, const ResolvedKey& key) {
+  int pc = pitch_class_of(js::round(pitch));
+  return pc != note_to_pitch_class(key.tonic) && !is_scale_tone(pc, KeyArg(key.scale));
+}
+
+void read_spelling_table_hints(const json::Value& chord, const std::optional<ResolvedKey>& key) {
+  if (!key) {
+    return;
+  }
+  for (int pc = 0; pc < 12; ++pc) {
+    if (spelled_by_chord(pc, *key)) {
+      read_spelled_hints(chord);
+      return;
+    }
+  }
+}
+
+void read_voicing_hints(const std::vector<double>& pitches, const json::Value& chord,
+                        const ResolvedKey& key) {
+  for (double pitch : pitches) {
+    if (spelled_by_chord(pitch, key)) {
+      read_spelled_hints(chord);
+      return;
+    }
+  }
+}
+
+SpelledVoicing spell_wire_voicing(const json::Array& pitches, const Chord& chord,
+                                  const json::Value& wire, const KeyArg& key) {
+  ResolvedKey resolved = resolve_key(key);
+  std::vector<double> numbers;
+  // The hints are read at the first pitch spelled by the chord, unless a pitch before it is
+  // refused.
+  bool unread = true;
+  for (const json::Value& pitch : pitches) {
+    if (is_wire_number(pitch)) {
+      double number = *number_of(pitch);
+      if (unread && (!std::isfinite(number) || spelled_by_chord(number, resolved))) {
+        unread = false;
+        if (std::isfinite(number)) {
+          read_spelled_hints(wire);
+        }
+      }
+      numbers.push_back(number);
+      continue;
+    }
+    // The pitches before it are spelled first, and so is a probe pitch when it is the first.
+    spell_voicing(numbers.empty() ? std::vector<double>{60} : numbers, chord, key);
+    numbers.push_back(assert_finite_number(pitch, "pitch"));
+  }
+  return spell_voicing(numbers, chord, key);
+}
+
 namespace {
 
 /** The chord's tones, then `resolvedKeyOf`. */
-void read_voiced_tones_and_key(ChordData& data, const json::Value& asked, VoicingOptions& out) {
+std::optional<ResolvedKey> read_voiced_tones_and_key(ChordData& data, const json::Value& asked,
+                                                     VoicingOptions& out) {
   settle_chord_quality(data);
   read_key_option(asked, out);
-  if (out.key) {
-    resolve_key(*out.key);
-  }
+  return resolve_key_option(out);
 }
 
 }  // namespace
 
 void read_voiced_chord(ChordData& data, const json::Value& asked, VoicingOptions& out) {
-  read_voiced_tones_and_key(data, asked, out);
+  std::optional<ResolvedKey> key = read_voiced_tones_and_key(data, asked, out);
   reads_tone_letter_offsets(data.wire);
+  read_spelling_table_hints(data.wire, key);
 }
 
 void read_next_voiced_chord(ChordData& data, const json::Value& asked, VoicingOptions& out) {
-  read_voiced_tones_and_key(data, asked, out);
+  std::optional<ResolvedKey> key = read_voiced_tones_and_key(data, asked, out);
   std::optional<ChordData> previous;
   if (const json::Value* given = opt_strict(asked, "previousChord")) {
     previous = read_chord_like(*given);
@@ -98,6 +158,11 @@ void read_next_voiced_chord(ChordData& data, const json::Value& asked, VoicingOp
   if (previous && !previous->chord.intervals.empty()) {
     reads_tone_letter_offsets(previous->wire);
   }
+  // The key spells the chord being left, then the chord being voiced.
+  if (previous) {
+    read_spelling_table_hints(previous->wire, key);
+  }
+  read_spelling_table_hints(data.wire, key);
 }
 
 std::vector<double> read_voicing(const json::Value& value, std::string_view name) {

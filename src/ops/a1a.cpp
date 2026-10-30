@@ -117,14 +117,14 @@ void register_functional() {
       [](Args& a) -> json::Value { return to_json(is_minor_key(read_key_like(a[0]))); });
   def("functionOf", [](Args& a) -> json::Value {
     ChordData data = read_chord_like(a[0]);
-    KeyScale key = read_key_like(a[1]);
+    ResolvedKey key = resolve_key(read_key_arg(a[1]));
     // Every reading of the chord goes through a guard that refuses a quality no table has.
     settle_chord_quality(data);
     // A Neapolitan is answered before the chord is read as an augmented sixth.
-    if (!is_neapolitan_chord_of(data.chord, key)) {
+    if (!is_neapolitan_chord_of(data.chord, key.scale)) {
       read_augmented_sixth_hints(data, KeyArg(key));
     }
-    return to_json(function_of(data.chord, key));
+    return to_json(function_of(data.chord, KeyArg(key)));
   });
   def("isDiatonic", [](Args& a) -> json::Value {
     ChordData data = read_chord_like(a[0]);
@@ -135,9 +135,9 @@ void register_functional() {
   def("analyzeChord", [](Args& a) -> json::Value {
     const json::Value& asked = assert_options(a[2], "opts");
     ChordData data = read_chord_like(a[0]);
-    KeyScale key = read_key_like(a[1]);
+    ResolvedKey key = resolve_key(read_key_arg(a[1]));
     settle_chord_quality(data);
-    if (!is_neapolitan_chord_of(data.chord, key)) {
+    if (!is_neapolitan_chord_of(data.chord, key.scale)) {
       read_augmented_sixth_hints(data, KeyArg(key));
     }
     AnalyzeChordOptions options = read_numeral_options<AnalyzeChordOptions>(asked);
@@ -145,7 +145,7 @@ void register_functional() {
     if (options.applied == true) {
       read_tone_spellings(data.wire);
     }
-    return to_json(analyze_chord(data.chord, key, options));
+    return to_json(analyze_chord(data.chord, KeyArg(key), options));
   });
   def("secondaryDominant", [](Args& a) -> json::Value {
     ResolvedKey key = resolve_key(read_key_arg(a[1]));

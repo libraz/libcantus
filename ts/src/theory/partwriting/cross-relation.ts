@@ -16,11 +16,7 @@ import {
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { Chord } from '../chord/index.js';
-import {
-  appliedDominantTarget,
-  hasDominantSonority,
-  isNeapolitanChordOf,
-} from '../tendency/index.js';
+import { appliedChordTarget, isNeapolitanChordOf } from '../tendency/index.js';
 
 /** One chord of an exercise as this rule reads it: what sounds, and what it is. */
 export type ChromaticMoment = {
@@ -56,24 +52,23 @@ export type CrossRelation = {
 };
 
 /**
- * Whether a chord resolves as an applied dominant: the dominant's sonority,
- * taken down a fifth onto a degree the key can make a local tonic, with the
- * chord it names actually following.
+ * Whether a chord resolves as an applied chord: a dominant sonority taken down a
+ * fifth, or a leading-tone chord taken up a semitone, onto a degree the key can
+ * make a local tonic, with the chord it names actually following.
  *
  * Named for the resolution because the resolution is the only thing this adds:
- * which degrees may be tonicized is asked of the theory layer, so a chord
+ * which chords point at which degrees is asked of the theory layer, so a chord
  * exempted here is one the analysis layer can write an applied numeral for.
- * What the two do differ in is what they are for — there a chord is an applied
- * dominant by what it is, here only by what comes next. The same major triad on
- * the third degree of a major key is V/vi where vi follows and a plain III
- * where nothing does, and only the first of the two licenses the chromatic tone
- * it introduces.
+ * What the two do differ in is what they are for — there a chord is applied by
+ * what it is, here only by what comes next. The same major triad on the third
+ * degree of a major key is V/vi where vi follows and a plain III where nothing
+ * does, and only the first of the two licenses the chromatic tone it introduces.
  */
-function resolvesAsAppliedDominant(chord: Chord, next: Chord | undefined, key: KeyScale): boolean {
-  if (next === undefined || !hasDominantSonority(chord)) {
+function resolvesAsAppliedChord(chord: Chord, next: Chord | undefined, key: KeyScale): boolean {
+  if (next === undefined) {
     return false;
   }
-  const target = appliedDominantTarget(chord.rootPc + 5, key);
+  const target = appliedChordTarget(chord, key);
   return target !== null && pitchClassOf(next.rootPc) === target.rootPc;
 }
 
@@ -100,8 +95,8 @@ function soundsAugmentedSixth(moment: ChromaticMoment, key: KeyScale): boolean {
 
 /**
  * Whether a chord is one of the chromatic harmonies whose own definition
- * contains the contradiction: an applied dominant, the Neapolitan, or an
- * augmented sixth. Approaching or leaving one of these is where the textbooks
+ * contains the contradiction: an applied dominant or leading-tone chord, the
+ * Neapolitan, or an augmented sixth. Approaching or leaving one of these is where the textbooks
  * license the cross relation, since the chord cannot be written without it.
  *
  * The exemption is for chromatic harmony, so a chord the key already contains
@@ -116,7 +111,7 @@ function isChromaticHarmony(
   key: KeyScale,
 ): boolean {
   return (
-    resolvesAsAppliedDominant(moment.chord, next, key) ||
+    resolvesAsAppliedChord(moment.chord, next, key) ||
     isNeapolitanChordOf(moment.chord, key) ||
     soundsAugmentedSixth(moment, key)
   );

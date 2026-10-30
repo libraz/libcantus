@@ -145,6 +145,30 @@ describe('generateProgression', () => {
     );
   });
 
+  it('rejects a malformed custom preset by name rather than failing inside the read', () => {
+    const base = { key: 'C major', style: 'rock' as const, bars: 4 };
+    for (const preset of [{}, null, 5, { degrees: '1451' }]) {
+      expect(
+        () => generateProgression({ ...base, preset: preset as never }),
+        String(preset),
+      ).toThrow(InvalidInputError);
+    }
+    expect(() => generateProgression({ ...base, preset: null as never })).toThrow(
+      'progression preset must be an object; received null',
+    );
+    expect(() => generateProgression({ ...base, preset: {} as never })).toThrow(
+      'progression preset degrees must be an array; received undefined',
+    );
+    expect(() =>
+      generateProgression({
+        ...base,
+        preset: { degrees: [1, 5], functional: 'cadence' as 'loop' },
+      }),
+    ).toThrow(
+      'progression preset functional must be one of loop, tensionBuild, cadenceStrong, stable; received "cadence"',
+    );
+  });
+
   it('derives diatonic qualities from a minor key', () => {
     // A natural minor: i=Am, v=Em, VI=Fmaj, iv=Dm. The VI degree must be major,
     // not minor as a hardcoded major-key table would produce.

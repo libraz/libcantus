@@ -189,6 +189,8 @@ const NOT_PUBLISHED: Readonly<Record<string, string>> = {
   // throws what its own `tryParse` reported, and that reading — the `tryParse`
   // function beside it — is published.
   unwrapParse: 'turns a parse result into a throw; the reading itself is published',
+  statedKeyRegions:
+    'builds the region a stated key holds; the readings that take a key are published',
 
   // A reading the published value already carries: this is the search a
   // `ChordTimeline` answers `at(beat)` through, so a caller holding the plain

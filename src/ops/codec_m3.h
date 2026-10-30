@@ -71,7 +71,10 @@ class SessionHandle;
 /** A decoded Arrangement: its data, and the session its analysis getters read. */
 class DecodedArrangement final : public Decoded {
  public:
-  /** `data` as arrangement_data() wrote it; `session`, when given, is adopted (TS `#adopt`). */
+  /**
+   * `data` as arrangement_data() wrote it; `session`, when given, is adopted (TS `#adopt`). The key
+   * indices of both are built here, before the decode can be shared.
+   */
   explicit DecodedArrangement(json::Value data,
                               std::shared_ptr<const SessionHandle> session = nullptr);
 

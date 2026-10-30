@@ -148,7 +148,7 @@ import { Chord, detectChordBest } from '@libraz/libcantus';
 detectChordBest([60, 64, 67]); // { rootPc: 0, quality: 'maj', intervals: [0, 4, 7] }
 Chord.detectBest([60, 64, 67, 71])?.symbol(); // 'Cmaj7'
 Chord.detectBest([64, 67, 72])?.symbol(); // 'C/E'
-Chord.detect([60, 64, 67]).length; // 6
+Chord.detect([60, 64, 67]).length; // 4
 ```
 
 Every candidate carries what it had to add (`extraPcs`) and what it had to assume was missing (`missingPcs`), so a caller can set its own threshold instead of trusting the top match. An input whose values all fall in 0..11 is read as unordered pitch classes and has no bass to report; MIDI numbers, as above, give the inversion too.

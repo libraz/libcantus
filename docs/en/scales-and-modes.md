@@ -213,17 +213,17 @@ entry?.tensions; // [2, 9]
 
 `chordScaleReport` is the three calls combined, ordered best fit first, with an optional limit. Each entry splits the scale tones the chord does not state three ways: `avoid` may not be played at all, `passing` may be passed through melodically but not sounded against the chord, and `tensions` may be added freely as colour. It is the shape a UI panel usually wants.
 
-Availability also depends on what the chord is doing. Read on its own, a dominant seventh over the scale of its minor key offers nothing: its ♭9, 11 and ♭13 each sit a semitone above a chord tone. Heard as the dominant of that key, the ♭9 and ♭13 are the key's own tones and standard practice, so name the chord it resolves to:
+Availability also depends on what the chord is doing. Read on its own, a dominant seventh over the scale of its minor key offers only the ♭9, which is always an available tension on a dominant seventh; the 11 and ♭13 each sit a semitone above a chord tone. Heard as the dominant of that key, the ♭13 is the key's own tone and standard practice too, so name the chord it resolves to:
 
 ```ts
 import { availableTensions, makeChord } from '@libraz/libcantus';
 
-availableTensions(makeChord(7, 'dom7'), 'phrygianDominant'); // []
+availableTensions(makeChord(7, 'dom7'), 'phrygianDominant'); // [8]
 availableTensions(makeChord(7, 'dom7'), 'phrygianDominant', { resolvesTo: makeChord(0, 'min') });
 // [3, 8]
 ```
 
-The natural eleventh stays an avoid note: the resolution makes the altered ninths and the flat thirteenth available, not every clash.
+The natural eleventh stays an avoid note: the resolution to a minor chord adds the flat thirteenth, not every clash.
 
 ## Choosing scales across a progression
 

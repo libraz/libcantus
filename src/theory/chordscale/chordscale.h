@@ -6,6 +6,7 @@
 #define CANTUS_SRC_THEORY_CHORDSCALE_CHORDSCALE_H_
 
 #include <string_view>
+#include <vector>
 
 #include "cantus/theory/chord.h"
 
@@ -16,6 +17,9 @@ namespace cantus {
  * @throws InvalidInputError if the name is not a built-in scale, or names a world scale.
  */
 int require_chord_scale_mask(std::string_view name);
+
+/** The names of the avoid-note uses, for assert_one_of(). */
+std::vector<std::string_view> avoid_note_use_names();
 
 /**
  * Whether available_tensions() weighs a scale's tones over a chord at all: the scale fits the

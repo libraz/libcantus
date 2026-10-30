@@ -192,7 +192,7 @@ Value::Value(std::string_view s) : data_(std::string(s)) {}
 Value::Value(Array a) : data_(std::move(a)) {}
 Value::Value(Object o) : data_(std::move(o)) {}
 Value::Value(const Value& other) : data_(nullptr) {
-  if (!other.is_array() && !other.is_object()) {
+  if (!other.owns_container()) {
     data_ = other.data_;
     return;
   }
@@ -208,7 +208,7 @@ Value::Value(const Value& other) : data_(nullptr) {
       dst->data_ = Array(from.size());
       Array& to = dst->as_array();
       for (std::size_t i = 0; i < from.size(); ++i) {
-        if (from[i].is_array() || from[i].is_object()) {
+        if (from[i].owns_container()) {
           work.emplace_back(&from[i], &to[i]);
         } else {
           to[i].data_ = from[i].data_;
@@ -226,7 +226,7 @@ Value::Value(const Value& other) : data_(nullptr) {
       std::size_t i = 0;
       for (const Member& m : from) {
         Value& slot = to.members_[i++].value;
-        if (m.value.is_array() || m.value.is_object()) {
+        if (m.value.owns_container()) {
           work.emplace_back(&m.value, &slot);
         } else {
           slot.data_ = m.value.data_;
@@ -244,29 +244,46 @@ Value& Value::operator=(const Value& other) {
 }
 Value& Value::operator=(Value&& other) noexcept = default;
 
+Value Value::share(std::shared_ptr<const Value> target) {
+  Value out;
+  if (target->owns_container()) {
+    out.data_ = Shared(std::move(target));
+  } else {
+    // A scalar is cheap to copy, and a shared target is shared directly rather than through it.
+    out.data_ = target->data_;
+  }
+  return out;
+}
+
+void Value::unshare() {
+  if (Shared* shared = std::get_if<Shared>(&data_)) {
+    Shared held = std::move(*shared);
+    Value copy(*held);
+    data_ = std::move(copy.data_);
+  }
+}
+
 void Value::detach_children(std::vector<Value>& out) {
-  if (is_array()) {
-    Array& items = as_array();
-    for (Value& item : items) {
-      if (item.is_array() || item.is_object()) {
+  if (Array* items = std::get_if<Array>(&data_)) {
+    for (Value& item : *items) {
+      if (item.owns_container()) {
         out.push_back(std::move(item));
       }
     }
-    items.clear();
-  } else if (is_object()) {
-    Object& obj = as_object();
-    for (Member& m : obj.members_) {
-      if (m.value.is_array() || m.value.is_object()) {
+    items->clear();
+  } else if (Object* obj = std::get_if<Object>(&data_)) {
+    for (Member& m : obj->members_) {
+      if (m.value.owns_container()) {
         out.push_back(std::move(m.value));
       }
     }
-    obj.members_.clear();
-    obj.index_.reset();
+    obj->members_.clear();
+    obj->index_.reset();
   }
 }
 
 Value::~Value() {
-  if (!is_array() && !is_object()) {
+  if (!owns_container()) {
     return;
   }
   // Tear nested containers down from an explicit list so depth never reaches the native stack.
@@ -341,6 +358,9 @@ void build_indices(const Value& value) {
   while (!pending.empty()) {
     const Value* next = pending.back();
     pending.pop_back();
+    if (next->is_shared()) {
+      continue;
+    }
     if (next->is_array()) {
       for (const Value& item : next->as_array()) {
         pending.push_back(&item);

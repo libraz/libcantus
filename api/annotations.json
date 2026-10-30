@@ -154,10 +154,6 @@
     {
       "op": "Voicing.constructor",
       "reason": "The shared suite builds this class through its static factories only; `new` is not called."
-    },
-    {
-      "op": "ResolvedContext#instrument",
-      "reason": "The shared suite reads instrument profiles through the generators, never through a resolved context."
     }
   ],
   "surface_differences": [

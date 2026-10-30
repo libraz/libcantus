@@ -6,6 +6,7 @@
 
 #include "analyze/keys/keys.h"
 #include "analyze/reference/profile.h"
+#include "analyze/timeline/timeline.h"
 #include "cantus/analyze/arrange.h"
 #include "cantus/core/validation.h"
 #include "core/tempo/tempo.h"
@@ -103,18 +104,13 @@ TempoMap tempo_from(const std::optional<ScoreTempoArg>& tempo) {
   return std::get<TempoMap>(*tempo);
 }
 
-/** The one region a stated key describes, from where the music starts (`statedKeyRegions`). */
-std::vector<KeyRegion> stated_key_regions(const Key& key, const std::vector<NoteEvent>& notes,
-                                          double total_beats) {
-  if (notes.empty() || total_beats <= notes.front().startBeat) {
+/** The one region a stated key describes, from where the music starts (`scoreKeyRegions`). */
+std::vector<KeyRegion> score_key_regions(const Key& key, const std::vector<NoteEvent>& notes,
+                                         double total_beats) {
+  if (notes.empty()) {
     return {};
   }
-  KeyRegion region;
-  region.startBeat = notes.front().startBeat;
-  region.endBeat = total_beats;
-  region.key = key_identity(key);
-  region.confidence = STATED_KEY_CONFIDENCE;
-  return {region};
+  return stated_key_regions(key_identity(key), notes.front().startBeat, total_beats);
 }
 
 /** The plain data a set of notes and a context describe (`scoreData`). */
@@ -324,7 +320,7 @@ ChordTimelineResult Score::chord_analysis() const {
 
 std::vector<KeyRegion> Score::key_regions() const {
   if (key_) {
-    return stated_key_regions(*key_, data_.notes, total_beats());
+    return score_key_regions(*key_, data_.notes, total_beats());
   }
   KeyTimelineOptions opts;
   opts.meters = MeterArg(data_.meters);
@@ -358,7 +354,7 @@ std::vector<KeyRegion> Score::keys(const std::optional<KeyTimelineOptions>& opts
       double total = opts->totalBeats ? assert_range(*opts->totalBeats, 0, kMaxSafeInteger,
                                                      "key timeline totalBeats")
                                       : total_beats();
-      return stated_key_regions(*key_, data_.notes, total);
+      return score_key_regions(*key_, data_.notes, total);
     }
     KeyTimelineOptions asked = *opts;
     if (!asked.meters) {

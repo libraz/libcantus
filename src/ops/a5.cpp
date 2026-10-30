@@ -10,10 +10,15 @@
 #include <vector>
 
 #include "analyze/grid.h"
+#include "analyze/keys/keys.h"
+#include "analyze/reduction/reduction.h"
 #include "analyze/reference/profile.h"
+#include "analyze/timeline/timeline.h"
 #include "cantus/analyze/reference.h"
+#include "cantus/core/errors.h"
 #include "cantus/core/limits.h"
 #include "core/validation/validation.h"
+#include "js/format.h"
 #include "js/math.h"
 #include "ops/accessors.h"
 #include "ops/codec_a1c.h"
@@ -45,15 +50,50 @@ std::vector<NoteEvent> sounding_notes(const std::vector<NoteEvent>& notes) {
   return out;
 }
 
-/** The segments of a wire timeline with each chord read as `toChordData` reads it. */
-ChordTimeline read_timeline(const json::Array& segments) {
-  WireSegments wire(segments);
+/**
+ * The segments of a wire timeline for the typed profile. TS refuses a chord only once the profile
+ * reaches it (read_harmony(), read_numerals()), and every chord reaches `toChordData` there, so a
+ * chord it would refuse stands empty here and never reaches the result.
+ */
+ChordTimeline read_timeline(const WireSegments& wire) {
   std::vector<SegmentSpan> spans = wire.spans();
   ChordTimeline out;
   for (std::size_t i = 0; i < wire.size(); ++i) {
-    out.segments.push_back(ChordSegment{spans[i].startBeat, spans[i].endBeat, wire.checked(i)});
+    Chord chord;
+    try {
+      chord = read_chord_like(wire.chord_value(i)).chord;
+    } catch (const Error&) {
+    } catch (const js::TypeError&) {
+    }
+    out.segments.push_back(ChordSegment{spans[i].startBeat, spans[i].endBeat, std::move(chord)});
   }
   return out;
+}
+
+/** What `referenceFromReadings` reads of the timeline's chords for its cadences and reduction. */
+void read_harmony(WireSegments& wire, const ReferenceReadings& readings) {
+  KeyLookup key_at(readings.keys, readings.prevailingKey);
+  KeyAtBeat scale_at = [&key_at](double beat) { return scale_of(key_at(beat)); };
+  std::vector<SegmentSpan> spans = wire.spans();
+  ChordReads reads = wire.reads();
+  detect_cadences_over(spans, reads, scale_at);
+  reduce_progression_over(spans, reads, scale_at, ReductionBasis::kFunction);
+}
+
+/**
+ * `chordToRoman` then `functionOf` over each timeline chord as written, in the key region the
+ * profile names it in: the ops themselves, so each chord is refused as the public functions refuse
+ * it.
+ */
+void read_numerals(Args& a, const WireSegments& wire, const ReferenceHarmony& harmony) {
+  for (std::size_t i = 0; i < harmony.chords.size(); ++i) {
+    json::Value key = to_json(harmony.keys[harmony.chords[i].key].key);
+    for (const char* op : {"chordToRoman", "functionOf"}) {
+      json::Array arguments{wire.chord_value(i), key};
+      Args delegated(arguments, a.context());
+      find_op(op)->fn(delegated);
+    }
+  }
 }
 
 ReferenceProfile analyze_wire(Args& a) {
@@ -67,6 +107,7 @@ ReferenceProfile analyze_wire(Args& a) {
   const json::Value* key = field(asked, "key");
   const json::Value* total = opt_null_default(asked, "totalBeats");
   std::vector<NoteEvent> notes;
+  std::optional<WireSegments> wire;
   if (is_undefined(get(asked, "timeline"))) {
     // chordTimelineFromNotes reads the notes, then the span's end, then the key.
     notes = assert_note_events(a[0], "timeline notes", line_options(budget));
@@ -90,7 +131,8 @@ ReferenceProfile analyze_wire(Args& a) {
     } else {
       typed.key = read_key_arg(*key);
     }
-    typed.timeline = read_timeline(segments);
+    wire.emplace(segments);
+    typed.timeline = read_timeline(*wire);
   }
   if (total != nullptr) {
     typed.totalBeats = js::to_number(*total);
@@ -104,7 +146,14 @@ ReferenceProfile analyze_wire(Args& a) {
   if (const json::Value* melody = opt_null_default(asked, "melody")) {
     typed.melody = assert_note_events(*melody, "reference melody", line_options(budget));
   }
-  return reference_from_readings(notes, readings, typed);
+  if (wire) {
+    read_harmony(*wire, readings);
+  }
+  ReferenceProfile profile = reference_from_readings(notes, readings, typed);
+  if (wire) {
+    read_numerals(a, *wire, profile.harmony);
+  }
+  return profile;
 }
 
 }  // namespace

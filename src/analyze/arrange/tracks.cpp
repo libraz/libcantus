@@ -310,12 +310,7 @@ CallerKeys caller_keys(const TimelineHost& timeline, const std::optional<KeyArg>
     out.keys = *given;
   } else {
     if (key) {
-      KeyRegion region;
-      region.startBeat = music_start;
-      region.endBeat = total_beats;
-      region.key = resolve_key(*key);
-      region.confidence = 1;
-      out.keys.push_back(std::move(region));
+      out.keys = stated_key_regions(resolve_key(*key), music_start, total_beats);
     } else {
       KeyTimelineOptions key_options;
       key_options.meters = meters;

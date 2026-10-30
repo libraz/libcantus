@@ -123,6 +123,17 @@ describe('spelledKeyOf', () => {
     expect(spelledKeyOf({ rootPc: -1, modeMask12: MAJOR_MASK }).scale.rootPc).toBe(-1);
   });
 
+  it('reads the root before the mask, and a Key through its getters', () => {
+    expect(() => spelledKeyOf({} as never)).toThrow('pitch must be finite; received undefined');
+    expect(() => spelledKeyOf({ rootPc: 0 } as never)).toThrow(
+      'key.modeMask12 must be finite; received undefined',
+    );
+    // A Key names its root but carries its mask inside its scale.
+    expect(() => spelledKeyOf(Key.major('C') as never)).toThrow(
+      'key.modeMask12 must be finite; received undefined',
+    );
+  });
+
   it('feeds the key relations', () => {
     for (let pc = 0; pc < 12; pc += 1) {
       for (const key of [majorKey(pc), minorKey(pc)]) {
