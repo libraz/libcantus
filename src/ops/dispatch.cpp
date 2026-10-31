@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "js/format.h"
+#include "js/utf16.h"
 #include "json/json.h"
 #include "ops/args.h"
 #include "ops/codec.h"
@@ -49,6 +50,9 @@ void hold_refs(Args& a, const json::Array& values) {
 Result dispatch(std::string_view op, std::string_view args_json,
                 const CallContext& context) noexcept {
   try {
+    if (!js::is_valid_wtf8(op)) {
+      throw RequestError("op name is not valid UTF-8");
+    }
     const OpEntry* entry = find_op(op);
     if (entry == nullptr) {
       throw RequestError(ErrorCode::kUnknownOp, "unknown op " + js::quote(op));

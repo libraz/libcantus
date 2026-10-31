@@ -8,6 +8,7 @@ JSON to stderr; the exit code is the C ABI status (12 and 13 report as 99). ``li
 from __future__ import annotations
 
 import json
+import os
 import sys
 
 from . import _ffi
@@ -51,16 +52,38 @@ def _quote(text: str) -> str:
     return "".join(out)
 
 
+def _shown(text: str) -> str:
+    """Argument text as an error message may quote it: ill-formed UTF-8 shown as U+FFFD."""
+    return os.fsencode(text).decode("utf-8", "replace")
+
+
 def _fail(code: ErrorCode, message: str) -> int:
     reply = f'{{"code":{_quote(code.name)},"name":"Error","message":{_quote(message)}}}'
-    _write(sys.stderr, reply.encode("utf-8", "surrogateescape"))
+    _write(sys.stderr, reply.encode("utf-8"))
     return _exit_code(code)
 
 
+class _Unwritable(Exception):
+    """An output stream that is closed, missing or rejected the bytes."""
+
+
 def _write(stream: object, body: bytes) -> None:
-    buffer = getattr(stream, "buffer")  # noqa: B009 - the binary layer of a text stream
-    buffer.write(body + b"\n")
-    buffer.flush()
+    try:
+        buffer = getattr(stream, "buffer")  # noqa: B009 - the binary layer of a text stream
+        buffer.write(body + b"\n")
+        buffer.flush()
+    except (AttributeError, OSError, ValueError) as error:
+        raise _Unwritable from error
+
+
+def _silence_output() -> None:
+    """Send both output descriptors to the null device so shutdown cannot fail on them again."""
+    try:
+        null = os.open(os.devnull, os.O_WRONLY)
+        for fd in (1, 2):
+            os.dup2(null, fd)
+    except OSError:
+        pass
 
 
 def _entry(name: str) -> dict[str, object] | None:
@@ -80,15 +103,15 @@ def _payload(arg: str | None) -> bytes:
     if arg == "-":
         try:
             return sys.stdin.buffer.read()
-        except OSError as error:
+        except (AttributeError, OSError, ValueError) as error:
             raise _Unreadable("standard input") from error
     if arg.startswith("@"):
         try:
             with open(arg[1:], "rb") as file:
                 return file.read()
         except OSError as error:
-            raise _Unreadable(arg[1:]) from error
-    return arg.encode("utf-8", "surrogatepass")
+            raise _Unreadable(_shown(arg[1:])) from error
+    return os.fsencode(arg)
 
 
 def _run_op(op: str, arg: str | None) -> int:
@@ -99,7 +122,7 @@ def _run_op(op: str, arg: str | None) -> int:
         args = _payload(arg)
     except _Unreadable as error:
         return _fail(ErrorCode.BAD_REQUEST, f"cannot read {error}")
-    status, body = _ffi.call(op.encode("utf-8", "surrogatepass"), args)
+    status, body = _ffi.call(os.fsencode(op), args)
     _write(sys.stdout if status == 0 else sys.stderr, body)
     return _exit_code(status)
 
@@ -112,7 +135,7 @@ def main(argv: list[str]) -> int:
     command = argv[0]
     try:
         if command == "version":
-            print(json.dumps(_ffi.version()))
+            _write(sys.stdout, json.dumps(_ffi.version()).encode("ascii"))
             return 0
         if command == "list":
             _write(sys.stdout, _ffi.list_ops())
@@ -122,15 +145,22 @@ def main(argv: list[str]) -> int:
                 return _fail(ErrorCode.BAD_REQUEST, "describe takes one op name")
             entry = _entry(argv[1])
             if entry is None:
-                message = f"unknown op {_quote(argv[1])}"
+                message = f"unknown op {_quote(_shown(argv[1]))}"
                 return _fail(ErrorCode.UNKNOWN_OP, message)
-            print(json.dumps(entry, ensure_ascii=True, separators=(",", ":")))
+            _write(sys.stdout, json.dumps(entry, separators=(",", ":")).encode("ascii"))
             return 0
         if len(argv) > 2:
             return _fail(ErrorCode.BAD_REQUEST, "too many arguments")
         return _run_op(command, argv[1] if len(argv) == 2 else None)
     except CantusError as error:
         return _fail(error.code, str(error))
+    except _Unwritable:
+        try:
+            code = _fail(ErrorCode.INTERNAL, "cannot write output")
+        except _Unwritable:
+            code = _exit_code(ErrorCode.INTERNAL)
+        _silence_output()
+        return code
 
 
 if __name__ == "__main__":

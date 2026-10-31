@@ -37,6 +37,33 @@ def run(*argv: str, stdin: str | None = None) -> subprocess.CompletedProcess[str
     )
 
 
+def run_bytes(*argv: bytes) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(
+        [os.fsencode(sys.executable), b"-m", b"libcantus", *argv], capture_output=True, check=False
+    )
+
+
+def test_ill_formed_utf8_argv_is_refused_and_never_echoed() -> None:
+    for op in (b"\xff", b"\xe2\x82"):
+        refused = run_bytes(op, b"[]")
+        assert refused.returncode == 11
+        assert json.loads(refused.stderr.decode("utf-8")) == {
+            "code": "BAD_REQUEST",
+            "name": "Error",
+            "message": "op name is not valid UTF-8",
+        }
+    described = run_bytes(b"describe", b"\xff")
+    assert described.returncode == 10
+    assert json.loads(described.stderr.decode("utf-8"))["message"] == 'unknown op "\ufffd"'
+    unreadable = run_bytes(b"$echo", b"@/nonexistent/\xff")
+    assert unreadable.returncode == 11
+    message = json.loads(unreadable.stderr.decode("utf-8"))["message"]
+    assert message == "cannot read /nonexistent/\ufffd"
+    payload = run_bytes(b"$echo", b'["\xff"]')
+    assert payload.returncode == 11
+    assert json.loads(payload.stderr.decode("utf-8"))["code"] == "BAD_REQUEST"
+
+
 @pytest.mark.parametrize(("name", "code"), THROW_EXIT.items())
 def test_throw_exit_codes(name: str, code: int) -> None:
     result = run("$throw", json.dumps([{"code": name, "message": "m"}]))
@@ -106,6 +133,30 @@ def test_directory_argument_is_unreadable(tmp_path: Path) -> None:
     assert result.returncode == 11
     assert result.stdout == ""
     assert json.loads(result.stderr)["message"] == f"cannot read {tmp_path}"
+
+
+def test_closed_standard_streams_are_reported() -> None:
+    cmd = [sys.executable, "-m", "libcantus"]
+    closed_in = subprocess.run(
+        ["sh", "-c", 'exec "$@" <&-', "sh", *cmd, "$echo", "-"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    assert closed_in.returncode == 11
+    assert closed_in.stdout == ""
+    assert json.loads(closed_in.stderr)["message"] == "cannot read standard input"
+    for argv in (["detectChordBest", "[[0,4,7]]"], ["version"], ["list"], ["describe", "$echo"]):
+        closed_out = subprocess.run(
+            ["sh", "-c", 'exec "$@" >&-', "sh", *cmd, *argv],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+        assert closed_out.returncode == 99, argv
+        assert json.loads(closed_out.stderr)["code"] == "INTERNAL", argv
 
 
 def test_error_messages_match_the_cantus_tool() -> None:

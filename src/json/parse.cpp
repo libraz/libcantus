@@ -224,35 +224,10 @@ class Parser {
     return unit;
   }
 
-  std::uint8_t byte_at(std::size_t k) const { return static_cast<std::uint8_t>(text_[k]); }
-
-  bool continuation(std::size_t k) const { return k < text_.size() && (byte_at(k) & 0xC0) == 0x80; }
-
   /** Validate one non-ASCII UTF-8 (or WTF-8 surrogate) sequence and return its code point. */
   std::uint32_t parse_multibyte() {
-    std::uint8_t b0 = byte_at(pos_);
-    std::size_t len = 0;
-    std::uint8_t lo = 0x80;
-    std::uint8_t hi = 0xBF;
-    if (b0 >= 0xC2 && b0 <= 0xDF) {
-      len = 2;
-    } else if (b0 >= 0xE0 && b0 <= 0xEF) {
-      len = 3;
-      if (b0 == 0xE0) lo = 0xA0;
-    } else if (b0 >= 0xF0 && b0 <= 0xF4) {
-      len = 4;
-      if (b0 == 0xF0) lo = 0x90;
-      if (b0 == 0xF4) hi = 0x8F;
-    } else {
+    if (js::utf8_sequence_length(text_, pos_, true) == 0) {
       fail("invalid UTF-8");
-    }
-    if (!continuation(pos_ + 1) || byte_at(pos_ + 1) < lo || byte_at(pos_ + 1) > hi) {
-      fail("invalid UTF-8");
-    }
-    for (std::size_t k = 2; k < len; ++k) {
-      if (!continuation(pos_ + k)) {
-        fail("invalid UTF-8");
-      }
     }
     std::size_t i = pos_;
     std::uint32_t cp = js::detail::decode_wtf8(text_, i);

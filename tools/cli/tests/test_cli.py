@@ -31,6 +31,10 @@ def run(*argv: str, stdin: str | None = None) -> subprocess.CompletedProcess[str
     )
 
 
+def run_bytes(*argv: bytes) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run([bytes(CLI), *argv], capture_output=True)
+
+
 class CliTest(unittest.TestCase):
     def test_throw_exit_codes(self) -> None:
         for name, code in THROW_EXIT.items():
@@ -125,6 +129,48 @@ class CliTest(unittest.TestCase):
                 writer.join()
             self.assertEqual(q.returncode, 0)
             self.assertEqual(json.loads(q.stdout), 10)
+
+    def test_ill_formed_utf8_argv_is_refused_and_never_echoed(self) -> None:
+        for op in (b"\xff", b"\xe2\x82"):
+            with self.subTest(op):
+                p = run_bytes(op, b"[]")
+                self.assertEqual(p.returncode, 11)
+                self.assertEqual(
+                    json.loads(p.stderr.decode("utf-8")),
+                    {"code": "BAD_REQUEST", "name": "Error", "message": "op name is not valid UTF-8"},
+                )
+        described = run_bytes(b"describe", b"\xff")
+        self.assertEqual(described.returncode, 10)
+        self.assertEqual(json.loads(described.stderr.decode("utf-8"))["message"], 'unknown op "\ufffd"')
+        unreadable = run_bytes(b"$echo", b"@/nonexistent/\xff")
+        self.assertEqual(unreadable.returncode, 11)
+        self.assertEqual(
+            json.loads(unreadable.stderr.decode("utf-8"))["message"], "cannot read /nonexistent/\ufffd"
+        )
+        payload = run_bytes(b"$echo", b'["\xff"]')
+        self.assertEqual(payload.returncode, 11)
+        self.assertEqual(json.loads(payload.stderr.decode("utf-8"))["code"], "BAD_REQUEST")
+
+    def test_closed_standard_streams_are_reported(self) -> None:
+        closed_in = subprocess.run(
+            ["sh", "-c", 'exec "$@" <&-', "sh", str(CLI), "$echo", "-"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        self.assertEqual(closed_in.returncode, 11)
+        self.assertEqual(closed_in.stdout, "")
+        self.assertEqual(json.loads(closed_in.stderr)["message"], "cannot read standard input")
+        for argv in (("detectChordBest", "[[0,4,7]]"), ("version",), ("list",)):
+            with self.subTest(argv):
+                closed_out = subprocess.run(
+                    ["sh", "-c", 'exec "$@" >&-', "sh", str(CLI), *argv],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                )
+                self.assertEqual(closed_out.returncode, 99)
+                self.assertEqual(json.loads(closed_out.stderr)["code"], "INTERNAL")
 
     def test_usage_errors(self) -> None:
         self.assertEqual(run().returncode, 11)

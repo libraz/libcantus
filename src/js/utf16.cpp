@@ -119,4 +119,78 @@ int utf16_compare(std::string_view a, std::string_view b) {
   return c < 0 ? -1 : (c > 0 ? 1 : 0);
 }
 
+namespace {
+
+/**
+ * How many bytes from `s[i]` begin a well-formed sequence: the whole sequence when it is complete,
+ * else the maximal ill-formed subpart (at least one byte).
+ */
+std::size_t utf8_prefix(std::string_view s, std::size_t i, bool surrogates,
+                        bool& complete) noexcept {
+  auto byte = [&](std::size_t k) { return static_cast<unsigned char>(s[k]); };
+  unsigned char b0 = byte(i);
+  complete = false;
+  if (b0 < 0x80) {
+    complete = true;
+    return 1;
+  }
+  std::size_t len = 0;
+  unsigned char lo = 0x80;
+  unsigned char hi = 0xBF;
+  if (b0 >= 0xC2 && b0 <= 0xDF) {
+    len = 2;
+  } else if (b0 >= 0xE0 && b0 <= 0xEF) {
+    len = 3;
+    if (b0 == 0xE0) lo = 0xA0;
+    if (b0 == 0xED && !surrogates) hi = 0x9F;
+  } else if (b0 >= 0xF0 && b0 <= 0xF4) {
+    len = 4;
+    if (b0 == 0xF0) lo = 0x90;
+    if (b0 == 0xF4) hi = 0x8F;
+  } else {
+    return 1;
+  }
+  std::size_t k = 1;
+  for (; k < len && i + k < s.size(); ++k) {
+    unsigned char b = byte(i + k);
+    bool ok = k == 1 ? b >= lo && b <= hi : (b & 0xC0) == 0x80;
+    if (!ok) return k;
+  }
+  complete = k == len;
+  return k;
+}
+
+}  // namespace
+
+std::size_t utf8_sequence_length(std::string_view s, std::size_t i, bool surrogates) noexcept {
+  bool complete = false;
+  std::size_t n = utf8_prefix(s, i, surrogates, complete);
+  return complete ? n : 0;
+}
+
+bool is_valid_wtf8(std::string_view s) noexcept {
+  for (std::size_t i = 0; i < s.size();) {
+    std::size_t n = utf8_sequence_length(s, i, true);
+    if (n == 0) return false;
+    i += n;
+  }
+  return true;
+}
+
+std::string replace_ill_formed_utf8(std::string_view s) {
+  std::string out;
+  out.reserve(s.size());
+  for (std::size_t i = 0; i < s.size();) {
+    bool complete = false;
+    std::size_t n = utf8_prefix(s, i, false, complete);
+    if (complete) {
+      out.append(s.substr(i, n));
+    } else {
+      out += "\xEF\xBF\xBD";
+    }
+    i += n;
+  }
+  return out;
+}
+
 }  // namespace cantus::js

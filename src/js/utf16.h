@@ -87,6 +87,18 @@ std::string trim(std::string_view s);
 /** Append the WTF-8 encoding of a code point or lone surrogate, merging a completed pair. */
 void append_wtf8(std::string& out, std::uint32_t cp);
 
+/**
+ * Length of the well-formed UTF-8 sequence starting at `s[i]`, or 0 when it is ill-formed or
+ * truncated. `surrogates` also admits the three-byte lone surrogates WTF-8 allows.
+ */
+std::size_t utf8_sequence_length(std::string_view s, std::size_t i, bool surrogates) noexcept;
+
+/** Whether `s` is well-formed WTF-8, the form every string the library holds is in. */
+bool is_valid_wtf8(std::string_view s) noexcept;
+
+/** `s` read as strict UTF-8, each maximal ill-formed subpart replaced by U+FFFD. */
+std::string replace_ill_formed_utf8(std::string_view s);
+
 }  // namespace cantus::js
 
 #endif  // CANTUS_JS_UTF16_H_

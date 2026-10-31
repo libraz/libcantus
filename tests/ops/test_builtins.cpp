@@ -2,6 +2,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <string>
+#include <string_view>
 
 #include "cantus/cantus_c.h"
 #include "cantus/ops.h"
@@ -104,4 +105,16 @@ TEST_CASE("requests that cannot run are BAD_REQUEST or UNKNOWN_OP", "[builtins]"
   CHECK(call("$echo", "[").status == CANTUS_BAD_REQUEST);
   CHECK(call("$echo", "[1] x").status == CANTUS_BAD_REQUEST);
   CHECK(call("$echo", R"([{"$what":1}])").status == CANTUS_BAD_REQUEST);
+}
+
+TEST_CASE("an op name that is not UTF-8 is refused without being read past or echoed",
+          "[builtins]") {
+  // The views end before the bytes that follow them, so a decoder reading on would show it.
+  const std::string padded = "\xff\xe2\x82 tail";
+  for (std::string_view op :
+       {std::string_view(padded.data(), 1), std::string_view(padded.data() + 1, 2)}) {
+    Result r = call(op, "[]");
+    CHECK(r.status == CANTUS_BAD_REQUEST);
+    CHECK(field(r, "message") == "op name is not valid UTF-8");
+  }
 }

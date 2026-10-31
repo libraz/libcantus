@@ -9,6 +9,7 @@
 
 #include "cantus/cantus_c.h"
 #include "exit_codes.h"
+#include "js/utf16.h"
 
 namespace {
 
@@ -60,6 +61,9 @@ std::string json_quote(std::string_view s) {
   return out + '"';
 }
 
+/** Argument text as an error message may quote it: ill-formed UTF-8 shown as U+FFFD. */
+std::string shown(std::string_view s) { return cantus::js::replace_ill_formed_utf8(s); }
+
 int fail(ExitCode code, const std::string& code_name, const std::string& message) {
   std::cerr << "{\"code\":" << json_quote(code_name)
             << ",\"name\":\"Error\",\"message\":" << json_quote(message) << "}\n";
@@ -70,13 +74,24 @@ int bad_request(const std::string& message) {
   return fail(ExitCode::kBadRequest, "BAD_REQUEST", message);
 }
 
+/** Writes `text` and a newline, then flushes; false when the stream did not take all of it. */
+bool write_line(std::ostream& out, std::string_view text) {
+  out << text << '\n';
+  out.flush();
+  return static_cast<bool>(out);
+}
+
+/** Writes `text` to `out` and returns `ok`, or INTERNAL when the output could not be written. */
+int emit(std::ostream& out, std::string_view text, ExitCode ok = ExitCode::kOk) {
+  if (write_line(out, text)) return exit_code(ok);
+  return fail(ExitCode::kInternal, "INTERNAL", "cannot write output");
+}
+
 /** Calls the library; returns the exit code after printing to stdout or stderr. */
 int print_result(CantusStatus status, char* json, size_t len) {
-  std::string_view body = json != nullptr ? std::string_view(json, len) : std::string_view();
-  std::ostream& out = status == CANTUS_OK ? std::cout : std::cerr;
-  out << body << '\n';
+  std::string body = json != nullptr ? std::string(json, len) : std::string();
   cantus_free(json);
-  return exit_code(from_status(status));
+  return emit(status == CANTUS_OK ? std::cout : std::cerr, body, from_status(status));
 }
 
 bool list_ops(std::string* out) {
@@ -111,6 +126,13 @@ bool read_stream(std::istream& in, std::string* out) {
   return in.eof() && !in.bad();
 }
 
+/** Reads all of standard input; false when it is closed or fails, rather than empty. */
+bool read_stdin(std::string* out) {
+  // A closed descriptor reads as end of file through the stream; only the C stream knows.
+  std::clearerr(stdin);
+  return read_stream(std::cin, out) && std::ferror(stdin) == 0;
+}
+
 int run_op(const std::string& op, const char* arg) {
   std::string list;
   if (!list_ops(&list)) return fail(ExitCode::kInternal, "INTERNAL", "cannot list ops");
@@ -124,14 +146,14 @@ int run_op(const std::string& op, const char* arg) {
   if (arg == nullptr) {
     // No payload means no arguments.
   } else if (std::string_view(arg) == "-") {
-    if (!read_stream(std::cin, &args)) return bad_request("cannot read standard input");
+    if (!read_stdin(&args)) return bad_request("cannot read standard input");
   } else if (arg[0] == '@') {
     std::error_code ec;
     std::ifstream file;
     // Only a directory is refused up front; FIFOs and /dev/fd paths are read as streams.
     if (!std::filesystem::is_directory(arg + 1, ec)) file.open(arg + 1, std::ios::binary);
     if (!file.is_open() || !read_stream(file, &args)) {
-      return bad_request(std::string("cannot read ") + (arg + 1));
+      return bad_request("cannot read " + shown(arg + 1));
     }
   } else {
     args = arg;
@@ -153,14 +175,12 @@ int main(int argc, char** argv) {
   }
   std::string command = argv[1];
   if (command == "version") {
-    std::cout << json_quote(cantus_version()) << '\n';
-    return exit_code(ExitCode::kOk);
+    return emit(std::cout, json_quote(cantus_version()));
   }
   if (command == "list") {
     std::string list;
     if (!list_ops(&list)) return fail(ExitCode::kInternal, "INTERNAL", "cannot list ops");
-    std::cout << list << '\n';
-    return exit_code(ExitCode::kOk);
+    return emit(std::cout, list);
   }
   if (command == "describe") {
     if (argc != 3) return bad_request("describe takes one op name");
@@ -168,10 +188,9 @@ int main(int argc, char** argv) {
     if (!list_ops(&list)) return fail(ExitCode::kInternal, "INTERNAL", "cannot list ops");
     std::string entry = find_entry(list, argv[2]);
     if (entry.empty()) {
-      return fail(ExitCode::kUnknownOp, "UNKNOWN_OP", "unknown op " + json_quote(argv[2]));
+      return fail(ExitCode::kUnknownOp, "UNKNOWN_OP", "unknown op " + json_quote(shown(argv[2])));
     }
-    std::cout << entry << '\n';
-    return exit_code(ExitCode::kOk);
+    return emit(std::cout, entry);
   }
   if (argc > 3) return bad_request("too many arguments");
   return run_op(command, argc == 3 ? argv[2] : nullptr);
