@@ -24,5 +24,6 @@ set_target_properties(cantus_node PROPERTIES
 target_include_directories(cantus_node SYSTEM PRIVATE ${CMAKE_JS_INC})
 target_compile_definitions(cantus_node PRIVATE
   NAPI_VERSION=${CANTUS_NAPI_VERSION} NAPI_CPP_EXCEPTIONS)
-target_compile_options(cantus_node PRIVATE -Wall -Wextra -Wpedantic -Wshadow -Werror)
+target_compile_options(cantus_node PRIVATE -Wall -Wextra -Wpedantic -Wshadow -Werror
+  $<$<CXX_COMPILER_ID:GNU>:-Wno-error=maybe-uninitialized>)
 target_link_libraries(cantus_node PRIVATE cantus::ops ${CMAKE_JS_LIB})

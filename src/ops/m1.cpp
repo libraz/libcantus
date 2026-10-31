@@ -224,9 +224,11 @@ void register_note() {
   def_class_method("Note#octave", [](Args& a) -> json::Value {
     return to_json(read_note_instance(a, 0).octave());
   });
-  auto data = [](Args& a) -> json::Value { return echoed(read_note_instance(a, 0).data(), a[0]); };
-  def_class_method("Note#data", data);
-  def_class_method("Note#toJSON", data);
+  auto data_method = [](Args& a) -> json::Value {
+    return echoed(read_note_instance(a, 0).data(), a[0]);
+  };
+  def_class_method("Note#data", data_method);
+  def_class_method("Note#toJSON", data_method);
   def_class_method("Note#frequency", [](Args& a) -> json::Value {
     Note self = read_note_instance(a, 0);
     // The MIDI number is read first, so a note with no octave is refused before the tuning is.
@@ -360,11 +362,11 @@ void register_interval_class() {
                    [](Args& a) -> json::Value { return read_interval_instance(a, 0).name(); });
   def_class_method("Interval#toString",
                    [](Args& a) -> json::Value { return read_interval_instance(a, 0).to_string(); });
-  auto data = [](Args& a) -> json::Value {
+  auto data_method = [](Args& a) -> json::Value {
     return echoed(read_interval_instance(a, 0).data(), a[0]);
   };
-  def_class_method("Interval#data", data);
-  def_class_method("Interval#toJSON", data);
+  def_class_method("Interval#data", data_method);
+  def_class_method("Interval#toJSON", data_method);
   def_class_method("Interval#invert", [](Args& a) -> json::Value {
     return to_json(read_interval_instance(a, 0).invert());
   });
@@ -430,12 +432,12 @@ void register_duration_class() {
   def_class_method("Duration#tuplet", [](Args& a) -> json::Value {
     return to_json(read_duration_instance(a, 0).tuplet());
   });
-  auto data = [](Args& a) -> json::Value {
+  auto data_method = [](Args& a) -> json::Value {
     return echoed(read_duration_instance(a, 0).data(), a[0]);
   };
-  def_class_method("Duration#spelled", data);
-  def_class_method("Duration#data", data);
-  def_class_method("Duration#toJSON", data);
+  def_class_method("Duration#spelled", data_method);
+  def_class_method("Duration#data", data_method);
+  def_class_method("Duration#toJSON", data_method);
   def_class_method("Duration#beats", [](Args& a) -> json::Value {
     Duration self = read_duration_instance(a, 0);
     return self.beats(read_duration_options(a[1]));
@@ -494,9 +496,11 @@ void register_meter_class() {
   def_class_method("Meter#grouping", [](Args& a) -> json::Value {
     return to_json(read_meter_instance(a, 0).grouping());
   });
-  auto data = [](Args& a) -> json::Value { return to_json(read_meter_instance(a, 0).data()); };
-  def_class_method("Meter#data", data);
-  def_class_method("Meter#toJSON", data);
+  auto data_method = [](Args& a) -> json::Value {
+    return to_json(read_meter_instance(a, 0).data());
+  };
+  def_class_method("Meter#data", data_method);
+  def_class_method("Meter#toJSON", data_method);
   def_class_method("Meter#isCompound",
                    [](Args& a) -> json::Value { return read_meter_instance(a, 0).is_compound(); });
   def_class_method("Meter#beatsPerBar", [](Args& a) -> json::Value {
@@ -583,9 +587,11 @@ void register_tempo_class() {
 
   def_class_method("Tempo#bpm",
                    [](Args& a) -> json::Value { return read_tempo_instance(a, 0).bpm(); });
-  auto data = [](Args& a) -> json::Value { return to_json(read_tempo_instance(a, 0).data()); };
-  def_class_method("Tempo#data", data);
-  def_class_method("Tempo#toJSON", data);
+  auto data_method = [](Args& a) -> json::Value {
+    return to_json(read_tempo_instance(a, 0).data());
+  };
+  def_class_method("Tempo#data", data_method);
+  def_class_method("Tempo#toJSON", data_method);
   def_class_method("Tempo#secondsAt", [](Args& a) -> json::Value {
     Tempo self = read_tempo_instance(a, 0);
     return self.seconds_at(assert_finite_number(a[1], "beat"));
@@ -668,9 +674,11 @@ void register_tuning_class() {
                    [](Args& a) -> json::Value { return read_tuning_instance(a, 0).ref_freq(); });
   def_class_method("Tuning#divisions",
                    [](Args& a) -> json::Value { return read_tuning_instance(a, 0).divisions(); });
-  auto data = [](Args& a) -> json::Value { return to_json(read_tuning_instance(a, 0).data()); };
-  def_class_method("Tuning#data", data);
-  def_class_method("Tuning#toJSON", data);
+  auto data_method = [](Args& a) -> json::Value {
+    return to_json(read_tuning_instance(a, 0).data());
+  };
+  def_class_method("Tuning#data", data_method);
+  def_class_method("Tuning#toJSON", data_method);
   def_class_method("Tuning#frequencyOf", [](Args& a) -> json::Value {
     Tuning self = read_tuning_instance(a, 0);
     NoteData note = read_note_like(a[1]);
@@ -893,13 +901,13 @@ void register_instrument_class() {
   def_class_method("Instrument#articulations", [](Args& a) -> json::Value {
     return to_json(read_instrument_instance(a, 0).articulations());
   });
-  auto data = [](Args& a) -> json::Value {
+  auto data_method = [](Args& a) -> json::Value {
     json::Value out = instrument_data_json(read_instrument_instance(a, 0).data());
     restore_signed_zero(out, a[0]);
     return out;
   };
-  def_class_method("Instrument#data", data);
-  def_class_method("Instrument#toJSON", data);
+  def_class_method("Instrument#data", data_method);
+  def_class_method("Instrument#toJSON", data_method);
   def_class_method("Instrument#range", [](Args& a) -> json::Value {
     json::Value out = to_json(read_instrument_instance(a, 0).range());
     restore_range_zeros(out, a[0]);
@@ -1096,9 +1104,11 @@ void register_voicing_class() {
   def_class_method("Voicing#range", [](Args& a) -> json::Value {
     return to_json(read_voicing_instance(a, 0).range());
   });
-  auto data = [](Args& a) -> json::Value { return to_json(read_voicing_instance(a, 0).data()); };
-  def_class_method("Voicing#data", data);
-  def_class_method("Voicing#toJSON", data);
+  auto data_method = [](Args& a) -> json::Value {
+    return to_json(read_voicing_instance(a, 0).data());
+  };
+  def_class_method("Voicing#data", data_method);
+  def_class_method("Voicing#toJSON", data_method);
   def_class_method("Voicing#toString",
                    [](Args& a) -> json::Value { return read_voicing_instance(a, 0).to_string(); });
   def_class_method("Voicing#equals", [](Args& a) -> json::Value {

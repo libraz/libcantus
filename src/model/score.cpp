@@ -34,7 +34,8 @@ NoteEventAssertOptions score_note_options() {
 /** The notes checked and copied, in time order, ties broken by pitch (`orderNotes`). */
 std::vector<NoteEvent> order_notes(const std::vector<NoteEvent>& notes, std::string_view name) {
   std::vector<NoteEvent> out;
-  for (const NoteEvent& note : assert_note_events(notes, name, score_note_options())) {
+  assert_note_events(notes, name, score_note_options());
+  for (const NoteEvent& note : notes) {
     out.push_back(copy_note_event(note));
   }
   std::stable_sort(out.begin(), out.end(), [](const NoteEvent& a, const NoteEvent& b) {

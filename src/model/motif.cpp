@@ -22,7 +22,8 @@ NoteEvent copy_motif_note(const NoteEvent& note) {
 /** Defensive copy of a cell, its notes checked as a whole before they are copied (`copyCell`). */
 MotifCell copy_cell(const MotifCell& cell) {
   MotifCell copy;
-  for (const NoteEvent& note : assert_note_events(cell.notes, "motif notes")) {
+  assert_note_events(cell.notes, "motif notes");
+  for (const NoteEvent& note : cell.notes) {
     copy.notes.push_back(copy_motif_note(note));
   }
   return copy;

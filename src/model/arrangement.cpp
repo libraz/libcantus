@@ -25,7 +25,8 @@ std::vector<NoteEvent> copy_notes(const std::vector<NoteEvent>& notes, const std
   options.allowNonPositiveDuration = true;
   options.budget = budget;
   std::vector<NoteEvent> out;
-  for (const NoteEvent& note : assert_note_events(notes, name, options)) {
+  assert_note_events(notes, name, options);
+  for (const NoteEvent& note : notes) {
     out.push_back(copy_note_event(note));
   }
   return out;

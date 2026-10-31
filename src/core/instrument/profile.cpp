@@ -26,8 +26,7 @@ bool has_limb(const std::vector<Limb>& limbs, Limb limb) {
 
 /** Every field the library reads is checked, not only the family's (`assertProfile`). */
 void assert_profile(const InstrumentProfile& profile) {
-  const std::string& name =
-      std::visit([](const auto& p) -> const std::string& { return p.name; }, profile);
+  const std::string name = std::visit([](const auto& p) { return p.name; }, profile);
   if (name.empty()) {
     throw InvalidInputError("instrument name must be a non-empty string; received " +
                             describe_rejected(json::Value(name)));

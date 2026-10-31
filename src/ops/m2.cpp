@@ -338,9 +338,11 @@ void register_key() {
     std::optional<std::string_view> name = read_key_instance(a, 0).scale_name();
     return name ? json::Value(std::string(*name)) : undefined_value();
   });
-  auto data = [](Args& a) -> json::Value { return key_data_echo(read_key_instance(a, 0), a[0]); };
-  def_class_method("Key#data", data);
-  def_class_method("Key#toJSON", data);
+  auto data_method = [](Args& a) -> json::Value {
+    return key_data_echo(read_key_instance(a, 0), a[0]);
+  };
+  def_class_method("Key#data", data_method);
+  def_class_method("Key#toJSON", data_method);
   def_class_method("Key#variant", [](Args& a) -> json::Value {
     return to_json(read_key_instance(a, 0).variant());
   });
@@ -1007,7 +1009,7 @@ void register_progression() {
   def_class_method("Progression#key", [](Args& a) -> json::Value {
     return carried_key(read_progression_instance(a, 0).key());
   });
-  auto data = [](Args& a) -> json::Value {
+  auto data_method = [](Args& a) -> json::Value {
     ProgressionData plain = read_progression_instance(a, 0).to_json();
     json::Array chords;
     for (const Chord& chord : plain.chords) {
@@ -1027,8 +1029,8 @@ void register_progression() {
     }
     return json::Value(std::move(o));
   };
-  def_class_method("Progression#data", data);
-  def_class_method("Progression#toJSON", data);
+  def_class_method("Progression#data", data_method);
+  def_class_method("Progression#toJSON", data_method);
   def_class_method("Progression#length", [](Args& a) -> json::Value {
     return static_cast<double>(read_progression_instance(a, 0).length());
   });
@@ -1548,11 +1550,11 @@ void register_timeline() {
     }
     return true;
   });
-  auto data = [](Args& a) -> json::Value {
+  auto data_method = [](Args& a) -> json::Value {
     return timeline_data_json(timeline_instance(a, 0).data());
   };
-  def_class_method("Timeline#data", data);
-  def_class_method("Timeline#toJSON", data);
+  def_class_method("Timeline#data", data_method);
+  def_class_method("Timeline#toJSON", data_method);
   def_class_method("Timeline#chordTimeline", [](Args& a) -> json::Value {
     return timeline_hybrid(segments_json(timeline_instance(a, 0)));
   });
@@ -2129,9 +2131,11 @@ void register_score() {
     }
     return score_equals_wire(self, a[1]);
   });
-  auto data = [](Args& a) -> json::Value { return score_data_json(score_instance(a, 0).data()); };
-  def_class_method("Score#data", data);
-  def_class_method("Score#toJSON", data);
+  auto data_method = [](Args& a) -> json::Value {
+    return score_data_json(score_instance(a, 0).data());
+  };
+  def_class_method("Score#data", data_method);
+  def_class_method("Score#toJSON", data_method);
 }
 
 }  // namespace

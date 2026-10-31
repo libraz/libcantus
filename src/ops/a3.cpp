@@ -198,15 +198,16 @@ void register_phrases() {
       }
       return assert_finite_number(*total, "phrase totalBeats");
     };
-    auto beats = [&opts](std::string_view key, std::string_view name) -> BeatsOption {
+    auto beats_option = [&opts](std::string_view key, std::string_view name) -> BeatsOption {
       return [&opts, key, name](double fallback) {
         return assert_range_option(opts, key, fallback, kMinValue, kMaxSafeInteger, name);
       };
     };
-    source.rest_beats = beats("restBeats", "phrase restBeats");
-    source.long_note_beats = beats("longNoteBeats", "phrase longNoteBeats");
-    source.min_phrase_beats = beats("minPhraseBeats", "phrase minPhraseBeats");
-    source.expected_phrase_beats = beats("expectedPhraseBeats", "phrase expectedPhraseBeats");
+    source.rest_beats = beats_option("restBeats", "phrase restBeats");
+    source.long_note_beats = beats_option("longNoteBeats", "phrase longNoteBeats");
+    source.min_phrase_beats = beats_option("minPhraseBeats", "phrase minPhraseBeats");
+    source.expected_phrase_beats =
+        beats_option("expectedPhraseBeats", "phrase expectedPhraseBeats");
     if (const json::Value* key = field(opts, "key")) {
       source.key = [&a, key] { return read_key_context(a, *key); };
     }

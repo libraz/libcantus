@@ -55,6 +55,11 @@ endif()
 set(CANTUS_WARNINGS -Wall -Wextra -Wpedantic -Wshadow)
 if(PROJECT_IS_TOP_LEVEL)
   list(APPEND CANTUS_WARNINGS -Werror)
+  # GCC's optimizer reports uninitialized reads inside std::optional and std::variant that cannot
+  # happen; the warning stays visible but does not fail the build.
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    list(APPEND CANTUS_WARNINGS -Wno-error=maybe-uninitialized)
+  endif()
 endif()
 
 # Translation units that are still stubs have no symbols; keep macOS ranlib quiet about them.

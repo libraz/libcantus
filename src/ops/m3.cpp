@@ -240,9 +240,9 @@ void register_motif() {
     json::Value data = read_motif_instance(a, 0);
     return to_json(Motif(MotifCell{assert_note_events(get(data, "notes"))}).total_beats());
   });
-  auto data = [](Args& a) -> json::Value { return read_motif_instance(a, 0); };
-  def_class_method("Motif#data", data);
-  def_class_method("Motif#toJSON", data);
+  auto data_method = [](Args& a) -> json::Value { return read_motif_instance(a, 0); };
+  def_class_method("Motif#data", data_method);
+  def_class_method("Motif#toJSON", data_method);
   def_class_method("Motif#transform", [](Args& a) -> json::Value {
     json::Value self = read_motif_instance(a, 0);
     json::Value cell = forward(a, "transformMotif", json::Array{self, a[1], a[2], a[3]});
@@ -434,9 +434,9 @@ void register_rhythm() {
   def_class_method("Rhythm#totalBeats", [](Args& a) -> json::Value {
     return to_json(rhythm_span(read_rhythm_instance(a, 0)));
   });
-  auto data = [](Args& a) -> json::Value { return read_rhythm_instance(a, 0); };
-  def_class_method("Rhythm#data", data);
-  def_class_method("Rhythm#toJSON", data);
+  auto data_method = [](Args& a) -> json::Value { return read_rhythm_instance(a, 0); };
+  def_class_method("Rhythm#data", data_method);
+  def_class_method("Rhythm#toJSON", data_method);
   def_class_method("Rhythm#density", [](Args& a) -> json::Value {
     json::Value self = read_rhythm_instance(a, 0);
     return forward(a, "rhythmDensity", json::Array{get(self, "events"), get(self, "ts")});
@@ -722,11 +722,11 @@ void register_arrangement() {
   def_class_method("Arrangement#tracks", [](Args& a) -> json::Value {
     return copy_plain(get(arrangement_instance(a, 0).data(), "tracks"), "arrangement tracks");
   });
-  auto data = [](Args& a) -> json::Value {
+  auto data_method = [](Args& a) -> json::Value {
     return copy_plain(arrangement_instance(a, 0).data(), "arrangement data");
   };
-  def_class_method("Arrangement#data", data);
-  def_class_method("Arrangement#toJSON", data);
+  def_class_method("Arrangement#data", data_method);
+  def_class_method("Arrangement#toJSON", data_method);
   def_class_method("Arrangement#analysis", [](Args& a) -> json::Value {
     std::shared_ptr<const SessionHandle> session =
         arrangement_session(a, arrangement_instance(a, 0));
@@ -1072,9 +1072,11 @@ void register_composer() {
   def_class_method("Composer#context", [](Args& a) -> json::Value {
     return composer_context(read_composer_instance(a, 0), a.context());
   });
-  auto data = [](Args& a) -> json::Value { return composer_data(read_composer_instance(a, 0)); };
-  def_class_method("Composer#data", data);
-  def_class_method("Composer#toJSON", data);
+  auto data_method = [](Args& a) -> json::Value {
+    return composer_data(read_composer_instance(a, 0));
+  };
+  def_class_method("Composer#data", data_method);
+  def_class_method("Composer#toJSON", data_method);
 }
 
 }  // namespace
