@@ -1,6 +1,6 @@
 {
   "name": "@libraz/libcantus-node",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "description": "libcantus over its native C++ core: a Node-API addon behind the TS facade.",
   "type": "module",

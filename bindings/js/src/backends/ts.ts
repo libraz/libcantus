@@ -22,7 +22,7 @@ import { CLASS_WIRE, CLASSES, TYPES } from '../generated/meta.js';
 const PURE = Pure as unknown as Record<string, unknown>;
 
 /** The library version `$version` reports. */
-const VERSION = '1.3.0';
+const VERSION = '1.4.0';
 /** CANTUS_ABI_VERSION of the C ABI this backend stands in for. */
 const ABI_VERSION = 1;
 /** Path segment `resolveContext` puts between a part name and the algorithm version. */

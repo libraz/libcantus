@@ -407,7 +407,7 @@ TEST_CASE("no exception escapes, whatever the input", "[c_api]") {
 }
 
 TEST_CASE("version accessors", "[c_api]") {
-  CHECK(std::string(cantus_version()) == "1.3.0");
+  CHECK(std::string(cantus_version()) == "1.4.0");
   CHECK(cantus_abi_version() == CANTUS_ABI_VERSION);
   CHECK(cantus_algorithm_version() == 1);
 }

@@ -1,6 +1,6 @@
 {
   "name": "@libraz/libcantus-wasm",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "libcantus music theory engine compiled to WebAssembly, behind the same API and types as @libraz/libcantus. ESM only; instantiates with top-level await.",
   "type": "module",
   "license": "Apache-2.0",

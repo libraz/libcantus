@@ -95,7 +95,7 @@ TEST_CASE("ops::call refuses callbacks", "[builtins]") {
 
 TEST_CASE("$version reports the library, algorithm and ABI versions", "[builtins]") {
   CHECK(call("$version", "[]").json ==
-        R"({"version":"1.3.0","algorithmVersion":1,"abiVersion":1})");
+        R"({"version":"1.4.0","algorithmVersion":1,"abiVersion":1})");
 }
 
 TEST_CASE("requests that cannot run are BAD_REQUEST or UNKNOWN_OP", "[builtins]") {
