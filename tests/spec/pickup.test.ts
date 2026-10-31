@@ -165,7 +165,7 @@ describe('the analysis entry points read a pickup', () => {
     // nothing about where the analysis says the music is.
     const quantized = jittered.map((note) => ({
       ...note,
-      startBeat: note.startBeat < 0 ? 0 : note.startBeat,
+      startBeat: Math.max(0, note.startBeat),
     }));
     const exact = chordTimelineFromNotes(quantized);
     expect(timeline.segments.map((s) => [s.startBeat, s.endBeat])).toEqual(

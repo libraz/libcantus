@@ -1204,6 +1204,7 @@ function chooseBoundaries(
     for (let c = 0; c < LEXICON_SIZE; c += 1) {
       const stay = costs[c] ?? Number.POSITIVE_INFINITY;
       // Ties hold the current chord: a change has to be strictly better.
+      // biome-ignore lint/complexity/useMathMinMax: mirrors the back-pointer test on the next line.
       const carried = stay <= change ? stay : change;
       back[rowBase + c] = stay <= change ? c : cheapestIndex;
       next[c] = carried - (scores[rowBase + c] ?? 0);

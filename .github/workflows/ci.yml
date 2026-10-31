@@ -39,7 +39,7 @@ jobs:
       - name: Enable Corepack and pin Yarn
         run: |
           corepack enable
-          corepack prepare yarn@4.18.0 --activate
+          corepack prepare yarn@4.18.1 --activate
           yarn --version
 
       - name: Restore Yarn cache
@@ -104,7 +104,7 @@ jobs:
       - name: Enable Corepack and pin Yarn
         run: |
           corepack enable
-          corepack prepare yarn@4.18.0 --activate
+          corepack prepare yarn@4.18.1 --activate
           yarn --version
 
       - name: Restore Yarn cache
@@ -188,7 +188,7 @@ jobs:
       - name: Enable Corepack and pin Yarn
         run: |
           corepack enable
-          corepack prepare yarn@4.18.0 --activate
+          corepack prepare yarn@4.18.1 --activate
           yarn --version
 
       - name: Restore Yarn cache
