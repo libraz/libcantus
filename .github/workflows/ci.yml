@@ -226,6 +226,10 @@ jobs:
 
       - run: make test-wasm
 
+      # spec-ready picks the spec files from the corpus, which is not tracked.
+      - name: Record the call corpus
+        run: make corpus
+
       - name: Spec against the WebAssembly module
         run: make spec-ready IMPL=wasm
 
