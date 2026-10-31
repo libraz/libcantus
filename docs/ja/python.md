@@ -37,7 +37,7 @@ timeline = libcantus.Score.of(notes).timeline()
 ## 名前と引数
 
 - 関数名とメソッド名は、TypeScript の名前を `snake_case` にしたものです。`detectChord` は `detect_chord`、`Score#withTempo` は `with_tempo` です。
-- オプションオブジェクトは、キーワード専用引数になります。名前も `snake_case` です（`detect_chord(pitches, input="midi", bass_pc=0)`）。ただし、渡す dict の中のフィールド名は TypeScript の綴り（`startBeat`、`durationBeat`）のままです。その dict がデータそのものだからです。
+- 省略可能なオプションオブジェクト（`opts` / `options`）は、キーワード専用引数になります。名前も `snake_case` です（`detect_chord(pitches, input="midi", bass_pc=0)`）。引数リストのどの位置にあっても同じで、後ろに `ctx` が続く `Rhythm.deform(rate=0.5)` も動きます。必須のオプションオブジェクト（`generate_progression`、`Composer(...)`、`resolve_meters` など）は先頭の位置引数で、TypeScript のフィールド名を持つ dict として渡します。ただし、渡す dict の中のフィールド名は TypeScript の綴り（`startBeat`、`durationBeat`）のままです。その dict がデータそのものだからです。
 - キーワード引数の既定値は `None` で、`None` は「渡していない」を意味します。位置引数の `None`、および dict や list の中の `None` は JSON の `null` として送られるので、TypeScript が `null` を検証するのとまったく同じに検証されます。
 - 未知のキーワード引数は、Python 自身が `TypeError` にします。TypeScript は未知のオプションキーを無視します。
 - `int` は 10 進の整数、`nan` と `inf` を含む `float` はタグ付きの数値、`bool` は真偽値として送られます。数値の位置に `bool` や `str` を渡すと、TypeScript と同じメッセージで拒否されます。

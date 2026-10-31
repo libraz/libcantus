@@ -12,7 +12,7 @@
 
 **Music theory for MIDI note events: recover the harmony from notes, and write new parts against that same reading.**
 
-One specification, a pure TypeScript reference implementation and a C++17 core under it, reachable from C++, WebAssembly, Node, Python and the command line. Every surface gives the same results, the same errors and the same floating-point bits.
+One specification, a pure TypeScript reference implementation and a C++17 core under it, reachable from C++, WebAssembly, Node, Python and the command line. Every surface gives the same results and the same errors, and the surfaces over the core give the same floating-point bits on every platform.
 
 **[Documentation](docs/en/introduction.md)** · **[Getting started](docs/en/getting-started.md)** · **[Packages and surfaces](docs/en/packages.md)**
 

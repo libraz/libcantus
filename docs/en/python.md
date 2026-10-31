@@ -37,7 +37,7 @@ timeline = libcantus.Score.of(notes).timeline()
 ## Names and arguments
 
 - Function and method names are the `snake_case` form of the TypeScript names: `detectChord` is `detect_chord`, `Score#withTempo` is `with_tempo`.
-- An options object becomes keyword-only arguments, also in `snake_case`: `detect_chord(pitches, input="midi", bass_pc=0)`. The field names inside a plain dict that you pass keep their TypeScript spelling (`startBeat`, `durationBeat`), because that dict is the data itself.
+- An optional options object (`opts` / `options`) becomes keyword-only arguments, also in `snake_case`: `detect_chord(pitches, input="midi", bass_pc=0)`. It does so wherever it sits in the parameter list, so `Rhythm.deform(rate=0.5)` works even though a `ctx` parameter follows. A required options object, as in `generate_progression`, `Composer(...)` and `resolve_meters`, is the first positional argument and is a dict with TypeScript field names. The field names inside a plain dict that you pass keep their TypeScript spelling (`startBeat`, `durationBeat`), because that dict is the data itself.
 - Keyword arguments default to `None`, and `None` means not given. A positional `None`, or a `None` inside a dict or list, is sent as JSON `null`, so it is validated exactly as TypeScript validates `null`.
 - An unknown keyword argument is a `TypeError`, raised by Python. TypeScript ignores unknown option keys.
 - `int` crosses as a decimal integer, `float` including `nan` and `inf` as a tagged number, and `bool` as a boolean. `bool` and `str` where a number is expected are rejected with the TypeScript message.

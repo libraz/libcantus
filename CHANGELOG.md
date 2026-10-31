@@ -196,6 +196,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `0`; and a context's `instrument()` answers only for the parts it was given.
 - **`@libraz/libcantus` ships its NOTICE.** The package carries the project's
   NOTICE file next to its LICENSE, as the Apache License asks.
+- **Form analysis credits a cadence to the span it holds.** A dominant held
+  through a bar no longer moves the hyperbar downbeats of a period onto its
+  cadence bars, `Score.hypermeter` reads the score's cadences as `phrases`
+  does, a tonic held across a phrase seam still closes its phrase, a
+  melody-only score no longer gains silent bars before it, a diatonic tune
+  keeps its final authentic cadence in the tonic, a humanized opening note
+  stays in the first section, and `hypermeter([])` reports no downbeat.
+  `sectionsFromNotes`, `phrasesFromTimeline` and `analyzeRhythm` check
+  `totalBeats` before holding it to the span start.
+- **Minor keys spell their raised degrees.** `spellLine` writes the leading
+  tone of a minor key on the seventh letter (G# in A minor, F## in G# minor),
+  `tensionCurve` reads harmonic function against the whole key, a diatonic
+  root keeps its degree numeral however its symbol spells it, and a held bass
+  note no longer hides the chord struck above it in a chord timeline.
+- **Meter maps are read whole.** A pickup written as its own meter-map entry
+  no longer makes bar numbering skip a bar, the default chord grid no longer
+  depends on how the pickup is written, and `humanize`, `ornament` and the
+  `Composer` parts follow meter changes; `extractGrooveTemplate` and
+  `applyGrooveTemplate` refuse a map that changes signature.
+- **Range and arithmetic edges.** `Rng.float(lo, hi)` and a draw's `float`
+  stay below `hi`, `beatsToTicks` refuses a result past the safe integers,
+  octave-less note arithmetic keeps the letter for extreme alterations,
+  `parseNote('C-0')` reads octave 0, and a `PositionalRng` with a seed outside
+  `0..0xffffffff` is refused.
+- **Playability follows how a line is played.** An open string does not move
+  the fretting hand, the notes of one strum are one hand shape, a note
+  overlapping the next onset by up to a sixty-fourth note is released, and a
+  zero-length note costs no time and gets no fingering.
+- **Voice and melody readings.** A suspension is named only when it resolves
+  to its figure, a solo line is judged against the chord it is heard over,
+  zero-length notes affect no neighbour's label, an evenly timed cell played
+  backwards is a retrograde, and contour rationales quote the share they
+  describe.
+- **Generators keep to what they report.** `harmonizeMelody`'s transposition
+  search keeps the melody in the key it reports, harmonization and
+  `developMotif` no longer depend on the order notes are listed in, a
+  difficulty ceiling never removes onsets of a lower rhythmic setting,
+  chromatic mediants are spelled a third from the source root, a plan derived
+  from a melody evaluates clean against the melody generated from it, and the
+  rhythm transforms keep each stream to itself, keep off-grid onsets on their
+  grid, check every dial they are given and tell 7/8 grouped 3+2+2 from 2+2+3.
+- **Malformed arguments are named.** `Progression`, `Timeline.fromProgression`,
+  `Interval.between`, `Motif.generate`, `Motif.fromNotes`, `romanToChord` and
+  the generation context refuse a value of the wrong shape with an
+  `InvalidInputError`, a null key or chord is reported as `null`, and a value
+  with no string form is named by its type.
+- **Bindings agree on retained values and wire text.** Node, WebAssembly and
+  Python retain a hybrid with the edits made before its first method call,
+  Python enforces the 4 MiB cap on retained values, an argument nested deeper
+  than 4096 levels is a `BAD_REQUEST`, and a built-in object crosses with the
+  same rejected-value text on every JavaScript surface.
+- **Packages load as documented.** The WebAssembly package bundles for the
+  browser under esbuild and its handle types declare `[Symbol.dispose]`;
+  macOS wheels carry a tag pip accepts; the release CLI is named `cantus` and
+  the Linux build links statically; Python classes without a public
+  constructor say which factory to use, and optional option bags are keyword
+  arguments wherever they sit.
+- **The command line checks its input and output.** An op name or argument
+  that is not UTF-8 is a `BAD_REQUEST` and is never echoed, both CLIs report
+  a failed write or an unreadable standard input, and `python -m libcantus`
+  passes the core the same bytes as `cantus`.
 
 These corrections change generated output for affected seeds without raising
 `ALGORITHM_VERSION`, as [Determinism and seeding](docs/en/determinism-and-seeding.md#pinning-the-algorithm-version)

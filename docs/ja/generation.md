@@ -112,7 +112,7 @@ drums.length > 0; // true
 
 `generateBassLine` は開始拍と終了拍を明示したセグメントを受け取ります。コードタイムラインが返すのがこの形です。進行が返す `ChordSpan` はセグメントではないため、先に配置する必要があります。`composer.bass` は `Timeline` でも同じセグメントでも受け取りますが、配置を代行することはありません。ベースのスタイルは `root`、`rootFifth`、`pop`、`walking`、`arpeggio` です。`octave` は目標の音域を指定し、`instrument` を指定するとその楽器で演奏可能な線になります。
 
-ベースパートへのもう一つの入口が `placeLicks` です。`generateDrums` に対する `placeDrumPattern` と同じ関係で、規則として書かれたスタイルの代わりに、[リズムとグルーヴ](rhythm-and-groove.md)が説明する辞書 `BASS_LICKS` からジャンルのフィギュアを引き、セグメントの上に小節単位で敷き、コード交代へはフィギュア自身の最終音から入っていきます。辞書は `motown`、`soul`、`funk`、`blues`、`jazz`、`bossa`、`gospel`、`country`、`reggae` のフィギュアを持ち、ドラム辞書と同じく `ctx.vocabulary` で自作のフィギュアも受け取ります。
+ベースパートへのもう一つの入口が `placeLicks` です。`placeLicks` と `generateBassLine` の関係は、`placeDrumPattern` と `generateDrums` の関係と同じです。規則として書かれたスタイルの代わりに、[リズムとグルーヴ](rhythm-and-groove.md)が説明する辞書 `BASS_LICKS` からジャンルのフィギュアを引き、セグメントの上に小節単位で敷き、コード交代へはフィギュア自身の最終音から入っていきます。辞書は `motown`、`soul`、`funk`、`blues`、`jazz`、`bossa`、`gospel`、`country`、`reggae` のフィギュアを持ち、ドラム辞書と同じく `ctx.vocabulary` で自作のフィギュアも受け取ります。
 
 ```ts
 import { BASS_LICKS, majorKey, placeLicks, makeChord } from '@libraz/libcantus';

@@ -213,7 +213,7 @@ pivotChords(majorKey(0), majorKey(7)).map((pivot) => `${pivot.romanFrom}=${pivot
 // ['I=IV', 'iii=vi', 'V=I', 'vi=ii']
 ```
 
-各項目はコードと、両方の調でのローマ数字を持ちます。`detectModulations` から得た調区間には境界をまたぐコードが紐づくため、レポートは調が変わった拍だけでなくピボット自体を示せます。
+各項目はコードと、両方の調でのローマ数字を持ちます。`detectModulations` から得た調区間には、区間の開始拍かそれより前に終わる最後のコードが、両方の調で読める場合にピボットとして紐づきます。そのため、レポートは調が変わった拍だけでなくピボット自体を示せます。境界をまたいで鳴り続けているコードは候補になりません。
 
 ## 転調ではない一時的転調
 
@@ -231,7 +231,7 @@ chordToRoman(secondaryDominantOf(Chord.of('A', 'min')), key, { applied: true });
 Chord.of('A', 'min').secondaryDominant().symbol(); // 'E7'
 ```
 
-`secondaryDominantOf` はコードを表す値であれば何でも受け取るため、`Chord` はそのまま渡せます。`Chord.secondaryDominant` は同じ処理をコード自身から行います。`applied` は既定でオフです。主調に対してルートを名指しする綴りは常に正しく、その半音階的な属和音が実際に適用されたものかどうかは呼び出し側にしか判断できないためです。オンにすると、`secondaryDominant` が作るコードについて `chordToRoman` が `romanToChord` の逆写像になります。
+`secondaryDominantOf` はコードを表す値であれば何でも受け取るため、`Chord` はそのまま渡せます。`Chord.secondaryDominant` は同じ処理をコード自身から行います。`applied` は既定でオフです。主調に対してルートを名指しする綴りは常に正しく、その半音階的な属和音が実際に適用されたものかどうかは呼び出し側にしか判断できないためです。オンにすると、`secondaryDominant` が作るコードについて `chordToRoman` が `romanToChord` の逆写像になります。ただし次の場合は、オフのときと同じく主調に対してルートを名指しします。目標の度数に完全5度がない場合（長調の7度上のコードは `#IV7`）、目標が主音そのものである場合（`V/I` ではなく `V7`）、コードがその調の全音階に属する場合（イ短調の `G7` は `VII7`）、同主調から借用したコードの場合（ピカルディの主和音は `I` のまま）です。
 
 もう1つの一般的な例が借用和音で、同主調から借りるだけで主音は移動しません。
 

@@ -217,7 +217,7 @@ harmonizeMelody({
   melody: tune,
   key: 'E major',
   placement: { transposeSearch: true, octaveSearch: false },
-}).transposeSemitones; // -3
+}).transposeSemitones; // 4
 ```
 
 `budget` bounds the work one call may do. The search is one pass per placement over every pair of candidate chords in every slot, so a long line harmonized with `transposeSearch` on is what needs it raised; past it the call raises a `BudgetExceededError` rather than blocking the thread.

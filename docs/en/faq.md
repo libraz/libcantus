@@ -104,7 +104,7 @@ A lone `B` from an unknown source is far more often English. Pass `system` expli
 Pure TypeScript for a web application or anything that bundles its dependencies or needs `require()`. WebAssembly when a JavaScript application should run the C++ core. Python for scripts and notebooks, the command line for shell pipelines, and C++ for a native application. [Packages and surfaces](packages.md) compares them.
 
 **Do the surfaces give the same results?**
-Yes. Results, errors and error messages are the same, and floating-point output is bit-identical across platforms. The differences are small and listed in full in [C++ core and surface differences](cpp.md); among them are object identity, C++ implicit conversions, unknown keyword arguments in Python, and the module format.
+Yes. Results, errors and error messages are the same, and floating-point output from the core is bit-identical across platforms; pure TypeScript on arm64 Node can differ from it in the last bit of a tuning result. The differences are small and listed in full in [C++ core and surface differences](cpp.md); among them are object identity, C++ implicit conversions, unknown keyword arguments in Python, and the module format.
 
 **Is the C++ core faster than pure TypeScript?**
 Speed is not what it is for. It exists so that one implementation serves JavaScript, Python, the shell and native code, and so that a native application can link the library without a JavaScript runtime.

@@ -217,7 +217,7 @@ harmonizeMelody({
   melody: tune,
   key: 'E major',
   placement: { transposeSearch: true, octaveSearch: false },
-}).transposeSemitones; // -3
+}).transposeSemitones; // 4
 ```
 
 `budget` は1回の呼び出しが行える計算量の上限です。探索は配置1つにつき、各スロットの候補コードの組をすべて1巡します。そのため `transposeSearch` を有効にした長い旋律がこの値を上げる必要のある場面です。上限を超えた場合はスレッドを塞ぐ代わりに `BudgetExceededError` を投げます。

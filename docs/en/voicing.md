@@ -43,7 +43,7 @@ The options that shape the search:
 | `voices` | How many voices, when no explicit ranges are given. |
 | `ranges` | Explicit per-voice ranges, ascending. Takes precedence over `voices`. |
 | `maxSpacing` | Largest gap in semitones between adjacent voices. Defaults to 12, with the bass–tenor pair allowed an octave more. |
-| `key` | Enables the rules that need a tonic: the leading tone is neither doubled nor left unresolved. |
+| `key` | Enables the rules that need a tonic: the leading tone is not doubled where it acts as one (the third of the dominant, the root of a diminished leading-tone triad), and it is not left unresolved. |
 | `maxCandidates` | How many candidate voicings are evaluated for one chord. Defaults to 4000. |
 | `budget` | How many chords `voiceProgression` will voice at all. |
 

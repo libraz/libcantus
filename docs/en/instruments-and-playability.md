@@ -136,7 +136,7 @@ playability(run, GUITAR_STANDARD).difficulty <= playability(run, GUITAR_STANDARD
 
 `difficulty` maps movement per unit time onto 1 (trivial) to 5 (at the limit). Without a tempo the passage is measured at 120 BPM so the number stays comparable between passages; with one it rises as the tempo does.
 
-Layer 3 has one threshold per family, and they are physical rather than stylistic. A fretting hand shifts at most 100 frets per second along the neck, and one limb strikes at most once every 0.06 seconds; a passage asking for more raises `tooFast`. Each issue also says whether practice can fix it. `impossible` is true for layers 1 and 2, which the instrument alone decides, and false for `tooFast`, which is a matter of degree:
+Layer 3 has one threshold per family, and they are physical rather than stylistic. A fretting hand shifts at most 100 frets per second along the neck, and one limb strikes at most once every 0.06 seconds; a passage asking for more raises `tooFast`. An open string does not move the fretting hand, and the notes struck together in one attack are one hand shape, so neither a pedal on an open string nor a strummed chord counts as a shift. A note that overlaps the next onset by up to a sixty-fourth note is read as released, as a legato or humanized line plays it. Each issue also says whether practice can fix it. `impossible` is true for layers 1 and 2, which the instrument alone decides, and false for `tooFast`, which is a matter of degree:
 
 ```ts
 import { GUITAR_STANDARD, playability } from '@libraz/libcantus';
@@ -156,7 +156,7 @@ report.issues.every((issue) => issue.impossible === false); // true
 
 `placements` carries one entry per note, in the order the notes arrived, and reports how each note that has a position at all would be produced — string and fret, or the striking limb — whether or not the passage raised issues, so a caller can apply its own standard instead of this module's. A note the instrument cannot sound keeps its entry with neither field set.
 
-A note of zero or negative length strikes nothing, so it takes no limb and no time: it keeps a `placements` entry, and two of them on the same voice at the same instant raise neither `limbConflict` nor `tooFast`. Its pitch is still checked, since whether the instrument has the note does not depend on how long it is held.
+A note of zero or negative length strikes nothing, so it takes no limb and no time: it keeps a `placements` entry with no fingering, and two of them on the same voice at the same instant raise neither `limbConflict` nor `tooFast`. Its pitch is still checked, since whether the instrument has the note does not depend on how long it is held.
 
 ```ts
 import { DRUM_KIT, playability } from '@libraz/libcantus';

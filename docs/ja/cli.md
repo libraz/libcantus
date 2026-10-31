@@ -36,8 +36,8 @@ cantus '$const:ALGORITHM_VERSION'
 | 3 | `BUDGET_EXCEEDED` |
 | 4 | `HOST_TYPE_ERROR` |
 | 10 | `UNKNOWN_OP` |
-| 11 | `BAD_REQUEST`: 引数の形式が不正、`@file` を読めない、または未対応の op |
-| 99 | `INTERNAL` |
+| 11 | `BAD_REQUEST`: 引数の形式が不正、`@file` や標準入力（閉じている場合を含む）を読めない、または未対応の op |
+| 99 | `INTERNAL`。結果を標準出力に書き切れなかった場合も同じです |
 
 ```sh
 cantus detectChord '[[200]]'
@@ -57,6 +57,7 @@ cantus detectChord '[[200]]'
 | `{"$u": 1}` | 配列の中の `undefined` の要素 |
 | `{"$big": "10"}` | bigint を 10 進の文字列で表したもの |
 | `{"$class": "Chord", …}` | model クラスのインスタンス。データのフィールドを持ちます |
+| `{"$hy": "PositionalRng", …}` | ハイブリッド値。型名に続けてデータのフィールドを持ちます。`createPositionalRng` はこの形で出力し、ハイブリッドの引数も同じ形で渡します |
 
 未知の `$` タグは `BAD_REQUEST` です。自分のキーが `$` で始まる場合は `$$` と書きます。結果にそうしたキーがあれば、同じ形で出力されます。
 

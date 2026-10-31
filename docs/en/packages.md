@@ -56,7 +56,7 @@ Python:
 pip install libcantus
 ```
 
-The command-line tool is a single executable, downloaded from the releases page of the repository and placed on `PATH`.
+The command-line tool is a single executable. Download the archive for your platform from the releases page of the repository (`cantus-linux-x86_64.tar.gz`, `cantus-linux-aarch64.tar.gz` or `cantus-macos-arm64.tar.gz`), extract it, and place the `cantus` file on `PATH`. The Linux binary is statically linked and needs no particular glibc. On macOS, a downloaded binary is quarantined; clear it once with `xattr -d com.apple.quarantine cantus`.
 
 ## Building from source
 

@@ -50,7 +50,7 @@ except libcantus.InvalidInputError as error:
     # 'pitches[0] must be an integer in [0, 127]; received 128'
 ```
 
-- Function and method names are the `snake_case` form of the TypeScript names. A TypeScript options object becomes keyword-only arguments, where `None` means not given. A positional `None`, or one inside a list or dict, is sent as JSON `null`.
+- Function and method names are the `snake_case` form of the TypeScript names. An optional TypeScript options object becomes keyword-only arguments, where `None` means not given; a required one (`generate_progression`, `Composer(...)`) is passed as a dict with the TypeScript field names. A positional `None`, or one inside a list or dict, is sent as JSON `null`.
 - Model classes, hybrids and handles come back as objects. Release a handle with `close()` or a `with` block.
 - Errors derive from `CantusError` and carry `code`. `InvalidInputError` and `BudgetExceededError` are also `ValueError`, and `NoSolutionError` carries `at`. An exception raised inside a callback you passed is re-raised unchanged.
 - `python -m libcantus <op> [ARGS_JSON | @file | -]` is the same command line as the `cantus` tool.

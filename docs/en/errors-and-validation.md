@@ -217,7 +217,7 @@ Each row is the behaviour of pure TypeScript, and every surface returns the same
 | Missing or `undefined` | An omitted option bag is `{}`, and an omitted argument takes its default. | `std::optional` | The key is absent; `undefined` inside an array is `{"$u": 1}` |
 | A field set to `undefined` | Counts as present in the two checks that test with `in` or reject an explicit `undefined`. | Not possible | Omitted on the wire, so it counts as absent (see [C++ core and surface differences](cpp.md)) |
 | Empty list or text | `detectChord([])` is `[]`, `detectChordBest([])` is `null`, and `parseChordSymbol('')` fails with `Invalid chord symbol: ""`. Empty meter and tempo maps are rejected. | Same | Same |
-| Limits | Ranges are closed: pitch and velocity `0..127`, seed `0..0xffffffff`, tempo `0.1..1000` (context tempo from `Number.MIN_VALUE`), ppq up to `1e6`, a budget up to `1e6`. | Same constants | Same |
+| Limits | Ranges are closed: pitch and velocity `0..127`, seed `0..0xffffffff`, tempo `0.1..1000` (context tempo from `Number.MIN_VALUE`), ppq up to `1e6`, a budget up to `Number.MAX_SAFE_INTEGER` (default `1e6`). | Same constants | Same |
 | One past a limit | Rejected: `must be an integer in [0, 127]; received 128`. `midiToNote` and `pitchClassOf` take any finite number and round it. | Same | Same |
 | Beyond 2^31, 2^32, 2^53 | A safe-integer check rejects what is out of range. | The value is checked, then narrowed; a caller's implicit conversion comes first (see below) | A `double` is checked on the wire; a Python `int` is sent in decimal |
 | A fraction where an integer is required | Rejected: a velocity of `63.7`. | Converted by C++ before the check, so it can arrive as `63` | Rejected |
@@ -228,6 +228,6 @@ Each row is the behaviour of pure TypeScript, and every surface returns the same
 | `bigint` | Rejected: `received 10`. | Not possible | `{"$big": "10"}` in JavaScript; an `int` in Python |
 | An unknown option key | Ignored. | Not possible | Ignored on the wire; a `TypeError` for a Python keyword argument |
 | Non-ASCII text and lone surrogates | Lengths and truncation count UTF-16 code units. | Stored as WTF-8 and counted in UTF-16 code units | Read as WTF-8, written as `\udXXX` escapes; Python uses `surrogatepass` |
-| Floating-point output | Beats, seconds, hertz, cents and scores. | Bit-identical to TypeScript | Shortest round-trip text; a Python `float` |
+| Floating-point output | Beats, seconds, hertz, cents and scores. | Bit-identical to TypeScript, except the last bit of a tuning result against pure TypeScript on arm64 Node | Shortest round-trip text; a Python `float` |
 
 A C++ call that passes `-1` where an unsigned integer is declared, or `63.7` where an `int` is declared, converts the number before any validation runs. This is the C++ type system rather than a different rule, and the JSON surfaces, which receive doubles, reject the same values. Validate at the boundary if the value comes from elsewhere.

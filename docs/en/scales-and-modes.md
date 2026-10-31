@@ -267,6 +267,6 @@ Key.major('Gb').spell()[0].name; // 'Gb'
 
 `spelledKeyOf` picks the tonic spelling with the fewest accidentals: pitch class 1 in major comes out as Db rather than C#. Where the two spellings are equally far out — pitch class 6 is F# at six sharps and Gb at six flats — the flat side is taken. Pass an explicit tonic when the piece is written the other way.
 
-A heptatonic scale gives every degree the next letter. An eight-note scale uses all seven letters and doubles exactly one of them, so an octatonic is read as a scale with one letter stated twice rather than as a run of accidentals. A gapped scale gets one letter per tone wherever its pitch set allows it, and is spelled tone by tone on the side it leans towards where it does not — the blues scale has to name one letter twice however it is read.
+A heptatonic scale gives every degree the next letter. An eight-note scale uses all seven letters and doubles exactly one of them, so an octatonic is read as a scale with one letter stated twice rather than as a run of accidentals. A gapped scale gets one letter per tone wherever its pitch set allows it, and is spelled tone by tone on the side it leans towards where it does not — the blues scale names one letter twice in every spelling a chart would write, and avoids that only with a double flat or a run of sharps.
 
 See [Pitch and notation](pitch-and-notation.md) for the spelling rules this follows, and [Key relations and modulation](key-relations-and-modulation.md) for how a tonic spelling is chosen in the first place.

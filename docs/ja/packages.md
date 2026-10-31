@@ -56,7 +56,7 @@ Python:
 pip install libcantus
 ```
 
-コマンドラインツールは単体の実行ファイルです。リポジトリのリリースページからダウンロードして、`PATH` の通った場所に置きます。
+コマンドラインツールは単体の実行ファイルです。リポジトリのリリースページから、お使いのプラットフォーム用のアーカイブ（`cantus-linux-x86_64.tar.gz`、`cantus-linux-aarch64.tar.gz`、`cantus-macos-arm64.tar.gz`）をダウンロードして展開し、中の `cantus` を `PATH` の通った場所に置きます。Linux 版は静的リンクなので、glibc のバージョンを問いません。macOS ではダウンロードしたバイナリに隔離属性が付くため、`xattr -d com.apple.quarantine cantus` で一度だけ外します。
 
 ## ソースからのビルド
 

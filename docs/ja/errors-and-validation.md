@@ -217,7 +217,7 @@ try {
 | 欠落、または `undefined` | 省略したオプションは `{}` になり、省略した引数は既定値になります。 | `std::optional` | キーが無い。配列の中の `undefined` は `{"$u": 1}` |
 | `undefined` を入れたフィールド | `in` で調べる検査と、明示的な `undefined` を拒否する検査の 2 か所では「ある」と数えられます。 | 起きない | ワイヤ上で省略され、「無い」と数えられる（[C++ コアと面ごとの差](cpp.md)を参照） |
 | 空の list や文字列 | `detectChord([])` は `[]`、`detectChordBest([])` は `null`、`parseChordSymbol('')` は `Invalid chord symbol: ""` で失敗します。空の meter map と tempo map は拒否されます。 | 同じ | 同じ |
-| 限界値 | 範囲はすべて閉区間です。pitch と velocity は `0..127`、seed は `0..0xffffffff`、テンポは `0.1..1000`（context のテンポは `Number.MIN_VALUE` から）、ppq は `1e6` 以下、予算は `1e6` 以下です。 | 同じ定数 | 同じ |
+| 限界値 | 範囲はすべて閉区間です。pitch と velocity は `0..127`、seed は `0..0xffffffff`、テンポは `0.1..1000`（context のテンポは `Number.MIN_VALUE` から）、ppq は `1e6` 以下、予算は `Number.MAX_SAFE_INTEGER` 以下（既定値は `1e6`）です。 | 同じ定数 | 同じ |
 | 限界の 1 つ外 | 拒否されます: `must be an integer in [0, 127]; received 128`。`midiToNote` と `pitchClassOf` は有限の任意の数を受け取り、丸めて使います。 | 同じ | 同じ |
 | 2^31、2^32、2^53 を超える値 | safe integer の検査で、範囲外が拒否されます。 | 検査してから狭めます。ただし呼び出し側の暗黙変換が先に起きます（下記参照） | double はワイヤ上で検査される。Python の `int` は 10 進で送られる |
 | 整数の位置の小数 | 拒否されます: velocity の `63.7`。 | 検査の前に C++ が変換するので、`63` として届くことがある | 拒否される |
@@ -228,6 +228,6 @@ try {
 | `bigint` | 拒否されます: `received 10`。 | 起きない | JavaScript では `{"$big": "10"}`。Python では `int` |
 | 未知のオプションキー | 無視されます。 | 起きない | ワイヤ上では無視される。Python のキーワード引数では `TypeError` |
 | 非 ASCII の文字列と孤立サロゲート | 長さと切り詰めは UTF-16 コードユニットで数えます。 | WTF-8 で保持し、UTF-16 コードユニットで数える | WTF-8 で読み、`\udXXX` のエスケープで書く。Python は `surrogatepass` |
-| 浮動小数の出力 | beats、seconds、Hz、cents、スコア。 | TypeScript とビット単位で一致 | 往復可能な最短の表記。Python では `float` |
+| 浮動小数の出力 | beats、seconds、Hz、cents、スコア。 | TypeScript とビット単位で一致（arm64 の Node で動く純 TypeScript に対する調律結果の最後の1ビットを除く） | 往復可能な最短の表記。Python では `float` |
 
 符号なし整数として宣言された位置に `-1` を、`int` として宣言された位置に `63.7` を渡す C++ の呼び出しでは、検証の前に数値が変換されます。これは規則が違うのではなく C++ の型システムによるもので、double を受け取る JSON の面では、同じ値が拒否されます。値が外部から来る場合は、境界で検証してください。

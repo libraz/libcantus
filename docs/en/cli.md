@@ -36,8 +36,8 @@ A result goes to standard output as JSON. A failure goes to standard error as an
 | 3 | `BUDGET_EXCEEDED` |
 | 4 | `HOST_TYPE_ERROR` |
 | 10 | `UNKNOWN_OP` |
-| 11 | `BAD_REQUEST`: malformed arguments, an unreadable `@file`, or an unsupported op |
-| 99 | `INTERNAL` |
+| 11 | `BAD_REQUEST`: malformed arguments, an unreadable `@file` or standard input (including a closed one), or an unsupported op |
+| 99 | `INTERNAL`, also when the result could not be written to standard output |
 
 ```sh
 cantus detectChord '[[200]]'
@@ -57,6 +57,7 @@ Arguments and results use the wire format of the C ABI, which is JSON with a few
 | `{"$u": 1}` | An `undefined` element of an array |
 | `{"$big": "10"}` | A bigint, as a decimal string |
 | `{"$class": "Chord", …}` | An instance of a model class, with its data fields |
+| `{"$hy": "PositionalRng", …}` | A hybrid value: its type name, then its data fields. `createPositionalRng` prints one, and a hybrid argument is written the same way |
 
 An unknown `$` tag is `BAD_REQUEST`. A key of your own that begins with `$` is written with a doubled `$$`, and a result that has such a key shows it the same way:
 

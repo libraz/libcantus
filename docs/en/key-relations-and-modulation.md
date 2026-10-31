@@ -213,7 +213,7 @@ pivotChords(majorKey(0), majorKey(7)).map((pivot) => `${pivot.romanFrom}=${pivot
 // ['I=IV', 'iii=vi', 'V=I', 'vi=ii']
 ```
 
-Each entry gives the chord and its numeral in both keys. When key regions come from `detectModulations`, the chord that straddles the boundary is attached to the region, so a report can name the pivot rather than only the beat where the key changed.
+Each entry gives the chord and its numeral in both keys. When key regions come from `detectModulations`, the last chord that ends at or before the region's start is attached as its pivot when it reads in both keys, so a report can name the pivot rather than only the beat where the key changed. A chord still sounding across the boundary is not a candidate.
 
 ## Tonicization without modulation
 
@@ -231,7 +231,7 @@ chordToRoman(secondaryDominantOf(Chord.of('A', 'min')), key, { applied: true });
 Chord.of('A', 'min').secondaryDominant().symbol(); // 'E7'
 ```
 
-`secondaryDominantOf` reads any chord-shaped value, so a `Chord` goes in as it is; `Chord.secondaryDominant` is the same step from the chord itself. `applied` is off by default. Naming the root against the home key is always a correct spelling; whether a chromatic dominant is genuinely *applied* is a reading only the caller can make. Turning it on also makes `chordToRoman` the exact inverse of `romanToChord` for the chords `secondaryDominant` builds.
+`secondaryDominantOf` reads any chord-shaped value, so a `Chord` goes in as it is; `Chord.secondaryDominant` is the same step from the chord itself. `applied` is off by default. Naming the root against the home key is always a correct spelling; whether a chromatic dominant is genuinely *applied* is a reading only the caller can make. Turning it on also makes `chordToRoman` the inverse of `romanToChord` for the chords `secondaryDominant` builds, except where the numeral keeps naming the root against the home key: a target with no perfect fifth (the seventh degree of a major key gives `#IV7`), the tonic itself (`V7`, not `V/I`), a chord diatonic to the key (`G7` is `VII7` in A minor), and a chord borrowed from the parallel mode (the Picardy tonic stays `I`).
 
 Borrowed chords are the other common case: the chord comes from the parallel mode and the tonic does not move.
 
