@@ -1,0 +1,42 @@
+{
+  "class-equivalence.test.ts": [
+    {
+      "unit": "Interval > reads consonance the way the interval module reads it, in both contexts",
+      "reason": "Interval#isConsonant reads the spelled interval; checked against classifySpelledInterval under a new title."
+    }
+  ],
+  "model-score.test.ts": [
+    {
+      "unit": "Score performance shaping > humanizes as the groove module does, reading the opening signature",
+      "reason": "Score#humanize reads the whole meter map; checked under 'reading the whole meter map'."
+    }
+  ],
+  "part-writing.test.ts": [
+    {
+      "unit": "cross relation > reports one clash per pair of voices, not one per direction",
+      "reason": "Cross relations are found by crossRelations, whose pair-once rule ts/test/cross-relation.test.ts checks."
+    }
+  ],
+  "spell-line.test.ts": [
+    {
+      "unit": "spellLine under a chord > keeps a sharp-side chord on its own spelling",
+      "reason": "majorKey(6) is Gb major, so the same case is a flat-side chord; checked under 'in Gb major'."
+    }
+  ],
+  "spelling.test.ts": [
+    {
+      "unit": "spelling stays on the key side across every path > spells common borrowed roots without double accidentals in flat keys",
+      "reason": "A borrowed root is spelled on the letter its numeral names (bII of Ab is Bbb); checked under the new title."
+    },
+    {
+      "unit": "spelling stays on the key side across every path > keeps borrowed roots readable across every major key",
+      "reason": "Borrowed roots keep the letter of their degree in every major key; checked under the new title."
+    }
+  ],
+  "voice.test.ts": [
+    {
+      "unit": "analyzeVoice > does not label a suspension when no other voice is dissonant against it",
+      "reason": "A solo line is judged against its chord; split into the solo-line case and the consonant-voices case."
+    }
+  ]
+}

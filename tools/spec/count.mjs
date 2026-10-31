@@ -9,6 +9,8 @@
  * as `tsOnly`, `tests/spec/<file>` for the rest. A unit missing from its half
  * or present in the other fails; units and files added since the split are
  * reported and pass. The base must hold the unit counts the manifest records.
+ * A unit a behaviour change removed is listed with its reason in
+ * `tests/spec/retired.json`; it must be at the base and absent today.
  * `--compare <impl>`: run `tests/spec` under CANTUS_IMPL=ts and under
  * CANTUS_IMPL=<impl> with the JSON reporter; the passed counts must match and
  * neither run may skip, mark todo, or fail.
@@ -30,6 +32,7 @@ const SPEC = path.join(REPO, 'tests/spec');
 const SPEC_CONFIG = path.join(SPEC, 'vitest.config.ts');
 const TS_TEST = path.join(REPO, 'ts/test');
 const MANIFEST = path.join(SPEC, 'manifest.json');
+const RETIRED = path.join(SPEC, 'retired.json');
 
 function parseArgs(argv) {
   const args = { compare: null, maxWorkers: '2' };
@@ -192,7 +195,7 @@ function testFiles(dir) {
 }
 
 /** Compare one recorded file's units at the base with its two halves today. */
-function checkFile(file, entry, baseText, problems) {
+function checkFile(file, entry, baseText, retired, problems) {
   const before = unitsOf(baseText, file);
   if (before.length !== entry.units) {
     problems.push(
@@ -206,6 +209,19 @@ function checkFile(file, entry, baseText, problems) {
     spec: tally(before.filter((u) => !tsLines.has(u.line))),
   };
   const actual = { ts: tally(unitsNow(TS_TEST, file)), spec: tally(unitsNow(SPEC, file)) };
+  for (const { unit } of retired) {
+    const side = ['ts', 'spec'].find((s) => expected[s].has(unit));
+    if (side === undefined) {
+      problems.push(`${file}: retired but not at the base: ${unit}`);
+    } else if (actual.ts.has(unit) || actual.spec.has(unit)) {
+      problems.push(`${file}: retired but still present: ${unit}`);
+    } else {
+      const left = (expected[side].get(unit) ?? 0) - 1;
+      if (left > 0) expected[side].set(unit, left);
+      else expected[side].delete(unit);
+    }
+  }
+  if (retired.length > 0) log(`${file}: ${retired.length} units retired since the split`);
   let added = 0;
   for (const [side, other] of [
     ['ts', 'spec'],
@@ -236,12 +252,18 @@ function checkSplit() {
     manifest.base,
     files.map((file) => `ts/test/${file}`),
   );
+  const retired = JSON.parse(readFileSync(RETIRED, 'utf8'));
   const problems = [];
   let units = 0;
   for (const file of files) {
-    units += checkFile(file, manifest.files[file], base.get(`ts/test/${file}`), problems);
+    const entries = retired[file] ?? [];
+    units += checkFile(file, manifest.files[file], base.get(`ts/test/${file}`), entries, problems);
   }
   const recorded = new Set(files);
+  for (const file of Object.keys(retired)) {
+    if (!recorded.has(file))
+      problems.push(`${file}: retired units of a file the manifest does not record`);
+  }
   for (const [label, dir] of [
     ['ts/test', TS_TEST],
     ['tests/spec', SPEC],
