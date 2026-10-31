@@ -1,5 +1,5 @@
 # WebAssembly surface: build the emscripten module and bindings/wasm/dist (wasm), then run the
-# boundary test and the fixed corpus through it (test-wasm).
+# boundary test, the package checks and the fixed corpus through it (test-wasm).
 
 CANTUS_TARGETS += wasm test-wasm
 
@@ -26,5 +26,5 @@ wasm: $(PURE_DTS)
 
 test-wasm: wasm
 	CANTUS_BOUNDARY_BACKEND=wasm $(NICE) $(VITEST) run -c bindings/js/vitest.config.ts \
-	  --maxWorkers=$(JOBS) test/boundary.test.ts
+	  --maxWorkers=$(JOBS) test/boundary.test.ts test/wasm-package.test.ts
 	$(NODE) tools/corpus/replay_js.mjs --backend wasm $(WASM_FIXTURES)

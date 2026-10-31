@@ -13,7 +13,8 @@ RYE ?= rye
 # libcantus.{so,dylib} (cantus_shared) in its own tree, which the binding finds without help.
 build-shared:
 	$(NICE) $(CMAKE) -S . -B $(SHARED_DIR) -DCMAKE_BUILD_TYPE=$(SHARED_BUILD_TYPE) \
-	  -DCANTUS_BUILD_SHARED=ON -DCANTUS_BUILD_TESTS=OFF -DCANTUS_BUILD_CLI=OFF
+	  -DCANTUS_BUILD_SHARED=ON -DCANTUS_BUILD_TESTS=OFF -DCANTUS_BUILD_CLI=OFF \
+	  -DCMAKE_OSX_DEPLOYMENT_TARGET=$(MACOS_DEPLOYMENT_TARGET)
 	$(NICE) $(CMAKE) --build $(SHARED_DIR) --target cantus_shared -j $(JOBS)
 
 # The environment with pytest, ruff and mypy: rye when installed, else venv + pip.

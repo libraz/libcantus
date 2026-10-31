@@ -33,6 +33,18 @@ _LC_BUILD_VERSION = 0x32
 _ELF_ARCHS = {62: "x86_64", 183: "aarch64"}
 
 
+def _macos_tag(minos: int, arch: str) -> str:
+    """The tag for a packed minimum OS; from macOS 11 pip accepts only ``N_0`` tags."""
+    major, minor = minos >> 16, (minos >> 8) & 0xFF
+    if major >= 11 and minor != 0:
+        raise ValueError(
+            f"the bundled library targets macOS {major}.{minor}; build it with a fixed "
+            "deployment target (MACOSX_DEPLOYMENT_TARGET, which the build recipes pin) "
+            "so the wheel tag is installable"
+        )
+    return f"macosx_{major}_{minor}_{arch}"
+
+
 def _macho_tag(data: bytes) -> str:
     magic, cputype, _, _, ncmds = struct.unpack_from("<5I", data)
     arch = _MACHO_ARCHS.get(cputype)
@@ -44,10 +56,10 @@ def _macho_tag(data: bytes) -> str:
         # Both commands carry the minimum OS as major<<16 | minor<<8 | patch.
         if cmd == _LC_BUILD_VERSION:
             (minos,) = struct.unpack_from("<I", data, offset + 12)
-            return f"macosx_{minos >> 16}_{(minos >> 8) & 0xFF}_{arch}"
+            return _macos_tag(minos, arch)
         if cmd == _LC_VERSION_MIN_MACOSX:
             (minos,) = struct.unpack_from("<I", data, offset + 8)
-            return f"macosx_{minos >> 16}_{(minos >> 8) & 0xFF}_{arch}"
+            return _macos_tag(minos, arch)
         offset += size
     raise ValueError("the bundled library records no minimum macOS version")
 

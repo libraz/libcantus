@@ -56,7 +56,7 @@ Results, errors and messages are the same. What differs:
 
 - **ESM only**, with top-level await, as above.
 - **Objects are copied across the boundary.** A result is a fresh value on every call, so comparing two results by identity fails where it can succeed in pure TypeScript, and the per-object caches the pure package keeps do not apply.
-- **Handles are released explicitly.** `createRng`, `NoteEventIndex` and `ArrangementSession` return handles with `[Symbol.dispose]`; a finalizer releases a forgotten one.
+- **Handles are released explicitly.** `createRng`, `NoteEventIndex` and `ArrangementSession` return handles with `[Symbol.dispose]`; a finalizer releases a forgotten one. The declarations of these handles reference TypeScript's `esnext.disposable` library, so they need TypeScript 5.2 or later.
 - **Arguments cross as JSON.** A function argument is called back into JavaScript, and a cyclic object is cut where it repeats.
 
 The complete list is in [C++ core and surface differences](https://github.com/libraz/libcantus/blob/main/docs/en/cpp.md), and the shared error table and edge-value behaviour are in [Errors and validation](https://github.com/libraz/libcantus/blob/main/docs/en/errors-and-validation.md).

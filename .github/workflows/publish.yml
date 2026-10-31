@@ -218,11 +218,9 @@ jobs:
 
       - name: Package the binary
         run: |
-          mkdir -p dist
-          cp build-release/tools/cli/cantus "dist/${{ matrix.asset }}"
-          cp LICENSE NOTICE dist/
-          tar -C dist -czf "dist/${{ matrix.asset }}.tar.gz" "${{ matrix.asset }}" LICENSE NOTICE
-          rm "dist/${{ matrix.asset }}" dist/LICENSE dist/NOTICE
+          mkdir -p dist stage
+          cp build-release/tools/cli/cantus LICENSE NOTICE stage/
+          tar -C stage -czf "dist/${{ matrix.asset }}.tar.gz" cantus LICENSE NOTICE
 
       - name: Upload CLI asset
         uses: actions/upload-artifact@v7

@@ -2,20 +2,25 @@
 /**
  * Assemble bindings/wasm/dist from the emscripten output, the facade and the pure TS types.
  *
- *   dist/cantus.{js,wasm}     the module (copied from the wasm build directory)
+ *   dist/cantus.{js,wasm}     the module (from the wasm build directory), its Node-only
+ *                             `node:` imports hidden from bundlers
  *   dist/backend.js           src/backend.ts; imports ./cantus.js
  *   dist/index.js, dist/<layer>/index.js
  *                             the facade (bindings/js) with `#backend` bound to ./backend.js;
  *                             shared code is split into dist/chunk-*.js so every subpath sees
  *                             the same classes and the same module instance
- *   dist/**\/*.d.ts           ts/dist's declarations, so the types are pure TS's
+ *   dist/**\/*.d.ts           ts/dist's declarations, so the types are pure TS's, with
+ *                             `[Symbol.dispose]` on the handle types
+ *
+ * The result is checked by bundling examples/browser/main.js for the browser.
  *
  * Usage: node bindings/wasm/build.mjs [--wasm-dir build-wasm]
  */
-import { copyFileSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import { browserSafeModule, declareDispose, handleTypes, importsNodeBuiltin } from './patch.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '../..');
@@ -36,9 +41,11 @@ const wasmDir = path.resolve(
 rmSync(DIST, { recursive: true, force: true });
 mkdirSync(DIST, { recursive: true });
 
-for (const file of ['cantus.js', 'cantus.wasm']) {
-  copyFileSync(path.join(wasmDir, file), path.join(DIST, file));
-}
+copyFileSync(path.join(wasmDir, 'cantus.wasm'), path.join(DIST, 'cantus.wasm'));
+const cantusJs = browserSafeModule(readFileSync(path.join(wasmDir, 'cantus.js'), 'utf8'));
+if (importsNodeBuiltin(cantusJs))
+  throw new Error('cantus.js imports a node: builtin a bundler resolves');
+writeFileSync(path.join(DIST, 'cantus.js'), cantusJs);
 
 await build({
   entryPoints: [path.join(HERE, 'src/backend.ts')],
@@ -82,7 +89,11 @@ for (const [file, info] of Object.entries(facade.metafile.outputs)) {
   }
 }
 
-/** Copy every .d.ts under `from` into `to`, keeping the layout. */
+const HANDLES = handleTypes();
+/** The handle types given `[Symbol.dispose]`. */
+const disposable = new Set();
+
+/** Copy every .d.ts under `from` into `to`, keeping the layout, with the handles disposable. */
 function copyDeclarations(from, to) {
   let count = 0;
   for (const entry of readdirSync(from, { withFileTypes: true })) {
@@ -91,7 +102,9 @@ function copyDeclarations(from, to) {
       count += copyDeclarations(source, path.join(to, entry.name));
     } else if (entry.name.endsWith('.d.ts')) {
       mkdirSync(to, { recursive: true });
-      copyFileSync(source, path.join(to, entry.name));
+      const { text, added } = declareDispose(readFileSync(source, 'utf8'), HANDLES);
+      for (const name of added) disposable.add(name);
+      writeFileSync(path.join(to, entry.name), text);
       count += 1;
     }
   }
@@ -101,4 +114,21 @@ function copyDeclarations(from, to) {
 const declarations = copyDeclarations(TYPES, DIST);
 if (declarations === 0)
   throw new Error('ts/dist has no declarations; build the pure package first');
+const undeclared = HANDLES.filter((name) => !disposable.has(name));
+if (undeclared.length > 0) {
+  throw new Error(`no \`type X = {\` declaration to make disposable for ${undeclared.join(', ')}`);
+}
 process.stdout.write(`wasm dist: ${declarations} declaration files from ts/dist\n`);
+
+// The package as a browser bundler sees it, under the target the README asks for.
+await build({
+  entryPoints: [path.join(REPO, 'examples/browser/main.js')],
+  bundle: true,
+  platform: 'browser',
+  format: 'esm',
+  target: TARGET,
+  alias: { '@libraz/libcantus-wasm': path.join(DIST, 'index.js') },
+  write: false,
+  outdir: path.join(DIST, 'browser-check'),
+  logLevel: 'warning',
+});

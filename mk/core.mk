@@ -6,6 +6,10 @@ CANTUS_TARGETS += build release test-cxx test-install conformance-fast \
 
 INSTALL_PREFIX ?= $(CURDIR)/$(INSTALL_BUILD_DIR)/prefix
 
+# The oldest macOS every shipped binary runs on: the first whose libc++ has floating-point
+# std::from_chars. A wheel tag never claims an older one.
+MACOS_DEPLOYMENT_TARGET ?= 26.0
+
 # Tracked and new C/C++ sources, minus generated files and test fixtures.
 CXX_SOURCES = git ls-files -z --cached --others --exclude-standard -- \
   '*.h' '*.cpp' '*.c' ':!:**/*.gen.*' ':!:tools/data/fixtures/**'
@@ -15,7 +19,8 @@ build:
 	$(NICE) $(CMAKE) --build $(BUILD_DIR) -j $(JOBS)
 
 release:
-	$(NICE) $(CMAKE) -S . -B $(RELEASE_DIR) -DCMAKE_BUILD_TYPE=Release
+	$(NICE) $(CMAKE) -S . -B $(RELEASE_DIR) -DCMAKE_BUILD_TYPE=Release \
+	  -DCMAKE_OSX_DEPLOYMENT_TARGET=$(MACOS_DEPLOYMENT_TARGET)
 	$(NICE) $(CMAKE) --build $(RELEASE_DIR) -j $(JOBS)
 
 test-cxx: build

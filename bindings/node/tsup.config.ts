@@ -1,12 +1,13 @@
-import { cpSync, statSync } from 'node:fs';
+import { cpSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'tsup';
+import { declareDispose, handleTypes } from '../wasm/patch.mjs';
 
 /**
  * The node package's dist/: the facade (bindings/js) bundled with `#backend` bound to the addon
  * backend, ESM and CJS, one entry per pure TS subpath plus backend.js. Declarations are the pure
- * package's own (ts/dist), copied as they are.
+ * package's own (ts/dist), with each handle type given the `[Symbol.dispose]` the runtime adds.
  */
 const here = path.dirname(fileURLToPath(import.meta.url));
 const facade = (file: string) => path.join(here, '../js/src', file);
@@ -50,5 +51,19 @@ export default defineConfig({
       filter: (src) =>
         statSync(src).isDirectory() || src.endsWith('.d.ts') || src.endsWith('.d.cts'),
     });
+    const handles = handleTypes();
+    const disposable = new Set<string>();
+    const dist = path.join(here, 'dist');
+    for (const entry of readdirSync(dist, { recursive: true, encoding: 'utf8' })) {
+      if (!entry.endsWith('.d.ts') && !entry.endsWith('.d.cts')) continue;
+      const file = path.join(dist, entry);
+      const { text, added } = declareDispose(readFileSync(file, 'utf8'), handles);
+      for (const name of added) disposable.add(name);
+      writeFileSync(file, text);
+    }
+    const undeclared = handles.filter((name: string) => !disposable.has(name));
+    if (undeclared.length > 0) {
+      throw new Error(`no declaration to make disposable for ${undeclared.join(', ')}`);
+    }
   },
 });
