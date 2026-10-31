@@ -52,8 +52,10 @@ target_compile_definitions(cantus_js_test_lib_fallback
                            PUBLIC CANTUS_JS_HAVE_FROM_CHARS_DOUBLE=0 CANTUS_JS_HAVE_TO_CHARS_DOUBLE=0)
 
 # ieee754_fused.cpp rebuilds the V8 port with contraction, as Node's clang build does (clang's
-# default "on"; GCC only contracts with "fast"), to tell Node's FMA rounding from a porting error.
-set(CANTUS_JS_FUSED_OPTIONS $<IF:$<CXX_COMPILER_ID:GNU>,-ffp-contract=fast,-ffp-contract=on>)
+# default "on"; GCC only contracts with "fast", and only when optimizing), to tell Node's FMA
+# rounding from a porting error.
+set(CANTUS_JS_FUSED_OPTIONS $<IF:$<CXX_COMPILER_ID:GNU>,-ffp-contract=fast,-ffp-contract=on>
+                            $<$<CXX_COMPILER_ID:GNU>:-O2>)
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
   list(APPEND CANTUS_JS_FUSED_OPTIONS -mfma)
 endif()
