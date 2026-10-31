@@ -124,9 +124,10 @@ describe('a retained class receiver', () => {
 });
 
 describe('a retained hybrid receiver', () => {
-  const timelineOf = (rt: Runtime) =>
-    (rt.call('chordTimelineFromNotes', [NOTES, { key: 'C major' }]) as { timeline: object })
+  const timelineOf2 = (rt: Runtime, notes: readonly object[]) =>
+    (rt.call('chordTimelineFromNotes', [notes, { key: 'C major' }]) as { timeline: object })
       .timeline;
+  const timelineOf = (rt: Runtime) => timelineOf2(rt, NOTES);
 
   it('is sent as a reference only to its own methods', () => {
     const { rt, calls, last } = observed();
@@ -148,6 +149,20 @@ describe('a retained hybrid receiver', () => {
     rt.call('analyzeArrangement', [TRACKS, { key: 'C major', timeline }]);
     expect(last()).toMatch(/"timeline":\{"\$hy":"ChordTimeline","segments":\[/);
     expect(last()).not.toMatch(/\{"\$hy":"ChordTimeline","\$ref":\d+\}/);
+  });
+
+  it('is retained with the fields written before its first method call', () => {
+    const { rt, calls } = observed();
+    type Segments = { segments: { chord: unknown }[] };
+    const timeline = timelineOf(rt) as Segments;
+    const g = (timelineOf2(rt, [67, 71, 74].map(note)) as Segments).segments[0]?.chord;
+    (timeline.segments[0] as { chord: unknown }).chord = g;
+    rt.call('ChordTimeline#at', [timeline, 0]);
+    const [retain, at] = calls().slice(-2);
+    expect(retain?.op).toBe('$retain');
+    // The pure backend answers from the timeline it issued; the core reads the text retained.
+    expect(retain?.argsJson).toContain(`"chord":${JSON.stringify(g)}`);
+    expect(at?.argsJson).toMatch(/^\[\{"\$hy":"ChordTimeline","\$ref":[1-9]\d*\},0\]$/);
   });
 });
 
@@ -245,6 +260,26 @@ describe('the reference cap', () => {
     expect(rt.call('Score#secondsAt', [score, 1])).toBe(Pure.Score.of(NOTES).secondsAt(1));
     expect(calls().map((c) => c.op)).toEqual(['Score.of', 'Score#secondsAt', 'Score#secondsAt']);
     expect(rt.retainedRefs).toBe(0);
+  });
+
+  it('reads no reference at a call return while under both caps', () => {
+    const { rt } = observed();
+    const scores = Array.from({ length: 1000 }, (_, i) => rt.call('Score.of', [[note(i % 128)]]));
+    for (const score of scores) rt.call('Score#totalBeats', [score]);
+    expect(rt.retainedRefs).toBe(1000);
+    const deref = WeakRef.prototype.deref;
+    let reads = 0;
+    WeakRef.prototype.deref = function (this: WeakRef<object>) {
+      reads += 1;
+      return deref.call(this);
+    };
+    try {
+      rt.call('Score#totalBeats', [scores[0]]);
+    } finally {
+      WeakRef.prototype.deref = deref;
+    }
+    expect(reads).toBe(0);
+    expect(rt.retainedRefs).toBe(1000);
   });
 
   it('releases a reference whose instance is gone once, at a call return or by its finalizer', async () => {

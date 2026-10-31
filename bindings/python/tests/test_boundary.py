@@ -541,12 +541,23 @@ class TestRetainedValues:
         assert core.calls[3][1] == '[{"$hy":"ChordTimeline","segments":[1,2]}]'
         assert core.calls[-1][1].endswith(',{"$hy":"ChordTimeline","segments":[1,2]}]')
 
-    def test_a_retained_hybrid_sends_its_original_segments(self) -> None:
+    def test_a_hybrid_is_retained_with_the_fields_written_before_its_first_use(self) -> None:
         rt, core = fake_runtime()
         timeline = rt._decode({"$hy": "ChordTimeline", "segments": [1, 2]})
         timeline.segments = [9]
         rt.call("ChordTimeline#at", [timeline, 0])
-        assert core.calls[0][1] == '[{"$hy":"ChordTimeline","segments":[1,2]}]'
+        assert core.calls[0] == ("$retain", '[{"$hy":"ChordTimeline","segments":[9]}]')
+        timeline.segments.append(10)
+        rt.call("ChordTimeline#at", [timeline, 0])
+        assert core.calls[-1][1] == '[{"$hy":"ChordTimeline","$ref":101},0]'
+
+    def test_a_hybrid_whose_fields_hold_a_function_is_not_retained(self) -> None:
+        rt, core = fake_runtime()
+        timeline = rt._decode({"$hy": "ChordTimeline", "segments": []})
+        timeline.segments = [len]
+        rt.call("ChordTimeline#at", [timeline, 0])
+        assert core.ops() == ["ChordTimeline#at"]
+        assert rt.retained_refs == 0
 
     def test_a_value_holding_a_callback_is_not_retained(self) -> None:
         rt, core = fake_runtime()
@@ -676,7 +687,7 @@ class TestRetainedValues:
         def other_thread_wins(name: str) -> None:
             if name == "$retain":
                 core.on_call = None
-                rt._adopt(score, 50)
+                rt._adopt(score, 50, 0)
 
         core.on_call = other_thread_wins
         rt.call("Score#secondsAt", [score, 0])

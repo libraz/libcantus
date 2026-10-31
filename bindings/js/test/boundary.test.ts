@@ -10,6 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { describe, expect, it } from 'vitest';
 import { replayCorpus } from '../../../tools/corpus/replay_js.mjs';
+import * as Pure from '../../../ts/src/index.js';
 import type { Backend } from '../src/backend.js';
 import {
   BudgetExceededError,
@@ -17,7 +18,8 @@ import {
   isLibcantusError,
   NoSolutionError,
 } from '../src/errors.js';
-import { Runtime } from '../src/runtime.js';
+import { BY_REFERENCE, TYPES } from '../src/generated/meta.js';
+import { MAX_DEPTH, Runtime } from '../src/runtime.js';
 
 const REPO = fileURLToPath(new URL('../../../', import.meta.url));
 const NAME = process.env.CANTUS_BOUNDARY_BACKEND ?? 'ts';
@@ -379,6 +381,36 @@ describe(`boundary (${NAME} backend)`, () => {
       backend.release(id);
     });
 
+    // The pure backend answers a hybrid from the object it issued, so only a core reads its fields.
+    it.skipIf(NAME === 'ts')('retains a hybrid with the edits made before its first use', () => {
+      const typed = new Runtime(backend, TYPES, { byReference: BY_REFERENCE });
+      type Timeline = { segments: { chord: unknown }[]; at(beat: number): unknown };
+      const timelineOf = (call: (notes: object[]) => unknown, pitches: number[]) =>
+        (
+          call(pitches.map((pitch) => ({ pitch, startBeat: 0, durationBeat: 4 }))) as {
+            timeline: Timeline;
+          }
+        ).timeline;
+      const viaCore = (notes: object[]) =>
+        typed.call('chordTimelineFromNotes', [notes, { key: 'C major' }]);
+      const viaPure = (notes: object[]) =>
+        Pure.chordTimelineFromNotes(notes as Pure.NoteEvent[], { key: 'C major' });
+      const timeline = timelineOf(viaCore, [60, 64, 67]);
+      const pure = timelineOf(viaPure, [60, 64, 67]);
+      (timeline.segments[0] as { chord: unknown }).chord = timelineOf(
+        viaCore,
+        [67, 71, 74],
+      ).segments[0]?.chord;
+      (pure.segments[0] as { chord: unknown }).chord = timelineOf(
+        viaPure,
+        [67, 71, 74],
+      ).segments[0]?.chord;
+      expect(typed.call('ChordTimeline#at', [timeline, 0])).toEqual(pure.at(0));
+      expect((pure.at(0) as { rootPc: number }).rootPc).toBe(7);
+      expect(typed.retainedRefs).toBe(1);
+      expect(typed.call('ChordTimeline#at', [timeline, 0])).toEqual(pure.at(0));
+    });
+
     it('refuses what the plain path refuses, and values holding callbacks', () => {
       const broken = '{"$class":"Score","notes":"x"}';
       expect(retain(broken)).toEqual(raw('Score#totalBeats', `[${broken}]`));
@@ -414,6 +446,14 @@ describe(`boundary (${NAME} backend)`, () => {
       }
       expect(live()).toBe(before);
     });
+  });
+
+  it(`refuses an argument nested deeper than ${MAX_DEPTH} levels with BAD_REQUEST`, () => {
+    let value: unknown = 0;
+    for (let i = 0; i <= MAX_DEPTH; i += 1) value = [value];
+    const error = thrown(() => echo(value)) as Error & { code?: string };
+    expect(error).not.toBeInstanceOf(RangeError);
+    expect(error.code).toBe('BAD_REQUEST');
   });
 
   it('reports the version triple', () => {

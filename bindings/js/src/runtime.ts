@@ -9,12 +9,12 @@
  * here: it stays in the kept node and goes back with it.
  *
  * An instance of a by-reference type (see `RuntimeOptions`) is retained in the core on its first
- * use as a receiver (`$retain`); later calls send `{"$class": T, "$ref": id}` instead of its data.
- * The reference is released when the instance is collected. When the outermost call returns, the
- * references whose instance is gone are released, and so are the least recently used while more
- * than `maxRefs` are live or their values' wire text exceeds `maxRefBytes`; an evicted instance
- * sends its data and is retained again on its next use as a receiver. A value whose text alone
- * exceeds `maxRefBytes` is never retained.
+ * use as a receiver (`$retain`), as the wire text it would be sent as at that moment; later calls
+ * send `{"$class": T, "$ref": id}` instead of its data. The reference is released when the
+ * instance is collected. When the outermost call returns, the least recently used are released
+ * while more than `maxRefs` are live or their values' wire text exceeds `maxRefBytes`; an evicted
+ * instance sends its data and is retained again on its next use as a receiver. A value whose text
+ * alone exceeds `maxRefBytes` is never retained.
  *
  * Freezing follows the pure package, which hands out mutable results: decoded
  * results are left writable, except what the pure package freezes: the entries
@@ -60,6 +60,9 @@ export const MAX_LIVE_REFS = 1024;
  */
 export const MAX_REF_BYTES = 4 * 1024 * 1024;
 
+/** The deepest nesting of arrays and objects an argument may have, as the core's JSON parser allows. */
+export const MAX_DEPTH = 4096;
+
 /** How a runtime treats the values it sends. */
 export type RuntimeOptions = {
   /** Types whose instances are retained in the core on first use as a receiver. */
@@ -95,6 +98,20 @@ type Frame = {
   /** The length of the reply's text. */
   bytes: number;
 };
+
+/** A value to encode, with the containers above it (for cutting a cycle) and how many there are. */
+type ValueStep = { value: unknown; stack: object[]; depth: number };
+
+/**
+ * One pending step of encoding: text to append, a value, a kept wire node, the end of a container
+ * on `close`, or the end of the hybrid `hybrid` whose text began at `start`.
+ */
+type Step =
+  | string
+  | ValueStep
+  | { node: Wire; fns: readonly Callable[] | undefined }
+  | { close: object[] }
+  | { hybrid: object; start: number };
 
 /** How one result is decoded. */
 type DecodeContext = {
@@ -222,6 +239,92 @@ function numberText(n: number): string {
 function isPlainPrototype(object: object): boolean {
   const proto = Object.getPrototypeOf(object) as object | null;
   return proto === Object.prototype || proto === null;
+}
+
+/**
+ * Whether `object` is an instance of a built-in class (a `Map`, a `RegExp`, a boxed number): its
+ * state is internal, so it crosses as its string form, as an object with a `toJSON` does.
+ */
+function isBuiltInInstance(object: object): boolean {
+  if (Array.isArray(object) || isPlainPrototype(object)) return false;
+  const ctor = (Object.getPrototypeOf(object) as { constructor?: unknown }).constructor;
+  // Another realm's `Object` is native too, and its instances are plain data.
+  return (
+    typeof ctor === 'function' &&
+    ctor.name !== 'Object' &&
+    Function.prototype.toString.call(ctor).includes('[native code]')
+  );
+}
+
+/** A field as encoding reads it: a getter that throws reads as absent, as pure code never reads it. */
+function fieldOf(record: Record<string, unknown>, key: string): unknown {
+  try {
+    return record[key];
+  } catch {
+    return undefined;
+  }
+}
+
+/** A value that is no object or function as wire text; undefined for the others. */
+function scalarText(value: unknown): string | undefined {
+  switch (typeof value) {
+    case 'undefined':
+      return '{"$u":1}';
+    case 'number':
+      return numberText(value);
+    case 'string':
+      return JSON.stringify(value);
+    case 'boolean':
+      return value ? 'true' : 'false';
+    case 'bigint':
+      return `{"$big":"${value.toString()}"}`;
+    case 'symbol':
+      return `{"$sym":${JSON.stringify(value.description ?? '')}}`;
+    case 'object':
+      return value === null ? 'null' : undefined;
+    default:
+      return undefined;
+  }
+}
+
+/** Append `text` to the parts of a container, joined to the text before it. */
+function addText(parts: Step[], text: string): void {
+  const last = parts.length - 1;
+  if (last >= 0 && typeof parts[last] === 'string') parts[last] += text;
+  else parts.push(text);
+}
+
+/** Append a member to the parts of a container: its text now when it is a scalar. */
+function addValue(parts: Step[], value: unknown, stack: object[], depth: number): void {
+  const text = scalarText(value);
+  if (text === undefined) parts.push({ value, stack, depth });
+  else addText(parts, text);
+}
+
+/**
+ * The first of a container's parts, which is its opening text; the rest go on `steps` to follow
+ * it. A container with members still to encode is on `stack` until they are done.
+ */
+function follow(parts: Step[], steps: Step[], stack: object[] | null, object: object): string {
+  if (parts.length > 1) {
+    if (stack !== null) {
+      stack.push(object);
+      steps.push({ close: stack });
+    }
+    for (let i = parts.length - 1; i >= 1; i -= 1) steps.push(parts[i] as Step);
+  }
+  return parts[0] as string;
+}
+
+/** Refuse a container nested below `depth` others once that passes what the core parses. */
+function checkDepth(depth: number): void {
+  if (depth >= MAX_DEPTH) {
+    throw errorFromReply({
+      code: 'BAD_REQUEST',
+      name: 'Error',
+      message: `invalid args JSON: nesting deeper than ${MAX_DEPTH}`,
+    });
+  }
 }
 
 function setOwn(target: Record<string, unknown>, key: string, value: unknown): void {
@@ -494,16 +597,14 @@ export class Runtime {
   }
 
   /**
-   * Release the references whose instance is gone, then the least recently used while the count
-   * or the text is over its cap.
+   * Release the least recently used references while the count or the text is over its cap. One
+   * whose instance is gone is released here when it comes up, otherwise by its finalizer.
    */
   #evict(): void {
     for (const [id, live] of this.#liveRefs) {
+      if (this.#liveRefs.size <= this.#maxRefs && this.#refBytes <= this.#maxRefBytes) return;
       const entry = live.entry.deref();
-      if (entry !== undefined) {
-        if (this.#liveRefs.size <= this.#maxRefs && this.#refBytes <= this.#maxRefBytes) continue;
-        this.#refRegistry.unregister(entry);
-      }
+      if (entry !== undefined) this.#refRegistry.unregister(entry);
       this.#dropRef(id);
     }
   }
@@ -516,7 +617,8 @@ export class Runtime {
     const hash = op.indexOf('#');
     if (hash <= 0 || this.#retainUnsupported || typeof self !== 'object' || self === null) return;
     if (!this.#byReference.has(op.slice(0, hash))) return;
-    const entry = this.#classWire.get(self) ?? this.#hybrids.get(self);
+    const cls = this.#classWire.get(self);
+    const entry = cls ?? this.#hybrids.get(self);
     if (entry === undefined || entry.fns !== undefined) return;
     const id = this.#refOf(entry);
     if (id !== undefined) {
@@ -526,13 +628,26 @@ export class Runtime {
     if (entry.ref !== undefined) return;
     const type = entry.wire.$class ?? entry.wire.$hy;
     if (type !== op.slice(0, hash)) return;
-    entry.text ??= JSON.stringify(entry.wire);
-    if (entry.text.length > this.#maxRefBytes) return;
-    const reply = this.#backend.call('$retain', `[${entry.text}]`, null);
+    let text: string | undefined;
+    if (cls === undefined) {
+      text = this.#retainedHybridText(self);
+    } else {
+      entry.text ??= JSON.stringify(entry.wire);
+      text = entry.text;
+    }
+    if (text === undefined || text.length > this.#maxRefBytes) return;
+    const reply = this.#backend.call('$retain', `[${text}]`, null);
     if (reply.status === ERROR_CODES.UNKNOWN_OP) this.#retainUnsupported = true;
     if (reply.status !== 0) return;
     const ref = (JSON.parse(reply.json) as WireObject).$ref;
-    if (typeof ref === 'number') this.#adoptRef(self, entry, ref, entry.text.length);
+    if (typeof ref === 'number') this.#adoptRef(self, entry, ref, text.length);
+  }
+
+  /** What a hybrid would be sent as now, its fields as written; none when they hold a function. */
+  #retainedHybridText(object: object): string | undefined {
+    const frame = this.#newFrame();
+    const text = this.#encode(object, frame, []);
+    return frame.fns.length > 0 ? undefined : text;
   }
 
   /** `{"$hy": T, "$ref": id}` when `value` is a retained hybrid receiving one of its own methods. */
@@ -610,26 +725,35 @@ export class Runtime {
     };
   }
 
+  /**
+   * `value` as wire text. Containers are walked on an explicit list rather than the native stack,
+   * so nesting up to `MAX_DEPTH` encodes and deeper is refused. `stack` holds the containers
+   * being encoded, for cutting a cycle.
+   */
   #encode(value: unknown, frame: Frame, stack: object[]): string {
-    switch (typeof value) {
-      case 'undefined':
-        return '{"$u":1}';
-      case 'number':
-        return numberText(value);
-      case 'string':
-        return JSON.stringify(value);
-      case 'boolean':
-        return value ? 'true' : 'false';
-      case 'bigint':
-        return `{"$big":"${value.toString()}"}`;
-      case 'symbol':
-        return `{"$sym":${JSON.stringify(value.description ?? '')}}`;
-      case 'function':
-        return this.#encodeFunction(value as Callable, frame);
-      default:
-        break;
+    const scalar = scalarText(value);
+    if (scalar !== undefined) return scalar;
+    let out = '';
+    const steps: Step[] = [{ value, stack, depth: 0 }];
+    for (let step = steps.pop(); step !== undefined; step = steps.pop()) {
+      if (typeof step === 'string') out += step;
+      else if ('value' in step) out += this.#open(step, frame, steps, out.length);
+      else if ('node' in step) out += this.#nodeText(step.node, step.fns, frame);
+      else if ('close' in step) step.close.pop();
+      else frame.hybrids.set(out.slice(step.start), step.hybrid);
     }
-    if (value === null) return 'null';
+    return out;
+  }
+
+  /**
+   * The text `step.value` starts with; what follows it goes on `steps`, last first. `at` is where
+   * the text starts in the whole.
+   */
+  #open(step: ValueStep, frame: Frame, steps: Step[], at: number): string {
+    const { value, stack, depth } = step;
+    const scalar = scalarText(value);
+    if (scalar !== undefined) return scalar;
+    if (typeof value === 'function') return this.#encodeFunction(value as Callable, frame);
     const object = value as object;
     const cls = this.#classWire.get(object);
     if (cls !== undefined) {
@@ -640,74 +764,96 @@ export class Runtime {
     }
     const hybrid = this.#hybrids.get(object);
     if (hybrid !== undefined) {
-      const text = this.#encodeHybrid(object as Record<string, unknown>, hybrid, frame);
-      frame.hybrids.set(text, object);
-      return text;
+      steps.push({ hybrid: object, start: at });
+      return this.#openHybrid(object as Record<string, unknown>, hybrid, frame, steps, depth);
     }
     const handle = this.#handleOf.get(object);
     if (handle !== undefined) return `{"$h":${handle.id},"$type":${JSON.stringify(handle.type)}}`;
     // JSON holds no cycle: a value that contains itself crosses with the repeat cut to an
     // empty object or array, which reads as `[object Object]` wherever it is described.
     if (stack.includes(object)) return Array.isArray(object) ? '[]' : '{}';
-    stack.push(object);
-    try {
-      if (Array.isArray(object)) {
-        let out = '[';
-        for (let i = 0; i < object.length; i += 1) {
-          if (i > 0) out += ',';
-          out += this.#encode(object[i], frame, stack);
-        }
-        return `${out}]`;
+    checkDepth(depth);
+    const inner = depth + 1;
+    const parts: Step[] = [];
+    if (Array.isArray(object)) {
+      addText(parts, '[');
+      for (let i = 0; i < object.length; i += 1) {
+        if (i > 0) addText(parts, ',');
+        addValue(parts, object[i], stack, inner);
       }
-      const record = object as Record<string, unknown>;
-      const keys = Object.keys(record);
-      if (typeof record.toJSON === 'function' && this.#crossesAsToJson(record, keys)) {
-        let repr: string;
-        try {
-          repr = String(object);
-        } catch {
-          repr = '[object Object]';
-        }
-        const payload = this.#encode(record.toJSON(), frame, stack);
-        return `{"$tojson":${payload},"$repr":${JSON.stringify(repr)}}`;
-      }
-      let out = '{';
-      let first = true;
-      for (const key of keys) {
-        const field = record[key];
-        if (field === undefined) continue;
-        out += `${first ? '' : ','}${JSON.stringify(escapeKey(key))}:${this.#encode(field, frame, stack)}`;
-        first = false;
-      }
-      for (const [key, method] of inheritedMethods(record, keys)) {
-        out += `${first ? '' : ','}${JSON.stringify(escapeKey(key))}:${this.#encodeFunction(method, frame)}`;
-        first = false;
-      }
-      return `${out}}`;
-    } finally {
-      stack.pop();
+      addText(parts, ']');
+      return follow(parts, steps, stack, object);
     }
+    const record = object as Record<string, unknown>;
+    const keys = Object.keys(record);
+    const toJson = fieldOf(record, 'toJSON');
+    const crossesAsToJson = typeof toJson === 'function' && this.#crossesAsToJson(record, keys);
+    if (crossesAsToJson || isBuiltInInstance(object)) {
+      let repr: string;
+      try {
+        repr = String(object);
+      } catch {
+        repr = '[object Object]';
+      }
+      // A built-in without `toJSON` keeps its state internal: what `JSON.stringify` sees is its fields.
+      const payload = crossesAsToJson
+        ? toJson.call(record)
+        : Object.fromEntries(keys.map((key) => [key, fieldOf(record, key)]));
+      addText(parts, '{"$tojson":');
+      addValue(parts, payload, stack, inner);
+      addText(parts, `,"$repr":${JSON.stringify(repr)}}`);
+      return follow(parts, steps, stack, object);
+    }
+    let first = true;
+    addText(parts, '{');
+    for (const key of keys) {
+      const field = fieldOf(record, key);
+      if (field === undefined) continue;
+      addText(parts, `${first ? '' : ','}${JSON.stringify(escapeKey(key))}:`);
+      addValue(parts, field, stack, inner);
+      first = false;
+    }
+    for (const [key, method] of inheritedMethods(record, keys)) {
+      addText(parts, `${first ? '' : ','}${JSON.stringify(escapeKey(key))}:`);
+      addValue(parts, method, stack, inner);
+      first = false;
+    }
+    addText(parts, '}');
+    return follow(parts, steps, stack, object);
   }
 
   /**
    * A hybrid's wire: the kept node, with each payload field the object shows re-read from it,
    * since a caller may have written to a visible field (a timeline's segments) after decoding.
    */
-  #encodeHybrid(object: Record<string, unknown>, entry: WireEntry, frame: Frame): string {
+  #openHybrid(
+    object: Record<string, unknown>,
+    entry: WireEntry,
+    frame: Frame,
+    steps: Step[],
+    depth: number,
+  ): string {
     const visible = this.#types[String(entry.wire.$hy)]?.properties ?? [];
     if (visible.length === 0) return this.#entryText(entry, frame);
-    let out = '{';
+    checkDepth(depth);
+    const parts: Step[] = [];
     let first = true;
+    addText(parts, '{');
     for (const key of Object.keys(entry.wire)) {
       const name = unescapeKey(key);
-      const value =
-        !isTagKey(key) && visible.includes(name)
-          ? this.#encode(object[name], frame, [])
-          : this.#nodeText(entry.wire[key] as Wire, entry.fns, frame);
-      out += `${first ? '' : ','}${JSON.stringify(key)}:${value}`;
+      addText(parts, `${first ? '' : ','}${JSON.stringify(key)}:`);
       first = false;
+      const node = entry.wire[key] as Wire;
+      if (!isTagKey(key) && visible.includes(name)) {
+        addValue(parts, fieldOf(object, name), [], depth + 1);
+      } else if (entry.fns === undefined) {
+        addText(parts, JSON.stringify(node));
+      } else {
+        parts.push({ node, fns: entry.fns });
+      }
     }
-    return `${out}}`;
+    addText(parts, '}');
+    return follow(parts, steps, null, object);
   }
 
   /** A kept node as wire text; the callbacks it names are registered with `frame` again. */
@@ -744,7 +890,10 @@ export class Runtime {
    */
   #crossesAsToJson(record: Record<string, unknown>, keys: readonly string[]): boolean {
     if (!isPlainPrototype(record)) return true;
-    return keys.every((k) => typeof record[k] === 'function' || record[k] === undefined);
+    return keys.every((k) => {
+      const field = fieldOf(record, k);
+      return typeof field === 'function' || field === undefined;
+    });
   }
 
   #encodeFunction(fn: Callable, frame: Frame): string {
