@@ -125,11 +125,13 @@ jobs:
         with:
           python-version-file: bindings/python/.python-version
 
+      # Pinned to the versions the local format and lint run, not whatever the image's apt carries.
       - name: Install the C++ format and lint tools
         if: matrix.gate
         run: |
-          sudo apt-get update
-          sudo apt-get install -y clang-format clang-tidy
+          python3 -m pip install clang-format==18.1.8 clang-tidy==18.1.8
+          clang-format --version
+          clang-tidy --version
 
       - name: Core, Debug
         run: make test-cxx
@@ -144,6 +146,10 @@ jobs:
 
       - name: Generators, manifest, file map and cross-implementation parity
         run: make parity
+
+      # The corpus is not tracked; record it from pure TS through the facade before replaying it.
+      - name: Record the call corpus
+        run: make corpus
 
       - name: Corpus replay through the C ABI, Debug
         run: make corpus-check UNIT=all
