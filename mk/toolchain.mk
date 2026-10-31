@@ -6,6 +6,8 @@ EMSDK_VERSION := 6.0.3
 # LLVM release whose clang-tidy and clang-format the checks are written against. On macOS
 # clang-tidy reads that release's own libc++ headers: the SDK's can be newer than it parses.
 LLVM_VERSION := 18
+# A GCC build's compile commands carry GCC-only warning flags that clang-tidy does not know.
+CLANG_TIDY_ARGS += --extra-arg=-Wno-unknown-warning-option
 ifeq ($(shell uname -s),Darwin)
 LLVM_PREFIX ?= $(shell brew --prefix llvm@$(LLVM_VERSION) 2>/dev/null)
 CLANG_TIDY_ARGS += --extra-arg=-nostdinc++ --extra-arg=-isystem$(LLVM_PREFIX)/include/c++/v1
