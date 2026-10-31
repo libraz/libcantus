@@ -24,7 +24,7 @@ Builds run two jobs under `nice` by default; set `JOBS=` to change that. `yarn s
 
 ## Shared and TS-only tests
 
-The shared suite in `tests/spec` and the TS-only tests in `ts/test` were split unit by unit from one suite, and `tests/spec/manifest.json` records the split. `node tools/spec/count.mjs` checks that every unit of the split is still in its half and in only one; tests added since are reported. A new test goes in `tests/spec` unless it reads internals, source text or object identity that no other surface can reproduce; a test that has to move to `ts/test` later is listed in `ts_only_units` of `api/annotations.json` with its reason.
+The shared suite in `tests/spec` and the TS-only tests in `ts/test` were split unit by unit from one suite, and `tests/spec/manifest.json` records the split. `node tools/spec/count.mjs` checks that every unit of the split is still in its half and in only one; tests added since are reported. A unit a behaviour change removes or retitles is listed in `tests/spec/retired.json` with its reason. A new test goes in `tests/spec` unless it reads internals, source text or object identity that no other surface can reproduce; a test that has to move to `ts/test` later is listed in `ts_only_units` of `api/annotations.json` with its reason.
 
 ## Layout and ownership
 
