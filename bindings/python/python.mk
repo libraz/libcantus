@@ -17,13 +17,13 @@ build-shared:
 	  -DCMAKE_OSX_DEPLOYMENT_TARGET=$(MACOS_DEPLOYMENT_TARGET)
 	$(NICE) $(CMAKE) --build $(SHARED_DIR) --target cantus_shared -j $(JOBS)
 
-# The environment with pytest, ruff and mypy: rye when installed, else venv + pip.
+# The environment with the dev dependencies of pyproject.toml: rye when installed, else venv + pip.
 $(PY_STAMP): $(PY_DIR)/pyproject.toml
 	if command -v $(RYE) >/dev/null 2>&1; then \
 	  (cd $(PY_DIR) && $(RYE) sync --quiet); \
 	else \
 	  $(PYTHON) -m venv $(PY_VENV) && \
-	  $(PY_BIN)/python -m pip install --quiet -e $(PY_DIR) pytest ruff mypy; \
+	  $(PY_BIN)/python -m pip install --quiet -e $(PY_DIR) pytest ruff mypy hatchling; \
 	fi
 	touch $(PY_STAMP)
 
