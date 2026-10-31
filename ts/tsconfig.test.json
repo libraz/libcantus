@@ -13,6 +13,6 @@
       "@libraz/libcantus/model": ["./src/model/index.ts"]
     }
   },
-  "include": ["test", "vitest.config.ts", "benchmark"],
+  "include": ["test", "vitest.config.ts", "vitest.coverage.config.ts", "benchmark"],
   "exclude": ["test/generated"]
 }

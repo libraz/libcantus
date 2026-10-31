@@ -27,17 +27,5 @@ export default defineConfig({
     // here is for catching a hang; the sweeps that guard against a complexity
     // regression are orders of magnitude slower than this when they regress.
     testTimeout: 120_000,
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'lcov'],
-      include: ['src/**/*.ts'],
-      exclude: ['src/index.ts'],
-      thresholds: {
-        lines: 80,
-        functions: 80,
-        branches: 75,
-        statements: 80,
-      },
-    },
   },
 });
